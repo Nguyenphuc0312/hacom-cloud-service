@@ -1,0 +1,34 @@
+import React from "react";
+import clsx from "clsx";
+import { PlusIcon } from "@heroicons/react/24/solid";
+
+interface NewChatButtonProps {
+  onClick: () => void;
+  className?: string;
+}
+
+export const NewChatButton: React.FC<NewChatButtonProps> = ({
+  onClick,
+  className,
+}) => {
+  return (
+    <button
+      onClick={onClick}
+      className={clsx(
+        "fixed bottom-6 right-6 z-sticky",
+        "w-14 h-14 rounded-full",
+        "bg-telegram-primary hover:bg-telegram-primary/90",
+        "text-white shadow-lg hover:shadow-xl",
+        "flex items-center justify-center",
+        "transition-all duration-200",
+        "hover:scale-105 active:scale-95",
+        className,
+      )}
+      aria-label="Tạo cuộc trò chuyện mới"
+    >
+      <PlusIcon className="w-6 h-6" />
+    </button>
+  );
+};
+
+export default NewChatButton;
