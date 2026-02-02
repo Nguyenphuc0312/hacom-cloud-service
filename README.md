@@ -1,4 +1,4 @@
-# 💬 Chat Web Client
+# Chat Web Client
 
 Ứng dụng web chat real-time với giao diện hiện đại, lấy cảm hứng từ Telegram và Zalo. Đây là Sprint 1 MVP sử dụng mock data.
 
@@ -7,7 +7,7 @@
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.1-38B2AC?style=flat-square&logo=tailwind-css)
 ![Vite](https://img.shields.io/badge/Vite-6.3-646CFF?style=flat-square&logo=vite)
 
-## 📸 Screenshots
+## Screenshots
 
 <!-- Thêm screenshots sau khi chạy ứng dụng -->
 
@@ -15,9 +15,9 @@
 | :-----------------------: | :---------------------------: |
 | _Giao diện desktop 3 cột_ | _Giao diện mobile responsive_ |
 
-## ✨ Features
+## Features
 
-### 🗨️ Chat Features
+### Chat Features
 
 - **Danh sách hội thoại** với search, filter và sort
 - **Nhiều loại tin nhắn**: Text, Image, File, Voice, System
@@ -27,7 +27,7 @@
 - **Typing indicator** animation
 - **Online status** real-time
 
-### 🎨 UI/UX
+### UI/UX
 
 - **3-column layout**: Sidebar - Chat Window - Info Panel
 - **Telegram/Zalo inspired** design
@@ -42,7 +42,7 @@
 - **Group chat** (nhiều người)
 - **Channel** (broadcast)
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -75,7 +75,7 @@ npm run build
 npm run preview
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 src/
@@ -131,7 +131,7 @@ src/
 └── index.css            # Global styles
 ```
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Technology   | Version | Purpose         |
 | ------------ | ------- | --------------- |
@@ -144,7 +144,7 @@ src/
 | date-fns     | 4.1     | Date Formatting |
 | clsx         | 2.1     | Class Names     |
 
-## 🎨 Design System
+## Design System
 
 ### Colors
 
@@ -170,7 +170,7 @@ src/
 - **Tablet**: 768px-1023px (2 columns, toggle info)
 - **Mobile**: <768px (1 column, swipe navigation)
 
-## 📝 Mock Data
+## Mock Data
 
 Mock data includes:
 
@@ -180,9 +180,9 @@ Mock data includes:
 - **Reactions** và read receipts
 - **Typing indicators**
 
-## 🔜 Roadmap
+## Roadmap
 
-### Sprint 1 (Current) ✅
+### Sprint 1 (Current)
 
 - [x] UI Components
 - [x] Mock Data
@@ -203,7 +203,7 @@ Mock data includes:
 - [ ] Push Notifications
 - [ ] Dark Mode Toggle
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create feature branch (`git checkout -b feature/AmazingFeature`)
@@ -220,28 +220,6 @@ MIT License - see [LICENSE](LICENSE) for details.
 <p align="center">
   Made with ❤️ by Hacom Holding DX Team
 </p>
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-globalIgnores(['dist']),
-{
-files: ['**/*.{ts,tsx}'],
-extends: [
-// Other configs...
-// Enable lint rules for React
-reactX.configs['recommended-typescript'],
-// Enable lint rules for React DOM
-reactDom.configs.recommended,
-],
-languageOptions: {
-parserOptions: {
-project: ['./tsconfig.node.json', './tsconfig.app.json'],
-tsconfigRootDir: import.meta.dirname,
-},
-// other options...
-},
-},
-])
 
 ```
 
