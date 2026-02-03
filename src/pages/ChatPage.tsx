@@ -3,7 +3,7 @@
  * Tích hợp với Zustand stores và WebSocket
  */
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { Sidebar } from "../components/layout/Sidebar";
@@ -60,18 +60,22 @@ export const ChatPage: React.FC = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   // Current user as UserSummary for components
-  const currentUserSummary: UserSummary | null = user
-    ? {
-        id: user.id,
-        username: user.username,
-        displayName:
-          `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
-          user.username,
-        avatar: user.avatar,
-        status: user.status as UserStatus,
-        isBot: false,
-      }
-    : null;
+  const currentUserSummary = useMemo<UserSummary | null>(
+    () =>
+      user
+        ? {
+            id: user.id,
+            username: user.username,
+            displayName:
+              `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
+              user.username,
+            avatar: user.avatar,
+            status: user.status as UserStatus,
+            isBot: false,
+          }
+        : null,
+    [user],
+  );
 
   // Sync URL with store
   useEffect(() => {
