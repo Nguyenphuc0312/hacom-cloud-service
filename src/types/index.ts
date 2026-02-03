@@ -1,100 +1,95 @@
-// User types
-export interface User {
-  id: string;
-  username: string;
-  firstName: string;
-  lastName?: string;
-  phone?: string;
-  bio?: string;
-  avatar?: string;
-  status: "online" | "offline" | "away";
-  lastSeen?: Date;
-  isVerified?: boolean;
-  isBot?: boolean;
-}
+/**
+ * @fileoverview Types cho Chat Web Client
+ *
+ * ⚠️ QUAN TRỌNG:
+ * - Types chính được import từ @hacom/chat-shared-types
+ * - File này chỉ chứa các types RIÊNG cho frontend (UI state, React components)
+ * - KHÔNG duplicate types đã có trong shared-types
+ */
 
-// Conversation types
-export type ConversationType = "private" | "group" | "channel";
+// ============================================
+// RE-EXPORT TỪ SHARED-TYPES
+// ============================================
 
-export interface Conversation {
-  id: string;
-  type: ConversationType;
-  name: string;
-  avatar?: string;
-  participants: User[];
-  lastMessage?: Message;
-  unreadCount: number;
-  isPinned: boolean;
-  isMuted: boolean;
-  isArchived: boolean;
-  updatedAt: Date;
-  createdAt: Date;
-  description?: string;
-  pinnedMessageId?: string;
-}
+// Entities
+export type {
+  User,
+  UserSummary,
+  UserProfile,
+  UserPresence,
+  Message,
+  MessageSummary,
+  Attachment,
+  Reaction,
+  ForwardInfo,
+  MessageMetadata,
+  Room,
+  RoomSettings,
+  RoomSummary,
+  RoomMember,
+  Conversation,
+  ConversationDetail,
+  TypingUser,
+} from "@hacom/chat-shared-types";
 
-// Message types
-export type MessageType =
-  | "text"
-  | "image"
-  | "video"
-  | "file"
-  | "voice"
-  | "location"
-  | "sticker"
-  | "system";
+// Enums
+export {
+  UserStatus,
+  MessageType,
+  MessageStatus,
+  RoomType,
+  RoomMemberRole,
+  FileType,
+  EventType,
+} from "@hacom/chat-shared-types";
 
-export type MessageStatus =
-  | "sending"
-  | "sent"
-  | "delivered"
-  | "read"
-  | "failed";
+// DTOs
+export type {
+  SendMessageDto,
+  EditMessageDto,
+  GetMessagesDto,
+  MessagesListResponseDto,
+  CreateRoomDto,
+  UpdateRoomDto,
+  LoginDto,
+  RegisterDto,
+  AuthResponseDto,
+  SearchUsersDto,
+  UpdateUserDto,
+  UpdateUserStatusDto,
+} from "@hacom/chat-shared-types";
 
-export interface Message {
-  id: string;
-  conversationId: string;
-  senderId: string;
-  senderName: string;
-  senderAvatar?: string;
-  content: string;
-  type: MessageType;
-  replyTo?: Message;
-  forwardedFrom?: User;
-  attachments?: Attachment[];
-  reactions?: Reaction[];
-  status: MessageStatus;
-  isEdited: boolean;
-  isPinned: boolean;
-  createdAt: Date;
-  editedAt?: Date;
-  readBy?: string[];
-}
+// Utility types
+export type {
+  ApiResponse,
+  ErrorResponse,
+  PaginationParams,
+  PaginationResponse,
+} from "@hacom/chat-shared-types";
 
-// Attachment types
-export type AttachmentType = "image" | "video" | "file" | "audio";
+// WebSocket events
+export type {
+  MessageNewEvent,
+  MessageUpdateEvent,
+  MessageDeletedEvent,
+  MessageReactionEvent,
+} from "@hacom/chat-shared-types";
 
-export interface Attachment {
-  id: string;
-  type: AttachmentType;
-  url: string;
-  thumbnailUrl?: string;
-  fileName?: string;
-  fileSize?: number;
-  mimeType?: string;
-  duration?: number;
-  width?: number;
-  height?: number;
-}
+// ============================================
+// FRONTEND-SPECIFIC TYPES
+// Các types chỉ dùng trong frontend
+// ============================================
 
-// Reaction types
-export interface Reaction {
-  emoji: string;
-  userIds: string[];
-  count: number;
-}
+import type {
+  User,
+  Message,
+  Conversation,
+  UserStatus,
+} from "@hacom/chat-shared-types";
 
-// Typing status
+/**
+ * Typing status for UI display
+ */
 export interface TypingStatus {
   conversationId: string;
   userId: string;
@@ -102,7 +97,9 @@ export interface TypingStatus {
   isTyping: boolean;
 }
 
-// Location types
+/**
+ * Location types for map display
+ */
 export interface Location {
   latitude: number;
   longitude: number;
@@ -110,19 +107,25 @@ export interface Location {
   name?: string;
 }
 
-// App state types
+/**
+ * App state types - Frontend specific
+ */
 export interface ChatState {
-  currentUser: User;
+  currentUser: User | null;
   conversations: Conversation[];
   selectedConversationId: string | null;
   messages: Record<string, Message[]>;
   typingStatuses: TypingStatus[];
   isInfoPanelOpen: boolean;
   searchQuery: string;
-  activeTab: "all" | "unread" | "groups" | "channels";
+  activeTab: ConversationFilter;
+  isLoading: boolean;
+  error: string | null;
 }
 
-// Context menu types
+/**
+ * Context menu types
+ */
 export interface ContextMenuItem {
   id: string;
   label: string;
@@ -130,16 +133,151 @@ export interface ContextMenuItem {
   onClick: () => void;
   danger?: boolean;
   divider?: boolean;
+  disabled?: boolean;
 }
 
-// Filter types
+/**
+ * Filter types
+ */
 export type ConversationFilter = "all" | "unread" | "groups" | "channels";
 
-// Input modes
+/**
+ * Input modes for message composer
+ */
 export type InputMode = "normal" | "reply" | "edit";
 
 export interface InputState {
   mode: InputMode;
   replyToMessage?: Message;
   editingMessage?: Message;
+}
+
+/**
+ * Notification permission state
+ */
+export type NotificationPermission = "default" | "granted" | "denied";
+
+/**
+ * Theme options
+ */
+export type Theme = "light" | "dark" | "system";
+
+/**
+ * WebSocket connection state
+ */
+export type ConnectionState =
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "reconnecting";
+
+export interface WebSocketState {
+  connectionState: ConnectionState;
+  reconnectAttempts: number;
+  lastConnected: Date | null;
+  error: string | null;
+}
+
+/**
+ * UI Component props
+ */
+export interface MessageListProps {
+  messages: Message[];
+  currentUserId: string;
+  onReply: (message: Message) => void;
+  onEdit: (message: Message) => void;
+  onDelete: (messageId: string) => void;
+  onReaction: (messageId: string, emoji: string) => void;
+}
+
+export interface ConversationListProps {
+  conversations: Conversation[];
+  selectedId: string | null;
+  onSelect: (conversationId: string) => void;
+  filter: ConversationFilter;
+}
+
+export interface MessageInputProps {
+  inputState: InputState;
+  onSend: (content: string, attachments?: File[]) => void;
+  onCancel: () => void;
+  disabled?: boolean;
+}
+
+/**
+ * Form states
+ */
+export interface LoginFormData {
+  email: string;
+  password: string;
+  rememberMe: boolean;
+}
+
+export interface RegisterFormData {
+  username: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  firstName?: string;
+  lastName?: string;
+  acceptTerms: boolean;
+}
+
+/**
+ * Search state
+ */
+export interface SearchState {
+  query: string;
+  results: {
+    users: User[];
+    messages: Message[];
+    conversations: Conversation[];
+  };
+  isSearching: boolean;
+}
+
+/**
+ * Upload state
+ */
+export interface UploadState {
+  files: File[];
+  progress: number;
+  isUploading: boolean;
+  error: string | null;
+}
+
+/**
+ * Modal state
+ */
+export interface ModalState {
+  isOpen: boolean;
+  type: ModalType | null;
+  data?: unknown;
+}
+
+export type ModalType =
+  | "createGroup"
+  | "editProfile"
+  | "settings"
+  | "members"
+  | "forward"
+  | "imagePreview"
+  | "deleteConfirm";
+
+/**
+ * Toast notification
+ */
+export interface ToastNotification {
+  id: string;
+  type: "success" | "error" | "warning" | "info";
+  message: string;
+  duration?: number;
+}
+
+/**
+ * Sidebar state
+ */
+export interface SidebarState {
+  isCollapsed: boolean;
+  activeSection: "chats" | "contacts" | "settings";
 }
