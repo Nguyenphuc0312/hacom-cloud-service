@@ -2,8 +2,6 @@ import React from "react";
 import clsx from "clsx";
 import {
   XMarkIcon,
-  PhoneIcon,
-  EnvelopeIcon,
   UserIcon,
   BellIcon,
   PhotoIcon,
@@ -11,14 +9,13 @@ import {
   NoSymbolIcon,
   ExclamationTriangleIcon,
   TrashIcon,
-  CheckBadgeIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../common/Avatar";
-import type { User } from "../../types";
-import { formatLastSeen } from "../../utils/formatTime";
+import type { UserSummary } from "../../types";
+import { UserStatus } from "../../types";
 
 interface UserProfileProps {
-  user: User;
+  user: UserSummary;
   onClose: () => void;
   className?: string;
 }
@@ -29,7 +26,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   className,
 }) => {
   const statusText =
-    user.status === "online" ? "Đang hoạt động" : formatLastSeen(user.lastSeen);
+    user.status === UserStatus.ONLINE ? "Đang hoạt động" : "Ngoại tuyến";
 
   return (
     <div className={clsx("flex flex-col h-full bg-white", className)}>
@@ -51,7 +48,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         <div className="flex flex-col items-center py-6 px-4">
           <Avatar
             src={user.avatar}
-            alt={`${user.firstName} ${user.lastName || ""}`}
+            alt={user.displayName || user.username}
             size="xl"
             status={user.status}
             showStatus
@@ -60,11 +57,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           <div className="mt-4 text-center">
             <div className="flex items-center justify-center gap-2">
               <h2 className="text-xl font-semibold text-gray-900">
-                {user.firstName} {user.lastName}
+                {user.displayName || user.username}
               </h2>
-              {user.isVerified && (
-                <CheckBadgeIcon className="w-5 h-5 text-telegram-primary" />
-              )}
             </div>
 
             <p className="text-sm text-gray-500 mt-0.5">@{user.username}</p>
@@ -72,7 +66,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             <p
               className={clsx(
                 "text-sm mt-1",
-                user.status === "online" ? "text-chat-online" : "text-gray-500",
+                user.status === UserStatus.ONLINE
+                  ? "text-chat-online"
+                  : "text-gray-500",
               )}
             >
               {statusText}
@@ -84,26 +80,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
         {/* Info items */}
         <div className="py-2">
-          {user.phone && (
-            <div className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
-              <PhoneIcon className="w-5 h-5 text-gray-400" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-900">{user.phone}</p>
-                <p className="text-xs text-gray-500">Điện thoại</p>
-              </div>
-            </div>
-          )}
-
-          {user.bio && (
-            <div className="flex items-start gap-4 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
-              <EnvelopeIcon className="w-5 h-5 text-gray-400 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-900">{user.bio}</p>
-                <p className="text-xs text-gray-500">Giới thiệu</p>
-              </div>
-            </div>
-          )}
-
           <div className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
             <UserIcon className="w-5 h-5 text-gray-400" />
             <div className="flex-1 min-w-0">

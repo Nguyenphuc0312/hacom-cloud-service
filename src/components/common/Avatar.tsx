@@ -1,12 +1,12 @@
 import React from "react";
 import clsx from "clsx";
-import type { User } from "../../types";
+import { UserStatus } from "../../types";
 
 interface AvatarProps {
   src?: string;
   alt: string;
   size?: "xs" | "sm" | "md" | "lg" | "xl";
-  status?: User["status"];
+  status?: UserStatus;
   showStatus?: boolean;
   className?: string;
   onClick?: () => void;
@@ -28,10 +28,13 @@ const statusSizeClasses = {
   xl: "w-4 h-4",
 };
 
-const statusColors = {
-  online: "bg-chat-online",
-  offline: "bg-chat-offline",
-  away: "bg-chat-away",
+const statusColors: Record<UserStatus, string> = {
+  [UserStatus.ONLINE]: "bg-chat-online",
+  [UserStatus.OFFLINE]: "bg-chat-offline",
+  [UserStatus.AWAY]: "bg-chat-away",
+  [UserStatus.DND]: "bg-red-500",
+  [UserStatus.INVISIBLE]: "bg-gray-400",
+  [UserStatus.BUSY]: "bg-orange-500",
 };
 
 export const Avatar: React.FC<AvatarProps> = ({
@@ -91,7 +94,7 @@ export const Avatar: React.FC<AvatarProps> = ({
             "absolute bottom-0 right-0 rounded-full ring-2 ring-white",
             statusSizeClasses[size],
             statusColors[status],
-            status === "online" && "animate-pulse-online",
+            status === UserStatus.ONLINE && "animate-pulse-online",
           )}
           aria-label={`Status: ${status}`}
         />

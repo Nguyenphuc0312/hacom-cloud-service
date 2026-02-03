@@ -8,17 +8,19 @@ import type {
   Message,
   TypingStatus,
   InputMode,
-  User,
+  UserSummary,
 } from "../../types";
 
 interface ChatWindowProps {
   conversation: Conversation;
   messages: Message[];
-  currentUser: User;
+  currentUser: UserSummary;
   typingStatus?: TypingStatus;
   onSendMessage: (content: string, replyTo?: Message) => void;
   onToggleInfoPanel: () => void;
   onBack?: () => void;
+  onTyping?: (isTyping: boolean) => void;
+  onImageClick?: (imageUrl: string) => void;
   className?: string;
 }
 
@@ -30,6 +32,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onSendMessage,
   onToggleInfoPanel,
   onBack,
+  onTyping,
+  onImageClick,
   className,
 }) => {
   const [inputValue, setInputValue] = useState("");
@@ -95,6 +99,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         currentUserId={currentUser.id}
         onReply={handleReply}
         onReact={handleReact}
+        onImageClick={onImageClick}
         className="flex-1 min-h-0"
       />
 
@@ -108,6 +113,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         editingMessage={editingMessage}
         onCancelReply={handleCancelReply}
         onCancelEdit={handleCancelEdit}
+        onTyping={onTyping}
       />
     </div>
   );

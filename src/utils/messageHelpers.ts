@@ -1,4 +1,10 @@
-import type { Message, Conversation, User } from "../types";
+import type {
+  Message,
+  MessageSummary,
+  Conversation,
+  UserSummary,
+} from "../types";
+import { MessageType, MessageStatus } from "../types";
 import { isSameDay } from "./formatTime";
 
 /**
@@ -69,7 +75,7 @@ export function groupMessagesByDate(
  * Get message preview for conversation list
  */
 export function getMessagePreview(
-  message: Message | undefined,
+  message: Message | MessageSummary | undefined,
   currentUserId: string,
   maxLength: number = 50,
 ): string {
@@ -79,28 +85,28 @@ export function getMessagePreview(
   let preview = "";
 
   switch (message.type) {
-    case "text":
+    case MessageType.TEXT:
       preview = message.content;
       break;
-    case "image":
+    case MessageType.IMAGE:
       preview = "📷 Ảnh";
       break;
-    case "video":
+    case MessageType.VIDEO:
       preview = "🎬 Video";
       break;
-    case "file":
-      preview = `📄 ${message.attachments?.[0]?.fileName || "Tệp"}`;
+    case MessageType.FILE:
+      preview = "📄 Tệp";
       break;
-    case "voice":
+    case MessageType.VOICE:
       preview = "🎤 Tin nhắn thoại";
       break;
-    case "location":
+    case MessageType.LOCATION:
       preview = "📍 Vị trí";
       break;
-    case "sticker":
+    case MessageType.STICKER:
       preview = "🎨 Nhãn dán";
       break;
-    case "system":
+    case MessageType.SYSTEM:
       return message.content; // No prefix for system messages
     default:
       preview = message.content;
@@ -115,17 +121,17 @@ export function getMessagePreview(
 /**
  * Get message status icon
  */
-export function getMessageStatusIcon(status: Message["status"]): string {
+export function getMessageStatusIcon(status: MessageStatus): string {
   switch (status) {
-    case "sending":
+    case MessageStatus.SENDING:
       return "🕐";
-    case "sent":
+    case MessageStatus.SENT:
       return "✓";
-    case "delivered":
+    case MessageStatus.DELIVERED:
       return "✓✓";
-    case "read":
+    case MessageStatus.READ:
       return "✓✓"; // Blue colored in UI
-    case "failed":
+    case MessageStatus.FAILED:
       return "❌";
     default:
       return "";
@@ -148,9 +154,11 @@ export function getConversationDisplayName(
     (p) => p.id !== currentUserId,
   );
 
-  return otherParticipant
-    ? `${otherParticipant.firstName}${otherParticipant.lastName ? " " + otherParticipant.lastName : ""}`
-    : conversation.name;
+  return (
+    otherParticipant?.displayName ||
+    otherParticipant?.username ||
+    conversation.name
+  );
 }
 
 /**
@@ -177,8 +185,9 @@ export function getConversationAvatar(
 export function getOtherParticipant(
   conversation: Conversation,
   currentUserId: string,
-): User | undefined {
-  if (conversation.type !== "private") return undefined;
+): UserSummary | undefined {
+  if (conversation.type !== "private" && conversation.type !== "direct")
+    return undefined;
   return conversation.participants.find((p) => p.id !== currentUserId);
 }
 
@@ -213,8 +222,7 @@ export function filterConversations(
     const nameMatch = conv.name.toLowerCase().includes(lowerQuery);
     const participantMatch = conv.participants.some(
       (p) =>
-        p.firstName.toLowerCase().includes(lowerQuery) ||
-        p.lastName?.toLowerCase().includes(lowerQuery) ||
+        p.displayName?.toLowerCase().includes(lowerQuery) ||
         p.username.toLowerCase().includes(lowerQuery),
     );
 

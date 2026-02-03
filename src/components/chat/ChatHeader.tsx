@@ -10,7 +10,6 @@ import {
 import { Avatar } from "../common/Avatar";
 import { TypingIndicator } from "../common/TypingIndicator";
 import type { Conversation, TypingStatus } from "../../types";
-import { formatLastSeen } from "../../utils/formatTime";
 import { getOtherParticipant } from "../../utils/messageHelpers";
 
 interface ChatHeaderProps {
@@ -57,7 +56,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       if (isOnline) {
         return "Đang hoạt động";
       }
-      return formatLastSeen(otherUser.lastSeen);
+      return "Ngoại tuyến";
     }
 
     return "";

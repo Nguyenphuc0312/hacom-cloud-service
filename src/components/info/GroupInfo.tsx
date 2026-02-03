@@ -62,15 +62,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             </h2>
 
             <p className="text-sm text-gray-500 mt-1">
-              {conversation.participants.length} thành viên
+              {conversation.participantCount ||
+                conversation.participants.length}{" "}
+              thành viên
             </p>
           </div>
-
-          {conversation.description && (
-            <p className="mt-3 text-sm text-gray-600 text-center">
-              {conversation.description}
-            </p>
-          )}
         </div>
 
         <div className="h-px bg-gray-200 mx-4" />
@@ -140,14 +136,14 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 >
                   <Avatar
                     src={participant.avatar}
-                    alt={`${participant.firstName} ${participant.lastName || ""}`}
+                    alt={participant.displayName || participant.username}
                     size="md"
                     status={participant.status}
                     showStatus
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">
-                      {participant.firstName} {participant.lastName}
+                      {participant.displayName || participant.username}
                       {participant.id === currentUserId && (
                         <span className="ml-2 text-xs text-gray-500">
                           (Bạn)

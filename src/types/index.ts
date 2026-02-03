@@ -64,7 +64,7 @@ export type {
   ApiResponse,
   ErrorResponse,
   PaginationParams,
-  PaginationResponse,
+  PaginatedResponse,
 } from "@hacom/chat-shared-types";
 
 // WebSocket events
@@ -80,12 +80,7 @@ export type {
 // Các types chỉ dùng trong frontend
 // ============================================
 
-import type {
-  User,
-  Message,
-  Conversation,
-  UserStatus,
-} from "@hacom/chat-shared-types";
+import type { User, Message, Conversation } from "@hacom/chat-shared-types";
 
 /**
  * Typing status for UI display

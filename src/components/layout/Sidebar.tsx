@@ -10,13 +10,18 @@ import {
 import { ConversationSearch } from "../conversation/ConversationSearch";
 import { ConversationList } from "../conversation/ConversationList";
 import { NewChatButton } from "../conversation/NewChatButton";
-import type { Conversation, ConversationFilter, User } from "../../types";
+import type {
+  Conversation,
+  ConversationFilter,
+  UserSummary,
+} from "../../types";
 
 interface SidebarProps {
   conversations: Conversation[];
-  currentUser: User;
+  currentUser: UserSummary;
   selectedId: string | null;
   onSelectConversation: (id: string) => void;
+  onNewChat?: () => void;
   className?: string;
 }
 
@@ -32,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentUser,
   selectedId,
   onSelectConversation,
+  onNewChat,
   className,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -114,6 +120,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <button
           className="p-2 rounded-full hover:bg-gray-100 transition-colors"
           aria-label="Tạo nhóm mới"
+          onClick={onNewChat}
         >
           <UserGroupIcon className="w-6 h-6 text-gray-600" />
         </button>
@@ -135,7 +142,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* New chat FAB - mobile only */}
       <div className="lg:hidden">
-        <NewChatButton onClick={() => console.log("New chat")} />
+        <NewChatButton onClick={onNewChat || (() => console.log("New chat"))} />
       </div>
     </div>
   );

@@ -1,140 +1,221 @@
-import React, { useState, useCallback } from "react";
+/**
+ * @fileoverview Chat Page - Main chat interface
+ * Tích hợp với Zustand stores và WebSocket
+ */
+
+import React, { useState, useCallback, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { Sidebar } from "../components/layout/Sidebar";
 import { ChatWindow } from "../components/layout/ChatWindow";
 import { UserProfile } from "../components/info/UserProfile";
 import { GroupInfo } from "../components/info/GroupInfo";
+import { NoChatSelected } from "../components/ui";
+import { NewChatModal, ImagePreviewModal } from "../components/modals";
 import {
-  conversations as initialConversations,
-  messages as initialMessages,
-  currentUser,
-  typingStatuses,
-} from "../data/mockData";
-import type { Message } from "../types";
+  useAuthStore,
+  useChatStore,
+  useSelectedConversation,
+  useCurrentMessages,
+  useCurrentTypingStatus,
+} from "../stores";
+import { useWebSocket } from "../hooks";
+import type { Message, UserSummary } from "../types";
+import { MessageType, MessageStatus, RoomType, UserStatus } from "../types";
 import { getOtherParticipant } from "../utils/messageHelpers";
 
 export const ChatPage: React.FC = () => {
-  const [conversations, setConversations] = useState(initialConversations);
-  const [messages, setMessages] = useState(initialMessages);
-  const [selectedConversationId, setSelectedConversationId] = useState<
-    string | null
-  >("conv-1");
+  const { conversationId } = useParams<{ conversationId?: string }>();
+  const navigate = useNavigate();
+
+  // Auth store
+  const { user } = useAuthStore();
+
+  // Chat store
+  const {
+    selectedConversationId,
+    selectConversation,
+    conversations,
+    fetchConversations,
+    fetchMessages,
+    sendMessage: storeSendMessage,
+    addMessage,
+    updateMessage,
+    markAsRead,
+  } = useChatStore();
+
+  // Selectors
+  const selectedConversation = useSelectedConversation();
+  const conversationMessages = useCurrentMessages();
+  const typingStatus = useCurrentTypingStatus();
+
+  // WebSocket
+  const { isConnected, sendTyping, stopTyping, joinRoom, leaveRoom } =
+    useWebSocket();
+
+  // Local state
   const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-  const selectedConversation = conversations.find(
-    (c) => c.id === selectedConversationId,
+  // Current user as UserSummary for components
+  const currentUserSummary: UserSummary | null = user
+    ? {
+        id: user.id,
+        username: user.username,
+        displayName:
+          `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
+          user.username,
+        avatar: user.avatar,
+        status: user.status as UserStatus,
+        isBot: false,
+      }
+    : null;
+
+  // Sync URL with store
+  useEffect(() => {
+    if (conversationId && conversationId !== selectedConversationId) {
+      selectConversation(conversationId);
+    }
+  }, [conversationId, selectedConversationId, selectConversation]);
+
+  // Load conversations on mount
+  useEffect(() => {
+    fetchConversations();
+  }, [fetchConversations]);
+
+  // Load messages when conversation changes & join/leave rooms
+  useEffect(() => {
+    if (selectedConversationId) {
+      fetchMessages(selectedConversationId);
+      markAsRead(selectedConversationId);
+      joinRoom(selectedConversationId);
+
+      return () => {
+        leaveRoom(selectedConversationId);
+      };
+    }
+  }, [selectedConversationId, fetchMessages, markAsRead, joinRoom, leaveRoom]);
+
+  // Handle select conversation
+  const handleSelectConversation = useCallback(
+    (id: string) => {
+      selectConversation(id);
+      setIsMobileMenuOpen(false);
+      navigate(`/chat/${id}`);
+    },
+    [selectConversation, navigate],
   );
-  const conversationMessages = selectedConversationId
-    ? messages[selectedConversationId] || []
-    : [];
-  const typingStatus = typingStatuses.find(
-    (t) => t.conversationId === selectedConversationId,
-  );
 
-  const handleSelectConversation = useCallback((id: string) => {
-    setSelectedConversationId(id);
-    setIsMobileMenuOpen(false);
-
-    // Mark as read
-    setConversations((prev) =>
-      prev.map((conv) => (conv.id === id ? { ...conv, unreadCount: 0 } : conv)),
-    );
-  }, []);
-
+  // Handle send message
   const handleSendMessage = useCallback(
-    (content: string, replyTo?: Message) => {
-      if (!selectedConversationId) return;
+    async (content: string, replyTo?: Message) => {
+      if (!selectedConversationId || !currentUserSummary) return;
 
-      const newMessage: Message = {
-        id: `msg-${Date.now()}`,
+      // Optimistic update - create temp message
+      const tempId = `temp-${Date.now()}`;
+      const tempMessage: Message = {
+        id: tempId,
         conversationId: selectedConversationId,
-        senderId: currentUser.id,
-        senderName: `${currentUser.firstName} ${currentUser.lastName || ""}`,
-        senderAvatar: currentUser.avatar,
+        senderId: currentUserSummary.id,
+        senderName:
+          currentUserSummary.displayName || currentUserSummary.username,
+        senderAvatar: currentUserSummary.avatar,
         content,
-        type: "text",
-        status: "sending",
+        type: MessageType.TEXT,
+        status: MessageStatus.SENDING,
         isEdited: false,
         isPinned: false,
+        isDeleted: false,
+        isSystem: false,
         createdAt: new Date(),
-        replyTo,
+        replyTo: replyTo?.id,
       };
 
-      // Add message
-      setMessages((prev) => ({
-        ...prev,
-        [selectedConversationId]: [
-          ...(prev[selectedConversationId] || []),
-          newMessage,
-        ],
-      }));
+      // Add to store temporarily
+      addMessage(selectedConversationId, tempMessage);
 
-      // Update conversation
-      setConversations((prev) =>
-        prev.map((conv) =>
-          conv.id === selectedConversationId
-            ? { ...conv, lastMessage: newMessage, updatedAt: new Date() }
-            : conv,
-        ),
-      );
-
-      // Simulate message status updates
-      setTimeout(() => {
-        setMessages((prev) => ({
-          ...prev,
-          [selectedConversationId]:
-            prev[selectedConversationId]?.map((msg) =>
-              msg.id === newMessage.id
-                ? { ...msg, status: "sent" as const }
-                : msg,
-            ) || [],
-        }));
-      }, 500);
-
-      setTimeout(() => {
-        setMessages((prev) => ({
-          ...prev,
-          [selectedConversationId]:
-            prev[selectedConversationId]?.map((msg) =>
-              msg.id === newMessage.id
-                ? { ...msg, status: "delivered" as const }
-                : msg,
-            ) || [],
-        }));
-      }, 1000);
-
-      setTimeout(() => {
-        setMessages((prev) => ({
-          ...prev,
-          [selectedConversationId]:
-            prev[selectedConversationId]?.map((msg) =>
-              msg.id === newMessage.id
-                ? { ...msg, status: "read" as const }
-                : msg,
-            ) || [],
-        }));
-      }, 2000);
+      try {
+        // Send via API
+        await storeSendMessage(selectedConversationId, content, replyTo?.id);
+      } catch (error) {
+        console.error("Failed to send message:", error);
+        // Update status to failed
+        updateMessage(selectedConversationId, tempId, {
+          status: MessageStatus.FAILED,
+        });
+      }
     },
-    [selectedConversationId],
+    [
+      selectedConversationId,
+      currentUserSummary,
+      addMessage,
+      storeSendMessage,
+      updateMessage,
+    ],
   );
 
+  // Handle typing
+  const handleTyping = useCallback(
+    (isTyping: boolean) => {
+      if (selectedConversationId) {
+        if (isTyping) {
+          sendTyping(selectedConversationId);
+        } else {
+          stopTyping(selectedConversationId);
+        }
+      }
+    },
+    [selectedConversationId, sendTyping, stopTyping],
+  );
+
+  // Handle toggle info panel
   const handleToggleInfoPanel = useCallback(() => {
     setIsInfoPanelOpen((prev) => !prev);
   }, []);
 
+  // Handle back (mobile)
   const handleBack = useCallback(() => {
-    setSelectedConversationId(null);
+    selectConversation(null);
     setIsMobileMenuOpen(true);
+    navigate("/chat");
+  }, [selectConversation, navigate]);
+
+  // Handle new chat
+  const handleStartChat = useCallback(async (userId: string) => {
+    // TODO: Implement create direct conversation API
+    console.log("Start chat with:", userId);
+    setIsNewChatModalOpen(false);
   }, []);
 
+  // Handle new chat modal
+  const handleOpenNewChat = useCallback(() => {
+    setIsNewChatModalOpen(true);
+  }, []);
+
+  // Get other user for private chat
   const otherUser =
-    selectedConversation?.type === "private"
-      ? getOtherParticipant(selectedConversation, currentUser.id)
+    selectedConversation &&
+    (selectedConversation.type === RoomType.PRIVATE ||
+      selectedConversation.type === RoomType.DIRECT) &&
+    currentUserSummary
+      ? getOtherParticipant(selectedConversation, currentUserSummary.id)
       : null;
+
+  if (!currentUserSummary) {
+    return null;
+  }
 
   return (
     <div className="flex h-screen bg-white overflow-hidden">
+      {/* Connection status indicator */}
+      {!isConnected && (
+        <div className="absolute top-0 left-0 right-0 z-50 bg-yellow-500 text-white text-center py-1 text-sm">
+          Đang kết nối lại...
+        </div>
+      )}
+
       {/* Sidebar */}
       <div
         className={clsx(
@@ -148,7 +229,7 @@ export const ChatPage: React.FC = () => {
       >
         <Sidebar
           conversations={conversations}
-          currentUser={currentUser}
+          currentUser={currentUserSummary}
           selectedId={selectedConversationId}
           onSelectConversation={handleSelectConversation}
         />
@@ -165,35 +246,16 @@ export const ChatPage: React.FC = () => {
           <ChatWindow
             conversation={selectedConversation}
             messages={conversationMessages}
-            currentUser={currentUser}
-            typingStatus={typingStatus}
+            currentUser={currentUserSummary}
+            typingStatus={typingStatus || undefined}
             onSendMessage={handleSendMessage}
             onToggleInfoPanel={handleToggleInfoPanel}
             onBack={handleBack}
+            onTyping={handleTyping}
+            onImageClick={setImagePreview}
           />
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center bg-chat-background text-gray-500">
-            <svg
-              className="w-24 h-24 mb-4 text-gray-300"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1}
-                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-              />
-            </svg>
-            <h2 className="text-xl font-medium">
-              Chọn một cuộc trò chuyện để bắt đầu
-            </h2>
-            <p className="mt-2 text-sm">
-              Chọn một cuộc hội thoại từ danh sách hoặc bắt đầu cuộc trò chuyện
-              mới
-            </p>
-          </div>
+          <NoChatSelected onNewChat={handleOpenNewChat} />
         )}
       </div>
 
@@ -208,12 +270,14 @@ export const ChatPage: React.FC = () => {
               : "translate-x-full lg:translate-x-0 lg:w-0 lg:overflow-hidden",
           )}
         >
-          {selectedConversation.type === "private" && otherUser ? (
+          {(selectedConversation.type === RoomType.PRIVATE ||
+            selectedConversation.type === RoomType.DIRECT) &&
+          otherUser ? (
             <UserProfile user={otherUser} onClose={handleToggleInfoPanel} />
           ) : (
             <GroupInfo
               conversation={selectedConversation}
-              currentUserId={currentUser.id}
+              currentUserId={currentUserSummary.id}
               onClose={handleToggleInfoPanel}
             />
           )}
@@ -225,6 +289,22 @@ export const ChatPage: React.FC = () => {
         <div
           className="fixed inset-0 bg-black/50 z-20 lg:hidden"
           onClick={handleToggleInfoPanel}
+        />
+      )}
+
+      {/* New Chat Modal */}
+      <NewChatModal
+        isOpen={isNewChatModalOpen}
+        onClose={() => setIsNewChatModalOpen(false)}
+        onStartChat={handleStartChat}
+      />
+
+      {/* Image Preview Modal */}
+      {imagePreview && (
+        <ImagePreviewModal
+          isOpen={!!imagePreview}
+          onClose={() => setImagePreview(null)}
+          imageUrl={imagePreview}
         />
       )}
     </div>

@@ -1,14 +1,10 @@
 import React from "react";
 import clsx from "clsx";
-import {
-  SpeakerXMarkIcon,
-  CheckIcon,
-  CheckCircleIcon,
-  ClockIcon,
-} from "@heroicons/react/24/solid";
+import { SpeakerXMarkIcon, CheckCircleIcon } from "@heroicons/react/24/solid";
 import { Avatar } from "../common/Avatar";
 import { Badge } from "../common/Badge";
-import type { Conversation, Message } from "../../types";
+import type { Conversation } from "../../types";
+import { RoomType } from "../../types";
 import { formatRelativeTime } from "../../utils/formatTime";
 import { getMessagePreview } from "../../utils/messageHelpers";
 
@@ -20,33 +16,6 @@ interface ConversationItemProps {
   className?: string;
 }
 
-const MessageStatusIcon: React.FC<{ status: Message["status"] }> = ({
-  status,
-}) => {
-  switch (status) {
-    case "sending":
-      return <ClockIcon className="w-4 h-4 text-gray-400" />;
-    case "sent":
-      return <CheckIcon className="w-4 h-4 text-gray-400" />;
-    case "delivered":
-      return (
-        <div className="flex -space-x-2">
-          <CheckIcon className="w-4 h-4 text-gray-400" />
-          <CheckIcon className="w-4 h-4 text-gray-400" />
-        </div>
-      );
-    case "read":
-      return (
-        <div className="flex -space-x-2">
-          <CheckIcon className="w-4 h-4 text-telegram-primary" />
-          <CheckIcon className="w-4 h-4 text-telegram-primary" />
-        </div>
-      );
-    default:
-      return null;
-  }
-};
-
 export const ConversationItem: React.FC<ConversationItemProps> = ({
   conversation,
   currentUserId,
@@ -55,7 +24,8 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   className,
 }) => {
   const otherParticipant =
-    conversation.type === "private"
+    conversation.type === RoomType.PRIVATE ||
+    conversation.type === RoomType.DIRECT
       ? conversation.participants.find((p) => p.id !== currentUserId)
       : null;
 
@@ -86,7 +56,10 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
         alt={conversation.name}
         size="lg"
         status={status}
-        showStatus={conversation.type === "private"}
+        showStatus={
+          conversation.type === RoomType.PRIVATE ||
+          conversation.type === RoomType.DIRECT
+        }
       />
 
       {/* Content */}
@@ -116,7 +89,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
                 <path d="M16 4a1 1 0 00-1.5-.87l-4 2.25A1 1 0 0010 5.5v6.19l-4.15 2.4A1 1 0 006 16v1a1 1 0 001 1h4v4a1 1 0 102 0v-4h4a1 1 0 001-1v-1a1 1 0 00-.15-.52L14 13.08V5.5a1 1 0 00-.5-.13l4-2.25A1 1 0 0016 4z" />
               </svg>
             )}
-            {otherParticipant?.isVerified && (
+            {otherParticipant?.isBot === false && (
               <CheckCircleIcon className="w-4 h-4 text-telegram-primary flex-shrink-0" />
             )}
           </div>
@@ -136,9 +109,9 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
         {/* Bottom row: Preview and badge */}
         <div className="flex items-center justify-between gap-2 mt-0.5">
           <div className="flex items-center gap-1 min-w-0 flex-1">
-            {/* Message status for own messages */}
+            {/* Sender indicator for own messages */}
             {isOwnLastMessage && lastMessage && (
-              <MessageStatusIcon status={lastMessage.status} />
+              <span className="text-sm text-gray-400">Bạn:</span>
             )}
 
             {/* Message preview */}

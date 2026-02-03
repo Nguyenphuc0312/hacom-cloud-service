@@ -1,9 +1,9 @@
 import React from "react";
 import clsx from "clsx";
-import type { User } from "../../types";
+import { UserStatus } from "../../types";
 
 interface OnlineIndicatorProps {
-  status: User["status"];
+  status: UserStatus;
   size?: "sm" | "md" | "lg";
   pulse?: boolean;
   className?: string;
@@ -15,10 +15,13 @@ const sizeClasses = {
   lg: "w-4 h-4",
 };
 
-const statusColors = {
-  online: "bg-chat-online",
-  offline: "bg-chat-offline",
-  away: "bg-chat-away",
+const statusColors: Record<UserStatus, string> = {
+  [UserStatus.ONLINE]: "bg-chat-online",
+  [UserStatus.OFFLINE]: "bg-chat-offline",
+  [UserStatus.AWAY]: "bg-chat-away",
+  [UserStatus.DND]: "bg-red-500",
+  [UserStatus.INVISIBLE]: "bg-gray-400",
+  [UserStatus.BUSY]: "bg-orange-500",
 };
 
 export const OnlineIndicator: React.FC<OnlineIndicatorProps> = ({
@@ -33,7 +36,7 @@ export const OnlineIndicator: React.FC<OnlineIndicatorProps> = ({
         "inline-block rounded-full ring-2 ring-white",
         sizeClasses[size],
         statusColors[status],
-        status === "online" && pulse && "animate-pulse-online",
+        status === UserStatus.ONLINE && pulse && "animate-pulse-online",
         className,
       )}
       aria-label={`Status: ${status}`}

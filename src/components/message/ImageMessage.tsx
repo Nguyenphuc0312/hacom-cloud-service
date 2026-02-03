@@ -6,6 +6,7 @@ interface ImageMessageProps {
   attachment: Attachment;
   caption?: string;
   isOwn: boolean;
+  onClick?: (imageUrl: string) => void;
   className?: string;
 }
 
@@ -13,6 +14,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   attachment,
   caption,
   isOwn,
+  onClick,
   className,
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -20,7 +22,11 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   const [showFullScreen, setShowFullScreen] = useState(false);
 
   const handleImageClick = () => {
-    setShowFullScreen(true);
+    if (onClick) {
+      onClick(attachment.url);
+    } else {
+      setShowFullScreen(true);
+    }
   };
 
   const handleClose = () => {

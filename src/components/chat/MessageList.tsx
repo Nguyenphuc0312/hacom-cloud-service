@@ -16,6 +16,7 @@ interface MessageListProps {
   currentUserId: string;
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
+  onImageClick?: (imageUrl: string) => void;
   className?: string;
 }
 
@@ -25,6 +26,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   currentUserId,
   onReply,
   onReact,
+  onImageClick,
   className,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -86,6 +88,7 @@ export const MessageList: React.FC<MessageListProps> = ({
                   conversationType={conversation.type}
                   onReply={onReply}
                   onReact={onReact}
+                  onImageClick={onImageClick}
                 />
               )}
             </React.Fragment>

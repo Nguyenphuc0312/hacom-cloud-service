@@ -20,6 +20,7 @@ interface MessageInputProps {
   editingMessage?: Message;
   onCancelReply?: () => void;
   onCancelEdit?: () => void;
+  onTyping?: (isTyping: boolean) => void;
   disabled?: boolean;
   className?: string;
 }
@@ -33,6 +34,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   editingMessage,
   onCancelReply,
   onCancelEdit,
+  onTyping,
   disabled = false,
   className,
 }) => {
@@ -78,6 +80,37 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     setShowEmojiPicker(false);
     textareaRef.current?.focus();
   };
+
+  // Typing indicator logic
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+
+  const handleInputChange = (newValue: string) => {
+    onChange(newValue);
+
+    // Notify typing
+    if (onTyping) {
+      onTyping(true);
+
+      // Clear previous timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      // Set new timeout to stop typing after 2s of inactivity
+      typingTimeoutRef.current = setTimeout(() => {
+        onTyping(false);
+      }, 2000);
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const hasContent = value.trim().length > 0;
 
@@ -200,7 +233,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           <textarea
             ref={textareaRef}
             value={value}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) => handleInputChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Nhập tin nhắn..."
             disabled={disabled}

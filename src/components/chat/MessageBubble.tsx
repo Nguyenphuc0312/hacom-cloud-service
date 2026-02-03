@@ -13,6 +13,7 @@ import { VoiceMessage } from "../message/VoiceMessage";
 import { MessageActions } from "../message/MessageActions";
 import { ReactionBar } from "../message/ReactionBar";
 import type { Message, Conversation } from "../../types";
+import { MessageStatus, MessageType, RoomType } from "../../types";
 import { formatMessageTime } from "../../utils/formatTime";
 
 interface MessageBubbleProps {
@@ -22,6 +23,7 @@ interface MessageBubbleProps {
   conversationType: Conversation["type"];
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
+  onImageClick?: (imageUrl: string) => void;
   className?: string;
 }
 
@@ -32,25 +34,25 @@ const MessageStatusIcon: React.FC<{
   if (!isOwn) return null;
 
   switch (status) {
-    case "sending":
+    case MessageStatus.SENDING:
       return <ClockIcon className="w-3.5 h-3.5 text-white/60" />;
-    case "sent":
+    case MessageStatus.SENT:
       return <CheckIcon className="w-3.5 h-3.5 text-white/60" />;
-    case "delivered":
+    case MessageStatus.DELIVERED:
       return (
         <div className="flex -space-x-1">
           <CheckIcon className="w-3.5 h-3.5 text-white/60" />
           <CheckIcon className="w-3.5 h-3.5 text-white/60" />
         </div>
       );
-    case "read":
+    case MessageStatus.READ:
       return (
         <div className="flex -space-x-1">
           <CheckIcon className="w-3.5 h-3.5 text-white" />
           <CheckIcon className="w-3.5 h-3.5 text-white" />
         </div>
       );
-    case "failed":
+    case MessageStatus.FAILED:
       return <ExclamationCircleIcon className="w-4 h-4 text-red-300" />;
     default:
       return null;
@@ -64,6 +66,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   conversationType,
   onReply,
   onReact,
+  onImageClick,
   className,
 }) => {
   const [showActions, setShowActions] = useState(false);
@@ -72,28 +75,29 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const renderContent = () => {
     switch (message.type) {
-      case "text":
+      case MessageType.TEXT:
         return <TextMessage content={message.content} isOwn={isOwn} />;
 
-      case "image":
+      case MessageType.IMAGE:
         return (
           message.attachments?.[0] && (
             <ImageMessage
               attachment={message.attachments[0]}
               caption={message.content}
               isOwn={isOwn}
+              onClick={onImageClick}
             />
           )
         );
 
-      case "file":
+      case MessageType.FILE:
         return (
           message.attachments?.[0] && (
             <FileMessage attachment={message.attachments[0]} isOwn={isOwn} />
           )
         );
 
-      case "voice":
+      case MessageType.VOICE:
         return (
           message.attachments?.[0] && (
             <VoiceMessage attachment={message.attachments[0]} isOwn={isOwn} />
@@ -121,29 +125,34 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       onMouseLeave={() => setShowActions(false)}
     >
       {/* Avatar for group chats */}
-      {conversationType !== "private" && !isOwn && (
-        <div className="shrink-0 w-8">
-          {showAvatar && (
-            <Avatar
-              src={message.senderAvatar}
-              alt={message.senderName}
-              size="sm"
-            />
-          )}
-        </div>
-      )}
+      {conversationType !== RoomType.PRIVATE &&
+        conversationType !== RoomType.DIRECT &&
+        !isOwn && (
+          <div className="shrink-0 w-8">
+            {showAvatar && (
+              <Avatar
+                src={message.senderAvatar}
+                alt={message.senderName}
+                size="sm"
+              />
+            )}
+          </div>
+        )}
 
       {/* Message bubble */}
       <div className="flex flex-col">
         {/* Sender name for group chats */}
-        {conversationType !== "private" && !isOwn && showAvatar && (
-          <span className="text-xs font-medium text-telegram-primary mb-1 ml-1">
-            {message.senderName}
-          </span>
-        )}
+        {conversationType !== RoomType.PRIVATE &&
+          conversationType !== RoomType.DIRECT &&
+          !isOwn &&
+          showAvatar && (
+            <span className="text-xs font-medium text-telegram-primary mb-1 ml-1">
+              {message.senderName}
+            </span>
+          )}
 
         {/* Reply preview */}
-        {message.replyTo && (
+        {message.replyToMessage && (
           <div
             className={clsx(
               "flex items-center gap-2 px-3 py-2 rounded-t-2xl border-l-2 border-telegram-primary text-xs",
@@ -152,8 +161,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 : "bg-gray-200 text-gray-600",
             )}
           >
-            <span className="font-medium">{message.replyTo.senderName}</span>
-            <span className="truncate">{message.replyTo.content}</span>
+            <span className="font-medium">
+              {message.replyToMessage.senderName}
+            </span>
+            <span className="truncate">{message.replyToMessage.content}</span>
           </div>
         )}
 
@@ -164,7 +175,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             isOwn
               ? "bg-telegram-primary text-white rounded-br-md"
               : "bg-white text-gray-900 rounded-bl-md shadow-sm",
-            message.replyTo && "rounded-t-none",
+            message.replyToMessage && "rounded-t-none",
             isOwn ? "animate-slide-in-right" : "animate-slide-in-left",
           )}
         >
@@ -179,7 +190,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2l9 9h-6v4H9v-4H3l9-9zm0 18h10v2H2v-2h10z" />
               </svg>
-              Chuyển tiếp từ {message.forwardedFrom.firstName}
+              Chuyển tiếp từ {message.forwardedFrom.username}
             </div>
           )}
 
