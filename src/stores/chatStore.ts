@@ -5,6 +5,7 @@
 
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
+import { shallow } from "zustand/shallow";
 import apiClient from "../lib/axios";
 import type { ApiResponse } from "../lib/axios";
 import type {
@@ -99,6 +100,8 @@ const initialState = {
   error: null,
 };
 
+const EMPTY_MESSAGES: Message[] = [];
+
 // ============================================
 // STORE
 // ============================================
@@ -159,7 +162,7 @@ export const useChatStore = create<ChatState>()(
       }));
 
       // Gọi API mark as read (fire and forget)
-      apiClient.post(`/rooms/${conversationId}/read`).catch(() => {
+      apiClient.post(`/rooms/${conversationId}/messages/read`).catch(() => {
         // Bỏ qua lỗi
       });
     },
@@ -255,7 +258,7 @@ export const useChatStore = create<ChatState>()(
         });
 
         const response = await apiClient.get<ApiResponse<MessagesResponse>>(
-          `/messages/${conversationId}?${params}`,
+          `/rooms/${conversationId}/messages?${params}`,
         );
 
         const { messages: newMessages, pagination } = response.data.data;
@@ -315,12 +318,11 @@ export const useChatStore = create<ChatState>()(
 
       try {
         const response = await apiClient.post<ApiResponse<Message>>(
-          "/messages",
+          `/rooms/${conversationId}/messages`,
           {
-            roomId: conversationId,
             content,
             type: "text",
-            ...(replyToId && { replyToId }),
+            ...(replyToId && { replyTo: replyToId }),
           },
         );
 
@@ -419,13 +421,8 @@ export const useSelectedConversation = () => {
 
 /**
  * Selector lấy messages của conversation đang chọn
+ * (implemented below with `shallow` equality)
  */
-export const useCurrentMessages = () => {
-  return useChatStore((state) => {
-    if (!state.selectedConversationId) return [];
-    return state.messages[state.selectedConversationId] || [];
-  });
-};
 
 /**
  * Selector lấy typing status của conversation đang chọn
@@ -470,7 +467,8 @@ export const useFilteredConversations = () => {
     }
 
     // Sort: pinned first, then by updatedAt
-    return filtered.sort((a, b) => {
+    // Use a copy to avoid mutating the original state array (causes infinite updates)
+    return filtered.slice().sort((a, b) => {
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
@@ -486,3 +484,15 @@ export const useTotalUnreadCount = () => {
     state.conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0),
   );
 };
+
+/**
+ * Selector lấy messages của conversation đang chọn
+ * Use `shallow` equality to avoid returning new array references
+ */
+
+export const useCurrentMessages = () =>
+  useChatStore((state) => {
+    const id = state.selectedConversationId;
+    if (!id) return EMPTY_MESSAGES;
+    return state.messages[id] || EMPTY_MESSAGES;
+  });

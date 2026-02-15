@@ -1,199 +1,395 @@
 /**
- * @fileoverview Socket.io client configuration
+ * @fileoverview Raw WebSocket client configuration
  * Quản lý WebSocket connection cho real-time features
+ *
+ * FIX #2: Chuyển từ Socket.IO sang raw WebSocket
+ * để tương thích với Gorilla WebSocket backend
  */
 
-import { io, Socket } from "socket.io-client";
 import { WEBSOCKET_URL, WEBSOCKET_CONFIG, AUTH_CONFIG } from "../config";
 
-// Singleton socket instance
-let socket: Socket | null = null;
+// ============================================
+// Types
+// ============================================
 
-/**
- * Lấy token từ storage
- */
-const getAccessToken = (): string | null => {
-  return (
-    localStorage.getItem(AUTH_CONFIG.ACCESS_TOKEN_KEY) ||
-    sessionStorage.getItem(AUTH_CONFIG.ACCESS_TOKEN_KEY)
-  );
-};
+export type ConnectionState =
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "reconnecting"
+  | "error";
+
+export interface WebSocketEvent {
+  type: string;
+  data: unknown;
+}
+
+export type EventHandler = (data: unknown) => void;
+
+// ============================================
+// WebSocket Manager Class
+// ============================================
+
+class WebSocketManager {
+  private socket: WebSocket | null = null;
+  private reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private eventHandlers: Map<string, Set<EventHandler>> = new Map();
+  private connectionState: ConnectionState = "disconnected";
+  private stateChangeHandlers: Set<(state: ConnectionState) => void> =
+    new Set();
+
+  /**
+   * Lấy token từ storage
+   */
+  private getAccessToken(): string | null {
+    return (
+      localStorage.getItem(AUTH_CONFIG.ACCESS_TOKEN_KEY) ||
+      sessionStorage.getItem(AUTH_CONFIG.ACCESS_TOKEN_KEY)
+    );
+  }
+
+  /**
+   * Cập nhật connection state
+   */
+  private setConnectionState(state: ConnectionState): void {
+    this.connectionState = state;
+    this.stateChangeHandlers.forEach((handler) => handler(state));
+  }
+
+  /**
+   * Đăng ký listener cho state changes
+   */
+  onStateChange(handler: (state: ConnectionState) => void): () => void {
+    this.stateChangeHandlers.add(handler);
+    return () => this.stateChangeHandlers.delete(handler);
+  }
+
+  /**
+   * Lấy connection state hiện tại
+   */
+  getConnectionState(): ConnectionState {
+    return this.connectionState;
+  }
+
+  /**
+   * Kiểm tra đã connected chưa
+   */
+  isConnected(): boolean {
+    return (
+      this.socket !== null &&
+      this.socket.readyState === WebSocket.OPEN &&
+      this.connectionState === "connected"
+    );
+  }
+
+  /**
+   * Kết nối WebSocket
+   */
+  connect(): void {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      console.log("WebSocket already connected");
+      return;
+    }
+
+    const token = this.getAccessToken();
+    if (!token) {
+      console.error("No access token available");
+      this.setConnectionState("error");
+      return;
+    }
+
+    this.setConnectionState("connecting");
+
+    // Build WebSocket URL với token
+    // Backend expects: ws://host:port/ws?token=JWT_TOKEN
+    const wsUrl = `${WEBSOCKET_URL}/ws?token=${encodeURIComponent(token)}`;
+
+    try {
+      this.socket = new WebSocket(wsUrl);
+      this.setupSocketHandlers();
+    } catch (error) {
+      console.error("Failed to create WebSocket:", error);
+      this.setConnectionState("error");
+      this.scheduleReconnect();
+    }
+  }
+
+  /**
+   * Setup các event handlers cho WebSocket
+   */
+  private setupSocketHandlers(): void {
+    if (!this.socket) return;
+
+    this.socket.onopen = () => {
+      console.log("WebSocket connected");
+      this.setConnectionState("connected");
+      this.reconnectAttempts = 0;
+      this.startPingInterval();
+
+      // Trigger custom connect event
+      this.emit("connect", {});
+    };
+
+    this.socket.onclose = (event) => {
+      console.log("WebSocket disconnected:", event.code, event.reason);
+      this.setConnectionState("disconnected");
+      this.stopPingInterval();
+
+      // Trigger custom disconnect event
+      this.emit("disconnect", { code: event.code, reason: event.reason });
+
+      // Tự động reconnect nếu không phải đóng chủ động
+      if (event.code !== 1000) {
+        this.scheduleReconnect();
+      }
+    };
+
+    this.socket.onerror = (error) => {
+      console.error("WebSocket error:", error);
+      this.setConnectionState("error");
+      this.emit("connect_error", { error });
+    };
+
+    this.socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data) as WebSocketEvent;
+        this.handleMessage(message);
+      } catch (error) {
+        console.error("Failed to parse WebSocket message:", error);
+      }
+    };
+  }
+
+  /**
+   * Xử lý message nhận được từ server
+   */
+  private handleMessage(message: WebSocketEvent): void {
+    const { type, data } = message;
+
+    // Log for debugging
+    console.debug("WebSocket received:", type, data);
+
+    // Emit to registered handlers
+    this.emit(type, data);
+  }
+
+  /**
+   * Schedule reconnect với exponential backoff
+   */
+  private scheduleReconnect(): void {
+    if (this.reconnectAttempts >= WEBSOCKET_CONFIG.RECONNECT_ATTEMPTS) {
+      console.error("Max reconnect attempts reached");
+      this.setConnectionState("error");
+      this.emit("reconnect_failed", {});
+      return;
+    }
+
+    this.setConnectionState("reconnecting");
+    this.reconnectAttempts++;
+
+    // Exponential backoff
+    const delay = Math.min(
+      WEBSOCKET_CONFIG.RECONNECT_DELAY *
+        Math.pow(2, this.reconnectAttempts - 1),
+      WEBSOCKET_CONFIG.RECONNECT_DELAY_MAX,
+    );
+
+    console.log(
+      `Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${WEBSOCKET_CONFIG.RECONNECT_ATTEMPTS})`,
+    );
+
+    this.emit("reconnect_attempt", { attempt: this.reconnectAttempts });
+
+    this.reconnectTimer = setTimeout(() => {
+      this.connect();
+    }, delay);
+  }
+
+  /**
+   * Start ping interval để giữ connection alive
+   */
+  private startPingInterval(): void {
+    this.stopPingInterval();
+    // WebSocket protocol có built-in ping/pong, không cần manual ping
+    this.pingTimer = setInterval(() => {
+      // Noop - built-in ping/pong
+    }, WEBSOCKET_CONFIG.PING_INTERVAL);
+  }
+
+  /**
+   * Stop ping interval
+   */
+  private stopPingInterval(): void {
+    if (this.pingTimer) {
+      clearInterval(this.pingTimer);
+      this.pingTimer = null;
+    }
+  }
+
+  /**
+   * Ngắt kết nối WebSocket
+   */
+  disconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    this.stopPingInterval();
+    this.reconnectAttempts = 0;
+
+    if (this.socket) {
+      this.socket.close(1000, "Client disconnect");
+      this.socket = null;
+    }
+
+    this.setConnectionState("disconnected");
+  }
+
+  /**
+   * Gửi event đến server
+   */
+  send(type: string, data: unknown): boolean {
+    if (!this.isConnected()) {
+      console.warn("Cannot send message, WebSocket not connected");
+      return false;
+    }
+
+    try {
+      const message: WebSocketEvent = { type, data };
+      this.socket!.send(JSON.stringify(message));
+      return true;
+    } catch (error) {
+      console.error("Failed to send message:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Đăng ký event handler
+   */
+  on(eventType: string, handler: EventHandler): () => void {
+    if (!this.eventHandlers.has(eventType)) {
+      this.eventHandlers.set(eventType, new Set());
+    }
+    this.eventHandlers.get(eventType)!.add(handler);
+
+    // Return unsubscribe function
+    return () => {
+      this.eventHandlers.get(eventType)?.delete(handler);
+    };
+  }
+
+  /**
+   * Hủy đăng ký event handler
+   */
+  off(eventType: string, handler?: EventHandler): void {
+    if (handler) {
+      this.eventHandlers.get(eventType)?.delete(handler);
+    } else {
+      this.eventHandlers.delete(eventType);
+    }
+  }
+
+  /**
+   * Emit event đến local handlers
+   */
+  private emit(eventType: string, data: unknown): void {
+    const handlers = this.eventHandlers.get(eventType);
+    if (handlers) {
+      handlers.forEach((handler) => {
+        try {
+          handler(data);
+        } catch (error) {
+          console.error(`Error in event handler for ${eventType}:`, error);
+        }
+      });
+    }
+  }
+
+  /**
+   * Cập nhật token và reconnect
+   */
+  updateAuth(token: string): void {
+    // Lưu token mới
+    localStorage.setItem(AUTH_CONFIG.ACCESS_TOKEN_KEY, token);
+
+    // Reconnect với token mới
+    if (this.isConnected()) {
+      this.disconnect();
+      this.connect();
+    }
+  }
+}
+
+// ============================================
+// Singleton instance
+// ============================================
+
+const wsManager = new WebSocketManager();
+
+// ============================================
+// Export functions (giữ tương thích API cũ)
+// ============================================
 
 /**
  * Khởi tạo socket connection
  */
-export const initSocket = (): Socket => {
-  if (socket?.connected) {
-    return socket;
-  }
-
-  const token = getAccessToken();
-
-  socket = io(WEBSOCKET_URL, {
-    auth: {
-      token,
-    },
-    autoConnect: false,
-    reconnection: true,
-    reconnectionAttempts: WEBSOCKET_CONFIG.RECONNECT_ATTEMPTS,
-    reconnectionDelay: WEBSOCKET_CONFIG.RECONNECT_DELAY,
-    reconnectionDelayMax: WEBSOCKET_CONFIG.RECONNECT_DELAY_MAX,
-    timeout: 20000,
-    transports: ["websocket", "polling"],
-  });
-
-  return socket;
+export const initSocket = (): WebSocketManager => {
+  return wsManager;
 };
 
 /**
- * Lấy socket instance hiện tại
+ * Lấy socket manager instance
  */
-export const getSocket = (): Socket | null => {
-  return socket;
+export const getSocket = (): WebSocketManager | null => {
+  return wsManager;
 };
 
 /**
  * Kết nối socket
  */
 export const connectSocket = (): void => {
-  if (!socket) {
-    socket = initSocket();
-  }
-
-  if (!socket.connected) {
-    // Cập nhật token mới nhất trước khi connect
-    const token = getAccessToken();
-    socket.auth = { token };
-    socket.connect();
-  }
+  wsManager.connect();
 };
 
 /**
  * Ngắt kết nối socket
  */
 export const disconnectSocket = (): void => {
-  if (socket?.connected) {
-    socket.disconnect();
-  }
+  wsManager.disconnect();
 };
 
 /**
  * Cập nhật token cho socket
  */
 export const updateSocketAuth = (token: string): void => {
-  if (socket) {
-    socket.auth = { token };
-    // Reconnect với token mới
-    if (socket.connected) {
-      socket.disconnect();
-      socket.connect();
-    }
-  }
+  wsManager.updateAuth(token);
 };
 
 // ============================================
-// Socket Events Types
+// Event Types (mapping với backend)
 // ============================================
 
-export interface SocketEvents {
-  // Connection events
-  connect: () => void;
-  disconnect: (reason: string) => void;
-  connect_error: (error: Error) => void;
-  reconnect: (attemptNumber: number) => void;
-  reconnect_attempt: (attemptNumber: number) => void;
-  reconnect_error: (error: Error) => void;
-  reconnect_failed: () => void;
+export const WebSocketEvents = {
+  // Client → Server
+  MESSAGE_SEND: "message:send",
+  ROOM_JOIN: "room:join",
+  ROOM_LEAVE: "room:leave",
+  TYPING_START: "typing:start",
+  TYPING_STOP: "typing:stop",
 
-  // Authentication events
-  authenticated: (data: { userId: string }) => void;
-  authentication_error: (error: { message: string }) => void;
+  // Server → Client
+  MESSAGE_NEW: "message:new",
+  USER_ONLINE: "user:online",
+  USER_OFFLINE: "user:offline",
+  ROOM_JOINED: "room:joined",
+  ROOM_LEFT: "room:left",
+  TYPING: "typing",
+  ERROR: "error",
+  PRESENCE_SYNC: "presence:sync",
+} as const;
 
-  // Room events
-  "room:joined": (data: { roomId: string }) => void;
-  "room:left": (data: { roomId: string }) => void;
-  "room:updated": (data: { roomId: string; updates: unknown }) => void;
-  "room:deleted": (data: { roomId: string }) => void;
-  "room:member_added": (data: {
-    roomId: string;
-    userId: string;
-    user: unknown;
-  }) => void;
-  "room:member_removed": (data: { roomId: string; userId: string }) => void;
-
-  // Message events
-  "message:new": (data: { roomId: string; message: unknown }) => void;
-  "message:updated": (data: {
-    roomId: string;
-    messageId: string;
-    updates: unknown;
-  }) => void;
-  "message:deleted": (data: { roomId: string; messageId: string }) => void;
-  "message:reaction": (data: {
-    roomId: string;
-    messageId: string;
-    reaction: unknown;
-  }) => void;
-  "message:read": (data: {
-    roomId: string;
-    userId: string;
-    messageId: string;
-  }) => void;
-
-  // Presence events
-  "user:online": (data: { userId: string }) => void;
-  "user:offline": (data: { userId: string; lastSeen: string }) => void;
-  "user:typing": (data: {
-    roomId: string;
-    userId: string;
-    userName: string;
-  }) => void;
-  "user:stop_typing": (data: { roomId: string; userId: string }) => void;
-  "user:status_changed": (data: { userId: string; status: string }) => void;
-
-  // Error events
-  error: (error: { code: string; message: string }) => void;
-}
-
-// ============================================
-// Socket Emit Events
-// ============================================
-
-export interface SocketEmitEvents {
-  // Authentication
-  authenticate: (data: { token: string }) => void;
-
-  // Room management
-  "room:join": (data: { roomId: string }) => void;
-  "room:leave": (data: { roomId: string }) => void;
-
-  // Messages
-  "message:send": (data: {
-    roomId: string;
-    content: string;
-    type?: string;
-    attachments?: unknown[];
-    replyToId?: string;
-  }) => void;
-  "message:edit": (data: {
-    roomId: string;
-    messageId: string;
-    content: string;
-  }) => void;
-  "message:delete": (data: { roomId: string; messageId: string }) => void;
-  "message:react": (data: {
-    roomId: string;
-    messageId: string;
-    emoji: string;
-  }) => void;
-  "message:mark_read": (data: { roomId: string; messageId: string }) => void;
-
-  // Typing
-  "typing:start": (data: { roomId: string }) => void;
-  "typing:stop": (data: { roomId: string }) => void;
-
-  // Presence
-  "presence:update": (data: { status: string }) => void;
-}
-
-export default socket;
+export default wsManager;

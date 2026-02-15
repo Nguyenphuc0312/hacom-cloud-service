@@ -156,12 +156,10 @@ export const conversationApi = {
   },
 
   createPrivateConversation: async (userId: string) => {
-    const response = await apiClient.post<ApiResponse<Conversation>>(
-      "/rooms/direct",
-      {
-        userId,
-      },
-    );
+    const response = await apiClient.post<ApiResponse<Conversation>>("/rooms", {
+      type: "direct",
+      members: [userId],
+    });
     return response.data;
   },
 
@@ -171,10 +169,12 @@ export const conversationApi = {
     avatar?: string;
     description?: string;
   }) => {
-    const response = await apiClient.post<ApiResponse<Conversation>>(
-      "/rooms/group",
-      data,
-    );
+    const response = await apiClient.post<ApiResponse<Conversation>>("/rooms", {
+      type: "group",
+      name: data.name,
+      members: data.memberIds,
+      description: data.description,
+    });
     return response.data;
   },
 
@@ -182,7 +182,7 @@ export const conversationApi = {
     conversationId: string,
     data: Partial<Conversation>,
   ) => {
-    const response = await apiClient.put<ApiResponse<Conversation>>(
+    const response = await apiClient.patch<ApiResponse<Conversation>>(
       `/rooms/${conversationId}`,
       data,
     );
@@ -194,19 +194,30 @@ export const conversationApi = {
   },
 
   addMembers: async (conversationId: string, memberIds: string[]) => {
-    const response = await apiClient.post<ApiResponse<Conversation>>(
-      `/rooms/${conversationId}/members`,
-      { memberIds },
+    // Backend expects single userId, so we add one by one
+    const results = [];
+    for (const userId of memberIds) {
+      const response = await apiClient.post<ApiResponse<Conversation>>(
+        `/rooms/${conversationId}/members`,
+        { userId },
+      );
+      results.push(response.data);
+    }
+    return results[results.length - 1]; // Return last result
+  },
+
+  removeMember: async (conversationId: string, userId: string) => {
+    const response = await apiClient.delete<ApiResponse<Conversation>>(
+      `/rooms/${conversationId}/members/${userId}`,
     );
     return response.data;
   },
 
   removeMembers: async (conversationId: string, memberIds: string[]) => {
-    const response = await apiClient.delete<ApiResponse<Conversation>>(
-      `/rooms/${conversationId}/members`,
-      { data: { memberIds } },
-    );
-    return response.data;
+    // Backend expects path param, so we remove one by one
+    for (const userId of memberIds) {
+      await apiClient.delete(`/rooms/${conversationId}/members/${userId}`);
+    }
   },
 
   leaveConversation: async (conversationId: string) => {
@@ -214,7 +225,7 @@ export const conversationApi = {
   },
 
   markAsRead: async (conversationId: string) => {
-    await apiClient.post(`/rooms/${conversationId}/read`);
+    await apiClient.post(`/rooms/${conversationId}/messages/read`);
   },
 };
 
@@ -230,7 +241,7 @@ export const messageApi = {
         total: number;
         hasMore: boolean;
       }>
-    >(`/messages/${conversationId}?page=${page}&limit=${limit}`);
+    >(`/rooms/${conversationId}/messages?page=${page}&limit=${limit}`);
     return response.data;
   },
 
@@ -244,14 +255,19 @@ export const messageApi = {
     },
   ) => {
     const response = await apiClient.post<ApiResponse<Message>>(
-      `/messages/${conversationId}`,
-      data,
+      `/rooms/${conversationId}/messages`,
+      {
+        content: data.content,
+        type: data.type || "text",
+        replyTo: data.replyToId,
+        attachments: data.attachments,
+      },
     );
     return response.data;
   },
 
   editMessage: async (messageId: string, content: string) => {
-    const response = await apiClient.put<ApiResponse<Message>>(
+    const response = await apiClient.patch<ApiResponse<Message>>(
       `/messages/${messageId}`,
       { content },
     );
@@ -270,8 +286,9 @@ export const messageApi = {
   },
 
   unpinMessage: async (messageId: string) => {
+    // Backend uses toggle endpoint for both pin/unpin
     const response = await apiClient.post<ApiResponse<Message>>(
-      `/messages/${messageId}/unpin`,
+      `/messages/${messageId}/pin`,
     );
     return response.data;
   },
@@ -284,9 +301,9 @@ export const messageApi = {
     return response.data;
   },
 
-  removeReaction: async (messageId: string) => {
+  removeReaction: async (messageId: string, emoji: string) => {
     const response = await apiClient.delete<ApiResponse<Message>>(
-      `/messages/${messageId}/reactions`,
+      `/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`,
     );
     return response.data;
   },
@@ -365,7 +382,7 @@ export const friendshipApi = {
         friends: User[];
         total: number;
       }>
-    >("/friendships");
+    >("/friends");
     return response.data;
   },
 
@@ -374,33 +391,34 @@ export const friendshipApi = {
       ApiResponse<{
         requests: Array<{ id: string; sender: User; createdAt: string }>;
       }>
-    >("/friendships/pending");
+    >("/friends/requests/received");
     return response.data;
   },
 
   sendFriendRequest: async (userId: string) => {
     const response = await apiClient.post<ApiResponse<{ message: string }>>(
-      `/friendships/request/${userId}`,
+      "/friends/requests",
+      { userId },
     );
     return response.data;
   },
 
   acceptFriendRequest: async (requestId: string) => {
     const response = await apiClient.post<ApiResponse<{ message: string }>>(
-      `/friendships/accept/${requestId}`,
+      `/friends/requests/${requestId}/accept`,
     );
     return response.data;
   },
 
   rejectFriendRequest: async (requestId: string) => {
     const response = await apiClient.post<ApiResponse<{ message: string }>>(
-      `/friendships/reject/${requestId}`,
+      `/friends/requests/${requestId}/decline`,
     );
     return response.data;
   },
 
-  removeFriend: async (userId: string) => {
-    await apiClient.delete(`/friendships/${userId}`);
+  removeFriend: async (friendshipId: string) => {
+    await apiClient.delete(`/friends/${friendshipId}`);
   },
 };
 

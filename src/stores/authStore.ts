@@ -29,15 +29,12 @@ export interface User {
   createdAt?: string;
 }
 
-interface TokensResponse {
+interface AuthResponse {
+  user: User;
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
-}
-
-interface AuthResponse {
-  user: User;
-  tokens: TokensResponse;
+  tokenType: string;
 }
 
 interface AuthState {
@@ -90,10 +87,10 @@ export const useAuthStore = create<AuthState>()(
             },
           );
 
-          const { user, tokens } = response.data.data;
+          const { user, accessToken, refreshToken } = response.data.data;
 
           // Lưu tokens
-          storeTokens(tokens.accessToken, tokens.refreshToken, data.rememberMe);
+          storeTokens(accessToken, refreshToken, data.rememberMe);
 
           set({
             user,
@@ -130,10 +127,10 @@ export const useAuthStore = create<AuthState>()(
             data,
           );
 
-          const { user, tokens } = response.data.data;
+          const { user, accessToken, refreshToken } = response.data.data;
 
           // Lưu tokens (mặc định không remember)
-          storeTokens(tokens.accessToken, tokens.refreshToken, false);
+          storeTokens(accessToken, refreshToken, false);
 
           set({
             user,

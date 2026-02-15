@@ -1,26 +1,22 @@
 /**
  * @fileoverview useWebSocket hook
  * Custom hook quản lý WebSocket connection và events
+ *
+ * FIX #2: Updated to work with raw WebSocket instead of Socket.IO
  */
 
 import { useEffect, useCallback, useRef, useState } from "react";
-import { Socket } from "socket.io-client";
 import {
   initSocket,
   connectSocket,
   disconnectSocket,
   getSocket,
+  WebSocketEvents,
+  type ConnectionState,
 } from "../lib/socket";
 import { useAuthStore, useChatStore } from "../stores";
 import { toast } from "../components/ui";
 import type { Message, Conversation } from "../types";
-
-export type ConnectionState =
-  | "connecting"
-  | "connected"
-  | "disconnected"
-  | "reconnecting"
-  | "error";
 
 interface UseWebSocketOptions {
   autoConnect?: boolean;
@@ -30,7 +26,6 @@ interface UseWebSocketOptions {
 }
 
 interface UseWebSocketReturn {
-  socket: Socket | null;
   isConnected: boolean;
   connectionState: ConnectionState;
   connect: () => void;
@@ -38,6 +33,7 @@ interface UseWebSocketReturn {
   emit: (event: string, data: unknown) => void;
   joinRoom: (roomId: string) => void;
   leaveRoom: (roomId: string) => void;
+  sendMessage: (roomId: string, content: string, type?: string) => void;
   sendTyping: (roomId: string) => void;
   stopTyping: (roomId: string) => void;
 }
@@ -47,133 +43,147 @@ export const useWebSocket = (
 ): UseWebSocketReturn => {
   const { autoConnect = true, onConnect, onDisconnect, onError } = options;
 
-  const { isAuthenticated } = useAuthStore();
-  const {
-    addMessage,
-    updateMessage,
-    removeMessage,
-    setTyping,
-    clearTyping,
-    updateConversation,
-  } = useChatStore();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const addMessage = useChatStore((s) => s.addMessage);
+  const updateMessage = useChatStore((s) => s.updateMessage);
+  const removeMessage = useChatStore((s) => s.removeMessage);
+  const setTyping = useChatStore((s) => s.setTyping);
+  const clearTyping = useChatStore((s) => s.clearTyping);
+  const updateConversation = useChatStore((s) => s.updateConversation);
 
-  const socketRef = useRef<Socket | null>(null);
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("disconnected");
   const joinedRoomsRef = useRef<Set<string>>(new Set());
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const unsubscribersRef = useRef<Array<() => void>>([]);
 
   // Initialize và setup event listeners
   const setupSocket = useCallback(() => {
     const socket = initSocket();
-    socketRef.current = socket;
+
+    // Cleanup previous listeners
+    unsubscribersRef.current.forEach((unsub) => unsub());
+    unsubscribersRef.current = [];
+
+    // Subscribe to state changes
+    const unsubState = socket.onStateChange((state) => {
+      setConnectionState(state);
+    });
+    unsubscribersRef.current.push(unsubState);
 
     // Connection events
-    socket.on("connect", () => {
-      setConnectionState("connected");
+    const unsubConnect = socket.on("connect", () => {
       console.log("WebSocket connected");
       onConnect?.();
 
       // Rejoin rooms after reconnect
       joinedRoomsRef.current.forEach((roomId) => {
-        socket.emit("room:join", { roomId });
+        socket.send(WebSocketEvents.ROOM_JOIN, { roomId });
       });
     });
+    unsubscribersRef.current.push(unsubConnect);
 
-    socket.on("disconnect", (reason) => {
-      setConnectionState("disconnected");
-      console.log("WebSocket disconnected:", reason);
-      onDisconnect?.(reason);
+    const unsubDisconnect = socket.on(
+      "disconnect",
+      (data: { code?: number; reason?: string }) => {
+        console.log("WebSocket disconnected:", data);
+        onDisconnect?.(data.reason || "Unknown");
+      },
+    );
+    unsubscribersRef.current.push(unsubDisconnect);
 
-      if (reason === "io server disconnect") {
-        // Server disconnected, need to reconnect manually
-        socket.connect();
-      }
+    const unsubError = socket.on("connect_error", (data: { error?: Error }) => {
+      console.error("WebSocket connection error:", data);
+      onError?.(data.error || new Error("Connection error"));
     });
+    unsubscribersRef.current.push(unsubError);
 
-    socket.on("connect_error", (error) => {
-      setConnectionState("error");
-      console.error("WebSocket connection error:", error);
-      onError?.(error);
-    });
-
-    socket.on("reconnect", (attemptNumber) => {
-      console.log("WebSocket reconnected after", attemptNumber, "attempts");
-      toast.success("Đã kết nối lại");
-    });
-
-    socket.on("reconnect_attempt", (attemptNumber) => {
-      setConnectionState("reconnecting");
-      console.log("WebSocket reconnecting... attempt", attemptNumber);
-    });
-
-    socket.on("reconnect_failed", () => {
-      setConnectionState("error");
+    const unsubReconnectFailed = socket.on("reconnect_failed", () => {
       toast.error("Không thể kết nối lại. Vui lòng tải lại trang.");
     });
-
-    // Authentication events
-    socket.on("authenticated", ({ userId }) => {
-      console.log("WebSocket authenticated for user:", userId);
-    });
-
-    socket.on("authentication_error", ({ message }) => {
-      console.error("WebSocket authentication failed:", message);
-      toast.error("Xác thực thất bại. Vui lòng đăng nhập lại.");
-    });
+    unsubscribersRef.current.push(unsubReconnectFailed);
 
     // Message events
-    socket.on("message:new", ({ roomId, message }) => {
-      addMessage(roomId, message as Message);
-    });
-
-    socket.on("message:updated", ({ roomId, messageId, updates }) => {
-      updateMessage(roomId, messageId, updates as Partial<Message>);
-    });
-
-    socket.on("message:deleted", ({ roomId, messageId }) => {
-      removeMessage(roomId, messageId);
-    });
+    const unsubNewMsg = socket.on(
+      WebSocketEvents.MESSAGE_NEW,
+      (data: { roomId: string; message: Message } | Message) => {
+        // Handle both formats
+        if ("roomId" in data && "message" in data) {
+          addMessage(data.roomId, data.message);
+        } else {
+          // Message contains roomId directly
+          const msg = data as Message;
+          if (msg.roomId) {
+            addMessage(msg.roomId, msg);
+          }
+        }
+      },
+    );
+    unsubscribersRef.current.push(unsubNewMsg);
 
     // Typing events
-    socket.on("user:typing", ({ roomId, userId, userName }) => {
-      setTyping({
-        conversationId: roomId,
-        userId,
-        userName,
-        isTyping: true,
-      });
+    const unsubTyping = socket.on(
+      WebSocketEvents.TYPING,
+      (data: {
+        roomId: string;
+        userId: string;
+        username: string;
+        isTyping: boolean;
+      }) => {
+        if (data.isTyping) {
+          setTyping({
+            conversationId: data.roomId,
+            userId: data.userId,
+            userName: data.username,
+            isTyping: true,
+          });
 
-      // Auto clear after 3 seconds
-      setTimeout(() => {
-        clearTyping(roomId, userId);
-      }, 3000);
-    });
-
-    socket.on("user:stop_typing", ({ roomId, userId }) => {
-      clearTyping(roomId, userId);
-    });
+          // Auto clear after 3 seconds
+          setTimeout(() => {
+            clearTyping(data.roomId, data.userId);
+          }, 3000);
+        } else {
+          clearTyping(data.roomId, data.userId);
+        }
+      },
+    );
+    unsubscribersRef.current.push(unsubTyping);
 
     // Room events
-    socket.on("room:updated", ({ roomId, updates }) => {
-      updateConversation(roomId, updates as Partial<Conversation>);
-    });
+    const unsubRoomJoined = socket.on(
+      WebSocketEvents.ROOM_JOINED,
+      (data: { roomId: string }) => {
+        console.log("Joined room:", data.roomId);
+      },
+    );
+    unsubscribersRef.current.push(unsubRoomJoined);
 
     // Presence events
-    socket.on("user:online", ({ userId }) => {
-      // Update user status in conversations
-      console.log("User online:", userId);
-    });
+    const unsubOnline = socket.on(
+      WebSocketEvents.USER_ONLINE,
+      (data: { userId: string }) => {
+        console.log("User online:", data.userId);
+      },
+    );
+    unsubscribersRef.current.push(unsubOnline);
 
-    socket.on("user:offline", ({ userId }) => {
-      console.log("User offline:", userId);
-    });
+    const unsubOffline = socket.on(
+      WebSocketEvents.USER_OFFLINE,
+      (data: { userId: string }) => {
+        console.log("User offline:", data.userId);
+      },
+    );
+    unsubscribersRef.current.push(unsubOffline);
 
     // Error handling
-    socket.on("error", ({ code, message }) => {
-      console.error("WebSocket error:", code, message);
-      toast.error(message);
-    });
+    const unsubErr = socket.on(
+      WebSocketEvents.ERROR,
+      (data: { code: string; message: string }) => {
+        console.error("WebSocket error:", data.code, data.message);
+        toast.error(data.message);
+      },
+    );
+    unsubscribersRef.current.push(unsubErr);
 
     return socket;
   }, [
@@ -190,9 +200,7 @@ export const useWebSocket = (
 
   // Connect
   const connect = useCallback(() => {
-    if (!socketRef.current) {
-      setupSocket();
-    }
+    setupSocket();
     connectSocket();
   }, [setupSocket]);
 
@@ -205,8 +213,8 @@ export const useWebSocket = (
   // Emit event
   const emit = useCallback((event: string, data: unknown) => {
     const socket = getSocket();
-    if (socket?.connected) {
-      socket.emit(event, data);
+    if (socket?.isConnected()) {
+      socket.send(event, data);
     } else {
       console.warn("Socket not connected, cannot emit:", event);
     }
@@ -216,7 +224,7 @@ export const useWebSocket = (
   const joinRoom = useCallback(
     (roomId: string) => {
       if (!joinedRoomsRef.current.has(roomId)) {
-        emit("room:join", { roomId });
+        emit(WebSocketEvents.ROOM_JOIN, { roomId });
         joinedRoomsRef.current.add(roomId);
       }
     },
@@ -226,8 +234,20 @@ export const useWebSocket = (
   // Leave room
   const leaveRoom = useCallback(
     (roomId: string) => {
-      emit("room:leave", { roomId });
+      emit(WebSocketEvents.ROOM_LEAVE, { roomId });
       joinedRoomsRef.current.delete(roomId);
+    },
+    [emit],
+  );
+
+  // Send message
+  const sendMessage = useCallback(
+    (roomId: string, content: string, type: string = "text") => {
+      emit(WebSocketEvents.MESSAGE_SEND, {
+        roomId,
+        content,
+        messageType: type,
+      });
     },
     [emit],
   );
@@ -235,14 +255,14 @@ export const useWebSocket = (
   // Send typing indicator
   const sendTyping = useCallback(
     (roomId: string) => {
-      emit("typing:start", { roomId });
+      emit(WebSocketEvents.TYPING_START, { roomId });
 
       // Auto stop typing after 3 seconds
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
       typingTimeoutRef.current = setTimeout(() => {
-        emit("typing:stop", { roomId });
+        emit(WebSocketEvents.TYPING_STOP, { roomId });
       }, 3000);
     },
     [emit],
@@ -255,7 +275,7 @@ export const useWebSocket = (
         clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = null;
       }
-      emit("typing:stop", { roomId });
+      emit(WebSocketEvents.TYPING_STOP, { roomId });
     },
     [emit],
   );
@@ -268,6 +288,9 @@ export const useWebSocket = (
 
     return () => {
       disconnect();
+      // Cleanup all event listeners
+      unsubscribersRef.current.forEach((unsub) => unsub());
+      unsubscribersRef.current = [];
     };
   }, [autoConnect, isAuthenticated, connect, disconnect]);
 
@@ -281,7 +304,6 @@ export const useWebSocket = (
   }, []);
 
   return {
-    socket: getSocket(),
     isConnected: connectionState === "connected",
     connectionState,
     connect,
@@ -289,9 +311,11 @@ export const useWebSocket = (
     emit,
     joinRoom,
     leaveRoom,
+    sendMessage,
     sendTyping,
     stopTyping,
   };
 };
 
+export type { ConnectionState };
 export default useWebSocket;

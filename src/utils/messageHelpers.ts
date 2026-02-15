@@ -195,8 +195,10 @@ export function getOtherParticipant(
  * Sort conversations (pinned first, then by updatedAt)
  */
 export function sortConversations(
-  conversations: Conversation[],
+  conversations?: Conversation[] | null,
 ): Conversation[] {
+  if (!Array.isArray(conversations)) return [];
+
   return [...conversations].sort((a, b) => {
     // Pinned first
     if (a.isPinned && !b.isPinned) return -1;
