@@ -27,7 +27,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   className,
 }) => {
   // Filter conversations
-  let filtered = filterConversations(conversations, searchQuery);
+  let filtered = filterConversations(
+    Array.isArray(conversations) ? conversations : [],
+    searchQuery,
+  );
 
   // Apply tab filter
   switch (activeFilter) {

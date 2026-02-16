@@ -58,21 +58,21 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
 
         {/* Image */}
         <img
-          src={attachment.url}
-          alt={attachment.fileName || "Image"}
           className={clsx(
-            "rounded-lg max-w-full cursor-pointer transition-opacity",
+            "max-w-full h-auto object-cover rounded cursor-pointer transition-opacity",
             isLoaded ? "opacity-100" : "opacity-0 absolute top-0 left-0",
             "hover:opacity-95",
           )}
           style={{
             maxWidth: "300px",
-            maxHeight: "200px",
+            maxHeight: 300,
             objectFit: "cover",
           }}
+          src={attachment.url}
+          alt={caption || attachment.fileName || "image"}
+          onClick={handleImageClick}
           onLoad={() => setIsLoaded(true)}
           onError={() => setIsError(true)}
-          onClick={handleImageClick}
         />
 
         {/* Caption */}

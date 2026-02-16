@@ -45,13 +45,26 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 }) => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [fileToSend, setFileToSend] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
-  const [fileToSend, setFileToSend] = useState<File | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const sendMessage = useChatStore((s) => s.sendMessage);
+
+  // ...existing code...
+
+  return (
+    <div
+      className={clsx(
+        "sticky bottom-0 bg-white z-10 px-2 py-2 border-t border-gray-200",
+        className,
+      )}
+    >
+      {/* ...existing code... */}
+    </div>
+  );
 
   // Validate file
   const validateFile = (file: File): string | null => {

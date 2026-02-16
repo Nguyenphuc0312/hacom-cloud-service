@@ -49,7 +49,20 @@ export const useWebSocket = (
   const clearTyping = useChatStore((s) => s.clearTyping);
   const updateConversation = useChatStore((s) => s.updateConversation);
 
-  const [connectionState] = useState<ConnectionState>("disconnected");
+  const [connectionState, setConnectionState] =
+    useState<ConnectionState>("disconnected");
+  // Lắng nghe realtime connectionState từ WebSocketManager
+  useEffect(() => {
+    const socket = initSocket();
+    const unsub = socket.onStateChange((state) => {
+      setConnectionState(state);
+    });
+    // Sync ngay lần đầu
+    setConnectionState(socket.getConnectionState());
+    return () => {
+      unsub();
+    };
+  }, []);
   const joinedRoomsRef = useRef<Set<string>>(new Set());
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unsubscribersRef = useRef<Array<() => void>>([]);

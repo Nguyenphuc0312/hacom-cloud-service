@@ -31,7 +31,7 @@ export const FileMessage: React.FC<FileMessageProps> = ({
   return (
     <div
       className={clsx(
-        "flex items-center gap-3 p-3 rounded-lg min-w-[200px]",
+        "flex items-center gap-3 p-3 rounded-lg min-w-0 max-w-full sm:max-w-md",
         isOwn ? "bg-white/10" : "bg-gray-100",
         className,
       )}
@@ -50,7 +50,7 @@ export const FileMessage: React.FC<FileMessageProps> = ({
       <div className="flex-1 min-w-0">
         <p
           className={clsx(
-            "font-medium text-sm truncate",
+            "font-medium text-sm truncate break-all",
             isOwn ? "text-white" : "text-gray-900",
           )}
         >

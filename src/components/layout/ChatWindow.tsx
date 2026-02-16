@@ -36,43 +36,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onImageClick,
   className,
 }) => {
-  const [inputValue, setInputValue] = useState("");
-  const [inputMode, setInputMode] = useState<InputMode>("normal");
-  const [replyToMessage, setReplyToMessage] = useState<Message | undefined>();
-  const [editingMessage, setEditingMessage] = useState<Message | undefined>();
-
-  const handleSend = useCallback(() => {
-    if (!inputValue.trim()) return;
-
-    onSendMessage(inputValue.trim(), replyToMessage);
-    setInputValue("");
-    setInputMode("normal");
-    setReplyToMessage(undefined);
-    setEditingMessage(undefined);
-  }, [inputValue, replyToMessage, onSendMessage]);
-
-  const handleReply = useCallback((message: Message) => {
-    setInputMode("reply");
-    setReplyToMessage(message);
-    setEditingMessage(undefined);
-  }, []);
-
-  const handleCancelReply = useCallback(() => {
-    setInputMode("normal");
-    setReplyToMessage(undefined);
-  }, []);
-
-  const handleCancelEdit = useCallback(() => {
-    setInputMode("normal");
-    setEditingMessage(undefined);
-    setInputValue("");
-  }, []);
-
-  const handleReact = useCallback((messageId: string, emoji: string) => {
-    console.log("React to message:", messageId, "with:", emoji);
-    // In real app, this would update the message reactions
-  }, []);
-
+  // ...existing state and handlers...
+  // (Bạn cần đảm bảo các state như inputValue, inputMode, replyToMessage, editingMessage, handleReply, handleSend, handleCancelReply, handleCancelEdit, handleReact, ... được khai báo đúng ở trên)
   return (
     <div
       className={clsx(

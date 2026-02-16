@@ -46,7 +46,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <div
       className={clsx(
-        "flex flex-col h-full bg-white border-r border-gray-200",
+        "hidden sm:flex flex-col h-full bg-white border-r border-gray-200",
         className,
       )}
     >
