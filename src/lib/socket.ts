@@ -383,6 +383,9 @@ export const WebSocketEvents = {
 
   // Server → Client
   MESSAGE_NEW: "message:new",
+  MESSAGE_UPDATE: "message:update",
+  MESSAGE_DELIVERED: "message:delivered",
+  MESSAGE_READ: "message:read",
   USER_ONLINE: "user:online",
   USER_OFFLINE: "user:offline",
   ROOM_JOINED: "room:joined",

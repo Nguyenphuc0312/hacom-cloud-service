@@ -121,6 +121,35 @@ export const useWebSocket = (
     );
     unsubscribersRef.current.push(unsubNewMsg);
 
+    // Realtime message status events
+    const unsubDelivered = socket.on(
+      WebSocketEvents.MESSAGE_DELIVERED,
+      (data: { roomId: string; messageId: string }) => {
+        updateMessage(data.roomId, data.messageId, { status: "delivered" });
+      },
+    );
+    unsubscribersRef.current.push(unsubDelivered);
+
+    const unsubRead = socket.on(
+      WebSocketEvents.MESSAGE_READ,
+      (data: { roomId: string; messageId: string }) => {
+        updateMessage(data.roomId, data.messageId, { status: "read" });
+      },
+    );
+    unsubscribersRef.current.push(unsubRead);
+
+    const unsubUpdate = socket.on(
+      WebSocketEvents.MESSAGE_UPDATE,
+      (data: {
+        roomId: string;
+        messageId: string;
+        updates: Partial<Message>;
+      }) => {
+        updateMessage(data.roomId, data.messageId, data.updates);
+      },
+    );
+    unsubscribersRef.current.push(unsubUpdate);
+
     // Typing events
     const unsubTyping = socket.on(
       WebSocketEvents.TYPING,

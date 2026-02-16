@@ -15,6 +15,7 @@ import { ReactionBar } from "../message/ReactionBar";
 import type { Message, Conversation } from "../../types";
 import { MessageStatus, MessageType, RoomType } from "../../types";
 import { formatMessageTime } from "../../utils/formatTime";
+import { useChatStore } from "../../stores";
 
 interface MessageBubbleProps {
   message: Message;
@@ -30,9 +31,15 @@ interface MessageBubbleProps {
 const MessageStatusIcon: React.FC<{
   status: Message["status"];
   isOwn: boolean;
-}> = ({ status, isOwn }) => {
+  onResend?: () => void;
+}> = ({ status, isOwn, onResend }) => {
   if (!isOwn) return null;
 
+  if (status === "uploading") {
+    return (
+      <span className="inline-block w-3.5 h-3.5 animate-spin border-2 border-white/60 border-t-transparent rounded-full" />
+    );
+  }
   switch (status) {
     case MessageStatus.SENDING:
       return <ClockIcon className="w-3.5 h-3.5 text-white/60" />;
@@ -53,7 +60,15 @@ const MessageStatusIcon: React.FC<{
         </div>
       );
     case MessageStatus.FAILED:
-      return <ExclamationCircleIcon className="w-4 h-4 text-red-300" />;
+      return (
+        <button
+          title="Gửi lại"
+          onClick={onResend}
+          className="w-4 h-4 text-red-300 hover:text-red-500 focus:outline-none"
+        >
+          <ExclamationCircleIcon />
+        </button>
+      );
     default:
       return null;
   }
@@ -70,6 +85,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   className,
 }) => {
   const [showActions, setShowActions] = useState(false);
+  const resendMessage = useChatStore((s) => s.resendMessage);
 
   const timeStr = formatMessageTime(new Date(message.createdAt));
 
@@ -112,6 +128,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const handleCopy = () => {
     navigator.clipboard.writeText(message.content);
     setShowActions(false);
+  };
+
+  // Handler resend message (gọi lại store.resendMessage)
+  const handleResend = () => {
+    if (message.conversationId) {
+      resendMessage(message.conversationId, message);
+    }
   };
 
   return (
@@ -206,7 +229,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           >
             {message.isEdited && <span className="text-[10px]">đã sửa</span>}
             <span className="text-[10px]">{timeStr}</span>
-            <MessageStatusIcon status={message.status} isOwn={isOwn} />
+            <MessageStatusIcon
+              status={message.status}
+              isOwn={isOwn}
+              onResend={handleResend}
+            />
           </div>
 
           {/* Bubble tail */}

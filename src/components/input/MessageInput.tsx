@@ -10,6 +10,9 @@ import {
 import { EmojiPicker } from "./EmojiPicker";
 import { AttachmentMenu } from "./AttachmentMenu";
 import type { Message, InputMode } from "../../types";
+import { fileApi } from "../../services/api";
+import { toast } from "../ui";
+import { useChatStore } from "../../stores";
 
 interface MessageInputProps {
   value: string;
@@ -41,6 +44,78 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [fileToSend, setFileToSend] = useState<File | null>(null);
+  const sendMessage = useChatStore((s) => s.sendMessage);
+
+  // Validate file
+  const validateFile = (file: File): string | null => {
+    const maxSize = 20 * 1024 * 1024; // 20MB
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "video/mp4",
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/zip",
+    ];
+    if (file.size > maxSize) return "File vượt quá 20MB";
+    if (!allowedTypes.includes(file.type)) return "Định dạng file không hỗ trợ";
+    return null;
+  };
+
+  // Handle file select
+  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const err = validateFile(file);
+    if (err) {
+      toast.error(err);
+      return;
+    }
+    setFileToSend(file);
+    setFilePreview(URL.createObjectURL(file));
+    setUploadError(null);
+    setUploadProgress(0);
+  };
+
+  // Upload file & gửi message
+  const handleUploadAndSend = async () => {
+    if (!fileToSend) return;
+    setUploading(true);
+    setUploadError(null);
+    setUploadProgress(0);
+    try {
+      const res = await fileApi.uploadFile(fileToSend, setUploadProgress);
+      // Sau khi upload thành công, gửi message với file info
+      await sendMessage(
+        // Cần truyền conversationId, content, type, fileMeta
+        // Giả sử có biến conversationId từ props/context
+        // conversationId,
+        "[File]", // content placeholder
+        "file",
+        {
+          url: res.data.url,
+          fileName: res.data.filename,
+          fileSize: fileToSend.size,
+          fileType: fileToSend.type,
+        },
+      );
+      setFileToSend(null);
+      setFilePreview(null);
+      setUploadProgress(0);
+    } catch (err) {
+      setUploadError("Upload thất bại, thử lại.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   // Auto-resize textarea
   useEffect(() => {
@@ -165,6 +240,50 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         </div>
       )}
 
+      {/* File preview & progress */}
+      {fileToSend && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border-b border-gray-200">
+          {filePreview && fileToSend.type.startsWith("image/") ? (
+            <img
+              src={filePreview}
+              alt="preview"
+              className="w-12 h-12 object-cover rounded"
+            />
+          ) : (
+            <span className="text-xs">{fileToSend.name}</span>
+          )}
+          {uploading ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Đang tải lên...</span>
+              <progress value={uploadProgress} max={100} className="w-24" />
+            </div>
+          ) : uploadError ? (
+            <button
+              onClick={handleUploadAndSend}
+              className="text-red-500 text-xs underline"
+            >
+              Thử lại
+            </button>
+          ) : (
+            <button
+              onClick={handleUploadAndSend}
+              className="text-telegram-primary text-xs underline"
+            >
+              Gửi file
+            </button>
+          )}
+          <button
+            onClick={() => {
+              setFileToSend(null);
+              setFilePreview(null);
+            }}
+            className="ml-auto p-1"
+          >
+            <XMarkIcon className="w-4 h-4 text-gray-400" />
+          </button>
+        </div>
+      )}
+
       {/* Main input area */}
       <div className="flex items-end gap-2 p-3">
         {/* Emoji picker button */}
@@ -219,7 +338,17 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           {showAttachmentMenu && (
             <AttachmentMenu
               onSelect={(type: string) => {
-                console.log("Selected attachment type:", type);
+                if (type === "photo" || type === "document") {
+                  // Trigger file input
+                  const input = document.createElement("input");
+                  input.type = "file";
+                  input.accept =
+                    type === "photo"
+                      ? "image/*,video/*"
+                      : ".pdf,.doc,.docx,.xls,.xlsx,.zip";
+                  input.onchange = handleFileInput;
+                  input.click();
+                }
                 setShowAttachmentMenu(false);
               }}
               onClose={() => setShowAttachmentMenu(false)}

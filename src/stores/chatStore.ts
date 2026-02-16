@@ -5,7 +5,7 @@
 
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
-import { shallow } from "zustand/shallow";
+
 import apiClient from "../lib/axios";
 import type { ApiResponse } from "../lib/axios";
 import type {
@@ -15,6 +15,9 @@ import type {
   ConversationFilter,
 } from "../types";
 import { MessageType, MessageStatus } from "../types";
+import type { Attachment } from "../types";
+
+// Bổ sung trạng thái nội bộ cho UI: 'uploading' (string literal, không enum)
 
 // ============================================
 // TYPES
@@ -64,11 +67,15 @@ interface ChatState {
   ) => void;
   removeMessage: (conversationId: string, messageId: string) => void;
   fetchMessages: (conversationId: string, before?: string) => Promise<void>;
+  // Gửi tin nhắn text hoặc file (optimistic update)
   sendMessage: (
     conversationId: string,
     content: string,
+    type?: MessageType,
+    fileMeta?: Attachment,
     replyToId?: string,
   ) => Promise<void>;
+  resendMessage: (conversationId: string, message: Message) => void;
 
   // Actions - Typing
   setTyping: (status: TypingStatus) => void;
@@ -203,25 +210,38 @@ export const useChatStore = create<ChatState>()(
     },
 
     addMessage: (conversationId, message) => {
+      // Nếu message có localId (id tạm) và đã có message tạm trong list, replace thay vì push mới
+      // Giả sử server trả về message có trường localId hoặc mapping được với id tạm
+      // Nếu không có localId, vẫn push như cũ
       set((state) => {
-        const currentMessages = state.messages[conversationId] || [];
-
-        // Kiểm tra message đã tồn tại chưa (tránh duplicate)
-        if (currentMessages.some((m) => m.id === message.id)) {
-          return state;
+        const msgs = state.messages[conversationId] || [];
+        // Tìm message tạm (id bắt đầu bằng 'temp-' hoặc mapping localId)
+        const idx = msgs.findIndex(
+          (m) =>
+            m.id === message.localId ||
+            (message.localId && m.id === message.localId) ||
+            (m.id.startsWith &&
+              m.id.startsWith("temp-") &&
+              message.id &&
+              m.id === message.id),
+        );
+        if (idx !== -1) {
+          // Replace message tạm bằng message thật
+          const newMsgs = [...msgs];
+          newMsgs[idx] = { ...msgs[idx], ...message };
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: newMsgs,
+            },
+          };
         }
-
+        // Nếu không có message tạm, append như cũ
         return {
           messages: {
             ...state.messages,
-            [conversationId]: [...currentMessages, message],
+            [conversationId]: [...msgs, message],
           },
-          // Cập nhật lastMessage trong conversation
-          conversations: state.conversations.map((conv) =>
-            conv.id === conversationId
-              ? { ...conv, lastMessage: message, updatedAt: new Date() }
-              : conv,
-          ),
         };
       });
     },
@@ -293,40 +313,66 @@ export const useChatStore = create<ChatState>()(
       }
     },
 
-    sendMessage: async (conversationId, content, replyToId) => {
-      const tempId = `temp-${Date.now()}`;
-
-      // Tạo message tạm (optimistic update)
+    // Gửi tin nhắn (text/file), optimistic update, xử lý trạng thái
+    sendMessage: async (
+      conversationId,
+      content,
+      type = MessageType.TEXT,
+      fileMeta,
+      replyToId,
+    ) => {
+      const tempId = `temp-${Date.now()}-${Math.random()}`;
+      const now = new Date();
+      // Nếu là file, trạng thái đầu là 'uploading' (string literal)
+      const isFile = type === MessageType.FILE || type === MessageType.IMAGE;
       const tempMessage: Message = {
         id: tempId,
         conversationId,
-        senderId: "current-user", // Sẽ được replace bởi server
+        senderId: "current-user",
         senderName: "Bạn",
         content,
-        type: MessageType.TEXT,
-        status: MessageStatus.SENDING,
+        type,
+        status: isFile ? "uploading" : MessageStatus.SENDING,
         isEdited: false,
         isPinned: false,
         isDeleted: false,
         isSystem: false,
-        createdAt: new Date(),
+        createdAt: now,
         ...(replyToId && { replyToId }),
+        ...(fileMeta && { attachments: [fileMeta] }),
       };
-
-      // Add message ngay lập tức
       get().addMessage(conversationId, tempMessage);
 
+      // Nếu là file: cần upload trước, cập nhật progress, sau đó mới gửi message
+      if (isFile && fileMeta) {
+        try {
+          // TODO: Thực hiện upload file, cập nhật progress qua updateMessage
+          // const uploadResult = await api.uploadFile(fileMeta.file, (progress) => {
+          //   get().updateMessage(conversationId, tempId, { progress });
+          // });
+          // Sau khi upload xong:
+          // get().updateMessage(conversationId, tempId, { status: MessageStatus.SENDING, attachments: [uploadResult] });
+          // Gửi message với fileUrl
+        } catch {
+          get().updateMessage(conversationId, tempId, {
+            status: MessageStatus.FAILED,
+          });
+          return;
+        }
+      }
+
+      // Gửi message qua API (hoặc WebSocket)
       try {
         const response = await apiClient.post<ApiResponse<Message>>(
           `/rooms/${conversationId}/messages`,
           {
             content,
-            type: "text",
+            type,
             ...(replyToId && { replyTo: replyToId }),
+            ...(fileMeta && { attachments: [fileMeta] }),
           },
         );
-
-        // Replace temp message với message thật
+        // Replace temp message với message thật từ server
         set((state) => ({
           messages: {
             ...state.messages,
@@ -338,9 +384,21 @@ export const useChatStore = create<ChatState>()(
       } catch {
         // Đánh dấu message failed
         get().updateMessage(conversationId, tempId, {
-          status: "failed" as Message["status"],
+          status: MessageStatus.FAILED,
         });
       }
+    },
+
+    resendMessage: async (conversationId: string, message: Message) => {
+      // Nếu là file, cần truyền lại fileMeta (nếu còn), hoặc chỉ gửi lại link nếu đã upload
+      await get().sendMessage(
+        conversationId,
+        message.content,
+        message.type,
+        message.attachments?.[0],
+        message.replyToId,
+      );
+      // Optionally: remove message lỗi cũ nếu cần
     },
 
     // ============================================
