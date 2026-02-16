@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { debounce } from "lodash";
 import clsx from "clsx";
 import {
   FaceSmileIcon,
@@ -10,6 +11,7 @@ import {
 import { EmojiPicker } from "./EmojiPicker";
 import { AttachmentMenu } from "./AttachmentMenu";
 import type { Message, InputMode } from "../../types";
+import { FileType } from "../../types";
 import { fileApi } from "../../services/api";
 import { toast } from "../ui";
 import { useChatStore } from "../../stores";
@@ -93,25 +95,27 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     setUploadProgress(0);
     try {
       const res = await fileApi.uploadFile(fileToSend, setUploadProgress);
-      // Sau khi upload thành công, gửi message với file info
+      // Chỉ gửi message khi upload thành công
       await sendMessage(
-        // Cần truyền conversationId, content, type, fileMeta
-        // Giả sử có biến conversationId từ props/context
         // conversationId,
-        "[File]", // content placeholder
-        "file",
+        res.data.filename, // content là tên file hoặc tuỳ API
+        "file", // MessageType
+        undefined,
         {
+          id: res.data.filename,
+          type: "pdf" as FileType, // fallback, hoặc map đúng FileType
           url: res.data.url,
           fileName: res.data.filename,
           fileSize: fileToSend.size,
-          fileType: fileToSend.type,
         },
+        undefined,
       );
       setFileToSend(null);
       setFilePreview(null);
       setUploadProgress(0);
     } catch (err) {
       setUploadError("Upload thất bại, thử lại.");
+      // Không gửi message nếu upload fail
     } finally {
       setUploading(false);
     }
@@ -159,23 +163,38 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   // Typing indicator logic
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
 
+  // Debounce emit typing (400ms)
+  const debouncedTyping = useRef(
+    debounce(() => {
+      if (onTyping) onTyping(true);
+    }, 400),
+  ).current;
+
   const handleInputChange = (newValue: string) => {
     onChange(newValue);
-
-    // Notify typing
-    if (onTyping) {
-      onTyping(true);
-
+    // Chỉ emit typing khi có input và textarea focus
+    if (
+      onTyping &&
+      textareaRef.current === document.activeElement &&
+      newValue.trim()
+    ) {
+      debouncedTyping();
       // Clear previous timeout
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
-
-      // Set new timeout to stop typing after 2s of inactivity
+      // Set timeout để stop typing sau 2s không nhập
       typingTimeoutRef.current = setTimeout(() => {
         onTyping(false);
       }, 2000);
+    } else if (onTyping && !newValue.trim()) {
+      onTyping(false);
     }
+  };
+
+  // Emit stop typing khi blur
+  const handleBlur = () => {
+    if (onTyping) onTyping(false);
   };
 
   // Cleanup on unmount
@@ -192,6 +211,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   return (
     <div
       className={clsx("relative bg-white border-t border-gray-200", className)}
+      onBlur={handleBlur}
     >
       {/* Reply/Edit preview */}
       {mode === "reply" && replyToMessage && (
@@ -346,7 +366,10 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                     type === "photo"
                       ? "image/*,video/*"
                       : ".pdf,.doc,.docx,.xls,.xlsx,.zip";
-                  input.onchange = handleFileInput;
+                  input.onchange = (ev: Event) =>
+                    handleFileInput(
+                      ev as unknown as React.ChangeEvent<HTMLInputElement>,
+                    );
                   input.click();
                 }
                 setShowAttachmentMenu(false);

@@ -12,6 +12,7 @@ import {
 import { useWebSocket } from "./useWebSocket";
 import { toast } from "../components/ui";
 import type { Message } from "../types";
+import { MessageType } from "../types";
 
 interface UseMessagesOptions {
   conversationId: string | null;
@@ -131,7 +132,13 @@ export const useMessages = ({
       if (!conversationId || !content.trim()) return;
 
       try {
-        await storeSendMessage(conversationId, content.trim(), replyToId);
+        await storeSendMessage(
+          conversationId,
+          content.trim(),
+          MessageType.TEXT,
+          undefined,
+          replyToId,
+        );
 
         // Emit qua WebSocket để real-time
         emit("message:send", {

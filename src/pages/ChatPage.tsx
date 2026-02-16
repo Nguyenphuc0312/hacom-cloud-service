@@ -142,7 +142,13 @@ export const ChatPage: React.FC = () => {
 
       try {
         // Send via API
-        await storeSendMessage(selectedConversationId, content, replyTo?.id);
+        await storeSendMessage(
+          selectedConversationId,
+          content,
+          MessageType.TEXT,
+          undefined,
+          replyTo?.id,
+        );
       } catch (error) {
         console.error("Failed to send message:", error);
         // Update status to failed

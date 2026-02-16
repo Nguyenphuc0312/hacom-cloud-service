@@ -17,7 +17,6 @@ export type {
   UserSummary,
   UserProfile,
   UserPresence,
-  Message,
   MessageSummary,
   Attachment,
   Reaction,
@@ -80,7 +79,17 @@ export type {
 // Các types chỉ dùng trong frontend
 // ============================================
 
-import type { User, Message, Conversation } from "@hacom/chat-shared-types";
+import type { User, Conversation } from "@hacom/chat-shared-types";
+
+// Bổ sung Message type cho frontend (kế thừa từ shared, thêm localId)
+export interface Message extends Omit<
+  import("@hacom/chat-shared-types").Message,
+  "id" | "status"
+> {
+  id: string;
+  localId?: string; // id tạm phía client để mapping
+  status: import("@hacom/chat-shared-types").MessageStatus | "uploading";
+}
 
 /**
  * Typing status for UI display

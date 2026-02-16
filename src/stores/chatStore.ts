@@ -210,23 +210,19 @@ export const useChatStore = create<ChatState>()(
     },
 
     addMessage: (conversationId, message) => {
-      // Nếu message có localId (id tạm) và đã có message tạm trong list, replace thay vì push mới
-      // Giả sử server trả về message có trường localId hoặc mapping được với id tạm
-      // Nếu không có localId, vẫn push như cũ
+      // Gia cố: mapping message tạm (clientId/localId) để tránh duplicate/loss
       set((state) => {
         const msgs = state.messages[conversationId] || [];
-        // Tìm message tạm (id bắt đầu bằng 'temp-' hoặc mapping localId)
+        // Tìm message tạm bằng localId hoặc id (server trả về), hoặc id tạm (temp-)
         const idx = msgs.findIndex(
-          (m) =>
-            m.id === message.localId ||
-            (message.localId && m.id === message.localId) ||
-            (m.id.startsWith &&
-              m.id.startsWith("temp-") &&
-              message.id &&
-              m.id === message.id),
+          (m: Message) =>
+            (message.localId &&
+              (m.id === message.localId || m.localId === message.localId)) ||
+            (m.localId && message.id && m.localId === message.id) ||
+            m.id === message.id,
         );
         if (idx !== -1) {
-          // Replace message tạm bằng message thật
+          // Replace message tạm bằng message thật, giữ lại các trường local nếu cần
           const newMsgs = [...msgs];
           newMsgs[idx] = { ...msgs[idx], ...message };
           return {
@@ -323,10 +319,11 @@ export const useChatStore = create<ChatState>()(
     ) => {
       const tempId = `temp-${Date.now()}-${Math.random()}`;
       const now = new Date();
-      // Nếu là file, trạng thái đầu là 'uploading' (string literal)
+      // Nếu là file, trạng thái đầu là 'uploading'
       const isFile = type === MessageType.FILE || type === MessageType.IMAGE;
-      const tempMessage: Message = {
+      const tempMessage: import("../types").Message = {
         id: tempId,
+        localId: tempId,
         conversationId,
         senderId: "current-user",
         senderName: "Bạn",
@@ -338,7 +335,7 @@ export const useChatStore = create<ChatState>()(
         isDeleted: false,
         isSystem: false,
         createdAt: now,
-        ...(replyToId && { replyToId }),
+        ...(replyToId && { replyTo: replyToId }),
         ...(fileMeta && { attachments: [fileMeta] }),
       };
       get().addMessage(conversationId, tempMessage);
@@ -391,12 +388,18 @@ export const useChatStore = create<ChatState>()(
 
     resendMessage: async (conversationId: string, message: Message) => {
       // Nếu là file, cần truyền lại fileMeta (nếu còn), hoặc chỉ gửi lại link nếu đã upload
+      let replyToId: string | undefined = undefined;
+      if (message.replyTo) {
+        if (typeof message.replyTo === "string") replyToId = message.replyTo;
+        else if (typeof (message.replyTo as { id?: string }).id === "string")
+          replyToId = (message.replyTo as { id: string }).id;
+      }
       await get().sendMessage(
         conversationId,
         message.content,
         message.type,
         message.attachments?.[0],
-        message.replyToId,
+        replyToId,
       );
       // Optionally: remove message lỗi cũ nếu cần
     },
