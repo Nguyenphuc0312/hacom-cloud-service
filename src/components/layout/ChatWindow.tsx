@@ -58,6 +58,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [editingMessage, setEditingMessage] = React.useState<
     Message | undefined
   >(undefined);
+  const [isSendingMessage, setIsSendingMessage] = React.useState(false);
 
   const handleReply = React.useCallback((msg: Message) => {
     setReplyToMessage(msg);
@@ -81,25 +82,32 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, []);
 
   const handleSend = React.useCallback(
-    (content?: string, fileMeta?: unknown, type?: string) => {
+    async (content?: string, fileMeta?: unknown, type?: string) => {
       // Prevent empty sends
       if (!content && !fileMeta) return;
 
       const attachment = fileMeta as Attachment | undefined;
       const messageType = type as MessageType | undefined;
 
-      // Forward to parent ChatPage handler (include fileMeta and type if present)
-      onSendMessage(
-        content || attachment?.fileName || "",
-        replyToMessage,
-        attachment,
-        messageType,
-      );
-
       // Reset local input state on send
       setInputValue("");
       setReplyToMessage(undefined);
       setInputMode("normal");
+      setIsSendingMessage(true);
+
+      try {
+        // Forward to parent ChatPage handler (include fileMeta and type if present)
+        await Promise.resolve(
+          onSendMessage(
+            content || attachment?.fileName || "",
+            replyToMessage,
+            attachment,
+            messageType,
+          ),
+        );
+      } finally {
+        setIsSendingMessage(false);
+      }
     },
     [onSendMessage, replyToMessage],
   );
@@ -130,7 +138,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onReply={handleReply}
         onReact={handleReact}
         hasMore={hasMoreMessages}
-        isLoadingMore={isLoadingMessages}
+        isLoadingMore={Boolean(isLoadingMessages && messages.length > 0)}
+        isInitialLoading={Boolean(isLoadingMessages && messages.length === 0)}
         onLoadMore={onLoadOlderMessages}
         onImageClick={onImageClick}
         className="flex-1 min-h-0"
@@ -147,6 +156,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onCancelReply={handleCancelReply}
         onCancelEdit={handleCancelEdit}
         onTyping={onTyping}
+        isSending={isSendingMessage}
       />
     </div>
   );

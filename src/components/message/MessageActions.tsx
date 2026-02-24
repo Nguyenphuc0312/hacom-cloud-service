@@ -15,6 +15,8 @@ interface MessageActionsProps {
   onCopy: () => void;
   onEdit?: () => void;
   onDelete: () => void;
+  isVisible?: boolean;
+  onClose?: () => void;
   className?: string;
 }
 
@@ -25,6 +27,8 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
   onCopy,
   onEdit,
   onDelete,
+  isVisible = true,
+  onClose,
   className,
 }) => {
   const actions = [
@@ -65,6 +69,12 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
         "animate-fade-in",
         className,
       )}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose?.();
+        }
+      }}
     >
       {actions.map((action) => (
         <button
@@ -78,6 +88,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
           )}
           aria-label={action.label}
           title={action.label}
+          tabIndex={isVisible ? 0 : -1}
         >
           <action.icon className="w-4 h-4" />
         </button>

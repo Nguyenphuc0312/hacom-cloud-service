@@ -27,6 +27,7 @@ interface MessageInputProps {
   onCancelReply?: () => void;
   onCancelEdit?: () => void;
   onTyping?: (isTyping: boolean) => void;
+  isSending?: boolean;
   disabled?: boolean;
   className?: string;
 }
@@ -66,6 +67,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   onCancelReply,
   onCancelEdit,
   onTyping,
+  isSending = false,
   disabled = false,
   className,
 }) => {
@@ -79,6 +81,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
 
   const debouncedTyping = useRef(
     debounce(() => {
@@ -94,6 +97,17 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     setFilePreview(null);
     setUploadError(null);
     setUploadProgress(0);
+  };
+
+  const isCanceledUploadError = (error: unknown): boolean => {
+    if (!error || typeof error !== "object") return false;
+
+    const value = error as { code?: string; name?: string };
+    return (
+      value.code === "ERR_CANCELED" ||
+      value.name === "AbortError" ||
+      value.name === "CanceledError"
+    );
   };
 
   const validateFile = (file: File): string | null => {
@@ -133,12 +147,18 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const handleUploadAndSend = async () => {
     if (!fileToSend) return;
 
+    const abortController = new AbortController();
+    uploadAbortRef.current = abortController;
     setUploading(true);
     setUploadError(null);
     setUploadProgress(0);
 
     try {
-      const response = await fileApi.uploadFile(fileToSend, setUploadProgress);
+      const response = await fileApi.uploadFile(
+        fileToSend,
+        setUploadProgress,
+        abortController.signal,
+      );
       const uploadedFile = unwrapApiSuccess(response);
       const mimeType = uploadedFile.mimetype || fileToSend.type;
       const attachmentType = resolveFileType(mimeType);
@@ -156,15 +176,31 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       onSend(uploadedFile.filename || fileToSend.name, attachment, messageType);
       clearSelectedFile();
     } catch (error) {
+      if (isCanceledUploadError(error)) {
+        setUploadError("Upload canceled");
+        return;
+      }
       const apiError = extractApiError(error);
       setUploadError(apiError.message || "Upload failed, please try again");
     } finally {
+      uploadAbortRef.current = null;
       setUploading(false);
     }
   };
 
+  const handleCancelUpload = () => {
+    uploadAbortRef.current?.abort();
+  };
+
+  const handleRemoveSelectedFile = () => {
+    if (uploading) {
+      uploadAbortRef.current?.abort();
+    }
+    clearSelectedFile();
+  };
+
   const handleSendText = () => {
-    if (!value.trim()) return;
+    if (!value.trim() || disabled || isSending || uploading) return;
     onTyping?.(false);
     onSend(value.trim());
   };
@@ -210,7 +246,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     if (!textareaRef.current) return;
 
     textareaRef.current.style.height = "auto";
-    const newHeight = Math.min(textareaRef.current.scrollHeight, 120);
+    const newHeight = Math.min(textareaRef.current.scrollHeight, 144);
     textareaRef.current.style.height = `${newHeight}px`;
   }, [value]);
 
@@ -228,6 +264,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         clearTimeout(typingTimeoutRef.current);
       }
 
+      if (uploadAbortRef.current) {
+        uploadAbortRef.current.abort();
+        uploadAbortRef.current = null;
+      }
+
       if (filePreview) {
         URL.revokeObjectURL(filePreview);
       }
@@ -235,6 +276,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   }, [debouncedTyping, filePreview]);
 
   const hasContent = value.trim().length > 0;
+  const disableComposerActions = disabled || uploading;
 
   return (
     <div className={clsx("relative bg-white border-t border-gray-200", className)}>
@@ -290,9 +332,20 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">Uploading...</span>
               <progress value={uploadProgress} max={100} className="w-24" />
+              <button
+                type="button"
+                onClick={handleCancelUpload}
+                className="text-xs text-gray-500 underline hover:text-gray-700"
+              >
+                Cancel
+              </button>
             </div>
           ) : uploadError ? (
-            <button onClick={handleUploadAndSend} className="text-red-500 text-xs underline">
+            <button
+              type="button"
+              onClick={handleUploadAndSend}
+              className="text-red-500 text-xs underline"
+            >
               Retry
             </button>
           ) : (
@@ -304,13 +357,18 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             </button>
           )}
 
-          <button onClick={clearSelectedFile} className="ml-auto p-1" aria-label="Remove file">
+          <button
+            type="button"
+            onClick={handleRemoveSelectedFile}
+            className="ml-auto p-1"
+            aria-label="Remove file"
+          >
             <XMarkIcon className="w-4 h-4 text-gray-400" />
           </button>
         </div>
       )}
 
-      <div className="flex items-end gap-2 p-3">
+      <div className="flex items-end gap-2 px-4 py-2 pb-[max(env(safe-area-inset-bottom),0px)]">
         <div className="relative">
           <button
             onClick={() => {
@@ -318,15 +376,15 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               setShowAttachmentMenu(false);
             }}
             className={clsx(
-              "p-2 rounded-full transition-colors",
+              "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
               showEmojiPicker
                 ? "bg-telegram-primary text-white"
                 : "text-gray-500 hover:bg-gray-100",
             )}
             aria-label="Open emoji picker"
-            disabled={disabled}
+            disabled={disableComposerActions}
           >
-            <FaceSmileIcon className="w-6 h-6" />
+            <FaceSmileIcon className="h-5 w-5" />
           </button>
 
           {showEmojiPicker && (
@@ -349,15 +407,15 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               setShowEmojiPicker(false);
             }}
             className={clsx(
-              "p-2 rounded-full transition-colors",
+              "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
               showAttachmentMenu
                 ? "bg-telegram-primary text-white"
                 : "text-gray-500 hover:bg-gray-100",
             )}
             aria-label="Attach file"
-            disabled={disabled}
+            disabled={disableComposerActions}
           >
-            <PaperClipIcon className="w-6 h-6" />
+            <PaperClipIcon className="h-5 w-5" />
           </button>
 
           {showAttachmentMenu && (
@@ -393,7 +451,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             disabled={disabled}
             rows={1}
             className={clsx(
-              "w-full px-4 py-2.5 rounded-2xl",
+              "w-full rounded-2xl px-4 py-2",
               "bg-gray-100 border-none",
               "text-gray-900 placeholder-gray-500",
               "focus:outline-none focus:ring-2 focus:ring-telegram-primary focus:bg-white",
@@ -401,7 +459,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               "transition-all duration-200",
               disabled && "opacity-50 cursor-not-allowed",
             )}
-            style={{ minHeight: "44px", maxHeight: "120px" }}
+            style={{ minHeight: "40px", maxHeight: "144px" }}
             aria-label="Message input"
           />
         </div>
@@ -409,25 +467,31 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         {hasContent ? (
           <button
             onClick={handleSendText}
-            disabled={disabled}
+            disabled={disabled || uploading || isSending}
             className={clsx(
-              "p-2 rounded-full transition-all",
+              "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
               "bg-telegram-primary text-white",
               "hover:bg-telegram-secondary",
               "disabled:opacity-50 disabled:cursor-not-allowed",
-              "animate-bounce-in",
             )}
             aria-label="Send message"
           >
-            <PaperAirplaneIcon className="w-6 h-6" />
+            {isSending ? (
+              <span
+                className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                aria-hidden="true"
+              />
+            ) : (
+              <PaperAirplaneIcon className="h-5 w-5" />
+            )}
           </button>
         ) : (
           <button
-            className="p-2 rounded-full text-gray-500 hover:bg-gray-100 transition-colors"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Record voice message"
-            disabled={disabled}
+            disabled={disableComposerActions}
           >
-            <MicrophoneIcon className="w-6 h-6" />
+            <MicrophoneIcon className="h-5 w-5" />
           </button>
         )}
       </div>

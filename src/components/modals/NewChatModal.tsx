@@ -48,6 +48,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
   const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
   const [isGroupMode, setIsGroupMode] = useState(false);
   const [groupName, setGroupName] = useState("");
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const isBusy = isSubmitting || externalSubmitting;
 
   const debouncedQuery = useDebounce(searchQuery, 300);
@@ -92,10 +93,13 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
       setIsGroupMode(false);
       setGroupName("");
       setIsSubmitting(false);
+      setPendingUserId(null);
     }
   }, [isOpen]);
 
   const handleUserClick = async (user: User) => {
+    if (isBusy) return;
+
     if (isGroupMode) {
       setSelectedUsers((prev) =>
         prev.some((u) => u.id === user.id)
@@ -105,11 +109,13 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
       return;
     }
 
+    setPendingUserId(user.id);
     setIsSubmitting(true);
     try {
       await onStartChat(user.id);
       onClose();
     } finally {
+      setPendingUserId(null);
       setIsSubmitting(false);
     }
   };
@@ -247,6 +253,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             <div className="space-y-1">
               {users.map((user) => {
                 const isSelected = selectedUsers.some((u) => u.id === user.id);
+                const isPending = pendingUserId === user.id;
                 return (
                   <button
                     key={user.id}
@@ -274,6 +281,9 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                         @{user.username}
                       </p>
                     </div>
+                    {!isGroupMode && isPending && (
+                      <Spinner size="sm" variant="primary" className="shrink-0" />
+                    )}
                     {isGroupMode && (
                       <div
                         className={clsx(

@@ -1,9 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
 import clsx from "clsx";
-import {
-  CheckIcon,
-  ExclamationCircleIcon,
-} from "@heroicons/react/24/solid";
+import { CheckIcon, ExclamationCircleIcon } from "@heroicons/react/24/solid";
 import { Avatar } from "../common/Avatar";
 import { TextMessage } from "../message/TextMessage";
 import { ImageMessage } from "../message/ImageMessage";
@@ -20,6 +17,9 @@ interface MessageBubbleProps {
   message: Message;
   isOwn: boolean;
   showAvatar: boolean;
+  showSenderName?: boolean;
+  isGroupStart?: boolean;
+  isGroupEnd?: boolean;
   conversationType: Conversation["type"];
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
@@ -37,58 +37,59 @@ const MessageStatusIcon: React.FC<{
   if (status === "uploading") {
     return (
       <span
-        className="inline-block w-3.5 h-3.5 animate-spin border-2 border-white/60 border-t-transparent rounded-full"
+        className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/80 border-t-transparent"
         role="img"
-        aria-label="Đang tải lên"
-        title="Đang tải lên"
+        aria-label="Uploading"
+        title="Uploading"
       >
-        <span className="sr-only">Đang tải lên</span>
+        <span className="sr-only">Uploading</span>
       </span>
     );
   }
+
   switch (status) {
     case MessageStatus.SENDING:
       return (
         <span
-          className="inline-block w-3.5 h-3.5 animate-spin border-2 border-white/60 border-t-transparent rounded-full"
+          className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/80 border-t-transparent"
           role="img"
-          aria-label="Đang gửi"
-          title="Đang gửi"
+          aria-label="Sending"
+          title="Sending"
         >
-          <span className="sr-only">Đang gửi</span>
+          <span className="sr-only">Sending</span>
         </span>
       );
     case MessageStatus.SENT:
       return (
-        <span role="img" aria-label="Đã gửi" title="Đã gửi">
-          <CheckIcon className="w-3.5 h-3.5 text-white/60" />
-          <span className="sr-only">Đã gửi</span>
+        <span role="img" aria-label="Sent" title="Sent">
+          <CheckIcon className="h-3.5 w-3.5 text-white/80" />
+          <span className="sr-only">Sent</span>
         </span>
       );
     case MessageStatus.DELIVERED:
       return (
         <div className="flex -space-x-1">
-          <CheckIcon className="w-3.5 h-3.5 text-white/60" />
-          <CheckIcon className="w-3.5 h-3.5 text-white/60" />
+          <CheckIcon className="h-3.5 w-3.5 text-white/80" />
+          <CheckIcon className="h-3.5 w-3.5 text-white/80" />
         </div>
       );
     case MessageStatus.READ:
       return (
         <div className="flex -space-x-1">
-          <CheckIcon className="w-3.5 h-3.5 text-white" />
-          <CheckIcon className="w-3.5 h-3.5 text-white" />
+          <CheckIcon className="h-3.5 w-3.5 text-white" />
+          <CheckIcon className="h-3.5 w-3.5 text-white" />
         </div>
       );
     case MessageStatus.FAILED:
       return (
         <button
-          title="Gửi lại"
+          type="button"
+          title="Retry"
           onClick={onResend}
-          aria-disabled={false}
-          className="w-4 h-4 text-red-300 hover:text-red-500 focus:outline-none hover:scale-110 active:scale-95 transition-transform duration-150 animate-shake"
+          className="h-4 w-4 text-red-300 transition-transform duration-150 hover:scale-110 hover:text-red-500 focus:outline-none active:scale-95"
         >
-          <ExclamationCircleIcon className="w-4 h-4" aria-hidden="true" />
-          <span className="sr-only">Gửi thất bại. Bấm để gửi lại.</span>
+          <ExclamationCircleIcon className="h-4 w-4" aria-hidden="true" />
+          <span className="sr-only">Failed to send. Click to retry.</span>
         </button>
       );
     default:
@@ -100,16 +101,25 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   message,
   isOwn,
   showAvatar,
+  showSenderName = false,
+  isGroupStart = true,
+  isGroupEnd = true,
   conversationType,
   onReply,
   onReact,
   onImageClick,
   className,
 }) => {
-  const [showActions, setShowActions] = useState(false);
   const resendMessage = useChatStore((s) => s.resendMessage);
+  const bubbleRef = React.useRef<HTMLDivElement>(null);
+  const actionsRef = React.useRef<HTMLDivElement>(null);
+  const [isActionsPinned, setIsActionsPinned] = React.useState(false);
+  const [hasFocusWithin, setHasFocusWithin] = React.useState(false);
 
   const timeStr = formatMessageTime(new Date(message.createdAt));
+  const isGroupConversation =
+    conversationType !== RoomType.PRIVATE && conversationType !== RoomType.DIRECT;
+  const isActionsVisibleForKeyboard = isActionsPinned || hasFocusWithin;
 
   const renderContent = () => {
     switch (message.type) {
@@ -148,59 +158,86 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   };
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(message.content);
-    setShowActions(false);
+    void navigator.clipboard.writeText(message.content);
+    setIsActionsPinned(false);
+    bubbleRef.current?.focus();
   };
 
-  // Handler resend message (gọi lại store.resendMessage)
   const handleResend = () => {
     if (message.conversationId) {
-      resendMessage(message.conversationId, message);
+      void resendMessage(message.conversationId, message);
     }
   };
+
+  const closeActions = () => {
+    setIsActionsPinned(false);
+    bubbleRef.current?.focus();
+  };
+
+  const openActionsWithKeyboard = () => {
+    setIsActionsPinned(true);
+    requestAnimationFrame(() => {
+      const firstActionButton = actionsRef.current?.querySelector<HTMLButtonElement>(
+        "button[tabindex='0']",
+      );
+      firstActionButton?.focus();
+    });
+  };
+
+  const bubbleRadiusClass = (() => {
+    if (isOwn) {
+      if (isGroupStart && isGroupEnd) return "rounded-2xl rounded-br-md";
+      if (isGroupStart) return "rounded-2xl rounded-br-md";
+      if (isGroupEnd) return "rounded-2xl rounded-tr-md";
+      return "rounded-2xl rounded-r-md";
+    }
+
+    if (isGroupStart && isGroupEnd) return "rounded-2xl rounded-bl-md";
+    if (isGroupStart) return "rounded-2xl rounded-bl-md";
+    if (isGroupEnd) return "rounded-2xl rounded-tl-md";
+    return "rounded-2xl rounded-l-md";
+  })();
 
   return (
     <div
       className={clsx(
-        "flex gap-2 max-w-[85%] group",
+        "group flex w-fit max-w-[min(82%,40rem)] items-end gap-2",
         isOwn ? "ml-auto flex-row-reverse" : "mr-auto",
         className,
       )}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
+      onFocusCapture={() => setHasFocusWithin(true)}
+      onBlurCapture={(event) => {
+        const nextFocusedElement = event.relatedTarget as Node | null;
+        if (!event.currentTarget.contains(nextFocusedElement)) {
+          setHasFocusWithin(false);
+          setIsActionsPinned(false);
+        }
+      }}
     >
-      {/* Avatar for group chats */}
-      {conversationType !== RoomType.PRIVATE &&
-        conversationType !== RoomType.DIRECT &&
-        !isOwn && (
-          <div className="shrink-0 w-8">
-            {showAvatar && (
-              <Avatar
-                src={message.senderAvatar}
-                alt={message.senderName}
-                size="sm"
-              />
-            )}
-          </div>
+      {isGroupConversation && !isOwn && (
+        <div className="w-8 shrink-0 self-end">
+          {/* Keep slot width for grouped messages to align bubbles */}
+          {showAvatar && (
+            <Avatar
+              src={message.senderAvatar}
+              alt={message.senderName}
+              size="sm"
+            />
+          )}
+        </div>
+      )}
+
+      <div className="relative flex min-w-0 flex-col">
+        {isGroupConversation && !isOwn && showSenderName && (
+          <span className="mb-1 ml-1 text-xs font-medium text-telegram-primary">
+            {message.senderName}
+          </span>
         )}
 
-      {/* Message bubble */}
-      <div className="flex flex-col">
-        {/* Sender name for group chats */}
-        {conversationType !== RoomType.PRIVATE &&
-          conversationType !== RoomType.DIRECT &&
-          !isOwn &&
-          showAvatar && (
-            <span className="text-xs font-medium text-telegram-primary mb-1 ml-1">
-              {message.senderName}
-            </span>
-          )}
-
-        {/* Reply preview */}
         {message.replyToMessage && (
           <div
             className={clsx(
-              "flex items-center gap-2 px-3 py-2 rounded-t-2xl border-l-2 border-telegram-primary text-xs",
+              "flex items-center gap-2 rounded-t-2xl border-l-2 border-telegram-primary px-3 py-2 text-xs",
               isOwn
                 ? "bg-telegram-primary/80 text-white/80"
                 : "bg-gray-200 text-gray-600",
@@ -213,74 +250,85 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           </div>
         )}
 
-        {/* Main bubble */}
         <div
+          ref={bubbleRef}
           className={clsx(
-            "relative px-3 py-2 pr-10 rounded-2xl",
-            isOwn
-              ? "bg-telegram-primary text-white rounded-br-md"
-              : "bg-white text-gray-900 rounded-bl-md shadow-sm",
+            "relative px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-telegram-primary/30",
+            bubbleRadiusClass,
+            isOwn ? "bg-telegram-primary text-white" : "bg-white text-gray-900 shadow-sm",
             message.replyToMessage && "rounded-t-none",
             isOwn ? "animate-slide-in-right" : "animate-slide-in-left",
           )}
+          tabIndex={0}
+          aria-label={`${isOwn ? "Ban" : message.senderName} luc ${timeStr}`}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              openActionsWithKeyboard();
+              return;
+            }
+
+            if (event.key === "Escape") {
+              event.preventDefault();
+              closeActions();
+            }
+          }}
         >
-          {/* Forwarded label */}
           {message.forwardedFrom && (
             <div
               className={clsx(
-                "flex items-center gap-1 text-xs mb-1",
-                isOwn ? "text-white/70" : "text-gray-500",
+                "mb-1 flex items-center gap-1 text-xs",
+                isOwn ? "text-white/90" : "text-gray-500",
               )}
             >
-              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2l9 9h-6v4H9v-4H3l9-9zm0 18h10v2H2v-2h10z" />
               </svg>
-              Chuyển tiếp từ {message.forwardedFrom.username}
+              Forwarded from {message.forwardedFrom.username}
             </div>
           )}
 
-          {/* Content */}
           {renderContent()}
 
-          {/* Time and status */}
           <div
             className={clsx(
-              "flex items-center justify-end gap-1 mt-1",
-              isOwn ? "text-white/70" : "text-gray-400",
+              "mt-1 flex items-center justify-end gap-1 text-xs leading-none",
+              isOwn ? "text-white/90" : "text-gray-500",
             )}
           >
-            {message.isEdited && <span className="text-[10px]">đã sửa</span>}
-            <span className="text-[10px]">{timeStr}</span>
-            {/* Reserve fixed space for status icon to avoid layout shift */}
-            <span className="inline-flex items-center justify-center w-4 h-4">
-              <MessageStatusIcon
-                status={message.status}
-                isOwn={isOwn}
-                onResend={handleResend}
-              />
-            </span>
+            {message.isEdited && <span>edited</span>}
+            <span>{timeStr}</span>
+            {isOwn && (
+              <span className="inline-flex h-4 w-4 items-center justify-center">
+                <MessageStatusIcon
+                  status={message.status}
+                  isOwn={isOwn}
+                  onResend={handleResend}
+                />
+              </span>
+            )}
           </div>
 
-          {/* Bubble tail */}
-          <div
-            className={clsx(
-              "absolute bottom-0 w-3 h-3",
-              isOwn
-                ? "-right-1.5 text-telegram-primary"
-                : "-left-1.5 text-white",
-            )}
-          >
-            <svg
-              viewBox="0 0 12 12"
-              fill="currentColor"
-              className={clsx(isOwn ? "rotate-90" : "-rotate-90")}
+          {isGroupEnd && (
+            <div
+              className={clsx(
+                "absolute bottom-0 h-3 w-3",
+                isOwn
+                  ? "-right-1.5 text-telegram-primary"
+                  : "-left-1.5 text-white",
+              )}
             >
-              <path d="M0 0 L12 0 L12 12 Q12 0 0 0 Z" />
-            </svg>
-          </div>
+              <svg
+                viewBox="0 0 12 12"
+                fill="currentColor"
+                className={clsx(isOwn ? "rotate-90" : "-rotate-90")}
+              >
+                <path d="M0 0 L12 0 L12 12 Q12 0 0 0 Z" />
+              </svg>
+            </div>
+          )}
         </div>
 
-        {/* Reactions */}
         {(message.reactions?.length ?? 0) > 0 && (
           <div className={clsx("mt-1", isOwn ? "self-end" : "self-start")}>
             <ReactionBar
@@ -289,26 +337,34 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             />
           </div>
         )}
-      </div>
 
-      {/* Actions */}
-      {showActions && (
         <div
+          ref={actionsRef}
           className={clsx(
-            "shrink-0 self-center",
-            isOwn ? "order-first" : "order-last",
+            "absolute top-0 z-10 transition-opacity duration-150",
+            isActionsVisibleForKeyboard
+              ? "pointer-events-auto opacity-100"
+              : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100",
+            isOwn ? "-left-2 -translate-x-full" : "-right-2 translate-x-full",
           )}
         >
-          <MessageActions
-            isOwn={isOwn}
-            onReply={() => onReply(message)}
-            onForward={() => {}}
-            onCopy={handleCopy}
-            onEdit={isOwn ? () => {} : undefined}
-            onDelete={() => {}}
-          />
+          <div className="px-2">
+            <MessageActions
+              isOwn={isOwn}
+              onReply={() => {
+                onReply(message);
+                closeActions();
+              }}
+              onForward={() => {}}
+              onCopy={handleCopy}
+              onEdit={isOwn ? () => {} : undefined}
+              onDelete={() => {}}
+              isVisible={isActionsVisibleForKeyboard}
+              onClose={closeActions}
+            />
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };

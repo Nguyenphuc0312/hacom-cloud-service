@@ -250,7 +250,20 @@ export const messageApi = {
       content: string;
       type?: Message["type"];
       replyToId?: string;
-      attachments?: string[];
+      senderName?: string;
+      senderAvatar?: string;
+      attachments?: Array<{
+        id: string;
+        type: Message["type"] | string;
+        url: string;
+        filename: string;
+        mimetype: string;
+        size: number;
+        width?: number;
+        height?: number;
+        duration?: number;
+        thumbnailUrl?: string;
+      }>;
     },
   ) => {
     const response = await apiClient.post<ApiResponse<CreateMessageResponse>>(
@@ -258,6 +271,8 @@ export const messageApi = {
       {
         content: data.content,
         type: data.type || "text",
+        senderName: data.senderName,
+        senderAvatar: data.senderAvatar,
         replyTo: data.replyToId,
         attachments: data.attachments,
       },
@@ -313,7 +328,11 @@ export const messageApi = {
 // ============================================
 
 export const fileApi = {
-  uploadFile: async (file: File, onProgress?: (progress: number) => void) => {
+  uploadFile: async (
+    file: File,
+    onProgress?: (progress: number) => void,
+    signal?: AbortSignal,
+  ) => {
     const formData = new FormData();
     formData.append("file", file);
 
@@ -330,6 +349,7 @@ export const fileApi = {
       }>
     >("/files/upload", formData, {
       headers: { "Content-Type": "multipart/form-data" },
+      signal,
       onUploadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {
           const progress = Math.round(
@@ -343,7 +363,11 @@ export const fileApi = {
     return response.data;
   },
 
-  uploadImage: async (file: File, onProgress?: (progress: number) => void) => {
+  uploadImage: async (
+    file: File,
+    onProgress?: (progress: number) => void,
+    signal?: AbortSignal,
+  ) => {
     const formData = new FormData();
     formData.append("image", file);
 
@@ -363,6 +387,7 @@ export const fileApi = {
       }>
     >("/files/upload-image", formData, {
       headers: { "Content-Type": "multipart/form-data" },
+      signal,
       onUploadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {
           const progress = Math.round(

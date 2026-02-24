@@ -253,9 +253,40 @@ const normalizeMessagesResponse = (
 
 const toAttachmentPayload = (attachments?: Attachment[]) =>
   attachments?.map((attachment) => ({
-    fileId: attachment.id,
+    id: attachment.id,
     type: attachment.type,
+    url: attachment.url,
+    filename: attachment.fileName || "attachment",
+    mimetype: attachment.mimeType || "application/octet-stream",
+    size:
+      typeof attachment.fileSize === "number" && attachment.fileSize >= 0
+        ? attachment.fileSize
+        : 0,
+    ...(typeof attachment.width === "number" ? { width: attachment.width } : {}),
+    ...(typeof attachment.height === "number" ? { height: attachment.height } : {}),
+    ...(typeof attachment.duration === "number"
+      ? { duration: attachment.duration }
+      : {}),
+    ...(attachment.thumbnailUrl ? { thumbnailUrl: attachment.thumbnailUrl } : {}),
   }));
+
+const resolveSenderIdentity = (): {
+  id: string | null;
+  senderName: string;
+  senderAvatar?: string;
+} => {
+  const currentUser = useAuthStore.getState().user;
+  const senderName =
+    `${currentUser?.firstName || ""} ${currentUser?.lastName || ""}`.trim() ||
+    currentUser?.username?.trim() ||
+    "Ban";
+
+  return {
+    id: currentUser?.id || null,
+    senderName,
+    senderAvatar: currentUser?.avatar || undefined,
+  };
+};
 
 const getReplyToId = (replyTo: Message["replyTo"]): string | undefined => {
   if (!replyTo) return undefined;
@@ -602,18 +633,16 @@ export const useChatStore = create<ChatState>()(
       const messageContent = text || fileMeta?.fileName || "";
       if (!messageContent) return;
 
-      const currentUser = useAuthStore.getState().user;
+      const sender = resolveSenderIdentity();
+
       const tempId = `temp-${Date.now()}-${Math.random()}`;
       const tempMessage: Message = {
         id: tempId,
         localId: tempId,
         conversationId,
-        senderId: currentUser?.id || "current-user",
-        senderName:
-          `${currentUser?.firstName || ""} ${currentUser?.lastName || ""}`.trim() ||
-          currentUser?.username ||
-          "Ban",
-        senderAvatar: currentUser?.avatar,
+        senderId: sender.id || "current-user",
+        senderName: sender.senderName,
+        senderAvatar: sender.senderAvatar,
         content: messageContent,
         type,
         status: MessageStatus.SENDING,
@@ -635,6 +664,8 @@ export const useChatStore = create<ChatState>()(
           {
             content: messageContent,
             type,
+            senderName: sender.senderName,
+            ...(sender.senderAvatar ? { senderAvatar: sender.senderAvatar } : {}),
             tempId,
             ...(replyToId ? { replyTo: replyToId } : {}),
             ...(attachments?.length ? { attachments } : {}),
@@ -662,6 +693,9 @@ export const useChatStore = create<ChatState>()(
 
       const replyToId = getReplyToId(message.replyTo);
       const attachments = toAttachmentPayload(message.attachments);
+      const sender = resolveSenderIdentity();
+      const senderName = message.senderName?.trim() || sender.senderName;
+      const senderAvatar = message.senderAvatar || sender.senderAvatar;
 
       try {
         const response = await apiClient.post<ApiResponse<Message>>(
@@ -669,6 +703,8 @@ export const useChatStore = create<ChatState>()(
           {
             content: message.content,
             type: message.type,
+            senderName,
+            ...(senderAvatar ? { senderAvatar } : {}),
             tempId: message.localId || message.id,
             ...(replyToId ? { replyTo: replyToId } : {}),
             ...(attachments?.length ? { attachments } : {}),

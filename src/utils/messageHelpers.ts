@@ -27,11 +27,11 @@ export function shouldShowAvatar(
   }
 
   const message = messages[index];
-  const prevMessage = messages[index - 1];
+  const nextMessage = messages[index + 1];
 
-  if (!prevMessage) return true;
-  if (prevMessage.senderId !== message.senderId) return true;
-  if (!isSameDay(new Date(prevMessage.createdAt), new Date(message.createdAt))) {
+  if (!nextMessage) return true;
+  if (nextMessage.senderId !== message.senderId) return true;
+  if (!isSameDay(new Date(nextMessage.createdAt), new Date(message.createdAt))) {
     return true;
   }
 

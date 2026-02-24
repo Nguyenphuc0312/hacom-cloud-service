@@ -164,6 +164,13 @@ export const useWebSocket = (
         }
       }
 
+      console.debug("[ws] resyncRoom", { roomId, afterCursor });
+
+      // Keep initial room load on ChatPage (no cursor) and use `after` only for realtime resync.
+      if (!afterCursor) {
+        return;
+      }
+
       try {
         await fetchMessages(roomId, undefined, afterCursor);
       } catch (error) {

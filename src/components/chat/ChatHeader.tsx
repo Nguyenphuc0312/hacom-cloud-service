@@ -65,7 +65,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   return (
     <div
       className={clsx(
-        "flex items-center gap-2 border-b border-gray-200 bg-white px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3",
+        "flex items-center gap-2 border-b border-gray-200 bg-white px-4 py-2",
         className,
       )}
     >
@@ -73,10 +73,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         <button
           type="button"
           onClick={onBack}
-          className="min-h-11 min-w-11 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100 lg:hidden"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 lg:hidden"
           aria-label="Back"
         >
-          <ArrowLeftIcon className="w-5 h-5 text-gray-600" />
+          <ArrowLeftIcon className="h-5 w-5 text-gray-600" />
         </button>
       )}
 
@@ -98,7 +98,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       </button>
 
       <button type="button" onClick={onInfoClick} className="min-w-0 flex-1 text-left">
-        <h2 className="truncate text-sm font-semibold text-gray-900 sm:text-base">
+        <h2 className="truncate text-sm font-semibold text-gray-900 sm:text-[15px]">
           {displayName}
         </h2>
 
@@ -107,7 +107,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         ) : (
           <p
             className={clsx(
-              "truncate text-xs sm:text-sm",
+              "truncate text-xs",
               isOnline ? "text-chat-online" : "text-gray-600",
             )}
           >
@@ -121,10 +121,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           <button
             type="button"
             onClick={onCallClick}
-            className="min-h-11 min-w-11 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100"
             aria-label="Voice call"
           >
-            <PhoneIcon className="w-5 h-5 text-gray-600" />
+            <PhoneIcon className="h-5 w-5 text-gray-600" />
           </button>
         )}
 
@@ -132,10 +132,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           <button
             type="button"
             onClick={onVideoCallClick}
-            className="min-h-11 min-w-11 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100"
             aria-label="Video call"
           >
-            <VideoCameraIcon className="w-5 h-5 text-gray-600" />
+            <VideoCameraIcon className="h-5 w-5 text-gray-600" />
           </button>
         )}
 
@@ -143,20 +143,20 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           <button
             type="button"
             onClick={onSearchClick}
-            className="hidden min-h-11 min-w-11 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100 sm:inline-flex"
+            className="hidden h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 sm:inline-flex"
             aria-label="Search in chat"
           >
-            <MagnifyingGlassIcon className="w-5 h-5 text-gray-600" />
+            <MagnifyingGlassIcon className="h-5 w-5 text-gray-600" />
           </button>
         )}
 
         <button
           type="button"
           onClick={onInfoClick}
-          className="min-h-11 min-w-11 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100"
           aria-label="Toggle info panel"
         >
-          <InformationCircleIcon className="w-5 h-5 text-gray-600" />
+          <InformationCircleIcon className="h-5 w-5 text-gray-600" />
         </button>
       </div>
     </div>
