@@ -241,7 +241,9 @@ export const useWebSocket = (
       const conversationId = getConversationId(payload);
       const messagePayload = getMessagePayload(payload);
       const messageId = messagePayload
-        ? asString(messagePayload.id) ?? asString(messagePayload._id)
+        ? asString(messagePayload.id) ??
+          asString(messagePayload._id) ??
+          asString(messagePayload.messageId)
         : null;
       if (!conversationId || !messagePayload || !messageId) return;
 
@@ -313,7 +315,9 @@ export const useWebSocket = (
         const conversationId = getConversationId(payload);
         const messagePayload = getMessagePayload(payload);
         const messageId = messagePayload
-          ? asString(messagePayload.id) ?? asString(messagePayload._id)
+          ? asString(messagePayload.id) ??
+            asString(messagePayload._id) ??
+            asString(messagePayload.messageId)
           : null;
         if (!conversationId || !messagePayload || !messageId) return;
 

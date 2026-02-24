@@ -33,7 +33,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   className,
 }) => {
   const participants = React.useMemo(
-    () => (Array.isArray(conversation.participants) ? conversation.participants : []),
+    () =>
+      Array.isArray(conversation.participants) ? conversation.participants : [],
     [conversation.participants],
   );
 
@@ -52,26 +53,29 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   const isAdmin = false;
 
-  const searchUsers = useCallback(async (query: string) => {
-    if (!query.trim() || query.length < 2) {
-      setSearchResults([]);
-      return;
-    }
+  const searchUsers = useCallback(
+    async (query: string) => {
+      if (!query.trim() || query.length < 2) {
+        setSearchResults([]);
+        return;
+      }
 
-    setIsSearching(true);
-    try {
-      const response = await userApi.searchUsers(query, 1, 10);
-      const participantIds = new Set(participants.map((p) => p.id));
-      const users = unwrapApiSuccess(response).filter(
-        (u) => !participantIds.has(u.id) && u.id !== currentUserId,
-      );
-      setSearchResults(users as unknown as UserSummary[]);
-    } catch {
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-    }
-  }, [participants, currentUserId]);
+      setIsSearching(true);
+      try {
+        const response = await userApi.searchUsers(query, 1, 10);
+        const participantIds = new Set(participants.map((p) => p.id));
+        const users = unwrapApiSuccess(response).filter(
+          (u) => !participantIds.has(u.id) && u.id !== currentUserId,
+        );
+        setSearchResults(users as unknown as UserSummary[]);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [participants, currentUserId],
+  );
 
   React.useEffect(() => {
     void searchUsers(debouncedQuery);
@@ -81,16 +85,18 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     async (userId: string) => {
       setIsSubmitting(true);
       try {
-        const response = await conversationApi.addMembers(conversation.id, [userId]);
+        const response = await conversationApi.addMembers(conversation.id, [
+          userId,
+        ]);
         const updatedConversation = unwrapApiSuccess(response);
         updateConversation(conversation.id, updatedConversation);
         setSearchQuery("");
         setSearchResults([]);
         setShowAddMember(false);
-        toast.success("Da them thanh vien vao nhom");
+        toast.success("Đã thêm thành viên vào nhóm");
       } catch (error) {
         const apiError = extractApiError(error);
-        toast.error(apiError.message || "Khong the them thanh vien");
+        toast.error(apiError.message || "Không thể thêm thành viên");
       } finally {
         setIsSubmitting(false);
       }
@@ -99,17 +105,18 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   );
 
   const handleLeaveGroup = useCallback(async () => {
-    if (!window.confirm("Ban co chac muon roi nhom nay?")) return;
+    if (!window.confirm("Bạn có chắc muốn rời nhóm này?")) return;
 
     setIsSubmitting(true);
     try {
       await conversationApi.leaveConversation(conversation.id);
       removeConversation(conversation.id);
-      toast.success("Da roi nhom");
+      toast.success("Đã rời nhóm");
       onClose();
       navigate("/chat");
-    } catch {
-      toast.error("Khong the roi nhom luc nay");
+    } catch (error) {
+      toast.error("Không thể rời nhóm lúc này");
+      console.log(error);
     } finally {
       setIsSubmitting(false);
     }
@@ -118,12 +125,12 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   return (
     <div className={clsx("flex flex-col h-full bg-white", className)}>
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-        <h3 className="font-semibold text-gray-900">Thong tin nhom</h3>
+        <h3 className="font-semibold text-gray-900">Thông tin nhóm</h3>
         <button
           type="button"
           onClick={onClose}
           className="p-1 rounded-full hover:bg-gray-100 transition-colors"
-          aria-label="Dong"
+          aria-label="Đóng"
         >
           <XMarkIcon className="w-5 h-5 text-gray-500" />
         </button>
@@ -137,14 +144,17 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2 justify-center">
               {conversation.name}
               {isAdmin && (
-                <button type="button" className="p-1 hover:bg-gray-100 rounded-full">
+                <button
+                  type="button"
+                  className="p-1 hover:bg-gray-100 rounded-full"
+                >
                   <PencilIcon className="w-4 h-4 text-gray-500" />
                 </button>
               )}
             </h2>
 
             <p className="text-sm text-gray-500 mt-1">
-              {(conversation.participantCount ?? participants.length)} thanh vien
+              {conversation.participantCount ?? participants.length} thành viên
             </p>
           </div>
         </div>
@@ -155,7 +165,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           <div className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
             <div className="flex items-center gap-4">
               <BellIcon className="w-5 h-5 text-gray-400" />
-              <span className="text-sm text-gray-900">Thong bao</span>
+              <span className="text-sm text-gray-900">Thông báo</span>
             </div>
             <div
               className={clsx(
@@ -177,9 +187,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
         <div className="flex border-b border-gray-200">
           {[
-            { id: "members", label: "Thanh vien" },
-            { id: "media", label: "Phuong tien" },
-            { id: "files", label: "Tep" },
+            { id: "members", label: "Thành viên" },
+            { id: "media", label: "Phương tiện" },
+            { id: "files", label: "Tệp" },
           ].map((tab) => (
             <button
               type="button"
@@ -207,7 +217,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 className="w-full flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors text-telegram-primary"
               >
                 <UserPlusIcon className="w-5 h-5" />
-                <span className="text-sm font-medium">Them thanh vien</span>
+                <span className="text-sm font-medium">Thêm thành viên</span>
               </button>
 
               {showAddMember && (
@@ -216,7 +226,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Tim kiem thanh vien..."
+                    placeholder="Tìm kiếm thành viên..."
                     leftIcon={<MagnifyingGlassIcon className="w-5 h-5" />}
                     disabled={isSubmitting}
                   />
@@ -227,7 +237,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                       </div>
                     ) : searchResults.length === 0 ? (
                       <p className="px-3 py-3 text-sm text-gray-500">
-                        Khong co ket qua phu hop
+                        Không có kết quả phù hợp
                       </p>
                     ) : (
                       searchResults.map((user) => (
@@ -249,7 +259,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                             <p className="text-sm font-medium text-gray-900 truncate">
                               {user.displayName || user.username}
                             </p>
-                            <p className="text-xs text-gray-500 truncate">@{user.username}</p>
+                            <p className="text-xs text-gray-500 truncate">
+                              @{user.username}
+                            </p>
                           </div>
                         </button>
                       ))
@@ -274,10 +286,14 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     <p className="text-sm font-medium text-gray-900 truncate">
                       {participant.displayName || participant.username}
                       {participant.id === currentUserId && (
-                        <span className="ml-2 text-xs text-gray-500">(Ban)</span>
+                        <span className="ml-2 text-xs text-gray-500">
+                          (Ban)
+                        </span>
                       )}
                     </p>
-                    <p className="text-xs text-gray-500 truncate">@{participant.username}</p>
+                    <p className="text-xs text-gray-500 truncate">
+                      @{participant.username}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -306,7 +322,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           )}
 
           {activeTab === "files" && (
-            <div className="p-4 text-center text-gray-500 text-sm">Chua co tep duoc chia se</div>
+            <div className="p-4 text-center text-gray-500 text-sm">
+              Chua co tep duoc chia se
+            </div>
           )}
         </div>
 

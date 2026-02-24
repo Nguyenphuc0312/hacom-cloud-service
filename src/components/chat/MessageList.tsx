@@ -88,8 +88,8 @@ const estimateMessageHeight = (item: TimelineItem): number => {
   return baseHeight;
 };
 
-const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> = React.memo(
-  ({ index, style, data }) => {
+const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
+  React.memo(({ index, style, data }) => {
     const item = data.items[index];
     const rowRef = React.useRef<HTMLDivElement>(null);
 
@@ -130,8 +130,7 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> = React.me
         </div>
       </div>
     );
-  },
-);
+  });
 
 TimelineRow.displayName = "TimelineRow";
 
@@ -242,14 +241,16 @@ export const MessageList: React.FC<MessageListProps> = ({
 
   const setItemSize = React.useCallback((index: number, size: number) => {
     const currentSize = sizeMapRef.current[index];
-    if (currentSize === size || Math.abs((currentSize || 0) - size) <= 1) return;
+    if (currentSize === size || Math.abs((currentSize || 0) - size) <= 1)
+      return;
 
     sizeMapRef.current[index] = size;
     listRef.current?.resetAfterIndex(index);
   }, []);
 
   const getItemSize = React.useCallback(
-    (index: number) => sizeMapRef.current[index] ?? estimateMessageHeight(timelineItems[index]),
+    (index: number) =>
+      sizeMapRef.current[index] ?? estimateMessageHeight(timelineItems[index]),
     [timelineItems],
   );
 
@@ -262,7 +263,14 @@ export const MessageList: React.FC<MessageListProps> = ({
       setItemSize,
       measureVersion: viewportHeight,
     }),
-    [timelineItems, onReply, onReact, onImageClick, setItemSize, viewportHeight],
+    [
+      timelineItems,
+      onReply,
+      onReact,
+      onImageClick,
+      setItemSize,
+      viewportHeight,
+    ],
   );
 
   React.useEffect(() => {
@@ -283,7 +291,8 @@ export const MessageList: React.FC<MessageListProps> = ({
   }, []);
 
   React.useEffect(() => {
-    const conversationChanged = prevConversationIdRef.current !== conversation.id;
+    const conversationChanged =
+      prevConversationIdRef.current !== conversation.id;
     if (!conversationChanged) return;
 
     prevConversationIdRef.current = conversation.id;
@@ -310,7 +319,8 @@ export const MessageList: React.FC<MessageListProps> = ({
     const lastMessageId = lastMessage?.id;
     const hasTailChanged =
       !!lastMessageId && lastMessageId !== prevLastMessageIdRef.current;
-    const incomingCount = messageCountDiff > 0 ? messageCountDiff : hasTailChanged ? 1 : 0;
+    const incomingCount =
+      messageCountDiff > 0 ? messageCountDiff : hasTailChanged ? 1 : 0;
     const isOwnLatestMessage =
       !!lastMessage && lastMessage.senderId === currentUserId;
     const outer = outerRef.current;
@@ -322,7 +332,8 @@ export const MessageList: React.FC<MessageListProps> = ({
       prevFirstMessageIdRef.current &&
       firstMessageId !== prevFirstMessageIdRef.current
     ) {
-      const scrollDelta = outer.scrollHeight - scrollSnapshotRef.current.scrollHeight;
+      const scrollDelta =
+        outer.scrollHeight - scrollSnapshotRef.current.scrollHeight;
       outer.scrollTop = scrollSnapshotRef.current.scrollTop + scrollDelta;
       loadingOlderRef.current = false;
     } else if (incomingCount > 0) {
@@ -422,7 +433,7 @@ export const MessageList: React.FC<MessageListProps> = ({
           aria-live="polite"
           aria-relevant="additions text"
           aria-atomic="false"
-          aria-label="Tin nhan trong cuoc tro chuyen"
+          aria-label="Tin nhắn trong cuộc trò chuyện"
         >
           {messages.length === 0 ? (
             <EmptyMessages />
@@ -473,7 +484,7 @@ export const MessageList: React.FC<MessageListProps> = ({
         >
           <ChevronDownIcon className="h-5 w-5 text-gray-600" />
           <span className="text-xs font-medium text-gray-700">
-            Tin nhan moi ({pendingNewMessages})
+            Tin nhắn mới ({pendingNewMessages})
           </span>
         </button>
       )}

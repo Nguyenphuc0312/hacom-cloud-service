@@ -31,7 +31,9 @@ export function shouldShowAvatar(
 
   if (!nextMessage) return true;
   if (nextMessage.senderId !== message.senderId) return true;
-  if (!isSameDay(new Date(nextMessage.createdAt), new Date(message.createdAt))) {
+  if (
+    !isSameDay(new Date(nextMessage.createdAt), new Date(message.createdAt))
+  ) {
     return true;
   }
 
@@ -84,7 +86,7 @@ export function getMessagePreview(
 ): string {
   if (!message) return "";
 
-  const prefix = message.senderId === currentUserId ? "You: " : "";
+  const prefix = message.senderId === currentUserId ? "" : "";
   let preview = "";
 
   switch (message.type) {
@@ -226,7 +228,9 @@ export function filterConversations(
   const lowerQuery = query.toLowerCase();
 
   return conversations.filter((conversation) => {
-    const nameMatch = (conversation.name || "").toLowerCase().includes(lowerQuery);
+    const nameMatch = (conversation.name || "")
+      .toLowerCase()
+      .includes(lowerQuery);
     const participantMatch = (conversation.participants || []).some(
       (participant) =>
         participant.displayName?.toLowerCase().includes(lowerQuery) ||

@@ -277,7 +277,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const disableComposerActions = disabled || uploading;
 
   return (
-    <div className={clsx("relative bg-white border-t border-gray-200", className)}>
+    <div
+      className={clsx("relative bg-white border-t border-gray-200", className)}
+    >
       {mode === "reply" && replyToMessage && (
         <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200">
           <div className="flex items-center gap-2 min-w-0">
@@ -286,7 +288,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               <p className="text-xs font-medium text-telegram-primary">
                 Replying to {replyToMessage.senderName}
               </p>
-              <p className="text-xs text-gray-500 truncate">{replyToMessage.content}</p>
+              <p className="text-xs text-gray-500 truncate">
+                {replyToMessage.content}
+              </p>
             </div>
           </div>
           <button
@@ -304,8 +308,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-1 h-8 bg-yellow-500 rounded-full" />
             <div className="min-w-0">
-              <p className="text-xs font-medium text-yellow-700">Editing message</p>
-              <p className="text-xs text-yellow-600 truncate">{editingMessage.content}</p>
+              <p className="text-xs font-medium text-yellow-700">
+                Editing message
+              </p>
+              <p className="text-xs text-yellow-600 truncate">
+                {editingMessage.content}
+              </p>
             </div>
           </div>
           <button
@@ -321,7 +329,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       {fileToSend && (
         <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border-b border-gray-200">
           {filePreview && fileToSend.type.startsWith("image/") ? (
-            <img src={filePreview} alt="preview" className="w-12 h-12 object-cover rounded" />
+            <img
+              src={filePreview}
+              alt="preview"
+              className="w-12 h-12 object-cover rounded"
+            />
           ) : (
             <span className="text-xs">{fileToSend.name}</span>
           )}
@@ -427,7 +439,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                       ? "image/*,video/*"
                       : ".pdf,.doc,.docx,.xls,.xlsx,.zip,.txt";
                   input.onchange = (event: Event) =>
-                    handleFileInput(event as unknown as React.ChangeEvent<HTMLInputElement>);
+                    handleFileInput(
+                      event as unknown as React.ChangeEvent<HTMLInputElement>,
+                    );
                   input.click();
                 }
                 setShowAttachmentMenu(false);
@@ -445,7 +459,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             onChange={(e) => handleInputChange(e.target.value)}
             onKeyDown={handleKeyDown}
             onBlur={() => onTyping?.(false)}
-            placeholder="Type a message..."
+            placeholder="Nhập một tin nhắn..."
             disabled={disabled}
             rows={1}
             className={clsx(
@@ -472,7 +486,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               "hover:bg-telegram-secondary",
               "disabled:opacity-50 disabled:cursor-not-allowed",
             )}
-            aria-label="Send message"
+            aria-label="Gửi tin nhắn"
           >
             <PaperAirplaneIcon className="h-5 w-5" />
           </button>
@@ -491,4 +505,3 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 };
 
 export default MessageInput;
-
