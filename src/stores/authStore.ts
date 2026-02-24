@@ -8,9 +8,10 @@ import apiClient, {
   resetAuthFailureState,
   setAuthFailureHandler,
 } from "../lib/axios";
-import type { ApiResponse } from "../lib/axios";
+import type { ApiResponse } from "@hacom/chat-shared-types";
 import type { LoginFormData, RegisterFormData } from "../lib/validations";
 import { getAccessToken, storeTokens } from "../services/tokenService";
+import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import {
   initializeAuthSync,
   notifyLogoutAcrossTabs,
@@ -152,10 +153,9 @@ export const useAuthStore = create<AuthState>()(
               },
             );
 
-            const { user } = response.data.data;
-            const { accessToken, refreshToken } = resolveTokens(
-              response.data.data,
-            );
+            const payload = unwrapApiSuccess(response.data);
+            const { user } = payload;
+            const { accessToken, refreshToken } = resolveTokens(payload);
 
             if (!accessToken) {
               throw new Error("Missing access token in login response");
@@ -172,12 +172,8 @@ export const useAuthStore = create<AuthState>()(
               error: null,
             });
           } catch (error: unknown) {
-            const errorMessage =
-              (
-                error as {
-                  response?: { data?: { error?: { message?: string } } };
-                }
-              )?.response?.data?.error?.message || "Dang nhap that bai";
+            const apiError = extractApiError(error);
+            const errorMessage = apiError.message || "Dang nhap that bai";
 
             set({
               isLoading: false,
@@ -199,10 +195,9 @@ export const useAuthStore = create<AuthState>()(
               data,
             );
 
-            const { user } = response.data.data;
-            const { accessToken, refreshToken } = resolveTokens(
-              response.data.data,
-            );
+            const payload = unwrapApiSuccess(response.data);
+            const { user } = payload;
+            const { accessToken, refreshToken } = resolveTokens(payload);
 
             if (!accessToken) {
               throw new Error("Missing access token in register response");
@@ -219,12 +214,8 @@ export const useAuthStore = create<AuthState>()(
               error: null,
             });
           } catch (error: unknown) {
-            const errorMessage =
-              (
-                error as {
-                  response?: { data?: { error?: { message?: string } } };
-                }
-              )?.response?.data?.error?.message || "Dang ky that bai";
+            const apiError = extractApiError(error);
+            const errorMessage = apiError.message || "Dang ky that bai";
             set({
               isLoading: false,
               error: errorMessage,
@@ -260,8 +251,9 @@ export const useAuthStore = create<AuthState>()(
 
           try {
             const response = await apiClient.get<ApiResponse<User>>("/auth/me");
+            const user = unwrapApiSuccess(response.data);
             set({
-              user: response.data.data,
+              user,
               isAuthenticated: true,
               isLoading: false,
               isInitialized: true,
@@ -293,12 +285,8 @@ export const useAuthStore = create<AuthState>()(
               set({ user: { ...currentUser, status } });
             }
           } catch (error: unknown) {
-            const errorMessage =
-              (
-                error as {
-                  response?: { data?: { error?: { message?: string } } };
-                }
-              )?.response?.data?.error?.message || "Cap nhat status that bai";
+            const apiError = extractApiError(error);
+            const errorMessage = apiError.message || "Cap nhat status that bai";
             throw new Error(errorMessage);
           }
         },
@@ -356,4 +344,3 @@ setAuthFailureHandler((reason) => {
 initializeAuthSync((reason) => {
   void useAuthStore.getState().handleRemoteLogout(reason);
 });
-

@@ -12,6 +12,7 @@ import { useDebounce } from "../../hooks";
 import { userApi } from "../../services/api";
 import { toast } from "../ui";
 import type { User as UserType } from "../../types";
+import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 
 interface User {
   id: string;
@@ -30,6 +31,7 @@ interface NewChatModalProps {
     name: string;
     memberIds: string[];
   }) => Promise<void>;
+  isSubmitting?: boolean;
 }
 
 export const NewChatModal: React.FC<NewChatModalProps> = ({
@@ -37,6 +39,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
   onClose,
   onStartChat,
   onCreateGroup,
+  isSubmitting: externalSubmitting = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [users, setUsers] = useState<User[]>([]);
@@ -45,6 +48,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
   const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
   const [isGroupMode, setIsGroupMode] = useState(false);
   const [groupName, setGroupName] = useState("");
+  const isBusy = isSubmitting || externalSubmitting;
 
   const debouncedQuery = useDebounce(searchQuery, 300);
 
@@ -57,7 +61,8 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
     setIsLoading(true);
     try {
       const response = await userApi.searchUsers(query);
-      const normalizedUsers = (response.data || []).map((user) => ({
+      const users = unwrapApiSuccess(response);
+      const normalizedUsers = users.map((user) => ({
         id: user.id,
         username: user.username,
         firstName: user.firstName,
@@ -66,8 +71,9 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
         status: user.status,
       }));
       setUsers(normalizedUsers);
-    } catch {
-      toast.error("Khong the tim kiem nguoi dung");
+    } catch (error) {
+      const apiError = extractApiError(error);
+      toast.error(apiError.message || "Khong the tim kiem nguoi dung");
       setUsers([]);
     } finally {
       setIsLoading(false);
@@ -157,7 +163,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
         <div className="flex gap-2">
           <button
             onClick={() => setIsGroupMode(false)}
-            disabled={isSubmitting}
+            disabled={isBusy}
             className={clsx(
               "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors",
               !isGroupMode
@@ -170,7 +176,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
           </button>
           <button
             onClick={() => setIsGroupMode(true)}
-            disabled={isSubmitting}
+            disabled={isBusy}
             className={clsx(
               "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors",
               isGroupMode
@@ -190,7 +196,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
           onChange={(e) => setSearchQuery(e.target.value)}
           leftIcon={<MagnifyingGlassIcon className="w-5 h-5" />}
           autoFocus
-          disabled={isSubmitting}
+          disabled={isBusy}
         />
 
         {isGroupMode && (
@@ -199,7 +205,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             placeholder="Nhap ten nhom..."
             value={groupName}
             onChange={(e) => setGroupName(e.target.value)}
-            disabled={isSubmitting}
+            disabled={isBusy}
           />
         )}
 
@@ -245,13 +251,13 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                   <button
                     key={user.id}
                     onClick={() => void handleUserClick(user)}
-                    disabled={isSubmitting}
+                    disabled={isBusy}
                     className={clsx(
                       "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-left",
                       isSelected
                         ? "bg-telegram-primary/10"
                         : "hover:bg-gray-100",
-                      isSubmitting && "opacity-60 cursor-not-allowed",
+                      isBusy && "opacity-60 cursor-not-allowed",
                     )}
                   >
                     <Avatar
@@ -306,8 +312,8 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             fullWidth
             size="lg"
             onClick={() => void handleCreateGroup()}
-            isLoading={isSubmitting}
-            disabled={isSubmitting}
+            isLoading={isBusy}
+            disabled={isBusy}
           >
             Tao nhom ({selectedUsers.length} nguoi)
           </Button>

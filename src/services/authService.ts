@@ -50,7 +50,10 @@ export const requestServerLogout = async (): Promise<void> => {
 
   await axios.post(`${API_BASE_URL}/auth/logout`, payload, {
     withCredentials: true,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Api-Contract": "2",
+    },
   });
 };
 

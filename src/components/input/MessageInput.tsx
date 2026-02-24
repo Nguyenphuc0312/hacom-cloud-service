@@ -15,6 +15,7 @@ import { FileType } from "../../types";
 import { fileApi } from "../../services/api";
 import { UPLOAD_CONFIG } from "../../config";
 import { toast } from "../ui";
+import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 
 interface MessageInputProps {
   value: string;
@@ -138,23 +139,25 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
     try {
       const response = await fileApi.uploadFile(fileToSend, setUploadProgress);
-      const mimeType = response.data.mimetype || fileToSend.type;
+      const uploadedFile = unwrapApiSuccess(response);
+      const mimeType = uploadedFile.mimetype || fileToSend.type;
       const attachmentType = resolveFileType(mimeType);
       const messageType = attachmentType === FileType.IMAGE ? "image" : "file";
 
       const attachment = {
-        id: response.data.id,
+        id: uploadedFile.id,
         type: attachmentType,
-        url: response.data.url,
-        fileName: response.data.filename || fileToSend.name,
-        fileSize: response.data.size || fileToSend.size,
+        url: uploadedFile.url,
+        fileName: uploadedFile.filename || fileToSend.name,
+        fileSize: uploadedFile.size || fileToSend.size,
         mimeType,
       };
 
-      onSend(response.data.filename || fileToSend.name, attachment, messageType);
+      onSend(uploadedFile.filename || fileToSend.name, attachment, messageType);
       clearSelectedFile();
-    } catch {
-      setUploadError("Upload failed, please try again");
+    } catch (error) {
+      const apiError = extractApiError(error);
+      setUploadError(apiError.message || "Upload failed, please try again");
     } finally {
       setUploading(false);
     }

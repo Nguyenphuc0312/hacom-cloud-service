@@ -61,7 +61,12 @@ export type {
 // Utility types
 export type {
   ApiResponse,
+  ApiSuccess,
+  ApiFailure,
+  ApiError,
   ErrorResponse,
+  PaginationMeta,
+  CursorMeta,
   PaginationParams,
   PaginatedResponse,
 } from "@hacom/chat-shared-types";

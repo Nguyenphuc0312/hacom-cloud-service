@@ -3,8 +3,8 @@ import clsx from "clsx";
 import { UserStatus } from "../../types";
 
 interface AvatarProps {
-  src?: string;
-  alt: string;
+  src?: string | null;
+  alt?: string | null;
   size?: "xs" | "sm" | "md" | "lg" | "xl";
   status?: UserStatus;
   showStatus?: boolean;
@@ -46,12 +46,18 @@ export const Avatar: React.FC<AvatarProps> = ({
   className,
   onClick,
 }) => {
-  const initials = alt
-    .split(" ")
+  const normalizedAlt = typeof alt === "string" ? alt.trim() : "";
+  const safeAlt = normalizedAlt || "User";
+  const safeSrc =
+    typeof src === "string" && src.trim().length > 0 ? src.trim() : undefined;
+
+  const initials = safeAlt
+    .split(/\s+/)
+    .filter(Boolean)
     .map((word) => word[0])
     .join("")
     .toUpperCase()
-    .slice(0, 2);
+    .slice(0, 2) || "?";
 
   return (
     <div
@@ -60,10 +66,10 @@ export const Avatar: React.FC<AvatarProps> = ({
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
     >
-      {src ? (
+      {safeSrc ? (
         <img
-          src={src}
-          alt={alt}
+          src={safeSrc}
+          alt={safeAlt}
           className={clsx(
             sizeClasses[size],
             "rounded-full object-cover ring-2 ring-white",

@@ -6,7 +6,8 @@ import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 
 import apiClient from "../lib/axios";
-import type { ApiResponse } from "../lib/axios";
+import type { ApiResponse } from "@hacom/chat-shared-types";
+import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import { toast } from "../utils/toast";
 import { useAuthStore } from "./authStore";
 import type {
@@ -345,16 +346,15 @@ export const useChatStore = create<ChatState>()(
 
       try {
         const response = await apiClient.get<ApiResponse<unknown>>("/rooms");
-        const conversations = toConversationArray(response.data.data);
+        const payload = unwrapApiSuccess(response.data);
+        const conversations = toConversationArray(payload);
         set({
           conversations,
           isLoadingConversations: false,
         });
       } catch (error: unknown) {
-        const errorMessage =
-          (error as { response?: { data?: { error?: { message?: string } } } })
-            ?.response?.data?.error?.message ||
-          "Khong the tai danh sach hoi thoai";
+        const apiError = extractApiError(error);
+        const errorMessage = apiError.message || "Khong the tai danh sach hoi thoai";
         set({
           error: errorMessage,
           isLoadingConversations: false,
@@ -532,7 +532,8 @@ export const useChatStore = create<ChatState>()(
         const response = await apiClient.get<ApiResponse<unknown>>(
           `/rooms/${conversationId}/messages?${params.toString()}`,
         );
-        const normalized = normalizeMessagesResponse(response.data.data);
+        const payload = unwrapApiSuccess(response.data);
+        const normalized = normalizeMessagesResponse(payload);
 
         set((state) => {
           const existingMessages = state.messages[conversationId] || [];
@@ -581,9 +582,8 @@ export const useChatStore = create<ChatState>()(
           };
         });
       } catch (error: unknown) {
-        const errorMessage =
-          (error as { response?: { data?: { error?: { message?: string } } } })
-            ?.response?.data?.error?.message || "Khong the tai tin nhan";
+        const apiError = extractApiError(error);
+        const errorMessage = apiError.message || "Khong the tai tin nhan";
         set({
           error: errorMessage,
           isLoadingMessages: false,
@@ -640,11 +640,12 @@ export const useChatStore = create<ChatState>()(
             ...(attachments?.length ? { attachments } : {}),
           },
         );
+        const message = unwrapApiSuccess(response.data);
 
         get().addMessage(conversationId, {
-          ...response.data.data,
+          ...message,
           localId: tempId,
-          status: response.data.data.status || MessageStatus.SENT,
+          status: message.status || MessageStatus.SENT,
         });
       } catch (error) {
         get().updateMessage(conversationId, tempId, {
@@ -673,11 +674,12 @@ export const useChatStore = create<ChatState>()(
             ...(attachments?.length ? { attachments } : {}),
           },
         );
+        const resentMessage = unwrapApiSuccess(response.data);
 
         get().addMessage(conversationId, {
-          ...response.data.data,
+          ...resentMessage,
           localId: message.localId || message.id,
-          status: response.data.data.status || MessageStatus.SENT,
+          status: resentMessage.status || MessageStatus.SENT,
         });
         toast.success("Gui lai thanh cong");
       } catch {

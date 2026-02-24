@@ -25,6 +25,8 @@ import { conversationApi } from "../services/api";
 import type { Message, UserSummary, Attachment } from "../types";
 import { MessageType, RoomType, UserStatus } from "../types";
 import { getOtherParticipant } from "../utils/messageHelpers";
+import { ErrorCode } from "@hacom/chat-shared-types";
+import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 
 export const ChatPage: React.FC = () => {
   const { conversationId } = useParams<{ conversationId?: string }>();
@@ -60,6 +62,7 @@ export const ChatPage: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(!conversationId);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isCreatingRoom, setIsCreatingRoom] = useState(false);
 
   // Current user as UserSummary for components
   const currentUserSummary = useMemo<UserSummary | null>(
@@ -197,9 +200,15 @@ export const ChatPage: React.FC = () => {
   // Handle new chat
   const handleStartChat = useCallback(
     async (userId: string) => {
+      if (isCreatingRoom) {
+        return;
+      }
+
+      setIsCreatingRoom(true);
       try {
         const response = await conversationApi.createPrivateConversation(userId);
-        const roomId = response.data?.id;
+        const payload = unwrapApiSuccess(response);
+        const roomId = payload.id;
         if (!roomId) {
           throw new Error("Missing room id");
         }
@@ -211,22 +220,54 @@ export const ChatPage: React.FC = () => {
         selectConversation(roomId);
         navigate(`/chat/${roomId}`);
       } catch (error) {
-        console.error("Create direct room failed:", error);
-        toast.error("Khong the bat dau cuoc tro chuyen");
+        const apiError = extractApiError(error);
+        const details =
+          apiError.details && typeof apiError.details === "object"
+            ? (apiError.details as Record<string, unknown>)
+            : null;
+        const existingRoomId =
+          details && typeof details.roomId === "string" ? details.roomId : null;
+
+        if (
+          existingRoomId &&
+          (apiError.code === ErrorCode.CONFLICT ||
+            apiError.code === ErrorCode.ROOM_ALREADY_EXISTS)
+        ) {
+          fetchConversations().catch((refreshError) => {
+            console.warn(
+              "Refresh conversations after conflict room lookup failed:",
+              refreshError,
+            );
+          });
+          selectConversation(existingRoomId);
+          navigate(`/chat/${existingRoomId}`);
+          return;
+        }
+
+        console.error("Create direct room failed:", apiError);
+        toast.error(apiError.message || "Khong the bat dau cuoc tro chuyen");
         throw new Error("Cannot create conversation");
+      } finally {
+        setIsCreatingRoom(false);
       }
     },
-    [fetchConversations, navigate, selectConversation],
+    [fetchConversations, isCreatingRoom, navigate, selectConversation],
   );
 
   const handleCreateGroup = useCallback(
     async (payload: { name: string; memberIds: string[] }) => {
+      if (isCreatingRoom) {
+        return;
+      }
+
+      setIsCreatingRoom(true);
       try {
         const response = await conversationApi.createGroupConversation({
           name: payload.name,
           memberIds: payload.memberIds,
         });
-        const roomId = response.data?.id;
+        const roomPayload = unwrapApiSuccess(response);
+        const roomId = roomPayload.id;
         if (!roomId) {
           throw new Error("Missing room id");
         }
@@ -237,12 +278,15 @@ export const ChatPage: React.FC = () => {
         selectConversation(roomId);
         navigate(`/chat/${roomId}`);
       } catch (error) {
-        console.error("Create group room failed:", error);
-        toast.error("Khong the tao nhom moi");
+        const apiError = extractApiError(error);
+        console.error("Create group room failed:", apiError);
+        toast.error(apiError.message || "Khong the tao nhom moi");
         throw new Error("Cannot create group");
+      } finally {
+        setIsCreatingRoom(false);
       }
     },
-    [fetchConversations, navigate, selectConversation],
+    [fetchConversations, isCreatingRoom, navigate, selectConversation],
   );
 
   // Handle new chat modal
@@ -375,6 +419,7 @@ export const ChatPage: React.FC = () => {
         onClose={() => setIsNewChatModalOpen(false)}
         onStartChat={handleStartChat}
         onCreateGroup={handleCreateGroup}
+        isSubmitting={isCreatingRoom}
       />
 
       {/* Image Preview Modal */}

@@ -4,7 +4,16 @@
  */
 
 import apiClient from "../lib/axios";
-import type { ApiResponse } from "../lib/axios";
+import type {
+  ApiResponse,
+  AuthResponseDto,
+  CreateMessageResponse,
+  CreateRoomResponse,
+  LoginResponse,
+  RefreshTokenResponse,
+  RoomMessagesResponse,
+  RoomsListResponse,
+} from "@hacom/chat-shared-types";
 import type { User } from "../stores/authStore";
 import type { Conversation, Message } from "../types";
 
@@ -14,12 +23,10 @@ import type { Conversation, Message } from "../types";
 
 export const authApi = {
   login: async (email: string, password: string) => {
-    const response = await apiClient.post<
-      ApiResponse<{
-        user: User;
-        tokens: { accessToken: string; refreshToken: string };
-      }>
-    >("/auth/login", { email, password });
+    const response = await apiClient.post<ApiResponse<LoginResponse>>(
+      "/auth/login",
+      { email, password },
+    );
     return response.data;
   },
 
@@ -30,12 +37,10 @@ export const authApi = {
     firstName?: string;
     lastName?: string;
   }) => {
-    const response = await apiClient.post<
-      ApiResponse<{
-        user: User;
-        tokens: { accessToken: string; refreshToken: string };
-      }>
-    >("/auth/register", data);
+    const response = await apiClient.post<ApiResponse<AuthResponseDto>>(
+      "/auth/register",
+      data,
+    );
     return response.data;
   },
 
@@ -46,12 +51,10 @@ export const authApi = {
   },
 
   refreshToken: async (refreshToken?: string) => {
-    const response = await apiClient.post<
-      ApiResponse<{
-        accessToken: string;
-        refreshToken: string;
-      }>
-    >("/auth/refresh", refreshToken ? { refreshToken } : undefined, {
+    const response = await apiClient.post<ApiResponse<RefreshTokenResponse>>(
+      "/auth/refresh",
+      refreshToken ? { refreshToken } : undefined,
+      {
       withCredentials: true,
     });
     return response.data;
@@ -136,13 +139,9 @@ export const userApi = {
 
 export const conversationApi = {
   getConversations: async (page = 1, limit = 50) => {
-    const response = await apiClient.get<
-      ApiResponse<{
-        conversations: Conversation[];
-        total: number;
-        hasMore: boolean;
-      }>
-    >(`/rooms?page=${page}&limit=${limit}`);
+    const response = await apiClient.get<ApiResponse<RoomsListResponse>>(
+      `/rooms?page=${page}&limit=${limit}`,
+    );
     return response.data;
   },
 
@@ -154,10 +153,13 @@ export const conversationApi = {
   },
 
   createPrivateConversation: async (userId: string) => {
-    const response = await apiClient.post<ApiResponse<Conversation>>("/rooms", {
-      type: "direct",
-      members: [userId],
-    });
+    const response = await apiClient.post<ApiResponse<CreateRoomResponse>>(
+      "/rooms",
+      {
+        type: "direct",
+        members: [userId],
+      },
+    );
     return response.data;
   },
 
@@ -167,12 +169,15 @@ export const conversationApi = {
     avatar?: string;
     description?: string;
   }) => {
-    const response = await apiClient.post<ApiResponse<Conversation>>("/rooms", {
-      type: "group",
-      name: data.name,
-      members: data.memberIds,
-      description: data.description,
-    });
+    const response = await apiClient.post<ApiResponse<CreateRoomResponse>>(
+      "/rooms",
+      {
+        type: "group",
+        name: data.name,
+        members: data.memberIds,
+        description: data.description,
+      },
+    );
     return response.data;
   },
 
@@ -233,13 +238,9 @@ export const conversationApi = {
 
 export const messageApi = {
   getMessages: async (conversationId: string, page = 1, limit = 50) => {
-    const response = await apiClient.get<
-      ApiResponse<{
-        messages: Message[];
-        total: number;
-        hasMore: boolean;
-      }>
-    >(`/rooms/${conversationId}/messages?page=${page}&limit=${limit}`);
+    const response = await apiClient.get<ApiResponse<RoomMessagesResponse>>(
+      `/rooms/${conversationId}/messages?page=${page}&limit=${limit}`,
+    );
     return response.data;
   },
 
@@ -252,7 +253,7 @@ export const messageApi = {
       attachments?: string[];
     },
   ) => {
-    const response = await apiClient.post<ApiResponse<Message>>(
+    const response = await apiClient.post<ApiResponse<CreateMessageResponse>>(
       `/rooms/${conversationId}/messages`,
       {
         content: data.content,

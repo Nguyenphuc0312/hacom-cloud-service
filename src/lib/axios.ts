@@ -5,6 +5,7 @@
 
 import axios, { AxiosError, AxiosHeaders } from "axios";
 import type { AxiosInstance, InternalAxiosRequestConfig } from "axios";
+import type { ApiResponse } from "@hacom/chat-shared-types";
 import { API_BASE_URL } from "../config";
 import {
   clearTokens,
@@ -34,6 +35,8 @@ const PUBLIC_ENDPOINT_PATTERNS = [
   /\/auth\/reset-password$/i,
   /\/users\/check-username(?:\/|$)/i,
 ];
+const API_CONTRACT_HEADER = "X-Api-Contract";
+const API_CONTRACT_VERSION = "2";
 
 let authFailureHandler: AuthFailureHandler | null = null;
 let authFailureNotified = false;
@@ -101,6 +104,30 @@ const notifyAuthFailure = (reason: AuthFailureReason): void => {
 const extractTokenPayload = (
   rawResponseData: unknown,
 ): { accessToken: string | null; refreshToken: string | null } => {
+  const contractPayload = rawResponseData as ApiResponse<{
+    accessToken?: string;
+    refreshToken?: string;
+    tokens?: {
+      accessToken?: string;
+      refreshToken?: string;
+    };
+  }>;
+
+  if (contractPayload && typeof contractPayload === "object" && contractPayload.success) {
+    const responseData = contractPayload.data;
+    const accessTokenCandidate =
+      responseData.tokens?.accessToken ?? responseData.accessToken;
+    const refreshTokenCandidate =
+      responseData.tokens?.refreshToken ?? responseData.refreshToken;
+
+    return {
+      accessToken:
+        typeof accessTokenCandidate === "string" ? accessTokenCandidate : null,
+      refreshToken:
+        typeof refreshTokenCandidate === "string" ? refreshTokenCandidate : null,
+    };
+  }
+
   const topLevel =
     rawResponseData && typeof rawResponseData === "object"
       ? (rawResponseData as Record<string, unknown>)
@@ -143,7 +170,10 @@ const refreshAccessToken = async (): Promise<string> => {
       storedRefreshToken ? { refreshToken: storedRefreshToken } : undefined,
       {
         withCredentials: true,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          [API_CONTRACT_HEADER]: API_CONTRACT_VERSION,
+        },
       },
     );
 
@@ -200,6 +230,7 @@ const apiClient: AxiosInstance = axios.create({
   timeout: 30000,
   headers: {
     "Content-Type": "application/json",
+    [API_CONTRACT_HEADER]: API_CONTRACT_VERSION,
   },
 });
 
@@ -217,6 +248,15 @@ apiClient.interceptors.request.use(
     }
 
     const shouldAttachAuth = !isPublicEndpoint(config.url);
+    requestConfig.headers = requestConfig.headers ?? {};
+    const contractHeaders =
+      requestConfig.headers as AxiosHeaders | Record<string, string>;
+    if (contractHeaders instanceof AxiosHeaders) {
+      contractHeaders.set(API_CONTRACT_HEADER, API_CONTRACT_VERSION);
+    } else {
+      contractHeaders[API_CONTRACT_HEADER] = API_CONTRACT_VERSION;
+    }
+
     if (!shouldAttachAuth) {
       setAuthHeader(config, null);
       return config;
@@ -261,26 +301,3 @@ apiClient.interceptors.response.use(
 );
 
 export default apiClient;
-
-export interface ApiResponse<T> {
-  success: boolean;
-  data: T;
-  message: string;
-  pagination?: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-    hasNextPage: boolean;
-    hasPrevPage: boolean;
-  };
-}
-
-export interface ApiError {
-  success: false;
-  error: {
-    code: string;
-    message: string;
-    details?: Record<string, string[]>;
-  };
-}

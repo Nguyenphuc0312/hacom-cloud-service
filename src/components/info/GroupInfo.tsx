@@ -17,6 +17,7 @@ import type { Conversation, UserSummary } from "../../types";
 import { useDebounce } from "../../hooks";
 import { conversationApi, userApi } from "../../services/api";
 import { useChatStore } from "../../stores";
+import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 
 interface GroupInfoProps {
   conversation: Conversation;
@@ -31,6 +32,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   onClose,
   className,
 }) => {
+  const participants = React.useMemo(
+    () => (Array.isArray(conversation.participants) ? conversation.participants : []),
+    [conversation.participants],
+  );
+
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"members" | "media" | "files">(
     "members",
@@ -55,9 +61,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     setIsSearching(true);
     try {
       const response = await userApi.searchUsers(query, 1, 10);
-      const participants = new Set(conversation.participants.map((p) => p.id));
-      const users = (response.data || []).filter(
-        (u) => !participants.has(u.id) && u.id !== currentUserId,
+      const participantIds = new Set(participants.map((p) => p.id));
+      const users = unwrapApiSuccess(response).filter(
+        (u) => !participantIds.has(u.id) && u.id !== currentUserId,
       );
       setSearchResults(users as unknown as UserSummary[]);
     } catch {
@@ -65,7 +71,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     } finally {
       setIsSearching(false);
     }
-  }, [conversation.participants, currentUserId]);
+  }, [participants, currentUserId]);
 
   React.useEffect(() => {
     void searchUsers(debouncedQuery);
@@ -76,13 +82,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       setIsSubmitting(true);
       try {
         const response = await conversationApi.addMembers(conversation.id, [userId]);
-        updateConversation(conversation.id, response.data);
+        const updatedConversation = unwrapApiSuccess(response);
+        updateConversation(conversation.id, updatedConversation);
         setSearchQuery("");
         setSearchResults([]);
         setShowAddMember(false);
         toast.success("Da them thanh vien vao nhom");
-      } catch {
-        toast.error("Khong the them thanh vien");
+      } catch (error) {
+        const apiError = extractApiError(error);
+        toast.error(apiError.message || "Khong the them thanh vien");
       } finally {
         setIsSubmitting(false);
       }
@@ -136,7 +144,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             </h2>
 
             <p className="text-sm text-gray-500 mt-1">
-              {conversation.participantCount || conversation.participants.length} thanh vien
+              {(conversation.participantCount ?? participants.length)} thanh vien
             </p>
           </div>
         </div>
@@ -250,7 +258,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 </div>
               )}
 
-              {conversation.participants.map((participant) => (
+              {participants.map((participant) => (
                 <div
                   key={participant.id}
                   className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer"
