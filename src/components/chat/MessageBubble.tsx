@@ -37,14 +37,35 @@ const MessageStatusIcon: React.FC<{
 
   if (status === "uploading") {
     return (
-      <span className="inline-block w-3.5 h-3.5 animate-spin border-2 border-white/60 border-t-transparent rounded-full" />
+      <span
+        className="inline-block w-3.5 h-3.5 animate-spin border-2 border-white/60 border-t-transparent rounded-full"
+        role="img"
+        aria-label="Đang tải lên"
+        title="Đang tải lên"
+      >
+        <span className="sr-only">Đang tải lên</span>
+      </span>
     );
   }
   switch (status) {
     case MessageStatus.SENDING:
-      return <ClockIcon className="w-3.5 h-3.5 text-white/60" />;
+      return (
+        <span
+          className="inline-block w-3.5 h-3.5 animate-spin border-2 border-white/60 border-t-transparent rounded-full"
+          role="img"
+          aria-label="Đang gửi"
+          title="Đang gửi"
+        >
+          <span className="sr-only">Đang gửi</span>
+        </span>
+      );
     case MessageStatus.SENT:
-      return <CheckIcon className="w-3.5 h-3.5 text-white/60" />;
+      return (
+        <span role="img" aria-label="Đã gửi" title="Đã gửi">
+          <CheckIcon className="w-3.5 h-3.5 text-white/60" />
+          <span className="sr-only">Đã gửi</span>
+        </span>
+      );
     case MessageStatus.DELIVERED:
       return (
         <div className="flex -space-x-1">
@@ -64,9 +85,11 @@ const MessageStatusIcon: React.FC<{
         <button
           title="Gửi lại"
           onClick={onResend}
-          className="w-4 h-4 text-red-300 hover:text-red-500 focus:outline-none"
+          aria-disabled={false}
+          className="w-4 h-4 text-red-300 hover:text-red-500 focus:outline-none hover:scale-110 active:scale-95 transition-transform duration-150 animate-shake"
         >
-          <ExclamationCircleIcon />
+          <ExclamationCircleIcon className="w-4 h-4" aria-hidden="true" />
+          <span className="sr-only">Gửi thất bại. Bấm để gửi lại.</span>
         </button>
       );
     default:
@@ -194,7 +217,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         {/* Main bubble */}
         <div
           className={clsx(
-            "relative px-3 py-2 rounded-2xl",
+            "relative px-3 py-2 pr-10 rounded-2xl",
             isOwn
               ? "bg-telegram-primary text-white rounded-br-md"
               : "bg-white text-gray-900 rounded-bl-md shadow-sm",
@@ -229,11 +252,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           >
             {message.isEdited && <span className="text-[10px]">đã sửa</span>}
             <span className="text-[10px]">{timeStr}</span>
-            <MessageStatusIcon
-              status={message.status}
-              isOwn={isOwn}
-              onResend={handleResend}
-            />
+            {/* Reserve fixed space for status icon to avoid layout shift */}
+            <span className="inline-flex items-center justify-center w-4 h-4">
+              <MessageStatusIcon
+                status={message.status}
+                isOwn={isOwn}
+                onResend={handleResend}
+              />
+            </span>
           </div>
 
           {/* Bubble tail */}

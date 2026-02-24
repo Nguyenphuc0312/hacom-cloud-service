@@ -8,6 +8,7 @@ import { subscribeWithSelector } from "zustand/middleware";
 
 import apiClient from "../lib/axios";
 import type { ApiResponse } from "../lib/axios";
+import { toast } from "../utils/toast";
 import type {
   Conversation,
   Message,
@@ -387,21 +388,55 @@ export const useChatStore = create<ChatState>()(
     },
 
     resendMessage: async (conversationId: string, message: Message) => {
-      // Nếu là file, cần truyền lại fileMeta (nếu còn), hoặc chỉ gửi lại link nếu đã upload
+      // Try to resend in-place: set status -> call API -> replace message on success
+      const msgId = message.id;
+
+      // Mark as sending
+      get().updateMessage(conversationId, msgId, {
+        status: MessageStatus.SENDING,
+      });
+
+      // Prepare replyToId
       let replyToId: string | undefined = undefined;
       if (message.replyTo) {
         if (typeof message.replyTo === "string") replyToId = message.replyTo;
         else if (typeof (message.replyTo as { id?: string }).id === "string")
           replyToId = (message.replyTo as { id: string }).id;
       }
-      await get().sendMessage(
-        conversationId,
-        message.content,
-        message.type,
-        message.attachments?.[0],
-        replyToId,
-      );
-      // Optionally: remove message lỗi cũ nếu cần
+
+      try {
+        const response = await apiClient.post<ApiResponse<Message>>(
+          `/rooms/${conversationId}/messages`,
+          {
+            content: message.content,
+            type: message.type,
+            ...(replyToId && { replyTo: replyToId }),
+            ...(message.attachments && { attachments: message.attachments }),
+          },
+        );
+
+        // Replace the failed message with server message (preserve localId if needed)
+        set((state) => ({
+          messages: {
+            ...state.messages,
+            [conversationId]: (state.messages[conversationId] || []).map((m) =>
+              m.id === msgId ? response.data.data : m,
+            ),
+          },
+        }));
+        // Show transient success toast
+        try {
+          toast.success("Gửi lại thành công");
+        } catch {}
+      } catch (err) {
+        // Mark failed again
+        get().updateMessage(conversationId, msgId, {
+          status: MessageStatus.FAILED,
+        });
+        try {
+          toast.error("Gửi lại không thành công");
+        } catch {}
+      }
     },
 
     // ============================================

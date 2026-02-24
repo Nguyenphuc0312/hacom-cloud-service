@@ -19,7 +19,10 @@ import { useChatStore } from "../../stores";
 interface MessageInputProps {
   value: string;
   onChange: (value: string) => void;
-  onSend: () => void;
+  // content: text content for text messages
+  // fileMeta: optional attachment meta when sending uploaded files
+  // type: optional message type string (e.g. 'file', 'image')
+  onSend: (content?: string, fileMeta?: unknown, type?: string) => void;
   mode: InputMode;
   replyToMessage?: Message;
   editingMessage?: Message;
@@ -51,7 +54,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const sendMessage = useChatStore((s) => s.sendMessage);
+  // NOTE: MessageInput should not call store.sendMessage directly because
+  // the parent (ChatWindow / ChatPage) owns conversation context. Use
+  // `onSend` prop to forward text/file sends to parent.
 
   // ...existing code...
 
@@ -109,20 +114,16 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     try {
       const res = await fileApi.uploadFile(fileToSend, setUploadProgress);
       // Chỉ gửi message khi upload thành công
-      await sendMessage(
-        // conversationId,
-        res.data.filename, // content là tên file hoặc tuỳ API
-        "file", // MessageType
-        undefined,
-        {
-          id: res.data.filename,
-          type: "pdf" as FileType, // fallback, hoặc map đúng FileType
-          url: res.data.url,
-          fileName: res.data.filename,
-          fileSize: fileToSend.size,
-        },
-        undefined,
-      );
+      // Notify parent to send message with attachment meta
+      const attachment = {
+        id: res.data.filename,
+        type: (res.data.fileType || "file") as FileType,
+        url: res.data.url,
+        fileName: res.data.filename,
+        fileSize: fileToSend.size,
+      };
+      // Call onSend so parent (ChatWindow/ChatPage) can use correct conversationId
+      onSend(res.data.filename, attachment, "file");
       setFileToSend(null);
       setFilePreview(null);
       setUploadProgress(0);
@@ -154,7 +155,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (value.trim()) {
-        onSend();
+        onSend(value.trim());
       }
     }
 
@@ -420,7 +421,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         {/* Send / Voice button */}
         {hasContent ? (
           <button
-            onClick={onSend}
+            onClick={() => onSend(value.trim())}
             disabled={disabled}
             className={clsx(
               "p-2 rounded-full transition-all",

@@ -20,7 +20,7 @@ import {
   useCurrentTypingStatus,
 } from "../stores";
 import { useWebSocket } from "../hooks";
-import type { Message, UserSummary } from "../types";
+import type { Message, UserSummary, Attachment } from "../types";
 import { MessageType, MessageStatus, RoomType, UserStatus } from "../types";
 import { getOtherParticipant } from "../utils/messageHelpers";
 
@@ -114,7 +114,12 @@ export const ChatPage: React.FC = () => {
 
   // Handle send message
   const handleSendMessage = useCallback(
-    async (content: string, replyTo?: Message) => {
+    async (
+      content: string,
+      replyTo?: Message,
+      fileMeta?: Attachment | undefined,
+      type: MessageType = MessageType.TEXT,
+    ) => {
       if (!selectedConversationId || !currentUserSummary) return;
 
       // Optimistic update - create temp message
@@ -127,26 +132,29 @@ export const ChatPage: React.FC = () => {
           currentUserSummary.displayName || currentUserSummary.username,
         senderAvatar: currentUserSummary.avatar,
         content,
-        type: MessageType.TEXT,
-        status: MessageStatus.SENDING,
+        type,
+        status: fileMeta
+          ? ("uploading" as MessageStatus)
+          : MessageStatus.SENDING,
         isEdited: false,
         isPinned: false,
         isDeleted: false,
         isSystem: false,
         createdAt: new Date(),
         replyTo: replyTo?.id,
-      };
+        ...(fileMeta && { attachments: [fileMeta] }),
+      } as Message;
 
       // Add to store temporarily
       addMessage(selectedConversationId, tempMessage);
 
       try {
-        // Send via API
+        // Send via API (storeSendMessage handles optimistic replacement)
         await storeSendMessage(
           selectedConversationId,
           content,
-          MessageType.TEXT,
-          undefined,
+          type,
+          fileMeta,
           replyTo?.id,
         );
       } catch (error) {

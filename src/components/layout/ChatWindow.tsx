@@ -36,8 +36,55 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onImageClick,
   className,
 }) => {
-  // ...existing state and handlers...
-  // (Bạn cần đảm bảo các state như inputValue, inputMode, replyToMessage, editingMessage, handleReply, handleSend, handleCancelReply, handleCancelEdit, handleReact, ... được khai báo đúng ở trên)
+  // Local input state and handlers (wire input -> parent send)
+  const [inputValue, setInputValue] = React.useState<string>("");
+  const [inputMode, setInputMode] = React.useState<InputMode>("normal");
+  const [replyToMessage, setReplyToMessage] = React.useState<
+    Message | undefined
+  >(undefined);
+  const [editingMessage, setEditingMessage] = React.useState<
+    Message | undefined
+  >(undefined);
+
+  const handleReply = React.useCallback((msg: Message) => {
+    setReplyToMessage(msg);
+    setInputMode("reply");
+  }, []);
+
+  const handleCancelReply = React.useCallback(() => {
+    setReplyToMessage(undefined);
+    setInputMode("normal");
+  }, []);
+
+  const handleCancelEdit = React.useCallback(() => {
+    setEditingMessage(undefined);
+    setInputMode("normal");
+  }, []);
+
+  const handleReact = React.useCallback((_msg: Message, _emoji: string) => {
+    // noop - placeholder for reaction handling
+  }, []);
+
+  const handleSend = React.useCallback(
+    (content?: string, fileMeta?: unknown, type?: string) => {
+      // Prevent empty sends
+      if (!content && !fileMeta) return;
+
+      // Forward to parent ChatPage handler (include fileMeta and type if present)
+      onSendMessage(
+        content || (fileMeta && (fileMeta as any).fileName) || "",
+        replyToMessage,
+        fileMeta as any,
+        (type as any) || undefined,
+      );
+
+      // Reset local input state on send
+      setInputValue("");
+      setReplyToMessage(undefined);
+      setInputMode("normal");
+    },
+    [onSendMessage, replyToMessage],
+  );
   return (
     <div
       className={clsx(
