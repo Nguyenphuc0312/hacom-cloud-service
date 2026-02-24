@@ -28,7 +28,9 @@ interface ChatState {
   activeFilter: ConversationFilter;
   isLoadingConversations: boolean;
   isLoadingMessages: boolean;
+  isLoadingMessagesByConversation: Record<string, boolean>;
   hasMoreMessages: Record<string, boolean>;
+  messageErrors: Record<string, string | null>;
   error: string | null;
 
   setConversations: (conversations: Conversation[]) => void;
@@ -36,7 +38,7 @@ interface ChatState {
   updateConversation: (id: string, updates: Partial<Conversation>) => void;
   removeConversation: (id: string) => void;
   selectConversation: (id: string | null) => void;
-  markAsRead: (conversationId: string) => void;
+  markAsRead: (conversationId: string) => Promise<void>;
   fetchConversations: () => Promise<void>;
 
   setMessages: (conversationId: string, messages: Message[]) => void;
@@ -56,7 +58,7 @@ interface ChatState {
     conversationId: string,
     before?: string,
     after?: string,
-  ) => Promise<void>;
+  ) => Promise<FetchMessagesResult>;
   sendMessage: (
     conversationId: string,
     content: string,
@@ -76,6 +78,11 @@ interface ChatState {
   reset: () => void;
 }
 
+interface FetchMessagesResult {
+  loaded: number;
+  hasMore: boolean;
+}
+
 const initialState = {
   conversations: [],
   messages: {},
@@ -85,11 +92,34 @@ const initialState = {
   activeFilter: "all" as ConversationFilter,
   isLoadingConversations: false,
   isLoadingMessages: false,
+  isLoadingMessagesByConversation: {},
   hasMoreMessages: {},
+  messageErrors: {},
   error: null,
 };
 
 const EMPTY_MESSAGES: Message[] = [];
+
+const roomMessageFetchInFlight = new Map<string, number>();
+const initialFetchSeqByConversation = new Map<string, number>();
+
+const buildLoadingStateFromInFlightMap = (): {
+  isLoadingMessages: boolean;
+  isLoadingMessagesByConversation: Record<string, boolean>;
+} => {
+  const isLoadingMessagesByConversation = Object.fromEntries(
+    Array.from(roomMessageFetchInFlight.entries()).map(([conversationId, count]) => [
+      conversationId,
+      count > 0,
+    ]),
+  );
+  return {
+    isLoadingMessages: Array.from(roomMessageFetchInFlight.values()).some(
+      (count) => count > 0,
+    ),
+    isLoadingMessagesByConversation,
+  };
+};
 
 const toConversationArray = (data: unknown): Conversation[] => {
   if (Array.isArray(data)) return data as Conversation[];
@@ -107,6 +137,182 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
     ? (value as Record<string, unknown>)
     : null;
 
+const asStringValue = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim().length > 0 ? value : undefined;
+
+const asNumberValue = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) ? value : undefined;
+
+const toDateObject = (value: unknown, fallback: Date = new Date()): Date => {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return fallback;
+};
+
+const normalizeAttachments = (value: unknown): Message["attachments"] => {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((attachmentRaw) => {
+      const attachment = asRecord(attachmentRaw);
+      if (!attachment) return null;
+
+      const id = asStringValue(attachment.id) ?? asStringValue(attachment.fileId);
+      const url = asStringValue(attachment.url) ?? asStringValue(attachment.fileUrl);
+      if (!id || !url) return null;
+
+      return {
+        id,
+        type: (asStringValue(attachment.type) ?? "other") as Attachment["type"],
+        url,
+        fileName:
+          asStringValue(attachment.fileName) ??
+          asStringValue(attachment.filename) ??
+          asStringValue(attachment.originalName),
+        mimeType:
+          asStringValue(attachment.mimeType) ?? asStringValue(attachment.mimetype),
+        fileSize:
+          asNumberValue(attachment.fileSize) ?? asNumberValue(attachment.size),
+        thumbnailUrl: asStringValue(attachment.thumbnailUrl),
+        width: asNumberValue(attachment.width),
+        height: asNumberValue(attachment.height),
+        duration: asNumberValue(attachment.duration),
+      } as Attachment;
+    })
+    .filter((item): item is Attachment => item !== null);
+};
+
+const normalizeReactions = (value: unknown): Message["reactions"] => {
+  if (!Array.isArray(value)) return [];
+  if (value.length === 0) return [];
+
+  const first = asRecord(value[0]);
+  if (first && Array.isArray(first.userIds)) {
+    return value as Message["reactions"];
+  }
+
+  const grouped = new Map<string, Set<string>>();
+
+  for (const reactionRaw of value) {
+    const reaction = asRecord(reactionRaw);
+    if (!reaction) continue;
+
+    const emoji = asStringValue(reaction.emoji);
+    const userId =
+      asStringValue(reaction.userId) ??
+      asStringValue(reaction.senderId) ??
+      asStringValue(reaction.user_id);
+    if (!emoji || !userId) continue;
+
+    if (!grouped.has(emoji)) grouped.set(emoji, new Set());
+    grouped.get(emoji)?.add(userId);
+  }
+
+  return Array.from(grouped.entries()).map(([emoji, userIds]) => ({
+    emoji,
+    userIds: Array.from(userIds),
+    count: userIds.size,
+  }));
+};
+
+const normalizeMessage = (
+  input: unknown,
+  fallbackConversationId?: string,
+): Message | null => {
+  const sourceRecord = asRecord(input);
+  if (!sourceRecord) return null;
+
+  const nestedMessage = asRecord(sourceRecord.message);
+  const source =
+    nestedMessage &&
+    !asStringValue(sourceRecord.id) &&
+    !asStringValue(sourceRecord._id) &&
+    !asStringValue(sourceRecord.messageId)
+      ? nestedMessage
+      : sourceRecord;
+
+  const sender = asRecord(source.sender);
+  const id =
+    asStringValue(source.id) ??
+    asStringValue(source._id) ??
+    asStringValue(source.messageId);
+  const conversationId =
+    asStringValue(source.conversationId) ??
+    asStringValue(source.roomId) ??
+    asStringValue(source.room_id) ??
+    fallbackConversationId;
+
+  if (!id || !conversationId) return null;
+
+  const senderId =
+    asStringValue(source.senderId) ??
+    asStringValue(source.userId) ??
+    asStringValue(sender?.id) ??
+    "unknown-user";
+  const senderName =
+    asStringValue(source.senderName) ??
+    asStringValue(source.username) ??
+    asStringValue(sender?.displayName) ??
+    asStringValue(sender?.username) ??
+    "Unknown";
+  const senderAvatar =
+    asStringValue(source.senderAvatar) ??
+    asStringValue(source.avatar) ??
+    asStringValue(sender?.avatar);
+
+  const rawStatus = asStringValue(source.status);
+  const statusValues = new Set<string>(Object.values(MessageStatus));
+  const status = statusValues.has(rawStatus ?? "")
+    ? (rawStatus as Message["status"])
+    : MessageStatus.SENT;
+
+  return {
+    id,
+    localId:
+      asStringValue(source.localId) ??
+      asStringValue(source.tempId) ??
+      asStringValue(source.clientMessageId),
+    conversationId,
+    senderId,
+    senderName,
+    senderAvatar,
+    content: typeof source.content === "string" ? source.content : "",
+    type: (asStringValue(source.type) ?? MessageType.TEXT) as Message["type"],
+    replyTo:
+      asStringValue(source.replyTo) ??
+      (asRecord(source.replyTo)?.id as string | undefined),
+    replyToMessage: source.replyToMessage as Message["replyToMessage"],
+    forwardedFrom: source.forwardedFrom as Message["forwardedFrom"],
+    attachments: normalizeAttachments(source.attachments),
+    reactions: normalizeReactions(source.reactions),
+    mentions: Array.isArray(source.mentions)
+      ? (source.mentions.filter((item): item is string => typeof item === "string") as string[])
+      : [],
+    status,
+    isEdited: Boolean(source.isEdited),
+    isPinned: Boolean(source.isPinned),
+    isDeleted: Boolean(source.isDeleted),
+    isSystem: Boolean(source.isSystem),
+    metadata: asRecord(source.metadata) ?? undefined,
+    createdAt: toDateObject(source.createdAt),
+    editedAt: source.editedAt ? toDateObject(source.editedAt) : undefined,
+    deliveredAt: source.deliveredAt ? toDateObject(source.deliveredAt) : undefined,
+    readAt: source.readAt ? toDateObject(source.readAt) : undefined,
+    readBy: Array.isArray(source.readBy)
+      ? source.readBy
+          .map((item) => {
+            if (typeof item === "string") return item;
+            const record = asRecord(item);
+            return asStringValue(record?.userId) ?? asStringValue(record?.id);
+          })
+          .filter((item): item is string => typeof item === "string")
+      : [],
+  };
+};
+
 const toDateValue = (value: unknown): number => {
   if (value instanceof Date) return value.getTime();
   if (typeof value === "string" || typeof value === "number") {
@@ -119,7 +325,9 @@ const toDateValue = (value: unknown): number => {
 const compareMessages = (a: Message, b: Message): number => {
   const timeDiff = toDateValue(a.createdAt) - toDateValue(b.createdAt);
   if (timeDiff !== 0) return timeDiff;
-  return a.id.localeCompare(b.id);
+  const aId = typeof a.id === "string" ? a.id : "";
+  const bId = typeof b.id === "string" ? b.id : "";
+  return aId.localeCompare(bId);
 };
 
 const sortMessages = (messages: Message[]): Message[] =>
@@ -134,7 +342,45 @@ const matchesMessage = (source: Message, target: Message): boolean =>
   (target.localId !== undefined && target.localId === source.id) ||
   (source.localId !== undefined &&
     target.localId !== undefined &&
-    source.localId === target.localId);
+    source.localId === target.localId) ||
+  isSamePendingMessageCandidate(source, target);
+
+const isSamePendingMessageCandidate = (
+  source: Message,
+  target: Message,
+): boolean => {
+  const sourceIsPending =
+    isTempMessageId(source.id) ||
+    source.status === MessageStatus.SENDING ||
+    source.status === MessageStatus.FAILED;
+  const targetIsPending =
+    isTempMessageId(target.id) ||
+    target.status === MessageStatus.SENDING ||
+    target.status === MessageStatus.FAILED;
+
+  if (sourceIsPending === targetIsPending) return false;
+  if (!source.senderId || source.senderId !== target.senderId) return false;
+  if (!source.conversationId || source.conversationId !== target.conversationId) {
+    return false;
+  }
+  if (source.type !== target.type) return false;
+  if ((source.content || "") !== (target.content || "")) return false;
+
+  const sourceTs = toDateValue(source.createdAt);
+  const targetTs = toDateValue(target.createdAt);
+  if (!sourceTs || !targetTs) return false;
+
+  const withinGraceWindow = Math.abs(sourceTs - targetTs) <= 45_000;
+  if (!withinGraceWindow) return false;
+
+  const sourceAttachment = source.attachments?.[0];
+  const targetAttachment = target.attachments?.[0];
+  // Do not collapse plain text messages by heuristic. They are deduped by id/localId.
+  // This avoids overwriting legitimate repeated messages from the same sender.
+  if (!sourceAttachment && !targetAttachment) return false;
+  if (!sourceAttachment || !targetAttachment) return false;
+  return sourceAttachment.id === targetAttachment.id;
+};
 
 const findMessageIndex = (messages: Message[], target: Message): number =>
   messages.findIndex(
@@ -226,9 +472,23 @@ const toMessageSummary = (message: Message): Conversation["lastMessage"] => ({
 
 const normalizeMessagesResponse = (
   rawData: unknown,
+  responseMeta?: Record<string, unknown> | null,
 ): { messages: Message[]; hasMore: boolean } => {
+  const hasMoreFromMeta = (): boolean | null => {
+    if (!responseMeta) return null;
+    if (typeof responseMeta.hasMore === "boolean") return responseMeta.hasMore;
+    if (typeof responseMeta.hasNext === "boolean") return responseMeta.hasNext;
+    if (typeof responseMeta.hasNextPage === "boolean") return responseMeta.hasNextPage;
+    return null;
+  };
+
   if (Array.isArray(rawData)) {
-    return { messages: rawData as Message[], hasMore: false };
+    return {
+      messages: rawData
+        .map((item) => normalizeMessage(item))
+        .filter((item): item is Message => item !== null),
+      hasMore: hasMoreFromMeta() ?? false,
+    };
   }
 
   const payload = asRecord(rawData);
@@ -236,12 +496,22 @@ const normalizeMessagesResponse = (
     return { messages: [], hasMore: false };
   }
 
-  const messages = Array.isArray(payload.messages)
-    ? (payload.messages as Message[])
-    : [];
+  const rawMessages = Array.isArray(payload.messages)
+    ? payload.messages
+    : Array.isArray(payload.items)
+      ? payload.items
+      : [];
+  const messages = rawMessages
+    .map((item) => normalizeMessage(item))
+    .filter((item): item is Message => item !== null);
 
   if (typeof payload.hasMore === "boolean") {
     return { messages, hasMore: payload.hasMore };
+  }
+
+  const hasMoreByMeta = hasMoreFromMeta();
+  if (typeof hasMoreByMeta === "boolean") {
+    return { messages, hasMore: hasMoreByMeta };
   }
 
   const pagination = asRecord(payload.pagination);
@@ -328,6 +598,8 @@ export const useChatStore = create<ChatState>()(
     },
 
     removeConversation: (id) => {
+      roomMessageFetchInFlight.delete(id);
+      initialFetchSeqByConversation.delete(id);
       set((state) => ({
         conversations: (Array.isArray(state.conversations)
           ? state.conversations
@@ -345,7 +617,11 @@ export const useChatStore = create<ChatState>()(
       set({ selectedConversationId: id });
     },
 
-    markAsRead: (conversationId) => {
+    markAsRead: async (conversationId) => {
+      const previousUnreadCount =
+        get().conversations.find((conversation) => conversation.id === conversationId)
+          ?.unreadCount ?? 0;
+
       set((state) => ({
         conversations: (Array.isArray(state.conversations)
           ? state.conversations
@@ -367,9 +643,21 @@ export const useChatStore = create<ChatState>()(
           ? { messageId: latestReadableMessage.id }
           : {};
 
-      apiClient.post(`/rooms/${conversationId}/messages/read`, payload).catch(() => {
-        // no-op
-      });
+      try {
+        await apiClient.post(`/rooms/${conversationId}/messages/read`, payload);
+      } catch (error) {
+        set((state) => ({
+          conversations: (Array.isArray(state.conversations)
+            ? state.conversations
+            : []
+          ).map((conversation) =>
+            conversation.id === conversationId
+              ? { ...conversation, unreadCount: previousUnreadCount }
+              : conversation,
+          ),
+        }));
+        throw error;
+      }
     },
 
     fetchConversations: async () => {
@@ -394,7 +682,12 @@ export const useChatStore = create<ChatState>()(
     },
 
     setMessages: (conversationId, messages) => {
-      const normalized = mergeMessages([], Array.isArray(messages) ? messages : []);
+      const normalized = mergeMessages(
+        [],
+        (Array.isArray(messages) ? messages : [])
+          .map((item) => normalizeMessage(item, conversationId))
+          .filter((item): item is Message => item !== null),
+      );
       set((state) => ({
         messages: {
           ...state.messages,
@@ -404,11 +697,14 @@ export const useChatStore = create<ChatState>()(
     },
 
     addMessage: (conversationId, message) => {
+      const incoming = normalizeMessage(message, conversationId);
+      if (!incoming) return;
+
       set((state) => {
         const currentMessages = state.messages[conversationId] || [];
         const { messages, inserted, mergedMessage } = upsertMessage(
           currentMessages,
-          message,
+          incoming,
         );
 
         const currentUserId = useAuthStore.getState().user?.id;
@@ -553,7 +849,25 @@ export const useChatStore = create<ChatState>()(
     },
 
     fetchMessages: async (conversationId, before, after) => {
-      set({ isLoadingMessages: true, error: null });
+      const currentInFlight = roomMessageFetchInFlight.get(conversationId) ?? 0;
+      roomMessageFetchInFlight.set(conversationId, currentInFlight + 1);
+      const isInitialFetch = !before && !after;
+      const initialFetchSeq = isInitialFetch
+        ? (initialFetchSeqByConversation.get(conversationId) ?? 0) + 1
+        : null;
+
+      if (initialFetchSeq !== null) {
+        initialFetchSeqByConversation.set(conversationId, initialFetchSeq);
+      }
+
+      set((state) => ({
+        ...buildLoadingStateFromInFlightMap(),
+        error: null,
+        messageErrors: {
+          ...state.messageErrors,
+          [conversationId]: null,
+        },
+      }));
 
       try {
         const params = new URLSearchParams({ limit: "50" });
@@ -563,21 +877,21 @@ export const useChatStore = create<ChatState>()(
         const response = await apiClient.get<ApiResponse<unknown>>(
           `/rooms/${conversationId}/messages?${params.toString()}`,
         );
+        const responseEnvelope = asRecord(response.data);
+        const responseMeta = asRecord(responseEnvelope?.meta);
         const payload = unwrapApiSuccess(response.data);
-        const normalized = normalizeMessagesResponse(payload);
+        const normalized = normalizeMessagesResponse(payload, responseMeta);
 
         set((state) => {
+          if (
+            initialFetchSeq !== null &&
+            initialFetchSeqByConversation.get(conversationId) !== initialFetchSeq
+          ) {
+            return state;
+          }
+
           const existingMessages = state.messages[conversationId] || [];
-          const optimisticMessages = existingMessages.filter(
-            (message) =>
-              isTempMessageId(message.id) ||
-              message.status === MessageStatus.SENDING ||
-              message.status === MessageStatus.FAILED,
-          );
-          const mergedMessages =
-            before || after
-              ? mergeMessages(existingMessages, normalized.messages)
-              : mergeMessages(optimisticMessages, normalized.messages);
+          const mergedMessages = mergeMessages(existingMessages, normalized.messages);
           const latestMessage = mergedMessages[mergedMessages.length - 1];
 
           const updatedConversations = state.conversations.map((conversation) => {
@@ -609,16 +923,33 @@ export const useChatStore = create<ChatState>()(
                   ? normalized.hasMore
                   : state.hasMoreMessages[conversationId] ?? false,
             },
-            isLoadingMessages: false,
           };
         });
+
+        return { loaded: normalized.messages.length, hasMore: normalized.hasMore };
       } catch (error: unknown) {
         const apiError = extractApiError(error);
         const errorMessage = apiError.message || "Khong the tai tin nhan";
-        set({
+        set((state) => ({
           error: errorMessage,
-          isLoadingMessages: false,
-        });
+          messageErrors: {
+            ...state.messageErrors,
+            [conversationId]: errorMessage,
+          },
+        }));
+        return { loaded: 0, hasMore: false };
+      } finally {
+        const nextInFlight = Math.max(
+          0,
+          (roomMessageFetchInFlight.get(conversationId) ?? 1) - 1,
+        );
+        if (nextInFlight === 0) {
+          roomMessageFetchInFlight.delete(conversationId);
+        } else {
+          roomMessageFetchInFlight.set(conversationId, nextInFlight);
+        }
+
+        set(buildLoadingStateFromInFlightMap());
       }
     },
 
@@ -671,7 +1002,13 @@ export const useChatStore = create<ChatState>()(
             ...(attachments?.length ? { attachments } : {}),
           },
         );
-        const message = unwrapApiSuccess(response.data);
+        const message = normalizeMessage(
+          unwrapApiSuccess(response.data),
+          conversationId,
+        );
+        if (!message) {
+          throw new Error("Send message response is invalid");
+        }
 
         get().addMessage(conversationId, {
           ...message,
@@ -710,7 +1047,13 @@ export const useChatStore = create<ChatState>()(
             ...(attachments?.length ? { attachments } : {}),
           },
         );
-        const resentMessage = unwrapApiSuccess(response.data);
+        const resentMessage = normalizeMessage(
+          unwrapApiSuccess(response.data),
+          conversationId,
+        );
+        if (!resentMessage) {
+          throw new Error("Resend message response is invalid");
+        }
 
         get().addMessage(conversationId, {
           ...resentMessage,
@@ -772,7 +1115,11 @@ export const useChatStore = create<ChatState>()(
 
     clearError: () => set({ error: null }),
 
-    reset: () => set(initialState),
+    reset: () => {
+      roomMessageFetchInFlight.clear();
+      initialFetchSeqByConversation.clear();
+      set(initialState);
+    },
   })),
 );
 

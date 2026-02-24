@@ -50,6 +50,8 @@ const getConversationId = (payload: Record<string, unknown>): string | null => {
     asString(payload.room_id) ??
     asString(payload.room) ??
     asString(asRecord(payload.message)?.conversationId) ??
+    asString(asRecord(payload.message)?.roomId) ??
+    asString(asRecord(payload.message)?.room_id) ??
     null
   );
 };
@@ -59,7 +61,13 @@ const getMessagePayload = (
 ): Record<string, unknown> | null => {
   const nested = asRecord(payload.message);
   if (nested) return nested;
-  if (asString(payload.id)) return payload;
+  if (
+    asString(payload.id) ||
+    asString(payload._id) ||
+    asString(payload.messageId)
+  ) {
+    return payload;
+  }
   return null;
 };
 
@@ -152,29 +160,36 @@ export const useWebSocket = (
 
   const resyncRoom = useCallback(
     async (roomId: string) => {
-      const roomMessages = useChatStore.getState().messages[roomId] || [];
-      let afterCursor: string | undefined;
-
-      for (let index = roomMessages.length - 1; index >= 0; index -= 1) {
-        const candidate = roomMessages[index];
-        const candidateId = candidate?.id;
-        if (typeof candidateId === "string" && !candidateId.startsWith("temp-")) {
-          afterCursor = toCursorValue(candidate?.createdAt);
-          break;
+      const resolveLatestCursor = (): string | undefined => {
+        const roomMessages = useChatStore.getState().messages[roomId] || [];
+        for (let index = roomMessages.length - 1; index >= 0; index -= 1) {
+          const candidate = roomMessages[index];
+          const candidateId = candidate?.id;
+          if (typeof candidateId === "string" && !candidateId.startsWith("temp-")) {
+            return toCursorValue(candidate?.createdAt);
+          }
         }
-      }
+        return undefined;
+      };
 
+      let afterCursor = resolveLatestCursor();
       console.debug("[ws] resyncRoom", { roomId, afterCursor });
 
-      // Keep initial room load on ChatPage (no cursor) and use `after` only for realtime resync.
-      if (!afterCursor) {
-        return;
-      }
+      if (!afterCursor) return;
 
-      try {
-        await fetchMessages(roomId, undefined, afterCursor);
-      } catch (error) {
-        console.warn("Resync room failed:", roomId, error);
+      // Fetch missed messages in pages to avoid dropping backlog on long disconnects.
+      for (let attempts = 0; attempts < 10; attempts += 1) {
+        const result = await fetchMessages(roomId, undefined, afterCursor);
+        if (!result.loaded || !result.hasMore) {
+          break;
+        }
+
+        const nextCursor = resolveLatestCursor();
+        if (!nextCursor || nextCursor === afterCursor) {
+          break;
+        }
+
+        afterCursor = nextCursor;
       }
     },
     [fetchMessages],
@@ -225,11 +240,23 @@ export const useWebSocket = (
 
       const conversationId = getConversationId(payload);
       const messagePayload = getMessagePayload(payload);
-      const messageId = messagePayload ? asString(messagePayload.id) : null;
+      const messageId = messagePayload
+        ? asString(messagePayload.id) ?? asString(messagePayload._id)
+        : null;
       if (!conversationId || !messagePayload || !messageId) return;
 
-      const tempId = asString(payload.tempId) ?? asString(messagePayload.tempId);
-      const localId = asString(messagePayload.localId) ?? tempId ?? undefined;
+      const tempId =
+        asString(payload.tempId) ??
+        asString(messagePayload.tempId) ??
+        asString(payload.clientMessageId) ??
+        asString(messagePayload.clientMessageId);
+      const localId =
+        asString(messagePayload.localId) ??
+        asString(payload.localId) ??
+        asString(payload.clientMessageId) ??
+        asString(messagePayload.clientMessageId) ??
+        tempId ??
+        undefined;
       addMessage(conversationId, {
         ...(messagePayload as unknown as Parameters<typeof addMessage>[1]),
         ...(localId ? { localId } : {}),
@@ -246,7 +273,9 @@ export const useWebSocket = (
         currentUserId &&
         senderId !== currentUserId
       ) {
-        chatState.markAsRead(conversationId);
+        void chatState.markAsRead(conversationId).catch(() => {
+          // no-op: best effort read receipt
+        });
       }
     };
 
@@ -262,7 +291,9 @@ export const useWebSocket = (
       const conversationId = getConversationId(payload);
       const messagePayload = getMessagePayload(payload);
       const messageId =
-        asString(payload.messageId) ?? (messagePayload && asString(messagePayload.id));
+        asString(payload.messageId) ??
+        (messagePayload &&
+          (asString(messagePayload.id) ?? asString(messagePayload._id)));
       if (!conversationId || !messagePayload || !messageId) return;
 
       updateMessage(
@@ -281,7 +312,9 @@ export const useWebSocket = (
 
         const conversationId = getConversationId(payload);
         const messagePayload = getMessagePayload(payload);
-        const messageId = messagePayload ? asString(messagePayload.id) : null;
+        const messageId = messagePayload
+          ? asString(messagePayload.id) ?? asString(messagePayload._id)
+          : null;
         if (!conversationId || !messagePayload || !messageId) return;
 
         updateMessage(
@@ -303,6 +336,7 @@ export const useWebSocket = (
         const messageId =
           asString(payload.messageId) ??
           asString(payload.id) ??
+          asString(payload._id) ??
           asString(asRecord(payload.message)?.id);
         if (!conversationId || !messageId) return;
 
@@ -316,7 +350,10 @@ export const useWebSocket = (
       if (!payload) return;
 
       const conversationId = getConversationId(payload);
-      const messageId = asString(payload.messageId) ?? asString(payload.id);
+      const messageId =
+        asString(payload.messageId) ??
+        asString(payload.id) ??
+        asString(payload._id);
       if (!conversationId || !messageId) return;
 
       updateMessage(conversationId, messageId, {
@@ -333,7 +370,8 @@ export const useWebSocket = (
       const lastMessageId =
         asString(payload.lastMessageId) ??
         asString(payload.messageId) ??
-        asString(payload.id);
+        asString(payload.id) ??
+        asString(payload._id);
       if (!conversationId || !lastMessageId) return;
 
       markMessagesReadUpTo(

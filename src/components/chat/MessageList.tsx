@@ -154,12 +154,15 @@ export const MessageList: React.FC<MessageListProps> = ({
 
   const [viewportHeight, setViewportHeight] = React.useState(0);
   const [showScrollButton, setShowScrollButton] = React.useState(false);
+  const [pendingNewMessages, setPendingNewMessages] = React.useState(0);
 
   const nearBottomRef = React.useRef(true);
   const loadingOlderRef = React.useRef(false);
   const prevMessageCountRef = React.useRef(0);
   const prevFirstMessageIdRef = React.useRef<string | undefined>(undefined);
+  const prevLastMessageIdRef = React.useRef<string | undefined>(undefined);
   const prevConversationIdRef = React.useRef<string | null>(null);
+  const pendingNewMessagesRef = React.useRef(0);
   const scrollSnapshotRef = React.useRef({ scrollTop: 0, scrollHeight: 0 });
   const sizeMapRef = React.useRef<Record<number, number>>({});
 
@@ -286,13 +289,16 @@ export const MessageList: React.FC<MessageListProps> = ({
     prevConversationIdRef.current = conversation.id;
     prevMessageCountRef.current = messages.length;
     prevFirstMessageIdRef.current = messages[0]?.id;
+    prevLastMessageIdRef.current = messages[messages.length - 1]?.id;
     loadingOlderRef.current = false;
     nearBottomRef.current = true;
+    pendingNewMessagesRef.current = 0;
     sizeMapRef.current = {};
     listRef.current?.resetAfterIndex(0, true);
 
     requestAnimationFrame(() => {
       setShowScrollButton(false);
+      setPendingNewMessages(0);
       scrollToBottom("auto");
     });
   }, [conversation.id, messages, scrollToBottom]);
@@ -300,6 +306,13 @@ export const MessageList: React.FC<MessageListProps> = ({
   React.useEffect(() => {
     const firstMessageId = messages[0]?.id;
     const messageCountDiff = messages.length - prevMessageCountRef.current;
+    const lastMessage = messages[messages.length - 1];
+    const lastMessageId = lastMessage?.id;
+    const hasTailChanged =
+      !!lastMessageId && lastMessageId !== prevLastMessageIdRef.current;
+    const incomingCount = messageCountDiff > 0 ? messageCountDiff : hasTailChanged ? 1 : 0;
+    const isOwnLatestMessage =
+      !!lastMessage && lastMessage.senderId === currentUserId;
     const outer = outerRef.current;
 
     if (
@@ -312,13 +325,23 @@ export const MessageList: React.FC<MessageListProps> = ({
       const scrollDelta = outer.scrollHeight - scrollSnapshotRef.current.scrollHeight;
       outer.scrollTop = scrollSnapshotRef.current.scrollTop + scrollDelta;
       loadingOlderRef.current = false;
-    } else if (nearBottomRef.current && messageCountDiff > 0) {
-      scrollToBottom(messageCountDiff === 1 ? "smooth" : "auto");
+    } else if (incomingCount > 0) {
+      if (nearBottomRef.current || isOwnLatestMessage) {
+        pendingNewMessagesRef.current = 0;
+        setPendingNewMessages(0);
+        setShowScrollButton(false);
+        scrollToBottom(incomingCount === 1 ? "smooth" : "auto");
+      } else {
+        pendingNewMessagesRef.current += incomingCount;
+        setPendingNewMessages(pendingNewMessagesRef.current);
+        setShowScrollButton(true);
+      }
     }
 
     prevMessageCountRef.current = messages.length;
     prevFirstMessageIdRef.current = firstMessageId;
-  }, [messages, scrollToBottom]);
+    prevLastMessageIdRef.current = lastMessageId;
+  }, [messages, scrollToBottom, currentUserId]);
 
   React.useEffect(() => {
     if (!isLoadingMore) {
@@ -328,6 +351,8 @@ export const MessageList: React.FC<MessageListProps> = ({
 
   React.useEffect(() => {
     if (messages.length === 0) {
+      pendingNewMessagesRef.current = 0;
+      setPendingNewMessages(0);
       setShowScrollButton(false);
     }
   }, [messages.length]);
@@ -340,7 +365,16 @@ export const MessageList: React.FC<MessageListProps> = ({
       const isNearBottom =
         outer.scrollHeight - scrollOffset - outer.clientHeight < 200;
       nearBottomRef.current = isNearBottom;
-      setShowScrollButton(!isNearBottom);
+
+      if (isNearBottom) {
+        if (pendingNewMessagesRef.current > 0) {
+          pendingNewMessagesRef.current = 0;
+          setPendingNewMessages(0);
+        }
+        setShowScrollButton(false);
+      } else {
+        setShowScrollButton(pendingNewMessagesRef.current > 0);
+      }
 
       if (
         onLoadMore &&
@@ -420,19 +454,27 @@ export const MessageList: React.FC<MessageListProps> = ({
         </div>
       )}
 
-      {showScrollButton && (
+      {showScrollButton && pendingNewMessages > 0 && (
         <button
           type="button"
-          onClick={() => scrollToBottom("smooth")}
+          onClick={() => {
+            pendingNewMessagesRef.current = 0;
+            setPendingNewMessages(0);
+            setShowScrollButton(false);
+            scrollToBottom("smooth");
+          }}
           className={clsx(
             "absolute bottom-4 right-4 z-sticky",
-            "flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white shadow-lg",
+            "flex min-h-10 items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-3 shadow-lg",
             "transition-colors hover:bg-gray-50",
             "animate-bounce-in",
           )}
-          aria-label="Cuon xuong cuoi"
+          aria-label="Tin nhan moi"
         >
           <ChevronDownIcon className="h-5 w-5 text-gray-600" />
+          <span className="text-xs font-medium text-gray-700">
+            Tin nhan moi ({pendingNewMessages})
+          </span>
         </button>
       )}
     </div>

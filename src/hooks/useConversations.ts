@@ -27,7 +27,7 @@ interface UseConversationsReturn {
   setSearchQuery: (query: string) => void;
   setActiveFilter: (filter: ConversationFilter) => void;
   refreshConversations: () => Promise<void>;
-  markAsRead: (conversationId: string) => void;
+  markAsRead: (conversationId: string) => Promise<void>;
 }
 
 export const useConversations = (): UseConversationsReturn => {

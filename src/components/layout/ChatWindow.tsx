@@ -58,7 +58,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [editingMessage, setEditingMessage] = React.useState<
     Message | undefined
   >(undefined);
-  const [isSendingMessage, setIsSendingMessage] = React.useState(false);
 
   const handleReply = React.useCallback((msg: Message) => {
     setReplyToMessage(msg);
@@ -82,7 +81,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, []);
 
   const handleSend = React.useCallback(
-    async (content?: string, fileMeta?: unknown, type?: string) => {
+    (content?: string, fileMeta?: unknown, type?: string) => {
       // Prevent empty sends
       if (!content && !fileMeta) return;
 
@@ -93,21 +92,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       setInputValue("");
       setReplyToMessage(undefined);
       setInputMode("normal");
-      setIsSendingMessage(true);
 
-      try {
-        // Forward to parent ChatPage handler (include fileMeta and type if present)
-        await Promise.resolve(
-          onSendMessage(
-            content || attachment?.fileName || "",
-            replyToMessage,
-            attachment,
-            messageType,
-          ),
-        );
-      } finally {
-        setIsSendingMessage(false);
-      }
+      // Forward to parent ChatPage handler (include fileMeta and type if present)
+      void Promise.resolve(
+        onSendMessage(
+          content || attachment?.fileName || "",
+          replyToMessage,
+          attachment,
+          messageType,
+        ),
+      );
     },
     [onSendMessage, replyToMessage],
   );
@@ -156,7 +150,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onCancelReply={handleCancelReply}
         onCancelEdit={handleCancelEdit}
         onTyping={onTyping}
-        isSending={isSendingMessage}
       />
     </div>
   );

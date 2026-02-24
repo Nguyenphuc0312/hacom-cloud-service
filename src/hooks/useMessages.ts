@@ -44,6 +44,7 @@ export const useMessages = ({
   const typingStatus = useCurrentTypingStatus();
   const {
     isLoadingMessages,
+    isLoadingMessagesByConversation,
     hasMoreMessages,
     error,
     fetchMessages,
@@ -111,7 +112,7 @@ export const useMessages = ({
     if (
       conversationId &&
       hasMoreMessages[conversationId] &&
-      !isLoadingMessages
+      !isLoadingMessagesByConversation[conversationId]
     ) {
       const oldestMessage = messages[0];
       if (oldestMessage) {
@@ -124,7 +125,7 @@ export const useMessages = ({
   }, [
     conversationId,
     hasMoreMessages,
-    isLoadingMessages,
+    isLoadingMessagesByConversation,
     messages,
     fetchMessages,
   ]);
@@ -215,7 +216,10 @@ export const useMessages = ({
 
   return {
     messages,
-    isLoading: isLoadingMessages,
+    isLoading:
+      conversationId !== null
+        ? Boolean(isLoadingMessagesByConversation[conversationId])
+        : isLoadingMessages,
     hasMore: conversationId ? (hasMoreMessages[conversationId] ?? true) : false,
     error,
     typingStatus: typingStatus || null,

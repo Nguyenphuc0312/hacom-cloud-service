@@ -3,7 +3,7 @@
  * Tích hợp với Zustand stores và WebSocket
  */
 
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { Sidebar } from "../components/layout/Sidebar";
@@ -39,6 +39,8 @@ export const ChatPage: React.FC = () => {
   const {
     selectedConversationId,
     selectConversation,
+    addConversation,
+    updateConversation,
     conversations,
     fetchConversations,
     fetchMessages,
@@ -46,6 +48,7 @@ export const ChatPage: React.FC = () => {
     markAsRead,
     hasMoreMessages,
     isLoadingMessages,
+    isLoadingMessagesByConversation,
   } = useChatStore();
 
   // Selectors
@@ -63,6 +66,8 @@ export const ChatPage: React.FC = () => {
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const roomCreationLockRef = useRef(false);
+  const [isValidatingRoom, setIsValidatingRoom] = useState(false);
 
   // Current user as UserSummary for components
   const currentUserSummary = useMemo<UserSummary | null>(
@@ -82,12 +87,76 @@ export const ChatPage: React.FC = () => {
     [user],
   );
 
-  // Sync URL with store
+  // Validate room in URL then sync to store.
   useEffect(() => {
-    if (conversationId && conversationId !== selectedConversationId) {
-      selectConversation(conversationId);
+    let isCancelled = false;
+
+    if (!conversationId) {
+      if (useChatStore.getState().selectedConversationId !== null) {
+        selectConversation(null);
+      }
+      return;
     }
-  }, [conversationId, selectedConversationId, selectConversation]);
+
+    const validateConversation = async () => {
+      setIsValidatingRoom(true);
+      try {
+        const response = await conversationApi.getConversationById(conversationId);
+        const room = unwrapApiSuccess(response);
+        if (isCancelled) return;
+
+        const roomExists = useChatStore
+          .getState()
+          .conversations.some((conversation) => conversation.id === conversationId);
+
+        if (roomExists) {
+          updateConversation(conversationId, room);
+        } else {
+          addConversation(room);
+        }
+
+        if (conversationId !== useChatStore.getState().selectedConversationId) {
+          selectConversation(conversationId);
+        }
+      } catch (error: unknown) {
+        if (isCancelled) return;
+
+        const apiError = extractApiError(error);
+        const code = String(apiError.code || "").toUpperCase();
+        const roomInvalidCodes = new Set([
+          "NOT_FOUND",
+          "ROOM_NOT_FOUND",
+          "FORBIDDEN",
+          "ROOM_ACCESS_DENIED",
+        ]);
+
+        if (roomInvalidCodes.has(code)) {
+          toast.error("Khong the truy cap cuoc tro chuyen nay");
+        } else {
+          toast.error(apiError.message || "Khong the mo cuoc tro chuyen");
+        }
+
+        selectConversation(null);
+        navigate("/chat", { replace: true });
+      } finally {
+        if (!isCancelled) {
+          setIsValidatingRoom(false);
+        }
+      }
+    };
+
+    void validateConversation();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    addConversation,
+    conversationId,
+    navigate,
+    selectConversation,
+    updateConversation,
+  ]);
 
   // Load conversations on mount
   useEffect(() => {
@@ -96,18 +165,30 @@ export const ChatPage: React.FC = () => {
 
   // Load messages when conversation changes & join/leave rooms
   useEffect(() => {
-    if (selectedConversationId) {
-      void fetchMessages(selectedConversationId);
+    let isCancelled = false;
+
+    if (selectedConversationId && !isValidatingRoom) {
+      void fetchMessages(selectedConversationId).then(() => {
+        if (isCancelled) return;
+        void markAsRead(selectedConversationId).catch(() => {
+          // no-op: best effort to align unread count
+        });
+      });
       joinRoom(selectedConversationId);
-      markAsRead(selectedConversationId);
 
       return () => {
+        isCancelled = true;
         stopTyping(selectedConversationId);
         leaveRoom(selectedConversationId);
       };
     }
+
+    return () => {
+      isCancelled = true;
+    };
   }, [
     selectedConversationId,
+    isValidatingRoom,
     fetchMessages,
     joinRoom,
     leaveRoom,
@@ -151,7 +232,9 @@ export const ChatPage: React.FC = () => {
   );
 
   const handleLoadOlderMessages = useCallback(async () => {
-    if (!selectedConversationId || isLoadingMessages) return;
+    if (!selectedConversationId || isLoadingMessagesByConversation[selectedConversationId]) {
+      return;
+    }
     if (!hasMoreMessages[selectedConversationId]) return;
 
     const oldestMessage = conversationMessages.find(
@@ -165,7 +248,7 @@ export const ChatPage: React.FC = () => {
     );
   }, [
     selectedConversationId,
-    isLoadingMessages,
+    isLoadingMessagesByConversation,
     hasMoreMessages,
     conversationMessages,
     fetchMessages,
@@ -204,6 +287,10 @@ export const ChatPage: React.FC = () => {
         return;
       }
 
+      if (roomCreationLockRef.current) {
+        return;
+      }
+      roomCreationLockRef.current = true;
       setIsCreatingRoom(true);
       try {
         const response = await conversationApi.createPrivateConversation(userId);
@@ -246,8 +333,8 @@ export const ChatPage: React.FC = () => {
 
         console.error("Create direct room failed:", apiError);
         toast.error(apiError.message || "Khong the bat dau cuoc tro chuyen");
-        throw new Error("Cannot create conversation");
       } finally {
+        roomCreationLockRef.current = false;
         setIsCreatingRoom(false);
       }
     },
@@ -260,6 +347,10 @@ export const ChatPage: React.FC = () => {
         return;
       }
 
+      if (roomCreationLockRef.current) {
+        return;
+      }
+      roomCreationLockRef.current = true;
       setIsCreatingRoom(true);
       try {
         const response = await conversationApi.createGroupConversation({
@@ -281,8 +372,8 @@ export const ChatPage: React.FC = () => {
         const apiError = extractApiError(error);
         console.error("Create group room failed:", apiError);
         toast.error(apiError.message || "Khong the tao nhom moi");
-        throw new Error("Cannot create group");
       } finally {
+        roomCreationLockRef.current = false;
         setIsCreatingRoom(false);
       }
     },
@@ -372,7 +463,11 @@ export const ChatPage: React.FC = () => {
                 ? (hasMoreMessages[selectedConversationId] ?? true)
                 : false
             }
-            isLoadingMessages={isLoadingMessages}
+            isLoadingMessages={
+              selectedConversationId
+                ? Boolean(isLoadingMessagesByConversation[selectedConversationId])
+                : isLoadingMessages
+            }
             onLoadOlderMessages={handleLoadOlderMessages}
             onImageClick={setImagePreview}
           />

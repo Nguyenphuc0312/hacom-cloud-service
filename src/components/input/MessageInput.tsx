@@ -27,7 +27,6 @@ interface MessageInputProps {
   onCancelReply?: () => void;
   onCancelEdit?: () => void;
   onTyping?: (isTyping: boolean) => void;
-  isSending?: boolean;
   disabled?: boolean;
   className?: string;
 }
@@ -67,7 +66,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   onCancelReply,
   onCancelEdit,
   onTyping,
-  isSending = false,
   disabled = false,
   className,
 }) => {
@@ -200,7 +198,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const handleSendText = () => {
-    if (!value.trim() || disabled || isSending || uploading) return;
+    if (!value.trim() || disabled || uploading) return;
     onTyping?.(false);
     onSend(value.trim());
   };
@@ -467,7 +465,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         {hasContent ? (
           <button
             onClick={handleSendText}
-            disabled={disabled || uploading || isSending}
+            disabled={disabled || uploading}
             className={clsx(
               "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
               "bg-telegram-primary text-white",
@@ -476,14 +474,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             )}
             aria-label="Send message"
           >
-            {isSending ? (
-              <span
-                className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white"
-                aria-hidden="true"
-              />
-            ) : (
-              <PaperAirplaneIcon className="h-5 w-5" />
-            )}
+            <PaperAirplaneIcon className="h-5 w-5" />
           </button>
         ) : (
           <button
