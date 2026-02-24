@@ -1,18 +1,23 @@
 /**
  * @fileoverview Auth Store (Zustand)
- * Quản lý state xác thực người dùng
  */
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import apiClient, { storeTokens, clearTokens } from "../lib/axios";
+import apiClient, {
+  resetAuthFailureState,
+  setAuthFailureHandler,
+} from "../lib/axios";
 import type { ApiResponse } from "../lib/axios";
 import type { LoginFormData, RegisterFormData } from "../lib/validations";
-import { AUTH_CONFIG } from "../config";
-
-// ============================================
-// TYPES
-// ============================================
+import { getAccessToken, storeTokens } from "../services/tokenService";
+import {
+  initializeAuthSync,
+  notifyLogoutAcrossTabs,
+  redirectToLogin,
+  requestServerLogout,
+  runClientLogoutCleanup,
+} from "../services/authService";
 
 export interface User {
   id: string;
@@ -31,21 +36,28 @@ export interface User {
 
 interface AuthResponse {
   user: User;
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: number;
-  tokenType: string;
+  accessToken?: string;
+  refreshToken?: string;
+  tokens?: {
+    accessToken?: string;
+    refreshToken?: string;
+  };
+}
+
+interface LogoutOptions {
+  reason: string;
+  notifyServer: boolean;
+  broadcast: boolean;
+  redirect: boolean;
 }
 
 interface AuthState {
-  // State
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   isInitialized: boolean;
   error: string | null;
 
-  // Actions
   login: (data: LoginFormData) => Promise<void>;
   register: (
     data: Omit<RegisterFormData, "confirmPassword" | "acceptTerms">,
@@ -56,209 +68,276 @@ interface AuthState {
   updateStatus: (status: User["status"]) => Promise<void>;
   clearError: () => void;
   initialize: () => Promise<void>;
+
+  handleAuthFailure: (reason?: string) => Promise<void>;
+  handleRemoteLogout: (reason?: string) => Promise<void>;
 }
 
-// ============================================
-// STORE
-// ============================================
+let logoutFlowPromise: Promise<void> | null = null;
+
+const resolveTokens = (
+  payload: AuthResponse,
+): { accessToken: string | null; refreshToken: string | null } => {
+  const accessToken = payload.tokens?.accessToken ?? payload.accessToken ?? null;
+  const refreshToken =
+    payload.tokens?.refreshToken ?? payload.refreshToken ?? null;
+  return { accessToken, refreshToken };
+};
+
+const resetChatState = async (): Promise<void> => {
+  const { useChatStore } = await import("./chatStore");
+  useChatStore.getState().reset();
+};
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
-      // Initial state
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-      isInitialized: false,
-      error: null,
-
-      /**
-       * Đăng nhập
-       */
-      login: async (data: LoginFormData) => {
-        set({ isLoading: true, error: null });
-
-        try {
-          const response = await apiClient.post<ApiResponse<AuthResponse>>(
-            "/auth/login",
-            {
-              email: data.email,
-              password: data.password,
-            },
-          );
-
-          const { user, accessToken, refreshToken } = response.data.data;
-
-          // Lưu tokens
-          storeTokens(accessToken, refreshToken, data.rememberMe);
-
-          set({
-            user,
-            isAuthenticated: true,
-            isLoading: false,
-            error: null,
-          });
-        } catch (error: unknown) {
-          const errorMessage =
-            (
-              error as {
-                response?: { data?: { error?: { message?: string } } };
-              }
-            )?.response?.data?.error?.message || "Đăng nhập thất bại";
-          set({
-            isLoading: false,
-            error: errorMessage,
-            isAuthenticated: false,
-            user: null,
-          });
-          throw new Error(errorMessage);
+    (set, get) => {
+      const runLogoutFlow = async (options: LogoutOptions): Promise<void> => {
+        if (logoutFlowPromise) {
+          return logoutFlowPromise;
         }
-      },
 
-      /**
-       * Đăng ký
-       */
-      register: async (data) => {
-        set({ isLoading: true, error: null });
+        logoutFlowPromise = (async () => {
+          set({ isLoading: true });
 
-        try {
-          const response = await apiClient.post<ApiResponse<AuthResponse>>(
-            "/auth/register",
-            data,
-          );
+          if (options.notifyServer) {
+            try {
+              await requestServerLogout();
+            } catch {
+              // Local logout still continues even when server call fails.
+            }
+          }
 
-          const { user, accessToken, refreshToken } = response.data.data;
+          runClientLogoutCleanup(options.reason);
+          await resetChatState();
 
-          // Lưu tokens (mặc định không remember)
-          storeTokens(accessToken, refreshToken, false);
-
-          set({
-            user,
-            isAuthenticated: true,
-            isLoading: false,
-            error: null,
-          });
-        } catch (error: unknown) {
-          const errorMessage =
-            (
-              error as {
-                response?: { data?: { error?: { message?: string } } };
-              }
-            )?.response?.data?.error?.message || "Đăng ký thất bại";
-          set({
-            isLoading: false,
-            error: errorMessage,
-          });
-          throw new Error(errorMessage);
-        }
-      },
-
-      /**
-       * Đăng xuất
-       */
-      logout: async () => {
-        set({ isLoading: true });
-
-        try {
-          await apiClient.post("/auth/logout");
-        } catch {
-          // Bỏ qua lỗi logout, vẫn clear local state
-        } finally {
-          clearTokens();
           set({
             user: null,
             isAuthenticated: false,
             isLoading: false,
             error: null,
-          });
-        }
-      },
-
-      /**
-       * Lấy thông tin user hiện tại
-       */
-      refreshUser: async () => {
-        const token =
-          localStorage.getItem(AUTH_CONFIG.ACCESS_TOKEN_KEY) ||
-          sessionStorage.getItem(AUTH_CONFIG.ACCESS_TOKEN_KEY);
-
-        if (!token) {
-          set({ isInitialized: true });
-          return;
-        }
-
-        set({ isLoading: true });
-
-        try {
-          const response = await apiClient.get<ApiResponse<User>>("/auth/me");
-          set({
-            user: response.data.data,
-            isAuthenticated: true,
-            isLoading: false,
             isInitialized: true,
           });
-        } catch {
-          clearTokens();
-          set({
-            user: null,
-            isAuthenticated: false,
-            isLoading: false,
-            isInitialized: true,
+
+          if (options.broadcast) {
+            notifyLogoutAcrossTabs(options.reason);
+          }
+
+          if (options.redirect) {
+            redirectToLogin();
+          }
+        })().finally(() => {
+          logoutFlowPromise = null;
+        });
+
+        return logoutFlowPromise;
+      };
+
+      return {
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        isInitialized: false,
+        error: null,
+
+        login: async (data: LoginFormData) => {
+          set({ isLoading: true, error: null });
+
+          try {
+            const response = await apiClient.post<ApiResponse<AuthResponse>>(
+              "/auth/login",
+              {
+                email: data.email,
+                password: data.password,
+              },
+            );
+
+            const { user } = response.data.data;
+            const { accessToken, refreshToken } = resolveTokens(
+              response.data.data,
+            );
+
+            if (!accessToken) {
+              throw new Error("Missing access token in login response");
+            }
+
+            storeTokens(accessToken, refreshToken ?? undefined, data.rememberMe);
+            resetAuthFailureState();
+
+            set({
+              user,
+              isAuthenticated: true,
+              isLoading: false,
+              isInitialized: true,
+              error: null,
+            });
+          } catch (error: unknown) {
+            const errorMessage =
+              (
+                error as {
+                  response?: { data?: { error?: { message?: string } } };
+                }
+              )?.response?.data?.error?.message || "Dang nhap that bai";
+
+            set({
+              isLoading: false,
+              error: errorMessage,
+              isAuthenticated: false,
+              user: null,
+              isInitialized: true,
+            });
+            throw new Error(errorMessage);
+          }
+        },
+
+        register: async (data) => {
+          set({ isLoading: true, error: null });
+
+          try {
+            const response = await apiClient.post<ApiResponse<AuthResponse>>(
+              "/auth/register",
+              data,
+            );
+
+            const { user } = response.data.data;
+            const { accessToken, refreshToken } = resolveTokens(
+              response.data.data,
+            );
+
+            if (!accessToken) {
+              throw new Error("Missing access token in register response");
+            }
+
+            storeTokens(accessToken, refreshToken ?? undefined, false);
+            resetAuthFailureState();
+
+            set({
+              user,
+              isAuthenticated: true,
+              isLoading: false,
+              isInitialized: true,
+              error: null,
+            });
+          } catch (error: unknown) {
+            const errorMessage =
+              (
+                error as {
+                  response?: { data?: { error?: { message?: string } } };
+                }
+              )?.response?.data?.error?.message || "Dang ky that bai";
+            set({
+              isLoading: false,
+              error: errorMessage,
+              isInitialized: true,
+            });
+            throw new Error(errorMessage);
+          }
+        },
+
+        logout: async () => {
+          await runLogoutFlow({
+            reason: "manual_logout",
+            notifyServer: true,
+            broadcast: true,
+            redirect: true,
           });
-        }
-      },
+        },
 
-      /**
-       * Cập nhật user trong state (local)
-       */
-      updateUser: (data: Partial<User>) => {
-        const currentUser = get().user;
-        if (currentUser) {
-          set({ user: { ...currentUser, ...data } });
-        }
-      },
+        refreshUser: async () => {
+          const token = getAccessToken();
 
-      /**
-       * Cập nhật status online
-       */
-      updateStatus: async (status: User["status"]) => {
-        try {
-          await apiClient.put("/users/status", { status });
+          if (!token) {
+            set({
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+              isInitialized: true,
+            });
+            return;
+          }
+
+          set({ isLoading: true });
+
+          try {
+            const response = await apiClient.get<ApiResponse<User>>("/auth/me");
+            set({
+              user: response.data.data,
+              isAuthenticated: true,
+              isLoading: false,
+              isInitialized: true,
+            });
+            resetAuthFailureState();
+          } catch {
+            runClientLogoutCleanup("refresh_user_failed");
+            set({
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+              isInitialized: true,
+            });
+          }
+        },
+
+        updateUser: (data: Partial<User>) => {
           const currentUser = get().user;
           if (currentUser) {
-            set({ user: { ...currentUser, status } });
+            set({ user: { ...currentUser, ...data } });
           }
-        } catch (error: unknown) {
-          const errorMessage =
-            (
-              error as {
-                response?: { data?: { error?: { message?: string } } };
-              }
-            )?.response?.data?.error?.message || "Cập nhật status thất bại";
-          throw new Error(errorMessage);
-        }
-      },
+        },
 
-      /**
-       * Xóa error
-       */
-      clearError: () => set({ error: null }),
+        updateStatus: async (status: User["status"]) => {
+          try {
+            await apiClient.put("/users/status", { status });
+            const currentUser = get().user;
+            if (currentUser) {
+              set({ user: { ...currentUser, status } });
+            }
+          } catch (error: unknown) {
+            const errorMessage =
+              (
+                error as {
+                  response?: { data?: { error?: { message?: string } } };
+                }
+              )?.response?.data?.error?.message || "Cap nhat status that bai";
+            throw new Error(errorMessage);
+          }
+        },
 
-      /**
-       * Khởi tạo auth state từ storage
-       */
-      initialize: async () => {
-        const token =
-          localStorage.getItem(AUTH_CONFIG.ACCESS_TOKEN_KEY) ||
-          sessionStorage.getItem(AUTH_CONFIG.ACCESS_TOKEN_KEY);
+        clearError: () => set({ error: null }),
 
-        if (token) {
-          await get().refreshUser();
-        } else {
-          set({ isInitialized: true });
-        }
-      },
-    }),
+        initialize: async () => {
+          const token = getAccessToken();
+
+          if (token) {
+            await get().refreshUser();
+          } else {
+            set({
+              user: null,
+              isAuthenticated: false,
+              isInitialized: true,
+            });
+          }
+        },
+
+        handleAuthFailure: async (reason = "refresh_failed") => {
+          await runLogoutFlow({
+            reason,
+            notifyServer: false,
+            broadcast: true,
+            redirect: true,
+          });
+        },
+
+        handleRemoteLogout: async (reason = "remote_logout") => {
+          await runLogoutFlow({
+            reason,
+            notifyServer: false,
+            broadcast: false,
+            redirect: true,
+          });
+        },
+      };
+    },
     {
       name: "auth-storage",
       storage: createJSONStorage(() => localStorage),
@@ -269,3 +348,12 @@ export const useAuthStore = create<AuthState>()(
     },
   ),
 );
+
+setAuthFailureHandler((reason) => {
+  void useAuthStore.getState().handleAuthFailure(reason);
+});
+
+initializeAuthSync((reason) => {
+  void useAuthStore.getState().handleRemoteLogout(reason);
+});
+

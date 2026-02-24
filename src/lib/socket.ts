@@ -6,7 +6,11 @@
  * để tương thích với Gorilla WebSocket backend
  */
 
-import { WEBSOCKET_URL, WEBSOCKET_CONFIG, AUTH_CONFIG } from "../config";
+import { WEBSOCKET_URL, WEBSOCKET_CONFIG } from "../config";
+import {
+  getAccessToken as getStoredAccessToken,
+  updateAccessToken,
+} from "../services/tokenService";
 
 // ============================================
 // Types
@@ -45,10 +49,7 @@ class WebSocketManager {
    * Lấy token từ storage
    */
   private getAccessToken(): string | null {
-    return (
-      localStorage.getItem(AUTH_CONFIG.ACCESS_TOKEN_KEY) ||
-      sessionStorage.getItem(AUTH_CONFIG.ACCESS_TOKEN_KEY)
-    );
+    return getStoredAccessToken();
   }
 
   /**
@@ -336,7 +337,7 @@ class WebSocketManager {
    */
   updateAuth(token: string): void {
     // Lưu token mới
-    localStorage.setItem(AUTH_CONFIG.ACCESS_TOKEN_KEY, token);
+    updateAccessToken(token);
 
     // Reconnect với token mới
     if (this.isConnected()) {
@@ -426,3 +427,4 @@ export const WebSocketEvents = {
 } as const;
 
 export default wsManager;
+

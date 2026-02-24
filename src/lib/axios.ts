@@ -1,13 +1,200 @@
 /**
- * @fileoverview Cấu hình Axios client
- * Xử lý interceptors, token refresh, error handling
+ * @fileoverview Centralized Axios client configuration.
+ * Handles auth header injection, refresh lock/queue and request cancellation.
  */
 
-import axios, { AxiosError } from "axios";
+import axios, { AxiosError, AxiosHeaders } from "axios";
 import type { AxiosInstance, InternalAxiosRequestConfig } from "axios";
-import { API_BASE_URL, AUTH_CONFIG } from "../config";
+import { API_BASE_URL } from "../config";
+import {
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+  isRefreshTokenCookieMode,
+  isRememberMeEnabled,
+  storeTokens,
+  updateAccessToken,
+} from "../services/tokenService";
 
-// Tạo axios instance
+type AuthFailureReason = "missing_refresh_token" | "refresh_failed";
+type AuthFailureHandler = (reason: AuthFailureReason) => void | Promise<void>;
+
+interface AuthRequestConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean;
+  _requestId?: string;
+  _managedSignal?: boolean;
+}
+
+const PUBLIC_ENDPOINT_PATTERNS = [
+  /\/auth\/login$/i,
+  /\/auth\/register$/i,
+  /\/auth\/logout$/i,
+  /\/auth\/refresh$/i,
+  /\/auth\/forgot-password$/i,
+  /\/auth\/reset-password$/i,
+  /\/users\/check-username(?:\/|$)/i,
+];
+
+let authFailureHandler: AuthFailureHandler | null = null;
+let authFailureNotified = false;
+let refreshPromise: Promise<string> | null = null;
+
+const pendingRequestControllers = new Map<string, AbortController>();
+
+const isPublicEndpoint = (url?: string): boolean => {
+  if (!url) return false;
+
+  const normalized = url.startsWith("http")
+    ? new URL(url).pathname
+    : url.split("?")[0];
+
+  return PUBLIC_ENDPOINT_PATTERNS.some((pattern) => pattern.test(normalized));
+};
+
+const setAuthHeader = (
+  config: InternalAxiosRequestConfig,
+  accessToken: string | null,
+): void => {
+  config.headers = config.headers ?? {};
+  const headers = config.headers as AxiosHeaders | Record<string, string>;
+
+  if (headers instanceof AxiosHeaders) {
+    if (accessToken) {
+      headers.set("Authorization", `Bearer ${accessToken}`);
+      return;
+    }
+
+    headers.delete("Authorization");
+    return;
+  }
+
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  } else {
+    delete headers.Authorization;
+  }
+};
+
+const buildRequestId = (config: InternalAxiosRequestConfig): string =>
+  `${config.method ?? "get"}:${config.url ?? "unknown"}:${Date.now()}:${Math.random()
+    .toString(36)
+    .slice(2)}`;
+
+const releasePendingRequest = (config?: InternalAxiosRequestConfig): void => {
+  if (!config) return;
+  const requestId = (config as AuthRequestConfig)._requestId;
+  if (requestId) {
+    pendingRequestControllers.delete(requestId);
+  }
+};
+
+const notifyAuthFailure = (reason: AuthFailureReason): void => {
+  if (authFailureNotified) return;
+
+  authFailureNotified = true;
+  clearTokens();
+  if (authFailureHandler) {
+    void authFailureHandler(reason);
+  }
+};
+
+const extractTokenPayload = (
+  rawResponseData: unknown,
+): { accessToken: string | null; refreshToken: string | null } => {
+  const topLevel =
+    rawResponseData && typeof rawResponseData === "object"
+      ? (rawResponseData as Record<string, unknown>)
+      : {};
+
+  const payload =
+    topLevel.data && typeof topLevel.data === "object"
+      ? (topLevel.data as Record<string, unknown>)
+      : topLevel;
+
+  const nestedTokens =
+    payload.tokens && typeof payload.tokens === "object"
+      ? (payload.tokens as Record<string, unknown>)
+      : null;
+
+  const accessTokenCandidate = nestedTokens?.accessToken ?? payload.accessToken;
+  const refreshTokenCandidate =
+    nestedTokens?.refreshToken ?? payload.refreshToken;
+
+  return {
+    accessToken:
+      typeof accessTokenCandidate === "string" ? accessTokenCandidate : null,
+    refreshToken:
+      typeof refreshTokenCandidate === "string" ? refreshTokenCandidate : null,
+  };
+};
+
+// Lock refresh with a shared promise so all 401 requests wait for one refresh call.
+const refreshAccessToken = async (): Promise<string> => {
+  const storedRefreshToken = getRefreshToken();
+
+  if (!isRefreshTokenCookieMode() && !storedRefreshToken) {
+    notifyAuthFailure("missing_refresh_token");
+    throw new Error("Missing refresh token");
+  }
+
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/auth/refresh`,
+      storedRefreshToken ? { refreshToken: storedRefreshToken } : undefined,
+      {
+        withCredentials: true,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+
+    const { accessToken, refreshToken } = extractTokenPayload(response.data);
+    if (!accessToken) {
+      throw new Error("Refresh response missing access token");
+    }
+
+    if (refreshToken || storedRefreshToken) {
+      storeTokens(
+        accessToken,
+        refreshToken ?? storedRefreshToken ?? undefined,
+        isRememberMeEnabled(),
+      );
+    } else {
+      updateAccessToken(accessToken);
+    }
+
+    authFailureNotified = false;
+    return accessToken;
+  } catch (error) {
+    notifyAuthFailure("refresh_failed");
+    throw error;
+  }
+};
+
+const getRefreshPromise = async (): Promise<string> => {
+  if (!refreshPromise) {
+    refreshPromise = refreshAccessToken().finally(() => {
+      refreshPromise = null;
+    });
+  }
+
+  return refreshPromise;
+};
+
+export const setAuthFailureHandler = (handler: AuthFailureHandler): void => {
+  authFailureHandler = handler;
+};
+
+export const resetAuthFailureState = (): void => {
+  authFailureNotified = false;
+};
+
+export const cancelPendingRequests = (reason: string = "cancelled"): void => {
+  pendingRequestControllers.forEach((controller) => {
+    controller.abort(reason);
+  });
+  pendingRequestControllers.clear();
+};
+
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
@@ -16,167 +203,65 @@ const apiClient: AxiosInstance = axios.create({
   },
 });
 
-// Flag để tránh multiple refresh requests
-let isRefreshing = false;
-let failedQueue: Array<{
-  resolve: (token: string) => void;
-  reject: (error: Error) => void;
-}> = [];
-
-/**
- * Xử lý queue các request failed trong khi đang refresh token
- */
-const processQueue = (error: Error | null, token: string | null = null) => {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(token!);
-    }
-  });
-  failedQueue = [];
-};
-
-/**
- * Lấy token từ storage
- */
-const getStoredToken = (): string | null => {
-  return (
-    localStorage.getItem(AUTH_CONFIG.ACCESS_TOKEN_KEY) ||
-    sessionStorage.getItem(AUTH_CONFIG.ACCESS_TOKEN_KEY)
-  );
-};
-
-/**
- * Lấy refresh token từ storage
- */
-const getStoredRefreshToken = (): string | null => {
-  return (
-    localStorage.getItem(AUTH_CONFIG.REFRESH_TOKEN_KEY) ||
-    sessionStorage.getItem(AUTH_CONFIG.REFRESH_TOKEN_KEY)
-  );
-};
-
-/**
- * Lưu tokens vào storage
- */
-export const storeTokens = (
-  accessToken: string,
-  refreshToken: string,
-  rememberMe: boolean = false,
-) => {
-  const storage = rememberMe ? localStorage : sessionStorage;
-  storage.setItem(AUTH_CONFIG.ACCESS_TOKEN_KEY, accessToken);
-  storage.setItem(AUTH_CONFIG.REFRESH_TOKEN_KEY, refreshToken);
-  if (rememberMe) {
-    localStorage.setItem(AUTH_CONFIG.REMEMBER_ME_KEY, "true");
-  }
-};
-
-/**
- * Xóa tokens khỏi storage
- */
-export const clearTokens = () => {
-  localStorage.removeItem(AUTH_CONFIG.ACCESS_TOKEN_KEY);
-  localStorage.removeItem(AUTH_CONFIG.REFRESH_TOKEN_KEY);
-  localStorage.removeItem(AUTH_CONFIG.USER_KEY);
-  localStorage.removeItem(AUTH_CONFIG.REMEMBER_ME_KEY);
-  sessionStorage.removeItem(AUTH_CONFIG.ACCESS_TOKEN_KEY);
-  sessionStorage.removeItem(AUTH_CONFIG.REFRESH_TOKEN_KEY);
-  sessionStorage.removeItem(AUTH_CONFIG.USER_KEY);
-};
-
-/**
- * Request interceptor - Thêm token vào header
- */
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = getStoredToken();
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
+    const requestConfig = config as AuthRequestConfig;
+    const requestId = buildRequestId(config);
+    requestConfig._requestId = requestId;
+
+    if (!requestConfig.signal || requestConfig._managedSignal) {
+      const controller = new AbortController();
+      requestConfig.signal = controller.signal;
+      requestConfig._managedSignal = true;
+      pendingRequestControllers.set(requestId, controller);
     }
+
+    const shouldAttachAuth = !isPublicEndpoint(config.url);
+    if (!shouldAttachAuth) {
+      setAuthHeader(config, null);
+      return config;
+    }
+
+    const accessToken = getAccessToken();
+    setAuthHeader(config, accessToken);
     return config;
   },
-  (error: AxiosError) => {
-    return Promise.reject(error);
-  },
+  (error: AxiosError) => Promise.reject(error),
 );
 
-/**
- * Response interceptor - Xử lý token refresh và errors
- */
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    releasePendingRequest(response.config);
+    return response;
+  },
   async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & {
-      _retry?: boolean;
-    };
+    const originalRequest = error.config as AuthRequestConfig | undefined;
+    releasePendingRequest(originalRequest);
 
-    // Nếu lỗi 401 và chưa retry
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      // Nếu đang refresh, thêm vào queue
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        })
-          .then((token) => {
-            if (originalRequest.headers) {
-              originalRequest.headers.Authorization = `Bearer ${token}`;
-            }
-            return apiClient(originalRequest);
-          })
-          .catch((err) => Promise.reject(err));
-      }
-
-      originalRequest._retry = true;
-      isRefreshing = true;
-
-      const refreshToken = getStoredRefreshToken();
-
-      if (!refreshToken) {
-        clearTokens();
-        window.location.href = "/login";
-        return Promise.reject(error);
-      }
-
-      try {
-        // Gọi API refresh token
-        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-          refreshToken,
-        });
-
-        const { accessToken, refreshToken: newRefreshToken } =
-          response.data.data;
-        const rememberMe =
-          localStorage.getItem(AUTH_CONFIG.REMEMBER_ME_KEY) === "true";
-
-        storeTokens(accessToken, newRefreshToken, rememberMe);
-        processQueue(null, accessToken);
-
-        if (originalRequest.headers) {
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-        }
-
-        return apiClient(originalRequest);
-      } catch (refreshError) {
-        processQueue(refreshError as Error, null);
-        clearTokens();
-        window.location.href = "/login";
-        return Promise.reject(refreshError);
-      } finally {
-        isRefreshing = false;
-      }
+    if (
+      !originalRequest ||
+      error.response?.status !== 401 ||
+      originalRequest._retry ||
+      isPublicEndpoint(originalRequest.url) ||
+      /\/auth\/refresh$/i.test((originalRequest.url ?? "").split("?")[0])
+    ) {
+      return Promise.reject(error);
     }
 
-    return Promise.reject(error);
+    originalRequest._retry = true;
+
+    try {
+      const newAccessToken = await getRefreshPromise();
+      setAuthHeader(originalRequest, newAccessToken);
+      return apiClient(originalRequest);
+    } catch (refreshError) {
+      return Promise.reject(refreshError);
+    }
   },
 );
 
 export default apiClient;
 
-/**
- * Type cho API Response
- */
 export interface ApiResponse<T> {
   success: boolean;
   data: T;
@@ -191,9 +276,6 @@ export interface ApiResponse<T> {
   };
 }
 
-/**
- * Type cho API Error
- */
 export interface ApiError {
   success: false;
   error: {

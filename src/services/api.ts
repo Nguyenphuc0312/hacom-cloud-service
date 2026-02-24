@@ -40,16 +40,20 @@ export const authApi = {
   },
 
   logout: async () => {
-    await apiClient.post("/auth/logout");
+    await apiClient.post("/auth/logout", undefined, {
+      withCredentials: true,
+    });
   },
 
-  refreshToken: async (refreshToken: string) => {
+  refreshToken: async (refreshToken?: string) => {
     const response = await apiClient.post<
       ApiResponse<{
         accessToken: string;
         refreshToken: string;
       }>
-    >("/auth/refresh", { refreshToken });
+    >("/auth/refresh", refreshToken ? { refreshToken } : undefined, {
+      withCredentials: true,
+    });
     return response.data;
   },
 

@@ -1,24 +1,20 @@
 /**
  * @fileoverview useAuth hook
- * Custom hook cho authentication operations
  */
 
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores";
 import type { User } from "../stores";
-import { disconnectSocket } from "../lib/socket";
 import { toast } from "../components/ui";
 import type { LoginFormData, RegisterFormData } from "../lib/validations";
 
 export interface UseAuthReturn {
-  // State
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
 
-  // Actions
   login: (data: LoginFormData) => Promise<void>;
   register: (
     data: Omit<RegisterFormData, "confirmPassword" | "acceptTerms">,
@@ -42,7 +38,6 @@ export const useAuth = (): UseAuthReturn => {
     clearError,
   } = useAuthStore();
 
-  // Login với navigation
   const login = useCallback(
     async (data: LoginFormData) => {
       await storeLogin(data);
@@ -51,7 +46,6 @@ export const useAuth = (): UseAuthReturn => {
     [storeLogin, navigate],
   );
 
-  // Register với navigation
   const register = useCallback(
     async (data: Omit<RegisterFormData, "confirmPassword" | "acceptTerms">) => {
       await storeRegister(data);
@@ -60,21 +54,11 @@ export const useAuth = (): UseAuthReturn => {
     [storeRegister, navigate],
   );
 
-  // Logout với cleanup
   const logout = useCallback(async () => {
-    // Disconnect socket trước
-    disconnectSocket();
-
-    // Logout from store
     await storeLogout();
-
-    // Navigate to login
-    navigate("/login", { replace: true });
-
     toast.success("Đã đăng xuất");
-  }, [storeLogout, navigate]);
+  }, [storeLogout]);
 
-  // Update status
   const updateStatus = useCallback(
     async (status: User["status"]) => {
       try {
@@ -101,7 +85,6 @@ export const useAuth = (): UseAuthReturn => {
   };
 };
 
-// Helper function to get status label
 const getStatusLabel = (status: User["status"]): string => {
   const labels: Record<User["status"], string> = {
     online: "Trực tuyến",
