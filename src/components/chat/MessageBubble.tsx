@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import clsx from "clsx";
 import {
   CheckIcon,
-  ClockIcon,
   ExclamationCircleIcon,
 } from "@heroicons/react/24/solid";
 import { Avatar } from "../common/Avatar";
@@ -97,7 +96,7 @@ const MessageStatusIcon: React.FC<{
   }
 };
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({
+const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   message,
   isOwn,
   showAvatar,
@@ -313,5 +312,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     </div>
   );
 };
+
+export const MessageBubble = React.memo(MessageBubbleComponent);
 
 export default MessageBubble;

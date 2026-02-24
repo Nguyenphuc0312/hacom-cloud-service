@@ -26,7 +26,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   const otherParticipant =
     conversation.type === RoomType.PRIVATE ||
     conversation.type === RoomType.DIRECT
-      ? conversation.participants.find((p) => p.id !== currentUserId)
+      ? (conversation.participants || []).find((p) => p.id !== currentUserId)
       : null;
 
   const status = otherParticipant?.status;
@@ -39,9 +39,11 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
 
   return (
     <button
+      type="button"
       onClick={onClick}
       className={clsx(
-        "w-full flex items-center gap-3 px-4 py-3 text-left transition-all duration-150",
+        "flex w-full items-center gap-3 px-4 py-3 text-left transition-all duration-150",
+        "min-h-16",
         "hover:bg-gray-100",
         isActive && "bg-telegram-primary/10 hover:bg-telegram-primary/15",
         conversation.isPinned && !isActive && "bg-gray-50",
@@ -53,7 +55,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
       {/* Avatar */}
       <Avatar
         src={conversation.avatar}
-        alt={conversation.name}
+        alt={conversation.name || otherParticipant?.displayName || "Conversation"}
         size="lg"
         status={status}
         showStatus={
@@ -73,7 +75,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
                 conversation.unreadCount > 0 && "text-black",
               )}
             >
-              {conversation.name}
+              {conversation.name || otherParticipant?.displayName || "Cuoc tro chuyen"}
             </span>
 
             {/* Icons */}

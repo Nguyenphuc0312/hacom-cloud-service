@@ -28,7 +28,8 @@ export const TextMessage: React.FC<TextMessageProps> = ({
       )}
     >
       {parts.map((part, index) => {
-        if (urlRegex.test(part)) {
+        const isLink = /^https?:\/\/[^\s]+$/i.test(part);
+        if (isLink) {
           return (
             <a
               key={index}

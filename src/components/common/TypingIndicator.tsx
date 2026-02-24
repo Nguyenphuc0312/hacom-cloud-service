@@ -17,7 +17,7 @@ export const TypingIndicator: React.FC<TypingIndicatorProps> = ({
         className,
       )}
     >
-      {userName && <span>{userName} đang nhập...</span>}
+      {userName && <span>{userName} is typing...</span>}
       <div className="flex items-center gap-1">
         <span className="w-1.5 h-1.5 bg-chat-text-secondary rounded-full animate-typing" />
         <span className="w-1.5 h-1.5 bg-chat-text-secondary rounded-full animate-typing-delay-1" />

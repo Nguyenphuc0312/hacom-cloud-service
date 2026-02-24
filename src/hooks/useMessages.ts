@@ -59,7 +59,7 @@ export const useMessages = ({
     sendTyping: wsSendTyping,
     stopTyping: wsStopTyping,
     emit,
-  } = useWebSocket();
+  } = useWebSocket({ autoConnect: false });
 
   const previousConversationRef = useRef<string | null>(null);
 
@@ -115,7 +115,10 @@ export const useMessages = ({
     ) {
       const oldestMessage = messages[0];
       if (oldestMessage) {
-        await fetchMessages(conversationId, oldestMessage.id);
+        await fetchMessages(
+          conversationId,
+          new Date(oldestMessage.createdAt).toISOString(),
+        );
       }
     }
   }, [
@@ -139,19 +142,11 @@ export const useMessages = ({
           undefined,
           replyToId,
         );
-
-        // Emit qua WebSocket để real-time
-        emit("message:send", {
-          roomId: conversationId,
-          content: content.trim(),
-          type: "text",
-          ...(replyToId && { replyToId }),
-        });
       } catch {
         toast.error("Không thể gửi tin nhắn. Vui lòng thử lại.");
       }
     },
-    [conversationId, storeSendMessage, emit],
+    [conversationId, storeSendMessage],
   );
 
   // Edit message
@@ -235,3 +230,4 @@ export const useMessages = ({
 };
 
 export default useMessages;
+

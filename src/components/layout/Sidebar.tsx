@@ -46,27 +46,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <div
       className={clsx(
-        "hidden sm:flex flex-col h-full bg-white border-r border-gray-200",
+        "flex h-full flex-col bg-white",
         className,
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 sm:px-5">
         <div className="flex items-center gap-3">
           <button
-            className="p-2 -ml-2 rounded-full hover:bg-gray-100 transition-colors lg:hidden"
+            type="button"
+            className="min-h-11 min-w-11 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100 lg:hidden"
             aria-label="Menu"
           >
             <Bars3Icon className="w-5 h-5 text-gray-600" />
           </button>
-          <h1 className="text-xl font-bold text-telegram-primary">
+          <h1 className="text-lg font-semibold tracking-tight text-telegram-primary sm:text-xl">
             Hacom Chat
           </h1>
         </div>
 
         <div className="flex items-center gap-1">
           <button
-            className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+            type="button"
+            className="min-h-11 min-w-11 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100"
             aria-label="Cài đặt"
           >
             <Cog6ToothIcon className="w-5 h-5 text-gray-600" />
@@ -75,22 +77,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Search */}
-      <div className="px-4 py-3">
+      <div className="px-4 py-3 sm:px-5">
         <ConversationSearch value={searchQuery} onChange={setSearchQuery} />
       </div>
 
       {/* Tabs */}
-      <div className="flex px-4 gap-1 border-b border-gray-200">
+      <div className="grid grid-cols-4 gap-1 border-b border-gray-200 px-3 pb-1 sm:px-4">
         {tabs.map((tab) => (
           <button
+            type="button"
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={clsx(
-              "flex-1 py-2.5 text-sm font-medium rounded-t-lg transition-colors",
+              "min-h-11 rounded-lg px-1 py-2 text-xs font-medium transition-colors sm:text-sm",
               activeTab === tab.id
-                ? "text-telegram-primary bg-telegram-primary/5 border-b-2 border-telegram-primary"
-                : "text-gray-500 hover:text-gray-700 hover:bg-gray-50",
+                ? "border-b-2 border-telegram-primary bg-telegram-primary/5 text-telegram-primary"
+                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
             )}
+            aria-pressed={activeTab === tab.id}
           >
             {tab.label}
           </button>
@@ -109,16 +113,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
       />
 
       {/* Bottom actions */}
-      <div className="flex items-center justify-around px-4 py-3 border-t border-gray-200">
+      <div className="grid grid-cols-4 gap-1 border-t border-gray-200 px-3 py-2 sm:px-4">
         <button
-          className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+          type="button"
+          className="min-h-11 min-w-11 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100"
           aria-label="Hồ sơ"
         >
           <UserCircleIcon className="w-6 h-6 text-gray-600" />
         </button>
 
         <button
-          className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+          type="button"
+          className="min-h-11 min-w-11 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100"
           aria-label="Tạo nhóm mới"
           onClick={onNewChat}
         >
@@ -126,14 +132,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
 
         <button
-          className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+          type="button"
+          className="min-h-11 min-w-11 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100"
           aria-label="Chế độ tối"
         >
           <MoonIcon className="w-6 h-6 text-gray-600" />
         </button>
 
         <button
-          className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+          type="button"
+          className="min-h-11 min-w-11 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100"
           aria-label="Cài đặt"
         >
           <Cog6ToothIcon className="w-6 h-6 text-gray-600" />

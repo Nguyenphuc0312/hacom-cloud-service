@@ -21,7 +21,8 @@ export type ConnectionState =
 
 export interface WebSocketEvent {
   type: string;
-  data: unknown;
+  data?: unknown;
+  [key: string]: unknown;
 }
 
 export type EventHandler = (data: unknown) => void;
@@ -92,6 +93,9 @@ class WebSocketManager {
       console.log("WebSocket already connected");
       return;
     }
+    if (this.socket?.readyState === WebSocket.CONNECTING) {
+      return;
+    }
 
     const token = this.getAccessToken();
     if (!token) {
@@ -134,6 +138,7 @@ class WebSocketManager {
 
     this.socket.onclose = (event) => {
       console.log("WebSocket disconnected:", event.code, event.reason);
+      this.socket = null;
       this.setConnectionState("disconnected");
       this.stopPingInterval();
 
@@ -166,13 +171,20 @@ class WebSocketManager {
    * Xử lý message nhận được từ server
    */
   private handleMessage(message: WebSocketEvent): void {
-    const { type, data } = message;
+    const { type } = message;
+    if (!type) return;
+
+    const payload = Object.prototype.hasOwnProperty.call(message, "data")
+      ? message.data
+      : Object.fromEntries(
+          Object.entries(message).filter(([key]) => key !== "type"),
+        );
 
     // Log for debugging
-    console.debug("WebSocket received:", type, data);
+    console.debug("WebSocket received:", type, payload);
 
     // Emit to registered handlers
-    this.emit(type, data);
+    this.emit(type, payload);
   }
 
   /**
@@ -202,6 +214,10 @@ class WebSocketManager {
 
     this.emit("reconnect_attempt", { attempt: this.reconnectAttempts });
 
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.reconnectTimer = setTimeout(() => {
       this.connect();
     }, delay);
@@ -258,7 +274,13 @@ class WebSocketManager {
     }
 
     try {
-      const message: WebSocketEvent = { type, data };
+      const message =
+        data !== null && typeof data === "object" && !Array.isArray(data)
+          ? ({ type, ...(data as Record<string, unknown>), data } as Record<
+              string,
+              unknown
+            >)
+          : ({ type, data } as WebSocketEvent);
       this.socket!.send(JSON.stringify(message));
       return true;
     } catch (error) {
@@ -378,19 +400,27 @@ export const WebSocketEvents = {
   MESSAGE_SEND: "message:send",
   ROOM_JOIN: "room:join",
   ROOM_LEAVE: "room:leave",
-  TYPING_START: "typing:start",
-  TYPING_STOP: "typing:stop",
+  TYPING_START: "user:typing",
+  TYPING_STOP: "user:stop_typing",
+  LEGACY_TYPING_START: "typing:start",
+  LEGACY_TYPING_STOP: "typing:stop",
 
   // Server → Client
   MESSAGE_NEW: "message:new",
   MESSAGE_UPDATE: "message:update",
+  MESSAGE_UPDATED: "message:updated",
+  MESSAGE_DELETED: "message:deleted",
   MESSAGE_DELIVERED: "message:delivered",
   MESSAGE_READ: "message:read",
+  MESSAGE_READ_CONFIRMED: "message:read_confirmed",
   USER_ONLINE: "user:online",
   USER_OFFLINE: "user:offline",
   ROOM_JOINED: "room:joined",
   ROOM_LEFT: "room:left",
+  USER_TYPING: "user:typing",
+  USER_STOP_TYPING: "user:stop_typing",
   TYPING: "typing",
+  SYNC_COMPLETE: "sync:complete",
   ERROR: "error",
   PRESENCE_SYNC: "presence:sync",
 } as const;

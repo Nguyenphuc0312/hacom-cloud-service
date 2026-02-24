@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { debounce } from "lodash";
 import clsx from "clsx";
 import {
@@ -13,15 +13,12 @@ import { AttachmentMenu } from "./AttachmentMenu";
 import type { Message, InputMode } from "../../types";
 import { FileType } from "../../types";
 import { fileApi } from "../../services/api";
+import { UPLOAD_CONFIG } from "../../config";
 import { toast } from "../ui";
-import { useChatStore } from "../../stores";
 
 interface MessageInputProps {
   value: string;
   onChange: (value: string) => void;
-  // content: text content for text messages
-  // fileMeta: optional attachment meta when sending uploaded files
-  // type: optional message type string (e.g. 'file', 'image')
   onSend: (content?: string, fileMeta?: unknown, type?: string) => void;
   mode: InputMode;
   replyToMessage?: Message;
@@ -32,6 +29,31 @@ interface MessageInputProps {
   disabled?: boolean;
   className?: string;
 }
+
+const resolveFileType = (mimeType: string): FileType => {
+  if (mimeType.startsWith("image/")) return FileType.IMAGE;
+  if (mimeType.startsWith("video/")) return FileType.VIDEO;
+  if (mimeType.startsWith("audio/")) return FileType.AUDIO;
+
+  if (
+    mimeType === "application/zip" ||
+    mimeType === "application/x-zip-compressed"
+  ) {
+    return FileType.ARCHIVE;
+  }
+
+  if (
+    mimeType.includes("word") ||
+    mimeType.includes("excel") ||
+    mimeType.includes("powerpoint") ||
+    mimeType === "application/pdf" ||
+    mimeType === "text/plain"
+  ) {
+    return FileType.DOCUMENT;
+  }
+
+  return FileType.OTHER;
+};
 
 export const MessageInput: React.FC<MessageInputProps> = ({
   value,
@@ -53,198 +75,181 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  // NOTE: MessageInput should not call store.sendMessage directly because
-  // the parent (ChatWindow / ChatPage) owns conversation context. Use
-  // `onSend` prop to forward text/file sends to parent.
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
 
-  // ...existing code...
+  const debouncedTyping = useRef(
+    debounce(() => {
+      onTyping?.(true);
+    }, 400),
+  ).current;
 
-  return (
-    <div
-      className={clsx(
-        "sticky bottom-0 bg-white z-10 px-2 py-2 border-t border-gray-200",
-        className,
-      )}
-    >
-      {/* ...existing code... */}
-    </div>
-  );
+  const clearSelectedFile = () => {
+    if (filePreview) {
+      URL.revokeObjectURL(filePreview);
+    }
+    setFileToSend(null);
+    setFilePreview(null);
+    setUploadError(null);
+    setUploadProgress(0);
+  };
 
-  // Validate file
   const validateFile = (file: File): string | null => {
-    const maxSize = 20 * 1024 * 1024; // 20MB
-    const allowedTypes = [
-      "image/jpeg",
-      "image/png",
-      "image/gif",
-      "video/mp4",
-      "application/pdf",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/vnd.ms-excel",
-      "application/zip",
-    ];
-    if (file.size > maxSize) return "File vượt quá 20MB";
-    if (!allowedTypes.includes(file.type)) return "Định dạng file không hỗ trợ";
+    const allowedTypes = [...UPLOAD_CONFIG.ALLOWED_FILE_TYPES, "video/mp4"];
+
+    if (file.size > UPLOAD_CONFIG.MAX_FILE_SIZE) {
+      return "File exceeds the allowed size limit";
+    }
+
+    if (!allowedTypes.includes(file.type)) {
+      return "Unsupported file type";
+    }
+
     return null;
   };
 
-  // Handle file select
-  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const err = validateFile(file);
-    if (err) {
-      toast.error(err);
+
+    const error = validateFile(file);
+    if (error) {
+      toast.error(error);
       return;
     }
+
+    if (filePreview) {
+      URL.revokeObjectURL(filePreview);
+    }
+
     setFileToSend(file);
     setFilePreview(URL.createObjectURL(file));
     setUploadError(null);
     setUploadProgress(0);
   };
 
-  // Upload file & gửi message
   const handleUploadAndSend = async () => {
     if (!fileToSend) return;
+
     setUploading(true);
     setUploadError(null);
     setUploadProgress(0);
+
     try {
-      const res = await fileApi.uploadFile(fileToSend, setUploadProgress);
-      // Chỉ gửi message khi upload thành công
-      // Notify parent to send message with attachment meta
+      const response = await fileApi.uploadFile(fileToSend, setUploadProgress);
+      const mimeType = response.data.mimetype || fileToSend.type;
+      const attachmentType = resolveFileType(mimeType);
+      const messageType = attachmentType === FileType.IMAGE ? "image" : "file";
+
       const attachment = {
-        id: res.data.filename,
-        type: (res.data.fileType || "file") as FileType,
-        url: res.data.url,
-        fileName: res.data.filename,
-        fileSize: fileToSend.size,
+        id: response.data.id,
+        type: attachmentType,
+        url: response.data.url,
+        fileName: response.data.filename || fileToSend.name,
+        fileSize: response.data.size || fileToSend.size,
+        mimeType,
       };
-      // Call onSend so parent (ChatWindow/ChatPage) can use correct conversationId
-      onSend(res.data.filename, attachment, "file");
-      setFileToSend(null);
-      setFilePreview(null);
-      setUploadProgress(0);
-    } catch (err) {
-      setUploadError("Upload thất bại, thử lại.");
-      // Không gửi message nếu upload fail
+
+      onSend(response.data.filename || fileToSend.name, attachment, messageType);
+      clearSelectedFile();
+    } catch {
+      setUploadError("Upload failed, please try again");
     } finally {
       setUploading(false);
     }
   };
 
-  // Auto-resize textarea
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      const newHeight = Math.min(textareaRef.current.scrollHeight, 120);
-      textareaRef.current.style.height = `${newHeight}px`;
+  const handleSendText = () => {
+    if (!value.trim()) return;
+    onTyping?.(false);
+    onSend(value.trim());
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendText();
     }
+
+    if (e.key === "Escape") {
+      if (mode === "reply") onCancelReply?.();
+      if (mode === "edit") onCancelEdit?.();
+    }
+  };
+
+  const handleInputChange = (nextValue: string) => {
+    onChange(nextValue);
+
+    if (
+      onTyping &&
+      textareaRef.current === document.activeElement &&
+      nextValue.trim()
+    ) {
+      debouncedTyping();
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      typingTimeoutRef.current = setTimeout(() => {
+        onTyping(false);
+      }, 2000);
+      return;
+    }
+
+    if (onTyping && !nextValue.trim()) {
+      onTyping(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!textareaRef.current) return;
+
+    textareaRef.current.style.height = "auto";
+    const newHeight = Math.min(textareaRef.current.scrollHeight, 120);
+    textareaRef.current.style.height = `${newHeight}px`;
   }, [value]);
 
-  // Focus input when replying or editing
   useEffect(() => {
     if ((mode === "reply" || mode === "edit") && textareaRef.current) {
       textareaRef.current.focus();
     }
   }, [mode]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if (value.trim()) {
-        onSend(value.trim());
-      }
-    }
-
-    if (e.key === "Escape") {
-      if (mode === "reply" && onCancelReply) {
-        onCancelReply();
-      } else if (mode === "edit" && onCancelEdit) {
-        onCancelEdit();
-      }
-    }
-  };
-
-  const handleEmojiSelect = (emoji: string) => {
-    onChange(value + emoji);
-    setShowEmojiPicker(false);
-    textareaRef.current?.focus();
-  };
-
-  // Typing indicator logic
-  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
-
-  // Debounce emit typing (400ms)
-  const debouncedTyping = useRef(
-    debounce(() => {
-      if (onTyping) onTyping(true);
-    }, 400),
-  ).current;
-
-  const handleInputChange = (newValue: string) => {
-    onChange(newValue);
-    // Chỉ emit typing khi có input và textarea focus
-    if (
-      onTyping &&
-      textareaRef.current === document.activeElement &&
-      newValue.trim()
-    ) {
-      debouncedTyping();
-      // Clear previous timeout
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-      // Set timeout để stop typing sau 2s không nhập
-      typingTimeoutRef.current = setTimeout(() => {
-        onTyping(false);
-      }, 2000);
-    } else if (onTyping && !newValue.trim()) {
-      onTyping(false);
-    }
-  };
-
-  // Emit stop typing khi blur
-  const handleBlur = () => {
-    if (onTyping) onTyping(false);
-  };
-
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
+      debouncedTyping.cancel();
+
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
+
+      if (filePreview) {
+        URL.revokeObjectURL(filePreview);
+      }
     };
-  }, []);
+  }, [debouncedTyping, filePreview]);
 
   const hasContent = value.trim().length > 0;
 
   return (
-    <div
-      className={clsx("relative bg-white border-t border-gray-200", className)}
-      onBlur={handleBlur}
-    >
-      {/* Reply/Edit preview */}
+    <div className={clsx("relative bg-white border-t border-gray-200", className)}>
       {mode === "reply" && replyToMessage && (
         <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200">
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-1 h-8 bg-telegram-primary rounded-full" />
             <div className="min-w-0">
               <p className="text-xs font-medium text-telegram-primary">
-                Trả lời {replyToMessage.senderName}
+                Replying to {replyToMessage.senderName}
               </p>
-              <p className="text-xs text-gray-500 truncate">
-                {replyToMessage.content}
-              </p>
+              <p className="text-xs text-gray-500 truncate">{replyToMessage.content}</p>
             </div>
           </div>
           <button
             onClick={onCancelReply}
             className="p-1 hover:bg-gray-200 rounded-full transition-colors"
-            aria-label="Hủy trả lời"
+            aria-label="Cancel reply"
           >
             <XMarkIcon className="w-4 h-4 text-gray-500" />
           </button>
@@ -256,75 +261,57 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-1 h-8 bg-yellow-500 rounded-full" />
             <div className="min-w-0">
-              <p className="text-xs font-medium text-yellow-700">
-                Chỉnh sửa tin nhắn
-              </p>
-              <p className="text-xs text-yellow-600 truncate">
-                {editingMessage.content}
-              </p>
+              <p className="text-xs font-medium text-yellow-700">Editing message</p>
+              <p className="text-xs text-yellow-600 truncate">{editingMessage.content}</p>
             </div>
           </div>
           <button
             onClick={onCancelEdit}
             className="p-1 hover:bg-yellow-100 rounded-full transition-colors"
-            aria-label="Hủy chỉnh sửa"
+            aria-label="Cancel edit"
           >
             <XMarkIcon className="w-4 h-4 text-yellow-600" />
           </button>
         </div>
       )}
 
-      {/* File preview & progress */}
       {fileToSend && (
         <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border-b border-gray-200">
           {filePreview && fileToSend.type.startsWith("image/") ? (
-            <img
-              src={filePreview}
-              alt="preview"
-              className="w-12 h-12 object-cover rounded"
-            />
+            <img src={filePreview} alt="preview" className="w-12 h-12 object-cover rounded" />
           ) : (
             <span className="text-xs">{fileToSend.name}</span>
           )}
+
           {uploading ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">Đang tải lên...</span>
+              <span className="text-xs text-gray-500">Uploading...</span>
               <progress value={uploadProgress} max={100} className="w-24" />
             </div>
           ) : uploadError ? (
-            <button
-              onClick={handleUploadAndSend}
-              className="text-red-500 text-xs underline"
-            >
-              Thử lại
+            <button onClick={handleUploadAndSend} className="text-red-500 text-xs underline">
+              Retry
             </button>
           ) : (
             <button
               onClick={handleUploadAndSend}
               className="text-telegram-primary text-xs underline"
             >
-              Gửi file
+              Send file
             </button>
           )}
-          <button
-            onClick={() => {
-              setFileToSend(null);
-              setFilePreview(null);
-            }}
-            className="ml-auto p-1"
-          >
+
+          <button onClick={clearSelectedFile} className="ml-auto p-1" aria-label="Remove file">
             <XMarkIcon className="w-4 h-4 text-gray-400" />
           </button>
         </div>
       )}
 
-      {/* Main input area */}
       <div className="flex items-end gap-2 p-3">
-        {/* Emoji picker button */}
         <div className="relative">
           <button
             onClick={() => {
-              setShowEmojiPicker(!showEmojiPicker);
+              setShowEmojiPicker((prev) => !prev);
               setShowAttachmentMenu(false);
             }}
             className={clsx(
@@ -333,27 +320,29 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 ? "bg-telegram-primary text-white"
                 : "text-gray-500 hover:bg-gray-100",
             )}
-            aria-label="Mở bảng emoji"
+            aria-label="Open emoji picker"
             disabled={disabled}
           >
             <FaceSmileIcon className="w-6 h-6" />
           </button>
 
-          {/* Emoji picker dropdown */}
           {showEmojiPicker && (
             <EmojiPicker
-              onSelect={handleEmojiSelect}
+              onSelect={(emoji: string) => {
+                onChange(value + emoji);
+                setShowEmojiPicker(false);
+                textareaRef.current?.focus();
+              }}
               onClose={() => setShowEmojiPicker(false)}
               className="absolute bottom-full left-0 mb-2"
             />
           )}
         </div>
 
-        {/* Attachment button */}
         <div className="relative">
           <button
             onClick={() => {
-              setShowAttachmentMenu(!showAttachmentMenu);
+              setShowAttachmentMenu((prev) => !prev);
               setShowEmojiPicker(false);
             }}
             className={clsx(
@@ -362,28 +351,24 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 ? "bg-telegram-primary text-white"
                 : "text-gray-500 hover:bg-gray-100",
             )}
-            aria-label="Đính kèm tệp"
+            aria-label="Attach file"
             disabled={disabled}
           >
             <PaperClipIcon className="w-6 h-6" />
           </button>
 
-          {/* Attachment menu dropdown */}
           {showAttachmentMenu && (
             <AttachmentMenu
               onSelect={(type: string) => {
                 if (type === "photo" || type === "document") {
-                  // Trigger file input
                   const input = document.createElement("input");
                   input.type = "file";
                   input.accept =
                     type === "photo"
                       ? "image/*,video/*"
-                      : ".pdf,.doc,.docx,.xls,.xlsx,.zip";
-                  input.onchange = (ev: Event) =>
-                    handleFileInput(
-                      ev as unknown as React.ChangeEvent<HTMLInputElement>,
-                    );
+                      : ".pdf,.doc,.docx,.xls,.xlsx,.zip,.txt";
+                  input.onchange = (event: Event) =>
+                    handleFileInput(event as unknown as React.ChangeEvent<HTMLInputElement>);
                   input.click();
                 }
                 setShowAttachmentMenu(false);
@@ -394,14 +379,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           )}
         </div>
 
-        {/* Text input */}
         <div className="flex-1 min-w-0">
           <textarea
             ref={textareaRef}
             value={value}
             onChange={(e) => handleInputChange(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Nhập tin nhắn..."
+            onBlur={() => onTyping?.(false)}
+            placeholder="Type a message..."
             disabled={disabled}
             rows={1}
             className={clsx(
@@ -414,14 +399,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               disabled && "opacity-50 cursor-not-allowed",
             )}
             style={{ minHeight: "44px", maxHeight: "120px" }}
-            aria-label="Ô nhập tin nhắn"
+            aria-label="Message input"
           />
         </div>
 
-        {/* Send / Voice button */}
         {hasContent ? (
           <button
-            onClick={() => onSend(value.trim())}
+            onClick={handleSendText}
             disabled={disabled}
             className={clsx(
               "p-2 rounded-full transition-all",
@@ -430,14 +414,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               "disabled:opacity-50 disabled:cursor-not-allowed",
               "animate-bounce-in",
             )}
-            aria-label="Gửi tin nhắn"
+            aria-label="Send message"
           >
             <PaperAirplaneIcon className="w-6 h-6" />
           </button>
         ) : (
           <button
             className="p-2 rounded-full text-gray-500 hover:bg-gray-100 transition-colors"
-            aria-label="Ghi âm tin nhắn"
+            aria-label="Record voice message"
             disabled={disabled}
           >
             <MicrophoneIcon className="w-6 h-6" />
@@ -449,3 +433,4 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 };
 
 export default MessageInput;
+

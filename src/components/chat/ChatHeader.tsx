@@ -41,64 +41,65 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
   const getStatusText = () => {
     if (isTyping) {
-      return null; // Will show typing indicator instead
+      return null;
     }
 
     if (conversation.type === "group") {
-      return `${conversation.participants.length} thành viên`;
+      return `${conversation.participants?.length ?? 0} members`;
     }
 
     if (conversation.type === "channel") {
-      return "Kênh";
+      return "Channel";
     }
 
     if (otherUser) {
-      if (isOnline) {
-        return "Đang hoạt động";
-      }
-      return "Ngoại tuyến";
+      return isOnline ? "Online" : "Offline";
     }
 
     return "";
   };
 
+  const displayName =
+    conversation.name || otherUser?.displayName || otherUser?.username || "Conversation";
+
   return (
     <div
       className={clsx(
-        "flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200",
+        "flex items-center gap-2 border-b border-gray-200 bg-white px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3",
         className,
       )}
     >
-      {/* Back button (mobile) */}
       {onBack && (
         <button
+          type="button"
           onClick={onBack}
-          className="p-2 -ml-2 rounded-full hover:bg-gray-100 transition-colors lg:hidden"
-          aria-label="Quay lại"
+          className="min-h-11 min-w-11 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100 lg:hidden"
+          aria-label="Back"
         >
           <ArrowLeftIcon className="w-5 h-5 text-gray-600" />
         </button>
       )}
 
-      {/* Avatar */}
       <button
+        type="button"
         onClick={onInfoClick}
-        className="shrink-0"
-        aria-label="Xem thông tin"
+        className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-telegram-primary"
+        aria-label="View conversation info"
       >
         <Avatar
           src={conversation.avatar}
-          alt={conversation.name}
+          alt={displayName}
           size="md"
           status={otherUser?.status}
-          showStatus={conversation.type === "private"}
+          showStatus={
+            conversation.type === "private" || conversation.type === "direct"
+          }
         />
       </button>
 
-      {/* Name and status */}
-      <button onClick={onInfoClick} className="flex-1 min-w-0 text-left">
-        <h2 className="font-semibold text-gray-900 truncate">
-          {conversation.name}
+      <button type="button" onClick={onInfoClick} className="min-w-0 flex-1 text-left">
+        <h2 className="truncate text-sm font-semibold text-gray-900 sm:text-base">
+          {displayName}
         </h2>
 
         {isTyping ? (
@@ -106,8 +107,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         ) : (
           <p
             className={clsx(
-              "text-sm truncate",
-              isOnline ? "text-chat-online" : "text-gray-500",
+              "truncate text-xs sm:text-sm",
+              isOnline ? "text-chat-online" : "text-gray-600",
             )}
           >
             {getStatusText()}
@@ -115,45 +116,44 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         )}
       </button>
 
-      {/* Action buttons */}
       <div className="flex items-center gap-1">
-        {/* Voice call */}
         {onCallClick && (
           <button
+            type="button"
             onClick={onCallClick}
-            className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+            className="min-h-11 min-w-11 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100"
             aria-label="Voice call"
           >
             <PhoneIcon className="w-5 h-5 text-gray-600" />
           </button>
         )}
 
-        {/* Video call */}
         {onVideoCallClick && (
           <button
+            type="button"
             onClick={onVideoCallClick}
-            className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+            className="min-h-11 min-w-11 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100"
             aria-label="Video call"
           >
             <VideoCameraIcon className="w-5 h-5 text-gray-600" />
           </button>
         )}
 
-        {/* Search in chat */}
         {onSearchClick && (
           <button
+            type="button"
             onClick={onSearchClick}
-            className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+            className="hidden min-h-11 min-w-11 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100 sm:inline-flex"
             aria-label="Search in chat"
           >
             <MagnifyingGlassIcon className="w-5 h-5 text-gray-600" />
           </button>
         )}
 
-        {/* Info panel toggle */}
         <button
+          type="button"
           onClick={onInfoClick}
-          className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+          className="min-h-11 min-w-11 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100"
           aria-label="Toggle info panel"
         >
           <InformationCircleIcon className="w-5 h-5 text-gray-600" />

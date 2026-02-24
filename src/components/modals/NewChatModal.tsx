@@ -1,8 +1,3 @@
-/**
- * @fileoverview New Chat Modal
- * Modal tìm kiếm và bắt đầu cuộc trò chuyện mới
- */
-
 import React, { useState, useCallback, useEffect } from "react";
 import clsx from "clsx";
 import {
@@ -14,7 +9,7 @@ import {
 import { Modal, Input, Button, Spinner, EmptySearchResults } from "../ui";
 import { Avatar } from "../common/Avatar";
 import { useDebounce } from "../../hooks";
-import apiClient from "../../lib/axios";
+import { userApi } from "../../services/api";
 import { toast } from "../ui";
 import type { User as UserType } from "../../types";
 
@@ -24,14 +19,17 @@ interface User {
   firstName?: string;
   lastName?: string;
   avatar?: string;
-  status?: UserType["status"];
+  status?: UserType["status"] | "online" | "offline" | "away" | "dnd";
 }
 
 interface NewChatModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onStartChat: (userId: string) => void;
-  onCreateGroup?: () => void;
+  onStartChat: (userId: string) => Promise<void>;
+  onCreateGroup?: (payload: {
+    name: string;
+    memberIds: string[];
+  }) => Promise<void>;
 }
 
 export const NewChatModal: React.FC<NewChatModalProps> = ({
@@ -43,12 +41,13 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
   const [isGroupMode, setIsGroupMode] = useState(false);
+  const [groupName, setGroupName] = useState("");
 
   const debouncedQuery = useDebounce(searchQuery, 300);
 
-  // Search users
   const searchUsers = useCallback(async (query: string) => {
     if (!query.trim() || query.length < 2) {
       setUsers([]);
@@ -57,61 +56,84 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
 
     setIsLoading(true);
     try {
-      const response = await apiClient.get(
-        `/users/search?q=${encodeURIComponent(query)}`,
-      );
-      setUsers(response.data.data || []);
+      const response = await userApi.searchUsers(query);
+      const normalizedUsers = (response.data || []).map((user) => ({
+        id: user.id,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        avatar: user.avatar,
+        status: user.status,
+      }));
+      setUsers(normalizedUsers);
     } catch {
-      toast.error("Không thể tìm kiếm người dùng");
+      toast.error("Khong the tim kiem nguoi dung");
       setUsers([]);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // Trigger search when debounced query changes
   useEffect(() => {
     searchUsers(debouncedQuery);
   }, [debouncedQuery, searchUsers]);
 
-  // Reset state when modal closes
   useEffect(() => {
     if (!isOpen) {
       setSearchQuery("");
       setUsers([]);
       setSelectedUsers([]);
       setIsGroupMode(false);
+      setGroupName("");
+      setIsSubmitting(false);
     }
   }, [isOpen]);
 
-  // Handle user click
-  const handleUserClick = (user: User) => {
+  const handleUserClick = async (user: User) => {
     if (isGroupMode) {
-      // Toggle selection in group mode
       setSelectedUsers((prev) =>
         prev.some((u) => u.id === user.id)
           ? prev.filter((u) => u.id !== user.id)
           : [...prev, user],
       );
-    } else {
-      // Start direct chat
-      onStartChat(user.id);
-      onClose();
-    }
-  };
-
-  // Handle create group
-  const handleCreateGroup = () => {
-    if (selectedUsers.length < 1) {
-      toast.error("Chọn ít nhất 1 người để tạo nhóm");
       return;
     }
-    // TODO: Open create group modal with selected users
-    onCreateGroup?.();
-    onClose();
+
+    setIsSubmitting(true);
+    try {
+      await onStartChat(user.id);
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Get display name
+  const handleCreateGroup = async () => {
+    if (selectedUsers.length < 1) {
+      toast.error("Chon it nhat 1 nguoi de tao nhom");
+      return;
+    }
+
+    const name = groupName.trim();
+    if (!name) {
+      toast.error("Vui long nhap ten nhom");
+      return;
+    }
+
+    if (!onCreateGroup) return;
+
+    setIsSubmitting(true);
+    try {
+      await onCreateGroup({
+        name,
+        memberIds: selectedUsers.map((user) => user.id),
+      });
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const getDisplayName = (user: User) => {
     if (user.firstName || user.lastName) {
       return `${user.firstName || ""} ${user.lastName || ""}`.trim();
@@ -123,19 +145,19 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Cuộc trò chuyện mới"
+      title="Cuoc tro chuyen moi"
       description={
         isGroupMode
-          ? "Chọn thành viên để tạo nhóm"
-          : "Tìm kiếm người dùng để bắt đầu trò chuyện"
+          ? "Chon thanh vien de tao nhom"
+          : "Tim kiem nguoi dung de bat dau tro chuyen"
       }
       size="md"
     >
       <div className="space-y-4">
-        {/* Mode toggle */}
         <div className="flex gap-2">
           <button
             onClick={() => setIsGroupMode(false)}
+            disabled={isSubmitting}
             className={clsx(
               "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors",
               !isGroupMode
@@ -144,10 +166,11 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             )}
           >
             <UserPlusIcon className="w-5 h-5" />
-            Tin nhắn trực tiếp
+            Tin nhan truc tiep
           </button>
           <button
             onClick={() => setIsGroupMode(true)}
+            disabled={isSubmitting}
             className={clsx(
               "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors",
               isGroupMode
@@ -156,21 +179,30 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             )}
           >
             <UserGroupIcon className="w-5 h-5" />
-            Tạo nhóm
+            Tao nhom
           </button>
         </div>
 
-        {/* Search input */}
         <Input
           type="text"
-          placeholder="Tìm kiếm theo tên hoặc username..."
+          placeholder="Tim kiem theo ten hoac username..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           leftIcon={<MagnifyingGlassIcon className="w-5 h-5" />}
           autoFocus
+          disabled={isSubmitting}
         />
 
-        {/* Selected users (group mode) */}
+        {isGroupMode && (
+          <Input
+            type="text"
+            placeholder="Nhap ten nhom..."
+            value={groupName}
+            onChange={(e) => setGroupName(e.target.value)}
+            disabled={isSubmitting}
+          />
+        )}
+
         {isGroupMode && selectedUsers.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {selectedUsers.map((user) => (
@@ -194,7 +226,6 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
           </div>
         )}
 
-        {/* Results */}
         <div className="max-h-80 overflow-y-auto -mx-6 px-6">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
@@ -202,7 +233,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             </div>
           ) : searchQuery.length > 0 && searchQuery.length < 2 ? (
             <p className="text-center text-gray-500 py-8 text-sm">
-              Nhập ít nhất 2 ký tự để tìm kiếm
+              Nhap it nhat 2 ky tu de tim kiem
             </p>
           ) : users.length === 0 && debouncedQuery.length >= 2 ? (
             <EmptySearchResults query={debouncedQuery} />
@@ -213,19 +244,21 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                 return (
                   <button
                     key={user.id}
-                    onClick={() => handleUserClick(user)}
+                    onClick={() => void handleUserClick(user)}
+                    disabled={isSubmitting}
                     className={clsx(
                       "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-left",
                       isSelected
                         ? "bg-telegram-primary/10"
                         : "hover:bg-gray-100",
+                      isSubmitting && "opacity-60 cursor-not-allowed",
                     )}
                   >
                     <Avatar
                       src={user.avatar}
                       alt={getDisplayName(user)}
                       size="md"
-                      status={user.status as User["status"]}
+                      status={user.status as unknown as UserType["status"]}
                     />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-900 truncate">
@@ -268,10 +301,15 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
           )}
         </div>
 
-        {/* Create group button */}
         {isGroupMode && selectedUsers.length > 0 && (
-          <Button fullWidth size="lg" onClick={handleCreateGroup}>
-            Tạo nhóm ({selectedUsers.length} người)
+          <Button
+            fullWidth
+            size="lg"
+            onClick={() => void handleCreateGroup()}
+            isLoading={isSubmitting}
+            disabled={isSubmitting}
+          >
+            Tao nhom ({selectedUsers.length} nguoi)
           </Button>
         )}
       </div>

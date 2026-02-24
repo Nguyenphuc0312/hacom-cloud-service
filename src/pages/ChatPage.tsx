@@ -12,6 +12,7 @@ import { UserProfile } from "../components/info/UserProfile";
 import { GroupInfo } from "../components/info/GroupInfo";
 import { NoChatSelected } from "../components/ui";
 import { NewChatModal, ImagePreviewModal } from "../components/modals";
+import { toast } from "../components/ui";
 import {
   useAuthStore,
   useChatStore,
@@ -20,8 +21,9 @@ import {
   useCurrentTypingStatus,
 } from "../stores";
 import { useWebSocket } from "../hooks";
+import { conversationApi } from "../services/api";
 import type { Message, UserSummary, Attachment } from "../types";
-import { MessageType, MessageStatus, RoomType, UserStatus } from "../types";
+import { MessageType, RoomType, UserStatus } from "../types";
 import { getOtherParticipant } from "../utils/messageHelpers";
 
 export const ChatPage: React.FC = () => {
@@ -39,9 +41,9 @@ export const ChatPage: React.FC = () => {
     fetchConversations,
     fetchMessages,
     sendMessage: storeSendMessage,
-    addMessage,
-    updateMessage,
     markAsRead,
+    hasMoreMessages,
+    isLoadingMessages,
   } = useChatStore();
 
   // Selectors
@@ -55,7 +57,7 @@ export const ChatPage: React.FC = () => {
 
   // Local state
   const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(!conversationId);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -92,15 +94,23 @@ export const ChatPage: React.FC = () => {
   // Load messages when conversation changes & join/leave rooms
   useEffect(() => {
     if (selectedConversationId) {
-      fetchMessages(selectedConversationId);
-      markAsRead(selectedConversationId);
+      void fetchMessages(selectedConversationId);
       joinRoom(selectedConversationId);
+      markAsRead(selectedConversationId);
 
       return () => {
+        stopTyping(selectedConversationId);
         leaveRoom(selectedConversationId);
       };
     }
-  }, [selectedConversationId, fetchMessages, markAsRead, joinRoom, leaveRoom]);
+  }, [
+    selectedConversationId,
+    fetchMessages,
+    joinRoom,
+    leaveRoom,
+    markAsRead,
+    stopTyping,
+  ]);
 
   // Handle select conversation
   const handleSelectConversation = useCallback(
@@ -120,36 +130,9 @@ export const ChatPage: React.FC = () => {
       fileMeta?: Attachment | undefined,
       type: MessageType = MessageType.TEXT,
     ) => {
-      if (!selectedConversationId || !currentUserSummary) return;
-
-      // Optimistic update - create temp message
-      const tempId = `temp-${Date.now()}`;
-      const tempMessage: Message = {
-        id: tempId,
-        conversationId: selectedConversationId,
-        senderId: currentUserSummary.id,
-        senderName:
-          currentUserSummary.displayName || currentUserSummary.username,
-        senderAvatar: currentUserSummary.avatar,
-        content,
-        type,
-        status: fileMeta
-          ? ("uploading" as MessageStatus)
-          : MessageStatus.SENDING,
-        isEdited: false,
-        isPinned: false,
-        isDeleted: false,
-        isSystem: false,
-        createdAt: new Date(),
-        replyTo: replyTo?.id,
-        ...(fileMeta && { attachments: [fileMeta] }),
-      } as Message;
-
-      // Add to store temporarily
-      addMessage(selectedConversationId, tempMessage);
+      if (!selectedConversationId) return;
 
       try {
-        // Send via API (storeSendMessage handles optimistic replacement)
         await storeSendMessage(
           selectedConversationId,
           content,
@@ -157,22 +140,33 @@ export const ChatPage: React.FC = () => {
           fileMeta,
           replyTo?.id,
         );
-      } catch (error) {
-        console.error("Failed to send message:", error);
-        // Update status to failed
-        updateMessage(selectedConversationId, tempId, {
-          status: MessageStatus.FAILED,
-        });
+      } catch {
+        toast.error("Khong the gui tin nhan. Vui long thu lai.");
       }
     },
-    [
-      selectedConversationId,
-      currentUserSummary,
-      addMessage,
-      storeSendMessage,
-      updateMessage,
-    ],
+    [selectedConversationId, storeSendMessage],
   );
+
+  const handleLoadOlderMessages = useCallback(async () => {
+    if (!selectedConversationId || isLoadingMessages) return;
+    if (!hasMoreMessages[selectedConversationId]) return;
+
+    const oldestMessage = conversationMessages.find(
+      (message) => !message.id.startsWith("temp-"),
+    );
+    if (!oldestMessage) return;
+
+    await fetchMessages(
+      selectedConversationId,
+      new Date(oldestMessage.createdAt).toISOString(),
+    );
+  }, [
+    selectedConversationId,
+    isLoadingMessages,
+    hasMoreMessages,
+    conversationMessages,
+    fetchMessages,
+  ]);
 
   // Handle typing
   const handleTyping = useCallback(
@@ -201,16 +195,62 @@ export const ChatPage: React.FC = () => {
   }, [selectConversation, navigate]);
 
   // Handle new chat
-  const handleStartChat = useCallback(async (userId: string) => {
-    // TODO: Implement create direct conversation API
-    console.log("Start chat with:", userId);
-    setIsNewChatModalOpen(false);
-  }, []);
+  const handleStartChat = useCallback(
+    async (userId: string) => {
+      try {
+        const response = await conversationApi.createPrivateConversation(userId);
+        const roomId = response.data?.id;
+        if (!roomId) {
+          throw new Error("Missing room id");
+        }
+
+        // Refresh list to get full room shape (participants, display fields...)
+        fetchConversations().catch((error) => {
+          console.warn("Refresh conversations after creating direct room failed:", error);
+        });
+        selectConversation(roomId);
+        navigate(`/chat/${roomId}`);
+      } catch (error) {
+        console.error("Create direct room failed:", error);
+        toast.error("Khong the bat dau cuoc tro chuyen");
+        throw new Error("Cannot create conversation");
+      }
+    },
+    [fetchConversations, navigate, selectConversation],
+  );
+
+  const handleCreateGroup = useCallback(
+    async (payload: { name: string; memberIds: string[] }) => {
+      try {
+        const response = await conversationApi.createGroupConversation({
+          name: payload.name,
+          memberIds: payload.memberIds,
+        });
+        const roomId = response.data?.id;
+        if (!roomId) {
+          throw new Error("Missing room id");
+        }
+
+        fetchConversations().catch((error) => {
+          console.warn("Refresh conversations after creating group room failed:", error);
+        });
+        selectConversation(roomId);
+        navigate(`/chat/${roomId}`);
+      } catch (error) {
+        console.error("Create group room failed:", error);
+        toast.error("Khong the tao nhom moi");
+        throw new Error("Cannot create group");
+      }
+    },
+    [fetchConversations, navigate, selectConversation],
+  );
 
   // Handle new chat modal
   const handleOpenNewChat = useCallback(() => {
     setIsNewChatModalOpen(true);
   }, []);
+
+  const showSidebarOnMobile = !selectedConversationId || isMobileMenuOpen;
 
   // Get other user for private chat
   const otherUser =
@@ -226,10 +266,14 @@ export const ChatPage: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen bg-white overflow-hidden">
+    <div className="relative flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-white">
       {/* Connection status indicator */}
       {!isConnected && (
-        <div className="absolute top-0 left-0 right-0 z-50 bg-yellow-500 text-white text-center py-1 text-sm">
+        <div
+          className="absolute inset-x-0 top-0 z-50 bg-amber-500 px-4 py-1.5 text-center text-xs font-medium text-white sm:text-sm"
+          role="status"
+          aria-live="polite"
+        >
           Đang kết nối lại...
         </div>
       )}
@@ -237,26 +281,35 @@ export const ChatPage: React.FC = () => {
       {/* Sidebar */}
       <div
         className={clsx(
-          "w-full lg:w-sidebar flex-shrink-0 transition-transform duration-300",
-          "lg:translate-x-0",
-          selectedConversationId && !isMobileMenuOpen
-            ? "-translate-x-full lg:translate-x-0"
-            : "translate-x-0",
-          "absolute lg:relative inset-y-0 left-0 z-20 lg:z-0",
+          "absolute inset-y-0 left-0 z-30 w-full max-w-full border-r border-gray-200 bg-white transition-transform duration-300 sm:max-w-[min(24rem,92vw)] lg:relative lg:z-0 lg:w-[clamp(18rem,24vw,22rem)] lg:max-w-none",
+          showSidebarOnMobile
+            ? "translate-x-0"
+            : "-translate-x-full lg:translate-x-0",
         )}
+        aria-hidden={!showSidebarOnMobile}
       >
         <Sidebar
           conversations={conversations}
           currentUser={currentUserSummary}
           selectedId={selectedConversationId}
           onSelectConversation={handleSelectConversation}
+          onNewChat={handleOpenNewChat}
         />
       </div>
+
+      {showSidebarOnMobile && selectedConversationId && (
+        <button
+          type="button"
+          className="fixed inset-0 z-20 bg-black/40 lg:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+          aria-label="Đóng danh sách cuộc trò chuyện"
+        />
+      )}
 
       {/* Chat window */}
       <div
         className={clsx(
-          "flex-1 flex flex-col min-w-0",
+          "relative z-10 flex min-w-0 flex-1 flex-col",
           !selectedConversation && "hidden lg:flex",
         )}
       >
@@ -270,6 +323,13 @@ export const ChatPage: React.FC = () => {
             onToggleInfoPanel={handleToggleInfoPanel}
             onBack={handleBack}
             onTyping={handleTyping}
+            hasMoreMessages={
+              selectedConversationId
+                ? (hasMoreMessages[selectedConversationId] ?? true)
+                : false
+            }
+            isLoadingMessages={isLoadingMessages}
+            onLoadOlderMessages={handleLoadOlderMessages}
             onImageClick={setImagePreview}
           />
         ) : (
@@ -281,11 +341,10 @@ export const ChatPage: React.FC = () => {
       {selectedConversation && (
         <div
           className={clsx(
-            "w-full lg:w-info-panel flex-shrink-0 transition-all duration-300",
-            "fixed lg:relative inset-y-0 right-0 z-30 lg:z-0",
+            "fixed inset-y-0 right-0 z-40 w-full max-w-full border-l border-gray-200 bg-white transition-transform duration-300 sm:max-w-[min(26rem,94vw)] lg:relative lg:z-0 lg:w-[clamp(20rem,28vw,24rem)] lg:max-w-none",
             isInfoPanelOpen
               ? "translate-x-0"
-              : "translate-x-full lg:translate-x-0 lg:w-0 lg:overflow-hidden",
+              : "translate-x-full lg:hidden",
           )}
         >
           {(selectedConversation.type === RoomType.PRIVATE ||
@@ -305,7 +364,7 @@ export const ChatPage: React.FC = () => {
       {/* Info panel overlay (mobile) */}
       {isInfoPanelOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
+          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
           onClick={handleToggleInfoPanel}
         />
       )}
@@ -315,6 +374,7 @@ export const ChatPage: React.FC = () => {
         isOpen={isNewChatModalOpen}
         onClose={() => setIsNewChatModalOpen(false)}
         onStartChat={handleStartChat}
+        onCreateGroup={handleCreateGroup}
       />
 
       {/* Image Preview Modal */}

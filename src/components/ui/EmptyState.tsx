@@ -183,8 +183,8 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
   onNewChat,
 }) => {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center bg-chat-background text-gray-500 p-6">
-      <div className="w-32 h-32 mb-6 text-gray-300">
+    <section className="flex flex-1 flex-col items-center justify-center bg-chat-background px-6 py-10 text-gray-600">
+      <div className="mb-5 h-24 w-24 text-gray-300 sm:mb-6 sm:h-32 sm:w-32">
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -198,22 +198,23 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
           />
         </svg>
       </div>
-      <h2 className="text-xl font-medium text-gray-700 mb-2">
+      <h2 className="mb-2 text-lg font-semibold text-gray-800 sm:text-xl">
         Chọn một cuộc trò chuyện
       </h2>
-      <p className="text-sm text-gray-500 text-center max-w-sm mb-4">
+      <p className="mb-5 max-w-sm text-center text-sm leading-6 text-gray-600">
         Chọn một cuộc hội thoại từ danh sách bên trái hoặc bắt đầu cuộc trò
         chuyện mới
       </p>
       {onNewChat && (
         <button
+          type="button"
           onClick={onNewChat}
-          className="px-4 py-2 bg-telegram-primary text-white rounded-lg hover:bg-telegram-primary/90 transition-colors"
+          className="min-h-11 rounded-xl bg-telegram-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-telegram-primary/90"
         >
           Bắt đầu trò chuyện mới
         </button>
       )}
-    </div>
+    </section>
   );
 };
 

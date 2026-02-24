@@ -107,13 +107,7 @@ export const userApi = {
   },
 
   searchUsers: async (query: string, page = 1, limit = 20) => {
-    const response = await apiClient.get<
-      ApiResponse<{
-        users: User[];
-        total: number;
-        hasMore: boolean;
-      }>
-    >(
+    const response = await apiClient.get<ApiResponse<User[]>>(
       `/users/search?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`,
     );
     return response.data;
@@ -320,10 +314,14 @@ export const fileApi = {
 
     const response = await apiClient.post<
       ApiResponse<{
+        id: string;
         url: string;
         filename: string;
+        originalName?: string;
         mimetype: string;
         size: number;
+        uploadedBy?: string;
+        createdAt?: string;
       }>
     >("/files/upload", formData, {
       headers: { "Content-Type": "multipart/form-data" },
@@ -346,10 +344,17 @@ export const fileApi = {
 
     const response = await apiClient.post<
       ApiResponse<{
+        id: string;
         url: string;
+        filename: string;
+        originalName?: string;
+        mimetype?: string;
+        size?: number;
         thumbnail?: string;
         width?: number;
         height?: number;
+        uploadedBy?: string;
+        createdAt?: string;
       }>
     >("/files/upload-image", formData, {
       headers: { "Content-Type": "multipart/form-data" },

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React from "react";
 import clsx from "clsx";
 import { ChatHeader } from "../chat/ChatHeader";
 import { MessageList } from "../chat/MessageList";
@@ -9,17 +9,27 @@ import type {
   TypingStatus,
   InputMode,
   UserSummary,
+  Attachment,
 } from "../../types";
+import { MessageType } from "../../types";
 
 interface ChatWindowProps {
   conversation: Conversation;
   messages: Message[];
   currentUser: UserSummary;
   typingStatus?: TypingStatus;
-  onSendMessage: (content: string, replyTo?: Message) => void;
+  onSendMessage: (
+    content: string,
+    replyTo?: Message,
+    fileMeta?: Attachment,
+    type?: MessageType,
+  ) => void | Promise<void>;
   onToggleInfoPanel: () => void;
   onBack?: () => void;
   onTyping?: (isTyping: boolean) => void;
+  hasMoreMessages?: boolean;
+  isLoadingMessages?: boolean;
+  onLoadOlderMessages?: () => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
   className?: string;
 }
@@ -33,6 +43,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onToggleInfoPanel,
   onBack,
   onTyping,
+  hasMoreMessages,
+  isLoadingMessages,
+  onLoadOlderMessages,
   onImageClick,
   className,
 }) => {
@@ -61,8 +74,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setInputMode("normal");
   }, []);
 
-  const handleReact = React.useCallback((_msg: Message, _emoji: string) => {
+  const handleReact = React.useCallback((messageId: string, emoji: string) => {
     // noop - placeholder for reaction handling
+    void messageId;
+    void emoji;
   }, []);
 
   const handleSend = React.useCallback(
@@ -70,12 +85,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       // Prevent empty sends
       if (!content && !fileMeta) return;
 
+      const attachment = fileMeta as Attachment | undefined;
+      const messageType = type as MessageType | undefined;
+
       // Forward to parent ChatPage handler (include fileMeta and type if present)
       onSendMessage(
-        content || (fileMeta && (fileMeta as any).fileName) || "",
+        content || attachment?.fileName || "",
         replyToMessage,
-        fileMeta as any,
-        (type as any) || undefined,
+        attachment,
+        messageType,
       );
 
       // Reset local input state on send
@@ -111,6 +129,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         currentUserId={currentUser.id}
         onReply={handleReply}
         onReact={handleReact}
+        hasMore={hasMoreMessages}
+        isLoadingMore={isLoadingMessages}
+        onLoadMore={onLoadOlderMessages}
         onImageClick={onImageClick}
         className="flex-1 min-h-0"
       />

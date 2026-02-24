@@ -10,16 +10,19 @@ import {
 } from "date-fns";
 import { vi } from "date-fns/locale";
 
+const isValidDate = (date: Date): boolean => !Number.isNaN(date.getTime());
+
 /**
- * Format time for message timestamp
- * Shows: "10:30" for today, "Hôm qua 10:30" for yesterday
+ * Format time for message timestamp.
  */
 export function formatMessageTime(date: Date): string {
+  if (!isValidDate(date)) return "";
+
   if (isToday(date)) {
     return format(date, "HH:mm");
   }
   if (isYesterday(date)) {
-    return `Hôm qua ${format(date, "HH:mm")}`;
+    return `Yesterday ${format(date, "HH:mm")}`;
   }
   if (isThisWeek(date)) {
     return format(date, "EEEE HH:mm", { locale: vi });
@@ -28,26 +31,27 @@ export function formatMessageTime(date: Date): string {
 }
 
 /**
- * Format relative time for conversation list
- * Shows: "3p", "1g", "Hôm qua", "T2", "15/01"
+ * Format relative time for conversation list.
  */
 export function formatRelativeTime(date: Date): string {
+  if (!isValidDate(date)) return "";
+
   const now = new Date();
   const minutes = differenceInMinutes(now, date);
   const hours = differenceInHours(now, date);
   const days = differenceInDays(now, date);
 
   if (minutes < 1) {
-    return "Vừa xong";
+    return "Just now";
   }
   if (minutes < 60) {
-    return `${minutes}p`;
+    return `${minutes}m`;
   }
   if (hours < 24 && isToday(date)) {
-    return `${hours}g`;
+    return `${hours}h`;
   }
   if (isYesterday(date)) {
-    return "Hôm qua";
+    return "Yesterday";
   }
   if (days < 7) {
     return format(date, "EEE", { locale: vi });
@@ -56,15 +60,16 @@ export function formatRelativeTime(date: Date): string {
 }
 
 /**
- * Format date divider for message groups
- * Shows: "Hôm nay", "Hôm qua", "Thứ Hai, 15 tháng 1"
+ * Format date divider for message groups.
  */
 export function formatDateDivider(date: Date): string {
+  if (!isValidDate(date)) return "";
+
   if (isToday(date)) {
-    return "Hôm nay";
+    return "Today";
   }
   if (isYesterday(date)) {
-    return "Hôm qua";
+    return "Yesterday";
   }
   if (isThisWeek(date)) {
     return format(date, "EEEE", { locale: vi });
@@ -73,56 +78,61 @@ export function formatDateDivider(date: Date): string {
 }
 
 /**
- * Format last seen status
- * Shows: "truy cập lúc 10:30", "truy cập hôm qua", etc.
+ * Format last seen status.
  */
 export function formatLastSeen(date: Date | undefined): string {
-  if (!date) {
-    return "truy cập gần đây";
+  if (!date || !isValidDate(date)) {
+    return "Last seen recently";
   }
 
   const now = new Date();
   const minutes = differenceInMinutes(now, date);
 
   if (minutes < 1) {
-    return "vừa truy cập";
+    return "Online now";
   }
   if (minutes < 5) {
-    return "truy cập gần đây";
+    return "Last seen recently";
   }
   if (isToday(date)) {
-    return `truy cập lúc ${format(date, "HH:mm")}`;
+    return `Last seen at ${format(date, "HH:mm")}`;
   }
   if (isYesterday(date)) {
-    return `truy cập hôm qua lúc ${format(date, "HH:mm")}`;
+    return `Last seen yesterday at ${format(date, "HH:mm")}`;
   }
   if (isThisWeek(date)) {
-    return `truy cập ${format(date, "EEEE", { locale: vi })} lúc ${format(date, "HH:mm")}`;
+    return `Last seen ${format(date, "EEEE", { locale: vi })} ${format(
+      date,
+      "HH:mm",
+    )}`;
   }
-  return `truy cập ${format(date, "d MMM", { locale: vi })}`;
+  return `Last seen ${format(date, "d MMM", { locale: vi })}`;
 }
 
 /**
- * Format voice message duration
- * Shows: "0:45", "1:23", "12:34"
+ * Format voice message duration.
  */
 export function formatDuration(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
+  const safeSeconds = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+  const mins = Math.floor(safeSeconds / 60);
+  const secs = Math.floor(safeSeconds % 60);
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
 /**
- * Format relative time in Vietnamese (optional)
+ * Format relative time with locale.
  */
 export function formatRelativeTimeVi(date: Date): string {
+  if (!isValidDate(date)) return "";
   return formatDistanceToNow(date, { addSuffix: true, locale: vi });
 }
 
 /**
- * Check if two dates are on the same day
+ * Check if two dates are on the same day.
  */
 export function isSameDay(date1: Date, date2: Date): boolean {
+  if (!isValidDate(date1) || !isValidDate(date2)) return false;
+
   return (
     date1.getFullYear() === date2.getFullYear() &&
     date1.getMonth() === date2.getMonth() &&

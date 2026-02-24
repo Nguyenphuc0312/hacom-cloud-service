@@ -1,8 +1,6 @@
 /**
  * @fileoverview useWebSocket hook
- * Custom hook quản lý WebSocket connection và events
- *
- * FIX #2: Updated to work with raw WebSocket instead of Socket.IO
+ * Manages raw WebSocket connection and real-time chat events.
  */
 
 import { useEffect, useCallback, useRef, useState } from "react";
@@ -15,6 +13,7 @@ import {
   type ConnectionState,
 } from "../lib/socket";
 import { useAuthStore, useChatStore } from "../stores";
+import { MessageStatus } from "../types";
 
 interface UseWebSocketOptions {
   autoConnect?: boolean;
@@ -36,212 +35,102 @@ interface UseWebSocketReturn {
   stopTyping: (roomId: string) => void;
 }
 
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value !== null && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+
+const asString = (value: unknown): string | null =>
+  typeof value === "string" && value.trim().length > 0 ? value : null;
+
+const getConversationId = (payload: Record<string, unknown>): string | null => {
+  return (
+    asString(payload.conversationId) ??
+    asString(payload.roomId) ??
+    asString(payload.room_id) ??
+    asString(payload.room) ??
+    asString(asRecord(payload.message)?.conversationId) ??
+    null
+  );
+};
+
+const getMessagePayload = (
+  payload: Record<string, unknown>,
+): Record<string, unknown> | null => {
+  const nested = asRecord(payload.message);
+  if (nested) return nested;
+  if (asString(payload.id)) return payload;
+  return null;
+};
+
+const toCursorValue = (value: unknown): string | undefined => {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+  }
+
+  return undefined;
+};
+
 export const useWebSocket = (
   options: UseWebSocketOptions = {},
 ): UseWebSocketReturn => {
   const { autoConnect = true, onConnect, onDisconnect, onError } = options;
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
   const addMessage = useChatStore((s) => s.addMessage);
   const updateMessage = useChatStore((s) => s.updateMessage);
   const removeMessage = useChatStore((s) => s.removeMessage);
   const setTyping = useChatStore((s) => s.setTyping);
   const clearTyping = useChatStore((s) => s.clearTyping);
-  const updateConversation = useChatStore((s) => s.updateConversation);
+  const fetchMessages = useChatStore((s) => s.fetchMessages);
+  const markMessagesReadUpTo = useChatStore((s) => s.markMessagesReadUpTo);
 
-  const [connectionState, setConnectionState] =
-    useState<ConnectionState>("disconnected");
-  // Lắng nghe realtime connectionState từ WebSocketManager
+  const [connectionState, setConnectionState] = useState<ConnectionState>(() =>
+    initSocket().getConnectionState(),
+  );
+
+  const joinedRoomsRef = useRef<Set<string>>(new Set());
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const remoteTypingTimersRef = useRef<
+    Map<string, ReturnType<typeof setTimeout>>
+  >(new Map());
+  const unsubscribersRef = useRef<Array<() => void>>([]);
+
   useEffect(() => {
     const socket = initSocket();
     const unsub = socket.onStateChange((state) => {
       setConnectionState(state);
     });
-    // Sync ngay lần đầu
-    setConnectionState(socket.getConnectionState());
     return () => {
       unsub();
     };
   }, []);
-  const joinedRoomsRef = useRef<Set<string>>(new Set());
-  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const unsubscribersRef = useRef<Array<() => void>>([]);
 
-  // Initialize và setup event listeners
-  // Đảm bảo chỉ tạo 1 socket instance (singleton) trong initSocket/getSocket
-  // Cleanup listeners trước khi setup lại
-  const setupSocket = useCallback(() => {
-    const socket = initSocket(); // singleton pattern trong lib/socket
-
-    unsubscribersRef.current.forEach((unsub) => unsub());
-    unsubscribersRef.current = [];
-
-    // Register incoming message handler
-    const unsubMessageNew = socket.on(WebSocketEvents.MESSAGE_NEW, (data) => {
-      try {
-        const payload = data as any;
-        const roomId = payload?.roomId ?? payload?.room_id ?? payload?.room;
-        const message = payload?.message ?? payload;
-        if (!roomId || !message) return;
-
-        // Avoid duplicates / reconcile temp messages
-        const stateMessages = useChatStore.getState().messages[roomId] || [];
-        const existsById = stateMessages.some((m: any) => m.id === message.id);
-        const existsByLocal = stateMessages.some(
-          (m: any) =>
-            m.localId &&
-            (m.localId === message.id || message.localId === m.localId),
-        );
-
-        if (existsById) {
-          // Update existing server message
-          updateMessage(roomId, message.id, message);
-          return;
-        }
-
-        if (existsByLocal) {
-          // Let store reconcile temp <-> server message via addMessage logic
-          addMessage(roomId, message);
-          return;
-        }
-
-        // Default: append message
-        addMessage(roomId, message);
-      } catch (err) {
-        console.error("Error handling MESSAGE_NEW:", err);
+  const clearRemoteTypingTimer = useCallback(
+    (conversationId: string, userId: string) => {
+      const key = `${conversationId}:${userId}`;
+      const timer = remoteTypingTimersRef.current.get(key);
+      if (timer) {
+        clearTimeout(timer);
+        remoteTypingTimersRef.current.delete(key);
       }
-    });
-    unsubscribersRef.current.push(unsubMessageNew);
+    },
+    [],
+  );
 
-    // Register message update handler
-    const unsubMessageUpdate = socket.on(
-      WebSocketEvents.MESSAGE_UPDATE,
-      (data) => {
-        try {
-          const payload = data as any;
-          const roomId = payload?.roomId ?? payload?.room_id ?? payload?.room;
-          const message = payload?.message ?? payload;
-          if (!roomId || !message || !message.id) return;
-          updateMessage(roomId, message.id, message);
-        } catch (err) {
-          console.error("Error handling MESSAGE_UPDATE:", err);
-        }
-      },
-    );
-    unsubscribersRef.current.push(unsubMessageUpdate);
-
-    // Register delivered/read events to update message status
-    const unsubDelivered = socket.on(
-      WebSocketEvents.MESSAGE_DELIVERED,
-      (data) => {
-        try {
-          const payload = data as any; // { roomId, messageId, deliveredAt }
-          const roomId = payload?.roomId ?? payload?.room;
-          const messageId = payload?.messageId ?? payload?.id;
-          if (!roomId || !messageId) return;
-          updateMessage(roomId, messageId, { status: "delivered" });
-        } catch (err) {
-          console.error("Error handling MESSAGE_DELIVERED:", err);
-        }
-      },
-    );
-    unsubscribersRef.current.push(unsubDelivered);
-
-    const unsubRead = socket.on(WebSocketEvents.MESSAGE_READ, (data) => {
-      try {
-        const payload = data as any; // { roomId, messageId, readAt }
-        const roomId = payload?.roomId ?? payload?.room;
-        const messageId = payload?.messageId ?? payload?.id;
-        if (!roomId || !messageId) return;
-        updateMessage(roomId, messageId, { status: "read" });
-      } catch (err) {
-        console.error("Error handling MESSAGE_READ:", err);
-      }
-    });
-    unsubscribersRef.current.push(unsubRead);
-
-    // Typing indicators
-    const unsubTypingStart = socket.on(WebSocketEvents.TYPING_START, (data) => {
-      try {
-        const payload = data as any; // { roomId, userId, userName }
-        const roomId = payload?.roomId ?? payload?.room;
-        const userId = payload?.userId ?? payload?.user_id;
-        const userName =
-          payload?.userName ?? payload?.user_name ?? payload?.userName;
-        if (!roomId || !userId) return;
-        setTyping({
-          conversationId: roomId,
-          userId,
-          userName: userName || "",
-          isTyping: true,
-        });
-      } catch (err) {
-        console.error("Error handling TYPING_START:", err);
-      }
-    });
-    unsubscribersRef.current.push(unsubTypingStart);
-
-    const unsubTypingStop = socket.on(WebSocketEvents.TYPING_STOP, (data) => {
-      try {
-        const payload = data as any; // { roomId, userId }
-        const roomId = payload?.roomId ?? payload?.room;
-        const userId = payload?.userId ?? payload?.user_id;
-        if (!roomId || !userId) return;
-        clearTyping(roomId, userId);
-      } catch (err) {
-        console.error("Error handling TYPING_STOP:", err);
-      }
-    });
-    unsubscribersRef.current.push(unsubTypingStop);
-
-    // Pseudo-code reconnect backoff (nên implement trong lib/socket):
-    // let retryCount = 0;
-    // socket.on('disconnect', () => {
-    //   setTimeout(() => {
-    //     connectSocket();
-    //     retryCount++;
-    //   }, Math.min(1000 * 2 ** retryCount, 30000));
-    // });
-
-    return socket;
-  }, [
-    addMessage,
-    updateMessage,
-    removeMessage,
-    setTyping,
-    clearTyping,
-    updateConversation,
-    onConnect,
-    onDisconnect,
-    onError,
-  ]);
-
-  // Connect
-  const connect = useCallback(() => {
-    setupSocket();
-    connectSocket();
-  }, [setupSocket]);
-
-  // Disconnect
-  const disconnect = useCallback(() => {
-    disconnectSocket();
-    joinedRoomsRef.current.clear();
-    // Khi disconnect, có thể trigger fallback polling ở store
-    if (
-      typeof window !== "undefined" &&
-      useChatStore.getState().selectedConversationId
-    ) {
-      // Pseudo-code: fallback fetch messages mỗi 5s khi socket mất kết nối
-      const pollInterval = setInterval(() => {
-        const convId = useChatStore.getState().selectedConversationId;
-        if (convId) useChatStore.getState().fetchMessages(convId);
-      }, 5000);
-      // Lưu interval vào window để clear khi reconnect
-      (window as any).__chat_poll_interval = pollInterval;
-    }
+  const clearAllRemoteTypingTimers = useCallback(() => {
+    remoteTypingTimersRef.current.forEach((timer) => clearTimeout(timer));
+    remoteTypingTimersRef.current.clear();
   }, []);
 
-  // Emit event
   const emit = useCallback((event: string, data: unknown) => {
     const socket = getSocket();
     if (socket?.isConnected()) {
@@ -251,91 +140,432 @@ export const useWebSocket = (
     }
   }, []);
 
-  // Join room
-  const joinRoom = useCallback(
+  const emitJoinRoom = useCallback(
     (roomId: string) => {
-      if (!joinedRoomsRef.current.has(roomId)) {
-        emit(WebSocketEvents.ROOM_JOIN, { roomId });
-        joinedRoomsRef.current.add(roomId);
-      }
-    },
-    [emit],
-  );
-
-  // Leave room
-  const leaveRoom = useCallback(
-    (roomId: string) => {
-      emit(WebSocketEvents.ROOM_LEAVE, { roomId });
-      joinedRoomsRef.current.delete(roomId);
-    },
-    [emit],
-  );
-
-  // Send message
-  const sendMessage = useCallback(
-    (roomId: string, content: string, type: string = "text") => {
-      emit(WebSocketEvents.MESSAGE_SEND, {
+      emit(WebSocketEvents.ROOM_JOIN, {
         roomId,
-        content,
-        messageType: type,
+        conversationId: roomId,
       });
     },
     [emit],
   );
 
-  // Send typing indicator
+  const resyncRoom = useCallback(
+    async (roomId: string) => {
+      const roomMessages = useChatStore.getState().messages[roomId] || [];
+      let afterCursor: string | undefined;
+
+      for (let index = roomMessages.length - 1; index >= 0; index -= 1) {
+        const candidate = roomMessages[index];
+        const candidateId = candidate?.id;
+        if (typeof candidateId === "string" && !candidateId.startsWith("temp-")) {
+          afterCursor = toCursorValue(candidate?.createdAt);
+          break;
+        }
+      }
+
+      try {
+        await fetchMessages(roomId, undefined, afterCursor);
+      } catch (error) {
+        console.warn("Resync room failed:", roomId, error);
+      }
+    },
+    [fetchMessages],
+  );
+
+  const setupSocket = useCallback(() => {
+    const socket = initSocket();
+
+    unsubscribersRef.current.forEach((unsub) => unsub());
+    unsubscribersRef.current = [];
+
+    const unsubConnect = socket.on("connect", () => {
+      onConnect?.();
+
+      joinedRoomsRef.current.forEach((roomId) => {
+        emitJoinRoom(roomId);
+        void resyncRoom(roomId);
+      });
+    });
+    unsubscribersRef.current.push(unsubConnect);
+
+    const unsubDisconnect = socket.on("disconnect", (data) => {
+      const reason =
+        asString(asRecord(data)?.reason) ??
+        asString(asRecord(data)?.code) ??
+        "disconnected";
+      onDisconnect?.(reason);
+    });
+    unsubscribersRef.current.push(unsubDisconnect);
+
+    const unsubConnectError = socket.on("connect_error", (data) => {
+      const message =
+        asString(asRecord(data)?.message) ?? "WebSocket connection error";
+      onError?.(new Error(message));
+    });
+    unsubscribersRef.current.push(unsubConnectError);
+
+    const unsubWsError = socket.on(WebSocketEvents.ERROR, (data) => {
+      const message =
+        asString(asRecord(data)?.message) ?? "WebSocket server error";
+      onError?.(new Error(message));
+    });
+    unsubscribersRef.current.push(unsubWsError);
+
+    const upsertIncomingMessage = (data: unknown) => {
+      const payload = asRecord(data);
+      if (!payload) return;
+
+      const conversationId = getConversationId(payload);
+      const messagePayload = getMessagePayload(payload);
+      const messageId = messagePayload ? asString(messagePayload.id) : null;
+      if (!conversationId || !messagePayload || !messageId) return;
+
+      const tempId = asString(payload.tempId) ?? asString(messagePayload.tempId);
+      const localId = asString(messagePayload.localId) ?? tempId ?? undefined;
+      addMessage(conversationId, {
+        ...(messagePayload as unknown as Parameters<typeof addMessage>[1]),
+        ...(localId ? { localId } : {}),
+      });
+
+      const chatState = useChatStore.getState();
+      const currentUserId = useAuthStore.getState().user?.id;
+      const senderId =
+        asString(messagePayload.senderId) ?? asString(payload.senderId);
+
+      if (
+        chatState.selectedConversationId === conversationId &&
+        senderId &&
+        currentUserId &&
+        senderId !== currentUserId
+      ) {
+        chatState.markAsRead(conversationId);
+      }
+    };
+
+    const unsubMessageNew = socket.on(WebSocketEvents.MESSAGE_NEW, (data) => {
+      upsertIncomingMessage(data);
+    });
+    unsubscribersRef.current.push(unsubMessageNew);
+
+    const unsubMessageUpdate = socket.on(WebSocketEvents.MESSAGE_UPDATE, (data) => {
+      const payload = asRecord(data);
+      if (!payload) return;
+
+      const conversationId = getConversationId(payload);
+      const messagePayload = getMessagePayload(payload);
+      const messageId =
+        asString(payload.messageId) ?? (messagePayload && asString(messagePayload.id));
+      if (!conversationId || !messagePayload || !messageId) return;
+
+      updateMessage(
+        conversationId,
+        messageId,
+        messagePayload as unknown as Parameters<typeof updateMessage>[2],
+      );
+    });
+    unsubscribersRef.current.push(unsubMessageUpdate);
+
+    const unsubMessageUpdated = socket.on(
+      WebSocketEvents.MESSAGE_UPDATED,
+      (data) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+
+        const conversationId = getConversationId(payload);
+        const messagePayload = getMessagePayload(payload);
+        const messageId = messagePayload ? asString(messagePayload.id) : null;
+        if (!conversationId || !messagePayload || !messageId) return;
+
+        updateMessage(
+          conversationId,
+          messageId,
+          messagePayload as unknown as Parameters<typeof updateMessage>[2],
+        );
+      },
+    );
+    unsubscribersRef.current.push(unsubMessageUpdated);
+
+    const unsubMessageDeleted = socket.on(
+      WebSocketEvents.MESSAGE_DELETED,
+      (data) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+
+        const conversationId = getConversationId(payload);
+        const messageId =
+          asString(payload.messageId) ??
+          asString(payload.id) ??
+          asString(asRecord(payload.message)?.id);
+        if (!conversationId || !messageId) return;
+
+        removeMessage(conversationId, messageId);
+      },
+    );
+    unsubscribersRef.current.push(unsubMessageDeleted);
+
+    const unsubDelivered = socket.on(WebSocketEvents.MESSAGE_DELIVERED, (data) => {
+      const payload = asRecord(data);
+      if (!payload) return;
+
+      const conversationId = getConversationId(payload);
+      const messageId = asString(payload.messageId) ?? asString(payload.id);
+      if (!conversationId || !messageId) return;
+
+      updateMessage(conversationId, messageId, {
+        status: MessageStatus.DELIVERED,
+      });
+    });
+    unsubscribersRef.current.push(unsubDelivered);
+
+    const handleReadReceipt = (data: unknown) => {
+      const payload = asRecord(data);
+      if (!payload) return;
+
+      const conversationId = getConversationId(payload);
+      const lastMessageId =
+        asString(payload.lastMessageId) ??
+        asString(payload.messageId) ??
+        asString(payload.id);
+      if (!conversationId || !lastMessageId) return;
+
+      markMessagesReadUpTo(
+        conversationId,
+        lastMessageId,
+        asString(payload.userId) ?? undefined,
+      );
+    };
+
+    const unsubRead = socket.on(WebSocketEvents.MESSAGE_READ, handleReadReceipt);
+    unsubscribersRef.current.push(unsubRead);
+
+    const unsubReadConfirmed = socket.on(
+      WebSocketEvents.MESSAGE_READ_CONFIRMED,
+      handleReadReceipt,
+    );
+    unsubscribersRef.current.push(unsubReadConfirmed);
+
+    const handleTypingStart = (data: unknown) => {
+      const payload = asRecord(data);
+      if (!payload) return;
+
+      const conversationId = getConversationId(payload);
+      const userId = asString(payload.userId);
+      if (!conversationId || !userId) return;
+
+      const currentUserId = useAuthStore.getState().user?.id;
+      if (currentUserId && userId === currentUserId) return;
+
+      const userName =
+        asString(payload.userName) ??
+        asString(payload.username) ??
+        asString(payload.user_name) ??
+        "";
+
+      setTyping({
+        conversationId,
+        userId,
+        userName,
+        isTyping: true,
+      });
+
+      clearRemoteTypingTimer(conversationId, userId);
+      const key = `${conversationId}:${userId}`;
+      const timer = setTimeout(() => {
+        clearTyping(conversationId, userId);
+        remoteTypingTimersRef.current.delete(key);
+      }, 4000);
+      remoteTypingTimersRef.current.set(key, timer);
+    };
+
+    const handleTypingStop = (data: unknown) => {
+      const payload = asRecord(data);
+      if (!payload) return;
+
+      const conversationId = getConversationId(payload);
+      const userId = asString(payload.userId);
+      if (!conversationId || !userId) return;
+
+      clearRemoteTypingTimer(conversationId, userId);
+      clearTyping(conversationId, userId);
+    };
+
+    const unsubTypingStart = socket.on(
+      WebSocketEvents.USER_TYPING,
+      handleTypingStart,
+    );
+    unsubscribersRef.current.push(unsubTypingStart);
+
+    const unsubTypingStop = socket.on(
+      WebSocketEvents.USER_STOP_TYPING,
+      handleTypingStop,
+    );
+    unsubscribersRef.current.push(unsubTypingStop);
+
+    const unsubTypingStartLegacy = socket.on(
+      WebSocketEvents.LEGACY_TYPING_START,
+      handleTypingStart,
+    );
+    unsubscribersRef.current.push(unsubTypingStartLegacy);
+
+    const unsubTypingStopLegacy = socket.on(
+      WebSocketEvents.LEGACY_TYPING_STOP,
+      handleTypingStop,
+    );
+    unsubscribersRef.current.push(unsubTypingStopLegacy);
+
+    const unsubTypingLegacy = socket.on(WebSocketEvents.TYPING, (data) => {
+      const payload = asRecord(data);
+      if (!payload) return;
+
+      if (payload.isTyping === true) {
+        handleTypingStart(payload);
+        return;
+      }
+
+      handleTypingStop(payload);
+    });
+    unsubscribersRef.current.push(unsubTypingLegacy);
+
+    const unsubSyncComplete = socket.on(WebSocketEvents.SYNC_COMPLETE, () => {
+      joinedRoomsRef.current.forEach((roomId) => {
+        void resyncRoom(roomId);
+      });
+    });
+    unsubscribersRef.current.push(unsubSyncComplete);
+
+    return socket;
+  }, [
+    addMessage,
+    clearRemoteTypingTimer,
+    clearTyping,
+    emitJoinRoom,
+    markMessagesReadUpTo,
+    onConnect,
+    onDisconnect,
+    onError,
+    resyncRoom,
+    removeMessage,
+    setTyping,
+    updateMessage,
+  ]);
+
+  const connect = useCallback(() => {
+    setupSocket();
+    connectSocket();
+  }, [setupSocket]);
+
+  const disconnect = useCallback(() => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+
+    clearAllRemoteTypingTimers();
+    joinedRoomsRef.current.clear();
+    disconnectSocket();
+  }, [clearAllRemoteTypingTimers]);
+
+  const joinRoom = useCallback(
+    (roomId: string) => {
+      if (!roomId) return;
+      joinedRoomsRef.current.add(roomId);
+      emitJoinRoom(roomId);
+    },
+    [emitJoinRoom],
+  );
+
+  const leaveRoom = useCallback(
+    (roomId: string) => {
+      if (!roomId) return;
+
+      emit(WebSocketEvents.ROOM_LEAVE, {
+        roomId,
+        conversationId: roomId,
+      });
+      joinedRoomsRef.current.delete(roomId);
+
+      const typingStatuses = useChatStore
+        .getState()
+        .typingStatuses.filter((item) => item.conversationId === roomId);
+      typingStatuses.forEach((item) => {
+        clearRemoteTypingTimer(roomId, item.userId);
+        clearTyping(roomId, item.userId);
+      });
+    },
+    [clearRemoteTypingTimer, clearTyping, emit],
+  );
+
+  const sendMessage = useCallback(
+    (roomId: string, content: string, type: string = "text") => {
+      emit(WebSocketEvents.MESSAGE_SEND, {
+        roomId,
+        conversationId: roomId,
+        content,
+        type,
+      });
+    },
+    [emit],
+  );
+
   const sendTyping = useCallback(
     (roomId: string) => {
-      emit(WebSocketEvents.TYPING_START, { roomId });
+      emit(WebSocketEvents.TYPING_START, {
+        roomId,
+        conversationId: roomId,
+        isTyping: true,
+      });
+      emit(WebSocketEvents.LEGACY_TYPING_START, { roomId });
 
-      // Auto stop typing after 3 seconds
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
       typingTimeoutRef.current = setTimeout(() => {
-        emit(WebSocketEvents.TYPING_STOP, { roomId });
+        emit(WebSocketEvents.TYPING_STOP, {
+          roomId,
+          conversationId: roomId,
+          isTyping: false,
+        });
+        emit(WebSocketEvents.LEGACY_TYPING_STOP, { roomId });
       }, 3000);
     },
     [emit],
   );
 
-  // Stop typing indicator
   const stopTyping = useCallback(
     (roomId: string) => {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = null;
       }
-      emit(WebSocketEvents.TYPING_STOP, { roomId });
+
+      emit(WebSocketEvents.TYPING_STOP, {
+        roomId,
+        conversationId: roomId,
+        isTyping: false,
+      });
+      emit(WebSocketEvents.LEGACY_TYPING_STOP, { roomId });
     },
     [emit],
   );
 
-  // Auto connect when authenticated
   useEffect(() => {
-    if (autoConnect && isAuthenticated) {
-      connect();
-      // Nếu reconnect thành công, clear polling interval
-      if ((window as any).__chat_poll_interval) {
-        clearInterval((window as any).__chat_poll_interval);
-        (window as any).__chat_poll_interval = null;
-      }
+    if (!autoConnect) {
+      return;
     }
-    return () => {
+
+    if (isAuthenticated) {
+      connect();
+    } else {
       disconnect();
+    }
+
+    return () => {
       unsubscribersRef.current.forEach((unsub) => unsub());
       unsubscribersRef.current = [];
+      disconnect();
     };
-  }, [autoConnect, isAuthenticated, connect, disconnect]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-    };
-  }, []);
+  }, [autoConnect, connect, disconnect, isAuthenticated]);
 
   return {
     isConnected: connectionState === "connected",

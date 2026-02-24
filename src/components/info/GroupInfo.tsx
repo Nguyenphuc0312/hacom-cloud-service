@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import clsx from "clsx";
 import {
   XMarkIcon,
@@ -8,9 +8,15 @@ import {
   UserPlusIcon,
   ExclamationTriangleIcon,
   ArrowRightOnRectangleIcon,
+  MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
+import { useNavigate } from "react-router-dom";
 import { Avatar } from "../common/Avatar";
-import type { Conversation } from "../../types";
+import { Input, Spinner, toast } from "../ui";
+import type { Conversation, UserSummary } from "../../types";
+import { useDebounce } from "../../hooks";
+import { conversationApi, userApi } from "../../services/api";
+import { useChatStore } from "../../stores";
 
 interface GroupInfoProps {
   conversation: Conversation;
@@ -25,29 +31,97 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   onClose,
   className,
 }) => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"members" | "media" | "files">(
     "members",
   );
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<UserSummary[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isAdmin = false; // In real app, check if current user is admin
+  const debouncedQuery = useDebounce(searchQuery, 300);
+  const { updateConversation, removeConversation } = useChatStore();
+
+  const isAdmin = false;
+
+  const searchUsers = useCallback(async (query: string) => {
+    if (!query.trim() || query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const response = await userApi.searchUsers(query, 1, 10);
+      const participants = new Set(conversation.participants.map((p) => p.id));
+      const users = (response.data || []).filter(
+        (u) => !participants.has(u.id) && u.id !== currentUserId,
+      );
+      setSearchResults(users as unknown as UserSummary[]);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [conversation.participants, currentUserId]);
+
+  React.useEffect(() => {
+    void searchUsers(debouncedQuery);
+  }, [debouncedQuery, searchUsers]);
+
+  const handleAddMember = useCallback(
+    async (userId: string) => {
+      setIsSubmitting(true);
+      try {
+        const response = await conversationApi.addMembers(conversation.id, [userId]);
+        updateConversation(conversation.id, response.data);
+        setSearchQuery("");
+        setSearchResults([]);
+        setShowAddMember(false);
+        toast.success("Da them thanh vien vao nhom");
+      } catch {
+        toast.error("Khong the them thanh vien");
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [conversation.id, updateConversation],
+  );
+
+  const handleLeaveGroup = useCallback(async () => {
+    if (!window.confirm("Ban co chac muon roi nhom nay?")) return;
+
+    setIsSubmitting(true);
+    try {
+      await conversationApi.leaveConversation(conversation.id);
+      removeConversation(conversation.id);
+      toast.success("Da roi nhom");
+      onClose();
+      navigate("/chat");
+    } catch {
+      toast.error("Khong the roi nhom luc nay");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [conversation.id, navigate, onClose, removeConversation]);
 
   return (
     <div className={clsx("flex flex-col h-full bg-white", className)}>
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-        <h3 className="font-semibold text-gray-900">Thông tin nhóm</h3>
+        <h3 className="font-semibold text-gray-900">Thong tin nhom</h3>
         <button
+          type="button"
           onClick={onClose}
           className="p-1 rounded-full hover:bg-gray-100 transition-colors"
-          aria-label="Đóng"
+          aria-label="Dong"
         >
           <XMarkIcon className="w-5 h-5 text-gray-500" />
         </button>
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        {/* Group profile */}
         <div className="flex flex-col items-center py-6 px-4">
           <Avatar src={conversation.avatar} alt={conversation.name} size="xl" />
 
@@ -55,28 +129,25 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2 justify-center">
               {conversation.name}
               {isAdmin && (
-                <button className="p-1 hover:bg-gray-100 rounded-full">
+                <button type="button" className="p-1 hover:bg-gray-100 rounded-full">
                   <PencilIcon className="w-4 h-4 text-gray-500" />
                 </button>
               )}
             </h2>
 
             <p className="text-sm text-gray-500 mt-1">
-              {conversation.participantCount ||
-                conversation.participants.length}{" "}
-              thành viên
+              {conversation.participantCount || conversation.participants.length} thanh vien
             </p>
           </div>
         </div>
 
         <div className="h-px bg-gray-200 mx-4" />
 
-        {/* Actions */}
         <div className="py-2">
           <div className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
             <div className="flex items-center gap-4">
               <BellIcon className="w-5 h-5 text-gray-400" />
-              <span className="text-sm text-gray-900">Thông báo</span>
+              <span className="text-sm text-gray-900">Thong bao</span>
             </div>
             <div
               className={clsx(
@@ -96,14 +167,14 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
         <div className="h-px bg-gray-200 mx-4" />
 
-        {/* Tabs */}
         <div className="flex border-b border-gray-200">
           {[
-            { id: "members", label: "Thành viên" },
-            { id: "media", label: "Phương tiện" },
-            { id: "files", label: "Tệp" },
+            { id: "members", label: "Thanh vien" },
+            { id: "media", label: "Phuong tien" },
+            { id: "files", label: "Tep" },
           ].map((tab) => (
             <button
+              type="button"
               key={tab.id}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
               className={clsx(
@@ -118,17 +189,67 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           ))}
         </div>
 
-        {/* Tab content */}
         <div className="py-2">
           {activeTab === "members" && (
             <>
-              {/* Add member button */}
-              <button className="w-full flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors text-telegram-primary">
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => setShowAddMember((prev) => !prev)}
+                className="w-full flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors text-telegram-primary"
+              >
                 <UserPlusIcon className="w-5 h-5" />
-                <span className="text-sm font-medium">Thêm thành viên</span>
+                <span className="text-sm font-medium">Them thanh vien</span>
               </button>
 
-              {/* Members list */}
+              {showAddMember && (
+                <div className="px-4 pb-3 space-y-2">
+                  <Input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Tim kiem thanh vien..."
+                    leftIcon={<MagnifyingGlassIcon className="w-5 h-5" />}
+                    disabled={isSubmitting}
+                  />
+                  <div className="max-h-44 overflow-y-auto rounded-lg border border-gray-200">
+                    {isSearching ? (
+                      <div className="py-4 flex justify-center">
+                        <Spinner size="md" />
+                      </div>
+                    ) : searchResults.length === 0 ? (
+                      <p className="px-3 py-3 text-sm text-gray-500">
+                        Khong co ket qua phu hop
+                      </p>
+                    ) : (
+                      searchResults.map((user) => (
+                        <button
+                          key={user.id}
+                          type="button"
+                          onClick={() => void handleAddMember(user.id)}
+                          disabled={isSubmitting}
+                          className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50"
+                        >
+                          <Avatar
+                            src={user.avatar}
+                            alt={user.displayName || user.username}
+                            size="sm"
+                            status={user.status}
+                            showStatus
+                          />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {user.displayName || user.username}
+                            </p>
+                            <p className="text-xs text-gray-500 truncate">@{user.username}</p>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
               {conversation.participants.map((participant) => (
                 <div
                   key={participant.id}
@@ -145,14 +266,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     <p className="text-sm font-medium text-gray-900 truncate">
                       {participant.displayName || participant.username}
                       {participant.id === currentUserId && (
-                        <span className="ml-2 text-xs text-gray-500">
-                          (Bạn)
-                        </span>
+                        <span className="ml-2 text-xs text-gray-500">(Ban)</span>
                       )}
                     </p>
-                    <p className="text-xs text-gray-500 truncate">
-                      @{participant.username}
-                    </p>
+                    <p className="text-xs text-gray-500 truncate">@{participant.username}</p>
                   </div>
                 </div>
               ))}
@@ -171,31 +288,39 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   </div>
                 ))}
               </div>
-              <button className="w-full mt-4 py-2 text-sm text-telegram-primary font-medium hover:bg-gray-50 rounded-lg">
-                Xem tất cả phương tiện
+              <button
+                type="button"
+                className="w-full mt-4 py-2 text-sm text-telegram-primary font-medium hover:bg-gray-50 rounded-lg"
+              >
+                Xem tat ca phuong tien
               </button>
             </div>
           )}
 
           {activeTab === "files" && (
-            <div className="p-4 text-center text-gray-500 text-sm">
-              Chưa có tệp được chia sẻ
-            </div>
+            <div className="p-4 text-center text-gray-500 text-sm">Chua co tep duoc chia se</div>
           )}
         </div>
 
         <div className="h-px bg-gray-200 mx-4" />
 
-        {/* Danger zone */}
         <div className="py-2">
-          <button className="w-full flex items-center gap-4 px-4 py-3 hover:bg-red-50 transition-colors text-red-500">
+          <button
+            type="button"
+            className="w-full flex items-center gap-4 px-4 py-3 hover:bg-red-50 transition-colors text-red-500"
+          >
             <ExclamationTriangleIcon className="w-5 h-5" />
-            <span className="text-sm">Báo cáo nhóm</span>
+            <span className="text-sm">Bao cao nhom</span>
           </button>
 
-          <button className="w-full flex items-center gap-4 px-4 py-3 hover:bg-red-50 transition-colors text-red-500">
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={() => void handleLeaveGroup()}
+            className="w-full flex items-center gap-4 px-4 py-3 hover:bg-red-50 transition-colors text-red-500"
+          >
             <ArrowRightOnRectangleIcon className="w-5 h-5" />
-            <span className="text-sm">Rời nhóm</span>
+            <span className="text-sm">Roi nhom</span>
           </button>
         </div>
       </div>
