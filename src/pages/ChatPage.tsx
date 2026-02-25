@@ -6,6 +6,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import clsx from "clsx";
+import { useShallow } from "zustand/react/shallow";
 import { Sidebar } from "../components/layout/Sidebar";
 import { ChatWindow } from "../components/layout/ChatWindow";
 import { UserProfile } from "../components/info/UserProfile";
@@ -44,12 +45,27 @@ export const ChatPage: React.FC = () => {
     conversations,
     fetchConversations,
     fetchMessages,
-    sendMessage: storeSendMessage,
+    storeSendMessage,
     markAsRead,
     hasMoreMessages,
     isLoadingMessages,
     isLoadingMessagesByConversation,
-  } = useChatStore();
+  } = useChatStore(
+    useShallow((state) => ({
+      selectedConversationId: state.selectedConversationId,
+      selectConversation: state.selectConversation,
+      addConversation: state.addConversation,
+      updateConversation: state.updateConversation,
+      conversations: state.conversations,
+      fetchConversations: state.fetchConversations,
+      fetchMessages: state.fetchMessages,
+      storeSendMessage: state.sendMessage,
+      markAsRead: state.markAsRead,
+      hasMoreMessages: state.hasMoreMessages,
+      isLoadingMessages: state.isLoadingMessages,
+      isLoadingMessagesByConversation: state.isLoadingMessagesByConversation,
+    })),
+  );
 
   // Selectors
   const selectedConversation = useSelectedConversation();
@@ -416,7 +432,7 @@ export const ChatPage: React.FC = () => {
       {/* Sidebar */}
       <div
         className={clsx(
-          "absolute inset-y-0 left-0 z-30 w-full max-w-full border-r border-gray-200 bg-white transition-transform duration-300 sm:max-w-[min(24rem,92vw)] lg:relative lg:z-0 lg:w-[clamp(18rem,24vw,22rem)] lg:max-w-none",
+          "absolute inset-y-0 left-0 z-30 w-full max-w-full bg-white transition-transform duration-300 sm:max-w-[min(24rem,92vw)] lg:relative lg:z-0 lg:w-auto lg:max-w-none lg:flex-shrink-0",
           showSidebarOnMobile
             ? "translate-x-0"
             : "-translate-x-full lg:translate-x-0",
