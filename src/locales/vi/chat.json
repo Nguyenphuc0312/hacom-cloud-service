@@ -6,6 +6,7 @@
     "videoCall": "Gọi video",
     "searchInChat": "Tìm trong cuộc trò chuyện",
     "toggleInfoPanel": "Bật/tắt bảng thông tin",
+    "moreActions": "Thêm hành động",
     "channel": "Kênh",
     "members": "{{count}} thành viên"
   },
@@ -45,15 +46,22 @@
     "removeFile": "Xóa tệp",
     "openEmojiPicker": "Mở bảng emoji",
     "attachFile": "Đính kèm tệp",
+    "mentionTrigger": "Nhắc người dùng",
+    "mentionList": "Gợi ý người dùng",
+    "noMentionResults": "Không tìm thấy người dùng phù hợp",
     "placeholder": "Nhập một tin nhắn...",
     "messageInput": "Ô nhập tin nhắn",
     "sendMessage": "Gửi tin nhắn",
+    "sending": "Đang gửi tin nhắn",
+    "sentAnnouncement": "Đã gửi tin nhắn",
+    "failedAnnouncement": "Gửi tin nhắn thất bại",
     "recordVoice": "Ghi âm",
     "uploading": "Đang tải lên...",
     "cancelUpload": "Hủy",
     "retryUpload": "Thử lại",
     "sendFile": "Gửi tệp",
-    "filePreviewAlt": "Xem trước tệp"
+    "filePreviewAlt": "Xem trước tệp",
+    "fileSizeLimit": "Giới hạn {{size}}"
   },
   "attachment": {
     "types": {

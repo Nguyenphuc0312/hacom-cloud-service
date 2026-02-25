@@ -52,6 +52,7 @@ export const ChatPage: React.FC = () => {
     hasMoreMessages,
     isLoadingMessages,
     isLoadingMessagesByConversation,
+    messageErrors,
   } = useChatStore(
     useShallow((state) => ({
       selectedConversationId: state.selectedConversationId,
@@ -66,6 +67,7 @@ export const ChatPage: React.FC = () => {
       hasMoreMessages: state.hasMoreMessages,
       isLoadingMessages: state.isLoadingMessages,
       isLoadingMessagesByConversation: state.isLoadingMessagesByConversation,
+      messageErrors: state.messageErrors,
     })),
   );
 
@@ -271,6 +273,12 @@ export const ChatPage: React.FC = () => {
     conversationMessages,
     fetchMessages,
   ]);
+
+  const handleRetryMessages = useCallback(async () => {
+    if (!selectedConversationId) return;
+    if (isLoadingMessagesByConversation[selectedConversationId]) return;
+    await fetchMessages(selectedConversationId);
+  }, [fetchMessages, isLoadingMessagesByConversation, selectedConversationId]);
 
   // Handle typing
   const handleTyping = useCallback(
@@ -488,6 +496,12 @@ export const ChatPage: React.FC = () => {
             }
             onLoadOlderMessages={handleLoadOlderMessages}
             onImageClick={setImagePreview}
+            messageError={
+              selectedConversationId
+                ? (messageErrors[selectedConversationId] ?? null)
+                : null
+            }
+            onRetryMessages={handleRetryMessages}
           />
         ) : (
           <NoChatSelected onNewChat={handleOpenNewChat} />

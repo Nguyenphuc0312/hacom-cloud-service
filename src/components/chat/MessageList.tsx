@@ -7,16 +7,15 @@ import {
   type ListChildComponentProps,
   type ListOnScrollProps,
 } from "react-window";
-import { MessageBubble } from "./MessageBubble";
-import { DateDivider } from "./DateDivider";
-import { SystemMessage } from "../message/SystemMessage";
-import { EmptyMessages, MessageListSkeleton } from "../ui";
-import type { Message, Conversation } from "../../types";
+import { MessageItem } from "./MessageItem";
+import { EmptyMessages, ErrorState, MessageListSkeleton } from "../ui";
+import { useAutoScrollToBottom } from "../../hooks/useAutoScrollToBottom";
 import {
-  shouldShowDateDivider,
-  shouldShowAvatar,
-} from "../../utils/messageHelpers";
-import { isSameDay } from "../../utils/formatTime";
+  useMessageGrouping,
+  type TimelineItem,
+} from "../../hooks/useMessageGrouping";
+import { useVirtualizedMessages } from "../../hooks/useVirtualizedMessages";
+import type { Conversation, Message } from "../../types";
 
 interface MessageListProps {
   messages: Message[];
@@ -29,23 +28,10 @@ interface MessageListProps {
   isInitialLoading?: boolean;
   onLoadMore?: () => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
+  error?: string | null;
+  onRetry?: () => void | Promise<void>;
   className?: string;
 }
-
-type TimelineItem =
-  | { kind: "date"; key: string; date: Date }
-  | { kind: "system"; key: string; message: Message }
-  | {
-      kind: "message";
-      key: string;
-      message: Message;
-      isOwn: boolean;
-      showAvatar: boolean;
-      showSenderName: boolean;
-      isGroupStart: boolean;
-      isGroupEnd: boolean;
-      conversationType: Conversation["type"];
-    };
 
 interface TimelineRowData {
   items: TimelineItem[];
@@ -56,14 +42,14 @@ interface TimelineRowData {
   measureVersion: number;
 }
 
-const estimateMessageHeight = (item: TimelineItem): number => {
+const estimateTimelineItemHeight = (item: TimelineItem): number => {
   if (item.kind === "date") return 54;
   if (item.kind === "system") return 44;
 
   const message = item.message;
-  let baseHeight = item.isGroupEnd ? 84 : 72;
+  let baseHeight = item.isGroupEnd ? 84 : 70;
 
-  if (message.replyToMessage) baseHeight += 32;
+  if (message.replyToMessage) baseHeight += 34;
   if (message.forwardedFrom) baseHeight += 20;
   if ((message.reactions?.length ?? 0) > 0) baseHeight += 30;
   if (!item.isOwn && item.showSenderName) baseHeight += 18;
@@ -89,14 +75,13 @@ const estimateMessageHeight = (item: TimelineItem): number => {
   return baseHeight;
 };
 
-const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
-  React.memo(({ index, style, data }) => {
+const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> = React.memo(
+  ({ index, style, data }) => {
     const item = data.items[index];
     const rowRef = React.useRef<HTMLDivElement>(null);
 
     React.useLayoutEffect(() => {
       if (!rowRef.current) return;
-
       const nextSize = Math.ceil(rowRef.current.getBoundingClientRect().height);
       data.setItemSize(index, nextSize);
     }, [data, data.measureVersion, index, item]);
@@ -106,36 +91,21 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
     return (
       <div style={style}>
         <div ref={rowRef}>
-          {item.kind === "date" && <DateDivider date={item.date} />}
-
-          {item.kind === "system" && (
-            <SystemMessage message={item.message} className="my-4" />
-          )}
-
-          {item.kind === "message" && (
-            <div className={clsx(item.isGroupEnd ? "mb-3" : "mb-1")}>
-              <MessageBubble
-                message={item.message}
-                isOwn={item.isOwn}
-                showAvatar={item.showAvatar}
-                showSenderName={item.showSenderName}
-                isGroupStart={item.isGroupStart}
-                isGroupEnd={item.isGroupEnd}
-                conversationType={item.conversationType}
-                onReply={data.onReply}
-                onReact={data.onReact}
-                onImageClick={data.onImageClick}
-              />
-            </div>
-          )}
+          <MessageItem
+            item={item}
+            onReply={data.onReply}
+            onReact={data.onReact}
+            onImageClick={data.onImageClick}
+          />
         </div>
       </div>
     );
-  });
+  },
+);
 
 TimelineRow.displayName = "TimelineRow";
 
-export const MessageList: React.FC<MessageListProps> = ({
+const MessageListComponent: React.FC<MessageListProps> = ({
   messages,
   conversation,
   currentUserId,
@@ -146,85 +116,32 @@ export const MessageList: React.FC<MessageListProps> = ({
   isInitialLoading = false,
   onLoadMore,
   onImageClick,
+  error,
+  onRetry,
   className,
 }) => {
   const { t } = useTranslation();
-  const listRef = React.useRef<VirtualList<TimelineRowData> | null>(null);
-  const outerRef = React.useRef<HTMLDivElement | null>(null);
   const viewportRef = React.useRef<HTMLDivElement | null>(null);
 
-  const [viewportHeight, setViewportHeight] = React.useState(0);
-  const [showScrollButton, setShowScrollButton] = React.useState(false);
-  const [pendingNewMessages, setPendingNewMessages] = React.useState(0);
+  const timelineItems = useMessageGrouping({
+    messages,
+    currentUserId,
+    conversationType: conversation.type,
+  });
 
-  const nearBottomRef = React.useRef(true);
-  const loadingOlderRef = React.useRef(false);
-  const prevMessageCountRef = React.useRef(0);
-  const prevFirstMessageIdRef = React.useRef<string | undefined>(undefined);
-  const prevLastMessageIdRef = React.useRef<string | undefined>(undefined);
-  const prevConversationIdRef = React.useRef<string | null>(null);
-  const pendingNewMessagesRef = React.useRef(0);
-  const scrollSnapshotRef = React.useRef({ scrollTop: 0, scrollHeight: 0 });
-  const sizeMapRef = React.useRef<Record<number, number>>({});
-
-  const timelineItems = React.useMemo<TimelineItem[]>(() => {
-    const items: TimelineItem[] = [];
-
-    messages.forEach((message, index) => {
-      const previousMessage = messages[index - 1];
-      const nextMessage = messages[index + 1];
-      const showDate = shouldShowDateDivider(messages, index);
-
-      if (showDate) {
-        items.push({
-          kind: "date",
-          key: `date-${message.id}`,
-          date: new Date(message.createdAt),
-        });
-      }
-
-      if (message.type === "system") {
-        items.push({
-          kind: "system",
-          key: `system-${message.id}`,
-          message,
-        });
-        return;
-      }
-
-      const isOwn = message.senderId === currentUserId;
-      const showAvatar = shouldShowAvatar(messages, index, conversation.type);
-      const isGroupedWithPrevious =
-        !!previousMessage &&
-        previousMessage.type !== "system" &&
-        previousMessage.senderId === message.senderId &&
-        isSameDay(
-          new Date(previousMessage.createdAt),
-          new Date(message.createdAt),
-        );
-      const isGroupedWithNext =
-        !!nextMessage &&
-        nextMessage.type !== "system" &&
-        nextMessage.senderId === message.senderId &&
-        isSameDay(new Date(nextMessage.createdAt), new Date(message.createdAt));
-      const isGroupStart = !isGroupedWithPrevious;
-      const isGroupEnd = !isGroupedWithNext;
-
-      items.push({
-        kind: "message",
-        key: `message-${message.id}`,
-        message,
-        isOwn,
-        showAvatar,
-        showSenderName: isGroupStart,
-        isGroupStart,
-        isGroupEnd,
-        conversationType: conversation.type,
-      });
-    });
-
-    return items;
-  }, [messages, currentUserId, conversation.type]);
+  const {
+    listRef,
+    outerRef,
+    viewportHeight,
+    getItemSize,
+    setItemSize,
+    clearMeasuredSizes,
+    measureVersion,
+  } = useVirtualizedMessages<TimelineItem, TimelineRowData>({
+    items: timelineItems,
+    viewportRef,
+    estimateItemSize: estimateTimelineItemHeight,
+  });
 
   const scrollToBottom = React.useCallback(
     (behavior: ScrollBehavior = "smooth") => {
@@ -238,23 +155,28 @@ export const MessageList: React.FC<MessageListProps> = ({
         listRef.current?.scrollToItem(timelineItems.length - 1, "end");
       }
     },
-    [timelineItems.length],
+    [timelineItems.length, listRef, outerRef],
   );
 
-  const setItemSize = React.useCallback((index: number, size: number) => {
-    const currentSize = sizeMapRef.current[index];
-    if (currentSize === size || Math.abs((currentSize || 0) - size) <= 1)
-      return;
+  const {
+    pendingNewMessages,
+    showNewMessagesPill,
+    handleScroll,
+    jumpToLatest,
+  } = useAutoScrollToBottom({
+    conversationId: conversation.id,
+    messages,
+    currentUserId,
+    hasMore,
+    isLoadingMore,
+    onLoadMore,
+    outerRef,
+    scrollToBottom,
+  });
 
-    sizeMapRef.current[index] = size;
-    listRef.current?.resetAfterIndex(index);
-  }, []);
-
-  const getItemSize = React.useCallback(
-    (index: number) =>
-      sizeMapRef.current[index] ?? estimateMessageHeight(timelineItems[index]),
-    [timelineItems],
-  );
+  React.useEffect(() => {
+    clearMeasuredSizes();
+  }, [conversation.id, clearMeasuredSizes]);
 
   const rowData = React.useMemo<TimelineRowData>(
     () => ({
@@ -263,177 +185,99 @@ export const MessageList: React.FC<MessageListProps> = ({
       onReact,
       onImageClick,
       setItemSize,
-      measureVersion: viewportHeight,
+      measureVersion,
     }),
-    [
-      timelineItems,
-      onReply,
-      onReact,
-      onImageClick,
-      setItemSize,
-      viewportHeight,
-    ],
+    [timelineItems, onReply, onReact, onImageClick, setItemSize, measureVersion],
   );
-
-  React.useEffect(() => {
-    const element = viewportRef.current;
-    if (!element) return;
-
-    const updateHeight = () => {
-      setViewportHeight(element.clientHeight);
-    };
-
-    updateHeight();
-    const observer = new ResizeObserver(() => {
-      updateHeight();
-    });
-    observer.observe(element);
-
-    return () => observer.disconnect();
-  }, []);
-
-  React.useEffect(() => {
-    const conversationChanged =
-      prevConversationIdRef.current !== conversation.id;
-    if (!conversationChanged) return;
-
-    prevConversationIdRef.current = conversation.id;
-    prevMessageCountRef.current = messages.length;
-    prevFirstMessageIdRef.current = messages[0]?.id;
-    prevLastMessageIdRef.current = messages[messages.length - 1]?.id;
-    loadingOlderRef.current = false;
-    nearBottomRef.current = true;
-    pendingNewMessagesRef.current = 0;
-    sizeMapRef.current = {};
-    listRef.current?.resetAfterIndex(0, true);
-
-    requestAnimationFrame(() => {
-      setShowScrollButton(false);
-      setPendingNewMessages(0);
-      scrollToBottom("auto");
-    });
-  }, [conversation.id, messages, scrollToBottom]);
-
-  React.useEffect(() => {
-    const firstMessageId = messages[0]?.id;
-    const messageCountDiff = messages.length - prevMessageCountRef.current;
-    const lastMessage = messages[messages.length - 1];
-    const lastMessageId = lastMessage?.id;
-    const hasTailChanged =
-      !!lastMessageId && lastMessageId !== prevLastMessageIdRef.current;
-    const incomingCount =
-      messageCountDiff > 0 ? messageCountDiff : hasTailChanged ? 1 : 0;
-    const isOwnLatestMessage =
-      !!lastMessage && lastMessage.senderId === currentUserId;
-    const outer = outerRef.current;
-
-    if (
-      loadingOlderRef.current &&
-      outer &&
-      firstMessageId &&
-      prevFirstMessageIdRef.current &&
-      firstMessageId !== prevFirstMessageIdRef.current
-    ) {
-      const scrollDelta =
-        outer.scrollHeight - scrollSnapshotRef.current.scrollHeight;
-      outer.scrollTop = scrollSnapshotRef.current.scrollTop + scrollDelta;
-      loadingOlderRef.current = false;
-    } else if (incomingCount > 0) {
-      if (nearBottomRef.current || isOwnLatestMessage) {
-        pendingNewMessagesRef.current = 0;
-        setPendingNewMessages(0);
-        setShowScrollButton(false);
-        scrollToBottom(incomingCount === 1 ? "smooth" : "auto");
-      } else {
-        pendingNewMessagesRef.current += incomingCount;
-        setPendingNewMessages(pendingNewMessagesRef.current);
-        setShowScrollButton(true);
-      }
-    }
-
-    prevMessageCountRef.current = messages.length;
-    prevFirstMessageIdRef.current = firstMessageId;
-    prevLastMessageIdRef.current = lastMessageId;
-  }, [messages, scrollToBottom, currentUserId]);
-
-  React.useEffect(() => {
-    if (!isLoadingMore) {
-      loadingOlderRef.current = false;
-    }
-  }, [isLoadingMore]);
-
-  React.useEffect(() => {
-    if (messages.length === 0) {
-      pendingNewMessagesRef.current = 0;
-      setPendingNewMessages(0);
-      setShowScrollButton(false);
-    }
-  }, [messages.length]);
 
   const handleListScroll = React.useCallback(
-    ({ scrollOffset }: ListOnScrollProps) => {
-      const outer = outerRef.current;
-      if (!outer) return;
-
-      const isNearBottom =
-        outer.scrollHeight - scrollOffset - outer.clientHeight < 200;
-      nearBottomRef.current = isNearBottom;
-
-      if (isNearBottom) {
-        if (pendingNewMessagesRef.current > 0) {
-          pendingNewMessagesRef.current = 0;
-          setPendingNewMessages(0);
-        }
-        setShowScrollButton(false);
-      } else {
-        setShowScrollButton(pendingNewMessagesRef.current > 0);
-      }
-
-      if (
-        onLoadMore &&
-        hasMore &&
-        !isLoadingMore &&
-        !loadingOlderRef.current &&
-        scrollOffset < 120
-      ) {
-        loadingOlderRef.current = true;
-        scrollSnapshotRef.current = {
-          scrollTop: scrollOffset,
-          scrollHeight: outer.scrollHeight,
-        };
-
-        Promise.resolve(onLoadMore()).catch(() => {
-          loadingOlderRef.current = false;
-        });
-      }
+    ({ scrollOffset, scrollUpdateWasRequested }: ListOnScrollProps) => {
+      if (scrollUpdateWasRequested) return;
+      handleScroll(scrollOffset);
     },
-    [onLoadMore, hasMore, isLoadingMore],
+    [handleScroll],
   );
 
+  const handleRetry = React.useCallback(() => {
+    if (!onRetry) return;
+    void Promise.resolve(onRetry());
+  }, [onRetry]);
+
+  const handleKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      const outer = outerRef.current;
+      if (!outer || event.altKey || event.ctrlKey || event.metaKey) return;
+
+      switch (event.key) {
+        case "End":
+          event.preventDefault();
+          jumpToLatest("smooth");
+          break;
+        case "Home":
+          event.preventDefault();
+          outer.scrollTo({ top: 0, behavior: "smooth" });
+          break;
+        case "PageDown":
+          event.preventDefault();
+          outer.scrollBy({
+            top: Math.round(outer.clientHeight * 0.9),
+            behavior: "smooth",
+          });
+          break;
+        case "PageUp":
+          event.preventDefault();
+          outer.scrollBy({
+            top: -Math.round(outer.clientHeight * 0.9),
+            behavior: "smooth",
+          });
+          break;
+        case "ArrowDown":
+          event.preventDefault();
+          outer.scrollBy({ top: 72, behavior: "smooth" });
+          break;
+        case "ArrowUp":
+          event.preventDefault();
+          outer.scrollBy({ top: -72, behavior: "smooth" });
+          break;
+        default:
+          break;
+      }
+    },
+    [jumpToLatest, outerRef],
+  );
 
   return (
-    <div className={clsx("relative h-full min-h-0 flex-1", className)}>
+    <section className={clsx("relative h-full min-h-0 flex-1", className)}>
       {isInitialLoading && (
-        <div
-          className="chat-background h-full min-h-0 overflow-y-auto px-4 py-4"
-        >
+        <div className="chat-background h-full min-h-0 overflow-y-auto px-4 py-4">
           <MessageListSkeleton />
         </div>
       )}
 
       {!isInitialLoading && (
         <div
-          className="chat-background h-full min-h-0 flex-1 overflow-hidden px-4 py-4"
+          className="chat-background h-full min-h-0 overflow-hidden px-4 py-4"
           role="log"
           aria-live="polite"
           aria-relevant="additions text"
           aria-atomic="false"
+          aria-busy={isLoadingMore}
           aria-label={t("chat:message.inConversationAria")}
         >
-          {messages.length === 0 ? (
+          {error && messages.length === 0 ? (
+            <ErrorState message={error} onRetry={onRetry ? handleRetry : undefined} />
+          ) : messages.length === 0 ? (
             <EmptyMessages />
           ) : (
-            <div ref={viewportRef} className="h-full min-h-0">
+            <div
+              ref={viewportRef}
+              tabIndex={0}
+              onKeyDown={handleKeyDown}
+              className={clsx(
+                "h-full min-h-0 rounded-md outline-none",
+                "focus-visible:ring-2 focus-visible:ring-focus/30",
+              )}
+            >
               {viewportHeight > 0 && (
                 <VirtualList
                   ref={listRef}
@@ -454,21 +298,33 @@ export const MessageList: React.FC<MessageListProps> = ({
         </div>
       )}
 
+      {error && messages.length > 0 && (
+        <div className="pointer-events-none absolute inset-x-4 top-2 z-sticky flex justify-center">
+          <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-border bg-surface/95 px-3 py-1 shadow-xs backdrop-blur">
+            <span className="truncate text-xs text-text-secondary">{error}</span>
+            {onRetry && (
+              <button
+                type="button"
+                onClick={handleRetry}
+                className="rounded-full px-2 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-surface-overlay"
+              >
+                {t("common:actions.retry")}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {isLoadingMore && !isInitialLoading && (
         <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full border border-border bg-surface/90 px-3 py-1 text-xs text-text-muted shadow-xs">
           {t("chat:message.loadMore")}
         </div>
       )}
 
-      {showScrollButton && pendingNewMessages > 0 && (
+      {showNewMessagesPill && pendingNewMessages > 0 && (
         <button
           type="button"
-          onClick={() => {
-            pendingNewMessagesRef.current = 0;
-            setPendingNewMessages(0);
-            setShowScrollButton(false);
-            scrollToBottom("smooth");
-          }}
+          onClick={() => jumpToLatest("smooth")}
           className={clsx(
             "absolute bottom-4 right-4 z-sticky",
             "flex min-h-10 items-center justify-center gap-2 rounded-full border border-border bg-surface px-3 shadow-elev2",
@@ -483,9 +339,31 @@ export const MessageList: React.FC<MessageListProps> = ({
           </span>
         </button>
       )}
-    </div>
+    </section>
   );
 };
 
-export default MessageList;
+const areEqualMessageListProps = (
+  previousProps: MessageListProps,
+  nextProps: MessageListProps,
+): boolean =>
+  previousProps.messages === nextProps.messages &&
+  previousProps.conversation === nextProps.conversation &&
+  previousProps.currentUserId === nextProps.currentUserId &&
+  previousProps.onReply === nextProps.onReply &&
+  previousProps.onReact === nextProps.onReact &&
+  previousProps.hasMore === nextProps.hasMore &&
+  previousProps.isLoadingMore === nextProps.isLoadingMore &&
+  previousProps.isInitialLoading === nextProps.isInitialLoading &&
+  previousProps.onLoadMore === nextProps.onLoadMore &&
+  previousProps.onImageClick === nextProps.onImageClick &&
+  previousProps.error === nextProps.error &&
+  previousProps.onRetry === nextProps.onRetry &&
+  previousProps.className === nextProps.className;
 
+export const MessageList = React.memo(
+  MessageListComponent,
+  areEqualMessageListProps,
+);
+
+export default MessageList;

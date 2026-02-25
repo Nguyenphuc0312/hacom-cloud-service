@@ -89,15 +89,22 @@
       "removeFile": "Xoa tep",
       "openEmojiPicker": "Mo bang emoji",
       "attachFile": "Dinh kem tep",
+      "mentionTrigger": "Nhac nguoi dung",
+      "mentionList": "Goi y nguoi dung",
+      "noMentionResults": "Khong tim thay nguoi dung phu hop",
       "placeholder": "Nhap mot tin nhan...",
       "messageInput": "O nhap tin nhan",
       "sendMessage": "Gui tin nhan",
+      "sending": "Dang gui tin nhan",
+      "sentAnnouncement": "Da gui tin nhan",
+      "failedAnnouncement": "Gui tin nhan that bai",
       "recordVoice": "Ghi am",
       "uploading": "Dang tai len...",
       "cancelUpload": "Huy",
       "retryUpload": "Thu lai",
       "sendFile": "Gui tep",
-      "filePreviewAlt": "Xem truoc tep"
+      "filePreviewAlt": "Xem truoc tep",
+      "fileSizeLimit": "Gioi han {{size}}"
     },
     "attachment": {
       "types": {

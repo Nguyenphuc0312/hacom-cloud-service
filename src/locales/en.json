@@ -89,15 +89,22 @@
       "removeFile": "Remove file",
       "openEmojiPicker": "Open emoji picker",
       "attachFile": "Attach file",
+      "mentionTrigger": "Mention someone",
+      "mentionList": "Mention suggestions",
+      "noMentionResults": "No matching users",
       "placeholder": "Type a message...",
       "messageInput": "Message input",
       "sendMessage": "Send message",
+      "sending": "Sending message",
+      "sentAnnouncement": "Message sent",
+      "failedAnnouncement": "Message failed to send",
       "recordVoice": "Record voice message",
       "uploading": "Uploading...",
       "cancelUpload": "Cancel",
       "retryUpload": "Retry",
       "sendFile": "Send file",
-      "filePreviewAlt": "File preview"
+      "filePreviewAlt": "File preview",
+      "fileSizeLimit": "Limit {{size}}"
     },
     "attachment": {
       "types": {

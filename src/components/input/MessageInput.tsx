@@ -1,60 +1,131 @@
-﻿import React, { useEffect, useRef, useState } from "react";
-import { debounce } from "lodash";
+import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
-  FaceSmileIcon,
+  AtSymbolIcon,
   PaperClipIcon,
-  MicrophoneIcon,
-  PaperAirplaneIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { EmojiPicker } from "./EmojiPicker";
+import { EmojiButton } from "./EmojiButton";
 import { AttachmentMenu } from "./AttachmentMenu";
-import type { Message, InputMode } from "../../types";
-import { FileType } from "../../types";
-import { fileApi } from "../../services/api";
+import { AttachmentPreview } from "./AttachmentPreview";
+import { SendButton } from "./SendButton";
+import {
+  useAutoResizeTextarea,
+  useSendMessage,
+  useTypingIndicator,
+} from "../../hooks";
+import type { AttachmentPickerMode } from "../../hooks/useSendMessage";
+import type { InputMode, Message } from "../../types";
 import { UPLOAD_CONFIG } from "../../config";
 import { toast } from "../ui";
-import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
+
+export interface MentionCandidate {
+  id: string;
+  username: string;
+  displayName?: string;
+}
 
 interface MessageInputProps {
   value: string;
   onChange: (value: string) => void;
-  onSend: (content?: string, fileMeta?: unknown, type?: string) => void;
+  onSend: (
+    content?: string,
+    fileMeta?: unknown,
+    type?: string,
+  ) => void | Promise<void>;
   mode: InputMode;
+  conversationId?: string;
+  mentionCandidates?: MentionCandidate[];
   replyToMessage?: Message;
   editingMessage?: Message;
   onCancelReply?: () => void;
   onCancelEdit?: () => void;
   onTyping?: (isTyping: boolean) => void;
+  sendOnEnter?: boolean;
   disabled?: boolean;
   className?: string;
 }
 
-const resolveFileType = (mimeType: string): FileType => {
-  if (mimeType.startsWith("image/")) return FileType.IMAGE;
-  if (mimeType.startsWith("video/")) return FileType.VIDEO;
-  if (mimeType.startsWith("audio/")) return FileType.AUDIO;
+interface MentionMatch {
+  start: number;
+  end: number;
+  query: string;
+}
 
+const isDesktopViewport = (): boolean => {
   if (
-    mimeType === "application/zip" ||
-    mimeType === "application/x-zip-compressed"
+    typeof window === "undefined" ||
+    typeof window.matchMedia !== "function"
   ) {
-    return FileType.ARCHIVE;
+    return false;
   }
 
-  if (
-    mimeType.includes("word") ||
-    mimeType.includes("excel") ||
-    mimeType.includes("powerpoint") ||
-    mimeType === "application/pdf" ||
-    mimeType === "text/plain"
-  ) {
-    return FileType.DOCUMENT;
+  return !window.matchMedia("(max-width: 768px), (pointer: coarse)").matches;
+};
+
+const buildMentionMatch = (
+  text: string,
+  caret: number,
+): MentionMatch | null => {
+  if (caret < 0 || caret > text.length) {
+    return null;
   }
 
-  return FileType.OTHER;
+  const beforeCaret = text.slice(0, caret);
+  const mentionStart = beforeCaret.lastIndexOf("@");
+  if (mentionStart < 0) {
+    return null;
+  }
+
+  const prefixChar = mentionStart === 0 ? " " : beforeCaret[mentionStart - 1];
+  const isValidPrefix = /\s|\(|\[|\{|"|'|`/.test(prefixChar);
+  if (!isValidPrefix) {
+    return null;
+  }
+
+  const mentionQuery = beforeCaret.slice(mentionStart + 1);
+  if (
+    mentionQuery.includes(" ") ||
+    mentionQuery.includes("\n") ||
+    mentionQuery.includes("\t")
+  ) {
+    return null;
+  }
+
+  if (!/^[a-zA-Z0-9._-]*$/.test(mentionQuery)) {
+    return null;
+  }
+
+  return {
+    start: mentionStart,
+    end: caret,
+    query: mentionQuery,
+  };
+};
+
+const normalizeMentionCandidates = (
+  mentionCandidates: MentionCandidate[],
+): MentionCandidate[] => {
+  const seen = new Set<string>();
+  const normalized: MentionCandidate[] = [];
+
+  mentionCandidates.forEach((candidate) => {
+    const username = candidate.username.trim();
+    if (!username) return;
+
+    const key = `${candidate.id}:${username.toLowerCase()}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    normalized.push({
+      id: candidate.id,
+      username,
+      displayName: candidate.displayName?.trim() || undefined,
+    });
+  });
+
+  return normalized;
 };
 
 export const MessageInput: React.FC<MessageInputProps> = ({
@@ -62,452 +133,606 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   onChange,
   onSend,
   mode,
+  conversationId,
+  mentionCandidates = [],
   replyToMessage,
   editingMessage,
   onCancelReply,
   onCancelEdit,
   onTyping,
+  sendOnEnter = true,
   disabled = false,
   className,
 }) => {
   const { t } = useTranslation();
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
-  const [fileToSend, setFileToSend] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const { textareaRef } = useAutoResizeTextarea({
+    value,
+    minRows: 1,
+    maxRows: 6,
+  });
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
-  const uploadAbortRef = useRef<AbortController | null>(null);
+  const [showAttachmentMenu, setShowAttachmentMenu] = React.useState(false);
+  const [mentionMatch, setMentionMatch] = React.useState<MentionMatch | null>(
+    null,
+  );
+  const [activeMentionIndex, setActiveMentionIndex] = React.useState(0);
+  const [liveRegionMessage, setLiveRegionMessage] = React.useState("");
 
-  const debouncedTyping = useRef(
-    debounce(() => {
-      onTyping?.(true);
-    }, 400),
-  ).current;
+  const mentionListId = React.useId();
 
-  const clearSelectedFile = () => {
-    if (filePreview) {
-      URL.revokeObjectURL(filePreview);
+  const {
+    selectedFile,
+    previewUrl,
+    uploadProgress,
+    uploadError,
+    isUploading,
+    isSending,
+    selectFile,
+    sendTextMessage,
+    sendAttachmentMessage,
+    clearSelectedFile,
+    cancelUpload,
+    openFilePicker,
+  } = useSendMessage({
+    disabled,
+    onSend,
+  });
+
+  const { notifyInput, notifyBlur, stopTypingNow } = useTypingIndicator({
+    enabled: !disabled,
+    onTyping,
+  });
+
+  const normalizedMentionCandidates = React.useMemo(
+    () => normalizeMentionCandidates(mentionCandidates),
+    [mentionCandidates],
+  );
+
+  const deferredMentionQuery = React.useDeferredValue(
+    mentionMatch?.query ?? "",
+  );
+
+  const mentionSuggestions = React.useMemo(() => {
+    if (!mentionMatch) {
+      return [] as MentionCandidate[];
     }
-    setFileToSend(null);
-    setFilePreview(null);
-    setUploadError(null);
-    setUploadProgress(0);
-  };
 
-  const isCanceledUploadError = (error: unknown): boolean => {
-    if (!error || typeof error !== "object") return false;
-
-    const value = error as { code?: string; name?: string };
-    return (
-      value.code === "ERR_CANCELED" ||
-      value.name === "AbortError" ||
-      value.name === "CanceledError"
-    );
-  };
-
-  const validateFile = (file: File): string | null => {
-    const allowedTypes = [...UPLOAD_CONFIG.ALLOWED_FILE_TYPES, "video/mp4"];
-
-    if (file.size > UPLOAD_CONFIG.MAX_FILE_SIZE) {
-      return t("error:upload.fileTooLarge");
+    const query = deferredMentionQuery.trim().toLowerCase();
+    if (!query) {
+      return normalizedMentionCandidates.slice(0, 8);
     }
 
-    if (!allowedTypes.includes(file.type)) {
-      return t("error:upload.unsupportedType");
-    }
+    return normalizedMentionCandidates
+      .filter((candidate) => {
+        const username = candidate.username.toLowerCase();
+        const displayName = candidate.displayName?.toLowerCase() || "";
+        return username.includes(query) || displayName.includes(query);
+      })
+      .slice(0, 8);
+  }, [deferredMentionQuery, mentionMatch, normalizedMentionCandidates]);
 
-    return null;
-  };
+  const showMentionPanel = Boolean(mentionMatch) && !disabled;
 
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const clearMentionState = React.useCallback(() => {
+    setMentionMatch(null);
+    setActiveMentionIndex(0);
+  }, []);
 
-    const error = validateFile(file);
-    if (error) {
-      toast.error(error);
+  const updateMentionState = React.useCallback(
+    (nextText: string, caret: number) => {
+      const nextMatch = buildMentionMatch(nextText, caret);
+
+      setMentionMatch(nextMatch);
+      setActiveMentionIndex(0);
+    },
+    [],
+  );
+
+  const handleFileInputChange = React.useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      selectFile(file);
+      event.target.value = "";
+    },
+    [selectFile],
+  );
+
+  const handleAttachmentSelect = React.useCallback(
+    (type: string) => {
+      if (type === "photo" || type === "document") {
+        openFilePicker(type as AttachmentPickerMode, fileInputRef.current);
+      } else {
+        toast.info(t("common:toast.featureInDevelopment"));
+      }
+      setShowAttachmentMenu(false);
+    },
+    [openFilePicker, t],
+  );
+
+  const handleInsertMentionTrigger = React.useCallback(() => {
+    if (disabled || isUploading || isSending) return;
+
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      onChange(`${value}@`);
       return;
     }
 
-    if (filePreview) {
-      URL.revokeObjectURL(filePreview);
-    }
+    const start = textarea.selectionStart ?? value.length;
+    const end = textarea.selectionEnd ?? value.length;
+    const nextValue = `${value.slice(0, start)}@${value.slice(end)}`;
+    const nextCaret = start + 1;
 
-    setFileToSend(file);
-    setFilePreview(URL.createObjectURL(file));
-    setUploadError(null);
-    setUploadProgress(0);
-  };
-
-  const handleUploadAndSend = async () => {
-    if (!fileToSend) return;
-
-    const abortController = new AbortController();
-    uploadAbortRef.current = abortController;
-    setUploading(true);
-    setUploadError(null);
-    setUploadProgress(0);
-
-    try {
-      const response = await fileApi.uploadFile(
-        fileToSend,
-        setUploadProgress,
-        abortController.signal,
-      );
-      const uploadedFile = unwrapApiSuccess(response);
-      const mimeType = uploadedFile.mimetype || fileToSend.type;
-      const attachmentType = resolveFileType(mimeType);
-      const messageType = attachmentType === FileType.IMAGE ? "image" : "file";
-
-      const attachment = {
-        id: uploadedFile.id,
-        type: attachmentType,
-        url: uploadedFile.url,
-        fileName: uploadedFile.filename || fileToSend.name,
-        fileSize: uploadedFile.size || fileToSend.size,
-        mimeType,
-      };
-
-      onSend(uploadedFile.filename || fileToSend.name, attachment, messageType);
-      clearSelectedFile();
-    } catch (error) {
-      if (isCanceledUploadError(error)) {
-        setUploadError(t("error:upload.uploadCanceled"));
-        return;
-      }
-      const apiError = extractApiError(error);
-      setUploadError(apiError.message || t("error:upload.uploadFailed"));
-    } finally {
-      uploadAbortRef.current = null;
-      setUploading(false);
-    }
-  };
-
-  const handleCancelUpload = () => {
-    uploadAbortRef.current?.abort();
-  };
-
-  const handleRemoveSelectedFile = () => {
-    if (uploading) {
-      uploadAbortRef.current?.abort();
-    }
-    clearSelectedFile();
-  };
-
-  const handleSendText = () => {
-    if (!value.trim() || disabled || uploading) return;
-    onTyping?.(false);
-    onSend(value.trim());
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSendText();
-    }
-
-    if (e.key === "Escape") {
-      if (mode === "reply") onCancelReply?.();
-      if (mode === "edit") onCancelEdit?.();
-    }
-  };
-
-  const handleInputChange = (nextValue: string) => {
     onChange(nextValue);
 
-    if (
-      onTyping &&
-      textareaRef.current === document.activeElement &&
-      nextValue.trim()
-    ) {
-      debouncedTyping();
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(nextCaret, nextCaret);
+      updateMentionState(nextValue, nextCaret);
+    });
+  }, [
+    disabled,
+    isSending,
+    isUploading,
+    onChange,
+    textareaRef,
+    updateMentionState,
+    value,
+  ]);
 
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-
-      typingTimeoutRef.current = setTimeout(() => {
-        onTyping(false);
-      }, 2000);
+  const handleSendText = React.useCallback(async () => {
+    const sent = await sendTextMessage(value);
+    if (!sent) {
+      setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
       return;
     }
 
-    if (onTyping && !nextValue.trim()) {
-      onTyping(false);
+    onChange("");
+    clearMentionState();
+    stopTypingNow();
+    setLiveRegionMessage(t("chat:composer.sentAnnouncement"));
+  }, [clearMentionState, onChange, sendTextMessage, stopTypingNow, t, value]);
+
+  const handleSendAttachment = React.useCallback(async () => {
+    const sent = await sendAttachmentMessage();
+    setLiveRegionMessage(
+      sent
+        ? t("chat:composer.sentAnnouncement")
+        : t("chat:composer.failedAnnouncement"),
+    );
+  }, [sendAttachmentMessage, t]);
+
+  const handlePrimarySend = React.useCallback(async () => {
+    if (selectedFile) {
+      await handleSendAttachment();
+      return;
     }
-  };
 
-  useEffect(() => {
-    if (!textareaRef.current) return;
+    await handleSendText();
+  }, [handleSendAttachment, handleSendText, selectedFile]);
 
-    textareaRef.current.style.height = "auto";
-    const newHeight = Math.min(textareaRef.current.scrollHeight, 144);
-    textareaRef.current.style.height = `${newHeight}px`;
-  }, [value]);
+  const handleInputChange = React.useCallback(
+    (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const nextValue = event.target.value;
+      const caret = event.target.selectionStart ?? nextValue.length;
 
-  useEffect(() => {
+      onChange(nextValue);
+      updateMentionState(nextValue, caret);
+
+      notifyInput({
+        hasText: nextValue.trim().length > 0,
+        isFocused: event.target === document.activeElement,
+      });
+    },
+    [notifyInput, onChange, updateMentionState],
+  );
+
+  const handleMentionSelect = React.useCallback(
+    (candidate: MentionCandidate) => {
+      if (!mentionMatch) return;
+
+      const insertion = `@${candidate.username} `;
+      const nextValue = `${value.slice(0, mentionMatch.start)}${insertion}${value.slice(mentionMatch.end)}`;
+      const nextCaret = mentionMatch.start + insertion.length;
+
+      onChange(nextValue);
+      clearMentionState();
+
+      requestAnimationFrame(() => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        textarea.focus();
+        textarea.setSelectionRange(nextCaret, nextCaret);
+      });
+    },
+    [clearMentionState, mentionMatch, onChange, textareaRef, value],
+  );
+
+  const handleRemoveSelectedFile = React.useCallback(() => {
+    if (isUploading) {
+      cancelUpload();
+    }
+    clearSelectedFile();
+  }, [cancelUpload, clearSelectedFile, isUploading]);
+
+  const handleRetryUpload = React.useCallback(() => {
+    void handleSendAttachment();
+  }, [handleSendAttachment]);
+
+  const handleKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (showMentionPanel) {
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          setActiveMentionIndex((current) =>
+            mentionSuggestions.length === 0
+              ? 0
+              : (current + 1) % mentionSuggestions.length,
+          );
+          return;
+        }
+
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          setActiveMentionIndex((current) =>
+            mentionSuggestions.length === 0
+              ? 0
+              : (current - 1 + mentionSuggestions.length) %
+                mentionSuggestions.length,
+          );
+          return;
+        }
+
+        if (
+          event.key === "Enter" &&
+          !event.shiftKey &&
+          mentionSuggestions.length > 0 &&
+          !event.nativeEvent.isComposing
+        ) {
+          event.preventDefault();
+          const candidate = mentionSuggestions[activeMentionIndex];
+          if (candidate) {
+            handleMentionSelect(candidate);
+          }
+          return;
+        }
+
+        if (event.key === "Escape") {
+          event.preventDefault();
+          clearMentionState();
+          return;
+        }
+      }
+
+      if (event.key === "Escape") {
+        if (mode === "reply") {
+          onCancelReply?.();
+        }
+
+        if (mode === "edit") {
+          onCancelEdit?.();
+        }
+
+        return;
+      }
+
+      if (
+        event.key === "Enter" &&
+        sendOnEnter &&
+        !event.shiftKey &&
+        !event.nativeEvent.isComposing
+      ) {
+        event.preventDefault();
+        void handlePrimarySend();
+      }
+    },
+    [
+      activeMentionIndex,
+      clearMentionState,
+      handleMentionSelect,
+      handlePrimarySend,
+      mentionSuggestions,
+      mode,
+      onCancelEdit,
+      onCancelReply,
+      sendOnEnter,
+      showMentionPanel,
+    ],
+  );
+
+  React.useEffect(() => {
     if ((mode === "reply" || mode === "edit") && textareaRef.current) {
       textareaRef.current.focus();
     }
-  }, [mode]);
+  }, [mode, textareaRef]);
 
-  useEffect(() => {
+  React.useEffect(() => {
+    if (!conversationId || !textareaRef.current) return;
+    if (!isDesktopViewport()) return;
+
+    textareaRef.current.focus();
+  }, [conversationId, textareaRef]);
+
+  React.useEffect(() => {
+    if (uploadError) {
+      setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
+    }
+  }, [t, uploadError]);
+
+  React.useEffect(() => {
+    if (!showMentionPanel) {
+      setActiveMentionIndex(0);
+      return;
+    }
+
+    setActiveMentionIndex((current) => {
+      if (mentionSuggestions.length === 0) {
+        return 0;
+      }
+      return Math.min(current, mentionSuggestions.length - 1);
+    });
+  }, [mentionSuggestions.length, showMentionPanel]);
+
+  React.useEffect(() => {
     return () => {
-      debouncedTyping.cancel();
-
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-
-      if (uploadAbortRef.current) {
-        uploadAbortRef.current.abort();
-        uploadAbortRef.current = null;
-      }
-
-      if (filePreview) {
-        URL.revokeObjectURL(filePreview);
-      }
+      stopTypingNow();
     };
-  }, [debouncedTyping, filePreview]);
+  }, [stopTypingNow]);
 
-  const hasContent = value.trim().length > 0;
-  const disableComposerActions = disabled || uploading;
+  const hasText = value.trim().length > 0;
+  const canSend = selectedFile
+    ? !disabled && !isUploading && !isSending
+    : !disabled && !isSending && hasText;
+  const disableToolbar = disabled || isUploading;
+  const sendButtonLabel =
+    isUploading || isSending
+      ? t("chat:composer.sending")
+      : t("chat:composer.sendMessage");
 
   return (
-    <div
-      className={clsx("relative bg-surface border-t border-border", className)}
-    >
+    <div className={clsx("border-t border-border bg-surface", className)}>
+      <p
+        className="sr-only"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {liveRegionMessage}
+      </p>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        onChange={handleFileInputChange}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+
       {mode === "reply" && replyToMessage && (
-        <div className="flex items-center justify-between px-4 py-2 bg-surface-overlay border-b border-border">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-1 h-8 bg-primary rounded-full" />
+        <div className="flex items-center justify-between border-b border-border bg-surface-overlay px-4 py-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="h-8 w-1 rounded-full bg-primary" />
             <div className="min-w-0">
               <p className="text-xs font-medium text-primary">
                 {t("chat:composer.replyingTo", {
                   name: replyToMessage.senderName,
                 })}
               </p>
-              <p className="text-xs text-text-muted truncate">
+              <p className="truncate text-xs text-text-muted">
                 {replyToMessage.content}
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onCancelReply}
-            className="p-1 hover:bg-surface-active rounded-full transition-colors"
+            className={clsx(
+              "rounded-full p-1 transition-colors hover:bg-surface-active",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+            )}
             aria-label={t("chat:composer.cancelReply")}
           >
-            <XMarkIcon className="w-4 h-4 text-text-muted" />
+            <XMarkIcon className="h-4 w-4 text-text-muted" />
           </button>
         </div>
       )}
 
       {mode === "edit" && editingMessage && (
-        <div className="flex items-center justify-between px-4 py-2 bg-warning/15 border-b border-warning/35">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-1 h-8 bg-warning rounded-full" />
+        <div className="flex items-center justify-between border-b border-warning/35 bg-warning/15 px-4 py-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="h-8 w-1 rounded-full bg-warning" />
             <div className="min-w-0">
               <p className="text-xs font-medium text-warning">
                 {t("chat:composer.editing")}
               </p>
-              <p className="text-xs text-warning truncate">
+              <p className="truncate text-xs text-warning">
                 {editingMessage.content}
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onCancelEdit}
-            className="p-1 hover:bg-warning/20 rounded-full transition-colors"
+            className={clsx(
+              "rounded-full p-1 transition-colors hover:bg-warning/20",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+            )}
             aria-label={t("chat:composer.cancelEdit")}
           >
-            <XMarkIcon className="w-4 h-4 text-warning" />
+            <XMarkIcon className="h-4 w-4 text-warning" />
           </button>
         </div>
       )}
 
-      {fileToSend && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-surface-overlay border-b border-border">
-          {filePreview && fileToSend.type.startsWith("image/") ? (
-            <img
-              src={filePreview}
-              alt={t("chat:composer.filePreviewAlt")}
-              className="w-12 h-12 object-cover rounded"
-            />
-          ) : (
-            <span className="text-xs">{fileToSend.name}</span>
-          )}
-
-          {uploading ? (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-text-muted">{t("chat:composer.uploading")}</span>
-              <progress value={uploadProgress} max={100} className="w-24" />
-              <button
-                type="button"
-                onClick={handleCancelUpload}
-                className="text-xs text-text-muted underline hover:text-text-secondary"
-              >
-                {t("chat:composer.cancelUpload")}
-              </button>
-            </div>
-          ) : uploadError ? (
-            <button
-              type="button"
-              onClick={handleUploadAndSend}
-              className="text-danger text-xs underline"
-            >
-              {t("chat:composer.retryUpload")}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleUploadAndSend}
-              className="text-primary text-xs underline"
-            >
-              {t("chat:composer.sendFile")}
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={handleRemoveSelectedFile}
-            className="ml-auto p-1"
-            aria-label={t("chat:composer.removeFile")}
-          >
-            <XMarkIcon className="w-4 h-4 text-text-muted" />
-          </button>
-        </div>
+      {selectedFile && (
+        <AttachmentPreview
+          selectedFile={selectedFile}
+          previewUrl={previewUrl}
+          uploadProgress={uploadProgress}
+          uploadError={uploadError}
+          isUploading={isUploading}
+          maxFileSizeBytes={UPLOAD_CONFIG.MAX_FILE_SIZE}
+          onCancelUpload={cancelUpload}
+          onRetryUpload={handleRetryUpload}
+          onSendNow={() => void handleSendAttachment()}
+          onRemove={handleRemoveSelectedFile}
+        />
       )}
 
-      <div className="flex items-end gap-2 px-4 py-2 pb-[max(env(safe-area-inset-bottom),0px)]">
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => {
-              setShowEmojiPicker((prev) => !prev);
-              setShowAttachmentMenu(false);
-            }}
-            className={clsx(
-              "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
-              showEmojiPicker
-                ? "bg-primary text-text-inverse"
-                : "text-text-muted hover:bg-surface-overlay",
-            )}
-            aria-label={t("chat:composer.openEmojiPicker")}
-            disabled={disableComposerActions}
-          >
-            <FaceSmileIcon className="h-5 w-5" />
-          </button>
-
-          {showEmojiPicker && (
-            <EmojiPicker
-              onSelect={(emoji: string) => {
-                onChange(value + emoji);
-                setShowEmojiPicker(false);
-                textareaRef.current?.focus();
-              }}
-              onClose={() => setShowEmojiPicker(false)}
-              className="absolute bottom-full left-0 mb-2"
-            />
-          )}
-        </div>
+      <div className="flex items-center gap-2 px-3 py-2 pb-[max(env(safe-area-inset-bottom),8px)] sm:px-4">
+        <EmojiButton
+          value={value}
+          onChange={onChange}
+          textareaRef={textareaRef}
+          disabled={disableToolbar}
+          className="shrink-0"
+        />
 
         <div className="relative">
           <button
             type="button"
-            onClick={() => {
-              setShowAttachmentMenu((prev) => !prev);
-              setShowEmojiPicker(false);
-            }}
+            onClick={() => setShowAttachmentMenu((previous) => !previous)}
             className={clsx(
               "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
               showAttachmentMenu
                 ? "bg-primary text-text-inverse"
-                : "text-text-muted hover:bg-surface-overlay",
+                : "text-text-muted hover:bg-surface-overlay hover:text-text-primary",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+              disableToolbar && "cursor-not-allowed opacity-50",
             )}
             aria-label={t("chat:composer.attachFile")}
-            disabled={disableComposerActions}
+            aria-haspopup="menu"
+            aria-expanded={showAttachmentMenu}
+            disabled={disableToolbar}
           >
             <PaperClipIcon className="h-5 w-5" />
           </button>
 
           {showAttachmentMenu && (
             <AttachmentMenu
-              onSelect={(type: string) => {
-                if (type === "photo" || type === "document") {
-                  const input = document.createElement("input");
-                  input.type = "file";
-                  input.accept =
-                    type === "photo"
-                      ? "image/*,video/*"
-                      : ".pdf,.doc,.docx,.xls,.xlsx,.zip,.txt";
-                  input.onchange = (event: Event) =>
-                    handleFileInput(
-                      event as unknown as React.ChangeEvent<HTMLInputElement>,
-                    );
-                  input.click();
-                }
-                setShowAttachmentMenu(false);
-              }}
+              onSelect={handleAttachmentSelect}
               onClose={() => setShowAttachmentMenu(false)}
-              className="absolute bottom-full left-0 mb-2"
+              className="absolute bottom-full left-0 z-dropdown mb-2"
             />
           )}
         </div>
 
-        <div className="flex-1 min-w-0">
+        <button
+          type="button"
+          onClick={handleInsertMentionTrigger}
+          className={clsx(
+            "hidden h-10 w-10 items-center justify-center rounded-full transition-colors md:inline-flex",
+            "text-text-muted hover:bg-surface-overlay hover:text-text-primary",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+            disableToolbar && "cursor-not-allowed opacity-50",
+          )}
+          aria-label={t("chat:composer.mentionTrigger")}
+          disabled={disableToolbar}
+        >
+          <AtSymbolIcon className="h-5 w-5" />
+        </button>
+
+        <div className="relative flex min-w-0 flex-1 items-center">
+          {showMentionPanel && (
+            <div
+              id={mentionListId}
+              role="listbox"
+              aria-label={t("chat:composer.mentionList")}
+              className={clsx(
+                "absolute bottom-full left-0 right-0 z-dropdown mb-2 max-h-52 overflow-y-auto rounded-xl border border-border bg-surface shadow-elev2",
+                "p-1",
+              )}
+            >
+              {mentionSuggestions.length === 0 ? (
+                <p className="px-3 py-2 text-xs text-text-muted">
+                  {t("chat:composer.noMentionResults")}
+                </p>
+              ) : (
+                mentionSuggestions.map((candidate, index) => {
+                  const isActive = index === activeMentionIndex;
+                  return (
+                    <button
+                      key={`${candidate.id}:${candidate.username}`}
+                      id={`${mentionListId}-option-${index}`}
+                      type="button"
+                      role="option"
+                      aria-selected={isActive}
+                      className={clsx(
+                        "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left",
+                        "transition-colors",
+                        isActive
+                          ? "bg-primary/15 text-text-primary"
+                          : "text-text-secondary hover:bg-surface-overlay",
+                      )}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        handleMentionSelect(candidate);
+                      }}
+                    >
+                      <span className="truncate text-sm font-medium">
+                        @{candidate.username}
+                      </span>
+                      {candidate.displayName && (
+                        <span className="truncate text-xs text-text-muted">
+                          {candidate.displayName}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
+
           <textarea
             ref={textareaRef}
             value={value}
-            onChange={(e) => handleInputChange(e.target.value)}
+            onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            onBlur={() => onTyping?.(false)}
+            onSelect={(event) => {
+              const caret = event.currentTarget.selectionStart ?? value.length;
+              updateMentionState(value, caret);
+            }}
+            onBlur={() => {
+              notifyBlur();
+              clearMentionState();
+            }}
             placeholder={t("chat:composer.placeholder")}
             disabled={disabled}
             rows={1}
-            className={clsx(
-              "w-full rounded-2xl px-4 py-2",
-              "bg-surface-overlay border-none",
-              "text-text-primary placeholder:text-text-muted",
-              "focus:outline-none focus:ring-2 focus:ring-focus/30 focus:bg-surface",
-              "resize-none overflow-hidden",
-              "transition-all duration-200",
-              disabled && "opacity-50 cursor-not-allowed",
-            )}
-            style={{ minHeight: "40px", maxHeight: "144px" }}
+            role="textbox"
+            aria-multiline="true"
             aria-label={t("chat:composer.messageInput")}
+            aria-expanded={showMentionPanel}
+            aria-controls={showMentionPanel ? mentionListId : undefined}
+            aria-activedescendant={
+              showMentionPanel && mentionSuggestions.length > 0
+                ? `${mentionListId}-option-${activeMentionIndex}`
+                : undefined
+            }
+            className={clsx(
+              "w-full min-h-10 resize-none rounded-2xl border border-border bg-surface px-4 py-2",
+              "text-sm text-text-primary placeholder:text-text-muted",
+              "transition-colors focus:border-border-focus focus:outline-none focus:ring-2 focus:ring-focus/20",
+              disabled && "cursor-not-allowed bg-surface-overlay opacity-70",
+            )}
           />
         </div>
 
-        {hasContent ? (
-          <button
-            type="button"
-            onClick={handleSendText}
-            disabled={disabled || uploading}
-            className={clsx(
-              "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
-              "bg-primary text-text-inverse",
-              "hover:bg-primary-hover",
-              "disabled:opacity-50 disabled:cursor-not-allowed",
-            )}
-            aria-label={t("chat:composer.sendMessage")}
-          >
-            <PaperAirplaneIcon className="h-5 w-5" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-overlay disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label={t("chat:composer.recordVoice")}
-            disabled={disableComposerActions}
-          >
-            <MicrophoneIcon className="h-5 w-5" />
-          </button>
-        )}
+        <SendButton
+          disabled={!canSend}
+          isBusy={isUploading || isSending}
+          onClick={() => {
+            void handlePrimarySend();
+          }}
+          ariaLabel={sendButtonLabel}
+          className="shrink-0"
+        />
       </div>
     </div>
   );
