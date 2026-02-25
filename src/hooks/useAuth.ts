@@ -8,6 +8,7 @@ import { useAuthStore } from "../stores";
 import type { User } from "../stores";
 import { toast } from "../components/ui";
 import type { LoginFormData, RegisterFormData } from "../lib/validations";
+import { useLogout } from "./useLogout";
 
 export interface UseAuthReturn {
   user: User | null;
@@ -33,10 +34,10 @@ export const useAuth = (): UseAuthReturn => {
     error,
     login: storeLogin,
     register: storeRegister,
-    logout: storeLogout,
     updateStatus: storeUpdateStatus,
     clearError,
   } = useAuthStore();
+  const { logout } = useLogout();
 
   const login = useCallback(
     async (data: LoginFormData) => {
@@ -54,16 +55,11 @@ export const useAuth = (): UseAuthReturn => {
     [storeRegister, navigate],
   );
 
-  const logout = useCallback(async () => {
-    await storeLogout();
-    toast.success("Đã đăng xuất");
-  }, [storeLogout]);
-
   const updateStatus = useCallback(
     async (status: User["status"]) => {
       try {
         await storeUpdateStatus(status);
-        toast.success(`Đã cập nhật trạng thái: ${getStatusLabel(status)}`);
+        toast.success(`Da cap nhat trang thai: ${getStatusLabel(status)}`);
       } catch (err) {
         toast.error((err as Error).message);
         throw err;
@@ -87,10 +83,10 @@ export const useAuth = (): UseAuthReturn => {
 
 const getStatusLabel = (status: User["status"]): string => {
   const labels: Record<User["status"], string> = {
-    online: "Trực tuyến",
-    offline: "Ngoại tuyến",
-    away: "Vắng mặt",
-    dnd: "Không làm phiền",
+    online: "Truc tuyen",
+    offline: "Ngoai tuyen",
+    away: "Vang mat",
+    dnd: "Khong lam phien",
   };
   return labels[status];
 };

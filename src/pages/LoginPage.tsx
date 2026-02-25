@@ -1,6 +1,6 @@
 /**
- * @fileoverview Login Page
- * Trang đăng nhập với form validation, remember me, social login
+ * @fileoverview Login Page - Fully Responsive
+ * Fix: scroll đúng ở 125% display scaling, mọi màn hình & tỉ lệ
  */
 
 import React, { useEffect } from "react";
@@ -24,20 +24,17 @@ export const LoginPage: React.FC = () => {
   const { login, isLoading, isAuthenticated, error, clearError } =
     useAuthStore();
 
-  // Redirect nếu đã đăng nhập
   useEffect(() => {
     if (isAuthenticated) {
-      const from = (location.state as { from?: string })?.from || "/chat";
+      const from = (location.state as { from?: string })?.from ?? "/chat";
       navigate(from, { replace: true });
     }
   }, [isAuthenticated, navigate, location]);
 
-  // Clear error khi mount
   useEffect(() => {
     clearError();
   }, [clearError]);
 
-  // React Hook Form
   const {
     register,
     handleSubmit,
@@ -45,62 +42,106 @@ export const LoginPage: React.FC = () => {
     setFocus,
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-      rememberMe: false,
-    },
+    defaultValues: { email: "", password: "", rememberMe: false },
   });
 
-  // Auto-focus email input
   useEffect(() => {
     setFocus("email");
   }, [setFocus]);
 
-  // Submit handler
   const onSubmit = async (data: LoginFormData) => {
     try {
       await login(data);
       toast.success("Đăng nhập thành công!");
-      const from = (location.state as { from?: string })?.from || "/chat";
+      const from = (location.state as { from?: string })?.from ?? "/chat";
       navigate(from, { replace: true });
     } catch (err) {
-      toast.error((err as Error).message || "Đăng nhập thất bại");
+      toast.error((err as Error).message ?? "Đăng nhập thất bại");
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-telegram-primary/5 via-white to-telegram-secondary/5 px-4 py-12">
-      {/* Background decoration */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-telegram-primary/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-telegram-secondary/10 rounded-full blur-3xl" />
+    /**
+     * ROOT WRAPPER — giải quyết vấn đề 125% zoom
+     * ─────────────────────────────────────────────────────────────────
+     * VẤN ĐỀ:
+     *   flex + justify-center KHÔNG scroll được khi content > viewport.
+     *   Browser tính chiều cao flex container = 100dvh, sau đó center con
+     *   bên trong → nếu con cao hơn viewport, phần trên & dưới bị clip
+     *   và KHÔNG có scrollbar.
+     *
+     * GIẢI PHÁP: CSS Grid
+     *   • `grid` + `place-items-center` → card căn giữa cả ngang lẫn dọc
+     *     khi viewport đủ cao (màn hình bình thường)
+     *   • `min-height: 100dvh` (không phải height) → row tự mở rộng khi
+     *     content cao hơn viewport → overflow-y-auto có thể scroll
+     *   • Ở 125% zoom: viewport thu nhỏ ~20%, grid row tự giãn theo card,
+     *     scroll hoạt động bình thường
+     * ─────────────────────────────────────────────────────────────────
+     */
+    <div
+      className={clsx(
+        "relative isolate",
+        "grid place-items-center", // ← căn giữa cả x & y
+        "[min-height:100dvh]", // ← row mở rộng, không bị clip
+        "overflow-y-auto", // ← scroll khi zoom lớn
+        "bg-gradient-to-br from-telegram-primary/5 via-white to-telegram-secondary/5",
+        // Padding: đảm bảo card không sát mép, kể cả khi zoom 125%+
+        "px-4 py-8 sm:py-10",
+      )}
+    >
+      {/* Decoration blobs */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 overflow-hidden pointer-events-none"
+      >
+        <div className="absolute -top-40 -right-40 w-64 h-64 sm:w-80 sm:h-80 lg:w-96 lg:h-96 bg-telegram-primary/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-64 h-64 sm:w-80 sm:h-80 lg:w-96 lg:h-96 bg-telegram-secondary/10 rounded-full blur-3xl" />
       </div>
 
-      {/* Login card */}
-      <div className="relative w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 animate-fade-in">
-          {/* Logo & Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-telegram-primary rounded-2xl mb-4 shadow-lg shadow-telegram-primary/30">
-              <ChatBubbleLeftRightIcon className="w-8 h-8 text-white" />
+      {/* Card container — w-full + max-w để tự co giãn */}
+      <div className="relative z-10 w-full mx-auto max-w-[360px] xs:max-w-sm sm:max-w-md lg:max-w-lg">
+        {/* White card */}
+        <section
+          aria-label="Đăng nhập"
+          className="bg-white rounded-2xl shadow-xl border border-gray-100 animate-fade-in p-5 xs:p-6 sm:p-8 lg:p-10"
+        >
+          {/* Header */}
+          <header className="text-center mb-5 sm:mb-6 lg:mb-8">
+            <div className="inline-flex items-center justify-center rounded-2xl mb-3 sm:mb-4 shadow-lg shadow-telegram-primary/30 bg-telegram-primary w-12 h-12 xs:w-14 xs:h-14 sm:w-16 sm:h-16">
+              <ChatBubbleLeftRightIcon className="w-6 h-6 xs:w-7 xs:h-7 sm:w-8 sm:h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-lg xs:text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
               Chào mừng trở lại
             </h1>
-            <p className="text-gray-500 mt-2">
+            <p className="text-xs xs:text-sm sm:text-base text-gray-500 mt-1 sm:mt-2">
               Đăng nhập để tiếp tục trò chuyện
             </p>
-          </div>
+          </header>
 
           {/* Form */}
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            {/* Global error */}
-            {error && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm animate-shake">
-                {error}
-              </div>
-            )}
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            noValidate
+            className="space-y-3 xs:space-y-4 sm:space-y-5"
+          >
+            {/* Global error — transition tránh layout shift */}
+            <div
+              className={clsx(
+                "transition-all duration-200 overflow-hidden",
+                error ? "max-h-40 opacity-100" : "max-h-0 opacity-0",
+              )}
+              aria-live="polite"
+            >
+              {error && (
+                <div
+                  role="alert"
+                  className="p-3 sm:p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs xs:text-sm animate-shake"
+                >
+                  {error}
+                </div>
+              )}
+            </div>
 
             {/* Email */}
             <Input
@@ -108,9 +149,10 @@ export const LoginPage: React.FC = () => {
               type="email"
               label="Email"
               placeholder="you@example.com"
-              leftIcon={<EnvelopeIcon className="w-5 h-5" />}
+              leftIcon={<EnvelopeIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
               error={errors.email?.message}
               autoComplete="email"
+              inputMode="email"
               disabled={isLoading}
             />
 
@@ -120,14 +162,14 @@ export const LoginPage: React.FC = () => {
               type="password"
               label="Mật khẩu"
               placeholder="••••••••"
-              leftIcon={<LockClosedIcon className="w-5 h-5" />}
+              leftIcon={<LockClosedIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
               error={errors.password?.message}
               autoComplete="current-password"
               disabled={isLoading}
             />
 
             {/* Remember me & Forgot password */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <Checkbox
                 {...register("rememberMe")}
                 label="Ghi nhớ đăng nhập"
@@ -135,38 +177,39 @@ export const LoginPage: React.FC = () => {
               />
               <Link
                 to="/forgot-password"
-                className="text-sm text-telegram-primary hover:text-telegram-primary/80 font-medium"
+                className="text-xs xs:text-sm text-telegram-primary font-medium hover:text-telegram-primary/80 transition-colors duration-200 sm:text-right whitespace-nowrap"
               >
                 Quên mật khẩu?
               </Link>
             </div>
 
-            {/* Submit button */}
+            {/* Submit */}
             <Button
               type="submit"
               fullWidth
               size="lg"
               isLoading={isLoading || isSubmitting}
               disabled={isLoading || isSubmitting}
+              aria-busy={isLoading || isSubmitting}
             >
               Đăng nhập
             </Button>
           </form>
 
           {/* Divider */}
-          <div className="relative my-8">
+          <div className="relative my-5 sm:my-6 lg:my-8">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-gray-200" />
             </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-gray-500">
+            <div className="relative flex justify-center text-xs xs:text-sm">
+              <span className="px-3 xs:px-4 bg-white text-gray-400">
                 Hoặc đăng nhập với
               </span>
             </div>
           </div>
 
-          {/* Social login */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Social buttons */}
+          <div className="grid grid-cols-1 xs:grid-cols-2 gap-2 xs:gap-3 sm:gap-4">
             <SocialButton
               provider="google"
               onClick={() => toast.info("Tính năng đang phát triển")}
@@ -177,26 +220,32 @@ export const LoginPage: React.FC = () => {
             />
           </div>
 
-          {/* Sign up link */}
-          <p className="mt-8 text-center text-sm text-gray-500">
+          {/* Sign-up link */}
+          <p className="mt-5 sm:mt-6 lg:mt-8 text-center text-xs xs:text-sm text-gray-500">
             Chưa có tài khoản?{" "}
             <Link
               to="/register"
-              className="font-semibold text-telegram-primary hover:text-telegram-primary/80"
+              className="font-semibold text-telegram-primary hover:text-telegram-primary/80 transition-colors"
             >
               Đăng ký ngay
             </Link>
           </p>
-        </div>
+        </section>
 
         {/* Footer */}
-        <p className="mt-6 text-center text-xs text-gray-400">
+        <p className="mt-4 sm:mt-5 text-center text-[10px] xs:text-xs text-gray-400 px-2 leading-relaxed">
           Bằng việc đăng nhập, bạn đồng ý với{" "}
-          <Link to="/terms" className="underline hover:text-gray-600">
+          <Link
+            to="/terms"
+            className="underline hover:text-gray-600 transition-colors"
+          >
             Điều khoản sử dụng
           </Link>{" "}
           và{" "}
-          <Link to="/privacy" className="underline hover:text-gray-600">
+          <Link
+            to="/privacy"
+            className="underline hover:text-gray-600 transition-colors"
+          >
             Chính sách bảo mật
           </Link>
         </p>
@@ -205,9 +254,8 @@ export const LoginPage: React.FC = () => {
   );
 };
 
-/**
- * Social login button component
- */
+/* ─── Social Button ─── */
+
 const SocialButton: React.FC<{
   provider: "google" | "facebook";
   onClick: () => void;
@@ -216,7 +264,11 @@ const SocialButton: React.FC<{
     google: {
       label: "Google",
       icon: (
-        <svg className="w-5 h-5" viewBox="0 0 24 24">
+        <svg
+          className="w-4 h-4 xs:w-5 xs:h-5 flex-shrink-0"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
           <path
             fill="#4285F4"
             d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -235,33 +287,42 @@ const SocialButton: React.FC<{
           />
         </svg>
       ),
-      bg: "bg-white border border-gray-300 hover:bg-gray-50 text-gray-700",
+      className:
+        "bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 focus:ring-gray-300",
     },
     facebook: {
       label: "Facebook",
       icon: (
-        <svg className="w-5 h-5" fill="#1877F2" viewBox="0 0 24 24">
+        <svg
+          className="w-4 h-4 xs:w-5 xs:h-5 flex-shrink-0"
+          fill="#1877F2"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
           <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
         </svg>
       ),
-      bg: "bg-[#1877F2] hover:bg-[#166fe5] text-white",
+      className:
+        "bg-[#1877F2] hover:bg-[#166fe5] text-white focus:ring-blue-500/50",
     },
-  };
+  } as const;
 
-  const { label, icon, bg } = config[provider];
+  const { label, icon, className } = config[provider];
 
   return (
     <button
       type="button"
       onClick={onClick}
       className={clsx(
-        "flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl",
-        "font-medium text-sm transition-all duration-200",
+        "w-full flex items-center justify-center gap-2",
+        "min-h-[44px] px-3 xs:px-4 py-2.5 xs:py-3",
+        "rounded-xl font-medium text-xs xs:text-sm",
+        "whitespace-nowrap transition-all duration-200",
         "focus:outline-none focus:ring-2 focus:ring-offset-2",
-        bg,
-        provider === "google" && "focus:ring-gray-300",
-        provider === "facebook" && "focus:ring-blue-500/50",
+        "active:scale-[.97]",
+        className,
       )}
+      aria-label={`Đăng nhập bằng ${label}`}
     >
       {icon}
       <span>{label}</span>
@@ -270,3 +331,25 @@ const SocialButton: React.FC<{
 };
 
 export default LoginPage;
+
+/*
+ * KEY FIX: CSS Grid thay vì flex justify-center
+ * ─────────────────────────────────────────────────────────────────────
+ * TRƯỚC (bị clip ở 125% zoom):
+ *   className="flex flex-col items-center justify-center min-h-[100dvh]"
+ *   → Browser set height = 100dvh rồi center content bên trong
+ *   → Content > height → bị clip, không scroll
+ *
+ * SAU (scroll đúng):
+ *   className="grid place-items-center [min-height:100dvh] overflow-y-auto"
+ *   → min-height → grid row tự mở rộng theo content
+ *   → Khi content < viewport: row = 100dvh → card căn giữa ✓
+ *   → Khi content > viewport (zoom 125%): row mở rộng → scroll ✓
+ *
+ * Cần thêm tailwind.config.js:
+ *   theme: { extend: { screens: { xs: '360px' } } }
+ *
+ * Cần thêm index.html:
+ *   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+ * ─────────────────────────────────────────────────────────────────────
+ */

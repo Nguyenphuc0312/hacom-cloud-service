@@ -49,6 +49,7 @@ export const requestServerLogout = async (): Promise<void> => {
     !isRefreshTokenCookieMode() && refreshToken ? { refreshToken } : undefined;
 
   await axios.post(`${API_BASE_URL}/auth/logout`, payload, {
+    timeout: 10000,
     withCredentials: true,
     headers: {
       "Content-Type": "application/json",

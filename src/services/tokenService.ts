@@ -15,6 +15,16 @@ const REFRESH_TOKEN_STORAGE_MODE =
 const getStorageByArea = (area: StorageArea): Storage =>
   area === "local" ? localStorage : sessionStorage;
 
+const getAuthSessionMarker = (): string | null => {
+  if (!isBrowser()) return null;
+  return localStorage.getItem(AUTH_CONFIG.AUTH_SESSION_ACTIVE_KEY);
+};
+
+const setAuthSessionActive = (active: boolean): void => {
+  if (!isBrowser()) return;
+  localStorage.setItem(AUTH_CONFIG.AUTH_SESSION_ACTIVE_KEY, active ? "true" : "false");
+};
+
 const getPreferredAccessStorage = (): Storage => {
   const rememberMe = isRememberMeEnabled();
   return rememberMe ? localStorage : sessionStorage;
@@ -54,12 +64,29 @@ export const getRefreshToken = (): string | null => {
   );
 };
 
+export const isAuthSessionActive = (): boolean => {
+  if (!isBrowser()) return false;
+
+  const marker = getAuthSessionMarker();
+  if (marker === "true") return true;
+  if (marker === "false") return false;
+
+  // Backward compatibility: if marker is missing, infer from existing tokens.
+  return Boolean(
+    sessionStorage.getItem(AUTH_CONFIG.ACCESS_TOKEN_KEY) ||
+      localStorage.getItem(AUTH_CONFIG.ACCESS_TOKEN_KEY) ||
+      sessionStorage.getItem(AUTH_CONFIG.REFRESH_TOKEN_KEY) ||
+      localStorage.getItem(AUTH_CONFIG.REFRESH_TOKEN_KEY),
+  );
+};
+
 export const updateAccessToken = (accessToken: string): void => {
   if (!isBrowser() || !accessToken) return;
 
   localStorage.removeItem(AUTH_CONFIG.ACCESS_TOKEN_KEY);
   sessionStorage.removeItem(AUTH_CONFIG.ACCESS_TOKEN_KEY);
   getPreferredAccessStorage().setItem(AUTH_CONFIG.ACCESS_TOKEN_KEY, accessToken);
+  setAuthSessionActive(true);
 };
 
 export const storeTokens = (
@@ -73,6 +100,7 @@ export const storeTokens = (
 
   const accessStorage = getStorageByArea(rememberMe ? "local" : "session");
   accessStorage.setItem(AUTH_CONFIG.ACCESS_TOKEN_KEY, accessToken);
+  setAuthSessionActive(true);
 
   if (rememberMe) {
     localStorage.setItem(AUTH_CONFIG.REMEMBER_ME_KEY, "true");
@@ -100,6 +128,7 @@ export const clearTokens = (): void => {
   if (!isBrowser()) return;
 
   clearTokenKeys();
+  setAuthSessionActive(false);
   localStorage.removeItem(AUTH_CONFIG.USER_KEY);
   localStorage.removeItem(AUTH_CONFIG.REMEMBER_ME_KEY);
   sessionStorage.removeItem(AUTH_CONFIG.USER_KEY);

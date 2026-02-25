@@ -11,6 +11,7 @@ import {
   clearTokens,
   getAccessToken,
   getRefreshToken,
+  isAuthSessionActive,
   isRefreshTokenCookieMode,
   isRememberMeEnabled,
   storeTokens,
@@ -157,6 +158,11 @@ const extractTokenPayload = (
 
 // Lock refresh with a shared promise so all 401 requests wait for one refresh call.
 const refreshAccessToken = async (): Promise<string> => {
+  if (!isAuthSessionActive()) {
+    notifyAuthFailure("refresh_failed");
+    throw new Error("Auth session is inactive");
+  }
+
   const storedRefreshToken = getRefreshToken();
 
   if (!isRefreshTokenCookieMode() && !storedRefreshToken) {

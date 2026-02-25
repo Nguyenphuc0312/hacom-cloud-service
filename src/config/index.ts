@@ -21,6 +21,7 @@ export const AUTH_CONFIG = {
   REFRESH_TOKEN_KEY: "refreshToken",
   USER_KEY: "user",
   REMEMBER_ME_KEY: "rememberMe",
+  AUTH_SESSION_ACTIVE_KEY: "authSessionActive",
 };
 
 // Pagination
