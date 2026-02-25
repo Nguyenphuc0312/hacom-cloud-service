@@ -1,4 +1,4 @@
-import React, {
+﻿import React, {
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -141,8 +141,7 @@ const Row = ({ index, style, data }: ListChildComponentProps<RowData>) => {
       <div style={style} className="px-3">
         <div
           className={clsx(
-            "flex h-full items-center text-[11px] font-semibold uppercase tracking-[0.08em]",
-            "text-slate-500 dark:text-slate-400",
+            "flex h-full items-center text-xs font-semibold uppercase tracking-wide text-text-muted",
             data.collapsed && "justify-center",
           )}
         >
@@ -362,7 +361,7 @@ export const RoomList: React.FC<RoomListProps> = ({
   if (flatItems.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-center">
-        <p className="text-sm text-slate-500 dark:text-slate-400">
+        <p className="text-sm text-text-muted">
           {normalizedQuery ? "No room matches your search." : "No conversations available."}
         </p>
       </div>

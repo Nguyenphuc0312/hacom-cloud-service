@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import { formatDateDivider } from "../../utils/formatTime";
 
@@ -12,12 +12,12 @@ export const DateDivider: React.FC<DateDividerProps> = ({
   className,
 }) => {
   return (
-    <div className={clsx("flex items-center justify-center my-4", className)}>
-      <div className="flex-1 h-px bg-gray-200" />
-      <span className="px-4 py-1.5 rounded-full bg-white text-gray-500 text-xs font-medium shadow-sm">
+    <div className={clsx("my-4 flex items-center justify-center", className)}>
+      <div className="h-px flex-1 bg-border" />
+      <span className="rounded-full border border-border bg-surface px-4 py-1.5 text-xs font-medium text-text-muted shadow-xs">
         {formatDateDivider(date)}
       </span>
-      <div className="flex-1 h-px bg-gray-200" />
+      <div className="h-px flex-1 bg-border" />
     </div>
   );
 };

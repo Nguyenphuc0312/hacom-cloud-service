@@ -1,6 +1,5 @@
-/**
+﻿/**
  * @fileoverview Empty State components
- * Hiển thị khi không có dữ liệu
  */
 
 import React from "react";
@@ -26,9 +25,6 @@ interface EmptyStateProps {
   className?: string;
 }
 
-/**
- * Generic empty state component
- */
 export const EmptyState: React.FC<EmptyStateProps> = ({
   title,
   description,
@@ -39,22 +35,18 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   return (
     <div
       className={clsx(
-        "flex flex-col items-center justify-center py-12 px-6 text-center",
+        "flex flex-col items-center justify-center px-6 py-12 text-center",
         className,
       )}
     >
-      {/* Icon */}
-      {icon && <div className="w-20 h-20 mb-4 text-gray-300">{icon}</div>}
+      {icon && <div className="mb-4 h-20 w-20 text-text-muted/55">{icon}</div>}
 
-      {/* Title */}
-      <h3 className="text-lg font-medium text-gray-900 mb-2">{title}</h3>
+      <h3 className="mb-2 text-lg font-medium text-text-primary">{title}</h3>
 
-      {/* Description */}
       {description && (
-        <p className="text-sm text-gray-500 max-w-sm mb-6">{description}</p>
+        <p className="mb-6 max-w-sm text-sm text-text-secondary">{description}</p>
       )}
 
-      {/* Action button */}
       {action && (
         <Button variant={action.variant || "primary"} onClick={action.onClick}>
           {action.label}
@@ -64,21 +56,18 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   );
 };
 
-/**
- * Empty conversations state
- */
 export const EmptyConversations: React.FC<{
   onNewChat?: () => void;
 }> = ({ onNewChat }) => {
   return (
     <EmptyState
-      icon={<ChatBubbleLeftRightIcon className="w-full h-full" />}
-      title="Chưa có cuộc trò chuyện"
-      description="Bắt đầu cuộc trò chuyện mới để kết nối với bạn bè và đồng nghiệp"
+      icon={<ChatBubbleLeftRightIcon className="h-full w-full" />}
+      title="No conversations yet"
+      description="Start a new chat to connect with your team."
       action={
         onNewChat
           ? {
-              label: "Bắt đầu trò chuyện",
+              label: "Start chat",
               onClick: onNewChat,
             }
           : undefined
@@ -87,39 +76,33 @@ export const EmptyConversations: React.FC<{
   );
 };
 
-/**
- * Empty messages state
- */
 export const EmptyMessages: React.FC = () => {
   return (
     <EmptyState
-      icon={<InboxIcon className="w-full h-full" />}
-      title="Chưa có tin nhắn"
-      description="Gửi tin nhắn đầu tiên để bắt đầu cuộc trò chuyện"
+      icon={<InboxIcon className="h-full w-full" />}
+      title="No messages"
+      description="Send the first message to start this conversation."
     />
   );
 };
 
-/**
- * Empty search results state
- */
 export const EmptySearchResults: React.FC<{
   query?: string;
   onClear?: () => void;
 }> = ({ query, onClear }) => {
   return (
     <EmptyState
-      icon={<MagnifyingGlassIcon className="w-full h-full" />}
-      title="Không tìm thấy kết quả"
+      icon={<MagnifyingGlassIcon className="h-full w-full" />}
+      title="No result found"
       description={
         query
-          ? `Không tìm thấy kết quả phù hợp với "${query}". Thử từ khóa khác.`
-          : "Không tìm thấy kết quả. Thử từ khóa khác."
+          ? `No result matches "${query}".`
+          : "No result found. Try another keyword."
       }
       action={
         onClear
           ? {
-              label: "Xóa tìm kiếm",
+              label: "Clear search",
               onClick: onClear,
               variant: "outline",
             }
@@ -129,40 +112,34 @@ export const EmptySearchResults: React.FC<{
   );
 };
 
-/**
- * Empty members state
- */
 export const EmptyMembers: React.FC = () => {
   return (
     <EmptyState
-      icon={<UserGroupIcon className="w-full h-full" />}
-      title="Chưa có thành viên"
-      description="Thêm thành viên vào nhóm để bắt đầu"
+      icon={<UserGroupIcon className="h-full w-full" />}
+      title="No members"
+      description="Add members to start collaborating."
     />
   );
 };
 
-/**
- * Error state
- */
 export const ErrorState: React.FC<{
   title?: string;
   message?: string;
   onRetry?: () => void;
 }> = ({
-  title = "Đã xảy ra lỗi",
-  message = "Không thể tải dữ liệu. Vui lòng thử lại.",
+  title = "Something went wrong",
+  message = "Cannot load data right now. Please try again.",
   onRetry,
 }) => {
   return (
     <EmptyState
-      icon={<ExclamationTriangleIcon className="w-full h-full text-red-300" />}
+      icon={<ExclamationTriangleIcon className="h-full w-full text-danger/55" />}
       title={title}
       description={message}
       action={
         onRetry
           ? {
-              label: "Thử lại",
+              label: "Try again",
               onClick: onRetry,
               variant: "primary",
             }
@@ -172,9 +149,6 @@ export const ErrorState: React.FC<{
   );
 };
 
-/**
- * No chat selected state
- */
 interface NoChatSelectedProps {
   onNewChat?: () => void;
 }
@@ -183,8 +157,8 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
   onNewChat,
 }) => {
   return (
-    <section className="flex flex-1 flex-col items-center justify-center bg-chat-background px-6 py-10 text-gray-600">
-      <div className="mb-5 h-24 w-24 text-gray-300 sm:mb-6 sm:h-32 sm:w-32">
+    <section className="chat-background flex flex-1 flex-col items-center justify-center px-6 py-10 text-text-secondary">
+      <div className="mb-5 h-24 w-24 text-text-muted/60 sm:mb-6 sm:h-32 sm:w-32">
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -198,20 +172,19 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
           />
         </svg>
       </div>
-      <h2 className="mb-2 text-lg font-semibold text-gray-800 sm:text-xl">
-        Chọn một cuộc trò chuyện
+      <h2 className="mb-2 text-lg font-semibold text-text-primary sm:text-xl">
+        Select a conversation
       </h2>
-      <p className="mb-5 max-w-sm text-center text-sm leading-6 text-gray-600">
-        Chọn một cuộc hội thoại từ danh sách bên trái hoặc bắt đầu cuộc trò
-        chuyện mới
+      <p className="mb-5 max-w-sm text-center text-sm leading-6 text-text-secondary">
+        Choose a chat from the sidebar or start a new conversation.
       </p>
       {onNewChat && (
         <button
           type="button"
           onClick={onNewChat}
-          className="min-h-11 rounded-xl bg-telegram-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-telegram-primary/90"
+          className="min-h-11 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-text-inverse transition-colors hover:bg-primary/90"
         >
-          Bắt đầu trò chuyện mới
+          Start new chat
         </button>
       )}
     </section>

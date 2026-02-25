@@ -15,4 +15,4 @@ export {
 } from "./chatStore";
 
 export { useUIStore, useToast } from "./uiStore";
-export type { Theme, ModalType, Toast } from "./uiStore";
+export type { Theme, ThemeBrand, ModalType, Toast } from "./uiStore";

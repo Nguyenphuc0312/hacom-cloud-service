@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+﻿import React, { useMemo } from "react";
 import clsx from "clsx";
 import {
   BuildingOffice2Icon,
@@ -42,6 +42,9 @@ const resolveStatusLabel = (status: unknown): string => {
   return statusLabelByKey[status.trim().toLowerCase()] ?? "Offline";
 };
 
+const iconButtonClasses =
+  "inline-flex h-9 w-9 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-surface-overlay hover:text-text-primary";
+
 export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   currentUser,
   collapsed,
@@ -59,21 +62,20 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
 
   return (
     <>
-      <div className="border-b border-slate-200 px-3 py-3 dark:border-slate-800">
+      <div className="border-b border-border px-3 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             {!collapsed && (
-              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
+              <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
                 Workspace
               </p>
             )}
+
             <div className="flex items-center gap-2">
-              {!collapsed && (
-                <BuildingOffice2Icon className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-              )}
+              {!collapsed && <BuildingOffice2Icon className="h-4 w-4 text-text-muted" />}
               <h1
                 className={clsx(
-                  "truncate font-semibold text-slate-900 dark:text-slate-100",
+                  "truncate font-semibold text-text-primary",
                   collapsed ? "text-sm" : "text-base",
                 )}
               >
@@ -82,15 +84,11 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
             </div>
           </div>
 
-          <div className="flex flex-shrink-0 items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
               onClick={onNewChat}
-              className={clsx(
-                "inline-flex h-9 w-9 items-center justify-center rounded-xl",
-                "text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900",
-                "dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100",
-              )}
+              className={iconButtonClasses}
               aria-label="Start new chat"
             >
               <PencilSquareIcon className="h-5 w-5" />
@@ -99,11 +97,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
             <button
               type="button"
               onClick={onToggleCollapsed}
-              className={clsx(
-                "hidden h-9 w-9 items-center justify-center rounded-xl lg:inline-flex",
-                "text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900",
-                "dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100",
-              )}
+              className={clsx("hidden lg:inline-flex", iconButtonClasses)}
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
               {collapsed ? (
@@ -116,13 +110,12 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
         </div>
       </div>
 
-      <div className="border-b border-slate-200 px-3 py-2 dark:border-slate-800">
+      <div className="border-b border-border px-3 py-2">
         <button
           type="button"
           className={clsx(
-            "flex w-full items-center rounded-xl text-left",
-            "transition-colors hover:bg-slate-100 dark:hover:bg-slate-800",
-            collapsed ? "justify-center p-1.5" : "gap-3 px-2 py-1.5",
+            "flex w-full items-center rounded-lg text-left transition-colors hover:bg-surface-overlay",
+            collapsed ? "justify-center p-2" : "gap-3 px-2 py-1.5",
           )}
           title={collapsed ? currentUserName : undefined}
           aria-label={currentUserName}
@@ -137,12 +130,10 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
 
           {!collapsed && (
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+              <p className="truncate text-sm font-medium text-text-primary">
                 {currentUserName}
               </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {currentStatusLabel}
-              </p>
+              <p className="text-xs text-text-muted">{currentStatusLabel}</p>
             </div>
           )}
         </button>

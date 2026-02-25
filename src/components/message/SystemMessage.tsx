@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import type { Message } from "../../types";
 
@@ -12,8 +12,8 @@ export const SystemMessage: React.FC<SystemMessageProps> = ({
   className,
 }) => {
   return (
-    <div className={clsx("flex justify-center my-4", className)}>
-      <span className="px-3 py-1.5 rounded-full bg-black/5 text-gray-600 text-xs">
+    <div className={clsx("my-4 flex justify-center", className)}>
+      <span className="rounded-full bg-surface-overlay px-3 py-1.5 text-xs text-text-secondary">
         {message.content}
       </span>
     </div>

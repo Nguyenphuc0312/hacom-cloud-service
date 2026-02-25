@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import { CheckIcon, ExclamationCircleIcon } from "@heroicons/react/24/solid";
 import { Avatar } from "../common/Avatar";
@@ -37,7 +37,7 @@ const MessageStatusIcon: React.FC<{
   if (status === "uploading") {
     return (
       <span
-        className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/80 border-t-transparent"
+        className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-text-inverse/80 border-t-transparent"
         role="img"
         aria-label="Uploading"
         title="Uploading"
@@ -51,7 +51,7 @@ const MessageStatusIcon: React.FC<{
     case MessageStatus.SENDING:
       return (
         <span
-          className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/80 border-t-transparent"
+          className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-text-inverse/80 border-t-transparent"
           role="img"
           aria-label="Sending"
           title="Sending"
@@ -62,22 +62,22 @@ const MessageStatusIcon: React.FC<{
     case MessageStatus.SENT:
       return (
         <span role="img" aria-label="Sent" title="Sent">
-          <CheckIcon className="h-3.5 w-3.5 text-white/80" />
+          <CheckIcon className="h-3.5 w-3.5 text-text-inverse/80" />
           <span className="sr-only">Sent</span>
         </span>
       );
     case MessageStatus.DELIVERED:
       return (
         <div className="flex -space-x-1">
-          <CheckIcon className="h-3.5 w-3.5 text-white/80" />
-          <CheckIcon className="h-3.5 w-3.5 text-white/80" />
+          <CheckIcon className="h-3.5 w-3.5 text-text-inverse/80" />
+          <CheckIcon className="h-3.5 w-3.5 text-text-inverse/80" />
         </div>
       );
     case MessageStatus.READ:
       return (
         <div className="flex -space-x-1">
-          <CheckIcon className="h-3.5 w-3.5 text-white" />
-          <CheckIcon className="h-3.5 w-3.5 text-white" />
+          <CheckIcon className="h-3.5 w-3.5 text-text-inverse" />
+          <CheckIcon className="h-3.5 w-3.5 text-text-inverse" />
         </div>
       );
     case MessageStatus.FAILED:
@@ -86,7 +86,7 @@ const MessageStatusIcon: React.FC<{
           type="button"
           title="Retry"
           onClick={onResend}
-          className="h-4 w-4 text-red-300 transition-transform duration-150 hover:scale-110 hover:text-red-500 focus:outline-none active:scale-95"
+          className="h-4 w-4 text-danger/70 transition-transform duration-150 hover:scale-110 hover:text-danger focus:outline-none active:scale-95"
         >
           <ExclamationCircleIcon className="h-4 w-4" aria-hidden="true" />
           <span className="sr-only">Failed to send. Click to retry.</span>
@@ -186,16 +186,16 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
   const bubbleRadiusClass = (() => {
     if (isOwn) {
-      if (isGroupStart && isGroupEnd) return "rounded-2xl rounded-br-md";
-      if (isGroupStart) return "rounded-2xl rounded-br-md";
-      if (isGroupEnd) return "rounded-2xl rounded-tr-md";
-      return "rounded-2xl rounded-r-md";
+      if (isGroupStart && isGroupEnd) return "rounded-xl rounded-br-sm";
+      if (isGroupStart) return "rounded-xl rounded-br-sm";
+      if (isGroupEnd) return "rounded-xl rounded-tr-sm";
+      return "rounded-xl rounded-r-sm";
     }
 
-    if (isGroupStart && isGroupEnd) return "rounded-2xl rounded-bl-md";
-    if (isGroupStart) return "rounded-2xl rounded-bl-md";
-    if (isGroupEnd) return "rounded-2xl rounded-tl-md";
-    return "rounded-2xl rounded-l-md";
+    if (isGroupStart && isGroupEnd) return "rounded-xl rounded-bl-sm";
+    if (isGroupStart) return "rounded-xl rounded-bl-sm";
+    if (isGroupEnd) return "rounded-xl rounded-tl-sm";
+    return "rounded-xl rounded-l-sm";
   })();
 
   return (
@@ -216,7 +216,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     >
       {isGroupConversation && !isOwn && (
         <div className="w-8 shrink-0 self-end">
-          {/* Keep slot width for grouped messages to align bubbles */}
           {showAvatar && (
             <Avatar
               src={message.senderAvatar}
@@ -229,7 +228,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
       <div className="relative flex min-w-0 flex-col">
         {isGroupConversation && !isOwn && showSenderName && (
-          <span className="mb-1 ml-1 text-xs font-medium text-telegram-primary">
+          <span className="mb-1 ml-1 text-xs font-medium text-primary">
             {message.senderName}
           </span>
         )}
@@ -237,15 +236,13 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         {message.replyToMessage && (
           <div
             className={clsx(
-              "flex items-center gap-2 rounded-t-2xl border-l-2 border-telegram-primary px-3 py-2 text-xs",
+              "flex items-center gap-2 rounded-t-xl border-l-2 border-primary px-3 py-2 text-xs",
               isOwn
-                ? "bg-telegram-primary/80 text-white/80"
-                : "bg-gray-200 text-gray-600",
+                ? "bg-primary/80 text-text-inverse/80"
+                : "bg-surface-overlay text-text-secondary",
             )}
           >
-            <span className="font-medium">
-              {message.replyToMessage.senderName}
-            </span>
+            <span className="font-medium">{message.replyToMessage.senderName}</span>
             <span className="truncate">{message.replyToMessage.content}</span>
           </div>
         )}
@@ -253,14 +250,16 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         <div
           ref={bubbleRef}
           className={clsx(
-            "relative px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-telegram-primary/30",
+            "relative px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             bubbleRadiusClass,
-            isOwn ? "bg-telegram-primary text-white" : "bg-white text-gray-900 shadow-sm",
+            isOwn
+              ? "bg-primary text-text-inverse"
+              : "border border-border bg-surface text-text-primary shadow-xs",
             message.replyToMessage && "rounded-t-none",
             isOwn ? "animate-slide-in-right" : "animate-slide-in-left",
           )}
           tabIndex={0}
-          aria-label={`${isOwn ? "Ban" : message.senderName} luc ${timeStr}`}
+          aria-label={`${isOwn ? "You" : message.senderName} at ${timeStr}`}
           onKeyDown={(event) => {
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
@@ -278,7 +277,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             <div
               className={clsx(
                 "mb-1 flex items-center gap-1 text-xs",
-                isOwn ? "text-white/90" : "text-gray-500",
+                isOwn ? "text-text-inverse/90" : "text-text-muted",
               )}
             >
               <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
@@ -293,7 +292,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           <div
             className={clsx(
               "mt-1 flex items-center justify-end gap-1 text-xs leading-none",
-              isOwn ? "text-white/90" : "text-gray-500",
+              isOwn ? "text-text-inverse/90" : "text-text-muted",
             )}
           >
             {message.isEdited && <span>edited</span>}
@@ -313,9 +312,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             <div
               className={clsx(
                 "absolute bottom-0 h-3 w-3",
-                isOwn
-                  ? "-right-1.5 text-telegram-primary"
-                  : "-left-1.5 text-white",
+                isOwn ? "-right-1.5 text-primary" : "-left-1.5 text-surface",
               )}
             >
               <svg

@@ -1,6 +1,6 @@
-/**
+﻿/**
  * @fileoverview Spinner component
- * Loading spinner với nhiều size và variants
+ * Loading spinner with semantic token variants.
  */
 
 import React from "react";
@@ -13,17 +13,17 @@ interface SpinnerProps {
 }
 
 const sizeClasses = {
-  xs: "w-3 h-3 border",
-  sm: "w-4 h-4 border-2",
-  md: "w-6 h-6 border-2",
-  lg: "w-8 h-8 border-2",
-  xl: "w-12 h-12 border-3",
+  xs: "h-3 w-3 border",
+  sm: "h-4 w-4 border-2",
+  md: "h-6 w-6 border-2",
+  lg: "h-8 w-8 border-2",
+  xl: "h-12 w-12 border-[3px]",
 };
 
 const variantClasses = {
-  primary: "border-telegram-primary/30 border-t-telegram-primary",
-  white: "border-white/30 border-t-white",
-  gray: "border-gray-300 border-t-gray-600",
+  primary: "border-primary/25 border-t-primary",
+  white: "border-text-inverse/35 border-t-text-inverse",
+  gray: "border-border border-t-text-secondary",
 };
 
 export const Spinner: React.FC<SpinnerProps> = ({
@@ -34,7 +34,7 @@ export const Spinner: React.FC<SpinnerProps> = ({
   return (
     <div
       className={clsx(
-        "rounded-full animate-spin",
+        "animate-spin rounded-full",
         sizeClasses[size],
         variantClasses[variant],
         className,
@@ -45,31 +45,23 @@ export const Spinner: React.FC<SpinnerProps> = ({
   );
 };
 
-/**
- * Full page loading spinner
- */
 export const PageSpinner: React.FC<{ message?: string }> = ({
-  message = "Đang tải...",
+  message = "Loading...",
 }) => {
   return (
-    <div className="fixed inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center z-50">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-surface/80 backdrop-blur-sm">
       <Spinner size="xl" />
-      {message && (
-        <p className="mt-4 text-gray-600 text-sm animate-pulse">{message}</p>
-      )}
+      {message && <p className="mt-4 animate-pulse text-sm text-text-secondary">{message}</p>}
     </div>
   );
 };
 
-/**
- * Inline loading spinner với text
- */
 export const LoadingText: React.FC<{ text?: string; className?: string }> = ({
-  text = "Đang tải...",
+  text = "Loading...",
   className,
 }) => {
   return (
-    <div className={clsx("flex items-center gap-2 text-gray-500", className)}>
+    <div className={clsx("flex items-center gap-2 text-text-muted", className)}>
       <Spinner size="sm" variant="gray" />
       <span className="text-sm">{text}</span>
     </div>

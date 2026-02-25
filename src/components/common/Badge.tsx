@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 
 interface BadgeProps {
@@ -11,17 +11,17 @@ interface BadgeProps {
 }
 
 const variantClasses = {
-  primary: "bg-telegram-primary text-white",
-  secondary: "bg-zalo-primary text-white",
-  muted: "bg-gray-400 text-white",
-  danger: "bg-red-500 text-white",
-  success: "bg-chat-online text-white",
+  primary: "bg-primary text-text-inverse",
+  secondary: "bg-secondary text-text-inverse",
+  muted: "bg-border-strong text-text-inverse",
+  danger: "bg-danger text-text-inverse",
+  success: "bg-success text-text-inverse",
 };
 
 const sizeClasses = {
-  sm: "text-[10px] min-w-[16px] h-4 px-1",
-  md: "text-xs min-w-[20px] h-5 px-1.5",
-  lg: "text-sm min-w-[24px] h-6 px-2",
+  sm: "h-4 min-w-4 px-1 text-xs",
+  md: "h-5 min-w-5 px-1.5 text-xs",
+  lg: "h-6 min-w-6 px-2 text-sm",
 };
 
 export const Badge: React.FC<BadgeProps> = ({
@@ -37,14 +37,14 @@ export const Badge: React.FC<BadgeProps> = ({
       <span
         className={clsx(
           "inline-block rounded-full",
-          variant === "primary" && "bg-telegram-primary",
-          variant === "secondary" && "bg-zalo-primary",
-          variant === "muted" && "bg-gray-400",
-          variant === "danger" && "bg-red-500",
-          variant === "success" && "bg-chat-online",
-          size === "sm" && "w-2 h-2",
-          size === "md" && "w-2.5 h-2.5",
-          size === "lg" && "w-3 h-3",
+          variant === "primary" && "bg-primary",
+          variant === "secondary" && "bg-secondary",
+          variant === "muted" && "bg-border-strong",
+          variant === "danger" && "bg-danger",
+          variant === "success" && "bg-success",
+          size === "sm" && "h-2 w-2",
+          size === "md" && "h-2.5 w-2.5",
+          size === "lg" && "h-3 w-3",
           className,
         )}
         aria-hidden="true"

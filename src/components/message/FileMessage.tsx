@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import { ArrowDownTrayIcon } from "@heroicons/react/24/outline";
 import type { Attachment } from "../../types";
@@ -24,57 +24,51 @@ export const FileMessage: React.FC<FileMessageProps> = ({
   const size = formatFileSize(attachment.fileSize);
 
   const handleDownload = () => {
-    // In a real app, this would trigger a download
     window.open(attachment.url, "_blank");
   };
 
   return (
     <div
       className={clsx(
-        "flex items-center gap-3 p-3 rounded-lg min-w-0 max-w-full sm:max-w-md",
-        isOwn ? "bg-white/10" : "bg-gray-100",
+        "flex min-w-0 max-w-full items-center gap-3 rounded-md p-3 sm:max-w-md",
+        isOwn ? "bg-surface/20" : "bg-surface-overlay",
         className,
       )}
     >
-      {/* File icon */}
       <div
         className={clsx(
-          "flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-xl",
-          isOwn ? "bg-white/20" : "bg-gray-200",
+          "flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-xl",
+          isOwn ? "bg-surface/25" : "bg-surface",
         )}
       >
         {icon}
       </div>
 
-      {/* File info */}
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 flex-1">
         <p
           className={clsx(
-            "font-medium text-sm truncate break-all",
-            isOwn ? "text-white" : "text-gray-900",
+            "truncate break-all text-sm font-medium",
+            isOwn ? "text-text-inverse" : "text-text-primary",
           )}
         >
           {attachment.fileName || "Unknown file"}
         </p>
-        <p
-          className={clsx("text-xs", isOwn ? "text-white/70" : "text-gray-500")}
-        >
+        <p className={clsx("text-xs", isOwn ? "text-text-inverse/70" : "text-text-muted")}>
           {size} • {extension}
         </p>
       </div>
 
-      {/* Download button */}
       <button
         onClick={handleDownload}
         className={clsx(
-          "flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-colors",
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors",
           isOwn
-            ? "bg-white/20 hover:bg-white/30 text-white"
-            : "bg-gray-200 hover:bg-gray-300 text-gray-600",
+            ? "bg-surface/25 text-text-inverse hover:bg-surface/35"
+            : "bg-surface text-text-secondary hover:bg-surface-raised hover:text-text-primary",
         )}
         aria-label="Download file"
       >
-        <ArrowDownTrayIcon className="w-5 h-5" />
+        <ArrowDownTrayIcon className="h-5 w-5" />
       </button>
     </div>
   );

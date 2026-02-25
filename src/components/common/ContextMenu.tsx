@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo, useCallback } from "react";
+﻿import React, { useEffect, useRef, useMemo, useCallback } from "react";
 import clsx from "clsx";
 import type { ContextMenuItem } from "../../types";
 
@@ -9,13 +9,10 @@ interface ContextMenuProps {
   className?: string;
 }
 
-/**
- * Calculate adjusted position to keep menu within viewport
- */
 function calculateAdjustedPosition(
   position: { x: number; y: number },
-  menuWidth: number = 160,
-  menuHeight: number = 200,
+  menuWidth: number = 176,
+  menuHeight: number = 220,
 ): { x: number; y: number } {
   const viewport = {
     width: window.innerWidth,
@@ -44,13 +41,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Calculate initial position using estimated menu dimensions
   const adjustedPosition = useMemo(
     () => calculateAdjustedPosition(position),
     [position],
   );
 
-  // Handle click outside
   const handleClickOutside = useCallback(
     (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -60,7 +55,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     [onClose],
   );
 
-  // Handle escape key
   const handleEscape = useCallback(
     (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -84,7 +78,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     <div
       ref={menuRef}
       className={clsx(
-        "fixed z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-40 animate-fade-in",
+        "fixed z-dropdown min-w-44 rounded-md border border-border bg-surface py-1 shadow-elev2",
+        "animate-fade-in",
         className,
       )}
       style={{
@@ -97,12 +92,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       {items.map((item, index) => (
         <React.Fragment key={item.id}>
           {item.divider && index > 0 && (
-            <div className="h-px bg-gray-200 my-1" role="separator" />
+            <div className="my-1 h-px bg-border" role="separator" />
           )}
+
           <button
             className={clsx(
-              "w-full px-4 py-2 text-left text-sm flex items-center gap-3 hover:bg-gray-100 transition-colors",
-              item.danger ? "text-red-600 hover:bg-red-50" : "text-gray-700",
+              "flex w-full items-center gap-3 px-4 py-2 text-left text-sm transition-colors",
+              item.danger
+                ? "text-danger hover:bg-danger/10"
+                : "text-text-secondary hover:bg-surface-overlay hover:text-text-primary",
             )}
             onClick={() => {
               item.onClick();
@@ -110,9 +108,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             }}
             role="menuitem"
           >
-            {item.icon && (
-              <span className="w-5 h-5 flex-shrink-0">{item.icon}</span>
-            )}
+            {item.icon && <span className="h-5 w-5 shrink-0">{item.icon}</span>}
             <span>{item.label}</span>
           </button>
         </React.Fragment>

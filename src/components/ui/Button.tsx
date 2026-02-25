@@ -1,6 +1,6 @@
-/**
+﻿/**
  * @fileoverview Button component
- * Reusable button với nhiều variants, sizes và states
+ * Reusable button with semantic design tokens.
  */
 
 import React from "react";
@@ -18,29 +18,30 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses = {
   primary:
-    "bg-telegram-primary text-white hover:bg-telegram-primary/90 focus:ring-telegram-primary/50 shadow-sm",
-  secondary: "bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-200",
+    "bg-primary text-text-inverse shadow-xs hover:bg-primary/90 focus:ring-focus/30",
+  secondary:
+    "border border-border bg-surface-overlay text-text-primary hover:bg-surface focus:ring-focus/20",
   outline:
-    "border-2 border-telegram-primary text-telegram-primary hover:bg-telegram-primary/5 focus:ring-telegram-primary/50",
+    "border border-primary text-primary hover:bg-primary/10 focus:ring-focus/30",
   ghost:
-    "text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:ring-gray-200",
+    "text-text-secondary hover:bg-surface-overlay hover:text-text-primary focus:ring-focus/20",
   danger:
-    "bg-red-500 text-white hover:bg-red-600 focus:ring-red-500/50 shadow-sm",
-  link: "text-telegram-primary hover:text-telegram-primary/80 hover:underline p-0 h-auto",
+    "bg-danger text-text-inverse shadow-xs hover:bg-danger/90 focus:ring-danger/30",
+  link: "h-auto p-0 text-primary hover:text-primary/80 hover:underline",
 };
 
 const sizeClasses = {
-  xs: "px-2.5 py-1 text-xs rounded",
-  sm: "px-3 py-1.5 text-sm rounded-lg",
-  md: "px-4 py-2 text-sm rounded-lg",
-  lg: "px-6 py-3 text-base rounded-xl",
+  xs: "rounded-sm px-2 py-1 text-xs",
+  sm: "rounded-md px-3 py-2 text-sm",
+  md: "rounded-md px-4 py-2 text-sm",
+  lg: "rounded-lg px-6 py-3 text-base",
 };
 
 const iconSizeClasses = {
-  xs: "w-3 h-3",
-  sm: "w-4 h-4",
-  md: "w-4 h-4",
-  lg: "w-5 h-5",
+  xs: "h-3 w-3",
+  sm: "h-4 w-4",
+  md: "h-4 w-4",
+  lg: "h-5 w-5",
 };
 
 export const Button: React.FC<ButtonProps> = ({
@@ -61,18 +62,14 @@ export const Button: React.FC<ButtonProps> = ({
     <button
       disabled={isDisabled}
       className={clsx(
-        // Base styles
         "inline-flex items-center justify-center gap-2 font-medium",
         "transition-all duration-200",
-        "focus:outline-none focus:ring-2 focus:ring-offset-2",
-        "disabled:opacity-60 disabled:cursor-not-allowed disabled:pointer-events-none",
-        // Variant & size
+        "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface",
+        "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60",
         variant !== "link" && variantClasses[variant],
         variant !== "link" && sizeClasses[size],
         variant === "link" && variantClasses.link,
-        // Full width
         fullWidth && "w-full",
-        // Hover scale (except when disabled)
         !isDisabled && variant !== "link" && "active:scale-[0.98]",
         className,
       )}
@@ -82,24 +79,18 @@ export const Button: React.FC<ButtonProps> = ({
         <>
           <Spinner
             size={size === "lg" ? "sm" : "xs"}
-            variant={
-              variant === "primary" || variant === "danger" ? "white" : "gray"
-            }
+            variant={variant === "primary" || variant === "danger" ? "white" : "gray"}
           />
-          <span>Đang xử lý...</span>
+          <span>Processing...</span>
         </>
       ) : (
         <>
           {leftIcon && (
-            <span className={clsx("flex-shrink-0", iconSizeClasses[size])}>
-              {leftIcon}
-            </span>
+            <span className={clsx("shrink-0", iconSizeClasses[size])}>{leftIcon}</span>
           )}
           {children}
           {rightIcon && (
-            <span className={clsx("flex-shrink-0", iconSizeClasses[size])}>
-              {rightIcon}
-            </span>
+            <span className={clsx("shrink-0", iconSizeClasses[size])}>{rightIcon}</span>
           )}
         </>
       )}
@@ -107,9 +98,6 @@ export const Button: React.FC<ButtonProps> = ({
   );
 };
 
-/**
- * Icon-only button
- */
 interface IconButtonProps extends Omit<ButtonProps, "leftIcon" | "rightIcon"> {
   icon: React.ReactNode;
   "aria-label": string;
@@ -123,10 +111,10 @@ export const IconButton: React.FC<IconButtonProps> = ({
   ...props
 }) => {
   const iconButtonSizes = {
-    xs: "w-6 h-6",
-    sm: "w-8 h-8",
-    md: "w-10 h-10",
-    lg: "w-12 h-12",
+    xs: "h-6 w-6",
+    sm: "h-8 w-8",
+    md: "h-10 w-10",
+    lg: "h-12 w-12",
   };
 
   return (

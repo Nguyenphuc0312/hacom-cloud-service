@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import {
   ArrowLeftIcon,
@@ -23,6 +23,9 @@ interface ChatHeaderProps {
   onSearchClick?: () => void;
   className?: string;
 }
+
+const iconButtonClass =
+  "inline-flex h-10 w-10 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-surface-overlay hover:text-text-primary";
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
   conversation,
@@ -65,7 +68,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   return (
     <div
       className={clsx(
-        "flex items-center gap-2 border-b border-gray-200 bg-white px-4 py-2",
+        "flex items-center gap-2 border-b border-border bg-surface px-4 py-2",
         className,
       )}
     >
@@ -73,17 +76,17 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 lg:hidden"
+          className={clsx(iconButtonClass, "lg:hidden")}
           aria-label="Back"
         >
-          <ArrowLeftIcon className="h-5 w-5 text-gray-600" />
+          <ArrowLeftIcon className="h-5 w-5" />
         </button>
       )}
 
       <button
         type="button"
         onClick={onInfoClick}
-        className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-telegram-primary"
+        className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
         aria-label="View conversation info"
       >
         <Avatar
@@ -98,19 +101,14 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       </button>
 
       <button type="button" onClick={onInfoClick} className="min-w-0 flex-1 text-left">
-        <h2 className="truncate text-sm font-semibold text-gray-900 sm:text-[15px]">
+        <h2 className="truncate text-sm font-semibold text-text-primary sm:text-base">
           {displayName}
         </h2>
 
         {isTyping ? (
           <TypingIndicator userName={typingStatus?.userName} />
         ) : (
-          <p
-            className={clsx(
-              "truncate text-xs",
-              isOnline ? "text-chat-online" : "text-gray-600",
-            )}
-          >
+          <p className={clsx("truncate text-xs", isOnline ? "text-success" : "text-text-secondary")}>
             {getStatusText()}
           </p>
         )}
@@ -121,10 +119,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           <button
             type="button"
             onClick={onCallClick}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100"
+            className={iconButtonClass}
             aria-label="Voice call"
           >
-            <PhoneIcon className="h-5 w-5 text-gray-600" />
+            <PhoneIcon className="h-5 w-5" />
           </button>
         )}
 
@@ -132,10 +130,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           <button
             type="button"
             onClick={onVideoCallClick}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100"
+            className={iconButtonClass}
             aria-label="Video call"
           >
-            <VideoCameraIcon className="h-5 w-5 text-gray-600" />
+            <VideoCameraIcon className="h-5 w-5" />
           </button>
         )}
 
@@ -143,20 +141,20 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           <button
             type="button"
             onClick={onSearchClick}
-            className="hidden h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 sm:inline-flex"
+            className={clsx(iconButtonClass, "hidden sm:inline-flex")}
             aria-label="Search in chat"
           >
-            <MagnifyingGlassIcon className="h-5 w-5 text-gray-600" />
+            <MagnifyingGlassIcon className="h-5 w-5" />
           </button>
         )}
 
         <button
           type="button"
           onClick={onInfoClick}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100"
+          className={iconButtonClass}
           aria-label="Toggle info panel"
         >
-          <InformationCircleIcon className="h-5 w-5 text-gray-600" />
+          <InformationCircleIcon className="h-5 w-5" />
         </button>
       </div>
     </div>

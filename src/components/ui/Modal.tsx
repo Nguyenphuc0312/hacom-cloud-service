@@ -1,12 +1,12 @@
-/**
+﻿/**
  * @fileoverview Modal component
- * Reusable modal với animations
+ * Reusable modal with semantic tokens and theme-safe styles.
  */
 
 import React, { useEffect, useCallback } from "react";
 import clsx from "clsx";
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { IconButton } from "./Button";
+import { Button, IconButton } from "./Button";
 
 interface ModalProps {
   isOpen: boolean;
@@ -43,7 +43,6 @@ export const Modal: React.FC<ModalProps> = ({
   className,
   contentClassName,
 }) => {
-  // Handle ESC key
   const handleEsc = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "Escape" && closeOnEsc) {
@@ -53,7 +52,6 @@ export const Modal: React.FC<ModalProps> = ({
     [closeOnEsc, onClose],
   );
 
-  // Add/remove ESC listener
   useEffect(() => {
     if (isOpen) {
       document.addEventListener("keydown", handleEsc);
@@ -75,16 +73,14 @@ export const Modal: React.FC<ModalProps> = ({
         className,
       )}
     >
-      {/* Overlay */}
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in"
+        className="absolute inset-0 animate-fade-in bg-black/45 backdrop-blur-[1px]"
         onClick={closeOnOverlayClick ? onClose : undefined}
       />
 
-      {/* Modal content */}
       <div
         className={clsx(
-          "relative w-full bg-white rounded-2xl shadow-2xl",
+          "relative w-full rounded-xl border border-border bg-surface shadow-elev3",
           "animate-slide-in-up",
           sizeClasses[size],
           contentClassName,
@@ -94,31 +90,24 @@ export const Modal: React.FC<ModalProps> = ({
         aria-labelledby={title ? "modal-title" : undefined}
         aria-describedby={description ? "modal-description" : undefined}
       >
-        {/* Header */}
         {(title || showCloseButton) && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex items-start justify-between border-b border-border px-6 py-4">
             <div>
               {title && (
-                <h2
-                  id="modal-title"
-                  className="text-lg font-semibold text-gray-900"
-                >
+                <h2 id="modal-title" className="text-lg font-semibold text-text-primary">
                   {title}
                 </h2>
               )}
               {description && (
-                <p
-                  id="modal-description"
-                  className="mt-1 text-sm text-gray-500"
-                >
+                <p id="modal-description" className="mt-1 text-sm text-text-secondary">
                   {description}
                 </p>
               )}
             </div>
             {showCloseButton && (
               <IconButton
-                icon={<XMarkIcon className="w-5 h-5" />}
-                aria-label="Đóng"
+                icon={<XMarkIcon className="h-5 w-5" />}
+                aria-label="Close"
                 onClick={onClose}
                 variant="ghost"
                 size="sm"
@@ -127,16 +116,12 @@ export const Modal: React.FC<ModalProps> = ({
           </div>
         )}
 
-        {/* Body */}
         <div className="p-6">{children}</div>
       </div>
     </div>
   );
 };
 
-/**
- * Confirm dialog component
- */
 interface ConfirmDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -155,23 +140,23 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   title,
   message,
-  confirmText = "Xác nhận",
-  cancelText = "Hủy",
+  confirmText = "Confirm",
+  cancelText = "Cancel",
   variant = "danger",
   isLoading = false,
 }) => {
   const variantStyles = {
     danger: {
-      icon: "bg-red-100 text-red-600",
-      button: "bg-red-500 hover:bg-red-600 text-white",
+      icon: "bg-danger/15 text-danger",
+      button: "danger" as const,
     },
     warning: {
-      icon: "bg-amber-100 text-amber-600",
-      button: "bg-amber-500 hover:bg-amber-600 text-white",
+      icon: "bg-warning/15 text-warning",
+      button: "primary" as const,
     },
     info: {
-      icon: "bg-blue-100 text-blue-600",
-      button: "bg-blue-500 hover:bg-blue-600 text-white",
+      icon: "bg-primary/15 text-primary",
+      button: "primary" as const,
     },
   };
 
@@ -180,15 +165,14 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="sm" showCloseButton={false}>
       <div className="text-center">
-        {/* Icon */}
         <div
           className={clsx(
-            "mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4",
+            "mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full",
             styles.icon,
           )}
         >
           <svg
-            className="w-6 h-6"
+            className="h-6 w-6"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -202,29 +186,30 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           </svg>
         </div>
 
-        {/* Title & message */}
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
-        <p className="text-gray-500 text-sm mb-6">{message}</p>
+        <h3 className="mb-2 text-lg font-semibold text-text-primary">{title}</h3>
+        <p className="mb-6 text-sm text-text-secondary">{message}</p>
 
-        {/* Buttons */}
         <div className="flex gap-3">
-          <button
-            onClick={onClose}
+          <Button
+            type="button"
+            variant="secondary"
+            fullWidth
             disabled={isLoading}
-            className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+            onClick={onClose}
           >
             {cancelText}
-          </button>
-          <button
-            onClick={onConfirm}
+          </Button>
+
+          <Button
+            type="button"
+            variant={styles.button}
+            fullWidth
             disabled={isLoading}
-            className={clsx(
-              "flex-1 px-4 py-2.5 rounded-xl font-medium transition-colors disabled:opacity-50",
-              styles.button,
-            )}
+            isLoading={isLoading}
+            onClick={onConfirm}
           >
-            {isLoading ? "Đang xử lý..." : confirmText}
-          </button>
+            {confirmText}
+          </Button>
         </div>
       </div>
     </Modal>

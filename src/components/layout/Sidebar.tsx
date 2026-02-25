@@ -1,4 +1,4 @@
-import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
+﻿import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { ArrowLeftOnRectangleIcon } from "@heroicons/react/24/outline";
 import { Badge } from "../common/Badge";
@@ -92,7 +92,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
 
         {!isCollapsed && (
-          <div className="border-b border-slate-200 px-3 py-2 dark:border-slate-800">
+          <div className="border-b border-border px-3 py-2">
             <div className="flex items-center gap-1 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {tabs.map((tab) => {
                 const isActive = activeFilter === tab.id;
@@ -106,8 +106,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     className={clsx(
                       "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors",
                       isActive
-                        ? "bg-telegram-primary/15 text-telegram-primary dark:bg-telegram-primary/25"
-                        : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800",
+                        ? "bg-primary/15 text-primary"
+                        : "text-text-secondary hover:bg-surface-overlay hover:text-text-primary",
                     )}
                     aria-pressed={isActive}
                   >
@@ -136,20 +136,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onSelect={onSelectConversation}
         />
 
-        <div className="border-t border-slate-200 p-2 dark:border-slate-800">
+        <div className="border-t border-border p-2">
           <button
             type="button"
             disabled={isLoggingOut}
             onClick={() => setIsLogoutConfirmOpen(true)}
             className={clsx(
-              "inline-flex w-full items-center rounded-xl px-2.5 py-2 text-sm font-medium transition-colors",
-              "text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50",
-              "dark:text-red-400 dark:hover:bg-red-500/10",
+              "inline-flex w-full items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
+              "text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50",
               isCollapsed && "justify-center px-0",
             )}
             aria-label="Sign out"
           >
-            <ArrowLeftOnRectangleIcon className="h-5 w-5 flex-shrink-0" />
+            <ArrowLeftOnRectangleIcon className="h-5 w-5 shrink-0" />
             {!isCollapsed && (
               <span className="ml-2">
                 {isLoggingOut ? "Signing out..." : "Sign out"}

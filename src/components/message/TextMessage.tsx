@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import { isOnlyEmoji } from "../../utils/messageHelpers";
 
@@ -15,7 +15,6 @@ export const TextMessage: React.FC<TextMessageProps> = ({
 }) => {
   const onlyEmoji = isOnlyEmoji(content);
 
-  // Parse URLs
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const parts = content.split(urlRegex);
 
@@ -23,7 +22,7 @@ export const TextMessage: React.FC<TextMessageProps> = ({
     <p
       className={clsx(
         "max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere]",
-        onlyEmoji ? "text-3xl leading-tight" : "text-[15px] leading-6",
+        onlyEmoji ? "leading-tight text-3xl" : "text-sm leading-6",
         className,
       )}
     >
@@ -37,10 +36,10 @@ export const TextMessage: React.FC<TextMessageProps> = ({
               target="_blank"
               rel="noopener noreferrer"
               className={clsx(
-                "underline",
+                "underline transition-colors",
                 isOwn
-                  ? "text-white/90 hover:text-white"
-                  : "text-telegram-primary hover:text-telegram-secondary",
+                  ? "text-text-inverse/90 hover:text-text-inverse"
+                  : "text-primary hover:text-secondary",
               )}
             >
               {part}

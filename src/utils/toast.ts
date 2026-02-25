@@ -1,28 +1,18 @@
-/**
+﻿/**
  * @fileoverview Toast utility functions
- * Helper functions để show toast notifications
  */
 
 import toastLib from "react-hot-toast";
 
-/**
- * Toast utility object
- */
 export const toast = {
   success: (message: string) => {
     toastLib.success(message, {
       duration: 3000,
       position: "top-center",
-      style: {
-        background: "#10B981",
-        color: "#fff",
-        padding: "12px 24px",
-        borderRadius: "12px",
-        fontWeight: 500,
-      },
+      className: "toast-base toast-success",
       iconTheme: {
-        primary: "#fff",
-        secondary: "#10B981",
+        primary: "hsl(var(--color-text-inverse))",
+        secondary: "hsl(var(--color-success))",
       },
     });
   },
@@ -31,16 +21,10 @@ export const toast = {
     toastLib.error(message, {
       duration: 4000,
       position: "top-center",
-      style: {
-        background: "#EF4444",
-        color: "#fff",
-        padding: "12px 24px",
-        borderRadius: "12px",
-        fontWeight: 500,
-      },
+      className: "toast-base toast-danger",
       iconTheme: {
-        primary: "#fff",
-        secondary: "#EF4444",
+        primary: "hsl(var(--color-text-inverse))",
+        secondary: "hsl(var(--color-danger))",
       },
     });
   },
@@ -49,14 +33,8 @@ export const toast = {
     toastLib(message, {
       duration: 3000,
       position: "top-center",
-      style: {
-        background: "#3B82F6",
-        color: "#fff",
-        padding: "12px 24px",
-        borderRadius: "12px",
-        fontWeight: 500,
-      },
-      icon: "ℹ️",
+      className: "toast-base toast-info",
+      icon: "i",
     });
   },
 
@@ -64,14 +42,8 @@ export const toast = {
     toastLib(message, {
       duration: 3000,
       position: "top-center",
-      style: {
-        background: "#F59E0B",
-        color: "#fff",
-        padding: "12px 24px",
-        borderRadius: "12px",
-        fontWeight: 500,
-      },
-      icon: "⚠️",
+      className: "toast-base toast-warning",
+      icon: "!",
     });
   },
 
@@ -86,13 +58,7 @@ export const toast = {
   loading: (message: string) => {
     return toastLib.loading(message, {
       position: "top-center",
-      style: {
-        background: "#6B7280",
-        color: "#fff",
-        padding: "12px 24px",
-        borderRadius: "12px",
-        fontWeight: 500,
-      },
+      className: "toast-base toast-neutral",
     });
   },
 
@@ -113,11 +79,7 @@ export const toast = {
       },
       {
         position: "top-center",
-        style: {
-          padding: "12px 24px",
-          borderRadius: "12px",
-          fontWeight: 500,
-        },
+        className: "toast-base",
       },
     );
   },

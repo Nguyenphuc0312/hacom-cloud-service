@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import { UserStatus } from "../../types";
 
@@ -13,28 +13,28 @@ interface AvatarProps {
 }
 
 const sizeClasses = {
-  xs: "w-6 h-6",
-  sm: "w-8 h-8",
-  md: "w-10 h-10",
-  lg: "w-12 h-12",
-  xl: "w-16 h-16",
+  xs: "h-6 w-6",
+  sm: "h-8 w-8",
+  md: "h-10 w-10",
+  lg: "h-12 w-12",
+  xl: "h-16 w-16",
 };
 
 const statusSizeClasses = {
-  xs: "w-2 h-2",
-  sm: "w-2.5 h-2.5",
-  md: "w-3 h-3",
-  lg: "w-3.5 h-3.5",
-  xl: "w-4 h-4",
+  xs: "h-2 w-2",
+  sm: "h-2.5 w-2.5",
+  md: "h-3 w-3",
+  lg: "h-3.5 w-3.5",
+  xl: "h-4 w-4",
 };
 
 const statusColors: Record<UserStatus, string> = {
-  [UserStatus.ONLINE]: "bg-chat-online",
-  [UserStatus.OFFLINE]: "bg-chat-offline",
-  [UserStatus.AWAY]: "bg-chat-away",
-  [UserStatus.DND]: "bg-red-500",
-  [UserStatus.INVISIBLE]: "bg-gray-400",
-  [UserStatus.BUSY]: "bg-orange-500",
+  [UserStatus.ONLINE]: "bg-state-online",
+  [UserStatus.OFFLINE]: "bg-state-offline",
+  [UserStatus.AWAY]: "bg-state-away",
+  [UserStatus.DND]: "bg-danger",
+  [UserStatus.INVISIBLE]: "bg-border-strong",
+  [UserStatus.BUSY]: "bg-warning",
 };
 
 export const Avatar: React.FC<AvatarProps> = ({
@@ -51,17 +51,18 @@ export const Avatar: React.FC<AvatarProps> = ({
   const safeSrc =
     typeof src === "string" && src.trim().length > 0 ? src.trim() : undefined;
 
-  const initials = safeAlt
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word) => word[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2) || "?";
+  const initials =
+    safeAlt
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((word) => word[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2) || "?";
 
   return (
     <div
-      className={clsx("relative inline-block flex-shrink-0", className)}
+      className={clsx("relative inline-block shrink-0", className)}
       onClick={onClick}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
@@ -72,8 +73,8 @@ export const Avatar: React.FC<AvatarProps> = ({
           alt={safeAlt}
           className={clsx(
             sizeClasses[size],
-            "rounded-full object-cover ring-2 ring-white",
-            onClick && "cursor-pointer hover:opacity-90 transition-opacity",
+            "rounded-full object-cover ring-2 ring-surface",
+            onClick && "cursor-pointer transition-opacity hover:opacity-90",
           )}
           loading="lazy"
         />
@@ -81,9 +82,9 @@ export const Avatar: React.FC<AvatarProps> = ({
         <div
           className={clsx(
             sizeClasses[size],
-            "rounded-full bg-telegram-primary flex items-center justify-center text-white font-medium",
-            onClick && "cursor-pointer hover:opacity-90 transition-opacity",
-            size === "xs" && "text-[10px]",
+            "flex items-center justify-center rounded-full bg-primary font-medium text-text-inverse",
+            onClick && "cursor-pointer transition-opacity hover:opacity-90",
+            size === "xs" && "text-xs",
             size === "sm" && "text-xs",
             size === "md" && "text-sm",
             size === "lg" && "text-base",
@@ -97,7 +98,7 @@ export const Avatar: React.FC<AvatarProps> = ({
       {showStatus && status && (
         <span
           className={clsx(
-            "absolute bottom-0 right-0 rounded-full ring-2 ring-white",
+            "absolute bottom-0 right-0 rounded-full ring-2 ring-surface",
             statusSizeClasses[size],
             statusColors[status],
             status === UserStatus.ONLINE && "animate-pulse-online",

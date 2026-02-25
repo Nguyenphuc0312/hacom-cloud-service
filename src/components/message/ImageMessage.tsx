@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import clsx from "clsx";
 import type { Attachment } from "../../types";
 
@@ -36,10 +36,9 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   return (
     <>
       <div className={clsx("relative", className)}>
-        {/* Loading skeleton */}
         {!isLoaded && !isError && (
           <div
-            className="bg-gray-200 animate-pulse rounded-lg"
+            className="animate-pulse rounded-lg bg-surface-overlay"
             style={{
               width: attachment.width ? Math.min(attachment.width, 300) : 200,
               height: attachment.height
@@ -49,18 +48,16 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
           />
         )}
 
-        {/* Error state */}
         {isError && (
-          <div className="flex items-center justify-center bg-gray-100 rounded-lg p-4 text-gray-500 text-sm">
+          <div className="flex items-center justify-center rounded-lg bg-surface-overlay p-4 text-sm text-text-muted">
             Failed to load image
           </div>
         )}
 
-        {/* Image */}
         <img
           className={clsx(
-            "max-w-full h-auto object-cover rounded cursor-pointer transition-opacity",
-            isLoaded ? "opacity-100" : "opacity-0 absolute top-0 left-0",
+            "h-auto max-w-full cursor-pointer rounded object-cover transition-opacity",
+            isLoaded ? "opacity-100" : "absolute left-0 top-0 opacity-0",
             "hover:opacity-95",
           )}
           style={{
@@ -75,32 +72,25 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
           onError={() => setIsError(true)}
         />
 
-        {/* Caption */}
         {caption && isLoaded && (
-          <p
-            className={clsx(
-              "text-sm mt-2",
-              isOwn ? "text-white/90" : "text-gray-700",
-            )}
-          >
+          <p className={clsx("mt-2 text-sm", isOwn ? "text-text-inverse/90" : "text-text-secondary")}>
             {caption}
           </p>
         )}
       </div>
 
-      {/* Fullscreen modal */}
       {showFullScreen && (
         <div
-          className="fixed inset-0 z-modal bg-black/90 flex items-center justify-center animate-fade-in"
+          className="fixed inset-0 z-modal flex items-center justify-center bg-surface-overlay/95 backdrop-blur-md animate-fade-in"
           onClick={handleClose}
         >
           <button
-            className="absolute top-4 right-4 text-white/80 hover:text-white p-2"
+            className="absolute right-4 top-4 rounded-full border border-border bg-surface/80 p-2 text-text-secondary transition-colors hover:bg-surface hover:text-text-primary"
             onClick={handleClose}
             aria-label="Close"
           >
             <svg
-              className="w-8 h-8"
+              className="h-8 w-8"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -116,7 +106,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
           <img
             src={attachment.url}
             alt={attachment.fileName || "Image"}
-            className="max-w-[90vw] max-h-[90vh] object-contain"
+            className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-elev3"
             onClick={(e) => e.stopPropagation()}
           />
         </div>

@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import {
   ArrowUturnLeftIcon,
@@ -35,28 +35,28 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
     {
       id: "reply",
       icon: ArrowUturnLeftIcon,
-      label: "Trả lời",
+      label: "Reply",
       onClick: onReply,
     },
     {
       id: "forward",
       icon: ArrowUturnRightIcon,
-      label: "Chuyển tiếp",
+      label: "Forward",
       onClick: onForward,
     },
     {
       id: "copy",
       icon: ClipboardDocumentIcon,
-      label: "Sao chép",
+      label: "Copy",
       onClick: onCopy,
     },
     ...(isOwn && onEdit
-      ? [{ id: "edit", icon: PencilIcon, label: "Chỉnh sửa", onClick: onEdit }]
+      ? [{ id: "edit", icon: PencilIcon, label: "Edit", onClick: onEdit }]
       : []),
     {
       id: "delete",
       icon: TrashIcon,
-      label: "Xóa",
+      label: "Delete",
       onClick: onDelete,
       danger: true,
     },
@@ -65,7 +65,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
   return (
     <div
       className={clsx(
-        "flex items-center gap-1 p-1 rounded-lg bg-white shadow-lg border border-gray-100",
+        "flex items-center gap-1 rounded-lg border border-border bg-surface p-1 shadow-elev2",
         "animate-fade-in",
         className,
       )}
@@ -81,16 +81,16 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
           key={action.id}
           onClick={action.onClick}
           className={clsx(
-            "p-2 rounded-md transition-colors",
+            "rounded-md p-2 transition-colors",
             action.danger
-              ? "text-red-500 hover:bg-red-50"
-              : "text-gray-600 hover:bg-gray-100",
+              ? "text-danger hover:bg-danger/10"
+              : "text-text-secondary hover:bg-surface-overlay hover:text-text-primary",
           )}
           aria-label={action.label}
           title={action.label}
           tabIndex={isVisible ? 0 : -1}
         >
-          <action.icon className="w-4 h-4" />
+          <action.icon className="h-4 w-4" />
         </button>
       ))}
     </div>

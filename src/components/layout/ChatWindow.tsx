@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import { ChatHeader } from "../chat/ChatHeader";
 import { MessageList } from "../chat/MessageList";
@@ -108,7 +108,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   return (
     <div
       className={clsx(
-        "flex flex-col h-full bg-chat-background overflow-hidden",
+        "chat-background flex h-full flex-col overflow-hidden",
         className,
       )}
     >
@@ -156,3 +156,4 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 };
 
 export default ChatWindow;
+

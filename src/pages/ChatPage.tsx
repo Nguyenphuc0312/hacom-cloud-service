@@ -1,6 +1,6 @@
-/**
+﻿/**
  * @fileoverview Chat Page - Main chat interface
- * Tích hợp với Zustand stores và WebSocket
+ * Integrated with Zustand stores and WebSocket.
  */
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
@@ -417,22 +417,22 @@ export const ChatPage: React.FC = () => {
   }
 
   return (
-    <div className="relative flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-white">
+    <div className="relative flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-surface">
       {/* Connection status indicator */}
       {!isConnected && (
         <div
-          className="absolute inset-x-0 top-0 z-50 bg-amber-500 px-4 py-1.5 text-center text-xs font-medium text-white sm:text-sm"
+          className="absolute inset-x-0 top-0 z-50 bg-warning px-4 py-1.5 text-center text-xs font-medium text-text-inverse sm:text-sm"
           role="status"
           aria-live="polite"
         >
-          Đang kết nối lại...
+          Äang káº¿t ná»‘i láº¡i...
         </div>
       )}
 
       {/* Sidebar */}
       <div
         className={clsx(
-          "absolute inset-y-0 left-0 z-30 w-full max-w-full bg-white transition-transform duration-300 sm:max-w-[min(24rem,92vw)] lg:relative lg:z-0 lg:w-auto lg:max-w-none lg:flex-shrink-0",
+          "absolute inset-y-0 left-0 z-30 w-full max-w-full bg-surface transition-transform duration-300 sm:max-w-[min(24rem,92vw)] lg:relative lg:z-0 lg:w-auto lg:max-w-none lg:flex-shrink-0",
           showSidebarOnMobile
             ? "translate-x-0"
             : "-translate-x-full lg:translate-x-0",
@@ -451,9 +451,9 @@ export const ChatPage: React.FC = () => {
       {showSidebarOnMobile && selectedConversationId && (
         <button
           type="button"
-          className="fixed inset-0 z-20 bg-black/40 lg:hidden"
+          className="fixed inset-0 z-20 bg-text-primary/40 lg:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
-          aria-label="Đóng danh sách cuộc trò chuyện"
+          aria-label="ÄĂ³ng danh sĂ¡ch cuá»™c trĂ² chuyá»‡n"
         />
       )}
 
@@ -496,7 +496,7 @@ export const ChatPage: React.FC = () => {
       {selectedConversation && (
         <div
           className={clsx(
-            "fixed inset-y-0 right-0 z-40 w-full max-w-full border-l border-gray-200 bg-white transition-transform duration-300 sm:max-w-[min(26rem,94vw)] lg:relative lg:z-0 lg:w-[clamp(20rem,28vw,24rem)] lg:max-w-none",
+            "fixed inset-y-0 right-0 z-40 w-full max-w-full border-l border-border bg-surface transition-transform duration-300 sm:max-w-[min(26rem,94vw)] lg:relative lg:z-0 lg:w-[clamp(20rem,28vw,24rem)] lg:max-w-none",
             isInfoPanelOpen
               ? "translate-x-0"
               : "translate-x-full lg:hidden",
@@ -519,7 +519,7 @@ export const ChatPage: React.FC = () => {
       {/* Info panel overlay (mobile) */}
       {isInfoPanelOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-30 bg-text-primary/50 lg:hidden"
           onClick={handleToggleInfoPanel}
         />
       )}
@@ -546,3 +546,6 @@ export const ChatPage: React.FC = () => {
 };
 
 export default ChatPage;
+
+
+

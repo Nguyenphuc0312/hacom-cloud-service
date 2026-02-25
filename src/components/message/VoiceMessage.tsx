@@ -1,10 +1,9 @@
-import React, { useState, useRef, useMemo } from "react";
+﻿import React, { useState, useRef, useMemo } from "react";
 import clsx from "clsx";
 import { PlayIcon, PauseIcon } from "@heroicons/react/24/solid";
 import type { Attachment } from "../../types";
 import { formatDuration } from "../../utils/formatTime";
 
-// Seeded random number generator for consistent waveform
 const seededRandom = (seed: number): number => {
   const x = Math.sin(seed) * 10000;
   return x - Math.floor(x);
@@ -66,7 +65,6 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
     }
   };
 
-  // Generate stable waveform bars using seeded random
   const waveformBars = useMemo(() => {
     const seed = attachment.url?.length ?? 0;
     return Array.from(
@@ -76,8 +74,7 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
   }, [attachment.url]);
 
   return (
-    <div className={clsx("flex items-center gap-3 min-w-[200px]", className)}>
-      {/* Hidden audio element */}
+    <div className={clsx("flex min-w-[200px] items-center gap-3", className)}>
       <audio
         ref={audioRef}
         src={attachment.url}
@@ -86,28 +83,26 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
         preload="metadata"
       />
 
-      {/* Play/Pause button */}
       <button
         onClick={togglePlay}
         className={clsx(
-          "flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors",
+          "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors",
           isOwn
-            ? "bg-white/20 hover:bg-white/30 text-white"
-            : "bg-telegram-primary hover:bg-telegram-secondary text-white",
+            ? "bg-surface/25 text-text-inverse hover:bg-surface/35"
+            : "bg-primary text-text-inverse hover:bg-secondary",
         )}
         aria-label={isPlaying ? "Pause" : "Play"}
       >
         {isPlaying ? (
-          <PauseIcon className="w-5 h-5" />
+          <PauseIcon className="h-5 w-5" />
         ) : (
-          <PlayIcon className="w-5 h-5 ml-0.5" />
+          <PlayIcon className="ml-0.5 h-5 w-5" />
         )}
       </button>
 
-      {/* Waveform */}
       <div className="flex-1">
         <div
-          className="relative h-8 flex items-center gap-0.5 cursor-pointer"
+          className="relative flex h-8 cursor-pointer items-center gap-0.5"
           onClick={handleSeek}
           role="slider"
           aria-label="Audio progress"
@@ -126,11 +121,11 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
                   "w-1 rounded-full transition-colors",
                   isPlayed
                     ? isOwn
-                      ? "bg-white"
-                      : "bg-telegram-primary"
+                      ? "bg-text-inverse"
+                      : "bg-primary"
                     : isOwn
-                      ? "bg-white/40"
-                      : "bg-gray-300",
+                      ? "bg-text-inverse/45"
+                      : "bg-border-strong/45",
                 )}
                 style={{ height: `${height}%` }}
               />
@@ -138,13 +133,7 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
           })}
         </div>
 
-        {/* Duration */}
-        <p
-          className={clsx(
-            "text-xs mt-1",
-            isOwn ? "text-white/70" : "text-gray-500",
-          )}
-        >
+        <p className={clsx("mt-1 text-xs", isOwn ? "text-text-inverse/70" : "text-text-muted")}>
           {isPlaying || currentTime > 0
             ? `${formatDuration(currentTime)} / ${formatDuration(duration)}`
             : formatDuration(duration)}

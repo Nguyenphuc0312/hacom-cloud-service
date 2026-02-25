@@ -1,6 +1,6 @@
-/**
+﻿/**
  * @fileoverview Checkbox component
- * Custom checkbox với animation
+ * Custom checkbox with semantic design tokens.
  */
 
 import React, { forwardRef, useId } from "react";
@@ -29,61 +29,45 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
         <label
           htmlFor={checkboxId}
           className={clsx(
-            "inline-flex items-start gap-3 cursor-pointer",
+            "inline-flex cursor-pointer items-start gap-3",
             disabled && "cursor-not-allowed opacity-60",
           )}
         >
-          {/* Custom checkbox */}
-          <div className="relative flex-shrink-0 mt-0.5">
+          <div className="relative mt-0.5 shrink-0">
             <input
               ref={ref}
               type="checkbox"
               id={checkboxId}
               disabled={disabled}
-              className={clsx(
-                "peer sr-only", // Hide default checkbox
-                className,
-              )}
+              className={clsx("peer sr-only", className)}
               {...props}
             />
-            {/* Custom checkbox UI */}
+
             <div
               className={clsx(
-                "w-5 h-5 rounded border-2 transition-all duration-200",
-                "flex items-center justify-center",
-                // Unchecked state
-                "border-gray-300 bg-white",
-                // Checked state
-                "peer-checked:border-telegram-primary peer-checked:bg-telegram-primary",
-                // Focus state
-                "peer-focus:ring-2 peer-focus:ring-telegram-primary/20 peer-focus:ring-offset-2",
-                // Hover state
-                !disabled &&
-                  "hover:border-gray-400 peer-checked:hover:border-telegram-primary",
-                // Error state
+                "flex h-5 w-5 items-center justify-center rounded border-2 transition-all duration-200",
+                "border-border bg-surface",
+                "peer-checked:border-primary peer-checked:bg-primary",
+                "peer-focus:ring-2 peer-focus:ring-focus/20 peer-focus:ring-offset-2",
+                !disabled && "hover:border-border-strong",
                 error &&
-                  "border-red-500 peer-checked:border-red-500 peer-checked:bg-red-500",
+                  "border-danger peer-checked:border-danger peer-checked:bg-danger",
               )}
             >
-              {/* Checkmark */}
               <CheckIcon
                 className={clsx(
-                  "w-3.5 h-3.5 text-white transition-all duration-200",
-                  "opacity-0 scale-50",
-                  "peer-checked:opacity-100 peer-checked:scale-100",
+                  "h-3.5 w-3.5 text-text-inverse transition-all duration-200",
+                  "scale-50 opacity-0",
+                  "peer-checked:scale-100 peer-checked:opacity-100",
                 )}
               />
             </div>
           </div>
 
-          {/* Label */}
-          {label && (
-            <span className="text-sm text-gray-700 select-none">{label}</span>
-          )}
+          {label && <span className="select-none text-sm text-text-secondary">{label}</span>}
         </label>
 
-        {/* Error message */}
-        {error && <p className="mt-1.5 text-sm text-red-500">{error}</p>}
+        {error && <p className="mt-1.5 text-sm text-danger">{error}</p>}
       </div>
     );
   },

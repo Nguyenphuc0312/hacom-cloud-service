@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import { ChevronDownIcon } from "@heroicons/react/24/solid";
 import {
@@ -408,18 +408,12 @@ export const MessageList: React.FC<MessageListProps> = ({
     [onLoadMore, hasMore, isLoadingMore],
   );
 
-  const backgroundStyle = {
-    backgroundImage:
-      'url("data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%239C92AC" fill-opacity="0.05"%3E%3Cpath d="M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
-    backgroundColor: "#e6ebee",
-  } as const;
 
   return (
     <div className={clsx("relative h-full min-h-0 flex-1", className)}>
       {isInitialLoading && (
         <div
-          className="h-full min-h-0 overflow-y-auto px-4 py-4"
-          style={backgroundStyle}
+          className="chat-background h-full min-h-0 overflow-y-auto px-4 py-4"
         >
           <MessageListSkeleton />
         </div>
@@ -427,13 +421,12 @@ export const MessageList: React.FC<MessageListProps> = ({
 
       {!isInitialLoading && (
         <div
-          className="h-full min-h-0 flex-1 overflow-hidden px-4 py-4"
-          style={backgroundStyle}
+          className="chat-background h-full min-h-0 flex-1 overflow-hidden px-4 py-4"
           role="log"
           aria-live="polite"
           aria-relevant="additions text"
           aria-atomic="false"
-          aria-label="Tin nhắn trong cuộc trò chuyện"
+          aria-label="Tin nháº¯n trong cuá»™c trĂ² chuyá»‡n"
         >
           {messages.length === 0 ? (
             <EmptyMessages />
@@ -460,7 +453,7 @@ export const MessageList: React.FC<MessageListProps> = ({
       )}
 
       {isLoadingMore && !isInitialLoading && (
-        <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full bg-white/90 px-3 py-1 text-xs text-gray-500 shadow-sm">
+        <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full border border-border bg-surface/90 px-3 py-1 text-xs text-text-muted shadow-xs">
           Dang tai...
         </div>
       )}
@@ -476,15 +469,15 @@ export const MessageList: React.FC<MessageListProps> = ({
           }}
           className={clsx(
             "absolute bottom-4 right-4 z-sticky",
-            "flex min-h-10 items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-3 shadow-lg",
-            "transition-colors hover:bg-gray-50",
+            "flex min-h-10 items-center justify-center gap-2 rounded-full border border-border bg-surface px-3 shadow-elev2",
+            "transition-colors hover:bg-surface-overlay",
             "animate-bounce-in",
           )}
           aria-label="Tin nhan moi"
         >
-          <ChevronDownIcon className="h-5 w-5 text-gray-600" />
-          <span className="text-xs font-medium text-gray-700">
-            Tin nhắn mới ({pendingNewMessages})
+          <ChevronDownIcon className="h-5 w-5 text-text-secondary" />
+          <span className="text-xs font-medium text-text-primary">
+            Tin nháº¯n má»›i ({pendingNewMessages})
           </span>
         </button>
       )}
@@ -493,3 +486,4 @@ export const MessageList: React.FC<MessageListProps> = ({
 };
 
 export default MessageList;
+

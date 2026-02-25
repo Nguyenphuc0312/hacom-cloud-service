@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
 import type { Reaction } from "../../types";
 import { reactionEmojis } from "../../data/mockData";
@@ -22,14 +22,13 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
 
   return (
     <div className={clsx("flex flex-col gap-1", className)}>
-      {/* Reaction picker */}
       {showPicker && (
-        <div className="flex items-center gap-1 p-1.5 rounded-full bg-white shadow-lg border border-gray-100 animate-bounce-in">
+        <div className="flex items-center gap-1 rounded-full border border-border bg-surface p-1.5 shadow-elev2 animate-bounce-in">
           {reactionEmojis.map((emoji) => (
             <button
               key={emoji}
               onClick={() => onReact(emoji)}
-              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-all hover:scale-125"
+              className="flex h-8 w-8 items-center justify-center rounded-full transition-all hover:scale-125 hover:bg-surface-overlay"
               aria-label={`React with ${emoji}`}
             >
               <span className="text-lg">{emoji}</span>
@@ -38,7 +37,6 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
         </div>
       )}
 
-      {/* Existing reactions */}
       {hasReactions && (
         <div className="flex flex-wrap items-center gap-1">
           {reactions.map((reaction) => (
@@ -46,25 +44,21 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
               key={reaction.emoji}
               onClick={() => onReact(reaction.emoji)}
               className={clsx(
-                "flex items-center gap-1 px-2 py-1 rounded-full text-xs",
-                "bg-white border border-gray-200 hover:bg-gray-50",
-                "transition-all hover:scale-105 animate-reaction-pop",
+                "flex items-center gap-1 rounded-full border border-border bg-surface px-2 py-1 text-xs",
+                "animate-reaction-pop transition-all hover:scale-105 hover:bg-surface-overlay",
               )}
             >
               <span>{reaction.emoji}</span>
               {reaction.count > 1 && (
-                <span className="text-gray-600 font-medium">
-                  {reaction.count}
-                </span>
+                <span className="font-medium text-text-secondary">{reaction.count}</span>
               )}
             </button>
           ))}
 
-          {/* Add reaction button */}
           {onTogglePicker && (
             <button
               onClick={onTogglePicker}
-              className="w-7 h-7 flex items-center justify-center rounded-full bg-white border border-gray-200 hover:bg-gray-50 text-gray-400 text-sm"
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface text-sm text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary"
               aria-label="Add reaction"
             >
               +

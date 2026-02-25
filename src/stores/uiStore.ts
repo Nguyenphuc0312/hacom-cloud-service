@@ -11,6 +11,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 // ============================================
 
 export type Theme = "light" | "dark" | "system";
+export type ThemeBrand = "blue" | "green" | "purple";
 export type ModalType =
   | "createGroup"
   | "editProfile"
@@ -45,7 +46,9 @@ interface ModalData {
 interface UIState {
   // Theme
   theme: Theme;
+  brand: ThemeBrand;
   setTheme: (theme: Theme) => void;
+  setBrand: (brand: ThemeBrand) => void;
 
   // Sidebar
   isSidebarCollapsed: boolean;
@@ -90,22 +93,12 @@ export const useUIStore = create<UIState>()(
       // THEME
       // ============================================
       theme: "system",
+      brand: "blue",
       setTheme: (theme) => {
         set({ theme });
-
-        // Apply theme to document
-        const root = document.documentElement;
-        if (theme === "dark") {
-          root.classList.add("dark");
-        } else if (theme === "light") {
-          root.classList.remove("dark");
-        } else {
-          // System preference
-          const prefersDark = window.matchMedia(
-            "(prefers-color-scheme: dark)",
-          ).matches;
-          root.classList.toggle("dark", prefersDark);
-        }
+      },
+      setBrand: (brand) => {
+        set({ brand });
       },
 
       // ============================================
@@ -206,6 +199,7 @@ export const useUIStore = create<UIState>()(
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         theme: state.theme,
+        brand: state.brand,
         isSidebarCollapsed: state.isSidebarCollapsed,
       }),
     },

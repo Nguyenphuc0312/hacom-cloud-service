@@ -1,6 +1,6 @@
-/**
+﻿/**
  * @fileoverview Input component
- * Form input với nhiều variants và states
+ * Form input with semantic tokens.
  */
 
 import React, { forwardRef, useState, useId } from "react";
@@ -49,51 +49,40 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
 
     return (
       <div className={clsx("w-full", containerClassName)}>
-        {/* Label */}
         {label && (
           <label
             htmlFor={inputId}
-            className="block text-sm font-medium text-gray-700 mb-1.5"
+            className="mb-1.5 block text-sm font-medium text-text-secondary"
           >
             {label}
           </label>
         )}
 
-        {/* Input wrapper */}
         <div className="relative">
-          {/* Left icon */}
           {leftIcon && (
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-              <span className="w-5 h-5 block">{leftIcon}</span>
+            <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
+              <span className="block h-5 w-5">{leftIcon}</span>
             </div>
           )}
 
-          {/* Input */}
           <input
             ref={ref}
             id={inputId}
             type={inputType}
             disabled={disabled}
             className={clsx(
-              // Base styles
-              "w-full px-4 py-2.5 rounded-lg",
-              "border bg-white text-gray-900 placeholder-gray-400",
+              "w-full rounded-md border bg-surface px-4 py-2.5",
+              "text-text-primary placeholder:text-text-muted",
               "transition-all duration-200",
               "focus:outline-none focus:ring-2 focus:ring-offset-0",
-              // Normal state
               !error &&
                 !isValid &&
-                "border-gray-300 focus:border-telegram-primary focus:ring-telegram-primary/20",
-              // Error state
-              error &&
-                "border-red-500 focus:border-red-500 focus:ring-red-500/20 pr-10",
-              // Valid state
+                "border-border focus:border-primary focus:ring-focus/20",
+              error && "border-danger pr-10 focus:border-danger focus:ring-danger/20",
               isValid &&
                 !error &&
-                "border-green-500 focus:border-green-500 focus:ring-green-500/20 pr-10",
-              // Disabled state
-              disabled && "bg-gray-100 cursor-not-allowed opacity-60",
-              // Padding adjustments
+                "border-success pr-10 focus:border-success focus:ring-success/20",
+              disabled && "cursor-not-allowed bg-surface-overlay opacity-70",
               leftIcon && "pl-11",
               (rightIcon || isPasswordType) && "pr-11",
               className,
@@ -101,53 +90,40 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             {...props}
           />
 
-          {/* Right side: validation icons or password toggle */}
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-            {/* Custom right icon */}
+          <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-2">
             {rightIcon && !isPasswordType && !error && !isValid && (
-              <span className="text-gray-400 w-5 h-5">{rightIcon}</span>
+              <span className="h-5 w-5 text-text-muted">{rightIcon}</span>
             )}
 
-            {/* Password toggle */}
             {isPasswordType && (
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="text-gray-400 hover:text-gray-600 focus:outline-none"
+                className="text-text-muted transition-colors hover:text-text-secondary focus:outline-none"
                 tabIndex={-1}
               >
                 {showPassword ? (
-                  <EyeSlashIcon className="w-5 h-5" />
+                  <EyeSlashIcon className="h-5 w-5" />
                 ) : (
-                  <EyeIcon className="w-5 h-5" />
+                  <EyeIcon className="h-5 w-5" />
                 )}
               </button>
             )}
 
-            {/* Error icon */}
-            {error && (
-              <ExclamationCircleIcon className="w-5 h-5 text-red-500" />
-            )}
+            {error && <ExclamationCircleIcon className="h-5 w-5 text-danger" />}
 
-            {/* Valid icon */}
-            {isValid && !error && (
-              <CheckCircleIcon className="w-5 h-5 text-green-500" />
-            )}
+            {isValid && !error && <CheckCircleIcon className="h-5 w-5 text-success" />}
           </div>
         </div>
 
-        {/* Error message */}
         {error && (
-          <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1">
-            <ExclamationCircleIcon className="w-4 h-4 flex-shrink-0" />
+          <p className="mt-1.5 flex items-center gap-1 text-sm text-danger">
+            <ExclamationCircleIcon className="h-4 w-4 shrink-0" />
             {error}
           </p>
         )}
 
-        {/* Hint text */}
-        {hint && !error && (
-          <p className="mt-1.5 text-sm text-gray-500">{hint}</p>
-        )}
+        {hint && !error && <p className="mt-1.5 text-sm text-text-muted">{hint}</p>}
       </div>
     );
   },
@@ -155,9 +131,6 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
 
 Input.displayName = "Input";
 
-/**
- * Textarea component
- */
 interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
   error?: string;
@@ -187,7 +160,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         {label && (
           <label
             htmlFor={textareaId}
-            className="block text-sm font-medium text-gray-700 mb-1.5"
+            className="mb-1.5 block text-sm font-medium text-text-secondary"
           >
             {label}
           </label>
@@ -198,30 +171,26 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           id={textareaId}
           disabled={disabled}
           className={clsx(
-            "w-full px-4 py-2.5 rounded-lg",
-            "border bg-white text-gray-900 placeholder-gray-400",
-            "transition-all duration-200 resize-none",
+            "w-full resize-none rounded-md border bg-surface px-4 py-2.5",
+            "text-text-primary placeholder:text-text-muted",
+            "transition-all duration-200",
             "focus:outline-none focus:ring-2 focus:ring-offset-0",
-            !error &&
-              "border-gray-300 focus:border-telegram-primary focus:ring-telegram-primary/20",
-            error &&
-              "border-red-500 focus:border-red-500 focus:ring-red-500/20",
-            disabled && "bg-gray-100 cursor-not-allowed opacity-60",
+            !error && "border-border focus:border-primary focus:ring-focus/20",
+            error && "border-danger focus:border-danger focus:ring-danger/20",
+            disabled && "cursor-not-allowed bg-surface-overlay opacity-70",
             className,
           )}
           {...props}
         />
 
         {error && (
-          <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1">
-            <ExclamationCircleIcon className="w-4 h-4 flex-shrink-0" />
+          <p className="mt-1.5 flex items-center gap-1 text-sm text-danger">
+            <ExclamationCircleIcon className="h-4 w-4 shrink-0" />
             {error}
           </p>
         )}
 
-        {hint && !error && (
-          <p className="mt-1.5 text-sm text-gray-500">{hint}</p>
-        )}
+        {hint && !error && <p className="mt-1.5 text-sm text-text-muted">{hint}</p>}
       </div>
     );
   },

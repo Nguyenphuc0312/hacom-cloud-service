@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+﻿import React, { useMemo } from "react";
 import clsx from "clsx";
 import {
   AtSymbolIcon,
@@ -59,7 +59,10 @@ const hasMention = (
   currentUser: UserSummary,
 ): boolean => {
   if ((conversation.unreadCount || 0) <= 0) return false;
-  if (!conversation.lastMessage || conversation.lastMessage.senderId === currentUser.id) {
+  if (
+    !conversation.lastMessage ||
+    conversation.lastMessage.senderId === currentUser.id
+  ) {
     return false;
   }
 
@@ -124,11 +127,10 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         type="button"
         onClick={() => onSelect(conversation.id)}
         className={clsx(
-          "group relative mx-2 my-1 flex h-14 w-[72px] items-center justify-center rounded-xl",
+          "group relative mx-2 my-1 flex h-14 w-[72px] items-center justify-center rounded-lg",
           "transition-colors",
-          "hover:bg-slate-100 dark:hover:bg-slate-800",
-          (isActive || isKeyboardActive) &&
-            "bg-telegram-primary/10 text-telegram-primary dark:bg-telegram-primary/20",
+          "hover:bg-surface-overlay",
+          (isActive || isKeyboardActive) && "bg-primary/15 text-primary",
         )}
         aria-label={displayName}
         title={displayName}
@@ -162,11 +164,10 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
       type="button"
       onClick={() => onSelect(conversation.id)}
       className={clsx(
-        "mx-2 my-1 flex h-[72px] w-[calc(100%-1rem)] items-center rounded-xl px-3",
+        "mx-2 my-1 flex h-[72px] w-[calc(100%-1rem)] items-center rounded-lg px-3",
         "transition-colors",
-        "hover:bg-slate-100 dark:hover:bg-slate-800",
-        (isActive || isKeyboardActive) &&
-          "bg-telegram-primary/10 dark:bg-telegram-primary/20",
+        "hover:bg-surface-overlay",
+        (isActive || isKeyboardActive) && "bg-primary/15",
       )}
       aria-label={displayName}
     >
@@ -186,7 +187,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
           <div className="mb-1 flex items-center gap-1.5">
             <p
               className={clsx(
-                "truncate text-sm leading-5 text-slate-900 dark:text-slate-100",
+                "truncate text-sm leading-5 text-text-primary",
                 unreadCount > 0 && "font-semibold",
               )}
             >
@@ -195,19 +196,19 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
 
             {conversation.isMuted && (
               <SpeakerXMarkIcon
-                className="h-3.5 w-3.5 flex-shrink-0 text-slate-400"
+                className="h-3.5 w-3.5 shrink-0 text-text-muted"
                 aria-hidden="true"
               />
             )}
             {conversation.isPinned && (
               <BookmarkIcon
-                className="h-3.5 w-3.5 flex-shrink-0 text-slate-400"
+                className="h-3.5 w-3.5 shrink-0 text-text-muted"
                 aria-hidden="true"
               />
             )}
             {unreadMention && (
               <AtSymbolIcon
-                className="h-3.5 w-3.5 flex-shrink-0 text-red-500"
+                className="h-3.5 w-3.5 shrink-0 text-danger"
                 aria-label="Mentioned"
               />
             )}
@@ -216,9 +217,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
           <p
             className={clsx(
               "truncate text-xs leading-5",
-              unreadCount > 0
-                ? "font-medium text-slate-700 dark:text-slate-200"
-                : "text-slate-500 dark:text-slate-400",
+              unreadCount > 0 ? "font-medium text-text-secondary" : "text-text-muted",
             )}
           >
             {previewText || "No messages yet"}
@@ -228,10 +227,8 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         <div className="flex h-full min-w-[46px] flex-col items-end justify-between py-1">
           <span
             className={clsx(
-              "text-[11px] leading-4",
-              unreadCount > 0
-                ? "font-semibold text-telegram-primary"
-                : "text-slate-400 dark:text-slate-500",
+              "text-xs leading-4",
+              unreadCount > 0 ? "font-semibold text-primary" : "text-text-muted",
             )}
           >
             {timeLabel}

@@ -17,11 +17,7 @@ export const ToastProvider: React.FC = () => {
       containerClassName="toast-container"
       toastOptions={{
         duration: 3000,
-        style: {
-          padding: "12px 24px",
-          borderRadius: "12px",
-          fontWeight: 500,
-        },
+        className: "toast-base",
       }}
     />
   );
