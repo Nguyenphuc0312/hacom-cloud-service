@@ -123,16 +123,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   }, [conversation.id, navigate, onClose, removeConversation]);
 
   return (
-    <div className={clsx("flex flex-col h-full bg-white", className)}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-        <h3 className="font-semibold text-gray-900">Thông tin nhóm</h3>
-        <button
-          type="button"
+    <div className={clsx("flex flex-col h-full bg-surface", className)}>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <h3 className="font-semibold text-text-primary">Thông tin nhóm</h3>
+        <button type="button"
           onClick={onClose}
-          className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+          className="p-1 rounded-full hover:bg-surface-overlay transition-colors"
           aria-label="Đóng"
         >
-          <XMarkIcon className="w-5 h-5 text-gray-500" />
+          <XMarkIcon className="w-5 h-5 text-text-muted" />
         </button>
       </div>
 
@@ -141,41 +140,40 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           <Avatar src={conversation.avatar} alt={conversation.name} size="xl" />
 
           <div className="mt-4 text-center">
-            <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2 justify-center">
+            <h2 className="text-xl font-semibold text-text-primary flex items-center gap-2 justify-center">
               {conversation.name}
               {isAdmin && (
-                <button
-                  type="button"
-                  className="p-1 hover:bg-gray-100 rounded-full"
+                <button type="button"
+                  className="p-1 hover:bg-surface-overlay rounded-full"
                 >
-                  <PencilIcon className="w-4 h-4 text-gray-500" />
+                  <PencilIcon className="w-4 h-4 text-text-muted" />
                 </button>
               )}
             </h2>
 
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-text-muted mt-1">
               {conversation.participantCount ?? participants.length} thành viên
             </p>
           </div>
         </div>
 
-        <div className="h-px bg-gray-200 mx-4" />
+        <div className="h-px bg-border mx-4" />
 
         <div className="py-2">
-          <div className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
+          <div className="flex items-center justify-between px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer">
             <div className="flex items-center gap-4">
-              <BellIcon className="w-5 h-5 text-gray-400" />
-              <span className="text-sm text-gray-900">Thông báo</span>
+              <BellIcon className="w-5 h-5 text-text-muted" />
+              <span className="text-sm text-text-primary">Thông báo</span>
             </div>
             <div
               className={clsx(
                 "w-10 h-6 rounded-full relative",
-                conversation.isMuted ? "bg-gray-300" : "bg-telegram-primary",
+                conversation.isMuted ? "bg-border-strong" : "bg-primary",
               )}
             >
               <div
                 className={clsx(
-                  "absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all",
+                  "absolute top-1 w-4 h-4 bg-surface rounded-full shadow transition-all",
                   conversation.isMuted ? "left-1" : "right-1",
                 )}
               />
@@ -183,23 +181,22 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           </div>
         </div>
 
-        <div className="h-px bg-gray-200 mx-4" />
+        <div className="h-px bg-border mx-4" />
 
-        <div className="flex border-b border-gray-200">
+        <div className="flex border-b border-border">
           {[
             { id: "members", label: "Thành viên" },
             { id: "media", label: "Phương tiện" },
             { id: "files", label: "Tệp" },
           ].map((tab) => (
-            <button
-              type="button"
+            <button type="button"
               key={tab.id}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
               className={clsx(
                 "flex-1 py-3 text-sm font-medium transition-colors",
                 activeTab === tab.id
-                  ? "text-telegram-primary border-b-2 border-telegram-primary"
-                  : "text-gray-500 hover:text-gray-700",
+                  ? "text-primary border-b-2 border-primary"
+                  : "text-text-muted hover:text-text-secondary",
               )}
             >
               {tab.label}
@@ -210,11 +207,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         <div className="py-2">
           {activeTab === "members" && (
             <>
-              <button
-                type="button"
+              <button type="button"
                 disabled={isSubmitting}
                 onClick={() => setShowAddMember((prev) => !prev)}
-                className="w-full flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors text-telegram-primary"
+                className="w-full flex items-center gap-4 px-4 py-3 hover:bg-surface-hover transition-colors text-primary"
               >
                 <UserPlusIcon className="w-5 h-5" />
                 <span className="text-sm font-medium">Thêm thành viên</span>
@@ -230,13 +226,13 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     leftIcon={<MagnifyingGlassIcon className="w-5 h-5" />}
                     disabled={isSubmitting}
                   />
-                  <div className="max-h-44 overflow-y-auto rounded-lg border border-gray-200">
+                  <div className="max-h-44 overflow-y-auto rounded-lg border border-border">
                     {isSearching ? (
                       <div className="py-4 flex justify-center">
                         <Spinner size="md" />
                       </div>
                     ) : searchResults.length === 0 ? (
-                      <p className="px-3 py-3 text-sm text-gray-500">
+                      <p className="px-3 py-3 text-sm text-text-muted">
                         Không có kết quả phù hợp
                       </p>
                     ) : (
@@ -246,7 +242,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                           type="button"
                           onClick={() => void handleAddMember(user.id)}
                           disabled={isSubmitting}
-                          className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50"
+                          className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-surface-hover"
                         >
                           <Avatar
                             src={user.avatar}
@@ -256,10 +252,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                             showStatus
                           />
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">
+                            <p className="text-sm font-medium text-text-primary truncate">
                               {user.displayName || user.username}
                             </p>
-                            <p className="text-xs text-gray-500 truncate">
+                            <p className="text-xs text-text-muted truncate">
                               @{user.username}
                             </p>
                           </div>
@@ -273,7 +269,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               {participants.map((participant) => (
                 <div
                   key={participant.id}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer"
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer"
                 >
                   <Avatar
                     src={participant.avatar}
@@ -283,15 +279,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     showStatus
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="text-sm font-medium text-text-primary truncate">
                       {participant.displayName || participant.username}
                       {participant.id === currentUserId && (
-                        <span className="ml-2 text-xs text-gray-500">
+                        <span className="ml-2 text-xs text-text-muted">
                           (Ban)
                         </span>
                       )}
                     </p>
-                    <p className="text-xs text-gray-500 truncate">
+                    <p className="text-xs text-text-muted truncate">
                       @{participant.username}
                     </p>
                   </div>
@@ -306,15 +302,14 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 {[1, 2, 3, 4, 5, 6].map((i) => (
                   <div
                     key={i}
-                    className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center"
+                    className="aspect-square bg-surface-overlay rounded-lg flex items-center justify-center"
                   >
-                    <PhotoIcon className="w-8 h-8 text-gray-300" />
+                    <PhotoIcon className="w-8 h-8 text-border-strong" />
                   </div>
                 ))}
               </div>
-              <button
-                type="button"
-                className="w-full mt-4 py-2 text-sm text-telegram-primary font-medium hover:bg-gray-50 rounded-lg"
+              <button type="button"
+                className="w-full mt-4 py-2 text-sm text-primary font-medium hover:bg-surface-hover rounded-lg"
               >
                 Xem tat ca phuong tien
               </button>
@@ -322,28 +317,26 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           )}
 
           {activeTab === "files" && (
-            <div className="p-4 text-center text-gray-500 text-sm">
+            <div className="p-4 text-center text-text-muted text-sm">
               Chua co tep duoc chia se
             </div>
           )}
         </div>
 
-        <div className="h-px bg-gray-200 mx-4" />
+        <div className="h-px bg-border mx-4" />
 
         <div className="py-2">
-          <button
-            type="button"
-            className="w-full flex items-center gap-4 px-4 py-3 hover:bg-red-50 transition-colors text-red-500"
+          <button type="button"
+            className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-danger"
           >
             <ExclamationTriangleIcon className="w-5 h-5" />
             <span className="text-sm">Bao cao nhom</span>
           </button>
 
-          <button
-            type="button"
+          <button type="button"
             disabled={isSubmitting}
             onClick={() => void handleLeaveGroup()}
-            className="w-full flex items-center gap-4 px-4 py-3 hover:bg-red-50 transition-colors text-red-500"
+            className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-danger"
           >
             <ArrowRightOnRectangleIcon className="w-5 h-5" />
             <span className="text-sm">Roi nhom</span>
@@ -355,3 +348,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 };
 
 export default GroupInfo;
+
+
+
+
+

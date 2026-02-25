@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import clsx from "clsx";
 import { UserStatus } from "../../types";
 
@@ -22,9 +22,9 @@ const sizeClasses = {
 
 const statusSizeClasses = {
   xs: "h-2 w-2",
-  sm: "h-2.5 w-2.5",
+  sm: "h-3 w-3",
   md: "h-3 w-3",
-  lg: "h-3.5 w-3.5",
+  lg: "h-4 w-4",
   xl: "h-4 w-4",
 };
 
@@ -111,3 +111,4 @@ export const Avatar: React.FC<AvatarProps> = ({
 };
 
 export default Avatar;
+

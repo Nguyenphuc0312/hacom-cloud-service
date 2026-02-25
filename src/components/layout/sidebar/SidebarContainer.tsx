@@ -18,7 +18,7 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({
         "flex h-full min-h-0 w-full flex-col overflow-hidden",
         "border-r border-border bg-surface-raised/95 backdrop-blur-sm",
         "lg:transition-[width] lg:duration-200",
-        collapsed ? "lg:w-[88px]" : "lg:w-[304px]",
+        collapsed ? "lg:w-sidebar-collapsed" : "lg:w-sidebar-expanded",
         className,
       )}
       aria-label="Sidebar"

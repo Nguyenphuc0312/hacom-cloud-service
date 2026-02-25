@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @fileoverview Checkbox component
  * Custom checkbox with semantic design tokens.
  */
@@ -33,7 +33,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
             disabled && "cursor-not-allowed opacity-60",
           )}
         >
-          <div className="relative mt-0.5 shrink-0">
+          <div className="relative mt-1 shrink-0">
             <input
               ref={ref}
               type="checkbox"
@@ -56,7 +56,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
             >
               <CheckIcon
                 className={clsx(
-                  "h-3.5 w-3.5 text-text-inverse transition-all duration-200",
+                  "h-4 w-4 text-text-inverse transition-all duration-200",
                   "scale-50 opacity-0",
                   "peer-checked:scale-100 peer-checked:opacity-100",
                 )}
@@ -67,7 +67,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
           {label && <span className="select-none text-sm text-text-secondary">{label}</span>}
         </label>
 
-        {error && <p className="mt-1.5 text-sm text-danger">{error}</p>}
+        {error && <p className="mt-2 text-sm text-danger">{error}</p>}
       </div>
     );
   },
@@ -76,3 +76,4 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
 Checkbox.displayName = "Checkbox";
 
 export default Checkbox;
+

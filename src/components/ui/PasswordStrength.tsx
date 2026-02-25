@@ -15,21 +15,21 @@ interface PasswordStrengthProps {
 const strengthConfig = {
   weak: {
     label: "Yếu",
-    color: "bg-red-500",
+    color: "bg-danger",
     bars: 1,
-    textColor: "text-red-500",
+    textColor: "text-danger",
   },
   medium: {
     label: "Trung bình",
-    color: "bg-amber-500",
+    color: "bg-warning",
     bars: 2,
-    textColor: "text-amber-500",
+    textColor: "text-warning",
   },
   strong: {
     label: "Mạnh",
-    color: "bg-green-500",
+    color: "bg-success",
     bars: 3,
-    textColor: "text-green-500",
+    textColor: "text-success",
   },
 };
 
@@ -45,13 +45,13 @@ export const PasswordStrength: React.FC<PasswordStrengthProps> = ({
   return (
     <div className={clsx("space-y-1.5", className)}>
       {/* Strength bars */}
-      <div className="flex gap-1.5">
+      <div className="flex gap-2">
         {[1, 2, 3].map((bar) => (
           <div
             key={bar}
             className={clsx(
               "h-1.5 flex-1 rounded-full transition-all duration-300",
-              bar <= config.bars ? config.color : "bg-gray-200",
+              bar <= config.bars ? config.color : "bg-surface-active",
             )}
           />
         ))}
@@ -63,7 +63,7 @@ export const PasswordStrength: React.FC<PasswordStrengthProps> = ({
       </p>
 
       {/* Password requirements */}
-      <div className="text-xs text-gray-500 space-y-0.5">
+      <div className="text-xs text-text-muted space-y-0.5">
         <RequirementItem met={password.length >= 8} text="Ít nhất 8 ký tự" />
         <RequirementItem
           met={/[a-z]/.test(password)}
@@ -89,16 +89,16 @@ const RequirementItem: React.FC<{
   text: string;
   optional?: boolean;
 }> = ({ met, text, optional }) => (
-  <div className="flex items-center gap-1.5">
+  <div className="flex items-center gap-2">
     <div
       className={clsx(
-        "w-3 h-3 rounded-full flex items-center justify-center text-[8px]",
-        met ? "bg-green-500 text-white" : "bg-gray-200 text-gray-400",
+        "w-3 h-3 rounded-full flex items-center justify-center text-xs leading-none",
+        met ? "bg-success text-text-inverse" : "bg-surface-active text-text-muted",
       )}
     >
       {met ? "✓" : ""}
     </div>
-    <span className={clsx(met && "text-gray-700")}>
+    <span className={clsx(met && "text-text-secondary")}>
       {text}
       {optional && " (khuyến khích)"}
     </span>
@@ -106,3 +106,5 @@ const RequirementItem: React.FC<{
 );
 
 export default PasswordStrength;
+
+

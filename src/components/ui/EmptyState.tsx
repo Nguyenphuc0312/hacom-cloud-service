@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @fileoverview Empty State components
  */
 
@@ -182,7 +182,7 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
         <button
           type="button"
           onClick={onNewChat}
-          className="min-h-11 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-text-inverse transition-colors hover:bg-primary/90"
+          className="min-h-11 rounded-lg bg-primary px-5 py-2 text-sm font-medium text-text-inverse transition-colors hover:bg-primary/90"
         >
           Start new chat
         </button>
@@ -192,3 +192,4 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
 };
 
 export default EmptyState;
+

@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo } from "react";
 import clsx from "clsx";
 import { PlayIcon, PauseIcon } from "@heroicons/react/24/solid";
 import type { Attachment } from "../../types";
@@ -74,7 +74,7 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
   }, [attachment.url]);
 
   return (
-    <div className={clsx("flex min-w-[200px] items-center gap-3", className)}>
+    <div className={clsx("flex min-w-voice-message-min items-center gap-3", className)}>
       <audio
         ref={audioRef}
         src={attachment.url}
@@ -96,13 +96,13 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
         {isPlaying ? (
           <PauseIcon className="h-5 w-5" />
         ) : (
-          <PlayIcon className="ml-0.5 h-5 w-5" />
+          <PlayIcon className="ml-1 h-5 w-5" />
         )}
       </button>
 
       <div className="flex-1">
         <div
-          className="relative flex h-8 cursor-pointer items-center gap-0.5"
+          className="relative flex h-8 cursor-pointer items-center gap-1"
           onClick={handleSeek}
           role="slider"
           aria-label="Audio progress"
@@ -144,3 +144,4 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
 };
 
 export default VoiceMessage;
+

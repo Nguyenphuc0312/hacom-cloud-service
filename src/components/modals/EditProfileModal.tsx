@@ -144,9 +144,9 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
               className={clsx(
                 "absolute bottom-0 right-0",
                 "w-8 h-8 rounded-full",
-                "bg-telegram-primary text-white",
+                "bg-primary text-text-inverse",
                 "flex items-center justify-center",
-                "shadow-lg hover:bg-telegram-primary/90 transition-colors",
+                "shadow-lg hover:bg-primary-hover transition-colors",
               )}
             >
               <CameraIcon className="w-4 h-4" />
@@ -160,9 +160,9 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                 className={clsx(
                   "absolute -top-2 -right-2",
                   "w-6 h-6 rounded-full",
-                  "bg-red-500 text-white",
+                  "bg-danger text-text-inverse",
                   "flex items-center justify-center",
-                  "shadow-lg hover:bg-red-600 transition-colors",
+                  "shadow-lg hover:bg-danger-hover transition-colors",
                 )}
               >
                 <XMarkIcon className="w-4 h-4" />
@@ -178,7 +178,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
             className="hidden"
           />
 
-          <p className="mt-2 text-sm text-gray-500">
+          <p className="mt-2 text-sm text-text-muted">
             Click để thay đổi ảnh đại diện
           </p>
         </div>
@@ -247,3 +247,4 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
 };
 
 export default EditProfileModal;
+

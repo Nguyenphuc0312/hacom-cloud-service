@@ -50,34 +50,35 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
     <div
       ref={pickerRef}
       className={clsx(
-        "bg-white rounded-xl shadow-xl border border-gray-200",
+        "bg-surface rounded-xl shadow-elev2 border border-border",
         "w-80 animate-slide-in-up",
         className,
       )}
     >
       {/* Search */}
-      <div className="p-2 border-b border-gray-100">
+      <div className="p-2 border-b border-border">
         <div className="relative">
-          <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Tìm kiếm emoji..."
-            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg bg-gray-100 border-none focus:outline-none focus:ring-2 focus:ring-telegram-primary focus:bg-white"
+            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg bg-surface-overlay border-none focus:outline-none focus:ring-2 focus:ring-focus/30 focus:bg-surface"
           />
         </div>
       </div>
 
       {/* Categories */}
-      <div className="flex items-center gap-1 px-2 py-1 border-b border-gray-100">
+      <div className="flex items-center gap-1 px-2 py-1 border-b border-border">
         {categories.map((cat) => (
           <button
             key={cat.id}
+            type="button"
             onClick={() => setActiveCategory(cat.id)}
             className={clsx(
-              "flex-1 py-1.5 rounded-md text-lg transition-colors",
-              activeCategory === cat.id ? "bg-gray-100" : "hover:bg-gray-50",
+              "flex-1 py-2 rounded-md text-lg transition-colors",
+              activeCategory === cat.id ? "bg-surface-overlay" : "hover:bg-surface-hover",
             )}
             title={cat.name}
           >
@@ -92,8 +93,9 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
           {filteredEmojis.map((emoji, index) => (
             <button
               key={index}
+              type="button"
               onClick={() => onSelect(emoji)}
-              className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-xl transition-transform hover:scale-125"
+              className="w-8 h-8 flex items-center justify-center rounded hover:bg-surface-overlay text-xl transition-transform hover:scale-125"
             >
               {emoji}
             </button>
@@ -101,7 +103,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
         </div>
 
         {filteredEmojis.length === 0 && (
-          <div className="flex items-center justify-center h-full text-gray-500 text-sm">
+          <div className="flex items-center justify-center h-full text-text-muted text-sm">
             Không tìm thấy emoji
           </div>
         )}
@@ -111,3 +113,5 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
 };
 
 export default EmojiPicker;
+
+

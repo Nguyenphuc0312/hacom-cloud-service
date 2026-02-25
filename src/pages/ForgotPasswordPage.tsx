@@ -63,26 +63,26 @@ export const ForgotPasswordPage: React.FC = () => {
   // Success state
   if (isSubmitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-telegram-primary/5 via-white to-telegram-secondary/5 px-4 py-12">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 px-4 py-12">
         <div className="relative w-full max-w-md">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 text-center animate-fade-in">
+          <div className="bg-surface rounded-2xl shadow-xl border border-border p-8 text-center animate-fade-in">
             {/* Success icon */}
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-6">
-              <CheckCircleIcon className="w-8 h-8 text-green-500" />
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-success/15 rounded-full mb-6">
+              <CheckCircleIcon className="w-8 h-8 text-success" />
             </div>
 
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            <h1 className="text-2xl font-bold text-text-primary mb-2">
               Kiểm tra email của bạn
             </h1>
-            <p className="text-gray-500 mb-6">
+            <p className="text-text-muted mb-6">
               Chúng tôi đã gửi hướng dẫn đặt lại mật khẩu đến{" "}
-              <span className="font-medium text-gray-900">
+              <span className="font-medium text-text-primary">
                 {getValues("email")}
               </span>
             </p>
 
             <div className="space-y-4">
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-text-muted">
                 Không nhận được email? Kiểm tra thư mục spam hoặc
               </p>
               <Button
@@ -106,23 +106,23 @@ export const ForgotPasswordPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-telegram-primary/5 via-white to-telegram-secondary/5 px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 px-4 py-12">
       {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-telegram-primary/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-telegram-secondary/10 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-secondary/15 rounded-full blur-3xl" />
       </div>
 
       {/* Card */}
       <div className="relative w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 animate-fade-in">
+        <div className="bg-surface rounded-2xl shadow-xl border border-border p-8 animate-fade-in">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-telegram-primary rounded-2xl mb-4 shadow-lg shadow-telegram-primary/30">
-              <ChatBubbleLeftRightIcon className="w-8 h-8 text-white" />
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl mb-4 shadow-lg shadow-elev2">
+              <ChatBubbleLeftRightIcon className="w-8 h-8 text-text-inverse" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">Quên mật khẩu?</h1>
-            <p className="text-gray-500 mt-2">
+            <h1 className="text-2xl font-bold text-text-primary">Quên mật khẩu?</h1>
+            <p className="text-text-muted mt-2">
               Nhập email của bạn, chúng tôi sẽ gửi link đặt lại mật khẩu
             </p>
           </div>
@@ -155,7 +155,7 @@ export const ForgotPasswordPage: React.FC = () => {
           <div className="mt-6 text-center">
             <Link
               to="/login"
-              className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
+              className="inline-flex items-center text-sm text-text-muted hover:text-text-secondary"
             >
               <ArrowLeftIcon className="w-4 h-4 mr-1" />
               Quay lại đăng nhập
@@ -168,3 +168,5 @@ export const ForgotPasswordPage: React.FC = () => {
 };
 
 export default ForgotPasswordPage;
+
+

@@ -278,56 +278,56 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   return (
     <div
-      className={clsx("relative bg-white border-t border-gray-200", className)}
+      className={clsx("relative bg-surface border-t border-border", className)}
     >
       {mode === "reply" && replyToMessage && (
-        <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200">
+        <div className="flex items-center justify-between px-4 py-2 bg-surface-overlay border-b border-border">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-1 h-8 bg-telegram-primary rounded-full" />
+            <div className="w-1 h-8 bg-primary rounded-full" />
             <div className="min-w-0">
-              <p className="text-xs font-medium text-telegram-primary">
+              <p className="text-xs font-medium text-primary">
                 Replying to {replyToMessage.senderName}
               </p>
-              <p className="text-xs text-gray-500 truncate">
+              <p className="text-xs text-text-muted truncate">
                 {replyToMessage.content}
               </p>
             </div>
           </div>
           <button
             onClick={onCancelReply}
-            className="p-1 hover:bg-gray-200 rounded-full transition-colors"
+            className="p-1 hover:bg-surface-active rounded-full transition-colors"
             aria-label="Cancel reply"
           >
-            <XMarkIcon className="w-4 h-4 text-gray-500" />
+            <XMarkIcon className="w-4 h-4 text-text-muted" />
           </button>
         </div>
       )}
 
       {mode === "edit" && editingMessage && (
-        <div className="flex items-center justify-between px-4 py-2 bg-yellow-50 border-b border-yellow-200">
+        <div className="flex items-center justify-between px-4 py-2 bg-warning/15 border-b border-warning/35">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-1 h-8 bg-yellow-500 rounded-full" />
+            <div className="w-1 h-8 bg-warning rounded-full" />
             <div className="min-w-0">
-              <p className="text-xs font-medium text-yellow-700">
+              <p className="text-xs font-medium text-warning">
                 Editing message
               </p>
-              <p className="text-xs text-yellow-600 truncate">
+              <p className="text-xs text-warning truncate">
                 {editingMessage.content}
               </p>
             </div>
           </div>
           <button
             onClick={onCancelEdit}
-            className="p-1 hover:bg-yellow-100 rounded-full transition-colors"
+            className="p-1 hover:bg-warning/20 rounded-full transition-colors"
             aria-label="Cancel edit"
           >
-            <XMarkIcon className="w-4 h-4 text-yellow-600" />
+            <XMarkIcon className="w-4 h-4 text-warning" />
           </button>
         </div>
       )}
 
       {fileToSend && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border-b border-gray-200">
+        <div className="flex items-center gap-2 px-4 py-2 bg-surface-overlay border-b border-border">
           {filePreview && fileToSend.type.startsWith("image/") ? (
             <img
               src={filePreview}
@@ -340,12 +340,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
           {uploading ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">Uploading...</span>
+              <span className="text-xs text-text-muted">Uploading...</span>
               <progress value={uploadProgress} max={100} className="w-24" />
               <button
                 type="button"
                 onClick={handleCancelUpload}
-                className="text-xs text-gray-500 underline hover:text-gray-700"
+                className="text-xs text-text-muted underline hover:text-text-secondary"
               >
                 Cancel
               </button>
@@ -354,14 +354,15 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             <button
               type="button"
               onClick={handleUploadAndSend}
-              className="text-red-500 text-xs underline"
+              className="text-danger text-xs underline"
             >
               Retry
             </button>
           ) : (
             <button
+              type="button"
               onClick={handleUploadAndSend}
-              className="text-telegram-primary text-xs underline"
+              className="text-primary text-xs underline"
             >
               Send file
             </button>
@@ -373,7 +374,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             className="ml-auto p-1"
             aria-label="Remove file"
           >
-            <XMarkIcon className="w-4 h-4 text-gray-400" />
+            <XMarkIcon className="w-4 h-4 text-text-muted" />
           </button>
         </div>
       )}
@@ -381,6 +382,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       <div className="flex items-end gap-2 px-4 py-2 pb-[max(env(safe-area-inset-bottom),0px)]">
         <div className="relative">
           <button
+            type="button"
             onClick={() => {
               setShowEmojiPicker((prev) => !prev);
               setShowAttachmentMenu(false);
@@ -388,8 +390,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             className={clsx(
               "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
               showEmojiPicker
-                ? "bg-telegram-primary text-white"
-                : "text-gray-500 hover:bg-gray-100",
+                ? "bg-primary text-text-inverse"
+                : "text-text-muted hover:bg-surface-overlay",
             )}
             aria-label="Open emoji picker"
             disabled={disableComposerActions}
@@ -412,6 +414,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
         <div className="relative">
           <button
+            type="button"
             onClick={() => {
               setShowAttachmentMenu((prev) => !prev);
               setShowEmojiPicker(false);
@@ -419,8 +422,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             className={clsx(
               "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
               showAttachmentMenu
-                ? "bg-telegram-primary text-white"
-                : "text-gray-500 hover:bg-gray-100",
+                ? "bg-primary text-text-inverse"
+                : "text-text-muted hover:bg-surface-overlay",
             )}
             aria-label="Attach file"
             disabled={disableComposerActions}
@@ -464,13 +467,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             rows={1}
             className={clsx(
               "w-full rounded-2xl px-4 py-2",
-              "bg-gray-100 border-none",
-              "text-gray-900 placeholder-gray-500",
-              "focus:outline-none focus:ring-2 focus:ring-telegram-primary focus:bg-white",
+              "bg-surface-overlay border-none",
+              "text-text-primary placeholder:text-text-muted",
+              "focus:outline-none focus:ring-2 focus:ring-focus/30 focus:bg-surface",
               "resize-none overflow-hidden",
               "transition-all duration-200",
               disabled && "opacity-50 cursor-not-allowed",
             )}
+            // theme-exception: min/max height controls autosize behavior, not visual palette.
             style={{ minHeight: "40px", maxHeight: "144px" }}
             aria-label="Message input"
           />
@@ -478,12 +482,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
         {hasContent ? (
           <button
+            type="button"
             onClick={handleSendText}
             disabled={disabled || uploading}
             className={clsx(
               "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
-              "bg-telegram-primary text-white",
-              "hover:bg-telegram-secondary",
+              "bg-primary text-text-inverse",
+              "hover:bg-primary-hover",
               "disabled:opacity-50 disabled:cursor-not-allowed",
             )}
             aria-label="Gửi tin nhắn"
@@ -492,7 +497,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           </button>
         ) : (
           <button
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            type="button"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-overlay disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Record voice message"
             disabled={disableComposerActions}
           >
@@ -505,3 +511,4 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 };
 
 export default MessageInput;
+

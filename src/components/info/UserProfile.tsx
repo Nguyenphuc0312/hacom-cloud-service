@@ -29,16 +29,16 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     user.status === UserStatus.ONLINE ? "Đang hoạt động" : "Ngoại tuyến";
 
   return (
-    <div className={clsx("flex flex-col h-full bg-white", className)}>
+    <div className={clsx("flex flex-col h-full bg-surface", className)}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-        <h3 className="font-semibold text-gray-900">Thông tin người dùng</h3>
-        <button
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <h3 className="font-semibold text-text-primary">Thông tin người dùng</h3>
+        <button type="button"
           onClick={onClose}
-          className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+          className="p-1 rounded-full hover:bg-surface-overlay transition-colors"
           aria-label="Đóng"
         >
-          <XMarkIcon className="w-5 h-5 text-gray-500" />
+          <XMarkIcon className="w-5 h-5 text-text-muted" />
         </button>
       </div>
 
@@ -56,19 +56,19 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
           <div className="mt-4 text-center">
             <div className="flex items-center justify-center gap-2">
-              <h2 className="text-xl font-semibold text-gray-900">
+              <h2 className="text-xl font-semibold text-text-primary">
                 {user.displayName || user.username}
               </h2>
             </div>
 
-            <p className="text-sm text-gray-500 mt-0.5">@{user.username}</p>
+            <p className="text-sm text-text-muted mt-1">@{user.username}</p>
 
             <p
               className={clsx(
                 "text-sm mt-1",
                 user.status === UserStatus.ONLINE
                   ? "text-chat-online"
-                  : "text-gray-500",
+                  : "text-text-muted",
               )}
             >
               {statusText}
@@ -76,71 +76,71 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           </div>
         </div>
 
-        <div className="h-px bg-gray-200 mx-4" />
+        <div className="h-px bg-border mx-4" />
 
         {/* Info items */}
         <div className="py-2">
-          <div className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
-            <UserIcon className="w-5 h-5 text-gray-400" />
+          <div className="flex items-center gap-4 px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer">
+            <UserIcon className="w-5 h-5 text-text-muted" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-gray-900">@{user.username}</p>
-              <p className="text-xs text-gray-500">Tên người dùng</p>
+              <p className="text-sm text-text-primary">@{user.username}</p>
+              <p className="text-xs text-text-muted">Tên người dùng</p>
             </div>
           </div>
         </div>
 
-        <div className="h-px bg-gray-200 mx-4" />
+        <div className="h-px bg-border mx-4" />
 
         {/* Settings */}
         <div className="py-2">
-          <div className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
+          <div className="flex items-center justify-between px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer">
             <div className="flex items-center gap-4">
-              <BellIcon className="w-5 h-5 text-gray-400" />
-              <span className="text-sm text-gray-900">Thông báo</span>
+              <BellIcon className="w-5 h-5 text-text-muted" />
+              <span className="text-sm text-text-primary">Thông báo</span>
             </div>
-            <div className="w-10 h-6 bg-telegram-primary rounded-full relative">
-              <div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full shadow" />
+            <div className="w-10 h-6 bg-primary rounded-full relative">
+              <div className="absolute right-1 top-1 w-4 h-4 bg-surface rounded-full shadow" />
             </div>
           </div>
         </div>
 
-        <div className="h-px bg-gray-200 mx-4" />
+        <div className="h-px bg-border mx-4" />
 
         {/* Media section */}
         <div className="py-2">
-          <div className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
-            <PhotoIcon className="w-5 h-5 text-gray-400" />
-            <span className="text-sm text-gray-900">
+          <div className="flex items-center gap-4 px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer">
+            <PhotoIcon className="w-5 h-5 text-text-muted" />
+            <span className="text-sm text-text-primary">
               Phương tiện, Tệp, Liên kết
             </span>
-            <span className="ml-auto text-sm text-gray-500">24</span>
+            <span className="ml-auto text-sm text-text-muted">24</span>
           </div>
 
-          <div className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
-            <MagnifyingGlassIcon className="w-5 h-5 text-gray-400" />
-            <span className="text-sm text-gray-900">
+          <div className="flex items-center gap-4 px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer">
+            <MagnifyingGlassIcon className="w-5 h-5 text-text-muted" />
+            <span className="text-sm text-text-primary">
               Tìm kiếm trong cuộc trò chuyện
             </span>
           </div>
         </div>
 
-        <div className="h-px bg-gray-200 mx-4" />
+        <div className="h-px bg-border mx-4" />
 
         {/* Danger zone */}
         <div className="py-2">
-          <div className="flex items-center gap-4 px-4 py-3 hover:bg-red-50 transition-colors cursor-pointer">
-            <NoSymbolIcon className="w-5 h-5 text-red-500" />
-            <span className="text-sm text-red-500">Chặn người dùng</span>
+          <div className="flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors cursor-pointer">
+            <NoSymbolIcon className="w-5 h-5 text-danger" />
+            <span className="text-sm text-danger">Chặn người dùng</span>
           </div>
 
-          <div className="flex items-center gap-4 px-4 py-3 hover:bg-red-50 transition-colors cursor-pointer">
-            <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />
-            <span className="text-sm text-red-500">Báo cáo</span>
+          <div className="flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors cursor-pointer">
+            <ExclamationTriangleIcon className="w-5 h-5 text-danger" />
+            <span className="text-sm text-danger">Báo cáo</span>
           </div>
 
-          <div className="flex items-center gap-4 px-4 py-3 hover:bg-red-50 transition-colors cursor-pointer">
-            <TrashIcon className="w-5 h-5 text-red-500" />
-            <span className="text-sm text-red-500">Xóa cuộc trò chuyện</span>
+          <div className="flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors cursor-pointer">
+            <TrashIcon className="w-5 h-5 text-danger" />
+            <span className="text-sm text-danger">Xóa cuộc trò chuyện</span>
           </div>
         </div>
       </div>
@@ -149,3 +149,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 };
 
 export default UserProfile;
+
+
+
+
+

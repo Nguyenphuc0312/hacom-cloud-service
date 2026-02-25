@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import clsx from "clsx";
 import type { Reaction } from "../../types";
 import { reactionEmojis } from "../../data/mockData";
@@ -23,7 +23,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
   return (
     <div className={clsx("flex flex-col gap-1", className)}>
       {showPicker && (
-        <div className="flex items-center gap-1 rounded-full border border-border bg-surface p-1.5 shadow-elev2 animate-bounce-in">
+        <div className="flex items-center gap-1 rounded-full border border-border bg-surface p-2 shadow-elev2 animate-bounce-in">
           {reactionEmojis.map((emoji) => (
             <button
               key={emoji}
@@ -71,3 +71,4 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
 };
 
 export default ReactionBar;
+

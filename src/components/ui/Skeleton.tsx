@@ -33,7 +33,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
   return (
     <div
       className={clsx(
-        "bg-gray-200 animate-pulse",
+        "bg-surface-active animate-pulse",
         roundedClasses[rounded],
         className,
       )}
@@ -75,7 +75,7 @@ export const ConversationListSkeleton: React.FC<{ count?: number }> = ({
   count = 6,
 }) => {
   return (
-    <div className="divide-y divide-gray-100">
+    <div className="divide-y divide-border">
       {Array.from({ length: count }).map((_, i) => (
         <ConversationSkeleton key={i} />
       ))}
@@ -102,7 +102,7 @@ export const MessageSkeleton: React.FC<{ isMe?: boolean; width?: number }> = ({
 
       {/* Bubble */}
       <div
-        className="h-10 rounded-lg bg-gray-200 animate-pulse"
+        className="h-10 rounded-lg bg-surface-active animate-pulse"
         style={{ width: `${width}%` }}
       />
     </div>
@@ -171,11 +171,11 @@ export const UserProfileSkeleton: React.FC = () => {
  */
 export const PageSkeleton: React.FC = () => {
   return (
-    <div className="flex h-screen bg-white">
+    <div className="flex h-screen bg-surface">
       {/* Sidebar skeleton */}
-      <div className="w-80 border-r border-gray-200 flex flex-col">
+      <div className="flex w-80 flex-col border-r border-border">
         {/* Header */}
-        <div className="px-4 py-4 border-b border-gray-200">
+        <div className="border-b border-border px-4 py-4">
           <Skeleton className="h-6 w-32" />
         </div>
 
@@ -198,7 +198,7 @@ export const PageSkeleton: React.FC = () => {
       {/* Chat area skeleton */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <div className="px-4 py-3 border-b border-gray-200">
+        <div className="border-b border-border px-4 py-3">
           <div className="flex items-center gap-3">
             <Skeleton className="w-10 h-10" rounded="full" />
             <div className="space-y-1.5">
@@ -209,12 +209,12 @@ export const PageSkeleton: React.FC = () => {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 bg-gray-50">
+        <div className="flex-1 bg-background">
           <MessageListSkeleton />
         </div>
 
         {/* Input */}
-        <div className="px-4 py-3 border-t border-gray-200">
+        <div className="border-t border-border px-4 py-3">
           <Skeleton className="h-12 w-full" />
         </div>
       </div>

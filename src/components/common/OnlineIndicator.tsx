@@ -19,9 +19,9 @@ const statusColors: Record<UserStatus, string> = {
   [UserStatus.ONLINE]: "bg-chat-online",
   [UserStatus.OFFLINE]: "bg-chat-offline",
   [UserStatus.AWAY]: "bg-chat-away",
-  [UserStatus.DND]: "bg-red-500",
-  [UserStatus.INVISIBLE]: "bg-gray-400",
-  [UserStatus.BUSY]: "bg-orange-500",
+  [UserStatus.DND]: "bg-state-dnd",
+  [UserStatus.INVISIBLE]: "bg-border-strong",
+  [UserStatus.BUSY]: "bg-state-busy",
 };
 
 export const OnlineIndicator: React.FC<OnlineIndicatorProps> = ({
@@ -33,7 +33,7 @@ export const OnlineIndicator: React.FC<OnlineIndicatorProps> = ({
   return (
     <span
       className={clsx(
-        "inline-block rounded-full ring-2 ring-white",
+        "inline-block rounded-full ring-2 ring-surface",
         sizeClasses[size],
         statusColors[status],
         status === UserStatus.ONLINE && pulse && "animate-pulse-online",

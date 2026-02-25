@@ -256,7 +256,7 @@ export function parseLinks(text: string): string {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   return text.replace(
     urlRegex,
-    '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">$1</a>',
+    '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-primary hover:text-primary-hover hover:underline">$1</a>',
   );
 }
 

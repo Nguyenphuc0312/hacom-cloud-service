@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import clsx from "clsx";
 import { CheckIcon, ExclamationCircleIcon } from "@heroicons/react/24/solid";
 import { Avatar } from "../common/Avatar";
@@ -37,7 +37,7 @@ const MessageStatusIcon: React.FC<{
   if (status === "uploading") {
     return (
       <span
-        className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-text-inverse/80 border-t-transparent"
+        className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-text-inverse/80 border-t-transparent"
         role="img"
         aria-label="Uploading"
         title="Uploading"
@@ -51,7 +51,7 @@ const MessageStatusIcon: React.FC<{
     case MessageStatus.SENDING:
       return (
         <span
-          className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-text-inverse/80 border-t-transparent"
+          className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-text-inverse/80 border-t-transparent"
           role="img"
           aria-label="Sending"
           title="Sending"
@@ -62,22 +62,22 @@ const MessageStatusIcon: React.FC<{
     case MessageStatus.SENT:
       return (
         <span role="img" aria-label="Sent" title="Sent">
-          <CheckIcon className="h-3.5 w-3.5 text-text-inverse/80" />
+          <CheckIcon className="h-4 w-4 text-text-inverse/80" />
           <span className="sr-only">Sent</span>
         </span>
       );
     case MessageStatus.DELIVERED:
       return (
         <div className="flex -space-x-1">
-          <CheckIcon className="h-3.5 w-3.5 text-text-inverse/80" />
-          <CheckIcon className="h-3.5 w-3.5 text-text-inverse/80" />
+          <CheckIcon className="h-4 w-4 text-text-inverse/80" />
+          <CheckIcon className="h-4 w-4 text-text-inverse/80" />
         </div>
       );
     case MessageStatus.READ:
       return (
         <div className="flex -space-x-1">
-          <CheckIcon className="h-3.5 w-3.5 text-text-inverse" />
-          <CheckIcon className="h-3.5 w-3.5 text-text-inverse" />
+          <CheckIcon className="h-4 w-4 text-text-inverse" />
+          <CheckIcon className="h-4 w-4 text-text-inverse" />
         </div>
       );
     case MessageStatus.FAILED:
@@ -369,3 +369,4 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 export const MessageBubble = React.memo(MessageBubbleComponent);
 
 export default MessageBubble;
+

@@ -38,6 +38,12 @@
   --space-10: 40px;
   --space-12: 48px;
 
+  --size-room-item: 72px;
+  --size-room-meta: 46px;
+  --size-sidebar-collapsed: 88px;
+  --size-sidebar-expanded: 304px;
+  --size-voice-message-min: 200px;
+
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
@@ -54,28 +60,63 @@
   --theme-transition-duration: 180ms;
   --theme-transition-easing: cubic-bezier(0.2, 0.8, 0.2, 1);
 
-  --color-primary: 206 100% 41%;
-  --color-secondary: 203 88% 66%;
+  --core-gray-0: 0 0% 100%;
+  --core-gray-50: 210 33% 98%;
+  --core-gray-100: 220 18% 97%;
+  --core-gray-200: 215 20% 87%;
+  --core-gray-300: 215 16% 65%;
+  --core-gray-400: 215 16% 47%;
+  --core-gray-500: 215 13% 65%;
+  --core-gray-600: 220 14% 25%;
+  --core-gray-700: 221 24% 16%;
+  --core-gray-800: 222 22% 12%;
+  --core-gray-900: 222 47% 11%;
+
+  --core-brand-400: 203 88% 66%;
+  --core-brand-500: 206 100% 41%;
+  --core-brand-600: 206 100% 35%;
+
+  --core-danger-500: 0 84% 60%;
+  --core-danger-600: 0 72% 50%;
+  --core-warning-500: 42 96% 50%;
+  --core-warning-600: 38 94% 44%;
+  --core-success-500: 152 80% 36%;
+  --core-success-600: 152 74% 30%;
+
+  --color-primary: var(--core-brand-500);
+  --color-primary-hover: var(--core-brand-600);
+  --color-primary-active: var(--core-brand-600);
+  --color-secondary: var(--core-brand-400);
   --color-accent: 24 100% 50%;
-  --color-success: 152 80% 36%;
-  --color-warning: 42 96% 50%;
-  --color-danger: 0 84% 60%;
+  --color-success: var(--core-success-500);
+  --color-success-hover: var(--core-success-600);
+  --color-warning: var(--core-warning-500);
+  --color-warning-hover: var(--core-warning-600);
+  --color-danger: var(--core-danger-500);
+  --color-danger-hover: var(--core-danger-600);
 
-  --color-background: 210 33% 98%;
-  --color-surface: 0 0% 100%;
-  --color-surface-raised: 0 0% 100%;
-  --color-surface-overlay: 220 18% 97%;
-  --color-border: 215 20% 87%;
-  --color-border-strong: 215 16% 65%;
+  --color-background: var(--core-gray-50);
+  --color-surface: var(--core-gray-0);
+  --color-surface-raised: var(--core-gray-0);
+  --color-surface-overlay: var(--core-gray-100);
+  --color-surface-hover: var(--core-gray-100);
+  --color-surface-active: var(--core-gray-200);
+  --color-border: var(--core-gray-200);
+  --color-border-strong: var(--core-gray-300);
+  --color-border-focus: var(--core-brand-500);
 
-  --color-text-primary: 222 47% 11%;
-  --color-text-secondary: 215 16% 47%;
-  --color-text-muted: 215 13% 65%;
-  --color-text-inverse: 0 0% 100%;
+  --color-text-primary: var(--core-gray-900);
+  --color-text-secondary: var(--core-gray-400);
+  --color-text-muted: var(--core-gray-500);
+  --color-text-inverse: var(--core-gray-0);
+  --color-text-disabled: var(--core-gray-500);
+
+  --color-disabled-bg: var(--core-gray-100);
+  --color-disabled-border: var(--core-gray-200);
 
   --color-online: 142 71% 45%;
-  --color-offline: 215 13% 65%;
-  --color-away: 42 96% 50%;
+  --color-offline: var(--core-gray-500);
+  --color-away: var(--core-warning-500);
   --color-focus-ring: var(--color-primary);
 
   --chat-pattern-color: 210 12% 60%;
@@ -92,21 +133,34 @@
 }
 
 :root[data-theme="dark"] {
-  --color-primary: 203 100% 56%;
-  --color-secondary: 196 85% 66%;
+  --core-brand-400: 196 85% 66%;
+  --core-brand-500: 203 100% 56%;
+  --core-brand-600: 203 100% 48%;
+
+  --color-primary: var(--core-brand-500);
+  --color-primary-hover: var(--core-brand-400);
+  --color-primary-active: var(--core-brand-600);
+  --color-secondary: var(--core-brand-400);
   --color-accent: 28 100% 57%;
 
   --color-background: 222 24% 10%;
   --color-surface: 222 22% 12%;
   --color-surface-raised: 222 20% 18%;
-  --color-surface-overlay: 221 22% 16%;
+  --color-surface-overlay: 221 24% 15%;
+  --color-surface-hover: 220 22% 20%;
+  --color-surface-active: 220 20% 24%;
   --color-border: 218 17% 28%;
   --color-border-strong: 219 12% 44%;
+  --color-border-focus: var(--core-brand-500);
 
   --color-text-primary: 210 20% 96%;
   --color-text-secondary: 215 15% 74%;
   --color-text-muted: 215 11% 58%;
   --color-text-inverse: 222 47% 11%;
+  --color-text-disabled: 215 11% 58%;
+
+  --color-disabled-bg: 220 22% 18%;
+  --color-disabled-border: 219 17% 28%;
 
   --chat-pattern-color: 214 14% 52%;
   --chat-bubble-sent: var(--color-primary);
@@ -124,22 +178,37 @@
 }
 
 :root[data-brand="green"] {
-  --color-primary: 152 76% 33%;
-  --color-secondary: 160 56% 45%;
+  --core-brand-400: 160 56% 45%;
+  --core-brand-500: 152 76% 33%;
+  --core-brand-600: 152 72% 28%;
+  --color-primary: var(--core-brand-500);
+  --color-primary-hover: var(--core-brand-600);
+  --color-primary-active: var(--core-brand-600);
+  --color-secondary: var(--core-brand-400);
   --color-accent: 145 75% 40%;
   --color-focus-ring: var(--color-primary);
 }
 
 :root[data-brand="purple"] {
-  --color-primary: 268 83% 47%;
-  --color-secondary: 266 78% 64%;
+  --core-brand-400: 266 78% 64%;
+  --core-brand-500: 268 83% 47%;
+  --core-brand-600: 268 80% 40%;
+  --color-primary: var(--core-brand-500);
+  --color-primary-hover: var(--core-brand-600);
+  --color-primary-active: var(--core-brand-600);
+  --color-secondary: var(--core-brand-400);
   --color-accent: 286 72% 58%;
   --color-focus-ring: var(--color-primary);
 }
 
 :root[data-brand="blue"] {
-  --color-primary: 206 100% 41%;
-  --color-secondary: 203 88% 66%;
+  --core-brand-400: 203 88% 66%;
+  --core-brand-500: 206 100% 41%;
+  --core-brand-600: 206 100% 35%;
+  --color-primary: var(--core-brand-500);
+  --color-primary-hover: var(--core-brand-600);
+  --color-primary-active: var(--core-brand-600);
+  --color-secondary: var(--core-brand-400);
   --color-accent: 24 100% 50%;
   --color-focus-ring: var(--color-primary);
 }

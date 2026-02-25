@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import clsx from "clsx";
 
 interface BadgeProps {
@@ -20,7 +20,7 @@ const variantClasses = {
 
 const sizeClasses = {
   sm: "h-4 min-w-4 px-1 text-xs",
-  md: "h-5 min-w-5 px-1.5 text-xs",
+  md: "h-5 min-w-5 px-2 text-xs",
   lg: "h-6 min-w-6 px-2 text-sm",
 };
 
@@ -43,7 +43,7 @@ export const Badge: React.FC<BadgeProps> = ({
           variant === "danger" && "bg-danger",
           variant === "success" && "bg-success",
           size === "sm" && "h-2 w-2",
-          size === "md" && "h-2.5 w-2.5",
+          size === "md" && "h-3 w-3",
           size === "lg" && "h-3 w-3",
           className,
         )}
@@ -73,3 +73,4 @@ export const Badge: React.FC<BadgeProps> = ({
 };
 
 export default Badge;
+

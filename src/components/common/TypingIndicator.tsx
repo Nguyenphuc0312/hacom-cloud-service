@@ -13,7 +13,7 @@ export const TypingIndicator: React.FC<TypingIndicatorProps> = ({
   return (
     <div
       className={clsx(
-        "flex items-center gap-1.5 text-xs text-chat-text-secondary",
+        "flex items-center gap-2 text-xs text-chat-text-secondary",
         className,
       )}
     >
@@ -28,3 +28,4 @@ export const TypingIndicator: React.FC<TypingIndicatorProps> = ({
 };
 
 export default TypingIndicator;
+

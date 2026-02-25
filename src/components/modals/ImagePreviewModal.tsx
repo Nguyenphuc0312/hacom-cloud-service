@@ -106,7 +106,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-modal bg-black/95 flex items-center justify-center"
+      className="fixed inset-0 z-modal bg-text-primary/95 flex items-center justify-center"
       onClick={onClose}
       onKeyDown={handleKeyDown}
       tabIndex={0}
@@ -121,15 +121,16 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
             handleZoomOut();
           }}
           variant="ghost"
-          className="text-white hover:bg-white/10"
+          className="text-text-inverse hover:bg-text-inverse/10"
         />
 
         <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
             handleResetZoom();
           }}
-          className="px-3 py-1.5 text-sm text-white hover:bg-white/10 rounded-lg"
+          className="px-3 py-2 text-sm text-text-inverse hover:bg-text-inverse/10 rounded-lg"
         >
           {Math.round(scale * 100)}%
         </button>
@@ -142,10 +143,10 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
             handleZoomIn();
           }}
           variant="ghost"
-          className="text-white hover:bg-white/10"
+          className="text-text-inverse hover:bg-text-inverse/10"
         />
 
-        <div className="w-px h-6 bg-white/20 mx-2" />
+        <div className="w-px h-6 bg-text-inverse/20 mx-2" />
 
         <IconButton
           icon={<ArrowDownTrayIcon className="w-5 h-5" />}
@@ -155,7 +156,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
             handleDownload();
           }}
           variant="ghost"
-          className="text-white hover:bg-white/10"
+          className="text-text-inverse hover:bg-text-inverse/10"
         />
 
         <IconButton
@@ -163,7 +164,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
           aria-label="Đóng"
           onClick={onClose}
           variant="ghost"
-          className="text-white hover:bg-white/10"
+          className="text-text-inverse hover:bg-text-inverse/10"
         />
       </div>
 
@@ -194,7 +195,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
       </div>
 
       {/* Instructions */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/60 text-sm">
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-text-inverse/60 text-sm">
         Scroll để zoom • Double-click để reset • ESC để đóng
       </div>
     </div>
@@ -202,3 +203,5 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
 };
 
 export default ImagePreviewModal;
+
+

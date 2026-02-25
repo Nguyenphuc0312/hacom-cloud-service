@@ -1,4 +1,4 @@
-﻿import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
+import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { ArrowLeftOnRectangleIcon } from "@heroicons/react/24/outline";
 import { Badge } from "../common/Badge";
@@ -93,7 +93,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {!isCollapsed && (
           <div className="border-b border-border px-3 py-2">
-            <div className="flex items-center gap-1 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex items-center gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {tabs.map((tab) => {
                 const isActive = activeFilter === tab.id;
                 const showUnreadCount = tab.id === "unread" && unreadTotal > 0;
@@ -104,7 +104,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     type="button"
                     onClick={() => setActiveFilter(tab.id)}
                     className={clsx(
-                      "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors",
+                      "inline-flex h-8 items-center gap-2 rounded-full px-3 text-xs font-medium transition-colors",
                       isActive
                         ? "bg-primary/15 text-primary"
                         : "text-text-secondary hover:bg-surface-overlay hover:text-text-primary",
@@ -142,7 +142,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             disabled={isLoggingOut}
             onClick={() => setIsLogoutConfirmOpen(true)}
             className={clsx(
-              "inline-flex w-full items-center rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
+              "inline-flex w-full items-center rounded-lg px-2 py-2 text-sm font-medium transition-colors",
               "text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50",
               isCollapsed && "justify-center px-0",
             )}
@@ -176,3 +176,4 @@ export const Sidebar: React.FC<SidebarProps> = ({
 };
 
 export default Sidebar;
+

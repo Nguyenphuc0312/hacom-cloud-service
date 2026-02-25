@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @fileoverview Input component
  * Form input with semantic tokens.
  */
@@ -52,7 +52,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="mb-1.5 block text-sm font-medium text-text-secondary"
+            className="mb-2 block text-sm font-medium text-text-secondary"
           >
             {label}
           </label>
@@ -71,7 +71,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             type={inputType}
             disabled={disabled}
             className={clsx(
-              "w-full rounded-md border bg-surface px-4 py-2.5",
+              "w-full rounded-md border bg-surface px-4 py-2",
               "text-text-primary placeholder:text-text-muted",
               "transition-all duration-200",
               "focus:outline-none focus:ring-2 focus:ring-offset-0",
@@ -117,13 +117,13 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         </div>
 
         {error && (
-          <p className="mt-1.5 flex items-center gap-1 text-sm text-danger">
+          <p className="mt-2 flex items-center gap-1 text-sm text-danger">
             <ExclamationCircleIcon className="h-4 w-4 shrink-0" />
             {error}
           </p>
         )}
 
-        {hint && !error && <p className="mt-1.5 text-sm text-text-muted">{hint}</p>}
+        {hint && !error && <p className="mt-2 text-sm text-text-muted">{hint}</p>}
       </div>
     );
   },
@@ -160,7 +160,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         {label && (
           <label
             htmlFor={textareaId}
-            className="mb-1.5 block text-sm font-medium text-text-secondary"
+            className="mb-2 block text-sm font-medium text-text-secondary"
           >
             {label}
           </label>
@@ -171,7 +171,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           id={textareaId}
           disabled={disabled}
           className={clsx(
-            "w-full resize-none rounded-md border bg-surface px-4 py-2.5",
+            "w-full resize-none rounded-md border bg-surface px-4 py-2",
             "text-text-primary placeholder:text-text-muted",
             "transition-all duration-200",
             "focus:outline-none focus:ring-2 focus:ring-offset-0",
@@ -184,13 +184,13 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         />
 
         {error && (
-          <p className="mt-1.5 flex items-center gap-1 text-sm text-danger">
+          <p className="mt-2 flex items-center gap-1 text-sm text-danger">
             <ExclamationCircleIcon className="h-4 w-4 shrink-0" />
             {error}
           </p>
         )}
 
-        {hint && !error && <p className="mt-1.5 text-sm text-text-muted">{hint}</p>}
+        {hint && !error && <p className="mt-2 text-sm text-text-muted">{hint}</p>}
       </div>
     );
   },
@@ -199,3 +199,4 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
 Textarea.displayName = "Textarea";
 
 export default Input;
+

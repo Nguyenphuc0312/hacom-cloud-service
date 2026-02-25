@@ -167,27 +167,27 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
     >
       <div className="space-y-4">
         <div className="flex gap-2">
-          <button
+          <button type="button"
             onClick={() => setIsGroupMode(false)}
             disabled={isBusy}
             className={clsx(
-              "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors",
+              "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors",
               !isGroupMode
-                ? "bg-telegram-primary text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200",
+                ? "bg-primary text-text-inverse"
+                : "bg-surface-overlay text-text-secondary hover:bg-surface-active",
             )}
           >
             <UserPlusIcon className="w-5 h-5" />
             Tin nhan truc tiep
           </button>
-          <button
+          <button type="button"
             onClick={() => setIsGroupMode(true)}
             disabled={isBusy}
             className={clsx(
-              "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors",
+              "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors",
               isGroupMode
-                ? "bg-telegram-primary text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200",
+                ? "bg-primary text-text-inverse"
+                : "bg-surface-overlay text-text-secondary hover:bg-surface-active",
             )}
           >
             <UserGroupIcon className="w-5 h-5" />
@@ -220,16 +220,16 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             {selectedUsers.map((user) => (
               <div
                 key={user.id}
-                className="flex items-center gap-2 px-3 py-1.5 bg-telegram-primary/10 text-telegram-primary rounded-full text-sm"
+                className="flex items-center gap-2 px-3 py-2 bg-primary/15 text-primary rounded-full text-sm"
               >
                 <span>{getDisplayName(user)}</span>
-                <button
+                <button type="button"
                   onClick={() =>
                     setSelectedUsers((prev) =>
                       prev.filter((u) => u.id !== user.id),
                     )
                   }
-                  className="hover:bg-telegram-primary/20 rounded-full p-0.5"
+                  className="hover:bg-primary/25 rounded-full p-1"
                 >
                   <XMarkIcon className="w-4 h-4" />
                 </button>
@@ -244,7 +244,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
               <Spinner size="lg" />
             </div>
           ) : searchQuery.length > 0 && searchQuery.length < 2 ? (
-            <p className="text-center text-gray-500 py-8 text-sm">
+            <p className="text-center text-text-muted py-8 text-sm">
               Nhap it nhat 2 ky tu de tim kiem
             </p>
           ) : users.length === 0 && debouncedQuery.length >= 2 ? (
@@ -255,15 +255,15 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                 const isSelected = selectedUsers.some((u) => u.id === user.id);
                 const isPending = pendingUserId === user.id;
                 return (
-                  <button
+                  <button type="button"
                     key={user.id}
                     onClick={() => void handleUserClick(user)}
                     disabled={isBusy}
                     className={clsx(
                       "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-left",
                       isSelected
-                        ? "bg-telegram-primary/10"
-                        : "hover:bg-gray-100",
+                        ? "bg-primary/15"
+                        : "hover:bg-surface-overlay",
                       isBusy && "opacity-60 cursor-not-allowed",
                     )}
                   >
@@ -274,10 +274,10 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                       status={user.status as unknown as UserType["status"]}
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">
+                      <p className="font-medium text-text-primary truncate">
                         {getDisplayName(user)}
                       </p>
-                      <p className="text-sm text-gray-500 truncate">
+                      <p className="text-sm text-text-muted truncate">
                         @{user.username}
                       </p>
                     </div>
@@ -289,13 +289,13 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                         className={clsx(
                           "w-5 h-5 rounded-full border-2 flex items-center justify-center",
                           isSelected
-                            ? "bg-telegram-primary border-telegram-primary"
-                            : "border-gray-300",
+                            ? "bg-primary border-primary"
+                            : "border-border-strong",
                         )}
                       >
                         {isSelected && (
                           <svg
-                            className="w-3 h-3 text-white"
+                            className="w-3 h-3 text-text-inverse"
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
@@ -334,3 +334,6 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
 };
 
 export default NewChatModal;
+
+
+

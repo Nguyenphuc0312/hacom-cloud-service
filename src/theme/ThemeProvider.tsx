@@ -1,27 +1,6 @@
 import React, { useEffect } from "react";
 import { useUIStore } from "../stores";
-import type { Theme, ThemeBrand } from "../stores/uiStore";
-
-const SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)";
-
-const resolveTheme = (theme: Theme): "light" | "dark" => {
-  if (theme === "light" || theme === "dark") return theme;
-  if (typeof window === "undefined" || !window.matchMedia) return "light";
-  return window.matchMedia(SYSTEM_DARK_QUERY).matches ? "dark" : "light";
-};
-
-const applyThemeAttributes = (theme: Theme, brand: ThemeBrand) => {
-  if (typeof document === "undefined") return;
-
-  const root = document.documentElement;
-  const resolvedTheme = resolveTheme(theme);
-
-  root.dataset.themePreference = theme;
-  root.dataset.theme = resolvedTheme;
-  root.dataset.brand = brand;
-  root.classList.toggle("dark", resolvedTheme === "dark");
-  root.classList.add("theme-ready");
-};
+import { applyThemeAttributes, systemDarkQuery } from "./themeUtils";
 
 interface ThemeProviderProps {
   children: React.ReactNode;
@@ -45,7 +24,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
       applyThemeAttributes(state.theme, state.brand);
     });
 
-    const mediaQuery = window.matchMedia(SYSTEM_DARK_QUERY);
+    const mediaQuery = window.matchMedia(systemDarkQuery);
     const onSystemThemeChange = () => {
       if (useUIStore.getState().theme === "system") {
         applyFromStore();

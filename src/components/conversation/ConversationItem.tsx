@@ -44,9 +44,9 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
       className={clsx(
         "flex w-full items-center gap-3 px-4 py-3 text-left transition-all duration-150",
         "min-h-16",
-        "hover:bg-gray-100",
-        isActive && "bg-telegram-primary/10 hover:bg-telegram-primary/15",
-        conversation.isPinned && !isActive && "bg-gray-50",
+        "hover:bg-surface-overlay",
+        isActive && "bg-primary/15 hover:bg-primary/20",
+        conversation.isPinned && !isActive && "bg-background",
         className,
       )}
       role="option"
@@ -68,11 +68,11 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
       <div className="flex-1 min-w-0">
         {/* Top row: Name and time */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
             <span
               className={clsx(
-                "font-semibold text-gray-900 truncate",
-                conversation.unreadCount > 0 && "text-black",
+                "font-semibold text-text-primary truncate",
+                conversation.unreadCount > 0 && "text-text-primary",
               )}
             >
               {conversation.name || otherParticipant?.displayName || "Cuoc tro chuyen"}
@@ -80,11 +80,11 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
 
             {/* Icons */}
             {conversation.isMuted && (
-              <SpeakerXMarkIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
+              <SpeakerXMarkIcon className="w-4 h-4 text-text-muted flex-shrink-0" />
             )}
             {conversation.isPinned && (
               <svg
-                className="w-4 h-4 text-gray-400 flex-shrink-0"
+                className="w-4 h-4 text-text-muted flex-shrink-0"
                 viewBox="0 0 24 24"
                 fill="currentColor"
               >
@@ -92,7 +92,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
               </svg>
             )}
             {otherParticipant?.isBot === false && (
-              <CheckCircleIcon className="w-4 h-4 text-telegram-primary flex-shrink-0" />
+              <CheckCircleIcon className="w-4 h-4 text-primary flex-shrink-0" />
             )}
           </div>
 
@@ -100,8 +100,8 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
             className={clsx(
               "text-xs flex-shrink-0",
               conversation.unreadCount > 0
-                ? "text-telegram-primary font-medium"
-                : "text-gray-500",
+                ? "text-primary font-medium"
+                : "text-text-muted",
             )}
           >
             {timeStr}
@@ -109,11 +109,11 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
         </div>
 
         {/* Bottom row: Preview and badge */}
-        <div className="flex items-center justify-between gap-2 mt-0.5">
+        <div className="flex items-center justify-between gap-2 mt-1">
           <div className="flex items-center gap-1 min-w-0 flex-1">
             {/* Sender indicator for own messages */}
             {isOwnLastMessage && lastMessage && (
-              <span className="text-sm text-gray-400">Bạn:</span>
+              <span className="text-sm text-text-muted">Bạn:</span>
             )}
 
             {/* Message preview */}
@@ -121,8 +121,8 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
               className={clsx(
                 "text-sm truncate",
                 conversation.unreadCount > 0
-                  ? "text-gray-700 font-medium"
-                  : "text-gray-500",
+                  ? "text-text-secondary font-medium"
+                  : "text-text-muted",
               )}
             >
               {preview}
@@ -144,3 +144,5 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
 };
 
 export default ConversationItem;
+
+

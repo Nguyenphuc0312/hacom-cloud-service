@@ -1,4 +1,4 @@
-﻿import React, { useMemo } from "react";
+import React, { useMemo } from "react";
 import clsx from "clsx";
 import {
   BuildingOffice2Icon,
@@ -115,7 +115,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           type="button"
           className={clsx(
             "flex w-full items-center rounded-lg text-left transition-colors hover:bg-surface-overlay",
-            collapsed ? "justify-center p-2" : "gap-3 px-2 py-1.5",
+            collapsed ? "justify-center p-2" : "gap-3 px-2 py-2",
           )}
           title={collapsed ? currentUserName : undefined}
           aria-label={currentUserName}
@@ -143,3 +143,4 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
 };
 
 export default SidebarHeader;
+

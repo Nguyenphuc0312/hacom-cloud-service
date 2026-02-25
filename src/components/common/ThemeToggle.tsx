@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @fileoverview Theme Toggle Component
  * Toggle between light, dark and system themes.
  */
@@ -12,6 +12,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useUIStore } from "../../stores";
 import type { Theme, ThemeBrand } from "../../stores/uiStore";
+import { useTheme } from "../../theme";
 
 interface ThemeToggleProps {
   className?: string;
@@ -74,7 +75,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
               type="button"
               onClick={() => setBrand(item.id)}
               className={clsx(
-                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                "rounded-md px-3 py-2 text-xs font-medium transition-colors",
                 brand === item.id
                   ? "bg-surface text-text-primary shadow-xs"
                   : "text-text-secondary hover:bg-surface hover:text-text-primary",
@@ -92,17 +93,8 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
 export const ThemeToggleButton: React.FC<{ className?: string }> = ({
   className,
 }) => {
-  const theme = useUIStore((state) => state.theme);
-  const setTheme = useUIStore((state) => state.setTheme);
-
-  const isDark =
-    theme === "dark" ||
-    (theme === "system" &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches);
-
-  const toggleTheme = () => {
-    setTheme(isDark ? "light" : "dark");
-  };
+  const { resolvedTheme, toggleTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
 
   return (
     <button
@@ -120,3 +112,4 @@ export const ThemeToggleButton: React.FC<{ className?: string }> = ({
 };
 
 export default ThemeToggle;
+

@@ -74,7 +74,7 @@ export const Modal: React.FC<ModalProps> = ({
       )}
     >
       <div
-        className="absolute inset-0 animate-fade-in bg-black/45 backdrop-blur-[1px]"
+        className="absolute inset-0 animate-fade-in bg-text-primary/45 backdrop-blur-sm"
         onClick={closeOnOverlayClick ? onClose : undefined}
       />
 

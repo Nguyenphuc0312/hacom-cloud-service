@@ -85,7 +85,7 @@ export const LoginPage: React.FC = () => {
         "grid place-items-center", // ← căn giữa cả x & y
         "[min-height:100dvh]", // ← row mở rộng, không bị clip
         "overflow-y-auto", // ← scroll khi zoom lớn
-        "bg-gradient-to-br from-telegram-primary/5 via-white to-telegram-secondary/5",
+        "bg-gradient-to-br from-primary/10 via-background to-secondary/10",
         // Padding: đảm bảo card không sát mép, kể cả khi zoom 125%+
         "px-4 py-8 sm:py-10",
       )}
@@ -95,26 +95,26 @@ export const LoginPage: React.FC = () => {
         aria-hidden="true"
         className="absolute inset-0 overflow-hidden pointer-events-none"
       >
-        <div className="absolute -top-40 -right-40 w-64 h-64 sm:w-80 sm:h-80 lg:w-96 lg:h-96 bg-telegram-primary/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-64 h-64 sm:w-80 sm:h-80 lg:w-96 lg:h-96 bg-telegram-secondary/10 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-64 h-64 sm:w-80 sm:h-80 lg:w-96 lg:h-96 bg-primary/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-64 h-64 sm:w-80 sm:h-80 lg:w-96 lg:h-96 bg-secondary/15 rounded-full blur-3xl" />
       </div>
 
       {/* Card container — w-full + max-w để tự co giãn */}
-      <div className="relative z-10 w-full mx-auto max-w-[360px] xs:max-w-sm sm:max-w-md lg:max-w-lg">
+      <div className="relative z-10 w-full mx-auto max-w-sm xs:max-w-sm sm:max-w-md lg:max-w-lg">
         {/* White card */}
         <section
           aria-label="Đăng nhập"
-          className="bg-white rounded-2xl shadow-xl border border-gray-100 animate-fade-in p-5 xs:p-6 sm:p-8 lg:p-10"
+          className="bg-surface rounded-2xl shadow-xl border border-border animate-fade-in p-5 xs:p-6 sm:p-8 lg:p-10"
         >
           {/* Header */}
           <header className="text-center mb-5 sm:mb-6 lg:mb-8">
-            <div className="inline-flex items-center justify-center rounded-2xl mb-3 sm:mb-4 shadow-lg shadow-telegram-primary/30 bg-telegram-primary w-12 h-12 xs:w-14 xs:h-14 sm:w-16 sm:h-16">
-              <ChatBubbleLeftRightIcon className="w-6 h-6 xs:w-7 xs:h-7 sm:w-8 sm:h-8 text-white" />
+            <div className="inline-flex items-center justify-center rounded-2xl mb-3 sm:mb-4 shadow-lg shadow-elev2 bg-primary w-12 h-12 xs:w-14 xs:h-14 sm:w-16 sm:h-16">
+              <ChatBubbleLeftRightIcon className="w-6 h-6 xs:w-7 xs:h-7 sm:w-8 sm:h-8 text-text-inverse" />
             </div>
-            <h1 className="text-lg xs:text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
+            <h1 className="text-lg xs:text-xl sm:text-2xl font-bold text-text-primary leading-tight">
               Chào mừng trở lại
             </h1>
-            <p className="text-xs xs:text-sm sm:text-base text-gray-500 mt-1 sm:mt-2">
+            <p className="text-xs xs:text-sm sm:text-base text-text-muted mt-1 sm:mt-2">
               Đăng nhập để tiếp tục trò chuyện
             </p>
           </header>
@@ -136,7 +136,7 @@ export const LoginPage: React.FC = () => {
               {error && (
                 <div
                   role="alert"
-                  className="p-3 sm:p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs xs:text-sm animate-shake"
+                  className="p-3 sm:p-4 bg-danger/15 border border-danger/35 rounded-xl text-danger text-xs xs:text-sm animate-shake"
                 >
                   {error}
                 </div>
@@ -177,7 +177,7 @@ export const LoginPage: React.FC = () => {
               />
               <Link
                 to="/forgot-password"
-                className="text-xs xs:text-sm text-telegram-primary font-medium hover:text-telegram-primary/80 transition-colors duration-200 sm:text-right whitespace-nowrap"
+                className="text-xs xs:text-sm text-primary font-medium hover:text-primary/80 transition-colors duration-200 sm:text-right whitespace-nowrap"
               >
                 Quên mật khẩu?
               </Link>
@@ -199,10 +199,10 @@ export const LoginPage: React.FC = () => {
           {/* Divider */}
           <div className="relative my-5 sm:my-6 lg:my-8">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200" />
+              <div className="w-full border-t border-border" />
             </div>
             <div className="relative flex justify-center text-xs xs:text-sm">
-              <span className="px-3 xs:px-4 bg-white text-gray-400">
+              <span className="px-3 xs:px-4 bg-surface text-text-muted">
                 Hoặc đăng nhập với
               </span>
             </div>
@@ -221,11 +221,11 @@ export const LoginPage: React.FC = () => {
           </div>
 
           {/* Sign-up link */}
-          <p className="mt-5 sm:mt-6 lg:mt-8 text-center text-xs xs:text-sm text-gray-500">
+          <p className="mt-5 sm:mt-6 lg:mt-8 text-center text-xs xs:text-sm text-text-muted">
             Chưa có tài khoản?{" "}
             <Link
               to="/register"
-              className="font-semibold text-telegram-primary hover:text-telegram-primary/80 transition-colors"
+              className="font-semibold text-primary hover:text-primary/80 transition-colors"
             >
               Đăng ký ngay
             </Link>
@@ -233,18 +233,18 @@ export const LoginPage: React.FC = () => {
         </section>
 
         {/* Footer */}
-        <p className="mt-4 sm:mt-5 text-center text-[10px] xs:text-xs text-gray-400 px-2 leading-relaxed">
+        <p className="mt-4 sm:mt-5 text-center text-xs xs:text-xs text-text-muted px-2 leading-relaxed">
           Bằng việc đăng nhập, bạn đồng ý với{" "}
           <Link
             to="/terms"
-            className="underline hover:text-gray-600 transition-colors"
+            className="underline hover:text-text-secondary transition-colors"
           >
             Điều khoản sử dụng
           </Link>{" "}
           và{" "}
           <Link
             to="/privacy"
-            className="underline hover:text-gray-600 transition-colors"
+            className="underline hover:text-text-secondary transition-colors"
           >
             Chính sách bảo mật
           </Link>
@@ -315,7 +315,7 @@ const SocialButton: React.FC<{
       onClick={onClick}
       className={clsx(
         "w-full flex items-center justify-center gap-2",
-        "min-h-[44px] px-3 xs:px-4 py-2.5 xs:py-3",
+        "min-h-12 px-3 xs:px-4 py-2 xs:py-3",
         "rounded-xl font-medium text-xs xs:text-sm",
         "whitespace-nowrap transition-all duration-200",
         "focus:outline-none focus:ring-2 focus:ring-offset-2",
@@ -353,3 +353,5 @@ export default LoginPage;
  *   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
  * ─────────────────────────────────────────────────────────────────────
  */
+
+

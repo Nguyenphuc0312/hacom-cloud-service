@@ -1,4 +1,4 @@
-﻿import React, { useMemo } from "react";
+import React, { useMemo } from "react";
 import clsx from "clsx";
 import {
   AtSymbolIcon,
@@ -127,7 +127,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         type="button"
         onClick={() => onSelect(conversation.id)}
         className={clsx(
-          "group relative mx-2 my-1 flex h-14 w-[72px] items-center justify-center rounded-lg",
+          "group relative mx-2 my-1 flex h-room-item w-room-item items-center justify-center rounded-lg",
           "transition-colors",
           "hover:bg-surface-overlay",
           (isActive || isKeyboardActive) && "bg-primary/15 text-primary",
@@ -164,7 +164,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
       type="button"
       onClick={() => onSelect(conversation.id)}
       className={clsx(
-        "mx-2 my-1 flex h-[72px] w-[calc(100%-1rem)] items-center rounded-lg px-3",
+        "mx-2 my-1 flex h-room-item w-[calc(100%-var(--space-4))] items-center rounded-lg px-3",
         "transition-colors",
         "hover:bg-surface-overlay",
         (isActive || isKeyboardActive) && "bg-primary/15",
@@ -184,7 +184,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         />
 
         <div className="min-w-0">
-          <div className="mb-1 flex items-center gap-1.5">
+          <div className="mb-1 flex items-center gap-2">
             <p
               className={clsx(
                 "truncate text-sm leading-5 text-text-primary",
@@ -196,19 +196,19 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
 
             {conversation.isMuted && (
               <SpeakerXMarkIcon
-                className="h-3.5 w-3.5 shrink-0 text-text-muted"
+                className="h-4 w-4 shrink-0 text-text-muted"
                 aria-hidden="true"
               />
             )}
             {conversation.isPinned && (
               <BookmarkIcon
-                className="h-3.5 w-3.5 shrink-0 text-text-muted"
+                className="h-4 w-4 shrink-0 text-text-muted"
                 aria-hidden="true"
               />
             )}
             {unreadMention && (
               <AtSymbolIcon
-                className="h-3.5 w-3.5 shrink-0 text-danger"
+                className="h-4 w-4 shrink-0 text-danger"
                 aria-label="Mentioned"
               />
             )}
@@ -224,7 +224,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
           </p>
         </div>
 
-        <div className="flex h-full min-w-[46px] flex-col items-end justify-between py-1">
+        <div className="flex h-full min-w-room-meta flex-col items-end justify-between py-1">
           <span
             className={clsx(
               "text-xs leading-4",
@@ -269,3 +269,4 @@ export const RoomItem = React.memo(
 );
 
 export default RoomItem;
+

@@ -79,7 +79,9 @@ export const Button: React.FC<ButtonProps> = ({
         <>
           <Spinner
             size={size === "lg" ? "sm" : "xs"}
-            variant={variant === "primary" || variant === "danger" ? "white" : "gray"}
+            variant={
+              variant === "primary" || variant === "danger" ? "inverse" : "neutral"
+            }
           />
           <span>Processing...</span>
         </>

@@ -59,12 +59,12 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     return (
       <div
         className={clsx(
-          "flex flex-col items-center justify-center py-12 text-gray-500",
+          "flex flex-col items-center justify-center py-12 text-text-muted",
           className,
         )}
       >
         <svg
-          className="w-16 h-16 mb-4 text-gray-300"
+          className="w-16 h-16 mb-4 text-border-strong"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -105,7 +105,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           ))}
 
           {/* Divider between pinned and unpinned */}
-          {unpinned.length > 0 && <div className="h-px bg-gray-200 my-1" />}
+          {unpinned.length > 0 && <div className="h-px bg-border my-1" />}
         </>
       )}
 
@@ -124,3 +124,4 @@ export const ConversationList: React.FC<ConversationListProps> = ({
 };
 
 export default ConversationList;
+

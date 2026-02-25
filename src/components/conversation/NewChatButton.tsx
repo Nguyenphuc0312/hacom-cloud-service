@@ -17,8 +17,8 @@ export const NewChatButton: React.FC<NewChatButtonProps> = ({
       className={clsx(
         "fixed bottom-6 right-6 z-sticky",
         "w-14 h-14 rounded-full",
-        "bg-telegram-primary hover:bg-telegram-primary/90",
-        "text-white shadow-lg hover:shadow-xl",
+        "bg-primary hover:bg-primary-hover",
+        "text-text-inverse shadow-lg hover:shadow-xl",
         "flex items-center justify-center",
         "transition-all duration-200",
         "hover:scale-105 active:scale-95",
@@ -32,3 +32,4 @@ export const NewChatButton: React.FC<NewChatButtonProps> = ({
 };
 
 export default NewChatButton;
+

@@ -166,7 +166,7 @@ export const RegisterPage: React.FC = () => {
         "grid place-items-center", // căn giữa cả x & y
         "[min-height:100dvh]", // row mở rộng, không bị clip
         "overflow-y-auto", // scroll khi zoom lớn / form dài
-        "bg-gradient-to-br from-telegram-primary/5 via-white to-telegram-secondary/5",
+        "bg-gradient-to-br from-primary/10 via-background to-secondary/10",
         "px-4 py-8 sm:py-10",
       )}
     >
@@ -175,26 +175,26 @@ export const RegisterPage: React.FC = () => {
         aria-hidden="true"
         className="absolute inset-0 overflow-hidden pointer-events-none"
       >
-        <div className="absolute -top-40 -left-40 w-64 h-64 sm:w-80 sm:h-80 lg:w-96 lg:h-96 bg-telegram-secondary/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -right-40 w-64 h-64 sm:w-80 sm:h-80 lg:w-96 lg:h-96 bg-telegram-primary/10 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -left-40 w-64 h-64 sm:w-80 sm:h-80 lg:w-96 lg:h-96 bg-secondary/15 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -right-40 w-64 h-64 sm:w-80 sm:h-80 lg:w-96 lg:h-96 bg-primary/10 rounded-full blur-3xl" />
       </div>
 
       {/* Card container */}
-      <div className="relative z-10 w-full mx-auto max-w-[360px] xs:max-w-sm sm:max-w-lg lg:max-w-xl">
+      <div className="relative z-10 w-full mx-auto max-w-sm xs:max-w-sm sm:max-w-lg lg:max-w-xl">
         {/* White card */}
         <section
           aria-label="Đăng ký tài khoản"
-          className="bg-white rounded-2xl shadow-xl border border-gray-100 animate-fade-in p-5 xs:p-6 sm:p-8 lg:p-10"
+          className="bg-surface rounded-2xl shadow-xl border border-border animate-fade-in p-5 xs:p-6 sm:p-8 lg:p-10"
         >
           {/* Header */}
           <header className="text-center mb-5 sm:mb-6 lg:mb-8">
-            <div className="inline-flex items-center justify-center rounded-2xl mb-3 sm:mb-4 shadow-lg shadow-telegram-primary/30 bg-telegram-primary w-12 h-12 xs:w-14 xs:h-14 sm:w-16 sm:h-16">
-              <ChatBubbleLeftRightIcon className="w-6 h-6 xs:w-7 xs:h-7 sm:w-8 sm:h-8 text-white" />
+            <div className="inline-flex items-center justify-center rounded-2xl mb-3 sm:mb-4 shadow-lg shadow-elev2 bg-primary w-12 h-12 xs:w-14 xs:h-14 sm:w-16 sm:h-16">
+              <ChatBubbleLeftRightIcon className="w-6 h-6 xs:w-7 xs:h-7 sm:w-8 sm:h-8 text-text-inverse" />
             </div>
-            <h1 className="text-lg xs:text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
+            <h1 className="text-lg xs:text-xl sm:text-2xl font-bold text-text-primary leading-tight">
               Tạo tài khoản mới
             </h1>
-            <p className="text-xs xs:text-sm sm:text-base text-gray-500 mt-1 sm:mt-2">
+            <p className="text-xs xs:text-sm sm:text-base text-text-muted mt-1 sm:mt-2">
               Tham gia cộng đồng Hacom Chat ngay hôm nay
             </p>
           </header>
@@ -216,7 +216,7 @@ export const RegisterPage: React.FC = () => {
               {error && (
                 <div
                   role="alert"
-                  className="p-3 sm:p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs xs:text-sm animate-shake"
+                  className="p-3 sm:p-4 bg-danger/15 border border-danger/35 rounded-xl text-danger text-xs xs:text-sm animate-shake"
                 >
                   {error}
                 </div>
@@ -256,11 +256,11 @@ export const RegisterPage: React.FC = () => {
                 disabled={isLoading}
                 rightIcon={
                   usernameStatus.checking ? (
-                    <div className="w-4 h-4 border-2 border-gray-300 border-t-telegram-primary rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" />
                   ) : usernameStatus.available === true ? (
-                    <CheckCircleIcon className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
+                    <CheckCircleIcon className="w-4 h-4 sm:w-5 sm:h-5 text-success" />
                   ) : usernameStatus.available === false ? (
-                    <XCircleIcon className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />
+                    <XCircleIcon className="w-4 h-4 sm:w-5 sm:h-5 text-danger" />
                   ) : null
                 }
               />
@@ -275,10 +275,10 @@ export const RegisterPage: React.FC = () => {
               >
                 <p
                   className={clsx(
-                    "text-[10px] xs:text-xs",
-                    usernameStatus.available === true && "text-green-600",
-                    usernameStatus.available === false && "text-red-600",
-                    usernameStatus.checking && "text-gray-500",
+                    "text-xs xs:text-xs",
+                    usernameStatus.available === true && "text-success",
+                    usernameStatus.available === false && "text-danger",
+                    usernameStatus.checking && "text-text-muted",
                   )}
                 >
                   {usernameStatus.message}
@@ -334,7 +334,7 @@ export const RegisterPage: React.FC = () => {
                   Tôi đồng ý với{" "}
                   <Link
                     to="/terms"
-                    className="text-telegram-primary hover:underline"
+                    className="text-primary hover:underline"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -343,7 +343,7 @@ export const RegisterPage: React.FC = () => {
                   và{" "}
                   <Link
                     to="/privacy"
-                    className="text-telegram-primary hover:underline"
+                    className="text-primary hover:underline"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -371,11 +371,11 @@ export const RegisterPage: React.FC = () => {
           </form>
 
           {/* Login link */}
-          <p className="mt-5 sm:mt-6 lg:mt-8 text-center text-xs xs:text-sm text-gray-500">
+          <p className="mt-5 sm:mt-6 lg:mt-8 text-center text-xs xs:text-sm text-text-muted">
             Đã có tài khoản?{" "}
             <Link
               to="/login"
-              className="font-semibold text-telegram-primary hover:text-telegram-primary/80 transition-colors"
+              className="font-semibold text-primary hover:text-primary/80 transition-colors"
             >
               Đăng nhập ngay
             </Link>
@@ -383,11 +383,11 @@ export const RegisterPage: React.FC = () => {
         </section>
 
         {/* Footer */}
-        <p className="mt-4 sm:mt-5 text-center text-[10px] xs:text-xs text-gray-400 px-2 leading-relaxed">
+        <p className="mt-4 sm:mt-5 text-center text-xs xs:text-xs text-text-muted px-2 leading-relaxed">
           Thông tin của bạn được bảo mật theo{" "}
           <Link
             to="/privacy"
-            className="underline hover:text-gray-600 transition-colors"
+            className="underline hover:text-text-secondary transition-colors"
           >
             Chính sách bảo mật
           </Link>{" "}
@@ -399,3 +399,6 @@ export const RegisterPage: React.FC = () => {
 };
 
 export default RegisterPage;
+
+
+

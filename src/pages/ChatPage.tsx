@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @fileoverview Chat Page - Main chat interface
  * Integrated with Zustand stores and WebSocket.
  */
@@ -421,11 +421,11 @@ export const ChatPage: React.FC = () => {
       {/* Connection status indicator */}
       {!isConnected && (
         <div
-          className="absolute inset-x-0 top-0 z-50 bg-warning px-4 py-1.5 text-center text-xs font-medium text-text-inverse sm:text-sm"
+          className="absolute inset-x-0 top-0 z-50 bg-warning px-4 py-2 text-center text-xs font-medium text-text-inverse sm:text-sm"
           role="status"
           aria-live="polite"
         >
-          Äang káº¿t ná»‘i láº¡i...
+          Đang kết nối lại...
         </div>
       )}
 
@@ -453,7 +453,7 @@ export const ChatPage: React.FC = () => {
           type="button"
           className="fixed inset-0 z-20 bg-text-primary/40 lg:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
-          aria-label="ÄĂ³ng danh sĂ¡ch cuá»™c trĂ² chuyá»‡n"
+          aria-label="Đóng danh sách cuộc trò chuyện"
         />
       )}
 
@@ -546,6 +546,7 @@ export const ChatPage: React.FC = () => {
 };
 
 export default ChatPage;
+
 
 
 
