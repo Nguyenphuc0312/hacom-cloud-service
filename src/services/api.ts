@@ -8,7 +8,6 @@ import type {
   ApiResponse,
   AuthResponseDto,
   CreateMessageResponse,
-  CreateRoomResponse,
   LoginResponse,
   RefreshTokenResponse,
   RoomMessagesResponse,
@@ -144,7 +143,7 @@ export const userApi = {
 export const conversationApi = {
   getConversations: async (page = 1, limit = 50) => {
     const response = await apiClient.get<ApiResponse<unknown>>(
-      `/rooms?page=${page}&limit=${limit}`,
+      `/conversations?page=${page}&limit=${limit}`,
     );
 
     if (!response.data.success) {
@@ -159,7 +158,7 @@ export const conversationApi = {
 
   getConversationById: async (conversationId: string) => {
     const response = await apiClient.get<ApiResponse<unknown>>(
-      `/rooms/${conversationId}`,
+      `/conversations/${conversationId}`,
     );
 
     if (!response.data.success) {
@@ -174,14 +173,22 @@ export const conversationApi = {
   },
 
   createPrivateConversation: async (userId: string) => {
-    const response = await apiClient.post<ApiResponse<CreateRoomResponse>>(
-      "/rooms",
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      "/conversations/direct",
       {
-        type: "direct",
-        members: [userId],
+        userId,
       },
     );
-    return response.data;
+
+    if (!response.data.success) {
+      return response.data as ApiResponse<Conversation>;
+    }
+
+    const normalized = normalizeConversation(response.data.data);
+    return {
+      ...response.data,
+      data: (normalized ?? (response.data.data as Conversation)) as Conversation,
+    };
   },
 
   createGroupConversation: async (data: {
@@ -190,16 +197,25 @@ export const conversationApi = {
     avatar?: string;
     description?: string;
   }) => {
-    const response = await apiClient.post<ApiResponse<CreateRoomResponse>>(
-      "/rooms",
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      "/conversations/group",
       {
-        type: "group",
         name: data.name,
-        members: data.memberIds,
+        memberIds: data.memberIds,
         description: data.description,
+        avatar: data.avatar,
       },
     );
-    return response.data;
+
+    if (!response.data.success) {
+      return response.data as ApiResponse<Conversation>;
+    }
+
+    const normalized = normalizeConversation(response.data.data);
+    return {
+      ...response.data,
+      data: (normalized ?? (response.data.data as Conversation)) as Conversation,
+    };
   },
 
   updateConversation: async (

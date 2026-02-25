@@ -52,17 +52,35 @@ export const useVirtualizedMessages = <Item, ListData>({
     if (!viewportElement) return;
 
     const measure = () => {
-      setViewportHeight(viewportElement.clientHeight);
+      const nextHeight =
+        viewportElement.clientHeight ||
+        Math.round(viewportElement.getBoundingClientRect().height);
+      setViewportHeight((previous) =>
+        previous === nextHeight ? previous : nextHeight,
+      );
     };
 
     measure();
+    if (typeof ResizeObserver === "undefined") {
+      if (typeof window === "undefined") return;
+      window.addEventListener("resize", measure);
+      const rafId = window.requestAnimationFrame(measure);
+      const timerId = window.setTimeout(measure, 120);
+
+      return () => {
+        window.removeEventListener("resize", measure);
+        window.cancelAnimationFrame(rafId);
+        window.clearTimeout(timerId);
+      };
+    }
+
     const resizeObserver = new ResizeObserver(measure);
     resizeObserver.observe(viewportElement);
 
     return () => {
       resizeObserver.disconnect();
     };
-  }, [viewportRef]);
+  }, [viewportRef, items.length]);
 
   return {
     listRef,

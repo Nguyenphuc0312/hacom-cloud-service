@@ -36,6 +36,7 @@ export {
   UserStatus,
   MessageType,
   MessageStatus,
+  ConversationType,
   RoomType,
   RoomMemberRole,
   FileType,

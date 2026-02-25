@@ -86,6 +86,11 @@ const toCursorValue = (value: unknown): string | undefined => {
   return undefined;
 };
 
+type MessageCursor = {
+  at: string;
+  id: string;
+};
+
 export const useWebSocket = (
   options: UseWebSocketOptions = {},
 ): UseWebSocketReturn => {
@@ -107,6 +112,9 @@ export const useWebSocket = (
 
   const joinedRoomsRef = useRef<Set<string>>(new Set());
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const emitQueueRef = useRef<Array<{ event: string; data: unknown }>>([]);
+  const hasConnectedOnceRef = useRef(false);
+  const shouldResyncOnConnectRef = useRef(false);
   const remoteTypingTimersRef = useRef<
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
@@ -139,13 +147,28 @@ export const useWebSocket = (
     remoteTypingTimersRef.current.clear();
   }, []);
 
+  const flushEmitQueue = useCallback(() => {
+    const socket = getSocket();
+    if (!socket?.isConnected()) return;
+
+    while (emitQueueRef.current.length > 0) {
+      const queued = emitQueueRef.current.shift();
+      if (!queued) continue;
+      const sent = socket.send(queued.event, queued.data);
+      if (!sent) {
+        emitQueueRef.current.unshift(queued);
+        break;
+      }
+    }
+  }, []);
+
   const emit = useCallback((event: string, data: unknown) => {
     const socket = getSocket();
-    if (socket?.isConnected()) {
-      socket.send(event, data);
-    } else {
-      console.warn("Socket not connected, cannot emit:", event);
+    if (!socket?.isConnected()) {
+      emitQueueRef.current.push({ event, data });
+      return;
     }
+    socket.send(event, data);
   }, []);
 
   const emitJoinRoom = useCallback(
@@ -160,32 +183,48 @@ export const useWebSocket = (
 
   const resyncRoom = useCallback(
     async (roomId: string) => {
-      const resolveLatestCursor = (): string | undefined => {
+      const resolveLatestCursor = (): MessageCursor | undefined => {
         const roomMessages = useChatStore.getState().messages[roomId] || [];
         for (let index = roomMessages.length - 1; index >= 0; index -= 1) {
           const candidate = roomMessages[index];
           const candidateId = candidate?.id;
-          if (typeof candidateId === "string" && !candidateId.startsWith("temp-")) {
-            return toCursorValue(candidate?.createdAt);
+          const candidateAt = toCursorValue(candidate?.createdAt);
+          if (
+            typeof candidateId === "string" &&
+            !candidateId.startsWith("temp-") &&
+            typeof candidateAt === "string"
+          ) {
+            return {
+              at: candidateAt,
+              id: candidateId,
+            };
           }
         }
         return undefined;
       };
 
       let afterCursor = resolveLatestCursor();
-      console.debug("[ws] resyncRoom", { roomId, afterCursor });
 
       if (!afterCursor) return;
 
       // Fetch missed messages in pages to avoid dropping backlog on long disconnects.
       for (let attempts = 0; attempts < 10; attempts += 1) {
-        const result = await fetchMessages(roomId, undefined, afterCursor);
+        const result = await fetchMessages(
+          roomId,
+          undefined,
+          afterCursor.at,
+          { afterId: afterCursor.id },
+        );
+
         if (!result.loaded || !result.hasMore) {
           break;
         }
 
         const nextCursor = resolveLatestCursor();
-        if (!nextCursor || nextCursor === afterCursor) {
+        if (
+          !nextCursor ||
+          (nextCursor.at === afterCursor.at && nextCursor.id === afterCursor.id)
+        ) {
           break;
         }
 
@@ -204,10 +243,19 @@ export const useWebSocket = (
     const unsubConnect = socket.on("connect", () => {
       onConnect?.();
 
+      const shouldResync = shouldResyncOnConnectRef.current;
+      shouldResyncOnConnectRef.current = false;
+
       joinedRoomsRef.current.forEach((roomId) => {
         emitJoinRoom(roomId);
-        void resyncRoom(roomId);
+        if (shouldResync) {
+          void resyncRoom(roomId);
+        }
       });
+
+      hasConnectedOnceRef.current = true;
+
+      flushEmitQueue();
     });
     unsubscribersRef.current.push(unsubConnect);
 
@@ -216,6 +264,9 @@ export const useWebSocket = (
         asString(asRecord(data)?.reason) ??
         asString(asRecord(data)?.code) ??
         "disconnected";
+      if (hasConnectedOnceRef.current) {
+        shouldResyncOnConnectRef.current = true;
+      }
       onDisconnect?.(reason);
     });
     unsubscribersRef.current.push(unsubDisconnect);
@@ -241,9 +292,9 @@ export const useWebSocket = (
       const conversationId = getConversationId(payload);
       const messagePayload = getMessagePayload(payload);
       const messageId = messagePayload
-        ? asString(messagePayload.id) ??
+        ? (asString(messagePayload.id) ??
           asString(messagePayload._id) ??
-          asString(messagePayload.messageId)
+          asString(messagePayload.messageId))
         : null;
       if (!conversationId || !messagePayload || !messageId) return;
 
@@ -286,24 +337,27 @@ export const useWebSocket = (
     });
     unsubscribersRef.current.push(unsubMessageNew);
 
-    const unsubMessageUpdate = socket.on(WebSocketEvents.MESSAGE_UPDATE, (data) => {
-      const payload = asRecord(data);
-      if (!payload) return;
+    const unsubMessageUpdate = socket.on(
+      WebSocketEvents.MESSAGE_UPDATE,
+      (data) => {
+        const payload = asRecord(data);
+        if (!payload) return;
 
-      const conversationId = getConversationId(payload);
-      const messagePayload = getMessagePayload(payload);
-      const messageId =
-        asString(payload.messageId) ??
-        (messagePayload &&
-          (asString(messagePayload.id) ?? asString(messagePayload._id)));
-      if (!conversationId || !messagePayload || !messageId) return;
+        const conversationId = getConversationId(payload);
+        const messagePayload = getMessagePayload(payload);
+        const messageId =
+          asString(payload.messageId) ??
+          (messagePayload &&
+            (asString(messagePayload.id) ?? asString(messagePayload._id)));
+        if (!conversationId || !messagePayload || !messageId) return;
 
-      updateMessage(
-        conversationId,
-        messageId,
-        messagePayload as unknown as Parameters<typeof updateMessage>[2],
-      );
-    });
+        updateMessage(
+          conversationId,
+          messageId,
+          messagePayload as unknown as Parameters<typeof updateMessage>[2],
+        );
+      },
+    );
     unsubscribersRef.current.push(unsubMessageUpdate);
 
     const unsubMessageUpdated = socket.on(
@@ -315,9 +369,9 @@ export const useWebSocket = (
         const conversationId = getConversationId(payload);
         const messagePayload = getMessagePayload(payload);
         const messageId = messagePayload
-          ? asString(messagePayload.id) ??
+          ? (asString(messagePayload.id) ??
             asString(messagePayload._id) ??
-            asString(messagePayload.messageId)
+            asString(messagePayload.messageId))
           : null;
         if (!conversationId || !messagePayload || !messageId) return;
 
@@ -349,21 +403,24 @@ export const useWebSocket = (
     );
     unsubscribersRef.current.push(unsubMessageDeleted);
 
-    const unsubDelivered = socket.on(WebSocketEvents.MESSAGE_DELIVERED, (data) => {
-      const payload = asRecord(data);
-      if (!payload) return;
+    const unsubDelivered = socket.on(
+      WebSocketEvents.MESSAGE_DELIVERED,
+      (data) => {
+        const payload = asRecord(data);
+        if (!payload) return;
 
-      const conversationId = getConversationId(payload);
-      const messageId =
-        asString(payload.messageId) ??
-        asString(payload.id) ??
-        asString(payload._id);
-      if (!conversationId || !messageId) return;
+        const conversationId = getConversationId(payload);
+        const messageId =
+          asString(payload.messageId) ??
+          asString(payload.id) ??
+          asString(payload._id);
+        if (!conversationId || !messageId) return;
 
-      updateMessage(conversationId, messageId, {
-        status: MessageStatus.DELIVERED,
-      });
-    });
+        updateMessage(conversationId, messageId, {
+          status: MessageStatus.DELIVERED,
+        });
+      },
+    );
     unsubscribersRef.current.push(unsubDelivered);
 
     const handleReadReceipt = (data: unknown) => {
@@ -385,7 +442,10 @@ export const useWebSocket = (
       );
     };
 
-    const unsubRead = socket.on(WebSocketEvents.MESSAGE_READ, handleReadReceipt);
+    const unsubRead = socket.on(
+      WebSocketEvents.MESSAGE_READ,
+      handleReadReceipt,
+    );
     unsubscribersRef.current.push(unsubRead);
 
     const unsubReadConfirmed = socket.on(
@@ -477,6 +537,7 @@ export const useWebSocket = (
     clearRemoteTypingTimer,
     clearTyping,
     emitJoinRoom,
+    flushEmitQueue,
     markMessagesReadUpTo,
     onConnect,
     onDisconnect,
@@ -500,6 +561,7 @@ export const useWebSocket = (
 
     clearAllRemoteTypingTimers();
     joinedRoomsRef.current.clear();
+    emitQueueRef.current = [];
     disconnectSocket();
   }, [clearAllRemoteTypingTimers]);
 

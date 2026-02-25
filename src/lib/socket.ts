@@ -24,7 +24,8 @@ export type ConnectionState =
   | "error";
 
 export interface WebSocketEvent {
-  type: string;
+  event: string;
+  type?: string;
   data?: unknown;
   [key: string]: unknown;
 }
@@ -159,12 +160,12 @@ class WebSocketManager {
     };
 
     this.socket.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data) as WebSocketEvent;
-        this.handleMessage(message);
-      } catch (error) {
-        console.error("Failed to parse WebSocket message:", error);
+      const messages = this.parseIncomingMessages(event.data);
+      if (messages.length === 0) {
+        console.error("Failed to parse WebSocket message:", event.data);
+        return;
       }
+      messages.forEach((message) => this.handleMessage(message));
     };
   }
 
@@ -172,13 +173,17 @@ class WebSocketManager {
    * Xử lý message nhận được từ server
    */
   private handleMessage(message: WebSocketEvent): void {
-    const { type } = message;
+    const type =
+      (typeof message.event === "string" && message.event) ||
+      (typeof message.type === "string" ? message.type : "");
     if (!type) return;
 
     const payload = Object.prototype.hasOwnProperty.call(message, "data")
       ? message.data
       : Object.fromEntries(
-          Object.entries(message).filter(([key]) => key !== "type"),
+          Object.entries(message).filter(
+            ([key]) => key !== "type" && key !== "event",
+          ),
         );
 
     // Log for debugging
@@ -186,6 +191,59 @@ class WebSocketManager {
 
     // Emit to registered handlers
     this.emit(type, payload);
+  }
+
+  /**
+   * Parse payload from raw websocket frame.
+   * Some backends emit multiple JSON objects separated by newlines in one frame.
+   */
+  private parseIncomingMessages(raw: unknown): WebSocketEvent[] {
+    const toEventArray = (value: unknown): WebSocketEvent[] => {
+      const isEventShape = (item: unknown): item is WebSocketEvent =>
+        item !== null &&
+        typeof item === "object" &&
+        (typeof (item as Record<string, unknown>).event === "string" ||
+          typeof (item as Record<string, unknown>).type === "string");
+
+      if (Array.isArray(value)) {
+        return value.filter((item): item is WebSocketEvent => isEventShape(item));
+      }
+
+      if (isEventShape(value)) {
+        return [value as WebSocketEvent];
+      }
+
+      return [];
+    };
+
+    if (typeof raw !== "string") {
+      return [];
+    }
+
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+
+    try {
+      return toEventArray(JSON.parse(trimmed));
+    } catch {
+      // Fallback for NDJSON/newline-delimited payloads.
+      const events: WebSocketEvent[] = [];
+      const lines = trimmed
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+
+      for (const line of lines) {
+        try {
+          const parsed = JSON.parse(line);
+          events.push(...toEventArray(parsed));
+        } catch {
+          // Skip malformed line and continue parsing remaining lines.
+        }
+      }
+
+      return events;
+    }
   }
 
   /**
@@ -275,13 +333,10 @@ class WebSocketManager {
     }
 
     try {
-      const message =
-        data !== null && typeof data === "object" && !Array.isArray(data)
-          ? ({ type, ...(data as Record<string, unknown>), data } as Record<
-              string,
-              unknown
-            >)
-          : ({ type, data } as WebSocketEvent);
+      const message = {
+        event: type,
+        data,
+      } as WebSocketEvent;
       this.socket!.send(JSON.stringify(message));
       return true;
     } catch (error) {

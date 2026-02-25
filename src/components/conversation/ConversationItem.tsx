@@ -7,7 +7,12 @@ import { Badge } from "../common/Badge";
 import type { Conversation } from "../../types";
 import { isDirectConversation } from "../../lib/conversationAdapter";
 import { formatRelativeTime } from "../../utils/formatTime";
-import { getMessagePreview } from "../../utils/messageHelpers";
+import {
+  getConversationAvatar,
+  getConversationDisplayName,
+  getMessagePreview,
+  getOtherParticipant,
+} from "../../utils/messageHelpers";
 
 interface ConversationItemProps {
   conversation: Conversation;
@@ -27,10 +32,9 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   const { t } = useTranslation();
   const isDirect = isDirectConversation(conversation);
 
-  const otherParticipant =
-    isDirect
-      ? (conversation.participants || []).find((p) => p.id !== currentUserId)
-      : null;
+  const otherParticipant = isDirect
+    ? getOtherParticipant(conversation, currentUserId)
+    : null;
 
   const status = otherParticipant?.status;
   const lastMessage = conversation.lastMessage;
@@ -41,6 +45,10 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   const isOwnLastMessage = lastMessage?.senderId === currentUserId;
 
   const fallbackConversationLabel = t("common:labels.conversation");
+  const displayName =
+    getConversationDisplayName(conversation, currentUserId) ||
+    fallbackConversationLabel;
+  const avatarSrc = getConversationAvatar(conversation, currentUserId);
 
   return (
     <button
@@ -58,8 +66,8 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
       aria-selected={isActive}
     >
       <Avatar
-        src={conversation.avatar}
-        alt={conversation.name || otherParticipant?.displayName || fallbackConversationLabel}
+        src={avatarSrc}
+        alt={displayName}
         size="lg"
         status={status}
         showStatus={isDirect}
@@ -74,7 +82,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
                 conversation.unreadCount > 0 && "text-text-primary",
               )}
             >
-              {conversation.name || otherParticipant?.displayName || fallbackConversationLabel}
+              {displayName}
             </span>
 
             {conversation.isMuted && (

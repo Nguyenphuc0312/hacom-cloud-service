@@ -160,17 +160,24 @@ export function getConversationDisplayName(
   conversation: Conversation,
   currentUserId: string,
 ): string {
-  if (!isDirectConversation(conversation)) {
-    return conversation.name || i18n.t("common:labels.conversation");
+  if (conversation.displayName?.trim()) {
+    return conversation.displayName.trim();
   }
 
-  const otherParticipant = (conversation.participants || []).find(
-    (participant) => participant.id !== currentUserId,
-  );
+  if (!isDirectConversation(conversation)) {
+    return (
+      conversation.name?.trim() ||
+      conversation.displayName?.trim() ||
+      i18n.t("common:labels.conversation")
+    );
+  }
+
+  const otherParticipant = getOtherParticipant(conversation, currentUserId);
 
   return (
     otherParticipant?.displayName ||
     otherParticipant?.username ||
+    conversation.displayName ||
     conversation.name ||
     i18n.t("common:labels.conversation")
   );
@@ -183,15 +190,22 @@ export function getConversationAvatar(
   conversation: Conversation,
   currentUserId: string,
 ): string | undefined {
-  if (!isDirectConversation(conversation)) {
-    return conversation.avatar;
+  const displayAvatar =
+    typeof conversation.displayAvatar === "string"
+      ? conversation.displayAvatar
+      : undefined;
+
+  if (displayAvatar) {
+    return displayAvatar;
   }
 
-  const otherParticipant = (conversation.participants || []).find(
-    (participant) => participant.id !== currentUserId,
-  );
+  if (!isDirectConversation(conversation)) {
+    return conversation.avatar ?? undefined;
+  }
 
-  return otherParticipant?.avatar || conversation.avatar;
+  const otherParticipant = getOtherParticipant(conversation, currentUserId);
+
+  return otherParticipant?.avatar || conversation.avatar || undefined;
 }
 
 /**
@@ -203,6 +217,10 @@ export function getOtherParticipant(
 ): UserSummary | undefined {
   if (!isDirectConversation(conversation)) {
     return undefined;
+  }
+
+  if (conversation.otherUser) {
+    return conversation.otherUser;
   }
 
   return (conversation.participants || []).find(

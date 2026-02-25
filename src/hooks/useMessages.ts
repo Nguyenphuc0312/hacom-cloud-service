@@ -135,6 +135,8 @@ export const useMessages = ({
         await fetchMessages(
           conversationId,
           new Date(oldestMessage.createdAt).toISOString(),
+          undefined,
+          { beforeId: oldestMessage.id },
         );
       }
     }

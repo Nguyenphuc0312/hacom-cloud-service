@@ -65,12 +65,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const { t } = useTranslation();
   const [inputValue, setInputValue] = React.useState("");
   const [inputMode, setInputMode] = React.useState<InputMode>("normal");
-  const [replyToMessage, setReplyToMessage] = React.useState<Message | undefined>(
-    undefined,
-  );
-  const [editingMessage, setEditingMessage] = React.useState<Message | undefined>(
-    undefined,
-  );
+  const [replyToMessage, setReplyToMessage] = React.useState<
+    Message | undefined
+  >(undefined);
+  const [editingMessage, setEditingMessage] = React.useState<
+    Message | undefined
+  >(undefined);
 
   const handleReply = React.useCallback((message: Message) => {
     setReplyToMessage(message);
@@ -96,10 +96,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setInputValue(nextValue);
   }, []);
 
-  const handleReact = React.useCallback((messageId: string, emoji: string) => {
-    if (!onReactMessage) return;
-    void Promise.resolve(onReactMessage(messageId, emoji));
-  }, [onReactMessage]);
+  const handleReact = React.useCallback(
+    (messageId: string, emoji: string) => {
+      if (!onReactMessage) return;
+      void Promise.resolve(onReactMessage(messageId, emoji));
+    },
+    [onReactMessage],
+  );
 
   const handleEdit = React.useCallback((message: Message) => {
     setReplyToMessage(undefined);
@@ -120,7 +123,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     async (content?: string, fileMeta?: unknown, type?: string) => {
       if (inputMode === "edit" && editingMessage && onEditMessage) {
         const nextContent = (content || "").trim();
-        if (!nextContent || nextContent === (editingMessage.content || "").trim()) {
+        if (
+          !nextContent ||
+          nextContent === (editingMessage.content || "").trim()
+        ) {
           setEditingMessage(undefined);
           setInputMode(replyToMessage ? "reply" : "normal");
           return;
@@ -200,6 +206,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       currentUser.id,
       handleReact,
       handleReply,
+      handleDelete,
       hasMoreMessages,
       isLoadingMessages,
       messageError,

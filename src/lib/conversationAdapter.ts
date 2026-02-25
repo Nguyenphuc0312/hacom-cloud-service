@@ -9,6 +9,13 @@ const isRecord = (value: unknown): value is UnknownRecord =>
 const asString = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim().length > 0 ? value : undefined;
 
+const asNullableString = (value: unknown): string | null | undefined => {
+  if (value === null) {
+    return null;
+  }
+  return asString(value);
+};
+
 const asBoolean = (value: unknown, fallback = false): boolean =>
   typeof value === "boolean" ? value : fallback;
 
@@ -70,7 +77,10 @@ const normalizeUserSummary = (value: unknown): UserSummary | null => {
   };
 };
 
-const normalizeParticipants = (source: UnknownRecord): UserSummary[] => {
+const normalizeParticipants = (
+  source: UnknownRecord,
+  otherUser: UserSummary | null,
+): UserSummary[] => {
   const result = new Map<string, UserSummary>();
   const candidates = [
     source.participants,
@@ -92,6 +102,10 @@ const normalizeParticipants = (source: UnknownRecord): UserSummary[] => {
       result.set(normalized.id, normalized);
     });
   });
+
+  if (otherUser) {
+    result.set(otherUser.id, otherUser);
+  }
 
   return Array.from(result.values());
 };
@@ -207,18 +221,27 @@ export const normalizeRoomType = (
 };
 
 export const isDirectConversation = (
-  conversation: Pick<Conversation, "type" | "participants"> | null | undefined,
+  conversation:
+    | Pick<Conversation, "type" | "participants" | "otherUser" | "participantCount">
+    | null
+    | undefined,
 ): boolean => {
   if (!conversation) {
     return false;
   }
 
-  const participantCount = Array.isArray(conversation.participants)
-    ? conversation.participants.length
-    : undefined;
+  const participantCount =
+    asNumber(conversation.participantCount) ??
+    (Array.isArray(conversation.participants)
+      ? conversation.participants.length
+      : undefined);
   const normalizedType = normalizeRoomType(conversation.type, participantCount);
 
   if (normalizedType === RoomType.DIRECT || normalizedType === RoomType.PRIVATE) {
+    return true;
+  }
+
+  if (conversation.otherUser) {
     return true;
   }
 
@@ -239,7 +262,8 @@ export const normalizeConversation = (payload: unknown): Conversation | null => 
     return null;
   }
 
-  const participants = normalizeParticipants(payload);
+  const otherUser = normalizeUserSummary(payload.otherUser);
+  const participants = normalizeParticipants(payload, otherUser);
   const participantCount = toParticipantsCount(participants, payload);
   const normalizedType = normalizeRoomType(payload.type, participantCount);
   const lastMessage = normalizeLastMessage(payload);
@@ -247,23 +271,53 @@ export const normalizeConversation = (payload: unknown): Conversation | null => 
     payload.updatedAt ?? payload.lastMessageAt ?? payload.createdAt,
     new Date(),
   );
+  const conversationName = asNullableString(payload.name);
+  const displayName =
+    asString(payload.displayName) ??
+    (normalizedType === RoomType.DIRECT
+      ? (otherUser?.displayName ?? otherUser?.username ?? conversationName)
+      : conversationName) ??
+    "";
+  const displayAvatar =
+    asNullableString(payload.displayAvatar) ??
+    (normalizedType === RoomType.DIRECT
+      ? (otherUser?.avatar ?? asNullableString(payload.avatar))
+      : asNullableString(payload.avatar));
+  const avatar = asNullableString(payload.avatar);
+  const resolvedParticipantCount =
+    normalizedType === RoomType.DIRECT && otherUser && participantCount < 2
+      ? 2
+      : participantCount;
+
   const baseConversation: Conversation = {
     id,
     type: normalizedType,
-    name: asString(payload.name) ?? "",
+    name:
+      normalizedType === RoomType.DIRECT
+        ? null
+        : (conversationName ?? (displayName || null)),
     unreadCount: asNumber(payload.unreadCount) ?? asNumber(payload.unread) ?? 0,
     isPinned: asBoolean(payload.isPinned, false),
     isMuted: asBoolean(payload.isMuted, false),
     isArchived: asBoolean(payload.isArchived, false),
     isBlocked: asBoolean(payload.isBlocked, false),
     participants,
-    participantCount,
+    participantCount: resolvedParticipantCount,
     updatedAt,
-    ...(asString(payload.avatar) ? { avatar: asString(payload.avatar) } : {}),
+    ...(avatar !== undefined ? { avatar } : {}),
+    ...(otherUser ? { otherUser } : {}),
+    ...(displayName ? { displayName } : {}),
+    ...(displayAvatar !== undefined ? { displayAvatar } : {}),
     ...(lastMessage ? { lastMessage } : {}),
     ...(asString(payload.currentUserId)
       ? { currentUserId: asString(payload.currentUserId) }
       : {}),
+    ...(asString(payload.createdBy) ? { createdBy: asString(payload.createdBy) } : {}),
+    ...(payload.createdAt ? { createdAt: toDate(payload.createdAt, updatedAt) } : {}),
+    ...(payload.lastMessageAt
+      ? { lastMessageAt: toDate(payload.lastMessageAt, updatedAt) }
+      : {}),
+    ...(asString(payload.directKey) ? { directKey: asString(payload.directKey) } : {}),
     ...(payload.joinedAt ? { joinedAt: toDate(payload.joinedAt, updatedAt) } : {}),
     ...(payload.lastReadAt
       ? { lastReadAt: toDate(payload.lastReadAt, updatedAt) }

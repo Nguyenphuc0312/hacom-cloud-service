@@ -13,7 +13,11 @@ import { Avatar } from "../common/Avatar";
 import { TypingIndicator } from "../common/TypingIndicator";
 import type { Conversation, TypingStatus } from "../../types";
 import { isDirectConversation, normalizeRoomType } from "../../lib/conversationAdapter";
-import { getOtherParticipant } from "../../utils/messageHelpers";
+import {
+  getConversationAvatar,
+  getConversationDisplayName,
+  getOtherParticipant,
+} from "../../utils/messageHelpers";
 
 interface ChatHeaderProps {
   conversation: Conversation;
@@ -121,10 +125,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   ]);
 
   const displayName =
-    conversation.name ||
-    otherUser?.displayName ||
-    otherUser?.username ||
+    getConversationDisplayName(conversation, currentUserId) ||
     t("common:labels.conversation");
+  const avatarSrc = getConversationAvatar(conversation, currentUserId);
 
   const actions = React.useMemo<HeaderAction[]>(() => {
     const nextActions: HeaderAction[] = [];
@@ -195,7 +198,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           aria-label={t("chat:header.viewInfo")}
         >
           <Avatar
-            src={conversation.avatar}
+            src={avatarSrc}
             alt={displayName}
             size="md"
             status={otherUser?.status}

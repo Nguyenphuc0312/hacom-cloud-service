@@ -11,7 +11,12 @@ import { Badge } from "../../common/Badge";
 import type { Conversation, UserSummary } from "../../../types";
 import { isDirectConversation } from "../../../lib/conversationAdapter";
 import { formatRelativeTime } from "../../../utils/formatTime";
-import { getMessagePreview } from "../../../utils/messageHelpers";
+import {
+  getConversationAvatar,
+  getConversationDisplayName,
+  getMessagePreview,
+  getOtherParticipant,
+} from "../../../utils/messageHelpers";
 
 interface RoomItemProps {
   conversation: Conversation;
@@ -21,32 +26,6 @@ interface RoomItemProps {
   isKeyboardActive: boolean;
   onSelect: (conversationId: string) => void;
 }
-
-const getDirectPartner = (
-  conversation: Conversation,
-  currentUserId: string,
-): UserSummary | undefined =>
-  (conversation.participants || []).find(
-    (participant) => participant.id !== currentUserId,
-  );
-
-const getDisplayName = (
-  conversation: Conversation,
-  currentUser: UserSummary,
-  fallbackName: string,
-): string => {
-  if (!isDirectConversation(conversation)) {
-    return conversation.name || fallbackName;
-  }
-
-  const directPartner = getDirectPartner(conversation, currentUser.id);
-  return (
-    directPartner?.displayName ||
-    directPartner?.username ||
-    conversation.name ||
-    fallbackName
-  );
-};
 
 const normalizeMentionToken = (value: unknown): string => {
   if (typeof value !== "string") return "";
@@ -95,11 +74,11 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
   const fallbackConversationName = t("common:labels.conversation");
 
   const directPartner = useMemo(
-    () => getDirectPartner(conversation, currentUser.id),
+    () => getOtherParticipant(conversation, currentUser.id),
     [conversation, currentUser.id],
   );
   const displayName = useMemo(
-    () => getDisplayName(conversation, currentUser, fallbackConversationName),
+    () => getConversationDisplayName(conversation, currentUser.id) || fallbackConversationName,
     [conversation, currentUser, fallbackConversationName],
   );
   const previewText = useMemo(
@@ -115,10 +94,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
   const unreadMention = hasMention(conversation, currentUser);
   const isDirect = isDirectConversation(conversation);
 
-  const avatarSrc =
-    isDirect
-      ? directPartner?.avatar || conversation.avatar
-      : conversation.avatar;
+  const avatarSrc = getConversationAvatar(conversation, currentUser.id);
   const avatarStatus = isDirect ? directPartner?.status : undefined;
 
   if (collapsed) {

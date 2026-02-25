@@ -86,6 +86,11 @@ const scheduleIdleTask = (task: () => void): (() => void) => {
   };
 };
 
+const isMessageDebugEnabled = (): boolean => {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("debugMessages") === "1";
+};
+
 export const ChatPage: React.FC = () => {
   const { t } = useTranslation();
   const { conversationId } = useParams<{ conversationId?: string }>();
@@ -153,6 +158,7 @@ export const ChatPage: React.FC = () => {
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const roomCreationLockRef = useRef(false);
   const [isValidatingRoom, setIsValidatingRoom] = useState(false);
+  const directInfoHydratedRef = useRef<Set<string>>(new Set());
 
   // Current user as UserSummary for components
   const currentUserSummary = useMemo<UserSummary | null>(
@@ -335,6 +341,8 @@ export const ChatPage: React.FC = () => {
     await fetchMessages(
       selectedConversationId,
       new Date(oldestMessage.createdAt).toISOString(),
+      undefined,
+      { beforeId: oldestMessage.id },
     );
   }, [
     selectedConversationId,
@@ -389,6 +397,20 @@ export const ChatPage: React.FC = () => {
       cancelScheduledTask();
     };
   }, [conversations, isValidatingRoom, selectedConversationId]);
+
+  useEffect(() => {
+    if (!isMessageDebugEnabled()) return;
+    if (!selectedConversationId) return;
+    if (!isSelectedConversationHydrated) return;
+    if (conversationMessages.length > 0) return;
+
+    // eslint-disable-next-line no-debugger
+    debugger;
+  }, [
+    selectedConversationId,
+    isSelectedConversationHydrated,
+    conversationMessages.length,
+  ]);
 
   const handleReactMessage = useCallback(
     async (messageId: string, emoji: string) => {
@@ -611,6 +633,38 @@ export const ChatPage: React.FC = () => {
     currentUserSummary
       ? getOtherParticipant(selectedConversation, currentUserSummary.id)
       : null;
+
+  useEffect(() => {
+    if (!selectedConversationId || !isSelectedDirectConversation || otherUser) {
+      return;
+    }
+
+    if (directInfoHydratedRef.current.has(selectedConversationId)) {
+      return;
+    }
+    directInfoHydratedRef.current.add(selectedConversationId);
+
+    let isCancelled = false;
+    void conversationApi
+      .getConversationById(selectedConversationId)
+      .then((response) => {
+        if (isCancelled) return;
+        const conversation = unwrapApiSuccess(response);
+        updateConversation(selectedConversationId, conversation);
+      })
+      .catch(() => {
+        // no-op: fallback UI keeps skeleton and retries on next navigation
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    isSelectedDirectConversation,
+    otherUser,
+    selectedConversationId,
+    updateConversation,
+  ]);
 
   if (!currentUserSummary) {
     return null;

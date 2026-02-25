@@ -9,7 +9,11 @@
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { VariableSizeList, type ListChildComponentProps } from "react-window";
-import type { Conversation, ConversationFilter, UserSummary } from "../../../types";
+import type {
+  Conversation,
+  ConversationFilter,
+  UserSummary,
+} from "../../../types";
 import { RoomType } from "../../../types";
 import {
   isDirectConversation,
@@ -60,6 +64,16 @@ const SECTION_HEIGHT = 30;
 const EXPANDED_ROOM_HEIGHT = 80;
 const COLLAPSED_ROOM_HEIGHT = 64;
 
+const measureViewportHeight = (node: HTMLDivElement): number => {
+  if (node.clientHeight > 0) return node.clientHeight;
+
+  const rectHeight = node.getBoundingClientRect().height;
+  if (rectHeight > 0) return Math.round(rectHeight);
+
+  if (node.scrollHeight > 0) return node.scrollHeight;
+  return 0;
+};
+
 const toTimestamp = (value: unknown): number => {
   const date = new Date(value as string | number | Date);
   const timestamp = date.getTime();
@@ -73,22 +87,43 @@ const sortByPriority = (items: Conversation[]): Conversation[] =>
     return toTimestamp(b.updatedAt) - toTimestamp(a.updatedAt);
   });
 
-const includesQuery = (conversation: Conversation, normalizedQuery: string): boolean => {
+const includesQuery = (
+  conversation: Conversation,
+  normalizedQuery: string,
+): boolean => {
   if (!normalizedQuery) return true;
+
+  if ((conversation.displayName || "").toLowerCase().includes(normalizedQuery)) {
+    return true;
+  }
 
   if ((conversation.name || "").toLowerCase().includes(normalizedQuery)) {
     return true;
   }
 
-  const participantMatch = (conversation.participants || []).some((participant) => {
-    const displayName = (participant.displayName || "").toLowerCase();
-    const username = (participant.username || "").toLowerCase();
-    return displayName.includes(normalizedQuery) || username.includes(normalizedQuery);
-  });
+  if (
+    (conversation.otherUser?.displayName || "").toLowerCase().includes(normalizedQuery) ||
+    (conversation.otherUser?.username || "").toLowerCase().includes(normalizedQuery)
+  ) {
+    return true;
+  }
+
+  const participantMatch = (conversation.participants || []).some(
+    (participant) => {
+      const displayName = (participant.displayName || "").toLowerCase();
+      const username = (participant.username || "").toLowerCase();
+      return (
+        displayName.includes(normalizedQuery) ||
+        username.includes(normalizedQuery)
+      );
+    },
+  );
 
   if (participantMatch) return true;
 
-  return (conversation.lastMessage?.content || "").toLowerCase().includes(normalizedQuery);
+  return (conversation.lastMessage?.content || "")
+    .toLowerCase()
+    .includes(normalizedQuery);
 };
 
 const toSections = (
@@ -110,7 +145,9 @@ const toSections = (
     case "groups":
       return groups.length > 0 ? [{ id: "groups", rooms: groups }] : [];
     default: {
-      const readChannel = channels.filter((room) => (room.unreadCount || 0) === 0);
+      const readChannel = channels.filter(
+        (room) => (room.unreadCount || 0) === 0,
+      );
       const readGroup = groups.filter((room) => (room.unreadCount || 0) === 0);
       const readDirect = direct.filter((room) => (room.unreadCount || 0) === 0);
 
@@ -147,7 +184,9 @@ const Row = ({ index, style, data }: ListChildComponentProps<RowData>) => {
             data.collapsed && "justify-center",
           )}
         >
-          {data.collapsed ? item.title.charAt(0) : `${item.title} (${item.count})`}
+          {data.collapsed
+            ? item.title.charAt(0)
+            : `${item.title} (${item.count})`}
         </div>
       </div>
     );
@@ -183,12 +222,15 @@ export const RoomList: React.FC<RoomListProps> = ({
   const [keyboardCursor, setKeyboardCursor] = useState(0);
   const [isKeyboardMode, setIsKeyboardMode] = useState(false);
 
-  const sectionTitles: Record<SectionId, string> = {
-    unread: t("sidebar:room.section.unread"),
-    channels: t("sidebar:room.section.channels"),
-    groups: t("sidebar:room.section.groups"),
-    direct: t("sidebar:room.section.direct"),
-  };
+  const sectionTitles = useMemo<Record<SectionId, string>>(
+    () => ({
+      unread: t("sidebar:room.section.unread"),
+      channels: t("sidebar:room.section.channels"),
+      groups: t("sidebar:room.section.groups"),
+      direct: t("sidebar:room.section.direct"),
+    }),
+    [t],
+  );
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
 
@@ -197,10 +239,11 @@ export const RoomList: React.FC<RoomListProps> = ({
     [conversations],
   );
 
-  const queriedRooms = useMemo(
-    () => sortedRooms.filter((conversation) => includesQuery(conversation, normalizedQuery)),
-    [sortedRooms, normalizedQuery],
-  );
+  const queriedRooms = useMemo(() => {
+    return sortedRooms.filter((conversation) =>
+      includesQuery(conversation, normalizedQuery),
+    );
+  }, [sortedRooms, normalizedQuery]);
 
   const sections = useMemo(
     () => toSections(queriedRooms, activeFilter),
@@ -273,7 +316,9 @@ export const RoomList: React.FC<RoomListProps> = ({
   const currentCursor = useMemo(() => {
     if (roomIndexes.length === 0) return 0;
     if (isKeyboardMode) return clampedKeyboardCursor;
-    return selectedRoomPosition >= 0 ? selectedRoomPosition : clampedKeyboardCursor;
+    return selectedRoomPosition >= 0
+      ? selectedRoomPosition
+      : clampedKeyboardCursor;
   }, [
     roomIndexes.length,
     isKeyboardMode,
@@ -284,7 +329,8 @@ export const RoomList: React.FC<RoomListProps> = ({
   const rowData = useMemo<RowData>(() => {
     const keyboardListIndex = roomIndexes[currentCursor];
     const keyboardActiveRoomId =
-      typeof keyboardListIndex === "number" && flatItems[keyboardListIndex]?.kind === "room"
+      typeof keyboardListIndex === "number" &&
+      flatItems[keyboardListIndex]?.kind === "room"
         ? flatItems[keyboardListIndex].room.id
         : null;
 
@@ -311,24 +357,59 @@ export const RoomList: React.FC<RoomListProps> = ({
     listRef.current?.resetAfterIndex(0, true);
   }, [rowHeights]);
 
+  const syncViewportHeight = useCallback(() => {
+    const node = containerRef.current;
+    if (!node) return;
+
+    const nextHeight = measureViewportHeight(node);
+    setViewportHeight((prev) => (prev === nextHeight ? prev : nextHeight));
+  }, []);
+
   useLayoutEffect(() => {
     const node = containerRef.current;
     if (!node) return undefined;
 
-    const updateHeight = () => setViewportHeight(node.clientHeight);
-    updateHeight();
+    syncViewportHeight();
 
-    const observer = new ResizeObserver(updateHeight);
-    observer.observe(node);
+    const observer =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(syncViewportHeight)
+        : null;
+    observer?.observe(node);
 
-    return () => observer.disconnect();
-  }, []);
+    const onResize = () => syncViewportHeight();
+    window.addEventListener("resize", onResize);
+
+    let rafId1 = 0;
+    let rafId2 = 0;
+    rafId1 = window.requestAnimationFrame(() => {
+      syncViewportHeight();
+      rafId2 = window.requestAnimationFrame(syncViewportHeight);
+    });
+
+    const timerId = window.setTimeout(syncViewportHeight, 120);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", onResize);
+      window.cancelAnimationFrame(rafId1);
+      window.cancelAnimationFrame(rafId2);
+      window.clearTimeout(timerId);
+    };
+  }, [syncViewportHeight]);
+
+  useEffect(() => {
+    syncViewportHeight();
+  }, [flatItems.length, collapsed, syncViewportHeight]);
 
   const moveCursor = useCallback(
     (delta: -1 | 1) => {
       if (roomIndexes.length === 0) return;
 
-      const next = Math.max(0, Math.min(roomIndexes.length - 1, currentCursor + delta));
+      const next = Math.max(
+        0,
+        Math.min(roomIndexes.length - 1, currentCursor + delta),
+      );
       setKeyboardCursor(next);
       const listIndex = roomIndexes[next];
       listRef.current?.scrollToItem(listIndex, "smart");

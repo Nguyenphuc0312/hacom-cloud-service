@@ -16,6 +16,7 @@ import {
 import { toast } from "../utils/toast";
 import i18n from "../i18n";
 import { useAuthStore } from "./authStore";
+import { conversationApi } from "../services/api";
 import type {
   Conversation,
   Message,
@@ -94,6 +95,8 @@ interface FetchMessagesResult {
 interface FetchMessagesOptions {
   force?: boolean;
   limit?: number;
+  beforeId?: string;
+  afterId?: string;
 }
 
 const initialState = {
@@ -138,6 +141,11 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
   value !== null && typeof value === "object"
     ? (value as Record<string, unknown>)
     : null;
+
+const isMessageDebugEnabled = (): boolean => {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("debugMessages") === "1";
+};
 
 const asStringValue = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim().length > 0 ? value : undefined;
@@ -509,6 +517,42 @@ const mergeMessages = (current: Message[], incoming: Message[]): Message[] =>
     ...(Array.isArray(incoming) ? incoming : []),
   ]);
 
+const findMessageByIdentityIndex = (
+  messages: Message[],
+  target: Message,
+): number =>
+  messages.findIndex((item) => {
+    if (!item) return false;
+
+    const targetId = typeof target.id === "string" ? target.id : "";
+    const targetLocalId =
+      typeof target.localId === "string" ? target.localId : "";
+    const itemId = typeof item.id === "string" ? item.id : "";
+    const itemLocalId = typeof item.localId === "string" ? item.localId : "";
+
+    return (
+      (targetId.length > 0 && (itemId === targetId || itemLocalId === targetId)) ||
+      (targetLocalId.length > 0 &&
+        (itemId === targetLocalId || itemLocalId === targetLocalId))
+    );
+  });
+
+const mergeMessagesAfterCursor = (
+  current: Message[],
+  incoming: Message[],
+): Message[] => {
+  const base = Array.isArray(current) ? [...current] : [];
+  for (const nextMessage of incoming) {
+    const matchIndex = findMessageByIdentityIndex(base, nextMessage);
+    if (matchIndex >= 0) {
+      base[matchIndex] = mergeMessageRecords(base[matchIndex], nextMessage);
+    } else {
+      base.push(nextMessage);
+    }
+  }
+  return sortMessages(base);
+};
+
 const toMessageSummary = (message: Message): Conversation["lastMessage"] => ({
   id: message.id,
   senderId: message.senderId,
@@ -522,28 +566,55 @@ const toMessageSummary = (message: Message): Conversation["lastMessage"] => ({
 const normalizeMessagesResponse = (
   rawData: unknown,
   responseMeta?: Record<string, unknown> | null,
-): { messages: Message[]; hasMore: boolean } => {
-  const hasMoreFromMeta = (): boolean | null => {
-    if (!responseMeta) return null;
-    if (typeof responseMeta.hasMore === "boolean") return responseMeta.hasMore;
-    if (typeof responseMeta.hasNext === "boolean") return responseMeta.hasNext;
-    if (typeof responseMeta.hasNextPage === "boolean")
-      return responseMeta.hasNextPage;
-    return null;
+): { messages: Message[]; hasNext: boolean; hasPrev: boolean } => {
+  const getBoolean = (
+    source: Record<string, unknown> | null | undefined,
+    key: string,
+  ): boolean | null => {
+    if (!source) return null;
+    return typeof source[key] === "boolean"
+      ? (source[key] as boolean)
+      : null;
+  };
+
+  const resolveFlags = (
+    payloadMeta?: Record<string, unknown> | null,
+  ): { hasNext: boolean | null; hasPrev: boolean | null } => {
+    const hasNext =
+      getBoolean(payloadMeta, "hasNext") ??
+      getBoolean(payloadMeta, "hasNextPage") ??
+      getBoolean(payloadMeta, "hasMore") ??
+      getBoolean(responseMeta, "hasNext") ??
+      getBoolean(responseMeta, "hasNextPage") ??
+      getBoolean(responseMeta, "hasMore") ??
+      null;
+
+    const hasPrev =
+      getBoolean(payloadMeta, "hasPrev") ??
+      getBoolean(payloadMeta, "hasPrevPage") ??
+      getBoolean(payloadMeta, "hasMore") ??
+      getBoolean(responseMeta, "hasPrev") ??
+      getBoolean(responseMeta, "hasPrevPage") ??
+      getBoolean(responseMeta, "hasMore") ??
+      null;
+
+    return { hasNext, hasPrev };
   };
 
   if (Array.isArray(rawData)) {
+    const flags = resolveFlags();
     return {
       messages: rawData
         .map((item) => normalizeMessage(item))
         .filter((item): item is Message => item !== null),
-      hasMore: hasMoreFromMeta() ?? false,
+      hasNext: flags.hasNext ?? false,
+      hasPrev: flags.hasPrev ?? false,
     };
   }
 
   const payload = asRecord(rawData);
   if (!payload) {
-    return { messages: [], hasMore: false };
+    return { messages: [], hasNext: false, hasPrev: false };
   }
 
   const rawMessages = Array.isArray(payload.messages)
@@ -554,20 +625,21 @@ const normalizeMessagesResponse = (
   const messages = rawMessages
     .map((item) => normalizeMessage(item))
     .filter((item): item is Message => item !== null);
-
-  if (typeof payload.hasMore === "boolean") {
-    return { messages, hasMore: payload.hasMore };
-  }
-
-  const hasMoreByMeta = hasMoreFromMeta();
-  if (typeof hasMoreByMeta === "boolean") {
-    return { messages, hasMore: hasMoreByMeta };
-  }
-
   const pagination = asRecord(payload.pagination);
+  const flags = resolveFlags(payload);
+
   return {
     messages,
-    hasMore: Boolean(pagination?.hasNextPage),
+    hasNext:
+      flags.hasNext ??
+      (typeof pagination?.hasNextPage === "boolean"
+        ? Boolean(pagination.hasNextPage)
+        : false),
+    hasPrev:
+      flags.hasPrev ??
+      (typeof pagination?.hasPrevPage === "boolean"
+        ? Boolean(pagination.hasPrevPage)
+        : false),
   };
 };
 
@@ -657,10 +729,10 @@ export const useChatStore = create<ChatState>()(
           : []
         ).map((conversation) =>
           conversation.id === id
-            ? normalizeConversation({ ...conversation, ...updates }) ?? {
+            ? (normalizeConversation({ ...conversation, ...updates }) ?? {
                 ...conversation,
                 ...updates,
-              }
+              })
             : conversation,
         ),
       }));
@@ -749,11 +821,10 @@ export const useChatStore = create<ChatState>()(
       set({ isLoadingConversations: true, error: null });
 
       try {
-        const response = await apiClient.get<ApiResponse<unknown>>(
-          "/rooms?page=1&limit=100",
+        const response = await conversationApi.getConversations(1, 100);
+        const conversations = normalizeConversationsPayload(
+          unwrapApiSuccess(response),
         );
-        const payload = unwrapApiSuccess(response.data);
-        const conversations = normalizeConversationsPayload(payload);
         set({
           conversations,
           isLoadingConversations: false,
@@ -997,17 +1068,70 @@ export const useChatStore = create<ChatState>()(
           options.limit > 0
             ? Math.min(100, Math.floor(options.limit))
             : 50;
+        const beforeId = asStringValue(options?.beforeId);
+        const afterId = asStringValue(options?.afterId);
         const params = new URLSearchParams({ limit: String(limit) });
         if (before) params.set("before", before);
+        if (beforeId) params.set("beforeId", beforeId);
         if (after) params.set("after", after);
+        if (afterId) params.set("afterId", afterId);
 
-        const response = await apiClient.get<ApiResponse<unknown>>(
-          `/rooms/${conversationId}/messages?${params.toString()}`,
-        );
+        const url = `/rooms/${conversationId}/messages?${params.toString()}`;
+        const response = await apiClient.get<ApiResponse<unknown>>(url);
         const responseEnvelope = asRecord(response.data);
         const responseMeta = asRecord(responseEnvelope?.meta);
         const payload = unwrapApiSuccess(response.data);
-        const normalized = normalizeMessagesResponse(payload, responseMeta);
+        let normalized = normalizeMessagesResponse(payload, responseMeta);
+
+        if (
+          after &&
+          !afterId &&
+          Array.isArray(normalized.messages) &&
+          normalized.messages.length === 0
+        ) {
+          try {
+            const parsedAfter = Date.parse(after);
+            if (!Number.isNaN(parsedAfter)) {
+              const earlierTs = Math.max(0, parsedAfter - 1);
+              const earlier = new Date(earlierTs).toISOString();
+              const retryParams = new URLSearchParams({
+                limit: String(limit),
+                after: earlier,
+              });
+              const retryUrl = `/rooms/${conversationId}/messages?${retryParams.toString()}`;
+              const retryResp = await apiClient.get<ApiResponse<unknown>>(
+                retryUrl,
+              );
+              const retryPayload = unwrapApiSuccess(retryResp.data);
+              const retryMeta =
+                asRecord(asRecord(retryResp.data)?.meta) ?? responseMeta;
+              const retryNormalized = normalizeMessagesResponse(
+                retryPayload,
+                retryMeta,
+              );
+              if (
+                Array.isArray(retryNormalized.messages) &&
+                retryNormalized.messages.length > 0
+              ) {
+                normalized = retryNormalized;
+              }
+            }
+          } catch {
+            // ignore retry errors
+          }
+        }
+        const hasMoreForDirection = after
+          ? normalized.hasNext
+          : normalized.hasPrev;
+
+        if (
+          isMessageDebugEnabled() &&
+          isInitialFetch &&
+          normalized.messages.length > 0
+        ) {
+          // eslint-disable-next-line no-debugger
+          debugger;
+        }
 
         set((state) => {
           if (
@@ -1019,10 +1143,10 @@ export const useChatStore = create<ChatState>()(
           }
 
           const existingMessages = state.messages[conversationId] || [];
-          const mergedMessages = mergeMessages(
-            existingMessages,
-            normalized.messages,
-          );
+          const mergedMessages =
+            after && !before
+              ? mergeMessagesAfterCursor(existingMessages, normalized.messages)
+              : mergeMessages(existingMessages, normalized.messages);
           const latestMessage = mergedMessages[mergedMessages.length - 1];
 
           const updatedConversations = state.conversations.map(
@@ -1057,7 +1181,7 @@ export const useChatStore = create<ChatState>()(
               ...state.hasMoreMessages,
               [conversationId]:
                 before || (!before && !after)
-                  ? normalized.hasMore
+                  ? normalized.hasPrev
                   : (state.hasMoreMessages[conversationId] ?? false),
             },
           };
@@ -1065,7 +1189,7 @@ export const useChatStore = create<ChatState>()(
 
         return {
           loaded: normalized.messages.length,
-          hasMore: normalized.hasMore,
+          hasMore: hasMoreForDirection,
         };
       } catch (error: unknown) {
         const apiError = extractApiError(error);

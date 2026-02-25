@@ -117,6 +117,11 @@ const toDayKey = (date: Date | null): string => {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 };
 
+const isMessageDebugEnabled = (): boolean => {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("debugMessages") === "1";
+};
+
 const MessageListComponent: React.FC<MessageListProps> = ({
   messages,
   conversation,
@@ -347,6 +352,15 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
     setStickyDate(null);
   }, [conversation.id, getItemSize, outerRef, timelineItems]);
+
+  React.useEffect(() => {
+    if (!isMessageDebugEnabled()) return;
+    if (messages.length === 0) return;
+    if (viewportHeight > 0) return;
+
+    // eslint-disable-next-line no-debugger
+    debugger;
+  }, [messages.length, viewportHeight]);
 
   React.useEffect(() => {
     return () => {
