@@ -1,12 +1,8 @@
-/**
- * @fileoverview Forgot Password Page
- * Trang quên mật khẩu
- */
-
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useTranslation } from "react-i18next";
 import {
   EnvelopeIcon,
   ChatBubbleLeftRightIcon,
@@ -19,10 +15,10 @@ import type { ForgotPasswordFormData } from "../lib/validations";
 import apiClient from "../lib/axios";
 
 export const ForgotPasswordPage: React.FC = () => {
+  const { t } = useTranslation();
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // React Hook Form
   const {
     register,
     handleSubmit,
@@ -36,46 +32,39 @@ export const ForgotPasswordPage: React.FC = () => {
     },
   });
 
-  // Auto-focus email input
   useEffect(() => {
     setFocus("email");
   }, [setFocus]);
 
-  // Submit handler
   const onSubmit = async (data: ForgotPasswordFormData) => {
     setIsLoading(true);
 
     try {
       await apiClient.post("/auth/forgot-password", data);
       setIsSubmitted(true);
-      toast.success("Email đặt lại mật khẩu đã được gửi!");
+      toast.success(t("auth:toast.forgotPasswordSent"));
     } catch {
-      // Vẫn hiển thị thành công để tránh leak thông tin user
       setIsSubmitted(true);
-      toast.success(
-        "Nếu email tồn tại, bạn sẽ nhận được link đặt lại mật khẩu",
-      );
+      toast.success(t("auth:toast.forgotPasswordFallback"));
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Success state
   if (isSubmitted) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 px-4 py-12">
         <div className="relative w-full max-w-md">
           <div className="bg-surface rounded-2xl shadow-xl border border-border p-8 text-center animate-fade-in">
-            {/* Success icon */}
             <div className="inline-flex items-center justify-center w-16 h-16 bg-success/15 rounded-full mb-6">
               <CheckCircleIcon className="w-8 h-8 text-success" />
             </div>
 
             <h1 className="text-2xl font-bold text-text-primary mb-2">
-              Kiểm tra email của bạn
+              {t("auth:forgot.successTitle")}
             </h1>
             <p className="text-text-muted mb-6">
-              Chúng tôi đã gửi hướng dẫn đặt lại mật khẩu đến{" "}
+              {t("auth:forgot.successDescription")} {" "}
               <span className="font-medium text-text-primary">
                 {getValues("email")}
               </span>
@@ -83,19 +72,19 @@ export const ForgotPasswordPage: React.FC = () => {
 
             <div className="space-y-4">
               <p className="text-sm text-text-muted">
-                Không nhận được email? Kiểm tra thư mục spam hoặc
+                {t("auth:forgot.successHint")}
               </p>
               <Button
                 variant="outline"
                 fullWidth
                 onClick={() => setIsSubmitted(false)}
               >
-                Thử lại với email khác
+                {t("auth:forgot.tryAnotherEmail")}
               </Button>
               <Link to="/login">
                 <Button variant="ghost" fullWidth>
                   <ArrowLeftIcon className="w-4 h-4 mr-2" />
-                  Quay lại đăng nhập
+                  {t("auth:forgot.backToLogin")}
                 </Button>
               </Link>
             </div>
@@ -107,33 +96,29 @@ export const ForgotPasswordPage: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 px-4 py-12">
-      {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/10 rounded-full blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-secondary/15 rounded-full blur-3xl" />
       </div>
 
-      {/* Card */}
       <div className="relative w-full max-w-md">
         <div className="bg-surface rounded-2xl shadow-xl border border-border p-8 animate-fade-in">
-          {/* Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl mb-4 shadow-lg shadow-elev2">
               <ChatBubbleLeftRightIcon className="w-8 h-8 text-text-inverse" />
             </div>
-            <h1 className="text-2xl font-bold text-text-primary">Quên mật khẩu?</h1>
+            <h1 className="text-2xl font-bold text-text-primary">{t("auth:forgot.title")}</h1>
             <p className="text-text-muted mt-2">
-              Nhập email của bạn, chúng tôi sẽ gửi link đặt lại mật khẩu
+              {t("auth:forgot.subtitle")}
             </p>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <Input
               {...register("email")}
               type="email"
-              label="Email"
-              placeholder="you@example.com"
+              label={t("auth:login.email")}
+              placeholder={t("auth:placeholders.email")}
               leftIcon={<EnvelopeIcon className="w-5 h-5" />}
               error={errors.email?.message}
               autoComplete="email"
@@ -147,18 +132,17 @@ export const ForgotPasswordPage: React.FC = () => {
               isLoading={isLoading}
               disabled={isLoading}
             >
-              Gửi link đặt lại mật khẩu
+              {t("auth:forgot.submit")}
             </Button>
           </form>
 
-          {/* Back to login */}
           <div className="mt-6 text-center">
             <Link
               to="/login"
               className="inline-flex items-center text-sm text-text-muted hover:text-text-secondary"
             >
               <ArrowLeftIcon className="w-4 h-4 mr-1" />
-              Quay lại đăng nhập
+              {t("auth:forgot.backToLogin")}
             </Link>
           </div>
         </div>
@@ -168,5 +152,3 @@ export const ForgotPasswordPage: React.FC = () => {
 };
 
 export default ForgotPasswordPage;
-
-

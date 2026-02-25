@@ -5,6 +5,7 @@
 
 import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 
 interface SpinnerProps {
   size?: "xs" | "sm" | "md" | "lg" | "xl";
@@ -31,6 +32,8 @@ export const Spinner: React.FC<SpinnerProps> = ({
   variant = "primary",
   className,
 }) => {
+  const { t } = useTranslation();
+
   return (
     <div
       className={clsx(
@@ -40,30 +43,38 @@ export const Spinner: React.FC<SpinnerProps> = ({
         className,
       )}
       role="status"
-      aria-label="Loading"
+      aria-label={t("common:loading.default")}
     />
   );
 };
 
-export const PageSpinner: React.FC<{ message?: string }> = ({
-  message = "Loading...",
-}) => {
+export const PageSpinner: React.FC<{ message?: string }> = ({ message }) => {
+  const { t } = useTranslation();
+  const displayMessage = message ?? t("common:loading.default");
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-surface/80 backdrop-blur-sm">
       <Spinner size="xl" />
-      {message && <p className="mt-4 animate-pulse text-sm text-text-secondary">{message}</p>}
+      {displayMessage && (
+        <p className="mt-4 animate-pulse text-sm text-text-secondary">
+          {displayMessage}
+        </p>
+      )}
     </div>
   );
 };
 
 export const LoadingText: React.FC<{ text?: string; className?: string }> = ({
-  text = "Loading...",
+  text,
   className,
 }) => {
+  const { t } = useTranslation();
+  const displayText = text ?? t("common:loading.default");
+
   return (
     <div className={clsx("flex items-center gap-2 text-text-muted", className)}>
       <Spinner size="sm" variant="neutral" />
-      <span className="text-sm">{text}</span>
+      <span className="text-sm">{displayText}</span>
     </div>
   );
 };

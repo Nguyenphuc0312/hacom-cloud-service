@@ -8,7 +8,8 @@ import {
   differenceInHours,
   differenceInDays,
 } from "date-fns";
-import { vi } from "date-fns/locale";
+import i18n from "../i18n";
+import { getDateFnsLocale } from "../i18n/dateFns";
 
 const isValidDate = (date: Date): boolean => !Number.isNaN(date.getTime());
 
@@ -17,17 +18,18 @@ const isValidDate = (date: Date): boolean => !Number.isNaN(date.getTime());
  */
 export function formatMessageTime(date: Date): string {
   if (!isValidDate(date)) return "";
+  const locale = getDateFnsLocale();
 
   if (isToday(date)) {
-    return format(date, "HH:mm");
+    return format(date, "HH:mm", { locale });
   }
   if (isYesterday(date)) {
-    return `Yesterday ${format(date, "HH:mm")}`;
+    return `${i18n.t("chat:time.yesterday")} ${format(date, "HH:mm", { locale })}`;
   }
   if (isThisWeek(date)) {
-    return format(date, "EEEE HH:mm", { locale: vi });
+    return format(date, "EEEE HH:mm", { locale });
   }
-  return format(date, "d MMM, HH:mm", { locale: vi });
+  return format(date, "d MMM, HH:mm", { locale });
 }
 
 /**
@@ -35,6 +37,7 @@ export function formatMessageTime(date: Date): string {
  */
 export function formatRelativeTime(date: Date): string {
   if (!isValidDate(date)) return "";
+  const locale = getDateFnsLocale();
 
   const now = new Date();
   const minutes = differenceInMinutes(now, date);
@@ -42,21 +45,21 @@ export function formatRelativeTime(date: Date): string {
   const days = differenceInDays(now, date);
 
   if (minutes < 1) {
-    return "Just now";
+    return i18n.t("chat:time.justNow");
   }
   if (minutes < 60) {
-    return `${minutes}m`;
+    return i18n.t("chat:time.minutesShort", { count: minutes });
   }
   if (hours < 24 && isToday(date)) {
-    return `${hours}h`;
+    return i18n.t("chat:time.hoursShort", { count: hours });
   }
   if (isYesterday(date)) {
-    return "Yesterday";
+    return i18n.t("chat:time.yesterday");
   }
   if (days < 7) {
-    return format(date, "EEE", { locale: vi });
+    return format(date, "EEE", { locale });
   }
-  return format(date, "dd/MM", { locale: vi });
+  return format(date, "dd/MM", { locale });
 }
 
 /**
@@ -64,49 +67,58 @@ export function formatRelativeTime(date: Date): string {
  */
 export function formatDateDivider(date: Date): string {
   if (!isValidDate(date)) return "";
+  const locale = getDateFnsLocale();
 
   if (isToday(date)) {
-    return "Today";
+    return i18n.t("chat:time.today");
   }
   if (isYesterday(date)) {
-    return "Yesterday";
+    return i18n.t("chat:time.yesterday");
   }
   if (isThisWeek(date)) {
-    return format(date, "EEEE", { locale: vi });
+    return format(date, "EEEE", { locale });
   }
-  return format(date, "EEEE, d MMMM", { locale: vi });
+  return format(date, "EEEE, d MMMM", { locale });
 }
 
 /**
  * Format last seen status.
  */
 export function formatLastSeen(date: Date | undefined): string {
+  const locale = getDateFnsLocale();
+
   if (!date || !isValidDate(date)) {
-    return "Last seen recently";
+    return i18n.t("chat:time.lastSeenRecently");
   }
 
   const now = new Date();
   const minutes = differenceInMinutes(now, date);
 
   if (minutes < 1) {
-    return "Online now";
+    return i18n.t("chat:time.onlineNow");
   }
   if (minutes < 5) {
-    return "Last seen recently";
+    return i18n.t("chat:time.lastSeenRecently");
   }
   if (isToday(date)) {
-    return `Last seen at ${format(date, "HH:mm")}`;
+    return i18n.t("chat:time.lastSeenAt", {
+      time: format(date, "HH:mm", { locale }),
+    });
   }
   if (isYesterday(date)) {
-    return `Last seen yesterday at ${format(date, "HH:mm")}`;
+    return i18n.t("chat:time.lastSeenYesterdayAt", {
+      time: format(date, "HH:mm", { locale }),
+    });
   }
   if (isThisWeek(date)) {
-    return `Last seen ${format(date, "EEEE", { locale: vi })} ${format(
-      date,
-      "HH:mm",
-    )}`;
+    return i18n.t("chat:time.lastSeenDayAt", {
+      day: format(date, "EEEE", { locale }),
+      time: format(date, "HH:mm", { locale }),
+    });
   }
-  return `Last seen ${format(date, "d MMM", { locale: vi })}`;
+  return i18n.t("chat:time.lastSeenDate", {
+    date: format(date, "d MMM", { locale }),
+  });
 }
 
 /**
@@ -124,7 +136,10 @@ export function formatDuration(seconds: number): string {
  */
 export function formatRelativeTimeVi(date: Date): string {
   if (!isValidDate(date)) return "";
-  return formatDistanceToNow(date, { addSuffix: true, locale: vi });
+  return formatDistanceToNow(date, {
+    addSuffix: true,
+    locale: getDateFnsLocale(),
+  });
 }
 
 /**

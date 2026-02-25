@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "../components/ui";
 import { useAuthStore } from "../stores";
 
@@ -8,6 +9,7 @@ interface UseLogoutReturn {
 }
 
 export const useLogout = (): UseLogoutReturn => {
+  const { t } = useTranslation();
   const storeLogout = useAuthStore((state) => state.logout);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const isMountedRef = useRef(true);
@@ -32,12 +34,12 @@ export const useLogout = (): UseLogoutReturn => {
 
     try {
       await storeLogout();
-      toast.success("Dang xuat thanh cong");
+      toast.success(t("chat:toast.logoutSuccess"));
     } catch (error: unknown) {
       const message =
         error instanceof Error && error.message
           ? error.message
-          : "Dang xuat that bai";
+          : t("error:auth.logoutFailed");
       toast.error(message);
       throw error;
     } finally {
@@ -46,7 +48,7 @@ export const useLogout = (): UseLogoutReturn => {
         setIsLoggingOut(false);
       }
     }
-  }, [storeLogout]);
+  }, [storeLogout, t]);
 
   return {
     logout,

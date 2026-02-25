@@ -1,5 +1,6 @@
-import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
+﻿import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { ArrowLeftOnRectangleIcon } from "@heroicons/react/24/outline";
 import { Badge } from "../common/Badge";
 import { ConfirmDialog } from "../ui";
@@ -25,13 +26,6 @@ interface SidebarProps {
 
 const COLLAPSED_STORAGE_KEY = "chat.sidebar.collapsed";
 
-const tabs: { id: ConversationFilter; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "unread", label: "Unread" },
-  { id: "groups", label: "Groups" },
-  { id: "channels", label: "Channels" },
-];
-
 export const Sidebar: React.FC<SidebarProps> = ({
   conversations,
   currentUser,
@@ -40,6 +34,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNewChat,
   className,
 }) => {
+  const { t } = useTranslation();
+
+  const tabs: { id: ConversationFilter; label: string }[] = [
+    { id: "all", label: t("sidebar:tabs.all") },
+    { id: "unread", label: t("sidebar:tabs.unread") },
+    { id: "groups", label: t("sidebar:tabs.groups") },
+    { id: "channels", label: t("sidebar:tabs.channels") },
+  ];
+
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [activeFilter, setActiveFilter] = useState<ConversationFilter>("all");
@@ -146,12 +149,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               "text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50",
               isCollapsed && "justify-center px-0",
             )}
-            aria-label="Sign out"
+            aria-label={t("sidebar:logout.button")}
           >
             <ArrowLeftOnRectangleIcon className="h-5 w-5 shrink-0" />
             {!isCollapsed && (
               <span className="ml-2">
-                {isLoggingOut ? "Signing out..." : "Sign out"}
+                {isLoggingOut
+                  ? t("sidebar:logout.loading")
+                  : t("sidebar:logout.button")}
               </span>
             )}
           </button>
@@ -164,10 +169,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           if (!isLoggingOut) setIsLogoutConfirmOpen(false);
         }}
         onConfirm={handleLogoutConfirm}
-        title="Sign out"
-        message="You need to log in again to continue."
-        confirmText="Sign out"
-        cancelText="Cancel"
+        title={t("sidebar:logout.confirmTitle")}
+        message={t("sidebar:logout.confirmMessage")}
+        confirmText={t("sidebar:logout.confirmText")}
+        cancelText={t("sidebar:logout.cancelText")}
         variant="warning"
         isLoading={isLoggingOut}
       />
@@ -176,4 +181,3 @@ export const Sidebar: React.FC<SidebarProps> = ({
 };
 
 export default Sidebar;
-

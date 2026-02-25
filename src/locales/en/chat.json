@@ -1,0 +1,150 @@
+﻿{
+  "header": {
+    "back": "Back",
+    "viewInfo": "View conversation info",
+    "voiceCall": "Voice call",
+    "videoCall": "Video call",
+    "searchInChat": "Search in chat",
+    "toggleInfoPanel": "Toggle info panel",
+    "channel": "Channel",
+    "members": "{{count}} members"
+  },
+  "typing": {
+    "user": "{{name}} is typing..."
+  },
+  "message": {
+    "you": "You",
+    "edited": "edited",
+    "forwardedFrom": "Forwarded from {{name}}",
+    "bubbleAria": "{{name}} at {{time}}",
+    "status": {
+      "uploading": "Uploading",
+      "sending": "Sending",
+      "sent": "Sent",
+      "retry": "Retry",
+      "failedRetry": "Failed to send. Click to retry"
+    },
+    "actions": {
+      "reply": "Reply",
+      "forward": "Forward",
+      "copy": "Copy",
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "newLabel": "New messages ({{count}})",
+    "newAria": "New messages",
+    "inConversationAria": "Messages in conversation",
+    "loadMore": "Loading...",
+    "senderYou": "You:"
+  },
+  "composer": {
+    "replyingTo": "Replying to {{name}}",
+    "editing": "Editing message",
+    "cancelReply": "Cancel reply",
+    "cancelEdit": "Cancel edit",
+    "removeFile": "Remove file",
+    "openEmojiPicker": "Open emoji picker",
+    "attachFile": "Attach file",
+    "placeholder": "Type a message...",
+    "messageInput": "Message input",
+    "sendMessage": "Send message",
+    "recordVoice": "Record voice message",
+    "uploading": "Uploading...",
+    "cancelUpload": "Cancel",
+    "retryUpload": "Retry",
+    "sendFile": "Send file",
+    "filePreviewAlt": "File preview"
+  },
+  "attachment": {
+    "types": {
+      "photo": "Photo/Video",
+      "document": "Document",
+      "location": "Location",
+      "contact": "Contact",
+      "audio": "Audio",
+      "poll": "Poll"
+    },
+    "menu": {
+      "searchPlaceholder": "Search emoji...",
+      "noEmojiFound": "No emoji found"
+    }
+  },
+  "emoji": {
+    "searchPlaceholder": "Search emoji...",
+    "clearSearch": "Clear emoji search",
+    "quickReactions": "Quick reactions",
+    "category": {
+      "recent": "Recent",
+      "smileys": "Smileys",
+      "gestures": "Gestures",
+      "hearts": "Hearts",
+      "nature": "Nature",
+      "food": "Food",
+      "activities": "Activities",
+      "objects": "Objects",
+      "flags": "Flags"
+    }
+  },
+  "reaction": {
+    "reactWith": "React with {{emoji}}",
+    "add": "Add reaction"
+  },
+  "file": {
+    "unknown": "Unknown file",
+    "download": "Download file"
+  },
+  "voice": {
+    "play": "Play",
+    "pause": "Pause",
+    "progress": "Audio progress"
+  },
+  "image": {
+    "failedToLoad": "Failed to load image",
+    "previewAlt": "Image preview",
+    "close": "Close"
+  },
+  "empty": {
+    "messagesTitle": "No messages",
+    "messagesDescription": "Send the first message to start this conversation.",
+    "noChatTitle": "Select a conversation",
+    "noChatDescription": "Choose a chat from the sidebar or start a new conversation.",
+    "startNewChat": "Start new chat",
+    "searchTitle": "No result found",
+    "searchDescription": "No result matches \"{{query}}\".",
+    "searchDescriptionEmpty": "No result found. Try another keyword.",
+    "clearSearch": "Clear search"
+  },
+  "time": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "justNow": "Just now",
+    "minutesShort": "{{count}}m",
+    "hoursShort": "{{count}}h",
+    "lastSeenRecently": "Last seen recently",
+    "onlineNow": "Online now",
+    "lastSeenAt": "Last seen at {{time}}",
+    "lastSeenYesterdayAt": "Last seen yesterday at {{time}}",
+    "lastSeenDayAt": "Last seen {{day}} {{time}}",
+    "lastSeenDate": "Last seen {{date}}"
+  },
+  "toast": {
+    "statusUpdated": "Status updated: {{status}}",
+    "logoutSuccess": "Signed out successfully",
+    "sendFailed": "Unable to send message. Please try again.",
+    "messageEdited": "Message edited",
+    "editFailed": "Unable to edit message",
+    "messageDeleted": "Message deleted",
+    "deleteFailed": "Unable to delete message",
+    "resendSuccess": "Resent successfully",
+    "resendFailed": "Resend failed",
+    "connectionReconnecting": "Reconnecting..."
+  },
+  "preview": {
+    "photo": "Photo",
+    "video": "Video",
+    "file": "File",
+    "voice": "Voice message",
+    "location": "Location",
+    "sticker": "Sticker"
+  }
+}

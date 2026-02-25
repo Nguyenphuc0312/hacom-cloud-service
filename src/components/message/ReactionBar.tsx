@@ -1,5 +1,6 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import type { Reaction } from "../../types";
 import { reactionEmojis } from "../../data/mockData";
 
@@ -18,6 +19,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
   onTogglePicker,
   className,
 }) => {
+  const { t } = useTranslation();
   const hasReactions = reactions.length > 0;
 
   return (
@@ -29,7 +31,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
               key={emoji}
               onClick={() => onReact(emoji)}
               className="flex h-8 w-8 items-center justify-center rounded-full transition-all hover:scale-125 hover:bg-surface-overlay"
-              aria-label={`React with ${emoji}`}
+              aria-label={t("chat:reaction.reactWith", { emoji })}
             >
               <span className="text-lg">{emoji}</span>
             </button>
@@ -59,7 +61,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
             <button
               onClick={onTogglePicker}
               className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface text-sm text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary"
-              aria-label="Add reaction"
+              aria-label={t("chat:reaction.add")}
             >
               +
             </button>
@@ -71,4 +73,3 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
 };
 
 export default ReactionBar;
-

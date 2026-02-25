@@ -7,6 +7,7 @@
   useState,
 } from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { VariableSizeList, type ListChildComponentProps } from "react-window";
 import type { Conversation, ConversationFilter, UserSummary } from "../../../types";
 import { RoomType } from "../../../types";
@@ -26,7 +27,6 @@ type SectionId = "unread" | "channels" | "groups" | "direct";
 
 interface RoomSection {
   id: SectionId;
-  title: string;
   rooms: Conversation[];
 }
 
@@ -100,13 +100,11 @@ const toSections = (
 
   switch (activeFilter) {
     case "unread":
-      return unread.length > 0 ? [{ id: "unread", title: "Unread", rooms: unread }] : [];
+      return unread.length > 0 ? [{ id: "unread", rooms: unread }] : [];
     case "channels":
-      return channels.length > 0
-        ? [{ id: "channels", title: "Channels", rooms: channels }]
-        : [];
+      return channels.length > 0 ? [{ id: "channels", rooms: channels }] : [];
     case "groups":
-      return groups.length > 0 ? [{ id: "groups", title: "Groups", rooms: groups }] : [];
+      return groups.length > 0 ? [{ id: "groups", rooms: groups }] : [];
     default: {
       const readChannel = channels.filter((room) => (room.unreadCount || 0) === 0);
       const readGroup = groups.filter((room) => (room.unreadCount || 0) === 0);
@@ -114,16 +112,16 @@ const toSections = (
 
       const sections: RoomSection[] = [];
       if (unread.length > 0) {
-        sections.push({ id: "unread", title: "Unread", rooms: unread });
+        sections.push({ id: "unread", rooms: unread });
       }
       if (readChannel.length > 0) {
-        sections.push({ id: "channels", title: "Channels", rooms: readChannel });
+        sections.push({ id: "channels", rooms: readChannel });
       }
       if (readGroup.length > 0) {
-        sections.push({ id: "groups", title: "Groups", rooms: readGroup });
+        sections.push({ id: "groups", rooms: readGroup });
       }
       if (readDirect.length > 0) {
-        sections.push({ id: "direct", title: "Direct Messages", rooms: readDirect });
+        sections.push({ id: "direct", rooms: readDirect });
       }
       return sections;
     }
@@ -174,11 +172,19 @@ export const RoomList: React.FC<RoomListProps> = ({
   collapsed,
   onSelect,
 }) => {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<VariableSizeList<RowData> | null>(null);
   const [viewportHeight, setViewportHeight] = useState(0);
   const [keyboardCursor, setKeyboardCursor] = useState(0);
   const [isKeyboardMode, setIsKeyboardMode] = useState(false);
+
+  const sectionTitles: Record<SectionId, string> = {
+    unread: t("sidebar:room.section.unread"),
+    channels: t("sidebar:room.section.channels"),
+    groups: t("sidebar:room.section.groups"),
+    direct: t("sidebar:room.section.direct"),
+  };
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
 
@@ -204,7 +210,7 @@ export const RoomList: React.FC<RoomListProps> = ({
       result.push({
         kind: "section",
         key: `section-${section.id}`,
-        title: section.title,
+        title: sectionTitles[section.id],
         count: section.rooms.length,
       });
 
@@ -218,7 +224,7 @@ export const RoomList: React.FC<RoomListProps> = ({
     });
 
     return result;
-  }, [sections]);
+  }, [sections, sectionTitles]);
 
   const roomIndexes = useMemo(() => {
     const indexes: number[] = [];
@@ -362,7 +368,9 @@ export const RoomList: React.FC<RoomListProps> = ({
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-center">
         <p className="text-sm text-text-muted">
-          {normalizedQuery ? "No room matches your search." : "No conversations available."}
+          {normalizedQuery
+            ? t("sidebar:room.emptyBySearch")
+            : t("sidebar:room.empty")}
         </p>
       </div>
     );
@@ -374,7 +382,7 @@ export const RoomList: React.FC<RoomListProps> = ({
       className="min-h-0 flex-1"
       tabIndex={0}
       role="listbox"
-      aria-label="Conversation list"
+      aria-label={t("sidebar:room.listAria")}
       onKeyDown={handleKeyDown}
       onMouseMove={() => {
         if (isKeyboardMode) {

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+﻿import React, { useState, useCallback } from "react";
 import clsx from "clsx";
 import {
   XMarkIcon,
@@ -11,6 +11,7 @@ import {
   MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Avatar } from "../common/Avatar";
 import { Input, Spinner, toast } from "../ui";
 import type { Conversation, UserSummary } from "../../types";
@@ -32,6 +33,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   onClose,
   className,
 }) => {
+  const { t } = useTranslation(["profile", "common"]);
+
   const participants = React.useMemo(
     () =>
       Array.isArray(conversation.participants) ? conversation.participants : [],
@@ -93,43 +96,52 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         setSearchQuery("");
         setSearchResults([]);
         setShowAddMember(false);
-        toast.success("Đã thêm thành viên vào nhóm");
+        toast.success(t("profile:toast.memberAdded"));
       } catch (error) {
         const apiError = extractApiError(error);
-        toast.error(apiError.message || "Không thể thêm thành viên");
+        toast.error(apiError.message || t("profile:toast.memberAddFailed"));
       } finally {
         setIsSubmitting(false);
       }
     },
-    [conversation.id, updateConversation],
+    [conversation.id, t, updateConversation],
   );
 
   const handleLeaveGroup = useCallback(async () => {
-    if (!window.confirm("Bạn có chắc muốn rời nhóm này?")) return;
+    if (!window.confirm(t("profile:groupInfo.leaveConfirm"))) return;
 
     setIsSubmitting(true);
     try {
       await conversationApi.leaveConversation(conversation.id);
       removeConversation(conversation.id);
-      toast.success("Đã rời nhóm");
+      toast.success(t("profile:toast.leftGroup"));
       onClose();
       navigate("/chat");
     } catch (error) {
-      toast.error("Không thể rời nhóm lúc này");
+      toast.error(t("profile:toast.leaveGroupFailed"));
       console.log(error);
     } finally {
       setIsSubmitting(false);
     }
-  }, [conversation.id, navigate, onClose, removeConversation]);
+  }, [conversation.id, navigate, onClose, removeConversation, t]);
+
+  const tabs = [
+    { id: "members", label: t("profile:groupInfo.tabs.members") },
+    { id: "media", label: t("profile:groupInfo.tabs.media") },
+    { id: "files", label: t("profile:groupInfo.tabs.files") },
+  ] as const;
 
   return (
     <div className={clsx("flex flex-col h-full bg-surface", className)}>
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <h3 className="font-semibold text-text-primary">Thông tin nhóm</h3>
-        <button type="button"
+        <h3 className="font-semibold text-text-primary">
+          {t("profile:groupInfo.title")}
+        </h3>
+        <button
+          type="button"
           onClick={onClose}
           className="p-1 rounded-full hover:bg-surface-overlay transition-colors"
-          aria-label="Đóng"
+          aria-label={t("common:actions.close")}
         >
           <XMarkIcon className="w-5 h-5 text-text-muted" />
         </button>
@@ -143,7 +155,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             <h2 className="text-xl font-semibold text-text-primary flex items-center gap-2 justify-center">
               {conversation.name}
               {isAdmin && (
-                <button type="button"
+                <button
+                  type="button"
                   className="p-1 hover:bg-surface-overlay rounded-full"
                 >
                   <PencilIcon className="w-4 h-4 text-text-muted" />
@@ -152,7 +165,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             </h2>
 
             <p className="text-sm text-text-muted mt-1">
-              {conversation.participantCount ?? participants.length} thành viên
+              {t("profile:groupInfo.membersCount", {
+                count: conversation.participantCount ?? participants.length,
+              })}
             </p>
           </div>
         </div>
@@ -163,7 +178,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           <div className="flex items-center justify-between px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer">
             <div className="flex items-center gap-4">
               <BellIcon className="w-5 h-5 text-text-muted" />
-              <span className="text-sm text-text-primary">Thông báo</span>
+              <span className="text-sm text-text-primary">
+                {t("profile:groupInfo.notifications")}
+              </span>
             </div>
             <div
               className={clsx(
@@ -184,14 +201,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         <div className="h-px bg-border mx-4" />
 
         <div className="flex border-b border-border">
-          {[
-            { id: "members", label: "Thành viên" },
-            { id: "media", label: "Phương tiện" },
-            { id: "files", label: "Tệp" },
-          ].map((tab) => (
-            <button type="button"
+          {tabs.map((tab) => (
+            <button
+              type="button"
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as typeof activeTab)}
+              onClick={() => setActiveTab(tab.id)}
               className={clsx(
                 "flex-1 py-3 text-sm font-medium transition-colors",
                 activeTab === tab.id
@@ -207,13 +221,16 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         <div className="py-2">
           {activeTab === "members" && (
             <>
-              <button type="button"
+              <button
+                type="button"
                 disabled={isSubmitting}
                 onClick={() => setShowAddMember((prev) => !prev)}
                 className="w-full flex items-center gap-4 px-4 py-3 hover:bg-surface-hover transition-colors text-primary"
               >
                 <UserPlusIcon className="w-5 h-5" />
-                <span className="text-sm font-medium">Thêm thành viên</span>
+                <span className="text-sm font-medium">
+                  {t("profile:groupInfo.addMember")}
+                </span>
               </button>
 
               {showAddMember && (
@@ -222,7 +239,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Tìm kiếm thành viên..."
+                    placeholder={t("profile:groupInfo.searchMemberPlaceholder")}
                     leftIcon={<MagnifyingGlassIcon className="w-5 h-5" />}
                     disabled={isSubmitting}
                   />
@@ -233,7 +250,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                       </div>
                     ) : searchResults.length === 0 ? (
                       <p className="px-3 py-3 text-sm text-text-muted">
-                        Không có kết quả phù hợp
+                        {t("profile:groupInfo.noSearchResult")}
                       </p>
                     ) : (
                       searchResults.map((user) => (
@@ -283,7 +300,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                       {participant.displayName || participant.username}
                       {participant.id === currentUserId && (
                         <span className="ml-2 text-xs text-text-muted">
-                          (Ban)
+                          {t("profile:groupInfo.youSuffix")}
                         </span>
                       )}
                     </p>
@@ -308,17 +325,18 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   </div>
                 ))}
               </div>
-              <button type="button"
+              <button
+                type="button"
                 className="w-full mt-4 py-2 text-sm text-primary font-medium hover:bg-surface-hover rounded-lg"
               >
-                Xem tat ca phuong tien
+                {t("profile:groupInfo.viewAllMedia")}
               </button>
             </div>
           )}
 
           {activeTab === "files" && (
             <div className="p-4 text-center text-text-muted text-sm">
-              Chua co tep duoc chia se
+              {t("profile:groupInfo.noSharedFiles")}
             </div>
           )}
         </div>
@@ -326,20 +344,22 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         <div className="h-px bg-border mx-4" />
 
         <div className="py-2">
-          <button type="button"
+          <button
+            type="button"
             className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-danger"
           >
             <ExclamationTriangleIcon className="w-5 h-5" />
-            <span className="text-sm">Bao cao nhom</span>
+            <span className="text-sm">{t("profile:groupInfo.reportGroup")}</span>
           </button>
 
-          <button type="button"
+          <button
+            type="button"
             disabled={isSubmitting}
             onClick={() => void handleLeaveGroup()}
             className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-danger"
           >
             <ArrowRightOnRectangleIcon className="w-5 h-5" />
-            <span className="text-sm">Roi nhom</span>
+            <span className="text-sm">{t("profile:groupInfo.leaveGroup")}</span>
           </button>
         </div>
       </div>
@@ -348,8 +368,3 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 };
 
 export default GroupInfo;
-
-
-
-
-

@@ -1,0 +1,150 @@
+﻿{
+  "header": {
+    "back": "Quay lại",
+    "viewInfo": "Xem thông tin cuộc trò chuyện",
+    "voiceCall": "Gọi thoại",
+    "videoCall": "Gọi video",
+    "searchInChat": "Tìm trong cuộc trò chuyện",
+    "toggleInfoPanel": "Bật/tắt bảng thông tin",
+    "channel": "Kênh",
+    "members": "{{count}} thành viên"
+  },
+  "typing": {
+    "user": "{{name}} đang nhập..."
+  },
+  "message": {
+    "you": "Bạn",
+    "edited": "đã chỉnh sửa",
+    "forwardedFrom": "Chuyển tiếp từ {{name}}",
+    "bubbleAria": "{{name}} lúc {{time}}",
+    "status": {
+      "uploading": "Đang tải lên",
+      "sending": "Đang gửi",
+      "sent": "Đã gửi",
+      "retry": "Gửi lại",
+      "failedRetry": "Gửi thất bại. Bấm để gửi lại"
+    },
+    "actions": {
+      "reply": "Trả lời",
+      "forward": "Chuyển tiếp",
+      "copy": "Sao chép",
+      "edit": "Chỉnh sửa",
+      "delete": "Xóa"
+    },
+    "newLabel": "Tin nhắn mới ({{count}})",
+    "newAria": "Tin nhắn mới",
+    "inConversationAria": "Tin nhắn trong cuộc trò chuyện",
+    "loadMore": "Đang tải...",
+    "senderYou": "Bạn:"
+  },
+  "composer": {
+    "replyingTo": "Đang trả lời {{name}}",
+    "editing": "Đang chỉnh sửa tin nhắn",
+    "cancelReply": "Hủy trả lời",
+    "cancelEdit": "Hủy chỉnh sửa",
+    "removeFile": "Xóa tệp",
+    "openEmojiPicker": "Mở bảng emoji",
+    "attachFile": "Đính kèm tệp",
+    "placeholder": "Nhập một tin nhắn...",
+    "messageInput": "Ô nhập tin nhắn",
+    "sendMessage": "Gửi tin nhắn",
+    "recordVoice": "Ghi âm",
+    "uploading": "Đang tải lên...",
+    "cancelUpload": "Hủy",
+    "retryUpload": "Thử lại",
+    "sendFile": "Gửi tệp",
+    "filePreviewAlt": "Xem trước tệp"
+  },
+  "attachment": {
+    "types": {
+      "photo": "Ảnh/Video",
+      "document": "Tài liệu",
+      "location": "Vị trí",
+      "contact": "Liên hệ",
+      "audio": "Âm thanh",
+      "poll": "Khảo sát"
+    },
+    "menu": {
+      "searchPlaceholder": "Tìm emoji...",
+      "noEmojiFound": "Không tìm thấy emoji"
+    }
+  },
+  "emoji": {
+    "searchPlaceholder": "Tìm emoji...",
+    "clearSearch": "Xóa tìm emoji",
+    "quickReactions": "Phản ứng nhanh",
+    "category": {
+      "recent": "Gần đây",
+      "smileys": "Biểu cảm",
+      "gestures": "Cử chỉ",
+      "hearts": "Trái tim",
+      "nature": "Thiên nhiên",
+      "food": "Đồ ăn",
+      "activities": "Hoạt động",
+      "objects": "Đồ vật",
+      "flags": "Cờ"
+    }
+  },
+  "reaction": {
+    "reactWith": "Phản ứng bằng {{emoji}}",
+    "add": "Thêm phản ứng"
+  },
+  "file": {
+    "unknown": "Tệp không xác định",
+    "download": "Tải tệp"
+  },
+  "voice": {
+    "play": "Phát",
+    "pause": "Tạm dừng",
+    "progress": "Tiến độ âm thanh"
+  },
+  "image": {
+    "failedToLoad": "Không tải được ảnh",
+    "previewAlt": "Xem trước ảnh",
+    "close": "Đóng"
+  },
+  "empty": {
+    "messagesTitle": "Chưa có tin nhắn",
+    "messagesDescription": "Hãy gửi tin nhắn đầu tiên để bắt đầu cuộc trò chuyện.",
+    "noChatTitle": "Chọn một cuộc trò chuyện",
+    "noChatDescription": "Chọn một cuộc chat ở thanh bên hoặc bắt đầu cuộc trò chuyện mới.",
+    "startNewChat": "Bắt đầu chat mới",
+    "searchTitle": "Không tìm thấy kết quả",
+    "searchDescription": "Không có kết quả phù hợp với \"{{query}}\".",
+    "searchDescriptionEmpty": "Không tìm thấy kết quả. Thử từ khóa khác.",
+    "clearSearch": "Xóa tìm kiếm"
+  },
+  "time": {
+    "today": "Hôm nay",
+    "yesterday": "Hôm qua",
+    "justNow": "Vừa xong",
+    "minutesShort": "{{count}}m",
+    "hoursShort": "{{count}}h",
+    "lastSeenRecently": "Vừa truy cập",
+    "onlineNow": "Đang trực tuyến",
+    "lastSeenAt": "Truy cập lúc {{time}}",
+    "lastSeenYesterdayAt": "Truy cập hôm qua lúc {{time}}",
+    "lastSeenDayAt": "Truy cập {{day}} {{time}}",
+    "lastSeenDate": "Truy cập {{date}}"
+  },
+  "toast": {
+    "statusUpdated": "Đã cập nhật trạng thái: {{status}}",
+    "logoutSuccess": "Đăng xuất thành công",
+    "sendFailed": "Không thể gửi tin nhắn. Vui lòng thử lại.",
+    "messageEdited": "Đã chỉnh sửa tin nhắn",
+    "editFailed": "Không thể chỉnh sửa tin nhắn",
+    "messageDeleted": "Đã xóa tin nhắn",
+    "deleteFailed": "Không thể xóa tin nhắn",
+    "resendSuccess": "Gửi lại thành công",
+    "resendFailed": "Gửi lại không thành công",
+    "connectionReconnecting": "Đang kết nối lại..."
+  },
+  "preview": {
+    "photo": "Ảnh",
+    "video": "Video",
+    "file": "Tệp",
+    "voice": "Tin nhắn giọng nói",
+    "location": "Vị trí",
+    "sticker": "Sticker"
+  }
+}

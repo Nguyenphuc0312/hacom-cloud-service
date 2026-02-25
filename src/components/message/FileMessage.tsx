@@ -1,5 +1,6 @@
 ﻿import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { ArrowDownTrayIcon } from "@heroicons/react/24/outline";
 import type { Attachment } from "../../types";
 import {
@@ -19,6 +20,7 @@ export const FileMessage: React.FC<FileMessageProps> = ({
   isOwn,
   className,
 }) => {
+  const { t } = useTranslation();
   const icon = getFileIcon(attachment.fileName || "file");
   const extension = getFileExtension(attachment.fileName || "file");
   const size = formatFileSize(attachment.fileSize);
@@ -51,7 +53,7 @@ export const FileMessage: React.FC<FileMessageProps> = ({
             isOwn ? "text-text-inverse" : "text-text-primary",
           )}
         >
-          {attachment.fileName || "Unknown file"}
+          {attachment.fileName || t("chat:file.unknown")}
         </p>
         <p className={clsx("text-xs", isOwn ? "text-text-inverse/70" : "text-text-muted")}>
           {size} • {extension}
@@ -66,7 +68,7 @@ export const FileMessage: React.FC<FileMessageProps> = ({
             ? "bg-surface/25 text-text-inverse hover:bg-surface/35"
             : "bg-surface text-text-secondary hover:bg-surface-raised hover:text-text-primary",
         )}
-        aria-label="Download file"
+        aria-label={t("chat:file.download")}
       >
         <ArrowDownTrayIcon className="h-5 w-5" />
       </button>

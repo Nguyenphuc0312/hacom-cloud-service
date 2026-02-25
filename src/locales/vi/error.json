@@ -1,0 +1,35 @@
+﻿{
+  "generic": {
+    "unexpected": "Đã có lỗi xảy ra",
+    "requestFailed": "Yêu cầu thất bại"
+  },
+  "auth": {
+    "loginFailed": "Đăng nhập thất bại",
+    "registerFailed": "Đăng ký thất bại",
+    "logoutFailed": "Đăng xuất thất bại",
+    "statusUpdateFailed": "Cập nhật trạng thái thất bại",
+    "sessionInactive": "Phiên đăng nhập không còn hiệu lực",
+    "missingRefreshToken": "Không tìm thấy refresh token",
+    "refreshMissingToken": "Phản hồi refresh không có access token",
+    "loginTokenMissing": "Phản hồi đăng nhập không có access token",
+    "registerTokenMissing": "Phản hồi đăng ký không có access token"
+  },
+  "chat": {
+    "conversationAccessDenied": "Không thể truy cập cuộc trò chuyện này",
+    "conversationOpenFailed": "Không thể mở cuộc trò chuyện",
+    "sendFailed": "Không thể gửi tin nhắn. Vui lòng thử lại.",
+    "startConversationFailed": "Không thể bắt đầu cuộc trò chuyện",
+    "createGroupFailed": "Không thể tạo nhóm mới",
+    "fetchConversationsFailed": "Không thể tải danh sách hội thoại",
+    "fetchMessagesFailed": "Không thể tải tin nhắn",
+    "roomIdMissing": "Không nhận được mã phòng",
+    "invalidSendResponse": "Phản hồi gửi tin nhắn không hợp lệ",
+    "invalidResendResponse": "Phản hồi gửi lại tin nhắn không hợp lệ"
+  },
+  "upload": {
+    "fileTooLarge": "Tệp vượt quá giới hạn dung lượng",
+    "unsupportedType": "Định dạng tệp không hỗ trợ",
+    "uploadCanceled": "Đã hủy tải lên",
+    "uploadFailed": "Tải lên thất bại, vui lòng thử lại"
+  }
+}

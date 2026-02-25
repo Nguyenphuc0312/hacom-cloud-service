@@ -1,0 +1,14 @@
+﻿{
+  "toggle": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode"
+  },
+  "brand": {
+    "blue": "Blue",
+    "green": "Green",
+    "purple": "Purple"
+  }
+}

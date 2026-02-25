@@ -1,0 +1,14 @@
+﻿{
+  "toggle": {
+    "light": "Sáng",
+    "dark": "Tối",
+    "system": "Theo hệ thống",
+    "switchToLight": "Chuyển sang chế độ sáng",
+    "switchToDark": "Chuyển sang chế độ tối"
+  },
+  "brand": {
+    "blue": "Xanh dương",
+    "green": "Xanh lá",
+    "purple": "Tím"
+  }
+}

@@ -1,5 +1,6 @@
-import React, { useMemo } from "react";
+﻿import React, { useMemo } from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import {
   BuildingOffice2Icon,
   ChevronDoubleLeftIcon,
@@ -16,16 +17,7 @@ interface SidebarHeaderProps {
   onNewChat?: () => void;
 }
 
-const statusLabelByKey: Record<string, string> = {
-  online: "Online",
-  offline: "Offline",
-  away: "Away",
-  dnd: "Do not disturb",
-  busy: "Busy",
-  invisible: "Invisible",
-};
-
-const resolveDisplayName = (user: UserSummary): string => {
+const resolveDisplayName = (user: UserSummary, fallback: string): string => {
   const byDisplayName =
     typeof user.displayName === "string" ? user.displayName.trim() : "";
   if (byDisplayName) return byDisplayName;
@@ -34,12 +26,27 @@ const resolveDisplayName = (user: UserSummary): string => {
     typeof user.username === "string" ? user.username.trim() : "";
   if (byUsername) return byUsername;
 
-  return "User";
+  return fallback;
 };
 
-const resolveStatusLabel = (status: unknown): string => {
-  if (typeof status !== "string") return "Offline";
-  return statusLabelByKey[status.trim().toLowerCase()] ?? "Offline";
+const resolveStatusLabel = (
+  status: unknown,
+  t: (key: string) => string,
+): string => {
+  if (typeof status !== "string") return t("common:status.offline");
+
+  const normalized = status.trim().toLowerCase();
+  const statusKeyMap: Record<string, string> = {
+    online: "common:status.online",
+    offline: "common:status.offline",
+    away: "common:status.away",
+    dnd: "common:status.dnd",
+    busy: "common:status.busy",
+    invisible: "common:status.invisible",
+  };
+
+  const key = statusKeyMap[normalized];
+  return key ? t(key) : t("common:status.offline");
 };
 
 const iconButtonClasses =
@@ -51,13 +58,15 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   onToggleCollapsed,
   onNewChat,
 }) => {
+  const { t } = useTranslation();
+
   const currentUserName = useMemo(
-    () => resolveDisplayName(currentUser),
-    [currentUser],
+    () => resolveDisplayName(currentUser, t("common:labels.user")),
+    [currentUser, t],
   );
   const currentStatusLabel = useMemo(
-    () => resolveStatusLabel(currentUser.status),
-    [currentUser.status],
+    () => resolveStatusLabel(currentUser.status, t),
+    [currentUser.status, t],
   );
 
   return (
@@ -67,7 +76,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           <div className="min-w-0">
             {!collapsed && (
               <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
-                Workspace
+                {t("sidebar:header.workspace")}
               </p>
             )}
 
@@ -79,7 +88,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
                   collapsed ? "text-sm" : "text-base",
                 )}
               >
-                {collapsed ? "HC" : "Hacom Chat"}
+                {collapsed ? t("common:app.shortName") : t("common:app.name")}
               </h1>
             </div>
           </div>
@@ -89,7 +98,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
               type="button"
               onClick={onNewChat}
               className={iconButtonClasses}
-              aria-label="Start new chat"
+              aria-label={t("sidebar:header.startNewChat")}
             >
               <PencilSquareIcon className="h-5 w-5" />
             </button>
@@ -98,7 +107,11 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
               type="button"
               onClick={onToggleCollapsed}
               className={clsx("hidden lg:inline-flex", iconButtonClasses)}
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={
+                collapsed
+                  ? t("sidebar:header.expandSidebar")
+                  : t("sidebar:header.collapseSidebar")
+              }
             >
               {collapsed ? (
                 <ChevronDoubleRightIcon className="h-5 w-5" />
@@ -143,4 +156,3 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
 };
 
 export default SidebarHeader;
-

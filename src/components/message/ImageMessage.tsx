@@ -1,5 +1,6 @@
 ﻿import React, { useState } from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import type { Attachment } from "../../types";
 
 interface ImageMessageProps {
@@ -17,6 +18,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   onClick,
   className,
 }) => {
+  const { t } = useTranslation();
   const [isLoaded, setIsLoaded] = useState(false);
   const [isError, setIsError] = useState(false);
   const [showFullScreen, setShowFullScreen] = useState(false);
@@ -50,7 +52,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
 
         {isError && (
           <div className="flex items-center justify-center rounded-lg bg-surface-overlay p-4 text-sm text-text-muted">
-            Failed to load image
+            {t("chat:image.failedToLoad")}
           </div>
         )}
 
@@ -66,7 +68,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
             objectFit: "cover",
           }}
           src={attachment.url}
-          alt={caption || attachment.fileName || "image"}
+          alt={caption || attachment.fileName || t("chat:image.previewAlt")}
           onClick={handleImageClick}
           onLoad={() => setIsLoaded(true)}
           onError={() => setIsError(true)}
@@ -87,7 +89,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
           <button
             className="absolute right-4 top-4 rounded-full border border-border bg-surface/80 p-2 text-text-secondary transition-colors hover:bg-surface hover:text-text-primary"
             onClick={handleClose}
-            aria-label="Close"
+            aria-label={t("chat:image.close")}
           >
             <svg
               className="h-8 w-8"
@@ -105,7 +107,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
           </button>
           <img
             src={attachment.url}
-            alt={attachment.fileName || "Image"}
+            alt={attachment.fileName || t("chat:image.previewAlt")}
             className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-elev3"
             onClick={(e) => e.stopPropagation()}
           />

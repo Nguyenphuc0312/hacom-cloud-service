@@ -1,5 +1,6 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { PlusIcon } from "@heroicons/react/24/solid";
 
 interface NewChatButtonProps {
@@ -11,6 +12,8 @@ export const NewChatButton: React.FC<NewChatButtonProps> = ({
   onClick,
   className,
 }) => {
+  const { t } = useTranslation();
+
   return (
     <button
       onClick={onClick}
@@ -24,7 +27,7 @@ export const NewChatButton: React.FC<NewChatButtonProps> = ({
         "hover:scale-105 active:scale-95",
         className,
       )}
-      aria-label="Tạo cuộc trò chuyện mới"
+      aria-label={t("chat:empty.startNewChat")}
     >
       <PlusIcon className="w-6 h-6" />
     </button>
@@ -32,4 +35,3 @@ export const NewChatButton: React.FC<NewChatButtonProps> = ({
 };
 
 export default NewChatButton;
-

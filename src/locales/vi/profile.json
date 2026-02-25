@@ -1,0 +1,76 @@
+﻿{
+  "userProfile": {
+    "title": "Thông tin người dùng",
+    "usernameLabel": "Tên người dùng",
+    "notifications": "Thông báo",
+    "media": "Phương tiện, Tệp, Liên kết",
+    "searchInConversation": "Tìm trong cuộc trò chuyện",
+    "blockUser": "Chặn người dùng",
+    "report": "Báo cáo",
+    "deleteConversation": "Xóa cuộc trò chuyện"
+  },
+  "groupInfo": {
+    "title": "Thông tin nhóm",
+    "membersCount": "{{count}} thành viên",
+    "notifications": "Thông báo",
+    "tabs": {
+      "members": "Thành viên",
+      "media": "Phương tiện",
+      "files": "Tệp"
+    },
+    "addMember": "Thêm thành viên",
+    "searchMemberPlaceholder": "Tìm kiếm thành viên...",
+    "noSearchResult": "Không có kết quả phù hợp",
+    "youSuffix": "(Bạn)",
+    "viewAllMedia": "Xem tất cả phương tiện",
+    "noSharedFiles": "Chưa có tệp được chia sẻ",
+    "reportGroup": "Báo cáo nhóm",
+    "leaveGroup": "Rời nhóm",
+    "leaveConfirm": "Bạn có chắc muốn rời nhóm này?"
+  },
+  "newChatModal": {
+    "title": "Cuộc trò chuyện mới",
+    "descriptionDirect": "Tìm kiếm người dùng để bắt đầu trò chuyện",
+    "descriptionGroup": "Chọn thành viên để tạo nhóm",
+    "directMessage": "Tin nhắn trực tiếp",
+    "createGroup": "Tạo nhóm",
+    "searchPlaceholder": "Tìm kiếm theo tên hoặc username...",
+    "groupNamePlaceholder": "Nhập tên nhóm...",
+    "searchMinChars": "Nhập ít nhất {{count}} ký tự để tìm kiếm",
+    "createGroupButton": "Tạo nhóm ({{count}} người)"
+  },
+  "editProfileModal": {
+    "title": "Chỉnh sửa hồ sơ",
+    "changeAvatarHint": "Bấm để thay đổi ảnh đại diện",
+    "firstName": "Họ",
+    "lastName": "Tên",
+    "phone": "Số điện thoại",
+    "bio": "Giới thiệu",
+    "bioPlaceholder": "Viết vài dòng về bản thân...",
+    "bioHint": "Đã dùng {{count}} ký tự",
+    "cancel": "Hủy",
+    "save": "Lưu thay đổi",
+    "phonePlaceholder": "+84 912 345 678"
+  },
+  "imagePreview": {
+    "defaultAlt": "Xem trước ảnh",
+    "zoomOut": "Thu nhỏ",
+    "zoomIn": "Phóng to",
+    "download": "Tải xuống",
+    "close": "Đóng",
+    "instructions": "Cuộn để zoom • Nhấn đúp để đặt lại • ESC để đóng"
+  },
+  "toast": {
+    "searchUsersFailed": "Không thể tìm kiếm người dùng",
+    "selectAtLeastOneMember": "Chọn ít nhất 1 người để tạo nhóm",
+    "groupNameRequired": "Vui lòng nhập tên nhóm",
+    "avatarFileRequired": "Vui lòng chọn file ảnh",
+    "avatarMaxSize": "Kích thước ảnh không được vượt quá 5MB",
+    "profileUpdateSuccess": "Cập nhật hồ sơ thành công!",
+    "profileUpdateFailed": "Cập nhật thất bại",
+    "memberAdded": "Đã thêm thành viên vào nhóm",
+    "memberAddFailed": "Không thể thêm thành viên",
+    "leftGroup": "Đã rời nhóm",
+    "leaveGroupFailed": "Không thể rời nhóm lúc này"
+  }
+}

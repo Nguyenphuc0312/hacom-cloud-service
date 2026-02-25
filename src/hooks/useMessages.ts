@@ -1,9 +1,10 @@
-/**
+﻿/**
  * @fileoverview useMessages hook
- * Custom hook quản lý messages trong một conversation
+ * Custom hook quan ly messages trong mot conversation
  */
 
 import { useEffect, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import {
   useChatStore,
   useCurrentMessages,
@@ -26,7 +27,6 @@ interface UseMessagesReturn {
   error: string | null;
   typingStatus: { userId: string; userName: string; isTyping: boolean } | null;
 
-  // Actions
   loadMessages: () => Promise<void>;
   loadMore: () => Promise<void>;
   sendMessage: (content: string, replyToId?: string) => Promise<void>;
@@ -40,6 +40,7 @@ export const useMessages = ({
   conversationId,
   autoLoad = true,
 }: UseMessagesOptions): UseMessagesReturn => {
+  const { t } = useTranslation();
   const messages = useCurrentMessages();
   const typingStatus = useCurrentTypingStatus();
   const {
@@ -64,10 +65,8 @@ export const useMessages = ({
 
   const previousConversationRef = useRef<string | null>(null);
 
-  // Join room khi conversation thay đổi
   useEffect(() => {
     if (conversationId) {
-      // Leave previous room
       if (
         previousConversationRef.current &&
         previousConversationRef.current !== conversationId
@@ -75,11 +74,9 @@ export const useMessages = ({
         leaveRoom(previousConversationRef.current);
       }
 
-      // Join new room
       joinRoom(conversationId);
       previousConversationRef.current = conversationId;
 
-      // Load messages nếu chưa có
       if (autoLoad && !messages.length) {
         fetchMessages(conversationId);
       }
@@ -99,7 +96,6 @@ export const useMessages = ({
     messages.length,
   ]);
 
-  // Load messages
   const loadMessages = useCallback(async () => {
     if (conversationId) {
       clearError();
@@ -107,7 +103,6 @@ export const useMessages = ({
     }
   }, [conversationId, fetchMessages, clearError]);
 
-  // Load more (pagination)
   const loadMore = useCallback(async () => {
     if (
       conversationId &&
@@ -130,7 +125,6 @@ export const useMessages = ({
     fetchMessages,
   ]);
 
-  // Send message
   const sendMessage = useCallback(
     async (content: string, replyToId?: string) => {
       if (!conversationId || !content.trim()) return;
@@ -144,64 +138,56 @@ export const useMessages = ({
           replyToId,
         );
       } catch {
-        toast.error("Không thể gửi tin nhắn. Vui lòng thử lại.");
+        toast.error(t("chat:toast.sendFailed"));
       }
     },
-    [conversationId, storeSendMessage],
+    [conversationId, storeSendMessage, t],
   );
 
-  // Edit message
   const editMessage = useCallback(
     async (messageId: string, content: string) => {
       if (!conversationId || !content.trim()) return;
 
       try {
-        // Optimistic update
         updateMessage(conversationId, messageId, {
           content: content.trim(),
           isEdited: true,
         });
 
-        // Emit qua WebSocket
         emit("message:edit", {
           roomId: conversationId,
           messageId,
           content: content.trim(),
         });
 
-        toast.success("Đã chỉnh sửa tin nhắn");
+        toast.success(t("chat:toast.messageEdited"));
       } catch {
-        toast.error("Không thể chỉnh sửa tin nhắn");
+        toast.error(t("chat:toast.editFailed"));
       }
     },
-    [conversationId, updateMessage, emit],
+    [conversationId, updateMessage, emit, t],
   );
 
-  // Delete message
   const deleteMessage = useCallback(
     async (messageId: string) => {
       if (!conversationId) return;
 
       try {
-        // Optimistic update
         removeMessage(conversationId, messageId);
 
-        // Emit qua WebSocket
         emit("message:delete", {
           roomId: conversationId,
           messageId,
         });
 
-        toast.success("Đã xóa tin nhắn");
+        toast.success(t("chat:toast.messageDeleted"));
       } catch {
-        toast.error("Không thể xóa tin nhắn");
-        // TODO: Rollback optimistic update
+        toast.error(t("chat:toast.deleteFailed"));
       }
     },
-    [conversationId, removeMessage, emit],
+    [conversationId, removeMessage, emit, t],
   );
 
-  // Typing indicators
   const sendTyping = useCallback(() => {
     if (conversationId) {
       wsSendTyping(conversationId);
@@ -234,4 +220,3 @@ export const useMessages = ({
 };
 
 export default useMessages;
-

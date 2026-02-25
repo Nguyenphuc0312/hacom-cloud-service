@@ -5,6 +5,7 @@
 
 import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { Spinner } from "./Spinner";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -56,6 +57,7 @@ export const Button: React.FC<ButtonProps> = ({
   className,
   ...props
 }) => {
+  const { t } = useTranslation();
   const isDisabled = disabled || isLoading;
 
   return (
@@ -83,7 +85,7 @@ export const Button: React.FC<ButtonProps> = ({
               variant === "primary" || variant === "danger" ? "inverse" : "neutral"
             }
           />
-          <span>Processing...</span>
+          <span>{t("common:loading.processing")}</span>
         </>
       ) : (
         <>

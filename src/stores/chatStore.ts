@@ -9,6 +9,7 @@ import apiClient from "../lib/axios";
 import type { ApiResponse } from "@hacom/chat-shared-types";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import { toast } from "../utils/toast";
+import i18n from "../i18n";
 import { useAuthStore } from "./authStore";
 import type {
   Conversation,
@@ -257,7 +258,7 @@ const normalizeMessage = (
     asStringValue(source.username) ??
     asStringValue(sender?.displayName) ??
     asStringValue(sender?.username) ??
-    "Unknown";
+    i18n.t("common:labels.user");
   const senderAvatar =
     asStringValue(source.senderAvatar) ??
     asStringValue(source.avatar) ??
@@ -549,7 +550,7 @@ const resolveSenderIdentity = (): {
   const senderName =
     `${currentUser?.firstName || ""} ${currentUser?.lastName || ""}`.trim() ||
     currentUser?.username?.trim() ||
-    "Ban";
+    i18n.t("chat:message.you");
 
   return {
     id: currentUser?.id || null,
@@ -673,7 +674,8 @@ export const useChatStore = create<ChatState>()(
         });
       } catch (error: unknown) {
         const apiError = extractApiError(error);
-        const errorMessage = apiError.message || "Khong the tai danh sach hoi thoai";
+        const errorMessage =
+          apiError.message || i18n.t("error:chat.fetchConversationsFailed");
         set({
           error: errorMessage,
           isLoadingConversations: false,
@@ -929,7 +931,8 @@ export const useChatStore = create<ChatState>()(
         return { loaded: normalized.messages.length, hasMore: normalized.hasMore };
       } catch (error: unknown) {
         const apiError = extractApiError(error);
-        const errorMessage = apiError.message || "Khong the tai tin nhan";
+        const errorMessage =
+          apiError.message || i18n.t("error:chat.fetchMessagesFailed");
         set((state) => ({
           error: errorMessage,
           messageErrors: {
@@ -1007,7 +1010,7 @@ export const useChatStore = create<ChatState>()(
           conversationId,
         );
         if (!message) {
-          throw new Error("Send message response is invalid");
+          throw new Error(i18n.t("error:chat.invalidSendResponse"));
         }
 
         get().addMessage(conversationId, {
@@ -1052,7 +1055,7 @@ export const useChatStore = create<ChatState>()(
           conversationId,
         );
         if (!resentMessage) {
-          throw new Error("Resend message response is invalid");
+          throw new Error(i18n.t("error:chat.invalidResendResponse"));
         }
 
         get().addMessage(conversationId, {
@@ -1060,12 +1063,12 @@ export const useChatStore = create<ChatState>()(
           localId: message.localId || message.id,
           status: resentMessage.status || MessageStatus.SENT,
         });
-        toast.success("Gui lai thanh cong");
+        toast.success(i18n.t("chat:toast.resendSuccess"));
       } catch {
         get().updateMessage(conversationId, message.id, {
           status: MessageStatus.FAILED,
         });
-        toast.error("Gui lai khong thanh cong");
+        toast.error(i18n.t("chat:toast.resendFailed"));
       }
     },
 

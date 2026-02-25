@@ -1,0 +1,502 @@
+﻿{
+  "sidebar": {
+    "header": {
+      "workspace": "Workspace",
+      "startNewChat": "Start new chat",
+      "expandSidebar": "Expand sidebar",
+      "collapseSidebar": "Collapse sidebar"
+    },
+    "search": {
+      "placeholder": "Search channels or people",
+      "aria": "Search conversations",
+      "clearAria": "Clear search"
+    },
+    "tabs": {
+      "all": "All",
+      "unread": "Unread",
+      "groups": "Groups",
+      "channels": "Channels"
+    },
+    "room": {
+      "section": {
+        "unread": "Unread",
+        "channels": "Channels",
+        "groups": "Groups",
+        "direct": "Direct messages"
+      },
+      "mentioned": "Mentioned",
+      "noMessagesYet": "No messages yet",
+      "emptyBySearch": "No room matches your search.",
+      "empty": "No conversations available.",
+      "listAria": "Conversation list"
+    },
+    "sidebar": {
+      "aria": "Sidebar"
+    },
+    "logout": {
+      "button": "Sign out",
+      "loading": "Signing out...",
+      "confirmTitle": "Sign out",
+      "confirmMessage": "You need to sign in again to continue.",
+      "confirmText": "Sign out",
+      "cancelText": "Cancel"
+    }
+  },
+  "chat": {
+    "header": {
+      "back": "Back",
+      "viewInfo": "View conversation info",
+      "voiceCall": "Voice call",
+      "videoCall": "Video call",
+      "searchInChat": "Search in chat",
+      "toggleInfoPanel": "Toggle info panel",
+      "channel": "Channel",
+      "members": "{{count}} members"
+    },
+    "typing": {
+      "user": "{{name}} is typing..."
+    },
+    "message": {
+      "you": "You",
+      "edited": "edited",
+      "forwardedFrom": "Forwarded from {{name}}",
+      "bubbleAria": "{{name}} at {{time}}",
+      "status": {
+        "uploading": "Uploading",
+        "sending": "Sending",
+        "sent": "Sent",
+        "retry": "Retry",
+        "failedRetry": "Failed to send. Click to retry"
+      },
+      "actions": {
+        "reply": "Reply",
+        "forward": "Forward",
+        "copy": "Copy",
+        "edit": "Edit",
+        "delete": "Delete"
+      },
+      "newLabel": "New messages ({{count}})",
+      "newAria": "New messages",
+      "inConversationAria": "Messages in conversation",
+      "loadMore": "Loading...",
+      "senderYou": "You:"
+    },
+    "composer": {
+      "replyingTo": "Replying to {{name}}",
+      "editing": "Editing message",
+      "cancelReply": "Cancel reply",
+      "cancelEdit": "Cancel edit",
+      "removeFile": "Remove file",
+      "openEmojiPicker": "Open emoji picker",
+      "attachFile": "Attach file",
+      "placeholder": "Type a message...",
+      "messageInput": "Message input",
+      "sendMessage": "Send message",
+      "recordVoice": "Record voice message",
+      "uploading": "Uploading...",
+      "cancelUpload": "Cancel",
+      "retryUpload": "Retry",
+      "sendFile": "Send file",
+      "filePreviewAlt": "File preview"
+    },
+    "attachment": {
+      "types": {
+        "photo": "Photo/Video",
+        "document": "Document",
+        "location": "Location",
+        "contact": "Contact",
+        "audio": "Audio",
+        "poll": "Poll"
+      },
+      "menu": {
+        "searchPlaceholder": "Search emoji...",
+        "noEmojiFound": "No emoji found"
+      }
+    },
+    "emoji": {
+      "searchPlaceholder": "Search emoji...",
+      "clearSearch": "Clear emoji search",
+      "quickReactions": "Quick reactions",
+      "category": {
+        "recent": "Recent",
+        "smileys": "Smileys",
+        "gestures": "Gestures",
+        "hearts": "Hearts",
+        "nature": "Nature",
+        "food": "Food",
+        "activities": "Activities",
+        "objects": "Objects",
+        "flags": "Flags"
+      }
+    },
+    "reaction": {
+      "reactWith": "React with {{emoji}}",
+      "add": "Add reaction"
+    },
+    "file": {
+      "unknown": "Unknown file",
+      "download": "Download file"
+    },
+    "voice": {
+      "play": "Play",
+      "pause": "Pause",
+      "progress": "Audio progress"
+    },
+    "image": {
+      "failedToLoad": "Failed to load image",
+      "previewAlt": "Image preview",
+      "close": "Close"
+    },
+    "empty": {
+      "messagesTitle": "No messages",
+      "messagesDescription": "Send the first message to start this conversation.",
+      "noChatTitle": "Select a conversation",
+      "noChatDescription": "Choose a chat from the sidebar or start a new conversation.",
+      "startNewChat": "Start new chat",
+      "searchTitle": "No result found",
+      "searchDescription": "No result matches \"{{query}}\".",
+      "searchDescriptionEmpty": "No result found. Try another keyword.",
+      "clearSearch": "Clear search"
+    },
+    "time": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "justNow": "Just now",
+      "minutesShort": "{{count}}m",
+      "hoursShort": "{{count}}h",
+      "lastSeenRecently": "Last seen recently",
+      "onlineNow": "Online now",
+      "lastSeenAt": "Last seen at {{time}}",
+      "lastSeenYesterdayAt": "Last seen yesterday at {{time}}",
+      "lastSeenDayAt": "Last seen {{day}} {{time}}",
+      "lastSeenDate": "Last seen {{date}}"
+    },
+    "toast": {
+      "statusUpdated": "Status updated: {{status}}",
+      "logoutSuccess": "Signed out successfully",
+      "sendFailed": "Unable to send message. Please try again.",
+      "messageEdited": "Message edited",
+      "editFailed": "Unable to edit message",
+      "messageDeleted": "Message deleted",
+      "deleteFailed": "Unable to delete message",
+      "resendSuccess": "Resent successfully",
+      "resendFailed": "Resend failed",
+      "connectionReconnecting": "Reconnecting..."
+    },
+    "preview": {
+      "photo": "Photo",
+      "video": "Video",
+      "file": "File",
+      "voice": "Voice message",
+      "location": "Location",
+      "sticker": "Sticker"
+    }
+  },
+  "profile": {
+    "userProfile": {
+      "title": "User information",
+      "usernameLabel": "Username",
+      "notifications": "Notifications",
+      "media": "Media, Files, Links",
+      "searchInConversation": "Search in conversation",
+      "blockUser": "Block user",
+      "report": "Report",
+      "deleteConversation": "Delete conversation"
+    },
+    "groupInfo": {
+      "title": "Group information",
+      "membersCount": "{{count}} members",
+      "notifications": "Notifications",
+      "tabs": {
+        "members": "Members",
+        "media": "Media",
+        "files": "Files"
+      },
+      "addMember": "Add member",
+      "searchMemberPlaceholder": "Search members...",
+      "noSearchResult": "No matching result",
+      "youSuffix": "(You)",
+      "viewAllMedia": "View all media",
+      "noSharedFiles": "No shared files",
+      "reportGroup": "Report group",
+      "leaveGroup": "Leave group",
+      "leaveConfirm": "Are you sure you want to leave this group?"
+    },
+    "newChatModal": {
+      "title": "New conversation",
+      "descriptionDirect": "Search users to start chatting",
+      "descriptionGroup": "Select members to create a group",
+      "directMessage": "Direct message",
+      "createGroup": "Create group",
+      "searchPlaceholder": "Search by name or username...",
+      "groupNamePlaceholder": "Enter group name...",
+      "searchMinChars": "Type at least {{count}} characters to search",
+      "createGroupButton": "Create group ({{count}} users)"
+    },
+    "editProfileModal": {
+      "title": "Edit profile",
+      "changeAvatarHint": "Click to change avatar",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "phone": "Phone number",
+      "bio": "Bio",
+      "bioPlaceholder": "Write a few lines about yourself...",
+      "bioHint": "Up to {{count}} characters",
+      "cancel": "Cancel",
+      "save": "Save changes",
+      "phonePlaceholder": "+84 912 345 678"
+    },
+    "imagePreview": {
+      "defaultAlt": "Image preview",
+      "zoomOut": "Zoom out",
+      "zoomIn": "Zoom in",
+      "download": "Download",
+      "close": "Close",
+      "instructions": "Scroll to zoom • Double-click to reset • ESC to close"
+    },
+    "toast": {
+      "searchUsersFailed": "Unable to search users",
+      "selectAtLeastOneMember": "Select at least one user to create a group",
+      "groupNameRequired": "Please enter a group name",
+      "avatarFileRequired": "Please choose an image file",
+      "avatarMaxSize": "Image size must not exceed 5MB",
+      "profileUpdateSuccess": "Profile updated successfully!",
+      "profileUpdateFailed": "Profile update failed",
+      "memberAdded": "Member added to group",
+      "memberAddFailed": "Unable to add member",
+      "leftGroup": "Left group",
+      "leaveGroupFailed": "Unable to leave group right now"
+    }
+  },
+  "error": {
+    "generic": {
+      "unexpected": "An unexpected error occurred",
+      "requestFailed": "Request failed"
+    },
+    "auth": {
+      "loginFailed": "Login failed",
+      "registerFailed": "Registration failed",
+      "logoutFailed": "Sign out failed",
+      "statusUpdateFailed": "Failed to update status",
+      "sessionInactive": "Authentication session is inactive",
+      "missingRefreshToken": "Missing refresh token",
+      "refreshMissingToken": "Refresh response is missing access token",
+      "loginTokenMissing": "Login response is missing access token",
+      "registerTokenMissing": "Registration response is missing access token"
+    },
+    "chat": {
+      "conversationAccessDenied": "Unable to access this conversation",
+      "conversationOpenFailed": "Unable to open this conversation",
+      "sendFailed": "Unable to send message. Please try again.",
+      "startConversationFailed": "Unable to start conversation",
+      "createGroupFailed": "Unable to create new group",
+      "fetchConversationsFailed": "Unable to load conversations",
+      "fetchMessagesFailed": "Unable to load messages",
+      "roomIdMissing": "Missing room id",
+      "invalidSendResponse": "Invalid send message response",
+      "invalidResendResponse": "Invalid resend message response"
+    },
+    "upload": {
+      "fileTooLarge": "File exceeds size limit",
+      "unsupportedType": "Unsupported file type",
+      "uploadCanceled": "Upload canceled",
+      "uploadFailed": "Upload failed, please try again"
+    }
+  },
+  "theme": {
+    "toggle": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System",
+      "switchToLight": "Switch to light mode",
+      "switchToDark": "Switch to dark mode"
+    },
+    "brand": {
+      "blue": "Blue",
+      "green": "Green",
+      "purple": "Purple"
+    }
+  },
+  "common": {
+    "app": {
+      "name": "Hacom Chat",
+      "shortName": "HC"
+    },
+    "actions": {
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "retry": "Retry",
+      "close": "Close",
+      "save": "Save",
+      "back": "Back",
+      "clear": "Clear",
+      "search": "Search",
+      "add": "Add",
+      "remove": "Remove",
+      "download": "Download",
+      "send": "Send",
+      "create": "Create",
+      "edit": "Edit",
+      "delete": "Delete",
+      "copy": "Copy",
+      "forward": "Forward",
+      "reply": "Reply",
+      "startChat": "Start chat",
+      "signOut": "Sign out"
+    },
+    "loading": {
+      "default": "Loading...",
+      "page": "Loading page...",
+      "checkingAuth": "Checking authentication...",
+      "processing": "Processing..."
+    },
+    "labels": {
+      "user": "User",
+      "conversation": "Conversation",
+      "channel": "Channel",
+      "group": "Group"
+    },
+    "statusLabel": "Status",
+    "status": {
+      "online": "Online",
+      "offline": "Offline",
+      "away": "Away",
+      "dnd": "Do not disturb",
+      "busy": "Busy",
+      "invisible": "Invisible"
+    },
+    "toast": {
+      "featureInDevelopment": "This feature is in development"
+    }
+  },
+  "auth": {
+    "login": {
+      "aria": {
+        "section": "Sign in"
+      },
+      "title": "Welcome back",
+      "subtitle": "Sign in to continue chatting",
+      "email": "Email",
+      "password": "Password",
+      "rememberMe": "Remember me",
+      "forgotPassword": "Forgot password?",
+      "submit": "Sign in",
+      "orWith": "Or sign in with",
+      "noAccount": "Don\u0027t have an account?",
+      "signupNow": "Sign up now",
+      "agreement": "By signing in, you agree to",
+      "agreementAnd": "and",
+      "terms": "Terms of use",
+      "privacy": "Privacy policy",
+      "socialAria": "Sign in with {{provider}}"
+    },
+    "register": {
+      "aria": {
+        "section": "Create account"
+      },
+      "title": "Create a new account",
+      "subtitle": "Join the Hacom Chat community today",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "username": "Username",
+      "email": "Email",
+      "password": "Password",
+      "confirmPassword": "Confirm password",
+      "acceptTermsPrefix": "I agree to",
+      "acceptTermsAnd": "and",
+      "terms": "Terms of use",
+      "privacy": "Privacy policy",
+      "submit": "Sign up",
+      "haveAccount": "Already have an account?",
+      "loginNow": "Sign in now",
+      "footerPrivacyPrefix": "Your information is protected by our",
+      "footerPrivacySuffix": ""
+    },
+    "forgot": {
+      "title": "Forgot password?",
+      "subtitle": "Enter your email and we will send a reset link",
+      "submit": "Send reset link",
+      "backToLogin": "Back to sign in",
+      "successTitle": "Check your email",
+      "successDescription": "We sent reset instructions to",
+      "successHint": "Didn\u0027t receive email? Check spam folder or",
+      "tryAnotherEmail": "Try another email"
+    },
+    "username": {
+      "invalid": "Only letters, numbers, and underscores are allowed",
+      "checking": "Checking...",
+      "available": "Username is available",
+      "taken": "Username already exists",
+      "searchMinChars": "Type at least {{count}} characters to search"
+    },
+    "toast": {
+      "loginSuccess": "Login successful!",
+      "loginFailed": "Login failed",
+      "registerSuccess": "Registration successful! Welcome to Hacom Chat",
+      "registerFailed": "Registration failed",
+      "forgotPasswordSent": "Password reset email has been sent!",
+      "forgotPasswordFallback": "If the email exists, you will receive a reset link"
+    },
+    "placeholders": {
+      "email": "you@example.com",
+      "password": "••••••••",
+      "firstName": "John",
+      "lastName": "Doe",
+      "username": "username"
+    }
+  },
+  "validation": {
+    "auth": {
+      "emailRequired": "Email is required",
+      "emailInvalid": "Invalid email",
+      "passwordRequired": "Password is required",
+      "passwordMin": "Password must be at least {{count}} characters",
+      "passwordMax": "Password must not exceed {{count}} characters",
+      "passwordComplexity": "Password must contain at least 1 lowercase letter, 1 uppercase letter, and 1 number",
+      "confirmPasswordRequired": "Password confirmation is required",
+      "confirmPasswordMismatch": "Passwords do not match",
+      "acceptTerms": "You must accept the terms"
+    },
+    "register": {
+      "usernameRequired": "Username is required",
+      "usernameMin": "Username must be at least {{count}} characters",
+      "usernameMax": "Username must not exceed {{count}} characters",
+      "usernamePattern": "Username may contain only letters, numbers, and underscores"
+    },
+    "profile": {
+      "bioMax": "Bio must not exceed {{count}} characters",
+      "phoneInvalid": "Invalid phone number"
+    },
+    "password": {
+      "currentRequired": "Current password is required",
+      "newRequired": "New password is required",
+      "mustBeDifferent": "New password must be different from current password"
+    },
+    "room": {
+      "nameRequired": "Group name is required",
+      "nameMin": "Group name must be at least 2 characters",
+      "nameMax": "Group name must not exceed 100 characters",
+      "descriptionMax": "Description must not exceed 500 characters",
+      "memberMin": "Select at least 1 member",
+      "memberMax": "Group must not exceed 200 members"
+    },
+    "message": {
+      "contentRequired": "Message cannot be empty",
+      "contentMax": "Message must not exceed {{count}} characters"
+    },
+    "strength": {
+      "label": "Strength",
+      "weak": "Weak",
+      "medium": "Medium",
+      "strong": "Strong",
+      "requirements": {
+        "length": "At least 8 characters",
+        "lowercase": "Contains lowercase letters (a-z)",
+        "uppercase": "Contains uppercase letters (A-Z)",
+        "number": "Contains numbers (0-9)",
+        "special": "Contains special characters (!@#$...)",
+        "optional": "optional"
+      }
+    }
+  }
+}

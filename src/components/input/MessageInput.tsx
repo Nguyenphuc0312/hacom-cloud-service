@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { debounce } from "lodash";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import {
   FaceSmileIcon,
   PaperClipIcon,
@@ -69,6 +70,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   disabled = false,
   className,
 }) => {
+  const { t } = useTranslation();
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [filePreview, setFilePreview] = useState<string | null>(null);
@@ -112,11 +114,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const allowedTypes = [...UPLOAD_CONFIG.ALLOWED_FILE_TYPES, "video/mp4"];
 
     if (file.size > UPLOAD_CONFIG.MAX_FILE_SIZE) {
-      return "File exceeds the allowed size limit";
+      return t("error:upload.fileTooLarge");
     }
 
     if (!allowedTypes.includes(file.type)) {
-      return "Unsupported file type";
+      return t("error:upload.unsupportedType");
     }
 
     return null;
@@ -175,11 +177,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       clearSelectedFile();
     } catch (error) {
       if (isCanceledUploadError(error)) {
-        setUploadError("Upload canceled");
+        setUploadError(t("error:upload.uploadCanceled"));
         return;
       }
       const apiError = extractApiError(error);
-      setUploadError(apiError.message || "Upload failed, please try again");
+      setUploadError(apiError.message || t("error:upload.uploadFailed"));
     } finally {
       uploadAbortRef.current = null;
       setUploading(false);
@@ -286,7 +288,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             <div className="w-1 h-8 bg-primary rounded-full" />
             <div className="min-w-0">
               <p className="text-xs font-medium text-primary">
-                Replying to {replyToMessage.senderName}
+                {t("chat:composer.replyingTo", {
+                  name: replyToMessage.senderName,
+                })}
               </p>
               <p className="text-xs text-text-muted truncate">
                 {replyToMessage.content}
@@ -296,7 +300,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           <button
             onClick={onCancelReply}
             className="p-1 hover:bg-surface-active rounded-full transition-colors"
-            aria-label="Cancel reply"
+            aria-label={t("chat:composer.cancelReply")}
           >
             <XMarkIcon className="w-4 h-4 text-text-muted" />
           </button>
@@ -309,7 +313,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             <div className="w-1 h-8 bg-warning rounded-full" />
             <div className="min-w-0">
               <p className="text-xs font-medium text-warning">
-                Editing message
+                {t("chat:composer.editing")}
               </p>
               <p className="text-xs text-warning truncate">
                 {editingMessage.content}
@@ -319,7 +323,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           <button
             onClick={onCancelEdit}
             className="p-1 hover:bg-warning/20 rounded-full transition-colors"
-            aria-label="Cancel edit"
+            aria-label={t("chat:composer.cancelEdit")}
           >
             <XMarkIcon className="w-4 h-4 text-warning" />
           </button>
@@ -331,7 +335,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           {filePreview && fileToSend.type.startsWith("image/") ? (
             <img
               src={filePreview}
-              alt="preview"
+              alt={t("chat:composer.filePreviewAlt")}
               className="w-12 h-12 object-cover rounded"
             />
           ) : (
@@ -340,14 +344,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
           {uploading ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-text-muted">Uploading...</span>
+              <span className="text-xs text-text-muted">{t("chat:composer.uploading")}</span>
               <progress value={uploadProgress} max={100} className="w-24" />
               <button
                 type="button"
                 onClick={handleCancelUpload}
                 className="text-xs text-text-muted underline hover:text-text-secondary"
               >
-                Cancel
+                {t("chat:composer.cancelUpload")}
               </button>
             </div>
           ) : uploadError ? (
@@ -356,7 +360,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               onClick={handleUploadAndSend}
               className="text-danger text-xs underline"
             >
-              Retry
+              {t("chat:composer.retryUpload")}
             </button>
           ) : (
             <button
@@ -364,7 +368,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               onClick={handleUploadAndSend}
               className="text-primary text-xs underline"
             >
-              Send file
+              {t("chat:composer.sendFile")}
             </button>
           )}
 
@@ -372,7 +376,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             type="button"
             onClick={handleRemoveSelectedFile}
             className="ml-auto p-1"
-            aria-label="Remove file"
+            aria-label={t("chat:composer.removeFile")}
           >
             <XMarkIcon className="w-4 h-4 text-text-muted" />
           </button>
@@ -393,7 +397,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 ? "bg-primary text-text-inverse"
                 : "text-text-muted hover:bg-surface-overlay",
             )}
-            aria-label="Open emoji picker"
+            aria-label={t("chat:composer.openEmojiPicker")}
             disabled={disableComposerActions}
           >
             <FaceSmileIcon className="h-5 w-5" />
@@ -425,7 +429,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 ? "bg-primary text-text-inverse"
                 : "text-text-muted hover:bg-surface-overlay",
             )}
-            aria-label="Attach file"
+            aria-label={t("chat:composer.attachFile")}
             disabled={disableComposerActions}
           >
             <PaperClipIcon className="h-5 w-5" />
@@ -462,7 +466,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             onChange={(e) => handleInputChange(e.target.value)}
             onKeyDown={handleKeyDown}
             onBlur={() => onTyping?.(false)}
-            placeholder="Nhập một tin nhắn..."
+            placeholder={t("chat:composer.placeholder")}
             disabled={disabled}
             rows={1}
             className={clsx(
@@ -474,9 +478,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               "transition-all duration-200",
               disabled && "opacity-50 cursor-not-allowed",
             )}
-            // theme-exception: min/max height controls autosize behavior, not visual palette.
             style={{ minHeight: "40px", maxHeight: "144px" }}
-            aria-label="Message input"
+            aria-label={t("chat:composer.messageInput")}
           />
         </div>
 
@@ -491,7 +494,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
               "hover:bg-primary-hover",
               "disabled:opacity-50 disabled:cursor-not-allowed",
             )}
-            aria-label="Gửi tin nhắn"
+            aria-label={t("chat:composer.sendMessage")}
           >
             <PaperAirplaneIcon className="h-5 w-5" />
           </button>
@@ -499,7 +502,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           <button
             type="button"
             className="inline-flex h-10 w-10 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-overlay disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label="Record voice message"
+            aria-label={t("chat:composer.recordVoice")}
             disabled={disableComposerActions}
           >
             <MicrophoneIcon className="h-5 w-5" />
@@ -511,4 +514,3 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 };
 
 export default MessageInput;
-

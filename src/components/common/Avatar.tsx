@@ -1,5 +1,6 @@
 import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { UserStatus } from "../../types";
 
 interface AvatarProps {
@@ -37,6 +38,15 @@ const statusColors: Record<UserStatus, string> = {
   [UserStatus.BUSY]: "bg-warning",
 };
 
+const statusLabelKeys: Record<UserStatus, string> = {
+  [UserStatus.ONLINE]: "common:status.online",
+  [UserStatus.OFFLINE]: "common:status.offline",
+  [UserStatus.AWAY]: "common:status.away",
+  [UserStatus.DND]: "common:status.dnd",
+  [UserStatus.INVISIBLE]: "common:status.invisible",
+  [UserStatus.BUSY]: "common:status.busy",
+};
+
 export const Avatar: React.FC<AvatarProps> = ({
   src,
   alt,
@@ -46,8 +56,9 @@ export const Avatar: React.FC<AvatarProps> = ({
   className,
   onClick,
 }) => {
+  const { t } = useTranslation();
   const normalizedAlt = typeof alt === "string" ? alt.trim() : "";
-  const safeAlt = normalizedAlt || "User";
+  const safeAlt = normalizedAlt || t("common:labels.user");
   const safeSrc =
     typeof src === "string" && src.trim().length > 0 ? src.trim() : undefined;
 
@@ -103,7 +114,7 @@ export const Avatar: React.FC<AvatarProps> = ({
             statusColors[status],
             status === UserStatus.ONLINE && "animate-pulse-online",
           )}
-          aria-label={`Status: ${status}`}
+          aria-label={`${t("common:statusLabel")}: ${t(statusLabelKeys[status])}`}
         />
       )}
     </div>

@@ -7,6 +7,7 @@ import axios, { AxiosError, AxiosHeaders } from "axios";
 import type { AxiosInstance, InternalAxiosRequestConfig } from "axios";
 import type { ApiResponse } from "@hacom/chat-shared-types";
 import { API_BASE_URL } from "../config";
+import i18n from "../i18n";
 import {
   clearTokens,
   getAccessToken,
@@ -160,14 +161,14 @@ const extractTokenPayload = (
 const refreshAccessToken = async (): Promise<string> => {
   if (!isAuthSessionActive()) {
     notifyAuthFailure("refresh_failed");
-    throw new Error("Auth session is inactive");
+    throw new Error(i18n.t("error:auth.sessionInactive"));
   }
 
   const storedRefreshToken = getRefreshToken();
 
   if (!isRefreshTokenCookieMode() && !storedRefreshToken) {
     notifyAuthFailure("missing_refresh_token");
-    throw new Error("Missing refresh token");
+    throw new Error(i18n.t("error:auth.missingRefreshToken"));
   }
 
   try {
@@ -185,7 +186,7 @@ const refreshAccessToken = async (): Promise<string> => {
 
     const { accessToken, refreshToken } = extractTokenPayload(response.data);
     if (!accessToken) {
-      throw new Error("Refresh response missing access token");
+      throw new Error(i18n.t("error:auth.refreshMissingToken"));
     }
 
     if (refreshToken || storedRefreshToken) {

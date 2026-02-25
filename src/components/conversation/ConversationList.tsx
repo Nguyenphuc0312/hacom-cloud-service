@@ -1,5 +1,6 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { ConversationItem } from "./ConversationItem";
 import type { Conversation, ConversationFilter } from "../../types";
 import {
@@ -26,13 +27,13 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   onSelect,
   className,
 }) => {
-  // Filter conversations
+  const { t } = useTranslation();
+
   let filtered = filterConversations(
     Array.isArray(conversations) ? conversations : [],
     searchQuery,
   );
 
-  // Apply tab filter
   switch (activeFilter) {
     case "unread":
       filtered = filtered.filter((c) => c.unreadCount > 0);
@@ -44,14 +45,11 @@ export const ConversationList: React.FC<ConversationListProps> = ({
       filtered = filtered.filter((c) => c.type === "channel");
       break;
     default:
-      // 'all' - no additional filter
       break;
   }
 
-  // Sort conversations
   const sorted = sortConversations(filtered);
 
-  // Separate pinned and unpinned
   const pinned = sorted.filter((c) => c.isPinned);
   const unpinned = sorted.filter((c) => !c.isPinned);
 
@@ -77,9 +75,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           />
         </svg>
         <p className="text-sm">
-          {searchQuery
-            ? "Không tìm thấy cuộc trò chuyện"
-            : "Chưa có cuộc trò chuyện"}
+          {searchQuery ? t("sidebar:room.emptyBySearch") : t("sidebar:room.empty")}
         </p>
       </div>
     );
@@ -89,9 +85,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     <div
       className={clsx("overflow-y-auto", className)}
       role="listbox"
-      aria-label="Danh sách cuộc trò chuyện"
+      aria-label={t("sidebar:room.listAria")}
     >
-      {/* Pinned conversations */}
       {pinned.length > 0 && (
         <>
           {pinned.map((conversation) => (
@@ -104,12 +99,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             />
           ))}
 
-          {/* Divider between pinned and unpinned */}
           {unpinned.length > 0 && <div className="h-px bg-border my-1" />}
         </>
       )}
 
-      {/* Unpinned conversations */}
       {unpinned.map((conversation) => (
         <ConversationItem
           key={conversation.id}
@@ -124,4 +117,3 @@ export const ConversationList: React.FC<ConversationListProps> = ({
 };
 
 export default ConversationList;
-

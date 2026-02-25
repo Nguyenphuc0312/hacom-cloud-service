@@ -5,6 +5,7 @@
 
 import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import {
   SunIcon,
   MoonIcon,
@@ -20,20 +21,20 @@ interface ThemeToggleProps {
   showBrand?: boolean;
 }
 
-const themes: { id: Theme; label: string; icon: React.ReactNode }[] = [
-  { id: "light", label: "Light", icon: <SunIcon className="h-5 w-5" /> },
-  { id: "dark", label: "Dark", icon: <MoonIcon className="h-5 w-5" /> },
+const themes: { id: Theme; labelKey: string; icon: React.ReactNode }[] = [
+  { id: "light", labelKey: "theme:toggle.light", icon: <SunIcon className="h-5 w-5" /> },
+  { id: "dark", labelKey: "theme:toggle.dark", icon: <MoonIcon className="h-5 w-5" /> },
   {
     id: "system",
-    label: "System",
+    labelKey: "theme:toggle.system",
     icon: <ComputerDesktopIcon className="h-5 w-5" />,
   },
 ];
 
-const brands: { id: ThemeBrand; label: string }[] = [
-  { id: "blue", label: "Blue" },
-  { id: "green", label: "Green" },
-  { id: "purple", label: "Purple" },
+const brands: { id: ThemeBrand; labelKey: string }[] = [
+  { id: "blue", labelKey: "theme:brand.blue" },
+  { id: "green", labelKey: "theme:brand.green" },
+  { id: "purple", labelKey: "theme:brand.purple" },
 ];
 
 export const ThemeToggle: React.FC<ThemeToggleProps> = ({
@@ -41,6 +42,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
   showLabel = true,
   showBrand = false,
 }) => {
+  const { t } = useTranslation();
   const theme = useUIStore((state) => state.theme);
   const brand = useUIStore((state) => state.brand);
   const setTheme = useUIStore((state) => state.setTheme);
@@ -59,11 +61,11 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
                 ? "bg-primary text-text-inverse shadow-xs"
                 : "text-text-secondary hover:bg-surface hover:text-text-primary",
             )}
-            title={item.label}
-          >
-            {item.icon}
-            {showLabel && <span>{item.label}</span>}
-          </button>
+              title={t(item.labelKey)}
+            >
+              {item.icon}
+              {showLabel && <span>{t(item.labelKey)}</span>}
+            </button>
         ))}
       </div>
 
@@ -80,8 +82,8 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
                   ? "bg-surface text-text-primary shadow-xs"
                   : "text-text-secondary hover:bg-surface hover:text-text-primary",
               )}
-            >
-              {item.label}
+              >
+              {t(item.labelKey)}
             </button>
           ))}
         </div>
@@ -93,6 +95,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
 export const ThemeToggleButton: React.FC<{ className?: string }> = ({
   className,
 }) => {
+  const { t } = useTranslation();
   const { resolvedTheme, toggleTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
@@ -104,7 +107,11 @@ export const ThemeToggleButton: React.FC<{ className?: string }> = ({
         "hover:bg-surface-overlay hover:text-text-primary",
         className,
       )}
-      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      title={
+        isDark
+          ? t("theme:toggle.switchToLight")
+          : t("theme:toggle.switchToDark")
+      }
     >
       {isDark ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
     </button>

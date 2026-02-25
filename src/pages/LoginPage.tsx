@@ -1,13 +1,9 @@
-/**
- * @fileoverview Login Page - Fully Responsive
- * Fix: scroll đúng ở 125% display scaling, mọi màn hình & tỉ lệ
- */
-
-import React, { useEffect } from "react";
+﻿import React, { useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import {
   EnvelopeIcon,
   LockClosedIcon,
@@ -19,6 +15,7 @@ import type { LoginFormData } from "../lib/validations";
 import { useAuthStore } from "../stores";
 
 export const LoginPage: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { login, isLoading, isAuthenticated, error, clearError } =
@@ -52,45 +49,25 @@ export const LoginPage: React.FC = () => {
   const onSubmit = async (data: LoginFormData) => {
     try {
       await login(data);
-      toast.success("Đăng nhập thành công!");
+      toast.success(t("auth:toast.loginSuccess"));
       const from = (location.state as { from?: string })?.from ?? "/chat";
       navigate(from, { replace: true });
     } catch (err) {
-      toast.error((err as Error).message ?? "Đăng nhập thất bại");
+      toast.error((err as Error).message ?? t("auth:toast.loginFailed"));
     }
   };
 
   return (
-    /**
-     * ROOT WRAPPER — giải quyết vấn đề 125% zoom
-     * ─────────────────────────────────────────────────────────────────
-     * VẤN ĐỀ:
-     *   flex + justify-center KHÔNG scroll được khi content > viewport.
-     *   Browser tính chiều cao flex container = 100dvh, sau đó center con
-     *   bên trong → nếu con cao hơn viewport, phần trên & dưới bị clip
-     *   và KHÔNG có scrollbar.
-     *
-     * GIẢI PHÁP: CSS Grid
-     *   • `grid` + `place-items-center` → card căn giữa cả ngang lẫn dọc
-     *     khi viewport đủ cao (màn hình bình thường)
-     *   • `min-height: 100dvh` (không phải height) → row tự mở rộng khi
-     *     content cao hơn viewport → overflow-y-auto có thể scroll
-     *   • Ở 125% zoom: viewport thu nhỏ ~20%, grid row tự giãn theo card,
-     *     scroll hoạt động bình thường
-     * ─────────────────────────────────────────────────────────────────
-     */
     <div
       className={clsx(
         "relative isolate",
-        "grid place-items-center", // ← căn giữa cả x & y
-        "[min-height:100dvh]", // ← row mở rộng, không bị clip
-        "overflow-y-auto", // ← scroll khi zoom lớn
+        "grid place-items-center",
+        "[min-height:100dvh]",
+        "overflow-y-auto",
         "bg-gradient-to-br from-primary/10 via-background to-secondary/10",
-        // Padding: đảm bảo card không sát mép, kể cả khi zoom 125%+
         "px-4 py-8 sm:py-10",
       )}
     >
-      {/* Decoration blobs */}
       <div
         aria-hidden="true"
         className="absolute inset-0 overflow-hidden pointer-events-none"
@@ -99,33 +76,28 @@ export const LoginPage: React.FC = () => {
         <div className="absolute -bottom-40 -left-40 w-64 h-64 sm:w-80 sm:h-80 lg:w-96 lg:h-96 bg-secondary/15 rounded-full blur-3xl" />
       </div>
 
-      {/* Card container — w-full + max-w để tự co giãn */}
       <div className="relative z-10 w-full mx-auto max-w-sm xs:max-w-sm sm:max-w-md lg:max-w-lg">
-        {/* White card */}
         <section
-          aria-label="Đăng nhập"
+          aria-label={t("auth:login.aria.section")}
           className="bg-surface rounded-2xl shadow-xl border border-border animate-fade-in p-5 xs:p-6 sm:p-8 lg:p-10"
         >
-          {/* Header */}
           <header className="text-center mb-5 sm:mb-6 lg:mb-8">
             <div className="inline-flex items-center justify-center rounded-2xl mb-3 sm:mb-4 shadow-lg shadow-elev2 bg-primary w-12 h-12 xs:w-14 xs:h-14 sm:w-16 sm:h-16">
               <ChatBubbleLeftRightIcon className="w-6 h-6 xs:w-7 xs:h-7 sm:w-8 sm:h-8 text-text-inverse" />
             </div>
             <h1 className="text-lg xs:text-xl sm:text-2xl font-bold text-text-primary leading-tight">
-              Chào mừng trở lại
+              {t("auth:login.title")}
             </h1>
             <p className="text-xs xs:text-sm sm:text-base text-text-muted mt-1 sm:mt-2">
-              Đăng nhập để tiếp tục trò chuyện
+              {t("auth:login.subtitle")}
             </p>
           </header>
 
-          {/* Form */}
           <form
             onSubmit={handleSubmit(onSubmit)}
             noValidate
             className="space-y-3 xs:space-y-4 sm:space-y-5"
           >
-            {/* Global error — transition tránh layout shift */}
             <div
               className={clsx(
                 "transition-all duration-200 overflow-hidden",
@@ -143,12 +115,11 @@ export const LoginPage: React.FC = () => {
               )}
             </div>
 
-            {/* Email */}
             <Input
               {...register("email")}
               type="email"
-              label="Email"
-              placeholder="you@example.com"
+              label={t("auth:login.email")}
+              placeholder={t("auth:placeholders.email")}
               leftIcon={<EnvelopeIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
               error={errors.email?.message}
               autoComplete="email"
@@ -156,34 +127,31 @@ export const LoginPage: React.FC = () => {
               disabled={isLoading}
             />
 
-            {/* Password */}
             <Input
               {...register("password")}
               type="password"
-              label="Mật khẩu"
-              placeholder="••••••••"
+              label={t("auth:login.password")}
+              placeholder={t("auth:placeholders.password")}
               leftIcon={<LockClosedIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
               error={errors.password?.message}
               autoComplete="current-password"
               disabled={isLoading}
             />
 
-            {/* Remember me & Forgot password */}
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <Checkbox
                 {...register("rememberMe")}
-                label="Ghi nhớ đăng nhập"
+                label={t("auth:login.rememberMe")}
                 disabled={isLoading}
               />
               <Link
                 to="/forgot-password"
                 className="text-xs xs:text-sm text-primary font-medium hover:text-primary/80 transition-colors duration-200 sm:text-right whitespace-nowrap"
               >
-                Quên mật khẩu?
+                {t("auth:login.forgotPassword")}
               </Link>
             </div>
 
-            {/* Submit */}
             <Button
               type="submit"
               fullWidth
@@ -192,61 +160,57 @@ export const LoginPage: React.FC = () => {
               disabled={isLoading || isSubmitting}
               aria-busy={isLoading || isSubmitting}
             >
-              Đăng nhập
+              {t("auth:login.submit")}
             </Button>
           </form>
 
-          {/* Divider */}
           <div className="relative my-5 sm:my-6 lg:my-8">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-border" />
             </div>
             <div className="relative flex justify-center text-xs xs:text-sm">
               <span className="px-3 xs:px-4 bg-surface text-text-muted">
-                Hoặc đăng nhập với
+                {t("auth:login.orWith")}
               </span>
             </div>
           </div>
 
-          {/* Social buttons */}
           <div className="grid grid-cols-1 xs:grid-cols-2 gap-2 xs:gap-3 sm:gap-4">
             <SocialButton
               provider="google"
-              onClick={() => toast.info("Tính năng đang phát triển")}
+              onClick={() => toast.info(t("common:toast.featureInDevelopment"))}
             />
             <SocialButton
               provider="facebook"
-              onClick={() => toast.info("Tính năng đang phát triển")}
+              onClick={() => toast.info(t("common:toast.featureInDevelopment"))}
             />
           </div>
 
-          {/* Sign-up link */}
           <p className="mt-5 sm:mt-6 lg:mt-8 text-center text-xs xs:text-sm text-text-muted">
-            Chưa có tài khoản?{" "}
+            {t("auth:login.noAccount")} {" "}
             <Link
               to="/register"
               className="font-semibold text-primary hover:text-primary/80 transition-colors"
             >
-              Đăng ký ngay
+              {t("auth:login.signupNow")}
             </Link>
           </p>
         </section>
 
-        {/* Footer */}
         <p className="mt-4 sm:mt-5 text-center text-xs xs:text-xs text-text-muted px-2 leading-relaxed">
-          Bằng việc đăng nhập, bạn đồng ý với{" "}
+          {t("auth:login.agreement")} {" "}
           <Link
             to="/terms"
             className="underline hover:text-text-secondary transition-colors"
           >
-            Điều khoản sử dụng
+            {t("auth:login.terms")}
           </Link>{" "}
-          và{" "}
+          {t("auth:login.agreementAnd")} {" "}
           <Link
             to="/privacy"
             className="underline hover:text-text-secondary transition-colors"
           >
-            Chính sách bảo mật
+            {t("auth:login.privacy")}
           </Link>
         </p>
       </div>
@@ -254,12 +218,12 @@ export const LoginPage: React.FC = () => {
   );
 };
 
-/* ─── Social Button ─── */
-
 const SocialButton: React.FC<{
   provider: "google" | "facebook";
   onClick: () => void;
 }> = ({ provider, onClick }) => {
+  const { t } = useTranslation();
+
   const config = {
     google: {
       label: "Google",
@@ -322,7 +286,7 @@ const SocialButton: React.FC<{
         "active:scale-[.97]",
         className,
       )}
-      aria-label={`Đăng nhập bằng ${label}`}
+      aria-label={t("auth:login.socialAria", { provider: label })}
     >
       {icon}
       <span>{label}</span>
@@ -331,27 +295,3 @@ const SocialButton: React.FC<{
 };
 
 export default LoginPage;
-
-/*
- * KEY FIX: CSS Grid thay vì flex justify-center
- * ─────────────────────────────────────────────────────────────────────
- * TRƯỚC (bị clip ở 125% zoom):
- *   className="flex flex-col items-center justify-center min-h-[100dvh]"
- *   → Browser set height = 100dvh rồi center content bên trong
- *   → Content > height → bị clip, không scroll
- *
- * SAU (scroll đúng):
- *   className="grid place-items-center [min-height:100dvh] overflow-y-auto"
- *   → min-height → grid row tự mở rộng theo content
- *   → Khi content < viewport: row = 100dvh → card căn giữa ✓
- *   → Khi content > viewport (zoom 125%): row mở rộng → scroll ✓
- *
- * Cần thêm tailwind.config.js:
- *   theme: { extend: { screens: { xs: '360px' } } }
- *
- * Cần thêm index.html:
- *   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
- * ─────────────────────────────────────────────────────────────────────
- */
-
-

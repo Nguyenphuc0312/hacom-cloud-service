@@ -1,10 +1,6 @@
-/**
- * @fileoverview Emoji Picker Component
- * Component chọn emoji với danh mục và tìm kiếm
- */
-
-import React, { useState, useMemo, useRef, useEffect } from "react";
+﻿import React, { useState, useMemo, useRef, useEffect } from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import {
   FaceSmileIcon,
   HeartIcon,
@@ -19,25 +15,23 @@ import {
 } from "@heroicons/react/24/outline";
 import { useDebounce } from "../../hooks";
 
-// Emoji data structure
 interface EmojiCategory {
   id: string;
-  name: string;
+  nameKey: string;
   icon: React.ReactNode;
   emojis: string[];
 }
 
-// Common emojis organized by category
 const EMOJI_DATA: EmojiCategory[] = [
   {
     id: "recent",
-    name: "Gần đây",
+    nameKey: "chat:emoji.category.recent",
     icon: <FaceSmileIcon className="w-5 h-5" />,
     emojis: ["😀", "😂", "❤️", "👍", "🔥", "😊", "🎉", "💪"],
   },
   {
     id: "smileys",
-    name: "Mặt cười",
+    nameKey: "chat:emoji.category.smileys",
     icon: <FaceSmileIcon className="w-5 h-5" />,
     emojis: [
       "😀",
@@ -58,57 +52,35 @@ const EMOJI_DATA: EmojiCategory[] = [
       "🤩",
       "😘",
       "😗",
-      "☺️",
       "😚",
       "😙",
-      "🥲",
       "😋",
       "😛",
       "😜",
       "🤪",
       "😝",
-      "🤑",
       "🤗",
-      "🤭",
-      "🤫",
       "🤔",
-      "🤐",
-      "🤨",
       "😐",
       "😑",
       "😶",
-      "😏",
-      "😒",
       "🙄",
+      "😏",
       "😬",
       "🤥",
       "😌",
-      "😔",
-      "😪",
-      "🤤",
       "😴",
-      "😷",
       "🤒",
       "🤕",
-      "🤢",
-      "🤮",
       "🤧",
-      "🥵",
-      "🥶",
-      "🥴",
-      "😵",
-      "🤯",
-      "🤠",
       "🥳",
-      "🥸",
       "😎",
       "🤓",
-      "🧐",
     ],
   },
   {
     id: "hearts",
-    name: "Trái tim",
+    nameKey: "chat:emoji.category.hearts",
     icon: <HeartIcon className="w-5 h-5" />,
     emojis: [
       "❤️",
@@ -131,7 +103,6 @@ const EMOJI_DATA: EmojiCategory[] = [
       "💝",
       "💟",
       "♥️",
-      "😻",
       "😍",
       "🥰",
       "😘",
@@ -139,7 +110,7 @@ const EMOJI_DATA: EmojiCategory[] = [
   },
   {
     id: "gestures",
-    name: "Cử chỉ",
+    nameKey: "chat:emoji.category.gestures",
     icon: <HandThumbUpIcon className="w-5 h-5" />,
     emojis: [
       "👍",
@@ -167,18 +138,16 @@ const EMOJI_DATA: EmojiCategory[] = [
       "👋",
       "🤙",
       "💪",
-      "🦾",
       "🙏",
       "🤝",
       "👏",
       "🙌",
-      "👐",
       "✍️",
     ],
   },
   {
     id: "nature",
-    name: "Thiên nhiên",
+    nameKey: "chat:emoji.category.nature",
     icon: <GlobeAltIcon className="w-5 h-5" />,
     emojis: [
       "🌸",
@@ -187,25 +156,17 @@ const EMOJI_DATA: EmojiCategory[] = [
       "🌻",
       "🌼",
       "🌷",
-      "🪻",
       "🌱",
-      "🪴",
       "🌲",
       "🌳",
       "🌴",
-      "🌵",
-      "🌾",
-      "🌿",
-      "☘️",
       "🍀",
       "🍁",
       "🍂",
       "🍃",
-      "🍄",
       "🌍",
       "🌎",
       "🌏",
-      "🌕",
       "🌙",
       "⭐",
       "🌟",
@@ -217,7 +178,7 @@ const EMOJI_DATA: EmojiCategory[] = [
   },
   {
     id: "food",
-    name: "Đồ ăn",
+    nameKey: "chat:emoji.category.food",
     icon: <MusicalNoteIcon className="w-5 h-5" />,
     emojis: [
       "🍎",
@@ -227,15 +188,11 @@ const EMOJI_DATA: EmojiCategory[] = [
       "🍉",
       "🍇",
       "🍓",
-      "🫐",
       "🍑",
-      "🥭",
       "🍍",
-      "🥥",
-      "🥝",
+      "🥭",
       "🍅",
       "🥑",
-      "🥦",
       "🍔",
       "🍕",
       "🌭",
@@ -244,35 +201,25 @@ const EMOJI_DATA: EmojiCategory[] = [
       "🎂",
       "🍰",
       "🍩",
-      "🍪",
       "🍫",
       "☕",
       "🍵",
-      "🧃",
       "🍹",
-      "🍺",
-      "🥂",
     ],
   },
   {
     id: "activities",
-    name: "Hoạt động",
+    nameKey: "chat:emoji.category.activities",
     icon: <BuildingOfficeIcon className="w-5 h-5" />,
     emojis: [
       "⚽",
       "🏀",
       "🏈",
       "⚾",
-      "🥎",
       "🎾",
       "🏐",
-      "🏉",
-      "🎱",
       "🏓",
-      "🏸",
-      "🏒",
-      "🥊",
-      "🎯",
+      "🎱",
       "🎮",
       "🎲",
       "🧩",
@@ -285,8 +232,6 @@ const EMOJI_DATA: EmojiCategory[] = [
       "🎹",
       "🎸",
       "🎺",
-      "🎷",
-      "🥁",
       "🎬",
       "🏆",
       "🥇",
@@ -295,7 +240,7 @@ const EMOJI_DATA: EmojiCategory[] = [
   },
   {
     id: "objects",
-    name: "Đồ vật",
+    nameKey: "chat:emoji.category.objects",
     icon: <LightBulbIcon className="w-5 h-5" />,
     emojis: [
       "📱",
@@ -304,7 +249,6 @@ const EMOJI_DATA: EmojiCategory[] = [
       "📷",
       "📹",
       "📺",
-      "📻",
       "⏰",
       "⌚",
       "💡",
@@ -316,25 +260,20 @@ const EMOJI_DATA: EmojiCategory[] = [
       "📦",
       "🎁",
       "🎈",
-      "🎀",
-      "🏷️",
       "📝",
       "📚",
-      "📖",
       "🔑",
       "🔒",
       "🔓",
-      "❤️‍🔥",
       "💯",
       "✅",
       "❌",
-      "⭕",
       "❓",
     ],
   },
   {
     id: "flags",
-    name: "Cờ",
+    nameKey: "chat:emoji.category.flags",
     icon: <FlagIcon className="w-5 h-5" />,
     emojis: [
       "🇻🇳",
@@ -376,6 +315,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
   onClose,
   className,
 }) => {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("smileys");
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -383,23 +323,28 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
 
   const debouncedSearch = useDebounce(searchQuery, 150);
 
-  // Filter emojis based on search
+  const categories = useMemo(
+    () =>
+      EMOJI_DATA.map((category) => ({
+        ...category,
+        name: t(category.nameKey),
+      })),
+    [t],
+  );
+
   const filteredEmojis = useMemo(() => {
-    if (!debouncedSearch) return null;
+    if (!debouncedSearch.trim()) return null;
 
     const allEmojis: string[] = [];
-    EMOJI_DATA.forEach((cat) => {
-      if (cat.id !== "recent") {
-        allEmojis.push(...cat.emojis);
+    categories.forEach((category) => {
+      if (category.id !== "recent") {
+        allEmojis.push(...category.emojis);
       }
     });
 
-    // Simple search - match any emoji that contains the search term
-    // In a real app, you'd want emoji metadata with names/keywords
     return [...new Set(allEmojis)].slice(0, 50);
-  }, [debouncedSearch]);
+  }, [categories, debouncedSearch]);
 
-  // Click outside handler
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
@@ -411,7 +356,6 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [onClose]);
 
-  // Scroll to category
   const scrollToCategory = (categoryId: string) => {
     setActiveCategory(categoryId);
     categoryRefs.current[categoryId]?.scrollIntoView({
@@ -420,10 +364,8 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
     });
   };
 
-  // Handle emoji click
   const handleEmojiClick = (emoji: string) => {
     onSelect(emoji);
-    // Could save to recent emojis here
   };
 
   return (
@@ -436,7 +378,6 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
         className,
       )}
     >
-      {/* Search */}
       <div className="p-3 border-b border-border">
         <div className="relative">
           <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
@@ -444,7 +385,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm emoji..."
+            placeholder={t("chat:emoji.searchPlaceholder")}
             className={clsx(
               "w-full pl-9 pr-9 py-2 text-sm rounded-xl",
               "bg-surface-overlay border-0",
@@ -452,9 +393,11 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
             )}
           />
           {searchQuery && (
-            <button type="button"
+            <button
+              type="button"
               onClick={() => setSearchQuery("")}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary"
+              aria-label={t("chat:emoji.clearSearch")}
             >
               <XMarkIcon className="w-4 h-4" />
             </button>
@@ -462,11 +405,11 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
         </div>
       </div>
 
-      {/* Category tabs */}
       {!searchQuery && (
         <div className="flex items-center gap-1 px-3 py-2 border-b border-border overflow-x-auto scrollbar-hide">
-          {EMOJI_DATA.map((category) => (
-            <button type="button"
+          {categories.map((category) => (
+            <button
+              type="button"
               key={category.id}
               onClick={() => scrollToCategory(category.id)}
               className={clsx(
@@ -483,13 +426,12 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
         </div>
       )}
 
-      {/* Emojis grid */}
       <div className="h-64 overflow-y-auto p-2">
         {filteredEmojis ? (
-          // Search results
           <div className="grid grid-cols-8 gap-1">
             {filteredEmojis.map((emoji, index) => (
-              <button type="button"
+              <button
+                type="button"
                 key={index}
                 onClick={() => handleEmojiClick(emoji)}
                 className={clsx(
@@ -498,14 +440,14 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
                   "hover:bg-surface-overlay active:scale-90",
                   "transition-all duration-100",
                 )}
+                aria-label={t("chat:reaction.reactWith", { emoji })}
               >
                 {emoji}
               </button>
             ))}
           </div>
         ) : (
-          // Categories
-          EMOJI_DATA.map((category) => (
+          categories.map((category) => (
             <div
               key={category.id}
               ref={(el) => {
@@ -518,7 +460,8 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
               </h3>
               <div className="grid grid-cols-8 gap-1">
                 {category.emojis.map((emoji, index) => (
-                  <button type="button"
+                  <button
+                    type="button"
                     key={index}
                     onClick={() => handleEmojiClick(emoji)}
                     className={clsx(
@@ -527,6 +470,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
                       "hover:bg-surface-overlay active:scale-90",
                       "transition-all duration-100",
                     )}
+                    aria-label={t("chat:reaction.reactWith", { emoji })}
                   >
                     {emoji}
                   </button>
@@ -537,10 +481,10 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
         )}
       </div>
 
-      {/* Quick reactions */}
       <div className="flex items-center justify-center gap-2 px-3 py-2 border-t border-border bg-surface-overlay">
         {["👍", "❤️", "😂", "😮", "😢", "🎉"].map((emoji) => (
-          <button type="button"
+          <button
+            type="button"
             key={emoji}
             onClick={() => handleEmojiClick(emoji)}
             className={clsx(
@@ -549,6 +493,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
               "hover:bg-surface hover:shadow-sm",
               "transition-all duration-100 active:scale-90",
             )}
+            aria-label={t("chat:reaction.reactWith", { emoji })}
           >
             {emoji}
           </button>
@@ -559,6 +504,3 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
 };
 
 export default EmojiPicker;
-
-
-

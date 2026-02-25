@@ -1,5 +1,6 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import {
   XMarkIcon,
   UserIcon,
@@ -25,26 +26,30 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   onClose,
   className,
 }) => {
+  const { t } = useTranslation(["profile", "common"]);
+
   const statusText =
-    user.status === UserStatus.ONLINE ? "Đang hoạt động" : "Ngoại tuyến";
+    user.status === UserStatus.ONLINE
+      ? t("common:status.online")
+      : t("common:status.offline");
 
   return (
     <div className={clsx("flex flex-col h-full bg-surface", className)}>
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <h3 className="font-semibold text-text-primary">Thông tin người dùng</h3>
-        <button type="button"
+        <h3 className="font-semibold text-text-primary">
+          {t("profile:userProfile.title")}
+        </h3>
+        <button
+          type="button"
           onClick={onClose}
           className="p-1 rounded-full hover:bg-surface-overlay transition-colors"
-          aria-label="Đóng"
+          aria-label={t("common:actions.close")}
         >
           <XMarkIcon className="w-5 h-5 text-text-muted" />
         </button>
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        {/* Profile section */}
         <div className="flex flex-col items-center py-6 px-4">
           <Avatar
             src={user.avatar}
@@ -78,25 +83,27 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
         <div className="h-px bg-border mx-4" />
 
-        {/* Info items */}
         <div className="py-2">
           <div className="flex items-center gap-4 px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer">
             <UserIcon className="w-5 h-5 text-text-muted" />
             <div className="flex-1 min-w-0">
               <p className="text-sm text-text-primary">@{user.username}</p>
-              <p className="text-xs text-text-muted">Tên người dùng</p>
+              <p className="text-xs text-text-muted">
+                {t("profile:userProfile.usernameLabel")}
+              </p>
             </div>
           </div>
         </div>
 
         <div className="h-px bg-border mx-4" />
 
-        {/* Settings */}
         <div className="py-2">
           <div className="flex items-center justify-between px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer">
             <div className="flex items-center gap-4">
               <BellIcon className="w-5 h-5 text-text-muted" />
-              <span className="text-sm text-text-primary">Thông báo</span>
+              <span className="text-sm text-text-primary">
+                {t("profile:userProfile.notifications")}
+              </span>
             </div>
             <div className="w-10 h-6 bg-primary rounded-full relative">
               <div className="absolute right-1 top-1 w-4 h-4 bg-surface rounded-full shadow" />
@@ -106,12 +113,11 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
         <div className="h-px bg-border mx-4" />
 
-        {/* Media section */}
         <div className="py-2">
           <div className="flex items-center gap-4 px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer">
             <PhotoIcon className="w-5 h-5 text-text-muted" />
             <span className="text-sm text-text-primary">
-              Phương tiện, Tệp, Liên kết
+              {t("profile:userProfile.media")}
             </span>
             <span className="ml-auto text-sm text-text-muted">24</span>
           </div>
@@ -119,28 +125,33 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           <div className="flex items-center gap-4 px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer">
             <MagnifyingGlassIcon className="w-5 h-5 text-text-muted" />
             <span className="text-sm text-text-primary">
-              Tìm kiếm trong cuộc trò chuyện
+              {t("profile:userProfile.searchInConversation")}
             </span>
           </div>
         </div>
 
         <div className="h-px bg-border mx-4" />
 
-        {/* Danger zone */}
         <div className="py-2">
           <div className="flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors cursor-pointer">
             <NoSymbolIcon className="w-5 h-5 text-danger" />
-            <span className="text-sm text-danger">Chặn người dùng</span>
+            <span className="text-sm text-danger">
+              {t("profile:userProfile.blockUser")}
+            </span>
           </div>
 
           <div className="flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors cursor-pointer">
             <ExclamationTriangleIcon className="w-5 h-5 text-danger" />
-            <span className="text-sm text-danger">Báo cáo</span>
+            <span className="text-sm text-danger">
+              {t("profile:userProfile.report")}
+            </span>
           </div>
 
           <div className="flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors cursor-pointer">
             <TrashIcon className="w-5 h-5 text-danger" />
-            <span className="text-sm text-danger">Xóa cuộc trò chuyện</span>
+            <span className="text-sm text-danger">
+              {t("profile:userProfile.deleteConversation")}
+            </span>
           </div>
         </div>
       </div>
@@ -149,8 +160,3 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 };
 
 export default UserProfile;
-
-
-
-
-

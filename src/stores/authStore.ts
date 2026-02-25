@@ -19,6 +19,7 @@ import {
   requestServerLogout,
   runClientLogoutCleanup,
 } from "../services/authService";
+import i18n from "../i18n";
 
 export interface User {
   id: string;
@@ -158,7 +159,7 @@ export const useAuthStore = create<AuthState>()(
             const { accessToken, refreshToken } = resolveTokens(payload);
 
             if (!accessToken) {
-              throw new Error("Missing access token in login response");
+              throw new Error(i18n.t("error:auth.loginTokenMissing"));
             }
 
             storeTokens(accessToken, refreshToken ?? undefined, data.rememberMe);
@@ -173,7 +174,8 @@ export const useAuthStore = create<AuthState>()(
             });
           } catch (error: unknown) {
             const apiError = extractApiError(error);
-            const errorMessage = apiError.message || "Dang nhap that bai";
+            const errorMessage =
+              apiError.message || i18n.t("error:auth.loginFailed");
 
             set({
               isLoading: false,
@@ -200,7 +202,7 @@ export const useAuthStore = create<AuthState>()(
             const { accessToken, refreshToken } = resolveTokens(payload);
 
             if (!accessToken) {
-              throw new Error("Missing access token in register response");
+              throw new Error(i18n.t("error:auth.registerTokenMissing"));
             }
 
             storeTokens(accessToken, refreshToken ?? undefined, false);
@@ -215,7 +217,8 @@ export const useAuthStore = create<AuthState>()(
             });
           } catch (error: unknown) {
             const apiError = extractApiError(error);
-            const errorMessage = apiError.message || "Dang ky that bai";
+            const errorMessage =
+              apiError.message || i18n.t("error:auth.registerFailed");
             set({
               isLoading: false,
               error: errorMessage,
@@ -286,7 +289,8 @@ export const useAuthStore = create<AuthState>()(
             }
           } catch (error: unknown) {
             const apiError = extractApiError(error);
-            const errorMessage = apiError.message || "Cap nhat status that bai";
+            const errorMessage =
+              apiError.message || i18n.t("error:auth.statusUpdateFailed");
             throw new Error(errorMessage);
           }
         },

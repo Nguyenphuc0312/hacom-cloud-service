@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from "react";
+﻿import React, { useEffect, useRef } from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import {
   PhotoIcon,
   DocumentIcon,
@@ -15,53 +16,53 @@ interface AttachmentMenuProps {
   className?: string;
 }
 
-const attachmentTypes = [
-  {
-    id: "photo",
-    label: "Ảnh/Video",
-    icon: PhotoIcon,
-    color: "bg-primary/15 text-primary",
-  },
-  {
-    id: "document",
-    label: "Tài liệu",
-    icon: DocumentIcon,
-    color: "bg-secondary/15 text-secondary",
-  },
-  {
-    id: "location",
-    label: "Vị trí",
-    icon: MapPinIcon,
-    color: "bg-success/15 text-success",
-  },
-  {
-    id: "contact",
-    label: "Liên hệ",
-    icon: UserIcon,
-    color: "bg-warning/15 text-warning",
-  },
-  {
-    id: "audio",
-    label: "Âm thanh",
-    icon: MusicalNoteIcon,
-    color: "bg-accent/15 text-accent",
-  },
-  {
-    id: "poll",
-    label: "Khảo sát",
-    icon: ChartBarIcon,
-    color: "bg-danger/15 text-danger",
-  },
-];
-
 export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
   onSelect,
   onClose,
   className,
 }) => {
+  const { t } = useTranslation();
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close on click outside
+  const attachmentTypes = [
+    {
+      id: "photo",
+      label: t("chat:attachment.types.photo"),
+      icon: PhotoIcon,
+      color: "bg-primary/15 text-primary",
+    },
+    {
+      id: "document",
+      label: t("chat:attachment.types.document"),
+      icon: DocumentIcon,
+      color: "bg-secondary/15 text-secondary",
+    },
+    {
+      id: "location",
+      label: t("chat:attachment.types.location"),
+      icon: MapPinIcon,
+      color: "bg-success/15 text-success",
+    },
+    {
+      id: "contact",
+      label: t("chat:attachment.types.contact"),
+      icon: UserIcon,
+      color: "bg-warning/15 text-warning",
+    },
+    {
+      id: "audio",
+      label: t("chat:attachment.types.audio"),
+      icon: MusicalNoteIcon,
+      color: "bg-accent/15 text-accent",
+    },
+    {
+      id: "poll",
+      label: t("chat:attachment.types.poll"),
+      icon: ChartBarIcon,
+      color: "bg-danger/15 text-danger",
+    },
+  ];
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -102,4 +103,3 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
 };
 
 export default AttachmentMenu;
-

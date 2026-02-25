@@ -1,5 +1,6 @@
 ﻿import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import {
   ArrowLeftIcon,
   PhoneIcon,
@@ -38,6 +39,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onSearchClick,
   className,
 }) => {
+  const { t } = useTranslation();
   const otherUser = getOtherParticipant(conversation, currentUserId);
   const isOnline = otherUser?.status === "online";
   const isTyping = typingStatus?.isTyping;
@@ -48,22 +50,27 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     }
 
     if (conversation.type === "group") {
-      return `${conversation.participants?.length ?? 0} members`;
+      return t("chat:header.members", {
+        count: conversation.participants?.length ?? 0,
+      });
     }
 
     if (conversation.type === "channel") {
-      return "Channel";
+      return t("chat:header.channel");
     }
 
     if (otherUser) {
-      return isOnline ? "Online" : "Offline";
+      return isOnline ? t("common:status.online") : t("common:status.offline");
     }
 
     return "";
   };
 
   const displayName =
-    conversation.name || otherUser?.displayName || otherUser?.username || "Conversation";
+    conversation.name ||
+    otherUser?.displayName ||
+    otherUser?.username ||
+    t("common:labels.conversation");
 
   return (
     <div
@@ -77,7 +84,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           type="button"
           onClick={onBack}
           className={clsx(iconButtonClass, "lg:hidden")}
-          aria-label="Back"
+          aria-label={t("chat:header.back")}
         >
           <ArrowLeftIcon className="h-5 w-5" />
         </button>
@@ -87,7 +94,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         type="button"
         onClick={onInfoClick}
         className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-        aria-label="View conversation info"
+        aria-label={t("chat:header.viewInfo")}
       >
         <Avatar
           src={conversation.avatar}
@@ -120,7 +127,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             type="button"
             onClick={onCallClick}
             className={iconButtonClass}
-            aria-label="Voice call"
+            aria-label={t("chat:header.voiceCall")}
           >
             <PhoneIcon className="h-5 w-5" />
           </button>
@@ -131,7 +138,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             type="button"
             onClick={onVideoCallClick}
             className={iconButtonClass}
-            aria-label="Video call"
+            aria-label={t("chat:header.videoCall")}
           >
             <VideoCameraIcon className="h-5 w-5" />
           </button>
@@ -142,7 +149,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             type="button"
             onClick={onSearchClick}
             className={clsx(iconButtonClass, "hidden sm:inline-flex")}
-            aria-label="Search in chat"
+            aria-label={t("chat:header.searchInChat")}
           >
             <MagnifyingGlassIcon className="h-5 w-5" />
           </button>
@@ -152,7 +159,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           type="button"
           onClick={onInfoClick}
           className={iconButtonClass}
-          aria-label="Toggle info panel"
+          aria-label={t("chat:header.toggleInfoPanel")}
         >
           <InformationCircleIcon className="h-5 w-5" />
         </button>

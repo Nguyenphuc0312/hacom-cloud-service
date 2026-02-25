@@ -1,10 +1,6 @@
-/**
- * @fileoverview Image Preview Modal
- * Modal xem ảnh full screen
- */
-
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import {
   XMarkIcon,
   ArrowDownTrayIcon,
@@ -24,8 +20,9 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
   isOpen,
   onClose,
   imageUrl,
-  alt = "Image preview",
+  alt,
 }) => {
+  const { t } = useTranslation();
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -33,7 +30,8 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Handle zoom
+  const resolvedAlt = alt || t("profile:imagePreview.defaultAlt");
+
   const handleZoomIn = () => setScale((prev) => Math.min(prev + 0.25, 3));
   const handleZoomOut = () => setScale((prev) => Math.max(prev - 0.25, 0.5));
   const handleResetZoom = () => {
@@ -41,7 +39,6 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
     setPosition({ x: 0, y: 0 });
   };
 
-  // Handle download
   const handleDownload = async () => {
     try {
       const response = await fetch(imageUrl);
@@ -55,12 +52,10 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch {
-      // Fallback: open in new tab
       window.open(imageUrl, "_blank");
     }
   };
 
-  // Handle drag
   const handleMouseDown = (e: React.MouseEvent) => {
     if (scale > 1) {
       setIsDragging(true);
@@ -81,7 +76,6 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
     setIsDragging(false);
   };
 
-  // Handle wheel zoom
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     if (e.deltaY < 0) {
@@ -91,7 +85,6 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
     }
   };
 
-  // Handle keyboard
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       onClose();
@@ -111,11 +104,10 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
-      {/* Toolbar */}
       <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
         <IconButton
           icon={<MagnifyingGlassMinusIcon className="w-5 h-5" />}
-          aria-label="Zoom out"
+          aria-label={t("profile:imagePreview.zoomOut")}
           onClick={(e) => {
             e.stopPropagation();
             handleZoomOut();
@@ -137,7 +129,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
 
         <IconButton
           icon={<MagnifyingGlassPlusIcon className="w-5 h-5" />}
-          aria-label="Zoom in"
+          aria-label={t("profile:imagePreview.zoomIn")}
           onClick={(e) => {
             e.stopPropagation();
             handleZoomIn();
@@ -150,7 +142,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
 
         <IconButton
           icon={<ArrowDownTrayIcon className="w-5 h-5" />}
-          aria-label="Tải xuống"
+          aria-label={t("profile:imagePreview.download")}
           onClick={(e) => {
             e.stopPropagation();
             handleDownload();
@@ -161,14 +153,13 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
 
         <IconButton
           icon={<XMarkIcon className="w-5 h-5" />}
-          aria-label="Đóng"
+          aria-label={t("profile:imagePreview.close")}
           onClick={onClose}
           variant="ghost"
           className="text-text-inverse hover:bg-text-inverse/10"
         />
       </div>
 
-      {/* Image */}
       <div
         className={clsx(
           "relative max-w-full max-h-full overflow-hidden",
@@ -185,7 +176,7 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
       >
         <img
           src={imageUrl}
-          alt={alt}
+          alt={resolvedAlt}
           className="max-w-[90vw] max-h-[90vh] object-contain transition-transform duration-200"
           style={{
             transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
@@ -194,14 +185,11 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
         />
       </div>
 
-      {/* Instructions */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-text-inverse/60 text-sm">
-        Scroll để zoom • Double-click để reset • ESC để đóng
+        {t("profile:imagePreview.instructions")}
       </div>
     </div>
   );
 };
 
 export default ImagePreviewModal;
-
-

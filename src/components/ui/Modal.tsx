@@ -5,6 +5,7 @@
 
 import React, { useEffect, useCallback } from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { Button, IconButton } from "./Button";
 
@@ -43,6 +44,8 @@ export const Modal: React.FC<ModalProps> = ({
   className,
   contentClassName,
 }) => {
+  const { t } = useTranslation();
+
   const handleEsc = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "Escape" && closeOnEsc) {
@@ -107,7 +110,7 @@ export const Modal: React.FC<ModalProps> = ({
             {showCloseButton && (
               <IconButton
                 icon={<XMarkIcon className="h-5 w-5" />}
-                aria-label="Close"
+                aria-label={t("common:actions.close")}
                 onClick={onClose}
                 variant="ghost"
                 size="sm"
@@ -140,11 +143,15 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   title,
   message,
-  confirmText = "Confirm",
-  cancelText = "Cancel",
+  confirmText,
+  cancelText,
   variant = "danger",
   isLoading = false,
 }) => {
+  const { t } = useTranslation();
+  const resolvedConfirmText = confirmText ?? t("common:actions.confirm");
+  const resolvedCancelText = cancelText ?? t("common:actions.cancel");
+
   const variantStyles = {
     danger: {
       icon: "bg-danger/15 text-danger",
@@ -197,7 +204,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             disabled={isLoading}
             onClick={onClose}
           >
-            {cancelText}
+            {resolvedCancelText}
           </Button>
 
           <Button
@@ -208,7 +215,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             isLoading={isLoading}
             onClick={onConfirm}
           >
-            {confirmText}
+            {resolvedConfirmText}
           </Button>
         </div>
       </div>

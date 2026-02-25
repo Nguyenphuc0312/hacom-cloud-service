@@ -1,0 +1,43 @@
+﻿{
+  "header": {
+    "workspace": "Không gian",
+    "startNewChat": "Bắt đầu chat mới",
+    "expandSidebar": "Mở rộng thanh bên",
+    "collapseSidebar": "Thu gọn thanh bên"
+  },
+  "search": {
+    "placeholder": "Tìm kênh hoặc người dùng",
+    "aria": "Tìm kiếm cuộc trò chuyện",
+    "clearAria": "Xóa tìm kiếm"
+  },
+  "tabs": {
+    "all": "Tất cả",
+    "unread": "Chưa đọc",
+    "groups": "Nhóm",
+    "channels": "Kênh"
+  },
+  "room": {
+    "section": {
+      "unread": "Chưa đọc",
+      "channels": "Kênh",
+      "groups": "Nhóm",
+      "direct": "Tin nhắn trực tiếp"
+    },
+    "mentioned": "Được nhắc đến",
+    "noMessagesYet": "Chưa có tin nhắn",
+    "emptyBySearch": "Không có phòng phù hợp với tìm kiếm.",
+    "empty": "Không có cuộc trò chuyện nào.",
+    "listAria": "Danh sách cuộc trò chuyện"
+  },
+  "sidebar": {
+    "aria": "Thanh bên"
+  },
+  "logout": {
+    "button": "Đăng xuất",
+    "loading": "Đang đăng xuất...",
+    "confirmTitle": "Đăng xuất",
+    "confirmMessage": "Bạn cần đăng nhập lại để tiếp tục.",
+    "confirmText": "Đăng xuất",
+    "cancelText": "Hủy"
+  }
+}

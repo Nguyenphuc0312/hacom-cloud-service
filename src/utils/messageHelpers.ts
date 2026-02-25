@@ -6,6 +6,7 @@ import type {
 } from "../types";
 import { MessageType, MessageStatus } from "../types";
 import { isSameDay } from "./formatTime";
+import i18n from "../i18n";
 
 /**
  * Check if message is from current user.
@@ -94,22 +95,22 @@ export function getMessagePreview(
       preview = message.content;
       break;
     case MessageType.IMAGE:
-      preview = "Photo";
+      preview = i18n.t("chat:preview.photo");
       break;
     case MessageType.VIDEO:
-      preview = "Video";
+      preview = i18n.t("chat:preview.video");
       break;
     case MessageType.FILE:
-      preview = "File";
+      preview = i18n.t("chat:preview.file");
       break;
     case MessageType.VOICE:
-      preview = "Voice message";
+      preview = i18n.t("chat:preview.voice");
       break;
     case MessageType.LOCATION:
-      preview = "Location";
+      preview = i18n.t("chat:preview.location");
       break;
     case MessageType.STICKER:
-      preview = "Sticker";
+      preview = i18n.t("chat:preview.sticker");
       break;
     case MessageType.SYSTEM:
       return message.content;
@@ -151,7 +152,7 @@ export function getConversationDisplayName(
   currentUserId: string,
 ): string {
   if (conversation.type !== "private" && conversation.type !== "direct") {
-    return conversation.name || "Conversation";
+    return conversation.name || i18n.t("common:labels.conversation");
   }
 
   const otherParticipant = (conversation.participants || []).find(
@@ -162,7 +163,7 @@ export function getConversationDisplayName(
     otherParticipant?.displayName ||
     otherParticipant?.username ||
     conversation.name ||
-    "Conversation"
+    i18n.t("common:labels.conversation")
   );
 }
 

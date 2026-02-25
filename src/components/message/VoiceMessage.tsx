@@ -1,5 +1,6 @@
-import React, { useState, useRef, useMemo } from "react";
+﻿import React, { useState, useRef, useMemo } from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { PlayIcon, PauseIcon } from "@heroicons/react/24/solid";
 import type { Attachment } from "../../types";
 import { formatDuration } from "../../utils/formatTime";
@@ -20,6 +21,7 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
   isOwn,
   className,
 }) => {
+  const { t } = useTranslation();
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -91,7 +93,7 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
             ? "bg-surface/25 text-text-inverse hover:bg-surface/35"
             : "bg-primary text-text-inverse hover:bg-secondary",
         )}
-        aria-label={isPlaying ? "Pause" : "Play"}
+        aria-label={isPlaying ? t("chat:voice.pause") : t("chat:voice.play")}
       >
         {isPlaying ? (
           <PauseIcon className="h-5 w-5" />
@@ -105,7 +107,7 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
           className="relative flex h-8 cursor-pointer items-center gap-1"
           onClick={handleSeek}
           role="slider"
-          aria-label="Audio progress"
+          aria-label={t("chat:voice.progress")}
           aria-valuenow={progress}
           aria-valuemin={0}
           aria-valuemax={100}
@@ -144,4 +146,3 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
 };
 
 export default VoiceMessage;
-

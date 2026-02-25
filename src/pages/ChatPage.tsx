@@ -6,6 +6,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Sidebar } from "../components/layout/Sidebar";
 import { ChatWindow } from "../components/layout/ChatWindow";
@@ -30,6 +31,7 @@ import { ErrorCode } from "@hacom/chat-shared-types";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 
 export const ChatPage: React.FC = () => {
+  const { t } = useTranslation();
   const { conversationId } = useParams<{ conversationId?: string }>();
   const navigate = useNavigate();
 
@@ -147,9 +149,9 @@ export const ChatPage: React.FC = () => {
         ]);
 
         if (roomInvalidCodes.has(code)) {
-          toast.error("Khong the truy cap cuoc tro chuyen nay");
+          toast.error(t("error:chat.conversationAccessDenied"));
         } else {
-          toast.error(apiError.message || "Khong the mo cuoc tro chuyen");
+          toast.error(apiError.message || t("error:chat.conversationOpenFailed"));
         }
 
         selectConversation(null);
@@ -241,7 +243,7 @@ export const ChatPage: React.FC = () => {
           replyTo?.id,
         );
       } catch {
-        toast.error("Khong the gui tin nhan. Vui long thu lai.");
+        toast.error(t("error:chat.sendFailed"));
       }
     },
     [selectedConversationId, storeSendMessage],
@@ -313,7 +315,7 @@ export const ChatPage: React.FC = () => {
         const payload = unwrapApiSuccess(response);
         const roomId = payload.id;
         if (!roomId) {
-          throw new Error("Missing room id");
+          throw new Error(t("error:chat.roomIdMissing"));
         }
 
         // Refresh list to get full room shape (participants, display fields...)
@@ -348,7 +350,7 @@ export const ChatPage: React.FC = () => {
         }
 
         console.error("Create direct room failed:", apiError);
-        toast.error(apiError.message || "Khong the bat dau cuoc tro chuyen");
+        toast.error(apiError.message || t("error:chat.startConversationFailed"));
       } finally {
         roomCreationLockRef.current = false;
         setIsCreatingRoom(false);
@@ -376,7 +378,7 @@ export const ChatPage: React.FC = () => {
         const roomPayload = unwrapApiSuccess(response);
         const roomId = roomPayload.id;
         if (!roomId) {
-          throw new Error("Missing room id");
+          throw new Error(t("error:chat.roomIdMissing"));
         }
 
         fetchConversations().catch((error) => {
@@ -387,7 +389,7 @@ export const ChatPage: React.FC = () => {
       } catch (error) {
         const apiError = extractApiError(error);
         console.error("Create group room failed:", apiError);
-        toast.error(apiError.message || "Khong the tao nhom moi");
+        toast.error(apiError.message || t("error:chat.createGroupFailed"));
       } finally {
         roomCreationLockRef.current = false;
         setIsCreatingRoom(false);
@@ -425,7 +427,7 @@ export const ChatPage: React.FC = () => {
           role="status"
           aria-live="polite"
         >
-          Đang kết nối lại...
+          {t("chat:toast.connectionReconnecting")}
         </div>
       )}
 
@@ -453,7 +455,7 @@ export const ChatPage: React.FC = () => {
           type="button"
           className="fixed inset-0 z-20 bg-text-primary/40 lg:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
-          aria-label="Đóng danh sách cuộc trò chuyện"
+          aria-label={t("common:actions.close")}
         />
       )}
 

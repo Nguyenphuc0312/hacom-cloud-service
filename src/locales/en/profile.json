@@ -1,0 +1,76 @@
+﻿{
+  "userProfile": {
+    "title": "User information",
+    "usernameLabel": "Username",
+    "notifications": "Notifications",
+    "media": "Media, Files, Links",
+    "searchInConversation": "Search in conversation",
+    "blockUser": "Block user",
+    "report": "Report",
+    "deleteConversation": "Delete conversation"
+  },
+  "groupInfo": {
+    "title": "Group information",
+    "membersCount": "{{count}} members",
+    "notifications": "Notifications",
+    "tabs": {
+      "members": "Members",
+      "media": "Media",
+      "files": "Files"
+    },
+    "addMember": "Add member",
+    "searchMemberPlaceholder": "Search members...",
+    "noSearchResult": "No matching result",
+    "youSuffix": "(You)",
+    "viewAllMedia": "View all media",
+    "noSharedFiles": "No shared files",
+    "reportGroup": "Report group",
+    "leaveGroup": "Leave group",
+    "leaveConfirm": "Are you sure you want to leave this group?"
+  },
+  "newChatModal": {
+    "title": "New conversation",
+    "descriptionDirect": "Search users to start chatting",
+    "descriptionGroup": "Select members to create a group",
+    "directMessage": "Direct message",
+    "createGroup": "Create group",
+    "searchPlaceholder": "Search by name or username...",
+    "groupNamePlaceholder": "Enter group name...",
+    "searchMinChars": "Type at least {{count}} characters to search",
+    "createGroupButton": "Create group ({{count}} users)"
+  },
+  "editProfileModal": {
+    "title": "Edit profile",
+    "changeAvatarHint": "Click to change avatar",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "phone": "Phone number",
+    "bio": "Bio",
+    "bioPlaceholder": "Write a few lines about yourself...",
+    "bioHint": "Up to {{count}} characters",
+    "cancel": "Cancel",
+    "save": "Save changes",
+    "phonePlaceholder": "+84 912 345 678"
+  },
+  "imagePreview": {
+    "defaultAlt": "Image preview",
+    "zoomOut": "Zoom out",
+    "zoomIn": "Zoom in",
+    "download": "Download",
+    "close": "Close",
+    "instructions": "Scroll to zoom • Double-click to reset • ESC to close"
+  },
+  "toast": {
+    "searchUsersFailed": "Unable to search users",
+    "selectAtLeastOneMember": "Select at least one user to create a group",
+    "groupNameRequired": "Please enter a group name",
+    "avatarFileRequired": "Please choose an image file",
+    "avatarMaxSize": "Image size must not exceed 5MB",
+    "profileUpdateSuccess": "Profile updated successfully!",
+    "profileUpdateFailed": "Profile update failed",
+    "memberAdded": "Member added to group",
+    "memberAddFailed": "Unable to add member",
+    "leftGroup": "Left group",
+    "leaveGroupFailed": "Unable to leave group right now"
+  }
+}

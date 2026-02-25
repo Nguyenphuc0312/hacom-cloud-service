@@ -1,5 +1,6 @@
-import React, { useMemo } from "react";
+﻿import React, { useMemo } from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import {
   AtSymbolIcon,
   BookmarkIcon,
@@ -32,12 +33,13 @@ const getDirectPartner = (
 const getDisplayName = (
   conversation: Conversation,
   currentUser: UserSummary,
+  fallbackName: string,
 ): string => {
   if (
     conversation.type !== RoomType.PRIVATE &&
     conversation.type !== RoomType.DIRECT
   ) {
-    return conversation.name || "Conversation";
+    return conversation.name || fallbackName;
   }
 
   const directPartner = getDirectPartner(conversation, currentUser.id);
@@ -45,7 +47,7 @@ const getDisplayName = (
     directPartner?.displayName ||
     directPartner?.username ||
     conversation.name ||
-    "Conversation"
+    fallbackName
   );
 };
 
@@ -92,13 +94,16 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
   isKeyboardActive,
   onSelect,
 }) => {
+  const { t } = useTranslation();
+  const fallbackConversationName = t("common:labels.conversation");
+
   const directPartner = useMemo(
     () => getDirectPartner(conversation, currentUser.id),
     [conversation, currentUser.id],
   );
   const displayName = useMemo(
-    () => getDisplayName(conversation, currentUser),
-    [conversation, currentUser],
+    () => getDisplayName(conversation, currentUser, fallbackConversationName),
+    [conversation, currentUser, fallbackConversationName],
   );
   const previewText = useMemo(
     () => getMessagePreview(conversation.lastMessage, currentUser.id, 44),
@@ -209,7 +214,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
             {unreadMention && (
               <AtSymbolIcon
                 className="h-4 w-4 shrink-0 text-danger"
-                aria-label="Mentioned"
+                aria-label={t("sidebar:room.mentioned")}
               />
             )}
           </div>
@@ -220,7 +225,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
               unreadCount > 0 ? "font-medium text-text-secondary" : "text-text-muted",
             )}
           >
-            {previewText || "No messages yet"}
+            {previewText || t("sidebar:room.noMessagesYet")}
           </p>
         </div>
 
@@ -269,4 +274,3 @@ export const RoomItem = React.memo(
 );
 
 export default RoomItem;
-

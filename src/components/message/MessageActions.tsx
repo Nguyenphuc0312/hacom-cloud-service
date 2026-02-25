@@ -1,5 +1,6 @@
 ﻿import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import {
   ArrowUturnLeftIcon,
   ArrowUturnRightIcon,
@@ -31,32 +32,41 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
   onClose,
   className,
 }) => {
+  const { t } = useTranslation();
+
   const actions = [
     {
       id: "reply",
       icon: ArrowUturnLeftIcon,
-      label: "Reply",
+      label: t("chat:message.actions.reply"),
       onClick: onReply,
     },
     {
       id: "forward",
       icon: ArrowUturnRightIcon,
-      label: "Forward",
+      label: t("chat:message.actions.forward"),
       onClick: onForward,
     },
     {
       id: "copy",
       icon: ClipboardDocumentIcon,
-      label: "Copy",
+      label: t("chat:message.actions.copy"),
       onClick: onCopy,
     },
     ...(isOwn && onEdit
-      ? [{ id: "edit", icon: PencilIcon, label: "Edit", onClick: onEdit }]
+      ? [
+          {
+            id: "edit",
+            icon: PencilIcon,
+            label: t("chat:message.actions.edit"),
+            onClick: onEdit,
+          },
+        ]
       : []),
     {
       id: "delete",
       icon: TrashIcon,
-      label: "Delete",
+      label: t("chat:message.actions.delete"),
       onClick: onDelete,
       danger: true,
     },

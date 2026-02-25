@@ -1,5 +1,6 @@
-import React, { useState, useCallback, useEffect } from "react";
+﻿import React, { useState, useCallback, useEffect } from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import {
   MagnifyingGlassIcon,
   UserPlusIcon,
@@ -41,6 +42,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
   onCreateGroup,
   isSubmitting: externalSubmitting = false,
 }) => {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -74,12 +76,12 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
       setUsers(normalizedUsers);
     } catch (error) {
       const apiError = extractApiError(error);
-      toast.error(apiError.message || "Khong the tim kiem nguoi dung");
+      toast.error(apiError.message || t("profile:toast.searchUsersFailed"));
       setUsers([]);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     searchUsers(debouncedQuery);
@@ -122,13 +124,13 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
 
   const handleCreateGroup = async () => {
     if (selectedUsers.length < 1) {
-      toast.error("Chon it nhat 1 nguoi de tao nhom");
+      toast.error(t("profile:toast.selectAtLeastOneMember"));
       return;
     }
 
     const name = groupName.trim();
     if (!name) {
-      toast.error("Vui long nhap ten nhom");
+      toast.error(t("profile:toast.groupNameRequired"));
       return;
     }
 
@@ -157,17 +159,18 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Cuoc tro chuyen moi"
+      title={t("profile:newChatModal.title")}
       description={
         isGroupMode
-          ? "Chon thanh vien de tao nhom"
-          : "Tim kiem nguoi dung de bat dau tro chuyen"
+          ? t("profile:newChatModal.descriptionGroup")
+          : t("profile:newChatModal.descriptionDirect")
       }
       size="md"
     >
       <div className="space-y-4">
         <div className="flex gap-2">
-          <button type="button"
+          <button
+            type="button"
             onClick={() => setIsGroupMode(false)}
             disabled={isBusy}
             className={clsx(
@@ -178,9 +181,10 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             )}
           >
             <UserPlusIcon className="w-5 h-5" />
-            Tin nhan truc tiep
+            {t("profile:newChatModal.directMessage")}
           </button>
-          <button type="button"
+          <button
+            type="button"
             onClick={() => setIsGroupMode(true)}
             disabled={isBusy}
             className={clsx(
@@ -191,13 +195,13 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             )}
           >
             <UserGroupIcon className="w-5 h-5" />
-            Tao nhom
+            {t("profile:newChatModal.createGroup")}
           </button>
         </div>
 
         <Input
           type="text"
-          placeholder="Tim kiem theo ten hoac username..."
+          placeholder={t("profile:newChatModal.searchPlaceholder")}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           leftIcon={<MagnifyingGlassIcon className="w-5 h-5" />}
@@ -208,7 +212,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
         {isGroupMode && (
           <Input
             type="text"
-            placeholder="Nhap ten nhom..."
+            placeholder={t("profile:newChatModal.groupNamePlaceholder")}
             value={groupName}
             onChange={(e) => setGroupName(e.target.value)}
             disabled={isBusy}
@@ -223,7 +227,8 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                 className="flex items-center gap-2 px-3 py-2 bg-primary/15 text-primary rounded-full text-sm"
               >
                 <span>{getDisplayName(user)}</span>
-                <button type="button"
+                <button
+                  type="button"
                   onClick={() =>
                     setSelectedUsers((prev) =>
                       prev.filter((u) => u.id !== user.id),
@@ -245,7 +250,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             </div>
           ) : searchQuery.length > 0 && searchQuery.length < 2 ? (
             <p className="text-center text-text-muted py-8 text-sm">
-              Nhap it nhat 2 ky tu de tim kiem
+              {t("profile:newChatModal.searchMinChars", { count: 2 })}
             </p>
           ) : users.length === 0 && debouncedQuery.length >= 2 ? (
             <EmptySearchResults query={debouncedQuery} />
@@ -255,7 +260,8 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                 const isSelected = selectedUsers.some((u) => u.id === user.id);
                 const isPending = pendingUserId === user.id;
                 return (
-                  <button type="button"
+                  <button
+                    type="button"
                     key={user.id}
                     onClick={() => void handleUserClick(user)}
                     disabled={isBusy}
@@ -325,7 +331,9 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             isLoading={isBusy}
             disabled={isBusy}
           >
-            Tao nhom ({selectedUsers.length} nguoi)
+            {t("profile:newChatModal.createGroupButton", {
+              count: selectedUsers.length,
+            })}
           </Button>
         )}
       </div>
@@ -334,6 +342,3 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
 };
 
 export default NewChatModal;
-
-
-

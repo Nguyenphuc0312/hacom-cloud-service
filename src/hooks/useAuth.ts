@@ -3,6 +3,7 @@
  */
 
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores";
 import type { User } from "../stores";
@@ -26,6 +27,7 @@ export interface UseAuthReturn {
 }
 
 export const useAuth = (): UseAuthReturn => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const {
     user,
@@ -59,13 +61,17 @@ export const useAuth = (): UseAuthReturn => {
     async (status: User["status"]) => {
       try {
         await storeUpdateStatus(status);
-        toast.success(`Da cap nhat trang thai: ${getStatusLabel(status)}`);
+        toast.success(
+          t("chat:toast.statusUpdated", {
+            status: getStatusLabel(status, t),
+          }),
+        );
       } catch (err) {
         toast.error((err as Error).message);
         throw err;
       }
     },
-    [storeUpdateStatus],
+    [storeUpdateStatus, t],
   );
 
   return {
@@ -81,14 +87,18 @@ export const useAuth = (): UseAuthReturn => {
   };
 };
 
-const getStatusLabel = (status: User["status"]): string => {
-  const labels: Record<User["status"], string> = {
-    online: "Truc tuyen",
-    offline: "Ngoai tuyen",
-    away: "Vang mat",
-    dnd: "Khong lam phien",
+const getStatusLabel = (
+  status: User["status"],
+  t: (key: string) => string,
+): string => {
+  const labelMap: Record<User["status"], string> = {
+    online: "common:status.online",
+    offline: "common:status.offline",
+    away: "common:status.away",
+    dnd: "common:status.dnd",
   };
-  return labels[status];
+
+  return t(labelMap[status]);
 };
 
 export default useAuth;

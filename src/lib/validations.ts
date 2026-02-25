@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import { VALIDATION_CONFIG } from "../config";
+import i18n from "../i18n";
 
 // ============================================
 // AUTH SCHEMAS
@@ -16,14 +17,16 @@ import { VALIDATION_CONFIG } from "../config";
 export const loginSchema = z.object({
   email: z
     .string()
-    .min(1, "Email không được để trống")
-    .email("Email không hợp lệ"),
+    .min(1, i18n.t("validation:auth.emailRequired"))
+    .email(i18n.t("validation:auth.emailInvalid")),
   password: z
     .string()
-    .min(1, "Mật khẩu không được để trống")
+    .min(1, i18n.t("validation:auth.passwordRequired"))
     .min(
       VALIDATION_CONFIG.PASSWORD_MIN_LENGTH,
-      `Mật khẩu phải có ít nhất ${VALIDATION_CONFIG.PASSWORD_MIN_LENGTH} ký tự`,
+      i18n.t("validation:auth.passwordMin", {
+        count: VALIDATION_CONFIG.PASSWORD_MIN_LENGTH,
+      }),
     ),
   rememberMe: z.boolean().optional().default(false),
 });
@@ -37,47 +40,57 @@ export const registerSchema = z
   .object({
     username: z
       .string()
-      .min(1, "Tên người dùng không được để trống")
+      .min(1, i18n.t("validation:register.usernameRequired"))
       .min(
         VALIDATION_CONFIG.USERNAME_MIN_LENGTH,
-        `Tên người dùng phải có ít nhất ${VALIDATION_CONFIG.USERNAME_MIN_LENGTH} ký tự`,
+        i18n.t("validation:register.usernameMin", {
+          count: VALIDATION_CONFIG.USERNAME_MIN_LENGTH,
+        }),
       )
       .max(
         VALIDATION_CONFIG.USERNAME_MAX_LENGTH,
-        `Tên người dùng không được quá ${VALIDATION_CONFIG.USERNAME_MAX_LENGTH} ký tự`,
+        i18n.t("validation:register.usernameMax", {
+          count: VALIDATION_CONFIG.USERNAME_MAX_LENGTH,
+        }),
       )
       .regex(
         /^[a-zA-Z0-9_]+$/,
-        "Tên người dùng chỉ được chứa chữ cái, số và dấu gạch dưới",
+        i18n.t("validation:register.usernamePattern"),
       ),
     email: z
       .string()
-      .min(1, "Email không được để trống")
-      .email("Email không hợp lệ"),
+      .min(1, i18n.t("validation:auth.emailRequired"))
+      .email(i18n.t("validation:auth.emailInvalid")),
     password: z
       .string()
-      .min(1, "Mật khẩu không được để trống")
+      .min(1, i18n.t("validation:auth.passwordRequired"))
       .min(
         VALIDATION_CONFIG.PASSWORD_MIN_LENGTH,
-        `Mật khẩu phải có ít nhất ${VALIDATION_CONFIG.PASSWORD_MIN_LENGTH} ký tự`,
+        i18n.t("validation:auth.passwordMin", {
+          count: VALIDATION_CONFIG.PASSWORD_MIN_LENGTH,
+        }),
       )
       .max(
         VALIDATION_CONFIG.PASSWORD_MAX_LENGTH,
-        `Mật khẩu không được quá ${VALIDATION_CONFIG.PASSWORD_MAX_LENGTH} ký tự`,
+        i18n.t("validation:auth.passwordMax", {
+          count: VALIDATION_CONFIG.PASSWORD_MAX_LENGTH,
+        }),
       )
       .regex(
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-        "Mật khẩu phải chứa ít nhất 1 chữ thường, 1 chữ hoa và 1 số",
+        i18n.t("validation:auth.passwordComplexity"),
       ),
-    confirmPassword: z.string().min(1, "Xác nhận mật khẩu không được để trống"),
+    confirmPassword: z
+      .string()
+      .min(1, i18n.t("validation:auth.confirmPasswordRequired")),
     firstName: z.string().optional(),
     lastName: z.string().optional(),
     acceptTerms: z.literal(true, {
-      errorMap: () => ({ message: "Bạn phải đồng ý với điều khoản sử dụng" }),
+      errorMap: () => ({ message: i18n.t("validation:auth.acceptTerms") }),
     }),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "Mật khẩu xác nhận không khớp",
+    message: i18n.t("validation:auth.confirmPasswordMismatch"),
     path: ["confirmPassword"],
   });
 
@@ -89,8 +102,8 @@ export type RegisterFormData = z.infer<typeof registerSchema>;
 export const forgotPasswordSchema = z.object({
   email: z
     .string()
-    .min(1, "Email không được để trống")
-    .email("Email không hợp lệ"),
+    .min(1, i18n.t("validation:auth.emailRequired"))
+    .email(i18n.t("validation:auth.emailInvalid")),
 });
 
 export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
@@ -102,19 +115,23 @@ export const resetPasswordSchema = z
   .object({
     password: z
       .string()
-      .min(1, "Mật khẩu không được để trống")
+      .min(1, i18n.t("validation:auth.passwordRequired"))
       .min(
         VALIDATION_CONFIG.PASSWORD_MIN_LENGTH,
-        `Mật khẩu phải có ít nhất ${VALIDATION_CONFIG.PASSWORD_MIN_LENGTH} ký tự`,
+        i18n.t("validation:auth.passwordMin", {
+          count: VALIDATION_CONFIG.PASSWORD_MIN_LENGTH,
+        }),
       )
       .regex(
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-        "Mật khẩu phải chứa ít nhất 1 chữ thường, 1 chữ hoa và 1 số",
+        i18n.t("validation:auth.passwordComplexity"),
       ),
-    confirmPassword: z.string().min(1, "Xác nhận mật khẩu không được để trống"),
+    confirmPassword: z
+      .string()
+      .min(1, i18n.t("validation:auth.confirmPasswordRequired")),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "Mật khẩu xác nhận không khớp",
+    message: i18n.t("validation:auth.confirmPasswordMismatch"),
     path: ["confirmPassword"],
   });
 
@@ -134,12 +151,14 @@ export const updateProfileSchema = z.object({
     .string()
     .max(
       VALIDATION_CONFIG.BIO_MAX_LENGTH,
-      `Bio không được quá ${VALIDATION_CONFIG.BIO_MAX_LENGTH} ký tự`,
+      i18n.t("validation:profile.bioMax", {
+        count: VALIDATION_CONFIG.BIO_MAX_LENGTH,
+      }),
     )
     .optional(),
   phone: z
     .string()
-    .regex(/^\+?[0-9]{10,15}$/, "Số điện thoại không hợp lệ")
+    .regex(/^\+?[0-9]{10,15}$/, i18n.t("validation:profile.phoneInvalid"))
     .optional()
     .or(z.literal("")),
 });
@@ -151,26 +170,32 @@ export type UpdateProfileFormData = z.infer<typeof updateProfileSchema>;
  */
 export const changePasswordSchema = z
   .object({
-    currentPassword: z.string().min(1, "Mật khẩu hiện tại không được để trống"),
+    currentPassword: z
+      .string()
+      .min(1, i18n.t("validation:password.currentRequired")),
     newPassword: z
       .string()
-      .min(1, "Mật khẩu mới không được để trống")
+      .min(1, i18n.t("validation:password.newRequired"))
       .min(
         VALIDATION_CONFIG.PASSWORD_MIN_LENGTH,
-        `Mật khẩu phải có ít nhất ${VALIDATION_CONFIG.PASSWORD_MIN_LENGTH} ký tự`,
+        i18n.t("validation:auth.passwordMin", {
+          count: VALIDATION_CONFIG.PASSWORD_MIN_LENGTH,
+        }),
       )
       .regex(
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-        "Mật khẩu phải chứa ít nhất 1 chữ thường, 1 chữ hoa và 1 số",
+        i18n.t("validation:auth.passwordComplexity"),
       ),
-    confirmPassword: z.string().min(1, "Xác nhận mật khẩu không được để trống"),
+    confirmPassword: z
+      .string()
+      .min(1, i18n.t("validation:auth.confirmPasswordRequired")),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
-    message: "Mật khẩu xác nhận không khớp",
+    message: i18n.t("validation:auth.confirmPasswordMismatch"),
     path: ["confirmPassword"],
   })
   .refine((data) => data.currentPassword !== data.newPassword, {
-    message: "Mật khẩu mới phải khác mật khẩu hiện tại",
+    message: i18n.t("validation:password.mustBeDifferent"),
     path: ["newPassword"],
   });
 
@@ -186,14 +211,17 @@ export type ChangePasswordFormData = z.infer<typeof changePasswordSchema>;
 export const createRoomSchema = z.object({
   name: z
     .string()
-    .min(1, "Tên nhóm không được để trống")
-    .min(2, "Tên nhóm phải có ít nhất 2 ký tự")
-    .max(100, "Tên nhóm không được quá 100 ký tự"),
-  description: z.string().max(500, "Mô tả không được quá 500 ký tự").optional(),
+    .min(1, i18n.t("validation:room.nameRequired"))
+    .min(2, i18n.t("validation:room.nameMin"))
+    .max(100, i18n.t("validation:room.nameMax")),
+  description: z
+    .string()
+    .max(500, i18n.t("validation:room.descriptionMax"))
+    .optional(),
   memberIds: z
     .array(z.string())
-    .min(1, "Phải chọn ít nhất 1 thành viên")
-    .max(199, "Nhóm không được quá 200 thành viên"),
+    .min(1, i18n.t("validation:room.memberMin"))
+    .max(199, i18n.t("validation:room.memberMax")),
 });
 
 export type CreateRoomFormData = z.infer<typeof createRoomSchema>;
@@ -208,10 +236,12 @@ export type CreateRoomFormData = z.infer<typeof createRoomSchema>;
 export const sendMessageSchema = z.object({
   content: z
     .string()
-    .min(1, "Tin nhắn không được để trống")
+    .min(1, i18n.t("validation:message.contentRequired"))
     .max(
       VALIDATION_CONFIG.MESSAGE_MAX_LENGTH,
-      `Tin nhắn không được quá ${VALIDATION_CONFIG.MESSAGE_MAX_LENGTH} ký tự`,
+      i18n.t("validation:message.contentMax", {
+        count: VALIDATION_CONFIG.MESSAGE_MAX_LENGTH,
+      }),
     ),
 });
 

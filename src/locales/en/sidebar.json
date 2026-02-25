@@ -1,0 +1,43 @@
+﻿{
+  "header": {
+    "workspace": "Workspace",
+    "startNewChat": "Start new chat",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar"
+  },
+  "search": {
+    "placeholder": "Search channels or people",
+    "aria": "Search conversations",
+    "clearAria": "Clear search"
+  },
+  "tabs": {
+    "all": "All",
+    "unread": "Unread",
+    "groups": "Groups",
+    "channels": "Channels"
+  },
+  "room": {
+    "section": {
+      "unread": "Unread",
+      "channels": "Channels",
+      "groups": "Groups",
+      "direct": "Direct messages"
+    },
+    "mentioned": "Mentioned",
+    "noMessagesYet": "No messages yet",
+    "emptyBySearch": "No room matches your search.",
+    "empty": "No conversations available.",
+    "listAria": "Conversation list"
+  },
+  "sidebar": {
+    "aria": "Sidebar"
+  },
+  "logout": {
+    "button": "Sign out",
+    "loading": "Signing out...",
+    "confirmTitle": "Sign out",
+    "confirmMessage": "You need to sign in again to continue.",
+    "confirmText": "Sign out",
+    "cancelText": "Cancel"
+  }
+}

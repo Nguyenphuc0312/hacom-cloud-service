@@ -1,13 +1,9 @@
-/**
- * @fileoverview Register Page - Fully Responsive
- * Fix: scroll đúng ở 125% display scaling, mọi màn hình & tỉ lệ
- */
-
-import React, { useEffect, useState, useCallback } from "react";
+﻿import React, { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import {
   EnvelopeIcon,
   LockClosedIcon,
@@ -28,8 +24,6 @@ import type { RegisterFormData } from "../lib/validations";
 import { useAuthStore } from "../stores";
 import apiClient from "../lib/axios";
 
-/* ─── Debounce Hook ─── */
-
 const useDebounce = <T,>(value: T, delay: number): T => {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
   useEffect(() => {
@@ -39,9 +33,8 @@ const useDebounce = <T,>(value: T, delay: number): T => {
   return debouncedValue;
 };
 
-/* ─── Main Page ─── */
-
 export const RegisterPage: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const {
     register: registerUser,
@@ -93,38 +86,41 @@ export const RegisterPage: React.FC = () => {
     setFocus("username");
   }, [setFocus]);
 
-  const checkUsername = useCallback(async (value: string) => {
-    if (!value || value.length < 3) {
-      setUsernameStatus({ checking: false, available: null, message: "" });
-      return;
-    }
-    if (!/^[a-zA-Z0-9_]+$/.test(value)) {
+  const checkUsername = useCallback(
+    async (value: string) => {
+      if (!value || value.length < 3) {
+        setUsernameStatus({ checking: false, available: null, message: "" });
+        return;
+      }
+      if (!/^[a-zA-Z0-9_]+$/.test(value)) {
+        setUsernameStatus({
+          checking: false,
+          available: false,
+          message: t("auth:username.invalid"),
+        });
+        return;
+      }
       setUsernameStatus({
-        checking: false,
-        available: false,
-        message: "Chỉ được dùng chữ cái, số và dấu gạch dưới",
+        checking: true,
+        available: null,
+        message: t("auth:username.checking"),
       });
-      return;
-    }
-    setUsernameStatus({
-      checking: true,
-      available: null,
-      message: "Đang kiểm tra...",
-    });
-    try {
-      const response = await apiClient.get(`/users/check-username/${value}`);
-      const isAvailable = response.data.data?.available ?? true;
-      setUsernameStatus({
-        checking: false,
-        available: isAvailable,
-        message: isAvailable
-          ? "Tên người dùng khả dụng"
-          : "Tên người dùng đã tồn tại",
-      });
-    } catch {
-      setUsernameStatus({ checking: false, available: true, message: "" });
-    }
-  }, []);
+      try {
+        const response = await apiClient.get(`/users/check-username/${value}`);
+        const isAvailable = response.data.data?.available ?? true;
+        setUsernameStatus({
+          checking: false,
+          available: isAvailable,
+          message: isAvailable
+            ? t("auth:username.available")
+            : t("auth:username.taken"),
+        });
+      } catch {
+        setUsernameStatus({ checking: false, available: true, message: "" });
+      }
+    },
+    [t],
+  );
 
   useEffect(() => {
     checkUsername(debouncedUsername);
@@ -132,7 +128,7 @@ export const RegisterPage: React.FC = () => {
 
   const onSubmit = async (data: RegisterFormData) => {
     if (usernameStatus.available === false) {
-      toast.error("Tên người dùng đã tồn tại");
+      toast.error(t("auth:username.taken"));
       return;
     }
     try {
@@ -143,34 +139,24 @@ export const RegisterPage: React.FC = () => {
         firstName: data.firstName,
         lastName: data.lastName,
       });
-      toast.success("Đăng ký thành công! Chào mừng bạn đến với Hacom Chat");
+      toast.success(t("auth:toast.registerSuccess"));
       navigate("/chat", { replace: true });
     } catch (err) {
-      toast.error((err as Error).message ?? "Đăng ký thất bại");
+      toast.error((err as Error).message ?? t("auth:toast.registerFailed"));
     }
   };
 
   return (
-    /**
-     * ROOT WRAPPER — fix 125% zoom scroll (xem giải thích chi tiết ở LoginPage)
-     *
-     * grid + place-items-center + [min-height:100dvh] + overflow-y-auto
-     * = căn giữa khi đủ chỗ, scroll tự nhiên khi không đủ chỗ.
-     *
-     * RegisterPage đặc biệt cần fix này vì form dài hơn LoginPage nhiều,
-     * rất dễ bị clip ở 125% zoom trên màn 768px–900px.
-     */
     <div
       className={clsx(
         "relative isolate",
-        "grid place-items-center", // căn giữa cả x & y
-        "[min-height:100dvh]", // row mở rộng, không bị clip
-        "overflow-y-auto", // scroll khi zoom lớn / form dài
+        "grid place-items-center",
+        "[min-height:100dvh]",
+        "overflow-y-auto",
         "bg-gradient-to-br from-primary/10 via-background to-secondary/10",
         "px-4 py-8 sm:py-10",
       )}
     >
-      {/* Decoration blobs */}
       <div
         aria-hidden="true"
         className="absolute inset-0 overflow-hidden pointer-events-none"
@@ -179,33 +165,28 @@ export const RegisterPage: React.FC = () => {
         <div className="absolute -bottom-40 -right-40 w-64 h-64 sm:w-80 sm:h-80 lg:w-96 lg:h-96 bg-primary/10 rounded-full blur-3xl" />
       </div>
 
-      {/* Card container */}
       <div className="relative z-10 w-full mx-auto max-w-sm xs:max-w-sm sm:max-w-lg lg:max-w-xl">
-        {/* White card */}
         <section
-          aria-label="Đăng ký tài khoản"
+          aria-label={t("auth:register.aria.section")}
           className="bg-surface rounded-2xl shadow-xl border border-border animate-fade-in p-5 xs:p-6 sm:p-8 lg:p-10"
         >
-          {/* Header */}
           <header className="text-center mb-5 sm:mb-6 lg:mb-8">
             <div className="inline-flex items-center justify-center rounded-2xl mb-3 sm:mb-4 shadow-lg shadow-elev2 bg-primary w-12 h-12 xs:w-14 xs:h-14 sm:w-16 sm:h-16">
               <ChatBubbleLeftRightIcon className="w-6 h-6 xs:w-7 xs:h-7 sm:w-8 sm:h-8 text-text-inverse" />
             </div>
             <h1 className="text-lg xs:text-xl sm:text-2xl font-bold text-text-primary leading-tight">
-              Tạo tài khoản mới
+              {t("auth:register.title")}
             </h1>
             <p className="text-xs xs:text-sm sm:text-base text-text-muted mt-1 sm:mt-2">
-              Tham gia cộng đồng Hacom Chat ngay hôm nay
+              {t("auth:register.subtitle")}
             </p>
           </header>
 
-          {/* Form */}
           <form
             onSubmit={handleSubmit(onSubmit)}
             noValidate
             className="space-y-3 xs:space-y-4 sm:space-y-5"
           >
-            {/* Global error */}
             <div
               className={clsx(
                 "transition-all duration-200 overflow-hidden",
@@ -223,33 +204,28 @@ export const RegisterPage: React.FC = () => {
               )}
             </div>
 
-            {/* Name row
-             * < 360px → 1 cột (mỗi ô ~280px, dễ nhập)
-             * ≥ 360px → 2 cột như thiết kế gốc
-             */}
             <div className="grid grid-cols-1 xs:grid-cols-2 gap-3 xs:gap-4">
               <Input
                 {...register("firstName")}
-                label="Họ"
-                placeholder="Nguyễn"
+                label={t("auth:register.firstName")}
+                placeholder={t("auth:placeholders.firstName")}
                 error={errors.firstName?.message}
                 disabled={isLoading}
               />
               <Input
                 {...register("lastName")}
-                label="Tên"
-                placeholder="Văn A"
+                label={t("auth:register.lastName")}
+                placeholder={t("auth:placeholders.lastName")}
                 error={errors.lastName?.message}
                 disabled={isLoading}
               />
             </div>
 
-            {/* Username */}
             <div className="space-y-1">
               <Input
                 {...register("username")}
-                label="Tên người dùng"
-                placeholder="username"
+                label={t("auth:register.username")}
+                placeholder={t("auth:placeholders.username")}
                 leftIcon={<UserIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
                 error={errors.username?.message}
                 autoComplete="username"
@@ -264,7 +240,6 @@ export const RegisterPage: React.FC = () => {
                   ) : null
                 }
               />
-              {/* Username status — transition tránh layout shift */}
               <div
                 className={clsx(
                   "transition-all duration-150 overflow-hidden",
@@ -286,12 +261,11 @@ export const RegisterPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Email */}
             <Input
               {...register("email")}
               type="email"
-              label="Email"
-              placeholder="you@example.com"
+              label={t("auth:register.email")}
+              placeholder={t("auth:placeholders.email")}
               leftIcon={<EnvelopeIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
               error={errors.email?.message}
               autoComplete="email"
@@ -299,13 +273,12 @@ export const RegisterPage: React.FC = () => {
               disabled={isLoading}
             />
 
-            {/* Password + Strength */}
             <div className="space-y-2">
               <Input
                 {...register("password")}
                 type="password"
-                label="Mật khẩu"
-                placeholder="••••••••"
+                label={t("auth:register.password")}
+                placeholder={t("auth:placeholders.password")}
                 leftIcon={<LockClosedIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
                 error={errors.password?.message}
                 autoComplete="new-password"
@@ -314,40 +287,38 @@ export const RegisterPage: React.FC = () => {
               <PasswordStrength password={password ?? ""} />
             </div>
 
-            {/* Confirm Password */}
             <Input
               {...register("confirmPassword")}
               type="password"
-              label="Xác nhận mật khẩu"
-              placeholder="••••••••"
+              label={t("auth:register.confirmPassword")}
+              placeholder={t("auth:placeholders.password")}
               leftIcon={<LockClosedIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
               error={errors.confirmPassword?.message}
               autoComplete="new-password"
               disabled={isLoading}
             />
 
-            {/* Terms checkbox */}
             <Checkbox
               {...register("acceptTerms")}
               label={
                 <span className="text-xs xs:text-sm leading-snug">
-                  Tôi đồng ý với{" "}
+                  {t("auth:register.acceptTermsPrefix")} {" "}
                   <Link
                     to="/terms"
                     className="text-primary hover:underline"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    Điều khoản sử dụng
+                    {t("auth:register.terms")}
                   </Link>{" "}
-                  và{" "}
+                  {t("auth:register.acceptTermsAnd")} {" "}
                   <Link
                     to="/privacy"
                     className="text-primary hover:underline"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    Chính sách bảo mật
+                    {t("auth:register.privacy")}
                   </Link>
                 </span>
               }
@@ -355,7 +326,6 @@ export const RegisterPage: React.FC = () => {
               disabled={isLoading}
             />
 
-            {/* Submit */}
             <Button
               type="submit"
               fullWidth
@@ -366,32 +336,30 @@ export const RegisterPage: React.FC = () => {
               }
               aria-busy={isLoading || isSubmitting}
             >
-              Đăng ký
+              {t("auth:register.submit")}
             </Button>
           </form>
 
-          {/* Login link */}
           <p className="mt-5 sm:mt-6 lg:mt-8 text-center text-xs xs:text-sm text-text-muted">
-            Đã có tài khoản?{" "}
+            {t("auth:register.haveAccount")} {" "}
             <Link
               to="/login"
               className="font-semibold text-primary hover:text-primary/80 transition-colors"
             >
-              Đăng nhập ngay
+              {t("auth:register.loginNow")}
             </Link>
           </p>
         </section>
 
-        {/* Footer */}
         <p className="mt-4 sm:mt-5 text-center text-xs xs:text-xs text-text-muted px-2 leading-relaxed">
-          Thông tin của bạn được bảo mật theo{" "}
+          {t("auth:register.footerPrivacyPrefix")} {" "}
           <Link
             to="/privacy"
             className="underline hover:text-text-secondary transition-colors"
           >
-            Chính sách bảo mật
+            {t("auth:register.privacy")}
           </Link>{" "}
-          của chúng tôi.
+          {t("auth:register.footerPrivacySuffix")}
         </p>
       </div>
     </div>
@@ -399,6 +367,3 @@ export const RegisterPage: React.FC = () => {
 };
 
 export default RegisterPage;
-
-
-

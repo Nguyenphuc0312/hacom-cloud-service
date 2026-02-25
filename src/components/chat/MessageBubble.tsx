@@ -1,5 +1,6 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { CheckIcon, ExclamationCircleIcon } from "@heroicons/react/24/solid";
 import { Avatar } from "../common/Avatar";
 import { TextMessage } from "../message/TextMessage";
@@ -32,6 +33,7 @@ const MessageStatusIcon: React.FC<{
   isOwn: boolean;
   onResend?: () => void;
 }> = ({ status, isOwn, onResend }) => {
+  const { t } = useTranslation();
   if (!isOwn) return null;
 
   if (status === "uploading") {
@@ -39,10 +41,10 @@ const MessageStatusIcon: React.FC<{
       <span
         className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-text-inverse/80 border-t-transparent"
         role="img"
-        aria-label="Uploading"
-        title="Uploading"
+        aria-label={t("chat:message.status.uploading")}
+        title={t("chat:message.status.uploading")}
       >
-        <span className="sr-only">Uploading</span>
+        <span className="sr-only">{t("chat:message.status.uploading")}</span>
       </span>
     );
   }
@@ -53,17 +55,21 @@ const MessageStatusIcon: React.FC<{
         <span
           className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-text-inverse/80 border-t-transparent"
           role="img"
-          aria-label="Sending"
-          title="Sending"
+          aria-label={t("chat:message.status.sending")}
+          title={t("chat:message.status.sending")}
         >
-          <span className="sr-only">Sending</span>
+          <span className="sr-only">{t("chat:message.status.sending")}</span>
         </span>
       );
     case MessageStatus.SENT:
       return (
-        <span role="img" aria-label="Sent" title="Sent">
+        <span
+          role="img"
+          aria-label={t("chat:message.status.sent")}
+          title={t("chat:message.status.sent")}
+        >
           <CheckIcon className="h-4 w-4 text-text-inverse/80" />
-          <span className="sr-only">Sent</span>
+          <span className="sr-only">{t("chat:message.status.sent")}</span>
         </span>
       );
     case MessageStatus.DELIVERED:
@@ -84,12 +90,12 @@ const MessageStatusIcon: React.FC<{
       return (
         <button
           type="button"
-          title="Retry"
+          title={t("chat:message.status.retry")}
           onClick={onResend}
           className="h-4 w-4 text-danger/70 transition-transform duration-150 hover:scale-110 hover:text-danger focus:outline-none active:scale-95"
         >
           <ExclamationCircleIcon className="h-4 w-4" aria-hidden="true" />
-          <span className="sr-only">Failed to send. Click to retry.</span>
+          <span className="sr-only">{t("chat:message.status.failedRetry")}</span>
         </button>
       );
     default:
@@ -110,6 +116,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   onImageClick,
   className,
 }) => {
+  const { t } = useTranslation();
   const resendMessage = useChatStore((s) => s.resendMessage);
   const bubbleRef = React.useRef<HTMLDivElement>(null);
   const actionsRef = React.useRef<HTMLDivElement>(null);
@@ -198,6 +205,8 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     return "rounded-xl rounded-l-sm";
   })();
 
+  const bubbleSender = isOwn ? t("chat:message.you") : message.senderName;
+
   return (
     <div
       className={clsx(
@@ -259,7 +268,10 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             isOwn ? "animate-slide-in-right" : "animate-slide-in-left",
           )}
           tabIndex={0}
-          aria-label={`${isOwn ? "You" : message.senderName} at ${timeStr}`}
+          aria-label={t("chat:message.bubbleAria", {
+            name: bubbleSender,
+            time: timeStr,
+          })}
           onKeyDown={(event) => {
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
@@ -283,7 +295,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2l9 9h-6v4H9v-4H3l9-9zm0 18h10v2H2v-2h10z" />
               </svg>
-              Forwarded from {message.forwardedFrom.username}
+              {t("chat:message.forwardedFrom", {
+                name: message.forwardedFrom.username,
+              })}
             </div>
           )}
 
@@ -295,7 +309,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               isOwn ? "text-text-inverse/90" : "text-text-muted",
             )}
           >
-            {message.isEdited && <span>edited</span>}
+            {message.isEdited && <span>{t("chat:message.edited")}</span>}
             <span>{timeStr}</span>
             {isOwn && (
               <span className="inline-flex h-4 w-4 items-center justify-center">
@@ -369,4 +383,3 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 export const MessageBubble = React.memo(MessageBubbleComponent);
 
 export default MessageBubble;
-

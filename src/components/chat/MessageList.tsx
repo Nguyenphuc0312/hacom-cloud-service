@@ -1,5 +1,6 @@
-﻿import React from "react";
+import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { ChevronDownIcon } from "@heroicons/react/24/solid";
 import {
   VariableSizeList as VirtualList,
@@ -147,6 +148,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   onImageClick,
   className,
 }) => {
+  const { t } = useTranslation();
   const listRef = React.useRef<VirtualList<TimelineRowData> | null>(null);
   const outerRef = React.useRef<HTMLDivElement | null>(null);
   const viewportRef = React.useRef<HTMLDivElement | null>(null);
@@ -426,7 +428,7 @@ export const MessageList: React.FC<MessageListProps> = ({
           aria-live="polite"
           aria-relevant="additions text"
           aria-atomic="false"
-          aria-label="Tin nháº¯n trong cuá»™c trĂ² chuyá»‡n"
+          aria-label={t("chat:message.inConversationAria")}
         >
           {messages.length === 0 ? (
             <EmptyMessages />
@@ -454,7 +456,7 @@ export const MessageList: React.FC<MessageListProps> = ({
 
       {isLoadingMore && !isInitialLoading && (
         <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full border border-border bg-surface/90 px-3 py-1 text-xs text-text-muted shadow-xs">
-          Dang tai...
+          {t("chat:message.loadMore")}
         </div>
       )}
 
@@ -473,11 +475,11 @@ export const MessageList: React.FC<MessageListProps> = ({
             "transition-colors hover:bg-surface-overlay",
             "animate-bounce-in",
           )}
-          aria-label="Tin nhan moi"
+          aria-label={t("chat:message.newAria")}
         >
           <ChevronDownIcon className="h-5 w-5 text-text-secondary" />
           <span className="text-xs font-medium text-text-primary">
-            Tin nháº¯n má»›i ({pendingNewMessages})
+            {t("chat:message.newLabel", { count: pendingNewMessages })}
           </span>
         </button>
       )}

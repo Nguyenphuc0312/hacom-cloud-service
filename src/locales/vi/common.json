@@ -1,0 +1,52 @@
+﻿{
+  "app": {
+    "name": "Hacom Chat",
+    "shortName": "HC"
+  },
+  "actions": {
+    "cancel": "Hủy",
+    "confirm": "Xác nhận",
+    "retry": "Thử lại",
+    "close": "Đóng",
+    "save": "Lưu",
+    "back": "Quay lại",
+    "clear": "Xóa",
+    "search": "Tìm kiếm",
+    "add": "Thêm",
+    "remove": "Xóa",
+    "download": "Tải xuống",
+    "send": "Gửi",
+    "create": "Tạo",
+    "edit": "Chỉnh sửa",
+    "delete": "Xóa",
+    "copy": "Sao chép",
+    "forward": "Chuyển tiếp",
+    "reply": "Trả lời",
+    "startChat": "Bắt đầu chat",
+    "signOut": "Đăng xuất"
+  },
+  "loading": {
+    "default": "Đang tải...",
+    "page": "Đang tải trang...",
+    "checkingAuth": "Đang kiểm tra đăng nhập...",
+    "processing": "Đang xử lý..."
+  },
+  "labels": {
+    "user": "Người dùng",
+    "conversation": "Cuộc trò chuyện",
+    "channel": "Kênh",
+    "group": "Nhóm"
+  },
+  "statusLabel": "Trạng thái",
+  "status": {
+    "online": "Trực tuyến",
+    "offline": "Ngoại tuyến",
+    "away": "Tạm vắng",
+    "dnd": "Không làm phiền",
+    "busy": "Bận",
+    "invisible": "Ẩn"
+  },
+  "toast": {
+    "featureInDevelopment": "Tính năng đang phát triển"
+  }
+}

@@ -1,0 +1,502 @@
+﻿{
+  "sidebar": {
+    "header": {
+      "workspace": "Khong gian",
+      "startNewChat": "Bat dau chat moi",
+      "expandSidebar": "Mo rong thanh ben",
+      "collapseSidebar": "Thu gon thanh ben"
+    },
+    "search": {
+      "placeholder": "Tim kenh hoac nguoi dung",
+      "aria": "Tim kiem cuoc tro chuyen",
+      "clearAria": "Xoa tim kiem"
+    },
+    "tabs": {
+      "all": "Tat ca",
+      "unread": "Chua doc",
+      "groups": "Nhom",
+      "channels": "Kenh"
+    },
+    "room": {
+      "section": {
+        "unread": "Chua doc",
+        "channels": "Kenh",
+        "groups": "Nhom",
+        "direct": "Tin nhan truc tiep"
+      },
+      "mentioned": "Duoc nhac den",
+      "noMessagesYet": "Chua co tin nhan",
+      "emptyBySearch": "Khong co phong phu hop voi tim kiem.",
+      "empty": "Khong co cuoc tro chuyen nao.",
+      "listAria": "Danh sach cuoc tro chuyen"
+    },
+    "sidebar": {
+      "aria": "Thanh ben"
+    },
+    "logout": {
+      "button": "Dang xuat",
+      "loading": "Dang dang xuat...",
+      "confirmTitle": "Dang xuat",
+      "confirmMessage": "Ban can dang nhap lai de tiep tuc.",
+      "confirmText": "Dang xuat",
+      "cancelText": "Huy"
+    }
+  },
+  "chat": {
+    "header": {
+      "back": "Quay lai",
+      "viewInfo": "Xem thong tin cuoc tro chuyen",
+      "voiceCall": "Goi thoai",
+      "videoCall": "Goi video",
+      "searchInChat": "Tim trong cuoc tro chuyen",
+      "toggleInfoPanel": "Bat/tat bang thong tin",
+      "channel": "Kenh",
+      "members": "{{count}} thanh vien"
+    },
+    "typing": {
+      "user": "{{name}} dang nhap..."
+    },
+    "message": {
+      "you": "Ban",
+      "edited": "da chinh sua",
+      "forwardedFrom": "Chuyen tiep tu {{name}}",
+      "bubbleAria": "{{name}} luc {{time}}",
+      "status": {
+        "uploading": "Dang tai len",
+        "sending": "Dang gui",
+        "sent": "Da gui",
+        "retry": "Gui lai",
+        "failedRetry": "Gui that bai. Bam de gui lai"
+      },
+      "actions": {
+        "reply": "Tra loi",
+        "forward": "Chuyen tiep",
+        "copy": "Sao chep",
+        "edit": "Chinh sua",
+        "delete": "Xoa"
+      },
+      "newLabel": "Tin nhan moi ({{count}})",
+      "newAria": "Tin nhan moi",
+      "inConversationAria": "Tin nhan trong cuoc tro chuyen",
+      "loadMore": "Dang tai...",
+      "senderYou": "Ban:"
+    },
+    "composer": {
+      "replyingTo": "Dang tra loi {{name}}",
+      "editing": "Dang chinh sua tin nhan",
+      "cancelReply": "Huy tra loi",
+      "cancelEdit": "Huy chinh sua",
+      "removeFile": "Xoa tep",
+      "openEmojiPicker": "Mo bang emoji",
+      "attachFile": "Dinh kem tep",
+      "placeholder": "Nhap mot tin nhan...",
+      "messageInput": "O nhap tin nhan",
+      "sendMessage": "Gui tin nhan",
+      "recordVoice": "Ghi am",
+      "uploading": "Dang tai len...",
+      "cancelUpload": "Huy",
+      "retryUpload": "Thu lai",
+      "sendFile": "Gui tep",
+      "filePreviewAlt": "Xem truoc tep"
+    },
+    "attachment": {
+      "types": {
+        "photo": "Anh/Video",
+        "document": "Tai lieu",
+        "location": "Vi tri",
+        "contact": "Lien he",
+        "audio": "Am thanh",
+        "poll": "Khao sat"
+      },
+      "menu": {
+        "searchPlaceholder": "Tim emoji...",
+        "noEmojiFound": "Khong tim thay emoji"
+      }
+    },
+    "emoji": {
+      "searchPlaceholder": "Tim emoji...",
+      "clearSearch": "Xoa tim emoji",
+      "quickReactions": "Phan ung nhanh",
+      "category": {
+        "recent": "Gan day",
+        "smileys": "Mat cuoi",
+        "gestures": "Cu chi",
+        "hearts": "Trai tim",
+        "nature": "Thien nhien",
+        "food": "Do an",
+        "activities": "Hoat dong",
+        "objects": "Do vat",
+        "flags": "Co"
+      }
+    },
+    "reaction": {
+      "reactWith": "Tha cam xuc {{emoji}}",
+      "add": "Them phan ung"
+    },
+    "file": {
+      "unknown": "Tep khong xac dinh",
+      "download": "Tai tep"
+    },
+    "voice": {
+      "play": "Phat",
+      "pause": "Tam dung",
+      "progress": "Tien do am thanh"
+    },
+    "image": {
+      "failedToLoad": "Khong tai duoc anh",
+      "previewAlt": "Xem truoc anh",
+      "close": "Dong"
+    },
+    "empty": {
+      "messagesTitle": "Chua co tin nhan",
+      "messagesDescription": "Hay gui tin nhan dau tien de bat dau cuoc tro chuyen.",
+      "noChatTitle": "Chon mot cuoc tro chuyen",
+      "noChatDescription": "Chon mot cuoc chat o thanh ben hoac bat dau cuoc tro chuyen moi.",
+      "startNewChat": "Bat dau chat moi",
+      "searchTitle": "Khong tim thay ket qua",
+      "searchDescription": "Khong co ket qua phu hop voi \"{{query}}\".",
+      "searchDescriptionEmpty": "Khong tim thay ket qua. Thu tu khoa khac.",
+      "clearSearch": "Xoa tim kiem"
+    },
+    "time": {
+      "today": "Hom nay",
+      "yesterday": "Hom qua",
+      "justNow": "Vua xong",
+      "minutesShort": "{{count}}m",
+      "hoursShort": "{{count}}h",
+      "lastSeenRecently": "Vua truy cap",
+      "onlineNow": "Dang truc tuyen",
+      "lastSeenAt": "Truy cap luc {{time}}",
+      "lastSeenYesterdayAt": "Truy cap hom qua luc {{time}}",
+      "lastSeenDayAt": "Truy cap {{day}} {{time}}",
+      "lastSeenDate": "Truy cap {{date}}"
+    },
+    "toast": {
+      "statusUpdated": "Da cap nhat trang thai: {{status}}",
+      "logoutSuccess": "Dang xuat thanh cong",
+      "sendFailed": "Khong the gui tin nhan. Vui long thu lai.",
+      "messageEdited": "Da chinh sua tin nhan",
+      "editFailed": "Khong the chinh sua tin nhan",
+      "messageDeleted": "Da xoa tin nhan",
+      "deleteFailed": "Khong the xoa tin nhan",
+      "resendSuccess": "Gui lai thanh cong",
+      "resendFailed": "Gui lai khong thanh cong",
+      "connectionReconnecting": "Dang ket noi lai..."
+    },
+    "preview": {
+      "photo": "Anh",
+      "video": "Video",
+      "file": "Tep",
+      "voice": "Tin nhan giong noi",
+      "location": "Vi tri",
+      "sticker": "Sticker"
+    }
+  },
+  "profile": {
+    "userProfile": {
+      "title": "Thong tin nguoi dung",
+      "usernameLabel": "Ten nguoi dung",
+      "notifications": "Thong bao",
+      "media": "Phuong tien, Tep, Lien ket",
+      "searchInConversation": "Tim trong cuoc tro chuyen",
+      "blockUser": "Chan nguoi dung",
+      "report": "Bao cao",
+      "deleteConversation": "Xoa cuoc tro chuyen"
+    },
+    "groupInfo": {
+      "title": "Thong tin nhom",
+      "membersCount": "{{count}} thanh vien",
+      "notifications": "Thong bao",
+      "tabs": {
+        "members": "Thanh vien",
+        "media": "Phuong tien",
+        "files": "Tep"
+      },
+      "addMember": "Them thanh vien",
+      "searchMemberPlaceholder": "Tim kiem thanh vien...",
+      "noSearchResult": "Khong co ket qua phu hop",
+      "youSuffix": "(Ban)",
+      "viewAllMedia": "Xem tat ca phuong tien",
+      "noSharedFiles": "Chua co tep duoc chia se",
+      "reportGroup": "Bao cao nhom",
+      "leaveGroup": "Roi nhom",
+      "leaveConfirm": "Ban co chac muon roi nhom nay?"
+    },
+    "newChatModal": {
+      "title": "Cuoc tro chuyen moi",
+      "descriptionDirect": "Tim kiem nguoi dung de bat dau tro chuyen",
+      "descriptionGroup": "Chon thanh vien de tao nhom",
+      "directMessage": "Tin nhan truc tiep",
+      "createGroup": "Tao nhom",
+      "searchPlaceholder": "Tim kiem theo ten hoac username...",
+      "groupNamePlaceholder": "Nhap ten nhom...",
+      "searchMinChars": "Nhap it nhat {{count}} ky tu de tim kiem",
+      "createGroupButton": "Tao nhom ({{count}} nguoi)"
+    },
+    "editProfileModal": {
+      "title": "Chinh sua ho so",
+      "changeAvatarHint": "Bam de thay doi anh dai dien",
+      "firstName": "Ho",
+      "lastName": "Ten",
+      "phone": "So dien thoai",
+      "bio": "Gioi thieu",
+      "bioPlaceholder": "Viet vai dong ve ban than...",
+      "bioHint": "Toi da {{count}} ky tu",
+      "cancel": "Huy",
+      "save": "Luu thay doi",
+      "phonePlaceholder": "+84 912 345 678"
+    },
+    "imagePreview": {
+      "defaultAlt": "Xem truoc anh",
+      "zoomOut": "Thu nho",
+      "zoomIn": "Phong to",
+      "download": "Tai xuong",
+      "close": "Dong",
+      "instructions": "Cuon de zoom • Double-click de reset • ESC de dong"
+    },
+    "toast": {
+      "searchUsersFailed": "Khong the tim kiem nguoi dung",
+      "selectAtLeastOneMember": "Chon it nhat 1 nguoi de tao nhom",
+      "groupNameRequired": "Vui long nhap ten nhom",
+      "avatarFileRequired": "Vui long chon file anh",
+      "avatarMaxSize": "Kich thuoc anh khong duoc vuot qua 5MB",
+      "profileUpdateSuccess": "Cap nhat ho so thanh cong!",
+      "profileUpdateFailed": "Cap nhat that bai",
+      "memberAdded": "Da them thanh vien vao nhom",
+      "memberAddFailed": "Khong the them thanh vien",
+      "leftGroup": "Da roi nhom",
+      "leaveGroupFailed": "Khong the roi nhom luc nay"
+    }
+  },
+  "error": {
+    "generic": {
+      "unexpected": "Da co loi xay ra",
+      "requestFailed": "Yeu cau that bai"
+    },
+    "auth": {
+      "loginFailed": "Dang nhap that bai",
+      "registerFailed": "Dang ky that bai",
+      "logoutFailed": "Dang xuat that bai",
+      "statusUpdateFailed": "Cap nhat trang thai that bai",
+      "sessionInactive": "Phien dang nhap khong con hieu luc",
+      "missingRefreshToken": "Khong tim thay refresh token",
+      "refreshMissingToken": "Phan hoi refresh khong co access token",
+      "loginTokenMissing": "Phan hoi dang nhap khong co access token",
+      "registerTokenMissing": "Phan hoi dang ky khong co access token"
+    },
+    "chat": {
+      "conversationAccessDenied": "Khong the truy cap cuoc tro chuyen nay",
+      "conversationOpenFailed": "Khong the mo cuoc tro chuyen",
+      "sendFailed": "Khong the gui tin nhan. Vui long thu lai.",
+      "startConversationFailed": "Khong the bat dau cuoc tro chuyen",
+      "createGroupFailed": "Khong the tao nhom moi",
+      "fetchConversationsFailed": "Khong the tai danh sach hoi thoai",
+      "fetchMessagesFailed": "Khong the tai tin nhan",
+      "roomIdMissing": "Khong nhan duoc ma phong",
+      "invalidSendResponse": "Phan hoi gui tin nhan khong hop le",
+      "invalidResendResponse": "Phan hoi gui lai tin nhan khong hop le"
+    },
+    "upload": {
+      "fileTooLarge": "Tep vuot qua gioi han dung luong",
+      "unsupportedType": "Dinh dang tep khong ho tro",
+      "uploadCanceled": "Da huy tai len",
+      "uploadFailed": "Tai len that bai, vui long thu lai"
+    }
+  },
+  "theme": {
+    "toggle": {
+      "light": "Sang",
+      "dark": "Toi",
+      "system": "Theo he thong",
+      "switchToLight": "Chuyen sang che do sang",
+      "switchToDark": "Chuyen sang che do toi"
+    },
+    "brand": {
+      "blue": "Xanh duong",
+      "green": "Xanh la",
+      "purple": "Tim"
+    }
+  },
+  "common": {
+    "app": {
+      "name": "Hacom Chat",
+      "shortName": "HC"
+    },
+    "actions": {
+      "cancel": "Huy",
+      "confirm": "Xac nhan",
+      "retry": "Thu lai",
+      "close": "Dong",
+      "save": "Luu",
+      "back": "Quay lai",
+      "clear": "Xoa",
+      "search": "Tim kiem",
+      "add": "Them",
+      "remove": "Xoa",
+      "download": "Tai xuong",
+      "send": "Gui",
+      "create": "Tao",
+      "edit": "Chinh sua",
+      "delete": "Xoa",
+      "copy": "Sao chep",
+      "forward": "Chuyen tiep",
+      "reply": "Tra loi",
+      "startChat": "Bat dau chat",
+      "signOut": "Dang xuat"
+    },
+    "loading": {
+      "default": "Dang tai...",
+      "page": "Dang tai trang...",
+      "checkingAuth": "Dang kiem tra dang nhap...",
+      "processing": "Dang xu ly..."
+    },
+    "labels": {
+      "user": "Nguoi dung",
+      "conversation": "Cuoc tro chuyen",
+      "channel": "Kenh",
+      "group": "Nhom"
+    },
+    "statusLabel": "Trang thai",
+    "status": {
+      "online": "Truc tuyen",
+      "offline": "Ngoai tuyen",
+      "away": "Tam vang",
+      "dnd": "Khong lam phien",
+      "busy": "Ban",
+      "invisible": "An"
+    },
+    "toast": {
+      "featureInDevelopment": "Tinh nang dang phat trien"
+    }
+  },
+  "auth": {
+    "login": {
+      "aria": {
+        "section": "Dang nhap"
+      },
+      "title": "Chao mung tro lai",
+      "subtitle": "Dang nhap de tiep tuc tro chuyen",
+      "email": "Email",
+      "password": "Mat khau",
+      "rememberMe": "Ghi nho dang nhap",
+      "forgotPassword": "Quen mat khau?",
+      "submit": "Dang nhap",
+      "orWith": "Hoac dang nhap voi",
+      "noAccount": "Chua co tai khoan?",
+      "signupNow": "Dang ky ngay",
+      "agreement": "Bang viec dang nhap, ban dong y voi",
+      "agreementAnd": "va",
+      "terms": "Dieu khoan su dung",
+      "privacy": "Chinh sach bao mat",
+      "socialAria": "Dang nhap bang {{provider}}"
+    },
+    "register": {
+      "aria": {
+        "section": "Dang ky tai khoan"
+      },
+      "title": "Tao tai khoan moi",
+      "subtitle": "Tham gia cong dong Hacom Chat ngay hom nay",
+      "firstName": "Ho",
+      "lastName": "Ten",
+      "username": "Ten nguoi dung",
+      "email": "Email",
+      "password": "Mat khau",
+      "confirmPassword": "Xac nhan mat khau",
+      "acceptTermsPrefix": "Toi dong y voi",
+      "acceptTermsAnd": "va",
+      "terms": "Dieu khoan su dung",
+      "privacy": "Chinh sach bao mat",
+      "submit": "Dang ky",
+      "haveAccount": "Da co tai khoan?",
+      "loginNow": "Dang nhap ngay",
+      "footerPrivacyPrefix": "Thong tin cua ban duoc bao mat theo",
+      "footerPrivacySuffix": "cua chung toi"
+    },
+    "forgot": {
+      "title": "Quen mat khau?",
+      "subtitle": "Nhap email cua ban, chung toi se gui link dat lai mat khau",
+      "submit": "Gui link dat lai mat khau",
+      "backToLogin": "Quay lai dang nhap",
+      "successTitle": "Kiem tra email cua ban",
+      "successDescription": "Chung toi da gui huong dan dat lai mat khau den",
+      "successHint": "Khong nhan duoc email? Kiem tra thu muc spam hoac",
+      "tryAnotherEmail": "Thu lai voi email khac"
+    },
+    "username": {
+      "invalid": "Chi duoc dung chu cai, so va dau gach duoi",
+      "checking": "Dang kiem tra...",
+      "available": "Ten nguoi dung kha dung",
+      "taken": "Ten nguoi dung da ton tai",
+      "searchMinChars": "Nhap it nhat {{count}} ky tu de tim kiem"
+    },
+    "toast": {
+      "loginSuccess": "Dang nhap thanh cong!",
+      "loginFailed": "Dang nhap that bai",
+      "registerSuccess": "Dang ky thanh cong! Chao mung ban den voi Hacom Chat",
+      "registerFailed": "Dang ky that bai",
+      "forgotPasswordSent": "Email dat lai mat khau da duoc gui!",
+      "forgotPasswordFallback": "Neu email ton tai, ban se nhan duoc link dat lai mat khau"
+    },
+    "placeholders": {
+      "email": "you@example.com",
+      "password": "••••••••",
+      "firstName": "Nguyen",
+      "lastName": "Van A",
+      "username": "username"
+    }
+  },
+  "validation": {
+    "auth": {
+      "emailRequired": "Email khong duoc de trong",
+      "emailInvalid": "Email khong hop le",
+      "passwordRequired": "Mat khau khong duoc de trong",
+      "passwordMin": "Mat khau phai co it nhat {{count}} ky tu",
+      "passwordMax": "Mat khau khong duoc qua {{count}} ky tu",
+      "passwordComplexity": "Mat khau phai chua it nhat 1 chu thuong, 1 chu hoa va 1 so",
+      "confirmPasswordRequired": "Xac nhan mat khau khong duoc de trong",
+      "confirmPasswordMismatch": "Mat khau xac nhan khong khop",
+      "acceptTerms": "Ban phai dong y voi dieu khoan su dung"
+    },
+    "register": {
+      "usernameRequired": "Ten nguoi dung khong duoc de trong",
+      "usernameMin": "Ten nguoi dung phai co it nhat {{count}} ky tu",
+      "usernameMax": "Ten nguoi dung khong duoc qua {{count}} ky tu",
+      "usernamePattern": "Ten nguoi dung chi duoc chua chu cai, so va dau gach duoi"
+    },
+    "profile": {
+      "bioMax": "Bio khong duoc qua {{count}} ky tu",
+      "phoneInvalid": "So dien thoai khong hop le"
+    },
+    "password": {
+      "currentRequired": "Mat khau hien tai khong duoc de trong",
+      "newRequired": "Mat khau moi khong duoc de trong",
+      "mustBeDifferent": "Mat khau moi phai khac mat khau hien tai"
+    },
+    "room": {
+      "nameRequired": "Ten nhom khong duoc de trong",
+      "nameMin": "Ten nhom phai co it nhat 2 ky tu",
+      "nameMax": "Ten nhom khong duoc qua 100 ky tu",
+      "descriptionMax": "Mo ta khong duoc qua 500 ky tu",
+      "memberMin": "Phai chon it nhat 1 thanh vien",
+      "memberMax": "Nhom khong duoc qua 200 thanh vien"
+    },
+    "message": {
+      "contentRequired": "Tin nhan khong duoc de trong",
+      "contentMax": "Tin nhan khong duoc qua {{count}} ky tu"
+    },
+    "strength": {
+      "label": "Do manh",
+      "weak": "Yeu",
+      "medium": "Trung binh",
+      "strong": "Manh",
+      "requirements": {
+        "length": "It nhat 8 ky tu",
+        "lowercase": "Co chu thuong (a-z)",
+        "uppercase": "Co chu hoa (A-Z)",
+        "number": "Co so (0-9)",
+        "special": "Co ky tu dac biet (!@#$...)",
+        "optional": "khuyen khich"
+      }
+    }
+  }
+}

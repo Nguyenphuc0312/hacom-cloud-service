@@ -3,6 +3,7 @@
  */
 
 import React, { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../../stores";
 import { PageSpinner } from "../../components/ui";
@@ -20,6 +21,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   allowedRoles,
 }) => {
+  const { t } = useTranslation();
   const location = useLocation();
   const { isAuthenticated, isInitialized, initialize, user } = useAuthStore();
 
@@ -30,7 +32,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }, [isInitialized, initialize]);
 
   if (!isInitialized) {
-    return <PageSpinner message="Dang kiem tra dang nhap..." />;
+    return <PageSpinner message={t("common:loading.checkingAuth")} />;
   }
 
   if (!isAuthenticated) {
@@ -56,6 +58,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 };
 
 export const GuestRoute: React.FC<GuardProps> = ({ children }) => {
+  const { t } = useTranslation();
   const { isAuthenticated, isInitialized, initialize } = useAuthStore();
 
   useEffect(() => {
@@ -65,7 +68,7 @@ export const GuestRoute: React.FC<GuardProps> = ({ children }) => {
   }, [isInitialized, initialize]);
 
   if (!isInitialized) {
-    return <PageSpinner message="Dang tai..." />;
+    return <PageSpinner message={t("common:loading.default")} />;
   }
 
   if (isAuthenticated) {
@@ -74,4 +77,3 @@ export const GuestRoute: React.FC<GuardProps> = ({ children }) => {
 
   return <>{children}</>;
 };
-

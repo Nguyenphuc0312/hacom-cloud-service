@@ -1,5 +1,6 @@
-import React from "react";
+﻿import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { SpeakerXMarkIcon, CheckCircleIcon } from "@heroicons/react/24/solid";
 import { Avatar } from "../common/Avatar";
 import { Badge } from "../common/Badge";
@@ -23,6 +24,8 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   onClick,
   className,
 }) => {
+  const { t } = useTranslation();
+
   const otherParticipant =
     conversation.type === RoomType.PRIVATE ||
     conversation.type === RoomType.DIRECT
@@ -36,6 +39,8 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
     ? formatRelativeTime(new Date(lastMessage.createdAt))
     : "";
   const isOwnLastMessage = lastMessage?.senderId === currentUserId;
+
+  const fallbackConversationLabel = t("common:labels.conversation");
 
   return (
     <button
@@ -52,10 +57,9 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
       role="option"
       aria-selected={isActive}
     >
-      {/* Avatar */}
       <Avatar
         src={conversation.avatar}
-        alt={conversation.name || otherParticipant?.displayName || "Conversation"}
+        alt={conversation.name || otherParticipant?.displayName || fallbackConversationLabel}
         size="lg"
         status={status}
         showStatus={
@@ -64,9 +68,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
         }
       />
 
-      {/* Content */}
       <div className="flex-1 min-w-0">
-        {/* Top row: Name and time */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <span
@@ -75,10 +77,9 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
                 conversation.unreadCount > 0 && "text-text-primary",
               )}
             >
-              {conversation.name || otherParticipant?.displayName || "Cuoc tro chuyen"}
+              {conversation.name || otherParticipant?.displayName || fallbackConversationLabel}
             </span>
 
-            {/* Icons */}
             {conversation.isMuted && (
               <SpeakerXMarkIcon className="w-4 h-4 text-text-muted flex-shrink-0" />
             )}
@@ -108,15 +109,12 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
           </span>
         </div>
 
-        {/* Bottom row: Preview and badge */}
         <div className="flex items-center justify-between gap-2 mt-1">
           <div className="flex items-center gap-1 min-w-0 flex-1">
-            {/* Sender indicator for own messages */}
             {isOwnLastMessage && lastMessage && (
-              <span className="text-sm text-text-muted">Bạn:</span>
+              <span className="text-sm text-text-muted">{t("chat:message.senderYou")}</span>
             )}
 
-            {/* Message preview */}
             <span
               className={clsx(
                 "text-sm truncate",
@@ -129,7 +127,6 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
             </span>
           </div>
 
-          {/* Unread badge */}
           {conversation.unreadCount > 0 && (
             <Badge
               count={conversation.unreadCount}
@@ -144,5 +141,3 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
 };
 
 export default ConversationItem;
-
-

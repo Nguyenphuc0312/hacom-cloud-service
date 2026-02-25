@@ -1,0 +1,54 @@
+﻿{
+  "auth": {
+    "emailRequired": "Email is required",
+    "emailInvalid": "Invalid email",
+    "passwordRequired": "Password is required",
+    "passwordMin": "Password must be at least {{count}} characters",
+    "passwordMax": "Password must not exceed {{count}} characters",
+    "passwordComplexity": "Password must contain at least 1 lowercase letter, 1 uppercase letter, and 1 number",
+    "confirmPasswordRequired": "Password confirmation is required",
+    "confirmPasswordMismatch": "Passwords do not match",
+    "acceptTerms": "You must accept the terms"
+  },
+  "register": {
+    "usernameRequired": "Username is required",
+    "usernameMin": "Username must be at least {{count}} characters",
+    "usernameMax": "Username must not exceed {{count}} characters",
+    "usernamePattern": "Username may contain only letters, numbers, and underscores"
+  },
+  "profile": {
+    "bioMax": "Bio must not exceed {{count}} characters",
+    "phoneInvalid": "Invalid phone number"
+  },
+  "password": {
+    "currentRequired": "Current password is required",
+    "newRequired": "New password is required",
+    "mustBeDifferent": "New password must be different from current password"
+  },
+  "room": {
+    "nameRequired": "Group name is required",
+    "nameMin": "Group name must be at least 2 characters",
+    "nameMax": "Group name must not exceed 100 characters",
+    "descriptionMax": "Description must not exceed 500 characters",
+    "memberMin": "Select at least 1 member",
+    "memberMax": "Group must not exceed 200 members"
+  },
+  "message": {
+    "contentRequired": "Message cannot be empty",
+    "contentMax": "Message must not exceed {{count}} characters"
+  },
+  "strength": {
+    "label": "Strength",
+    "weak": "Weak",
+    "medium": "Medium",
+    "strong": "Strong",
+    "requirements": {
+      "length": "At least 8 characters",
+      "lowercase": "Contains lowercase letters (a-z)",
+      "uppercase": "Contains uppercase letters (A-Z)",
+      "number": "Contains numbers (0-9)",
+      "special": "Contains special characters (!@#$...)",
+      "optional": "optional"
+    }
+  }
+}

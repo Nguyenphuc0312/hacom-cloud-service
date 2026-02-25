@@ -1,5 +1,6 @@
 ﻿import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 interface SidebarSearchProps {
@@ -13,6 +14,8 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
   collapsed,
   onChange,
 }) => {
+  const { t } = useTranslation();
+
   if (collapsed) {
     return (
       <div className="border-b border-border px-3 py-2">
@@ -35,13 +38,13 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
           type="text"
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          placeholder="Search channels or people"
+          placeholder={t("sidebar:search.placeholder")}
           className={clsx(
             "h-10 w-full rounded-lg border border-transparent bg-surface-overlay pl-10 pr-9 text-sm",
             "text-text-primary placeholder:text-text-muted",
             "transition-colors focus:border-primary focus:bg-surface focus:outline-none",
           )}
-          aria-label="Search conversations"
+          aria-label={t("sidebar:search.aria")}
         />
 
         {value.trim().length > 0 && (
@@ -49,7 +52,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
             type="button"
             onClick={() => onChange("")}
             className="absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface hover:text-text-primary"
-            aria-label="Clear search"
+            aria-label={t("sidebar:search.clearAria")}
           >
             <XMarkIcon className="h-4 w-4" />
           </button>

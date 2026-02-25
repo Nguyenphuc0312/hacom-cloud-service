@@ -1,5 +1,6 @@
 ﻿import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 
 interface SidebarContainerProps {
   collapsed: boolean;
@@ -12,6 +13,8 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({
   className,
   children,
 }) => {
+  const { t } = useTranslation();
+
   return (
     <aside
       className={clsx(
@@ -21,7 +24,7 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({
         collapsed ? "lg:w-sidebar-collapsed" : "lg:w-sidebar-expanded",
         className,
       )}
-      aria-label="Sidebar"
+      aria-label={t("sidebar:sidebar.aria")}
     >
       {children}
     </aside>

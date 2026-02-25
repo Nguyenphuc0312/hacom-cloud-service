@@ -1,5 +1,6 @@
 import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { UserStatus } from "../../types";
 
 interface OnlineIndicatorProps {
@@ -24,12 +25,22 @@ const statusColors: Record<UserStatus, string> = {
   [UserStatus.BUSY]: "bg-state-busy",
 };
 
+const statusLabelKeys: Record<UserStatus, string> = {
+  [UserStatus.ONLINE]: "common:status.online",
+  [UserStatus.OFFLINE]: "common:status.offline",
+  [UserStatus.AWAY]: "common:status.away",
+  [UserStatus.DND]: "common:status.dnd",
+  [UserStatus.INVISIBLE]: "common:status.invisible",
+  [UserStatus.BUSY]: "common:status.busy",
+};
+
 export const OnlineIndicator: React.FC<OnlineIndicatorProps> = ({
   status,
   size = "md",
   pulse = true,
   className,
 }) => {
+  const { t } = useTranslation();
   return (
     <span
       className={clsx(
@@ -39,7 +50,7 @@ export const OnlineIndicator: React.FC<OnlineIndicatorProps> = ({
         status === UserStatus.ONLINE && pulse && "animate-pulse-online",
         className,
       )}
-      aria-label={`Status: ${status}`}
+      aria-label={`${t("common:statusLabel")}: ${t(statusLabelKeys[status])}`}
     />
   );
 };

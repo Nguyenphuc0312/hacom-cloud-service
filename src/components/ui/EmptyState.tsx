@@ -4,6 +4,7 @@
 
 import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import {
   ChatBubbleLeftRightIcon,
   MagnifyingGlassIcon,
@@ -59,15 +60,17 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
 export const EmptyConversations: React.FC<{
   onNewChat?: () => void;
 }> = ({ onNewChat }) => {
+  const { t } = useTranslation();
+
   return (
     <EmptyState
       icon={<ChatBubbleLeftRightIcon className="h-full w-full" />}
-      title="No conversations yet"
-      description="Start a new chat to connect with your team."
+      title={t("chat:empty.noChatTitle")}
+      description={t("chat:empty.noChatDescription")}
       action={
         onNewChat
           ? {
-              label: "Start chat",
+              label: t("chat:empty.startNewChat"),
               onClick: onNewChat,
             }
           : undefined
@@ -77,11 +80,13 @@ export const EmptyConversations: React.FC<{
 };
 
 export const EmptyMessages: React.FC = () => {
+  const { t } = useTranslation();
+
   return (
     <EmptyState
       icon={<InboxIcon className="h-full w-full" />}
-      title="No messages"
-      description="Send the first message to start this conversation."
+      title={t("chat:empty.messagesTitle")}
+      description={t("chat:empty.messagesDescription")}
     />
   );
 };
@@ -90,19 +95,21 @@ export const EmptySearchResults: React.FC<{
   query?: string;
   onClear?: () => void;
 }> = ({ query, onClear }) => {
+  const { t } = useTranslation();
+
   return (
     <EmptyState
       icon={<MagnifyingGlassIcon className="h-full w-full" />}
-      title="No result found"
+      title={t("chat:empty.searchTitle")}
       description={
         query
-          ? `No result matches "${query}".`
-          : "No result found. Try another keyword."
+          ? t("chat:empty.searchDescription", { query })
+          : t("chat:empty.searchDescriptionEmpty")
       }
       action={
         onClear
           ? {
-              label: "Clear search",
+              label: t("chat:empty.clearSearch"),
               onClick: onClear,
               variant: "outline",
             }
@@ -113,11 +120,13 @@ export const EmptySearchResults: React.FC<{
 };
 
 export const EmptyMembers: React.FC = () => {
+  const { t } = useTranslation();
+
   return (
     <EmptyState
       icon={<UserGroupIcon className="h-full w-full" />}
-      title="No members"
-      description="Add members to start collaborating."
+      title={t("profile:groupInfo.tabs.members")}
+      description={t("profile:groupInfo.addMember")}
     />
   );
 };
@@ -127,19 +136,23 @@ export const ErrorState: React.FC<{
   message?: string;
   onRetry?: () => void;
 }> = ({
-  title = "Something went wrong",
-  message = "Cannot load data right now. Please try again.",
+  title,
+  message,
   onRetry,
 }) => {
+  const { t } = useTranslation();
+  const resolvedTitle = title ?? t("error:generic.unexpected");
+  const resolvedMessage = message ?? t("error:generic.requestFailed");
+
   return (
     <EmptyState
       icon={<ExclamationTriangleIcon className="h-full w-full text-danger/55" />}
-      title={title}
-      description={message}
+      title={resolvedTitle}
+      description={resolvedMessage}
       action={
         onRetry
           ? {
-              label: "Try again",
+              label: t("common:actions.retry"),
               onClick: onRetry,
               variant: "primary",
             }
@@ -156,6 +169,8 @@ interface NoChatSelectedProps {
 export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
   onNewChat,
 }) => {
+  const { t } = useTranslation();
+
   return (
     <section className="chat-background flex flex-1 flex-col items-center justify-center px-6 py-10 text-text-secondary">
       <div className="mb-5 h-24 w-24 text-text-muted/60 sm:mb-6 sm:h-32 sm:w-32">
@@ -173,10 +188,10 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
         </svg>
       </div>
       <h2 className="mb-2 text-lg font-semibold text-text-primary sm:text-xl">
-        Select a conversation
+        {t("chat:empty.noChatTitle")}
       </h2>
       <p className="mb-5 max-w-sm text-center text-sm leading-6 text-text-secondary">
-        Choose a chat from the sidebar or start a new conversation.
+        {t("chat:empty.noChatDescription")}
       </p>
       {onNewChat && (
         <button
@@ -184,7 +199,7 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
           onClick={onNewChat}
           className="min-h-11 rounded-lg bg-primary px-5 py-2 text-sm font-medium text-text-inverse transition-colors hover:bg-primary/90"
         >
-          Start new chat
+          {t("chat:empty.startNewChat")}
         </button>
       )}
     </section>

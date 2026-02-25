@@ -5,6 +5,7 @@
 
 import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { calculatePasswordStrength } from "../../lib/validations";
 
 interface PasswordStrengthProps {
@@ -14,19 +15,19 @@ interface PasswordStrengthProps {
 
 const strengthConfig = {
   weak: {
-    label: "Yếu",
+    labelKey: "validation:strength.weak",
     color: "bg-danger",
     bars: 1,
     textColor: "text-danger",
   },
   medium: {
-    label: "Trung bình",
+    labelKey: "validation:strength.medium",
     color: "bg-warning",
     bars: 2,
     textColor: "text-warning",
   },
   strong: {
-    label: "Mạnh",
+    labelKey: "validation:strength.strong",
     color: "bg-success",
     bars: 3,
     textColor: "text-success",
@@ -37,6 +38,7 @@ export const PasswordStrength: React.FC<PasswordStrengthProps> = ({
   password,
   className,
 }) => {
+  const { t } = useTranslation();
   if (!password) return null;
 
   const strength = calculatePasswordStrength(password);
@@ -59,21 +61,30 @@ export const PasswordStrength: React.FC<PasswordStrengthProps> = ({
 
       {/* Strength label */}
       <p className={clsx("text-xs font-medium", config.textColor)}>
-        Độ mạnh: {config.label}
+        {t("validation:strength.label")}: {t(config.labelKey)}
       </p>
 
       {/* Password requirements */}
       <div className="text-xs text-text-muted space-y-0.5">
-        <RequirementItem met={password.length >= 8} text="Ít nhất 8 ký tự" />
+        <RequirementItem
+          met={password.length >= 8}
+          text={t("validation:strength.requirements.length")}
+        />
         <RequirementItem
           met={/[a-z]/.test(password)}
-          text="Có chữ thường (a-z)"
+          text={t("validation:strength.requirements.lowercase")}
         />
-        <RequirementItem met={/[A-Z]/.test(password)} text="Có chữ hoa (A-Z)" />
-        <RequirementItem met={/[0-9]/.test(password)} text="Có số (0-9)" />
+        <RequirementItem
+          met={/[A-Z]/.test(password)}
+          text={t("validation:strength.requirements.uppercase")}
+        />
+        <RequirementItem
+          met={/[0-9]/.test(password)}
+          text={t("validation:strength.requirements.number")}
+        />
         <RequirementItem
           met={/[^a-zA-Z0-9]/.test(password)}
-          text="Có ký tự đặc biệt (!@#$...)"
+          text={t("validation:strength.requirements.special")}
           optional
         />
       </div>
@@ -89,6 +100,17 @@ const RequirementItem: React.FC<{
   text: string;
   optional?: boolean;
 }> = ({ met, text, optional }) => (
+  <RequirementItemBase met={met} text={text} optional={optional} />
+);
+
+const RequirementItemBase: React.FC<{
+  met: boolean;
+  text: string;
+  optional?: boolean;
+}> = ({ met, text, optional }) => {
+  const { t } = useTranslation();
+
+  return (
   <div className="flex items-center gap-2">
     <div
       className={clsx(
@@ -100,10 +122,11 @@ const RequirementItem: React.FC<{
     </div>
     <span className={clsx(met && "text-text-secondary")}>
       {text}
-      {optional && " (khuyến khích)"}
+      {optional && ` (${t("validation:strength.requirements.optional")})`}
     </span>
   </div>
-);
+  );
+};
 
 export default PasswordStrength;
 

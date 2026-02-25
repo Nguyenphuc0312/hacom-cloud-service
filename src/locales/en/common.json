@@ -1,0 +1,52 @@
+﻿{
+  "app": {
+    "name": "Hacom Chat",
+    "shortName": "HC"
+  },
+  "actions": {
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "retry": "Retry",
+    "close": "Close",
+    "save": "Save",
+    "back": "Back",
+    "clear": "Clear",
+    "search": "Search",
+    "add": "Add",
+    "remove": "Remove",
+    "download": "Download",
+    "send": "Send",
+    "create": "Create",
+    "edit": "Edit",
+    "delete": "Delete",
+    "copy": "Copy",
+    "forward": "Forward",
+    "reply": "Reply",
+    "startChat": "Start chat",
+    "signOut": "Sign out"
+  },
+  "loading": {
+    "default": "Loading...",
+    "page": "Loading page...",
+    "checkingAuth": "Checking authentication...",
+    "processing": "Processing..."
+  },
+  "labels": {
+    "user": "User",
+    "conversation": "Conversation",
+    "channel": "Channel",
+    "group": "Group"
+  },
+  "statusLabel": "Status",
+  "status": {
+    "online": "Online",
+    "offline": "Offline",
+    "away": "Away",
+    "dnd": "Do not disturb",
+    "busy": "Busy",
+    "invisible": "Invisible"
+  },
+  "toast": {
+    "featureInDevelopment": "This feature is in development"
+  }
+}
