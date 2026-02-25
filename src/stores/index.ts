@@ -9,6 +9,7 @@ export {
   useChatStore,
   useSelectedConversation,
   useCurrentMessages,
+  useMessagesByConversation,
   useCurrentTypingStatus,
   useFilteredConversations,
   useTotalUnreadCount,

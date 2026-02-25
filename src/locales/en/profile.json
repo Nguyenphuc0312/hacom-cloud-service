@@ -11,6 +11,8 @@
   },
   "groupInfo": {
     "title": "Group information",
+    "renameGroup": "Rename group",
+    "renamePlaceholder": "Enter new group name...",
     "membersCount": "{{count}} members",
     "notifications": "Notifications",
     "tabs": {
@@ -21,7 +23,21 @@
     "addMember": "Add member",
     "searchMemberPlaceholder": "Search members...",
     "noSearchResult": "No matching result",
+    "noMembers": "No members",
     "youSuffix": "(You)",
+    "removeMemberConfirm": "Are you sure you want to remove {{name}} from this group?",
+    "roles": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "moderator": "Moderator",
+      "member": "Member",
+      "guest": "Guest"
+    },
+    "actions": {
+      "makeAdmin": "Set as admin",
+      "removeAdmin": "Remove admin",
+      "removeMember": "Remove member"
+    },
     "viewAllMedia": "View all media",
     "noSharedFiles": "No shared files",
     "reportGroup": "Report group",
@@ -70,6 +86,14 @@
     "profileUpdateFailed": "Profile update failed",
     "memberAdded": "Member added to group",
     "memberAddFailed": "Unable to add member",
+    "loadMembersFailed": "Unable to load member list",
+    "groupRenamed": "Group renamed successfully",
+    "groupRenameFailed": "Unable to rename group",
+    "memberRemoved": "Member removed from group",
+    "memberRemoveFailed": "Unable to remove member",
+    "memberPromoted": "Admin role granted",
+    "memberDemoted": "Admin role removed",
+    "roleUpdateFailed": "Unable to update member role",
     "leftGroup": "Left group",
     "leaveGroupFailed": "Unable to leave group right now"
   }

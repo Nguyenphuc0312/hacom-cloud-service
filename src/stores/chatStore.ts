@@ -8,6 +8,11 @@ import { subscribeWithSelector } from "zustand/middleware";
 import apiClient from "../lib/axios";
 import type { ApiResponse } from "@hacom/chat-shared-types";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
+import {
+  normalizeConversation,
+  normalizeConversationsPayload,
+  normalizeRoomType,
+} from "../lib/conversationAdapter";
 import { toast } from "../utils/toast";
 import i18n from "../i18n";
 import { useAuthStore } from "./authStore";
@@ -23,6 +28,7 @@ import type { Attachment } from "../types";
 interface ChatState {
   conversations: Conversation[];
   messages: Record<string, Message[]>;
+  messagesHydratedByConversation: Record<string, boolean>;
   selectedConversationId: string | null;
   typingStatuses: TypingStatus[];
   searchQuery: string;
@@ -59,6 +65,7 @@ interface ChatState {
     conversationId: string,
     before?: string,
     after?: string,
+    options?: FetchMessagesOptions,
   ) => Promise<FetchMessagesResult>;
   sendMessage: (
     conversationId: string,
@@ -84,9 +91,15 @@ interface FetchMessagesResult {
   hasMore: boolean;
 }
 
+interface FetchMessagesOptions {
+  force?: boolean;
+  limit?: number;
+}
+
 const initialState = {
   conversations: [],
   messages: {},
+  messagesHydratedByConversation: {},
   selectedConversationId: null,
   typingStatuses: [],
   searchQuery: "",
@@ -109,10 +122,9 @@ const buildLoadingStateFromInFlightMap = (): {
   isLoadingMessagesByConversation: Record<string, boolean>;
 } => {
   const isLoadingMessagesByConversation = Object.fromEntries(
-    Array.from(roomMessageFetchInFlight.entries()).map(([conversationId, count]) => [
-      conversationId,
-      count > 0,
-    ]),
+    Array.from(roomMessageFetchInFlight.entries()).map(
+      ([conversationId, count]) => [conversationId, count > 0],
+    ),
   );
   return {
     isLoadingMessages: Array.from(roomMessageFetchInFlight.values()).some(
@@ -120,17 +132,6 @@ const buildLoadingStateFromInFlightMap = (): {
     ),
     isLoadingMessagesByConversation,
   };
-};
-
-const toConversationArray = (data: unknown): Conversation[] => {
-  if (Array.isArray(data)) return data as Conversation[];
-  if (data && typeof data === "object") {
-    const record = data as Record<string, unknown>;
-    if (Array.isArray(record.conversations))
-      return record.conversations as Conversation[];
-    if (Array.isArray(record.rooms)) return record.rooms as Conversation[];
-  }
-  return [];
 };
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
@@ -161,8 +162,10 @@ const normalizeAttachments = (value: unknown): Message["attachments"] => {
       const attachment = asRecord(attachmentRaw);
       if (!attachment) return null;
 
-      const id = asStringValue(attachment.id) ?? asStringValue(attachment.fileId);
-      const url = asStringValue(attachment.url) ?? asStringValue(attachment.fileUrl);
+      const id =
+        asStringValue(attachment.id) ?? asStringValue(attachment.fileId);
+      const url =
+        asStringValue(attachment.url) ?? asStringValue(attachment.fileUrl);
       if (!id || !url) return null;
 
       return {
@@ -174,7 +177,8 @@ const normalizeAttachments = (value: unknown): Message["attachments"] => {
           asStringValue(attachment.filename) ??
           asStringValue(attachment.originalName),
         mimeType:
-          asStringValue(attachment.mimeType) ?? asStringValue(attachment.mimetype),
+          asStringValue(attachment.mimeType) ??
+          asStringValue(attachment.mimetype),
         fileSize:
           asNumberValue(attachment.fileSize) ?? asNumberValue(attachment.size),
         thumbnailUrl: asStringValue(attachment.thumbnailUrl),
@@ -290,7 +294,9 @@ const normalizeMessage = (
     attachments: normalizeAttachments(source.attachments),
     reactions: normalizeReactions(source.reactions),
     mentions: Array.isArray(source.mentions)
-      ? (source.mentions.filter((item): item is string => typeof item === "string") as string[])
+      ? (source.mentions.filter(
+          (item): item is string => typeof item === "string",
+        ) as string[])
       : [],
     status,
     isEdited: Boolean(source.isEdited),
@@ -300,7 +306,9 @@ const normalizeMessage = (
     metadata: asRecord(source.metadata) ?? undefined,
     createdAt: toDateObject(source.createdAt),
     editedAt: source.editedAt ? toDateObject(source.editedAt) : undefined,
-    deliveredAt: source.deliveredAt ? toDateObject(source.deliveredAt) : undefined,
+    deliveredAt: source.deliveredAt
+      ? toDateObject(source.deliveredAt)
+      : undefined,
     readAt: source.readAt ? toDateObject(source.readAt) : undefined,
     readBy: Array.isArray(source.readBy)
       ? source.readBy
@@ -361,7 +369,10 @@ const isSamePendingMessageCandidate = (
 
   if (sourceIsPending === targetIsPending) return false;
   if (!source.senderId || source.senderId !== target.senderId) return false;
-  if (!source.conversationId || source.conversationId !== target.conversationId) {
+  if (
+    !source.conversationId ||
+    source.conversationId !== target.conversationId
+  ) {
     return false;
   }
   if (source.type !== target.type) return false;
@@ -384,9 +395,37 @@ const isSamePendingMessageCandidate = (
 };
 
 const findMessageIndex = (messages: Message[], target: Message): number =>
-  messages.findIndex(
-    (item) => matchesMessage(item, target),
+  messages.findIndex((item) => matchesMessage(item, target));
+
+const toMessageIdentityKeys = (message: Message): string[] => {
+  const keys = new Set<string>();
+  if (typeof message.id === "string" && message.id.length > 0) {
+    keys.add(`id:${message.id}`);
+    keys.add(`local:${message.id}`);
+  }
+  if (typeof message.localId === "string" && message.localId.length > 0) {
+    keys.add(`id:${message.localId}`);
+    keys.add(`local:${message.localId}`);
+  }
+  return Array.from(keys);
+};
+
+const resolveMessageMatchIndex = (
+  current: Message[],
+  keyToIndex: Map<string, number>,
+  incoming: Message,
+): number => {
+  const identityMatch = toMessageIdentityKeys(incoming)
+    .map((key) => keyToIndex.get(key))
+    .find((index): index is number => typeof index === "number");
+  if (typeof identityMatch === "number") {
+    return identityMatch;
+  }
+
+  return current.findIndex((item) =>
+    isSamePendingMessageCandidate(item, incoming),
   );
+};
 
 const mergeMessageRecords = (current: Message, incoming: Message): Message => {
   const merged = { ...current, ...incoming } as Message;
@@ -411,13 +450,19 @@ const mergeMessageRecords = (current: Message, incoming: Message): Message => {
 
 const dedupeAndSortMessages = (messages: Message[]): Message[] => {
   const deduped: Message[] = [];
+  const keyToIndex = new Map<string, number>();
 
   for (const message of messages) {
-    const existingIndex = deduped.findIndex((item) =>
-      matchesMessage(item, message),
+    const existingIndex = resolveMessageMatchIndex(
+      deduped,
+      keyToIndex,
+      message,
     );
     if (existingIndex < 0) {
-      deduped.push(message);
+      const nextIndex = deduped.push(message) - 1;
+      toMessageIdentityKeys(message).forEach((key) => {
+        keyToIndex.set(key, nextIndex);
+      });
       continue;
     }
 
@@ -425,6 +470,9 @@ const dedupeAndSortMessages = (messages: Message[]): Message[] => {
       deduped[existingIndex],
       message,
     );
+    toMessageIdentityKeys(deduped[existingIndex]).forEach((key) => {
+      keyToIndex.set(key, existingIndex);
+    });
   }
 
   return sortMessages(deduped);
@@ -479,7 +527,8 @@ const normalizeMessagesResponse = (
     if (!responseMeta) return null;
     if (typeof responseMeta.hasMore === "boolean") return responseMeta.hasMore;
     if (typeof responseMeta.hasNext === "boolean") return responseMeta.hasNext;
-    if (typeof responseMeta.hasNextPage === "boolean") return responseMeta.hasNextPage;
+    if (typeof responseMeta.hasNextPage === "boolean")
+      return responseMeta.hasNextPage;
     return null;
   };
 
@@ -533,12 +582,18 @@ const toAttachmentPayload = (attachments?: Attachment[]) =>
       typeof attachment.fileSize === "number" && attachment.fileSize >= 0
         ? attachment.fileSize
         : 0,
-    ...(typeof attachment.width === "number" ? { width: attachment.width } : {}),
-    ...(typeof attachment.height === "number" ? { height: attachment.height } : {}),
+    ...(typeof attachment.width === "number"
+      ? { width: attachment.width }
+      : {}),
+    ...(typeof attachment.height === "number"
+      ? { height: attachment.height }
+      : {}),
     ...(typeof attachment.duration === "number"
       ? { duration: attachment.duration }
       : {}),
-    ...(attachment.thumbnailUrl ? { thumbnailUrl: attachment.thumbnailUrl } : {}),
+    ...(attachment.thumbnailUrl
+      ? { thumbnailUrl: attachment.thumbnailUrl }
+      : {}),
   }));
 
 const resolveSenderIdentity = (): {
@@ -574,16 +629,24 @@ export const useChatStore = create<ChatState>()(
 
     setConversations: (conversations) => {
       set({
-        conversations: Array.isArray(conversations) ? conversations : [],
+        conversations: normalizeConversationsPayload(
+          Array.isArray(conversations) ? conversations : [],
+        ),
       });
     },
 
     addConversation: (conversation) => {
+      const normalized = normalizeConversation(conversation);
+      if (!normalized) return;
+
       set((state) => ({
         conversations: [
-          conversation,
+          normalized,
           ...(Array.isArray(state.conversations) ? state.conversations : []),
-        ],
+        ].filter(
+          (item, index, list) =>
+            list.findIndex((candidate) => candidate.id === item.id) === index,
+        ),
       }));
     },
 
@@ -593,7 +656,12 @@ export const useChatStore = create<ChatState>()(
           ? state.conversations
           : []
         ).map((conversation) =>
-          conversation.id === id ? { ...conversation, ...updates } : conversation,
+          conversation.id === id
+            ? normalizeConversation({ ...conversation, ...updates }) ?? {
+                ...conversation,
+                ...updates,
+              }
+            : conversation,
         ),
       }));
     },
@@ -609,8 +677,21 @@ export const useChatStore = create<ChatState>()(
         messages: Object.fromEntries(
           Object.entries(state.messages).filter(([key]) => key !== id),
         ),
+        messagesHydratedByConversation: Object.fromEntries(
+          Object.entries(state.messagesHydratedByConversation).filter(
+            ([key]) => key !== id,
+          ),
+        ),
+        hasMoreMessages: Object.fromEntries(
+          Object.entries(state.hasMoreMessages).filter(([key]) => key !== id),
+        ),
+        messageErrors: Object.fromEntries(
+          Object.entries(state.messageErrors).filter(([key]) => key !== id),
+        ),
         selectedConversationId:
-          state.selectedConversationId === id ? null : state.selectedConversationId,
+          state.selectedConversationId === id
+            ? null
+            : state.selectedConversationId,
       }));
     },
 
@@ -620,8 +701,9 @@ export const useChatStore = create<ChatState>()(
 
     markAsRead: async (conversationId) => {
       const previousUnreadCount =
-        get().conversations.find((conversation) => conversation.id === conversationId)
-          ?.unreadCount ?? 0;
+        get().conversations.find(
+          (conversation) => conversation.id === conversationId,
+        )?.unreadCount ?? 0;
 
       set((state) => ({
         conversations: (Array.isArray(state.conversations)
@@ -634,7 +716,9 @@ export const useChatStore = create<ChatState>()(
         ),
       }));
 
-      const currentMessages = sortMessages(get().messages[conversationId] || []);
+      const currentMessages = sortMessages(
+        get().messages[conversationId] || [],
+      );
       const latestReadableMessage = [...currentMessages]
         .reverse()
         .find((message) => !isTempMessageId(message.id));
@@ -665,9 +749,11 @@ export const useChatStore = create<ChatState>()(
       set({ isLoadingConversations: true, error: null });
 
       try {
-        const response = await apiClient.get<ApiResponse<unknown>>("/rooms");
+        const response = await apiClient.get<ApiResponse<unknown>>(
+          "/rooms?page=1&limit=100",
+        );
         const payload = unwrapApiSuccess(response.data);
-        const conversations = toConversationArray(payload);
+        const conversations = normalizeConversationsPayload(payload);
         set({
           conversations,
           isLoadingConversations: false,
@@ -695,6 +781,10 @@ export const useChatStore = create<ChatState>()(
           ...state.messages,
           [conversationId]: normalized,
         },
+        messagesHydratedByConversation: {
+          ...state.messagesHydratedByConversation,
+          [conversationId]: true,
+        },
       }));
     },
 
@@ -712,7 +802,8 @@ export const useChatStore = create<ChatState>()(
         const currentUserId = useAuthStore.getState().user?.id;
         const isOwnMessage =
           !!currentUserId && mergedMessage.senderId === currentUserId;
-        const isOpenConversation = state.selectedConversationId === conversationId;
+        const isOpenConversation =
+          state.selectedConversationId === conversationId;
 
         const updatedConversations = state.conversations.map((conversation) => {
           if (conversation.id !== conversationId) return conversation;
@@ -739,6 +830,10 @@ export const useChatStore = create<ChatState>()(
           messages: {
             ...state.messages,
             [conversationId]: messages,
+          },
+          messagesHydratedByConversation: {
+            ...state.messagesHydratedByConversation,
+            [conversationId]: true,
           },
         };
       });
@@ -779,6 +874,10 @@ export const useChatStore = create<ChatState>()(
             ...state.messages,
             [conversationId]: updatedMessages,
           },
+          messagesHydratedByConversation: {
+            ...state.messagesHydratedByConversation,
+            [conversationId]: true,
+          },
         };
       });
     },
@@ -816,6 +915,10 @@ export const useChatStore = create<ChatState>()(
             ...state.messages,
             [conversationId]: updatedMessages,
           },
+          messagesHydratedByConversation: {
+            ...state.messagesHydratedByConversation,
+            [conversationId]: true,
+          },
         };
       });
     },
@@ -846,14 +949,30 @@ export const useChatStore = create<ChatState>()(
             ...state.messages,
             [conversationId]: updatedMessages,
           },
+          messagesHydratedByConversation: {
+            ...state.messagesHydratedByConversation,
+            [conversationId]: true,
+          },
         };
       });
     },
 
-    fetchMessages: async (conversationId, before, after) => {
+    fetchMessages: async (conversationId, before, after, options) => {
+      const isInitialFetch = !before && !after;
+      const forceRefresh = options?.force === true;
+      if (
+        isInitialFetch &&
+        !forceRefresh &&
+        get().messagesHydratedByConversation[conversationId]
+      ) {
+        return {
+          loaded: 0,
+          hasMore: get().hasMoreMessages[conversationId] ?? false,
+        };
+      }
+
       const currentInFlight = roomMessageFetchInFlight.get(conversationId) ?? 0;
       roomMessageFetchInFlight.set(conversationId, currentInFlight + 1);
-      const isInitialFetch = !before && !after;
       const initialFetchSeq = isInitialFetch
         ? (initialFetchSeqByConversation.get(conversationId) ?? 0) + 1
         : null;
@@ -872,7 +991,13 @@ export const useChatStore = create<ChatState>()(
       }));
 
       try {
-        const params = new URLSearchParams({ limit: "50" });
+        const limit =
+          typeof options?.limit === "number" &&
+          Number.isFinite(options.limit) &&
+          options.limit > 0
+            ? Math.min(100, Math.floor(options.limit))
+            : 50;
+        const params = new URLSearchParams({ limit: String(limit) });
         if (before) params.set("before", before);
         if (after) params.set("after", after);
 
@@ -887,30 +1012,36 @@ export const useChatStore = create<ChatState>()(
         set((state) => {
           if (
             initialFetchSeq !== null &&
-            initialFetchSeqByConversation.get(conversationId) !== initialFetchSeq
+            initialFetchSeqByConversation.get(conversationId) !==
+              initialFetchSeq
           ) {
             return state;
           }
 
           const existingMessages = state.messages[conversationId] || [];
-          const mergedMessages = mergeMessages(existingMessages, normalized.messages);
+          const mergedMessages = mergeMessages(
+            existingMessages,
+            normalized.messages,
+          );
           const latestMessage = mergedMessages[mergedMessages.length - 1];
 
-          const updatedConversations = state.conversations.map((conversation) => {
-            if (conversation.id !== conversationId || !latestMessage) {
-              return conversation;
-            }
+          const updatedConversations = state.conversations.map(
+            (conversation) => {
+              if (conversation.id !== conversationId || !latestMessage) {
+                return conversation;
+              }
 
-            return {
-              ...conversation,
-              lastMessage: toMessageSummary(latestMessage),
-              updatedAt: latestMessage.createdAt,
-              unreadCount:
-                state.selectedConversationId === conversationId
-                  ? 0
-                  : conversation.unreadCount,
-            };
-          });
+              return {
+                ...conversation,
+                lastMessage: toMessageSummary(latestMessage),
+                updatedAt: latestMessage.createdAt,
+                unreadCount:
+                  state.selectedConversationId === conversationId
+                    ? 0
+                    : conversation.unreadCount,
+              };
+            },
+          );
 
           return {
             conversations: updatedConversations,
@@ -918,17 +1049,24 @@ export const useChatStore = create<ChatState>()(
               ...state.messages,
               [conversationId]: mergedMessages,
             },
+            messagesHydratedByConversation: {
+              ...state.messagesHydratedByConversation,
+              [conversationId]: true,
+            },
             hasMoreMessages: {
               ...state.hasMoreMessages,
               [conversationId]:
                 before || (!before && !after)
                   ? normalized.hasMore
-                  : state.hasMoreMessages[conversationId] ?? false,
+                  : (state.hasMoreMessages[conversationId] ?? false),
             },
           };
         });
 
-        return { loaded: normalized.messages.length, hasMore: normalized.hasMore };
+        return {
+          loaded: normalized.messages.length,
+          hasMore: normalized.hasMore,
+        };
       } catch (error: unknown) {
         const apiError = extractApiError(error);
         const errorMessage =
@@ -992,14 +1130,18 @@ export const useChatStore = create<ChatState>()(
       get().addMessage(conversationId, tempMessage);
 
       try {
-        const attachments = fileMeta ? toAttachmentPayload([fileMeta]) : undefined;
+        const attachments = fileMeta
+          ? toAttachmentPayload([fileMeta])
+          : undefined;
         const response = await apiClient.post<ApiResponse<Message>>(
           `/rooms/${conversationId}/messages`,
           {
             content: messageContent,
             type,
             senderName: sender.senderName,
-            ...(sender.senderAvatar ? { senderAvatar: sender.senderAvatar } : {}),
+            ...(sender.senderAvatar
+              ? { senderAvatar: sender.senderAvatar }
+              : {}),
             tempId,
             ...(replyToId ? { replyTo: replyToId } : {}),
             ...(attachments?.length ? { attachments } : {}),
@@ -1102,7 +1244,8 @@ export const useChatStore = create<ChatState>()(
         typingStatuses: state.typingStatuses.filter(
           (typing) =>
             !(
-              typing.conversationId === conversationId && typing.userId === userId
+              typing.conversationId === conversationId &&
+              typing.userId === userId
             ),
         ),
       }));
@@ -1141,25 +1284,40 @@ export const useCurrentTypingStatus = () => {
     if (!state.selectedConversationId) return null;
     return state.typingStatuses.find(
       (typing) =>
-        typing.conversationId === state.selectedConversationId && typing.isTyping,
+        typing.conversationId === state.selectedConversationId &&
+        typing.isTyping,
     );
   });
 };
 
 export const useFilteredConversations = () => {
   return useChatStore((state) => {
-    let filtered = Array.isArray(state.conversations) ? state.conversations : [];
+    let filtered = Array.isArray(state.conversations)
+      ? state.conversations
+      : [];
 
     switch (state.activeFilter) {
       case "unread":
-        filtered = filtered.filter((conversation) => conversation.unreadCount > 0);
+        filtered = filtered.filter(
+          (conversation) => conversation.unreadCount > 0,
+        );
         break;
       case "groups":
-        filtered = filtered.filter((conversation) => conversation.type === "group");
+        filtered = filtered.filter(
+          (conversation) =>
+            normalizeRoomType(
+              conversation.type,
+              conversation.participants?.length,
+            ) === "group",
+        );
         break;
       case "channels":
         filtered = filtered.filter(
-          (conversation) => conversation.type === "channel",
+          (conversation) =>
+            normalizeRoomType(
+              conversation.type,
+              conversation.participants?.length,
+            ) === "channel",
         );
         break;
     }
@@ -1195,4 +1353,10 @@ export const useCurrentMessages = () =>
     const id = state.selectedConversationId;
     if (!id) return EMPTY_MESSAGES;
     return state.messages[id] || EMPTY_MESSAGES;
+  });
+
+export const useMessagesByConversation = (conversationId: string | null) =>
+  useChatStore((state) => {
+    if (!conversationId) return EMPTY_MESSAGES;
+    return state.messages[conversationId] || EMPTY_MESSAGES;
   });

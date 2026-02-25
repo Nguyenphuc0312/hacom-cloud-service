@@ -598,7 +598,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             type="button"
             onClick={() => setShowAttachmentMenu((previous) => !previous)}
             className={clsx(
-              "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
+              "inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors",
               showAttachmentMenu
                 ? "bg-primary text-text-inverse"
                 : "text-text-muted hover:bg-surface-overlay hover:text-text-primary",
@@ -626,7 +626,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           type="button"
           onClick={handleInsertMentionTrigger}
           className={clsx(
-            "hidden h-10 w-10 items-center justify-center rounded-full transition-colors md:inline-flex",
+            "hidden h-11 w-11 items-center justify-center rounded-full transition-colors md:inline-flex",
             "text-text-muted hover:bg-surface-overlay hover:text-text-primary",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             disableToolbar && "cursor-not-allowed opacity-50",
@@ -716,7 +716,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 : undefined
             }
             className={clsx(
-              "w-full min-h-10 resize-none rounded-2xl border border-border bg-surface px-4 py-2",
+              "w-full min-h-11 resize-none rounded-2xl border border-border bg-surface px-4 py-2",
               "text-sm text-text-primary placeholder:text-text-muted",
               "transition-colors focus:border-border-focus focus:outline-none focus:ring-2 focus:ring-focus/20",
               disabled && "cursor-not-allowed bg-surface-overlay opacity-70",

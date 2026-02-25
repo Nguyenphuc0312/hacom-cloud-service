@@ -9,7 +9,7 @@ import {
 import { Avatar } from "../../common/Avatar";
 import { Badge } from "../../common/Badge";
 import type { Conversation, UserSummary } from "../../../types";
-import { RoomType } from "../../../types";
+import { isDirectConversation } from "../../../lib/conversationAdapter";
 import { formatRelativeTime } from "../../../utils/formatTime";
 import { getMessagePreview } from "../../../utils/messageHelpers";
 
@@ -35,10 +35,7 @@ const getDisplayName = (
   currentUser: UserSummary,
   fallbackName: string,
 ): string => {
-  if (
-    conversation.type !== RoomType.PRIVATE &&
-    conversation.type !== RoomType.DIRECT
-  ) {
+  if (!isDirectConversation(conversation)) {
     return conversation.name || fallbackName;
   }
 
@@ -116,15 +113,13 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
 
   const unreadCount = conversation.unreadCount || 0;
   const unreadMention = hasMention(conversation, currentUser);
+  const isDirect = isDirectConversation(conversation);
 
   const avatarSrc =
-    conversation.type === RoomType.PRIVATE || conversation.type === RoomType.DIRECT
+    isDirect
       ? directPartner?.avatar || conversation.avatar
       : conversation.avatar;
-  const avatarStatus =
-    conversation.type === RoomType.PRIVATE || conversation.type === RoomType.DIRECT
-      ? directPartner?.status
-      : undefined;
+  const avatarStatus = isDirect ? directPartner?.status : undefined;
 
   if (collapsed) {
     return (
@@ -145,10 +140,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
           alt={displayName}
           size="md"
           status={avatarStatus}
-          showStatus={
-            conversation.type === RoomType.PRIVATE ||
-            conversation.type === RoomType.DIRECT
-          }
+          showStatus={isDirect}
         />
 
         {unreadCount > 0 && (
@@ -182,10 +174,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
           alt={displayName}
           size="md"
           status={avatarStatus}
-          showStatus={
-            conversation.type === RoomType.PRIVATE ||
-            conversation.type === RoomType.DIRECT
-          }
+          showStatus={isDirect}
         />
 
         <div className="min-w-0">

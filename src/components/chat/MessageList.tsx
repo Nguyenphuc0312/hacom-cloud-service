@@ -16,6 +16,7 @@ import {
 } from "../../hooks/useMessageGrouping";
 import { useVirtualizedMessages } from "../../hooks/useVirtualizedMessages";
 import type { Conversation, Message } from "../../types";
+import { formatDateDivider } from "../../utils/formatTime";
 
 interface MessageListProps {
   messages: Message[];
@@ -23,6 +24,8 @@ interface MessageListProps {
   currentUserId: string;
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
+  onEdit?: (message: Message) => void | Promise<void>;
+  onDelete?: (messageId: string) => void | Promise<void>;
   hasMore?: boolean;
   isLoadingMore?: boolean;
   isInitialLoading?: boolean;
@@ -37,6 +40,8 @@ interface TimelineRowData {
   items: TimelineItem[];
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
+  onEdit?: (message: Message) => void | Promise<void>;
+  onDelete?: (messageId: string) => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
   setItemSize: (index: number, size: number) => void;
   measureVersion: number;
@@ -95,6 +100,8 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> = React.me
             item={item}
             onReply={data.onReply}
             onReact={data.onReact}
+            onEdit={data.onEdit}
+            onDelete={data.onDelete}
             onImageClick={data.onImageClick}
           />
         </div>
@@ -105,12 +112,19 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> = React.me
 
 TimelineRow.displayName = "TimelineRow";
 
+const toDayKey = (date: Date | null): string => {
+  if (!date) return "";
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+};
+
 const MessageListComponent: React.FC<MessageListProps> = ({
   messages,
   conversation,
   currentUserId,
   onReply,
   onReact,
+  onEdit,
+  onDelete,
   hasMore = false,
   isLoadingMore = false,
   isInitialLoading = false,
@@ -122,6 +136,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 }) => {
   const { t } = useTranslation();
   const viewportRef = React.useRef<HTMLDivElement | null>(null);
+  const stickyDateRafRef = React.useRef<number | null>(null);
+  const [stickyDate, setStickyDate] = React.useState<Date | null>(null);
 
   const timelineItems = useMessageGrouping({
     messages,
@@ -183,19 +199,70 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       items: timelineItems,
       onReply,
       onReact,
+      onEdit,
+      onDelete,
       onImageClick,
       setItemSize,
       measureVersion,
     }),
-    [timelineItems, onReply, onReact, onImageClick, setItemSize, measureVersion],
+    [
+      timelineItems,
+      onReply,
+      onReact,
+      onEdit,
+      onDelete,
+      onImageClick,
+      setItemSize,
+      measureVersion,
+    ],
   );
 
   const handleListScroll = React.useCallback(
     ({ scrollOffset, scrollUpdateWasRequested }: ListOnScrollProps) => {
       if (scrollUpdateWasRequested) return;
       handleScroll(scrollOffset);
+
+      if (stickyDateRafRef.current !== null) {
+        cancelAnimationFrame(stickyDateRafRef.current);
+      }
+      stickyDateRafRef.current = requestAnimationFrame(() => {
+        let accumulatedHeight = 0;
+        let targetIndex = 0;
+
+        for (let index = 0; index < timelineItems.length; index += 1) {
+          const rowHeight = Math.max(1, Math.ceil(getItemSize(index)));
+          if (accumulatedHeight + rowHeight > scrollOffset + 1) {
+            targetIndex = index;
+            break;
+          }
+          accumulatedHeight += rowHeight;
+          targetIndex = index;
+        }
+
+        let nextStickyDate: Date | null = null;
+        for (let index = targetIndex; index >= 0; index -= 1) {
+          const item = timelineItems[index];
+          if (!item) continue;
+          if (item.kind === "date") {
+            nextStickyDate = item.date;
+            break;
+          }
+          if (item.kind === "message" || item.kind === "system") {
+            nextStickyDate = new Date(item.message.createdAt);
+            break;
+          }
+        }
+
+        setStickyDate((previous) => {
+          if (toDayKey(previous) === toDayKey(nextStickyDate)) {
+            return previous;
+          }
+          return nextStickyDate;
+        });
+        stickyDateRafRef.current = null;
+      });
     },
-    [handleScroll],
+    [getItemSize, handleScroll, timelineItems],
   );
 
   const handleRetry = React.useCallback(() => {
@@ -246,6 +313,49 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     [jumpToLatest, outerRef],
   );
 
+  React.useEffect(() => {
+    if (timelineItems.length === 0) {
+      setStickyDate(null);
+      return;
+    }
+
+    const scrollTop = outerRef.current?.scrollTop ?? 0;
+    let accumulatedHeight = 0;
+    let targetIndex = 0;
+    for (let index = 0; index < timelineItems.length; index += 1) {
+      const rowHeight = Math.max(1, Math.ceil(getItemSize(index)));
+      if (accumulatedHeight + rowHeight > scrollTop + 1) {
+        targetIndex = index;
+        break;
+      }
+      accumulatedHeight += rowHeight;
+      targetIndex = index;
+    }
+
+    for (let index = targetIndex; index >= 0; index -= 1) {
+      const item = timelineItems[index];
+      if (!item) continue;
+      if (item.kind === "date") {
+        setStickyDate(item.date);
+        return;
+      }
+      if (item.kind === "message" || item.kind === "system") {
+        setStickyDate(new Date(item.message.createdAt));
+        return;
+      }
+    }
+
+    setStickyDate(null);
+  }, [conversation.id, getItemSize, outerRef, timelineItems]);
+
+  React.useEffect(() => {
+    return () => {
+      if (stickyDateRafRef.current !== null) {
+        cancelAnimationFrame(stickyDateRafRef.current);
+      }
+    };
+  }, []);
+
   return (
     <section className={clsx("relative h-full min-h-0 flex-1", className)}>
       {isInitialLoading && (
@@ -295,6 +405,14 @@ const MessageListComponent: React.FC<MessageListProps> = ({
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {!isInitialLoading && messages.length > 0 && stickyDate && (
+        <div className="pointer-events-none absolute left-1/2 top-3 z-[5] -translate-x-1/2">
+          <div className="rounded-full border border-border bg-surface/92 px-3 py-1 text-xs font-medium text-text-muted shadow-xs backdrop-blur">
+            {formatDateDivider(stickyDate)}
+          </div>
         </div>
       )}
 
@@ -352,6 +470,8 @@ const areEqualMessageListProps = (
   previousProps.currentUserId === nextProps.currentUserId &&
   previousProps.onReply === nextProps.onReply &&
   previousProps.onReact === nextProps.onReact &&
+  previousProps.onEdit === nextProps.onEdit &&
+  previousProps.onDelete === nextProps.onDelete &&
   previousProps.hasMore === nextProps.hasMore &&
   previousProps.isLoadingMore === nextProps.isLoadingMore &&
   previousProps.isInitialLoading === nextProps.isInitialLoading &&

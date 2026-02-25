@@ -401,10 +401,10 @@ export const WebSocketEvents = {
   MESSAGE_SEND: "message:send",
   ROOM_JOIN: "room:join",
   ROOM_LEAVE: "room:leave",
-  TYPING_START: "user:typing",
-  TYPING_STOP: "user:stop_typing",
-  LEGACY_TYPING_START: "typing:start",
-  LEGACY_TYPING_STOP: "typing:stop",
+  TYPING_START: "typing:start",
+  TYPING_STOP: "typing:stop",
+  LEGACY_TYPING_START: "user:typing",
+  LEGACY_TYPING_STOP: "user:stop_typing",
 
   // Server → Client
   MESSAGE_NEW: "message:new",

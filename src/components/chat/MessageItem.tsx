@@ -10,6 +10,8 @@ interface MessageItemProps {
   item: TimelineItem;
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
+  onEdit?: (message: Message) => void | Promise<void>;
+  onDelete?: (messageId: string) => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
 }
 
@@ -17,6 +19,8 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   item,
   onReply,
   onReact,
+  onEdit,
+  onDelete,
   onImageClick,
 }) => {
   if (item.kind === "date") {
@@ -39,6 +43,8 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
         conversationType={item.conversationType}
         onReply={onReply}
         onReact={onReact}
+        onEdit={onEdit}
+        onDelete={onDelete}
         onImageClick={onImageClick}
       />
     </div>

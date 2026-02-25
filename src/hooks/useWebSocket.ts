@@ -451,18 +451,6 @@ export const useWebSocket = (
     );
     unsubscribersRef.current.push(unsubTypingStop);
 
-    const unsubTypingStartLegacy = socket.on(
-      WebSocketEvents.LEGACY_TYPING_START,
-      handleTypingStart,
-    );
-    unsubscribersRef.current.push(unsubTypingStartLegacy);
-
-    const unsubTypingStopLegacy = socket.on(
-      WebSocketEvents.LEGACY_TYPING_STOP,
-      handleTypingStop,
-    );
-    unsubscribersRef.current.push(unsubTypingStopLegacy);
-
     const unsubTypingLegacy = socket.on(WebSocketEvents.TYPING, (data) => {
       const payload = asRecord(data);
       if (!payload) return;
@@ -564,7 +552,6 @@ export const useWebSocket = (
         conversationId: roomId,
         isTyping: true,
       });
-      emit(WebSocketEvents.LEGACY_TYPING_START, { roomId });
 
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -575,7 +562,6 @@ export const useWebSocket = (
           conversationId: roomId,
           isTyping: false,
         });
-        emit(WebSocketEvents.LEGACY_TYPING_STOP, { roomId });
       }, 3000);
     },
     [emit],
@@ -593,7 +579,6 @@ export const useWebSocket = (
         conversationId: roomId,
         isTyping: false,
       });
-      emit(WebSocketEvents.LEGACY_TYPING_STOP, { roomId });
     },
     [emit],
   );

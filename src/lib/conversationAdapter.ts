@@ -1,0 +1,285 @@
+import type { Conversation, MessageSummary, UserSummary } from "../types";
+import { MessageType, RoomType, UserStatus } from "../types";
+
+type UnknownRecord = Record<string, unknown>;
+
+const isRecord = (value: unknown): value is UnknownRecord =>
+  value !== null && typeof value === "object";
+
+const asString = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim().length > 0 ? value : undefined;
+
+const asBoolean = (value: unknown, fallback = false): boolean =>
+  typeof value === "boolean" ? value : fallback;
+
+const asNumber = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) ? value : undefined;
+
+const toDate = (value: unknown, fallback: Date): Date => {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value;
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+
+  return fallback;
+};
+
+const normalizeUserSummary = (value: unknown): UserSummary | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const nestedUser = isRecord(value.user) ? value.user : null;
+  const source = nestedUser ?? value;
+  const id =
+    asString(source.id) ??
+    asString(source.userId) ??
+    asString(source.user_id) ??
+    asString(value.userId) ??
+    asString(value.user_id);
+  if (!id) {
+    return null;
+  }
+
+  const username =
+    asString(source.username) ??
+    asString(source.userName) ??
+    asString(source.nickname) ??
+    id;
+  const displayName =
+    asString(source.displayName) ??
+    asString(source.fullName) ??
+    asString(source.name) ??
+    username;
+  const avatar = asString(source.avatar);
+  const status = asString(source.status);
+
+  return {
+    id,
+    username,
+    displayName,
+    avatar,
+    status: (status ?? UserStatus.OFFLINE) as UserSummary["status"],
+    isBot: typeof source.isBot === "boolean" ? source.isBot : undefined,
+  };
+};
+
+const normalizeParticipants = (source: UnknownRecord): UserSummary[] => {
+  const result = new Map<string, UserSummary>();
+  const candidates = [
+    source.participants,
+    source.members,
+    source.users,
+    source.memberDetails,
+  ];
+
+  candidates.forEach((candidate) => {
+    if (!Array.isArray(candidate)) {
+      return;
+    }
+
+    candidate.forEach((item) => {
+      const normalized = normalizeUserSummary(item);
+      if (!normalized) {
+        return;
+      }
+      result.set(normalized.id, normalized);
+    });
+  });
+
+  return Array.from(result.values());
+};
+
+const normalizeLastMessage = (source: UnknownRecord): MessageSummary | undefined => {
+  const raw =
+    (isRecord(source.lastMessage) ? source.lastMessage : null) ??
+    (isRecord(source.last_message) ? source.last_message : null);
+  if (!raw) {
+    return undefined;
+  }
+
+  const sender = isRecord(raw.sender) ? raw.sender : null;
+  const id =
+    asString(raw.id) ??
+    asString(raw.messageId) ??
+    asString(raw._id) ??
+    `last-${asString(source.id) ?? "message"}`;
+  const senderId =
+    asString(raw.senderId) ??
+    asString(raw.userId) ??
+    asString(sender?.id) ??
+    "unknown-user";
+  const senderName =
+    asString(raw.senderName) ??
+    asString(raw.username) ??
+    asString(sender?.displayName) ??
+    asString(sender?.username) ??
+    "Unknown user";
+  const type = asString(raw.type) ?? MessageType.TEXT;
+
+  return {
+    id,
+    senderId,
+    senderName,
+    content: typeof raw.content === "string" ? raw.content : "",
+    type: type as MessageSummary["type"],
+    isDeleted: asBoolean(raw.isDeleted, false),
+    createdAt: toDate(
+      raw.createdAt ?? source.lastMessageAt ?? source.updatedAt,
+      new Date(),
+    ),
+  };
+};
+
+const toParticipantsCount = (
+  participants: UserSummary[],
+  source: UnknownRecord,
+): number =>
+  asNumber(source.participantCount) ??
+  asNumber(source.memberCount) ??
+  asNumber(source.membersCount) ??
+  participants.length;
+
+const extractConversationRows = (payload: unknown): unknown[] => {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (!isRecord(payload)) {
+    return [];
+  }
+
+  const directKeys = ["conversations", "rooms", "items", "data"] as const;
+  for (const key of directKeys) {
+    if (Array.isArray(payload[key])) {
+      return payload[key];
+    }
+  }
+
+  const nestedData = isRecord(payload.data) ? payload.data : null;
+  if (nestedData) {
+    for (const key of directKeys) {
+      if (Array.isArray(nestedData[key])) {
+        return nestedData[key];
+      }
+    }
+  }
+
+  return [];
+};
+
+export const normalizeRoomType = (
+  value: unknown,
+  participantCount?: number,
+): RoomType => {
+  const roomType = asString(value)?.toLowerCase();
+
+  switch (roomType) {
+    case RoomType.DIRECT:
+      return RoomType.DIRECT;
+    case RoomType.PRIVATE:
+      return RoomType.PRIVATE;
+    case RoomType.GROUP:
+      return RoomType.GROUP;
+    case RoomType.CHANNEL:
+      return RoomType.CHANNEL;
+    case RoomType.PUBLIC:
+      return RoomType.PUBLIC;
+    case RoomType.SUPPORT:
+      return RoomType.SUPPORT;
+    case RoomType.BOT:
+      return RoomType.BOT;
+    default:
+      if (participantCount === 2) {
+        return RoomType.DIRECT;
+      }
+      if (typeof participantCount === "number" && participantCount > 2) {
+        return RoomType.GROUP;
+      }
+      return RoomType.GROUP;
+  }
+};
+
+export const isDirectConversation = (
+  conversation: Pick<Conversation, "type" | "participants"> | null | undefined,
+): boolean => {
+  if (!conversation) {
+    return false;
+  }
+
+  const participantCount = Array.isArray(conversation.participants)
+    ? conversation.participants.length
+    : undefined;
+  const normalizedType = normalizeRoomType(conversation.type, participantCount);
+
+  if (normalizedType === RoomType.DIRECT || normalizedType === RoomType.PRIVATE) {
+    return true;
+  }
+
+  return participantCount === 2;
+};
+
+export const normalizeConversation = (payload: unknown): Conversation | null => {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  const id =
+    asString(payload.id) ??
+    asString(payload._id) ??
+    asString(payload.roomId) ??
+    asString(payload.conversationId);
+  if (!id) {
+    return null;
+  }
+
+  const participants = normalizeParticipants(payload);
+  const participantCount = toParticipantsCount(participants, payload);
+  const normalizedType = normalizeRoomType(payload.type, participantCount);
+  const lastMessage = normalizeLastMessage(payload);
+  const updatedAt = toDate(
+    payload.updatedAt ?? payload.lastMessageAt ?? payload.createdAt,
+    new Date(),
+  );
+  const baseConversation: Conversation = {
+    id,
+    type: normalizedType,
+    name: asString(payload.name) ?? "",
+    unreadCount: asNumber(payload.unreadCount) ?? asNumber(payload.unread) ?? 0,
+    isPinned: asBoolean(payload.isPinned, false),
+    isMuted: asBoolean(payload.isMuted, false),
+    isArchived: asBoolean(payload.isArchived, false),
+    isBlocked: asBoolean(payload.isBlocked, false),
+    participants,
+    participantCount,
+    updatedAt,
+    ...(asString(payload.avatar) ? { avatar: asString(payload.avatar) } : {}),
+    ...(lastMessage ? { lastMessage } : {}),
+    ...(asString(payload.currentUserId)
+      ? { currentUserId: asString(payload.currentUserId) }
+      : {}),
+    ...(payload.joinedAt ? { joinedAt: toDate(payload.joinedAt, updatedAt) } : {}),
+    ...(payload.lastReadAt
+      ? { lastReadAt: toDate(payload.lastReadAt, updatedAt) }
+      : {}),
+    ...(asString(payload.lastReadMessageId)
+      ? { lastReadMessageId: asString(payload.lastReadMessageId) }
+      : {}),
+  };
+
+  return {
+    ...(payload as unknown as Conversation),
+    ...baseConversation,
+  };
+};
+
+export const normalizeConversationsPayload = (payload: unknown): Conversation[] =>
+  extractConversationRows(payload)
+    .map((room) => normalizeConversation(room))
+    .filter((room): room is Conversation => room !== null);

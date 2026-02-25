@@ -5,7 +5,7 @@ import { SpeakerXMarkIcon, CheckCircleIcon } from "@heroicons/react/24/solid";
 import { Avatar } from "../common/Avatar";
 import { Badge } from "../common/Badge";
 import type { Conversation } from "../../types";
-import { RoomType } from "../../types";
+import { isDirectConversation } from "../../lib/conversationAdapter";
 import { formatRelativeTime } from "../../utils/formatTime";
 import { getMessagePreview } from "../../utils/messageHelpers";
 
@@ -25,10 +25,10 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
+  const isDirect = isDirectConversation(conversation);
 
   const otherParticipant =
-    conversation.type === RoomType.PRIVATE ||
-    conversation.type === RoomType.DIRECT
+    isDirect
       ? (conversation.participants || []).find((p) => p.id !== currentUserId)
       : null;
 
@@ -62,10 +62,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
         alt={conversation.name || otherParticipant?.displayName || fallbackConversationLabel}
         size="lg"
         status={status}
-        showStatus={
-          conversation.type === RoomType.PRIVATE ||
-          conversation.type === RoomType.DIRECT
-        }
+        showStatus={isDirect}
       />
 
       <div className="flex-1 min-w-0">

@@ -7,8 +7,7 @@ import { useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
   useChatStore,
-  useCurrentMessages,
-  useCurrentTypingStatus,
+  useMessagesByConversation,
 } from "../stores";
 import { useWebSocket } from "./useWebSocket";
 import { toast } from "../components/ui";
@@ -41,19 +40,39 @@ export const useMessages = ({
   autoLoad = true,
 }: UseMessagesOptions): UseMessagesReturn => {
   const { t } = useTranslation();
-  const messages = useCurrentMessages();
-  const typingStatus = useCurrentTypingStatus();
-  const {
-    isLoadingMessages,
-    isLoadingMessagesByConversation,
-    hasMoreMessages,
-    error,
-    fetchMessages,
-    sendMessage: storeSendMessage,
-    updateMessage,
-    removeMessage,
-    clearError,
-  } = useChatStore();
+  const messages = useMessagesByConversation(conversationId);
+  const typingStatus = useChatStore((state) => {
+    if (!conversationId) return null;
+    return (
+      state.typingStatuses.find(
+        (typing) => typing.conversationId === conversationId && typing.isTyping,
+      ) || null
+    );
+  });
+  const isLoading = useChatStore((state) =>
+    conversationId !== null
+      ? Boolean(state.isLoadingMessagesByConversation[conversationId])
+      : state.isLoadingMessages,
+  );
+  const hasMore = useChatStore((state) =>
+    conversationId ? (state.hasMoreMessages[conversationId] ?? true) : false,
+  );
+  const error = useChatStore((state) =>
+    conversationId ? (state.messageErrors[conversationId] ?? null) : state.error,
+  );
+  const isHydrated = useChatStore((state) =>
+    conversationId
+      ? Boolean(state.messagesHydratedByConversation[conversationId])
+      : false,
+  );
+  const isLoadingByConversation = useChatStore(
+    (state) => state.isLoadingMessagesByConversation,
+  );
+  const fetchMessages = useChatStore((state) => state.fetchMessages);
+  const storeSendMessage = useChatStore((state) => state.sendMessage);
+  const updateMessage = useChatStore((state) => state.updateMessage);
+  const removeMessage = useChatStore((state) => state.removeMessage);
+  const clearError = useChatStore((state) => state.clearError);
 
   const {
     joinRoom,
@@ -77,7 +96,7 @@ export const useMessages = ({
       joinRoom(conversationId);
       previousConversationRef.current = conversationId;
 
-      if (autoLoad && !messages.length) {
+      if (autoLoad && !isHydrated) {
         fetchMessages(conversationId);
       }
     }
@@ -93,23 +112,25 @@ export const useMessages = ({
     leaveRoom,
     autoLoad,
     fetchMessages,
-    messages.length,
+    isHydrated,
   ]);
 
   const loadMessages = useCallback(async () => {
     if (conversationId) {
       clearError();
-      await fetchMessages(conversationId);
+      await fetchMessages(conversationId, undefined, undefined, { force: true });
     }
   }, [conversationId, fetchMessages, clearError]);
 
   const loadMore = useCallback(async () => {
     if (
       conversationId &&
-      hasMoreMessages[conversationId] &&
-      !isLoadingMessagesByConversation[conversationId]
+      hasMore &&
+      !isLoadingByConversation[conversationId]
     ) {
-      const oldestMessage = messages[0];
+      const oldestMessage = messages.find(
+        (message) => !message.id.startsWith("temp-"),
+      );
       if (oldestMessage) {
         await fetchMessages(
           conversationId,
@@ -119,8 +140,8 @@ export const useMessages = ({
     }
   }, [
     conversationId,
-    hasMoreMessages,
-    isLoadingMessagesByConversation,
+    hasMore,
+    isLoadingByConversation,
     messages,
     fetchMessages,
   ]);
@@ -202,11 +223,8 @@ export const useMessages = ({
 
   return {
     messages,
-    isLoading:
-      conversationId !== null
-        ? Boolean(isLoadingMessagesByConversation[conversationId])
-        : isLoadingMessages,
-    hasMore: conversationId ? (hasMoreMessages[conversationId] ?? true) : false,
+    isLoading,
+    hasMore,
     error,
     typingStatus: typingStatus || null,
     loadMessages,

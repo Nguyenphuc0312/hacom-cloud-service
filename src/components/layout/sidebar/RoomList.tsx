@@ -11,6 +11,10 @@ import { useTranslation } from "react-i18next";
 import { VariableSizeList, type ListChildComponentProps } from "react-window";
 import type { Conversation, ConversationFilter, UserSummary } from "../../../types";
 import { RoomType } from "../../../types";
+import {
+  isDirectConversation,
+  normalizeRoomType,
+} from "../../../lib/conversationAdapter";
 import { RoomItem } from "./RoomItem";
 
 interface RoomListProps {
@@ -91,12 +95,12 @@ const toSections = (
   source: Conversation[],
   activeFilter: ConversationFilter,
 ): RoomSection[] => {
+  const toType = (room: Conversation): RoomType =>
+    normalizeRoomType(room.type, room.participants?.length);
   const unread = source.filter((room) => (room.unreadCount || 0) > 0);
-  const channels = source.filter((room) => room.type === RoomType.CHANNEL);
-  const groups = source.filter((room) => room.type === RoomType.GROUP);
-  const direct = source.filter(
-    (room) => room.type === RoomType.DIRECT || room.type === RoomType.PRIVATE,
-  );
+  const channels = source.filter((room) => toType(room) === RoomType.CHANNEL);
+  const groups = source.filter((room) => toType(room) === RoomType.GROUP);
+  const direct = source.filter((room) => isDirectConversation(room));
 
   switch (activeFilter) {
     case "unread":

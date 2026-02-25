@@ -11,6 +11,8 @@
   },
   "groupInfo": {
     "title": "Thông tin nhóm",
+    "renameGroup": "Đổi tên nhóm",
+    "renamePlaceholder": "Nhập tên nhóm mới...",
     "membersCount": "{{count}} thành viên",
     "notifications": "Thông báo",
     "tabs": {
@@ -21,7 +23,21 @@
     "addMember": "Thêm thành viên",
     "searchMemberPlaceholder": "Tìm kiếm thành viên...",
     "noSearchResult": "Không có kết quả phù hợp",
+    "noMembers": "Không có thành viên",
     "youSuffix": "(Bạn)",
+    "removeMemberConfirm": "Bạn có chắc muốn xóa {{name}} khỏi nhóm?",
+    "roles": {
+      "owner": "Chủ nhóm",
+      "admin": "Quản trị viên",
+      "moderator": "Điều hành viên",
+      "member": "Thành viên",
+      "guest": "Khách"
+    },
+    "actions": {
+      "makeAdmin": "Đặt làm admin",
+      "removeAdmin": "Gỡ admin",
+      "removeMember": "Xóa khỏi nhóm"
+    },
     "viewAllMedia": "Xem tất cả phương tiện",
     "noSharedFiles": "Chưa có tệp được chia sẻ",
     "reportGroup": "Báo cáo nhóm",
@@ -70,6 +86,14 @@
     "profileUpdateFailed": "Cập nhật thất bại",
     "memberAdded": "Đã thêm thành viên vào nhóm",
     "memberAddFailed": "Không thể thêm thành viên",
+    "loadMembersFailed": "Không thể tải danh sách thành viên",
+    "groupRenamed": "Đã đổi tên nhóm",
+    "groupRenameFailed": "Không thể đổi tên nhóm",
+    "memberRemoved": "Đã xóa thành viên khỏi nhóm",
+    "memberRemoveFailed": "Không thể xóa thành viên",
+    "memberPromoted": "Đã cập nhật quyền admin",
+    "memberDemoted": "Đã gỡ quyền admin",
+    "roleUpdateFailed": "Không thể cập nhật vai trò thành viên",
     "leftGroup": "Đã rời nhóm",
     "leaveGroupFailed": "Không thể rời nhóm lúc này"
   }

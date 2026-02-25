@@ -23,7 +23,7 @@ export const SendButton: React.FC<SendButtonProps> = ({
       onClick={onClick}
       disabled={disabled}
       className={clsx(
-        "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
+        "inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors",
         "bg-primary text-text-inverse hover:bg-primary-hover",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
         "disabled:cursor-not-allowed disabled:opacity-50",

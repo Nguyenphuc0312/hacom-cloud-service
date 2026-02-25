@@ -1,8 +1,9 @@
-﻿import React, { useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import clsx from "clsx";
 import {
   XMarkIcon,
   PencilIcon,
+  CheckIcon,
   BellIcon,
   PhotoIcon,
   UserPlusIcon,
@@ -15,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import { Avatar } from "../common/Avatar";
 import { Input, Spinner, toast } from "../ui";
 import type { Conversation, UserSummary } from "../../types";
+import { RoomMemberRole, UserStatus } from "../../types";
 import { useDebounce } from "../../hooks";
 import { conversationApi, userApi } from "../../services/api";
 import { useChatStore } from "../../stores";
@@ -26,6 +28,88 @@ interface GroupInfoProps {
   onClose: () => void;
   className?: string;
 }
+
+type GroupMemberRole = RoomMemberRole;
+
+interface GroupMember {
+  id: string;
+  username: string;
+  displayName?: string;
+  avatar?: string;
+  status?: UserSummary["status"];
+  role: GroupMemberRole;
+}
+
+const ROLE_PRIORITY: Record<GroupMemberRole, number> = {
+  [RoomMemberRole.OWNER]: 0,
+  [RoomMemberRole.ADMIN]: 1,
+  [RoomMemberRole.MODERATOR]: 2,
+  [RoomMemberRole.MEMBER]: 3,
+  [RoomMemberRole.GUEST]: 4,
+};
+
+const VALID_ROLES = new Set<string>(Object.values(RoomMemberRole));
+const VALID_STATUSES = new Set<string>(Object.values(UserStatus));
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object";
+
+const asString = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim().length > 0 ? value : undefined;
+
+const asStatus = (value: unknown): UserSummary["status"] | undefined => {
+  const status = asString(value);
+  if (!status) return undefined;
+  return VALID_STATUSES.has(status) ? (status as UserSummary["status"]) : undefined;
+};
+
+const extractMemberRows = (payload: unknown): unknown[] => {
+  if (Array.isArray(payload)) return payload;
+
+  if (isRecord(payload)) {
+    if (Array.isArray(payload.data)) return payload.data;
+    if (Array.isArray(payload.members)) return payload.members;
+
+    if (isRecord(payload.data)) {
+      const nested = payload.data;
+      if (Array.isArray(nested.data)) return nested.data;
+      if (Array.isArray(nested.members)) return nested.members;
+    }
+  }
+
+  return [];
+};
+
+const normalizeMember = (raw: unknown): GroupMember | null => {
+  if (!isRecord(raw)) return null;
+
+  const user = isRecord(raw.user) ? raw.user : null;
+  const id =
+    asString(raw.userId) ??
+    asString(raw.user_id) ??
+    asString(user?.id) ??
+    asString(raw.id);
+
+  if (!id) return null;
+
+  const roleRaw = asString(raw.role);
+  const role = VALID_ROLES.has(roleRaw ?? "")
+    ? (roleRaw as GroupMemberRole)
+    : RoomMemberRole.MEMBER;
+
+  const username =
+    asString(raw.username) ?? asString(user?.username) ?? asString(raw.nickname) ?? id;
+
+  return {
+    id,
+    username,
+    displayName:
+      asString(raw.displayName) ?? asString(user?.displayName) ?? asString(raw.nickname),
+    avatar: asString(raw.avatar) ?? asString(user?.avatar),
+    status: asStatus(raw.status) ?? asStatus(user?.status),
+    role,
+  };
+};
 
 export const GroupInfo: React.FC<GroupInfoProps> = ({
   conversation,
@@ -50,11 +134,136 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const [searchResults, setSearchResults] = useState<UserSummary[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+  const [membersByUserId, setMembersByUserId] = useState<Record<string, GroupMember>>(
+    {},
+  );
+  const [actingMemberId, setActingMemberId] = useState<string | null>(null);
+  const [isRenamingGroup, setIsRenamingGroup] = useState(false);
+  const [groupNameDraft, setGroupNameDraft] = useState(conversation.name || "");
 
   const debouncedQuery = useDebounce(searchQuery, 300);
   const { updateConversation, removeConversation } = useChatStore();
 
-  const isAdmin = false;
+  const createdBy = React.useMemo(() => {
+    if (!isRecord(conversation)) return undefined;
+    return asString((conversation as unknown as Record<string, unknown>).createdBy);
+  }, [conversation]);
+
+  const members = React.useMemo<GroupMember[]>(() => {
+    const merged = new Map<string, GroupMember>();
+
+    participants.forEach((participant) => {
+      const existingMember = membersByUserId[participant.id];
+      merged.set(participant.id, {
+        id: participant.id,
+        username: participant.username,
+        displayName: participant.displayName,
+        avatar: participant.avatar,
+        status: participant.status,
+        role:
+          existingMember?.role ||
+          (participant.id === createdBy ? RoomMemberRole.OWNER : RoomMemberRole.MEMBER),
+      });
+    });
+
+    Object.values(membersByUserId).forEach((member) => {
+      if (!merged.has(member.id)) {
+        merged.set(member.id, member);
+      }
+    });
+
+    return Array.from(merged.values()).sort((a, b) => {
+      const roleDiff = ROLE_PRIORITY[a.role] - ROLE_PRIORITY[b.role];
+      if (roleDiff !== 0) return roleDiff;
+
+      const aName = (a.displayName || a.username).toLowerCase();
+      const bName = (b.displayName || b.username).toLowerCase();
+      return aName.localeCompare(bName);
+    });
+  }, [createdBy, membersByUserId, participants]);
+
+  const currentUserRole =
+    membersByUserId[currentUserId]?.role ||
+    (currentUserId === createdBy ? RoomMemberRole.OWNER : RoomMemberRole.MEMBER);
+  const isAdmin =
+    currentUserRole === RoomMemberRole.OWNER || currentUserRole === RoomMemberRole.ADMIN;
+  const canManageRoles = currentUserRole === RoomMemberRole.OWNER;
+
+  const canRemoveMember = useCallback(
+    (member: GroupMember) => {
+      if (!isAdmin) return false;
+      if (member.id === currentUserId) return false;
+      if (member.role === RoomMemberRole.OWNER) return false;
+      if (currentUserRole === RoomMemberRole.OWNER) return true;
+      return member.role !== RoomMemberRole.ADMIN;
+    },
+    [currentUserId, currentUserRole, isAdmin],
+  );
+
+  const roleLabel = useCallback(
+    (role: GroupMemberRole) => {
+      if (role === RoomMemberRole.OWNER) return t("profile:groupInfo.roles.owner");
+      if (role === RoomMemberRole.ADMIN) return t("profile:groupInfo.roles.admin");
+      if (role === RoomMemberRole.MODERATOR) {
+        return t("profile:groupInfo.roles.moderator");
+      }
+      if (role === RoomMemberRole.GUEST) return t("profile:groupInfo.roles.guest");
+      return t("profile:groupInfo.roles.member");
+    },
+    [t],
+  );
+
+  const roleBadgeClass = useCallback((role: GroupMemberRole) => {
+    if (role === RoomMemberRole.OWNER) {
+      return "bg-warning/15 text-warning";
+    }
+
+    if (role === RoomMemberRole.ADMIN) {
+      return "bg-primary/10 text-primary";
+    }
+
+    return "bg-surface-overlay text-text-muted";
+  }, []);
+
+  const fetchMembers = useCallback(async () => {
+    setIsLoadingMembers(true);
+    try {
+      const response = await conversationApi.getMembers(conversation.id, 1, 200);
+      const payload = unwrapApiSuccess(response);
+      const rows = extractMemberRows(payload);
+      const nextMembers = rows
+        .map((row) => normalizeMember(row))
+        .filter((member): member is GroupMember => member !== null);
+
+      const nextById: Record<string, GroupMember> = {};
+      nextMembers.forEach((member) => {
+        nextById[member.id] = member;
+      });
+      setMembersByUserId(nextById);
+    } catch (error) {
+      const apiError = extractApiError(error);
+      toast.error(apiError.message || t("profile:toast.loadMembersFailed"));
+    } finally {
+      setIsLoadingMembers(false);
+    }
+  }, [conversation.id, t]);
+
+  const refreshConversation = useCallback(async () => {
+    const response = await conversationApi.getConversationById(conversation.id);
+    const refreshedConversation = unwrapApiSuccess(response);
+    updateConversation(conversation.id, refreshedConversation);
+  }, [conversation.id, updateConversation]);
+
+  React.useEffect(() => {
+    setGroupNameDraft(conversation.name || "");
+    setIsRenamingGroup(false);
+    setShowAddMember(false);
+  }, [conversation.id, conversation.name]);
+
+  React.useEffect(() => {
+    void fetchMembers();
+  }, [fetchMembers]);
 
   const searchUsers = useCallback(
     async (query: string) => {
@@ -66,9 +275,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       setIsSearching(true);
       try {
         const response = await userApi.searchUsers(query, 1, 10);
-        const participantIds = new Set(participants.map((p) => p.id));
+        const memberIds = new Set(members.map((member) => member.id));
         const users = unwrapApiSuccess(response).filter(
-          (u) => !participantIds.has(u.id) && u.id !== currentUserId,
+          (user) => !memberIds.has(user.id) && user.id !== currentUserId,
         );
         setSearchResults(users as unknown as UserSummary[]);
       } catch {
@@ -77,7 +286,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         setIsSearching(false);
       }
     },
-    [participants, currentUserId],
+    [members, currentUserId],
   );
 
   React.useEffect(() => {
@@ -88,11 +297,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     async (userId: string) => {
       setIsSubmitting(true);
       try {
-        const response = await conversationApi.addMembers(conversation.id, [
-          userId,
-        ]);
+        const response = await conversationApi.addMembers(conversation.id, [userId]);
         const updatedConversation = unwrapApiSuccess(response);
         updateConversation(conversation.id, updatedConversation);
+        void fetchMembers();
         setSearchQuery("");
         setSearchResults([]);
         setShowAddMember(false);
@@ -104,7 +312,98 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         setIsSubmitting(false);
       }
     },
-    [conversation.id, t, updateConversation],
+    [conversation.id, fetchMembers, t, updateConversation],
+  );
+
+  const handleRenameGroup = useCallback(async () => {
+    const nextName = groupNameDraft.trim();
+
+    if (!nextName) {
+      toast.error(t("profile:toast.groupNameRequired"));
+      return;
+    }
+
+    if (nextName === (conversation.name || "").trim()) {
+      setIsRenamingGroup(false);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await conversationApi.updateConversation(conversation.id, { name: nextName });
+      await refreshConversation();
+      setIsRenamingGroup(false);
+      toast.success(t("profile:toast.groupRenamed"));
+    } catch (error) {
+      const apiError = extractApiError(error);
+      toast.error(apiError.message || t("profile:toast.groupRenameFailed"));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [
+    conversation.id,
+    conversation.name,
+    groupNameDraft,
+    refreshConversation,
+    t,
+  ]);
+
+  const handleToggleMemberRole = useCallback(
+    async (member: GroupMember) => {
+      if (!canManageRoles) return;
+      if (member.id === currentUserId) return;
+      if (member.role === RoomMemberRole.OWNER) return;
+
+      const nextRole =
+        member.role === RoomMemberRole.ADMIN
+          ? RoomMemberRole.MEMBER
+          : RoomMemberRole.ADMIN;
+
+      setActingMemberId(member.id);
+      try {
+        await conversationApi.updateMemberRole(conversation.id, member.id, nextRole);
+        await fetchMembers();
+        toast.success(
+          nextRole === RoomMemberRole.ADMIN
+            ? t("profile:toast.memberPromoted")
+            : t("profile:toast.memberDemoted"),
+        );
+      } catch (error) {
+        const apiError = extractApiError(error);
+        toast.error(apiError.message || t("profile:toast.roleUpdateFailed"));
+      } finally {
+        setActingMemberId(null);
+      }
+    },
+    [canManageRoles, conversation.id, currentUserId, fetchMembers, t],
+  );
+
+  const handleRemoveMember = useCallback(
+    async (member: GroupMember) => {
+      if (!canRemoveMember(member)) return;
+
+      const displayName = member.displayName || member.username;
+      if (
+        !window.confirm(
+          t("profile:groupInfo.removeMemberConfirm", { name: displayName }),
+        )
+      ) {
+        return;
+      }
+
+      setActingMemberId(member.id);
+      try {
+        await conversationApi.removeMember(conversation.id, member.id);
+        await Promise.all([refreshConversation(), fetchMembers()]);
+        toast.success(t("profile:toast.memberRemoved"));
+      } catch (error) {
+        const apiError = extractApiError(error);
+        toast.error(apiError.message || t("profile:toast.memberRemoveFailed"));
+      } finally {
+        setActingMemberId(null);
+      }
+    },
+    [canRemoveMember, conversation.id, fetchMembers, refreshConversation, t],
   );
 
   const handleLeaveGroup = useCallback(async () => {
@@ -153,22 +452,74 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
           <div className="mt-4 text-center">
             <h2 className="text-xl font-semibold text-text-primary flex items-center gap-2 justify-center">
-              {conversation.name}
-              {isAdmin && (
-                <button
-                  type="button"
-                  className="p-1 hover:bg-surface-overlay rounded-full"
-                >
-                  <PencilIcon className="w-4 h-4 text-text-muted" />
-                </button>
-              )}
+              {isRenamingGroup
+                ? t("profile:groupInfo.renameGroup")
+                : conversation.name || t("common:labels.group")}
             </h2>
 
-            <p className="text-sm text-text-muted mt-1">
-              {t("profile:groupInfo.membersCount", {
-                count: conversation.participantCount ?? participants.length,
-              })}
-            </p>
+            {isRenamingGroup ? (
+              <div className="mt-3 w-full min-w-[16rem] space-y-2">
+                <Input
+                  type="text"
+                  value={groupNameDraft}
+                  onChange={(event) => setGroupNameDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void handleRenameGroup();
+                    }
+                    if (event.key === "Escape") {
+                      setIsRenamingGroup(false);
+                      setGroupNameDraft(conversation.name || "");
+                    }
+                  }}
+                  placeholder={t("profile:groupInfo.renamePlaceholder")}
+                  disabled={isSubmitting}
+                />
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsRenamingGroup(false);
+                      setGroupNameDraft(conversation.name || "");
+                    }}
+                    className="px-3 py-1.5 text-sm rounded-md border border-border text-text-muted hover:bg-surface-hover"
+                  >
+                    {t("common:actions.cancel")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => void handleRenameGroup()}
+                    className="px-3 py-1.5 text-sm rounded-md bg-primary text-text-inverse hover:opacity-90 disabled:opacity-60 inline-flex items-center gap-1.5"
+                  >
+                    <CheckIcon className="w-4 h-4" />
+                    {t("common:actions.save")}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-1 flex items-center justify-center gap-2">
+                <p className="text-sm text-text-muted">
+                  {t("profile:groupInfo.membersCount", {
+                    count:
+                      conversation.participantCount ??
+                      (members.length > 0 ? members.length : participants.length),
+                  })}
+                </p>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setIsRenamingGroup(true)}
+                    disabled={isSubmitting}
+                    className="p-1 hover:bg-surface-overlay rounded-full"
+                    aria-label={t("profile:groupInfo.renameGroup")}
+                  >
+                    <PencilIcon className="w-4 h-4 text-text-muted" />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -221,17 +572,19 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         <div className="py-2">
           {activeTab === "members" && (
             <>
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => setShowAddMember((prev) => !prev)}
-                className="w-full flex items-center gap-4 px-4 py-3 hover:bg-surface-hover transition-colors text-primary"
-              >
-                <UserPlusIcon className="w-5 h-5" />
-                <span className="text-sm font-medium">
-                  {t("profile:groupInfo.addMember")}
-                </span>
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => setShowAddMember((prev) => !prev)}
+                  className="w-full flex items-center gap-4 px-4 py-3 hover:bg-surface-hover transition-colors text-primary"
+                >
+                  <UserPlusIcon className="w-5 h-5" />
+                  <span className="text-sm font-medium">
+                    {t("profile:groupInfo.addMember")}
+                  </span>
+                </button>
+              )}
 
               {showAddMember && (
                 <div className="px-4 pb-3 space-y-2">
@@ -283,33 +636,90 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 </div>
               )}
 
-              {participants.map((participant) => (
-                <div
-                  key={participant.id}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer"
-                >
-                  <Avatar
-                    src={participant.avatar}
-                    alt={participant.displayName || participant.username}
-                    size="md"
-                    status={participant.status}
-                    showStatus
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-text-primary truncate">
-                      {participant.displayName || participant.username}
-                      {participant.id === currentUserId && (
-                        <span className="ml-2 text-xs text-text-muted">
-                          {t("profile:groupInfo.youSuffix")}
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-xs text-text-muted truncate">
-                      @{participant.username}
-                    </p>
-                  </div>
+              {isLoadingMembers ? (
+                <div className="py-4 flex justify-center">
+                  <Spinner size="md" />
                 </div>
-              ))}
+              ) : members.length === 0 ? (
+                <p className="px-4 py-3 text-sm text-text-muted">
+                  {t("profile:groupInfo.noMembers")}
+                </p>
+              ) : (
+                members.map((member) => {
+                  const isMemberActionRunning =
+                    isSubmitting || actingMemberId === member.id;
+                  const canToggleRole =
+                    canManageRoles &&
+                    member.id !== currentUserId &&
+                    member.role !== RoomMemberRole.OWNER;
+
+                  return (
+                    <div
+                      key={member.id}
+                      className="flex items-start gap-3 px-4 py-3 hover:bg-surface-hover transition-colors"
+                    >
+                      <Avatar
+                        src={member.avatar}
+                        alt={member.displayName || member.username}
+                        size="md"
+                        status={member.status}
+                        showStatus
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-text-primary truncate">
+                          {member.displayName || member.username}
+                          {member.id === currentUserId && (
+                            <span className="ml-2 text-xs text-text-muted">
+                              {t("profile:groupInfo.youSuffix")}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-text-muted truncate">
+                          @{member.username}
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span
+                            className={clsx(
+                              "px-2 py-0.5 text-xs rounded-full",
+                              roleBadgeClass(member.role),
+                            )}
+                          >
+                            {roleLabel(member.role)}
+                          </span>
+
+                          {canToggleRole && (
+                            <button
+                              type="button"
+                              disabled={isMemberActionRunning}
+                              onClick={() => void handleToggleMemberRole(member)}
+                              className="text-xs px-2 py-0.5 rounded border border-border text-text-secondary hover:bg-surface-overlay disabled:opacity-60"
+                            >
+                              {member.role === RoomMemberRole.ADMIN
+                                ? t("profile:groupInfo.actions.removeAdmin")
+                                : t("profile:groupInfo.actions.makeAdmin")}
+                            </button>
+                          )}
+
+                          {canRemoveMember(member) && (
+                            <button
+                              type="button"
+                              disabled={isMemberActionRunning}
+                              onClick={() => void handleRemoveMember(member)}
+                              className="text-xs px-2 py-0.5 rounded border border-danger/40 text-danger hover:bg-danger/10 disabled:opacity-60"
+                            >
+                              {t("profile:groupInfo.actions.removeMember")}
+                            </button>
+                          )}
+
+                          {actingMemberId === member.id && (
+                            <Spinner size="sm" className="ml-1" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </>
           )}
 

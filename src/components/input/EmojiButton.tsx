@@ -63,7 +63,7 @@ export const EmojiButton: React.FC<EmojiButtonProps> = ({
         type="button"
         onClick={handleToggle}
         className={clsx(
-          "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
+          "inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors",
           isOpen
             ? "bg-primary text-text-inverse"
             : "text-text-muted hover:bg-surface-overlay hover:text-text-primary",

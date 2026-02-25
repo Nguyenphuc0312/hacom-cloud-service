@@ -81,7 +81,9 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
             )}
 
             <div className="flex items-center gap-2">
-              {!collapsed && <BuildingOffice2Icon className="h-4 w-4 text-text-muted" />}
+              {!collapsed && (
+                <BuildingOffice2Icon className="h-4 w-4 text-text-muted" />
+              )}
               <h1
                 className={clsx(
                   "truncate font-semibold text-text-primary",
@@ -94,14 +96,16 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              onClick={onNewChat}
-              className={iconButtonClasses}
-              aria-label={t("sidebar:header.startNewChat")}
-            >
-              <PencilSquareIcon className="h-5 w-5" />
-            </button>
+            {!collapsed && (
+              <button
+                type="button"
+                onClick={onNewChat}
+                className={iconButtonClasses}
+                aria-label={t("sidebar:header.startNewChat")}
+              >
+                <PencilSquareIcon className="h-5 w-5" />
+              </button>
+            )}
 
             <button
               type="button"

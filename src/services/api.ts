@@ -12,10 +12,14 @@ import type {
   LoginResponse,
   RefreshTokenResponse,
   RoomMessagesResponse,
-  RoomsListResponse,
 } from "@hacom/chat-shared-types";
 import type { User } from "../stores/authStore";
 import type { Conversation, Message } from "../types";
+import { RoomMemberRole } from "../types";
+import {
+  normalizeConversation,
+  normalizeConversationsPayload,
+} from "../lib/conversationAdapter";
 
 // ============================================
 // AUTH API
@@ -139,17 +143,34 @@ export const userApi = {
 
 export const conversationApi = {
   getConversations: async (page = 1, limit = 50) => {
-    const response = await apiClient.get<ApiResponse<RoomsListResponse>>(
+    const response = await apiClient.get<ApiResponse<unknown>>(
       `/rooms?page=${page}&limit=${limit}`,
     );
-    return response.data;
+
+    if (!response.data.success) {
+      return response.data as ApiResponse<Conversation[]>;
+    }
+
+    return {
+      ...response.data,
+      data: normalizeConversationsPayload(response.data.data),
+    };
   },
 
   getConversationById: async (conversationId: string) => {
-    const response = await apiClient.get<ApiResponse<Conversation>>(
+    const response = await apiClient.get<ApiResponse<unknown>>(
       `/rooms/${conversationId}`,
     );
-    return response.data;
+
+    if (!response.data.success) {
+      return response.data as ApiResponse<Conversation>;
+    }
+
+    const normalized = normalizeConversation(response.data.data);
+    return {
+      ...response.data,
+      data: (normalized ?? (response.data.data as Conversation)) as Conversation,
+    };
   },
 
   createPrivateConversation: async (userId: string) => {
@@ -197,23 +218,20 @@ export const conversationApi = {
   },
 
   addMembers: async (conversationId: string, memberIds: string[]) => {
-    // Backend expects single userId, so we add one by one
-    const results = [];
+    // Backend expects a single userId per request, so add sequentially.
     for (const userId of memberIds) {
-      const response = await apiClient.post<ApiResponse<Conversation>>(
+      await apiClient.post<ApiResponse<unknown>>(
         `/rooms/${conversationId}/members`,
         { userId },
       );
-      results.push(response.data);
     }
-    return results[results.length - 1]; // Return last result
+
+    // API returns RoomMember for add-member. Refresh room to get full Conversation shape.
+    return conversationApi.getConversationById(conversationId);
   },
 
   removeMember: async (conversationId: string, userId: string) => {
-    const response = await apiClient.delete<ApiResponse<Conversation>>(
-      `/rooms/${conversationId}/members/${userId}`,
-    );
-    return response.data;
+    await apiClient.delete(`/rooms/${conversationId}/members/${userId}`);
   },
 
   removeMembers: async (conversationId: string, memberIds: string[]) => {
@@ -227,6 +245,25 @@ export const conversationApi = {
     await apiClient.post(`/rooms/${conversationId}/leave`);
   },
 
+  getMembers: async (conversationId: string, page = 1, limit = 100) => {
+    const response = await apiClient.get<ApiResponse<unknown>>(
+      `/rooms/${conversationId}/members?page=${page}&limit=${limit}`,
+    );
+    return response.data;
+  },
+
+  updateMemberRole: async (
+    conversationId: string,
+    userId: string,
+    role: RoomMemberRole | "owner",
+  ) => {
+    const response = await apiClient.patch<ApiResponse<unknown>>(
+      `/rooms/${conversationId}/members/${userId}/role`,
+      { role },
+    );
+    return response.data;
+  },
+
   markAsRead: async (conversationId: string) => {
     await apiClient.post(`/rooms/${conversationId}/messages/read`);
   },
@@ -237,9 +274,45 @@ export const conversationApi = {
 // ============================================
 
 export const messageApi = {
-  getMessages: async (conversationId: string, page = 1, limit = 50) => {
+  getMessages: async (
+    conversationId: string,
+    pageOrOptions:
+      | number
+      | {
+          page?: number;
+          limit?: number;
+          before?: string;
+          after?: string;
+        } = 1,
+    limit = 50,
+  ) => {
+    const options =
+      typeof pageOrOptions === "number"
+        ? { page: pageOrOptions, limit }
+        : pageOrOptions;
+    const query = new URLSearchParams({
+      limit: String(
+        typeof options.limit === "number" && Number.isFinite(options.limit)
+          ? Math.max(1, Math.floor(options.limit))
+          : 50,
+      ),
+    });
+
+    if (options.before) query.set("before", options.before);
+    if (options.after) query.set("after", options.after);
+    if (!options.before && !options.after) {
+      query.set(
+        "page",
+        String(
+          typeof options.page === "number" && Number.isFinite(options.page)
+            ? Math.max(1, Math.floor(options.page))
+            : 1,
+        ),
+      );
+    }
+
     const response = await apiClient.get<ApiResponse<RoomMessagesResponse>>(
-      `/rooms/${conversationId}/messages?page=${page}&limit=${limit}`,
+      `/rooms/${conversationId}/messages?${query.toString()}`,
     );
     return response.data;
   },

@@ -27,6 +27,9 @@ interface ChatWindowProps {
     fileMeta?: Attachment,
     type?: MessageType,
   ) => void | Promise<void>;
+  onReactMessage?: (messageId: string, emoji: string) => void | Promise<void>;
+  onEditMessage?: (messageId: string, content: string) => void | Promise<void>;
+  onDeleteMessage?: (messageId: string) => void | Promise<void>;
   onToggleInfoPanel: () => void;
   onBack?: () => void;
   onTyping?: (isTyping: boolean) => void;
@@ -45,6 +48,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   currentUser,
   typingStatus,
   onSendMessage,
+  onReactMessage,
+  onEditMessage,
+  onDeleteMessage,
   onToggleInfoPanel,
   onBack,
   onTyping,
@@ -91,12 +97,43 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, []);
 
   const handleReact = React.useCallback((messageId: string, emoji: string) => {
-    void messageId;
-    void emoji;
+    if (!onReactMessage) return;
+    void Promise.resolve(onReactMessage(messageId, emoji));
+  }, [onReactMessage]);
+
+  const handleEdit = React.useCallback((message: Message) => {
+    setReplyToMessage(undefined);
+    setEditingMessage(message);
+    setInputValue(message.content || "");
+    setInputMode("edit");
   }, []);
+
+  const handleDelete = React.useCallback(
+    (messageId: string) => {
+      if (!onDeleteMessage) return;
+      void Promise.resolve(onDeleteMessage(messageId));
+    },
+    [onDeleteMessage],
+  );
 
   const handleSend = React.useCallback(
     async (content?: string, fileMeta?: unknown, type?: string) => {
+      if (inputMode === "edit" && editingMessage && onEditMessage) {
+        const nextContent = (content || "").trim();
+        if (!nextContent || nextContent === (editingMessage.content || "").trim()) {
+          setEditingMessage(undefined);
+          setInputMode(replyToMessage ? "reply" : "normal");
+          return;
+        }
+
+        await Promise.resolve(onEditMessage(editingMessage.id, nextContent));
+        setInputValue("");
+        setReplyToMessage(undefined);
+        setEditingMessage(undefined);
+        setInputMode("normal");
+        return;
+      }
+
       if (!content && !fileMeta) return;
 
       const attachment = fileMeta as Attachment | undefined;
@@ -114,7 +151,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onSendMessage(outgoingContent, replyToMessage, attachment, messageType),
       );
     },
-    [onSendMessage, replyToMessage],
+    [editingMessage, inputMode, onEditMessage, onSendMessage, replyToMessage],
   );
 
   const handleFeatureInDevelopment = React.useCallback(() => {
@@ -146,6 +183,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         currentUserId={currentUser.id}
         onReply={handleReply}
         onReact={handleReact}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
         hasMore={hasMoreMessages}
         isLoadingMore={Boolean(isLoadingMessages && messages.length > 0)}
         isInitialLoading={Boolean(isLoadingMessages && messages.length === 0)}

@@ -12,6 +12,7 @@ import {
 import { Avatar } from "../common/Avatar";
 import { TypingIndicator } from "../common/TypingIndicator";
 import type { Conversation, TypingStatus } from "../../types";
+import { isDirectConversation, normalizeRoomType } from "../../lib/conversationAdapter";
 import { getOtherParticipant } from "../../utils/messageHelpers";
 
 interface ChatHeaderProps {
@@ -53,6 +54,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 }) => {
   const { t } = useTranslation();
   const otherUser = getOtherParticipant(conversation, currentUserId);
+  const normalizedType = normalizeRoomType(
+    conversation.type,
+    conversation.participants?.length,
+  );
+  const isDirect = isDirectConversation(conversation);
   const isOnline = otherUser?.status === "online";
   const isTyping = Boolean(typingStatus?.isTyping);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
@@ -90,13 +96,13 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const statusText = React.useMemo(() => {
     if (isTyping) return "";
 
-    if (conversation.type === "group") {
+    if (normalizedType === "group") {
       return t("chat:header.members", {
         count: conversation.participants?.length ?? 0,
       });
     }
 
-    if (conversation.type === "channel") {
+    if (normalizedType === "channel") {
       return t("chat:header.channel");
     }
 
@@ -105,7 +111,14 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     }
 
     return "";
-  }, [conversation.participants?.length, conversation.type, isOnline, isTyping, otherUser, t]);
+  }, [
+    conversation.participants?.length,
+    isOnline,
+    isTyping,
+    normalizedType,
+    otherUser,
+    t,
+  ]);
 
   const displayName =
     conversation.name ||
@@ -186,9 +199,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             alt={displayName}
             size="md"
             status={otherUser?.status}
-            showStatus={
-              conversation.type === "private" || conversation.type === "direct"
-            }
+            showStatus={isDirect}
           />
         </button>
 

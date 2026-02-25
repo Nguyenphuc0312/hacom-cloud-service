@@ -12,7 +12,7 @@ import { Sidebar } from "../components/layout/Sidebar";
 import { ChatWindow } from "../components/layout/ChatWindow";
 import { UserProfile } from "../components/info/UserProfile";
 import { GroupInfo } from "../components/info/GroupInfo";
-import { NoChatSelected } from "../components/ui";
+import { NoChatSelected, Spinner } from "../components/ui";
 import { NewChatModal, ImagePreviewModal } from "../components/modals";
 import { toast } from "../components/ui";
 import {
@@ -23,12 +23,68 @@ import {
   useCurrentTypingStatus,
 } from "../stores";
 import { useWebSocket } from "../hooks";
-import { conversationApi } from "../services/api";
-import type { Message, UserSummary, Attachment } from "../types";
-import { MessageType, RoomType, UserStatus } from "../types";
+import { conversationApi, messageApi } from "../services/api";
+import type { Attachment, Conversation, Message, UserSummary } from "../types";
+import { MessageType, UserStatus } from "../types";
+import { isDirectConversation } from "../lib/conversationAdapter";
 import { getOtherParticipant } from "../utils/messageHelpers";
 import { ErrorCode } from "@hacom/chat-shared-types";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
+
+type IdleCallbackDeadline = {
+  didTimeout: boolean;
+  timeRemaining: () => number;
+};
+
+type WindowWithIdleCallback = Window & {
+  requestIdleCallback?: (
+    callback: (deadline: IdleCallbackDeadline) => void,
+    options?: { timeout?: number },
+  ) => number;
+  cancelIdleCallback?: (handle: number) => void;
+};
+
+const toTimestamp = (value: unknown): number => {
+  const parsed = new Date(value as string | number | Date);
+  const timestamp = parsed.getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+
+const sortConversationsByPriority = (
+  source: Conversation[],
+): Conversation[] =>
+  [...source].sort((a, b) => {
+    if (a.isPinned && !b.isPinned) return -1;
+    if (!a.isPinned && b.isPinned) return 1;
+    return toTimestamp(b.updatedAt) - toTimestamp(a.updatedAt);
+  });
+
+const scheduleIdleTask = (task: () => void): (() => void) => {
+  if (typeof window === "undefined") return () => {};
+
+  const idleWindow = window as WindowWithIdleCallback;
+  if (typeof idleWindow.requestIdleCallback === "function") {
+    const handle = idleWindow.requestIdleCallback(
+      (deadline) => {
+        if (deadline.didTimeout || deadline.timeRemaining() > 4) {
+          task();
+          return;
+        }
+        window.setTimeout(task, 0);
+      },
+      { timeout: 1200 },
+    );
+
+    return () => {
+      idleWindow.cancelIdleCallback?.(handle);
+    };
+  }
+
+  const timeoutId = window.setTimeout(task, 240);
+  return () => {
+    window.clearTimeout(timeoutId);
+  };
+};
 
 export const ChatPage: React.FC = () => {
   const { t } = useTranslation();
@@ -44,6 +100,8 @@ export const ChatPage: React.FC = () => {
     selectConversation,
     addConversation,
     updateConversation,
+    updateStoreMessage,
+    removeStoreMessage,
     conversations,
     fetchConversations,
     fetchMessages,
@@ -59,6 +117,8 @@ export const ChatPage: React.FC = () => {
       selectConversation: state.selectConversation,
       addConversation: state.addConversation,
       updateConversation: state.updateConversation,
+      updateStoreMessage: state.updateMessage,
+      removeStoreMessage: state.removeMessage,
       conversations: state.conversations,
       fetchConversations: state.fetchConversations,
       fetchMessages: state.fetchMessages,
@@ -75,6 +135,11 @@ export const ChatPage: React.FC = () => {
   const selectedConversation = useSelectedConversation();
   const conversationMessages = useCurrentMessages();
   const typingStatus = useCurrentTypingStatus();
+  const isSelectedConversationHydrated = useChatStore((state) =>
+    selectedConversationId
+      ? Boolean(state.messagesHydratedByConversation[selectedConversationId])
+      : false,
+  );
 
   // WebSocket
   const { isConnected, sendTyping, stopTyping, joinRoom, leaveRoom } =
@@ -188,7 +253,11 @@ export const ChatPage: React.FC = () => {
     let isCancelled = false;
 
     if (selectedConversationId && !isValidatingRoom) {
-      void fetchMessages(selectedConversationId).then(() => {
+      const loadPromise = isSelectedConversationHydrated
+        ? Promise.resolve()
+        : fetchMessages(selectedConversationId).then(() => undefined);
+
+      void loadPromise.finally(() => {
         if (isCancelled) return;
         void markAsRead(selectedConversationId).catch(() => {
           // no-op: best effort to align unread count
@@ -208,6 +277,7 @@ export const ChatPage: React.FC = () => {
     };
   }, [
     selectedConversationId,
+    isSelectedConversationHydrated,
     isValidatingRoom,
     fetchMessages,
     joinRoom,
@@ -277,8 +347,127 @@ export const ChatPage: React.FC = () => {
   const handleRetryMessages = useCallback(async () => {
     if (!selectedConversationId) return;
     if (isLoadingMessagesByConversation[selectedConversationId]) return;
-    await fetchMessages(selectedConversationId);
+    await fetchMessages(selectedConversationId, undefined, undefined, {
+      force: true,
+    });
   }, [fetchMessages, isLoadingMessagesByConversation, selectedConversationId]);
+
+  useEffect(() => {
+    if (!selectedConversationId || isValidatingRoom) return;
+
+    const orderedConversations = sortConversationsByPriority(
+      Array.isArray(conversations) ? conversations : [],
+    );
+    const currentIndex = orderedConversations.findIndex(
+      (conversation) => conversation.id === selectedConversationId,
+    );
+    if (currentIndex < 0) return;
+
+    const candidateRoomIds = [
+      orderedConversations[currentIndex - 1]?.id,
+      orderedConversations[currentIndex + 1]?.id,
+    ].filter((id): id is string => typeof id === "string" && id.length > 0);
+    if (candidateRoomIds.length === 0) return;
+
+    let isCancelled = false;
+    const cancelScheduledTask = scheduleIdleTask(() => {
+      void (async () => {
+        for (const candidateRoomId of candidateRoomIds) {
+          if (isCancelled) return;
+          const state = useChatStore.getState();
+          if (state.messagesHydratedByConversation[candidateRoomId]) continue;
+          if (state.isLoadingMessagesByConversation[candidateRoomId]) continue;
+          await state.fetchMessages(candidateRoomId, undefined, undefined, {
+            limit: 20,
+          });
+        }
+      })();
+    });
+
+    return () => {
+      isCancelled = true;
+      cancelScheduledTask();
+    };
+  }, [conversations, isValidatingRoom, selectedConversationId]);
+
+  const handleReactMessage = useCallback(
+    async (messageId: string, emoji: string) => {
+      if (!selectedConversationId || !currentUserSummary) return;
+
+      const targetMessage = conversationMessages.find(
+        (message) => message.id === messageId || message.localId === messageId,
+      );
+      if (!targetMessage) return;
+
+      try {
+        const existingReaction = targetMessage.reactions?.find(
+          (reaction) => reaction.emoji === emoji,
+        );
+        const hasReacted = Boolean(
+          existingReaction?.userIds?.includes(currentUserSummary.id),
+        );
+
+        const response = hasReacted
+          ? await messageApi.removeReaction(messageId, emoji)
+          : await messageApi.addReaction(messageId, emoji);
+        const updatedMessage = unwrapApiSuccess(response);
+
+        updateStoreMessage(selectedConversationId, messageId, {
+          reactions: Array.isArray(updatedMessage.reactions)
+            ? updatedMessage.reactions
+            : [],
+        });
+      } catch (error) {
+        const apiError = extractApiError(error);
+        toast.error(apiError.message || t("error:generic.requestFailed"));
+      }
+    },
+    [
+      selectedConversationId,
+      currentUserSummary,
+      conversationMessages,
+      updateStoreMessage,
+      t,
+    ],
+  );
+
+  const handleEditMessage = useCallback(
+    async (messageId: string, content: string) => {
+      if (!selectedConversationId) return;
+
+      try {
+        const response = await messageApi.editMessage(messageId, content);
+        const updatedMessage = unwrapApiSuccess(response);
+
+        updateStoreMessage(selectedConversationId, messageId, {
+          content: updatedMessage.content || content,
+          isEdited: true,
+          editedAt: updatedMessage.editedAt || new Date(),
+        });
+        toast.success(t("chat:toast.messageEdited"));
+      } catch (error) {
+        const apiError = extractApiError(error);
+        toast.error(apiError.message || t("chat:toast.editFailed"));
+      }
+    },
+    [selectedConversationId, t, updateStoreMessage],
+  );
+
+  const handleDeleteMessage = useCallback(
+    async (messageId: string) => {
+      if (!selectedConversationId) return;
+
+      try {
+        await messageApi.deleteMessage(messageId);
+        removeStoreMessage(selectedConversationId, messageId);
+        toast.success(t("chat:toast.messageDeleted"));
+      } catch (error) {
+        const apiError = extractApiError(error);
+        toast.error(apiError.message || t("chat:toast.deleteFailed"));
+      }
+    },
+    [removeStoreMessage, selectedConversationId, t],
+  );
 
   // Handle typing
   const handleTyping = useCallback(
@@ -413,11 +602,12 @@ export const ChatPage: React.FC = () => {
 
   const showSidebarOnMobile = !selectedConversationId || isMobileMenuOpen;
 
-  // Get other user for private chat
+  const isSelectedDirectConversation = isDirectConversation(selectedConversation);
+
+  // Get other user for direct chat
   const otherUser =
     selectedConversation &&
-    (selectedConversation.type === RoomType.PRIVATE ||
-      selectedConversation.type === RoomType.DIRECT) &&
+    isSelectedDirectConversation &&
     currentUserSummary
       ? getOtherParticipant(selectedConversation, currentUserSummary.id)
       : null;
@@ -481,6 +671,9 @@ export const ChatPage: React.FC = () => {
             currentUser={currentUserSummary}
             typingStatus={typingStatus || undefined}
             onSendMessage={handleSendMessage}
+            onReactMessage={handleReactMessage}
+            onEditMessage={handleEditMessage}
+            onDeleteMessage={handleDeleteMessage}
             onToggleInfoPanel={handleToggleInfoPanel}
             onBack={handleBack}
             onTyping={handleTyping}
@@ -518,10 +711,15 @@ export const ChatPage: React.FC = () => {
               : "translate-x-full lg:hidden",
           )}
         >
-          {(selectedConversation.type === RoomType.PRIVATE ||
-            selectedConversation.type === RoomType.DIRECT) &&
-          otherUser ? (
-            <UserProfile user={otherUser} onClose={handleToggleInfoPanel} />
+          {isSelectedDirectConversation ? (
+            otherUser ? (
+              <UserProfile user={otherUser} onClose={handleToggleInfoPanel} />
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+                <Spinner size="md" />
+                <p className="text-sm text-text-muted">{t("common:loading.default")}</p>
+              </div>
+            )
           ) : (
             <GroupInfo
               conversation={selectedConversation}

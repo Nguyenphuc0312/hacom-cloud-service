@@ -4,9 +4,18 @@ import type {
   Conversation,
   UserSummary,
 } from "../types";
-import { MessageType, MessageStatus } from "../types";
+import { MessageType, MessageStatus, RoomType } from "../types";
+import {
+  isDirectConversation,
+  normalizeRoomType,
+} from "../lib/conversationAdapter";
 import { isSameDay } from "./formatTime";
 import i18n from "../i18n";
+
+const isDirectType = (conversationType: unknown): boolean => {
+  const normalized = normalizeRoomType(conversationType);
+  return normalized === RoomType.PRIVATE || normalized === RoomType.DIRECT;
+};
 
 /**
  * Check if message is from current user.
@@ -23,7 +32,7 @@ export function shouldShowAvatar(
   index: number,
   conversationType: string,
 ): boolean {
-  if (conversationType === "private" || conversationType === "direct") {
+  if (isDirectType(conversationType)) {
     return false;
   }
 
@@ -151,7 +160,7 @@ export function getConversationDisplayName(
   conversation: Conversation,
   currentUserId: string,
 ): string {
-  if (conversation.type !== "private" && conversation.type !== "direct") {
+  if (!isDirectConversation(conversation)) {
     return conversation.name || i18n.t("common:labels.conversation");
   }
 
@@ -174,7 +183,7 @@ export function getConversationAvatar(
   conversation: Conversation,
   currentUserId: string,
 ): string | undefined {
-  if (conversation.type !== "private" && conversation.type !== "direct") {
+  if (!isDirectConversation(conversation)) {
     return conversation.avatar;
   }
 
@@ -192,7 +201,7 @@ export function getOtherParticipant(
   conversation: Conversation,
   currentUserId: string,
 ): UserSummary | undefined {
-  if (conversation.type !== "private" && conversation.type !== "direct") {
+  if (!isDirectConversation(conversation)) {
     return undefined;
   }
 

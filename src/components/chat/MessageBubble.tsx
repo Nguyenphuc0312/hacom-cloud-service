@@ -11,6 +11,7 @@ import { MessageActions } from "../message/MessageActions";
 import { ReactionBar } from "../message/ReactionBar";
 import type { Message, Conversation } from "../../types";
 import { MessageStatus, MessageType, RoomType } from "../../types";
+import { normalizeRoomType } from "../../lib/conversationAdapter";
 import { formatMessageTime } from "../../utils/formatTime";
 import { useChatStore } from "../../stores";
 
@@ -24,6 +25,8 @@ interface MessageBubbleProps {
   conversationType: Conversation["type"];
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
+  onEdit?: (message: Message) => void | Promise<void>;
+  onDelete?: (messageId: string) => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
   className?: string;
 }
@@ -113,6 +116,8 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   conversationType,
   onReply,
   onReact,
+  onEdit,
+  onDelete,
   onImageClick,
   className,
 }) => {
@@ -124,8 +129,10 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const [hasFocusWithin, setHasFocusWithin] = React.useState(false);
 
   const timeStr = formatMessageTime(new Date(message.createdAt));
+  const normalizedConversationType = normalizeRoomType(conversationType);
   const isGroupConversation =
-    conversationType !== RoomType.PRIVATE && conversationType !== RoomType.DIRECT;
+    normalizedConversationType !== RoomType.PRIVATE &&
+    normalizedConversationType !== RoomType.DIRECT;
   const isActionsVisibleForKeyboard = isActionsPinned || hasFocusWithin;
 
   const renderContent = () => {
@@ -368,8 +375,19 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               }}
               onForward={() => {}}
               onCopy={handleCopy}
-              onEdit={isOwn ? () => {} : undefined}
-              onDelete={() => {}}
+              onEdit={
+                isOwn && onEdit
+                  ? () => {
+                      void Promise.resolve(onEdit(message));
+                      closeActions();
+                    }
+                  : undefined
+              }
+              onDelete={() => {
+                if (!onDelete) return;
+                void Promise.resolve(onDelete(message.id));
+                closeActions();
+              }}
               isVisible={isActionsVisibleForKeyboard}
               onClose={closeActions}
             />
