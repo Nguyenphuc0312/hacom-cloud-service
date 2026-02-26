@@ -13,7 +13,6 @@ import {
   type ConnectionState,
 } from "../lib/socket";
 import { useAuthStore, useChatStore } from "../stores";
-import { MessageStatus } from "../types";
 
 interface UseWebSocketOptions {
   autoConnect?: boolean;
@@ -337,29 +336,6 @@ export const useWebSocket = (
     });
     unsubscribersRef.current.push(unsubMessageNew);
 
-    const unsubMessageUpdate = socket.on(
-      WebSocketEvents.MESSAGE_UPDATE,
-      (data) => {
-        const payload = asRecord(data);
-        if (!payload) return;
-
-        const conversationId = getConversationId(payload);
-        const messagePayload = getMessagePayload(payload);
-        const messageId =
-          asString(payload.messageId) ??
-          (messagePayload &&
-            (asString(messagePayload.id) ?? asString(messagePayload._id)));
-        if (!conversationId || !messagePayload || !messageId) return;
-
-        updateMessage(
-          conversationId,
-          messageId,
-          messagePayload as unknown as Parameters<typeof updateMessage>[2],
-        );
-      },
-    );
-    unsubscribersRef.current.push(unsubMessageUpdate);
-
     const unsubMessageUpdated = socket.on(
       WebSocketEvents.MESSAGE_UPDATED,
       (data) => {
@@ -403,26 +379,6 @@ export const useWebSocket = (
     );
     unsubscribersRef.current.push(unsubMessageDeleted);
 
-    const unsubDelivered = socket.on(
-      WebSocketEvents.MESSAGE_DELIVERED,
-      (data) => {
-        const payload = asRecord(data);
-        if (!payload) return;
-
-        const conversationId = getConversationId(payload);
-        const messageId =
-          asString(payload.messageId) ??
-          asString(payload.id) ??
-          asString(payload._id);
-        if (!conversationId || !messageId) return;
-
-        updateMessage(conversationId, messageId, {
-          status: MessageStatus.DELIVERED,
-        });
-      },
-    );
-    unsubscribersRef.current.push(unsubDelivered);
-
     const handleReadReceipt = (data: unknown) => {
       const payload = asRecord(data);
       if (!payload) return;
@@ -438,7 +394,7 @@ export const useWebSocket = (
       markMessagesReadUpTo(
         conversationId,
         lastMessageId,
-        asString(payload.userId) ?? undefined,
+        asString(payload.senderId) ?? asString(payload.userId) ?? undefined,
       );
     };
 
@@ -448,24 +404,19 @@ export const useWebSocket = (
     );
     unsubscribersRef.current.push(unsubRead);
 
-    const unsubReadConfirmed = socket.on(
-      WebSocketEvents.MESSAGE_READ_CONFIRMED,
-      handleReadReceipt,
-    );
-    unsubscribersRef.current.push(unsubReadConfirmed);
-
     const handleTypingStart = (data: unknown) => {
       const payload = asRecord(data);
       if (!payload) return;
 
       const conversationId = getConversationId(payload);
-      const userId = asString(payload.userId);
+      const userId = asString(payload.senderId) ?? asString(payload.userId);
       if (!conversationId || !userId) return;
 
       const currentUserId = useAuthStore.getState().user?.id;
       if (currentUserId && userId === currentUserId) return;
 
       const userName =
+        asString(payload.senderName) ??
         asString(payload.userName) ??
         asString(payload.username) ??
         asString(payload.user_name) ??
@@ -492,7 +443,7 @@ export const useWebSocket = (
       if (!payload) return;
 
       const conversationId = getConversationId(payload);
-      const userId = asString(payload.userId);
+      const userId = asString(payload.senderId) ?? asString(payload.userId);
       if (!conversationId || !userId) return;
 
       clearRemoteTypingTimer(conversationId, userId);
@@ -500,29 +451,16 @@ export const useWebSocket = (
     };
 
     const unsubTypingStart = socket.on(
-      WebSocketEvents.USER_TYPING,
+      WebSocketEvents.TYPING_START,
       handleTypingStart,
     );
     unsubscribersRef.current.push(unsubTypingStart);
 
     const unsubTypingStop = socket.on(
-      WebSocketEvents.USER_STOP_TYPING,
+      WebSocketEvents.TYPING_STOP,
       handleTypingStop,
     );
     unsubscribersRef.current.push(unsubTypingStop);
-
-    const unsubTypingLegacy = socket.on(WebSocketEvents.TYPING, (data) => {
-      const payload = asRecord(data);
-      if (!payload) return;
-
-      if (payload.isTyping === true) {
-        handleTypingStart(payload);
-        return;
-      }
-
-      handleTypingStop(payload);
-    });
-    unsubscribersRef.current.push(unsubTypingLegacy);
 
     const unsubSyncComplete = socket.on(WebSocketEvents.SYNC_COMPLETE, () => {
       joinedRoomsRef.current.forEach((roomId) => {

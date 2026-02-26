@@ -435,8 +435,23 @@ const resolveMessageMatchIndex = (
   );
 };
 
+const mergeDefinedMessageFields = (
+  current: Message,
+  incoming: Message,
+): Message => {
+  const merged = { ...current } as unknown as Record<string, unknown>;
+  Object.entries(incoming as unknown as Record<string, unknown>).forEach(
+    ([key, value]) => {
+      if (value !== undefined) {
+        merged[key] = value;
+      }
+    },
+  );
+  return merged as unknown as Message;
+};
+
 const mergeMessageRecords = (current: Message, incoming: Message): Message => {
-  const merged = { ...current, ...incoming } as Message;
+  const merged = mergeDefinedMessageFields(current, incoming);
 
   if (isTempMessageId(current.id) && !isTempMessageId(incoming.id)) {
     merged.id = incoming.id;

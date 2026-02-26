@@ -177,8 +177,8 @@ export const useMessages = ({
           isEdited: true,
         });
 
-        emit("message:edit", {
-          roomId: conversationId,
+        emit("message:updated", {
+          conversationId,
           messageId,
           content: content.trim(),
         });
@@ -198,8 +198,8 @@ export const useMessages = ({
       try {
         removeMessage(conversationId, messageId);
 
-        emit("message:delete", {
-          roomId: conversationId,
+        emit("message:deleted", {
+          conversationId,
           messageId,
         });
 

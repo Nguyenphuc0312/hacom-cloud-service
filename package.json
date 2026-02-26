@@ -12,7 +12,7 @@
     "i18n:export-keys": "node scripts/i18n-export-keys.mjs"
   },
   "dependencies": {
-    "@hacom/chat-shared-types": "file:../chat-shared-types",
+    "@hacom/chat-shared-types": "1.1.0",
     "@heroicons/react": "^2.2.0",
     "@hookform/resolvers": "^3.9.0",
     "@types/lodash": "^4.17.23",

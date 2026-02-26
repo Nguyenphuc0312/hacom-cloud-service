@@ -11,6 +11,7 @@ import {
   getAccessToken as getStoredAccessToken,
   updateAccessToken,
 } from "../services/tokenService";
+import { WsEventNames } from "@hacom/chat-shared-types";
 
 // ============================================
 // Types
@@ -456,29 +457,19 @@ export const WebSocketEvents = {
   MESSAGE_SEND: "message:send",
   ROOM_JOIN: "room:join",
   ROOM_LEAVE: "room:leave",
-  TYPING_START: "typing:start",
-  TYPING_STOP: "typing:stop",
-  LEGACY_TYPING_START: "user:typing",
-  LEGACY_TYPING_STOP: "user:stop_typing",
+  TYPING_START: WsEventNames.TYPING_START,
+  TYPING_STOP: WsEventNames.TYPING_STOP,
 
   // Server → Client
-  MESSAGE_NEW: "message:new",
-  MESSAGE_UPDATE: "message:update",
-  MESSAGE_UPDATED: "message:updated",
-  MESSAGE_DELETED: "message:deleted",
-  MESSAGE_DELIVERED: "message:delivered",
-  MESSAGE_READ: "message:read",
-  MESSAGE_READ_CONFIRMED: "message:read_confirmed",
-  USER_ONLINE: "user:online",
-  USER_OFFLINE: "user:offline",
+  MESSAGE_NEW: WsEventNames.MESSAGE_NEW,
+  MESSAGE_UPDATED: WsEventNames.MESSAGE_UPDATED,
+  MESSAGE_DELETED: WsEventNames.MESSAGE_DELETED,
+  MESSAGE_READ: WsEventNames.MESSAGE_READ,
+  PRESENCE_UPDATE: WsEventNames.PRESENCE_UPDATE,
   ROOM_JOINED: "room:joined",
   ROOM_LEFT: "room:left",
-  USER_TYPING: "user:typing",
-  USER_STOP_TYPING: "user:stop_typing",
-  TYPING: "typing",
-  SYNC_COMPLETE: "sync:complete",
+  SYNC_COMPLETE: WsEventNames.SYNC_COMPLETE,
   ERROR: "error",
-  PRESENCE_SYNC: "presence:sync",
 } as const;
 
 export default wsManager;
