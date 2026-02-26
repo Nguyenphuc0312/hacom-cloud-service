@@ -10,6 +10,7 @@ import type {
   AuthResponseDto,
   CompleteUploadResponse,
   CreateMessageResponse,
+  GetDownloadUrlResponse,
   LoginResponse,
   RefreshTokenResponse,
   RoomMessagesResponse,
@@ -348,7 +349,10 @@ export const messageApi = {
       attachments?: Array<{
         id: string;
         type: Message["type"] | string;
-        url: string;
+        objectKey?: string;
+        url?: string;
+        downloadUrl?: string;
+        expiresAt?: string;
         fileName: string;
         mimeType: string;
         fileSize: number;
@@ -442,6 +446,18 @@ export const fileApi = {
     const response = await apiClient.post<ApiResponse<CompleteUploadResponse>>(
       "/files/complete",
       payload,
+    );
+    return response.data;
+  },
+
+  getDownloadUrl: async (params: {
+    conversationId: string;
+    objectKey?: string;
+    attachmentId?: string;
+  }) => {
+    const response = await apiClient.get<ApiResponse<GetDownloadUrlResponse>>(
+      "/files/download-url",
+      { params },
     );
     return response.data;
   },

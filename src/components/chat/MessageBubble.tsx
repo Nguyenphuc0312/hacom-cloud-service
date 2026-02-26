@@ -136,34 +136,62 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const isActionsVisibleForKeyboard = isActionsPinned || hasFocusWithin;
 
   const renderContent = () => {
+    const attachments = Array.isArray(message.attachments)
+      ? message.attachments
+      : [];
+
     switch (message.type) {
       case MessageType.TEXT:
         return <TextMessage content={message.content} isOwn={isOwn} />;
 
       case MessageType.IMAGE:
-        return (
-          message.attachments?.[0] && (
+        return attachments.length > 0 ? (
+          <div className="space-y-2">
+            {attachments.map((attachment, index) => (
             <ImageMessage
-              attachment={message.attachments[0]}
-              caption={message.content}
+                key={attachment.id || `${message.id}-image-${index}`}
+                conversationId={message.conversationId}
+                attachment={attachment}
+                caption={index === 0 ? message.content : undefined}
               isOwn={isOwn}
               onClick={onImageClick}
             />
-          )
+            ))}
+          </div>
+        ) : (
+          <TextMessage content={message.content} isOwn={isOwn} />
         );
 
       case MessageType.FILE:
-        return (
-          message.attachments?.[0] && (
-            <FileMessage attachment={message.attachments[0]} isOwn={isOwn} />
-          )
+        return attachments.length > 0 ? (
+          <div className="space-y-2">
+            {attachments.map((attachment, index) => (
+              <FileMessage
+                key={attachment.id || `${message.id}-file-${index}`}
+                conversationId={message.conversationId}
+                attachment={attachment}
+                isOwn={isOwn}
+              />
+            ))}
+          </div>
+        ) : (
+          <TextMessage content={message.content} isOwn={isOwn} />
         );
 
       case MessageType.VOICE:
-        return (
-          message.attachments?.[0] && (
-            <VoiceMessage attachment={message.attachments[0]} isOwn={isOwn} />
-          )
+        return attachments.length > 0 ? (
+          <div className="space-y-2">
+            {attachments.map((attachment, index) => (
+              <VoiceMessage
+                key={attachment.id || `${message.id}-voice-${index}`}
+                conversationId={message.conversationId}
+                attachment={attachment}
+                isOwn={isOwn}
+              />
+            ))}
+          </div>
+        ) : (
+          <TextMessage content={message.content} isOwn={isOwn} />
         );
 
       default:

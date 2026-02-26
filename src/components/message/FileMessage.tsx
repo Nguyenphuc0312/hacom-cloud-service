@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { ArrowDownTrayIcon } from "@heroicons/react/24/outline";
 import type { Attachment } from "../../types";
+import { useAttachmentDownloadUrl } from "../../hooks";
 import {
   formatFileSize,
   getFileIcon,
@@ -10,12 +11,14 @@ import {
 } from "../../utils/formatFileSize";
 
 interface FileMessageProps {
+  conversationId: string;
   attachment: Attachment;
   isOwn: boolean;
   className?: string;
 }
 
 export const FileMessage: React.FC<FileMessageProps> = ({
+  conversationId,
   attachment,
   isOwn,
   className,
@@ -24,9 +27,15 @@ export const FileMessage: React.FC<FileMessageProps> = ({
   const icon = getFileIcon(attachment.fileName || "file");
   const extension = getFileExtension(attachment.fileName || "file");
   const size = formatFileSize(attachment.fileSize);
+  const { resolveUrl, isLoading } = useAttachmentDownloadUrl(
+    conversationId,
+    attachment,
+  );
 
-  const handleDownload = () => {
-    window.open(attachment.url, "_blank");
+  const handleDownload = async () => {
+    const downloadUrl = await resolveUrl(true);
+    if (!downloadUrl) return;
+    window.open(downloadUrl, "_blank");
   };
 
   return (
@@ -61,9 +70,10 @@ export const FileMessage: React.FC<FileMessageProps> = ({
       </div>
 
       <button
-        onClick={handleDownload}
+        onClick={() => void handleDownload()}
+        disabled={isLoading}
         className={clsx(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors",
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60",
           isOwn
             ? "bg-surface/25 text-text-inverse hover:bg-surface/35"
             : "bg-surface text-text-secondary hover:bg-surface-raised hover:text-text-primary",

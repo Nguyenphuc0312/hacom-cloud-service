@@ -1,9 +1,11 @@
-﻿import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import type { Attachment } from "../../types";
+import { useAttachmentDownloadUrl } from "../../hooks";
 
 interface ImageMessageProps {
+  conversationId: string;
   attachment: Attachment;
   caption?: string;
   isOwn: boolean;
@@ -12,6 +14,7 @@ interface ImageMessageProps {
 }
 
 export const ImageMessage: React.FC<ImageMessageProps> = ({
+  conversationId,
   attachment,
   caption,
   isOwn,
@@ -22,10 +25,27 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   const [isLoaded, setIsLoaded] = useState(false);
   const [isError, setIsError] = useState(false);
   const [showFullScreen, setShowFullScreen] = useState(false);
+  const [didRefreshOnError, setDidRefreshOnError] = useState(false);
+  const { url: resolvedUrl, isLoading, resolveUrl } = useAttachmentDownloadUrl(
+    conversationId,
+    attachment,
+    { autoResolve: true },
+  );
 
-  const handleImageClick = () => {
+  const hasDisplayUrl = Boolean(resolvedUrl);
+
+  useEffect(() => {
+    setIsLoaded(false);
+    setIsError(false);
+    setDidRefreshOnError(false);
+  }, [resolvedUrl]);
+
+  const handleImageClick = async () => {
+    const imageUrl = resolvedUrl || (await resolveUrl());
+    if (!imageUrl) return;
+
     if (onClick) {
-      onClick(attachment.url);
+      onClick(imageUrl);
     } else {
       setShowFullScreen(true);
     }
@@ -35,10 +55,19 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
     setShowFullScreen(false);
   };
 
+  const handleImageError = () => {
+    if (!didRefreshOnError) {
+      setDidRefreshOnError(true);
+      void resolveUrl(true);
+      return;
+    }
+    setIsError(true);
+  };
+
   return (
     <>
       <div className={clsx("relative", className)}>
-        {!isLoaded && !isError && (
+        {(!isLoaded || isLoading || !hasDisplayUrl) && !isError && (
           <div
             className="animate-pulse rounded-lg bg-surface-overlay"
             style={{
@@ -56,23 +85,25 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
           </div>
         )}
 
-        <img
-          className={clsx(
-            "h-auto max-w-full cursor-pointer rounded object-cover transition-opacity",
-            isLoaded ? "opacity-100" : "absolute left-0 top-0 opacity-0",
-            "hover:opacity-95",
-          )}
-          style={{
-            maxWidth: "300px",
-            maxHeight: 300,
-            objectFit: "cover",
-          }}
-          src={attachment.url}
-          alt={caption || attachment.fileName || t("chat:image.previewAlt")}
-          onClick={handleImageClick}
-          onLoad={() => setIsLoaded(true)}
-          onError={() => setIsError(true)}
-        />
+        {hasDisplayUrl && (
+          <img
+            className={clsx(
+              "h-auto max-w-full cursor-pointer rounded object-cover transition-opacity",
+              isLoaded ? "opacity-100" : "absolute left-0 top-0 opacity-0",
+              "hover:opacity-95",
+            )}
+            style={{
+              maxWidth: "300px",
+              maxHeight: 300,
+              objectFit: "cover",
+            }}
+            src={resolvedUrl}
+            alt={caption || attachment.fileName || t("chat:image.previewAlt")}
+            onClick={() => void handleImageClick()}
+            onLoad={() => setIsLoaded(true)}
+            onError={handleImageError}
+          />
+        )}
 
         {caption && isLoaded && (
           <p className={clsx("mt-2 text-sm", isOwn ? "text-text-inverse/90" : "text-text-secondary")}>
@@ -81,7 +112,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
         )}
       </div>
 
-      {showFullScreen && (
+      {showFullScreen && resolvedUrl && (
         <div
           className="fixed inset-0 z-modal flex items-center justify-center bg-surface-overlay/95 backdrop-blur-md animate-fade-in"
           onClick={handleClose}
@@ -106,7 +137,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
             </svg>
           </button>
           <img
-            src={attachment.url}
+            src={resolvedUrl}
             alt={attachment.fileName || t("chat:image.previewAlt")}
             className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-elev3"
             onClick={(e) => e.stopPropagation()}
@@ -118,3 +149,4 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
 };
 
 export default ImageMessage;
+

@@ -172,14 +172,20 @@ const normalizeAttachments = (value: unknown): Message["attachments"] => {
 
       const id =
         asStringValue(attachment.id) ?? asStringValue(attachment.fileId);
+      const objectKey = asStringValue(attachment.objectKey);
       const url =
-        asStringValue(attachment.url) ?? asStringValue(attachment.fileUrl);
-      if (!id || !url) return null;
+        asStringValue(attachment.url) ??
+        asStringValue(attachment.downloadUrl) ??
+        asStringValue(attachment.fileUrl);
+      if (!id || (!objectKey && !url)) return null;
 
       return {
         id,
         type: (asStringValue(attachment.type) ?? "other") as Attachment["type"],
+        objectKey,
         url,
+        downloadUrl: asStringValue(attachment.downloadUrl),
+        expiresAt: asStringValue(attachment.expiresAt),
         fileName:
           asStringValue(attachment.fileName) ??
           asStringValue(attachment.filename) ??
@@ -661,8 +667,11 @@ const normalizeMessagesResponse = (
 const toAttachmentPayload = (attachments?: Attachment[]) =>
   attachments?.map((attachment) => ({
     id: attachment.id,
+    objectKey: attachment.objectKey,
     type: attachment.type,
-    url: attachment.url,
+    ...(attachment.url ? { url: attachment.url } : {}),
+    ...(attachment.downloadUrl ? { downloadUrl: attachment.downloadUrl } : {}),
+    ...(attachment.expiresAt ? { expiresAt: attachment.expiresAt } : {}),
     fileName: attachment.fileName || "attachment",
     mimeType: attachment.mimeType || "application/octet-stream",
     fileSize:

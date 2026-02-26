@@ -1,9 +1,10 @@
-﻿import React, { useState, useRef, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { PlayIcon, PauseIcon } from "@heroicons/react/24/solid";
 import type { Attachment } from "../../types";
 import { formatDuration } from "../../utils/formatTime";
+import { useAttachmentDownloadUrl } from "../../hooks";
 
 const seededRandom = (seed: number): number => {
   const x = Math.sin(seed) * 10000;
@@ -11,12 +12,14 @@ const seededRandom = (seed: number): number => {
 };
 
 interface VoiceMessageProps {
+  conversationId: string;
   attachment: Attachment;
   isOwn: boolean;
   className?: string;
 }
 
 export const VoiceMessage: React.FC<VoiceMessageProps> = ({
+  conversationId,
   attachment,
   isOwn,
   className,
@@ -25,7 +28,17 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [didRefreshOnError, setDidRefreshOnError] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const { url: resolvedUrl, resolveUrl } = useAttachmentDownloadUrl(
+    conversationId,
+    attachment,
+    { autoResolve: true },
+  );
+
+  useEffect(() => {
+    setDidRefreshOnError(false);
+  }, [resolvedUrl]);
 
   const duration = attachment.duration || 0;
 
@@ -55,6 +68,13 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
     setCurrentTime(0);
   };
 
+  const handleAudioError = () => {
+    if (!didRefreshOnError) {
+      setDidRefreshOnError(true);
+      void resolveUrl(true);
+    }
+  };
+
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     if (audioRef.current) {
       const rect = e.currentTarget.getBoundingClientRect();
@@ -68,27 +88,29 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
   };
 
   const waveformBars = useMemo(() => {
-    const seed = attachment.url?.length ?? 0;
+    const seed = resolvedUrl?.length ?? attachment.id.length ?? 0;
     return Array.from(
       { length: 30 },
       (_, i) => seededRandom(seed + i) * 60 + 20,
     );
-  }, [attachment.url]);
+  }, [attachment.id, resolvedUrl]);
 
   return (
     <div className={clsx("flex min-w-voice-message-min items-center gap-3", className)}>
       <audio
         ref={audioRef}
-        src={attachment.url}
+        src={resolvedUrl}
         onTimeUpdate={handleTimeUpdate}
         onEnded={handleEnded}
+        onError={handleAudioError}
         preload="metadata"
       />
 
       <button
         onClick={togglePlay}
+        disabled={!resolvedUrl}
         className={clsx(
-          "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors",
+          "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60",
           isOwn
             ? "bg-surface/25 text-text-inverse hover:bg-surface/35"
             : "bg-primary text-text-inverse hover:bg-secondary",
@@ -146,3 +168,5 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
 };
 
 export default VoiceMessage;
+
+
