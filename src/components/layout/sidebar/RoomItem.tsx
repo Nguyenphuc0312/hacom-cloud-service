@@ -78,12 +78,30 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
     [conversation, currentUser.id],
   );
   const displayName = useMemo(
-    () => getConversationDisplayName(conversation, currentUser.id) || fallbackConversationName,
+    () =>
+      getConversationDisplayName(conversation, currentUser.id) ||
+      fallbackConversationName,
     [conversation, currentUser, fallbackConversationName],
   );
   const previewText = useMemo(
-    () => getMessagePreview(conversation.lastMessage, currentUser.id, 44),
-    [conversation.lastMessage, currentUser.id],
+    () => {
+      const lastMessage = conversation.lastMessage;
+      if (!lastMessage) return "";
+
+      const messagePreview = getMessagePreview(lastMessage, currentUser.id, 44);
+      if (!messagePreview) return "";
+
+      const senderLabel =
+        lastMessage.senderId === currentUser.id
+          ? "Bạn"
+          : (lastMessage.senderName?.trim() ||
+            directPartner?.displayName ||
+            directPartner?.username ||
+            t("common:labels.conversation"));
+
+      return `${senderLabel}: ${messagePreview}`;
+    },
+    [conversation.lastMessage, currentUser.id, directPartner, t],
   );
   const timeLabel = useMemo(() => {
     if (!conversation.lastMessage?.createdAt) return "";
@@ -186,8 +204,10 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
 
           <p
             className={clsx(
-              "truncate text-xs leading-5",
-              unreadCount > 0 ? "font-medium text-text-secondary" : "text-text-muted",
+              "truncate text-xs leading-5 text-start",
+              unreadCount > 0
+                ? "font-medium text-text-secondary"
+                : "text-text-muted",
             )}
           >
             {previewText || t("sidebar:room.noMessagesYet")}
@@ -198,7 +218,9 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
           <span
             className={clsx(
               "text-xs leading-4",
-              unreadCount > 0 ? "font-semibold text-primary" : "text-text-muted",
+              unreadCount > 0
+                ? "font-semibold text-primary"
+                : "text-text-muted",
             )}
           >
             {timeLabel}
