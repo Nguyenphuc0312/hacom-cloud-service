@@ -105,6 +105,7 @@ export const ChatPage: React.FC = () => {
     selectConversation,
     addConversation,
     updateConversation,
+    removeConversation,
     updateStoreMessage,
     removeStoreMessage,
     conversations,
@@ -122,6 +123,7 @@ export const ChatPage: React.FC = () => {
       selectConversation: state.selectConversation,
       addConversation: state.addConversation,
       updateConversation: state.updateConversation,
+      removeConversation: state.removeConversation,
       updateStoreMessage: state.updateMessage,
       removeStoreMessage: state.removeMessage,
       conversations: state.conversations,
@@ -510,6 +512,23 @@ export const ChatPage: React.FC = () => {
     setIsInfoPanelOpen((prev) => !prev);
   }, []);
 
+  const handleDeleteConversation = useCallback(async () => {
+    if (!selectedConversation) return;
+    if (!window.confirm(t("profile:userProfile.deleteConversation"))) return;
+
+    try {
+      await conversationApi.deleteConversation(selectedConversation.id);
+      removeConversation(selectedConversation.id);
+      setIsInfoPanelOpen(false);
+      selectConversation(null);
+      navigate("/chat");
+      toast.success(t("chat:toast.messageDeleted"));
+    } catch (error) {
+      const apiError = extractApiError(error);
+      toast.error(apiError.message || t("error:generic.requestFailed"));
+    }
+  }, [navigate, removeConversation, selectConversation, selectedConversation, t]);
+
   // Handle back (mobile)
   const handleBack = useCallback(() => {
     selectConversation(null);
@@ -767,7 +786,11 @@ export const ChatPage: React.FC = () => {
         >
           {isSelectedDirectConversation ? (
             otherUser ? (
-              <UserProfile user={otherUser} onClose={handleToggleInfoPanel} />
+              <UserProfile
+                user={otherUser}
+                onClose={handleToggleInfoPanel}
+                onDeleteConversation={handleDeleteConversation}
+              />
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
                 <Spinner size="md" />
@@ -779,6 +802,7 @@ export const ChatPage: React.FC = () => {
               conversation={selectedConversation}
               currentUserId={currentUserSummary.id}
               onClose={handleToggleInfoPanel}
+              onDeleteConversation={handleDeleteConversation}
             />
           )}
         </div>

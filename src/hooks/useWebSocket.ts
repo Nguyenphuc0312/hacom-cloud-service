@@ -12,6 +12,8 @@ import {
   WebSocketEvents,
   type ConnectionState,
 } from "../lib/socket";
+import { conversationApi } from "../services/api";
+import { unwrapApiSuccess } from "../lib/apiContract";
 import { useAuthStore, useChatStore } from "../stores";
 
 interface UseWebSocketOptions {
@@ -104,6 +106,9 @@ export const useWebSocket = (
   const clearTyping = useChatStore((s) => s.clearTyping);
   const fetchMessages = useChatStore((s) => s.fetchMessages);
   const markMessagesReadUpTo = useChatStore((s) => s.markMessagesReadUpTo);
+  const updateConversation = useChatStore((s) => s.updateConversation);
+  const removeConversation = useChatStore((s) => s.removeConversation);
+  const selectConversation = useChatStore((s) => s.selectConversation);
 
   const [connectionState, setConnectionState] = useState<ConnectionState>(() =>
     initSocket().getConnectionState(),
@@ -404,6 +409,48 @@ export const useWebSocket = (
     );
     unsubscribersRef.current.push(unsubRead);
 
+    const unsubMemberUpdated = socket.on(WebSocketEvents.MEMBER_UPDATED, (data) => {
+      const payload = asRecord(data);
+      if (!payload) return;
+
+      const conversationId = getConversationId(payload);
+      if (!conversationId) return;
+
+      void conversationApi
+        .getConversationById(conversationId)
+        .then((response) => {
+          updateConversation(conversationId, unwrapApiSuccess(response));
+        })
+        .catch(() => {
+          // no-op: best effort refresh member/role changes
+        });
+    });
+    unsubscribersRef.current.push(unsubMemberUpdated);
+
+    const unsubConversationDeleted = socket.on(
+      WebSocketEvents.CONVERSATION_DELETED,
+      (data) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+
+        const conversationId = getConversationId(payload);
+        if (!conversationId) return;
+
+        const currentUserId = useAuthStore.getState().user?.id ?? null;
+        const deletedBy = asString(payload.deletedBy) ?? asString(payload.userId);
+        if (deletedBy && currentUserId && deletedBy !== currentUserId) {
+          return;
+        }
+
+        joinedRoomsRef.current.delete(conversationId);
+        removeConversation(conversationId);
+        if (useChatStore.getState().selectedConversationId === conversationId) {
+          selectConversation(null);
+        }
+      },
+    );
+    unsubscribersRef.current.push(unsubConversationDeleted);
+
     const handleTypingStart = (data: unknown) => {
       const payload = asRecord(data);
       if (!payload) return;
@@ -480,9 +527,12 @@ export const useWebSocket = (
     onConnect,
     onDisconnect,
     onError,
+    removeConversation,
     resyncRoom,
     removeMessage,
+    selectConversation,
     setTyping,
+    updateConversation,
     updateMessage,
   ]);
 

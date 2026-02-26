@@ -18,12 +18,14 @@ import { UserStatus } from "../../types";
 interface UserProfileProps {
   user: UserSummary;
   onClose: () => void;
+  onDeleteConversation?: () => void | Promise<void>;
   className?: string;
 }
 
 export const UserProfile: React.FC<UserProfileProps> = ({
   user,
   onClose,
+  onDeleteConversation,
   className,
 }) => {
   const { t } = useTranslation(["profile", "common"]);
@@ -147,12 +149,18 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors cursor-pointer">
+          <button
+            type="button"
+            onClick={() => {
+              void onDeleteConversation?.();
+            }}
+            className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-left"
+          >
             <TrashIcon className="w-5 h-5 text-danger" />
             <span className="text-sm text-danger">
               {t("profile:userProfile.deleteConversation")}
             </span>
-          </div>
+          </button>
         </div>
       </div>
     </div>

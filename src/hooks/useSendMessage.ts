@@ -9,6 +9,7 @@ import { FileType } from "../types";
 export type AttachmentPickerMode = "photo" | "document";
 
 interface UseSendMessageOptions {
+  conversationId?: string;
   disabled?: boolean;
   onSend: (content?: string, fileMeta?: unknown, type?: string) => void | Promise<void>;
 }
@@ -64,6 +65,7 @@ const isCanceledUploadError = (error: unknown): boolean => {
 };
 
 export const useSendMessage = ({
+  conversationId,
   disabled = false,
   onSend,
 }: UseSendMessageOptions): UseSendMessageResult => {
@@ -151,7 +153,7 @@ export const useSendMessage = ({
   );
 
   const sendAttachmentMessage = React.useCallback(async () => {
-    if (!selectedFile || disabled || isUploading || isSending) return false;
+    if (!selectedFile || !conversationId || disabled || isUploading || isSending) return false;
 
     const abortController = new AbortController();
     uploadAbortRef.current = abortController;
@@ -161,27 +163,20 @@ export const useSendMessage = ({
 
     try {
       const response = await fileApi.uploadFile(
+        conversationId,
         selectedFile,
         setUploadProgress,
         abortController.signal,
       );
-      const uploadedFile = unwrapApiSuccess(response);
-      const mimeType = uploadedFile.mimetype || selectedFile.type;
+      const uploaded = unwrapApiSuccess(response);
+      const attachment = fileApi.toAttachment(uploaded);
+      const mimeType = attachment.mimeType || selectedFile.type;
       const attachmentType = resolveFileType(mimeType);
       const messageType = attachmentType === FileType.IMAGE ? "image" : "file";
 
-      const attachment = {
-        id: uploadedFile.id,
-        type: attachmentType,
-        url: uploadedFile.url,
-        fileName: uploadedFile.filename || selectedFile.name,
-        fileSize: uploadedFile.size || selectedFile.size,
-        mimeType,
-      };
-
       setIsSending(true);
       await Promise.resolve(
-        onSend(uploadedFile.filename || selectedFile.name, attachment, messageType),
+        onSend(attachment.fileName || selectedFile.name, attachment, messageType),
       );
       clearSelectedFile();
       return true;
@@ -201,7 +196,7 @@ export const useSendMessage = ({
       setIsUploading(false);
       setIsSending(false);
     }
-  }, [clearSelectedFile, disabled, isSending, isUploading, onSend, selectedFile, t]);
+  }, [clearSelectedFile, conversationId, disabled, isSending, isUploading, onSend, selectedFile, t]);
 
   const cancelUpload = React.useCallback(() => {
     uploadAbortRef.current?.abort();

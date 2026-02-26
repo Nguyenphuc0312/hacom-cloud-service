@@ -83,26 +83,23 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
       fallbackConversationName,
     [conversation, currentUser, fallbackConversationName],
   );
-  const previewText = useMemo(
-    () => {
-      const lastMessage = conversation.lastMessage;
-      if (!lastMessage) return "";
+  const previewText = useMemo(() => {
+    const lastMessage = conversation.lastMessage;
+    if (!lastMessage) return "";
 
-      const messagePreview = getMessagePreview(lastMessage, currentUser.id, 44);
-      if (!messagePreview) return "";
+    const messagePreview = getMessagePreview(lastMessage, currentUser.id, 44);
+    if (!messagePreview) return "";
 
-      const senderLabel =
-        lastMessage.senderId === currentUser.id
-          ? "Bạn"
-          : (lastMessage.senderName?.trim() ||
-            directPartner?.displayName ||
-            directPartner?.username ||
-            t("common:labels.conversation"));
+    const senderLabel =
+      lastMessage.senderId === currentUser.id
+        ? "Bạn"
+        : lastMessage.senderName?.trim() ||
+          directPartner?.displayName ||
+          directPartner?.username ||
+          t("common:labels.conversation");
 
-      return `${senderLabel}: ${messagePreview}`;
-    },
-    [conversation.lastMessage, currentUser.id, directPartner, t],
-  );
+    return `${senderLabel}: ${messagePreview}`;
+  }, [conversation.lastMessage, currentUser.id, directPartner, t]);
   const timeLabel = useMemo(() => {
     if (!conversation.lastMessage?.createdAt) return "";
     return formatRelativeTime(new Date(conversation.lastMessage.createdAt));

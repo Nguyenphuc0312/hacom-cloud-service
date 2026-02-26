@@ -175,6 +175,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     cancelUpload,
     openFilePicker,
   } = useSendMessage({
+    conversationId,
     disabled,
     onSend,
   });

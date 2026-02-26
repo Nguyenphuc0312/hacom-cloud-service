@@ -10,6 +10,7 @@ import {
   ExclamationTriangleIcon,
   ArrowRightOnRectangleIcon,
   MagnifyingGlassIcon,
+  TrashIcon,
 } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -26,6 +27,7 @@ interface GroupInfoProps {
   conversation: Conversation;
   currentUserId: string;
   onClose: () => void;
+  onDeleteConversation?: () => void | Promise<void>;
   className?: string;
 }
 
@@ -43,9 +45,7 @@ interface GroupMember {
 const ROLE_PRIORITY: Record<GroupMemberRole, number> = {
   [RoomMemberRole.OWNER]: 0,
   [RoomMemberRole.ADMIN]: 1,
-  [RoomMemberRole.MODERATOR]: 2,
-  [RoomMemberRole.MEMBER]: 3,
-  [RoomMemberRole.GUEST]: 4,
+  [RoomMemberRole.MEMBER]: 2,
 };
 
 const VALID_ROLES = new Set<string>(Object.values(RoomMemberRole));
@@ -115,6 +115,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   conversation,
   currentUserId,
   onClose,
+  onDeleteConversation,
   className,
 }) => {
   const { t } = useTranslation(["profile", "common"]);
@@ -205,10 +206,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     (role: GroupMemberRole) => {
       if (role === RoomMemberRole.OWNER) return t("profile:groupInfo.roles.owner");
       if (role === RoomMemberRole.ADMIN) return t("profile:groupInfo.roles.admin");
-      if (role === RoomMemberRole.MODERATOR) {
-        return t("profile:groupInfo.roles.moderator");
-      }
-      if (role === RoomMemberRole.GUEST) return t("profile:groupInfo.roles.guest");
       return t("profile:groupInfo.roles.member");
     },
     [t],
@@ -754,6 +751,18 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         <div className="h-px bg-border mx-4" />
 
         <div className="py-2">
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={() => {
+              void onDeleteConversation?.();
+            }}
+            className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-danger"
+          >
+            <TrashIcon className="w-5 h-5" />
+            <span className="text-sm">{t("profile:userProfile.deleteConversation")}</span>
+          </button>
+
           <button
             type="button"
             className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-danger"

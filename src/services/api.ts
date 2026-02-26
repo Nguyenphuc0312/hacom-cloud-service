@@ -4,21 +4,25 @@
  */
 
 import apiClient from "../lib/axios";
+import axios from "axios";
 import type {
   ApiResponse,
   AuthResponseDto,
+  CompleteUploadResponse,
   CreateMessageResponse,
   LoginResponse,
   RefreshTokenResponse,
   RoomMessagesResponse,
+  UploadSignedUrlResponse,
 } from "@hacom/chat-shared-types";
 import type { User } from "../stores/authStore";
-import type { Conversation, Message } from "../types";
+import type { Attachment, Conversation, Message } from "../types";
 import { RoomMemberRole } from "../types";
 import {
   normalizeConversation,
   normalizeConversationsPayload,
 } from "../lib/conversationAdapter";
+import { unwrapApiSuccess } from "../lib/apiContract";
 
 // ============================================
 // AUTH API
@@ -230,7 +234,7 @@ export const conversationApi = {
   },
 
   deleteConversation: async (conversationId: string) => {
-    await apiClient.delete(`/rooms/${conversationId}`);
+    await apiClient.delete(`/conversations/${conversationId}`);
   },
 
   addMembers: async (conversationId: string, memberIds: string[]) => {
@@ -345,9 +349,9 @@ export const messageApi = {
         id: string;
         type: Message["type"] | string;
         url: string;
-        filename: string;
-        mimetype: string;
-        size: number;
+        fileName: string;
+        mimeType: string;
+        fileSize: number;
         width?: number;
         height?: number;
         duration?: number;
@@ -417,65 +421,48 @@ export const messageApi = {
 // ============================================
 
 export const fileApi = {
-  uploadFile: async (
-    file: File,
-    onProgress?: (progress: number) => void,
-    signal?: AbortSignal,
-  ) => {
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const response = await apiClient.post<
-      ApiResponse<{
-        id: string;
-        url: string;
-        filename: string;
-        originalName?: string;
-        mimetype: string;
-        size: number;
-        uploadedBy?: string;
-        createdAt?: string;
-      }>
-    >("/files/upload", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-      signal,
-      onUploadProgress: (progressEvent) => {
-        if (onProgress && progressEvent.total) {
-          const progress = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total,
-          );
-          onProgress(progress);
-        }
-      },
-    });
-
+  requestUploadUrl: async (payload: {
+    conversationId: string;
+    fileName: string;
+    mimeType: string;
+    fileSize: number;
+  }) => {
+    const response = await apiClient.post<ApiResponse<UploadSignedUrlResponse>>(
+      "/files/upload-url",
+      payload,
+    );
     return response.data;
   },
 
-  uploadImage: async (
+  completeUpload: async (payload: {
+    uploadId: string;
+    conversationId: string;
+    objectKey: string;
+  }) => {
+    const response = await apiClient.post<ApiResponse<CompleteUploadResponse>>(
+      "/files/complete",
+      payload,
+    );
+    return response.data;
+  },
+
+  uploadFile: async (
+    conversationId: string,
     file: File,
     onProgress?: (progress: number) => void,
     signal?: AbortSignal,
   ) => {
-    const formData = new FormData();
-    formData.append("image", file);
+    const mimeType = file.type || "application/octet-stream";
+    const signed = await fileApi.requestUploadUrl({
+      conversationId,
+      fileName: file.name,
+      mimeType,
+      fileSize: file.size,
+    });
+    const signedData = unwrapApiSuccess(signed);
 
-    const response = await apiClient.post<
-      ApiResponse<{
-        id: string;
-        url: string;
-        filename: string;
-        originalName?: string;
-        mimetype?: string;
-        size?: number;
-        thumbnail?: string;
-        width?: number;
-        height?: number;
-        uploadedBy?: string;
-        createdAt?: string;
-      }>
-    >("/files/upload-image", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
+    await axios.put(signedData.uploadUrl, file, {
+      headers: { "Content-Type": mimeType },
       signal,
       onUploadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {
@@ -487,7 +474,24 @@ export const fileApi = {
       },
     });
 
-    return response.data;
+    return fileApi.completeUpload({
+      uploadId: signedData.uploadId,
+      conversationId,
+      objectKey: signedData.objectKey,
+    });
+  },
+
+  uploadImage: async (
+    conversationId: string,
+    file: File,
+    onProgress?: (progress: number) => void,
+    signal?: AbortSignal,
+  ) => {
+    return fileApi.uploadFile(conversationId, file, onProgress, signal);
+  },
+
+  toAttachment: (payload: CompleteUploadResponse): Attachment => {
+    return payload.attachment as Attachment;
   },
 
   deleteFile: async (fileId: string) => {

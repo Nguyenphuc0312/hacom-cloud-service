@@ -663,9 +663,9 @@ const toAttachmentPayload = (attachments?: Attachment[]) =>
     id: attachment.id,
     type: attachment.type,
     url: attachment.url,
-    filename: attachment.fileName || "attachment",
-    mimetype: attachment.mimeType || "application/octet-stream",
-    size:
+    fileName: attachment.fileName || "attachment",
+    mimeType: attachment.mimeType || "application/octet-stream",
+    fileSize:
       typeof attachment.fileSize === "number" && attachment.fileSize >= 0
         ? attachment.fileSize
         : 0,
