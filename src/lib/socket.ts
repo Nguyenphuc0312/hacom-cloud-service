@@ -12,6 +12,7 @@ import {
   updateAccessToken,
 } from "../services/tokenService";
 import { WsEventNames } from "@hacom/chat-shared-types";
+import { isJwtLike, normalizeToken } from "../utils/jwtHelpers";
 
 // ============================================
 // Types
@@ -91,6 +92,39 @@ class WebSocketManager {
   /**
    * Kết nối WebSocket
    */
+  // connect(): void {
+  //   if (this.socket?.readyState === WebSocket.OPEN) {
+  //     console.log("WebSocket already connected");
+  //     return;
+  //   }
+  //   if (this.socket?.readyState === WebSocket.CONNECTING) {
+  //     return;
+  //   }
+
+  //   const token = this.getAccessToken();
+
+  //   if (!token) {
+  //     console.error("No access token available");
+  //     this.setConnectionState("error");
+  //     return;
+  //   }
+
+  //   this.setConnectionState("connecting");
+
+  //   // Build WebSocket URL với token
+  //   // Backend expects: ws://host:port/ws?token=JWT_TOKEN
+  //   const wsUrl = `${WEBSOCKET_URL}/ws?token=${encodeURIComponent(token)}`;
+
+  //   try {
+  //     this.socket = new WebSocket(wsUrl);
+  //     this.setupSocketHandlers();
+  //   } catch (error) {
+  //     console.error("Failed to create WebSocket:", error);
+  //     this.setConnectionState("error");
+  //     this.scheduleReconnect();
+  //   }
+  // }
+
   connect(): void {
     if (this.socket?.readyState === WebSocket.OPEN) {
       console.log("WebSocket already connected");
@@ -100,18 +134,29 @@ class WebSocketManager {
       return;
     }
 
-    const token = this.getAccessToken();
-    if (!token) {
-      console.error("No access token available");
+    const rawToken = this.getAccessToken();
+
+    // LOG DEBUG (tạm thời)
+    console.debug("WS connect() token raw:", rawToken);
+
+    if (!isJwtLike(rawToken)) {
+      console.error("WS: invalid/missing token, skip connect:", rawToken);
+      this.setConnectionState("error");
+      // optional: scheduleReconnect() chỉ khi token hợp lệ
+      return;
+    }
+
+    const token = normalizeToken(rawToken);
+    if (!isJwtLike(token)) {
+      console.error("WS: token normalized but still invalid:", token);
       this.setConnectionState("error");
       return;
     }
 
     this.setConnectionState("connecting");
 
-    // Build WebSocket URL với token
-    // Backend expects: ws://host:port/ws?token=JWT_TOKEN
     const wsUrl = `${WEBSOCKET_URL}/ws?token=${encodeURIComponent(token)}`;
+    console.debug("WS URL:", wsUrl);
 
     try {
       this.socket = new WebSocket(wsUrl);
@@ -207,7 +252,9 @@ class WebSocketManager {
           typeof (item as Record<string, unknown>).type === "string");
 
       if (Array.isArray(value)) {
-        return value.filter((item): item is WebSocketEvent => isEventShape(item));
+        return value.filter((item): item is WebSocketEvent =>
+          isEventShape(item),
+        );
       }
 
       if (isEventShape(value)) {
@@ -315,7 +362,6 @@ class WebSocketManager {
 
     this.stopPingInterval();
     this.reconnectAttempts = 0;
-
     if (this.socket) {
       this.socket.close(1000, "Client disconnect");
       this.socket = null;
@@ -395,11 +441,13 @@ class WebSocketManager {
     // Lưu token mới
     updateAccessToken(token);
 
+    this.disconnect();
+    this.connect();
     // Reconnect với token mới
-    if (this.isConnected()) {
-      this.disconnect();
-      this.connect();
-    }
+    // if (this.isConnected()) {
+    //   this.disconnect();
+    //   this.connect();
+    // }
   }
 }
 
@@ -475,4 +523,3 @@ export const WebSocketEvents = {
 } as const;
 
 export default wsManager;
-
