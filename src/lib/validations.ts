@@ -7,6 +7,12 @@ import { z } from "zod";
 import { VALIDATION_CONFIG } from "../config";
 import i18n from "../i18n";
 
+// Helper: when i18n may not be initialized at module-load time we store a
+// compact marker string containing the translation key and optional params.
+// The UI will decode this marker and call `t()` at render time.
+const i18nKey = (key: string, params?: Record<string, unknown>) =>
+  `__I18N__${key}::${params ? JSON.stringify(params) : "{}"}`;
+
 // ============================================
 // AUTH SCHEMAS
 // ============================================
@@ -17,16 +23,26 @@ import i18n from "../i18n";
 export const loginSchema = z.object({
   email: z
     .string()
-    .min(1, i18n.t("validation:auth.emailRequired"))
-    .email(i18n.t("validation:auth.emailInvalid")),
+    .min(1, i18nKey("validation:auth.emailRequired"))
+    .email(i18nKey("validation:auth.emailInvalid")),
   password: z
     .string()
-    .min(1, i18n.t("validation:auth.passwordRequired"))
+    .min(1, i18nKey("validation:auth.passwordRequired"))
     .min(
       VALIDATION_CONFIG.PASSWORD_MIN_LENGTH,
-      i18n.t("validation:auth.passwordMin", {
+      i18nKey("validation:auth.passwordMin", {
         count: VALIDATION_CONFIG.PASSWORD_MIN_LENGTH,
       }),
+    )
+    .max(
+      VALIDATION_CONFIG.PASSWORD_MAX_LENGTH,
+      i18nKey("validation:auth.passwordMax", {
+        count: VALIDATION_CONFIG.PASSWORD_MAX_LENGTH,
+      }),
+    )
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+      i18nKey("validation:auth.passwordComplexity"),
     ),
   rememberMe: z.boolean().optional().default(false),
 });
@@ -40,57 +56,54 @@ export const registerSchema = z
   .object({
     username: z
       .string()
-      .min(1, i18n.t("validation:register.usernameRequired"))
+      .min(1, i18nKey("validation:register.usernameRequired"))
       .min(
         VALIDATION_CONFIG.USERNAME_MIN_LENGTH,
-        i18n.t("validation:register.usernameMin", {
+        i18nKey("validation:register.usernameMin", {
           count: VALIDATION_CONFIG.USERNAME_MIN_LENGTH,
         }),
       )
       .max(
         VALIDATION_CONFIG.USERNAME_MAX_LENGTH,
-        i18n.t("validation:register.usernameMax", {
+        i18nKey("validation:register.usernameMax", {
           count: VALIDATION_CONFIG.USERNAME_MAX_LENGTH,
         }),
       )
-      .regex(
-        /^[a-zA-Z0-9_]+$/,
-        i18n.t("validation:register.usernamePattern"),
-      ),
+      .regex(/^[a-zA-Z0-9_]+$/, i18nKey("validation:register.usernamePattern")),
     email: z
       .string()
-      .min(1, i18n.t("validation:auth.emailRequired"))
-      .email(i18n.t("validation:auth.emailInvalid")),
+      .min(1, i18nKey("validation:auth.emailRequired"))
+      .email(i18nKey("validation:auth.emailInvalid")),
     password: z
       .string()
-      .min(1, i18n.t("validation:auth.passwordRequired"))
+      .min(1, i18nKey("validation:auth.passwordRequired"))
       .min(
         VALIDATION_CONFIG.PASSWORD_MIN_LENGTH,
-        i18n.t("validation:auth.passwordMin", {
+        i18nKey("validation:auth.passwordMin", {
           count: VALIDATION_CONFIG.PASSWORD_MIN_LENGTH,
         }),
       )
       .max(
         VALIDATION_CONFIG.PASSWORD_MAX_LENGTH,
-        i18n.t("validation:auth.passwordMax", {
+        i18nKey("validation:auth.passwordMax", {
           count: VALIDATION_CONFIG.PASSWORD_MAX_LENGTH,
         }),
       )
       .regex(
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-        i18n.t("validation:auth.passwordComplexity"),
+        i18nKey("validation:auth.passwordComplexity"),
       ),
     confirmPassword: z
       .string()
-      .min(1, i18n.t("validation:auth.confirmPasswordRequired")),
+      .min(1, i18nKey("validation:auth.confirmPasswordRequired")),
     firstName: z.string().optional(),
     lastName: z.string().optional(),
     acceptTerms: z.literal(true, {
-      errorMap: () => ({ message: i18n.t("validation:auth.acceptTerms") }),
+      errorMap: () => ({ message: i18nKey("validation:auth.acceptTerms") }),
     }),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: i18n.t("validation:auth.confirmPasswordMismatch"),
+    message: i18nKey("validation:auth.confirmPasswordMismatch"),
     path: ["confirmPassword"],
   });
 
@@ -102,8 +115,8 @@ export type RegisterFormData = z.infer<typeof registerSchema>;
 export const forgotPasswordSchema = z.object({
   email: z
     .string()
-    .min(1, i18n.t("validation:auth.emailRequired"))
-    .email(i18n.t("validation:auth.emailInvalid")),
+    .min(1, i18nKey("validation:auth.emailRequired"))
+    .email(i18nKey("validation:auth.emailInvalid")),
 });
 
 export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
@@ -115,23 +128,23 @@ export const resetPasswordSchema = z
   .object({
     password: z
       .string()
-      .min(1, i18n.t("validation:auth.passwordRequired"))
+      .min(1, i18nKey("validation:auth.passwordRequired"))
       .min(
         VALIDATION_CONFIG.PASSWORD_MIN_LENGTH,
-        i18n.t("validation:auth.passwordMin", {
+        i18nKey("validation:auth.passwordMin", {
           count: VALIDATION_CONFIG.PASSWORD_MIN_LENGTH,
         }),
       )
       .regex(
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-        i18n.t("validation:auth.passwordComplexity"),
+        i18nKey("validation:auth.passwordComplexity"),
       ),
     confirmPassword: z
       .string()
-      .min(1, i18n.t("validation:auth.confirmPasswordRequired")),
+      .min(1, i18nKey("validation:auth.confirmPasswordRequired")),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: i18n.t("validation:auth.confirmPasswordMismatch"),
+    message: i18nKey("validation:auth.confirmPasswordMismatch"),
     path: ["confirmPassword"],
   });
 
@@ -151,14 +164,14 @@ export const updateProfileSchema = z.object({
     .string()
     .max(
       VALIDATION_CONFIG.BIO_MAX_LENGTH,
-      i18n.t("validation:profile.bioMax", {
+      i18nKey("validation:profile.bioMax", {
         count: VALIDATION_CONFIG.BIO_MAX_LENGTH,
       }),
     )
     .optional(),
   phone: z
     .string()
-    .regex(/^\+?[0-9]{10,15}$/, i18n.t("validation:profile.phoneInvalid"))
+    .regex(/^\+?[0-9]{10,15}$/, i18nKey("validation:profile.phoneInvalid"))
     .optional()
     .or(z.literal("")),
 });
@@ -172,30 +185,30 @@ export const changePasswordSchema = z
   .object({
     currentPassword: z
       .string()
-      .min(1, i18n.t("validation:password.currentRequired")),
+      .min(1, i18nKey("validation:password.currentRequired")),
     newPassword: z
       .string()
-      .min(1, i18n.t("validation:password.newRequired"))
+      .min(1, i18nKey("validation:password.newRequired"))
       .min(
         VALIDATION_CONFIG.PASSWORD_MIN_LENGTH,
-        i18n.t("validation:auth.passwordMin", {
+        i18nKey("validation:auth.passwordMin", {
           count: VALIDATION_CONFIG.PASSWORD_MIN_LENGTH,
         }),
       )
       .regex(
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-        i18n.t("validation:auth.passwordComplexity"),
+        i18nKey("validation:auth.passwordComplexity"),
       ),
     confirmPassword: z
       .string()
-      .min(1, i18n.t("validation:auth.confirmPasswordRequired")),
+      .min(1, i18nKey("validation:auth.confirmPasswordRequired")),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
-    message: i18n.t("validation:auth.confirmPasswordMismatch"),
+    message: i18nKey("validation:auth.confirmPasswordMismatch"),
     path: ["confirmPassword"],
   })
   .refine((data) => data.currentPassword !== data.newPassword, {
-    message: i18n.t("validation:password.mustBeDifferent"),
+    message: i18nKey("validation:password.mustBeDifferent"),
     path: ["newPassword"],
   });
 
@@ -211,17 +224,17 @@ export type ChangePasswordFormData = z.infer<typeof changePasswordSchema>;
 export const createRoomSchema = z.object({
   name: z
     .string()
-    .min(1, i18n.t("validation:room.nameRequired"))
-    .min(2, i18n.t("validation:room.nameMin"))
-    .max(100, i18n.t("validation:room.nameMax")),
+    .min(1, i18nKey("validation:room.nameRequired"))
+    .min(2, i18nKey("validation:room.nameMin"))
+    .max(100, i18nKey("validation:room.nameMax")),
   description: z
     .string()
-    .max(500, i18n.t("validation:room.descriptionMax"))
+    .max(500, i18nKey("validation:room.descriptionMax"))
     .optional(),
   memberIds: z
     .array(z.string())
-    .min(1, i18n.t("validation:room.memberMin"))
-    .max(199, i18n.t("validation:room.memberMax")),
+    .min(1, i18nKey("validation:room.memberMin"))
+    .max(199, i18nKey("validation:room.memberMax")),
 });
 
 export type CreateRoomFormData = z.infer<typeof createRoomSchema>;
@@ -236,10 +249,10 @@ export type CreateRoomFormData = z.infer<typeof createRoomSchema>;
 export const sendMessageSchema = z.object({
   content: z
     .string()
-    .min(1, i18n.t("validation:message.contentRequired"))
+    .min(1, i18nKey("validation:message.contentRequired"))
     .max(
       VALIDATION_CONFIG.MESSAGE_MAX_LENGTH,
-      i18n.t("validation:message.contentMax", {
+      i18nKey("validation:message.contentMax", {
         count: VALIDATION_CONFIG.MESSAGE_MAX_LENGTH,
       }),
     ),

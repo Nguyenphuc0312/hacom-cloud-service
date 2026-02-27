@@ -4,6 +4,7 @@
  */
 
 import React, { forwardRef, useId } from "react";
+import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import { CheckIcon } from "@heroicons/react/24/solid";
 
@@ -23,6 +24,21 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
   ) => {
     const uniqueId = useId();
     const checkboxId = id || `checkbox-${uniqueId}`;
+    const { t } = useTranslation();
+
+    let displayError: string | undefined = error;
+    if (error && error.startsWith("__I18N__")) {
+      try {
+        const payload = error.replace("__I18N__", "");
+        const sep = payload.indexOf("::");
+        const key = payload.slice(0, sep);
+        const json = payload.slice(sep + 2) || "{}";
+        const params = JSON.parse(json);
+        displayError = t(key, params as Record<string, unknown>);
+      } catch {
+        displayError = error;
+      }
+    }
 
     return (
       <div className={clsx("w-full", containerClassName)}>
@@ -64,10 +80,16 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
             </div>
           </div>
 
-          {label && <span className="select-none text-sm text-text-secondary">{label}</span>}
+          {label && (
+            <span className="select-none text-sm text-text-secondary">
+              {label}
+            </span>
+          )}
         </label>
 
-        {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+        {displayError && (
+          <p className="mt-2 text-sm text-danger">{displayError}</p>
+        )}
       </div>
     );
   },
@@ -76,4 +98,3 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
 Checkbox.displayName = "Checkbox";
 
 export default Checkbox;
-

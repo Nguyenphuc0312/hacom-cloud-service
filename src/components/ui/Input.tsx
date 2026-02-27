@@ -4,6 +4,7 @@
  */
 
 import React, { forwardRef, useState, useId } from "react";
+import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import {
   EyeIcon,
@@ -44,6 +45,23 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     const uniqueId = useId();
     const inputId = id || `input-${uniqueId}`;
 
+    const { t } = useTranslation();
+
+    // decode i18n marker produced by validation when i18n wasn't initialized
+    let displayError: string | undefined = error;
+    if (error && error.startsWith("__I18N__")) {
+      try {
+        const payload = error.replace("__I18N__", "");
+        const sep = payload.indexOf("::");
+        const key = payload.slice(0, sep);
+        const json = payload.slice(sep + 2) || "{}";
+        const params = JSON.parse(json);
+        displayError = t(key, params as Record<string, unknown>);
+      } catch {
+        displayError = error;
+      }
+    }
+
     const isPasswordType = type === "password";
     const inputType = isPasswordType && showPassword ? "text" : type;
 
@@ -78,7 +96,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               !error &&
                 !isValid &&
                 "border-border focus:border-primary focus:ring-focus/20",
-              error && "border-danger pr-10 focus:border-danger focus:ring-danger/20",
+              error &&
+                "border-danger pr-10 focus:border-danger focus:ring-danger/20",
               isValid &&
                 !error &&
                 "border-success pr-10 focus:border-success focus:ring-success/20",
@@ -110,20 +129,26 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               </button>
             )}
 
-            {error && <ExclamationCircleIcon className="h-5 w-5 text-danger" />}
+            {displayError && (
+              <ExclamationCircleIcon className="h-5 w-5 text-danger" />
+            )}
 
-            {isValid && !error && <CheckCircleIcon className="h-5 w-5 text-success" />}
+            {isValid && !error && (
+              <CheckCircleIcon className="h-5 w-5 text-success" />
+            )}
           </div>
         </div>
 
-        {error && (
+        {displayError && (
           <p className="mt-2 flex items-center gap-1 text-sm text-danger">
             <ExclamationCircleIcon className="h-4 w-4 shrink-0" />
-            {error}
+            {displayError}
           </p>
         )}
 
-        {hint && !error && <p className="mt-2 text-sm text-text-muted">{hint}</p>}
+        {hint && !error && (
+          <p className="mt-2 text-sm text-text-muted">{hint}</p>
+        )}
       </div>
     );
   },
@@ -154,6 +179,21 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
   ) => {
     const uniqueId = useId();
     const textareaId = id || `textarea-${uniqueId}`;
+    const { t } = useTranslation();
+
+    let displayError: string | undefined = error;
+    if (error && error.startsWith("__I18N__")) {
+      try {
+        const payload = error.replace("__I18N__", "");
+        const sep = payload.indexOf("::");
+        const key = payload.slice(0, sep);
+        const json = payload.slice(sep + 2) || "{}";
+        const params = JSON.parse(json);
+        displayError = t(key, params as Record<string, unknown>);
+      } catch {
+        displayError = error;
+      }
+    }
 
     return (
       <div className={clsx("w-full", containerClassName)}>
@@ -183,14 +223,16 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           {...props}
         />
 
-        {error && (
+        {displayError && (
           <p className="mt-2 flex items-center gap-1 text-sm text-danger">
             <ExclamationCircleIcon className="h-4 w-4 shrink-0" />
-            {error}
+            {displayError}
           </p>
         )}
 
-        {hint && !error && <p className="mt-2 text-sm text-text-muted">{hint}</p>}
+        {hint && !error && (
+          <p className="mt-2 text-sm text-text-muted">{hint}</p>
+        )}
       </div>
     );
   },
@@ -199,4 +241,3 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
 Textarea.displayName = "Textarea";
 
 export default Input;
-
