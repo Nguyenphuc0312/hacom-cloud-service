@@ -1,0 +1,77 @@
+{
+  "pageTitle": "Settings",
+  "resetAll": "Reset to defaults",
+  "version": "Settings v{{version}}",
+  "appearance": {
+    "title": "Appearance",
+    "description": "Customise theme, colours, font size, and density",
+    "themeLabel": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "accentLabel": "Accent colour",
+    "accentDesc": "Choose primary colour for buttons and links",
+    "fontSizeLabel": "Font size",
+    "fontSizeDesc": "Applies to message bubbles",
+    "fontSmall": "Small",
+    "fontSmallDesc": "Compact text",
+    "fontMedium": "Medium",
+    "fontMediumDesc": "Default size",
+    "fontLarge": "Large",
+    "fontLargeDesc": "Easier to read",
+    "densityLabel": "Display density",
+    "densityCompact": "Compact",
+    "densityCompactDesc": "Tighter bubble spacing",
+    "densityComfortable": "Comfortable",
+    "densityComfortableDesc": "More breathing room",
+    "preview": "Preview"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "description": "Control how you receive notifications",
+    "enabled": "Message notifications",
+    "enabledDesc": "Show notifications for new messages",
+    "sound": "Notification sound",
+    "soundDesc": "Play a sound when a new message arrives",
+    "messagePreview": "Message preview",
+    "messagePreviewDesc": "Show message content in notifications"
+  },
+  "privacy": {
+    "title": "Privacy",
+    "description": "Manage your privacy preferences",
+    "showOnlineStatus": "Show online status",
+    "showOnlineStatusDesc": "Let others see when you are online",
+    "readReceipts": "Read receipts",
+    "readReceiptsDesc": "Show others when you have read their messages",
+    "allowStrangers": "Allow messages from strangers",
+    "allowStrangersDesc": "People not in your contacts can send you messages"
+  },
+  "chat": {
+    "title": "Chat",
+    "description": "Customise chat behaviour",
+    "autoScroll": "Auto-scroll on new messages",
+    "autoScrollDesc": "Automatically scroll to the latest message",
+    "enterKeyLabel": "Enter key behaviour",
+    "enterSend": "Enter to send",
+    "enterSendDesc": "Press Enter to send, Shift+Enter for new line",
+    "enterNewline": "Enter for new line",
+    "enterNewlineDesc": "Press Ctrl+Enter to send",
+    "saveSearchHistory": "Save search history",
+    "saveSearchHistoryDesc": "Remember recent searches for quicker access"
+  },
+  "language": {
+    "title": "Language",
+    "description": "Choose your preferred display language",
+    "label": "Display language",
+    "vi": "Tiếng Việt",
+    "en": "English",
+    "system": "System default",
+    "systemDesc": "Use your browser's language setting"
+  },
+  "preview": {
+    "contact": "John Doe",
+    "received": "Hey! How are you? 👋",
+    "sent": "I'm good, thanks! 🎉",
+    "receivedTwo": "Great to hear! Let's meet up 😊"
+  }
+}

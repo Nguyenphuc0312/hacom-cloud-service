@@ -8,5 +8,5 @@ export const ROUTE_PATHS = {
   FORGOT_PASSWORD: "/forgot-password",
   CHAT: "/chat",
   CHAT_DETAIL: "/chat/:conversationId?",
+  SETTINGS: "/settings",
 } as const;
-

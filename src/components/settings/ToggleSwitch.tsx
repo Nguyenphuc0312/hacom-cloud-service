@@ -1,0 +1,77 @@
+/**
+ * @fileoverview Toggle switch component for settings
+ * Accessible, keyboard-navigable toggle with label + description.
+ */
+
+import React, { useId } from "react";
+import clsx from "clsx";
+
+interface ToggleSwitchProps {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  description?: string;
+  disabled?: boolean;
+  className?: string;
+}
+
+export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
+  checked,
+  onChange,
+  label,
+  description,
+  disabled = false,
+  className,
+}) => {
+  const id = useId();
+
+  return (
+    <label
+      htmlFor={id}
+      className={clsx(
+        "flex cursor-pointer items-center justify-between gap-4 rounded-lg px-1 py-3",
+        "transition-colors duration-150",
+        disabled && "cursor-not-allowed opacity-60",
+        className,
+      )}
+    >
+      <div className="min-w-0 flex-1">
+        <span className="block text-sm font-medium text-text-primary">
+          {label}
+        </span>
+        {description && (
+          <span className="mt-0.5 block text-xs text-text-muted">
+            {description}
+          </span>
+        )}
+      </div>
+
+      <button
+        id={id}
+        role="switch"
+        type="button"
+        aria-checked={checked}
+        aria-label={label}
+        disabled={disabled}
+        onClick={() => !disabled && onChange(!checked)}
+        className={clsx(
+          "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full",
+          "transition-colors duration-200 ease-in-out",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
+          checked ? "bg-primary" : "bg-border-strong/50",
+          disabled && "pointer-events-none",
+        )}
+      >
+        <span
+          className={clsx(
+            "inline-block h-4 w-4 rounded-full bg-white shadow-sm",
+            "transition-transform duration-200 ease-in-out",
+            checked ? "translate-x-6" : "translate-x-1",
+          )}
+        />
+      </button>
+    </label>
+  );
+};
+
+export default ToggleSwitch;

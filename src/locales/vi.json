@@ -310,6 +310,74 @@
       "uploadFailed": "Tai len that bai, vui long thu lai"
     }
   },
+  "settings": {
+    "pageTitle": "Cai dat",
+    "resetAll": "Dat lai mac dinh",
+    "version": "Cai dat v{{version}}",
+    "appearance": {
+      "title": "Giao dien",
+      "description": "Tuy chinh giao dien, mau sac, co chu va mat do hien thi",
+      "themeLabel": "Giao dien",
+      "themeLight": "Sang",
+      "themeDark": "Toi",
+      "themeSystem": "Theo he thong",
+      "accentLabel": "Mau chu dao",
+      "accentDesc": "Chon mau chinh cho nut va lien ket",
+      "fontSizeLabel": "Co chu",
+      "fontSizeDesc": "Ap dung cho bong chat tin nhan",
+      "fontSmall": "Nho",
+      "fontSmallDesc": "Van ban nho gon",
+      "fontMedium": "Vua",
+      "fontMediumDesc": "Kich thuoc mac dinh",
+      "fontLarge": "Lon",
+      "fontLargeDesc": "De doc hon",
+      "densityLabel": "Mat do hien thi",
+      "densityCompact": "Chat",
+      "densityCompactDesc": "Khoang cach bong chat hep hon",
+      "densityComfortable": "Thoai mai",
+      "densityComfortableDesc": "Rong rai hon",
+      "preview": "Xem truoc"
+    },
+    "notifications": {
+      "title": "Thong bao",
+      "description": "Quan ly cach ban nhan thong bao",
+      "enabled": "Thong bao tin nhan",
+      "enabledDesc": "Hien thong bao khi co tin nhan moi",
+      "sound": "Am thanh thong bao",
+      "soundDesc": "Phat am thanh khi co tin nhan moi",
+      "messagePreview": "Xem truoc tin nhan",
+      "messagePreviewDesc": "Hien noi dung tin nhan trong thong bao"
+    },
+    "privacy": {
+      "title": "Quyen rieng tu",
+      "description": "Quan ly tuy chon quyen rieng tu",
+      "showOnlineStatus": "Hien trang thai truc tuyen",
+      "showOnlineStatusDesc": "Cho phep nguoi khac thay khi ban truc tuyen",
+      "readReceipts": "Xac nhan da doc",
+      "readReceiptsDesc": "Cho nguoi khac biet khi ban da doc tin nhan",
+      "allowStrangers": "Cho phep nguoi la nhan tin",
+      "allowStrangersDesc": "Nguoi khong co trong danh ba co the gui tin nhan cho ban"
+    },
+    "chat": {
+      "title": "Chat",
+      "description": "Tuy chinh hanh vi chat",
+      "autoScroll": "Tu cuon khi co tin moi",
+      "autoScrollDesc": "Tu dong cuon den tin nhan moi nhat",
+      "enterKeyLabel": "Hanh vi phim Enter",
+      "enterSend": "Enter de gui",
+      "enterSendDesc": "Nhan Enter de gui, Shift+Enter de xuong dong",
+      "enterNewline": "Enter de xuong dong",
+      "enterNewlineDesc": "Nhan Ctrl+Enter de gui",
+      "saveSearchHistory": "Luu lich su tim kiem",
+      "saveSearchHistoryDesc": "Ghi nho lich su tim kiem gan day"
+    },
+    "preview": {
+      "contact": "Nguyen Van A",
+      "received": "Chao ban! Khoe khong? 👋",
+      "sent": "Minh khoe, cam on ban! 🎉",
+      "receivedTwo": "Tot qua! Hen gap nhe 😊"
+    }
+  },
   "theme": {
     "toggle": {
       "light": "Sang",

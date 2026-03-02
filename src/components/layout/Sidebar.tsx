@@ -1,7 +1,11 @@
 ﻿import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { ArrowLeftOnRectangleIcon } from "@heroicons/react/24/outline";
+import { useNavigate } from "react-router-dom";
+import {
+  ArrowLeftOnRectangleIcon,
+  Cog6ToothIcon,
+} from "@heroicons/react/24/outline";
 import { Badge } from "../common/Badge";
 import { ConfirmDialog } from "../ui";
 import { useLogout } from "../../hooks";
@@ -35,6 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
 
   const tabs: { id: ConversationFilter; label: string }[] = [
     { id: "all", label: t("sidebar:tabs.all") },
@@ -140,6 +145,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
 
         <div className="border-t border-border p-2">
+          {/* Settings button */}
+          <button
+            type="button"
+            onClick={() => navigate("/settings")}
+            className={clsx(
+              "inline-flex w-full items-center rounded-lg px-2 py-2 text-sm font-medium transition-colors",
+              "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
+              isCollapsed && "justify-center px-0",
+            )}
+            aria-label={t("settings.pageTitle", { defaultValue: "Settings" })}
+          >
+            <Cog6ToothIcon className="h-5 w-5 shrink-0" />
+            {!isCollapsed && (
+              <span className="ml-2">
+                {t("settings.pageTitle", { defaultValue: "Settings" })}
+              </span>
+            )}
+          </button>
+
+          {/* Logout button */}
           <button
             type="button"
             disabled={isLoggingOut}

@@ -1,0 +1,77 @@
+{
+  "pageTitle": "Cài đặt",
+  "resetAll": "Đặt lại mặc định",
+  "version": "Cài đặt v{{version}}",
+  "appearance": {
+    "title": "Giao diện",
+    "description": "Tùy chỉnh giao diện, màu sắc, cỡ chữ và mật độ hiển thị",
+    "themeLabel": "Giao diện",
+    "themeLight": "Sáng",
+    "themeDark": "Tối",
+    "themeSystem": "Theo hệ thống",
+    "accentLabel": "Màu chủ đạo",
+    "accentDesc": "Chọn màu chính cho nút và liên kết",
+    "fontSizeLabel": "Cỡ chữ",
+    "fontSizeDesc": "Áp dụng cho bong chat tin nhắn",
+    "fontSmall": "Nhỏ",
+    "fontSmallDesc": "Văn bản nhỏ gọn",
+    "fontMedium": "Vừa",
+    "fontMediumDesc": "Kích thước mặc định",
+    "fontLarge": "Lớn",
+    "fontLargeDesc": "Dễ đọc hơn",
+    "densityLabel": "Mật độ hiển thị",
+    "densityCompact": "Chặt",
+    "densityCompactDesc": "Khoảng cách bong chat hẹp hơn",
+    "densityComfortable": "Thoải mái",
+    "densityComfortableDesc": "Rộng rãi hơn",
+    "preview": "Xem trước"
+  },
+  "notifications": {
+    "title": "Thông báo",
+    "description": "Quản lý cách bạn nhận thông báo",
+    "enabled": "Thông báo tin nhắn",
+    "enabledDesc": "Hiện thông báo khi có tin nhắn mới",
+    "sound": "Âm thanh thông báo",
+    "soundDesc": "Phát âm thanh khi có tin nhắn mới",
+    "messagePreview": "Xem trước tin nhắn",
+    "messagePreviewDesc": "Hiện nội dung tin nhắn trong thông báo"
+  },
+  "privacy": {
+    "title": "Quyền riêng tư",
+    "description": "Quản lý tùy chọn quyền riêng tư",
+    "showOnlineStatus": "Hiện trạng thái trực tuyến",
+    "showOnlineStatusDesc": "Cho phép người khác thấy khi bạn trực tuyến",
+    "readReceipts": "Xác nhận đã đọc",
+    "readReceiptsDesc": "Cho người khác biết khi bạn đã đọc tin nhắn",
+    "allowStrangers": "Cho phép người lạ nhắn tin",
+    "allowStrangersDesc": "Người không có trong danh bạ có thể gửi tin nhắn cho bạn"
+  },
+  "chat": {
+    "title": "Chat",
+    "description": "Tùy chỉnh hành vi chat",
+    "autoScroll": "Tự cuộn khi có tin mới",
+    "autoScrollDesc": "Tự động cuộn đến tin nhắn mới nhất",
+    "enterKeyLabel": "Hành vi phím Enter",
+    "enterSend": "Enter để gửi",
+    "enterSendDesc": "Nhấn Enter để gửi, Shift+Enter để xuống dòng",
+    "enterNewline": "Enter để xuống dòng",
+    "enterNewlineDesc": "Nhấn Ctrl+Enter để gửi",
+    "saveSearchHistory": "Lưu lịch sử tìm kiếm",
+    "saveSearchHistoryDesc": "Ghi nhớ lịch sử tìm kiếm gần đây"
+  },
+  "language": {
+    "title": "Ngôn ngữ",
+    "description": "Chọn ngôn ngữ hiển thị",
+    "label": "Ngôn ngữ hiển thị",
+    "vi": "Tiếng Việt",
+    "en": "English",
+    "system": "Mặc định hệ thống",
+    "systemDesc": "Sử dụng ngôn ngữ của trình duyệt"
+  },
+  "preview": {
+    "contact": "Nguyễn Văn A",
+    "received": "Chào bạn! Khỏe không? 👋",
+    "sent": "Mình khỏe, cảm ơn bạn! 🎉",
+    "receivedTwo": "Tốt quá! Hẹn gặp nhé 😊"
+  }
+}

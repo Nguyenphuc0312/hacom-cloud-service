@@ -44,6 +44,10 @@
   --size-sidebar-expanded: 304px;
   --size-voice-message-min: 200px;
 
+  /* Chat bubble density (overridden by SettingsApplier) */
+  --chat-bubble-px: 0.875rem;
+  --chat-bubble-py: 0.625rem;
+
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
@@ -213,6 +217,42 @@
   --color-focus-ring: var(--color-primary);
 }
 
+:root[data-brand="orange"] {
+  --core-brand-400: 30 90% 62%;
+  --core-brand-500: 24 100% 50%;
+  --core-brand-600: 20 100% 42%;
+  --color-primary: var(--core-brand-500);
+  --color-primary-hover: var(--core-brand-600);
+  --color-primary-active: var(--core-brand-600);
+  --color-secondary: var(--core-brand-400);
+  --color-accent: 24 100% 50%;
+  --color-focus-ring: var(--color-primary);
+}
+
+:root[data-brand="pink"] {
+  --core-brand-400: 340 75% 65%;
+  --core-brand-500: 340 82% 52%;
+  --core-brand-600: 340 80% 44%;
+  --color-primary: var(--core-brand-500);
+  --color-primary-hover: var(--core-brand-600);
+  --color-primary-active: var(--core-brand-600);
+  --color-secondary: var(--core-brand-400);
+  --color-accent: 340 82% 52%;
+  --color-focus-ring: var(--color-primary);
+}
+
+:root[data-brand="teal"] {
+  --core-brand-400: 178 55% 50%;
+  --core-brand-500: 180 70% 35%;
+  --core-brand-600: 180 68% 28%;
+  --color-primary: var(--core-brand-500);
+  --color-primary-hover: var(--core-brand-600);
+  --color-primary-active: var(--core-brand-600);
+  --color-secondary: var(--core-brand-400);
+  --color-accent: 180 70% 35%;
+  --color-focus-ring: var(--color-primary);
+}
+
 *,
 *::before,
 *::after {
@@ -247,12 +287,7 @@ html.theme-ready * {
   transition-duration: var(--theme-transition-duration);
   transition-timing-function: var(--theme-transition-easing);
   transition-property:
-    color,
-    background-color,
-    border-color,
-    text-decoration-color,
-    fill,
-    stroke,
+    color, background-color, border-color, text-decoration-color, fill, stroke,
     box-shadow;
 }
 
@@ -347,7 +382,8 @@ a:focus-visible {
 }
 
 :root[data-theme="dark"] .chat-background {
-  background-image: radial-gradient(
+  background-image:
+    radial-gradient(
       circle at 1px 1px,
       hsl(var(--chat-pattern-color) / 0.12) 1px,
       transparent 0

@@ -14,14 +14,16 @@ export const appNamespaces = [
   "error",
   "validation",
   "theme",
+  "settings",
 ] as const;
 
 if (!i18n.isInitialized) {
   void i18n
     .use(LanguageDetector)
     .use(
-      resourcesToBackend((language: string, namespace: string) =>
-        import(`../locales/${language}/${namespace}.json`),
+      resourcesToBackend(
+        (language: string, namespace: string) =>
+          import(`../locales/${language}/${namespace}.json`),
       ),
     )
     .use(initReactI18next)
