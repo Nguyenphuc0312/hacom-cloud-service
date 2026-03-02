@@ -12,9 +12,9 @@ export const DateDivider: React.FC<DateDividerProps> = ({
   className,
 }) => {
   return (
-    <div className={clsx("my-3 flex items-center justify-center", className)}>
+    <div className={clsx("my-4 flex items-center justify-center", className)}>
       <div className="h-px flex-1 bg-border" />
-      <span className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-text-muted shadow-xs">
+      <span className="mx-3 rounded-full border border-border bg-surface px-4 py-1.5 text-xs font-medium text-text-secondary shadow-xs">
         {formatDateDivider(date)}
       </span>
       <div className="h-px flex-1 bg-border" />

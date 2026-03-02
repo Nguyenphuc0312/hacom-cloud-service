@@ -33,7 +33,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
   return (
     <div
       className={clsx(
-        "bg-surface-active animate-pulse",
+        "relative overflow-hidden bg-surface-active",
         roundedClasses[rounded],
         className,
       )}
@@ -41,7 +41,16 @@ export const Skeleton: React.FC<SkeletonProps> = ({
         width: typeof width === "number" ? `${width}px` : width,
         height: typeof height === "number" ? `${height}px` : height,
       }}
-    />
+    >
+      <div
+        className="absolute inset-0 animate-skeleton-shimmer"
+        style={{
+          backgroundImage:
+            "linear-gradient(90deg, transparent 0%, hsl(var(--color-surface-hover) / 0.6) 50%, transparent 100%)",
+          backgroundSize: "200% 100%",
+        }}
+      />
+    </div>
   );
 };
 
@@ -93,7 +102,7 @@ export const MessageSkeleton: React.FC<{ isMe?: boolean; width?: number }> = ({
   return (
     <div
       className={clsx(
-        "flex gap-2 px-4 py-1",
+        "flex gap-2 px-4 py-1 animate-slide-up-fade",
         isMe ? "flex-row-reverse" : "flex-row",
       )}
     >
@@ -101,10 +110,7 @@ export const MessageSkeleton: React.FC<{ isMe?: boolean; width?: number }> = ({
       {!isMe && <Skeleton className="w-8 h-8 flex-shrink-0" rounded="full" />}
 
       {/* Bubble */}
-      <div
-        className="h-10 rounded-lg bg-surface-active animate-pulse"
-        style={{ width: `${width}%` }}
-      />
+      <Skeleton className="h-10" rounded="lg" width={`${width}%`} />
     </div>
   );
 };

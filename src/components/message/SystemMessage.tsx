@@ -13,7 +13,7 @@ export const SystemMessage: React.FC<SystemMessageProps> = ({
 }) => {
   return (
     <div className={clsx("my-4 flex justify-center", className)}>
-      <span className="rounded-full bg-surface-overlay px-3 py-2 text-xs text-text-secondary">
+      <span className="rounded-full bg-surface-overlay px-4 py-1.5 text-xs text-text-secondary">
         {message.content}
       </span>
     </div>
@@ -21,4 +21,3 @@ export const SystemMessage: React.FC<SystemMessageProps> = ({
 };
 
 export default SystemMessage;
-

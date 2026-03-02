@@ -55,10 +55,12 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
       type="button"
       onClick={onClick}
       className={clsx(
-        "flex w-full items-center gap-3 px-4 py-3 text-left transition-all duration-150",
+        "flex w-full items-center gap-3 px-4 py-3 text-left transition-micro",
         "min-h-16",
-        "hover:bg-surface-overlay",
-        isActive && "bg-primary/15 hover:bg-primary/20",
+        "hover:bg-surface-overlay active:bg-surface-active active:scale-[0.995]",
+        isActive &&
+          "bg-primary/10 hover:bg-primary/15 border-l-2 border-primary",
+        !isActive && "border-l-2 border-transparent",
         conversation.isPinned && !isActive && "bg-background",
         className,
       )}
@@ -117,7 +119,9 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
         <div className="flex items-center justify-between gap-2 mt-1">
           <div className="flex items-center gap-1 min-w-0 flex-1">
             {isOwnLastMessage && lastMessage && (
-              <span className="text-sm text-text-muted">{t("chat:message.senderYou")}</span>
+              <span className="text-sm text-text-muted">
+                {t("chat:message.senderYou")}
+              </span>
             )}
 
             <span

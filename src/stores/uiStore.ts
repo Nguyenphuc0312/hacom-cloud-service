@@ -12,6 +12,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 
 export type Theme = "light" | "dark" | "system";
 export type ThemeBrand = "blue" | "green" | "purple";
+export type ChatDensity = "comfortable" | "compact";
 export type ModalType =
   | "createGroup"
   | "editProfile"
@@ -76,6 +77,20 @@ interface UIState {
   // Loading overlays
   isGlobalLoading: boolean;
   setGlobalLoading: (loading: boolean) => void;
+
+  // Chat density
+  chatDensity: ChatDensity;
+  setChatDensity: (density: ChatDensity) => void;
+  toggleChatDensity: () => void;
+
+  // Message selection
+  isMessageSelectionMode: boolean;
+  selectedMessageIds: Set<string>;
+  enterSelectionMode: () => void;
+  exitSelectionMode: () => void;
+  toggleMessageSelection: (messageId: string) => void;
+  selectAllMessages: (messageIds: string[]) => void;
+  clearMessageSelection: () => void;
 
   // Keyboard shortcuts
   isKeyboardShortcutsOpen: boolean;
@@ -184,6 +199,62 @@ export const useUIStore = create<UIState>()(
       },
 
       // ============================================
+      // CHAT DENSITY
+      // ============================================
+      chatDensity: "comfortable",
+
+      setChatDensity: (density) => {
+        set({ chatDensity: density });
+      },
+
+      toggleChatDensity: () => {
+        set((state) => ({
+          chatDensity:
+            state.chatDensity === "comfortable" ? "compact" : "comfortable",
+        }));
+      },
+
+      // ============================================
+      // MESSAGE SELECTION
+      // ============================================
+      isMessageSelectionMode: false,
+      selectedMessageIds: new Set<string>(),
+
+      enterSelectionMode: () => {
+        set({
+          isMessageSelectionMode: true,
+          selectedMessageIds: new Set<string>(),
+        });
+      },
+
+      exitSelectionMode: () => {
+        set({
+          isMessageSelectionMode: false,
+          selectedMessageIds: new Set<string>(),
+        });
+      },
+
+      toggleMessageSelection: (messageId) => {
+        set((state) => {
+          const next = new Set(state.selectedMessageIds);
+          if (next.has(messageId)) {
+            next.delete(messageId);
+          } else {
+            next.add(messageId);
+          }
+          return { selectedMessageIds: next };
+        });
+      },
+
+      selectAllMessages: (messageIds) => {
+        set({ selectedMessageIds: new Set(messageIds) });
+      },
+
+      clearMessageSelection: () => {
+        set({ selectedMessageIds: new Set<string>() });
+      },
+
+      // ============================================
       // KEYBOARD SHORTCUTS
       // ============================================
       isKeyboardShortcutsOpen: false,
@@ -201,6 +272,7 @@ export const useUIStore = create<UIState>()(
         theme: state.theme,
         brand: state.brand,
         isSidebarCollapsed: state.isSidebarCollapsed,
+        chatDensity: state.chatDensity,
       }),
     },
   ),

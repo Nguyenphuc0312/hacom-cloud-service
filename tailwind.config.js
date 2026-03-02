@@ -166,14 +166,14 @@ export default {
         elev3: "var(--elevation-3, 0 12px 32px hsl(215 25% 15% / 0.2))",
       },
       spacing: {
-        "1": "var(--space-1, 4px)",
-        "2": "var(--space-2, 8px)",
-        "3": "var(--space-3, 12px)",
-        "4": "var(--space-4, 16px)",
-        "6": "var(--space-6, 24px)",
-        "8": "var(--space-8, 32px)",
-        "10": "var(--space-10, 40px)",
-        "12": "var(--space-12, 48px)",
+        1: "var(--space-1, 4px)",
+        2: "var(--space-2, 8px)",
+        3: "var(--space-3, 12px)",
+        4: "var(--space-4, 16px)",
+        6: "var(--space-6, 24px)",
+        8: "var(--space-8, 32px)",
+        10: "var(--space-10, 40px)",
+        12: "var(--space-12, 48px)",
         sidebar: "320px",
         "info-panel": "360px",
         "room-item": "var(--size-room-item, 72px)",
@@ -190,11 +190,22 @@ export default {
         "slide-in-right": "slideInRight 0.3s ease-out",
         "slide-in-up": "slideInUp 0.3s ease-out",
         "fade-in": "fadeIn 0.2s ease-out",
+        "fade-in-fast": "fadeIn 150ms ease-out",
         "bounce-in": "bounceIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55)",
         "pulse-online": "pulseOnline 2s infinite",
         "reaction-pop":
           "reactionPop 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)",
         shake: "shake 0.5s ease-in-out",
+        /* New polished animations */
+        "msg-in": "msgSlideIn 200ms cubic-bezier(0.16, 1, 0.3, 1) both",
+        "toolbar-in": "toolbarScaleIn 150ms cubic-bezier(0.16, 1, 0.3, 1) both",
+        "typing-dot": "typingDot 1.4s ease-in-out infinite",
+        "typing-dot-delay-1": "typingDot 1.4s ease-in-out 0.16s infinite",
+        "typing-dot-delay-2": "typingDot 1.4s ease-in-out 0.32s infinite",
+        "skeleton-shimmer": "shimmer 1.8s ease-in-out infinite",
+        "content-fade": "contentFade 200ms ease-out both",
+        "slide-up-fade": "slideUpFade 200ms cubic-bezier(0.16, 1, 0.3, 1) both",
+        "bounce-subtle": "bounceSubtle 1.5s ease-in-out infinite",
       },
       keyframes: {
         typing: {
@@ -238,6 +249,38 @@ export default {
           "25%": { transform: "translateX(-5px)" },
           "75%": { transform: "translateX(5px)" },
         },
+        /* New polished keyframes */
+        msgSlideIn: {
+          from: { opacity: "0", transform: "translateY(8px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        toolbarScaleIn: {
+          from: { opacity: "0", transform: "scale(0.92)" },
+          to: { opacity: "1", transform: "scale(1)" },
+        },
+        typingDot: {
+          "0%, 44%, 100%": {
+            opacity: "0.3",
+            transform: "scale(0.8) translateY(0)",
+          },
+          "22%": { opacity: "1", transform: "scale(1) translateY(-3px)" },
+        },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+        contentFade: {
+          from: { opacity: "0" },
+          to: { opacity: "1" },
+        },
+        slideUpFade: {
+          from: { opacity: "0", transform: "translateY(4px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        bounceSubtle: {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-4px)" },
+        },
       },
       maxWidth: {
         message: "70%",
@@ -250,5 +293,26 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // GPU-composited transition helpers
+    function ({ addUtilities }) {
+      addUtilities({
+        ".will-change-transform": { willChange: "transform" },
+        ".will-change-opacity": { willChange: "opacity" },
+        ".backface-hidden": { backfaceVisibility: "hidden" },
+        ".transition-micro": {
+          transitionProperty:
+            "background-color, color, box-shadow, border-color, opacity, transform",
+          transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
+          transitionDuration: "180ms",
+        },
+        ".transition-fast": {
+          transitionProperty:
+            "background-color, color, box-shadow, border-color, opacity, transform",
+          transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
+          transitionDuration: "150ms",
+        },
+      });
+    },
+  ],
 };

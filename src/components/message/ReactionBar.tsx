@@ -30,7 +30,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
             <button
               key={emoji}
               onClick={() => onReact(emoji)}
-              className="flex h-8 w-8 items-center justify-center rounded-full transition-all hover:scale-125 hover:bg-surface-overlay"
+              className="flex h-8 w-8 items-center justify-center rounded-full transition-micro hover:scale-110 hover:bg-surface-overlay active:scale-95"
               aria-label={t("chat:reaction.reactWith", { emoji })}
             >
               <span className="text-lg">{emoji}</span>
@@ -47,12 +47,14 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
               onClick={() => onReact(reaction.emoji)}
               className={clsx(
                 "flex items-center gap-1 rounded-full border border-border bg-surface px-2 py-1 text-xs",
-                "animate-reaction-pop transition-all hover:scale-105 hover:bg-surface-overlay",
+                "transition-micro hover:scale-105 hover:bg-surface-overlay hover:shadow-xs active:scale-100",
               )}
             >
               <span>{reaction.emoji}</span>
               {reaction.count > 1 && (
-                <span className="font-medium text-text-secondary">{reaction.count}</span>
+                <span className="font-medium text-text-secondary">
+                  {reaction.count}
+                </span>
               )}
             </button>
           ))}

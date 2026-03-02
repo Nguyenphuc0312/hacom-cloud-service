@@ -26,6 +26,11 @@ export interface MentionCandidate {
   displayName?: string;
 }
 
+/** Imperative handle for MessageInput — allows parent to programmatically add files */
+export interface MessageInputHandle {
+  addFile: (file: File) => void;
+}
+
 interface MessageInputProps {
   value: string;
   onChange: (value: string) => void;
@@ -128,22 +133,28 @@ const normalizeMentionCandidates = (
   return normalized;
 };
 
-export const MessageInput: React.FC<MessageInputProps> = ({
-  value,
-  onChange,
-  onSend,
-  mode,
-  conversationId,
-  mentionCandidates = [],
-  replyToMessage,
-  editingMessage,
-  onCancelReply,
-  onCancelEdit,
-  onTyping,
-  sendOnEnter = true,
-  disabled = false,
-  className,
-}) => {
+export const MessageInput = React.forwardRef<
+  MessageInputHandle,
+  MessageInputProps
+>(function MessageInput(
+  {
+    value,
+    onChange,
+    onSend,
+    mode,
+    conversationId,
+    mentionCandidates = [],
+    replyToMessage,
+    editingMessage,
+    onCancelReply,
+    onCancelEdit,
+    onTyping,
+    sendOnEnter = true,
+    disabled = false,
+    className,
+  },
+  ref,
+) {
   const { t } = useTranslation();
   const { textareaRef } = useAutoResizeTextarea({
     value,
@@ -179,6 +190,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     disabled,
     onSend,
   });
+
+  // Expose selectFile to parent (e.g. for drag-and-drop)
+  React.useImperativeHandle(
+    ref,
+    () => ({ addFile: (file: File) => selectFile(file) }),
+    [selectFile],
+  );
 
   const { notifyInput, notifyBlur, stopTypingNow } = useTypingIndicator({
     enabled: !disabled,
@@ -737,6 +755,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       </div>
     </div>
   );
-};
+});
 
 export default MessageInput;

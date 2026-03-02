@@ -154,3 +154,20 @@ export function isSameDay(date1: Date, date2: Date): boolean {
     date1.getDate() === date2.getDate()
   );
 }
+
+/**
+ * Format a date as a short relative string (e.g. "2 hours ago", "Yesterday 14:30").
+ * Useful for tooltip/edit timestamps.
+ */
+export function formatRelativeDate(date: Date): string {
+  if (!isValidDate(date)) return "";
+  const locale = getDateFnsLocale();
+
+  if (isToday(date)) {
+    return format(date, "HH:mm", { locale });
+  }
+  if (isYesterday(date)) {
+    return `${i18n.t("chat:time.yesterday")} ${format(date, "HH:mm", { locale })}`;
+  }
+  return format(date, "d MMM, HH:mm", { locale });
+}

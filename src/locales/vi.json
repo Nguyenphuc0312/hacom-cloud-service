@@ -148,6 +148,27 @@
       "unknown": "Tep khong xac dinh",
       "download": "Tai tep"
     },
+    "filePreview": {
+      "preview": "Xem truoc",
+      "playVideo": "Phat video",
+      "deleted": "Tep nay da bi xoa",
+      "blocked": "Tep bi chan — phat hien moi de doa tiem an",
+      "scanning": "Dang quet…",
+      "loading": "Dang tai xem truoc…",
+      "urlError": "Khong tai duoc ban xem truoc. Lien ket co the da het han.",
+      "retry": "Thu lai",
+      "noPreview": "Khong ho tro xem truoc loai tep nay.",
+      "videoNotSupported": "Trinh duyet cua ban khong ho tro phat video.",
+      "pdfFallback": "Khong thay PDF? Nhan nut tai xuong o tren.",
+      "modalLabel": "Xem truoc tep",
+      "zoomIn": "Phong to",
+      "zoomOut": "Thu nho",
+      "fitToScreen": "Vua voi man hinh",
+      "close": "Dong xem truoc",
+      "previous": "Tep truoc",
+      "next": "Tep tiep theo",
+      "instructions": "Cuon de phong to · Nhan doi de dat lai · Phim mui ten de di chuyen"
+    },
     "voice": {
       "play": "Phat",
       "pause": "Tam dung",

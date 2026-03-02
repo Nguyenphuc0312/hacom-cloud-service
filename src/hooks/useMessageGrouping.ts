@@ -19,6 +19,7 @@ export type MessageTimelineItem = {
 export type TimelineItem =
   | { kind: "date"; key: string; date: Date }
   | { kind: "system"; key: string; message: Message }
+  | { kind: "unread"; key: string }
   | MessageTimelineItem;
 
 interface UseMessageGroupingParams {
@@ -50,13 +51,52 @@ const canGroupMessages = (
   return diff <= groupingThresholdMs;
 };
 
+/**
+ * Structural-sharing equality check for TimelineItem.
+ * If the previous item is content-equal to the new one, we reuse the
+ * previous reference so downstream React.memo comparisons can bail out.
+ */
+const areTimelineItemsEqual = (a: TimelineItem, b: TimelineItem): boolean => {
+  if (a === b) return true;
+  if (a.kind !== b.kind || a.key !== b.key) return false;
+
+  if (a.kind === "date" && b.kind === "date") {
+    return a.date.getTime() === b.date.getTime();
+  }
+
+  if (a.kind === "unread" && b.kind === "unread") {
+    return true;
+  }
+
+  if (a.kind === "system" && b.kind === "system") {
+    return a.message === b.message;
+  }
+
+  if (a.kind === "message" && b.kind === "message") {
+    return (
+      a.message === b.message &&
+      a.isOwn === b.isOwn &&
+      a.showAvatar === b.showAvatar &&
+      a.showSenderName === b.showSenderName &&
+      a.isGroupStart === b.isGroupStart &&
+      a.isGroupEnd === b.isGroupEnd &&
+      a.conversationType === b.conversationType
+    );
+  }
+
+  return false;
+};
+
 export const useMessageGrouping = ({
   messages,
   currentUserId,
   conversationType,
   groupingThresholdMs = DEFAULT_GROUPING_THRESHOLD_MS,
-}: UseMessageGroupingParams): TimelineItem[] =>
-  React.useMemo(() => {
+}: UseMessageGroupingParams): TimelineItem[] => {
+  const prevItemsRef = React.useRef<TimelineItem[]>([]);
+  const prevKeyMapRef = React.useRef<Map<string, TimelineItem>>(new Map());
+
+  return React.useMemo(() => {
     const items: TimelineItem[] = [];
     const isGroupChat = isGroupConversation(conversationType);
 
@@ -117,7 +157,27 @@ export const useMessageGrouping = ({
       });
     });
 
+    // Structural sharing: reuse previous TimelineItem references when content
+    // is unchanged. This prevents downstream React.memo components from
+    // re-rendering for items that haven't actually changed (critical for 10k+
+    // message lists where only the tail or a single item typically changes).
+    const prevKeyMap = prevKeyMapRef.current;
+    const nextKeyMap = new Map<string, TimelineItem>();
+
+    for (let i = 0; i < items.length; i++) {
+      const newItem = items[i];
+      const prevItem = prevKeyMap.get(newItem.key);
+      if (prevItem && areTimelineItemsEqual(prevItem, newItem)) {
+        items[i] = prevItem; // reuse the stable reference
+      }
+      nextKeyMap.set(items[i].key, items[i]);
+    }
+
+    prevItemsRef.current = items;
+    prevKeyMapRef.current = nextKeyMap;
+
     return items;
   }, [messages, currentUserId, conversationType, groupingThresholdMs]);
+};
 
 export default useMessageGrouping;

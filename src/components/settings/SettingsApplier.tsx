@@ -54,15 +54,15 @@ const FONT_SIZE_TOKENS: Record<FontSize, Record<string, string>> = {
   },
 };
 
-/** Display density → CSS variable for chat bubble padding */
+/** Display density → CSS variable for chat bubble padding (8px grid) */
 const DENSITY_TOKENS: Record<DisplayDensity, Record<string, string>> = {
   compact: {
-    "--chat-bubble-px": "0.625rem",
-    "--chat-bubble-py": "0.375rem",
+    "--chat-bubble-px": "0.5rem",
+    "--chat-bubble-py": "0.25rem",
   },
   comfortable: {
-    "--chat-bubble-px": "0.875rem",
-    "--chat-bubble-py": "0.625rem",
+    "--chat-bubble-px": "0.75rem",
+    "--chat-bubble-py": "0.5rem",
   },
 };
 

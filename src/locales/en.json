@@ -148,6 +148,27 @@
       "unknown": "Unknown file",
       "download": "Download file"
     },
+    "filePreview": {
+      "preview": "Preview",
+      "playVideo": "Play video",
+      "deleted": "This file has been deleted",
+      "blocked": "File blocked — potential threat detected",
+      "scanning": "Scanning…",
+      "loading": "Loading preview…",
+      "urlError": "Failed to load preview. The link may have expired.",
+      "retry": "Retry",
+      "noPreview": "Preview is not available for this file type.",
+      "videoNotSupported": "Your browser does not support video playback.",
+      "pdfFallback": "Can't see the PDF? Click the download button above.",
+      "modalLabel": "File preview",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "fitToScreen": "Fit to screen",
+      "close": "Close preview",
+      "previous": "Previous file",
+      "next": "Next file",
+      "instructions": "Scroll to zoom · Double-click to reset · Arrow keys to navigate"
+    },
     "voice": {
       "play": "Play",
       "pause": "Pause",

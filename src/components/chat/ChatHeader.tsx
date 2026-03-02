@@ -8,9 +8,13 @@ import {
   MagnifyingGlassIcon,
   PhoneIcon,
   VideoCameraIcon,
+  CheckCircleIcon,
+  MapPinIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../common/Avatar";
 import { TypingIndicator } from "../common/TypingIndicator";
+import { DensityToggle } from "./DensityToggle";
+import { useUIStore } from "../../stores";
 import type { Conversation, TypingStatus } from "../../types";
 import {
   isDirectConversation,
@@ -31,6 +35,8 @@ interface ChatHeaderProps {
   onCallClick?: () => void;
   onVideoCallClick?: () => void;
   onSearchClick?: () => void;
+  onPinnedClick?: () => void;
+  onSelectionMode?: () => void;
   className?: string;
 }
 
@@ -43,8 +49,9 @@ interface HeaderAction {
 
 const iconButtonClass = clsx(
   "inline-flex h-11 w-11 items-center justify-center rounded-full",
-  "text-text-secondary transition-colors",
-  "hover:bg-surface-overlay hover:text-text-primary",
+  "text-text-secondary transition-micro",
+  "hover:bg-surface-overlay hover:text-text-primary hover:shadow-xs",
+  "active:scale-95 active:bg-surface-active",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
 );
 
@@ -57,9 +64,13 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onCallClick,
   onVideoCallClick,
   onSearchClick,
+  onPinnedClick,
+  onSelectionMode,
   className,
 }) => {
   const { t } = useTranslation();
+  const chatDensity = useUIStore((s) => s.chatDensity);
+  const setChatDensity = useUIStore((s) => s.setChatDensity);
   const otherUser = getOtherParticipant(conversation, currentUserId);
   const normalizedType = normalizeRoomType(
     conversation.type,
@@ -162,6 +173,24 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       });
     }
 
+    if (onPinnedClick) {
+      nextActions.push({
+        id: "pinned",
+        label: t("chat:pinned.title", { defaultValue: "Pinned messages" }),
+        icon: MapPinIcon,
+        onClick: onPinnedClick,
+      });
+    }
+
+    if (onSelectionMode) {
+      nextActions.push({
+        id: "select",
+        label: t("chat:selection.enter", { defaultValue: "Select messages" }),
+        icon: CheckCircleIcon,
+        onClick: onSelectionMode,
+      });
+    }
+
     nextActions.push({
       id: "info",
       label: t("chat:header.toggleInfoPanel"),
@@ -170,7 +199,15 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     });
 
     return nextActions;
-  }, [onCallClick, onInfoClick, onSearchClick, onVideoCallClick, t]);
+  }, [
+    onCallClick,
+    onInfoClick,
+    onPinnedClick,
+    onSearchClick,
+    onSelectionMode,
+    onVideoCallClick,
+    t,
+  ]);
 
   return (
     <header
@@ -217,7 +254,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
           )}
         >
-          <h2 className="truncate text-sm font-semibold text-text-primary sm:text-base">
+          <h2 className="truncate text-base font-semibold text-text-primary sm:text-lg">
             {displayName}
           </h2>
 
@@ -237,6 +274,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
         <div className="relative ml-1">
           <div className="hidden items-center gap-1 lg:flex">
+            <DensityToggle
+              density={chatDensity}
+              onChange={setChatDensity}
+              className="mr-1"
+            />
             {actions.map((action) => {
               const Icon = action.icon;
               return (
@@ -271,7 +313,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 ref={mobileMenuRef}
                 className={clsx(
                   "absolute right-0 top-full z-dropdown mt-2 min-w-48 overflow-hidden rounded-lg border border-border bg-surface shadow-elev2",
-                  "animate-fade-in",
+                  "animate-slide-up-fade",
                 )}
                 role="menu"
               >
@@ -284,7 +326,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                       role="menuitem"
                       className={clsx(
                         "flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-text-secondary",
-                        "transition-colors hover:bg-surface-overlay hover:text-text-primary",
+                        "transition-micro hover:bg-surface-overlay hover:text-text-primary active:bg-surface-active",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                       )}
                       onClick={() => {

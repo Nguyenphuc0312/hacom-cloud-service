@@ -92,8 +92,8 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
   return (
     <div
       className={clsx(
-        "flex items-center gap-1 rounded-lg border border-border bg-surface p-1 shadow-elev2",
-        "animate-fade-in",
+        "flex items-center gap-0.5 rounded-lg border border-border bg-surface/95 p-0.5 shadow-elev2 backdrop-blur-sm",
+        "animate-toolbar-in will-change-transform",
         className,
       )}
       onKeyDown={(event) => {
@@ -108,10 +108,10 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
           key={action.id}
           onClick={action.onClick}
           className={clsx(
-            "rounded-md p-2 transition-colors",
+            "rounded-md p-1.5 transition-micro",
             action.danger
-              ? "text-danger hover:bg-danger/10"
-              : "text-text-secondary hover:bg-surface-overlay hover:text-text-primary",
+              ? "text-danger/80 hover:bg-danger/10 hover:text-danger active:scale-95"
+              : "text-text-secondary hover:bg-surface-overlay hover:text-text-primary active:scale-95",
           )}
           aria-label={action.label}
           title={action.label}

@@ -65,9 +65,15 @@ export const Button: React.FC<ButtonProps> = ({
       disabled={isDisabled}
       className={clsx(
         "inline-flex items-center justify-center gap-2 font-medium",
-        "transition-all duration-200",
+        "transition-micro",
         "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface",
         "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60",
+        !isDisabled &&
+          variant === "primary" &&
+          "hover:shadow-sm hover:-translate-y-px",
+        !isDisabled &&
+          variant === "danger" &&
+          "hover:shadow-sm hover:-translate-y-px",
         variant !== "link" && variantClasses[variant],
         variant !== "link" && sizeClasses[size],
         variant === "link" && variantClasses.link,
@@ -82,7 +88,9 @@ export const Button: React.FC<ButtonProps> = ({
           <Spinner
             size={size === "lg" ? "sm" : "xs"}
             variant={
-              variant === "primary" || variant === "danger" ? "inverse" : "neutral"
+              variant === "primary" || variant === "danger"
+                ? "inverse"
+                : "neutral"
             }
           />
           <span>{t("common:loading.processing")}</span>
@@ -90,11 +98,15 @@ export const Button: React.FC<ButtonProps> = ({
       ) : (
         <>
           {leftIcon && (
-            <span className={clsx("shrink-0", iconSizeClasses[size])}>{leftIcon}</span>
+            <span className={clsx("shrink-0", iconSizeClasses[size])}>
+              {leftIcon}
+            </span>
           )}
           {children}
           {rightIcon && (
-            <span className={clsx("shrink-0", iconSizeClasses[size])}>{rightIcon}</span>
+            <span className={clsx("shrink-0", iconSizeClasses[size])}>
+              {rightIcon}
+            </span>
           )}
         </>
       )}

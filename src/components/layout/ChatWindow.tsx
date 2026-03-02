@@ -3,11 +3,17 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { ChatHeader } from "../chat/ChatHeader";
 import { MessageList } from "../chat/MessageList";
+import { SelectionToolbar } from "../chat/SelectionToolbar";
+import { DropZoneOverlay } from "../chat/DropZoneOverlay";
 import { MessageInput } from "../input/MessageInput";
 import { SearchPanel } from "../chat/SearchPanel";
 import { PinnedMessagesPanel } from "../chat/PinnedMessagesPanel";
-import type { MentionCandidate } from "../input/MessageInput";
+import type {
+  MentionCandidate,
+  MessageInputHandle,
+} from "../input/MessageInput";
 import { toast } from "../ui";
+import { useUIStore } from "../../stores";
 import type {
   Attachment,
   Conversation,
@@ -39,6 +45,7 @@ interface ChatWindowProps {
   isLoadingMessages?: boolean;
   onLoadOlderMessages?: () => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
+  onFilePreview?: (attachment: Attachment) => void;
   messageError?: string | null;
   onRetryMessages?: () => void | Promise<void>;
   className?: string;
@@ -60,11 +67,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   isLoadingMessages,
   onLoadOlderMessages,
   onImageClick,
+  onFilePreview,
   messageError,
   onRetryMessages,
   className,
 }) => {
   const { t } = useTranslation();
+  const chatDensity = useUIStore((s) => s.chatDensity);
+  const isMessageSelectionMode = useUIStore((s) => s.isMessageSelectionMode);
+  const selectedMessageIds = useUIStore((s) => s.selectedMessageIds);
+  const enterSelectionMode = useUIStore((s) => s.enterSelectionMode);
+  const exitSelectionMode = useUIStore((s) => s.exitSelectionMode);
+  const toggleMessageSelection = useUIStore((s) => s.toggleMessageSelection);
+
   const [inputValue, setInputValue] = React.useState("");
   const [inputMode, setInputMode] = React.useState<InputMode>("normal");
   const [replyToMessage, setReplyToMessage] = React.useState<
@@ -203,6 +218,83 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       }));
   }, [conversation.participants, currentUser.id]);
 
+  // Exit selection on conversation change
+  React.useEffect(() => {
+    exitSelectionMode();
+  }, [conversation.id, exitSelectionMode]);
+
+  const handleSelectionDelete = React.useCallback(() => {
+    if (!onDeleteMessage) return;
+    for (const id of selectedMessageIds) {
+      void Promise.resolve(onDeleteMessage(id));
+    }
+    exitSelectionMode();
+  }, [onDeleteMessage, selectedMessageIds, exitSelectionMode]);
+
+  const handleSelectionCopy = React.useCallback(() => {
+    const selectedMsgs = messages
+      .filter((m) => selectedMessageIds.has(m.id))
+      .map((m) => m.content)
+      .join("\n");
+    void navigator.clipboard.writeText(selectedMsgs);
+    toast.success(t("chat:message.actions.copy", { defaultValue: "Copied" }));
+    exitSelectionMode();
+  }, [messages, selectedMessageIds, exitSelectionMode, t]);
+
+  const handleSelectionForward = React.useCallback(() => {
+    toast.info(
+      t("common:toast.featureInDevelopment", { defaultValue: "Coming soon" }),
+    );
+    exitSelectionMode();
+  }, [exitSelectionMode, t]);
+
+  const currentUsername = currentUser.username;
+
+  // ── Drag-and-drop file upload ──
+  const [isDragActive, setIsDragActive] = React.useState(false);
+  const dragCounter = React.useRef(0);
+  const messageInputRef = React.useRef<MessageInputHandle>(null);
+
+  const handleDragEnter = React.useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current += 1;
+    if (e.dataTransfer.types.includes("Files")) {
+      setIsDragActive(true);
+    }
+  }, []);
+
+  const handleDragOver = React.useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDragLeave = React.useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current -= 1;
+    if (dragCounter.current <= 0) {
+      dragCounter.current = 0;
+      setIsDragActive(false);
+    }
+  }, []);
+
+  const handleDrop = React.useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current = 0;
+    setIsDragActive(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+
+    // Forward the first file to MessageInput via imperative handle
+    const file = files[0];
+    if (messageInputRef.current) {
+      messageInputRef.current.addFile(file);
+    }
+  }, []);
+
   const messageListNode = React.useMemo(
     () => (
       <MessageList
@@ -218,8 +310,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         isInitialLoading={Boolean(isLoadingMessages && messages.length === 0)}
         onLoadMore={onLoadOlderMessages}
         onImageClick={onImageClick}
+        onFilePreview={onFilePreview}
         error={messageError}
         onRetry={onRetryMessages}
+        density={chatDensity}
+        isSelectionMode={isMessageSelectionMode}
+        selectedMessageIds={selectedMessageIds}
+        onToggleSelect={toggleMessageSelection}
+        currentUsername={currentUsername}
         className="flex-1 min-h-0"
       />
     ),
@@ -234,18 +332,31 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       messageError,
       messages,
       onImageClick,
+      onFilePreview,
       onLoadOlderMessages,
       onRetryMessages,
+      chatDensity,
+      isMessageSelectionMode,
+      selectedMessageIds,
+      toggleMessageSelection,
+      currentUsername,
     ],
   );
 
   return (
     <section
+      key={conversation.id}
       className={clsx(
-        "chat-background flex h-full min-h-0 flex-col overflow-hidden",
+        "chat-background relative flex h-full min-h-0 flex-col overflow-hidden animate-content-fade",
         className,
       )}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
+      {/* Drag-and-drop overlay */}
+      <DropZoneOverlay isActive={isDragActive} />
       <ChatHeader
         conversation={conversation}
         currentUserId={currentUser.id}
@@ -255,6 +366,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onCallClick={handleFeatureInDevelopment}
         onVideoCallClick={handleFeatureInDevelopment}
         onSearchClick={handleSearchClick}
+        onPinnedClick={handlePinnedClick}
+        onSelectionMode={enterSelectionMode}
       />
 
       {/* Search panel overlay */}
@@ -275,22 +388,37 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {messageListNode}
 
-      <div className="sticky bottom-0 z-sticky">
-        <MessageInput
-          value={inputValue}
-          onChange={handleInputChange}
-          onSend={handleSend}
-          mode={inputMode}
-          conversationId={conversation.id}
-          mentionCandidates={mentionCandidates}
-          replyToMessage={replyToMessage}
-          editingMessage={editingMessage}
-          onCancelReply={handleCancelReply}
-          onCancelEdit={handleCancelEdit}
-          onTyping={onTyping}
-          sendOnEnter
+      {/* Selection toolbar */}
+      {isMessageSelectionMode && (
+        <SelectionToolbar
+          selectedCount={selectedMessageIds.size}
+          onDelete={handleSelectionDelete}
+          onForward={handleSelectionForward}
+          onCopy={handleSelectionCopy}
+          onCancel={exitSelectionMode}
         />
-      </div>
+      )}
+
+      {/* Message input - hidden during selection mode */}
+      {!isMessageSelectionMode && (
+        <div className="sticky bottom-0 z-sticky">
+          <MessageInput
+            ref={messageInputRef}
+            value={inputValue}
+            onChange={handleInputChange}
+            onSend={handleSend}
+            mode={inputMode}
+            conversationId={conversation.id}
+            mentionCandidates={mentionCandidates}
+            replyToMessage={replyToMessage}
+            editingMessage={editingMessage}
+            onCancelReply={handleCancelReply}
+            onCancelEdit={handleCancelEdit}
+            onTyping={onTyping}
+            sendOnEnter
+          />
+        </div>
+      )}
     </section>
   );
 };

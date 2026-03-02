@@ -16,19 +16,22 @@ export const TypingIndicator: React.FC<TypingIndicatorProps> = ({
   return (
     <div
       className={clsx(
-        "flex items-center gap-2 text-xs text-chat-text-secondary",
+        "flex items-center gap-2 text-xs text-text-muted animate-fade-in-fast",
         className,
       )}
     >
-      {userName && <span>{t("chat:typing.user", { name: userName })}</span>}
-      <div className="flex items-center gap-1">
-        <span className="w-1.5 h-1.5 bg-chat-text-secondary rounded-full animate-typing" />
-        <span className="w-1.5 h-1.5 bg-chat-text-secondary rounded-full animate-typing-delay-1" />
-        <span className="w-1.5 h-1.5 bg-chat-text-secondary rounded-full animate-typing-delay-2" />
+      {userName && (
+        <span className="truncate max-w-[10rem]">
+          {t("chat:typing.user", { name: userName })}
+        </span>
+      )}
+      <div className="flex items-center gap-[3px]">
+        <span className="h-[5px] w-[5px] rounded-full bg-text-muted animate-typing-dot will-change-transform" />
+        <span className="h-[5px] w-[5px] rounded-full bg-text-muted animate-typing-dot-delay-1 will-change-transform" />
+        <span className="h-[5px] w-[5px] rounded-full bg-text-muted animate-typing-dot-delay-2 will-change-transform" />
       </div>
     </div>
   );
 };
 
 export default TypingIndicator;
-

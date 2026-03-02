@@ -1,19 +1,33 @@
 ﻿import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { CheckIcon, ExclamationCircleIcon } from "@heroicons/react/24/solid";
+import {
+  CheckIcon,
+  ExclamationCircleIcon,
+  PencilIcon,
+} from "@heroicons/react/24/solid";
+import {
+  PhotoIcon,
+  DocumentIcon,
+  SpeakerWaveIcon,
+  ChatBubbleLeftIcon,
+} from "@heroicons/react/24/outline";
 import { Avatar } from "../common/Avatar";
 import { TextMessage } from "../message/TextMessage";
 import { ImageMessage } from "../message/ImageMessage";
 import { FileMessage } from "../message/FileMessage";
+import { FileMessageCard } from "../message/FileMessageCard";
 import { VoiceMessage } from "../message/VoiceMessage";
+import { LinkPreviewCard } from "../message/LinkPreviewCard";
+import { ThreadIndicator } from "../message/ThreadIndicator";
 import { MessageActions } from "../message/MessageActions";
 import { ReactionBar } from "../message/ReactionBar";
-import type { Message, Conversation } from "../../types";
+import type { Message, Conversation, Attachment } from "../../types";
 import { MessageStatus, MessageType, RoomType } from "../../types";
 import { normalizeRoomType } from "../../lib/conversationAdapter";
-import { formatMessageTime } from "../../utils/formatTime";
+import { formatMessageTime, formatRelativeDate } from "../../utils/formatTime";
 import { useChatStore } from "../../stores";
+import type { ChatDensity } from "../../stores/uiStore";
 
 interface MessageBubbleProps {
   message: Message;
@@ -28,8 +42,35 @@ interface MessageBubbleProps {
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (messageId: string) => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
+  onFilePreview?: (attachment: Attachment) => void;
+  density?: ChatDensity;
+  currentUsername?: string;
   className?: string;
 }
+
+/** Icon for reply-to preview type indicator */
+const ReplyTypeIcon: React.FC<{ type?: string; className?: string }> = ({
+  type,
+  className,
+}) => {
+  switch (type) {
+    case "image":
+      return <PhotoIcon className={className} />;
+    case "file":
+      return <DocumentIcon className={className} />;
+    case "voice":
+      return <SpeakerWaveIcon className={className} />;
+    default:
+      return <ChatBubbleLeftIcon className={className} />;
+  }
+};
+
+/** Extract first URL from message content */
+const extractFirstUrl = (content: string | undefined): string | null => {
+  if (!content) return null;
+  const match = content.match(/https?:\/\/[^\s]+/i);
+  return match ? match[0] : null;
+};
 
 const MessageStatusIcon: React.FC<{
   status: Message["status"];
@@ -42,7 +83,7 @@ const MessageStatusIcon: React.FC<{
   if (status === "uploading") {
     return (
       <span
-        className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-text-inverse/80 border-t-transparent"
+        className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-text-inverse/70 border-t-transparent"
         role="img"
         aria-label={t("chat:message.status.uploading")}
         title={t("chat:message.status.uploading")}
@@ -56,7 +97,7 @@ const MessageStatusIcon: React.FC<{
     case MessageStatus.SENDING:
       return (
         <span
-          className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-text-inverse/80 border-t-transparent"
+          className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-text-inverse/70 border-t-transparent"
           role="img"
           aria-label={t("chat:message.status.sending")}
           title={t("chat:message.status.sending")}
@@ -71,22 +112,36 @@ const MessageStatusIcon: React.FC<{
           aria-label={t("chat:message.status.sent")}
           title={t("chat:message.status.sent")}
         >
-          <CheckIcon className="h-4 w-4 text-text-inverse/80" />
+          <CheckIcon className="h-3.5 w-3.5 text-text-inverse/60" />
           <span className="sr-only">{t("chat:message.status.sent")}</span>
         </span>
       );
     case MessageStatus.DELIVERED:
       return (
-        <div className="flex -space-x-1">
-          <CheckIcon className="h-4 w-4 text-text-inverse/80" />
-          <CheckIcon className="h-4 w-4 text-text-inverse/80" />
+        <div
+          className="flex -space-x-1.5"
+          role="img"
+          aria-label={t("chat:message.status.delivered", {
+            defaultValue: "Delivered",
+          })}
+          title={t("chat:message.status.delivered", {
+            defaultValue: "Delivered",
+          })}
+        >
+          <CheckIcon className="h-3.5 w-3.5 text-text-inverse/75" />
+          <CheckIcon className="h-3.5 w-3.5 text-text-inverse/75" />
         </div>
       );
     case MessageStatus.READ:
       return (
-        <div className="flex -space-x-1">
-          <CheckIcon className="h-4 w-4 text-text-inverse" />
-          <CheckIcon className="h-4 w-4 text-text-inverse" />
+        <div
+          className="flex -space-x-1.5"
+          role="img"
+          aria-label={t("chat:message.status.read", { defaultValue: "Read" })}
+          title={t("chat:message.status.read", { defaultValue: "Read" })}
+        >
+          <CheckIcon className="h-3.5 w-3.5 text-secondary" />
+          <CheckIcon className="h-3.5 w-3.5 text-secondary" />
         </div>
       );
     case MessageStatus.FAILED:
@@ -95,9 +150,9 @@ const MessageStatusIcon: React.FC<{
           type="button"
           title={t("chat:message.status.retry")}
           onClick={onResend}
-          className="h-4 w-4 text-danger/70 transition-transform duration-150 hover:scale-110 hover:text-danger focus:outline-none active:scale-95"
+          className="h-3.5 w-3.5 text-danger/80 transition-transform duration-150 hover:scale-110 hover:text-danger focus:outline-none active:scale-95"
         >
-          <ExclamationCircleIcon className="h-4 w-4" aria-hidden="true" />
+          <ExclamationCircleIcon className="h-3.5 w-3.5" aria-hidden="true" />
           <span className="sr-only">
             {t("chat:message.status.failedRetry")}
           </span>
@@ -121,6 +176,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   onEdit,
   onDelete,
   onImageClick,
+  onFilePreview,
+  density = "comfortable",
+  currentUsername,
   className,
 }) => {
   const { t } = useTranslation();
@@ -129,6 +187,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const actionsRef = React.useRef<HTMLDivElement>(null);
   const [isActionsPinned, setIsActionsPinned] = React.useState(false);
   const [hasFocusWithin, setHasFocusWithin] = React.useState(false);
+  const isCompact = density === "compact";
 
   const timeStr = formatMessageTime(new Date(message.createdAt));
   const normalizedConversationType = normalizeRoomType(conversationType);
@@ -144,7 +203,13 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
     switch (message.type) {
       case MessageType.TEXT:
-        return <TextMessage content={message.content} isOwn={isOwn} />;
+        return (
+          <TextMessage
+            content={message.content}
+            isOwn={isOwn}
+            currentUsername={currentUsername}
+          />
+        );
 
       case MessageType.IMAGE:
         return attachments.length > 0 ? (
@@ -168,16 +233,23 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         return attachments.length > 0 ? (
           <div className="space-y-2">
             {attachments.map((attachment, index) => (
-              <FileMessage
+              <FileMessageCard
                 key={attachment.id || `${message.id}-file-${index}`}
                 conversationId={message.conversationId}
                 attachment={attachment}
                 isOwn={isOwn}
+                onPreview={
+                  onFilePreview ? (att) => onFilePreview(att) : undefined
+                }
               />
             ))}
           </div>
         ) : (
-          <TextMessage content={message.content} isOwn={isOwn} />
+          <TextMessage
+            content={message.content}
+            isOwn={isOwn}
+            currentUsername={currentUsername}
+          />
         );
 
       case MessageType.VOICE:
@@ -193,11 +265,21 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             ))}
           </div>
         ) : (
-          <TextMessage content={message.content} isOwn={isOwn} />
+          <TextMessage
+            content={message.content}
+            isOwn={isOwn}
+            currentUsername={currentUsername}
+          />
         );
 
       default:
-        return <TextMessage content={message.content} isOwn={isOwn} />;
+        return (
+          <TextMessage
+            content={message.content}
+            isOwn={isOwn}
+            currentUsername={currentUsername}
+          />
+        );
     }
   };
 
@@ -248,7 +330,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   return (
     <div
       className={clsx(
-        "group flex w-fit max-w-[min(75%,36rem)] items-end gap-2 sm:max-w-[min(65%,36rem)]",
+        "group flex w-fit max-w-[min(75%,32rem)] items-end gap-2 sm:max-w-[min(65%,32rem)]",
         isOwn ? "ml-auto flex-row-reverse" : "mr-auto",
         className,
       )}
@@ -275,7 +357,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
       <div className="relative flex min-w-0 flex-col">
         {isGroupConversation && !isOwn && showSenderName && (
-          <span className="mb-1 ml-1 text-xs font-medium text-primary">
+          <span className="mb-1 text-xs font-medium text-primary">
             {message.senderName}
           </span>
         )}
@@ -283,27 +365,45 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         {message.replyToMessage && (
           <div
             className={clsx(
-              "flex items-center gap-2 rounded-t-xl border-l-2 border-primary px-3 py-2 text-xs",
+              "flex items-center gap-2 rounded-t-xl border-l-2 border-primary/70 px-3 py-1.5 text-xs",
               isOwn
                 ? "bg-primary/80 text-text-inverse/80"
                 : "bg-surface-overlay text-text-secondary",
             )}
           >
-            <span className="font-medium">
-              {message.replyToMessage.senderName}
-            </span>
-            <span className="truncate">{message.replyToMessage.content}</span>
+            <ReplyTypeIcon
+              type={message.replyToMessage.type}
+              className={clsx(
+                "h-3.5 w-3.5 shrink-0",
+                isOwn ? "text-text-inverse/60" : "text-text-muted",
+              )}
+            />
+            <div className="min-w-0 flex-1">
+              <span className="font-semibold">
+                {message.replyToMessage.senderName}
+              </span>
+              <p className="mt-0.5 truncate leading-snug">
+                {message.replyToMessage.isDeleted
+                  ? t("chat:message.deleted", {
+                      defaultValue: "Message deleted",
+                    })
+                  : message.replyToMessage.content}
+              </p>
+            </div>
           </div>
         )}
 
         <div
           ref={bubbleRef}
           className={clsx(
-            "relative px-[var(--chat-bubble-px)] py-[var(--chat-bubble-py)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+            "relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+            isCompact
+              ? "px-2.5 py-1.5"
+              : "px-[var(--chat-bubble-px)] py-[var(--chat-bubble-py)]",
             bubbleRadiusClass,
             isOwn
               ? "bg-primary text-text-inverse"
-              : "border border-border bg-surface text-text-primary shadow-xs",
+              : "border border-border bg-surface-raised text-text-primary shadow-xs",
             message.replyToMessage && "rounded-t-none",
           )}
           tabIndex={0}
@@ -328,7 +428,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             <div
               className={clsx(
                 "mb-1 flex items-center gap-1 text-xs",
-                isOwn ? "text-text-inverse/90" : "text-text-muted",
+                isOwn ? "text-text-inverse/90" : "text-text-secondary",
               )}
             >
               <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
@@ -342,16 +442,41 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
           {renderContent()}
 
+          {/* Link preview (for text messages with URLs) */}
+          {message.type === MessageType.TEXT &&
+            (() => {
+              const firstUrl = extractFirstUrl(message.content);
+              return firstUrl ? (
+                <LinkPreviewCard url={firstUrl} isOwn={isOwn} />
+              ) : null;
+            })()}
+
+          {/* Timestamp + status row */}
           <div
             className={clsx(
-              "mt-1 flex items-center justify-end gap-1 text-xs leading-none",
-              isOwn ? "text-text-inverse/90" : "text-text-muted",
+              "mt-1 flex items-center justify-end gap-1 text-[11px] leading-tight",
+              isOwn ? "text-text-inverse/80" : "text-text-secondary",
             )}
           >
-            {message.isEdited && <span>{t("chat:message.edited")}</span>}
+            {message.isEdited && (
+              <span
+                className="inline-flex items-center gap-0.5"
+                title={
+                  message.editedAt
+                    ? t("chat:message.editedAt", {
+                        time: formatRelativeDate(new Date(message.editedAt)),
+                        defaultValue: `Edited ${formatRelativeDate(new Date(message.editedAt))}`,
+                      })
+                    : t("chat:message.edited")
+                }
+              >
+                <PencilIcon className="h-2.5 w-2.5" />
+                <span>{t("chat:message.edited")}</span>
+              </span>
+            )}
             <span>{timeStr}</span>
             {isOwn && (
-              <span className="inline-flex h-4 w-4 items-center justify-center">
+              <span className="inline-flex h-3.5 w-3.5 items-center justify-center">
                 <MessageStatusIcon
                   status={message.status}
                   isOwn={isOwn}
@@ -388,17 +513,28 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           </div>
         )}
 
+        {/* Thread indicator */}
+        {typeof (message as Record<string, unknown>).threadCount === "number" &&
+          ((message as Record<string, unknown>).threadCount as number) > 0 && (
+            <ThreadIndicator
+              threadCount={
+                (message as Record<string, unknown>).threadCount as number
+              }
+              isOwn={isOwn}
+            />
+          )}
+
         <div
           ref={actionsRef}
           className={clsx(
-            "absolute top-0 z-10 transition-opacity duration-150",
+            "absolute -top-1 z-10 transition-all duration-150",
             isActionsVisibleForKeyboard
-              ? "pointer-events-auto opacity-100"
-              : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100",
+              ? "pointer-events-auto translate-y-0 opacity-100"
+              : "pointer-events-none translate-y-1 opacity-0 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100",
             isOwn ? "-left-2 -translate-x-full" : "-right-2 translate-x-full",
           )}
         >
-          <div className="px-2">
+          <div className="px-1">
             <MessageActions
               isOwn={isOwn}
               onReply={() => {

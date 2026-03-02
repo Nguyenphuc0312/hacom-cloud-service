@@ -45,8 +45,8 @@
   --size-voice-message-min: 200px;
 
   /* Chat bubble density (overridden by SettingsApplier) */
-  --chat-bubble-px: 0.875rem;
-  --chat-bubble-py: 0.625rem;
+  --chat-bubble-px: 0.75rem;
+  --chat-bubble-py: 0.5rem;
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -431,6 +431,28 @@ a:focus-visible {
 }
 
 @layer components {
+  /* Interaction helpers */
+  .interactive-surface {
+    transition-property:
+      background-color, color, box-shadow, border-color, transform;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    transition-duration: 180ms;
+  }
+
+  .interactive-surface:active {
+    transform: scale(0.98);
+  }
+
+  /* Message row hover highlight */
+  .msg-row-hover {
+    transition: background-color 150ms ease;
+    border-radius: 6px;
+  }
+
+  .msg-row-hover:hover {
+    background-color: hsl(var(--color-surface-hover) / 0.4);
+  }
+
   .toast-base {
     border: 1px solid hsl(var(--color-border));
     border-radius: var(--radius-md);

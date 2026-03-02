@@ -19,7 +19,11 @@ import { ChatWindow } from "../components/layout/ChatWindow";
 import { UserProfile } from "../components/info/UserProfile";
 import { GroupInfo } from "../components/info/GroupInfo";
 import { NoChatSelected, Spinner } from "../components/ui";
-import { NewChatModal, ImagePreviewModal } from "../components/modals";
+import {
+  NewChatModal,
+  ImagePreviewModal,
+  FilePreviewModal,
+} from "../components/modals";
 import { toast } from "../components/ui";
 import {
   useAuthStore,
@@ -31,6 +35,9 @@ import {
 import { useWebSocket } from "../hooks";
 import { conversationApi, messageApi } from "../services/api";
 import type { Attachment, Conversation, Message, UserSummary } from "../types";
+import { useFilePreview } from "../hooks/useFilePreview";
+import type { PreviewTarget } from "../hooks/useFilePreview";
+import { getPreviewType } from "../utils/formatFileSize";
 import { MessageType, UserStatus } from "../types";
 import { isDirectConversation } from "../lib/conversationAdapter";
 import { getOtherParticipant } from "../utils/messageHelpers";
@@ -105,7 +112,10 @@ export const ChatPage: React.FC = () => {
   // Auth store
   const { user } = useAuthStore();
 
-  // Chat store
+  // Chat store — stable functions + data that drives re-renders.
+  // Per-conversation loading/error/hasMore are derived separately below to
+  // avoid re-renders when OTHER conversations' states change (e.g. during
+  // idle prefetch of adjacent rooms).
   const {
     selectedConversationId,
     selectConversation,
@@ -119,10 +129,6 @@ export const ChatPage: React.FC = () => {
     fetchMessages,
     storeSendMessage,
     markAsRead,
-    hasMoreMessages,
-    isLoadingMessages,
-    isLoadingMessagesByConversation,
-    messageErrors,
   } = useChatStore(
     useShallow((state) => ({
       selectedConversationId: state.selectedConversationId,
@@ -137,11 +143,25 @@ export const ChatPage: React.FC = () => {
       fetchMessages: state.fetchMessages,
       storeSendMessage: state.sendMessage,
       markAsRead: state.markAsRead,
-      hasMoreMessages: state.hasMoreMessages,
-      isLoadingMessages: state.isLoadingMessages,
-      isLoadingMessagesByConversation: state.isLoadingMessagesByConversation,
-      messageErrors: state.messageErrors,
     })),
+  );
+
+  // Per-conversation derived selectors — only re-render when THIS
+  // conversation's values change, not when other conversations load.
+  const currentHasMore = useChatStore((state) =>
+    selectedConversationId
+      ? (state.hasMoreMessages[selectedConversationId] ?? true)
+      : false,
+  );
+  const currentIsLoading = useChatStore((state) =>
+    selectedConversationId
+      ? Boolean(state.isLoadingMessagesByConversation[selectedConversationId])
+      : false,
+  );
+  const currentMessageError = useChatStore((state) =>
+    selectedConversationId
+      ? (state.messageErrors[selectedConversationId] ?? null)
+      : null,
   );
 
   // Selectors
@@ -163,6 +183,7 @@ export const ChatPage: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(!conversationId);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const filePreview = useFilePreview();
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const roomCreationLockRef = useRef(false);
   const [isValidatingRoom, setIsValidatingRoom] = useState(false);
@@ -341,15 +362,19 @@ export const ChatPage: React.FC = () => {
   );
 
   const handleLoadOlderMessages = useCallback(async () => {
-    if (
-      !selectedConversationId ||
-      isLoadingMessagesByConversation[selectedConversationId]
-    ) {
+    if (!selectedConversationId) return;
+
+    // Read from store directly to avoid depending on conversationMessages,
+    // hasMoreMessages, and isLoadingMessagesByConversation — prevents
+    // callback recreation on every incoming message.
+    const storeState = useChatStore.getState();
+    if (storeState.isLoadingMessagesByConversation[selectedConversationId]) {
       return;
     }
-    if (!hasMoreMessages[selectedConversationId]) return;
+    if (!storeState.hasMoreMessages[selectedConversationId]) return;
 
-    const oldestMessage = conversationMessages.find(
+    const storeMessages = storeState.messages[selectedConversationId] || [];
+    const oldestMessage = storeMessages.find(
       (message) => !message.id.startsWith("temp-"),
     );
     if (!oldestMessage) return;
@@ -360,21 +385,17 @@ export const ChatPage: React.FC = () => {
       undefined,
       { beforeId: oldestMessage.id },
     );
-  }, [
-    selectedConversationId,
-    isLoadingMessagesByConversation,
-    hasMoreMessages,
-    conversationMessages,
-    fetchMessages,
-  ]);
+  }, [selectedConversationId, fetchMessages]);
 
   const handleRetryMessages = useCallback(async () => {
     if (!selectedConversationId) return;
-    if (isLoadingMessagesByConversation[selectedConversationId]) return;
+    const storeState = useChatStore.getState();
+    if (storeState.isLoadingMessagesByConversation[selectedConversationId])
+      return;
     await fetchMessages(selectedConversationId, undefined, undefined, {
       force: true,
     });
-  }, [fetchMessages, isLoadingMessagesByConversation, selectedConversationId]);
+  }, [fetchMessages, selectedConversationId]);
 
   useEffect(() => {
     if (!selectedConversationId || isValidatingRoom) return;
@@ -432,19 +453,54 @@ export const ChatPage: React.FC = () => {
     async (messageId: string, emoji: string) => {
       if (!selectedConversationId || !currentUserSummary) return;
 
-      const targetMessage = conversationMessages.find(
+      // Read directly from store to avoid depending on conversationMessages
+      // (prevents callback recreation on every incoming message)
+      const storeState = useChatStore.getState();
+      const storeMessages = storeState.messages[selectedConversationId] || [];
+      const targetMessage = storeMessages.find(
         (message) => message.id === messageId || message.localId === messageId,
       );
       if (!targetMessage) return;
 
-      try {
-        const existingReaction = targetMessage.reactions?.find(
-          (reaction) => reaction.emoji === emoji,
-        );
-        const hasReacted = Boolean(
-          existingReaction?.userIds?.includes(currentUserSummary.id),
-        );
+      const existingReaction = targetMessage.reactions?.find(
+        (reaction) => reaction.emoji === emoji,
+      );
+      const hasReacted = Boolean(
+        existingReaction?.userIds?.includes(currentUserSummary.id),
+      );
 
+      // Optimistic update — apply immediately for snappy UX
+      const optimisticReactions = hasReacted
+        ? (targetMessage.reactions || [])
+            .map((r) =>
+              r.emoji === emoji
+                ? {
+                    ...r,
+                    userIds: r.userIds.filter(
+                      (id) => id !== currentUserSummary.id,
+                    ),
+                    count: r.count - 1,
+                  }
+                : r,
+            )
+            .filter((r) => r.count > 0)
+        : [
+            ...(targetMessage.reactions || []).filter((r) => r.emoji !== emoji),
+            {
+              emoji,
+              userIds: [
+                ...(existingReaction?.userIds || []),
+                currentUserSummary.id,
+              ],
+              count: (existingReaction?.count || 0) + 1,
+            },
+          ];
+
+      updateStoreMessage(selectedConversationId, messageId, {
+        reactions: optimisticReactions,
+      });
+
+      try {
         const response = hasReacted
           ? await messageApi.removeReaction(messageId, emoji)
           : await messageApi.addReaction(messageId, emoji);
@@ -456,17 +512,15 @@ export const ChatPage: React.FC = () => {
             : [],
         });
       } catch (error) {
+        // Rollback to pre-optimistic state
+        updateStoreMessage(selectedConversationId, messageId, {
+          reactions: targetMessage.reactions,
+        });
         const apiError = extractApiError(error);
         toast.error(apiError.message || t("error:generic.requestFailed"));
       }
     },
-    [
-      selectedConversationId,
-      currentUserSummary,
-      conversationMessages,
-      updateStoreMessage,
-      t,
-    ],
+    [selectedConversationId, currentUserSummary, updateStoreMessage],
   );
 
   const handleEditMessage = useCallback(
@@ -722,7 +776,7 @@ export const ChatPage: React.FC = () => {
       {/* Connection status indicator */}
       {!isConnected && (
         <div
-          className="absolute inset-x-0 top-0 z-50 bg-warning/95 px-4 py-1.5 text-center text-xs font-medium text-text-inverse backdrop-blur sm:text-sm"
+          className="absolute inset-x-0 top-0 z-50 bg-warning/95 px-4 py-1.5 text-center text-xs font-medium text-text-inverse backdrop-blur sm:text-sm animate-slide-up-fade"
           role="alert"
           aria-live="assertive"
         >
@@ -778,25 +832,34 @@ export const ChatPage: React.FC = () => {
             onToggleInfoPanel={handleToggleInfoPanel}
             onBack={handleBack}
             onTyping={handleTyping}
-            hasMoreMessages={
-              selectedConversationId
-                ? (hasMoreMessages[selectedConversationId] ?? true)
-                : false
-            }
-            isLoadingMessages={
-              selectedConversationId
-                ? Boolean(
-                    isLoadingMessagesByConversation[selectedConversationId],
-                  )
-                : isLoadingMessages
-            }
+            hasMoreMessages={currentHasMore}
+            isLoadingMessages={currentIsLoading}
             onLoadOlderMessages={handleLoadOlderMessages}
             onImageClick={setImagePreview}
-            messageError={
-              selectedConversationId
-                ? (messageErrors[selectedConversationId] ?? null)
-                : null
-            }
+            onFilePreview={(attachment: Attachment) => {
+              const previewType = getPreviewType(attachment.mimeType);
+              const target: PreviewTarget = {
+                attachment,
+                conversationId: selectedConversation.id,
+                previewType,
+              };
+              // Build gallery from all previewable attachments in current messages
+              const gallery: PreviewTarget[] = conversationMessages
+                .flatMap((msg) =>
+                  (msg.attachments ?? []).map((att) => ({
+                    attachment: att,
+                    conversationId: selectedConversation.id,
+                    messageId: msg.id,
+                    previewType: getPreviewType(att.mimeType),
+                  })),
+                )
+                .filter((t) => t.previewType !== "unsupported");
+              filePreview.open(
+                target,
+                gallery.length > 0 ? gallery : undefined,
+              );
+            }}
+            messageError={currentMessageError}
             onRetryMessages={handleRetryMessages}
           />
         ) : (
@@ -868,6 +931,23 @@ export const ChatPage: React.FC = () => {
           imageUrl={imagePreview}
         />
       )}
+
+      {/* File Preview Modal */}
+      <FilePreviewModal
+        isOpen={filePreview.isOpen}
+        onClose={filePreview.close}
+        current={filePreview.current}
+        currentIndex={filePreview.currentIndex}
+        totalItems={filePreview.totalItems}
+        secureUrl={filePreview.secureUrl}
+        isLoadingUrl={filePreview.isLoadingUrl}
+        urlError={filePreview.urlError}
+        hasPrev={filePreview.hasPrev}
+        hasNext={filePreview.hasNext}
+        onPrev={filePreview.prev}
+        onNext={filePreview.next}
+        onRefreshUrl={filePreview.refreshUrl}
+      />
     </div>
   );
 };
