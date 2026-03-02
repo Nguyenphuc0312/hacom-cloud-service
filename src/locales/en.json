@@ -50,6 +50,7 @@
       "videoCall": "Video call",
       "searchInChat": "Search in chat",
       "toggleInfoPanel": "Toggle info panel",
+      "moreActions": "More actions",
       "channel": "Channel",
       "members": "{{count}} members"
     },
@@ -79,6 +80,7 @@
       },
       "newLabel": "New messages ({{count}})",
       "newAria": "New messages",
+      "jumpToLatest": "Jump to latest",
       "inConversationAria": "Messages in conversation",
       "loadMore": "Loading...",
       "senderYou": "You:"

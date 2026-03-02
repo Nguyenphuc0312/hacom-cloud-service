@@ -48,15 +48,17 @@ interface TimelineRowData {
 }
 
 const estimateTimelineItemHeight = (item: TimelineItem): number => {
-  if (item.kind === "date") return 54;
-  if (item.kind === "system") return 44;
+  // Estimates include child margins (captured by flow-root on the row wrapper)
+  if (item.kind === "date") return 52; // DateDivider: my-3 (24px) + pill ~28px
+  if (item.kind === "system") return 52; // SystemMessage: my-4 (32px) + pill ~20px
 
   const message = item.message;
-  let baseHeight = item.isGroupEnd ? 84 : 70;
+  const marginBottom = item.isGroupEnd ? 6 : 2; // mb-1.5 / mb-0.5
+  let baseHeight = (item.isGroupEnd ? 56 : 44) + marginBottom;
 
   if (message.replyToMessage) baseHeight += 34;
   if (message.forwardedFrom) baseHeight += 20;
-  if ((message.reactions?.length ?? 0) > 0) baseHeight += 30;
+  if ((message.reactions?.length ?? 0) > 0) baseHeight += 28;
   if (!item.isOwn && item.showSenderName) baseHeight += 18;
 
   switch (message.type) {
@@ -80,8 +82,8 @@ const estimateTimelineItemHeight = (item: TimelineItem): number => {
   return baseHeight;
 };
 
-const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> = React.memo(
-  ({ index, style, data }) => {
+const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
+  React.memo(({ index, style, data }) => {
     const item = data.items[index];
     const rowRef = React.useRef<HTMLDivElement>(null);
 
@@ -95,7 +97,7 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> = React.me
 
     return (
       <div style={style}>
-        <div ref={rowRef}>
+        <div ref={rowRef} className="flow-root">
           <MessageItem
             item={item}
             onReply={data.onReply}
@@ -107,8 +109,7 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> = React.me
         </div>
       </div>
     );
-  },
-);
+  });
 
 TimelineRow.displayName = "TimelineRow";
 
@@ -119,7 +120,9 @@ const toDayKey = (date: Date | null): string => {
 
 const isMessageDebugEnabled = (): boolean => {
   if (typeof window === "undefined") return false;
-  return new URLSearchParams(window.location.search).get("debugMessages") === "1";
+  return (
+    new URLSearchParams(window.location.search).get("debugMessages") === "1"
+  );
 };
 
 const MessageListComponent: React.FC<MessageListProps> = ({
@@ -166,14 +169,19 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
   const scrollToBottom = React.useCallback(
     (behavior: ScrollBehavior = "smooth") => {
-      const outer = outerRef.current;
-      if (outer) {
-        outer.scrollTo({ top: outer.scrollHeight, behavior });
-        return;
-      }
+      if (timelineItems.length === 0) return;
 
-      if (timelineItems.length > 0) {
+      if (behavior === "auto") {
+        // For instant scrolls, use react-window's scrollToItem for reliability
+        // because outerRef.scrollHeight may be based on estimated sizes
         listRef.current?.scrollToItem(timelineItems.length - 1, "end");
+      } else {
+        const outer = outerRef.current;
+        if (outer) {
+          outer.scrollTo({ top: outer.scrollHeight, behavior });
+        } else {
+          listRef.current?.scrollToItem(timelineItems.length - 1, "end");
+        }
       }
     },
     [timelineItems.length, listRef, outerRef],
@@ -182,6 +190,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const {
     pendingNewMessages,
     showNewMessagesPill,
+    showJumpToBottom,
     handleScroll,
     jumpToLatest,
   } = useAutoScrollToBottom({
@@ -389,7 +398,10 @@ const MessageListComponent: React.FC<MessageListProps> = ({
           aria-label={t("chat:message.inConversationAria")}
         >
           {error && messages.length === 0 ? (
-            <ErrorState message={error} onRetry={onRetry ? handleRetry : undefined} />
+            <ErrorState
+              message={error}
+              onRetry={onRetry ? handleRetry : undefined}
+            />
           ) : messages.length === 0 ? (
             <EmptyMessages />
           ) : (
@@ -412,7 +424,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
                   itemSize={getItemSize}
                   itemData={rowData}
                   onScroll={handleListScroll}
-                  overscanCount={12}
+                  overscanCount={6}
                 >
                   {TimelineRow}
                 </VirtualList>
@@ -433,7 +445,9 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       {error && messages.length > 0 && (
         <div className="pointer-events-none absolute inset-x-4 top-2 z-sticky flex justify-center">
           <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-border bg-surface/95 px-3 py-1 shadow-xs backdrop-blur">
-            <span className="truncate text-xs text-text-secondary">{error}</span>
+            <span className="truncate text-xs text-text-secondary">
+              {error}
+            </span>
             {onRetry && (
               <button
                 type="button"
@@ -451,6 +465,22 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full border border-border bg-surface/90 px-3 py-1 text-xs text-text-muted shadow-xs">
           {t("chat:message.loadMore")}
         </div>
+      )}
+
+      {showJumpToBottom && !showNewMessagesPill && (
+        <button
+          type="button"
+          onClick={() => jumpToLatest("smooth")}
+          className={clsx(
+            "absolute bottom-4 right-4 z-sticky",
+            "flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface shadow-elev2",
+            "transition-colors hover:bg-surface-overlay",
+            "animate-fade-in",
+          )}
+          aria-label={t("chat:message.jumpToLatest")}
+        >
+          <ChevronDownIcon className="h-5 w-5 text-text-secondary" />
+        </button>
       )}
 
       {showNewMessagesPill && pendingNewMessages > 0 && (

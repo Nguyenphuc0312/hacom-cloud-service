@@ -18,6 +18,7 @@ interface UseAutoScrollToBottomParams {
 interface UseAutoScrollToBottomResult {
   pendingNewMessages: number;
   showNewMessagesPill: boolean;
+  showJumpToBottom: boolean;
   handleScroll: (scrollOffset: number) => void;
   jumpToLatest: (behavior?: ScrollBehavior) => void;
 }
@@ -34,6 +35,7 @@ export const useAutoScrollToBottom = ({
 }: UseAutoScrollToBottomParams): UseAutoScrollToBottomResult => {
   const [pendingNewMessages, setPendingNewMessages] = React.useState(0);
   const [showNewMessagesPill, setShowNewMessagesPill] = React.useState(false);
+  const [showJumpToBottom, setShowJumpToBottom] = React.useState(false);
 
   const nearBottomRef = React.useRef(true);
   const loadingOlderRef = React.useRef(false);
@@ -48,6 +50,7 @@ export const useAutoScrollToBottom = ({
     pendingNewMessagesRef.current = 0;
     setPendingNewMessages(0);
     setShowNewMessagesPill(false);
+    setShowJumpToBottom(false);
   }, []);
 
   const jumpToLatest = React.useCallback(
@@ -59,7 +62,8 @@ export const useAutoScrollToBottom = ({
   );
 
   React.useEffect(() => {
-    const conversationChanged = prevConversationIdRef.current !== conversationId;
+    const conversationChanged =
+      prevConversationIdRef.current !== conversationId;
     if (!conversationChanged) return;
 
     prevConversationIdRef.current = conversationId;
@@ -70,9 +74,19 @@ export const useAutoScrollToBottom = ({
     loadingOlderRef.current = false;
     resetPill();
 
+    // Scroll to bottom immediately, then retry after rows have measured
+    // to account for height estimation inaccuracies.
+    scrollToBottom("auto");
     requestAnimationFrame(() => {
       scrollToBottom("auto");
     });
+    const retryTimer = setTimeout(() => {
+      scrollToBottom("auto");
+    }, 80);
+
+    return () => {
+      clearTimeout(retryTimer);
+    };
   }, [conversationId, messages, resetPill, scrollToBottom]);
 
   React.useEffect(() => {
@@ -95,7 +109,8 @@ export const useAutoScrollToBottom = ({
       prevFirstMessageIdRef.current &&
       firstMessageId !== prevFirstMessageIdRef.current
     ) {
-      const scrollDelta = outer.scrollHeight - scrollSnapshotRef.current.scrollHeight;
+      const scrollDelta =
+        outer.scrollHeight - scrollSnapshotRef.current.scrollHeight;
       outer.scrollTop = scrollSnapshotRef.current.scrollTop + scrollDelta;
       loadingOlderRef.current = false;
     } else if (incomingCount > 0) {
@@ -138,6 +153,7 @@ export const useAutoScrollToBottom = ({
       if (isNearBottom) {
         resetPill();
       } else {
+        setShowJumpToBottom(true);
         setShowNewMessagesPill(pendingNewMessagesRef.current > 0);
       }
 
@@ -165,6 +181,7 @@ export const useAutoScrollToBottom = ({
   return {
     pendingNewMessages,
     showNewMessagesPill,
+    showJumpToBottom,
     handleScroll,
     jumpToLatest,
   };

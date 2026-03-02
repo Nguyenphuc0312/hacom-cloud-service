@@ -41,7 +41,7 @@ export const FileMessage: React.FC<FileMessageProps> = ({
   return (
     <div
       className={clsx(
-        "flex min-w-0 max-w-full items-center gap-3 rounded-md p-3 sm:max-w-md",
+        "flex min-w-0 max-w-full items-center gap-3 rounded-md p-3",
         isOwn ? "bg-surface/20" : "bg-surface-overlay",
         className,
       )}
@@ -64,7 +64,12 @@ export const FileMessage: React.FC<FileMessageProps> = ({
         >
           {attachment.fileName || t("chat:file.unknown")}
         </p>
-        <p className={clsx("text-xs", isOwn ? "text-text-inverse/70" : "text-text-muted")}>
+        <p
+          className={clsx(
+            "text-xs",
+            isOwn ? "text-text-inverse/70" : "text-text-muted",
+          )}
+        >
           {size} • {extension}
         </p>
       </div>

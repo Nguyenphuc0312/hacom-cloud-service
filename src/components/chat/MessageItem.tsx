@@ -28,11 +28,11 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   }
 
   if (item.kind === "system") {
-    return <SystemMessage message={item.message} className="my-4" />;
+    return <SystemMessage message={item.message} className="my-2" />;
   }
 
   return (
-    <div className={clsx(item.isGroupEnd ? "mb-3" : "mb-2")}>
+    <div className={clsx(item.isGroupEnd ? "mb-1.5" : "mb-0.5")}>
       <MessageBubble
         message={item.message}
         isOwn={item.isOwn}
@@ -47,7 +47,6 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
         onDelete={onDelete}
         onImageClick={onImageClick}
       />
-      <div style={{ height: item.isGroupEnd ? 12 : 8 }} />
     </div>
   );
 };

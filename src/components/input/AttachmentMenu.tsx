@@ -74,9 +74,50 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [onClose]);
 
+  useEffect(() => {
+    // Focus the first menu item on mount
+    const firstButton = menuRef.current?.querySelector<HTMLButtonElement>(
+      "button[role='menuitem']",
+    );
+    firstButton?.focus();
+  }, []);
+
+  const handleKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      const items = menuRef.current?.querySelectorAll<HTMLButtonElement>(
+        "button[role='menuitem']",
+      );
+      if (!items || items.length === 0) return;
+
+      const currentIndex = Array.from(items).indexOf(
+        document.activeElement as HTMLButtonElement,
+      );
+
+      switch (event.key) {
+        case "ArrowDown":
+          event.preventDefault();
+          items[(currentIndex + 1) % items.length]?.focus();
+          break;
+        case "ArrowUp":
+          event.preventDefault();
+          items[(currentIndex - 1 + items.length) % items.length]?.focus();
+          break;
+        case "Escape":
+          event.preventDefault();
+          onClose();
+          break;
+        default:
+          break;
+      }
+    },
+    [onClose],
+  );
+
   return (
     <div
       ref={menuRef}
+      role="menu"
+      onKeyDown={handleKeyDown}
       className={clsx(
         "rounded-xl border border-border bg-surface shadow-elev2",
         "p-2 min-w-44 animate-slide-in-up",
@@ -87,8 +128,10 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
         <button
           key={type.id}
           type="button"
+          role="menuitem"
+          tabIndex={0}
           onClick={() => onSelect(type.id)}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-surface-overlay"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-surface-overlay focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
         >
           <div className={clsx("p-2 rounded-lg", type.color)}>
             <type.icon className="w-5 h-5" />

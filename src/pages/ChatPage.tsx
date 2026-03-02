@@ -3,7 +3,13 @@
  * Integrated with Zustand stores and WebSocket.
  */
 
-import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
@@ -50,9 +56,7 @@ const toTimestamp = (value: unknown): number => {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 };
 
-const sortConversationsByPriority = (
-  source: Conversation[],
-): Conversation[] =>
+const sortConversationsByPriority = (source: Conversation[]): Conversation[] =>
   [...source].sort((a, b) => {
     if (a.isPinned && !b.isPinned) return -1;
     if (!a.isPinned && b.isPinned) return 1;
@@ -88,7 +92,9 @@ const scheduleIdleTask = (task: () => void): (() => void) => {
 
 const isMessageDebugEnabled = (): boolean => {
   if (typeof window === "undefined") return false;
-  return new URLSearchParams(window.location.search).get("debugMessages") === "1";
+  return (
+    new URLSearchParams(window.location.search).get("debugMessages") === "1"
+  );
 };
 
 export const ChatPage: React.FC = () => {
@@ -194,13 +200,16 @@ export const ChatPage: React.FC = () => {
     const validateConversation = async () => {
       setIsValidatingRoom(true);
       try {
-        const response = await conversationApi.getConversationById(conversationId);
+        const response =
+          await conversationApi.getConversationById(conversationId);
         const room = unwrapApiSuccess(response);
         if (isCancelled) return;
 
         const roomExists = useChatStore
           .getState()
-          .conversations.some((conversation) => conversation.id === conversationId);
+          .conversations.some(
+            (conversation) => conversation.id === conversationId,
+          );
 
         if (roomExists) {
           updateConversation(conversationId, room);
@@ -226,7 +235,9 @@ export const ChatPage: React.FC = () => {
         if (roomInvalidCodes.has(code)) {
           toast.error(t("error:chat.conversationAccessDenied"));
         } else {
-          toast.error(apiError.message || t("error:chat.conversationOpenFailed"));
+          toast.error(
+            apiError.message || t("error:chat.conversationOpenFailed"),
+          );
         }
 
         selectConversation(null);
@@ -330,7 +341,10 @@ export const ChatPage: React.FC = () => {
   );
 
   const handleLoadOlderMessages = useCallback(async () => {
-    if (!selectedConversationId || isLoadingMessagesByConversation[selectedConversationId]) {
+    if (
+      !selectedConversationId ||
+      isLoadingMessagesByConversation[selectedConversationId]
+    ) {
       return;
     }
     if (!hasMoreMessages[selectedConversationId]) return;
@@ -527,7 +541,13 @@ export const ChatPage: React.FC = () => {
       const apiError = extractApiError(error);
       toast.error(apiError.message || t("error:generic.requestFailed"));
     }
-  }, [navigate, removeConversation, selectConversation, selectedConversation, t]);
+  }, [
+    navigate,
+    removeConversation,
+    selectConversation,
+    selectedConversation,
+    t,
+  ]);
 
   // Handle back (mobile)
   const handleBack = useCallback(() => {
@@ -549,7 +569,8 @@ export const ChatPage: React.FC = () => {
       roomCreationLockRef.current = true;
       setIsCreatingRoom(true);
       try {
-        const response = await conversationApi.createPrivateConversation(userId);
+        const response =
+          await conversationApi.createPrivateConversation(userId);
         const payload = unwrapApiSuccess(response);
         const roomId = payload.id;
         if (!roomId) {
@@ -558,7 +579,10 @@ export const ChatPage: React.FC = () => {
 
         // Refresh list to get full room shape (participants, display fields...)
         fetchConversations().catch((error) => {
-          console.warn("Refresh conversations after creating direct room failed:", error);
+          console.warn(
+            "Refresh conversations after creating direct room failed:",
+            error,
+          );
         });
         selectConversation(roomId);
         navigate(`/chat/${roomId}`);
@@ -588,7 +612,9 @@ export const ChatPage: React.FC = () => {
         }
 
         console.error("Create direct room failed:", apiError);
-        toast.error(apiError.message || t("error:chat.startConversationFailed"));
+        toast.error(
+          apiError.message || t("error:chat.startConversationFailed"),
+        );
       } finally {
         roomCreationLockRef.current = false;
         setIsCreatingRoom(false);
@@ -620,7 +646,10 @@ export const ChatPage: React.FC = () => {
         }
 
         fetchConversations().catch((error) => {
-          console.warn("Refresh conversations after creating group room failed:", error);
+          console.warn(
+            "Refresh conversations after creating group room failed:",
+            error,
+          );
         });
         selectConversation(roomId);
         navigate(`/chat/${roomId}`);
@@ -643,13 +672,12 @@ export const ChatPage: React.FC = () => {
 
   const showSidebarOnMobile = !selectedConversationId || isMobileMenuOpen;
 
-  const isSelectedDirectConversation = isDirectConversation(selectedConversation);
+  const isSelectedDirectConversation =
+    isDirectConversation(selectedConversation);
 
   // Get other user for direct chat
   const otherUser =
-    selectedConversation &&
-    isSelectedDirectConversation &&
-    currentUserSummary
+    selectedConversation && isSelectedDirectConversation && currentUserSummary
       ? getOtherParticipant(selectedConversation, currentUserSummary.id)
       : null;
 
@@ -694,9 +722,9 @@ export const ChatPage: React.FC = () => {
       {/* Connection status indicator */}
       {!isConnected && (
         <div
-          className="absolute inset-x-0 top-0 z-50 bg-warning px-4 py-2 text-center text-xs font-medium text-text-inverse sm:text-sm"
-          role="status"
-          aria-live="polite"
+          className="absolute inset-x-0 top-0 z-50 bg-warning/95 px-4 py-1.5 text-center text-xs font-medium text-text-inverse backdrop-blur sm:text-sm"
+          role="alert"
+          aria-live="assertive"
         >
           {t("chat:toast.connectionReconnecting")}
         </div>
@@ -757,7 +785,9 @@ export const ChatPage: React.FC = () => {
             }
             isLoadingMessages={
               selectedConversationId
-                ? Boolean(isLoadingMessagesByConversation[selectedConversationId])
+                ? Boolean(
+                    isLoadingMessagesByConversation[selectedConversationId],
+                  )
                 : isLoadingMessages
             }
             onLoadOlderMessages={handleLoadOlderMessages}
@@ -779,9 +809,7 @@ export const ChatPage: React.FC = () => {
         <div
           className={clsx(
             "fixed inset-y-0 right-0 z-40 w-full max-w-full border-l border-border bg-surface transition-transform duration-300 sm:max-w-[min(26rem,94vw)] lg:relative lg:z-0 lg:w-[clamp(20rem,28vw,24rem)] lg:max-w-none",
-            isInfoPanelOpen
-              ? "translate-x-0"
-              : "translate-x-full lg:hidden",
+            isInfoPanelOpen ? "translate-x-0" : "translate-x-full lg:hidden",
           )}
         >
           {isSelectedDirectConversation ? (
@@ -794,7 +822,9 @@ export const ChatPage: React.FC = () => {
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
                 <Spinner size="md" />
-                <p className="text-sm text-text-muted">{t("common:loading.default")}</p>
+                <p className="text-sm text-text-muted">
+                  {t("common:loading.default")}
+                </p>
               </div>
             )
           ) : (
@@ -810,9 +840,14 @@ export const ChatPage: React.FC = () => {
 
       {/* Info panel overlay (mobile) */}
       {isInfoPanelOpen && (
-        <div
+        <button
+          type="button"
           className="fixed inset-0 z-30 bg-text-primary/50 lg:hidden"
           onClick={handleToggleInfoPanel}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") handleToggleInfoPanel();
+          }}
+          aria-label={t("common:actions.close")}
         />
       )}
 
@@ -838,7 +873,3 @@ export const ChatPage: React.FC = () => {
 };
 
 export default ChatPage;
-
-
-
-

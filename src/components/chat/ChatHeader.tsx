@@ -12,7 +12,10 @@ import {
 import { Avatar } from "../common/Avatar";
 import { TypingIndicator } from "../common/TypingIndicator";
 import type { Conversation, TypingStatus } from "../../types";
-import { isDirectConversation, normalizeRoomType } from "../../lib/conversationAdapter";
+import {
+  isDirectConversation,
+  normalizeRoomType,
+} from "../../lib/conversationAdapter";
 import {
   getConversationAvatar,
   getConversationDisplayName,
@@ -39,7 +42,7 @@ interface HeaderAction {
 }
 
 const iconButtonClass = clsx(
-  "inline-flex h-10 w-10 items-center justify-center rounded-full",
+  "inline-flex h-11 w-11 items-center justify-center rounded-full",
   "text-text-secondary transition-colors",
   "hover:bg-surface-overlay hover:text-text-primary",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
@@ -172,7 +175,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   return (
     <header
       className={clsx(
-        "sticky top-0 z-sticky border-b border-border bg-surface/95 px-4 py-2 shadow-elev1 backdrop-blur",
+        "sticky top-0 z-sticky border-b border-border bg-surface/95 px-4 py-3 shadow-elev1 backdrop-blur",
         className,
       )}
     >
@@ -233,7 +236,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         </button>
 
         <div className="relative ml-1">
-          <div className="hidden items-center gap-1 sm:flex">
+          <div className="hidden items-center gap-1 lg:flex">
             {actions.map((action) => {
               const Icon = action.icon;
               return (
@@ -250,7 +253,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             })}
           </div>
 
-          <div className="sm:hidden">
+          <div className="lg:hidden">
             <button
               ref={mobileMenuButtonRef}
               type="button"

@@ -98,7 +98,9 @@ const MessageStatusIcon: React.FC<{
           className="h-4 w-4 text-danger/70 transition-transform duration-150 hover:scale-110 hover:text-danger focus:outline-none active:scale-95"
         >
           <ExclamationCircleIcon className="h-4 w-4" aria-hidden="true" />
-          <span className="sr-only">{t("chat:message.status.failedRetry")}</span>
+          <span className="sr-only">
+            {t("chat:message.status.failedRetry")}
+          </span>
         </button>
       );
     default:
@@ -148,14 +150,14 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         return attachments.length > 0 ? (
           <div className="space-y-2">
             {attachments.map((attachment, index) => (
-            <ImageMessage
+              <ImageMessage
                 key={attachment.id || `${message.id}-image-${index}`}
                 conversationId={message.conversationId}
                 attachment={attachment}
                 caption={index === 0 ? message.content : undefined}
-              isOwn={isOwn}
-              onClick={onImageClick}
-            />
+                isOwn={isOwn}
+                onClick={onImageClick}
+              />
             ))}
           </div>
         ) : (
@@ -219,9 +221,10 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const openActionsWithKeyboard = () => {
     setIsActionsPinned(true);
     requestAnimationFrame(() => {
-      const firstActionButton = actionsRef.current?.querySelector<HTMLButtonElement>(
-        "button[tabindex='0']",
-      );
+      const firstActionButton =
+        actionsRef.current?.querySelector<HTMLButtonElement>(
+          "button[tabindex='0']",
+        );
       firstActionButton?.focus();
     });
   };
@@ -245,7 +248,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   return (
     <div
       className={clsx(
-        "group flex w-fit max-w-[min(82%,40rem)] items-end gap-2",
+        "group flex w-fit max-w-[min(75%,36rem)] items-end gap-2 sm:max-w-[min(65%,36rem)]",
         isOwn ? "ml-auto flex-row-reverse" : "mr-auto",
         className,
       )}
@@ -286,7 +289,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 : "bg-surface-overlay text-text-secondary",
             )}
           >
-            <span className="font-medium">{message.replyToMessage.senderName}</span>
+            <span className="font-medium">
+              {message.replyToMessage.senderName}
+            </span>
             <span className="truncate">{message.replyToMessage.content}</span>
           </div>
         )}
@@ -294,13 +299,12 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         <div
           ref={bubbleRef}
           className={clsx(
-            "relative px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+            "relative px-[var(--chat-bubble-px)] py-[var(--chat-bubble-py)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             bubbleRadiusClass,
             isOwn
               ? "bg-primary text-text-inverse"
               : "border border-border bg-surface text-text-primary shadow-xs",
             message.replyToMessage && "rounded-t-none",
-            isOwn ? "animate-slide-in-right" : "animate-slide-in-left",
           )}
           tabIndex={0}
           aria-label={t("chat:message.bubbleAria", {
@@ -357,7 +361,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             )}
           </div>
 
-          {isGroupEnd && (
+          {isGroupEnd && !message.reactions?.length && (
             <div
               className={clsx(
                 "absolute bottom-0 h-3 w-3",

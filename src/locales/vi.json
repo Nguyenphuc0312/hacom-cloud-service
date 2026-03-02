@@ -50,6 +50,7 @@
       "videoCall": "Goi video",
       "searchInChat": "Tim trong cuoc tro chuyen",
       "toggleInfoPanel": "Bat/tat bang thong tin",
+      "moreActions": "Them hanh dong",
       "channel": "Kenh",
       "members": "{{count}} thanh vien"
     },
@@ -79,6 +80,7 @@
       },
       "newLabel": "Tin nhan moi ({{count}})",
       "newAria": "Tin nhan moi",
+      "jumpToLatest": "Di den moi nhat",
       "inConversationAria": "Tin nhan trong cuoc tro chuyen",
       "loadMore": "Dang tai...",
       "senderYou": "Ban:"
