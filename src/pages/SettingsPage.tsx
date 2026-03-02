@@ -17,6 +17,9 @@ import {
   PrivacySection,
   ChatSection,
   LanguageSection,
+  SecuritySection,
+  DangerZoneSection,
+  BlockedUsersSection,
 } from "../components/settings";
 import { useSettings } from "../settings";
 import { useAuthStore } from "../stores";
@@ -89,6 +92,9 @@ const SettingsPage: React.FC = () => {
           <NotificationSection />
           <PrivacySection />
           <ChatSection />
+          <SecuritySection />
+          <BlockedUsersSection />
+          <DangerZoneSection />
 
           {/* Version info */}
           <p className="pb-6 text-center text-xs text-text-muted">

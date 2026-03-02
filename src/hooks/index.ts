@@ -19,3 +19,6 @@ export {
   useDebouncedCallback,
   useThrottledCallback,
 } from "./useDebounce";
+export { useMessageSearch } from "./useMessageSearch";
+export { usePinnedMessages } from "./usePinnedMessages";
+export { useFriendship } from "./useFriendship";

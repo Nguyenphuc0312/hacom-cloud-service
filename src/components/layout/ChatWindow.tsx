@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import { ChatHeader } from "../chat/ChatHeader";
 import { MessageList } from "../chat/MessageList";
 import { MessageInput } from "../input/MessageInput";
+import { SearchPanel } from "../chat/SearchPanel";
+import { PinnedMessagesPanel } from "../chat/PinnedMessagesPanel";
 import type { MentionCandidate } from "../input/MessageInput";
 import { toast } from "../ui";
 import type {
@@ -164,6 +166,26 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     toast.info(t("common:toast.featureInDevelopment"));
   }, [t]);
 
+  // Search & pinned panel state
+  const [isSearchOpen, setIsSearchOpen] = React.useState(false);
+  const [isPinnedOpen, setIsPinnedOpen] = React.useState(false);
+
+  const handleSearchClick = React.useCallback(() => {
+    setIsSearchOpen((prev) => !prev);
+    setIsPinnedOpen(false);
+  }, []);
+
+  const handlePinnedClick = React.useCallback(() => {
+    setIsPinnedOpen((prev) => !prev);
+    setIsSearchOpen(false);
+  }, []);
+
+  // Close panels when switching conversations
+  React.useEffect(() => {
+    setIsSearchOpen(false);
+    setIsPinnedOpen(false);
+  }, [conversation.id]);
+
   const mentionCandidates = React.useMemo<MentionCandidate[]>(() => {
     const participants = Array.isArray(conversation.participants)
       ? conversation.participants
@@ -232,8 +254,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onInfoClick={onToggleInfoPanel}
         onCallClick={handleFeatureInDevelopment}
         onVideoCallClick={handleFeatureInDevelopment}
-        onSearchClick={handleFeatureInDevelopment}
+        onSearchClick={handleSearchClick}
       />
+
+      {/* Search panel overlay */}
+      {isSearchOpen && (
+        <SearchPanel
+          roomId={conversation.id}
+          onClose={() => setIsSearchOpen(false)}
+        />
+      )}
+
+      {/* Pinned messages panel overlay */}
+      {isPinnedOpen && (
+        <PinnedMessagesPanel
+          roomId={conversation.id}
+          onClose={() => setIsPinnedOpen(false)}
+        />
+      )}
 
       {messageListNode}
 

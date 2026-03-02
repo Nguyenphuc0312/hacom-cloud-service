@@ -7,15 +7,18 @@ import {
   ClipboardDocumentIcon,
   TrashIcon,
   PencilIcon,
+  MapPinIcon,
 } from "@heroicons/react/24/outline";
 
 interface MessageActionsProps {
   isOwn: boolean;
+  isPinned?: boolean;
   onReply: () => void;
   onForward: () => void;
   onCopy: () => void;
   onEdit?: () => void;
   onDelete: () => void;
+  onPin?: () => void;
   isVisible?: boolean;
   onClose?: () => void;
   className?: string;
@@ -23,11 +26,13 @@ interface MessageActionsProps {
 
 export const MessageActions: React.FC<MessageActionsProps> = ({
   isOwn,
+  isPinned = false,
   onReply,
   onForward,
   onCopy,
   onEdit,
   onDelete,
+  onPin,
   isVisible = true,
   onClose,
   className,
@@ -53,6 +58,18 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
       label: t("chat:message.actions.copy"),
       onClick: onCopy,
     },
+    ...(onPin
+      ? [
+          {
+            id: "pin",
+            icon: MapPinIcon,
+            label: isPinned
+              ? t("chat:message.actions.unpin")
+              : t("chat:message.actions.pin"),
+            onClick: onPin,
+          },
+        ]
+      : []),
     ...(isOwn && onEdit
       ? [
           {

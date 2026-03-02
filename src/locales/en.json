@@ -73,7 +73,9 @@
         "forward": "Forward",
         "copy": "Copy",
         "edit": "Edit",
-        "delete": "Delete"
+        "delete": "Delete",
+        "pin": "Pin message",
+        "unpin": "Unpin message"
       },
       "newLabel": "New messages ({{count}})",
       "newAria": "New messages",
@@ -188,7 +190,26 @@
       "deleteFailed": "Unable to delete message",
       "resendSuccess": "Resent successfully",
       "resendFailed": "Resend failed",
-      "connectionReconnecting": "Reconnecting..."
+      "connectionReconnecting": "Reconnecting...",
+      "pinSuccess": "Message pinned",
+      "unpinSuccess": "Message unpinned",
+      "pinFailed": "Unable to pin message"
+    },
+    "search": {
+      "title": "Search messages",
+      "placeholder": "Search messages...",
+      "noResults": "No messages found",
+      "noResultsDescription": "Try a different search term.",
+      "resultCount": "{{count}} result(s) found",
+      "error": "Search failed. Please try again.",
+      "inConversation": "in {{name}}"
+    },
+    "pinned": {
+      "title": "Pinned messages",
+      "empty": "No pinned messages",
+      "emptyDescription": "Pin important messages to find them easily.",
+      "jumpTo": "Jump to message",
+      "count": "{{count}} pinned"
     },
     "preview": {
       "photo": "Photo",
@@ -314,6 +335,40 @@
     "pageTitle": "Settings",
     "resetAll": "Reset to defaults",
     "version": "Settings v{{version}}",
+    "security": {
+      "title": "Security",
+      "description": "Manage your password and account security",
+      "changePassword": "Change password",
+      "currentPassword": "Current password",
+      "newPassword": "New password",
+      "confirmPassword": "Confirm new password",
+      "changePasswordButton": "Update password",
+      "changePasswordSuccess": "Password changed successfully",
+      "changePasswordFailed": "Failed to change password"
+    },
+    "dangerZone": {
+      "title": "Danger zone",
+      "description": "Irreversible actions for your account",
+      "deleteAccount": "Delete account",
+      "deleteAccountDescription": "Permanently delete your account and all data. This action cannot be undone.",
+      "deleteAccountButton": "Delete my account",
+      "deleteAccountConfirmTitle": "Delete account?",
+      "deleteAccountConfirmMessage": "This will permanently delete your account, messages, and all associated data. Type your password to confirm.",
+      "deleteAccountPassword": "Enter your password",
+      "deleteAccountSuccess": "Account deleted successfully",
+      "deleteAccountFailed": "Failed to delete account"
+    },
+    "blockedUsers": {
+      "title": "Blocked users",
+      "description": "Manage users you have blocked",
+      "empty": "No blocked users",
+      "emptyDescription": "You haven't blocked anyone.",
+      "unblock": "Unblock",
+      "unblockSuccess": "User unblocked",
+      "unblockFailed": "Failed to unblock user",
+      "blockSuccess": "User blocked",
+      "blockFailed": "Failed to block user"
+    },
     "appearance": {
       "title": "Appearance",
       "description": "Customise theme, colours, font size, and density",
@@ -444,6 +499,40 @@
       "featureInDevelopment": "This feature is in development"
     }
   },
+  "friends": {
+    "tabs": {
+      "received": "Received",
+      "sent": "Sent"
+    },
+    "sentRequests": {
+      "title": "Sent requests",
+      "empty": "No sent requests",
+      "emptyDescription": "You haven't sent any friend requests.",
+      "emptyReceived": "No incoming friend requests",
+      "emptySent": "No sent friend requests",
+      "cancel": "Cancel request",
+      "cancelSuccess": "Friend request cancelled",
+      "cancelFailed": "Failed to cancel request"
+    },
+    "pendingBadge": {
+      "ariaLabel": "{{count}} pending friend request(s)"
+    },
+    "status": {
+      "none": "Add friend",
+      "pending": "Request pending",
+      "accepted": "Friends",
+      "declined": "Add friend",
+      "blocked": "Blocked"
+    },
+    "block": "Block user",
+    "unblock": "Unblock user",
+    "accept": "Accept",
+    "reject": "Reject",
+    "requestAccepted": "Friend request accepted",
+    "requestRejected": "Friend request rejected",
+    "requestCancelled": "Friend request cancelled",
+    "actionFailed": "Action failed. Please try again."
+  },
   "auth": {
     "login": {
       "aria": {
@@ -496,6 +585,17 @@
       "successDescription": "We sent reset instructions to",
       "successHint": "Didn\u0027t receive email? Check spam folder or",
       "tryAnotherEmail": "Try another email"
+    },
+    "reset": {
+      "title": "Set new password",
+      "subtitle": "Enter your new password below",
+      "submit": "Reset password",
+      "successTitle": "Password reset!",
+      "successDescription": "Your password has been reset successfully.",
+      "goToLogin": "Go to sign in",
+      "invalidToken": "Invalid or expired reset link",
+      "invalidTokenDescription": "This reset link is invalid or has expired. Please request a new one.",
+      "requestNewLink": "Request new link"
     },
     "username": {
       "invalid": "Only letters, numbers, and underscores are allowed",

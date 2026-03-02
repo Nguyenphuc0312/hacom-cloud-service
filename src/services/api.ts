@@ -63,8 +63,9 @@ export const authApi = {
       "/auth/refresh",
       refreshToken ? { refreshToken } : undefined,
       {
-      withCredentials: true,
-    });
+        withCredentials: true,
+      },
+    );
     return response.data;
   },
 
@@ -80,6 +81,18 @@ export const authApi = {
     const response = await apiClient.post<ApiResponse<{ message: string }>>(
       "/auth/reset-password",
       { token, password },
+    );
+    return response.data;
+  },
+
+  changePassword: async (data: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }) => {
+    const response = await apiClient.post<ApiResponse<{ message: string }>>(
+      "/auth/change-password",
+      data,
     );
     return response.data;
   },
@@ -139,6 +152,21 @@ export const userApi = {
     );
     return response.data;
   },
+
+  updateUsername: async (username: string) => {
+    const response = await apiClient.put<ApiResponse<User>>("/users/username", {
+      username,
+    });
+    return response.data;
+  },
+
+  deleteAccount: async (password: string, confirmation = "DELETE") => {
+    const response = await apiClient.delete<ApiResponse<void>>(
+      "/users/account",
+      { data: { password, confirmation } },
+    );
+    return response.data;
+  },
 };
 
 // ============================================
@@ -173,7 +201,8 @@ export const conversationApi = {
     const normalized = normalizeConversation(response.data.data);
     return {
       ...response.data,
-      data: (normalized ?? (response.data.data as Conversation)) as Conversation,
+      data: (normalized ??
+        (response.data.data as Conversation)) as Conversation,
     };
   },
 
@@ -192,7 +221,8 @@ export const conversationApi = {
     const normalized = normalizeConversation(response.data.data);
     return {
       ...response.data,
-      data: (normalized ?? (response.data.data as Conversation)) as Conversation,
+      data: (normalized ??
+        (response.data.data as Conversation)) as Conversation,
     };
   },
 
@@ -219,7 +249,8 @@ export const conversationApi = {
     const normalized = normalizeConversation(response.data.data);
     return {
       ...response.data,
-      data: (normalized ?? (response.data.data as Conversation)) as Conversation,
+      data: (normalized ??
+        (response.data.data as Conversation)) as Conversation,
     };
   },
 
@@ -287,6 +318,13 @@ export const conversationApi = {
 
   markAsRead: async (conversationId: string) => {
     await apiClient.post(`/rooms/${conversationId}/messages/read`);
+  },
+
+  getUnreadCount: async (conversationId: string) => {
+    const response = await apiClient.get<ApiResponse<{ unreadCount: number }>>(
+      `/rooms/${conversationId}/messages/unread`,
+    );
+    return response.data;
   },
 };
 
@@ -415,6 +453,44 @@ export const messageApi = {
   removeReaction: async (messageId: string, emoji: string) => {
     const response = await apiClient.delete<ApiResponse<Message>>(
       `/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`,
+    );
+    return response.data;
+  },
+
+  searchMessages: async (params: {
+    q: string;
+    roomId?: string;
+    type?: string;
+    page?: number;
+    limit?: number;
+  }) => {
+    const query = new URLSearchParams();
+    query.set("q", params.q);
+    if (params.roomId) query.set("roomId", params.roomId);
+    if (params.type) query.set("type", params.type);
+    if (params.page) query.set("page", String(params.page));
+    if (params.limit) query.set("limit", String(params.limit));
+    const response = await apiClient.get<
+      ApiResponse<{
+        messages: Message[];
+        total: number;
+        page: number;
+        limit: number;
+      }>
+    >(`/messages/search?${query.toString()}`);
+    return response.data;
+  },
+
+  getMessageById: async (messageId: string) => {
+    const response = await apiClient.get<ApiResponse<Message>>(
+      `/messages/${messageId}`,
+    );
+    return response.data;
+  },
+
+  getPinnedMessages: async (roomId: string) => {
+    const response = await apiClient.get<ApiResponse<{ messages: Message[] }>>(
+      `/rooms/${roomId}/messages/pinned`,
     );
     return response.data;
   },
@@ -563,6 +639,56 @@ export const friendshipApi = {
 
   removeFriend: async (friendshipId: string) => {
     await apiClient.delete(`/friends/${friendshipId}`);
+  },
+
+  getSentRequests: async () => {
+    const response = await apiClient.get<
+      ApiResponse<{
+        requests: Array<{ id: string; receiver: User; createdAt: string }>;
+      }>
+    >("/friends/requests/sent");
+    return response.data;
+  },
+
+  cancelFriendRequest: async (requestId: string) => {
+    await apiClient.delete(`/friends/requests/${requestId}`);
+  },
+
+  getPendingCount: async () => {
+    const response = await apiClient.get<ApiResponse<{ count: number }>>(
+      "/friends/requests/count",
+    );
+    return response.data;
+  },
+
+  blockUser: async (userId: string) => {
+    const response = await apiClient.post<ApiResponse<{ message: string }>>(
+      "/friends/block",
+      { userId },
+    );
+    return response.data;
+  },
+
+  unblockUser: async (userId: string) => {
+    await apiClient.delete(`/friends/unblock/${userId}`);
+  },
+
+  getBlockedUsers: async () => {
+    const response =
+      await apiClient.get<ApiResponse<{ users: User[]; total: number }>>(
+        "/friends/blocked",
+      );
+    return response.data;
+  },
+
+  getFriendshipStatus: async (userId: string) => {
+    const response = await apiClient.get<
+      ApiResponse<{
+        status: "none" | "pending" | "accepted" | "declined" | "blocked";
+        friendship?: { id: string };
+      }>
+    >(`/friends/status/${userId}`);
+    return response.data;
   },
 };
 

@@ -73,7 +73,9 @@
         "forward": "Chuyen tiep",
         "copy": "Sao chep",
         "edit": "Chinh sua",
-        "delete": "Xoa"
+        "delete": "Xoa",
+        "pin": "Ghim tin nhan",
+        "unpin": "Bo ghim tin nhan"
       },
       "newLabel": "Tin nhan moi ({{count}})",
       "newAria": "Tin nhan moi",
@@ -188,7 +190,26 @@
       "deleteFailed": "Khong the xoa tin nhan",
       "resendSuccess": "Gui lai thanh cong",
       "resendFailed": "Gui lai khong thanh cong",
-      "connectionReconnecting": "Dang ket noi lai..."
+      "connectionReconnecting": "Dang ket noi lai...",
+      "pinSuccess": "Da ghim tin nhan",
+      "unpinSuccess": "Da bo ghim tin nhan",
+      "pinFailed": "Khong the ghim tin nhan"
+    },
+    "search": {
+      "title": "Tim kiem tin nhan",
+      "placeholder": "Tim kiem tin nhan...",
+      "noResults": "Khong tim thay tin nhan",
+      "noResultsDescription": "Thu mot tu khoa khac.",
+      "resultCount": "Tim thay {{count}} ket qua",
+      "error": "Tim kiem that bai. Vui long thu lai.",
+      "inConversation": "trong {{name}}"
+    },
+    "pinned": {
+      "title": "Tin nhan da ghim",
+      "empty": "Khong co tin nhan ghim",
+      "emptyDescription": "Ghim tin nhan quan trong de tim lai de dang.",
+      "jumpTo": "Di den tin nhan",
+      "count": "{{count}} da ghim"
     },
     "preview": {
       "photo": "Anh",
@@ -314,6 +335,40 @@
     "pageTitle": "Cai dat",
     "resetAll": "Dat lai mac dinh",
     "version": "Cai dat v{{version}}",
+    "security": {
+      "title": "Bao mat",
+      "description": "Quan ly mat khau va bao mat tai khoan",
+      "changePassword": "Doi mat khau",
+      "currentPassword": "Mat khau hien tai",
+      "newPassword": "Mat khau moi",
+      "confirmPassword": "Xac nhan mat khau moi",
+      "changePasswordButton": "Cap nhat mat khau",
+      "changePasswordSuccess": "Doi mat khau thanh cong",
+      "changePasswordFailed": "Doi mat khau that bai"
+    },
+    "dangerZone": {
+      "title": "Vung nguy hiem",
+      "description": "Hanh dong khong the hoan tac cho tai khoan cua ban",
+      "deleteAccount": "Xoa tai khoan",
+      "deleteAccountDescription": "Xoa vinh vien tai khoan va tat ca du lieu. Hanh dong nay khong the hoan tac.",
+      "deleteAccountButton": "Xoa tai khoan cua toi",
+      "deleteAccountConfirmTitle": "Xoa tai khoan?",
+      "deleteAccountConfirmMessage": "Hanh dong nay se xoa vinh vien tai khoan, tin nhan va tat ca du lieu lien quan. Nhap mat khau de xac nhan.",
+      "deleteAccountPassword": "Nhap mat khau cua ban",
+      "deleteAccountSuccess": "Da xoa tai khoan thanh cong",
+      "deleteAccountFailed": "Xoa tai khoan that bai"
+    },
+    "blockedUsers": {
+      "title": "Nguoi dung bi chan",
+      "description": "Quan ly nguoi dung ban da chan",
+      "empty": "Khong co nguoi dung bi chan",
+      "emptyDescription": "Ban chua chan ai.",
+      "unblock": "Bo chan",
+      "unblockSuccess": "Da bo chan nguoi dung",
+      "unblockFailed": "Khong the bo chan nguoi dung",
+      "blockSuccess": "Da chan nguoi dung",
+      "blockFailed": "Khong the chan nguoi dung"
+    },
     "appearance": {
       "title": "Giao dien",
       "description": "Tuy chinh giao dien, mau sac, co chu va mat do hien thi",
@@ -444,6 +499,40 @@
       "featureInDevelopment": "Tinh nang dang phat trien"
     }
   },
+  "friends": {
+    "tabs": {
+      "received": "Da nhan",
+      "sent": "Da gui"
+    },
+    "sentRequests": {
+      "title": "Yeu cau da gui",
+      "empty": "Khong co yeu cau da gui",
+      "emptyDescription": "Ban chua gui yeu cau ket ban nao.",
+      "emptyReceived": "Khong co yeu cau ket ban den",
+      "emptySent": "Khong co yeu cau ket ban da gui",
+      "cancel": "Huy yeu cau",
+      "cancelSuccess": "Da huy yeu cau ket ban",
+      "cancelFailed": "Khong the huy yeu cau"
+    },
+    "pendingBadge": {
+      "ariaLabel": "{{count}} yeu cau ket ban cho xu ly"
+    },
+    "status": {
+      "none": "Ket ban",
+      "pending": "Dang cho",
+      "accepted": "Ban be",
+      "declined": "Ket ban",
+      "blocked": "Da chan"
+    },
+    "block": "Chan nguoi dung",
+    "unblock": "Bo chan nguoi dung",
+    "accept": "Chap nhan",
+    "reject": "Tu choi",
+    "requestAccepted": "Da chap nhan yeu cau ket ban",
+    "requestRejected": "Da tu choi yeu cau ket ban",
+    "requestCancelled": "Da huy yeu cau ket ban",
+    "actionFailed": "Thao tac that bai. Vui long thu lai."
+  },
   "auth": {
     "login": {
       "aria": {
@@ -496,6 +585,17 @@
       "successDescription": "Chung toi da gui huong dan dat lai mat khau den",
       "successHint": "Khong nhan duoc email? Kiem tra thu muc spam hoac",
       "tryAnotherEmail": "Thu lai voi email khac"
+    },
+    "reset": {
+      "title": "Dat mat khau moi",
+      "subtitle": "Nhap mat khau moi cua ban ben duoi",
+      "submit": "Dat lai mat khau",
+      "successTitle": "Da dat lai mat khau!",
+      "successDescription": "Mat khau cua ban da duoc dat lai thanh cong.",
+      "goToLogin": "Di den dang nhap",
+      "invalidToken": "Lien ket dat lai khong hop le hoac het han",
+      "invalidTokenDescription": "Lien ket dat lai nay khong hop le hoac da het han. Vui long yeu cau lien ket moi.",
+      "requestNewLink": "Yeu cau lien ket moi"
     },
     "username": {
       "invalid": "Chi duoc dung chu cai, so va dau gach duoi",
