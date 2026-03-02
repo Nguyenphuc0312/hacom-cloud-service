@@ -341,7 +341,7 @@ export const ChatPage: React.FC = () => {
     async (
       content: string,
       replyTo?: Message,
-      fileMeta?: Attachment | undefined,
+      fileMeta?: Attachment | Attachment[] | undefined,
       type: MessageType = MessageType.TEXT,
     ) => {
       if (!selectedConversationId) return;

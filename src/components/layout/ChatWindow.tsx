@@ -4,16 +4,14 @@ import { useTranslation } from "react-i18next";
 import { ChatHeader } from "../chat/ChatHeader";
 import { MessageList } from "../chat/MessageList";
 import { SelectionToolbar } from "../chat/SelectionToolbar";
-import { DropZoneOverlay } from "../chat/DropZoneOverlay";
+import { DropOverlay } from "../input/DropOverlay";
 import { MessageInput } from "../input/MessageInput";
 import { SearchPanel } from "../chat/SearchPanel";
 import { PinnedMessagesPanel } from "../chat/PinnedMessagesPanel";
-import type {
-  MentionCandidate,
-  MessageInputHandle,
-} from "../input/MessageInput";
+import type { MentionCandidate } from "../input/MessageInput";
 import { toast } from "../ui";
 import { useUIStore } from "../../stores";
+import { useDropZone, useUploadQueue } from "../../hooks";
 import type {
   Attachment,
   Conversation,
@@ -23,6 +21,30 @@ import type {
   UserSummary,
 } from "../../types";
 import { MessageType } from "../../types";
+import type { UploadedFileMeta } from "../../types/attachmentDraft";
+
+// ── Convert upload queue metadata to Attachment ─────────────────────
+
+function metaToAttachment(meta: UploadedFileMeta): Attachment {
+  const mime = meta.mimeType || "application/octet-stream";
+  let attachmentType: string = "file";
+  if (mime.startsWith("image/")) attachmentType = "image";
+  else if (mime.startsWith("video/")) attachmentType = "video";
+  else if (mime.startsWith("audio/")) attachmentType = "audio";
+
+  return {
+    id: meta.fileId,
+    objectKey: meta.objectKey ?? "",
+    type: attachmentType,
+    fileName: meta.name,
+    mimeType: mime,
+    fileSize: meta.size,
+    ...(meta.width != null ? { width: meta.width } : {}),
+    ...(meta.height != null ? { height: meta.height } : {}),
+    ...(meta.duration != null ? { duration: meta.duration } : {}),
+    ...(meta.thumbnailUrl ? { thumbnailUrl: meta.thumbnailUrl } : {}),
+  } as Attachment;
+}
 
 interface ChatWindowProps {
   conversation: Conversation;
@@ -32,7 +54,7 @@ interface ChatWindowProps {
   onSendMessage: (
     content: string,
     replyTo?: Message,
-    fileMeta?: Attachment,
+    fileMeta?: Attachment | Attachment[],
     type?: MessageType,
   ) => void | Promise<void>;
   onReactMessage?: (messageId: string, emoji: string) => void | Promise<void>;
@@ -136,6 +158,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     [onDeleteMessage],
   );
 
+  // ── Multi-file upload queue ──
+  const uploadQueue = useUploadQueue({ conversationId: conversation.id });
+
+  // ── Drag-and-drop ──
+  const { isDragActive, dropZoneProps, dismiss } = useDropZone({
+    onDrop: uploadQueue.addFiles,
+    disabled: false,
+  });
+
   const handleSend = React.useCallback(
     async (content?: string, fileMeta?: unknown, type?: string) => {
       if (inputMode === "edit" && editingMessage && onEditMessage) {
@@ -157,13 +188,37 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         return;
       }
 
-      if (!content && !fileMeta) return;
+      // ── Build attachments from upload queue + legacy single file ──
+      const queueMetas = uploadQueue.getReadyMeta();
+      const allAttachments: Attachment[] = [];
 
-      const attachment = fileMeta as Attachment | undefined;
-      const messageType = type as MessageType | undefined;
+      if (queueMetas.length > 0) {
+        for (const meta of queueMetas) {
+          allAttachments.push(metaToAttachment(meta));
+        }
+      }
+      if (fileMeta) {
+        allAttachments.push(fileMeta as Attachment);
+      }
 
-      const outgoingContent = content || attachment?.fileName || "";
+      const hasAttachments = allAttachments.length > 0;
+      if (!content && !hasAttachments) return;
+
+      const outgoingContent =
+        (content || "").trim() ||
+        (hasAttachments ? allAttachments[0].fileName : "") ||
+        "";
       if (!outgoingContent) return;
+
+      const messageType = hasAttachments
+        ? MessageType.FILE
+        : (type as MessageType | undefined);
+      const attachmentArg: Attachment | Attachment[] | undefined =
+        hasAttachments
+          ? allAttachments.length === 1
+            ? allAttachments[0]
+            : allAttachments
+          : undefined;
 
       setInputValue("");
       setReplyToMessage(undefined);
@@ -171,10 +226,27 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       setInputMode("normal");
 
       await Promise.resolve(
-        onSendMessage(outgoingContent, replyToMessage, attachment, messageType),
+        onSendMessage(
+          outgoingContent,
+          replyToMessage,
+          attachmentArg,
+          messageType,
+        ),
       );
+
+      // Clear queue after successful send
+      if (queueMetas.length > 0) {
+        uploadQueue.clearAll();
+      }
     },
-    [editingMessage, inputMode, onEditMessage, onSendMessage, replyToMessage],
+    [
+      editingMessage,
+      inputMode,
+      onEditMessage,
+      onSendMessage,
+      replyToMessage,
+      uploadQueue,
+    ],
   );
 
   const handleFeatureInDevelopment = React.useCallback(() => {
@@ -250,51 +322,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const currentUsername = currentUser.username;
 
-  // ── Drag-and-drop file upload ──
-  const [isDragActive, setIsDragActive] = React.useState(false);
-  const dragCounter = React.useRef(0);
-  const messageInputRef = React.useRef<MessageInputHandle>(null);
-
-  const handleDragEnter = React.useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounter.current += 1;
-    if (e.dataTransfer.types.includes("Files")) {
-      setIsDragActive(true);
-    }
-  }, []);
-
-  const handleDragOver = React.useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
-
-  const handleDragLeave = React.useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounter.current -= 1;
-    if (dragCounter.current <= 0) {
-      dragCounter.current = 0;
-      setIsDragActive(false);
-    }
-  }, []);
-
-  const handleDrop = React.useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounter.current = 0;
-    setIsDragActive(false);
-
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length === 0) return;
-
-    // Forward the first file to MessageInput via imperative handle
-    const file = files[0];
-    if (messageInputRef.current) {
-      messageInputRef.current.addFile(file);
-    }
-  }, []);
-
   const messageListNode = React.useMemo(
     () => (
       <MessageList
@@ -350,13 +377,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         "chat-background relative flex h-full min-h-0 flex-col overflow-hidden animate-content-fade",
         className,
       )}
-      onDragEnter={handleDragEnter}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      {...dropZoneProps}
     >
       {/* Drag-and-drop overlay */}
-      <DropZoneOverlay isActive={isDragActive} />
+      <DropOverlay isActive={isDragActive} onDismiss={dismiss} />
       <ChatHeader
         conversation={conversation}
         currentUserId={currentUser.id}
@@ -403,7 +427,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       {!isMessageSelectionMode && (
         <div className="sticky bottom-0 z-sticky">
           <MessageInput
-            ref={messageInputRef}
             value={inputValue}
             onChange={handleInputChange}
             onSend={handleSend}
@@ -416,6 +439,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             onCancelEdit={handleCancelEdit}
             onTyping={onTyping}
             sendOnEnter
+            uploadDrafts={uploadQueue.drafts}
+            onAddFiles={uploadQueue.addFiles}
+            onRemoveDraft={uploadQueue.removeDraft}
+            onCancelUpload={uploadQueue.cancelUpload}
+            onRetryUpload={uploadQueue.retryUpload}
+            onClearAllDrafts={uploadQueue.clearAll}
+            hasUploadingDrafts={uploadQueue.hasUploadingDrafts}
+            hasFailedDrafts={uploadQueue.hasFailedDrafts}
+            hasReadyDrafts={uploadQueue.hasReadyDrafts}
           />
         </div>
       )}

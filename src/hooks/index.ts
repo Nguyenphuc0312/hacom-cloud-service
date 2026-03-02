@@ -15,6 +15,8 @@ export { useTypingIndicator } from "./useTypingIndicator";
 export { useSendMessage } from "./useSendMessage";
 export { useAttachmentDownloadUrl } from "./useAttachmentDownloadUrl";
 export { useFilePreview } from "./useFilePreview";
+export { useDropZone } from "./useDropZone";
+export { useUploadQueue } from "./useUploadQueue";
 export {
   useDebounce,
   useDebouncedCallback,

@@ -63,6 +63,32 @@
     "filePreviewAlt": "File preview",
     "fileSizeLimit": "Limit {{size}}"
   },
+  "dropZone": {
+    "title": "Drop files here",
+    "subtitle": "Release to attach files to this conversation",
+    "limits": "Up to 10 files · 50 MB each"
+  },
+  "attachmentTray": {
+    "queued": "Queued",
+    "uploading": "Uploading",
+    "ready": "Ready",
+    "failed": "Failed",
+    "blocked": "Blocked",
+    "cancelUpload": "Cancel upload",
+    "remove": "Remove",
+    "retry": "Retry",
+    "retryUpload": "Retry upload {{name}}",
+    "uploadProgress": "{{name}} upload progress: {{progress}}%",
+    "region": "{{count}} attached files",
+    "summary": "{{count}} files · {{size}}",
+    "uploadingStatus": "Uploading…",
+    "someFailedStatus": "Some uploads failed",
+    "allReadyStatus": "All ready",
+    "clearAll": "Remove all files",
+    "clearAllLabel": "Clear all",
+    "fileList": "Attached files",
+    "waitForUploads": "Please wait for uploads to finish before sending"
+  },
   "attachment": {
     "types": {
       "photo": "Photo/Video",

@@ -63,6 +63,32 @@
     "filePreviewAlt": "Xem trước tệp",
     "fileSizeLimit": "Giới hạn {{size}}"
   },
+  "dropZone": {
+    "title": "Thả tệp vào đây",
+    "subtitle": "Thả để đính kèm tệp vào cuộc trò chuyện",
+    "limits": "Tối đa 10 tệp · 50 MB mỗi tệp"
+  },
+  "attachmentTray": {
+    "queued": "Đang chờ",
+    "uploading": "Đang tải",
+    "ready": "Sẵn sàng",
+    "failed": "Thất bại",
+    "blocked": "Bị chặn",
+    "cancelUpload": "Hủy tải lên",
+    "remove": "Xóa",
+    "retry": "Thử lại",
+    "retryUpload": "Thử tải lại {{name}}",
+    "uploadProgress": "Tiến trình tải {{name}}: {{progress}}%",
+    "region": "{{count}} tệp đính kèm",
+    "summary": "{{count}} tệp · {{size}}",
+    "uploadingStatus": "Đang tải lên…",
+    "someFailedStatus": "Một số tệp tải thất bại",
+    "allReadyStatus": "Tất cả sẵn sàng",
+    "clearAll": "Xóa tất cả tệp",
+    "clearAllLabel": "Xóa tất cả",
+    "fileList": "Tệp đính kèm",
+    "waitForUploads": "Vui lòng đợi tải lên hoàn tất trước khi gửi"
+  },
   "attachment": {
     "types": {
       "photo": "Ảnh/Video",

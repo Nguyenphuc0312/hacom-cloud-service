@@ -110,6 +110,32 @@
       "filePreviewAlt": "Xem truoc tep",
       "fileSizeLimit": "Gioi han {{size}}"
     },
+    "dropZone": {
+      "title": "Tha tep vao day",
+      "subtitle": "Tha de dinh kem tep vao cuoc tro chuyen",
+      "limits": "Toi da 10 tep · 50 MB moi tep"
+    },
+    "attachmentTray": {
+      "queued": "Dang cho",
+      "uploading": "Dang tai",
+      "ready": "San sang",
+      "failed": "That bai",
+      "blocked": "Bi chan",
+      "cancelUpload": "Huy tai len",
+      "remove": "Xoa",
+      "retry": "Thu lai",
+      "retryUpload": "Thu tai lai {{name}}",
+      "uploadProgress": "Tien trinh tai {{name}}: {{progress}}%",
+      "region": "{{count}} tep dinh kem",
+      "summary": "{{count}} tep · {{size}}",
+      "uploadingStatus": "Dang tai len…",
+      "someFailedStatus": "Mot so tep tai that bai",
+      "allReadyStatus": "Tat ca san sang",
+      "clearAll": "Xoa tat ca tep",
+      "clearAllLabel": "Xoa tat ca",
+      "fileList": "Tep dinh kem",
+      "waitForUploads": "Vui long doi tai len hoan tat truoc khi gui"
+    },
     "attachment": {
       "types": {
         "photo": "Anh/Video",
@@ -351,7 +377,13 @@
       "fileTooLarge": "Tep vuot qua gioi han dung luong",
       "unsupportedType": "Dinh dang tep khong ho tro",
       "uploadCanceled": "Da huy tai len",
-      "uploadFailed": "Tai len that bai, vui long thu lai"
+      "uploadFailed": "Tai len that bai, vui long thu lai",
+      "noConversation": "Chua chon cuoc tro chuyen",
+      "cancelled": "Da huy tai len",
+      "tooLarge": "Tep qua lon",
+      "tooManyFiles": "Toi da {{max}} tep",
+      "fileTooLargeNamed": "{{name}} qua lon",
+      "totalSizeTooLarge": "Tong dung luong tep vuot gioi han"
     }
   },
   "settings": {

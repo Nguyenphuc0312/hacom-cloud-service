@@ -9,6 +9,7 @@ import {
 import { EmojiButton } from "./EmojiButton";
 import { AttachmentMenu } from "./AttachmentMenu";
 import { AttachmentPreview } from "./AttachmentPreview";
+import { AttachmentTray } from "./AttachmentTray";
 import { SendButton } from "./SendButton";
 import {
   useAutoResizeTextarea,
@@ -17,6 +18,7 @@ import {
 } from "../../hooks";
 import type { AttachmentPickerMode } from "../../hooks/useSendMessage";
 import type { InputMode, Message } from "../../types";
+import type { AttachmentDraft } from "../../types/attachmentDraft";
 import { UPLOAD_CONFIG } from "../../config";
 import { toast } from "../ui";
 
@@ -50,6 +52,17 @@ interface MessageInputProps {
   sendOnEnter?: boolean;
   disabled?: boolean;
   className?: string;
+
+  // ── Multi-file upload queue (from ChatWindow) ──
+  uploadDrafts?: AttachmentDraft[];
+  onAddFiles?: (files: File[]) => void;
+  onRemoveDraft?: (localId: string) => void;
+  onCancelUpload?: (localId: string) => void;
+  onRetryUpload?: (localId: string) => void;
+  onClearAllDrafts?: () => void;
+  hasUploadingDrafts?: boolean;
+  hasFailedDrafts?: boolean;
+  hasReadyDrafts?: boolean;
 }
 
 interface MentionMatch {
@@ -152,6 +165,16 @@ export const MessageInput = React.forwardRef<
     sendOnEnter = true,
     disabled = false,
     className,
+    // Multi-file upload queue
+    uploadDrafts,
+    onAddFiles,
+    onRemoveDraft,
+    onCancelUpload: onCancelQueueUpload,
+    onRetryUpload: onRetryQueueUpload,
+    onClearAllDrafts,
+    hasUploadingDrafts = false,
+    hasFailedDrafts = false,
+    hasReadyDrafts = false,
   },
   ref,
 ) {
@@ -194,8 +217,16 @@ export const MessageInput = React.forwardRef<
   // Expose selectFile to parent (e.g. for drag-and-drop)
   React.useImperativeHandle(
     ref,
-    () => ({ addFile: (file: File) => selectFile(file) }),
-    [selectFile],
+    () => ({
+      addFile: (file: File) => {
+        if (onAddFiles) {
+          onAddFiles([file]);
+        } else {
+          selectFile(file);
+        }
+      },
+    }),
+    [onAddFiles, selectFile],
   );
 
   const { notifyInput, notifyBlur, stopTypingNow } = useTypingIndicator({
@@ -250,13 +281,18 @@ export const MessageInput = React.forwardRef<
 
   const handleFileInputChange = React.useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
+      const files = event.target.files;
+      if (!files || files.length === 0) return;
 
-      selectFile(file);
+      if (onAddFiles) {
+        onAddFiles(Array.from(files));
+      } else {
+        const file = files[0];
+        if (file) selectFile(file);
+      }
       event.target.value = "";
     },
-    [selectFile],
+    [onAddFiles, selectFile],
   );
 
   const handleAttachmentSelect = React.useCallback(
@@ -325,13 +361,39 @@ export const MessageInput = React.forwardRef<
   }, [sendAttachmentMessage, t]);
 
   const handlePrimarySend = React.useCallback(async () => {
+    // Multi-file queue path: send text (attachments handled by ChatWindow)
+    const hasQueueDrafts = (uploadDrafts?.length ?? 0) > 0;
+    if (hasQueueDrafts && hasReadyDrafts) {
+      const content = value.trim();
+      // Call onSend — ChatWindow.handleSend gathers ready metas
+      await onSend(content || undefined);
+      onChange("");
+      clearMentionState();
+      stopTypingNow();
+      setLiveRegionMessage(t("chat:composer.sentAnnouncement"));
+      return;
+    }
+
+    // Legacy single-file path
     if (selectedFile) {
       await handleSendAttachment();
       return;
     }
 
     await handleSendText();
-  }, [handleSendAttachment, handleSendText, selectedFile]);
+  }, [
+    clearMentionState,
+    handleSendAttachment,
+    handleSendText,
+    hasReadyDrafts,
+    onChange,
+    onSend,
+    selectedFile,
+    stopTypingNow,
+    t,
+    uploadDrafts?.length,
+    value,
+  ]);
 
   const handleInputChange = React.useCallback(
     (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -503,9 +565,15 @@ export const MessageInput = React.forwardRef<
   }, [stopTypingNow]);
 
   const hasText = value.trim().length > 0;
-  const canSend = selectedFile
-    ? !disabled && !isUploading && !isSending
-    : !disabled && !isSending && hasText;
+  const hasQueueDrafts = (uploadDrafts?.length ?? 0) > 0;
+  const canSend = hasQueueDrafts
+    ? !disabled &&
+      !isSending &&
+      !hasUploadingDrafts &&
+      (hasReadyDrafts || hasText)
+    : selectedFile
+      ? !disabled && !isUploading && !isSending
+      : !disabled && !isSending && hasText;
   const disableToolbar = disabled || isUploading;
   const sendButtonLabel =
     isUploading || isSending
@@ -530,6 +598,7 @@ export const MessageInput = React.forwardRef<
         onChange={handleFileInputChange}
         aria-hidden="true"
         tabIndex={-1}
+        {...(onAddFiles ? { multiple: true } : {})}
       />
 
       {mode === "reply" && replyToMessage && (
@@ -588,7 +657,26 @@ export const MessageInput = React.forwardRef<
         </div>
       )}
 
-      {selectedFile && (
+      {/* Multi-file upload tray */}
+      {uploadDrafts &&
+        uploadDrafts.length > 0 &&
+        onRemoveDraft &&
+        onCancelQueueUpload &&
+        onRetryQueueUpload &&
+        onClearAllDrafts && (
+          <AttachmentTray
+            drafts={uploadDrafts}
+            onRemove={onRemoveDraft}
+            onCancel={onCancelQueueUpload}
+            onRetry={onRetryQueueUpload}
+            onClearAll={onClearAllDrafts}
+            hasUploadingDrafts={hasUploadingDrafts}
+            hasFailedDrafts={hasFailedDrafts}
+          />
+        )}
+
+      {/* Legacy single-file preview (hidden when queue is active) */}
+      {!hasQueueDrafts && selectedFile && (
         <AttachmentPreview
           selectedFile={selectedFile}
           previewUrl={previewUrl}

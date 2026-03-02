@@ -72,7 +72,7 @@ interface ChatState {
     conversationId: string,
     content: string,
     type?: MessageType,
-    fileMeta?: Attachment,
+    fileMeta?: Attachment | Attachment[],
     replyToId?: string,
   ) => Promise<void>;
   resendMessage: (conversationId: string, message: Message) => Promise<void>;
@@ -144,7 +144,9 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
 
 const isMessageDebugEnabled = (): boolean => {
   if (typeof window === "undefined") return false;
-  return new URLSearchParams(window.location.search).get("debugMessages") === "1";
+  return (
+    new URLSearchParams(window.location.search).get("debugMessages") === "1"
+  );
 };
 
 const asStringValue = (value: unknown): string | undefined =>
@@ -552,7 +554,8 @@ const findMessageByIdentityIndex = (
     const itemLocalId = typeof item.localId === "string" ? item.localId : "";
 
     return (
-      (targetId.length > 0 && (itemId === targetId || itemLocalId === targetId)) ||
+      (targetId.length > 0 &&
+        (itemId === targetId || itemLocalId === targetId)) ||
       (targetLocalId.length > 0 &&
         (itemId === targetLocalId || itemLocalId === targetLocalId))
     );
@@ -593,9 +596,7 @@ const normalizeMessagesResponse = (
     key: string,
   ): boolean | null => {
     if (!source) return null;
-    return typeof source[key] === "boolean"
-      ? (source[key] as boolean)
-      : null;
+    return typeof source[key] === "boolean" ? (source[key] as boolean) : null;
   };
 
   const resolveFlags = (
@@ -1123,9 +1124,8 @@ export const useChatStore = create<ChatState>()(
                 after: earlier,
               });
               const retryUrl = `/rooms/${conversationId}/messages?${retryParams.toString()}`;
-              const retryResp = await apiClient.get<ApiResponse<unknown>>(
-                retryUrl,
-              );
+              const retryResp =
+                await apiClient.get<ApiResponse<unknown>>(retryUrl);
               const retryPayload = unwrapApiSuccess(retryResp.data);
               const retryMeta =
                 asRecord(asRecord(retryResp.data)?.meta) ?? responseMeta;
@@ -1250,7 +1250,14 @@ export const useChatStore = create<ChatState>()(
       replyToId,
     ) => {
       const text = content.trim();
-      const messageContent = text || fileMeta?.fileName || "";
+      // Normalise fileMeta to an array (or undefined)
+      const fileMetaArr: Attachment[] | undefined = fileMeta
+        ? Array.isArray(fileMeta)
+          ? fileMeta
+          : [fileMeta]
+        : undefined;
+      const firstFileName = fileMetaArr?.[0]?.fileName;
+      const messageContent = text || firstFileName || "";
       if (!messageContent) return;
 
       const sender = resolveSenderIdentity();
@@ -1272,14 +1279,14 @@ export const useChatStore = create<ChatState>()(
         isSystem: false,
         createdAt: new Date(),
         ...(replyToId ? { replyTo: replyToId } : {}),
-        ...(fileMeta ? { attachments: [fileMeta] } : {}),
+        ...(fileMetaArr?.length ? { attachments: fileMetaArr } : {}),
       };
 
       get().addMessage(conversationId, tempMessage);
 
       try {
-        const attachments = fileMeta
-          ? toAttachmentPayload([fileMeta])
+        const attachments = fileMetaArr
+          ? toAttachmentPayload(fileMetaArr)
           : undefined;
         const response = await apiClient.post<ApiResponse<Message>>(
           `/rooms/${conversationId}/messages`,

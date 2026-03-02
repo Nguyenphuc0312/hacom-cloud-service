@@ -30,6 +30,12 @@
     "fileTooLarge": "Tệp vượt quá giới hạn dung lượng",
     "unsupportedType": "Định dạng tệp không hỗ trợ",
     "uploadCanceled": "Đã hủy tải lên",
-    "uploadFailed": "Tải lên thất bại, vui lòng thử lại"
+    "uploadFailed": "Tải lên thất bại, vui lòng thử lại",
+    "noConversation": "Chưa chọn cuộc trò chuyện",
+    "cancelled": "Đã hủy tải lên",
+    "tooLarge": "Tệp quá lớn",
+    "tooManyFiles": "Tối đa {{max}} tệp",
+    "fileTooLargeNamed": "{{name}} quá lớn",
+    "totalSizeTooLarge": "Tổng dung lượng tệp vượt giới hạn"
   }
 }
