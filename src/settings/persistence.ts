@@ -27,8 +27,8 @@ export const loadSettings = (): SettingsSchema => {
 
     const parsed = JSON.parse(raw) as SettingsSchema;
 
-    // Version mismatch → migrate
-    if (parsed.version !== SETTINGS_VERSION) {
+    // Schema version mismatch → migrate structure
+    if (!parsed.schemaVersion || parsed.schemaVersion !== SETTINGS_VERSION) {
       return migrate(parsed);
     }
 
@@ -80,7 +80,8 @@ const migrate = (old: Partial<SettingsSchema>): SettingsSchema => {
     },
     privacy: { ...defaultSettings.privacy, ...(old.privacy ?? {}) },
     chat: { ...defaultSettings.chat, ...(old.chat ?? {}) },
-    version: SETTINGS_VERSION,
+    version: old.version ?? defaultSettings.version,
+    schemaVersion: SETTINGS_VERSION,
     updatedAt: new Date().toISOString(),
   };
 

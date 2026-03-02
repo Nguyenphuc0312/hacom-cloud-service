@@ -18,6 +18,10 @@ export type {
   SettingsPatch,
   SettingsSection,
   ServerSettingsDto,
+  UserSettingsUpdatedPayload,
+  SettingsPatchDto,
+  SettingsResponseDto,
+  SettingsUpdateResponseDto,
 } from "./types";
 
 // Defaults & constants

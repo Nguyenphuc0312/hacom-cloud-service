@@ -7,11 +7,14 @@
  *   only touches appearance slice → minimal re-renders via zustand selectors.
  * - Optimistic local update → debounced server sync.
  * - On login: fetch server prefs → merge → save.
+ * - WS event handler: `applyRemoteUpdate()` for multi-device sync.
+ * - Version-aware: server version used for optimistic locking.
  */
 
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import type { SettingsSchema, SettingsPatch, SettingsSection } from "./types";
+import type { UserSettingsUpdatedPayload } from "@hacom/chat-shared-types";
 import { defaultSettings } from "./defaults";
 import { loadSettings, saveSettings } from "./persistence";
 import { syncSettingsToServer, fetchSettingsFromServer } from "./sync";
@@ -35,6 +38,13 @@ interface SettingsState extends SettingsSchema {
    * Called once on login / app init when authenticated.
    */
   syncFromServer: () => Promise<void>;
+
+  /**
+   * Apply a remote settings update from WS event.
+   * Called when USER_SETTINGS_UPDATED event is received.
+   * Uses version to ensure idempotency (ignores stale events).
+   */
+  applyRemoteUpdate: (payload: UserSettingsUpdatedPayload) => void;
 }
 
 // ============================================
@@ -51,6 +61,14 @@ const debouncedServerSync = (settings: SettingsSchema) => {
       console.warn("[settingsStore] server sync failed", err),
     );
   }, SYNC_DEBOUNCE_MS);
+};
+
+/** Cancel any pending debounced sync (e.g. when receiving remote update) */
+const cancelPendingSync = () => {
+  if (syncTimer) {
+    clearTimeout(syncTimer);
+    syncTimer = null;
+  }
 };
 
 // ============================================
@@ -106,7 +124,7 @@ export const useSettingsStore = create<SettingsState>()(
         }
 
         const local = get();
-        // Conflict resolution: server wins if newer
+        // Conflict resolution: server wins if newer version
         const merged = mergeSettings(local, remote);
         saveSettings(merged);
         set({ ...merged, isSyncing: false });
@@ -115,6 +133,35 @@ export const useSettingsStore = create<SettingsState>()(
       } finally {
         set({ isSyncing: false });
       }
+    },
+
+    applyRemoteUpdate: (payload: UserSettingsUpdatedPayload) => {
+      const current = get();
+
+      // Idempotency: ignore events with version <= local version
+      if (payload.version <= current.version) {
+        console.debug("[settingsStore] Ignoring stale settings event", {
+          remoteVersion: payload.version,
+          localVersion: current.version,
+        });
+        return;
+      }
+
+      // Cancel any pending debounced sync to avoid overwriting the remote update
+      cancelPendingSync();
+
+      // Apply full settings snapshot from the event
+      const updated: SettingsSchema = {
+        ...payload.settings,
+      };
+
+      saveSettings(updated);
+      set(updated);
+
+      console.info("[settingsStore] Applied remote settings update", {
+        version: payload.version,
+        changedFields: payload.changedFields,
+      });
     },
   })),
 );
@@ -125,23 +172,29 @@ export const useSettingsStore = create<SettingsState>()(
 
 /**
  * Merge local and remote settings.
- * Strategy: last-write-wins per-section based on updatedAt.
- * If timestamps equal or remote newer → remote wins.
+ * Strategy: higher version wins (server is source of truth for version).
+ * If versions equal, use updatedAt timestamp as tiebreaker.
  */
 const mergeSettings = (
   local: SettingsSchema,
   remote: SettingsSchema,
 ): SettingsSchema => {
-  const localTs = new Date(local.updatedAt).getTime();
-  const remoteTs = new Date(remote.updatedAt).getTime();
-
-  if (remoteTs >= localTs) {
-    // Remote is newer — take remote but preserve version
-    return { ...remote, version: local.version };
+  // Server version is always authoritative
+  if (remote.version > local.version) {
+    return remote;
   }
 
-  // Local is newer — keep local
-  return local;
+  if (remote.version === local.version) {
+    // Same version → use timestamp as tiebreaker
+    const localTs = new Date(local.updatedAt).getTime();
+    const remoteTs = new Date(remote.updatedAt).getTime();
+    if (remoteTs >= localTs) {
+      return remote;
+    }
+  }
+
+  // Local is newer — keep local but adopt server version for next PATCH
+  return { ...local, version: Math.max(local.version, remote.version) };
 };
 
 // ============================================

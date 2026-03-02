@@ -213,12 +213,9 @@ export const useWebSocket = (
 
       // Fetch missed messages in pages to avoid dropping backlog on long disconnects.
       for (let attempts = 0; attempts < 10; attempts += 1) {
-        const result = await fetchMessages(
-          roomId,
-          undefined,
-          afterCursor.at,
-          { afterId: afterCursor.id },
-        );
+        const result = await fetchMessages(roomId, undefined, afterCursor.at, {
+          afterId: afterCursor.id,
+        });
 
         if (!result.loaded || !result.hasMore) {
           break;
@@ -409,22 +406,25 @@ export const useWebSocket = (
     );
     unsubscribersRef.current.push(unsubRead);
 
-    const unsubMemberUpdated = socket.on(WebSocketEvents.MEMBER_UPDATED, (data) => {
-      const payload = asRecord(data);
-      if (!payload) return;
+    const unsubMemberUpdated = socket.on(
+      WebSocketEvents.MEMBER_UPDATED,
+      (data) => {
+        const payload = asRecord(data);
+        if (!payload) return;
 
-      const conversationId = getConversationId(payload);
-      if (!conversationId) return;
+        const conversationId = getConversationId(payload);
+        if (!conversationId) return;
 
-      void conversationApi
-        .getConversationById(conversationId)
-        .then((response) => {
-          updateConversation(conversationId, unwrapApiSuccess(response));
-        })
-        .catch(() => {
-          // no-op: best effort refresh member/role changes
-        });
-    });
+        void conversationApi
+          .getConversationById(conversationId)
+          .then((response) => {
+            updateConversation(conversationId, unwrapApiSuccess(response));
+          })
+          .catch(() => {
+            // no-op: best effort refresh member/role changes
+          });
+      },
+    );
     unsubscribersRef.current.push(unsubMemberUpdated);
 
     const unsubConversationDeleted = socket.on(
@@ -437,7 +437,8 @@ export const useWebSocket = (
         if (!conversationId) return;
 
         const currentUserId = useAuthStore.getState().user?.id ?? null;
-        const deletedBy = asString(payload.deletedBy) ?? asString(payload.userId);
+        const deletedBy =
+          asString(payload.deletedBy) ?? asString(payload.userId);
         if (deletedBy && currentUserId && deletedBy !== currentUserId) {
           return;
         }
@@ -515,6 +516,31 @@ export const useWebSocket = (
       });
     });
     unsubscribersRef.current.push(unsubSyncComplete);
+
+    // Settings update from another device / admin
+    const unsubSettingsUpdated = socket.on(
+      WebSocketEvents.USER_SETTINGS_UPDATED,
+      (data) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+
+        // Validate required fields
+        const version =
+          typeof payload.version === "number" ? payload.version : null;
+        const settings = asRecord(payload.settings);
+        if (version === null || !settings) return;
+
+        // Import dynamically to avoid circular deps at module init time
+        import("../settings/settingsStore").then(({ useSettingsStore }) => {
+          useSettingsStore
+            .getState()
+            .applyRemoteUpdate(
+              payload as unknown as import("@hacom/chat-shared-types").UserSettingsUpdatedPayload,
+            );
+        });
+      },
+    );
+    unsubscribersRef.current.push(unsubSettingsUpdated);
 
     return socket;
   }, [

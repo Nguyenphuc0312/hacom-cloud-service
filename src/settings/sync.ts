@@ -1,17 +1,24 @@
 /**
  * @fileoverview Server sync service for settings
  *
- * GET  /users/settings  → fetch preferences from backend
- * PATCH /users/settings → push local preferences to backend
+ * GET  /me/settings  → fetch preferences from backend
+ * PATCH /me/settings → push local preferences to backend (with optimistic locking)
  *
  * The backend may not have these endpoints yet. The service is resilient:
  * if the request 404s we silently ignore so offline-first still works.
+ *
+ * Optimistic locking: PATCH sends the current `version` number.
+ * If another device updated in the meantime, the server returns 409.
+ * On 409 we refetch and let the store merge via version comparison.
  */
 
 import apiClient from "../lib/axios";
-import type { ApiResponse } from "@hacom/chat-shared-types";
-import type { SettingsSchema, ServerSettingsDto } from "./types";
-import { SETTINGS_VERSION } from "./defaults";
+import type {
+  ApiResponse,
+  SettingsResponseDto,
+  SettingsPatchDto,
+} from "@hacom/chat-shared-types";
+import type { SettingsSchema } from "./types";
 import { getAccessToken } from "../services/tokenService";
 
 // ============================================
@@ -29,16 +36,12 @@ export const fetchSettingsFromServer =
 
     try {
       const res =
-        await apiClient.get<ApiResponse<ServerSettingsDto>>("/users/settings");
+        await apiClient.get<ApiResponse<SettingsResponseDto>>("/me/settings");
 
       if (!res.data.success || !res.data.data) return null;
 
-      const dto = res.data.data;
-      return {
-        ...dto.settings,
-        version: SETTINGS_VERSION,
-        updatedAt: dto.updatedAt,
-      } as SettingsSchema;
+      // SettingsResponseDto wraps a full SettingsSchema
+      return res.data.data.settings;
     } catch (err: unknown) {
       // 404 = endpoint not deployed yet → silently return null
       const status = (err as { response?: { status?: number } })?.response
@@ -54,8 +57,10 @@ export const fetchSettingsFromServer =
 // ============================================
 
 /**
- * Push local settings to backend.
- * Fire-and-forget by default (caller doesn't await in hot path).
+ * Push local settings to backend using SettingsPatchDto format.
+ * Includes current `version` for optimistic locking.
+ *
+ * On 409 Conflict → refetch and let the store re-merge.
  */
 export const syncSettingsToServer = async (
   settings: SettingsSchema,
@@ -64,18 +69,34 @@ export const syncSettingsToServer = async (
   if (!token) return; // not logged in
 
   try {
-    const { version: _, ...rest } = settings;
-    await apiClient.patch("/users/settings", {
-      settings: rest,
-      updatedAt: settings.updatedAt,
-    } satisfies Omit<ServerSettingsDto, "settings"> & {
-      settings: Omit<SettingsSchema, "version">;
-    });
+    const patchBody: SettingsPatchDto = {
+      version: settings.version,
+      language: settings.language,
+      appearance: settings.appearance,
+      notifications: settings.notifications,
+      privacy: settings.privacy,
+      chat: settings.chat,
+    };
+
+    await apiClient.patch("/me/settings", patchBody);
   } catch (err: unknown) {
     const status = (err as { response?: { status?: number } })?.response
       ?.status;
+
     // 404 = endpoint not available yet — swallow silently
     if (status === 404) return;
+
+    // 409 = version conflict → refetch server state, store will re-merge
+    if (status === 409) {
+      console.warn(
+        "[sync] Settings version conflict (409). Refetching from server…",
+      );
+      // Dynamically import to avoid circular dependency
+      const { useSettingsStore } = await import("./settingsStore");
+      void useSettingsStore.getState().syncFromServer();
+      return;
+    }
+
     throw err;
   }
 };
