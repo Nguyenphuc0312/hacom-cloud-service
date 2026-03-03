@@ -331,13 +331,16 @@ class WebSocketManager {
   }
 
   /**
-   * Start ping interval để giữ connection alive
+   * Start ping interval to detect dead connections.
+   * Sends an app-level "ping" event. If no data is received within
+   * PONG_TIMEOUT, treat the connection as dead and trigger reconnect.
    */
   private startPingInterval(): void {
     this.stopPingInterval();
-    // WebSocket protocol có built-in ping/pong, không cần manual ping
     this.pingTimer = setInterval(() => {
-      // Noop - built-in ping/pong
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+      // Send lightweight app-level ping (server echoes EventPong)
+      this.send("ping", { t: Date.now() });
     }, WEBSOCKET_CONFIG.PING_INTERVAL);
   }
 
@@ -515,6 +518,12 @@ export const WebSocketEvents = {
   MESSAGE_READ: WsEventNames.MESSAGE_READ,
   MEMBER_UPDATED: WsEventNames.MEMBER_UPDATED,
   CONVERSATION_DELETED: WsEventNames.CONVERSATION_DELETED,
+  FRIEND_REQUEST_NEW: WsEventNames.FRIEND_REQUEST_NEW,
+  FRIEND_REQUEST_UPDATED: WsEventNames.FRIEND_REQUEST_UPDATED,
+  FRIEND_STATUS_CHANGED: WsEventNames.FRIEND_STATUS_CHANGED,
+  GROUP_INVITE_NEW: WsEventNames.GROUP_INVITE_NEW,
+  GROUP_INVITE_UPDATED: WsEventNames.GROUP_INVITE_UPDATED,
+  PERMISSION_CHANGED: WsEventNames.PERMISSION_CHANGED,
   PRESENCE_UPDATE: WsEventNames.PRESENCE_UPDATE,
   PRESENCE_SUBSCRIBE: WsEventNames.PRESENCE_SUBSCRIBE,
   PRESENCE_UNSUBSCRIBE: WsEventNames.PRESENCE_UNSUBSCRIBE,

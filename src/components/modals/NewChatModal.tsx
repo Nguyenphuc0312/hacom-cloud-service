@@ -10,7 +10,7 @@ import {
 import { Modal, Input, Button, Spinner, EmptySearchResults } from "../ui";
 import { Avatar } from "../common/Avatar";
 import { useDebounce } from "../../hooks";
-import { userApi } from "../../services/api";
+import { friendshipApi, userApi } from "../../services/api";
 import { toast } from "../ui";
 import type { User as UserType } from "../../types";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
@@ -22,6 +22,8 @@ interface User {
   lastName?: string;
   avatar?: string;
   status?: UserType["status"] | "online" | "offline" | "away" | "dnd";
+  isFriend?: boolean;
+  friendshipStatus?: "none" | "pending" | "accepted" | "declined" | "canceled" | "blocked";
 }
 
 interface NewChatModalProps {
@@ -51,9 +53,17 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
   const [isGroupMode, setIsGroupMode] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
+  const [pendingFriendRequestIds, setPendingFriendRequestIds] = useState<
+    Set<string>
+  >(new Set());
   const isBusy = isSubmitting || externalSubmitting;
 
   const debouncedQuery = useDebounce(searchQuery, 300);
+
+  const canStartDirectChat = useCallback((user: User): boolean => {
+    if (user.isFriend === true) return true;
+    return user.friendshipStatus === "accepted";
+  }, []);
 
   const searchUsers = useCallback(async (query: string) => {
     if (!query.trim() || query.length < 2) {
@@ -64,14 +74,23 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
     setIsLoading(true);
     try {
       const response = await userApi.searchUsers(query);
-      const users = unwrapApiSuccess(response);
-      const normalizedUsers = users.map((user) => ({
+      const payload = unwrapApiSuccess(response) as
+        | User[]
+        | { data?: User[] };
+      const userList = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.data)
+          ? payload.data
+          : [];
+      const normalizedUsers = userList.map((user) => ({
         id: user.id,
         username: user.username,
         firstName: user.firstName,
         lastName: user.lastName,
         avatar: user.avatar,
         status: user.status,
+        isFriend: user.isFriend,
+        friendshipStatus: user.friendshipStatus || "none",
       }));
       setUsers(normalizedUsers);
     } catch (error) {
@@ -96,6 +115,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
       setGroupName("");
       setIsSubmitting(false);
       setPendingUserId(null);
+      setPendingFriendRequestIds(new Set());
     }
   }, [isOpen]);
 
@@ -111,6 +131,16 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
       return;
     }
 
+    if (!canStartDirectChat(user)) {
+      toast.error(
+        t("profile:newChatModal.friendRequired", {
+          defaultValue:
+            "You can only start direct chat with friends. Send a friend request first.",
+        }),
+      );
+      return;
+    }
+
     setPendingUserId(user.id);
     setIsSubmitting(true);
     try {
@@ -121,6 +151,44 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
       setIsSubmitting(false);
     }
   };
+
+  const handleSendFriendRequest = useCallback(
+    async (userId: string) => {
+      if (isBusy) return;
+
+      setPendingFriendRequestIds((prev) => new Set(prev).add(userId));
+      try {
+        await friendshipApi.sendFriendRequest(userId);
+        setUsers((prev) =>
+          prev.map((user) =>
+            user.id === userId
+              ? { ...user, friendshipStatus: "pending" as const }
+              : user,
+          ),
+        );
+        toast.success(
+          t("profile:newChatModal.friendRequestSent", {
+            defaultValue: "Friend request sent",
+          }),
+        );
+      } catch (error) {
+        const apiError = extractApiError(error);
+        toast.error(
+          apiError.message ||
+            t("profile:newChatModal.friendRequestFailed", {
+              defaultValue: "Cannot send friend request",
+            }),
+        );
+      } finally {
+        setPendingFriendRequestIds((prev) => {
+          const next = new Set(prev);
+          next.delete(userId);
+          return next;
+        });
+      }
+    },
+    [isBusy, t],
+  );
 
   const handleCreateGroup = async () => {
     if (selectedUsers.length < 1) {
@@ -259,6 +327,9 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
               {users.map((user) => {
                 const isSelected = selectedUsers.some((u) => u.id === user.id);
                 const isPending = pendingUserId === user.id;
+                const isFriendRequestPending = pendingFriendRequestIds.has(
+                  user.id,
+                );
                 return (
                   <button
                     type="button"
@@ -289,6 +360,33 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                     </div>
                     {!isGroupMode && isPending && (
                       <Spinner size="sm" variant="primary" className="shrink-0" />
+                    )}
+                    {!isGroupMode && !canStartDirectChat(user) && !isPending && (
+                      user.friendshipStatus === "pending" ? (
+                        <span className="rounded-lg bg-surface-overlay px-2 py-1 text-xs text-text-muted">
+                          {t("profile:newChatModal.requestSent", {
+                            defaultValue: "Requested",
+                          })}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={isFriendRequestPending || isBusy}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleSendFriendRequest(user.id);
+                          }}
+                          className="rounded-lg bg-primary/15 px-2 py-1 text-xs font-medium text-primary disabled:opacity-60"
+                        >
+                          {isFriendRequestPending
+                            ? t("profile:newChatModal.sending", {
+                                defaultValue: "Sending...",
+                              })
+                            : t("profile:newChatModal.addFriend", {
+                                defaultValue: "Add friend",
+                              })}
+                        </button>
+                      )
                     )}
                     {isGroupMode && (
                       <div

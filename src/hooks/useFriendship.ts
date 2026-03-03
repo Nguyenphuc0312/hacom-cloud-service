@@ -3,9 +3,9 @@
  * Friendship status, sent requests, pending count, block/unblock management.
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { friendshipApi } from "../services/api";
-import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
+import { unwrapApiSuccess } from "../lib/apiContract";
 import type { User } from "../stores/authStore";
 
 type FriendshipStatusType =
@@ -13,6 +13,7 @@ type FriendshipStatusType =
   | "pending"
   | "accepted"
   | "declined"
+  | "canceled"
   | "blocked";
 
 interface SentRequest {
@@ -55,12 +56,23 @@ export const useFriendship = (): UseFriendshipReturn => {
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [isBlockedLoading, setIsBlockedLoading] = useState(false);
 
+  const extractList = (payload: unknown): unknown[] => {
+    if (Array.isArray(payload)) return payload;
+    if (payload && typeof payload === "object") {
+      const record = payload as Record<string, unknown>;
+      if (Array.isArray(record.data)) return record.data as unknown[];
+      if (Array.isArray(record.requests)) return record.requests as unknown[];
+      if (Array.isArray(record.users)) return record.users as unknown[];
+    }
+    return [];
+  };
+
   const fetchSentRequests = useCallback(async () => {
     setIsSentLoading(true);
     try {
       const response = await friendshipApi.getSentRequests();
-      const data = unwrapApiSuccess(response);
-      setSentRequests(data.requests ?? []);
+      const payload = unwrapApiSuccess(response);
+      setSentRequests(extractList(payload) as SentRequest[]);
     } catch {
       // Silently fail - UI shows empty state
     } finally {
@@ -87,8 +99,11 @@ export const useFriendship = (): UseFriendshipReturn => {
   const fetchPendingCount = useCallback(async () => {
     try {
       const response = await friendshipApi.getPendingCount();
-      const data = unwrapApiSuccess(response);
-      setPendingCount(data.count ?? 0);
+      const payload = unwrapApiSuccess(response) as
+        | { count?: number; data?: { count?: number } }
+        | undefined;
+      const count = payload?.count ?? payload?.data?.count ?? 0;
+      setPendingCount(count);
     } catch {
       // Silently fail
     }
@@ -98,8 +113,8 @@ export const useFriendship = (): UseFriendshipReturn => {
     setIsBlockedLoading(true);
     try {
       const response = await friendshipApi.getBlockedUsers();
-      const data = unwrapApiSuccess(response);
-      setBlockedUsers((data.users ?? []) as BlockedUser[]);
+      const payload = unwrapApiSuccess(response);
+      setBlockedUsers(extractList(payload) as BlockedUser[]);
     } catch {
       // Silently fail
     } finally {
@@ -138,9 +153,12 @@ export const useFriendship = (): UseFriendshipReturn => {
     ): Promise<{ status: FriendshipStatusType; friendshipId?: string }> => {
       try {
         const response = await friendshipApi.getFriendshipStatus(userId);
-        const data = unwrapApiSuccess(response);
+        const data = unwrapApiSuccess(response) as {
+          status?: FriendshipStatusType;
+          friendship?: { id?: string };
+        };
         return {
-          status: data.status,
+          status: data.status || "none",
           friendshipId: data.friendship?.id,
         };
       } catch {

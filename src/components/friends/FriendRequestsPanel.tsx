@@ -69,8 +69,18 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
     setIsLoadingReceived(true);
     try {
       const response = await friendshipApi.getPendingRequests();
-      const data = unwrapApiSuccess(response);
-      setReceivedRequests(Array.isArray(data) ? data : []);
+      const payload = unwrapApiSuccess(response) as
+        | FriendRequest[]
+        | { data?: FriendRequest[]; requests?: FriendRequest[] };
+      if (Array.isArray(payload)) {
+        setReceivedRequests(payload);
+      } else if (Array.isArray(payload?.data)) {
+        setReceivedRequests(payload.data);
+      } else if (Array.isArray(payload?.requests)) {
+        setReceivedRequests(payload.requests);
+      } else {
+        setReceivedRequests([]);
+      }
     } catch {
       // silent fail — empty state shown
     } finally {

@@ -707,6 +707,15 @@ export const ChatPage: React.FC = () => {
         });
         selectConversation(roomId);
         navigate(`/chat/${roomId}`);
+        const roomPayloadRecord = roomPayload as unknown as {
+          invitedMemberIds?: unknown[];
+        };
+        const invited = Array.isArray(roomPayloadRecord.invitedMemberIds)
+          ? roomPayloadRecord.invitedMemberIds.length
+          : 0;
+        if (invited > 0) {
+          toast.info(`${invited} member invite(s) are pending acceptance`);
+        }
       } catch (error) {
         const apiError = extractApiError(error);
         console.error("Create group room failed:", apiError);

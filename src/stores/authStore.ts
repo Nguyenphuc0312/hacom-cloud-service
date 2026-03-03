@@ -80,7 +80,8 @@ let logoutFlowPromise: Promise<void> | null = null;
 const resolveTokens = (
   payload: AuthResponse,
 ): { accessToken: string | null; refreshToken: string | null } => {
-  const accessToken = payload.tokens?.accessToken ?? payload.accessToken ?? null;
+  const accessToken =
+    payload.tokens?.accessToken ?? payload.accessToken ?? null;
   const refreshToken =
     payload.tokens?.refreshToken ?? payload.refreshToken ?? null;
   return { accessToken, refreshToken };
@@ -89,6 +90,8 @@ const resolveTokens = (
 const resetChatState = async (): Promise<void> => {
   const { useChatStore } = await import("./chatStore");
   useChatStore.getState().reset();
+  const { usePresenceStore } = await import("./presenceStore");
+  usePresenceStore.getState().clearAll();
 };
 
 export const useAuthStore = create<AuthState>()(
@@ -162,7 +165,11 @@ export const useAuthStore = create<AuthState>()(
               throw new Error(i18n.t("error:auth.loginTokenMissing"));
             }
 
-            storeTokens(accessToken, refreshToken ?? undefined, data.rememberMe);
+            storeTokens(
+              accessToken,
+              refreshToken ?? undefined,
+              data.rememberMe,
+            );
             resetAuthFailureState();
 
             set({

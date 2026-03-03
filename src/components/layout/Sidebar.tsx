@@ -8,12 +8,14 @@ import {
 } from "@heroicons/react/24/outline";
 import { Badge } from "../common/Badge";
 import { ConfirmDialog } from "../ui";
-import { useLogout } from "../../hooks";
+import { useLogout, usePresence } from "../../hooks";
 import type {
   Conversation,
   ConversationFilter,
   UserSummary,
 } from "../../types";
+import { isDirectConversation } from "../../lib/conversationAdapter";
+import { getOtherParticipant } from "../../utils/messageHelpers";
 import { SidebarContainer } from "./sidebar/SidebarContainer";
 import { SidebarHeader } from "./sidebar/SidebarHeader";
 import { SidebarSearch } from "./sidebar/SidebarSearch";
@@ -54,6 +56,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const { logout, isLoggingOut } = useLogout();
+
+  // Collect unique DM contact user IDs so presence is subscribed globally
+  const dmUserIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const conv of conversations ?? []) {
+      if (!isDirectConversation(conv)) continue;
+      const other = getOtherParticipant(conv, currentUser.id);
+      if (other?.id) ids.add(other.id);
+    }
+    return Array.from(ids);
+  }, [conversations, currentUser.id]);
+
+  // Subscribe to presence for all DM contacts visible in the sidebar
+  usePresence({ userIds: dmUserIds, enabled: dmUserIds.length > 0 });
 
   useEffect(() => {
     if (typeof window === "undefined") return;

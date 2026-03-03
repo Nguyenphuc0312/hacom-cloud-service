@@ -282,6 +282,28 @@ export const conversationApi = {
     return conversationApi.getConversationById(conversationId);
   },
 
+  inviteToGroup: async (conversationId: string, inviteeId: string) => {
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      `/rooms/${conversationId}/invites`,
+      { inviteeId },
+    );
+    return response.data;
+  },
+
+  acceptGroupInvite: async (conversationId: string, inviteId: string) => {
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      `/rooms/${conversationId}/invites/${inviteId}/accept`,
+    );
+    return response.data;
+  },
+
+  declineGroupInvite: async (conversationId: string, inviteId: string) => {
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      `/rooms/${conversationId}/invites/${inviteId}/decline`,
+    );
+    return response.data;
+  },
+
   removeMember: async (conversationId: string, userId: string) => {
     await apiClient.delete(`/rooms/${conversationId}/members/${userId}`);
   },
@@ -592,6 +614,31 @@ export const fileApi = {
 };
 
 // ============================================
+// CONTACT API
+// ============================================
+
+export const contactApi = {
+  shareContact: async (payload: {
+    contactUserId: string;
+    targetType: "ROOM" | "USER";
+    targetId: string;
+  }) => {
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      "/contacts/share",
+      payload,
+    );
+    return response.data;
+  },
+
+  getContactCard: async (userId: string) => {
+    const response = await apiClient.get<ApiResponse<unknown>>(
+      `/contacts/${userId}`,
+    );
+    return response.data;
+  },
+};
+
+// ============================================
 // FRIENDSHIP API
 // ============================================
 
@@ -684,7 +731,13 @@ export const friendshipApi = {
   getFriendshipStatus: async (userId: string) => {
     const response = await apiClient.get<
       ApiResponse<{
-        status: "none" | "pending" | "accepted" | "declined" | "blocked";
+        status:
+          | "none"
+          | "pending"
+          | "accepted"
+          | "declined"
+          | "canceled"
+          | "blocked";
         friendship?: { id: string };
       }>
     >(`/friends/status/${userId}`);
@@ -699,5 +752,6 @@ export default {
   conversation: conversationApi,
   message: messageApi,
   file: fileApi,
+  contact: contactApi,
   friendship: friendshipApi,
 };

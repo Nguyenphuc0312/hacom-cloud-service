@@ -11,7 +11,7 @@ import { PinnedMessagesPanel } from "../chat/PinnedMessagesPanel";
 import type { MentionCandidate } from "../input/MessageInput";
 import { toast } from "../ui";
 import { useUIStore } from "../../stores";
-import { useDropZone, useUploadQueue } from "../../hooks";
+import { useDropZone, useUploadQueue, usePresence } from "../../hooks";
 import type {
   Attachment,
   Conversation,
@@ -160,6 +160,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // ── Multi-file upload queue ──
   const uploadQueue = useUploadQueue({ conversationId: conversation.id });
+
+  // ── Presence subscription: subscribe to room members' presence ──
+  usePresence({ roomId: conversation.id });
 
   // ── Drag-and-drop ──
   const { isDragActive, dropZoneProps, dismiss } = useDropZone({

@@ -15,6 +15,7 @@ import {
 import { conversationApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import { useAuthStore, useChatStore } from "../stores";
+import { toast } from "../utils/toast";
 
 interface UseWebSocketOptions {
   autoConnect?: boolean;
@@ -451,6 +452,62 @@ export const useWebSocket = (
       },
     );
     unsubscribersRef.current.push(unsubConversationDeleted);
+
+    const unsubFriendRequestNew = socket.on(
+      WebSocketEvents.FRIEND_REQUEST_NEW,
+      () => {
+        toast.info("New friend request");
+      },
+    );
+    unsubscribersRef.current.push(unsubFriendRequestNew);
+
+    const unsubFriendRequestUpdated = socket.on(
+      WebSocketEvents.FRIEND_REQUEST_UPDATED,
+      () => {
+        toast.info("Friend request updated");
+      },
+    );
+    unsubscribersRef.current.push(unsubFriendRequestUpdated);
+
+    const unsubFriendStatusChanged = socket.on(
+      WebSocketEvents.FRIEND_STATUS_CHANGED,
+      (data) => {
+        const payload = asRecord(data);
+        const status = asString(payload?.status);
+        if (status === "blocked" || status === "canceled") {
+          toast.info("Friendship status changed");
+        }
+      },
+    );
+    unsubscribersRef.current.push(unsubFriendStatusChanged);
+
+    const unsubGroupInviteNew = socket.on(
+      WebSocketEvents.GROUP_INVITE_NEW,
+      () => {
+        toast.info("You received a group invite");
+      },
+    );
+    unsubscribersRef.current.push(unsubGroupInviteNew);
+
+    const unsubGroupInviteUpdated = socket.on(
+      WebSocketEvents.GROUP_INVITE_UPDATED,
+      () => {
+        toast.info("Group invite updated");
+      },
+    );
+    unsubscribersRef.current.push(unsubGroupInviteUpdated);
+
+    const unsubPermissionChanged = socket.on(
+      WebSocketEvents.PERMISSION_CHANGED,
+      (data) => {
+        const payload = asRecord(data);
+        const allowed = typeof payload?.allowed === "boolean" ? payload.allowed : true;
+        if (!allowed) {
+          toast.warning("Direct messaging permission changed");
+        }
+      },
+    );
+    unsubscribersRef.current.push(unsubPermissionChanged);
 
     const handleTypingStart = (data: unknown) => {
       const payload = asRecord(data);
