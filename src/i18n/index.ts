@@ -15,6 +15,8 @@ export const appNamespaces = [
   "validation",
   "theme",
   "settings",
+  "friends",
+  "group",
 ] as const;
 
 if (!i18n.isInitialized) {

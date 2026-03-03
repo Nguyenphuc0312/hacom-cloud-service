@@ -92,6 +92,8 @@ const resetChatState = async (): Promise<void> => {
   useChatStore.getState().reset();
   const { usePresenceStore } = await import("./presenceStore");
   usePresenceStore.getState().clearAll();
+  const { useGroupStore } = await import("./groupStore");
+  useGroupStore.getState().reset();
 };
 
 export const useAuthStore = create<AuthState>()(

@@ -95,6 +95,21 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handler = () => {
+      void fetchReceived();
+      void fetchPendingCount();
+      void fetchSentRequests();
+    };
+
+    window.addEventListener("friend:updated", handler);
+    return () => {
+      window.removeEventListener("friend:updated", handler);
+    };
+  }, [fetchPendingCount, fetchReceived, fetchSentRequests]);
+
   const handleAccept = useCallback(
     async (requestId: string) => {
       setProcessingIds((prev) => new Set(prev).add(requestId));

@@ -28,6 +28,7 @@ import { toast } from "../components/ui";
 import {
   useAuthStore,
   useChatStore,
+  useGroupStore,
   useSelectedConversation,
   useCurrentMessages,
   useCurrentTypingStatus,
@@ -111,6 +112,7 @@ export const ChatPage: React.FC = () => {
 
   // Auth store
   const { user } = useAuthStore();
+  const setSlowModeCooldown = useGroupStore((s) => s.setSlowModeCooldown);
 
   // Chat store — stable functions + data that drives re-renders.
   // Per-conversation loading/error/hasMore are derived separately below to
@@ -354,11 +356,30 @@ export const ChatPage: React.FC = () => {
           fileMeta,
           replyTo?.id,
         );
-      } catch {
-        toast.error(t("error:chat.sendFailed"));
+      } catch (error) {
+        const apiError = extractApiError(error);
+        const details =
+          apiError.details && typeof apiError.details === "object"
+            ? (apiError.details as Record<string, unknown>)
+            : null;
+        const retryAfterSeconds =
+          details && typeof details.retryAfterSeconds === "number"
+            ? details.retryAfterSeconds
+            : null;
+
+        if (
+          (apiError.code === ErrorCode.SLOW_MODE_ACTIVE ||
+            String(apiError.code).toUpperCase() === "SLOW_MODE_ACTIVE") &&
+          retryAfterSeconds &&
+          retryAfterSeconds > 0
+        ) {
+          setSlowModeCooldown(selectedConversationId, retryAfterSeconds);
+        }
+
+        toast.error(apiError.message || t("error:chat.sendFailed"));
       }
     },
-    [selectedConversationId, storeSendMessage],
+    [selectedConversationId, setSlowModeCooldown, storeSendMessage, t],
   );
 
   const handleLoadOlderMessages = useCallback(async () => {
@@ -775,6 +796,31 @@ export const ChatPage: React.FC = () => {
     selectedConversationId,
     updateConversation,
   ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handler = (event: Event) => {
+      const customEvent = event as CustomEvent<{ userId?: string }>;
+      const userId = customEvent.detail?.userId;
+      if (!userId) return;
+
+      void handleStartChat(userId).then(() => {
+        setIsInfoPanelOpen(true);
+      });
+    };
+
+    window.addEventListener(
+      "chat:contact:view-profile",
+      handler as EventListener,
+    );
+    return () => {
+      window.removeEventListener(
+        "chat:contact:view-profile",
+        handler as EventListener,
+      );
+    };
+  }, [handleStartChat]);
 
   if (!currentUserSummary) {
     return null;

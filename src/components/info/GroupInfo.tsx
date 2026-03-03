@@ -11,6 +11,9 @@ import {
   ArrowRightOnRectangleIcon,
   MagnifyingGlassIcon,
   TrashIcon,
+  LinkIcon,
+  ClipboardDocumentIcon,
+  NoSymbolIcon,
 } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -19,8 +22,8 @@ import { Input, Spinner, toast } from "../ui";
 import type { Conversation, UserSummary } from "../../types";
 import { RoomMemberRole, UserStatus } from "../../types";
 import { useDebounce } from "../../hooks";
-import { conversationApi, userApi } from "../../services/api";
-import { useChatStore } from "../../stores";
+import { conversationApi, groupApi, userApi } from "../../services/api";
+import { useChatStore, useGroupStore } from "../../stores";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 
 interface GroupInfoProps {
@@ -130,9 +133,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   );
 
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<"members" | "media" | "files">(
-    "members",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "members" | "media" | "files" | "inviteLinks" | "joinRequests"
+  >("members");
   const [showAddMember, setShowAddMember] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<UserSummary[]>([]);
@@ -145,9 +148,32 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const [actingMemberId, setActingMemberId] = useState<string | null>(null);
   const [isRenamingGroup, setIsRenamingGroup] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState(conversation.name || "");
+  const [showCreateInviteForm, setShowCreateInviteForm] = useState(false);
+  const [inviteNameDraft, setInviteNameDraft] = useState("");
+  const [inviteUsageLimitDraft, setInviteUsageLimitDraft] = useState("");
+  const [inviteExpireAtDraft, setInviteExpireAtDraft] = useState("");
+  const [isCreatingInvite, setIsCreatingInvite] = useState(false);
+  const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
+  const [resolvingRequestId, setResolvingRequestId] = useState<string | null>(
+    null,
+  );
 
   const debouncedQuery = useDebounce(searchQuery, 300);
   const { updateConversation, removeConversation } = useChatStore();
+  const inviteLinks = useGroupStore(
+    (state) => state.inviteLinksByRoom[conversation.id] || [],
+  );
+  const joinRequests = useGroupStore(
+    (state) => state.joinRequestsByRoom[conversation.id] || [],
+  );
+  const upsertInviteLink = useGroupStore((state) => state.upsertInviteLink);
+  const markInviteLinkRevoked = useGroupStore(
+    (state) => state.markInviteLinkRevoked,
+  );
+  const markJoinRequestResolved = useGroupStore(
+    (state) => state.markJoinRequestResolved,
+  );
+  const removeJoinRequest = useGroupStore((state) => state.removeJoinRequest);
 
   const createdBy = React.useMemo(() => {
     if (!isRecord(conversation)) return undefined;
@@ -426,9 +452,198 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   const tabs = [
     { id: "members", label: t("profile:groupInfo.tabs.members") },
+    {
+      id: "inviteLinks",
+      label: t("profile:groupInfo.tabs.inviteLinks", { defaultValue: "Invite links" }),
+    },
+    {
+      id: "joinRequests",
+      label: t("profile:groupInfo.tabs.joinRequests", {
+        defaultValue: "Join requests",
+      }),
+    },
     { id: "media", label: t("profile:groupInfo.tabs.media") },
     { id: "files", label: t("profile:groupInfo.tabs.files") },
   ] as const;
+
+  const handleCreateInviteLink = useCallback(async () => {
+    if (!isAdmin || isCreatingInvite) return;
+
+    const usageLimit = inviteUsageLimitDraft.trim()
+      ? Number(inviteUsageLimitDraft.trim())
+      : undefined;
+    if (usageLimit !== undefined && (!Number.isFinite(usageLimit) || usageLimit <= 0)) {
+      toast.error(
+        t("profile:groupInfo.invite.invalidUsageLimit", {
+          defaultValue: "Usage limit must be greater than 0",
+        }),
+      );
+      return;
+    }
+
+    setIsCreatingInvite(true);
+    try {
+      const response = await groupApi.createInviteLink(conversation.id, {
+        name: inviteNameDraft.trim() || undefined,
+        expireAt: inviteExpireAtDraft
+          ? new Date(inviteExpireAtDraft).toISOString()
+          : undefined,
+        usageLimit: usageLimit ? Math.floor(usageLimit) : undefined,
+      });
+      const payload = unwrapApiSuccess(response) as Record<string, unknown>;
+      const id = typeof payload.id === "string" ? payload.id : "";
+      if (!id) {
+        throw new Error("Invite link id missing");
+      }
+
+      upsertInviteLink(conversation.id, {
+        id,
+        roomId: conversation.id,
+        name: typeof payload.name === "string" ? payload.name : undefined,
+        inviteUrl:
+          typeof payload.inviteUrl === "string" ? payload.inviteUrl : undefined,
+        token: typeof payload.token === "string" ? payload.token : undefined,
+        tokenPreview:
+          typeof payload.tokenPreview === "string" ? payload.tokenPreview : undefined,
+        usageCount:
+          typeof payload.usageCount === "number" ? payload.usageCount : 0,
+        usageLimit:
+          typeof payload.usageLimit === "number" ? payload.usageLimit : null,
+        expireAt: typeof payload.expireAt === "string" ? payload.expireAt : null,
+        revokedAt: typeof payload.revokedAt === "string" ? payload.revokedAt : null,
+        createdAt:
+          typeof payload.createdAt === "string"
+            ? payload.createdAt
+            : new Date().toISOString(),
+      });
+
+      const copyValue =
+        (typeof payload.inviteUrl === "string" && payload.inviteUrl) ||
+        (typeof payload.token === "string" && payload.token) ||
+        "";
+      if (copyValue && typeof navigator !== "undefined") {
+        void navigator.clipboard.writeText(copyValue);
+      }
+
+      setShowCreateInviteForm(false);
+      setInviteNameDraft("");
+      setInviteUsageLimitDraft("");
+      setInviteExpireAtDraft("");
+      toast.success(
+        t("profile:groupInfo.invite.created", {
+          defaultValue: "Invite link created",
+        }),
+      );
+    } catch (error) {
+      const apiError = extractApiError(error);
+      toast.error(
+        apiError.message ||
+          t("profile:groupInfo.invite.createFailed", {
+            defaultValue: "Unable to create invite link",
+          }),
+      );
+    } finally {
+      setIsCreatingInvite(false);
+    }
+  }, [
+    conversation.id,
+    inviteExpireAtDraft,
+    inviteNameDraft,
+    inviteUsageLimitDraft,
+    isAdmin,
+    isCreatingInvite,
+    t,
+    upsertInviteLink,
+  ]);
+
+  const handleCopyInviteLink = useCallback(
+    async (value?: string) => {
+      if (!value) return;
+      try {
+        await navigator.clipboard.writeText(value);
+        toast.success(
+          t("profile:groupInfo.invite.copied", { defaultValue: "Copied" }),
+        );
+      } catch {
+        toast.error(
+          t("profile:groupInfo.invite.copyFailed", {
+            defaultValue: "Copy failed",
+          }),
+        );
+      }
+    },
+    [t],
+  );
+
+  const handleRevokeInvite = useCallback(
+    async (linkId: string) => {
+      if (!isAdmin || !linkId) return;
+      setRevokingInviteId(linkId);
+      try {
+        await groupApi.revokeInviteLink(conversation.id, linkId);
+        markInviteLinkRevoked(conversation.id, linkId);
+        toast.success(
+          t("profile:groupInfo.invite.revoked", {
+            defaultValue: "Invite link revoked",
+          }),
+        );
+      } catch (error) {
+        const apiError = extractApiError(error);
+        toast.error(
+          apiError.message ||
+            t("profile:groupInfo.invite.revokeFailed", {
+              defaultValue: "Unable to revoke invite link",
+            }),
+        );
+      } finally {
+        setRevokingInviteId(null);
+      }
+    },
+    [conversation.id, isAdmin, markInviteLinkRevoked, t],
+  );
+
+  const handleResolveJoinRequest = useCallback(
+    async (requestId: string, status: "approved" | "rejected") => {
+      if (!isAdmin || !requestId) return;
+
+      setResolvingRequestId(requestId);
+      try {
+        await groupApi.resolveJoinRequest(conversation.id, requestId, status);
+        markJoinRequestResolved(conversation.id, requestId, status);
+        removeJoinRequest(conversation.id, requestId);
+        if (status === "approved") {
+          void fetchMembers();
+        }
+        toast.success(
+          status === "approved"
+            ? t("profile:groupInfo.joinRequests.approved", {
+                defaultValue: "Join request approved",
+              })
+            : t("profile:groupInfo.joinRequests.rejected", {
+                defaultValue: "Join request rejected",
+              }),
+        );
+      } catch (error) {
+        const apiError = extractApiError(error);
+        toast.error(
+          apiError.message ||
+            t("profile:groupInfo.joinRequests.resolveFailed", {
+              defaultValue: "Unable to resolve join request",
+            }),
+        );
+      } finally {
+        setResolvingRequestId(null);
+      }
+    },
+    [
+      conversation.id,
+      fetchMembers,
+      isAdmin,
+      markJoinRequestResolved,
+      removeJoinRequest,
+      t,
+    ],
+  );
 
   return (
     <div className={clsx("flex flex-col h-full bg-surface", className)}>
@@ -747,6 +962,252 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           {activeTab === "files" && (
             <div className="p-4 text-center text-text-muted text-sm">
               {t("profile:groupInfo.noSharedFiles")}
+            </div>
+          )}
+
+          {activeTab === "inviteLinks" && (
+            <div className="space-y-3 p-4">
+              {!isAdmin ? (
+                <p className="text-sm text-text-muted">
+                  {t("profile:groupInfo.invite.noPermission", {
+                    defaultValue: "Only admins can manage invite links.",
+                  })}
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateInviteForm((prev) => !prev)}
+                    className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-text-secondary hover:bg-surface-hover"
+                  >
+                    <LinkIcon className="h-4 w-4" />
+                    {t("profile:groupInfo.invite.create", {
+                      defaultValue: "Create invite link",
+                    })}
+                  </button>
+
+                  {showCreateInviteForm && (
+                    <div className="space-y-2 rounded-xl border border-border bg-surface-raised p-3">
+                      <Input
+                        type="text"
+                        value={inviteNameDraft}
+                        onChange={(event) => setInviteNameDraft(event.target.value)}
+                        placeholder={t("profile:groupInfo.invite.namePlaceholder", {
+                          defaultValue: "Name (optional)",
+                        })}
+                        disabled={isCreatingInvite}
+                      />
+                      <Input
+                        type="number"
+                        value={inviteUsageLimitDraft}
+                        onChange={(event) =>
+                          setInviteUsageLimitDraft(event.target.value)
+                        }
+                        placeholder={t(
+                          "profile:groupInfo.invite.usageLimitPlaceholder",
+                          { defaultValue: "Usage limit (optional)" },
+                        )}
+                        disabled={isCreatingInvite}
+                      />
+                      <Input
+                        type="datetime-local"
+                        value={inviteExpireAtDraft}
+                        onChange={(event) => setInviteExpireAtDraft(event.target.value)}
+                        disabled={isCreatingInvite}
+                      />
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          disabled={isCreatingInvite}
+                          onClick={() => {
+                            setShowCreateInviteForm(false);
+                            setInviteNameDraft("");
+                            setInviteUsageLimitDraft("");
+                            setInviteExpireAtDraft("");
+                          }}
+                          className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-hover"
+                        >
+                          {t("common:actions.cancel")}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isCreatingInvite}
+                          onClick={() => void handleCreateInviteLink()}
+                          className="rounded-md bg-primary px-3 py-1.5 text-sm text-text-inverse hover:opacity-90 disabled:opacity-60"
+                        >
+                          {isCreatingInvite
+                            ? t("common:loading.processing")
+                            : t("profile:groupInfo.invite.create", {
+                                defaultValue: "Create invite link",
+                              })}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {inviteLinks.length === 0 ? (
+                    <p className="text-sm text-text-muted">
+                      {t("profile:groupInfo.invite.empty", {
+                        defaultValue: "No invite links yet.",
+                      })}
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {inviteLinks.map((link) => {
+                        const shareValue = link.inviteUrl || link.token || "";
+                        const isRevoked = Boolean(link.revokedAt);
+                        return (
+                          <div
+                            key={link.id}
+                            className="rounded-xl border border-border bg-surface-raised p-3"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-text-primary">
+                                  {link.name ||
+                                    t("profile:groupInfo.invite.unnamed", {
+                                      defaultValue: "Invite link",
+                                    })}
+                                </p>
+                                <p className="mt-1 truncate text-xs text-text-muted">
+                                  {link.inviteUrl || link.tokenPreview || link.id}
+                                </p>
+                                <p className="mt-1 text-xs text-text-muted">
+                                  {t("profile:groupInfo.invite.usage", {
+                                    defaultValue: "Usage: {{count}}/{{limit}}",
+                                    count: link.usageCount || 0,
+                                    limit:
+                                      typeof link.usageLimit === "number"
+                                        ? link.usageLimit
+                                        : "unlimited",
+                                  })}
+                                </p>
+                              </div>
+                              {isRevoked && (
+                                <span className="rounded-full bg-danger/10 px-2 py-0.5 text-xs text-danger">
+                                  {t("profile:groupInfo.invite.revokedLabel", {
+                                    defaultValue: "Revoked",
+                                  })}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="mt-3 flex items-center gap-2">
+                              <button
+                                type="button"
+                                disabled={!shareValue}
+                                onClick={() => void handleCopyInviteLink(shareValue)}
+                                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover disabled:opacity-50"
+                              >
+                                <ClipboardDocumentIcon className="h-3.5 w-3.5" />
+                                {t("common:actions.copy")}
+                              </button>
+                              {!isRevoked && (
+                                <button
+                                  type="button"
+                                  disabled={revokingInviteId === link.id}
+                                  onClick={() => void handleRevokeInvite(link.id)}
+                                  className="inline-flex items-center gap-1 rounded-md border border-danger/40 px-2 py-1 text-xs text-danger hover:bg-danger/10 disabled:opacity-50"
+                                >
+                                  <NoSymbolIcon className="h-3.5 w-3.5" />
+                                  {revokingInviteId === link.id
+                                    ? t("common:loading.processing")
+                                    : t("profile:groupInfo.invite.revoke", {
+                                        defaultValue: "Revoke",
+                                      })}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "joinRequests" && (
+            <div className="space-y-2 p-4">
+              {!isAdmin ? (
+                <p className="text-sm text-text-muted">
+                  {t("profile:groupInfo.joinRequests.noPermission", {
+                    defaultValue: "Only admins can resolve join requests.",
+                  })}
+                </p>
+              ) : joinRequests.length === 0 ? (
+                <p className="text-sm text-text-muted">
+                  {t("profile:groupInfo.joinRequests.empty", {
+                    defaultValue: "No pending join requests.",
+                  })}
+                </p>
+              ) : (
+                joinRequests.map((request) => {
+                  const user =
+                    membersByUserId[request.userId] ||
+                    members.find((member) => member.id === request.userId);
+                  const displayName =
+                    user?.displayName || user?.username || request.userId;
+
+                  return (
+                    <div
+                      key={request.id}
+                      className="rounded-xl border border-border bg-surface-raised p-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar
+                          src={user?.avatar}
+                          alt={displayName}
+                          size="md"
+                          status={user?.status}
+                          showStatus
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-text-primary">
+                            {displayName}
+                          </p>
+                          <p className="truncate text-xs text-text-muted">
+                            @{user?.username || request.userId}
+                          </p>
+                          {request.note && (
+                            <p className="mt-1 text-xs text-text-secondary">
+                              {request.note}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={resolvingRequestId === request.id}
+                          onClick={() =>
+                            void handleResolveJoinRequest(request.id, "approved")
+                          }
+                          className="rounded-md bg-primary px-3 py-1.5 text-xs text-text-inverse hover:opacity-90 disabled:opacity-60"
+                        >
+                          {t("common:actions.approve", {
+                            defaultValue: "Approve",
+                          })}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={resolvingRequestId === request.id}
+                          onClick={() =>
+                            void handleResolveJoinRequest(request.id, "rejected")
+                          }
+                          className="rounded-md border border-danger/40 px-3 py-1.5 text-xs text-danger hover:bg-danger/10 disabled:opacity-60"
+                        >
+                          {t("common:actions.reject", {
+                            defaultValue: "Reject",
+                          })}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           )}
         </div>

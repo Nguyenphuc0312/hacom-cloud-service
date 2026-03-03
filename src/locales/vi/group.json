@@ -1,0 +1,13 @@
+{
+  "joinByLink": {
+    "title": "Tham gia nhóm",
+    "inviteLink": "Liên kết mời",
+    "description": "Dùng liên kết này để tham gia nhóm. Quyền truy cập phụ thuộc cài đặt nhóm.",
+    "cta": "Tham gia ngay",
+    "joined": "Đã tham gia thành công",
+    "joinedDescription": "Bạn có thể bắt đầu trò chuyện trong nhóm ngay bây giờ.",
+    "openGroup": "Mở nhóm",
+    "pending": "Yêu cầu tham gia của bạn đang chờ quản trị viên duyệt.",
+    "backToChat": "Quay lại chat"
+  }
+}

@@ -2,9 +2,11 @@
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import {
   ArrowLeftOnRectangleIcon,
   Cog6ToothIcon,
+  UserGroupIcon,
 } from "@heroicons/react/24/outline";
 import { Badge } from "../common/Badge";
 import { ConfirmDialog } from "../ui";
@@ -20,6 +22,7 @@ import { SidebarContainer } from "./sidebar/SidebarContainer";
 import { SidebarHeader } from "./sidebar/SidebarHeader";
 import { SidebarSearch } from "./sidebar/SidebarSearch";
 import { RoomList } from "./sidebar/RoomList";
+import { ROUTE_PATHS } from "../../router/paths";
 
 interface SidebarProps {
   conversations: Conversation[];
@@ -42,6 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const tabs: { id: ConversationFilter; label: string }[] = [
     { id: "all", label: t("sidebar:tabs.all") },
@@ -113,6 +117,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           value={searchQuery}
           collapsed={isCollapsed}
           onChange={setSearchQuery}
+          onSearchUsers={(query) =>
+            navigate(`${ROUTE_PATHS.FRIENDS}?q=${encodeURIComponent(query)}`)
+          }
         />
 
         {!isCollapsed && (
@@ -161,13 +168,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
 
         <div className="border-t border-border p-2">
+          {/* Friends button */}
+          <button
+            type="button"
+            onClick={() => navigate(ROUTE_PATHS.FRIENDS)}
+            className={clsx(
+              "inline-flex w-full items-center rounded-lg px-2 py-2 text-sm font-medium transition-colors",
+              location.pathname.startsWith(ROUTE_PATHS.FRIENDS)
+                ? "bg-primary/10 text-primary"
+                : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
+              isCollapsed && "justify-center px-0",
+            )}
+            aria-label={t("friends:title", { defaultValue: "Friends" })}
+          >
+            <UserGroupIcon className="h-5 w-5 shrink-0" />
+            {!isCollapsed && (
+              <span className="ml-2">
+                {t("friends:title", { defaultValue: "Friends" })}
+              </span>
+            )}
+          </button>
+
           {/* Settings button */}
           <button
             type="button"
-            onClick={() => navigate("/settings")}
+            onClick={() => navigate(ROUTE_PATHS.SETTINGS)}
             className={clsx(
               "inline-flex w-full items-center rounded-lg px-2 py-2 text-sm font-medium transition-colors",
-              "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
+              location.pathname.startsWith(ROUTE_PATHS.SETTINGS)
+                ? "bg-primary/10 text-primary"
+                : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
               isCollapsed && "justify-center px-0",
             )}
             aria-label={t("settings.pageTitle", { defaultValue: "Settings" })}

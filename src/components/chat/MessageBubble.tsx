@@ -15,7 +15,6 @@ import {
 import { Avatar } from "../common/Avatar";
 import { TextMessage } from "../message/TextMessage";
 import { ImageMessage } from "../message/ImageMessage";
-import { FileMessage } from "../message/FileMessage";
 import { FileMessageCard } from "../message/FileMessageCard";
 import { VoiceMessage } from "../message/VoiceMessage";
 import { LinkPreviewCard } from "../message/LinkPreviewCard";
@@ -70,6 +69,58 @@ const extractFirstUrl = (content: string | undefined): string | null => {
   if (!content) return null;
   const match = content.match(/https?:\/\/[^\s]+/i);
   return match ? match[0] : null;
+};
+
+interface ContactPayloadView {
+  contactUserId?: string;
+  displayName: string;
+  username?: string;
+  avatarUrl?: string;
+  phone?: string;
+  email?: string;
+  orgUnit?: string;
+  title?: string;
+}
+
+const extractContactPayload = (message: Message): ContactPayloadView | null => {
+  const metadata =
+    message.metadata && typeof message.metadata === "object"
+      ? (message.metadata as Record<string, unknown>)
+      : null;
+  if (!metadata) return null;
+
+  const pickRecord = (value: unknown): Record<string, unknown> | null =>
+    value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+
+  const candidate =
+    pickRecord(metadata.attachment) ??
+    pickRecord(metadata.contact) ??
+    pickRecord(metadata);
+
+  if (!candidate) return null;
+
+  const displayName =
+    (typeof candidate.displayName === "string" && candidate.displayName.trim()) ||
+    (typeof candidate.name === "string" && candidate.name.trim()) ||
+    "";
+  if (!displayName) return null;
+
+  const asString = (value: unknown): string | undefined =>
+    typeof value === "string" && value.trim().length > 0 ? value : undefined;
+
+  return {
+    contactUserId: asString(candidate.contactUserId) || asString(candidate.userId),
+    displayName,
+    username: asString(candidate.username),
+    avatarUrl:
+      asString(candidate.avatarUrl) ||
+      asString(candidate.avatar) ||
+      asString(candidate.photo),
+    phone: asString(candidate.phone),
+    email: asString(candidate.email),
+    orgUnit: asString(candidate.orgUnit),
+    title: asString(candidate.title),
+  };
 };
 
 const MessageStatusIcon: React.FC<{
@@ -195,11 +246,17 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     normalizedConversationType !== RoomType.PRIVATE &&
     normalizedConversationType !== RoomType.DIRECT;
   const isActionsVisibleForKeyboard = isActionsPinned || hasFocusWithin;
+  const threadCountValue = (() => {
+    const candidate = message as unknown as { threadCount?: unknown };
+    return typeof candidate.threadCount === "number" ? candidate.threadCount : 0;
+  })();
 
   const renderContent = () => {
     const attachments = Array.isArray(message.attachments)
       ? message.attachments
       : [];
+    const contactPayload =
+      message.type === MessageType.CONTACT ? extractContactPayload(message) : null;
 
     switch (message.type) {
       case MessageType.TEXT:
@@ -270,6 +327,82 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             isOwn={isOwn}
             currentUsername={currentUsername}
           />
+        );
+
+      case MessageType.CONTACT:
+        if (!contactPayload) {
+          return (
+            <TextMessage
+              content={message.content}
+              isOwn={isOwn}
+              currentUsername={currentUsername}
+            />
+          );
+        }
+
+        return (
+          <div
+            className={clsx(
+              "min-w-[14rem] space-y-2 rounded-lg border px-3 py-2",
+              isOwn
+                ? "border-text-inverse/20 bg-text-inverse/10"
+                : "border-border bg-surface-overlay/40",
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <Avatar
+                src={contactPayload.avatarUrl}
+                alt={contactPayload.displayName}
+                size="md"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">
+                  {contactPayload.displayName}
+                </p>
+                {contactPayload.username && (
+                  <p className="truncate text-xs opacity-80">
+                    @{contactPayload.username}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {(contactPayload.phone || contactPayload.email) && (
+              <div className="space-y-0.5 text-xs opacity-85">
+                {contactPayload.phone && <p>{contactPayload.phone}</p>}
+                {contactPayload.email && <p>{contactPayload.email}</p>}
+              </div>
+            )}
+
+            {(contactPayload.orgUnit || contactPayload.title) && (
+              <div className="space-y-0.5 text-xs opacity-80">
+                {contactPayload.orgUnit && <p>{contactPayload.orgUnit}</p>}
+                {contactPayload.title && <p>{contactPayload.title}</p>}
+              </div>
+            )}
+
+            {contactPayload.contactUserId && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window === "undefined") return;
+                  window.dispatchEvent(
+                    new CustomEvent("chat:contact:view-profile", {
+                      detail: { userId: contactPayload.contactUserId },
+                    }),
+                  );
+                }}
+                className={clsx(
+                  "text-xs font-medium underline-offset-2 hover:underline",
+                  isOwn ? "text-text-inverse" : "text-primary",
+                )}
+              >
+                {t("chat:contactShare.viewProfile", {
+                  defaultValue: "View profile",
+                })}
+              </button>
+            )}
+          </div>
         );
 
       default:
@@ -514,12 +647,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         )}
 
         {/* Thread indicator */}
-        {typeof (message as Record<string, unknown>).threadCount === "number" &&
-          ((message as Record<string, unknown>).threadCount as number) > 0 && (
+        {threadCountValue > 0 && (
             <ThreadIndicator
-              threadCount={
-                (message as Record<string, unknown>).threadCount as number
-              }
+              threadCount={threadCountValue}
               isOwn={isOwn}
             />
           )}

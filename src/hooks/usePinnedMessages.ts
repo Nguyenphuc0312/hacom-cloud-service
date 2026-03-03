@@ -49,6 +49,22 @@ export const usePinnedMessages = (
     }
   }, [roomId, fetchPinned]);
 
+  useEffect(() => {
+    if (!roomId || typeof window === "undefined") return;
+
+    const handler = (event: Event) => {
+      const custom = event as CustomEvent<{ roomId?: string }>;
+      if (custom.detail?.roomId === roomId) {
+        void fetchPinned();
+      }
+    };
+
+    window.addEventListener("group:pin:updated", handler as EventListener);
+    return () => {
+      window.removeEventListener("group:pin:updated", handler as EventListener);
+    };
+  }, [fetchPinned, roomId]);
+
   const togglePin = useCallback(
     async (message: Message): Promise<boolean> => {
       if (!roomId) return false;

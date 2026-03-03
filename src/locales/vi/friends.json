@@ -1,0 +1,25 @@
+{
+  "title": "Bạn bè",
+  "tabs": {
+    "search": "Tìm kiếm",
+    "requests": "Yêu cầu"
+  },
+  "searchPlaceholder": "Tìm theo username/email/số điện thoại",
+  "searchHint": "Nhập ít nhất 2 ký tự",
+  "noSearchResult": "Không tìm thấy người dùng",
+  "addFriend": "Kết bạn",
+  "message": "Nhắn tin",
+  "accept": "Chấp nhận",
+  "reject": "Từ chối",
+  "requestSent": "Đã gửi lời mời kết bạn",
+  "requestAccepted": "Đã chấp nhận lời mời",
+  "requestRejected": "Đã từ chối lời mời",
+  "requestCancelled": "Đã hủy lời mời",
+  "actionFailed": "Thao tác thất bại",
+  "status": {
+    "unavailable": "Không khả dụng"
+  },
+  "sentRequests": {
+    "cancel": "Hủy"
+  }
+}

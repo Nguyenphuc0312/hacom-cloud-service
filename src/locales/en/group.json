@@ -1,0 +1,13 @@
+{
+  "joinByLink": {
+    "title": "Join group",
+    "inviteLink": "Invite link",
+    "description": "Use this invite link to join the group. Access depends on group settings.",
+    "cta": "Join now",
+    "joined": "Joined successfully",
+    "joinedDescription": "You can start chatting in this group now.",
+    "openGroup": "Open group",
+    "pending": "Your join request is pending admin approval.",
+    "backToChat": "Back to chat"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "title": "Friends",
+  "tabs": {
+    "search": "Search",
+    "requests": "Requests"
+  },
+  "searchPlaceholder": "Search by username/email/phone",
+  "searchHint": "Enter at least 2 characters",
+  "noSearchResult": "No users found",
+  "addFriend": "Add friend",
+  "message": "Message",
+  "accept": "Accept",
+  "reject": "Decline",
+  "requestSent": "Friend request sent",
+  "requestAccepted": "Request accepted",
+  "requestRejected": "Request declined",
+  "requestCancelled": "Request cancelled",
+  "actionFailed": "Action failed",
+  "status": {
+    "unavailable": "Unavailable"
+  },
+  "sentRequests": {
+    "cancel": "Cancel"
+  }
+}

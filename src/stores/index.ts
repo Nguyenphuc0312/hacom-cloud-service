@@ -26,3 +26,6 @@ export type {
 
 export { usePresenceStore } from "./presenceStore";
 export type { PresenceState, UserPresenceInfo } from "./presenceStore";
+
+export { useGroupStore } from "./groupStore";
+export type { InviteLinkItem, JoinRequestItem } from "./groupStore";

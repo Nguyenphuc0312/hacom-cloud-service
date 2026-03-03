@@ -10,7 +10,7 @@ import { SearchPanel } from "../chat/SearchPanel";
 import { PinnedMessagesPanel } from "../chat/PinnedMessagesPanel";
 import type { MentionCandidate } from "../input/MessageInput";
 import { toast } from "../ui";
-import { useUIStore } from "../../stores";
+import { useGroupStore, useUIStore } from "../../stores";
 import { useDropZone, useUploadQueue, usePresence } from "../../hooks";
 import type {
   Attachment,
@@ -22,6 +22,8 @@ import type {
 } from "../../types";
 import { MessageType } from "../../types";
 import type { UploadedFileMeta } from "../../types/attachmentDraft";
+import { contactApi } from "../../services/api";
+import { extractApiError } from "../../lib/apiContract";
 
 // ── Convert upload queue metadata to Attachment ─────────────────────
 
@@ -101,6 +103,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const enterSelectionMode = useUIStore((s) => s.enterSelectionMode);
   const exitSelectionMode = useUIStore((s) => s.exitSelectionMode);
   const toggleMessageSelection = useUIStore((s) => s.toggleMessageSelection);
+  const slowModeUntil = useGroupStore(
+    (state) => state.slowModeUntilByRoom[conversation.id] || 0,
+  );
+  const clearSlowModeCooldown = useGroupStore((s) => s.clearSlowModeCooldown);
 
   const [inputValue, setInputValue] = React.useState("");
   const [inputMode, setInputMode] = React.useState<InputMode>("normal");
@@ -259,6 +265,37 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   // Search & pinned panel state
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [isPinnedOpen, setIsPinnedOpen] = React.useState(false);
+  const [clockTick, setClockTick] = React.useState(() => Date.now());
+
+  const slowModeRemainingSeconds = React.useMemo(() => {
+    const delta = slowModeUntil - clockTick;
+    if (delta <= 0) return 0;
+    return Math.ceil(delta / 1000);
+  }, [clockTick, slowModeUntil]);
+
+  const isSlowModeBlocked = slowModeRemainingSeconds > 0;
+
+  React.useEffect(() => {
+    if (!isSlowModeBlocked) {
+      if (slowModeUntil > 0) {
+        clearSlowModeCooldown(conversation.id);
+      }
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setClockTick(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [
+    clearSlowModeCooldown,
+    conversation.id,
+    isSlowModeBlocked,
+    slowModeUntil,
+  ]);
 
   const handleSearchClick = React.useCallback(() => {
     setIsSearchOpen((prev) => !prev);
@@ -292,6 +329,29 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         displayName: participant.displayName?.trim() || undefined,
       }));
   }, [conversation.participants, currentUser.id]);
+
+  const handleShareContact = React.useCallback(
+    async (contactUserId: string) => {
+      try {
+        await contactApi.shareContact({
+          roomId: conversation.id,
+          contactUserId,
+        });
+        toast.success(
+          t("chat:contactShare.sent", { defaultValue: "Contact shared" }),
+        );
+      } catch (error) {
+        const apiError = extractApiError(error);
+        toast.error(
+          apiError.message ||
+            t("chat:contactShare.failed", {
+              defaultValue: "Unable to share contact",
+            }),
+        );
+      }
+    },
+    [conversation.id, t],
+  );
 
   // Exit selection on conversation change
   React.useEffect(() => {
@@ -435,6 +495,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             onSend={handleSend}
             mode={inputMode}
             conversationId={conversation.id}
+            currentUserId={currentUser.id}
             mentionCandidates={mentionCandidates}
             replyToMessage={replyToMessage}
             editingMessage={editingMessage}
@@ -442,6 +503,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             onCancelEdit={handleCancelEdit}
             onTyping={onTyping}
             sendOnEnter
+            disabled={isSlowModeBlocked}
+            disabledReason={
+              isSlowModeBlocked
+                ? t("chat:slowMode.active", {
+                    defaultValue: "Slow mode active. Try again in {{seconds}}s.",
+                    seconds: slowModeRemainingSeconds,
+                  })
+                : undefined
+            }
+            onShareContact={handleShareContact}
             uploadDrafts={uploadQueue.drafts}
             onAddFiles={uploadQueue.addFiles}
             onRemoveDraft={uploadQueue.removeDraft}

@@ -7,12 +7,14 @@ interface SidebarSearchProps {
   value: string;
   collapsed: boolean;
   onChange: (value: string) => void;
+  onSearchUsers?: (query: string) => void;
 }
 
 export const SidebarSearch: React.FC<SidebarSearchProps> = ({
   value,
   collapsed,
   onChange,
+  onSearchUsers,
 }) => {
   const { t } = useTranslation();
 
@@ -38,6 +40,12 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
           type="text"
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            const query = value.trim();
+            if (!query || !onSearchUsers) return;
+            onSearchUsers(query);
+          }}
           placeholder={t("sidebar:search.placeholder")}
           className={clsx(
             "h-10 w-full rounded-lg border border-transparent bg-surface-overlay pl-10 pr-9 text-sm",
@@ -58,6 +66,17 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
           </button>
         )}
       </label>
+
+      {onSearchUsers && value.trim().length >= 2 && (
+        <button
+          type="button"
+          onClick={() => onSearchUsers(value.trim())}
+          className="mt-2 w-full rounded-lg border border-border px-3 py-2 text-left text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
+        >
+          {t("friends:tabs.search", { defaultValue: "Search users" })}:{" "}
+          <span className="font-semibold">{value.trim()}</span>
+        </button>
+      )}
     </div>
   );
 };

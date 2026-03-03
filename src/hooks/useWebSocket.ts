@@ -14,7 +14,7 @@ import {
 } from "../lib/socket";
 import { conversationApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
-import { useAuthStore, useChatStore } from "../stores";
+import { useAuthStore, useChatStore, useGroupStore } from "../stores";
 import { toast } from "../utils/toast";
 
 interface UseWebSocketOptions {
@@ -110,6 +110,10 @@ export const useWebSocket = (
   const updateConversation = useChatStore((s) => s.updateConversation);
   const removeConversation = useChatStore((s) => s.removeConversation);
   const selectConversation = useChatStore((s) => s.selectConversation);
+  const setSlowModeCooldown = useGroupStore((s) => s.setSlowModeCooldown);
+  const upsertInviteLink = useGroupStore((s) => s.upsertInviteLink);
+  const upsertJoinRequest = useGroupStore((s) => s.upsertJoinRequest);
+  const markJoinRequestResolved = useGroupStore((s) => s.markJoinRequestResolved);
 
   const [connectionState, setConnectionState] = useState<ConnectionState>(() =>
     initSocket().getConnectionState(),
@@ -456,6 +460,9 @@ export const useWebSocket = (
     const unsubFriendRequestNew = socket.on(
       WebSocketEvents.FRIEND_REQUEST_NEW,
       () => {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("friend:updated"));
+        }
         toast.info("New friend request");
       },
     );
@@ -464,6 +471,9 @@ export const useWebSocket = (
     const unsubFriendRequestUpdated = socket.on(
       WebSocketEvents.FRIEND_REQUEST_UPDATED,
       () => {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("friend:updated"));
+        }
         toast.info("Friend request updated");
       },
     );
@@ -474,6 +484,9 @@ export const useWebSocket = (
       (data) => {
         const payload = asRecord(data);
         const status = asString(payload?.status);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("friend:updated"));
+        }
         if (status === "blocked" || status === "canceled") {
           toast.info("Friendship status changed");
         }
@@ -483,7 +496,47 @@ export const useWebSocket = (
 
     const unsubGroupInviteNew = socket.on(
       WebSocketEvents.GROUP_INVITE_NEW,
-      () => {
+      (data) => {
+        const payload = asRecord(data);
+        const roomId = payload ? getConversationId(payload) : null;
+        const candidate =
+          asRecord(payload?.inviteLink) ?? asRecord(payload?.link) ?? payload;
+        if (roomId && candidate && typeof candidate.id === "string") {
+          upsertInviteLink(roomId, {
+            id: candidate.id,
+            roomId,
+            name:
+              typeof candidate.name === "string" ? candidate.name : undefined,
+            inviteUrl:
+              typeof candidate.inviteUrl === "string"
+                ? candidate.inviteUrl
+                : undefined,
+            token:
+              typeof candidate.token === "string" ? candidate.token : undefined,
+            tokenPreview:
+              typeof candidate.tokenPreview === "string"
+                ? candidate.tokenPreview
+                : undefined,
+            usageCount:
+              typeof candidate.usageCount === "number"
+                ? candidate.usageCount
+                : 0,
+            usageLimit:
+              typeof candidate.usageLimit === "number"
+                ? candidate.usageLimit
+                : null,
+            expireAt:
+              typeof candidate.expireAt === "string" ? candidate.expireAt : null,
+            revokedAt:
+              typeof candidate.revokedAt === "string"
+                ? candidate.revokedAt
+                : null,
+            createdAt:
+              typeof candidate.createdAt === "string"
+                ? candidate.createdAt
+                : new Date().toISOString(),
+          });
+        }
         toast.info("You received a group invite");
       },
     );
@@ -547,7 +600,32 @@ export const useWebSocket = (
 
     const unsubGroupJoinRequestNew = socket.on(
       WebSocketEvents.GROUP_JOIN_REQUEST_NEW,
-      () => {
+      (data) => {
+        const payload = asRecord(data);
+        const roomId = payload ? getConversationId(payload) : null;
+        const requestId =
+          asString(payload?.requestId) ??
+          asString(payload?.id) ??
+          asString(asRecord(payload?.request)?.id);
+        const userId =
+          asString(payload?.userId) ??
+          asString(payload?.requesterId) ??
+          asString(asRecord(payload?.request)?.userId);
+        if (roomId && requestId && userId) {
+          upsertJoinRequest(roomId, {
+            id: requestId,
+            roomId,
+            userId,
+            status: "pending",
+            note:
+              asString(payload?.note) ??
+              asString(asRecord(payload?.request)?.note),
+            createdAt:
+              asString(payload?.createdAt) ??
+              asString(asRecord(payload?.request)?.createdAt) ??
+              new Date().toISOString(),
+          });
+        }
         toast.info("New group join request");
       },
     );
@@ -555,7 +633,21 @@ export const useWebSocket = (
 
     const unsubGroupJoinRequestResolved = socket.on(
       WebSocketEvents.GROUP_JOIN_REQUEST_RESOLVED,
-      () => {
+      (data) => {
+        const payload = asRecord(data);
+        const roomId = payload ? getConversationId(payload) : null;
+        const requestId =
+          asString(payload?.requestId) ??
+          asString(payload?.id) ??
+          asString(asRecord(payload?.request)?.id);
+        const status = asString(payload?.status);
+        if (
+          roomId &&
+          requestId &&
+          (status === "approved" || status === "rejected")
+        ) {
+          markJoinRequestResolved(roomId, requestId, status);
+        }
         toast.info("Group join request updated");
       },
     );
@@ -564,6 +656,13 @@ export const useWebSocket = (
     const unsubGroupPinUpdated = socket.on(
       WebSocketEvents.GROUP_PIN_UPDATED,
       (data) => {
+        const payload = asRecord(data);
+        const roomId = payload ? getConversationId(payload) : null;
+        if (roomId && typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("group:pin:updated", { detail: { roomId } }),
+          );
+        }
         refreshGroupRoom(data);
       },
     );
@@ -573,10 +672,14 @@ export const useWebSocket = (
       WebSocketEvents.GROUP_SLOW_MODE_TRIGGERED,
       (data) => {
         const payload = asRecord(data);
+        const roomId = payload ? getConversationId(payload) : null;
         const retryAfterSeconds =
           typeof payload?.retryAfterSeconds === "number"
             ? payload.retryAfterSeconds
             : 0;
+        if (roomId && retryAfterSeconds > 0) {
+          setSlowModeCooldown(roomId, retryAfterSeconds);
+        }
         if (retryAfterSeconds > 0) {
           toast.warning(`Slow mode is active. Retry in ${retryAfterSeconds}s`);
         }
@@ -702,6 +805,10 @@ export const useWebSocket = (
     removeMessage,
     selectConversation,
     setTyping,
+    setSlowModeCooldown,
+    upsertJoinRequest,
+    markJoinRequestResolved,
+    upsertInviteLink,
     updateConversation,
     updateMessage,
   ]);

@@ -11,6 +11,7 @@ import { AttachmentMenu } from "./AttachmentMenu";
 import { AttachmentPreview } from "./AttachmentPreview";
 import { AttachmentTray } from "./AttachmentTray";
 import { SendButton } from "./SendButton";
+import { ShareContactModal } from "../modals/ShareContactModal";
 import {
   useAutoResizeTextarea,
   useSendMessage,
@@ -52,6 +53,9 @@ interface MessageInputProps {
   sendOnEnter?: boolean;
   disabled?: boolean;
   className?: string;
+  disabledReason?: string;
+  currentUserId?: string;
+  onShareContact?: (contactUserId: string) => Promise<void>;
 
   // ── Multi-file upload queue (from ChatWindow) ──
   uploadDrafts?: AttachmentDraft[];
@@ -165,6 +169,9 @@ export const MessageInput = React.forwardRef<
     sendOnEnter = true,
     disabled = false,
     className,
+    disabledReason,
+    currentUserId,
+    onShareContact,
     // Multi-file upload queue
     uploadDrafts,
     onAddFiles,
@@ -187,6 +194,7 @@ export const MessageInput = React.forwardRef<
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [showAttachmentMenu, setShowAttachmentMenu] = React.useState(false);
+  const [isShareContactOpen, setIsShareContactOpen] = React.useState(false);
   const [mentionMatch, setMentionMatch] = React.useState<MentionMatch | null>(
     null,
   );
@@ -299,12 +307,18 @@ export const MessageInput = React.forwardRef<
     (type: string) => {
       if (type === "photo" || type === "document") {
         openFilePicker(type as AttachmentPickerMode, fileInputRef.current);
+      } else if (type === "contact") {
+        if (onShareContact && currentUserId && conversationId) {
+          setIsShareContactOpen(true);
+        } else {
+          toast.info(t("common:toast.featureInDevelopment"));
+        }
       } else {
         toast.info(t("common:toast.featureInDevelopment"));
       }
       setShowAttachmentMenu(false);
     },
-    [openFilePicker, t],
+    [conversationId, currentUserId, onShareContact, openFilePicker, t],
   );
 
   const handleInsertMentionTrigger = React.useCallback(() => {
@@ -591,6 +605,12 @@ export const MessageInput = React.forwardRef<
         {liveRegionMessage}
       </p>
 
+      {disabled && disabledReason && (
+        <div className="border-b border-warning/25 bg-warning/10 px-4 py-1.5 text-xs text-warning">
+          {disabledReason}
+        </div>
+      )}
+
       <input
         ref={fileInputRef}
         type="file"
@@ -841,6 +861,15 @@ export const MessageInput = React.forwardRef<
           className="shrink-0"
         />
       </div>
+
+      {onShareContact && currentUserId && (
+        <ShareContactModal
+          isOpen={isShareContactOpen}
+          currentUserId={currentUserId}
+          onClose={() => setIsShareContactOpen(false)}
+          onShare={onShareContact}
+        />
+      )}
     </div>
   );
 });
