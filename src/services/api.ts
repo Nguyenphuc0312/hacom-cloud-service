@@ -351,6 +351,164 @@ export const conversationApi = {
 };
 
 // ============================================
+// GROUP API (Telegram-like)
+// ============================================
+
+export const groupApi = {
+  createGroup: async (payload: {
+    type: "basic_group" | "supergroup" | "channel";
+    title: string;
+    description?: string;
+    avatarUrl?: string;
+    isPublic?: boolean;
+    username?: string;
+    joinApprovalRequired?: boolean;
+    historyVisibleToNewMembers?: boolean;
+    slowModeSeconds?: number;
+    defaultPermissions?: Record<string, boolean>;
+    memberIds?: string[];
+  }) => {
+    const response = await apiClient.post<ApiResponse<unknown>>("/groups", payload);
+    return response.data;
+  },
+
+  updateSettings: async (groupId: string, payload: Record<string, unknown>) => {
+    const response = await apiClient.patch<ApiResponse<unknown>>(
+      `/groups/${groupId}/settings`,
+      payload,
+    );
+    return response.data;
+  },
+
+  createInviteLink: async (
+    groupId: string,
+    payload: { name?: string; expireAt?: string; usageLimit?: number },
+  ) => {
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      `/groups/${groupId}/invite-links`,
+      payload,
+    );
+    return response.data;
+  },
+
+  revokeInviteLink: async (groupId: string, linkId: string) => {
+    await apiClient.delete(`/groups/${groupId}/invite-links/${linkId}`);
+  },
+
+  joinByLink: async (token: string) => {
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      "/groups/join-by-link",
+      { token },
+    );
+    return response.data;
+  },
+
+  sendJoinRequest: async (groupId: string, note?: string) => {
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      `/groups/${groupId}/join-requests`,
+      { note },
+    );
+    return response.data;
+  },
+
+  resolveJoinRequest: async (
+    groupId: string,
+    requestId: string,
+    status: "approved" | "rejected",
+  ) => {
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      `/groups/${groupId}/join-requests/${requestId}/resolve`,
+      { status },
+    );
+    return response.data;
+  },
+
+  addMember: async (groupId: string, userId: string) => {
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      `/groups/${groupId}/members`,
+      { userId },
+    );
+    return response.data;
+  },
+
+  removeMember: async (groupId: string, userId: string) => {
+    await apiClient.delete(`/groups/${groupId}/members/${userId}`);
+  },
+
+  updateMemberRole: async (
+    groupId: string,
+    userId: string,
+    role: "owner" | "admin" | "moderator" | "member" | "restricted" | "banned",
+  ) => {
+    const response = await apiClient.patch<ApiResponse<unknown>>(
+      `/groups/${groupId}/members/${userId}/role`,
+      { role },
+    );
+    return response.data;
+  },
+
+  restrictMember: async (groupId: string, userId: string, seconds: number) => {
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      `/groups/${groupId}/members/${userId}/restrict`,
+      { seconds },
+    );
+    return response.data;
+  },
+
+  banMember: async (groupId: string, userId: string) => {
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      `/groups/${groupId}/members/${userId}/ban`,
+    );
+    return response.data;
+  },
+
+  unbanMember: async (groupId: string, userId: string) => {
+    const response = await apiClient.delete<ApiResponse<unknown>>(
+      `/groups/${groupId}/members/${userId}/ban`,
+    );
+    return response.data;
+  },
+
+  pinMessage: async (groupId: string, messageId: string) => {
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      `/groups/${groupId}/pins`,
+      { messageId },
+    );
+    return response.data;
+  },
+
+  unpinMessage: async (groupId: string, messageId: string) => {
+    await apiClient.delete(`/groups/${groupId}/pins/${messageId}`);
+  },
+
+  transferOwnership: async (groupId: string, newOwnerId: string) => {
+    await apiClient.post(`/groups/${groupId}/transfer-ownership`, { newOwnerId });
+  },
+
+  getMembers: async (groupId: string, page = 1, limit = 50) => {
+    const response = await apiClient.get<ApiResponse<unknown>>(
+      `/groups/${groupId}/members?page=${page}&limit=${limit}`,
+    );
+    return response.data;
+  },
+
+  getSettings: async (groupId: string) => {
+    const response = await apiClient.get<ApiResponse<unknown>>(
+      `/groups/${groupId}/settings`,
+    );
+    return response.data;
+  },
+
+  leaveGroup: async (groupId: string) => {
+    await apiClient.post(`/groups/${groupId}/leave`);
+  },
+
+  deleteGroup: async (groupId: string) => {
+    await apiClient.delete(`/groups/${groupId}`);
+  },
+};
+
+// ============================================
 // MESSAGE API
 // ============================================
 
@@ -754,4 +912,5 @@ export default {
   file: fileApi,
   contact: contactApi,
   friendship: friendshipApi,
+  group: groupApi,
 };

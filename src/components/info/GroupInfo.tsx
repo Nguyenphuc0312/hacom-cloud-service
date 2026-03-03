@@ -45,7 +45,10 @@ interface GroupMember {
 const ROLE_PRIORITY: Record<GroupMemberRole, number> = {
   [RoomMemberRole.OWNER]: 0,
   [RoomMemberRole.ADMIN]: 1,
-  [RoomMemberRole.MEMBER]: 2,
+  [RoomMemberRole.MODERATOR]: 2,
+  [RoomMemberRole.MEMBER]: 3,
+  [RoomMemberRole.RESTRICTED]: 4,
+  [RoomMemberRole.BANNED]: 5,
 };
 
 const VALID_ROLES = new Set<string>(Object.values(RoomMemberRole));

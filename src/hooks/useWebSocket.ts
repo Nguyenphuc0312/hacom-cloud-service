@@ -497,6 +497,93 @@ export const useWebSocket = (
     );
     unsubscribersRef.current.push(unsubGroupInviteUpdated);
 
+    const refreshGroupRoom = (data: unknown) => {
+      const payload = asRecord(data);
+      const conversationId = payload ? getConversationId(payload) : null;
+      if (conversationId) {
+        void resyncRoom(conversationId);
+      }
+    };
+
+    const unsubGroupMemberJoined = socket.on(
+      WebSocketEvents.GROUP_MEMBER_JOINED,
+      (data) => {
+        refreshGroupRoom(data);
+      },
+    );
+    unsubscribersRef.current.push(unsubGroupMemberJoined);
+
+    const unsubGroupMemberLeft = socket.on(
+      WebSocketEvents.GROUP_MEMBER_LEFT,
+      (data) => {
+        refreshGroupRoom(data);
+      },
+    );
+    unsubscribersRef.current.push(unsubGroupMemberLeft);
+
+    const unsubGroupMemberUpdated = socket.on(
+      WebSocketEvents.GROUP_MEMBER_UPDATED,
+      (data) => {
+        refreshGroupRoom(data);
+      },
+    );
+    unsubscribersRef.current.push(unsubGroupMemberUpdated);
+
+    const unsubGroupMemberBanned = socket.on(
+      WebSocketEvents.GROUP_MEMBER_BANNED,
+      (data) => {
+        refreshGroupRoom(data);
+      },
+    );
+    unsubscribersRef.current.push(unsubGroupMemberBanned);
+
+    const unsubGroupSettingsUpdated = socket.on(
+      WebSocketEvents.GROUP_SETTINGS_UPDATED,
+      (data) => {
+        refreshGroupRoom(data);
+      },
+    );
+    unsubscribersRef.current.push(unsubGroupSettingsUpdated);
+
+    const unsubGroupJoinRequestNew = socket.on(
+      WebSocketEvents.GROUP_JOIN_REQUEST_NEW,
+      () => {
+        toast.info("New group join request");
+      },
+    );
+    unsubscribersRef.current.push(unsubGroupJoinRequestNew);
+
+    const unsubGroupJoinRequestResolved = socket.on(
+      WebSocketEvents.GROUP_JOIN_REQUEST_RESOLVED,
+      () => {
+        toast.info("Group join request updated");
+      },
+    );
+    unsubscribersRef.current.push(unsubGroupJoinRequestResolved);
+
+    const unsubGroupPinUpdated = socket.on(
+      WebSocketEvents.GROUP_PIN_UPDATED,
+      (data) => {
+        refreshGroupRoom(data);
+      },
+    );
+    unsubscribersRef.current.push(unsubGroupPinUpdated);
+
+    const unsubGroupSlowModeTriggered = socket.on(
+      WebSocketEvents.GROUP_SLOW_MODE_TRIGGERED,
+      (data) => {
+        const payload = asRecord(data);
+        const retryAfterSeconds =
+          typeof payload?.retryAfterSeconds === "number"
+            ? payload.retryAfterSeconds
+            : 0;
+        if (retryAfterSeconds > 0) {
+          toast.warning(`Slow mode is active. Retry in ${retryAfterSeconds}s`);
+        }
+      },
+    );
+    unsubscribersRef.current.push(unsubGroupSlowModeTriggered);
+
     const unsubPermissionChanged = socket.on(
       WebSocketEvents.PERMISSION_CHANGED,
       (data) => {
