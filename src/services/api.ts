@@ -778,8 +778,7 @@ export const fileApi = {
 export const contactApi = {
   shareContact: async (payload: {
     contactUserId: string;
-    targetType: "ROOM" | "USER";
-    targetId: string;
+    roomId: string;
   }) => {
     const response = await apiClient.post<ApiResponse<unknown>>(
       "/contacts/share",
