@@ -5,7 +5,9 @@ import { SpeakerXMarkIcon, CheckCircleIcon } from "@heroicons/react/24/solid";
 import { Avatar } from "../common/Avatar";
 import { Badge } from "../common/Badge";
 import type { Conversation } from "../../types";
+import { UserStatus } from "../../types";
 import { isDirectConversation } from "../../lib/conversationAdapter";
+import { usePresenceStore } from "../../stores";
 import { formatRelativeTime } from "../../utils/formatTime";
 import {
   getConversationAvatar,
@@ -36,7 +38,15 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
     ? getOtherParticipant(conversation, currentUserId)
     : null;
 
-  const status = otherParticipant?.status;
+  const otherUserId = otherParticipant?.id;
+  const livePresence = usePresenceStore((s) =>
+    otherUserId ? s.presenceMap[otherUserId] : undefined,
+  );
+  const status = livePresence
+    ? livePresence.state === "online"
+      ? UserStatus.ONLINE
+      : UserStatus.OFFLINE
+    : otherParticipant?.status;
   const lastMessage = conversation.lastMessage;
   const preview = getMessagePreview(lastMessage, currentUserId);
   const timeStr = lastMessage

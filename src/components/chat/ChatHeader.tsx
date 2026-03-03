@@ -14,7 +14,8 @@ import {
 import { Avatar } from "../common/Avatar";
 import { TypingIndicator } from "../common/TypingIndicator";
 import { DensityToggle } from "./DensityToggle";
-import { useUIStore } from "../../stores";
+import { useUIStore, usePresenceStore } from "../../stores";
+import { UserStatus } from "../../types";
 import type { Conversation, TypingStatus } from "../../types";
 import {
   isDirectConversation,
@@ -77,7 +78,16 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     conversation.participants?.length,
   );
   const isDirect = isDirectConversation(conversation);
-  const isOnline = otherUser?.status === "online";
+  const otherUserId = otherUser?.id;
+  const livePresence = usePresenceStore((s) =>
+    otherUserId ? s.presenceMap[otherUserId] : undefined,
+  );
+  const liveStatus = livePresence
+    ? livePresence.state === "online"
+      ? UserStatus.ONLINE
+      : UserStatus.OFFLINE
+    : otherUser?.status;
+  const isOnline = liveStatus === UserStatus.ONLINE;
   const isTyping = Boolean(typingStatus?.isTyping);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const mobileMenuRef = React.useRef<HTMLDivElement | null>(null);
@@ -125,7 +135,14 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     }
 
     if (otherUser) {
-      return isOnline ? t("common:status.online") : t("common:status.offline");
+      if (isOnline) return t("common:status.online");
+      if (livePresence?.lastSeenAt) {
+        return t("common:status.lastSeen", {
+          time: new Date(livePresence.lastSeenAt).toLocaleString(),
+          defaultValue: `Last seen ${new Date(livePresence.lastSeenAt).toLocaleString()}`,
+        });
+      }
+      return t("common:status.offline");
     }
 
     return "";
@@ -133,6 +150,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     conversation.participants?.length,
     isOnline,
     isTyping,
+    livePresence?.lastSeenAt,
     normalizedType,
     otherUser,
     t,
@@ -241,7 +259,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             src={avatarSrc}
             alt={displayName}
             size="md"
-            status={otherUser?.status}
+            status={liveStatus}
             showStatus={isDirect}
           />
         </button>

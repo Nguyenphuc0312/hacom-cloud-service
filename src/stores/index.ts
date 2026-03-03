@@ -23,3 +23,6 @@ export type {
   ModalType,
   Toast,
 } from "./uiStore";
+
+export { usePresenceStore } from "./presenceStore";
+export type { PresenceState, UserPresenceInfo } from "./presenceStore";

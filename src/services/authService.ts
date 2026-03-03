@@ -8,6 +8,7 @@ import {
   getRefreshToken,
   isRefreshTokenCookieMode,
 } from "./tokenService";
+import { usePresenceStore } from "../stores/presenceStore";
 
 type LogoutEventPayload = {
   reason: string;
@@ -62,6 +63,7 @@ export const runClientLogoutCleanup = (reason: string): void => {
   cancelPendingRequests(`logout:${reason}`);
   disconnectSocket();
   clearTokens();
+  usePresenceStore.getState().clearAll();
 };
 
 export const redirectToLogin = (): void => {
