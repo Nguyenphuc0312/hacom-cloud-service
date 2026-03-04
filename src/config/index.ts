@@ -10,6 +10,15 @@ export const API_BASE_URL =
 export const WEBSOCKET_URL =
   import.meta.env.VITE_WEBSOCKET_URL || "ws://localhost:8080";
 
+export const WEBSOCKET_AUTH_CONFIG = {
+  // Compatibility mode for backends that require token during handshake (/ws?token=...).
+  // Keep disabled by default to avoid exposing tokens in URL unless explicitly needed.
+  USE_QUERY_TOKEN: import.meta.env.VITE_WS_USE_QUERY_TOKEN === "true",
+  // Auto-retry with query-token when the first handshake closes before onopen.
+  AUTO_QUERY_TOKEN_FALLBACK:
+    import.meta.env.VITE_WS_AUTO_QUERY_TOKEN_FALLBACK !== "false",
+};
+
 // Authentication
 export const AUTH_CONFIG = {
   // Token refresh threshold (in ms) - refresh 1 minute before expiry

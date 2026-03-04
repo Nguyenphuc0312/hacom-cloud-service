@@ -6,7 +6,11 @@
  * để tương thích với Gorilla WebSocket backend
  */
 
-import { WEBSOCKET_URL, WEBSOCKET_CONFIG } from "../config";
+import {
+  WEBSOCKET_URL,
+  WEBSOCKET_CONFIG,
+  WEBSOCKET_AUTH_CONFIG,
+} from "../config";
 import {
   getAccessToken as getStoredAccessToken,
   updateAccessToken,
@@ -43,6 +47,9 @@ class WebSocketManager {
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private isManualDisconnect = false;
+  private queryTokenFallbackEnabled = false;
+  private queryTokenFallbackAttempted = false;
   private eventHandlers: Map<string, Set<EventHandler>> = new Map();
   private connectionState: ConnectionState = "disconnected";
   private stateChangeHandlers: Set<(state: ConnectionState) => void> =
@@ -65,6 +72,23 @@ class WebSocketManager {
    */
   private getAccessToken(): string | null {
     return getStoredAccessToken();
+  }
+
+  private buildWebSocketUrl(token: string): string {
+    const normalizedBase = WEBSOCKET_URL.replace(/\/+$/, "");
+    const endpoint = normalizedBase.endsWith("/ws")
+      ? normalizedBase
+      : `${normalizedBase}/ws`;
+
+    const useQueryToken =
+      WEBSOCKET_AUTH_CONFIG.USE_QUERY_TOKEN || this.queryTokenFallbackEnabled;
+
+    if (!useQueryToken) {
+      return endpoint;
+    }
+
+    const separator = endpoint.includes("?") ? "&" : "?";
+    return `${endpoint}${separator}token=${encodeURIComponent(token)}`;
   }
 
   /**
@@ -163,8 +187,13 @@ class WebSocketManager {
     }
 
     this.setConnectionState("connecting");
+    this.isManualDisconnect = false;
 
-    const wsUrl = `${WEBSOCKET_URL}/ws`;
+    const wsUrl = this.buildWebSocketUrl(token);
+    const useQueryToken = wsUrl.includes("token=");
+    console.log(
+      `WebSocket connecting (${useQueryToken ? "query-token" : "post-open-auth"})`,
+    );
 
     try {
       this.socket = new WebSocket(wsUrl);
@@ -181,8 +210,11 @@ class WebSocketManager {
    */
   private setupSocketHandlers(): void {
     if (!this.socket) return;
+    let hasOpened = false;
 
     this.socket.onopen = () => {
+      hasOpened = true;
+      this.queryTokenFallbackAttempted = false;
       console.log("WebSocket connected");
       const rawToken = this.getAccessToken();
       if (!isJwtLike(rawToken)) {
@@ -202,6 +234,9 @@ class WebSocketManager {
     };
 
     this.socket.onclose = (event) => {
+      const wasManualDisconnect = this.isManualDisconnect;
+      this.isManualDisconnect = false;
+
       console.log("WebSocket disconnected:", event.code, event.reason);
       this.socket = null;
       this.setConnectionState("disconnected");
@@ -210,8 +245,26 @@ class WebSocketManager {
       // Trigger custom disconnect event
       this.emit("disconnect", { code: event.code, reason: event.reason });
 
-      // Tự động reconnect nếu không phải đóng chủ động
-      if (event.code !== 1000) {
+      const shouldTryQueryTokenFallback =
+        !wasManualDisconnect &&
+        !hasOpened &&
+        event.code === 1006 &&
+        !WEBSOCKET_AUTH_CONFIG.USE_QUERY_TOKEN &&
+        WEBSOCKET_AUTH_CONFIG.AUTO_QUERY_TOKEN_FALLBACK &&
+        !this.queryTokenFallbackAttempted;
+
+      if (shouldTryQueryTokenFallback) {
+        this.queryTokenFallbackAttempted = true;
+        this.queryTokenFallbackEnabled = true;
+        console.warn(
+          "WebSocket handshake closed before onopen, retrying with query-token auth",
+        );
+        this.connect();
+        return;
+      }
+
+      // Auto reconnect only for non-manual close
+      if (event.code !== 1000 && !wasManualDisconnect) {
         this.scheduleReconnect();
       }
     };
@@ -233,7 +286,7 @@ class WebSocketManager {
   }
 
   /**
-   * Xử lý message nhận được từ server
+   * Handle message received from server.
    */
   private handleMessage(message: WebSocketEvent): void {
     const type =
@@ -375,6 +428,8 @@ class WebSocketManager {
    * Ngắt kết nối WebSocket
    */
   disconnect(): void {
+    this.isManualDisconnect = true;
+
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
