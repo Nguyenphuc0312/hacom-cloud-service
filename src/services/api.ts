@@ -24,6 +24,7 @@ import {
   normalizeConversationsPayload,
 } from "../lib/conversationAdapter";
 import { unwrapApiSuccess } from "../lib/apiContract";
+import { getCsrfToken } from "./tokenService";
 
 // ============================================
 // AUTH API
@@ -53,17 +54,21 @@ export const authApi = {
   },
 
   logout: async () => {
+    const csrfToken = getCsrfToken();
     await apiClient.post("/auth/logout", undefined, {
       withCredentials: true,
+      headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
     });
   },
 
   refreshToken: async (refreshToken?: string) => {
+    const csrfToken = getCsrfToken();
     const response = await apiClient.post<ApiResponse<RefreshTokenResponse>>(
       "/auth/refresh",
       refreshToken ? { refreshToken } : undefined,
       {
         withCredentials: true,
+        headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
       },
     );
     return response.data;

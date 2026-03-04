@@ -10,6 +10,7 @@ import { API_BASE_URL } from "../config";
 import i18n from "../i18n";
 import {
   clearTokens,
+  getCsrfToken,
   getAccessToken,
   getRefreshToken,
   isAuthSessionActive,
@@ -18,6 +19,7 @@ import {
   storeTokens,
   updateAccessToken,
 } from "../services/tokenService";
+import { updateSocketAuth } from "./socket";
 
 type AuthFailureReason = "missing_refresh_token" | "refresh_failed";
 type AuthFailureHandler = (reason: AuthFailureReason) => void | Promise<void>;
@@ -172,6 +174,7 @@ const refreshAccessToken = async (): Promise<string> => {
   }
 
   try {
+    const csrfToken = getCsrfToken();
     const response = await axios.post(
       `${API_BASE_URL}/auth/refresh`,
       storedRefreshToken ? { refreshToken: storedRefreshToken } : undefined,
@@ -180,6 +183,7 @@ const refreshAccessToken = async (): Promise<string> => {
         headers: {
           "Content-Type": "application/json",
           [API_CONTRACT_HEADER]: API_CONTRACT_VERSION,
+          ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
         },
       },
     );
@@ -198,6 +202,7 @@ const refreshAccessToken = async (): Promise<string> => {
     } else {
       updateAccessToken(accessToken);
     }
+    updateSocketAuth(accessToken);
 
     authFailureNotified = false;
     return accessToken;

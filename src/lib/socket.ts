@@ -48,6 +48,18 @@ class WebSocketManager {
   private stateChangeHandlers: Set<(state: ConnectionState) => void> =
     new Set();
 
+  private sendAuthenticate(accessToken: string): void {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    const message: WebSocketEvent = {
+      event: WsEventNames.AUTH_AUTHENTICATE,
+      data: { accessToken },
+    };
+    this.socket.send(JSON.stringify(message));
+  }
+
   /**
    * Lấy token từ storage
    */
@@ -113,7 +125,7 @@ class WebSocketManager {
 
   //   // Build WebSocket URL với token
   //   // Backend expects: ws://host:port/ws?token=JWT_TOKEN
-  //   const wsUrl = `${WEBSOCKET_URL}/ws?token=${encodeURIComponent(token)}`;
+  //   const wsUrl = `${WEBSOCKET_URL}/ws`;
 
   //   try {
   //     this.socket = new WebSocket(wsUrl);
@@ -136,9 +148,6 @@ class WebSocketManager {
 
     const rawToken = this.getAccessToken();
 
-    // LOG DEBUG (tạm thời)
-    console.debug("WS connect() token raw:", rawToken);
-
     if (!isJwtLike(rawToken)) {
       console.error("WS: invalid/missing token, skip connect:", rawToken);
       this.setConnectionState("error");
@@ -155,8 +164,7 @@ class WebSocketManager {
 
     this.setConnectionState("connecting");
 
-    const wsUrl = `${WEBSOCKET_URL}/ws?token=${encodeURIComponent(token)}`;
-    console.debug("WS URL:", wsUrl);
+    const wsUrl = `${WEBSOCKET_URL}/ws`;
 
     try {
       this.socket = new WebSocket(wsUrl);
@@ -176,6 +184,15 @@ class WebSocketManager {
 
     this.socket.onopen = () => {
       console.log("WebSocket connected");
+      const rawToken = this.getAccessToken();
+      if (!isJwtLike(rawToken)) {
+        this.setConnectionState("error");
+        this.disconnect();
+        return;
+      }
+
+      const token = normalizeToken(rawToken);
+      this.sendAuthenticate(token);
       this.setConnectionState("connected");
       this.reconnectAttempts = 0;
       this.startPingInterval();
@@ -441,16 +458,19 @@ class WebSocketManager {
    * Cập nhật token và reconnect
    */
   updateAuth(token: string): void {
-    // Lưu token mới
     updateAccessToken(token);
 
-    this.disconnect();
+    const normalizedToken = normalizeToken(token);
+    if (!isJwtLike(normalizedToken)) {
+      return;
+    }
+
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.sendAuthenticate(normalizedToken);
+      return;
+    }
+
     this.connect();
-    // Reconnect với token mới
-    // if (this.isConnected()) {
-    //   this.disconnect();
-    //   this.connect();
-    // }
   }
 }
 
@@ -505,6 +525,7 @@ export const updateSocketAuth = (token: string): void => {
 
 export const WebSocketEvents = {
   // Client → Server
+  AUTH_AUTHENTICATE: WsEventNames.AUTH_AUTHENTICATE,
   MESSAGE_SEND: "message:send",
   ROOM_JOIN: "room:join",
   ROOM_LEAVE: "room:leave",
@@ -512,6 +533,9 @@ export const WebSocketEvents = {
   TYPING_STOP: WsEventNames.TYPING_STOP,
 
   // Server → Client
+  AUTH_AUTHENTICATED: WsEventNames.AUTH_AUTHENTICATED,
+  AUTH_REAUTH_REQUIRED: WsEventNames.AUTH_REAUTH_REQUIRED,
+  AUTH_UNAUTHORIZED: WsEventNames.AUTH_UNAUTHORIZED,
   MESSAGE_NEW: WsEventNames.MESSAGE_NEW,
   MESSAGE_UPDATED: WsEventNames.MESSAGE_UPDATED,
   MESSAGE_DELETED: WsEventNames.MESSAGE_DELETED,
@@ -545,3 +569,6 @@ export const WebSocketEvents = {
 } as const;
 
 export default wsManager;
+
+
+

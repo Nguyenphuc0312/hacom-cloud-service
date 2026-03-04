@@ -15,6 +15,18 @@ const REFRESH_TOKEN_STORAGE_MODE =
 const getStorageByArea = (area: StorageArea): Storage =>
   area === "local" ? localStorage : sessionStorage;
 
+const getCookieValue = (name: string): string | null => {
+  if (typeof document === "undefined") return null;
+
+  const match = document.cookie
+    .split(";")
+    .map((chunk) => chunk.trim())
+    .find((chunk) => chunk.startsWith(`${name}=`));
+
+  if (!match) return null;
+  return decodeURIComponent(match.substring(name.length + 1));
+};
+
 const getAuthSessionMarker = (): string | null => {
   if (!isBrowser()) return null;
   return localStorage.getItem(AUTH_CONFIG.AUTH_SESSION_ACTIVE_KEY);
@@ -41,6 +53,9 @@ const clearTokenKeys = (): void => {
 
 export const isRefreshTokenCookieMode = (): boolean =>
   REFRESH_TOKEN_STORAGE_MODE === "cookie";
+
+export const getCsrfToken = (): string | null =>
+  isBrowser() ? getCookieValue("csrfToken") : null;
 
 export const isRememberMeEnabled = (): boolean =>
   isBrowser() && localStorage.getItem(AUTH_CONFIG.REMEMBER_ME_KEY) === "true";

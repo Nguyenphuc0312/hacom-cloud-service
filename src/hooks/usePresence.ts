@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useCallback, useRef } from "react";
-import { initSocket, WebSocketEvents } from "../lib/socket";
+import { initSocket } from "../lib/socket";
 import { WsEventNames } from "@hacom/chat-shared-types";
 import {
   usePresenceStore,

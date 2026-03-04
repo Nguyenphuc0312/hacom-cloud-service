@@ -291,6 +291,26 @@ export const useWebSocket = (
     });
     unsubscribersRef.current.push(unsubWsError);
 
+    const unsubAuthUnauthorized = socket.on(
+      WebSocketEvents.AUTH_UNAUTHORIZED,
+      (data) => {
+        const message =
+          asString(asRecord(data)?.message) ?? "WebSocket unauthorized";
+        onError?.(new Error(message));
+      },
+    );
+    unsubscribersRef.current.push(unsubAuthUnauthorized);
+
+    const unsubReauthRequired = socket.on(
+      WebSocketEvents.AUTH_REAUTH_REQUIRED,
+      (data) => {
+        const reason =
+          asString(asRecord(data)?.reason) ?? "reauthentication required";
+        onError?.(new Error(`WebSocket reauth required: ${reason}`));
+      },
+    );
+    unsubscribersRef.current.push(unsubReauthRequired);
+
     const upsertIncomingMessage = (data: unknown) => {
       const payload = asRecord(data);
       if (!payload) return;
@@ -619,7 +639,8 @@ export const useWebSocket = (
             status: "pending",
             note:
               asString(payload?.note) ??
-              asString(asRecord(payload?.request)?.note),
+              asString(asRecord(payload?.request)?.note) ??
+              undefined,
             createdAt:
               asString(payload?.createdAt) ??
               asString(asRecord(payload?.request)?.createdAt) ??

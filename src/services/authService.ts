@@ -5,6 +5,7 @@ import { disconnectSocket } from "../lib/socket";
 import { cancelPendingRequests } from "../lib/axios";
 import {
   clearTokens,
+  getCsrfToken,
   getRefreshToken,
   isRefreshTokenCookieMode,
 } from "./tokenService";
@@ -46,6 +47,7 @@ const broadcastLogoutEvent = (reason: string): void => {
 
 export const requestServerLogout = async (): Promise<void> => {
   const refreshToken = getRefreshToken();
+  const csrfToken = getCsrfToken();
   const payload =
     !isRefreshTokenCookieMode() && refreshToken ? { refreshToken } : undefined;
 
@@ -55,6 +57,7 @@ export const requestServerLogout = async (): Promise<void> => {
     headers: {
       "Content-Type": "application/json",
       "X-Api-Contract": "2",
+      ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
     },
   });
 };
