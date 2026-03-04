@@ -6,7 +6,7 @@
 import axios, { AxiosError, AxiosHeaders } from "axios";
 import type { AxiosInstance, InternalAxiosRequestConfig } from "axios";
 import type { ApiResponse } from "@hacom/chat-shared-types";
-import { API_BASE_URL } from "../config";
+import { API_BASE_URL, AUTH_BASE_URL, USE_AUTH_SERVICE } from "../config";
 import i18n from "../i18n";
 import {
   clearTokens,
@@ -117,7 +117,11 @@ const extractTokenPayload = (
     };
   }>;
 
-  if (contractPayload && typeof contractPayload === "object" && contractPayload.success) {
+  if (
+    contractPayload &&
+    typeof contractPayload === "object" &&
+    contractPayload.success
+  ) {
     const responseData = contractPayload.data;
     const accessTokenCandidate =
       responseData.tokens?.accessToken ?? responseData.accessToken;
@@ -128,7 +132,9 @@ const extractTokenPayload = (
       accessToken:
         typeof accessTokenCandidate === "string" ? accessTokenCandidate : null,
       refreshToken:
-        typeof refreshTokenCandidate === "string" ? refreshTokenCandidate : null,
+        typeof refreshTokenCandidate === "string"
+          ? refreshTokenCandidate
+          : null,
     };
   }
 
@@ -175,11 +181,14 @@ const refreshAccessToken = async (): Promise<string> => {
 
   try {
     const csrfToken = getCsrfToken();
+    const refreshBaseUrl = USE_AUTH_SERVICE ? AUTH_BASE_URL : API_BASE_URL;
     const response = await axios.post(
-      `${API_BASE_URL}/auth/refresh`,
+      `${refreshBaseUrl}/auth/refresh`,
       storedRefreshToken ? { refreshToken: storedRefreshToken } : undefined,
       {
-        withCredentials: true,
+        // Stage 1 body-mode: credentials=false (no cross-site cookies).
+        // Stage 2 cookie-mode: flip to true.
+        withCredentials: isRefreshTokenCookieMode(),
         headers: {
           "Content-Type": "application/json",
           [API_CONTRACT_HEADER]: API_CONTRACT_VERSION,
@@ -246,6 +255,31 @@ const apiClient: AxiosInstance = axios.create({
   },
 });
 
+/**
+ * Dedicated Axios client for auth endpoints (Stage 1 – body mode).
+ *
+ * When USE_AUTH_SERVICE=true the baseURL points to the dedicated
+ * chat-auth-service; otherwise it falls back to the api-service so
+ * rollback is a single env-var toggle.
+ *
+ * This client does NOT attach Authorization automatically (auth
+ * endpoints are public or manage their own bearer in the call-site).
+ * withCredentials is false in Stage 1 (body mode).
+ */
+const authBaseUrl = USE_AUTH_SERVICE ? AUTH_BASE_URL : API_BASE_URL;
+
+export const authClient: AxiosInstance = axios.create({
+  baseURL: authBaseUrl,
+  timeout: 15000,
+  headers: {
+    "Content-Type": "application/json",
+    [API_CONTRACT_HEADER]: API_CONTRACT_VERSION,
+  },
+  // Stage 1 body-mode: no cross-site cookies.
+  // Stage 2 cookie-mode: flip via isRefreshTokenCookieMode().
+  withCredentials: false,
+});
+
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const requestConfig = config as AuthRequestConfig;
@@ -261,8 +295,9 @@ apiClient.interceptors.request.use(
 
     const shouldAttachAuth = !isPublicEndpoint(config.url);
     requestConfig.headers = requestConfig.headers ?? {};
-    const contractHeaders =
-      requestConfig.headers as AxiosHeaders | Record<string, string>;
+    const contractHeaders = requestConfig.headers as
+      | AxiosHeaders
+      | Record<string, string>;
     if (contractHeaders instanceof AxiosHeaders) {
       contractHeaders.set(API_CONTRACT_HEADER, API_CONTRACT_VERSION);
     } else {

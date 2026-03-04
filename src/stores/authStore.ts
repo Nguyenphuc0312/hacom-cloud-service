@@ -5,6 +5,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import apiClient, {
+  authClient,
   resetAuthFailureState,
   setAuthFailureHandler,
 } from "../lib/axios";
@@ -151,7 +152,7 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: true, error: null });
 
           try {
-            const response = await apiClient.post<ApiResponse<AuthResponse>>(
+            const response = await authClient.post<ApiResponse<AuthResponse>>(
               "/auth/login",
               {
                 email: data.email,
@@ -201,7 +202,7 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: true, error: null });
 
           try {
-            const response = await apiClient.post<ApiResponse<AuthResponse>>(
+            const response = await authClient.post<ApiResponse<AuthResponse>>(
               "/auth/register",
               data,
             );
@@ -262,7 +263,11 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: true });
 
           try {
-            const response = await apiClient.get<ApiResponse<User>>("/auth/me");
+            // /auth/me needs Bearer token — use authClient with explicit header.
+            const response = await authClient.get<ApiResponse<User>>(
+              "/auth/me",
+              { headers: { Authorization: `Bearer ${token}` } },
+            );
             const user = unwrapApiSuccess(response.data);
             set({
               user,

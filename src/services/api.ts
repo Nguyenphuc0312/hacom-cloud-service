@@ -3,7 +3,7 @@
  * Tất cả các API calls
  */
 
-import apiClient from "../lib/axios";
+import apiClient, { authClient } from "../lib/axios";
 import axios from "axios";
 import type {
   ApiResponse,
@@ -24,7 +24,7 @@ import {
   normalizeConversationsPayload,
 } from "../lib/conversationAdapter";
 import { unwrapApiSuccess } from "../lib/apiContract";
-import { getCsrfToken } from "./tokenService";
+import { getCsrfToken, isRefreshTokenCookieMode } from "./tokenService";
 
 // ============================================
 // AUTH API
@@ -32,7 +32,7 @@ import { getCsrfToken } from "./tokenService";
 
 export const authApi = {
   login: async (email: string, password: string) => {
-    const response = await apiClient.post<ApiResponse<LoginResponse>>(
+    const response = await authClient.post<ApiResponse<LoginResponse>>(
       "/auth/login",
       { email, password },
     );
@@ -46,7 +46,7 @@ export const authApi = {
     firstName?: string;
     lastName?: string;
   }) => {
-    const response = await apiClient.post<ApiResponse<AuthResponseDto>>(
+    const response = await authClient.post<ApiResponse<AuthResponseDto>>(
       "/auth/register",
       data,
     );
@@ -54,20 +54,20 @@ export const authApi = {
   },
 
   logout: async () => {
-    const csrfToken = getCsrfToken();
-    await apiClient.post("/auth/logout", undefined, {
-      withCredentials: true,
+    const csrfToken = isRefreshTokenCookieMode() ? getCsrfToken() : undefined;
+    await authClient.post("/auth/logout", undefined, {
+      withCredentials: isRefreshTokenCookieMode(),
       headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
     });
   },
 
   refreshToken: async (refreshToken?: string) => {
-    const csrfToken = getCsrfToken();
-    const response = await apiClient.post<ApiResponse<RefreshTokenResponse>>(
+    const csrfToken = isRefreshTokenCookieMode() ? getCsrfToken() : undefined;
+    const response = await authClient.post<ApiResponse<RefreshTokenResponse>>(
       "/auth/refresh",
       refreshToken ? { refreshToken } : undefined,
       {
-        withCredentials: true,
+        withCredentials: isRefreshTokenCookieMode(),
         headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
       },
     );
@@ -75,7 +75,7 @@ export const authApi = {
   },
 
   forgotPassword: async (email: string) => {
-    const response = await apiClient.post<ApiResponse<{ message: string }>>(
+    const response = await authClient.post<ApiResponse<{ message: string }>>(
       "/auth/forgot-password",
       { email },
     );
@@ -83,7 +83,7 @@ export const authApi = {
   },
 
   resetPassword: async (token: string, password: string) => {
-    const response = await apiClient.post<ApiResponse<{ message: string }>>(
+    const response = await authClient.post<ApiResponse<{ message: string }>>(
       "/auth/reset-password",
       { token, password },
     );
@@ -95,7 +95,7 @@ export const authApi = {
     newPassword: string;
     confirmPassword: string;
   }) => {
-    const response = await apiClient.post<ApiResponse<{ message: string }>>(
+    const response = await authClient.post<ApiResponse<{ message: string }>>(
       "/auth/change-password",
       data,
     );
@@ -373,7 +373,10 @@ export const groupApi = {
     defaultPermissions?: Record<string, boolean>;
     memberIds?: string[];
   }) => {
-    const response = await apiClient.post<ApiResponse<unknown>>("/groups", payload);
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      "/groups",
+      payload,
+    );
     return response.data;
   },
 
@@ -487,7 +490,9 @@ export const groupApi = {
   },
 
   transferOwnership: async (groupId: string, newOwnerId: string) => {
-    await apiClient.post(`/groups/${groupId}/transfer-ownership`, { newOwnerId });
+    await apiClient.post(`/groups/${groupId}/transfer-ownership`, {
+      newOwnerId,
+    });
   },
 
   getMembers: async (groupId: string, page = 1, limit = 50) => {
@@ -781,10 +786,7 @@ export const fileApi = {
 // ============================================
 
 export const contactApi = {
-  shareContact: async (payload: {
-    contactUserId: string;
-    roomId: string;
-  }) => {
+  shareContact: async (payload: { contactUserId: string; roomId: string }) => {
     const response = await apiClient.post<ApiResponse<unknown>>(
       "/contacts/share",
       payload,

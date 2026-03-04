@@ -12,7 +12,7 @@ import {
 import { Button, Input, toast } from "../components/ui";
 import { forgotPasswordSchema } from "../lib/validations";
 import type { ForgotPasswordFormData } from "../lib/validations";
-import apiClient from "../lib/axios";
+import { authClient } from "../lib/axios";
 
 export const ForgotPasswordPage: React.FC = () => {
   const { t } = useTranslation();
@@ -40,7 +40,7 @@ export const ForgotPasswordPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      await apiClient.post("/auth/forgot-password", data);
+      await authClient.post("/auth/forgot-password", data);
       setIsSubmitted(true);
       toast.success(t("auth:toast.forgotPasswordSent"));
     } catch {
@@ -64,7 +64,7 @@ export const ForgotPasswordPage: React.FC = () => {
               {t("auth:forgot.successTitle")}
             </h1>
             <p className="text-text-muted mb-6">
-              {t("auth:forgot.successDescription")} {" "}
+              {t("auth:forgot.successDescription")}{" "}
               <span className="font-medium text-text-primary">
                 {getValues("email")}
               </span>
@@ -107,10 +107,10 @@ export const ForgotPasswordPage: React.FC = () => {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl mb-4 shadow-lg shadow-elev2">
               <ChatBubbleLeftRightIcon className="w-8 h-8 text-text-inverse" />
             </div>
-            <h1 className="text-2xl font-bold text-text-primary">{t("auth:forgot.title")}</h1>
-            <p className="text-text-muted mt-2">
-              {t("auth:forgot.subtitle")}
-            </p>
+            <h1 className="text-2xl font-bold text-text-primary">
+              {t("auth:forgot.title")}
+            </h1>
+            <p className="text-text-muted mt-2">{t("auth:forgot.subtitle")}</p>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">

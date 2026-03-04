@@ -7,6 +7,22 @@
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1";
 
+/**
+ * Auth service base URL (Stage 1 – body mode).
+ * When USE_AUTH_SERVICE is true, auth calls (login/refresh/logout/me/…) go
+ * directly to AUTH_BASE_URL instead of through API_BASE_URL.
+ * Rollback: set VITE_USE_AUTH_SERVICE=false to route back through api-service.
+ */
+export const AUTH_BASE_URL = import.meta.env.VITE_AUTH_BASE_URL || API_BASE_URL;
+
+/**
+ * Feature flag: redirect auth traffic to the dedicated auth-service.
+ * true  → FE calls AUTH_BASE_URL for /auth/* endpoints.
+ * false → FE calls API_BASE_URL (legacy, rollback).
+ */
+export const USE_AUTH_SERVICE =
+  import.meta.env.VITE_USE_AUTH_SERVICE === "true";
+
 export const WEBSOCKET_URL =
   import.meta.env.VITE_WEBSOCKET_URL || "ws://localhost:8080";
 

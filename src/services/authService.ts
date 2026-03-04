@@ -1,5 +1,5 @@
 import axios from "axios";
-import { API_BASE_URL } from "../config";
+import { API_BASE_URL, AUTH_BASE_URL, USE_AUTH_SERVICE } from "../config";
 import { ROUTE_PATHS } from "../router/paths";
 import { disconnectSocket } from "../lib/socket";
 import { cancelPendingRequests } from "../lib/axios";
@@ -51,9 +51,11 @@ export const requestServerLogout = async (): Promise<void> => {
   const payload =
     !isRefreshTokenCookieMode() && refreshToken ? { refreshToken } : undefined;
 
-  await axios.post(`${API_BASE_URL}/auth/logout`, payload, {
+  const logoutBaseUrl = USE_AUTH_SERVICE ? AUTH_BASE_URL : API_BASE_URL;
+  await axios.post(`${logoutBaseUrl}/auth/logout`, payload, {
     timeout: 10000,
-    withCredentials: true,
+    // Stage 1 body-mode: withCredentials=false (no cookies).
+    withCredentials: isRefreshTokenCookieMode(),
     headers: {
       "Content-Type": "application/json",
       "X-Api-Contract": "2",
