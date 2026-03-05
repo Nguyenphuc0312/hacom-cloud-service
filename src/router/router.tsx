@@ -6,10 +6,12 @@ import { AppLayout } from "../layouts/AppLayout";
 import { ProtectedRoute } from "./guards/RouteGuards";
 import { buildPrivateRouteObjects, buildPublicRouteObjects } from "./builders";
 import { ROUTE_PATHS } from "./paths";
+import { RouterErrorBoundary } from "../components/common/RouterErrorBoundary";
 
 const routeTree: RouteObject[] = [
   {
     element: <RootLayout />,
+    errorElement: <RouterErrorBoundary />,
     children: [
       {
         element: <AuthLayout />,
