@@ -33,7 +33,6 @@ interface AuthRequestConfig extends InternalAxiosRequestConfig {
 const PUBLIC_ENDPOINT_PATTERNS = [
   /\/auth\/login$/i,
   /\/auth\/register$/i,
-  /\/auth\/logout$/i,
   /\/auth\/refresh$/i,
   /\/auth\/forgot-password$/i,
   /\/auth\/reset-password$/i,
@@ -41,6 +40,28 @@ const PUBLIC_ENDPOINT_PATTERNS = [
 ];
 const API_CONTRACT_HEADER = "X-Api-Contract";
 const API_CONTRACT_VERSION = "2";
+
+const toOrigin = (baseUrl: string): string | null => {
+  try {
+    const fallbackBase =
+      typeof window !== "undefined" ? window.location.origin : "http://localhost";
+    return new URL(baseUrl, fallbackBase).origin;
+  } catch {
+    return null;
+  }
+};
+
+const TRUSTED_BASE_ORIGINS = (() => {
+  const trusted = new Set<string>();
+  const apiOrigin = toOrigin(API_BASE_URL);
+  const authOrigin = toOrigin(AUTH_BASE_URL);
+  if (apiOrigin) trusted.add(apiOrigin);
+  if (authOrigin) trusted.add(authOrigin);
+  if (typeof window !== "undefined") {
+    trusted.add(window.location.origin);
+  }
+  return trusted;
+})();
 
 let authFailureHandler: AuthFailureHandler | null = null;
 let authFailureNotified = false;
@@ -56,6 +77,21 @@ const isPublicEndpoint = (url?: string): boolean => {
     : url.split("?")[0];
 
   return PUBLIC_ENDPOINT_PATTERNS.some((pattern) => pattern.test(normalized));
+};
+
+const isTrustedRequestOrigin = (config: InternalAxiosRequestConfig): boolean => {
+  const targetUrl = config.url;
+  if (!targetUrl) return false;
+
+  try {
+    const fallbackBase =
+      config.baseURL ??
+      (typeof window !== "undefined" ? window.location.origin : API_BASE_URL);
+    const resolved = new URL(targetUrl, fallbackBase);
+    return TRUSTED_BASE_ORIGINS.has(resolved.origin);
+  } catch {
+    return false;
+  }
 };
 
 const setAuthHeader = (
@@ -172,23 +208,22 @@ const refreshAccessToken = async (): Promise<string> => {
     throw new Error(i18n.t("error:auth.sessionInactive"));
   }
 
+  const cookieMode = isRefreshTokenCookieMode();
   const storedRefreshToken = getRefreshToken();
 
-  if (!isRefreshTokenCookieMode() && !storedRefreshToken) {
+  if (!cookieMode && !storedRefreshToken) {
     notifyAuthFailure("missing_refresh_token");
     throw new Error(i18n.t("error:auth.missingRefreshToken"));
   }
 
   try {
-    const csrfToken = getCsrfToken();
+    const csrfToken = cookieMode ? getCsrfToken() : null;
     const refreshBaseUrl = USE_AUTH_SERVICE ? AUTH_BASE_URL : API_BASE_URL;
     const response = await axios.post(
       `${refreshBaseUrl}/auth/refresh`,
       storedRefreshToken ? { refreshToken: storedRefreshToken } : undefined,
       {
-        // Stage 1 body-mode: credentials=false (no cross-site cookies).
-        // Stage 2 cookie-mode: flip to true.
-        withCredentials: isRefreshTokenCookieMode(),
+        withCredentials: cookieMode,
         headers: {
           "Content-Type": "application/json",
           [API_CONTRACT_HEADER]: API_CONTRACT_VERSION,
@@ -202,14 +237,17 @@ const refreshAccessToken = async (): Promise<string> => {
       throw new Error(i18n.t("error:auth.refreshMissingToken"));
     }
 
-    if (refreshToken || storedRefreshToken) {
+    if (cookieMode) {
+      updateAccessToken(accessToken);
+    } else {
+      if (!refreshToken) {
+        throw new Error(i18n.t("error:auth.missingRefreshToken"));
+      }
       storeTokens(
         accessToken,
-        refreshToken ?? storedRefreshToken ?? undefined,
+        refreshToken,
         isRememberMeEnabled(),
       );
-    } else {
-      updateAccessToken(accessToken);
     }
     updateSocketAuth(accessToken);
 
@@ -275,9 +313,7 @@ export const authClient: AxiosInstance = axios.create({
     "Content-Type": "application/json",
     [API_CONTRACT_HEADER]: API_CONTRACT_VERSION,
   },
-  // Stage 1 body-mode: no cross-site cookies.
-  // Stage 2 cookie-mode: flip via isRefreshTokenCookieMode().
-  withCredentials: false,
+  withCredentials: isRefreshTokenCookieMode(),
 });
 
 apiClient.interceptors.request.use(
@@ -293,7 +329,8 @@ apiClient.interceptors.request.use(
       pendingRequestControllers.set(requestId, controller);
     }
 
-    const shouldAttachAuth = !isPublicEndpoint(config.url);
+    const shouldAttachAuth =
+      !isPublicEndpoint(config.url) && isTrustedRequestOrigin(config);
     requestConfig.headers = requestConfig.headers ?? {};
     const contractHeaders = requestConfig.headers as
       | AxiosHeaders
@@ -329,6 +366,7 @@ apiClient.interceptors.response.use(
       !originalRequest ||
       error.response?.status !== 401 ||
       originalRequest._retry ||
+      !isTrustedRequestOrigin(originalRequest) ||
       isPublicEndpoint(originalRequest.url) ||
       /\/auth\/refresh$/i.test((originalRequest.url ?? "").split("?")[0])
     ) {

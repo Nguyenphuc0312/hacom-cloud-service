@@ -9,10 +9,22 @@ import apiClient, {
   resetAuthFailureState,
   setAuthFailureHandler,
 } from "../lib/axios";
-import type { ApiResponse } from "@hacom/chat-shared-types";
+import type {
+  ApiResponse,
+  RefreshTokenResponse,
+} from "@hacom/chat-shared-types";
 import type { LoginFormData, RegisterFormData } from "../lib/validations";
-import { getAccessToken, storeTokens } from "../services/tokenService";
+import {
+  getAccessToken,
+  getCsrfToken,
+  getRefreshToken,
+  isRefreshTokenCookieMode,
+  isRememberMeEnabled,
+  storeTokens,
+  updateAccessToken,
+} from "../services/tokenService";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
+import { toast } from "../components/ui";
 import {
   initializeAuthSync,
   notifyLogoutAcrossTabs,
@@ -54,11 +66,21 @@ interface LogoutOptions {
   redirect: boolean;
 }
 
+type RegistrationStatus = "idle" | "verification_required";
+
+interface RefreshPayload extends RefreshTokenResponse {
+  tokens?: {
+    accessToken?: string;
+    refreshToken?: string;
+  };
+}
+
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   isInitialized: boolean;
+  registrationStatus: RegistrationStatus;
   error: string | null;
 
   login: (data: LoginFormData) => Promise<void>;
@@ -88,6 +110,62 @@ const resolveTokens = (
   return { accessToken, refreshToken };
 };
 
+const resolveRefreshTokens = (
+  payload: RefreshPayload,
+): { accessToken: string | null; refreshToken: string | null } => {
+  const accessToken =
+    payload.tokens?.accessToken ?? payload.accessToken ?? null;
+  const refreshToken =
+    payload.tokens?.refreshToken ?? payload.refreshToken ?? null;
+  return { accessToken, refreshToken };
+};
+
+const fetchCurrentUser = async (accessToken: string): Promise<User> => {
+  const response = await authClient.get<ApiResponse<User>>("/auth/me", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return unwrapApiSuccess(response.data);
+};
+
+const refreshAccessTokenForBootstrap = async (): Promise<string> => {
+  const cookieMode = isRefreshTokenCookieMode();
+  const refreshToken = getRefreshToken();
+
+  if (!cookieMode && !refreshToken) {
+    throw new Error(i18n.t("error:auth.missingRefreshToken"));
+  }
+
+  const csrfToken = cookieMode ? getCsrfToken() : null;
+  const response = await authClient.post<ApiResponse<RefreshPayload>>(
+    "/auth/refresh",
+    refreshToken ? { refreshToken } : undefined,
+    {
+      withCredentials: cookieMode,
+      headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
+    },
+  );
+
+  const payload = unwrapApiSuccess(response.data);
+  const { accessToken, refreshToken: rotatedRefreshToken } =
+    resolveRefreshTokens(payload);
+
+  if (!accessToken) {
+    throw new Error(i18n.t("error:auth.refreshMissingToken"));
+  }
+
+  if (cookieMode) {
+    updateAccessToken(accessToken);
+  } else {
+    if (!rotatedRefreshToken) {
+      throw new Error(i18n.t("error:auth.missingRefreshToken"));
+    }
+    storeTokens(accessToken, rotatedRefreshToken, isRememberMeEnabled());
+  }
+
+  resetAuthFailureState();
+  return accessToken;
+};
+
 const resetChatState = async (): Promise<void> => {
   const { useChatStore } = await import("./chatStore");
   useChatStore.getState().reset();
@@ -112,7 +190,7 @@ export const useAuthStore = create<AuthState>()(
             try {
               await requestServerLogout();
             } catch {
-              // Local logout still continues even when server call fails.
+              toast.warning("Logout server failed, local logout applied");
             }
           }
 
@@ -125,6 +203,7 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
             error: null,
             isInitialized: true,
+            registrationStatus: "idle",
           });
 
           if (options.broadcast) {
@@ -146,6 +225,7 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: false,
         isLoading: false,
         isInitialized: false,
+        registrationStatus: "idle",
         error: null,
 
         login: async (data: LoginFormData) => {
@@ -180,6 +260,7 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               isLoading: false,
               isInitialized: true,
+              registrationStatus: "idle",
               error: null,
             });
           } catch (error: unknown) {
@@ -193,6 +274,7 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: false,
               user: null,
               isInitialized: true,
+              registrationStatus: "idle",
             });
             throw new Error(errorMessage);
           }
@@ -202,27 +284,27 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: true, error: null });
 
           try {
-            const response = await authClient.post<ApiResponse<AuthResponse>>(
-              "/auth/register",
-              data,
-            );
-
-            const payload = unwrapApiSuccess(response.data);
-            const { user } = payload;
-            const { accessToken, refreshToken } = resolveTokens(payload);
-
-            if (!accessToken) {
-              throw new Error(i18n.t("error:auth.registerTokenMissing"));
-            }
-
-            storeTokens(accessToken, refreshToken ?? undefined, false);
-            resetAuthFailureState();
+            const { authApi } = await import("../services/api");
+            const response = await authApi.register(data);
+            const payload = unwrapApiSuccess(response);
+            const stagedUser: User | null = payload.userId
+              ? {
+                  id: payload.userId,
+                  username: data.username,
+                  email: data.email,
+                  firstName: data.firstName,
+                  lastName: data.lastName,
+                  status: "offline",
+                  isVerified: false,
+                }
+              : null;
 
             set({
-              user,
-              isAuthenticated: true,
+              user: stagedUser,
+              isAuthenticated: false,
               isLoading: false,
               isInitialized: true,
+              registrationStatus: "verification_required",
               error: null,
             });
           } catch (error: unknown) {
@@ -233,6 +315,7 @@ export const useAuthStore = create<AuthState>()(
               isLoading: false,
               error: errorMessage,
               isInitialized: true,
+              registrationStatus: "idle",
             });
             throw new Error(errorMessage);
           }
@@ -256,6 +339,7 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: false,
               isLoading: false,
               isInitialized: true,
+              registrationStatus: "idle",
             });
             return;
           }
@@ -274,6 +358,7 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               isLoading: false,
               isInitialized: true,
+              registrationStatus: "idle",
             });
             resetAuthFailureState();
           } catch {
@@ -283,6 +368,7 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: false,
               isLoading: false,
               isInitialized: true,
+              registrationStatus: "idle",
             });
           }
         },
@@ -312,17 +398,66 @@ export const useAuthStore = create<AuthState>()(
         clearError: () => set({ error: null }),
 
         initialize: async () => {
-          const token = getAccessToken();
+          set({ isLoading: true, error: null });
 
-          if (token) {
-            await get().refreshUser();
-          } else {
-            set({
-              user: null,
-              isAuthenticated: false,
-              isInitialized: true,
-            });
+          const accessToken = getAccessToken();
+          if (accessToken) {
+            try {
+              const user = await fetchCurrentUser(accessToken);
+              set({
+                user,
+                isAuthenticated: true,
+                isLoading: false,
+                isInitialized: true,
+                registrationStatus: "idle",
+                error: null,
+              });
+              resetAuthFailureState();
+              return;
+            } catch (error: unknown) {
+              const apiError = extractApiError(error);
+              if (apiError.statusCode !== 401) {
+                runClientLogoutCleanup("bootstrap_me_failed");
+                set({
+                  user: null,
+                  isAuthenticated: false,
+                  isLoading: false,
+                  isInitialized: true,
+                  registrationStatus: "idle",
+                  error: null,
+                });
+                return;
+              }
+            }
           }
+
+          if (isRefreshTokenCookieMode() || getRefreshToken()) {
+            try {
+              const newAccessToken = await refreshAccessTokenForBootstrap();
+              const user = await fetchCurrentUser(newAccessToken);
+              set({
+                user,
+                isAuthenticated: true,
+                isLoading: false,
+                isInitialized: true,
+                registrationStatus: "idle",
+                error: null,
+              });
+              return;
+            } catch {
+              // Fallback to local logout below.
+            }
+          }
+
+          runClientLogoutCleanup("bootstrap_auth_failed");
+          set({
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+            isInitialized: true,
+            registrationStatus: "idle",
+            error: null,
+          });
         },
 
         handleAuthFailure: async (reason = "refresh_failed") => {

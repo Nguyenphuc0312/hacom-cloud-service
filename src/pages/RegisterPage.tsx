@@ -139,8 +139,8 @@ export const RegisterPage: React.FC = () => {
         firstName: data.firstName,
         lastName: data.lastName,
       });
-      toast.success(t("auth:toast.registerSuccess"));
-      navigate("/chat", { replace: true });
+      toast.success("Registration submitted. Please check your email to verify your account.");
+      navigate("/login", { replace: true });
     } catch (err) {
       toast.error((err as Error).message ?? t("auth:toast.registerFailed"));
     }

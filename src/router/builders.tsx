@@ -7,7 +7,7 @@ import { GuestRoute, ProtectedRoute } from "./guards/RouteGuards";
 
 const renderRouteElement = (
   Component: React.ComponentType,
-  options?: { guestOnly?: boolean; protected?: boolean; roles?: string[] },
+  options?: { guestOnly?: boolean; roles?: string[] },
 ): ReactElement => {
   const page = <Component />;
 
@@ -15,7 +15,7 @@ const renderRouteElement = (
     return <GuestRoute>{page}</GuestRoute>;
   }
 
-  if (options?.protected || options?.roles?.length) {
+  if (options?.roles?.length) {
     return <ProtectedRoute allowedRoles={options.roles}>{page}</ProtectedRoute>;
   }
 
@@ -36,7 +36,6 @@ export const buildPrivateRouteObjects = (): RouteObject[] =>
     path,
     index,
     element: renderRouteElement(component as React.ComponentType, {
-      protected: true,
       roles,
     }),
   }));

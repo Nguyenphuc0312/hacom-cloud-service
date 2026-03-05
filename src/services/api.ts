@@ -7,12 +7,12 @@ import apiClient, { authClient } from "../lib/axios";
 import axios from "axios";
 import type {
   ApiResponse,
-  AuthResponseDto,
   CompleteUploadResponse,
   CreateMessageResponse,
   GetDownloadUrlResponse,
   LoginResponse,
   RefreshTokenResponse,
+  RegisterResponseDto,
   RoomMessagesResponse,
   UploadSignedUrlResponse,
 } from "@hacom/chat-shared-types";
@@ -46,7 +46,7 @@ export const authApi = {
     firstName?: string;
     lastName?: string;
   }) => {
-    const response = await authClient.post<ApiResponse<AuthResponseDto>>(
+    const response = await authClient.post<ApiResponse<RegisterResponseDto>>(
       "/auth/register",
       data,
     );
@@ -82,10 +82,14 @@ export const authApi = {
     return response.data;
   },
 
-  resetPassword: async (token: string, password: string) => {
+  resetPassword: async (
+    token: string,
+    newPassword: string,
+    confirmPassword: string,
+  ) => {
     const response = await authClient.post<ApiResponse<{ message: string }>>(
       "/auth/reset-password",
-      { token, password },
+      { token, newPassword, confirmPassword },
     );
     return response.data;
   },
@@ -95,7 +99,7 @@ export const authApi = {
     newPassword: string;
     confirmPassword: string;
   }) => {
-    const response = await authClient.post<ApiResponse<{ message: string }>>(
+    const response = await apiClient.post<ApiResponse<{ message: string }>>(
       "/auth/change-password",
       data,
     );

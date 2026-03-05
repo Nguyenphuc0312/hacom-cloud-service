@@ -63,7 +63,7 @@ export const ResetPasswordPage: React.FC = () => {
     setIsLoading(true);
     setTokenError(null);
     try {
-      await authApi.resetPassword(token, data.password);
+      await authApi.resetPassword(token, data.password, data.confirmPassword);
       setIsSubmitted(true);
       toast.success(t("auth:reset.successTitle"));
     } catch (err) {

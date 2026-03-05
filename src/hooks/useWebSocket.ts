@@ -9,12 +9,21 @@ import {
   connectSocket,
   disconnectSocket,
   getSocket,
+  updateSocketAuth,
   WebSocketEvents,
   type ConnectionState,
 } from "../lib/socket";
-import { conversationApi } from "../services/api";
+import { resetAuthFailureState } from "../lib/axios";
+import { authApi, conversationApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import { useAuthStore, useChatStore, useGroupStore } from "../stores";
+import {
+  getRefreshToken,
+  isRefreshTokenCookieMode,
+  isRememberMeEnabled,
+  storeTokens,
+  updateAccessToken,
+} from "../services/tokenService";
 import { toast } from "../utils/toast";
 
 interface UseWebSocketOptions {
@@ -91,6 +100,68 @@ const toCursorValue = (value: unknown): string | undefined => {
 type MessageCursor = {
   at: string;
   id: string;
+};
+
+type RefreshPayload = {
+  accessToken?: string;
+  refreshToken?: string;
+  tokens?: {
+    accessToken?: string;
+    refreshToken?: string;
+  };
+};
+
+let wsRefreshPromise: Promise<string> | null = null;
+let wsReauthFailureHandled = false;
+
+const resolveRefreshTokens = (
+  payload: RefreshPayload,
+): { accessToken: string | null; refreshToken: string | null } => {
+  const accessToken =
+    payload.tokens?.accessToken ?? payload.accessToken ?? null;
+  const refreshToken =
+    payload.tokens?.refreshToken ?? payload.refreshToken ?? null;
+  return { accessToken, refreshToken };
+};
+
+const refreshAccessTokenForWebSocket = async (): Promise<string> => {
+  const cookieMode = isRefreshTokenCookieMode();
+  const refreshToken = getRefreshToken();
+
+  if (!cookieMode && !refreshToken) {
+    throw new Error("Missing refresh token");
+  }
+
+  const response = await authApi.refreshToken(refreshToken ?? undefined);
+  const payload = unwrapApiSuccess(response) as RefreshPayload;
+  const { accessToken, refreshToken: rotatedRefreshToken } =
+    resolveRefreshTokens(payload);
+
+  if (!accessToken) {
+    throw new Error("Refresh response missing access token");
+  }
+
+  if (cookieMode) {
+    updateAccessToken(accessToken);
+  } else {
+    if (!rotatedRefreshToken) {
+      throw new Error("Refresh response missing refresh token");
+    }
+    storeTokens(accessToken, rotatedRefreshToken, isRememberMeEnabled());
+  }
+
+  resetAuthFailureState();
+  wsReauthFailureHandled = false;
+  return accessToken;
+};
+
+const getWsRefreshPromise = (): Promise<string> => {
+  if (!wsRefreshPromise) {
+    wsRefreshPromise = refreshAccessTokenForWebSocket().finally(() => {
+      wsRefreshPromise = null;
+    });
+  }
+  return wsRefreshPromise;
 };
 
 export const useWebSocket = (
@@ -306,7 +377,26 @@ export const useWebSocket = (
       (data) => {
         const reason =
           asString(asRecord(data)?.reason) ?? "reauthentication required";
-        onError?.(new Error(`WebSocket reauth required: ${reason}`));
+        void (async () => {
+          try {
+            const newAccessToken = await getWsRefreshPromise();
+            updateSocketAuth(newAccessToken);
+          } catch (error) {
+            if (!wsReauthFailureHandled) {
+              wsReauthFailureHandled = true;
+              toast.error("Session expired. Please login again.");
+              await useAuthStore.getState().handleAuthFailure("refresh_failed");
+            }
+
+            const message =
+              error instanceof Error ? error.message : "refresh_failed";
+            onError?.(
+              new Error(
+                `WebSocket reauth failed (${reason}): ${message}`,
+              ),
+            );
+          }
+        })();
       },
     );
     unsubscribersRef.current.push(unsubReauthRequired);

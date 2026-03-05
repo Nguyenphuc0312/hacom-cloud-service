@@ -18,6 +18,12 @@ import {
 import { WsEventNames } from "@hacom/chat-shared-types";
 import { isJwtLike, normalizeToken } from "../utils/jwtHelpers";
 
+const CAN_USE_QUERY_TOKEN = import.meta.env.DEV;
+const QUERY_TOKEN_BY_ENV =
+  CAN_USE_QUERY_TOKEN && WEBSOCKET_AUTH_CONFIG.USE_QUERY_TOKEN;
+const AUTO_QUERY_TOKEN_FALLBACK_ENABLED =
+  CAN_USE_QUERY_TOKEN && WEBSOCKET_AUTH_CONFIG.AUTO_QUERY_TOKEN_FALLBACK;
+
 // ============================================
 // Types
 // ============================================
@@ -80,8 +86,7 @@ class WebSocketManager {
       ? normalizedBase
       : `${normalizedBase}/ws`;
 
-    const useQueryToken =
-      WEBSOCKET_AUTH_CONFIG.USE_QUERY_TOKEN || this.queryTokenFallbackEnabled;
+    const useQueryToken = QUERY_TOKEN_BY_ENV || this.queryTokenFallbackEnabled;
 
     if (!useQueryToken) {
       return endpoint;
@@ -249,8 +254,8 @@ class WebSocketManager {
         !wasManualDisconnect &&
         !hasOpened &&
         event.code === 1006 &&
-        !WEBSOCKET_AUTH_CONFIG.USE_QUERY_TOKEN &&
-        WEBSOCKET_AUTH_CONFIG.AUTO_QUERY_TOKEN_FALLBACK &&
+        !QUERY_TOKEN_BY_ENV &&
+        AUTO_QUERY_TOKEN_FALLBACK_ENABLED &&
         !this.queryTokenFallbackAttempted;
 
       if (shouldTryQueryTokenFallback) {
@@ -304,6 +309,11 @@ class WebSocketManager {
 
     // Log for debugging
     console.debug("WebSocket received:", type, payload);
+
+    if (type === WsEventNames.AUTH_AUTHENTICATED) {
+      this.queryTokenFallbackEnabled = false;
+      this.queryTokenFallbackAttempted = false;
+    }
 
     // Emit to registered handlers
     this.emit(type, payload);
