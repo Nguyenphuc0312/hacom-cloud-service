@@ -66,6 +66,7 @@ const TRUSTED_BASE_ORIGINS = (() => {
 let authFailureHandler: AuthFailureHandler | null = null;
 let authFailureNotified = false;
 let refreshPromise: Promise<string> | null = null;
+let refreshEndpointLogged = false;
 
 const pendingRequestControllers = new Map<string, AbortController>();
 
@@ -218,9 +219,16 @@ const refreshAccessToken = async (): Promise<string> => {
 
   try {
     const csrfToken = cookieMode ? getCsrfToken() : null;
-    const refreshBaseUrl = USE_AUTH_SERVICE ? AUTH_BASE_URL : API_BASE_URL;
+    const refreshEndpoint = `${authBaseUrl}/auth/refresh`;
+    if (import.meta.env.DEV && !refreshEndpointLogged) {
+      refreshEndpointLogged = true;
+      console.info("[auth-refresh]", {
+        USE_AUTH_SERVICE,
+        refreshEndpoint,
+      });
+    }
     const response = await axios.post(
-      `${refreshBaseUrl}/auth/refresh`,
+      refreshEndpoint,
       storedRefreshToken ? { refreshToken: storedRefreshToken } : undefined,
       {
         withCredentials: cookieMode,

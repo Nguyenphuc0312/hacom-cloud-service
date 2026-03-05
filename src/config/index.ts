@@ -20,8 +20,36 @@ export const AUTH_BASE_URL = import.meta.env.VITE_AUTH_BASE_URL || API_BASE_URL;
  * true  → FE calls AUTH_BASE_URL for /auth/* endpoints.
  * false → FE calls API_BASE_URL (legacy, rollback).
  */
+const rawUseAuthService = import.meta.env.VITE_USE_AUTH_SERVICE;
 export const USE_AUTH_SERVICE =
-  import.meta.env.VITE_USE_AUTH_SERVICE === "true";
+  rawUseAuthService === undefined || rawUseAuthService === ""
+    ? true
+    : rawUseAuthService === "true";
+
+const normalizeBaseUrl = (url: string): string => url.replace(/\/+$/, "");
+const normalizedApiBaseUrl = normalizeBaseUrl(API_BASE_URL);
+const normalizedAuthBaseUrl = normalizeBaseUrl(AUTH_BASE_URL);
+
+if (import.meta.env.DEV) {
+  console.info("[auth-config]", {
+    VITE_USE_AUTH_SERVICE: rawUseAuthService ?? "(unset -> true)",
+    USE_AUTH_SERVICE,
+    API_BASE_URL: normalizedApiBaseUrl,
+    AUTH_BASE_URL: normalizedAuthBaseUrl,
+  });
+}
+
+if (USE_AUTH_SERVICE && normalizedApiBaseUrl === normalizedAuthBaseUrl) {
+  throw new Error(
+    "Invalid auth routing: USE_AUTH_SERVICE=true but AUTH_BASE_URL equals API_BASE_URL. Check VITE_AUTH_BASE_URL and restart dev server.",
+  );
+}
+
+if (import.meta.env.DEV && !USE_AUTH_SERVICE) {
+  console.warn(
+    "[auth-config] USE_AUTH_SERVICE=false: /auth/* requests will fallback to API_BASE_URL.",
+  );
+}
 
 export const WEBSOCKET_URL =
   import.meta.env.VITE_WS_URL ||
