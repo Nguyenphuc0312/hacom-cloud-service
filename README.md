@@ -63,7 +63,7 @@ npm install
 npm run dev
 ```
 
-Mở trình duyệt tại `http://localhost:5173`
+Mở trình duyệt tại `http://localhost:5100`
 
 ### Build Production
 

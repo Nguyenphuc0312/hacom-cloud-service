@@ -5,7 +5,7 @@
 
 // API Base URLs
 export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1";
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3001/api/v1";
 
 /**
  * Auth service base URL (Stage 1 – body mode).
@@ -24,7 +24,9 @@ export const USE_AUTH_SERVICE =
   import.meta.env.VITE_USE_AUTH_SERVICE === "true";
 
 export const WEBSOCKET_URL =
-  import.meta.env.VITE_WEBSOCKET_URL || "ws://localhost:8080";
+  import.meta.env.VITE_WS_URL ||
+  import.meta.env.VITE_WEBSOCKET_URL ||
+  "ws://localhost:8001";
 
 export const WEBSOCKET_AUTH_CONFIG = {
   // Compatibility mode for backends that require token during handshake (/ws?token=...).
