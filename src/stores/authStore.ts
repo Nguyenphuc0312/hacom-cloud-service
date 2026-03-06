@@ -99,6 +99,7 @@ interface AuthState {
 }
 
 let logoutFlowPromise: Promise<void> | null = null;
+let initializePromise: Promise<void> | null = null;
 
 const resolveTokens = (
   payload: AuthResponse,
@@ -398,66 +399,76 @@ export const useAuthStore = create<AuthState>()(
         clearError: () => set({ error: null }),
 
         initialize: async () => {
-          set({ isLoading: true, error: null });
+          if (initializePromise) {
+            return initializePromise;
+          }
 
-          const accessToken = getAccessToken();
-          if (accessToken) {
-            try {
-              const user = await fetchCurrentUser(accessToken);
-              set({
-                user,
-                isAuthenticated: true,
-                isLoading: false,
-                isInitialized: true,
-                registrationStatus: "idle",
-                error: null,
-              });
-              resetAuthFailureState();
-              return;
-            } catch (error: unknown) {
-              const apiError = extractApiError(error);
-              if (apiError.statusCode !== 401) {
-                runClientLogoutCleanup("bootstrap_me_failed");
+          initializePromise = (async () => {
+            set({ isLoading: true, error: null });
+
+            const accessToken = getAccessToken();
+            if (accessToken) {
+              try {
+                const user = await fetchCurrentUser(accessToken);
                 set({
-                  user: null,
-                  isAuthenticated: false,
+                  user,
+                  isAuthenticated: true,
+                  isLoading: false,
+                  isInitialized: true,
+                  registrationStatus: "idle",
+                  error: null,
+                });
+                resetAuthFailureState();
+                return;
+              } catch (error: unknown) {
+                const apiError = extractApiError(error);
+                if (apiError.statusCode !== 401) {
+                  runClientLogoutCleanup("bootstrap_me_failed");
+                  set({
+                    user: null,
+                    isAuthenticated: false,
+                    isLoading: false,
+                    isInitialized: true,
+                    registrationStatus: "idle",
+                    error: null,
+                  });
+                  return;
+                }
+              }
+            }
+
+            if (isRefreshTokenCookieMode() || getRefreshToken()) {
+              try {
+                const newAccessToken = await refreshAccessTokenForBootstrap();
+                const user = await fetchCurrentUser(newAccessToken);
+                set({
+                  user,
+                  isAuthenticated: true,
                   isLoading: false,
                   isInitialized: true,
                   registrationStatus: "idle",
                   error: null,
                 });
                 return;
+              } catch {
+                // Fallback to local logout below.
               }
             }
-          }
 
-          if (isRefreshTokenCookieMode() || getRefreshToken()) {
-            try {
-              const newAccessToken = await refreshAccessTokenForBootstrap();
-              const user = await fetchCurrentUser(newAccessToken);
-              set({
-                user,
-                isAuthenticated: true,
-                isLoading: false,
-                isInitialized: true,
-                registrationStatus: "idle",
-                error: null,
-              });
-              return;
-            } catch {
-              // Fallback to local logout below.
-            }
-          }
-
-          runClientLogoutCleanup("bootstrap_auth_failed");
-          set({
-            user: null,
-            isAuthenticated: false,
-            isLoading: false,
-            isInitialized: true,
-            registrationStatus: "idle",
-            error: null,
+            runClientLogoutCleanup("bootstrap_auth_failed");
+            set({
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+              isInitialized: true,
+              registrationStatus: "idle",
+              error: null,
+            });
+          })().finally(() => {
+            initializePromise = null;
           });
+
+          return initializePromise;
         },
 
         handleAuthFailure: async (reason = "refresh_failed") => {

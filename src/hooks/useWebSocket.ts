@@ -18,6 +18,7 @@ import { authApi, conversationApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import { useAuthStore, useChatStore, useGroupStore } from "../stores";
 import {
+  getAccessToken,
   getRefreshToken,
   isRefreshTokenCookieMode,
   isRememberMeEnabled,
@@ -155,9 +156,25 @@ const refreshAccessTokenForWebSocket = async (): Promise<string> => {
   return accessToken;
 };
 
-const getWsRefreshPromise = (): Promise<string> => {
+const getAccessTokenForWebSocketReauth = async (
+  reason: string,
+): Promise<string> => {
+  if (reason === "authenticate_required") {
+    const accessToken = getAccessToken();
+    if (!accessToken) {
+      throw new Error("Missing access token");
+    }
+
+    wsReauthFailureHandled = false;
+    return accessToken;
+  }
+
+  return refreshAccessTokenForWebSocket();
+};
+
+const getWsRefreshPromise = (reason: string): Promise<string> => {
   if (!wsRefreshPromise) {
-    wsRefreshPromise = refreshAccessTokenForWebSocket().finally(() => {
+    wsRefreshPromise = getAccessTokenForWebSocketReauth(reason).finally(() => {
       wsRefreshPromise = null;
     });
   }
@@ -379,7 +396,7 @@ export const useWebSocket = (
           asString(asRecord(data)?.reason) ?? "reauthentication required";
         void (async () => {
           try {
-            const newAccessToken = await getWsRefreshPromise();
+            const newAccessToken = await getWsRefreshPromise(reason);
             updateSocketAuth(newAccessToken);
           } catch (error) {
             if (!wsReauthFailureHandled) {
