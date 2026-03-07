@@ -168,7 +168,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const uploadQueue = useUploadQueue({ conversationId: conversation.id });
 
   // ── Presence subscription: subscribe to room members' presence ──
-  usePresence({ roomId: conversation.id });
+  usePresence({ conversationId: conversation.id });
 
   // ── Drag-and-drop ──
   const { isDragActive, dropZoneProps, dismiss } = useDropZone({
@@ -307,6 +307,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setIsSearchOpen(false);
   }, []);
 
+  const handleSelectSearchMessage = React.useCallback(() => {
+    setIsSearchOpen(false);
+  }, []);
+
   // Close panels when switching conversations
   React.useEffect(() => {
     setIsSearchOpen(false);
@@ -334,7 +338,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     async (contactUserId: string) => {
       try {
         await contactApi.shareContact({
-          roomId: conversation.id,
+          conversationId: conversation.id,
           contactUserId,
         });
         toast.success(
@@ -460,7 +464,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       {/* Search panel overlay */}
       {isSearchOpen && (
         <SearchPanel
-          roomId={conversation.id}
+          conversationId={conversation.id}
+          onSelectMessage={handleSelectSearchMessage}
           onClose={() => setIsSearchOpen(false)}
         />
       )}
@@ -468,7 +473,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       {/* Pinned messages panel overlay */}
       {isPinnedOpen && (
         <PinnedMessagesPanel
-          roomId={conversation.id}
+          conversationId={conversation.id}
           onClose={() => setIsPinnedOpen(false)}
         />
       )}

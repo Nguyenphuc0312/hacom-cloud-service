@@ -1,7 +1,7 @@
 /**
  * @fileoverview PinnedMessagesPanel
  * Enterprise-grade pinned messages panel with self-contained data fetching.
- * Shows pinned messages for a room. Click to jump to message.
+ * Shows pinned messages for a conversation. Click to jump to message.
  */
 
 import React from "react";
@@ -19,20 +19,21 @@ import { formatRelativeTime } from "../../utils/formatTime";
 import type { Message } from "../../types";
 
 interface PinnedMessagesPanelProps {
-  roomId: string;
+  conversationId: string;
   onClose: () => void;
   onJumpToMessage?: (message: Message) => void;
   className?: string;
 }
 
 export const PinnedMessagesPanel: React.FC<PinnedMessagesPanelProps> = ({
-  roomId,
+  conversationId,
   onClose,
   onJumpToMessage,
   className,
 }) => {
   const { t } = useTranslation();
-  const { pinnedMessages, isLoading, error } = usePinnedMessages(roomId);
+  const { pinnedMessages, isLoading, error } =
+    usePinnedMessages(conversationId);
 
   return (
     <div
@@ -108,18 +109,14 @@ export const PinnedMessagesPanel: React.FC<PinnedMessagesPanelProps> = ({
             })}
           >
             <Avatar
-              src={message.sender?.avatar}
-              alt={
-                message.sender?.displayName ?? message.sender?.username ?? ""
-              }
+              src={message.senderAvatar}
+              alt={message.senderName ?? ""}
               size="xs"
             />
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-2">
                 <span className="truncate text-xs font-semibold text-text-primary">
-                  {message.sender?.displayName ??
-                    message.sender?.username ??
-                    ""}
+                  {message.senderName ?? ""}
                 </span>
                 <span className="shrink-0 text-[11px] text-text-muted">
                   {formatRelativeTime(new Date(message.createdAt))}

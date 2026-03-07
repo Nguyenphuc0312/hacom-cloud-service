@@ -15,7 +15,7 @@ export const JoinByLinkPage: React.FC = () => {
   const { token = "" } = useParams<{ token: string }>();
 
   const [status, setStatus] = useState<JoinStatus>("idle");
-  const [roomId, setRoomId] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
 
   const tokenPreview = useMemo(() => {
@@ -32,11 +32,12 @@ export const JoinByLinkPage: React.FC = () => {
     try {
       const response = await groupApi.joinByLink(token);
       const payload = unwrapApiSuccess(response) as {
+        conversationId?: string;
         roomId?: string;
         status?: "joined" | "pending";
       };
 
-      setRoomId(payload.roomId || null);
+      setConversationId(payload.conversationId ?? payload.roomId ?? null);
       if (payload.status === "pending") {
         setStatus("pending");
         return;
@@ -54,12 +55,12 @@ export const JoinByLinkPage: React.FC = () => {
   }, [t, token]);
 
   const openChat = useCallback(() => {
-    if (roomId) {
-      navigate(`${ROUTE_PATHS.CHAT}/${roomId}`);
+    if (conversationId) {
+      navigate(`${ROUTE_PATHS.CHAT}/${conversationId}`);
       return;
     }
     navigate(ROUTE_PATHS.CHAT);
-  }, [navigate, roomId]);
+  }, [conversationId, navigate]);
 
   return (
     <div className="flex h-full flex-col bg-background">

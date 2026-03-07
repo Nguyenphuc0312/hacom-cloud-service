@@ -15,8 +15,8 @@ import { formatRelativeTime } from "../../utils/formatTime";
 import type { Message } from "../../types";
 
 interface SearchPanelProps {
-  /** Current room ID to scope search (optional) */
-  roomId?: string;
+  /** Current conversation ID to scope search (optional) */
+  conversationId?: string;
   /** Called when a search result is clicked */
   onSelectMessage: (message: Message) => void;
   /** Close the search panel */
@@ -54,7 +54,7 @@ const HighlightedText: React.FC<{ text: string; query: string }> = ({
 };
 
 export const SearchPanel: React.FC<SearchPanelProps> = ({
-  roomId,
+  conversationId,
   onSelectMessage,
   onClose,
   className,
@@ -73,7 +73,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     hasMore,
     loadMore,
     reset,
-  } = useMessageSearch({ roomId, debounceMs: 400, limit: 20 });
+  } = useMessageSearch({ conversationId, debounceMs: 400, limit: 20 });
 
   // Auto-focus input on mount
   useEffect(() => {
@@ -216,18 +216,14 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
             )}
           >
             <Avatar
-              src={message.sender?.avatar}
-              alt={
-                message.sender?.displayName ?? message.sender?.username ?? ""
-              }
+              src={message.senderAvatar}
+              alt={message.senderName ?? ""}
               size="sm"
             />
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-2">
                 <span className="truncate text-sm font-medium text-text-primary">
-                  {message.sender?.displayName ??
-                    message.sender?.username ??
-                    ""}
+                  {message.senderName ?? ""}
                 </span>
                 <span className="shrink-0 text-xs text-text-muted">
                   {formatRelativeTime(new Date(message.createdAt))}

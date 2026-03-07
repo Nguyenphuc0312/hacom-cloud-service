@@ -1,6 +1,6 @@
 /**
  * @fileoverview usePinnedMessages hook
- * Manages pinned messages for a room with optimistic pin/unpin.
+ * Manages pinned messages for a conversation with optimistic pin/unpin.
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
@@ -17,7 +17,7 @@ interface UsePinnedMessagesReturn {
 }
 
 export const usePinnedMessages = (
-  roomId: string | null,
+  conversationId: string | null,
 ): UsePinnedMessagesReturn => {
   const [pinnedMessages, setPinnedMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -25,11 +25,11 @@ export const usePinnedMessages = (
   const fetchedRef = useRef<string | null>(null);
 
   const fetchPinned = useCallback(async () => {
-    if (!roomId) return;
+    if (!conversationId) return;
     setIsLoading(true);
     setError(null);
     try {
-      const response = await messageApi.getPinnedMessages(roomId);
+      const response = await messageApi.getPinnedMessages(conversationId);
       if (response.success) {
         const data = response.data as { messages: Message[] };
         setPinnedMessages(data.messages ?? []);
@@ -40,21 +40,26 @@ export const usePinnedMessages = (
     } finally {
       setIsLoading(false);
     }
-  }, [roomId]);
+  }, [conversationId]);
 
   useEffect(() => {
-    if (roomId && roomId !== fetchedRef.current) {
-      fetchedRef.current = roomId;
+    if (conversationId && conversationId !== fetchedRef.current) {
+      fetchedRef.current = conversationId;
       fetchPinned();
     }
-  }, [roomId, fetchPinned]);
+  }, [conversationId, fetchPinned]);
 
   useEffect(() => {
-    if (!roomId || typeof window === "undefined") return;
+    if (!conversationId || typeof window === "undefined") return;
 
     const handler = (event: Event) => {
-      const custom = event as CustomEvent<{ roomId?: string }>;
-      if (custom.detail?.roomId === roomId) {
+      const custom = event as CustomEvent<{
+        conversationId?: string;
+        roomId?: string;
+      }>;
+      const updatedConversationId =
+        custom.detail?.conversationId ?? custom.detail?.roomId;
+      if (updatedConversationId === conversationId) {
         void fetchPinned();
       }
     };
@@ -63,11 +68,11 @@ export const usePinnedMessages = (
     return () => {
       window.removeEventListener("group:pin:updated", handler as EventListener);
     };
-  }, [fetchPinned, roomId]);
+  }, [conversationId, fetchPinned]);
 
   const togglePin = useCallback(
     async (message: Message): Promise<boolean> => {
-      if (!roomId) return false;
+      if (!conversationId) return false;
 
       const isPinned = message.isPinned ?? false;
 
@@ -97,7 +102,7 @@ export const usePinnedMessages = (
         return false;
       }
     },
-    [roomId],
+    [conversationId],
   );
 
   return {

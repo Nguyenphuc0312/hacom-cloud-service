@@ -21,7 +21,11 @@ interface UseMessageSearchOptions {
   debounceMs?: number;
   /** Results per page (default: 20) */
   limit?: number;
-  /** Optional room ID to scope search */
+  /** Optional conversation ID to scope search */
+  conversationId?: string;
+  /**
+   * @deprecated Use conversationId.
+   */
   roomId?: string;
 }
 
@@ -41,7 +45,8 @@ interface UseMessageSearchReturn {
 export const useMessageSearch = (
   options: UseMessageSearchOptions = {},
 ): UseMessageSearchReturn => {
-  const { debounceMs = 400, limit = 20, roomId } = options;
+  const { debounceMs = 400, limit = 20 } = options;
+  const conversationId = options.conversationId ?? options.roomId;
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Message[]>([]);
@@ -74,7 +79,7 @@ export const useMessageSearch = (
       try {
         const response = await messageApi.searchMessages({
           q: searchQuery.trim(),
-          roomId,
+          conversationId,
           page: searchPage,
           limit,
         });
@@ -100,7 +105,7 @@ export const useMessageSearch = (
         }
       }
     },
-    [roomId, limit],
+    [conversationId, limit],
   );
 
   // Trigger search when debounced query changes

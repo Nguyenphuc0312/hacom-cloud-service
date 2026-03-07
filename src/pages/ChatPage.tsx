@@ -647,46 +647,50 @@ export const ChatPage: React.FC = () => {
         const response =
           await conversationApi.createPrivateConversation(userId);
         const payload = unwrapApiSuccess(response);
-        const roomId = payload.id;
-        if (!roomId) {
+        const conversationId = payload.id;
+        if (!conversationId) {
           throw new Error(t("error:chat.roomIdMissing"));
         }
 
-        // Refresh list to get full room shape (participants, display fields...)
+        // Refresh list to get full conversation shape (participants, display fields...)
         fetchConversations().catch((error) => {
           console.warn(
-            "Refresh conversations after creating direct room failed:",
+            "Refresh conversations after creating direct conversation failed:",
             error,
           );
         });
-        selectConversation(roomId);
-        navigate(`/chat/${roomId}`);
+        selectConversation(conversationId);
+        navigate(`/chat/${conversationId}`);
       } catch (error) {
         const apiError = extractApiError(error);
         const details =
           apiError.details && typeof apiError.details === "object"
             ? (apiError.details as Record<string, unknown>)
             : null;
-        const existingRoomId =
-          details && typeof details.roomId === "string" ? details.roomId : null;
+        const existingConversationId =
+          details && typeof details.conversationId === "string"
+            ? details.conversationId
+            : details && typeof details.roomId === "string"
+              ? details.roomId
+              : null;
 
         if (
-          existingRoomId &&
+          existingConversationId &&
           (apiError.code === ErrorCode.CONFLICT ||
             apiError.code === ErrorCode.ROOM_ALREADY_EXISTS)
         ) {
           fetchConversations().catch((refreshError) => {
             console.warn(
-              "Refresh conversations after conflict room lookup failed:",
+              "Refresh conversations after conflict conversation lookup failed:",
               refreshError,
             );
           });
-          selectConversation(existingRoomId);
-          navigate(`/chat/${existingRoomId}`);
+          selectConversation(existingConversationId);
+          navigate(`/chat/${existingConversationId}`);
           return;
         }
 
-        console.error("Create direct room failed:", apiError);
+        console.error("Create direct conversation failed:", apiError);
         toast.error(
           apiError.message || t("error:chat.startConversationFailed"),
         );
@@ -714,32 +718,32 @@ export const ChatPage: React.FC = () => {
           name: payload.name,
           memberIds: payload.memberIds,
         });
-        const roomPayload = unwrapApiSuccess(response);
-        const roomId = roomPayload.id;
-        if (!roomId) {
+        const conversationPayload = unwrapApiSuccess(response);
+        const conversationId = conversationPayload.id;
+        if (!conversationId) {
           throw new Error(t("error:chat.roomIdMissing"));
         }
 
         fetchConversations().catch((error) => {
           console.warn(
-            "Refresh conversations after creating group room failed:",
+            "Refresh conversations after creating group conversation failed:",
             error,
           );
         });
-        selectConversation(roomId);
-        navigate(`/chat/${roomId}`);
-        const roomPayloadRecord = roomPayload as unknown as {
+        selectConversation(conversationId);
+        navigate(`/chat/${conversationId}`);
+        const conversationPayloadRecord = conversationPayload as unknown as {
           invitedMemberIds?: unknown[];
         };
-        const invited = Array.isArray(roomPayloadRecord.invitedMemberIds)
-          ? roomPayloadRecord.invitedMemberIds.length
+        const invited = Array.isArray(conversationPayloadRecord.invitedMemberIds)
+          ? conversationPayloadRecord.invitedMemberIds.length
           : 0;
         if (invited > 0) {
           toast.info(`${invited} member invite(s) are pending acceptance`);
         }
       } catch (error) {
         const apiError = extractApiError(error);
-        console.error("Create group room failed:", apiError);
+        console.error("Create group conversation failed:", apiError);
         toast.error(apiError.message || t("error:chat.createGroupFailed"));
       } finally {
         roomCreationLockRef.current = false;

@@ -270,7 +270,7 @@ export const useWebSocket = (
 
   const emitJoinRoom = useCallback(
     (roomId: string) => {
-      emit(WebSocketEvents.ROOM_JOIN, {
+      emit(WebSocketEvents.CONVERSATION_JOIN, {
         roomId,
         conversationId: roomId,
       });
@@ -788,7 +788,9 @@ export const useWebSocket = (
         const roomId = payload ? getConversationId(payload) : null;
         if (roomId && typeof window !== "undefined") {
           window.dispatchEvent(
-            new CustomEvent("group:pin:updated", { detail: { roomId } }),
+            new CustomEvent("group:pin:updated", {
+              detail: { conversationId: roomId, roomId },
+            }),
           );
         }
         refreshGroupRoom(data);
@@ -971,7 +973,7 @@ export const useWebSocket = (
     (roomId: string) => {
       if (!roomId) return;
 
-      emit(WebSocketEvents.ROOM_LEAVE, {
+      emit(WebSocketEvents.CONVERSATION_LEAVE, {
         roomId,
         conversationId: roomId,
       });

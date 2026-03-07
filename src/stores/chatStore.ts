@@ -5,8 +5,6 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 
-import apiClient from "../lib/axios";
-import type { ApiResponse } from "@hacom/chat-shared-types";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import {
   normalizeConversation,
@@ -16,7 +14,7 @@ import {
 import { toast } from "../utils/toast";
 import i18n from "../i18n";
 import { useAuthStore } from "./authStore";
-import { conversationApi } from "../services/api";
+import { conversationApi, messageApi } from "../services/api";
 import type {
   Conversation,
   Message,
@@ -826,7 +824,7 @@ export const useChatStore = create<ChatState>()(
           : {};
 
       try {
-        await apiClient.post(`/rooms/${conversationId}/messages/read`, payload);
+        await conversationApi.markAsRead(conversationId);
       } catch (error) {
         set((state) => ({
           conversations: (Array.isArray(state.conversations)
@@ -1101,11 +1099,16 @@ export const useChatStore = create<ChatState>()(
         if (after) params.set("after", after);
         if (afterId) params.set("afterId", afterId);
 
-        const url = `/rooms/${conversationId}/messages?${params.toString()}`;
-        const response = await apiClient.get<ApiResponse<unknown>>(url);
-        const responseEnvelope = asRecord(response.data);
+        const response = await messageApi.getMessages(conversationId, {
+          limit,
+          ...(before ? { before } : {}),
+          ...(beforeId ? { beforeId } : {}),
+          ...(after ? { after } : {}),
+          ...(afterId ? { afterId } : {}),
+        });
+        const responseEnvelope = asRecord(response);
         const responseMeta = asRecord(responseEnvelope?.meta);
-        const payload = unwrapApiSuccess(response.data);
+        const payload = unwrapApiSuccess(response);
         let normalized = normalizeMessagesResponse(payload, responseMeta);
 
         if (
@@ -1119,16 +1122,12 @@ export const useChatStore = create<ChatState>()(
             if (!Number.isNaN(parsedAfter)) {
               const earlierTs = Math.max(0, parsedAfter - 1);
               const earlier = new Date(earlierTs).toISOString();
-              const retryParams = new URLSearchParams({
-                limit: String(limit),
+              const retryResp = await messageApi.getMessages(conversationId, {
+                limit,
                 after: earlier,
               });
-              const retryUrl = `/rooms/${conversationId}/messages?${retryParams.toString()}`;
-              const retryResp =
-                await apiClient.get<ApiResponse<unknown>>(retryUrl);
-              const retryPayload = unwrapApiSuccess(retryResp.data);
-              const retryMeta =
-                asRecord(asRecord(retryResp.data)?.meta) ?? responseMeta;
+              const retryPayload = unwrapApiSuccess(retryResp);
+              const retryMeta = asRecord(asRecord(retryResp)?.meta) ?? responseMeta;
               const retryNormalized = normalizeMessagesResponse(
                 retryPayload,
                 retryMeta,
@@ -1288,22 +1287,18 @@ export const useChatStore = create<ChatState>()(
         const attachments = fileMetaArr
           ? toAttachmentPayload(fileMetaArr)
           : undefined;
-        const response = await apiClient.post<ApiResponse<Message>>(
-          `/rooms/${conversationId}/messages`,
-          {
-            content: messageContent,
-            type,
-            senderName: sender.senderName,
-            ...(sender.senderAvatar
-              ? { senderAvatar: sender.senderAvatar }
-              : {}),
-            tempId,
-            ...(replyToId ? { replyTo: replyToId } : {}),
-            ...(attachments?.length ? { attachments } : {}),
-          },
-        );
+        const response = await messageApi.sendMessage(conversationId, {
+          content: messageContent,
+          type,
+          senderName: sender.senderName,
+          ...(sender.senderAvatar
+            ? { senderAvatar: sender.senderAvatar }
+            : {}),
+          ...(replyToId ? { replyToId } : {}),
+          ...(attachments?.length ? { attachments } : {}),
+        });
         const message = normalizeMessage(
-          unwrapApiSuccess(response.data),
+          unwrapApiSuccess(response),
           conversationId,
         );
         if (!message) {
@@ -1335,20 +1330,16 @@ export const useChatStore = create<ChatState>()(
       const senderAvatar = message.senderAvatar || sender.senderAvatar;
 
       try {
-        const response = await apiClient.post<ApiResponse<Message>>(
-          `/rooms/${conversationId}/messages`,
-          {
-            content: message.content,
-            type: message.type,
-            senderName,
-            ...(senderAvatar ? { senderAvatar } : {}),
-            tempId: message.localId || message.id,
-            ...(replyToId ? { replyTo: replyToId } : {}),
-            ...(attachments?.length ? { attachments } : {}),
-          },
-        );
+        const response = await messageApi.sendMessage(conversationId, {
+          content: message.content,
+          type: message.type,
+          senderName,
+          ...(senderAvatar ? { senderAvatar } : {}),
+          ...(replyToId ? { replyToId } : {}),
+          ...(attachments?.length ? { attachments } : {}),
+        });
         const resentMessage = normalizeMessage(
-          unwrapApiSuccess(response.data),
+          unwrapApiSuccess(response),
           conversationId,
         );
         if (!resentMessage) {

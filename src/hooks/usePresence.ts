@@ -1,6 +1,6 @@
 /**
  * @fileoverview usePresence hook
- * Subscribes to presence updates for a set of userIds (or room members).
+ * Subscribes to presence updates for a set of userIds (or conversation members).
  * Integrates with the WebSocket and presenceStore.
  */
 
@@ -19,7 +19,11 @@ const SUBSCRIBE_DEBOUNCE_MS = 300;
 interface UsePresenceOptions {
   /** User IDs to subscribe to */
   userIds?: string[];
-  /** Room ID (server resolves members) */
+  /** Conversation ID (server resolves members) */
+  conversationId?: string;
+  /**
+   * @deprecated Use conversationId.
+   */
   roomId?: string;
   /** Auto-subscribe on mount (default true) */
   enabled?: boolean;
@@ -71,7 +75,8 @@ function formatLastSeenTime(isoString?: string): string {
 export function usePresence(
   options: UsePresenceOptions = {},
 ): UsePresenceReturn {
-  const { userIds, roomId, enabled = true } = options;
+  const { userIds, enabled = true } = options;
+  const conversationId = options.conversationId ?? options.roomId;
 
   const setPresence = usePresenceStore((s) => s.setPresence);
   const setPresenceBatch = usePresenceStore((s) => s.setPresenceBatch);
@@ -81,19 +86,22 @@ export function usePresence(
   const subscribeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const subscribedRef = useRef(false);
 
-  // Subscribe to presence for the given users/room
+  // Subscribe to presence for the given users/conversation.
   const subscribe = useCallback(() => {
     const socket = initSocket();
     if (!socket.isConnected()) return;
 
     const payload: Record<string, unknown> = {};
     if (userIds && userIds.length > 0) payload.userIds = userIds;
-    if (roomId) payload.roomId = roomId;
+    if (conversationId) {
+      payload.conversationId = conversationId;
+      payload.roomId = conversationId;
+    }
     if (!payload.userIds && !payload.roomId) return;
 
     socket.send("presence:subscribe", payload);
     subscribedRef.current = true;
-  }, [userIds, roomId]);
+  }, [conversationId, userIds]);
 
   const unsubscribe = useCallback(() => {
     if (!subscribedRef.current) return;
@@ -103,11 +111,14 @@ export function usePresence(
 
     const payload: Record<string, unknown> = {};
     if (userIds && userIds.length > 0) payload.userIds = userIds;
-    if (roomId) payload.roomId = roomId;
+    if (conversationId) {
+      payload.conversationId = conversationId;
+      payload.roomId = conversationId;
+    }
 
     socket.send("presence:unsubscribe", payload);
     subscribedRef.current = false;
-  }, [userIds, roomId]);
+  }, [conversationId, userIds]);
 
   // Listen for presence events
   useEffect(() => {
