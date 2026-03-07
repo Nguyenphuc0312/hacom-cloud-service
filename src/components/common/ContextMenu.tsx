@@ -82,8 +82,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     });
   }, []);
 
-  const enabledItems = items.filter((item) => !item.disabled);
-
   return (
     <div
       ref={menuRef}

@@ -5,7 +5,6 @@
 
 import { z } from "zod";
 import { VALIDATION_CONFIG } from "../config";
-import i18n from "../i18n";
 
 // Helper: when i18n may not be initialized at module-load time we store a
 // compact marker string containing the translation key and optional params.

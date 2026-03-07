@@ -51,10 +51,25 @@ if (import.meta.env.DEV && !USE_AUTH_SERVICE) {
   );
 }
 
-export const WEBSOCKET_URL =
+const rawWebSocketUrl =
   import.meta.env.VITE_WS_URL ||
   import.meta.env.VITE_WEBSOCKET_URL ||
   "ws://localhost:8001";
+
+const resolveWebSocketUrl = (value: string): string => {
+  if (!value.startsWith("/")) {
+    return value;
+  }
+
+  if (typeof window === "undefined") {
+    return `ws://localhost:8001${value}`;
+  }
+
+  const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${scheme}//${window.location.host}${value}`;
+};
+
+export const WEBSOCKET_URL = resolveWebSocketUrl(rawWebSocketUrl);
 
 export const WEBSOCKET_AUTH_CONFIG = {
   // Compatibility mode for backends that require token during handshake (/ws?token=...).

@@ -64,6 +64,7 @@ const estimateTimelineItemHeight = (item: TimelineItem): number => {
   // Estimates include child margins (captured by flow-root on the row wrapper)
   if (item.kind === "date") return 64; // DateDivider: my-4 (32px) + pill ~32px
   if (item.kind === "system") return 60; // SystemMessage: my-4 (32px) + pill ~28px
+  if (item.kind === "unread") return 40;
 
   const message = item.message;
   const marginBottom = item.isGroupEnd ? 8 : 2; // mb-2 / mb-0.5

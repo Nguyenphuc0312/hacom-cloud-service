@@ -811,18 +811,6 @@ export const useChatStore = create<ChatState>()(
         ),
       }));
 
-      const currentMessages = sortMessages(
-        get().messages[conversationId] || [],
-      );
-      const latestReadableMessage = [...currentMessages]
-        .reverse()
-        .find((message) => !isTempMessageId(message.id));
-      const payload =
-        typeof latestReadableMessage?.id === "string" &&
-        latestReadableMessage.id.length > 0
-          ? { messageId: latestReadableMessage.id }
-          : {};
-
       try {
         await conversationApi.markAsRead(conversationId);
       } catch (error) {
