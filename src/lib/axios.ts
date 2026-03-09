@@ -7,6 +7,7 @@ import axios, { AxiosError, AxiosHeaders } from "axios";
 import type { AxiosInstance, InternalAxiosRequestConfig } from "axios";
 import type { ApiResponse } from "@hacom/chat-shared-types";
 import { API_BASE_URL, AUTH_BASE_URL, USE_AUTH_SERVICE } from "../config";
+import { authBaseUrl, buildAuthEndpoint, normalizeAuthRequestPath } from "./authPath";
 import i18n from "../i18n";
 import {
   clearTokens,
@@ -219,7 +220,7 @@ const refreshAccessToken = async (): Promise<string> => {
 
   try {
     const csrfToken = cookieMode ? getCsrfToken() : null;
-    const refreshEndpoint = `${authBaseUrl}/auth/refresh`;
+    const refreshEndpoint = buildAuthEndpoint("/refresh");
     if (import.meta.env.DEV && !refreshEndpointLogged) {
       refreshEndpointLogged = true;
       console.info("[auth-refresh]", {
@@ -312,8 +313,6 @@ const apiClient: AxiosInstance = axios.create({
  * endpoints are public or manage their own bearer in the call-site).
  * withCredentials is false in Stage 1 (body mode).
  */
-const authBaseUrl = USE_AUTH_SERVICE ? AUTH_BASE_URL : API_BASE_URL;
-
 export const authClient: AxiosInstance = axios.create({
   baseURL: authBaseUrl,
   timeout: 15000,
@@ -322,6 +321,20 @@ export const authClient: AxiosInstance = axios.create({
     [API_CONTRACT_HEADER]: API_CONTRACT_VERSION,
   },
   withCredentials: isRefreshTokenCookieMode(),
+});
+
+authClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  config.url = normalizeAuthRequestPath(config.url);
+  config.headers = config.headers ?? {};
+
+  const headers = config.headers as AxiosHeaders | Record<string, string>;
+  if (headers instanceof AxiosHeaders) {
+    headers.set(API_CONTRACT_HEADER, API_CONTRACT_VERSION);
+  } else {
+    headers[API_CONTRACT_HEADER] = API_CONTRACT_VERSION;
+  }
+
+  return config;
 });
 
 apiClient.interceptors.request.use(
