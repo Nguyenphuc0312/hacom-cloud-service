@@ -2,6 +2,8 @@
 
 Vite + React chat SPA.
 
+Canonical container orchestration lives in [`chat-infrastructure/compose/local/compose.yml`](/d:/Workspace/hacom_holding_dx/projects/chat-infrastructure/compose/local/compose.yml).
+
 ## Runtime
 
 - Dev port: `5100`
