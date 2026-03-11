@@ -2,7 +2,7 @@ name: deploy-server-test
 
 on:
   push:
-    branches: [main]
+    branches: [develop]
   workflow_dispatch:
 
 permissions:
@@ -16,20 +16,22 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      SHARED_TYPES_REPO_TOKEN: ${{ secrets.SHARED_TYPES_REPO_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
           path: chat-web-client
 
-      - if: ${{ secrets.SHARED_TYPES_REPO_TOKEN != '' }}
+      - if: ${{ env.SHARED_TYPES_REPO_TOKEN != '' }}
         uses: actions/checkout@v4
         with:
           repository: ${{ vars.SHARED_TYPES_REPOSITORY || format('{0}/chat-shared-types', github.repository_owner) }}
           path: chat-shared-types
           ref: ${{ vars.SHARED_TYPES_REF || 'main' }}
-          token: ${{ secrets.SHARED_TYPES_REPO_TOKEN }}
+          token: ${{ env.SHARED_TYPES_REPO_TOKEN }}
 
-      - if: ${{ secrets.SHARED_TYPES_REPO_TOKEN == '' }}
+      - if: ${{ env.SHARED_TYPES_REPO_TOKEN == '' }}
         uses: actions/checkout@v4
         with:
           repository: ${{ vars.SHARED_TYPES_REPOSITORY || format('{0}/chat-shared-types', github.repository_owner) }}
