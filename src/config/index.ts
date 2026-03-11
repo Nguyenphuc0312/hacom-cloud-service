@@ -3,9 +3,48 @@
  * Quản lý tất cả các biến môi trường và cấu hình
  */
 
+const normalizeBaseUrl = (url: string): string => url.replace(/\/+$/, "");
+
+const normalizeAppBasePath = (value?: string): string => {
+  const rawValue = value?.trim();
+  if (!rawValue || rawValue === "/") {
+    return "/";
+  }
+
+  const withLeadingSlash = rawValue.startsWith("/") ? rawValue : `/${rawValue}`;
+  return withLeadingSlash.replace(/\/+$/, "");
+};
+
+const resolveHttpBaseUrl = (
+  configuredValue: string | undefined,
+  fallbackPath: string,
+): string => {
+  const trimmedValue = configuredValue?.trim();
+  if (trimmedValue) {
+    return normalizeBaseUrl(trimmedValue);
+  }
+
+  return fallbackPath;
+};
+
+const isLocalHostUrl = (value: string): boolean => {
+  try {
+    const parsedUrl = new URL(value, "http://placeholder.local");
+    return ["localhost", "127.0.0.1", "0.0.0.0"].includes(parsedUrl.hostname);
+  } catch {
+    return false;
+  }
+};
+
+export const APP_BASE_PATH = normalizeAppBasePath(
+  import.meta.env.VITE_APP_BASE_PATH,
+);
+
 // API Base URLs
-export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:3001/api/v1";
+export const API_BASE_URL = resolveHttpBaseUrl(
+  import.meta.env.VITE_API_BASE_URL,
+  "/api/v1",
+);
 
 /**
  * Auth service base URL (Stage 1 – body mode).
@@ -13,7 +52,10 @@ export const API_BASE_URL =
  * directly to AUTH_BASE_URL instead of through API_BASE_URL.
  * Rollback: set VITE_USE_AUTH_SERVICE=false to route back through api-service.
  */
-export const AUTH_BASE_URL = import.meta.env.VITE_AUTH_BASE_URL || API_BASE_URL;
+export const AUTH_BASE_URL = resolveHttpBaseUrl(
+  import.meta.env.VITE_AUTH_BASE_URL,
+  "/auth-api/v1",
+);
 
 /**
  * Feature flag: redirect auth traffic to the dedicated auth-service.
@@ -26,12 +68,12 @@ export const USE_AUTH_SERVICE =
     ? true
     : rawUseAuthService === "true";
 
-const normalizeBaseUrl = (url: string): string => url.replace(/\/+$/, "");
 const normalizedApiBaseUrl = normalizeBaseUrl(API_BASE_URL);
 const normalizedAuthBaseUrl = normalizeBaseUrl(AUTH_BASE_URL);
 
 if (import.meta.env.DEV) {
   console.info("[auth-config]", {
+    VITE_APP_BASE_PATH: APP_BASE_PATH,
     VITE_USE_AUTH_SERVICE: rawUseAuthService ?? "(unset -> true)",
     USE_AUTH_SERVICE,
     API_BASE_URL: normalizedApiBaseUrl,
@@ -54,7 +96,7 @@ if (import.meta.env.DEV && !USE_AUTH_SERVICE) {
 const rawWebSocketUrl =
   import.meta.env.VITE_WS_URL ||
   import.meta.env.VITE_WEBSOCKET_URL ||
-  "ws://localhost:8001";
+  "/ws";
 
 const resolveWebSocketUrl = (value: string): string => {
   if (!value.startsWith("/")) {
@@ -70,6 +112,19 @@ const resolveWebSocketUrl = (value: string): string => {
 };
 
 export const WEBSOCKET_URL = resolveWebSocketUrl(rawWebSocketUrl);
+
+if (import.meta.env.PROD) {
+  const localhostTargets = [API_BASE_URL, AUTH_BASE_URL, WEBSOCKET_URL].filter(
+    (value) => isLocalHostUrl(value),
+  );
+
+  if (localhostTargets.length > 0) {
+    console.warn(
+      "[runtime-config] Localhost URL detected in production bundle.",
+      localhostTargets,
+    );
+  }
+}
 
 export const WEBSOCKET_AUTH_CONFIG = {
   // Compatibility mode for backends that require token during handshake (/ws?token=...).

@@ -7,6 +7,7 @@ import { ProtectedRoute } from "./guards/RouteGuards";
 import { buildPrivateRouteObjects, buildPublicRouteObjects } from "./builders";
 import { ROUTE_PATHS } from "./paths";
 import { RouterErrorBoundary } from "../components/common/RouterErrorBoundary";
+import { APP_BASE_PATH } from "../config";
 
 const routeTree: RouteObject[] = [
   {
@@ -31,4 +32,6 @@ const routeTree: RouteObject[] = [
   },
 ];
 
-export const appRouter = createBrowserRouter(routeTree);
+export const appRouter = createBrowserRouter(routeTree, {
+  basename: APP_BASE_PATH === "/" ? undefined : APP_BASE_PATH,
+});

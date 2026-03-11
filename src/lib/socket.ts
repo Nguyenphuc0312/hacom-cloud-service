@@ -18,11 +18,9 @@ import {
 import { WsEventNames } from "@hacom/chat-shared-types";
 import { isJwtLike, normalizeToken } from "../utils/jwtHelpers";
 
-const CAN_USE_QUERY_TOKEN = import.meta.env.DEV;
-const QUERY_TOKEN_BY_ENV =
-  CAN_USE_QUERY_TOKEN && WEBSOCKET_AUTH_CONFIG.USE_QUERY_TOKEN;
+const QUERY_TOKEN_BY_ENV = WEBSOCKET_AUTH_CONFIG.USE_QUERY_TOKEN;
 const AUTO_QUERY_TOKEN_FALLBACK_ENABLED =
-  CAN_USE_QUERY_TOKEN && WEBSOCKET_AUTH_CONFIG.AUTO_QUERY_TOKEN_FALLBACK;
+  WEBSOCKET_AUTH_CONFIG.AUTO_QUERY_TOKEN_FALLBACK;
 
 // ============================================
 // Types

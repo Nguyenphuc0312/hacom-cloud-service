@@ -1,0 +1,263 @@
+name: deploy-server-test
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-server-test-chat-web-client
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: chat-web-client
+
+      - if: ${{ secrets.SHARED_TYPES_REPO_TOKEN != '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SHARED_TYPES_REPOSITORY || format('{0}/chat-shared-types', github.repository_owner) }}
+          path: chat-shared-types
+          ref: ${{ vars.SHARED_TYPES_REF || 'main' }}
+          token: ${{ secrets.SHARED_TYPES_REPO_TOKEN }}
+
+      - if: ${{ secrets.SHARED_TYPES_REPO_TOKEN == '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SHARED_TYPES_REPOSITORY || format('{0}/chat-shared-types', github.repository_owner) }}
+          path: chat-shared-types
+          ref: ${{ vars.SHARED_TYPES_REF || 'main' }}
+
+      - name: Validate deploy inputs
+        env:
+          DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
+          SERVICE_NAME: ${{ vars.SERVICE_NAME }}
+          DEPLOY_ENV: ${{ vars.DEPLOY_ENV }}
+          SERVER_ENV_PATH: ${{ vars.SERVER_ENV_PATH }}
+          HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL }}
+          VITE_APP_BASE_PATH: ${{ vars.VITE_APP_BASE_PATH }}
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+          VITE_AUTH_BASE_URL: ${{ vars.VITE_AUTH_BASE_URL }}
+          VITE_USE_AUTH_SERVICE: ${{ vars.VITE_USE_AUTH_SERVICE }}
+          VITE_WS_URL: ${{ vars.VITE_WS_URL }}
+          VITE_WS_USE_QUERY_TOKEN: ${{ vars.VITE_WS_USE_QUERY_TOKEN }}
+          VITE_WS_AUTO_QUERY_TOKEN_FALLBACK: ${{ vars.VITE_WS_AUTO_QUERY_TOKEN_FALLBACK }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -Eeuo pipefail
+
+          trim_single_line() {
+            printf '%s' "$1" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+          }
+
+          require_single_line() {
+            local name="$1"
+            local raw_value="$2"
+            local cleaned_value
+            cleaned_value="$(trim_single_line "${raw_value}")"
+            if [[ -z "${cleaned_value}" ]]; then
+              echo "::error title=Missing required input::${name} is required"
+              exit 1
+            fi
+            printf '%s' "${cleaned_value}"
+          }
+
+          require_multiline() {
+            local name="$1"
+            local raw_value="$2"
+            local cleaned_value
+            cleaned_value="$(printf '%s' "${raw_value}" | tr -d '\r')"
+            if [[ -z "${cleaned_value}" ]]; then
+              echo "::error title=Missing required input::${name} is required"
+              exit 1
+            fi
+          }
+
+          DEPLOY_ROOT_CLEAN="$(require_single_line "vars.DEPLOY_ROOT" "${DEPLOY_ROOT}")"
+          SERVICE_NAME_CLEAN="$(require_single_line "vars.SERVICE_NAME" "${SERVICE_NAME}")"
+          DEPLOY_ENV_CLEAN="$(require_single_line "vars.DEPLOY_ENV" "${DEPLOY_ENV}")"
+          SERVER_PORT_CLEAN="$(require_single_line "secrets.SERVER_PORT" "${SERVER_PORT}")"
+          SERVER_USER_CLEAN="$(require_single_line "secrets.SERVER_USER" "${SERVER_USER}")"
+          SERVER_HOST_CLEAN="$(require_single_line "secrets.SERVER_HOST" "${SERVER_HOST}")"
+          SERVER_ENV_PATH_CLEAN="$(require_single_line "vars.SERVER_ENV_PATH" "${SERVER_ENV_PATH}")"
+          GHCR_USERNAME_CLEAN="$(require_single_line "secrets.GHCR_USERNAME" "${GHCR_USERNAME}")"
+          GHCR_TOKEN_CLEAN="$(require_single_line "secrets.GHCR_TOKEN" "${GHCR_TOKEN}")"
+          HEALTHCHECK_URL_CLEAN="$(trim_single_line "${HEALTHCHECK_URL}")"
+          VITE_APP_BASE_PATH_CLEAN="$(trim_single_line "${VITE_APP_BASE_PATH}")"
+          VITE_API_BASE_URL_CLEAN="$(trim_single_line "${VITE_API_BASE_URL}")"
+          VITE_AUTH_BASE_URL_CLEAN="$(trim_single_line "${VITE_AUTH_BASE_URL}")"
+          VITE_USE_AUTH_SERVICE_CLEAN="$(trim_single_line "${VITE_USE_AUTH_SERVICE}")"
+          VITE_WS_URL_CLEAN="$(trim_single_line "${VITE_WS_URL}")"
+          VITE_WS_USE_QUERY_TOKEN_CLEAN="$(trim_single_line "${VITE_WS_USE_QUERY_TOKEN}")"
+          VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN="$(trim_single_line "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK}")"
+          if [[ -z "${HEALTHCHECK_URL_CLEAN}" ]]; then
+            HEALTHCHECK_URL_CLEAN="http://127.0.0.1/healthz"
+          fi
+          if [[ -z "${VITE_APP_BASE_PATH_CLEAN}" ]]; then
+            VITE_APP_BASE_PATH_CLEAN="/"
+          fi
+          if [[ -z "${VITE_API_BASE_URL_CLEAN}" ]]; then
+            VITE_API_BASE_URL_CLEAN="/api/v1"
+          fi
+          if [[ -z "${VITE_AUTH_BASE_URL_CLEAN}" ]]; then
+            VITE_AUTH_BASE_URL_CLEAN="/auth-api/v1"
+          fi
+          if [[ -z "${VITE_USE_AUTH_SERVICE_CLEAN}" ]]; then
+            VITE_USE_AUTH_SERVICE_CLEAN="true"
+          fi
+          if [[ -z "${VITE_WS_URL_CLEAN}" ]]; then
+            VITE_WS_URL_CLEAN="/ws"
+          fi
+          if [[ -z "${VITE_WS_USE_QUERY_TOKEN_CLEAN}" ]]; then
+            VITE_WS_USE_QUERY_TOKEN_CLEAN="false"
+          fi
+          if [[ -z "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN}" ]]; then
+            VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN="true"
+          fi
+
+          require_multiline "secrets.SERVER_SSH_KEY" "${SERVER_SSH_KEY}"
+          require_multiline "secrets.SERVER_SSH_KNOWN_HOSTS" "${SERVER_SSH_KNOWN_HOSTS}"
+
+          IMAGE_OWNER="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          IMAGE_REF="ghcr.io/${IMAGE_OWNER}/chat-web-client:${GITHUB_SHA}"
+          RELEASE_DIR="${DEPLOY_ROOT_CLEAN}/${SERVICE_NAME_CLEAN}/releases/${GITHUB_SHA}"
+
+          test -f ./chat-web-client/Dockerfile
+          test -f ./chat-web-client/package-lock.json
+          test -f ./chat-shared-types/package-lock.json
+          test -f ./chat-web-client/nginx/default.conf.template
+          test -f "./chat-web-client/deploy/compose/${DEPLOY_ENV_CLEAN}.yml"
+          test -f ./chat-web-client/deploy/scripts/deploy.sh
+          test -f ./chat-web-client/deploy/scripts/rollback.sh
+
+          {
+            printf 'DEPLOY_ROOT_CLEAN=%s\n' "${DEPLOY_ROOT_CLEAN}"
+            printf 'SERVICE_NAME_CLEAN=%s\n' "${SERVICE_NAME_CLEAN}"
+            printf 'DEPLOY_ENV_CLEAN=%s\n' "${DEPLOY_ENV_CLEAN}"
+            printf 'SERVER_PORT_CLEAN=%s\n' "${SERVER_PORT_CLEAN}"
+            printf 'SERVER_USER_CLEAN=%s\n' "${SERVER_USER_CLEAN}"
+            printf 'SERVER_HOST_CLEAN=%s\n' "${SERVER_HOST_CLEAN}"
+            printf 'SERVER_ENV_PATH_CLEAN=%s\n' "${SERVER_ENV_PATH_CLEAN}"
+            printf 'GHCR_USERNAME_CLEAN=%s\n' "${GHCR_USERNAME_CLEAN}"
+            printf 'GHCR_TOKEN_CLEAN=%s\n' "${GHCR_TOKEN_CLEAN}"
+            printf 'HEALTHCHECK_URL_CLEAN=%s\n' "${HEALTHCHECK_URL_CLEAN}"
+            printf 'VITE_APP_BASE_PATH_CLEAN=%s\n' "${VITE_APP_BASE_PATH_CLEAN}"
+            printf 'VITE_API_BASE_URL_CLEAN=%s\n' "${VITE_API_BASE_URL_CLEAN}"
+            printf 'VITE_AUTH_BASE_URL_CLEAN=%s\n' "${VITE_AUTH_BASE_URL_CLEAN}"
+            printf 'VITE_USE_AUTH_SERVICE_CLEAN=%s\n' "${VITE_USE_AUTH_SERVICE_CLEAN}"
+            printf 'VITE_WS_URL_CLEAN=%s\n' "${VITE_WS_URL_CLEAN}"
+            printf 'VITE_WS_USE_QUERY_TOKEN_CLEAN=%s\n' "${VITE_WS_USE_QUERY_TOKEN_CLEAN}"
+            printf 'VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN=%s\n' "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN}"
+            printf 'IMAGE_REF=%s\n' "${IMAGE_REF}"
+            printf 'RELEASE_DIR=%s\n' "${RELEASE_DIR}"
+          } >> "${GITHUB_ENV}"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push runtime image
+        run: |
+          set -Eeuo pipefail
+          docker buildx build \
+            --file ./chat-web-client/Dockerfile \
+            --target production \
+            --platform linux/amd64 \
+            --progress plain \
+            --build-arg VITE_APP_BASE_PATH="${VITE_APP_BASE_PATH_CLEAN}" \
+            --build-arg VITE_API_BASE_URL="${VITE_API_BASE_URL_CLEAN}" \
+            --build-arg VITE_AUTH_BASE_URL="${VITE_AUTH_BASE_URL_CLEAN}" \
+            --build-arg VITE_USE_AUTH_SERVICE="${VITE_USE_AUTH_SERVICE_CLEAN}" \
+            --build-arg VITE_WS_URL="${VITE_WS_URL_CLEAN}" \
+            --build-arg VITE_WS_USE_QUERY_TOKEN="${VITE_WS_USE_QUERY_TOKEN_CLEAN}" \
+            --build-arg VITE_WS_AUTO_QUERY_TOKEN_FALLBACK="${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN}" \
+            --tag "${IMAGE_REF}" \
+            --push \
+            .
+
+      - name: Verify pushed manifest
+        run: |
+          set -Eeuo pipefail
+          docker buildx imagetools inspect "${IMAGE_REF}"
+          DIGEST="$(docker buildx imagetools inspect "${IMAGE_REF}" | awk '/Digest:/ {print $2; exit}')"
+          test -n "${DIGEST}"
+          echo "IMAGE_DIGEST=${DIGEST}" >> "${GITHUB_ENV}"
+
+      - name: Prepare release bundle
+        working-directory: ./chat-web-client
+        run: |
+          set -Eeuo pipefail
+          mkdir -p .release-bundle/deploy
+          cp -R deploy/compose .release-bundle/deploy/
+          cp -R deploy/scripts .release-bundle/deploy/
+          cp deploy/README.md .release-bundle/deploy/README.md
+
+          {
+            printf 'CHAT_WEB_CLIENT_IMAGE=%q\n' "${IMAGE_REF}"
+            printf 'IMAGE_REF=%q\n' "${IMAGE_REF}"
+            printf 'IMAGE_DIGEST=%q\n' "${IMAGE_DIGEST}"
+            printf 'RELEASE_SHA=%q\n' "${GITHUB_SHA}"
+            printf 'SERVER_ENV_PATH=%q\n' "${SERVER_ENV_PATH_CLEAN}"
+            printf 'SERVICE_NAME=%q\n' "${SERVICE_NAME_CLEAN}"
+            printf 'DEPLOY_ENV=%q\n' "${DEPLOY_ENV_CLEAN}"
+            printf 'COMPOSE_PROJECT_NAME=%q\n' "chat-web-client-${DEPLOY_ENV_CLEAN}"
+            printf 'COMPOSE_FILE=%q\n' "deploy/compose/${DEPLOY_ENV_CLEAN}.yml"
+            printf 'RUNTIME_SERVICE=%q\n' "chat-web-client"
+            printf 'MIGRATE_ENABLED=%q\n' "false"
+            printf 'HEALTHCHECK_URL=%q\n' "${HEALTHCHECK_URL_CLEAN}"
+          } > .release-bundle/.release.env
+
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SERVER_SSH_KEY }}
+
+      - name: Configure known_hosts, rsync, deploy
+        run: |
+          set -Eeuo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SERVER_SSH_KNOWN_HOSTS }}" | tr -d '\r' > ~/.ssh/known_hosts
+          PORT="${SERVER_PORT_CLEAN}"
+          ssh -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" \
+            "mkdir -p '${RELEASE_DIR}'"
+          rsync -az --delete \
+            -e "ssh -p ${PORT}" \
+            ./chat-web-client/.release-bundle/ \
+            "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}:${RELEASE_DIR}/"
+          ssh -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" <<EOF
+          set -eu
+          cd "${RELEASE_DIR}"
+          test -f "${SERVER_ENV_PATH_CLEAN}"
+          echo "${GHCR_TOKEN_CLEAN}" | docker login ghcr.io -u "${GHCR_USERNAME_CLEAN}" --password-stdin
+          chmod +x deploy/scripts/deploy.sh deploy/scripts/rollback.sh
+          ./deploy/scripts/deploy.sh
+          EOF
+
+      - name: Show remote logs on failure
+        if: ${{ failure() }}
+        run: |
+          set +e
+          ssh -p "${SERVER_PORT_CLEAN}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" <<EOF
+          set +e
+          cd "${RELEASE_DIR}"
+          docker compose -f "deploy/compose/${DEPLOY_ENV_CLEAN}.yml" ps || true
+          docker compose -f "deploy/compose/${DEPLOY_ENV_CLEAN}.yml" logs --tail=200 chat-web-client || true
+          EOF
