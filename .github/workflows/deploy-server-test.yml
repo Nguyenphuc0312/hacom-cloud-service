@@ -44,7 +44,7 @@ jobs:
           DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
           SERVICE_NAME: ${{ vars.SERVICE_NAME }}
           DEPLOY_ENV: ${{ vars.DEPLOY_ENV }}
-          SERVER_ENV_PATH: ${{ vars.SERVER_ENV_PATH }}
+          SERVER_ENV_PATH: ${{ secrets.SERVER_ENV_PATH }}
           HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL }}
           VITE_APP_BASE_PATH: ${{ vars.VITE_APP_BASE_PATH }}
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
@@ -105,7 +105,7 @@ jobs:
           SERVER_PORT_CLEAN="$(require_single_line "secrets.SERVER_PORT" "${SERVER_PORT}")"
           SERVER_USER_CLEAN="$(require_single_line "secrets.SERVER_USER" "${SERVER_USER}")"
           SERVER_HOST_CLEAN="$(require_single_line "secrets.SERVER_HOST" "${SERVER_HOST}")"
-          SERVER_ENV_PATH_CLEAN="$(require_single_line "vars.SERVER_ENV_PATH" "${SERVER_ENV_PATH}")"
+          SERVER_ENV_PATH_CLEAN="$(require_single_line "secrets.SERVER_ENV_PATH" "${SERVER_ENV_PATH}")"
           GHCR_USERNAME_CLEAN="$(require_single_line "secrets.GHCR_USERNAME" "${GHCR_USERNAME}")"
           GHCR_TOKEN_CLEAN="$(require_single_line "secrets.GHCR_TOKEN" "${GHCR_TOKEN}")"
           HEALTHCHECK_URL_CLEAN="$(trim_single_line "${HEALTHCHECK_URL}")"
