@@ -54,7 +54,7 @@ export const API_BASE_URL = resolveHttpBaseUrl(
  */
 export const AUTH_BASE_URL = resolveHttpBaseUrl(
   import.meta.env.VITE_AUTH_BASE_URL,
-  "/auth-api/v1",
+  "/auth",
 );
 
 /**
