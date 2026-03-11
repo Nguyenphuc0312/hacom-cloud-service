@@ -39,6 +39,7 @@ jobs:
           ref: ${{ vars.SHARED_TYPES_REF || 'main' }}
 
       - name: Validate deploy inputs
+        id: validate_inputs
         env:
           DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
           SERVICE_NAME: ${{ vars.SERVICE_NAME }}
@@ -86,6 +87,14 @@ jobs:
             cleaned_value="$(printf '%s' "${raw_value}" | tr -d '\r')"
             if [[ -z "${cleaned_value}" ]]; then
               echo "::error title=Missing required input::${name} is required"
+              exit 1
+            fi
+          }
+
+          require_file() {
+            local path="$1"
+            if [[ ! -f "${path}" ]]; then
+              echo "::error title=Missing required file::${path} was not found"
               exit 1
             fi
           }
@@ -139,13 +148,13 @@ jobs:
           IMAGE_REF="ghcr.io/${IMAGE_OWNER}/chat-web-client:${GITHUB_SHA}"
           RELEASE_DIR="${DEPLOY_ROOT_CLEAN}/${SERVICE_NAME_CLEAN}/releases/${GITHUB_SHA}"
 
-          test -f ./chat-web-client/Dockerfile
-          test -f ./chat-web-client/package-lock.json
-          test -f ./chat-shared-types/package-lock.json
-          test -f ./chat-web-client/nginx/default.conf.template
-          test -f "./chat-web-client/deploy/compose/${DEPLOY_ENV_CLEAN}.yml"
-          test -f ./chat-web-client/deploy/scripts/deploy.sh
-          test -f ./chat-web-client/deploy/scripts/rollback.sh
+          require_file ./chat-web-client/Dockerfile
+          require_file ./chat-web-client/package-lock.json
+          require_file ./chat-shared-types/package-lock.json
+          require_file ./chat-web-client/nginx/default.conf.template
+          require_file "./chat-web-client/deploy/compose/${DEPLOY_ENV_CLEAN}.yml"
+          require_file ./chat-web-client/deploy/scripts/deploy.sh
+          require_file ./chat-web-client/deploy/scripts/rollback.sh
 
           {
             printf 'DEPLOY_ROOT_CLEAN=%s\n' "${DEPLOY_ROOT_CLEAN}"
@@ -233,6 +242,7 @@ jobs:
           ssh-private-key: ${{ secrets.SERVER_SSH_KEY }}
 
       - name: Configure known_hosts, rsync, deploy
+        id: deploy_remote
         run: |
           set -Eeuo pipefail
           mkdir -p ~/.ssh
@@ -254,9 +264,13 @@ jobs:
           EOF
 
       - name: Show remote logs on failure
-        if: ${{ failure() }}
+        if: ${{ failure() && steps.validate_inputs.outcome == 'success' && steps.deploy_remote.outcome == 'failure' }}
         run: |
           set +e
+          if [[ -z "${SERVER_PORT_CLEAN:-}" || -z "${SERVER_USER_CLEAN:-}" || -z "${SERVER_HOST_CLEAN:-}" || -z "${RELEASE_DIR:-}" || -z "${DEPLOY_ENV_CLEAN:-}" ]]; then
+            echo "Skipping remote logs because deploy connection variables are unavailable."
+            exit 0
+          fi
           ssh -p "${SERVER_PORT_CLEAN}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" <<EOF
           set +e
           cd "${RELEASE_DIR}"
