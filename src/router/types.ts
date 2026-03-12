@@ -5,5 +5,5 @@ export interface AppRouteConfig {
   index?: boolean;
   component: LazyExoticComponent<ComponentType> | ComponentType;
   roles?: string[];
+  guestOnly?: boolean;
 }
-

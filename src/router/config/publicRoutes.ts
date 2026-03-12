@@ -4,15 +4,18 @@ import { ROUTE_PATHS } from "../paths";
 
 const LoginPage = lazy(() => import("../../pages/LoginPage"));
 const RegisterPage = lazy(() => import("../../pages/RegisterPage"));
+const VerifyEmailPage = lazy(() => import("../../pages/VerifyEmailPage"));
 const ForgotPasswordPage = lazy(() => import("../../pages/ForgotPasswordPage"));
 const ResetPasswordPage = lazy(() => import("../../pages/ResetPasswordPage"));
 
 /**
- * Guest-only routes. Authenticated users are redirected by GuestRoute.
+ * Public routes. Most are guest-only, but verification links must stay accessible
+ * for both authenticated and unauthenticated users.
  */
 export const publicRoutes: AppRouteConfig[] = [
-  { path: ROUTE_PATHS.LOGIN, component: LoginPage },
-  { path: ROUTE_PATHS.REGISTER, component: RegisterPage },
-  { path: ROUTE_PATHS.FORGOT_PASSWORD, component: ForgotPasswordPage },
-  { path: ROUTE_PATHS.RESET_PASSWORD, component: ResetPasswordPage },
+  { path: ROUTE_PATHS.LOGIN, component: LoginPage, guestOnly: true },
+  { path: ROUTE_PATHS.REGISTER, component: RegisterPage, guestOnly: true },
+  { path: ROUTE_PATHS.VERIFY_EMAIL, component: VerifyEmailPage, guestOnly: false },
+  { path: ROUTE_PATHS.FORGOT_PASSWORD, component: ForgotPasswordPage, guestOnly: true },
+  { path: ROUTE_PATHS.RESET_PASSWORD, component: ResetPasswordPage, guestOnly: true },
 ];

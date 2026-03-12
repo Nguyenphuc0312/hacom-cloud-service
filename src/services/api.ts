@@ -15,6 +15,7 @@ import type {
   RegisterResponseDto,
   RoomMessagesResponse,
   UploadSignedUrlResponse,
+  VerifyEmailResponseDto,
 } from "@hacom/chat-shared-types";
 import type { User } from "../stores/authStore";
 import type { Attachment, Conversation, Message } from "../types";
@@ -78,6 +79,14 @@ export const authApi = {
     const response = await authClient.post<ApiResponse<RegisterResponseDto>>(
       "/auth/register",
       data,
+    );
+    return response.data;
+  },
+
+  verifyEmail: async (token: string) => {
+    const response = await authClient.post<ApiResponse<VerifyEmailResponseDto>>(
+      "/auth/verify-email",
+      { token },
     );
     return response.data;
   },
