@@ -5,6 +5,7 @@ interface UseTypingIndicatorOptions {
   onTyping?: (isTyping: boolean) => void;
   startDelayMs?: number;
   stopDelayMs?: number;
+  heartbeatIntervalMs?: number;
 }
 
 interface TypingInputState {
@@ -23,10 +24,12 @@ export const useTypingIndicator = ({
   onTyping,
   startDelayMs = 250,
   stopDelayMs = 2000,
+  heartbeatIntervalMs = 1500,
 }: UseTypingIndicatorOptions): UseTypingIndicatorResult => {
   const startTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = React.useRef(false);
+  const lastTypingEmitAtRef = React.useRef(0);
 
   const clearTimers = React.useCallback(() => {
     if (startTimerRef.current) {
@@ -41,11 +44,12 @@ export const useTypingIndicator = ({
   }, []);
 
   const emitTyping = React.useCallback(
-    (nextValue: boolean) => {
+    (nextValue: boolean, force = false) => {
       if (!enabled || !onTyping) return;
-      if (isTypingRef.current === nextValue) return;
+      if (!force && isTypingRef.current === nextValue) return;
 
       isTypingRef.current = nextValue;
+      lastTypingEmitAtRef.current = Date.now();
       onTyping(nextValue);
     },
     [enabled, onTyping],
@@ -65,6 +69,14 @@ export const useTypingIndicator = ({
         return;
       }
 
+      const now = Date.now();
+      if (
+        isTypingRef.current &&
+        now - lastTypingEmitAtRef.current >= heartbeatIntervalMs
+      ) {
+        emitTyping(true, true);
+      }
+
       if (startTimerRef.current) {
         clearTimeout(startTimerRef.current);
       }
@@ -82,7 +94,15 @@ export const useTypingIndicator = ({
         emitTyping(false);
       }, stopDelayMs);
     },
-    [emitTyping, enabled, onTyping, startDelayMs, stopDelayMs, stopTypingNow],
+    [
+      emitTyping,
+      enabled,
+      heartbeatIntervalMs,
+      onTyping,
+      startDelayMs,
+      stopDelayMs,
+      stopTypingNow,
+    ],
   );
 
   const notifyBlur = React.useCallback(() => {

@@ -4,6 +4,9 @@ import { isSameDay } from "../utils/formatTime";
 
 const DEFAULT_GROUPING_THRESHOLD_MS = 5 * 60 * 1000;
 
+const getTimelineMessageKey = (message: Message): string =>
+  message.stableId || message.clientMessageId || message.localId || message.id;
+
 export type MessageTimelineItem = {
   kind: "message";
   key: string;
@@ -116,7 +119,7 @@ export const useMessageGrouping = ({
       if (shouldInsertDateDivider) {
         items.push({
           kind: "date",
-          key: `date-${message.id}`,
+          key: `date-${getTimelineMessageKey(message)}`,
           date: new Date(message.createdAt),
         });
       }
@@ -124,7 +127,7 @@ export const useMessageGrouping = ({
       if (message.type === "system") {
         items.push({
           kind: "system",
-          key: `system-${message.id}`,
+          key: `system-${getTimelineMessageKey(message)}`,
           message,
         });
         return;
@@ -146,7 +149,7 @@ export const useMessageGrouping = ({
 
       items.push({
         kind: "message",
-        key: `message-${message.id}`,
+        key: `message-${getTimelineMessageKey(message)}`,
         message,
         isOwn,
         showAvatar: isGroupChat && !isOwn && isGroupEnd,

@@ -1,10 +1,12 @@
 import React from "react";
 import type { VariableSizeList as VirtualList } from "react-window";
 
-interface UseVirtualizedMessagesParams<Item> {
+interface UseVirtualizedMessagesParams<Item, ListData> {
   items: Item[];
   viewportRef: React.RefObject<HTMLDivElement | null>;
   estimateItemSize: (item: Item) => number;
+  listRef?: React.MutableRefObject<VirtualList<ListData> | null>;
+  outerRef?: React.MutableRefObject<HTMLDivElement | null>;
 }
 
 interface UseVirtualizedMessagesResult<ListData> {
@@ -21,9 +23,13 @@ export const useVirtualizedMessages = <Item, ListData>({
   items,
   viewportRef,
   estimateItemSize,
-}: UseVirtualizedMessagesParams<Item>): UseVirtualizedMessagesResult<ListData> => {
-  const listRef = React.useRef<VirtualList<ListData> | null>(null);
-  const outerRef = React.useRef<HTMLDivElement | null>(null);
+  listRef: providedListRef,
+  outerRef: providedOuterRef,
+}: UseVirtualizedMessagesParams<Item, ListData>): UseVirtualizedMessagesResult<ListData> => {
+  const fallbackListRef = React.useRef<VirtualList<ListData> | null>(null);
+  const fallbackOuterRef = React.useRef<HTMLDivElement | null>(null);
+  const listRef = providedListRef ?? fallbackListRef;
+  const outerRef = providedOuterRef ?? fallbackOuterRef;
   const sizeMapRef = React.useRef<Record<number, number>>({});
   const [viewportHeight, setViewportHeight] = React.useState(0);
 

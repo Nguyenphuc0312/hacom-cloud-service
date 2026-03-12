@@ -277,7 +277,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           </h2>
 
           {isTyping ? (
-            <TypingIndicator userName={typingStatus?.userName} />
+            <TypingIndicator
+              userName={typingStatus?.userName}
+              activity={typingStatus?.activity}
+              confidence={typingStatus?.confidence}
+            />
           ) : (
             <p
               className={clsx(

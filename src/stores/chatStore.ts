@@ -117,6 +117,13 @@ const EMPTY_MESSAGES: Message[] = [];
 
 const roomMessageFetchInFlight = new Map<string, number>();
 const initialFetchSeqByConversation = new Map<string, number>();
+let nextLocalMessageOrder = 1;
+
+const allocateLocalMessageOrder = (): number => {
+  const allocated = nextLocalMessageOrder;
+  nextLocalMessageOrder += 1;
+  return allocated;
+};
 
 const buildLoadingStateFromInFlightMap = (): {
   isLoadingMessages: boolean;
@@ -287,13 +294,60 @@ const normalizeMessage = (
   const status = statusValues.has(rawStatus ?? "")
     ? (rawStatus as Message["status"])
     : MessageStatus.SENT;
+  const clientMessageId =
+    asStringValue(source.clientMessageId) ??
+    asStringValue(source.client_message_id) ??
+    asStringValue(source.tempId) ??
+    asStringValue(source.localId);
+  const stableId =
+    asStringValue(source.stableId) ??
+    clientMessageId ??
+    asStringValue(source.localId) ??
+    id;
+  const serverTs =
+    source.serverTs ?? source.server_ts ?? source.createdAt ?? undefined;
+  const localOrder =
+    asNumberValue(source.localOrder) ??
+    asNumberValue(source.local_order) ??
+    undefined;
+  const serverSeq =
+    asNumberValue(source.serverSeq) ??
+    asNumberValue(source.server_seq) ??
+    asNumberValue(source.seq) ??
+    asNumberValue(source.sequence) ??
+    undefined;
+  const transportStatus = (() => {
+    const explicit =
+      asStringValue(source.transportStatus) ??
+      asStringValue(source.transport_status);
+    if (
+      explicit === "draft" ||
+      explicit === "optimistic" ||
+      explicit === "acked_transport" ||
+      explicit === "synced_stream"
+    ) {
+      return explicit;
+    }
+
+    if (id.startsWith("temp-") || status === MessageStatus.SENDING) {
+      return "optimistic" as const;
+    }
+
+    return serverSeq !== undefined ? ("synced_stream" as const) : ("acked_transport" as const);
+  })();
 
   return {
     id,
+    stableId,
+    clientMessageId,
     localId:
       asStringValue(source.localId) ??
       asStringValue(source.tempId) ??
       asStringValue(source.clientMessageId),
+    serverSeq,
+    serverTs: serverTs ? toDateObject(serverTs) : undefined,
+    localOrder,
+    transportStatus,
     conversationId,
     senderId,
     senderName,
@@ -345,9 +399,38 @@ const toDateValue = (value: unknown): number => {
   return 0;
 };
 
+const toFiniteNumber = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null;
+
+const getStableMessageId = (message: Message): string =>
+  message.stableId ||
+  message.clientMessageId ||
+  message.localId ||
+  message.id;
+
 const compareMessages = (a: Message, b: Message): number => {
+  const aSeq = toFiniteNumber(a.serverSeq);
+  const bSeq = toFiniteNumber(b.serverSeq);
+  if (aSeq !== null && bSeq !== null && aSeq !== bSeq) {
+    return aSeq - bSeq;
+  }
+  if (aSeq !== null && bSeq === null) return -1;
+  if (aSeq === null && bSeq !== null) return 1;
+
+  const serverTimeDiff = toDateValue(a.serverTs) - toDateValue(b.serverTs);
+  if (serverTimeDiff !== 0) return serverTimeDiff;
+
+  const localOrderDiff =
+    (toFiniteNumber(a.localOrder) ?? Number.MAX_SAFE_INTEGER) -
+    (toFiniteNumber(b.localOrder) ?? Number.MAX_SAFE_INTEGER);
+  if (localOrderDiff !== 0) return localOrderDiff;
+
   const timeDiff = toDateValue(a.createdAt) - toDateValue(b.createdAt);
   if (timeDiff !== 0) return timeDiff;
+
+  const stableDiff = getStableMessageId(a).localeCompare(getStableMessageId(b));
+  if (stableDiff !== 0) return stableDiff;
+
   const aId = typeof a.id === "string" ? a.id : "";
   const bId = typeof b.id === "string" ? b.id : "";
   return aId.localeCompare(bId);
@@ -360,6 +443,14 @@ const isTempMessageId = (id: string | undefined): boolean =>
   typeof id === "string" && id.startsWith("temp-");
 
 const matchesMessage = (source: Message, target: Message): boolean =>
+  (source.stableId !== undefined &&
+    (source.stableId === target.stableId ||
+      source.stableId === target.clientMessageId ||
+      source.stableId === target.localId)) ||
+  (source.clientMessageId !== undefined &&
+    (source.clientMessageId === target.clientMessageId ||
+      source.clientMessageId === target.stableId ||
+      source.clientMessageId === target.localId)) ||
   source.id === target.id ||
   (source.localId !== undefined && source.localId === target.id) ||
   (target.localId !== undefined && target.localId === source.id) ||
@@ -413,6 +504,16 @@ const findMessageIndex = (messages: Message[], target: Message): number =>
 
 const toMessageIdentityKeys = (message: Message): string[] => {
   const keys = new Set<string>();
+  if (typeof message.stableId === "string" && message.stableId.length > 0) {
+    keys.add(`stable:${message.stableId}`);
+  }
+  if (
+    typeof message.clientMessageId === "string" &&
+    message.clientMessageId.length > 0
+  ) {
+    keys.add(`client:${message.clientMessageId}`);
+    keys.add(`stable:${message.clientMessageId}`);
+  }
   if (typeof message.id === "string" && message.id.length > 0) {
     keys.add(`id:${message.id}`);
     keys.add(`local:${message.id}`);
@@ -420,6 +521,7 @@ const toMessageIdentityKeys = (message: Message): string[] => {
   if (typeof message.localId === "string" && message.localId.length > 0) {
     keys.add(`id:${message.localId}`);
     keys.add(`local:${message.localId}`);
+    keys.add(`stable:${message.localId}`);
   }
   return Array.from(keys);
 };
@@ -473,6 +575,27 @@ const mergeMessageRecords = (current: Message, incoming: Message): Message => {
       : isTempMessageId(incoming.id)
         ? incoming.id
         : undefined);
+  merged.clientMessageId =
+    incoming.clientMessageId || current.clientMessageId || merged.localId;
+  merged.stableId =
+    current.stableId ||
+    incoming.stableId ||
+    merged.clientMessageId ||
+    merged.localId ||
+    merged.id;
+  merged.localOrder =
+    incoming.localOrder ?? current.localOrder ?? allocateLocalMessageOrder();
+
+  const currentTransport = current.transportStatus;
+  const incomingTransport = incoming.transportStatus;
+  merged.transportStatus =
+    incomingTransport === "synced_stream" ||
+    currentTransport === "synced_stream"
+      ? "synced_stream"
+      : incomingTransport === "acked_transport" ||
+          currentTransport === "acked_transport"
+        ? "acked_transport"
+        : incomingTransport || currentTransport;
 
   return merged;
 };
@@ -548,10 +671,25 @@ const findMessageByIdentityIndex = (
     const targetId = typeof target.id === "string" ? target.id : "";
     const targetLocalId =
       typeof target.localId === "string" ? target.localId : "";
+    const targetStableId =
+      typeof target.stableId === "string" ? target.stableId : "";
+    const targetClientMessageId =
+      typeof target.clientMessageId === "string" ? target.clientMessageId : "";
     const itemId = typeof item.id === "string" ? item.id : "";
     const itemLocalId = typeof item.localId === "string" ? item.localId : "";
+    const itemStableId = typeof item.stableId === "string" ? item.stableId : "";
+    const itemClientMessageId =
+      typeof item.clientMessageId === "string" ? item.clientMessageId : "";
 
     return (
+      (targetStableId.length > 0 &&
+        (itemStableId === targetStableId ||
+          itemClientMessageId === targetStableId ||
+          itemLocalId === targetStableId)) ||
+      (targetClientMessageId.length > 0 &&
+        (itemClientMessageId === targetClientMessageId ||
+          itemStableId === targetClientMessageId ||
+          itemLocalId === targetClientMessageId)) ||
       (targetId.length > 0 &&
         (itemId === targetId || itemLocalId === targetId)) ||
       (targetLocalId.length > 0 &&
@@ -1249,10 +1387,16 @@ export const useChatStore = create<ChatState>()(
 
       const sender = resolveSenderIdentity();
 
+      const localOrder = allocateLocalMessageOrder();
+      const clientMessageId = `client-${conversationId}-${localOrder}`;
       const tempId = `temp-${Date.now()}-${Math.random()}`;
       const tempMessage: Message = {
         id: tempId,
+        stableId: clientMessageId,
+        clientMessageId,
         localId: tempId,
+        localOrder,
+        transportStatus: "optimistic",
         conversationId,
         senderId: sender.id || "current-user",
         senderName: sender.senderName,
@@ -1295,7 +1439,14 @@ export const useChatStore = create<ChatState>()(
 
         get().addMessage(conversationId, {
           ...message,
+          stableId: clientMessageId,
+          clientMessageId,
           localId: tempId,
+          localOrder,
+          transportStatus:
+            message.serverSeq !== undefined
+              ? "synced_stream"
+              : "acked_transport",
           status: message.status || MessageStatus.SENT,
         });
       } catch (error) {
@@ -1336,7 +1487,19 @@ export const useChatStore = create<ChatState>()(
 
         get().addMessage(conversationId, {
           ...resentMessage,
+          stableId:
+            message.stableId ||
+            message.clientMessageId ||
+            message.localId ||
+            message.id,
+          clientMessageId:
+            message.clientMessageId || message.localId || message.id,
           localId: message.localId || message.id,
+          localOrder: message.localOrder,
+          transportStatus:
+            resentMessage.serverSeq !== undefined
+              ? "synced_stream"
+              : "acked_transport",
           status: resentMessage.status || MessageStatus.SENT,
         });
         toast.success(i18n.t("chat:toast.resendSuccess"));
@@ -1416,11 +1579,25 @@ export const useSelectedConversation = () => {
 export const useCurrentTypingStatus = () => {
   return useChatStore((state) => {
     if (!state.selectedConversationId) return null;
-    return state.typingStatuses.find(
-      (typing) =>
-        typing.conversationId === state.selectedConversationId &&
-        typing.isTyping,
-    );
+    const priority = {
+      recording: 3,
+      uploading: 2,
+      typing: 1,
+      online: 0,
+    } as const;
+    return state.typingStatuses
+      .filter(
+        (typing) =>
+          typing.conversationId === state.selectedConversationId &&
+          typing.isTyping,
+      )
+      .sort((a, b) => {
+        const priorityDiff =
+          (priority[b.activity || "typing"] ?? 1) -
+          (priority[a.activity || "typing"] ?? 1);
+        if (priorityDiff !== 0) return priorityDiff;
+        return (b.confidence ?? 0) - (a.confidence ?? 0);
+      })[0];
   });
 };
 

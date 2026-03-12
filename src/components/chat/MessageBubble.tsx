@@ -463,7 +463,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   return (
     <div
       className={clsx(
-        "group flex w-fit max-w-[min(75%,32rem)] items-end gap-2 sm:max-w-[min(65%,32rem)]",
+        "group flex w-fit max-w-[78%] items-end gap-2 sm:max-w-[60%]",
         isOwn ? "ml-auto flex-row-reverse" : "mr-auto",
         className,
       )}
@@ -531,8 +531,8 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           className={clsx(
             "relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             isCompact
-              ? "px-2.5 py-1.5"
-              : "px-[var(--chat-bubble-px)] py-[var(--chat-bubble-py)]",
+              ? "px-2.5 py-1.5 pb-5"
+              : "px-[var(--chat-bubble-px)] py-[var(--chat-bubble-py)] pb-6",
             bubbleRadiusClass,
             isOwn
               ? "bg-primary text-text-inverse"
@@ -587,7 +587,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           {/* Timestamp + status row */}
           <div
             className={clsx(
-              "mt-1 flex items-center justify-end gap-1 text-[11px] leading-tight",
+              "pointer-events-none absolute bottom-1.5 right-2 flex min-h-4 items-center justify-end gap-1 text-[11px] leading-tight",
               isOwn ? "text-text-inverse/80" : "text-text-secondary",
             )}
           >

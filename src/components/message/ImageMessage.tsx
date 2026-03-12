@@ -31,6 +31,11 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
     attachment,
     { autoResolve: true },
   );
+  const mediaWidth = attachment.width ? Math.min(attachment.width, 300) : 240;
+  const aspectRatio =
+    attachment.width && attachment.height
+      ? `${attachment.width} / ${attachment.height}`
+      : "4 / 3";
 
   const hasDisplayUrl = Boolean(resolvedUrl);
 
@@ -67,43 +72,35 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   return (
     <>
       <div className={clsx("relative", className)}>
-        {(!isLoaded || isLoading || !hasDisplayUrl) && !isError && (
-          <div
-            className="animate-pulse rounded-lg bg-surface-overlay"
-            style={{
-              width: attachment.width ? Math.min(attachment.width, 300) : 200,
-              height: attachment.height
-                ? Math.min(attachment.height, 200)
-                : 150,
-            }}
-          />
-        )}
+        <div
+          className="relative overflow-hidden rounded-lg bg-surface-overlay"
+          style={{ width: mediaWidth, maxWidth: "100%", aspectRatio }}
+        >
+          {(!isLoaded || isLoading || !hasDisplayUrl) && !isError && (
+            <div className="absolute inset-0 animate-pulse bg-surface-overlay" />
+          )}
 
-        {isError && (
-          <div className="flex items-center justify-center rounded-lg bg-surface-overlay p-4 text-sm text-text-muted">
-            {t("chat:image.failedToLoad")}
-          </div>
-        )}
+          {isError && (
+            <div className="absolute inset-0 flex items-center justify-center p-4 text-sm text-text-muted">
+              {t("chat:image.failedToLoad")}
+            </div>
+          )}
 
-        {hasDisplayUrl && (
-          <img
-            className={clsx(
-              "h-auto max-w-full cursor-pointer rounded object-cover transition-opacity",
-              isLoaded ? "opacity-100" : "absolute left-0 top-0 opacity-0",
-              "hover:opacity-95",
-            )}
-            style={{
-              maxWidth: "300px",
-              maxHeight: 300,
-              objectFit: "cover",
-            }}
-            src={resolvedUrl}
-            alt={caption || attachment.fileName || t("chat:image.previewAlt")}
-            onClick={() => void handleImageClick()}
-            onLoad={() => setIsLoaded(true)}
-            onError={handleImageError}
-          />
-        )}
+          {hasDisplayUrl && (
+            <img
+              className={clsx(
+                "absolute inset-0 h-full w-full cursor-pointer object-cover transition-opacity duration-150",
+                isLoaded ? "opacity-100" : "opacity-0",
+                "hover:opacity-95",
+              )}
+              src={resolvedUrl}
+              alt={caption || attachment.fileName || t("chat:image.previewAlt")}
+              onClick={() => void handleImageClick()}
+              onLoad={() => setIsLoaded(true)}
+              onError={handleImageError}
+            />
+          )}
+        </div>
 
         {caption && isLoaded && (
           <p className={clsx("mt-2 text-sm", isOwn ? "text-text-inverse/90" : "text-text-secondary")}>

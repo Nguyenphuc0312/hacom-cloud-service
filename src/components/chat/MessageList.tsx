@@ -175,50 +175,37 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 }) => {
   const { t } = useTranslation();
   const viewportRef = React.useRef<HTMLDivElement | null>(null);
+  const listRef = React.useRef<VirtualList<TimelineRowData> | null>(null);
+  const outerRef = React.useRef<HTMLDivElement | null>(null);
   const stickyDateRafRef = React.useRef<number | null>(null);
   const [stickyDate, setStickyDate] = React.useState<Date | null>(null);
 
-  const timelineItems = useMessageGrouping({
-    messages,
-    currentUserId,
-    conversationType: conversation.type,
-  });
-
-  const {
-    listRef,
-    outerRef,
-    viewportHeight,
-    getItemSize,
-    setItemSize,
-    clearMeasuredSizes,
-    measureVersion,
-  } = useVirtualizedMessages<TimelineItem, TimelineRowData>({
-    items: timelineItems,
-    viewportRef,
-    estimateItemSize: estimateTimelineItemHeight,
-  });
+  const [timelineMessageCount, setTimelineMessageCount] = React.useState(
+    messages.length,
+  );
 
   const scrollToBottom = React.useCallback(
     (behavior: ScrollBehavior = "smooth") => {
-      if (timelineItems.length === 0) return;
+      if (timelineMessageCount === 0) return;
 
       if (behavior === "auto") {
         // For instant scrolls, use react-window's scrollToItem for reliability
         // because outerRef.scrollHeight may be based on estimated sizes
-        listRef.current?.scrollToItem(timelineItems.length - 1, "end");
+        listRef.current?.scrollToItem(timelineMessageCount - 1, "end");
       } else {
         const outer = outerRef.current;
         if (outer) {
           outer.scrollTo({ top: outer.scrollHeight, behavior });
         } else {
-          listRef.current?.scrollToItem(timelineItems.length - 1, "end");
+          listRef.current?.scrollToItem(timelineMessageCount - 1, "end");
         }
       }
     },
-    [timelineItems.length, listRef, outerRef],
+    [timelineMessageCount, listRef, outerRef],
   );
 
   const {
+    displayMessages,
     pendingNewMessages,
     showNewMessagesPill,
     showJumpToBottom,
@@ -234,6 +221,30 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     outerRef,
     scrollToBottom,
   });
+
+  const timelineItems = useMessageGrouping({
+    messages: displayMessages,
+    currentUserId,
+    conversationType: conversation.type,
+  });
+
+  const {
+    viewportHeight,
+    getItemSize,
+    setItemSize,
+    clearMeasuredSizes,
+    measureVersion,
+  } = useVirtualizedMessages<TimelineItem, TimelineRowData>({
+    items: timelineItems,
+    viewportRef,
+    estimateItemSize: estimateTimelineItemHeight,
+    listRef,
+    outerRef,
+  });
+
+  React.useEffect(() => {
+    setTimelineMessageCount(timelineItems.length);
+  }, [timelineItems.length]);
 
   React.useEffect(() => {
     clearMeasuredSizes();
