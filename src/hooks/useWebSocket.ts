@@ -5,6 +5,7 @@
 
 import { useEffect, useCallback, useRef, useState } from "react";
 import {
+  authenticateSocket,
   initSocket,
   connectSocket,
   disconnectSocket,
@@ -13,18 +14,18 @@ import {
   WebSocketEvents,
   type ConnectionState,
 } from "../lib/socket";
+import { AUTH_CONFIG } from "../config";
 import { resetAuthFailureState } from "../lib/axios";
-import { authApi, conversationApi } from "../services/api";
+import { conversationApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import { useAuthStore, useChatStore, useGroupStore } from "../stores";
+import { getAccessToken } from "../services/tokenService";
 import {
-  getAccessToken,
-  getRefreshToken,
-  isRefreshTokenCookieMode,
-  isRememberMeEnabled,
-  storeTokens,
-  updateAccessToken,
-} from "../services/tokenService";
+  ensureFreshAccessToken,
+  refreshAccessTokenShared,
+  subscribeToAuthRefreshEvents,
+} from "../services/authRefreshCoordinator";
+import { isTokenExpiringSoon } from "../utils/jwtHelpers";
 import { toast } from "../utils/toast";
 
 interface UseWebSocketOptions {
@@ -103,84 +104,6 @@ type MessageCursor = {
   id: string;
 };
 
-type RefreshPayload = {
-  accessToken?: string;
-  refreshToken?: string;
-  tokens?: {
-    accessToken?: string;
-    refreshToken?: string;
-  };
-};
-
-let wsRefreshPromise: Promise<string> | null = null;
-let wsReauthFailureHandled = false;
-
-const resolveRefreshTokens = (
-  payload: RefreshPayload,
-): { accessToken: string | null; refreshToken: string | null } => {
-  const accessToken =
-    payload.tokens?.accessToken ?? payload.accessToken ?? null;
-  const refreshToken =
-    payload.tokens?.refreshToken ?? payload.refreshToken ?? null;
-  return { accessToken, refreshToken };
-};
-
-const refreshAccessTokenForWebSocket = async (): Promise<string> => {
-  const cookieMode = isRefreshTokenCookieMode();
-  const refreshToken = getRefreshToken();
-
-  if (!cookieMode && !refreshToken) {
-    throw new Error("Missing refresh token");
-  }
-
-  const response = await authApi.refreshToken(refreshToken ?? undefined);
-  const payload = unwrapApiSuccess(response) as RefreshPayload;
-  const { accessToken, refreshToken: rotatedRefreshToken } =
-    resolveRefreshTokens(payload);
-
-  if (!accessToken) {
-    throw new Error("Refresh response missing access token");
-  }
-
-  if (cookieMode) {
-    updateAccessToken(accessToken);
-  } else {
-    if (!rotatedRefreshToken) {
-      throw new Error("Refresh response missing refresh token");
-    }
-    storeTokens(accessToken, rotatedRefreshToken, isRememberMeEnabled());
-  }
-
-  resetAuthFailureState();
-  wsReauthFailureHandled = false;
-  return accessToken;
-};
-
-const getAccessTokenForWebSocketReauth = async (
-  reason: string,
-): Promise<string> => {
-  if (reason === "authenticate_required") {
-    const accessToken = getAccessToken();
-    if (!accessToken) {
-      throw new Error("Missing access token");
-    }
-
-    wsReauthFailureHandled = false;
-    return accessToken;
-  }
-
-  return refreshAccessTokenForWebSocket();
-};
-
-const getWsRefreshPromise = (reason: string): Promise<string> => {
-  if (!wsRefreshPromise) {
-    wsRefreshPromise = getAccessTokenForWebSocketReauth(reason).finally(() => {
-      wsRefreshPromise = null;
-    });
-  }
-  return wsRefreshPromise;
-};
-
 export const useWebSocket = (
   options: UseWebSocketOptions = {},
 ): UseWebSocketReturn => {
@@ -216,6 +139,8 @@ export const useWebSocket = (
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
   const unsubscribersRef = useRef<Array<() => void>>([]);
+  const wsRecoveryPromiseRef = useRef<Promise<void> | null>(null);
+  const wsReauthFailureHandledRef = useRef(false);
 
   useEffect(() => {
     const socket = initSocket();
@@ -225,6 +150,15 @@ export const useWebSocket = (
     return () => {
       unsub();
     };
+  }, []);
+
+  useEffect(() => {
+    return subscribeToAuthRefreshEvents((event) => {
+      if (event.type === "token_refreshed") {
+        wsReauthFailureHandledRef.current = false;
+        resetAuthFailureState();
+      }
+    });
   }, []);
 
   const clearRemoteTypingTimer = useCallback(
@@ -243,6 +177,69 @@ export const useWebSocket = (
     remoteTypingTimersRef.current.forEach((timer) => clearTimeout(timer));
     remoteTypingTimersRef.current.clear();
   }, []);
+
+  const handleWsRefreshFailure = useCallback(
+    async (reason: string, error: unknown) => {
+      if (!wsReauthFailureHandledRef.current) {
+        wsReauthFailureHandledRef.current = true;
+        toast.error("Session expired. Please login again.");
+        await useAuthStore.getState().handleAuthFailure("refresh_failed");
+      }
+
+      const message = error instanceof Error ? error.message : "refresh_failed";
+      onError?.(new Error(`WebSocket auth recovery failed (${reason}): ${message}`));
+    },
+    [onError],
+  );
+
+  const recoverSocketAuth = useCallback(
+    async (
+      trigger: "ws_reauth_required" | "ws_unauthorized" | "ws_close_4401",
+      reason: string,
+      mode: "reauth" | "reconnect" = "reconnect",
+    ) => {
+      if (!wsRecoveryPromiseRef.current) {
+        wsRecoveryPromiseRef.current = (async () => {
+          try {
+            let accessToken: string;
+
+            if (mode === "reauth") {
+              const currentAccessToken = getAccessToken();
+              if (!currentAccessToken) {
+                throw new Error("Missing access token");
+              }
+
+              if (
+                isTokenExpiringSoon(
+                  currentAccessToken,
+                  AUTH_CONFIG.TOKEN_REFRESH_THRESHOLD,
+                )
+              ) {
+                accessToken = await refreshAccessTokenShared(trigger);
+                updateSocketAuth(accessToken);
+              } else {
+                accessToken = currentAccessToken;
+                authenticateSocket(accessToken);
+              }
+            } else {
+              accessToken = await refreshAccessTokenShared(trigger);
+              updateSocketAuth(accessToken);
+            }
+
+            resetAuthFailureState();
+            wsReauthFailureHandledRef.current = false;
+          } catch (error) {
+            await handleWsRefreshFailure(reason, error);
+          }
+        })().finally(() => {
+          wsRecoveryPromiseRef.current = null;
+        });
+      }
+
+      return wsRecoveryPromiseRef.current;
+    },
+    [handleWsRefreshFailure],
+  );
 
   const flushEmitQueue = useCallback(() => {
     const socket = getSocket();
@@ -354,12 +351,19 @@ export const useWebSocket = (
     unsubscribersRef.current.push(unsubConnect);
 
     const unsubDisconnect = socket.on("disconnect", (data) => {
+      const payload = asRecord(data);
+      const code =
+        typeof payload?.code === "number"
+          ? payload.code
+          : Number(asString(payload?.code) ?? "0");
       const reason =
-        asString(asRecord(data)?.reason) ??
-        asString(asRecord(data)?.code) ??
-        "disconnected";
+        asString(payload?.reason) ??
+        (Number.isFinite(code) && code > 0 ? String(code) : "disconnected");
       if (hasConnectedOnceRef.current) {
         shouldResyncOnConnectRef.current = true;
+      }
+      if (code === 4401) {
+        void recoverSocketAuth("ws_close_4401", "close_4401");
       }
       onDisconnect?.(reason);
     });
@@ -382,8 +386,11 @@ export const useWebSocket = (
     const unsubAuthUnauthorized = socket.on(
       WebSocketEvents.AUTH_UNAUTHORIZED,
       (data) => {
+        const payload = asRecord(data);
         const message =
-          asString(asRecord(data)?.message) ?? "WebSocket unauthorized";
+          asString(payload?.message) ?? "WebSocket unauthorized";
+        const code = asString(payload?.code) ?? "AUTH_UNAUTHORIZED";
+        void recoverSocketAuth("ws_unauthorized", code);
         onError?.(new Error(message));
       },
     );
@@ -394,26 +401,11 @@ export const useWebSocket = (
       (data) => {
         const reason =
           asString(asRecord(data)?.reason) ?? "reauthentication required";
-        void (async () => {
-          try {
-            const newAccessToken = await getWsRefreshPromise(reason);
-            updateSocketAuth(newAccessToken);
-          } catch (error) {
-            if (!wsReauthFailureHandled) {
-              wsReauthFailureHandled = true;
-              toast.error("Session expired. Please login again.");
-              await useAuthStore.getState().handleAuthFailure("refresh_failed");
-            }
-
-            const message =
-              error instanceof Error ? error.message : "refresh_failed";
-            onError?.(
-              new Error(
-                `WebSocket reauth failed (${reason}): ${message}`,
-              ),
-            );
-          }
-        })();
+        void recoverSocketAuth(
+          "ws_reauth_required",
+          reason,
+          reason === "authenticate_required" ? "reauth" : "reconnect",
+        );
       },
     );
     unsubscribersRef.current.push(unsubReauthRequired);
@@ -931,6 +923,7 @@ export const useWebSocket = (
     onDisconnect,
     onError,
     removeConversation,
+    recoverSocketAuth,
     resyncRoom,
     removeMessage,
     selectConversation,
@@ -944,9 +937,16 @@ export const useWebSocket = (
   ]);
 
   const connect = useCallback(() => {
-    setupSocket();
-    connectSocket();
-  }, [setupSocket]);
+    void (async () => {
+      try {
+        await ensureFreshAccessToken("ws_connect");
+        setupSocket();
+        connectSocket();
+      } catch (error) {
+        await handleWsRefreshFailure("ws_connect", error);
+      }
+    })();
+  }, [handleWsRefreshFailure, setupSocket]);
 
   const disconnect = useCallback(() => {
     if (typingTimeoutRef.current) {

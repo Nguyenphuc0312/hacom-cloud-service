@@ -5,22 +5,17 @@
 
 import axios, { AxiosError, AxiosHeaders } from "axios";
 import type { AxiosInstance, InternalAxiosRequestConfig } from "axios";
-import type { ApiResponse } from "@hacom/chat-shared-types";
 import { API_BASE_URL, AUTH_BASE_URL, USE_AUTH_SERVICE } from "../config";
 import { authBaseUrl, buildAuthEndpoint, normalizeAuthRequestPath } from "./authPath";
 import i18n from "../i18n";
 import {
   clearTokens,
-  getCsrfToken,
   getAccessToken,
-  getRefreshToken,
   isAuthSessionActive,
   isRefreshTokenCookieMode,
-  isRememberMeEnabled,
-  storeTokens,
-  updateAccessToken,
 } from "../services/tokenService";
 import { updateSocketAuth } from "./socket";
+import { refreshAccessTokenShared } from "../services/authRefreshCoordinator";
 
 type AuthFailureReason = "missing_refresh_token" | "refresh_failed";
 type AuthFailureHandler = (reason: AuthFailureReason) => void | Promise<void>;
@@ -66,7 +61,6 @@ const TRUSTED_BASE_ORIGINS = (() => {
 
 let authFailureHandler: AuthFailureHandler | null = null;
 let authFailureNotified = false;
-let refreshPromise: Promise<string> | null = null;
 let refreshEndpointLogged = false;
 
 const pendingRequestControllers = new Map<string, AbortController>();
@@ -148,83 +142,13 @@ const notifyAuthFailure = (reason: AuthFailureReason): void => {
   }
 };
 
-const extractTokenPayload = (
-  rawResponseData: unknown,
-): { accessToken: string | null; refreshToken: string | null } => {
-  const contractPayload = rawResponseData as ApiResponse<{
-    accessToken?: string;
-    refreshToken?: string;
-    tokens?: {
-      accessToken?: string;
-      refreshToken?: string;
-    };
-  }>;
-
-  if (
-    contractPayload &&
-    typeof contractPayload === "object" &&
-    contractPayload.success
-  ) {
-    const responseData = contractPayload.data;
-    const accessTokenCandidate =
-      responseData.tokens?.accessToken ?? responseData.accessToken;
-    const refreshTokenCandidate =
-      responseData.tokens?.refreshToken ?? responseData.refreshToken;
-
-    return {
-      accessToken:
-        typeof accessTokenCandidate === "string" ? accessTokenCandidate : null,
-      refreshToken:
-        typeof refreshTokenCandidate === "string"
-          ? refreshTokenCandidate
-          : null,
-    };
-  }
-
-  const topLevel =
-    rawResponseData && typeof rawResponseData === "object"
-      ? (rawResponseData as Record<string, unknown>)
-      : {};
-
-  const payload =
-    topLevel.data && typeof topLevel.data === "object"
-      ? (topLevel.data as Record<string, unknown>)
-      : topLevel;
-
-  const nestedTokens =
-    payload.tokens && typeof payload.tokens === "object"
-      ? (payload.tokens as Record<string, unknown>)
-      : null;
-
-  const accessTokenCandidate = nestedTokens?.accessToken ?? payload.accessToken;
-  const refreshTokenCandidate =
-    nestedTokens?.refreshToken ?? payload.refreshToken;
-
-  return {
-    accessToken:
-      typeof accessTokenCandidate === "string" ? accessTokenCandidate : null,
-    refreshToken:
-      typeof refreshTokenCandidate === "string" ? refreshTokenCandidate : null,
-  };
-};
-
-// Lock refresh with a shared promise so all 401 requests wait for one refresh call.
 const refreshAccessToken = async (): Promise<string> => {
   if (!isAuthSessionActive()) {
     notifyAuthFailure("refresh_failed");
     throw new Error(i18n.t("error:auth.sessionInactive"));
   }
 
-  const cookieMode = isRefreshTokenCookieMode();
-  const storedRefreshToken = getRefreshToken();
-
-  if (!cookieMode && !storedRefreshToken) {
-    notifyAuthFailure("missing_refresh_token");
-    throw new Error(i18n.t("error:auth.missingRefreshToken"));
-  }
-
   try {
-    const csrfToken = cookieMode ? getCsrfToken() : null;
     const refreshEndpoint = buildAuthEndpoint("/refresh");
     if (import.meta.env.DEV && !refreshEndpointLogged) {
       refreshEndpointLogged = true;
@@ -233,36 +157,7 @@ const refreshAccessToken = async (): Promise<string> => {
         refreshEndpoint,
       });
     }
-    const response = await axios.post(
-      refreshEndpoint,
-      storedRefreshToken ? { refreshToken: storedRefreshToken } : undefined,
-      {
-        withCredentials: cookieMode,
-        headers: {
-          "Content-Type": "application/json",
-          [API_CONTRACT_HEADER]: API_CONTRACT_VERSION,
-          ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
-        },
-      },
-    );
-
-    const { accessToken, refreshToken } = extractTokenPayload(response.data);
-    if (!accessToken) {
-      throw new Error(i18n.t("error:auth.refreshMissingToken"));
-    }
-
-    if (cookieMode) {
-      updateAccessToken(accessToken);
-    } else {
-      if (!refreshToken) {
-        throw new Error(i18n.t("error:auth.missingRefreshToken"));
-      }
-      storeTokens(
-        accessToken,
-        refreshToken,
-        isRememberMeEnabled(),
-      );
-    }
+    const accessToken = await refreshAccessTokenShared("http_401");
     updateSocketAuth(accessToken);
 
     authFailureNotified = false;
@@ -271,16 +166,6 @@ const refreshAccessToken = async (): Promise<string> => {
     notifyAuthFailure("refresh_failed");
     throw error;
   }
-};
-
-const getRefreshPromise = async (): Promise<string> => {
-  if (!refreshPromise) {
-    refreshPromise = refreshAccessToken().finally(() => {
-      refreshPromise = null;
-    });
-  }
-
-  return refreshPromise;
 };
 
 export const setAuthFailureHandler = (handler: AuthFailureHandler): void => {
@@ -402,7 +287,7 @@ apiClient.interceptors.response.use(
     originalRequest._retry = true;
 
     try {
-      const newAccessToken = await getRefreshPromise();
+      const newAccessToken = await refreshAccessToken();
       setAuthHeader(originalRequest, newAccessToken);
       return apiClient(originalRequest);
     } catch (refreshError) {

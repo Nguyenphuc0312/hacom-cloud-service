@@ -11,17 +11,13 @@ import apiClient, {
 } from "../lib/axios";
 import type {
   ApiResponse,
-  RefreshTokenResponse,
 } from "@hacom/chat-shared-types";
 import type { LoginFormData, RegisterFormData } from "../lib/validations";
 import {
   getAccessToken,
-  getCsrfToken,
   getRefreshToken,
   isRefreshTokenCookieMode,
-  isRememberMeEnabled,
   storeTokens,
-  updateAccessToken,
 } from "../services/tokenService";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import { toast } from "../components/ui";
@@ -33,6 +29,7 @@ import {
   runClientLogoutCleanup,
 } from "../services/authService";
 import i18n from "../i18n";
+import { refreshAccessTokenShared } from "../services/authRefreshCoordinator";
 
 export interface User {
   id: string;
@@ -67,13 +64,6 @@ interface LogoutOptions {
 }
 
 type RegistrationStatus = "idle" | "verification_required";
-
-interface RefreshPayload extends RefreshTokenResponse {
-  tokens?: {
-    accessToken?: string;
-    refreshToken?: string;
-  };
-}
 
 interface AuthState {
   user: User | null;
@@ -111,60 +101,11 @@ const resolveTokens = (
   return { accessToken, refreshToken };
 };
 
-const resolveRefreshTokens = (
-  payload: RefreshPayload,
-): { accessToken: string | null; refreshToken: string | null } => {
-  const accessToken =
-    payload.tokens?.accessToken ?? payload.accessToken ?? null;
-  const refreshToken =
-    payload.tokens?.refreshToken ?? payload.refreshToken ?? null;
-  return { accessToken, refreshToken };
-};
-
 const fetchCurrentUser = async (accessToken: string): Promise<User> => {
   const response = await authClient.get<ApiResponse<User>>("/auth/me", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   return unwrapApiSuccess(response.data);
-};
-
-const refreshAccessTokenForBootstrap = async (): Promise<string> => {
-  const cookieMode = isRefreshTokenCookieMode();
-  const refreshToken = getRefreshToken();
-
-  if (!cookieMode && !refreshToken) {
-    throw new Error(i18n.t("error:auth.missingRefreshToken"));
-  }
-
-  const csrfToken = cookieMode ? getCsrfToken() : null;
-  const response = await authClient.post<ApiResponse<RefreshPayload>>(
-    "/auth/refresh",
-    refreshToken ? { refreshToken } : undefined,
-    {
-      withCredentials: cookieMode,
-      headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
-    },
-  );
-
-  const payload = unwrapApiSuccess(response.data);
-  const { accessToken, refreshToken: rotatedRefreshToken } =
-    resolveRefreshTokens(payload);
-
-  if (!accessToken) {
-    throw new Error(i18n.t("error:auth.refreshMissingToken"));
-  }
-
-  if (cookieMode) {
-    updateAccessToken(accessToken);
-  } else {
-    if (!rotatedRefreshToken) {
-      throw new Error(i18n.t("error:auth.missingRefreshToken"));
-    }
-    storeTokens(accessToken, rotatedRefreshToken, isRememberMeEnabled());
-  }
-
-  resetAuthFailureState();
-  return accessToken;
 };
 
 const resetChatState = async (): Promise<void> => {
@@ -439,7 +380,7 @@ export const useAuthStore = create<AuthState>()(
 
             if (isRefreshTokenCookieMode() || getRefreshToken()) {
               try {
-                const newAccessToken = await refreshAccessTokenForBootstrap();
+                const newAccessToken = await refreshAccessTokenShared("bootstrap");
                 const user = await fetchCurrentUser(newAccessToken);
                 set({
                   user,
@@ -449,6 +390,7 @@ export const useAuthStore = create<AuthState>()(
                   registrationStatus: "idle",
                   error: null,
                 });
+                resetAuthFailureState();
                 return;
               } catch {
                 // Fallback to local logout below.

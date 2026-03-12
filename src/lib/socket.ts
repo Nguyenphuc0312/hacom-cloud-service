@@ -7,6 +7,7 @@
  */
 
 import {
+  AUTH_CONFIG,
   WEBSOCKET_URL,
   WEBSOCKET_CONFIG,
   WEBSOCKET_AUTH_CONFIG,
@@ -16,7 +17,13 @@ import {
   updateAccessToken,
 } from "../services/tokenService";
 import { WsEventNames } from "@hacom/chat-shared-types";
-import { isJwtLike, normalizeToken } from "../utils/jwtHelpers";
+import {
+  getJwtExpirationMs,
+  isJwtLike,
+  isTokenExpired,
+  isTokenExpiringSoon,
+  normalizeToken,
+} from "../utils/jwtHelpers";
 
 const QUERY_TOKEN_BY_ENV = WEBSOCKET_AUTH_CONFIG.USE_QUERY_TOKEN;
 const AUTO_QUERY_TOKEN_FALLBACK_ENABLED =
@@ -28,6 +35,7 @@ const AUTO_QUERY_TOKEN_FALLBACK_ENABLED =
 
 export type ConnectionState =
   | "connecting"
+  | "authenticating"
   | "connected"
   | "disconnected"
   | "reconnecting"
@@ -51,6 +59,7 @@ class WebSocketManager {
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private authRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private isManualDisconnect = false;
   private queryTokenFallbackEnabled = false;
   private queryTokenFallbackAttempted = false;
@@ -100,6 +109,50 @@ class WebSocketManager {
   private setConnectionState(state: ConnectionState): void {
     this.connectionState = state;
     this.stateChangeHandlers.forEach((handler) => handler(state));
+  }
+
+  private clearAuthRefreshTimer(): void {
+    if (this.authRefreshTimer) {
+      clearTimeout(this.authRefreshTimer);
+      this.authRefreshTimer = null;
+    }
+  }
+
+  private scheduleTokenRefresh(accessToken: string): void {
+    this.clearAuthRefreshTimer();
+
+    if (!isJwtLike(accessToken)) {
+      return;
+    }
+
+    const expiresSoon = isTokenExpiringSoon(
+      accessToken,
+      AUTH_CONFIG.TOKEN_REFRESH_THRESHOLD,
+    );
+    const expired = isTokenExpired(accessToken);
+
+    if (expired || expiresSoon) {
+      this.emit(WsEventNames.AUTH_REAUTH_REQUIRED, {
+        reason: expired ? "token_expired" : "token_expiring",
+      });
+      return;
+    }
+
+    const expMs = getJwtExpirationMs(accessToken);
+    if (!expMs) {
+      return;
+    }
+
+    const delay = Math.max(
+      expMs - Date.now() - AUTH_CONFIG.TOKEN_REFRESH_THRESHOLD,
+      0,
+    );
+
+    this.authRefreshTimer = setTimeout(() => {
+      this.emit(WsEventNames.AUTH_REAUTH_REQUIRED, {
+        reason: "token_expiring",
+      });
+    }, delay);
   }
 
   /**
@@ -189,8 +242,19 @@ class WebSocketManager {
       return;
     }
 
+    if (isTokenExpiringSoon(token, AUTH_CONFIG.TOKEN_REFRESH_THRESHOLD)) {
+      this.emit(WsEventNames.AUTH_REAUTH_REQUIRED, {
+        reason: isTokenExpired(token) ? "token_expired" : "token_expiring",
+      });
+      return;
+    }
+
     this.setConnectionState("connecting");
     this.isManualDisconnect = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
 
     const wsUrl = this.buildWebSocketUrl(token);
     const useQueryToken = wsUrl.includes("token=");
@@ -228,12 +292,7 @@ class WebSocketManager {
 
       const token = normalizeToken(rawToken);
       this.sendAuthenticate(token);
-      this.setConnectionState("connected");
-      this.reconnectAttempts = 0;
-      this.startPingInterval();
-
-      // Trigger custom connect event
-      this.emit("connect", {});
+      this.setConnectionState("authenticating");
     };
 
     this.socket.onclose = (event) => {
@@ -244,6 +303,7 @@ class WebSocketManager {
       this.socket = null;
       this.setConnectionState("disconnected");
       this.stopPingInterval();
+      this.clearAuthRefreshTimer();
 
       // Trigger custom disconnect event
       this.emit("disconnect", { code: event.code, reason: event.reason });
@@ -267,6 +327,10 @@ class WebSocketManager {
       }
 
       // Auto reconnect only for non-manual close
+      if (event.code === 4401 && !wasManualDisconnect) {
+        return;
+      }
+
       if (event.code !== 1000 && !wasManualDisconnect) {
         this.scheduleReconnect();
       }
@@ -311,6 +375,14 @@ class WebSocketManager {
     if (type === WsEventNames.AUTH_AUTHENTICATED) {
       this.queryTokenFallbackEnabled = false;
       this.queryTokenFallbackAttempted = false;
+      this.reconnectAttempts = 0;
+      this.setConnectionState("connected");
+      this.startPingInterval();
+      const accessToken = this.getAccessToken();
+      if (accessToken) {
+        this.scheduleTokenRefresh(accessToken);
+      }
+      this.emit("connect", {});
     }
 
     // Emit to registered handlers
@@ -444,6 +516,7 @@ class WebSocketManager {
     }
 
     this.stopPingInterval();
+    this.clearAuthRefreshTimer();
     this.reconnectAttempts = 0;
     if (this.socket) {
       this.socket.close(1000, "Client disconnect");
@@ -521,15 +594,36 @@ class WebSocketManager {
    * Cập nhật token và reconnect
    */
   updateAuth(token: string): void {
-    updateAccessToken(token);
-
     const normalizedToken = normalizeToken(token);
     if (!isJwtLike(normalizedToken)) {
       return;
     }
 
+    const currentToken = this.getAccessToken();
+    if (
+      currentToken &&
+      normalizeToken(currentToken) === normalizedToken &&
+      this.isConnected()
+    ) {
+      return;
+    }
+
+    updateAccessToken(normalizedToken);
+    this.disconnect();
+    this.connect();
+  }
+
+  authenticate(token: string): void {
+    const normalizedToken = normalizeToken(token);
+    if (!isJwtLike(normalizedToken)) {
+      return;
+    }
+
+    updateAccessToken(normalizedToken);
+
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.sendAuthenticate(normalizedToken);
+      this.setConnectionState("authenticating");
       return;
     }
 
@@ -580,6 +674,10 @@ export const disconnectSocket = (): void => {
  */
 export const updateSocketAuth = (token: string): void => {
   wsManager.updateAuth(token);
+};
+
+export const authenticateSocket = (token: string): void => {
+  wsManager.authenticate(token);
 };
 
 // ============================================
