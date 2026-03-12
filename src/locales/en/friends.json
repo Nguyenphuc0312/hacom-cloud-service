@@ -1,21 +1,61 @@
 {
   "title": "Friends",
+  "subtitle": "Contacts, requests and quick profile actions",
   "tabs": {
-    "search": "Search",
-    "requests": "Requests"
+    "friends": "Friends",
+    "requests": "Requests",
+    "discover": "Discover",
+    "blocked": "Blocked",
+    "search": "Search"
+  },
+  "requests": {
+    "incoming": "Incoming",
+    "sent": "Sent"
   },
   "searchPlaceholder": "Search by username/email/phone",
   "searchHint": "Enter at least 2 characters",
   "noSearchResult": "No users found",
+  "discoverHintTitle": "Find people without breaking your flow",
+  "discoverHintBody": "Try a different keyword or check the username spelling.",
   "addFriend": "Add friend",
   "message": "Message",
   "accept": "Accept",
   "reject": "Decline",
+  "unblock": "Unblock",
   "requestSent": "Friend request sent",
   "requestAccepted": "Request accepted",
   "requestRejected": "Request declined",
   "requestCancelled": "Request cancelled",
+  "requestReceivedAt": "Received {{date}}",
+  "requestSentAt": "Sent {{date}}",
   "actionFailed": "Action failed",
+  "blockSuccess": "User blocked",
+  "unblockSuccess": "User unblocked",
+  "profileHint": "Quick actions and contact details",
+  "joined": "Joined",
+  "relationshipLabel": "Relationship",
+  "startChatTitle": "Open this conversation quickly",
+  "startChatHint": "Use Message to jump back into chat without leaving context.",
+  "previewTitle": "Preview a contact",
+  "previewBody": "Select any friend, request or search result to inspect the profile without leaving this screen.",
+  "relationship": {
+    "self": "Your profile",
+    "friend": "Friend",
+    "incoming": "Wants to connect",
+    "outgoing": "Requested",
+    "blocked": "Blocked",
+    "notFriend": "Not in contacts"
+  },
+  "empty": {
+    "friendsTitle": "Your contacts will show up here",
+    "friendsBody": "Use Discover to find people and start building your network.",
+    "requestsIncomingTitle": "No incoming requests",
+    "requestsIncomingBody": "When someone adds you, the request will appear here.",
+    "requestsSentTitle": "No sent requests",
+    "requestsSentBody": "People you invite will appear here until they respond.",
+    "blockedTitle": "No blocked users",
+    "blockedBody": "Blocked contacts will appear here so you can review them later."
+  },
   "status": {
     "unavailable": "Unavailable"
   },

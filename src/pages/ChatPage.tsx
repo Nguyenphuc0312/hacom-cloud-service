@@ -50,6 +50,19 @@ type IdleCallbackDeadline = {
   timeRemaining: () => number;
 };
 
+interface ProfilePanelTarget {
+  userId: string;
+  initialUser?: {
+    id: string;
+    username?: string;
+    displayName?: string;
+    firstName?: string;
+    lastName?: string;
+    avatar?: string;
+    status?: UserStatus;
+  } | null;
+}
+
 type WindowWithIdleCallback = Window & {
   requestIdleCallback?: (
     callback: (deadline: IdleCallbackDeadline) => void,
@@ -182,6 +195,8 @@ export const ChatPage: React.FC = () => {
 
   // Local state
   const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false);
+  const [profilePanelTarget, setProfilePanelTarget] =
+    useState<ProfilePanelTarget | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(!conversationId);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -208,6 +223,15 @@ export const ChatPage: React.FC = () => {
         : null,
     [user],
   );
+
+  const isSelectedDirectConversation =
+    isDirectConversation(selectedConversation);
+
+  // Get other user for direct chat
+  const otherUser =
+    selectedConversation && isSelectedDirectConversation && currentUserSummary
+      ? getOtherParticipant(selectedConversation, currentUserSummary.id)
+      : null;
 
   // Validate room in URL then sync to store.
   useEffect(() => {
@@ -596,10 +620,49 @@ export const ChatPage: React.FC = () => {
     [selectedConversationId, sendTyping, stopTyping],
   );
 
+  const closeInfoPanel = useCallback(() => {
+    setIsInfoPanelOpen(false);
+    setProfilePanelTarget(null);
+  }, []);
+
+  const openUserProfile = useCallback(
+    (target: ProfilePanelTarget) => {
+      setProfilePanelTarget(target);
+      setIsInfoPanelOpen(true);
+    },
+    [],
+  );
+
   // Handle toggle info panel
   const handleToggleInfoPanel = useCallback(() => {
-    setIsInfoPanelOpen((prev) => !prev);
-  }, []);
+    if (isInfoPanelOpen) {
+      closeInfoPanel();
+      return;
+    }
+
+    if (isSelectedDirectConversation && otherUser) {
+      openUserProfile({
+        userId: otherUser.id,
+        initialUser: {
+          id: otherUser.id,
+          username: otherUser.username,
+          displayName: otherUser.displayName,
+          avatar: otherUser.avatar,
+          status: otherUser.status,
+        },
+      });
+      return;
+    }
+
+    setProfilePanelTarget(null);
+    setIsInfoPanelOpen(true);
+  }, [
+    closeInfoPanel,
+    isInfoPanelOpen,
+    isSelectedDirectConversation,
+    openUserProfile,
+    otherUser,
+  ]);
 
   const handleDeleteConversation = useCallback(async () => {
     if (!selectedConversation) return;
@@ -608,7 +671,7 @@ export const ChatPage: React.FC = () => {
     try {
       await conversationApi.deleteConversation(selectedConversation.id);
       removeConversation(selectedConversation.id);
-      setIsInfoPanelOpen(false);
+      closeInfoPanel();
       selectConversation(null);
       navigate("/chat");
       toast.success(t("chat:toast.messageDeleted"));
@@ -617,6 +680,7 @@ export const ChatPage: React.FC = () => {
       toast.error(apiError.message || t("error:generic.requestFailed"));
     }
   }, [
+    closeInfoPanel,
     navigate,
     removeConversation,
     selectConversation,
@@ -702,6 +766,20 @@ export const ChatPage: React.FC = () => {
     [fetchConversations, isCreatingRoom, navigate, selectConversation],
   );
 
+  const handleOpenCurrentUserProfile = useCallback(() => {
+    if (!currentUserSummary) return;
+    openUserProfile({
+      userId: currentUserSummary.id,
+      initialUser: {
+        id: currentUserSummary.id,
+        username: currentUserSummary.username,
+        displayName: currentUserSummary.displayName,
+        avatar: currentUserSummary.avatar,
+        status: currentUserSummary.status,
+      },
+    });
+  }, [currentUserSummary, openUserProfile]);
+
   const handleCreateGroup = useCallback(
     async (payload: { name: string; memberIds: string[] }) => {
       if (isCreatingRoom) {
@@ -760,15 +838,6 @@ export const ChatPage: React.FC = () => {
 
   const showSidebarOnMobile = !selectedConversationId || isMobileMenuOpen;
 
-  const isSelectedDirectConversation =
-    isDirectConversation(selectedConversation);
-
-  // Get other user for direct chat
-  const otherUser =
-    selectedConversation && isSelectedDirectConversation && currentUserSummary
-      ? getOtherParticipant(selectedConversation, currentUserSummary.id)
-      : null;
-
   useEffect(() => {
     if (!selectedConversationId || !isSelectedDirectConversation || otherUser) {
       return;
@@ -810,7 +879,10 @@ export const ChatPage: React.FC = () => {
       if (!userId) return;
 
       void handleStartChat(userId).then(() => {
-        setIsInfoPanelOpen(true);
+        openUserProfile({
+          userId,
+          initialUser: { id: userId },
+        });
       });
     };
 
@@ -824,7 +896,7 @@ export const ChatPage: React.FC = () => {
         handler as EventListener,
       );
     };
-  }, [handleStartChat]);
+  }, [handleStartChat, openUserProfile]);
 
   if (!currentUserSummary) {
     return null;
@@ -859,6 +931,7 @@ export const ChatPage: React.FC = () => {
           selectedId={selectedConversationId}
           onSelectConversation={handleSelectConversation}
           onNewChat={handleOpenNewChat}
+          onCurrentUserClick={handleOpenCurrentUserProfile}
         />
       </div>
 
@@ -927,19 +1000,43 @@ export const ChatPage: React.FC = () => {
       </div>
 
       {/* Info panel */}
-      {selectedConversation && (
+      {(selectedConversation || profilePanelTarget) && (
         <div
           className={clsx(
             "fixed inset-y-0 right-0 z-40 w-full max-w-full border-l border-border bg-surface transition-transform duration-300 sm:max-w-[min(26rem,94vw)] lg:relative lg:z-0 lg:w-[clamp(20rem,28vw,24rem)] lg:max-w-none",
             isInfoPanelOpen ? "translate-x-0" : "translate-x-full lg:hidden",
           )}
         >
-          {isSelectedDirectConversation ? (
+          {profilePanelTarget ? (
+            <UserProfile
+              userId={profilePanelTarget.userId}
+              currentUserId={currentUserSummary.id}
+              initialUser={profilePanelTarget.initialUser ?? null}
+              onClose={closeInfoPanel}
+              onDeleteConversation={
+                selectedConversation &&
+                isSelectedDirectConversation &&
+                otherUser?.id === profilePanelTarget.userId
+                  ? handleDeleteConversation
+                  : undefined
+              }
+              onStartConversation={handleStartChat}
+            />
+          ) : isSelectedDirectConversation ? (
             otherUser ? (
               <UserProfile
-                user={otherUser}
-                onClose={handleToggleInfoPanel}
+                userId={otherUser.id}
+                currentUserId={currentUserSummary.id}
+                initialUser={{
+                  id: otherUser.id,
+                  username: otherUser.username,
+                  displayName: otherUser.displayName,
+                  avatar: otherUser.avatar,
+                  status: otherUser.status,
+                }}
+                onClose={closeInfoPanel}
                 onDeleteConversation={handleDeleteConversation}
+                onStartConversation={handleStartChat}
               />
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
@@ -949,14 +1046,14 @@ export const ChatPage: React.FC = () => {
                 </p>
               </div>
             )
-          ) : (
+          ) : selectedConversation ? (
             <GroupInfo
               conversation={selectedConversation}
               currentUserId={currentUserSummary.id}
-              onClose={handleToggleInfoPanel}
+              onClose={closeInfoPanel}
               onDeleteConversation={handleDeleteConversation}
             />
-          )}
+          ) : null}
         </div>
       )}
 
@@ -965,9 +1062,9 @@ export const ChatPage: React.FC = () => {
         <button
           type="button"
           className="fixed inset-0 z-30 bg-text-primary/50 lg:hidden"
-          onClick={handleToggleInfoPanel}
+          onClick={closeInfoPanel}
           onKeyDown={(e) => {
-            if (e.key === "Escape") handleToggleInfoPanel();
+            if (e.key === "Escape") closeInfoPanel();
           }}
           aria-label={t("common:actions.close")}
         />

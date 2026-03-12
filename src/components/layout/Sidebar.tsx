@@ -30,6 +30,7 @@ interface SidebarProps {
   selectedId: string | null;
   onSelectConversation: (id: string) => void;
   onNewChat?: () => void;
+  onCurrentUserClick?: () => void;
   className?: string;
 }
 
@@ -41,6 +42,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   selectedId,
   onSelectConversation,
   onNewChat,
+  onCurrentUserClick,
   className,
 }) => {
   const { t } = useTranslation();
@@ -111,6 +113,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           collapsed={isCollapsed}
           onToggleCollapsed={() => setIsCollapsed((current) => !current)}
           onNewChat={onNewChat}
+          onCurrentUserClick={onCurrentUserClick}
         />
 
         <SidebarSearch

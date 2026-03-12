@@ -7,7 +7,9 @@
     "searchInConversation": "Tìm trong cuộc trò chuyện",
     "blockUser": "Chặn người dùng",
     "report": "Báo cáo",
-    "deleteConversation": "Xóa cuộc trò chuyện"
+    "deleteConversation": "Xóa cuộc trò chuyện",
+    "emptyBioSelf": "Hãy thêm vài dòng giới thiệu để mọi người biết bạn là ai.",
+    "emptyBioOther": "Người này chưa thêm giới thiệu."
   },
   "groupInfo": {
     "title": "Thông tin nhóm",

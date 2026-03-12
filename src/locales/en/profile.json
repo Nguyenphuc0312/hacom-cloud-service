@@ -7,7 +7,9 @@
     "searchInConversation": "Search in conversation",
     "blockUser": "Block user",
     "report": "Report",
-    "deleteConversation": "Delete conversation"
+    "deleteConversation": "Delete conversation",
+    "emptyBioSelf": "Add a short bio so people know who they're chatting with.",
+    "emptyBioOther": "No bio added yet."
   },
   "groupInfo": {
     "title": "Group information",

@@ -15,6 +15,7 @@ interface SidebarHeaderProps {
   collapsed: boolean;
   onToggleCollapsed: () => void;
   onNewChat?: () => void;
+  onCurrentUserClick?: () => void;
 }
 
 const resolveDisplayName = (user: UserSummary, fallback: string): string => {
@@ -57,6 +58,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   collapsed,
   onToggleCollapsed,
   onNewChat,
+  onCurrentUserClick,
 }) => {
   const { t } = useTranslation();
 
@@ -130,6 +132,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
       <div className="border-b border-border px-3 py-2">
         <button
           type="button"
+          onClick={onCurrentUserClick}
           className={clsx(
             "flex w-full items-center rounded-lg text-left transition-colors hover:bg-surface-overlay",
             collapsed ? "justify-center p-2" : "gap-3 px-2 py-2",

@@ -1,21 +1,61 @@
 {
   "title": "Bạn bè",
+  "subtitle": "Danh bạ, lời mời và thao tác hồ sơ nhanh",
   "tabs": {
-    "search": "Tìm kiếm",
-    "requests": "Yêu cầu"
+    "friends": "Bạn bè",
+    "requests": "Yêu cầu",
+    "discover": "Khám phá",
+    "blocked": "Đã chặn",
+    "search": "Tìm kiếm"
   },
-  "searchPlaceholder": "Tìm theo username/email/số điện thoại",
+  "requests": {
+    "incoming": "Nhận được",
+    "sent": "Đã gửi"
+  },
+  "searchPlaceholder": "Tìm theo username, tên, email hoặc số điện thoại",
   "searchHint": "Nhập ít nhất 2 ký tự",
   "noSearchResult": "Không tìm thấy người dùng",
+  "discoverHintTitle": "Tìm người phù hợp mà không rời khỏi ngữ cảnh",
+  "discoverHintBody": "Hãy thử từ khóa khác hoặc kiểm tra lại username.",
   "addFriend": "Kết bạn",
   "message": "Nhắn tin",
   "accept": "Chấp nhận",
   "reject": "Từ chối",
+  "unblock": "Bỏ chặn",
   "requestSent": "Đã gửi lời mời kết bạn",
   "requestAccepted": "Đã chấp nhận lời mời",
   "requestRejected": "Đã từ chối lời mời",
   "requestCancelled": "Đã hủy lời mời",
+  "requestReceivedAt": "Nhận ngày {{date}}",
+  "requestSentAt": "Gửi ngày {{date}}",
   "actionFailed": "Thao tác thất bại",
+  "blockSuccess": "Đã chặn người dùng",
+  "unblockSuccess": "Đã bỏ chặn người dùng",
+  "profileHint": "Thao tác nhanh và thông tin liên hệ",
+  "joined": "Tham gia",
+  "relationshipLabel": "Quan hệ",
+  "startChatTitle": "Mở lại cuộc trò chuyện nhanh",
+  "startChatHint": "Dùng nút Nhắn tin để quay lại chat mà không mất ngữ cảnh.",
+  "previewTitle": "Xem nhanh hồ sơ",
+  "previewBody": "Chọn bạn bè, lời mời hoặc kết quả tìm kiếm để xem hồ sơ ngay trên màn hình này.",
+  "relationship": {
+    "self": "Hồ sơ của bạn",
+    "friend": "Bạn bè",
+    "incoming": "Đã gửi lời mời cho bạn",
+    "outgoing": "Đã gửi lời mời",
+    "blocked": "Đã chặn",
+    "notFriend": "Chưa kết nối"
+  },
+  "empty": {
+    "friendsTitle": "Danh bạ của bạn sẽ xuất hiện ở đây",
+    "friendsBody": "Dùng tab Khám phá để tìm người mới và mở rộng mạng lưới của bạn.",
+    "requestsIncomingTitle": "Chưa có lời mời nào",
+    "requestsIncomingBody": "Khi ai đó thêm bạn, lời mời sẽ hiện ở đây.",
+    "requestsSentTitle": "Chưa có lời mời đã gửi",
+    "requestsSentBody": "Những người bạn đã mời sẽ nằm ở đây cho đến khi họ phản hồi.",
+    "blockedTitle": "Chưa chặn ai",
+    "blockedBody": "Danh sách người dùng bị chặn sẽ hiện ở đây để bạn xem lại sau."
+  },
   "status": {
     "unavailable": "Không khả dụng"
   },
