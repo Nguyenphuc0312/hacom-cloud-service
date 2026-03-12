@@ -86,9 +86,14 @@ const isTrustedRequestOrigin = (config: InternalAxiosRequestConfig): boolean => 
   if (!targetUrl) return false;
 
   try {
-    const fallbackBase =
-      config.baseURL ??
-      (typeof window !== "undefined" ? window.location.origin : API_BASE_URL);
+    const fallbackBase = config.baseURL
+      ? new URL(
+          config.baseURL,
+          typeof window !== "undefined" ? window.location.origin : "http://localhost",
+        ).toString()
+      : typeof window !== "undefined"
+        ? window.location.origin
+        : API_BASE_URL;
     const resolved = new URL(targetUrl, fallbackBase);
     return TRUSTED_BASE_ORIGINS.has(resolved.origin);
   } catch {
