@@ -12,6 +12,7 @@ import { AttachmentPreview } from "./AttachmentPreview";
 import { AttachmentTray } from "./AttachmentTray";
 import { SendButton } from "./SendButton";
 import { ShareContactModal } from "../modals/ShareContactModal";
+import { ConversationLane } from "../layout/ConversationLane";
 import {
   useAutoResizeTextarea,
   useSendMessage,
@@ -621,139 +622,145 @@ export const MessageInput = React.forwardRef<
           : "idle";
 
   return (
-    <div className={clsx("bg-transparent px-3 pb-[max(env(safe-area-inset-bottom),10px)] pt-2 sm:px-4", className)}>
-      <p
-        className="sr-only"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        {liveRegionMessage}
-      </p>
-
-      {disabled && disabledReason && (
-        <div className="mb-2 rounded-full border border-warning/25 bg-warning/10 px-4 py-1.5 text-xs text-warning">
-          {disabledReason}
-        </div>
+    <div
+      className={clsx(
+        "bg-transparent pb-[max(env(safe-area-inset-bottom),10px)] pt-2",
+        className,
       )}
+    >
+      <ConversationLane>
+        <p
+          className="sr-only"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {liveRegionMessage}
+        </p>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        className="hidden"
-        onChange={handleFileInputChange}
-        aria-hidden="true"
-        tabIndex={-1}
-        {...(onAddFiles ? { multiple: true } : {})}
-      />
-
-      {mode === "reply" && replyToMessage && (
-        <div className="mb-2 flex items-center justify-between rounded-[20px] border border-white/8 bg-[hsl(var(--color-chat-composer)/0.96)] px-3.5 py-2 shadow-xs animate-slide-up-fade">
-          <div className="flex min-w-0 items-center gap-2">
-            <div className="h-8 w-1 rounded-full bg-primary" />
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-primary">
-                {t("chat:composer.replyingTo", {
-                  name: replyToMessage.senderName,
-                })}
-              </p>
-              <p className="truncate text-xs text-text-muted">
-                {replyToMessage.content}
-              </p>
-            </div>
+        {disabled && disabledReason && (
+          <div className="mb-2 rounded-full border border-warning/25 bg-warning/10 px-4 py-1.5 text-xs text-warning">
+            {disabledReason}
           </div>
-          <button
-            type="button"
-            onClick={onCancelReply}
-            className={clsx(
-              "rounded-full p-1 transition-colors hover:bg-surface-active",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-            )}
-            aria-label={t("chat:composer.cancelReply")}
-          >
-            <XMarkIcon className="h-4 w-4 text-text-muted" />
-          </button>
-        </div>
-      )}
+        )}
 
-      {mode === "edit" && editingMessage && (
-        <div className="mb-2 flex items-center justify-between rounded-[20px] border border-warning/35 bg-warning/15 px-3.5 py-2 shadow-xs animate-slide-up-fade">
-          <div className="flex min-w-0 items-center gap-2">
-            <div className="h-8 w-1 rounded-full bg-warning" />
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-warning">
-                {t("chat:composer.editing")}
-              </p>
-              <p className="truncate text-xs text-warning">
-                {editingMessage.content}
-              </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={handleFileInputChange}
+          aria-hidden="true"
+          tabIndex={-1}
+          {...(onAddFiles ? { multiple: true } : {})}
+        />
+
+        {mode === "reply" && replyToMessage && (
+          <div className="mb-2 flex items-center justify-between rounded-[20px] border border-white/8 bg-[hsl(var(--color-chat-composer)/0.96)] px-3.5 py-2 shadow-xs animate-slide-up-fade">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="h-8 w-1 rounded-full bg-primary" />
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-primary">
+                  {t("chat:composer.replyingTo", {
+                    name: replyToMessage.senderName,
+                  })}
+                </p>
+                <p className="truncate text-xs text-text-muted">
+                  {replyToMessage.content}
+                </p>
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={onCancelReply}
+              className={clsx(
+                "rounded-full p-1 transition-colors hover:bg-surface-active",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+              )}
+              aria-label={t("chat:composer.cancelReply")}
+            >
+              <XMarkIcon className="h-4 w-4 text-text-muted" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onCancelEdit}
-            className={clsx(
-              "rounded-full p-1 transition-colors hover:bg-warning/20",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-            )}
-            aria-label={t("chat:composer.cancelEdit")}
-          >
-            <XMarkIcon className="h-4 w-4 text-warning" />
-          </button>
-        </div>
-      )}
+        )}
 
-      {/* Multi-file upload tray */}
-      {uploadDrafts &&
-        uploadDrafts.length > 0 &&
-        onRemoveDraft &&
-        onCancelQueueUpload &&
-        onRetryQueueUpload &&
-        onClearAllDrafts && (
-          <AttachmentTray
-            drafts={uploadDrafts}
-            onRemove={onRemoveDraft}
-            onCancel={onCancelQueueUpload}
-            onRetry={onRetryQueueUpload}
-            onClearAll={onClearAllDrafts}
-            hasUploadingDrafts={hasUploadingDrafts}
-            hasFailedDrafts={hasFailedDrafts}
+        {mode === "edit" && editingMessage && (
+          <div className="mb-2 flex items-center justify-between rounded-[20px] border border-warning/35 bg-warning/15 px-3.5 py-2 shadow-xs animate-slide-up-fade">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="h-8 w-1 rounded-full bg-warning" />
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-warning">
+                  {t("chat:composer.editing")}
+                </p>
+                <p className="truncate text-xs text-warning">
+                  {editingMessage.content}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onCancelEdit}
+              className={clsx(
+                "rounded-full p-1 transition-colors hover:bg-warning/20",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+              )}
+              aria-label={t("chat:composer.cancelEdit")}
+            >
+              <XMarkIcon className="h-4 w-4 text-warning" />
+            </button>
+          </div>
+        )}
+
+        {/* Multi-file upload tray */}
+        {uploadDrafts &&
+          uploadDrafts.length > 0 &&
+          onRemoveDraft &&
+          onCancelQueueUpload &&
+          onRetryQueueUpload &&
+          onClearAllDrafts && (
+            <AttachmentTray
+              drafts={uploadDrafts}
+              onRemove={onRemoveDraft}
+              onCancel={onCancelQueueUpload}
+              onRetry={onRetryQueueUpload}
+              onClearAll={onClearAllDrafts}
+              hasUploadingDrafts={hasUploadingDrafts}
+              hasFailedDrafts={hasFailedDrafts}
+            />
+          )}
+
+        {/* Legacy single-file preview (hidden when queue is active) */}
+        {!hasQueueDrafts && selectedFile && (
+          <AttachmentPreview
+            selectedFile={selectedFile}
+            previewUrl={previewUrl}
+            uploadProgress={uploadProgress}
+            uploadError={uploadError}
+            isUploading={isUploading}
+            maxFileSizeBytes={UPLOAD_CONFIG.MAX_FILE_SIZE}
+            onCancelUpload={cancelUpload}
+            onRetryUpload={handleRetryUpload}
+            onSendNow={() => void handleSendAttachment()}
+            onRemove={handleRemoveSelectedFile}
           />
         )}
 
-      {/* Legacy single-file preview (hidden when queue is active) */}
-      {!hasQueueDrafts && selectedFile && (
-        <AttachmentPreview
-          selectedFile={selectedFile}
-          previewUrl={previewUrl}
-          uploadProgress={uploadProgress}
-          uploadError={uploadError}
-          isUploading={isUploading}
-          maxFileSizeBytes={UPLOAD_CONFIG.MAX_FILE_SIZE}
-          onCancelUpload={cancelUpload}
-          onRetryUpload={handleRetryUpload}
-          onSendNow={() => void handleSendAttachment()}
-          onRemove={handleRemoveSelectedFile}
-        />
-      )}
-
-      <div className="flex items-end gap-2">
-        <div
-          data-composer-state={composerVisualState}
-          className={clsx(
-            "relative flex min-w-0 flex-1 items-end rounded-[28px] border px-2 py-2 transition-micro",
-            composerVisualState === "disabled" &&
-              "border-white/6 bg-[hsl(var(--color-chat-composer)/0.92)] shadow-none",
-            composerVisualState === "sending" &&
-              "border-primary/18 bg-[hsl(var(--color-chat-composer)/0.98)] shadow-elev2",
-            composerVisualState === "ready" &&
-              "border-primary/20 bg-[hsl(var(--color-chat-composer)/0.99)] shadow-elev2",
-            composerVisualState === "focused" &&
-              "border-white/12 bg-[hsl(var(--color-chat-composer)/0.99)] shadow-elev2",
-            composerVisualState === "idle" &&
-              "border-white/8 bg-[hsl(var(--color-chat-composer))] shadow-elev1",
-          )}
-        >
+        <div className="flex items-end gap-2">
+          <div
+            data-composer-state={composerVisualState}
+            className={clsx(
+              "relative flex min-w-0 flex-1 items-end rounded-[28px] border px-2 py-2 transition-micro",
+              composerVisualState === "disabled" &&
+                "border-white/6 bg-[hsl(var(--color-chat-composer)/0.92)] shadow-none",
+              composerVisualState === "sending" &&
+                "border-primary/18 bg-[hsl(var(--color-chat-composer)/0.98)] shadow-elev2",
+              composerVisualState === "ready" &&
+                "border-primary/20 bg-[hsl(var(--color-chat-composer)/0.99)] shadow-elev2",
+              composerVisualState === "focused" &&
+                "border-white/12 bg-[hsl(var(--color-chat-composer)/0.99)] shadow-elev2",
+              composerVisualState === "idle" &&
+                "border-white/8 bg-[hsl(var(--color-chat-composer))] shadow-elev1",
+            )}
+          >
           <EmojiButton
             value={value}
             onChange={onChange}
@@ -894,34 +901,35 @@ export const MessageInput = React.forwardRef<
               )}
             </div>
           </div>
+          </div>
+
+          <SendButton
+            disabled={!canSend}
+            isBusy={isUploading || isSending}
+            state={
+              !canSend
+                ? "disabled"
+                : isUploading || isSending
+                  ? "sending"
+                  : "ready"
+            }
+            onClick={() => {
+              void handlePrimarySend();
+            }}
+            ariaLabel={sendButtonLabel}
+            className="mb-0.5 shrink-0"
+          />
         </div>
 
-        <SendButton
-          disabled={!canSend}
-          isBusy={isUploading || isSending}
-          state={
-            !canSend
-              ? "disabled"
-              : isUploading || isSending
-                ? "sending"
-                : "ready"
-          }
-          onClick={() => {
-            void handlePrimarySend();
-          }}
-          ariaLabel={sendButtonLabel}
-          className="mb-0.5 shrink-0"
-        />
-      </div>
-
-      {onShareContact && currentUserId && (
-        <ShareContactModal
-          isOpen={isShareContactOpen}
-          currentUserId={currentUserId}
-          onClose={() => setIsShareContactOpen(false)}
-          onShare={onShareContact}
-        />
-      )}
+        {onShareContact && currentUserId && (
+          <ShareContactModal
+            isOpen={isShareContactOpen}
+            currentUserId={currentUserId}
+            onClose={() => setIsShareContactOpen(false)}
+            onShare={onShareContact}
+          />
+        )}
+      </ConversationLane>
     </div>
   );
 });

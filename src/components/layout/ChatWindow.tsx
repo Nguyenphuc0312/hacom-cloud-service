@@ -8,6 +8,7 @@ import { DropOverlay } from "../input/DropOverlay";
 import { MessageInput } from "../input/MessageInput";
 import { SearchPanel } from "../chat/SearchPanel";
 import { PinnedMessagesPanel } from "../chat/PinnedMessagesPanel";
+import { ConversationLane } from "./ConversationLane";
 import type { MentionCandidate } from "../input/MessageInput";
 import { toast } from "../ui";
 import { useChatStore, useGroupStore, useUIStore } from "../../stores";
@@ -709,19 +710,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {ephemeralNotice &&
         bottomOverlayPlacements["ephemeral-notice"]?.visible && (
-        <div className="pointer-events-none absolute inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-[55] flex justify-center">
-          <div
-            className={clsx(
-              "pointer-events-auto max-w-[min(28rem,calc(100%-2rem))] rounded-full border px-3.5 py-1.5 text-xs font-medium shadow-elev2 backdrop-blur animate-slide-up-fade",
-              getEphemeralNoticeClassName(ephemeralNotice.kind),
-            )}
-            role="status"
-            aria-live="polite"
-          >
-            {ephemeralNotice.message}
+          <div className="pointer-events-none absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-[55]">
+            <ConversationLane>
+              <div className="flex justify-center">
+                <div
+                  className={clsx(
+                    "pointer-events-auto max-w-[min(28rem,100%)] rounded-full border px-3.5 py-1.5 text-xs font-medium shadow-elev2 backdrop-blur animate-slide-up-fade",
+                    getEphemeralNoticeClassName(ephemeralNotice.kind),
+                  )}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {ephemeralNotice.message}
+                </div>
+              </div>
+            </ConversationLane>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Selection toolbar */}
       {isMessageSelectionMode &&

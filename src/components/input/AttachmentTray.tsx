@@ -50,7 +50,7 @@ const AttachmentTrayComponent: React.FC<AttachmentTrayProps> = ({
   return (
     <div
       className={clsx(
-        "mx-3 mb-2 rounded-[22px] border border-white/8 bg-[hsl(var(--color-chat-composer))]",
+        "mb-2 w-full rounded-[22px] border border-white/8 bg-[hsl(var(--color-chat-composer))]",
         "animate-content-fade",
         className,
       )}

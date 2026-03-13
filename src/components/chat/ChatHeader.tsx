@@ -14,6 +14,7 @@ import {
 import { Avatar } from "../common/Avatar";
 import { TypingIndicator } from "../common/TypingIndicator";
 import { DensityToggle } from "./DensityToggle";
+import { ConversationLane } from "../layout/ConversationLane";
 import { useUIStore, usePresenceStore } from "../../stores";
 import { UserStatus } from "../../types";
 import type { Conversation, TypingStatus } from "../../types";
@@ -212,147 +213,149 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   return (
     <header
       className={clsx(
-        "sticky top-0 z-sticky border-b border-white/6 px-4 py-2.5 backdrop-blur",
+        "sticky top-0 z-sticky border-b border-white/6 py-2.5 backdrop-blur",
         className,
       )}
       style={{ backgroundColor: "hsl(var(--color-chat-canvas) / 0.84)" }}
     >
-      <div className="flex min-h-11 items-center gap-2">
-        {onBack && (
+      <ConversationLane>
+        <div className="flex min-h-11 items-center gap-2">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className={clsx(iconButtonClass, "lg:hidden")}
+              aria-label={t("chat:header.back")}
+            >
+              <ArrowLeftIcon className="h-5 w-5" />
+            </button>
+          )}
+
           <button
             type="button"
-            onClick={onBack}
-            className={clsx(iconButtonClass, "lg:hidden")}
-            aria-label={t("chat:header.back")}
+            onClick={onInfoClick}
+            className={clsx(
+              "shrink-0 rounded-full",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+            )}
+            aria-label={t("chat:header.viewInfo")}
           >
-            <ArrowLeftIcon className="h-5 w-5" />
-          </button>
-        )}
-
-        <button
-          type="button"
-          onClick={onInfoClick}
-          className={clsx(
-            "shrink-0 rounded-full",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-          )}
-          aria-label={t("chat:header.viewInfo")}
-        >
-          <Avatar
-            src={avatarSrc}
-            alt={displayName}
-            size="md"
-            status={liveStatus}
-            showStatus={isDirect}
-          />
-        </button>
-
-        <button
-          type="button"
-          onClick={onInfoClick}
-          className={clsx(
-            "min-w-0 flex-1 text-left",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-          )}
-        >
-          <h2 className="truncate text-[15px] font-semibold text-text-primary sm:text-base">
-            {displayName}
-          </h2>
-
-          {isTyping ? (
-            <TypingIndicator
-              userName={typingStatus?.userName}
-              activity={typingStatus?.activity}
-              confidence={typingStatus?.confidence}
+            <Avatar
+              src={avatarSrc}
+              alt={displayName}
+              size="md"
+              status={liveStatus}
+              showStatus={isDirect}
             />
-          ) : (
-            <p
-              className={clsx(
-                "truncate text-[12px]",
-                isOnline ? "text-text-secondary" : "text-text-muted",
-              )}
-            >
-              {statusText}
-            </p>
-          )}
-        </button>
+          </button>
 
-        <div className="relative ml-1">
-          <div className="flex items-center gap-1">
-            {onSearchClick && (
+          <button
+            type="button"
+            onClick={onInfoClick}
+            className={clsx(
+              "min-w-0 flex-1 text-left",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+            )}
+          >
+            <h2 className="truncate text-[15px] font-semibold text-text-primary sm:text-base">
+              {displayName}
+            </h2>
+
+            {isTyping ? (
+              <TypingIndicator
+                userName={typingStatus?.userName}
+                activity={typingStatus?.activity}
+                confidence={typingStatus?.confidence}
+              />
+            ) : (
+              <p
+                className={clsx(
+                  "truncate text-[12px]",
+                  isOnline ? "text-text-secondary" : "text-text-muted",
+                )}
+              >
+                {statusText}
+              </p>
+            )}
+          </button>
+
+          <div className="relative ml-1">
+            <div className="flex items-center gap-1">
+              {onSearchClick && (
+                <button
+                  type="button"
+                  onClick={onSearchClick}
+                  className={iconButtonClass}
+                  aria-label={t("chat:header.searchInChat")}
+                >
+                  <MagnifyingGlassIcon className="h-5 w-5" />
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={onSearchClick}
+                onClick={onInfoClick}
                 className={iconButtonClass}
-                aria-label={t("chat:header.searchInChat")}
+                aria-label={t("chat:header.toggleInfoPanel")}
               >
-                <MagnifyingGlassIcon className="h-5 w-5" />
+                <InformationCircleIcon className="h-5 w-5" />
               </button>
-            )}
 
-            <button
-              type="button"
-              onClick={onInfoClick}
-              className={iconButtonClass}
-              aria-label={t("chat:header.toggleInfoPanel")}
-            >
-              <InformationCircleIcon className="h-5 w-5" />
-            </button>
-
-            <button
-              ref={menuButtonRef}
-              type="button"
-              onClick={() => setIsMenuOpen((value) => !value)}
-              className={iconButtonClass}
-              aria-label={t("chat:header.moreActions")}
-              aria-haspopup="menu"
-              aria-expanded={isMenuOpen}
-            >
-              <EllipsisHorizontalIcon className="h-5 w-5" />
-            </button>
-          </div>
-
-          {isMenuOpen && (
-            <div
-              ref={menuRef}
-              className={clsx(
-                "absolute right-0 top-full z-dropdown mt-2 min-w-52 overflow-hidden rounded-[18px] border border-white/8 bg-[hsl(var(--color-sidebar-surface))] p-1.5 shadow-elev2",
-                "animate-slide-up-fade",
-              )}
-              role="menu"
-            >
-              <div className="px-2 py-1.5">
-                <DensityToggle
-                  density={chatDensity}
-                  onChange={setChatDensity}
-                />
-              </div>
-              {menuActions.map((action) => {
-                const Icon = action.icon;
-                return (
-                  <button
-                    key={action.id}
-                    type="button"
-                    role="menuitem"
-                    className={clsx(
-                      "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-text-secondary",
-                      "transition-micro hover:bg-white/6 hover:text-text-primary active:bg-white/8",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-                    )}
-                    onClick={() => {
-                      action.onClick();
-                      setIsMenuOpen(false);
-                    }}
-                  >
-                    <Icon className="h-5 w-5 shrink-0" />
-                    <span className="truncate">{action.label}</span>
-                  </button>
-                );
-              })}
+              <button
+                ref={menuButtonRef}
+                type="button"
+                onClick={() => setIsMenuOpen((value) => !value)}
+                className={iconButtonClass}
+                aria-label={t("chat:header.moreActions")}
+                aria-haspopup="menu"
+                aria-expanded={isMenuOpen}
+              >
+                <EllipsisHorizontalIcon className="h-5 w-5" />
+              </button>
             </div>
-          )}
+
+            {isMenuOpen && (
+              <div
+                ref={menuRef}
+                className={clsx(
+                  "absolute right-0 top-full z-dropdown mt-2 min-w-52 overflow-hidden rounded-[18px] border border-white/8 bg-[hsl(var(--color-sidebar-surface))] p-1.5 shadow-elev2",
+                  "animate-slide-up-fade",
+                )}
+                role="menu"
+              >
+                <div className="px-2 py-1.5">
+                  <DensityToggle
+                    density={chatDensity}
+                    onChange={setChatDensity}
+                  />
+                </div>
+                {menuActions.map((action) => {
+                  const Icon = action.icon;
+                  return (
+                    <button
+                      key={action.id}
+                      type="button"
+                      role="menuitem"
+                      className={clsx(
+                        "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-text-secondary",
+                        "transition-micro hover:bg-white/6 hover:text-text-primary active:bg-white/8",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+                      )}
+                      onClick={() => {
+                        action.onClick();
+                        setIsMenuOpen(false);
+                      }}
+                    >
+                      <Icon className="h-5 w-5 shrink-0" />
+                      <span className="truncate">{action.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </ConversationLane>
     </header>
   );
 };
