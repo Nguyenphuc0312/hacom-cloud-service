@@ -611,7 +611,7 @@ export const MessageInput = React.forwardRef<
       : t("chat:composer.sendMessage");
 
   return (
-    <div className={clsx("border-t border-border bg-surface", className)}>
+    <div className={clsx("bg-transparent px-3 pb-[max(env(safe-area-inset-bottom),10px)] pt-2 sm:px-4", className)}>
       <p
         className="sr-only"
         role="status"
@@ -622,7 +622,7 @@ export const MessageInput = React.forwardRef<
       </p>
 
       {disabled && disabledReason && (
-        <div className="border-b border-warning/25 bg-warning/10 px-4 py-1.5 text-xs text-warning">
+        <div className="mb-2 rounded-full border border-warning/25 bg-warning/10 px-4 py-1.5 text-xs text-warning">
           {disabledReason}
         </div>
       )}
@@ -638,7 +638,7 @@ export const MessageInput = React.forwardRef<
       />
 
       {mode === "reply" && replyToMessage && (
-        <div className="flex items-center justify-between border-b border-border bg-surface-overlay px-4 py-1.5">
+        <div className="mb-2 flex items-center justify-between rounded-[22px] border border-white/8 bg-[hsl(var(--color-chat-composer))] px-4 py-2">
           <div className="flex min-w-0 items-center gap-2">
             <div className="h-8 w-1 rounded-full bg-primary" />
             <div className="min-w-0">
@@ -667,7 +667,7 @@ export const MessageInput = React.forwardRef<
       )}
 
       {mode === "edit" && editingMessage && (
-        <div className="flex items-center justify-between border-b border-warning/35 bg-warning/15 px-4 py-1.5">
+        <div className="mb-2 flex items-center justify-between rounded-[22px] border border-warning/35 bg-warning/15 px-4 py-2">
           <div className="flex min-w-0 items-center gap-2">
             <div className="h-8 w-1 rounded-full bg-warning" />
             <div className="min-w-0">
@@ -727,67 +727,23 @@ export const MessageInput = React.forwardRef<
         />
       )}
 
-      <div className="flex items-end gap-2 px-3 py-2 pb-[max(env(safe-area-inset-bottom),8px)] sm:px-4">
-        <EmojiButton
-          value={value}
-          onChange={onChange}
-          textareaRef={textareaRef}
-          disabled={disableToolbar}
-          className="shrink-0"
-        />
-
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowAttachmentMenu((previous) => !previous)}
-            className={clsx(
-              "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors sm:h-11 sm:w-11",
-              showAttachmentMenu
-                ? "bg-primary text-text-inverse"
-                : "text-text-muted hover:bg-surface-overlay hover:text-text-primary",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-              disableToolbar && "cursor-not-allowed opacity-50",
-            )}
-            aria-label={t("chat:composer.attachFile")}
-            aria-haspopup="menu"
-            aria-expanded={showAttachmentMenu}
+      <div className="flex items-end gap-2">
+        <div className="relative flex min-w-0 flex-1 items-end rounded-[28px] border border-white/8 bg-[hsl(var(--color-chat-composer))] px-2 py-2 shadow-elev1">
+          <EmojiButton
+            value={value}
+            onChange={onChange}
+            textareaRef={textareaRef}
             disabled={disableToolbar}
-          >
-            <PaperClipIcon className="h-5 w-5" />
-          </button>
+            className="shrink-0 [&>button]:h-10 [&>button]:w-10"
+          />
 
-          {showAttachmentMenu && (
-            <AttachmentMenu
-              onSelect={handleAttachmentSelect}
-              onClose={() => setShowAttachmentMenu(false)}
-              className="absolute bottom-full left-0 z-dropdown mb-2"
-            />
-          )}
-        </div>
-
-        <button
-          type="button"
-          onClick={handleInsertMentionTrigger}
-          className={clsx(
-            "hidden h-10 w-10 items-center justify-center rounded-full transition-colors md:inline-flex sm:h-11 sm:w-11",
-            "text-text-muted hover:bg-surface-overlay hover:text-text-primary",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-            disableToolbar && "cursor-not-allowed opacity-50",
-          )}
-          aria-label={t("chat:composer.mentionTrigger")}
-          disabled={disableToolbar}
-        >
-          <AtSymbolIcon className="h-5 w-5" />
-        </button>
-
-        <div className="relative flex min-w-0 flex-1 items-center">
           {showMentionPanel && (
             <div
               id={mentionListId}
               role="listbox"
               aria-label={t("chat:composer.mentionList")}
               className={clsx(
-                "absolute bottom-full left-0 right-0 z-dropdown mb-2 max-h-52 overflow-y-auto rounded-xl border border-border bg-surface shadow-elev2",
+                "absolute bottom-full left-2 right-2 z-dropdown mb-2 max-h-52 overflow-y-auto rounded-[20px] border border-white/8 bg-[hsl(var(--color-sidebar-surface))] shadow-elev2",
                 "p-1",
               )}
             >
@@ -810,7 +766,7 @@ export const MessageInput = React.forwardRef<
                         "transition-colors",
                         isActive
                           ? "bg-primary/15 text-text-primary"
-                          : "text-text-secondary hover:bg-surface-overlay",
+                          : "text-text-secondary hover:bg-white/6",
                       )}
                       onMouseDown={(event) => {
                         event.preventDefault();
@@ -859,12 +815,58 @@ export const MessageInput = React.forwardRef<
                 : undefined
             }
             className={clsx(
-              "w-full min-h-10 resize-none rounded-2xl border border-border bg-surface px-4 py-2",
+              "w-full min-h-10 flex-1 resize-none bg-transparent px-2 py-2.5",
               "text-sm text-text-primary placeholder:text-text-muted",
-              "transition-colors focus:border-border-focus focus:outline-none focus:ring-2 focus:ring-focus/20",
-              disabled && "cursor-not-allowed bg-surface-overlay opacity-70",
+              "transition-colors focus:outline-none",
+              disabled && "cursor-not-allowed opacity-70",
             )}
           />
+
+          <div className="flex shrink-0 items-end gap-1">
+            <button
+              type="button"
+              onClick={handleInsertMentionTrigger}
+              className={clsx(
+                "hidden h-10 w-10 items-center justify-center rounded-full transition-colors md:inline-flex",
+                "text-text-muted hover:bg-white/8 hover:text-text-primary",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+                disableToolbar && "cursor-not-allowed opacity-50",
+              )}
+              aria-label={t("chat:composer.mentionTrigger")}
+              disabled={disableToolbar}
+            >
+              <AtSymbolIcon className="h-5 w-5" />
+            </button>
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowAttachmentMenu((previous) => !previous)}
+                className={clsx(
+                  "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
+                  showAttachmentMenu
+                    ? "bg-white/10 text-text-primary"
+                    : "text-text-muted hover:bg-white/8 hover:text-text-primary",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+                  disableToolbar && "cursor-not-allowed opacity-50",
+                )}
+                aria-label={t("chat:composer.attachFile")}
+                aria-haspopup="menu"
+                aria-expanded={showAttachmentMenu}
+                disabled={disableToolbar}
+              >
+                <PaperClipIcon className="h-5 w-5" />
+              </button>
+
+              {showAttachmentMenu && (
+                <AttachmentMenu
+                  onSelect={handleAttachmentSelect}
+                  onClose={() => setShowAttachmentMenu(false)}
+                  className="absolute bottom-full right-0 z-dropdown mb-2"
+                />
+              )}
+            </div>
+          </div>
         </div>
 
         <SendButton
@@ -874,7 +876,7 @@ export const MessageInput = React.forwardRef<
             void handlePrimarySend();
           }}
           ariaLabel={sendButtonLabel}
-          className="shrink-0"
+          className="mb-0.5 shrink-0"
         />
       </div>
 

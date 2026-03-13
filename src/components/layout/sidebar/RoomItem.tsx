@@ -118,10 +118,10 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         type="button"
         onClick={() => onSelect(conversation.id)}
         className={clsx(
-          "group relative mx-2 my-1 flex h-room-item w-room-item items-center justify-center rounded-lg",
+          "group relative mx-2 my-1 flex h-room-item w-room-item items-center justify-center rounded-[20px]",
           "transition-colors",
-          "hover:bg-surface-overlay",
-          (isActive || isKeyboardActive) && "bg-primary/15 text-primary",
+          "hover:bg-white/6",
+          (isActive || isKeyboardActive) && "bg-white/12 text-primary",
         )}
         aria-label={displayName}
         title={displayName}
@@ -140,6 +140,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
               count={unreadCount}
               size="sm"
               variant={unreadMention ? "danger" : "primary"}
+              className="min-w-[18px] text-[10px]"
             />
           </span>
         )}
@@ -152,10 +153,10 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
       type="button"
       onClick={() => onSelect(conversation.id)}
       className={clsx(
-        "mx-2 my-1 flex h-room-item w-[calc(100%-var(--space-4))] items-center rounded-lg px-3",
+        "mx-2 my-0.5 flex h-room-item w-[calc(100%-var(--space-4))] items-center rounded-[22px] px-3.5",
         "transition-colors",
-        "hover:bg-surface-overlay",
-        (isActive || isKeyboardActive) && "bg-primary/15",
+        "hover:bg-white/6",
+        (isActive || isKeyboardActive) && "bg-white/10",
       )}
       aria-label={displayName}
     >
@@ -169,10 +170,10 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         />
 
         <div className="min-w-0">
-          <div className="mb-1 flex items-center gap-2">
+          <div className="mb-0.5 flex items-center gap-1.5">
             <p
               className={clsx(
-                "truncate text-sm leading-5 text-text-primary",
+                "truncate text-[14px] leading-5 text-text-primary",
                 unreadCount > 0 && "font-semibold",
               )}
             >
@@ -214,9 +215,9 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         <div className="flex h-full min-w-room-meta flex-col items-end justify-between py-1">
           <span
             className={clsx(
-              "text-xs leading-4",
+              "text-[11px] leading-4",
               unreadCount > 0
-                ? "font-semibold text-primary"
+                ? "font-medium text-primary"
                 : "text-text-muted",
             )}
           >
@@ -234,6 +235,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
                     ? "muted"
                     : "primary"
               }
+              className="min-w-[18px] px-1.5 text-[10px]"
             />
           ) : (
             <span className="h-4" aria-hidden="true" />

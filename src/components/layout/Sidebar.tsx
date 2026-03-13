@@ -126,8 +126,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
 
         {!isCollapsed && (
-          <div className="border-b border-border px-3 py-2">
-            <div className="flex items-center gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="px-3 pb-2 pt-1">
+            <div className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {tabs.map((tab) => {
                 const isActive = activeFilter === tab.id;
                 const showUnreadCount = tab.id === "unread" && unreadTotal > 0;
@@ -138,10 +138,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     type="button"
                     onClick={() => setActiveFilter(tab.id)}
                     className={clsx(
-                      "inline-flex h-8 items-center gap-2 rounded-full px-3 text-xs font-medium transition-colors",
+                      "inline-flex h-7 items-center gap-2 rounded-full px-3 text-[11px] font-medium transition-colors",
                       isActive
-                        ? "bg-primary/15 text-primary"
-                        : "text-text-secondary hover:bg-surface-overlay hover:text-text-primary",
+                        ? "bg-white/12 text-text-primary"
+                        : "text-text-muted hover:bg-white/6 hover:text-text-secondary",
                     )}
                     aria-pressed={isActive}
                   >
@@ -170,16 +170,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onSelect={onSelectConversation}
         />
 
-        <div className="border-t border-border p-2">
+        <div className="border-t border-border/70 px-2 pb-2 pt-1.5">
           {/* Friends button */}
           <button
             type="button"
             onClick={() => navigate(ROUTE_PATHS.FRIENDS)}
             className={clsx(
-              "inline-flex w-full items-center rounded-lg px-2 py-2 text-sm font-medium transition-colors",
+              "inline-flex w-full items-center rounded-2xl px-3 py-2.5 text-sm font-medium transition-colors",
               location.pathname.startsWith(ROUTE_PATHS.FRIENDS)
-                ? "bg-primary/10 text-primary"
-                : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
+                ? "bg-white/10 text-text-primary"
+                : "text-text-secondary hover:bg-white/6 hover:text-text-primary",
               isCollapsed && "justify-center px-0",
             )}
             aria-label={t("friends:title", { defaultValue: "Friends" })}
@@ -197,10 +197,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             type="button"
             onClick={() => navigate(ROUTE_PATHS.SETTINGS)}
             className={clsx(
-              "inline-flex w-full items-center rounded-lg px-2 py-2 text-sm font-medium transition-colors",
+              "inline-flex w-full items-center rounded-2xl px-3 py-2.5 text-sm font-medium transition-colors",
               location.pathname.startsWith(ROUTE_PATHS.SETTINGS)
-                ? "bg-primary/10 text-primary"
-                : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
+                ? "bg-white/10 text-text-primary"
+                : "text-text-secondary hover:bg-white/6 hover:text-text-primary",
               isCollapsed && "justify-center px-0",
             )}
             aria-label={t("settings.pageTitle", { defaultValue: "Settings" })}
@@ -219,7 +219,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             disabled={isLoggingOut}
             onClick={() => setIsLogoutConfirmOpen(true)}
             className={clsx(
-              "inline-flex w-full items-center rounded-lg px-2 py-2 text-sm font-medium transition-colors",
+              "inline-flex w-full items-center rounded-2xl px-3 py-2.5 text-sm font-medium transition-colors",
               "text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50",
               isCollapsed && "justify-center px-0",
             )}

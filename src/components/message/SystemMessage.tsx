@@ -34,13 +34,21 @@ export const SystemMessage: React.FC<SystemMessageProps> = ({
     <div className={clsx("my-4 flex justify-center", className)}>
       <span
         className={clsx(
-          "rounded-full border px-4 py-1.5 text-xs",
+          "rounded-full border px-3.5 py-1 text-[11px] backdrop-blur",
           severity === "error"
             ? "border-danger/25 bg-danger/10 text-danger"
             : severity === "warn"
               ? "border-warning/25 bg-warning/12 text-warning"
-              : "border-border bg-surface-overlay text-text-secondary",
+              : "text-text-secondary",
         )}
+        style={
+          severity === "info"
+            ? {
+                backgroundColor: "hsl(var(--color-chat-pill) / 0.94)",
+                borderColor: "hsl(var(--color-chat-pill-border) / 0.7)",
+              }
+            : undefined
+        }
       >
         {message.content}
       </span>

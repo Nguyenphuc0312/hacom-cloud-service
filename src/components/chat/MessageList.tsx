@@ -518,7 +518,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
       {!isInitialLoading && (
         <div
-          className="chat-background h-full min-h-0 overflow-hidden py-4"
+          className="chat-background h-full min-h-0 overflow-hidden pb-3 pt-2"
           role="log"
           aria-live="polite"
           aria-relevant="additions text"
@@ -530,7 +530,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
             <div className="pointer-events-none absolute inset-x-[var(--chat-lane-padding)] top-2 z-[6] flex justify-center">
               <div
                 className={clsx(
-                  "pointer-events-auto rounded-full border px-3 py-1 text-xs font-medium shadow-xs backdrop-blur",
+                  "pointer-events-auto rounded-full border px-3 py-1 text-[11px] font-medium shadow-xs backdrop-blur",
                   getNoticeClassName(notice.kind),
                 )}
               >
@@ -579,7 +579,13 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
       {!isInitialLoading && messages.length > 0 && stickyDate && (
         <div className="pointer-events-none absolute left-1/2 top-3 z-[5] -translate-x-1/2">
-          <div className="rounded-full border border-border bg-surface/92 px-4 py-1.5 text-xs font-medium text-text-secondary shadow-xs backdrop-blur">
+          <div
+            className="rounded-full border px-3.5 py-1 text-[11px] font-medium text-text-secondary shadow-xs backdrop-blur"
+            style={{
+              backgroundColor: "hsl(var(--color-chat-pill) / 0.94)",
+              borderColor: "hsl(var(--color-chat-pill-border) / 0.7)",
+            }}
+          >
             {formatDateDivider(stickyDate)}
           </div>
         </div>
@@ -614,8 +620,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
           onClick={() => jumpToLatest("smooth")}
           className={clsx(
             "absolute bottom-4 right-4 z-sticky",
-            "flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface shadow-elev2",
-            "transition-micro hover:bg-surface-overlay hover:shadow-elev3 hover:-translate-y-0.5",
+            "flex h-10 w-10 items-center justify-center rounded-full border border-white/8 bg-[hsl(var(--color-chat-pill))] shadow-elev2",
+            "transition-micro hover:bg-white/10 hover:shadow-elev3 hover:-translate-y-0.5",
             "active:scale-95",
             "animate-slide-up-fade",
           )}
@@ -631,8 +637,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
           onClick={() => jumpToLatest("smooth")}
           className={clsx(
             "absolute bottom-4 right-4 z-sticky",
-            "flex min-h-10 items-center justify-center gap-2 rounded-full border border-border bg-surface px-3 shadow-elev2",
-            "transition-micro hover:bg-surface-overlay hover:shadow-elev3 hover:-translate-y-0.5",
+            "flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/8 bg-[hsl(var(--color-chat-pill))] px-3 shadow-elev2",
+            "transition-micro hover:bg-white/10 hover:shadow-elev3 hover:-translate-y-0.5",
             "active:scale-95",
             "animate-bounce-in",
           )}

@@ -910,11 +910,11 @@ export const ChatPage: React.FC = () => {
   }
 
   return (
-    <div className="relative flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-surface">
+    <div className="relative flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-[hsl(var(--color-chat-canvas))]">
       {/* Sidebar */}
       <div
         className={clsx(
-          "absolute inset-y-0 left-0 z-30 w-full max-w-full bg-surface transition-transform duration-300 sm:max-w-[min(24rem,92vw)] lg:relative lg:z-0 lg:w-auto lg:max-w-none lg:flex-shrink-0",
+          "absolute inset-y-0 left-0 z-30 w-full max-w-full transition-transform duration-300 sm:max-w-[min(24rem,92vw)] lg:relative lg:z-0 lg:w-auto lg:max-w-none lg:flex-shrink-0",
           showSidebarOnMobile
             ? "translate-x-0"
             : "-translate-x-full lg:translate-x-0",
@@ -999,11 +999,12 @@ export const ChatPage: React.FC = () => {
       {/* Info panel */}
       {(selectedConversation || profilePanelTarget) && (
         <div
-          className={clsx(
-            "fixed inset-y-0 right-0 z-40 w-full max-w-full border-l border-border bg-surface transition-transform duration-300 sm:max-w-[min(26rem,94vw)] lg:relative lg:z-0 lg:w-[clamp(20rem,28vw,24rem)] lg:max-w-none",
-            isInfoPanelOpen ? "translate-x-0" : "translate-x-full lg:hidden",
-          )}
-        >
+        className={clsx(
+          "fixed inset-y-0 right-0 z-40 w-full max-w-full border-l border-border bg-surface transition-transform duration-300 sm:max-w-[min(26rem,94vw)] lg:relative lg:z-0 lg:w-[clamp(20rem,28vw,24rem)] lg:max-w-none",
+          isInfoPanelOpen ? "translate-x-0" : "translate-x-full lg:hidden",
+        )}
+        style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}
+      >
           {profilePanelTarget ? (
             <UserProfile
               userId={profilePanelTarget.userId}

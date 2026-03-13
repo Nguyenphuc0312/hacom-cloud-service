@@ -68,10 +68,10 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
         item.isGroupEnd
           ? isCompact
             ? "mb-1"
-            : "mb-2"
+            : "mb-3"
           : isCompact
             ? "mb-px"
-            : "mb-0.5",
+            : "mb-1",
         "msg-row-hover -mx-1 px-1",
         isSelectionMode && "cursor-pointer",
         isSelected && "bg-primary/6 rounded-md",

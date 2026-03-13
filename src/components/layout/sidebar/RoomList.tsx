@@ -60,9 +60,9 @@ interface RowData {
   onSelect: (conversationId: string) => void;
 }
 
-const SECTION_HEIGHT = 30;
-const EXPANDED_ROOM_HEIGHT = 80;
-const COLLAPSED_ROOM_HEIGHT = 64;
+const SECTION_HEIGHT = 24;
+const EXPANDED_ROOM_HEIGHT = 72;
+const COLLAPSED_ROOM_HEIGHT = 60;
 
 const measureViewportHeight = (node: HTMLDivElement): number => {
   if (node.clientHeight > 0) return node.clientHeight;
@@ -177,10 +177,10 @@ const Row = ({ index, style, data }: ListChildComponentProps<RowData>) => {
 
   if (item.kind === "section") {
     return (
-      <div style={style} className="px-3">
+      <div style={style} className="px-4">
         <div
           className={clsx(
-            "flex h-full items-center text-xs font-semibold uppercase tracking-wide text-text-muted",
+            "flex h-full items-center text-[11px] font-medium uppercase tracking-[0.12em] text-text-muted/80",
             data.collapsed && "justify-center",
           )}
         >
@@ -464,7 +464,7 @@ export const RoomList: React.FC<RoomListProps> = ({
   return (
     <div
       ref={containerRef}
-      className="min-h-0 flex-1"
+      className="min-h-0 flex-1 pb-2"
       tabIndex={0}
       role="listbox"
       aria-label={t("sidebar:room.listAria")}

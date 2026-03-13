@@ -17,16 +17,16 @@ const getBubbleRadiusClass = (
   isGroupEnd: boolean,
 ): string => {
   if (isOwn) {
-    if (isGroupStart && isGroupEnd) return "rounded-2xl rounded-br-md";
-    if (isGroupStart) return "rounded-2xl rounded-br-md";
-    if (isGroupEnd) return "rounded-2xl rounded-tr-md";
-    return "rounded-2xl rounded-r-md";
+    if (isGroupStart && isGroupEnd) return "rounded-[22px] rounded-br-[10px]";
+    if (isGroupStart) return "rounded-[22px] rounded-br-[10px]";
+    if (isGroupEnd) return "rounded-[22px] rounded-tr-[10px]";
+    return "rounded-[22px] rounded-r-[10px]";
   }
 
-  if (isGroupStart && isGroupEnd) return "rounded-2xl rounded-bl-md";
-  if (isGroupStart) return "rounded-2xl rounded-bl-md";
-  if (isGroupEnd) return "rounded-2xl rounded-tl-md";
-  return "rounded-2xl rounded-l-md";
+  if (isGroupStart && isGroupEnd) return "rounded-[22px] rounded-bl-[10px]";
+  if (isGroupStart) return "rounded-[22px] rounded-bl-[10px]";
+  if (isGroupEnd) return "rounded-[22px] rounded-tl-[10px]";
+  return "rounded-[22px] rounded-l-[10px]";
 };
 
 export const MessageSurface: React.FC<MessageSurfaceProps> = ({
@@ -41,16 +41,16 @@ export const MessageSurface: React.FC<MessageSurfaceProps> = ({
   return (
     <div
       className={clsx(
-        "relative min-w-0 border px-3 py-2.5 shadow-xs transition-colors",
+        "relative min-w-0 px-3.5 py-2.5 transition-colors",
         getBubbleRadiusClass(isOwn, isGroupStart, isGroupEnd),
         isOwn
-          ? "border-primary/80 bg-primary text-text-inverse"
-          : "border-border bg-surface-raised text-text-primary",
-        hasReplyPreview && "rounded-t-xl",
+          ? "bg-[hsl(var(--chat-bubble-sent))] text-[hsl(var(--chat-bubble-sent-text))]"
+          : "bg-[hsl(var(--chat-bubble-received))] text-[hsl(var(--chat-bubble-received-text))]",
+        hasReplyPreview && "rounded-t-[18px]",
         hasError &&
           (isOwn
-            ? "border-danger/40 bg-danger/90"
-            : "border-danger/30 bg-danger/6"),
+            ? "bg-danger/90"
+            : "bg-danger/10"),
         className,
       )}
     >

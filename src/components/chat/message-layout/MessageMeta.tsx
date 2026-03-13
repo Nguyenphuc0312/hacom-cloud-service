@@ -104,8 +104,8 @@ export const MessageMeta: React.FC<MessageMetaProps> = ({
   return (
     <div
       className={clsx(
-        "mt-1 flex min-h-4 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-tight",
-        isOwn ? "justify-end text-text-secondary" : "text-text-muted",
+        "mt-0.5 flex min-h-4 flex-wrap items-center gap-x-1.5 gap-y-1 px-1 text-[10px] leading-tight",
+        isOwn ? "justify-end text-text-muted" : "text-text-muted/90",
         className,
       )}
     >

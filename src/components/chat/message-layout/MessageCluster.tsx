@@ -176,12 +176,12 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
       >
         <div
           className={clsx(
-            "flex w-full min-w-0 items-end gap-2",
+            "flex w-full min-w-0 items-end gap-1.5",
             isOwn ? "justify-end" : "justify-start",
           )}
         >
           {isGroupConversation && !isOwn && (
-            <div className="w-8 shrink-0 self-end">
+            <div className="w-9 shrink-0 self-end">
               {showAvatar ? (
                 <Avatar
                   src={message.senderAvatar}
@@ -200,7 +200,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
             )}
           >
             {isGroupConversation && !isOwn && showSenderName && (
-              <span className="mb-1 px-1 text-xs font-semibold text-primary">
+              <span className="mb-1 px-1 text-[11px] font-semibold text-primary/90">
                 {message.senderName}
               </span>
             )}
@@ -210,8 +210,8 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                 className={clsx(
                   "mb-1 flex w-full items-center gap-2 rounded-2xl border-l-2 px-3 py-2 text-xs",
                   isOwn
-                    ? "border-text-inverse/60 bg-primary/90 text-text-inverse/85"
-                    : "border-primary/60 bg-surface-overlay text-text-secondary",
+                    ? "border-text-inverse/40 bg-text-inverse/10 text-text-inverse/78"
+                    : "border-primary/55 bg-white/5 text-text-secondary",
                 )}
               >
                 <ReplyTypeIcon
@@ -225,7 +225,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                   <span className="font-semibold">
                     {message.replyToMessage.senderName}
                   </span>
-                  <p className="mt-0.5 truncate leading-snug">
+                  <p className="mt-0.5 truncate leading-snug opacity-90">
                     {message.replyToMessage.isDeleted
                       ? t("chat:message.deleted", {
                           defaultValue: "Message deleted",
@@ -301,7 +301,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
             )}
 
             {isOwn && isPendingMessage(message) && isGroupEnd && (
-              <div className="mt-1 text-[11px] text-text-muted">
+              <div className="mt-0.5 px-1 text-[10px] text-text-muted">
                 {t("chat:message.status.pendingInline", {
                   defaultValue: "Dang dong bo",
                 })}
