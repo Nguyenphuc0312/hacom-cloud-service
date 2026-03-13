@@ -25,6 +25,8 @@ import type { UploadedFileMeta } from "../../types/attachmentDraft";
 import { contactApi } from "../../services/api";
 import { extractApiError } from "../../lib/apiContract";
 import type { ConnectionState } from "../../hooks/useWebSocket";
+import { resolveChatDensity } from "../../utils/densityPolicy";
+import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 
 // ── Convert upload queue metadata to Attachment ─────────────────────
 
@@ -302,8 +304,51 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [clockTick, setClockTick] = React.useState(() => Date.now());
   const [ephemeralNotice, setEphemeralNotice] =
     React.useState<EphemeralNotice | null>(null);
+  const [viewportMetrics, setViewportMetrics] = React.useState(() => ({
+    width:
+      typeof window !== "undefined" ? window.innerWidth : 1280,
+    height:
+      typeof window !== "undefined" ? window.innerHeight : 900,
+  }));
   const previousConnectionStateRef = React.useRef<ConnectionState>(connectionState);
   const ephemeralNoticeTimerRef = React.useRef<number | null>(null);
+
+  const resolvedDensity = React.useMemo(
+    () =>
+      resolveChatDensity({
+        preference: chatDensity,
+        viewportWidth: viewportMetrics.width,
+        viewportHeight: viewportMetrics.height,
+        messages,
+        conversationType: conversation.type,
+      }),
+    [
+      chatDensity,
+      conversation.type,
+      messages,
+      viewportMetrics.height,
+      viewportMetrics.width,
+    ],
+  );
+
+  const bottomOverlayPlacements = React.useMemo(
+    () =>
+      resolveOverlayPlacements([
+        {
+          id: "selection-toolbar",
+          visible: isMessageSelectionMode,
+          priority: 120,
+          slot: "bottom-center",
+        },
+        {
+          id: "ephemeral-notice",
+          visible: Boolean(ephemeralNotice) && !isMessageSelectionMode,
+          priority: 60,
+          slot: "bottom-center",
+        },
+      ]),
+    [ephemeralNotice, isMessageSelectionMode],
+  );
 
   const slowModeRemainingSeconds = React.useMemo(() => {
     const delta = slowModeUntil - clockTick;
@@ -461,6 +506,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     [],
   );
 
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleResize = () => {
+      setViewportMetrics({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
   const mentionCandidates = React.useMemo<MentionCandidate[]>(() => {
     const participants = Array.isArray(conversation.participants)
       ? conversation.participants
@@ -551,7 +613,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onFilePreview={onFilePreview}
         error={messageError}
         onRetry={onRetryMessages}
-        density={chatDensity}
+        density={resolvedDensity}
         isSelectionMode={isMessageSelectionMode}
         selectedMessageIds={selectedMessageIds}
         onToggleSelect={toggleMessageSelection}
@@ -578,7 +640,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       onFilePreview,
       onLoadOlderMessages,
       onRetryMessages,
-      chatDensity,
+      resolvedDensity,
       handleJumpHandled,
       handleReachedLatest,
       isMessageSelectionMode,
@@ -645,7 +707,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {messageListNode}
 
-      {ephemeralNotice && !isMessageSelectionMode && (
+      {ephemeralNotice &&
+        bottomOverlayPlacements["ephemeral-notice"]?.visible && (
         <div className="pointer-events-none absolute inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-[55] flex justify-center">
           <div
             className={clsx(
@@ -661,7 +724,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       )}
 
       {/* Selection toolbar */}
-      {isMessageSelectionMode && (
+      {isMessageSelectionMode &&
+        bottomOverlayPlacements["selection-toolbar"]?.visible && (
         <SelectionToolbar
           selectedCount={selectedMessageIds.size}
           onDelete={handleSelectionDelete}

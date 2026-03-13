@@ -19,6 +19,7 @@ import {
   isDirectConversation,
   normalizeRoomType,
 } from "../../../lib/conversationAdapter";
+import { rankConversations } from "../../../utils/conversationRanking";
 import { RoomItem } from "./RoomItem";
 
 interface RoomListProps {
@@ -73,19 +74,6 @@ const measureViewportHeight = (node: HTMLDivElement): number => {
   if (node.scrollHeight > 0) return node.scrollHeight;
   return 0;
 };
-
-const toTimestamp = (value: unknown): number => {
-  const date = new Date(value as string | number | Date);
-  const timestamp = date.getTime();
-  return Number.isNaN(timestamp) ? 0 : timestamp;
-};
-
-const sortByPriority = (items: Conversation[]): Conversation[] =>
-  [...items].sort((a, b) => {
-    if (a.isPinned && !b.isPinned) return -1;
-    if (!a.isPinned && b.isPinned) return 1;
-    return toTimestamp(b.updatedAt) - toTimestamp(a.updatedAt);
-  });
 
 const includesQuery = (
   conversation: Conversation,
@@ -235,8 +223,20 @@ export const RoomList: React.FC<RoomListProps> = ({
   const normalizedQuery = searchQuery.trim().toLowerCase();
 
   const sortedRooms = useMemo(
-    () => sortByPriority(Array.isArray(conversations) ? conversations : []),
-    [conversations],
+    () =>
+      rankConversations(Array.isArray(conversations) ? conversations : [], {
+        currentUserId: currentUser.id,
+        currentUsername: currentUser.username,
+        currentDisplayName: currentUser.displayName,
+        activeConversationId: selectedId,
+      }),
+    [
+      conversations,
+      currentUser.displayName,
+      currentUser.id,
+      currentUser.username,
+      selectedId,
+    ],
   );
 
   const queriedRooms = useMemo(() => {

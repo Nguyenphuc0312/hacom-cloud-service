@@ -10,6 +10,7 @@ import {
   normalizeRoomType,
 } from "../lib/conversationAdapter";
 import { isSameDay } from "./formatTime";
+import { rankConversations } from "./conversationRanking";
 import i18n from "../i18n";
 
 const isDirectType = (conversationType: unknown): boolean => {
@@ -229,19 +230,18 @@ export function getOtherParticipant(
 }
 
 /**
- * Sort conversations (pinned first, then updatedAt).
+ * Sort conversations with product ranking signals (pin, unread, mention, recency).
  */
 export function sortConversations(
   conversations?: Conversation[] | null,
+  options?: {
+    currentUserId?: string;
+    currentUsername?: string;
+    currentDisplayName?: string;
+    activeConversationId?: string | null;
+  },
 ): Conversation[] {
-  if (!Array.isArray(conversations)) return [];
-
-  return [...conversations].sort((a, b) => {
-    if (a.isPinned && !b.isPinned) return -1;
-    if (!a.isPinned && b.isPinned) return 1;
-
-    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-  });
+  return rankConversations(conversations, options);
 }
 
 /**

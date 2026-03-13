@@ -17,6 +17,7 @@ interface MessageBubbleProps {
   onDelete?: (messageId: string) => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
+  isSelectionMode?: boolean;
   density?: ChatDensity;
   currentUsername?: string;
   className?: string;

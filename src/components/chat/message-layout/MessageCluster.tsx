@@ -18,6 +18,10 @@ import { RoomType } from "../../../types";
 import { normalizeRoomType } from "../../../lib/conversationAdapter";
 import { useChatStore } from "../../../stores";
 import {
+  resolveMessageActions,
+  type MessageActionId,
+} from "../../../utils/messageActionPolicy";
+import {
   isFailedMessage,
   isPendingMessage,
 } from "../../../utils/messageTimeline";
@@ -40,6 +44,7 @@ interface MessageClusterProps {
   onDelete?: (messageId: string) => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
+  isSelectionMode?: boolean;
   currentUsername?: string;
   className?: string;
 }
@@ -130,6 +135,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   onDelete,
   onImageClick,
   onFilePreview,
+  isSelectionMode = false,
   currentUsername,
   className,
 }) => {
@@ -144,6 +150,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   const isGroupConversation =
     normalizedConversationType !== RoomType.PRIVATE &&
     normalizedConversationType !== RoomType.DIRECT;
+  const coarsePointer = isCoarsePointer();
   const threadCountValue = (() => {
     const candidate = message as unknown as { threadCount?: unknown };
     return typeof candidate.threadCount === "number" ? candidate.threadCount : 0;
@@ -174,15 +181,18 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
     }, 70);
   }, [clearRailTimers]);
 
-  const scheduleRailClose = React.useCallback((force = false) => {
-    clearRailTimers();
-    closeRailTimerRef.current = window.setTimeout(() => {
-      if (force || !isActionsOpen) {
-        setIsRailVisible(false);
-      }
-      closeRailTimerRef.current = null;
-    }, 90);
-  }, [clearRailTimers, isActionsOpen]);
+  const scheduleRailClose = React.useCallback(
+    (force = false) => {
+      clearRailTimers();
+      closeRailTimerRef.current = window.setTimeout(() => {
+        if (force || !isActionsOpen) {
+          setIsRailVisible(false);
+        }
+        closeRailTimerRef.current = null;
+      }, 90);
+    },
+    [clearRailTimers, isActionsOpen],
+  );
 
   React.useEffect(
     () => () => {
@@ -213,34 +223,105 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
     closeActions();
   }, [closeActions, message.content]);
 
+  const actionPolicy = React.useMemo(
+    () =>
+      resolveMessageActions({
+        message,
+        isOwn,
+        isCoarsePointer: coarsePointer,
+        isSelectionMode,
+        canEdit: Boolean(onEdit),
+        canDelete: Boolean(onDelete),
+        canRetry: isFailedMessage(message),
+      }),
+    [
+      coarsePointer,
+      isOwn,
+      isSelectionMode,
+      message,
+      onDelete,
+      onEdit,
+    ],
+  );
+
+  const handleAction = React.useCallback(
+    (actionId: MessageActionId) => {
+      switch (actionId) {
+        case "react":
+          onReact(message.id, "👍");
+          if (isActionsOpen) closeActions();
+          break;
+        case "reply":
+          onReply(message);
+          if (isActionsOpen) closeActions();
+          break;
+        case "copy":
+          handleCopy();
+          break;
+        case "edit":
+          if (onEdit) {
+            void Promise.resolve(onEdit(message));
+          }
+          closeActions();
+          break;
+        case "delete":
+          if (onDelete) {
+            void Promise.resolve(onDelete(message.id));
+          }
+          closeActions();
+          break;
+        case "retry":
+          handleRetry();
+          closeActions();
+          break;
+        case "more":
+          openActions();
+          break;
+      }
+    },
+    [
+      closeActions,
+      handleCopy,
+      handleRetry,
+      isActionsOpen,
+      message,
+      onDelete,
+      onEdit,
+      onReact,
+      onReply,
+      openActions,
+    ],
+  );
+
   const handlePointerDown = React.useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
-      if (!isCoarsePointer() || event.pointerType === "mouse") return;
+      if (!coarsePointer || event.pointerType === "mouse") return;
+      if (actionPolicy.menuActions.length === 0) return;
       clearLongPressTimer();
       longPressTimerRef.current = window.setTimeout(() => {
         openActions();
       }, 300);
     },
-    [clearLongPressTimer, openActions],
+    [
+      actionPolicy.menuActions.length,
+      clearLongPressTimer,
+      coarsePointer,
+      openActions,
+    ],
   );
 
-  const actionRail = (
-    <MessageActions
-      mode="rail"
-      isOwn={isOwn}
-      isOpen={isActionsOpen}
-      onReact={() => onReact(message.id, "👍")}
-      onReply={() => onReply(message)}
-      onMore={openActions}
-    />
-  );
+  const actionRail =
+    actionPolicy.railActions.length > 0 ? (
+      <MessageActions
+        mode="rail"
+        actions={actionPolicy.railActions}
+        onAction={handleAction}
+      />
+    ) : null;
 
   return (
     <div
-      className={clsx(
-        "group/message-cluster w-full",
-        className,
-      )}
+      className={clsx("group/message-cluster w-full", className)}
       onMouseEnter={scheduleRailOpen}
       onMouseLeave={() => scheduleRailClose()}
       onFocusCapture={() => {
@@ -257,18 +338,20 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
       <MessageRow
         isOwn={isOwn}
         actionRail={
-          <div
-            className={clsx(
-              "transition-fast",
-              isRailVisible || isActionsOpen
-                ? "pointer-events-auto translate-x-0 opacity-100"
-                : isOwn
-                  ? "pointer-events-none -translate-x-1 opacity-0"
-                  : "pointer-events-none translate-x-1 opacity-0",
-            )}
-          >
-            {actionRail}
-          </div>
+          actionRail ? (
+            <div
+              className={clsx(
+                "transition-fast",
+                isRailVisible || isActionsOpen
+                  ? "pointer-events-auto translate-x-0 opacity-100"
+                  : isOwn
+                    ? "pointer-events-none -translate-x-1 opacity-0"
+                    : "pointer-events-none translate-x-1 opacity-0",
+              )}
+            >
+              {actionRail}
+            </div>
+          ) : null
         }
       >
         <div
@@ -409,32 +492,10 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
 
       <MessageActions
         mode="sheet"
-        isOwn={isOwn}
+        actions={actionPolicy.menuActions}
         isOpen={isActionsOpen}
+        onAction={handleAction}
         onClose={closeActions}
-        onReact={() => onReact(message.id, "👍")}
-        onReply={() => {
-          onReply(message);
-          closeActions();
-        }}
-        onCopy={handleCopy}
-        onEdit={
-          isOwn && onEdit
-            ? () => {
-                void Promise.resolve(onEdit(message));
-                closeActions();
-              }
-            : undefined
-        }
-        onDelete={
-          onDelete
-            ? () => {
-                void Promise.resolve(onDelete(message.id));
-                closeActions();
-              }
-            : undefined
-        }
-        onRetry={isFailedMessage(message) ? handleRetry : undefined}
       />
     </div>
   );

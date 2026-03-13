@@ -13,6 +13,7 @@ import {
 } from "../lib/conversationAdapter";
 import { toast } from "../utils/toast";
 import { createReplySnapshot } from "../utils/messageTimeline";
+import { rankConversations } from "../utils/conversationRanking";
 import i18n from "../i18n";
 import { useAuthStore } from "./authStore";
 import { conversationApi, messageApi } from "../services/api";
@@ -1644,14 +1645,21 @@ export const useFilteredConversations = () => {
       filtered = filtered.filter(
         (conversation) =>
           conversation.name?.toLowerCase().includes(query) ||
+          conversation.displayName?.toLowerCase().includes(query) ||
           conversation.lastMessage?.content?.toLowerCase().includes(query),
       );
     }
 
-    return filtered.slice().sort((a, b) => {
-      if (a.isPinned && !b.isPinned) return -1;
-      if (!a.isPinned && b.isPinned) return 1;
-      return toDateValue(b.updatedAt) - toDateValue(a.updatedAt);
+    const currentUser = useAuthStore.getState().user;
+    const currentDisplayName = currentUser
+      ? `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim() ||
+        currentUser.username
+      : undefined;
+    return rankConversations(filtered, {
+      currentUserId: currentUser?.id,
+      currentUsername: currentUser?.username,
+      currentDisplayName,
+      activeConversationId: state.selectedConversationId,
     });
   });
 };

@@ -1,11 +1,13 @@
 import React from "react";
 import type { Message } from "../types";
 import { getMessageStableKey } from "../utils/messageTimeline";
+import {
+  decideAutoScroll,
+  deriveFollowModeFromScroll,
+  type ScrollFollowMode,
+} from "../utils/scrollController";
 
 const LOAD_MORE_TRIGGER_PX = 120;
-const NEAR_BOTTOM_PX = 96;
-const AUTO_SCROLL_DISTANCE_PX = 80;
-const PASSIVE_NEAR_BOTTOM_PX = 32;
 
 interface UseAutoScrollToBottomParams {
   conversationId: string;
@@ -80,26 +82,6 @@ const getTailAppendMessages = (
   return nextMessages.slice(previousLastIndex + 1);
 };
 
-const shouldAutoScroll = ({
-  distanceFromBottomPx,
-  velocityPxPerMs,
-  lastInteractionAgeMs,
-}: {
-  distanceFromBottomPx: number;
-  velocityPxPerMs: number;
-  lastInteractionAgeMs: number;
-}): boolean => {
-  const engagedBottom =
-    distanceFromBottomPx < AUTO_SCROLL_DISTANCE_PX &&
-    velocityPxPerMs >= -0.05 &&
-    lastInteractionAgeMs < 2500;
-  const passiveNearBottom =
-    distanceFromBottomPx < PASSIVE_NEAR_BOTTOM_PX &&
-    lastInteractionAgeMs < 5000;
-
-  return engagedBottom || passiveNearBottom;
-};
-
 export const useAutoScrollToBottom = ({
   conversationId,
   messages,
@@ -123,6 +105,7 @@ export const useAutoScrollToBottom = ({
     lastInteractionAt: Date.now(),
   });
   const loadingOlderRef = React.useRef(false);
+  const followModeRef = React.useRef<ScrollFollowMode>("following");
   const prevSourceMessagesRef = React.useRef<Message[]>(messages);
   const prevFirstMessageIdRef = React.useRef<string | undefined>(undefined);
   const prevConversationIdRef = React.useRef<string | null>(null);
@@ -140,6 +123,7 @@ export const useAutoScrollToBottom = ({
 
   const flushLiveBuffer = React.useCallback(
     (behavior?: ScrollBehavior) => {
+      followModeRef.current = "following";
       bufferedMessagesRef.current = [];
       setDisplayMessages(latestMessagesRef.current);
       setPendingNewMessages(0);
@@ -172,6 +156,7 @@ export const useAutoScrollToBottom = ({
     prevConversationIdRef.current = conversationId;
     prevSourceMessagesRef.current = messages;
     prevFirstMessageIdRef.current = messages[0]?.id;
+    followModeRef.current = "following";
     scrollMetricsRef.current = {
       isNearBottom: true,
       lastOffset: 0,
@@ -239,28 +224,33 @@ export const useAutoScrollToBottom = ({
         outer?.scrollHeight !== undefined
           ? outer.scrollHeight - outer.scrollTop - outer.clientHeight
           : Number.POSITIVE_INFINITY;
-      const canAutoScroll =
-        scrollMetricsRef.current.isNearBottom ||
-        latestIsOwnMessage ||
-        shouldAutoScroll({
-          distanceFromBottomPx: outerDistance,
-          velocityPxPerMs: scrollMetricsRef.current.velocityPxPerMs,
-          lastInteractionAgeMs:
-            Date.now() - scrollMetricsRef.current.lastInteractionAt,
-        });
+      const decision = decideAutoScroll({
+        currentMode: followModeRef.current,
+        distanceFromBottomPx: outerDistance,
+        clientHeightPx: outer?.clientHeight ?? 0,
+        velocityPxPerMs: scrollMetricsRef.current.velocityPxPerMs,
+        lastInteractionAgeMs:
+          Date.now() - scrollMetricsRef.current.lastInteractionAt,
+        latestIsOwnMessage,
+        appendedCount: tailAppend.length,
+        pendingBufferedCount: bufferedMessages.length,
+      });
+      const canAutoScroll = decision.action === "follow";
 
       if (canAutoScroll) {
         setDisplayMessages(messages);
         bufferedMessagesRef.current = [];
         setPendingNewMessages(0);
         setShowNewMessagesPill(false);
-        scrollToBottom(tailAppend.length === 1 ? "smooth" : "auto");
+        followModeRef.current = decision.nextMode;
+        scrollToBottom(decision.behavior);
         setShowJumpToBottom(false);
       } else {
         bufferedMessagesRef.current = dedupeMessagesByStableKey([
           ...bufferedMessages,
           ...tailAppend,
         ]);
+        followModeRef.current = decision.nextMode;
         setDisplayMessages(
           filterBufferedMessages(messages, bufferedMessagesRef.current),
         );
@@ -289,6 +279,7 @@ export const useAutoScrollToBottom = ({
 
   React.useEffect(() => {
     if (messages.length === 0) {
+      followModeRef.current = "following";
       bufferedMessagesRef.current = [];
       setDisplayMessages([]);
       setPendingNewMessages(0);
@@ -311,7 +302,13 @@ export const useAutoScrollToBottom = ({
           : previousMetrics.velocityPxPerMs;
       const distanceFromBottom =
         outer.scrollHeight - scrollOffset - outer.clientHeight;
-      const isNearBottom = distanceFromBottom < NEAR_BOTTOM_PX;
+      const scrollDecision = deriveFollowModeFromScroll({
+        distanceFromBottomPx: distanceFromBottom,
+        clientHeightPx: outer.clientHeight,
+        velocityPxPerMs,
+        pendingBufferedCount: bufferedMessagesRef.current.length,
+      });
+      const isNearBottom = scrollDecision.isNearBottom;
 
       scrollMetricsRef.current = {
         isNearBottom,
@@ -320,6 +317,7 @@ export const useAutoScrollToBottom = ({
         velocityPxPerMs,
         lastInteractionAt: Date.now(),
       };
+      followModeRef.current = scrollDecision.nextMode;
 
       if (isNearBottom) {
         if (bufferedMessagesRef.current.length > 0) {

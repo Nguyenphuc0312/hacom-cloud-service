@@ -11,6 +11,7 @@ import { Badge } from "../../common/Badge";
 import type { Conversation, UserSummary } from "../../../types";
 import { isDirectConversation } from "../../../lib/conversationAdapter";
 import { formatRelativeTime } from "../../../utils/formatTime";
+import { hasConversationMention } from "../../../utils/conversationRanking";
 import {
   getConversationAvatar,
   getConversationDisplayName,
@@ -26,41 +27,6 @@ interface RoomItemProps {
   isKeyboardActive: boolean;
   onSelect: (conversationId: string) => void;
 }
-
-const normalizeMentionToken = (value: unknown): string => {
-  if (typeof value !== "string") return "";
-  return value.trim().toLowerCase().replace(/\s+/g, "");
-};
-
-const hasMention = (
-  conversation: Conversation,
-  currentUser: UserSummary,
-): boolean => {
-  if ((conversation.unreadCount || 0) <= 0) return false;
-  if (
-    !conversation.lastMessage ||
-    conversation.lastMessage.senderId === currentUser.id
-  ) {
-    return false;
-  }
-
-  const content = conversation.lastMessage.content || "";
-  const normalizedContent = content.toLowerCase().replace(/\s+/g, "");
-  const usernameToken = normalizeMentionToken(currentUser.username);
-  const displayNameToken = normalizeMentionToken(currentUser.displayName);
-
-  if (/@(all|channel|here)\b/i.test(content)) return true;
-
-  if (usernameToken && normalizedContent.includes(`@${usernameToken}`)) {
-    return true;
-  }
-
-  if (displayNameToken && normalizedContent.includes(`@${displayNameToken}`)) {
-    return true;
-  }
-
-  return false;
-};
 
 const BaseRoomItem: React.FC<RoomItemProps> = ({
   conversation,
@@ -106,7 +72,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
   }, [conversation.lastMessage]);
 
   const unreadCount = conversation.unreadCount || 0;
-  const unreadMention = hasMention(conversation, currentUser);
+  const unreadMention = hasConversationMention(conversation, currentUser);
   const isDirect = isDirectConversation(conversation);
 
   const avatarSrc = getConversationAvatar(conversation, currentUser.id);

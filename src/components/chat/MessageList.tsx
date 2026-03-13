@@ -19,6 +19,7 @@ import { useVirtualizedMessages } from "../../hooks/useVirtualizedMessages";
 import type { Conversation, Message, Attachment } from "../../types";
 import type { ChatDensity } from "../../stores/uiStore";
 import { formatDateDivider } from "../../utils/formatTime";
+import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 
 interface MessageListProps {
   messages: Message[];
@@ -68,13 +69,18 @@ interface TimelineRowData {
   onTailResize: () => void;
 }
 
-const estimateTimelineItemHeight = (item: TimelineItem): number => {
+const estimateTimelineItemHeight = (
+  item: TimelineItem,
+  density: ChatDensity,
+): number => {
   if (item.kind === "date") return 64;
   if (item.kind === "system") return 68;
   if (item.kind === "unread") return 48;
 
   const message = item.message;
-  let baseHeight = item.isGroupEnd ? 76 : 62;
+  const densityOffset =
+    density === "compact" ? -8 : density === "expanded" ? 14 : 0;
+  let baseHeight = item.isGroupEnd ? 76 + densityOffset : 62 + densityOffset;
 
   if (message.replyToMessage) baseHeight += 52;
   if (message.forwardedFrom) baseHeight += 22;
@@ -272,6 +278,49 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     outerRef,
     scrollToBottom,
   });
+  const topOverlayPlacements = React.useMemo(
+    () =>
+      resolveOverlayPlacements([
+        {
+          id: "error",
+          visible: Boolean(error && messages.length > 0),
+          priority: 100,
+          slot: "top-center",
+        },
+        {
+          id: "loading",
+          visible: isLoadingMore && !isInitialLoading,
+          priority: 80,
+          slot: "top-center",
+        },
+        {
+          id: "sticky-date",
+          visible:
+            !isInitialLoading && messages.length > 0 && Boolean(stickyDate),
+          priority: 30,
+          slot: "top-center",
+        },
+      ]),
+    [error, isInitialLoading, isLoadingMore, messages.length, stickyDate],
+  );
+  const bottomOverlayPlacements = React.useMemo(
+    () =>
+      resolveOverlayPlacements([
+        {
+          id: "new-pill",
+          visible: showNewMessagesPill && pendingNewMessages > 0,
+          priority: 95,
+          slot: "bottom-right",
+        },
+        {
+          id: "jump-latest",
+          visible: showJumpToBottom && !showNewMessagesPill,
+          priority: 70,
+          slot: "bottom-right",
+        },
+      ]),
+    [pendingNewMessages, showJumpToBottom, showNewMessagesPill],
+  );
 
   const timelineItems = useMessageGrouping({
     messages: displayMessages,
@@ -279,6 +328,10 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     conversationType: conversation.type,
     unreadMarker,
   });
+  const estimateItemSize = React.useCallback(
+    (item: TimelineItem) => estimateTimelineItemHeight(item, density),
+    [density],
+  );
 
   const {
     viewportHeight,
@@ -289,7 +342,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   } = useVirtualizedMessages<TimelineItem, TimelineRowData>({
     items: timelineItems,
     viewportRef,
-    estimateItemSize: estimateTimelineItemHeight,
+    estimateItemSize,
     getItemKey: (item, index) =>
       item.key || `${item.kind}-${index}`,
     listRef,
@@ -605,7 +658,10 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         </div>
       )}
 
-      {!isInitialLoading && messages.length > 0 && stickyDate && (
+      {!isInitialLoading &&
+        messages.length > 0 &&
+        stickyDate &&
+        topOverlayPlacements["sticky-date"]?.visible && (
         <div className="pointer-events-none absolute left-1/2 top-3 z-[5] -translate-x-1/2">
           <div
             className="rounded-full border px-3.5 py-1 text-[11px] font-medium text-text-secondary shadow-xs backdrop-blur"
@@ -619,7 +675,9 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         </div>
       )}
 
-      {error && messages.length > 0 && (
+      {error &&
+        messages.length > 0 &&
+        topOverlayPlacements.error?.visible && (
         <div className="pointer-events-none absolute inset-x-[var(--chat-lane-padding)] top-2 z-sticky flex justify-center">
           <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-danger/25 bg-surface/95 px-3 py-1 shadow-xs backdrop-blur">
             <span className="truncate text-xs text-danger">{error}</span>
@@ -636,13 +694,15 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         </div>
       )}
 
-      {isLoadingMore && !isInitialLoading && (
+      {isLoadingMore &&
+        !isInitialLoading &&
+        topOverlayPlacements.loading?.visible && (
         <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full border border-border bg-surface/90 px-4 py-1.5 text-xs text-text-secondary shadow-xs animate-slide-up-fade">
           {t("chat:message.loadMore")}
         </div>
       )}
 
-      {showJumpToBottom && !showNewMessagesPill && (
+      {bottomOverlayPlacements["jump-latest"]?.visible && (
         <button
           type="button"
           onClick={() => jumpToLatest("smooth")}
@@ -659,7 +719,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         </button>
       )}
 
-      {showNewMessagesPill && pendingNewMessages > 0 && (
+      {bottomOverlayPlacements["new-pill"]?.visible && (
         <button
           type="button"
           onClick={() => jumpToLatest("smooth")}

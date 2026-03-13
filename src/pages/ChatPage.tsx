@@ -35,10 +35,11 @@ import {
 } from "../stores";
 import { useWebSocket } from "../hooks";
 import { conversationApi, messageApi } from "../services/api";
-import type { Attachment, Conversation, Message, UserSummary } from "../types";
+import type { Attachment, Message, UserSummary } from "../types";
 import { useFilePreview } from "../hooks/useFilePreview";
 import type { PreviewTarget } from "../hooks/useFilePreview";
 import { getPreviewType } from "../utils/formatFileSize";
+import { rankConversations } from "../utils/conversationRanking";
 import { MessageType, UserStatus } from "../types";
 import { isDirectConversation } from "../lib/conversationAdapter";
 import { getOtherParticipant } from "../utils/messageHelpers";
@@ -70,19 +71,6 @@ type WindowWithIdleCallback = Window & {
   ) => number;
   cancelIdleCallback?: (handle: number) => void;
 };
-
-const toTimestamp = (value: unknown): number => {
-  const parsed = new Date(value as string | number | Date);
-  const timestamp = parsed.getTime();
-  return Number.isNaN(timestamp) ? 0 : timestamp;
-};
-
-const sortConversationsByPriority = (source: Conversation[]): Conversation[] =>
-  [...source].sort((a, b) => {
-    if (a.isPinned && !b.isPinned) return -1;
-    if (!a.isPinned && b.isPinned) return 1;
-    return toTimestamp(b.updatedAt) - toTimestamp(a.updatedAt);
-  });
 
 const scheduleIdleTask = (task: () => void): (() => void) => {
   if (typeof window === "undefined") return () => {};
@@ -471,8 +459,14 @@ export const ChatPage: React.FC = () => {
   useEffect(() => {
     if (!selectedConversationId || isValidatingRoom) return;
 
-    const orderedConversations = sortConversationsByPriority(
+    const orderedConversations = rankConversations(
       Array.isArray(conversations) ? conversations : [],
+      {
+        currentUserId: currentUserSummary?.id,
+        currentUsername: currentUserSummary?.username,
+        currentDisplayName: currentUserSummary?.displayName,
+        activeConversationId: selectedConversationId,
+      },
     );
     const currentIndex = orderedConversations.findIndex(
       (conversation) => conversation.id === selectedConversationId,
@@ -504,7 +498,14 @@ export const ChatPage: React.FC = () => {
       isCancelled = true;
       cancelScheduledTask();
     };
-  }, [conversations, isValidatingRoom, selectedConversationId]);
+  }, [
+    conversations,
+    currentUserSummary?.displayName,
+    currentUserSummary?.id,
+    currentUserSummary?.username,
+    isValidatingRoom,
+    selectedConversationId,
+  ]);
 
   useEffect(() => {
     if (!isMessageDebugEnabled()) return;

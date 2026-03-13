@@ -38,20 +38,21 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   currentUsername,
 }) => {
   const isCompact = density === "compact";
+  const isExpanded = density === "expanded";
 
   if (item.kind === "date") {
-    return <DateDivider date={item.date} />;
+    return <DateDivider date={item.date} className={isExpanded ? "my-7" : undefined} />;
   }
 
   if (item.kind === "unread") {
-    return <UnreadDivider />;
+    return <UnreadDivider className={isExpanded ? "my-6" : undefined} />;
   }
 
   if (item.kind === "system") {
     return (
       <SystemMessage
         message={item.message}
-        className={isCompact ? "my-1" : "my-2"}
+        className={isCompact ? "my-1" : isExpanded ? "my-3" : "my-2"}
       />
     );
   }
@@ -68,9 +69,13 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
         item.isGroupEnd
           ? isCompact
             ? "mb-2.5"
+            : isExpanded
+              ? "mb-5"
             : "mb-3.5"
           : isCompact
             ? "mb-px"
+            : isExpanded
+              ? "mb-1"
             : "mb-[3px]",
         "msg-row-hover -mx-1 px-1",
         isSelectionMode && "cursor-pointer",
@@ -106,6 +111,7 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
             onDelete={onDelete}
             onImageClick={onImageClick}
             onFilePreview={onFilePreview}
+            isSelectionMode={isSelectionMode}
             density={density}
             currentUsername={currentUsername}
           />

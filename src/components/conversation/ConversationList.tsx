@@ -48,7 +48,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
       break;
   }
 
-  const sorted = sortConversations(filtered);
+  const sorted = sortConversations(filtered, {
+    currentUserId,
+    activeConversationId: selectedId,
+  });
 
   const pinned = sorted.filter((c) => c.isPinned);
   const unpinned = sorted.filter((c) => !c.isPinned);

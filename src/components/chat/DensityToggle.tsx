@@ -6,7 +6,12 @@
 import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { Bars3Icon, Bars2Icon } from "@heroicons/react/24/outline";
+import {
+  AdjustmentsHorizontalIcon,
+  Bars2Icon,
+  Bars3Icon,
+  RectangleStackIcon,
+} from "@heroicons/react/24/outline";
 import type { ChatDensity } from "../../stores/uiStore";
 
 interface DensityToggleProps {
@@ -16,8 +21,10 @@ interface DensityToggleProps {
 }
 
 const densityOptions: { value: ChatDensity; icon: typeof Bars3Icon }[] = [
+  { value: "auto", icon: AdjustmentsHorizontalIcon },
   { value: "comfortable", icon: Bars3Icon },
   { value: "compact", icon: Bars2Icon },
+  { value: "expanded", icon: RectangleStackIcon },
 ];
 
 export const DensityToggle: React.FC<DensityToggleProps> = ({
