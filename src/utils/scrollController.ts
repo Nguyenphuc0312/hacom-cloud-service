@@ -46,6 +46,21 @@ export const computeNearBottomThreshold = ({
   return clamp(baseThreshold + pendingBufferedCount * 4, 40, 160);
 };
 
+export const computeDetachThreshold = ({
+  nearBottomThresholdPx,
+  clientHeightPx,
+}: {
+  nearBottomThresholdPx: number;
+  clientHeightPx: number;
+}): number => {
+  const extraSlack = clientHeightPx > 0 ? clientHeightPx * 0.08 : 48;
+  return clamp(
+    nearBottomThresholdPx + extraSlack,
+    nearBottomThresholdPx + 24,
+    nearBottomThresholdPx + 96,
+  );
+};
+
 const isReadingHistory = ({
   distanceFromBottomPx,
   nearBottomThresholdPx,
@@ -96,6 +111,23 @@ export const decideAutoScroll = (
     };
   }
 
+  const detachThresholdPx = computeDetachThreshold({
+    nearBottomThresholdPx,
+    clientHeightPx: input.clientHeightPx,
+  });
+  if (
+    input.currentMode === "following" &&
+    input.distanceFromBottomPx <= detachThresholdPx
+  ) {
+    return {
+      action: "follow",
+      behavior: input.appendedCount > 1 ? "auto" : "smooth",
+      nextMode: "following",
+      nearBottomThresholdPx,
+      reason: "near_bottom",
+    };
+  }
+
   if (
     isReadingHistory({
       ...input,
@@ -125,11 +157,13 @@ export const deriveFollowModeFromScroll = ({
   clientHeightPx,
   velocityPxPerMs,
   pendingBufferedCount,
+  currentMode,
 }: {
   distanceFromBottomPx: number;
   clientHeightPx: number;
   velocityPxPerMs: number;
   pendingBufferedCount: number;
+  currentMode: ScrollFollowMode;
 }): {
   isNearBottom: boolean;
   nearBottomThresholdPx: number;
@@ -140,10 +174,25 @@ export const deriveFollowModeFromScroll = ({
     pendingBufferedCount,
   });
   const isNearBottom = distanceFromBottomPx <= nearBottomThresholdPx;
+  const detachThresholdPx = computeDetachThreshold({
+    nearBottomThresholdPx,
+    clientHeightPx,
+  });
 
   if (isNearBottom) {
     return {
       isNearBottom,
+      nearBottomThresholdPx,
+      nextMode: "following",
+    };
+  }
+
+  if (
+    currentMode === "following" &&
+    distanceFromBottomPx <= detachThresholdPx
+  ) {
+    return {
+      isNearBottom: false,
       nearBottomThresholdPx,
       nextMode: "following",
     };

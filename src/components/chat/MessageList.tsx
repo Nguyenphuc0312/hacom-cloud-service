@@ -59,7 +59,15 @@ interface TimelineRowData {
   onDelete?: (messageId: string) => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
-  setItemSize: (index: number, size: number) => void;
+  setItemSize: (
+    index: number,
+    size: number,
+  ) => {
+    changed: boolean;
+    previousSize: number;
+    nextSize: number;
+    delta: number;
+  };
   measureVersion: number;
   density: ChatDensity;
   isSelectionMode: boolean;
@@ -67,7 +75,17 @@ interface TimelineRowData {
   onToggleSelect?: (messageId: string) => void;
   currentUsername?: string;
   highlightedMessageId: string | null;
-  onTailResize: () => void;
+  onItemSizeChange: (payload: {
+    index: number;
+    key: string;
+    delta: number;
+  }) => void;
+}
+
+interface AnchorSnapshot {
+  itemKey: string | null;
+  index: number;
+  offsetWithinItem: number;
 }
 
 const estimateTimelineItemHeight = (
@@ -128,13 +146,17 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
 
     React.useLayoutEffect(() => {
       const node = rowRef.current;
-      if (!node) return;
+      if (!node || !item) return;
 
       const measure = () => {
         const nextSize = Math.ceil(node.getBoundingClientRect().height);
-        setItemSize(index, nextSize);
-        if (index === data.items.length - 1) {
-          data.onTailResize();
+        const measurement = setItemSize(index, nextSize);
+        if (measurement.changed && Math.abs(measurement.delta) > 1) {
+          data.onItemSizeChange({
+            index,
+            key: item.key || `${item.kind}-${index}`,
+            delta: measurement.delta,
+          });
         }
       };
 
@@ -148,7 +170,7 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
       const resizeObserver = new ResizeObserver(measure);
       resizeObserver.observe(node);
       return () => resizeObserver.disconnect();
-    }, [index, item, setItemSize]);
+    }, [data.onItemSizeChange, index, item, setItemSize]);
 
     if (!item) return null;
 
@@ -235,31 +257,38 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const outerRef = React.useRef<HTMLDivElement | null>(null);
   const stickyDateRafRef = React.useRef<number | null>(null);
   const highlightTimerRef = React.useRef<number | null>(null);
-  const tailFollowRafRef = React.useRef<number | null>(null);
+  const anchorAdjustRafRef = React.useRef<number | null>(null);
+  const pinBottomRafRef = React.useRef<number | null>(null);
+  const anchorSnapshotRef = React.useRef<AnchorSnapshot | null>(null);
+  const captureAnchorSnapshotRef = React.useRef<() => AnchorSnapshot | null>(
+    () => null,
+  );
+  const scheduleAnchorRestoreRef = React.useRef<() => void>(() => {});
+  const pendingPrependRestoreRef = React.useRef(false);
+  const previousViewportHeightRef = React.useRef(0);
+  const timelineItemCountRef = React.useRef(0);
   const [stickyDate, setStickyDate] = React.useState<Date | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = React.useState<
     string | null
   >(null);
-  const [timelineMessageCount, setTimelineMessageCount] = React.useState(
-    messages.length,
-  );
 
   const scrollToBottom = React.useCallback(
     (behavior: ScrollBehavior = "smooth") => {
-      if (timelineMessageCount === 0) return;
+      const itemCount = timelineItemCountRef.current;
+      if (itemCount === 0) return;
 
       if (behavior === "auto") {
-        listRef.current?.scrollToItem(timelineMessageCount - 1, "end");
+        listRef.current?.scrollToItem(itemCount - 1, "end");
       } else {
         const outer = outerRef.current;
         if (outer) {
           outer.scrollTo({ top: outer.scrollHeight, behavior });
         } else {
-          listRef.current?.scrollToItem(timelineMessageCount - 1, "end");
+          listRef.current?.scrollToItem(itemCount - 1, "end");
         }
       }
     },
-    [timelineMessageCount],
+    [],
   );
 
   const {
@@ -276,6 +305,15 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     hasMore,
     isLoadingMore,
     onLoadMore,
+    onBeforeLoadMore: () => {
+      captureAnchorSnapshotRef.current();
+      pendingPrependRestoreRef.current = true;
+    },
+    onAfterPrepend: () => {
+      if (!pendingPrependRestoreRef.current) return;
+      pendingPrependRestoreRef.current = false;
+      scheduleAnchorRestoreRef.current();
+    },
     outerRef,
     scrollToBottom,
   });
@@ -329,6 +367,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     conversationType: conversation.type,
     unreadMarker,
   });
+  timelineItemCountRef.current = timelineItems.length;
   const estimateItemSize = React.useCallback(
     (item: TimelineItem) => estimateTimelineItemHeight(item, density),
     [density],
@@ -347,16 +386,176 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     getItemKey: (item, index) =>
       item.key || `${item.kind}-${index}`,
     listRef,
-    outerRef,
+      outerRef,
   });
+  const shouldPinBottom =
+    !showJumpToBottom &&
+    !showNewMessagesPill &&
+    pendingNewMessages === 0;
 
-  React.useEffect(() => {
-    setTimelineMessageCount(timelineItems.length);
-  }, [timelineItems.length]);
+  const getItemOffset = React.useCallback(
+    (targetIndex: number): number => {
+      let accumulatedHeight = 0;
+      for (let index = 0; index < targetIndex; index += 1) {
+        accumulatedHeight += Math.max(1, Math.ceil(getItemSize(index)));
+      }
+      return accumulatedHeight;
+    },
+    [getItemSize],
+  );
+
+  const findAnchorFromScrollTop = React.useCallback(
+    (scrollTop: number): AnchorSnapshot | null => {
+      if (timelineItems.length === 0) return null;
+
+      let accumulatedHeight = 0;
+      let targetIndex = 0;
+
+      for (let index = 0; index < timelineItems.length; index += 1) {
+        const rowHeight = Math.max(1, Math.ceil(getItemSize(index)));
+        if (accumulatedHeight + rowHeight > scrollTop + 1) {
+          targetIndex = index;
+          break;
+        }
+        accumulatedHeight += rowHeight;
+        targetIndex = index;
+      }
+
+      const item = timelineItems[targetIndex];
+      if (!item) return null;
+
+      return {
+        itemKey: item.key ?? null,
+        index: targetIndex,
+        offsetWithinItem: Math.max(0, scrollTop - accumulatedHeight),
+      };
+    },
+    [getItemSize, timelineItems],
+  );
+
+  const resolveAnchorIndex = React.useCallback(
+    (snapshot: AnchorSnapshot | null): number => {
+      if (!snapshot || timelineItems.length === 0) return -1;
+
+      if (snapshot.itemKey) {
+        const byKeyIndex = timelineItems.findIndex(
+          (item) => (item.key ?? null) === snapshot.itemKey,
+        );
+        if (byKeyIndex >= 0) return byKeyIndex;
+      }
+
+      return Math.min(snapshot.index, timelineItems.length - 1);
+    },
+    [timelineItems],
+  );
+
+  const captureAnchorSnapshot = React.useCallback(() => {
+    const outer = outerRef.current;
+    if (!outer) return null;
+
+    const snapshot = findAnchorFromScrollTop(outer.scrollTop);
+    anchorSnapshotRef.current = snapshot;
+    return snapshot;
+  }, [findAnchorFromScrollTop, outerRef]);
+
+  const scheduleAnchorSnapshotRefresh = React.useCallback(() => {
+    requestAnimationFrame(() => {
+      captureAnchorSnapshot();
+    });
+  }, [captureAnchorSnapshot]);
+
+  const schedulePinToBottom = React.useCallback(() => {
+    if (pinBottomRafRef.current !== null) {
+      cancelAnimationFrame(pinBottomRafRef.current);
+    }
+
+    pinBottomRafRef.current = requestAnimationFrame(() => {
+      scrollToBottom("auto");
+      pinBottomRafRef.current = null;
+    });
+  }, [scrollToBottom]);
+
+  const scheduleAnchorRestore = React.useCallback(() => {
+    if (anchorAdjustRafRef.current !== null) {
+      cancelAnimationFrame(anchorAdjustRafRef.current);
+    }
+
+    anchorAdjustRafRef.current = requestAnimationFrame(() => {
+      const outer = outerRef.current;
+      const snapshot = anchorSnapshotRef.current;
+      if (!outer || !snapshot) {
+        anchorAdjustRafRef.current = null;
+        return;
+      }
+
+      const anchorIndex = resolveAnchorIndex(snapshot);
+      if (anchorIndex < 0) {
+        anchorAdjustRafRef.current = null;
+        return;
+      }
+
+      const nextOffset =
+        getItemOffset(anchorIndex) + snapshot.offsetWithinItem;
+      listRef.current?.scrollTo(Math.max(0, nextOffset));
+      anchorAdjustRafRef.current = null;
+      scheduleAnchorSnapshotRefresh();
+    });
+  }, [
+    getItemOffset,
+    listRef,
+    outerRef,
+    resolveAnchorIndex,
+    scheduleAnchorSnapshotRefresh,
+  ]);
+
+  captureAnchorSnapshotRef.current = captureAnchorSnapshot;
+  scheduleAnchorRestoreRef.current = scheduleAnchorRestore;
 
   React.useEffect(() => {
     clearMeasuredSizes();
+    anchorSnapshotRef.current = null;
+    pendingPrependRestoreRef.current = false;
+    previousViewportHeightRef.current = 0;
   }, [clearMeasuredSizes, conversation.id]);
+
+  React.useEffect(() => {
+    if (timelineItems.length === 0) {
+      anchorSnapshotRef.current = null;
+      return;
+    }
+
+    if (shouldPinBottom) {
+      schedulePinToBottom();
+      return;
+    }
+
+    if (!anchorSnapshotRef.current) {
+      captureAnchorSnapshot();
+    }
+  }, [
+    captureAnchorSnapshot,
+    schedulePinToBottom,
+    shouldPinBottom,
+    timelineItems.length,
+  ]);
+
+  React.useLayoutEffect(() => {
+    if (viewportHeight <= 0) return;
+
+    const previousViewportHeight = previousViewportHeightRef.current;
+    previousViewportHeightRef.current = viewportHeight;
+
+    if (previousViewportHeight <= 0 || previousViewportHeight === viewportHeight) {
+      return;
+    }
+
+    if (shouldPinBottom) {
+      schedulePinToBottom();
+      return;
+    }
+
+    scheduleAnchorRestore();
+  }, [scheduleAnchorRestore, schedulePinToBottom, shouldPinBottom, viewportHeight]);
 
   const rowData = React.useMemo<TimelineRowData>(
     () => ({
@@ -375,29 +574,37 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       onToggleSelect,
       currentUsername,
       highlightedMessageId,
-      onTailResize: () => {
-        if (
-          showJumpToBottom ||
-          showNewMessagesPill ||
-          pendingNewMessages > 0
-        ) {
+      onItemSizeChange: ({ index, delta }) => {
+        const outer = outerRef.current;
+        if (!outer || Math.abs(delta) <= 1) {
           return;
         }
 
-        if (tailFollowRafRef.current !== null) {
-          cancelAnimationFrame(tailFollowRafRef.current);
+        if (shouldPinBottom) {
+          schedulePinToBottom();
+          return;
         }
 
-        tailFollowRafRef.current = requestAnimationFrame(() => {
-          const outer = outerRef.current;
-          if (outer) {
-            outer.scrollTo({ top: outer.scrollHeight, behavior: "auto" });
-          }
-          tailFollowRafRef.current = null;
-        });
+        const snapshot =
+          anchorSnapshotRef.current ?? captureAnchorSnapshotRef.current();
+        if (!snapshot) return;
+
+        const anchorIndex = resolveAnchorIndex(snapshot);
+        if (anchorIndex < 0) return;
+
+        if (index < anchorIndex) {
+          listRef.current?.scrollTo(Math.max(0, outer.scrollTop + delta));
+          scheduleAnchorSnapshotRefresh();
+          return;
+        }
+
+        if (index === anchorIndex) {
+          scheduleAnchorRestore();
+        }
       },
     }),
     [
+      captureAnchorSnapshotRef,
       currentUsername,
       density,
       highlightedMessageId,
@@ -410,11 +617,14 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       onReact,
       onReply,
       onToggleSelect,
-      pendingNewMessages,
+      outerRef,
+      resolveAnchorIndex,
+      scheduleAnchorRestore,
+      scheduleAnchorSnapshotRefresh,
+      schedulePinToBottom,
       selectedMessageIds,
       setItemSize,
-      showJumpToBottom,
-      showNewMessagesPill,
+      shouldPinBottom,
       timelineItems,
     ],
   );
@@ -423,6 +633,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     ({ scrollOffset, scrollUpdateWasRequested }: ListOnScrollProps) => {
       if (scrollUpdateWasRequested) return;
       handleScroll(scrollOffset);
+      anchorSnapshotRef.current = findAnchorFromScrollTop(scrollOffset);
 
       if (stickyDateRafRef.current !== null) {
         cancelAnimationFrame(stickyDateRafRef.current);
@@ -463,7 +674,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         stickyDateRafRef.current = null;
       });
     },
-    [getItemSize, handleScroll, timelineItems],
+    [findAnchorFromScrollTop, getItemSize, handleScroll, timelineItems],
   );
 
   const handleRetry = React.useCallback(() => {
@@ -516,6 +727,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     if (targetIndex < 0) return;
 
     listRef.current?.scrollToItem(targetIndex, "center");
+    scheduleAnchorSnapshotRefresh();
     setHighlightedMessageId(jumpToMessageId);
     onJumpHandled?.(jumpToMessageId);
 
@@ -527,7 +739,13 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         current === jumpToMessageId ? null : current,
       );
     }, 1800);
-  }, [jumpRequestVersion, jumpToMessageId, onJumpHandled, timelineItems]);
+  }, [
+    jumpRequestVersion,
+    jumpToMessageId,
+    onJumpHandled,
+    scheduleAnchorSnapshotRefresh,
+    timelineItems,
+  ]);
 
   React.useEffect(() => {
     if (timelineItems.length === 0) {
@@ -593,8 +811,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       if (stickyDateRafRef.current !== null) {
         cancelAnimationFrame(stickyDateRafRef.current);
       }
-      if (tailFollowRafRef.current !== null) {
-        cancelAnimationFrame(tailFollowRafRef.current);
+      if (anchorAdjustRafRef.current !== null) {
+        cancelAnimationFrame(anchorAdjustRafRef.current);
+      }
+      if (pinBottomRafRef.current !== null) {
+        cancelAnimationFrame(pinBottomRafRef.current);
       }
       if (highlightTimerRef.current !== null) {
         window.clearTimeout(highlightTimerRef.current);

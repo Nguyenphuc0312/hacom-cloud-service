@@ -15,7 +15,15 @@ interface UseVirtualizedMessagesResult<ListData> {
   outerRef: React.MutableRefObject<HTMLDivElement | null>;
   viewportHeight: number;
   getItemSize: (index: number) => number;
-  setItemSize: (index: number, size: number) => void;
+  setItemSize: (
+    index: number,
+    size: number,
+  ) => {
+    changed: boolean;
+    previousSize: number;
+    nextSize: number;
+    delta: number;
+  };
   clearMeasuredSizes: () => void;
   measureVersion: number;
 }
@@ -38,18 +46,36 @@ export const useVirtualizedMessages = <Item, ListData>({
   const setItemSize = React.useCallback(
     (index: number, size: number) => {
       const item = items[index];
-      if (!item) return;
+      if (!item) {
+        return {
+          changed: false,
+          previousSize: 0,
+          nextSize: size,
+          delta: 0,
+        };
+      }
 
       const key = getItemKey(item, index);
       const current = sizeMapRef.current.get(key);
       if (current === size || Math.abs((current || 0) - size) <= 1) {
-        return;
+        return {
+          changed: false,
+          previousSize: current ?? size,
+          nextSize: size,
+          delta: 0,
+        };
       }
 
       sizeMapRef.current.set(key, size);
       listRef.current?.resetAfterIndex(index);
+      return {
+        changed: true,
+        previousSize: current ?? estimateItemSize(item),
+        nextSize: size,
+        delta: size - (current ?? estimateItemSize(item)),
+      };
     },
-    [getItemKey, items, listRef],
+    [estimateItemSize, getItemKey, items, listRef],
   );
 
   const getItemSize = React.useCallback(

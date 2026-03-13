@@ -16,6 +16,8 @@ interface UseAutoScrollToBottomParams {
   hasMore: boolean;
   isLoadingMore: boolean;
   onLoadMore?: () => void | Promise<void>;
+  onBeforeLoadMore?: () => void;
+  onAfterPrepend?: () => void;
   outerRef: React.RefObject<HTMLDivElement | null>;
   scrollToBottom: (behavior?: ScrollBehavior) => void;
 }
@@ -89,6 +91,8 @@ export const useAutoScrollToBottom = ({
   hasMore,
   isLoadingMore,
   onLoadMore,
+  onBeforeLoadMore,
+  onAfterPrepend,
   outerRef,
   scrollToBottom,
 }: UseAutoScrollToBottomParams): UseAutoScrollToBottomResult => {
@@ -117,7 +121,7 @@ export const useAutoScrollToBottom = ({
     setPendingNewMessages(count);
     setShowNewMessagesPill(count > 0);
     setShowJumpToBottom(
-      count > 0 || !scrollMetricsRef.current.isNearBottom,
+      count > 0 || followModeRef.current !== "following",
     );
   }, []);
 
@@ -172,16 +176,6 @@ export const useAutoScrollToBottom = ({
     setShowJumpToBottom(false);
 
     scrollToBottom("auto");
-    requestAnimationFrame(() => {
-      scrollToBottom("auto");
-    });
-    const retryTimer = setTimeout(() => {
-      scrollToBottom("auto");
-    }, 80);
-
-    return () => {
-      clearTimeout(retryTimer);
-    };
   }, [conversationId, messages, scrollToBottom]);
 
   React.useEffect(() => {
@@ -202,10 +196,14 @@ export const useAutoScrollToBottom = ({
       firstMessageId !== prevFirstMessageIdRef.current
     ) {
       setDisplayMessages(filterBufferedMessages(messages, bufferedMessages));
-      const scrollDelta =
-        outer.scrollHeight - scrollSnapshotRef.current.scrollHeight;
-      outer.scrollTop = scrollSnapshotRef.current.scrollTop + scrollDelta;
       loadingOlderRef.current = false;
+      if (onAfterPrepend) {
+        onAfterPrepend();
+      } else {
+        const scrollDelta =
+          outer.scrollHeight - scrollSnapshotRef.current.scrollHeight;
+        outer.scrollTop = scrollSnapshotRef.current.scrollTop + scrollDelta;
+      }
     } else if (tailAppend === null) {
       const updatedBufferedMessages = bufferedMessages
         .map((bufferedMessage) => {
@@ -266,6 +264,7 @@ export const useAutoScrollToBottom = ({
   }, [
     currentUserId,
     messages,
+    onAfterPrepend,
     outerRef,
     scrollToBottom,
     updatePendingUi,
@@ -307,6 +306,7 @@ export const useAutoScrollToBottom = ({
         clientHeightPx: outer.clientHeight,
         velocityPxPerMs,
         pendingBufferedCount: bufferedMessagesRef.current.length,
+        currentMode: followModeRef.current,
       });
       const isNearBottom = scrollDecision.isNearBottom;
 
@@ -319,7 +319,7 @@ export const useAutoScrollToBottom = ({
       };
       followModeRef.current = scrollDecision.nextMode;
 
-      if (isNearBottom) {
+      if (scrollDecision.nextMode === "following") {
         if (bufferedMessagesRef.current.length > 0) {
           flushLiveBuffer("auto");
         } else {
@@ -339,6 +339,7 @@ export const useAutoScrollToBottom = ({
         !loadingOlderRef.current &&
         scrollOffset < LOAD_MORE_TRIGGER_PX
       ) {
+        onBeforeLoadMore?.();
         loadingOlderRef.current = true;
         scrollSnapshotRef.current = {
           scrollTop: scrollOffset,
@@ -354,6 +355,7 @@ export const useAutoScrollToBottom = ({
       flushLiveBuffer,
       hasMore,
       isLoadingMore,
+      onBeforeLoadMore,
       onLoadMore,
       outerRef,
     ],
