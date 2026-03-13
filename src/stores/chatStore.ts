@@ -12,6 +12,7 @@ import {
   normalizeRoomType,
 } from "../lib/conversationAdapter";
 import { toast } from "../utils/toast";
+import { createReplySnapshot } from "../utils/messageTimeline";
 import i18n from "../i18n";
 import { useAuthStore } from "./authStore";
 import { conversationApi, messageApi } from "../services/api";
@@ -72,6 +73,7 @@ interface ChatState {
     type?: MessageType,
     fileMeta?: Attachment | Attachment[],
     replyToId?: string,
+    replyToSnapshot?: Message,
   ) => Promise<void>;
   resendMessage: (conversationId: string, message: Message) => Promise<void>;
 
@@ -1373,6 +1375,7 @@ export const useChatStore = create<ChatState>()(
       type = MessageType.TEXT,
       fileMeta,
       replyToId,
+      replyToSnapshot,
     ) => {
       const text = content.trim();
       // Normalise fileMeta to an array (or undefined)
@@ -1410,6 +1413,9 @@ export const useChatStore = create<ChatState>()(
         isSystem: false,
         createdAt: new Date(),
         ...(replyToId ? { replyTo: replyToId } : {}),
+        ...(replyToSnapshot
+          ? { replyToMessage: createReplySnapshot(replyToSnapshot) }
+          : {}),
         ...(fileMetaArr?.length ? { attachments: fileMetaArr } : {}),
       };
 

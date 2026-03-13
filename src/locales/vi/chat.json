@@ -22,10 +22,15 @@
       "uploading": "Đang tải lên",
       "sending": "Đang gửi",
       "sent": "Đã gửi",
+      "delivered": "Đã nhận",
+      "read": "Đã xem",
       "retry": "Gửi lại",
-      "failedRetry": "Gửi thất bại. Bấm để gửi lại"
+      "failedRetry": "Gửi thất bại. Bấm để gửi lại",
+      "failedInline": "Không gửi được",
+      "pendingInline": "Đang đồng bộ"
     },
     "actions": {
+      "react": "Thả cảm xúc",
       "reply": "Trả lời",
       "forward": "Chuyển tiếp",
       "copy": "Sao chép",

@@ -5,6 +5,7 @@ interface UseVirtualizedMessagesParams<Item, ListData> {
   items: Item[];
   viewportRef: React.RefObject<HTMLDivElement | null>;
   estimateItemSize: (item: Item) => number;
+  getItemKey: (item: Item, index: number) => string;
   listRef?: React.MutableRefObject<VirtualList<ListData> | null>;
   outerRef?: React.MutableRefObject<HTMLDivElement | null>;
 }
@@ -23,6 +24,7 @@ export const useVirtualizedMessages = <Item, ListData>({
   items,
   viewportRef,
   estimateItemSize,
+  getItemKey,
   listRef: providedListRef,
   outerRef: providedOuterRef,
 }: UseVirtualizedMessagesParams<Item, ListData>): UseVirtualizedMessagesResult<ListData> => {
@@ -30,28 +32,54 @@ export const useVirtualizedMessages = <Item, ListData>({
   const fallbackOuterRef = React.useRef<HTMLDivElement | null>(null);
   const listRef = providedListRef ?? fallbackListRef;
   const outerRef = providedOuterRef ?? fallbackOuterRef;
-  const sizeMapRef = React.useRef<Record<number, number>>({});
+  const sizeMapRef = React.useRef<Map<string, number>>(new Map());
   const [viewportHeight, setViewportHeight] = React.useState(0);
 
-  const setItemSize = React.useCallback((index: number, size: number) => {
-    const current = sizeMapRef.current[index];
-    if (current === size || Math.abs((current || 0) - size) <= 1) {
-      return;
-    }
+  const setItemSize = React.useCallback(
+    (index: number, size: number) => {
+      const item = items[index];
+      if (!item) return;
 
-    sizeMapRef.current[index] = size;
-    listRef.current?.resetAfterIndex(index);
-  }, []);
+      const key = getItemKey(item, index);
+      const current = sizeMapRef.current.get(key);
+      if (current === size || Math.abs((current || 0) - size) <= 1) {
+        return;
+      }
+
+      sizeMapRef.current.set(key, size);
+      listRef.current?.resetAfterIndex(index);
+    },
+    [getItemKey, items, listRef],
+  );
 
   const getItemSize = React.useCallback(
-    (index: number) => sizeMapRef.current[index] ?? estimateItemSize(items[index]),
-    [estimateItemSize, items],
+    (index: number) => {
+      const item = items[index];
+      if (!item) return 0;
+
+      const key = getItemKey(item, index);
+      return sizeMapRef.current.get(key) ?? estimateItemSize(item);
+    },
+    [estimateItemSize, getItemKey, items],
   );
 
   const clearMeasuredSizes = React.useCallback(() => {
-    sizeMapRef.current = {};
+    sizeMapRef.current = new Map();
     listRef.current?.resetAfterIndex(0, true);
-  }, []);
+  }, [listRef]);
+
+  React.useEffect(() => {
+    const nextKeys = new Set(items.map(getItemKey));
+    let removedAny = false;
+    sizeMapRef.current.forEach((_, key) => {
+      if (nextKeys.has(key)) return;
+      sizeMapRef.current.delete(key);
+      removedAny = true;
+    });
+    if (removedAny) {
+      listRef.current?.resetAfterIndex(0, false);
+    }
+  }, [getItemKey, items, listRef]);
 
   React.useEffect(() => {
     const viewportElement = viewportRef.current;

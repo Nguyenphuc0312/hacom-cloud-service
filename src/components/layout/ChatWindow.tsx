@@ -10,7 +10,7 @@ import { SearchPanel } from "../chat/SearchPanel";
 import { PinnedMessagesPanel } from "../chat/PinnedMessagesPanel";
 import type { MentionCandidate } from "../input/MessageInput";
 import { toast } from "../ui";
-import { useGroupStore, useUIStore } from "../../stores";
+import { useChatStore, useGroupStore, useUIStore } from "../../stores";
 import { useDropZone, useUploadQueue, usePresence } from "../../hooks";
 import type {
   Attachment,
@@ -24,6 +24,7 @@ import { MessageType } from "../../types";
 import type { UploadedFileMeta } from "../../types/attachmentDraft";
 import { contactApi } from "../../services/api";
 import { extractApiError } from "../../lib/apiContract";
+import type { ConnectionState } from "../../hooks/useWebSocket";
 
 // ── Convert upload queue metadata to Attachment ─────────────────────
 
@@ -72,6 +73,7 @@ interface ChatWindowProps {
   onFilePreview?: (attachment: Attachment) => void;
   messageError?: string | null;
   onRetryMessages?: () => void | Promise<void>;
+  connectionState?: ConnectionState;
   className?: string;
 }
 
@@ -94,6 +96,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onFilePreview,
   messageError,
   onRetryMessages,
+  connectionState = "connected",
   className,
 }) => {
   const { t } = useTranslation();
@@ -107,6 +110,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     (state) => state.slowModeUntilByRoom[conversation.id] || 0,
   );
   const clearSlowModeCooldown = useGroupStore((s) => s.clearSlowModeCooldown);
+  const addMessage = useChatStore((s) => s.addMessage);
+  const fetchMessages = useChatStore((s) => s.fetchMessages);
 
   const [inputValue, setInputValue] = React.useState("");
   const [inputMode, setInputMode] = React.useState<InputMode>("normal");
@@ -263,8 +268,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [t]);
 
   // Search & pinned panel state
-  const [isSearchOpen, setIsSearchOpen] = React.useState(false);
-  const [isPinnedOpen, setIsPinnedOpen] = React.useState(false);
+  const [overlayMode, setOverlayMode] = React.useState<"search" | "pinned" | null>(null);
+  const [jumpTargetMessage, setJumpTargetMessage] = React.useState<Message | null>(null);
+  const [jumpRequestVersion, setJumpRequestVersion] = React.useState(0);
+  const [unreadMarker, setUnreadMarker] = React.useState<{
+    lastReadMessageId?: string;
+    lastReadAt?: Date | string;
+    active?: boolean;
+  } | null>(null);
   const [clockTick, setClockTick] = React.useState(() => Date.now());
 
   const slowModeRemainingSeconds = React.useMemo(() => {
@@ -298,23 +309,69 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   ]);
 
   const handleSearchClick = React.useCallback(() => {
-    setIsSearchOpen((prev) => !prev);
-    setIsPinnedOpen(false);
+    setOverlayMode((prev) => (prev === "search" ? null : "search"));
   }, []);
 
   const handlePinnedClick = React.useCallback(() => {
-    setIsPinnedOpen((prev) => !prev);
-    setIsSearchOpen(false);
+    setOverlayMode((prev) => (prev === "pinned" ? null : "pinned"));
   }, []);
 
-  const handleSelectSearchMessage = React.useCallback(() => {
-    setIsSearchOpen(false);
+  const handleJumpHandled = React.useCallback((messageId: string) => {
+    setJumpTargetMessage((current) =>
+      current && current.id === messageId ? null : current,
+    );
   }, []);
+
+  const handleJumpToMessage = React.useCallback(
+    async (message: Message) => {
+      const inCache = messages.some(
+        (candidate) =>
+          candidate.id === message.id ||
+          candidate.localId === message.id ||
+          candidate.stableId === message.id,
+      );
+
+      if (!inCache) {
+        addMessage(conversation.id, message);
+        const cursor = new Date(message.createdAt).toISOString();
+        await Promise.allSettled([
+          fetchMessages(conversation.id, cursor, undefined, {
+            beforeId: message.id,
+            limit: 24,
+          }),
+          fetchMessages(conversation.id, undefined, cursor, {
+            afterId: message.id,
+            limit: 24,
+          }),
+        ]);
+      }
+
+      setOverlayMode(null);
+      setJumpTargetMessage(message);
+      setJumpRequestVersion((value) => value + 1);
+    },
+    [addMessage, conversation.id, fetchMessages, messages],
+  );
 
   // Close panels when switching conversations
   React.useEffect(() => {
-    setIsSearchOpen(false);
-    setIsPinnedOpen(false);
+    setOverlayMode(null);
+    const snapshot = conversation as Conversation & {
+      lastReadMessageId?: string;
+      lastReadAt?: Date | string;
+    };
+    if (
+      (conversation.unreadCount ?? 0) > 0 &&
+      (snapshot.lastReadMessageId || snapshot.lastReadAt)
+    ) {
+      setUnreadMarker({
+        lastReadMessageId: snapshot.lastReadMessageId,
+        lastReadAt: snapshot.lastReadAt,
+        active: true,
+      });
+    } else {
+      setUnreadMarker(null);
+    }
   }, [conversation.id]);
 
   const mentionCandidates = React.useMemo<MentionCandidate[]>(() => {
@@ -389,6 +446,26 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const currentUsername = currentUser.username;
 
+  const timelineNotice = React.useMemo(() => {
+    if (connectionState === "reconnecting") {
+      return {
+        kind: "warn" as const,
+        message: t("chat:toast.connectionReconnecting"),
+      };
+    }
+
+    if (connectionState === "disconnected") {
+      return {
+        kind: "error" as const,
+        message: t("chat:toast.connectionOffline", {
+          defaultValue: "Mat ket noi. Dang cho dong bo lai.",
+        }),
+      };
+    }
+
+    return null;
+  }, [connectionState, t]);
+
   const messageListNode = React.useMemo(
     () => (
       <MessageList
@@ -412,6 +489,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         selectedMessageIds={selectedMessageIds}
         onToggleSelect={toggleMessageSelection}
         currentUsername={currentUsername}
+        unreadMarker={unreadMarker}
+        jumpToMessageId={jumpTargetMessage?.id ?? null}
+        jumpRequestVersion={jumpRequestVersion}
+        onJumpHandled={handleJumpHandled}
+        notice={timelineNotice}
         className="flex-1 min-h-0"
       />
     ),
@@ -430,10 +512,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       onLoadOlderMessages,
       onRetryMessages,
       chatDensity,
+      handleJumpHandled,
       isMessageSelectionMode,
+      jumpRequestVersion,
+      jumpTargetMessage?.id,
       selectedMessageIds,
+      timelineNotice,
       toggleMessageSelection,
       currentUsername,
+      unreadMarker,
     ],
   );
 
@@ -461,21 +548,32 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onSelectionMode={enterSelectionMode}
       />
 
-      {/* Search panel overlay */}
-      {isSearchOpen && (
-        <SearchPanel
-          conversationId={conversation.id}
-          onSelectMessage={handleSelectSearchMessage}
-          onClose={() => setIsSearchOpen(false)}
-        />
-      )}
-
-      {/* Pinned messages panel overlay */}
-      {isPinnedOpen && (
-        <PinnedMessagesPanel
-          conversationId={conversation.id}
-          onClose={() => setIsPinnedOpen(false)}
-        />
+      {overlayMode && (
+        <div className="pointer-events-none absolute inset-0 z-[45]">
+          <button
+            type="button"
+            className="pointer-events-auto absolute inset-0 bg-text-primary/18 backdrop-blur-[1px]"
+            onClick={() => setOverlayMode(null)}
+            aria-label={t("common:actions.close")}
+          />
+          <div className="pointer-events-auto absolute inset-y-0 right-0 w-full max-w-[min(24rem,100%)] border-l border-border bg-surface shadow-elev3 animate-slide-up-fade">
+            {overlayMode === "search" ? (
+              <SearchPanel
+                conversationId={conversation.id}
+                onSelectMessage={handleJumpToMessage}
+                onClose={() => setOverlayMode(null)}
+                className="h-full"
+              />
+            ) : (
+              <PinnedMessagesPanel
+                conversationId={conversation.id}
+                onClose={() => setOverlayMode(null)}
+                onJumpToMessage={handleJumpToMessage}
+                className="h-full"
+              />
+            )}
+          </div>
+        </div>
       )}
 
       {messageListNode}

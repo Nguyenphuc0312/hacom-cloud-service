@@ -1,11 +1,36 @@
 import React from "react";
 import type { Conversation, Message } from "../types";
 import { isSameDay } from "../utils/formatTime";
+import {
+  getMessageSemanticFamily,
+  getMessageStableKey,
+  hasMessageLayoutDecorator,
+  isFailedMessage,
+  isPendingMessage,
+  type MessageSemanticFamily,
+} from "../utils/messageTimeline";
 
-const DEFAULT_GROUPING_THRESHOLD_MS = 5 * 60 * 1000;
+const DEFAULT_GROUPING_THRESHOLD_MS = 90 * 1000;
+
+export type ClusterBreakReason =
+  | "sender"
+  | "date"
+  | "time_gap"
+  | "semantic_family"
+  | "decorator"
+  | "status"
+  | "edited"
+  | "system"
+  | "timeline_decorator";
+
+export interface UnreadTimelineMarker {
+  lastReadMessageId?: string;
+  lastReadAt?: Date | string;
+  active?: boolean;
+}
 
 const getTimelineMessageKey = (message: Message): string =>
-  message.stableId || message.clientMessageId || message.localId || message.id;
+  getMessageStableKey(message);
 
 export type MessageTimelineItem = {
   kind: "message";
@@ -17,6 +42,9 @@ export type MessageTimelineItem = {
   isGroupStart: boolean;
   isGroupEnd: boolean;
   conversationType: Conversation["type"];
+  semanticFamily: MessageSemanticFamily;
+  clusterBreakBefore?: ClusterBreakReason;
+  clusterBreakAfter?: ClusterBreakReason;
 };
 
 export type TimelineItem =
@@ -30,35 +58,85 @@ interface UseMessageGroupingParams {
   currentUserId: string;
   conversationType: Conversation["type"];
   groupingThresholdMs?: number;
+  unreadMarker?: UnreadTimelineMarker | null;
 }
 
 const isGroupConversation = (conversationType: Conversation["type"]): boolean =>
   conversationType !== "private" && conversationType !== "direct";
 
-const canGroupMessages = (
+const resolveClusterBreakReason = (
   previousMessage: Message | undefined,
   nextMessage: Message | undefined,
   groupingThresholdMs: number,
-): boolean => {
-  if (!previousMessage || !nextMessage) return false;
-  if (previousMessage.type === "system" || nextMessage.type === "system")
-    return false;
-  if (previousMessage.senderId !== nextMessage.senderId) return false;
+): ClusterBreakReason | null => {
+  if (!previousMessage || !nextMessage) return "timeline_decorator";
+  if (previousMessage.type === "system" || nextMessage.type === "system") {
+    return "system";
+  }
+  if (previousMessage.senderId !== nextMessage.senderId) {
+    return "sender";
+  }
 
   const previousTime = new Date(previousMessage.createdAt);
   const nextTime = new Date(nextMessage.createdAt);
+  if (!isSameDay(previousTime, nextTime)) {
+    return "date";
+  }
+
   const diff = Math.abs(nextTime.getTime() - previousTime.getTime());
+  if (diff > groupingThresholdMs) {
+    return "time_gap";
+  }
 
-  if (!isSameDay(previousTime, nextTime)) return false;
+  const previousFamily = getMessageSemanticFamily(previousMessage);
+  const nextFamily = getMessageSemanticFamily(nextMessage);
+  if (previousFamily !== nextFamily) {
+    return "semantic_family";
+  }
 
-  return diff <= groupingThresholdMs;
+  if (
+    hasMessageLayoutDecorator(previousMessage) ||
+    hasMessageLayoutDecorator(nextMessage)
+  ) {
+    return "decorator";
+  }
+
+  if (
+    isFailedMessage(previousMessage) ||
+    isFailedMessage(nextMessage) ||
+    isPendingMessage(previousMessage) !== isPendingMessage(nextMessage)
+  ) {
+    return "status";
+  }
+
+  if (previousMessage.isEdited || nextMessage.isEdited) {
+    return "edited";
+  }
+
+  return null;
 };
 
-/**
- * Structural-sharing equality check for TimelineItem.
- * If the previous item is content-equal to the new one, we reuse the
- * previous reference so downstream React.memo comparisons can bail out.
- */
+const shouldInsertUnreadDivider = (
+  message: Message,
+  previousMessage: Message | undefined,
+  unreadMarker?: UnreadTimelineMarker | null,
+): boolean => {
+  if (!unreadMarker?.active) return false;
+
+  if (unreadMarker.lastReadMessageId) {
+    return previousMessage?.id === unreadMarker.lastReadMessageId;
+  }
+
+  if (!unreadMarker.lastReadAt) return false;
+  const lastReadTime = new Date(unreadMarker.lastReadAt).getTime();
+  const previousTime = previousMessage
+    ? new Date(previousMessage.createdAt).getTime()
+    : Number.NEGATIVE_INFINITY;
+  const currentTime = new Date(message.createdAt).getTime();
+
+  return previousTime <= lastReadTime && currentTime > lastReadTime;
+};
+
 const areTimelineItemsEqual = (a: TimelineItem, b: TimelineItem): boolean => {
   if (a === b) return true;
   if (a.kind !== b.kind || a.key !== b.key) return false;
@@ -83,7 +161,10 @@ const areTimelineItemsEqual = (a: TimelineItem, b: TimelineItem): boolean => {
       a.showSenderName === b.showSenderName &&
       a.isGroupStart === b.isGroupStart &&
       a.isGroupEnd === b.isGroupEnd &&
-      a.conversationType === b.conversationType
+      a.conversationType === b.conversationType &&
+      a.semanticFamily === b.semanticFamily &&
+      a.clusterBreakBefore === b.clusterBreakBefore &&
+      a.clusterBreakAfter === b.clusterBreakAfter
     );
   }
 
@@ -95,8 +176,8 @@ export const useMessageGrouping = ({
   currentUserId,
   conversationType,
   groupingThresholdMs = DEFAULT_GROUPING_THRESHOLD_MS,
+  unreadMarker,
 }: UseMessageGroupingParams): TimelineItem[] => {
-  const prevItemsRef = React.useRef<TimelineItem[]>([]);
   const prevKeyMapRef = React.useRef<Map<string, TimelineItem>>(new Map());
 
   return React.useMemo(() => {
@@ -108,6 +189,16 @@ export const useMessageGrouping = ({
 
       const previousMessage = messages[index - 1];
       const nextMessage = messages[index + 1];
+      const beforeBreak = resolveClusterBreakReason(
+        previousMessage,
+        message,
+        groupingThresholdMs,
+      );
+      const afterBreak = resolveClusterBreakReason(
+        message,
+        nextMessage,
+        groupingThresholdMs,
+      );
       const shouldInsertDateDivider =
         index === 0 ||
         !previousMessage ||
@@ -124,6 +215,13 @@ export const useMessageGrouping = ({
         });
       }
 
+      if (shouldInsertUnreadDivider(message, previousMessage, unreadMarker)) {
+        items.push({
+          kind: "unread",
+          key: `unread-${getTimelineMessageKey(message)}`,
+        });
+      }
+
       if (message.type === "system") {
         items.push({
           kind: "system",
@@ -133,19 +231,9 @@ export const useMessageGrouping = ({
         return;
       }
 
-      const groupedWithPrevious = canGroupMessages(
-        previousMessage,
-        message,
-        groupingThresholdMs,
-      );
-      const groupedWithNext = canGroupMessages(
-        message,
-        nextMessage,
-        groupingThresholdMs,
-      );
       const isOwn = message.senderId === currentUserId;
-      const isGroupStart = !groupedWithPrevious;
-      const isGroupEnd = !groupedWithNext;
+      const isGroupStart = beforeBreak !== null;
+      const isGroupEnd = afterBreak !== null;
 
       items.push({
         kind: "message",
@@ -157,30 +245,33 @@ export const useMessageGrouping = ({
         isGroupStart,
         isGroupEnd,
         conversationType,
+        semanticFamily: getMessageSemanticFamily(message),
+        clusterBreakBefore: beforeBreak ?? undefined,
+        clusterBreakAfter: afterBreak ?? undefined,
       });
     });
 
-    // Structural sharing: reuse previous TimelineItem references when content
-    // is unchanged. This prevents downstream React.memo components from
-    // re-rendering for items that haven't actually changed (critical for 10k+
-    // message lists where only the tail or a single item typically changes).
     const prevKeyMap = prevKeyMapRef.current;
     const nextKeyMap = new Map<string, TimelineItem>();
 
-    for (let i = 0; i < items.length; i++) {
+    for (let i = 0; i < items.length; i += 1) {
       const newItem = items[i];
       const prevItem = prevKeyMap.get(newItem.key);
       if (prevItem && areTimelineItemsEqual(prevItem, newItem)) {
-        items[i] = prevItem; // reuse the stable reference
+        items[i] = prevItem;
       }
       nextKeyMap.set(items[i].key, items[i]);
     }
 
-    prevItemsRef.current = items;
     prevKeyMapRef.current = nextKeyMap;
-
     return items;
-  }, [messages, currentUserId, conversationType, groupingThresholdMs]);
+  }, [
+    conversationType,
+    currentUserId,
+    groupingThresholdMs,
+    messages,
+    unreadMarker,
+  ]);
 };
 
 export default useMessageGrouping;

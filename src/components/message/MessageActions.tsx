@@ -1,72 +1,133 @@
-﻿import React from "react";
+import React from "react";
 import clsx from "clsx";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
+  ArrowPathIcon,
   ArrowUturnLeftIcon,
-  ArrowUturnRightIcon,
   ClipboardDocumentIcon,
-  TrashIcon,
+  EllipsisHorizontalIcon,
+  FaceSmileIcon,
   PencilIcon,
-  MapPinIcon,
+  TrashIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 
+type MessageActionsMode = "rail" | "sheet";
+
 interface MessageActionsProps {
+  mode: MessageActionsMode;
   isOwn: boolean;
-  isPinned?: boolean;
-  onReply: () => void;
-  onForward: () => void;
-  onCopy: () => void;
+  isOpen?: boolean;
+  onReact?: () => void;
+  onReply?: () => void;
+  onMore?: () => void;
+  onCopy?: () => void;
   onEdit?: () => void;
-  onDelete: () => void;
-  onPin?: () => void;
-  isVisible?: boolean;
+  onDelete?: () => void;
+  onRetry?: () => void;
   onClose?: () => void;
   className?: string;
 }
 
+interface ActionDescriptor {
+  id: string;
+  label: string;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  onClick?: () => void;
+  danger?: boolean;
+}
+
+const baseButtonClass =
+  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors";
+
 export const MessageActions: React.FC<MessageActionsProps> = ({
+  mode,
   isOwn,
-  isPinned = false,
+  isOpen = false,
+  onReact,
   onReply,
-  onForward,
+  onMore,
   onCopy,
   onEdit,
   onDelete,
-  onPin,
-  isVisible = true,
+  onRetry,
   onClose,
   className,
 }) => {
   const { t } = useTranslation();
 
-  const actions = [
+  if (mode === "rail") {
+    return (
+      <div
+        className={clsx(
+          "flex items-center gap-1 rounded-full border border-border bg-surface/96 p-1 shadow-elev1 backdrop-blur-sm",
+          className,
+        )}
+      >
+        {onReact && (
+          <button
+            type="button"
+            onClick={onReact}
+            className="rounded-full p-2 text-text-secondary transition-colors hover:bg-surface-overlay hover:text-text-primary"
+            aria-label={t("chat:message.actions.react", {
+              defaultValue: "React",
+            })}
+            title={t("chat:message.actions.react", { defaultValue: "React" })}
+          >
+            <FaceSmileIcon className="h-4 w-4" />
+          </button>
+        )}
+        {onReply && (
+          <button
+            type="button"
+            onClick={onReply}
+            className="rounded-full p-2 text-text-secondary transition-colors hover:bg-surface-overlay hover:text-text-primary"
+            aria-label={t("chat:message.actions.reply")}
+            title={t("chat:message.actions.reply")}
+          >
+            <ArrowUturnLeftIcon className="h-4 w-4" />
+          </button>
+        )}
+        {onMore && (
+          <button
+            type="button"
+            onClick={onMore}
+            className="rounded-full p-2 text-text-secondary transition-colors hover:bg-surface-overlay hover:text-text-primary"
+            aria-label={t("chat:header.moreActions")}
+            title={t("chat:header.moreActions")}
+          >
+            <EllipsisHorizontalIcon className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (!isOpen || typeof document === "undefined") {
+    return null;
+  }
+
+  const actions: ActionDescriptor[] = [
+    {
+      id: "react",
+      label: t("chat:message.actions.react", { defaultValue: "React" }),
+      icon: FaceSmileIcon,
+      onClick: onReact,
+    },
     {
       id: "reply",
-      icon: ArrowUturnLeftIcon,
       label: t("chat:message.actions.reply"),
+      icon: ArrowUturnLeftIcon,
       onClick: onReply,
     },
-    {
-      id: "forward",
-      icon: ArrowUturnRightIcon,
-      label: t("chat:message.actions.forward"),
-      onClick: onForward,
-    },
-    {
-      id: "copy",
-      icon: ClipboardDocumentIcon,
-      label: t("chat:message.actions.copy"),
-      onClick: onCopy,
-    },
-    ...(onPin
+    ...(onCopy
       ? [
           {
-            id: "pin",
-            icon: MapPinIcon,
-            label: isPinned
-              ? t("chat:message.actions.unpin")
-              : t("chat:message.actions.pin"),
-            onClick: onPin,
+            id: "copy",
+            label: t("chat:message.actions.copy"),
+            icon: ClipboardDocumentIcon,
+            onClick: onCopy,
           },
         ]
       : []),
@@ -74,53 +135,89 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
       ? [
           {
             id: "edit",
-            icon: PencilIcon,
             label: t("chat:message.actions.edit"),
+            icon: PencilIcon,
             onClick: onEdit,
           },
         ]
       : []),
-    {
-      id: "delete",
-      icon: TrashIcon,
-      label: t("chat:message.actions.delete"),
-      onClick: onDelete,
-      danger: true,
-    },
+    ...(onRetry
+      ? [
+          {
+            id: "retry",
+            label: t("chat:message.status.retry", { defaultValue: "Retry" }),
+            icon: ArrowPathIcon,
+            onClick: onRetry,
+          },
+        ]
+      : []),
+    ...(onDelete
+      ? [
+          {
+            id: "delete",
+            label: t("chat:message.actions.delete"),
+            icon: TrashIcon,
+            onClick: onDelete,
+            danger: true,
+          },
+        ]
+      : []),
   ];
 
-  return (
-    <div
-      className={clsx(
-        "flex items-center gap-0.5 rounded-lg border border-border bg-surface/95 p-0.5 shadow-elev2 backdrop-blur-sm",
-        "animate-toolbar-in will-change-transform",
-        className,
-      )}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          onClose?.();
-        }
-      }}
-    >
-      {actions.map((action) => (
-        <button
-          key={action.id}
-          onClick={action.onClick}
-          className={clsx(
-            "rounded-md p-1.5 transition-micro",
-            action.danger
-              ? "text-danger/80 hover:bg-danger/10 hover:text-danger active:scale-95"
-              : "text-text-secondary hover:bg-surface-overlay hover:text-text-primary active:scale-95",
-          )}
-          aria-label={action.label}
-          title={action.label}
-          tabIndex={isVisible ? 0 : -1}
-        >
-          <action.icon className="h-4 w-4" />
-        </button>
-      ))}
-    </div>
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-text-primary/30 p-3 md:items-center">
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+        aria-label={t("common:actions.close")}
+      />
+      <div
+        className={clsx(
+          "relative w-full max-w-sm rounded-[1.25rem] border border-border bg-surface p-3 shadow-elev3",
+          "animate-slide-up-fade",
+          className,
+        )}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("chat:header.moreActions")}
+      >
+        <div className="mb-2 flex items-center justify-between px-1">
+          <h3 className="text-sm font-semibold text-text-primary">
+            {t("chat:header.moreActions")}
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 text-text-secondary transition-colors hover:bg-surface-overlay hover:text-text-primary"
+            aria-label={t("common:actions.close")}
+          >
+            <XMarkIcon className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-1">
+          {actions.map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              onClick={action.onClick}
+              className={clsx(
+                baseButtonClass,
+                "w-full text-left",
+                action.danger
+                  ? "text-danger hover:bg-danger/8"
+                  : "text-text-secondary hover:bg-surface-overlay hover:text-text-primary",
+              )}
+            >
+              <action.icon className="h-5 w-5 shrink-0" />
+              <span>{action.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 };
 

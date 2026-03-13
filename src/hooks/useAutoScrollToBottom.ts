@@ -1,5 +1,6 @@
 import React from "react";
 import type { Message } from "../types";
+import { getMessageStableKey } from "../utils/messageTimeline";
 
 const LOAD_MORE_TRIGGER_PX = 120;
 const NEAR_BOTTOM_PX = 180;
@@ -33,9 +34,6 @@ type ScrollMetrics = {
   velocityPxPerMs: number;
   lastInteractionAt: number;
 };
-
-const getMessageStableKey = (message: Message): string =>
-  message.stableId || message.clientMessageId || message.localId || message.id;
 
 const dedupeMessagesByStableKey = (messages: Message[]): Message[] => {
   const seen = new Set<string>();

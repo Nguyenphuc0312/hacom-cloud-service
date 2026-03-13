@@ -190,7 +190,13 @@ export const ChatPage: React.FC = () => {
   );
 
   // WebSocket
-  const { isConnected, sendTyping, stopTyping, joinRoom, leaveRoom } =
+  const {
+    connectionState,
+    sendTyping,
+    stopTyping,
+    joinRoom,
+    leaveRoom,
+  } =
     useWebSocket();
 
   // Local state
@@ -379,6 +385,7 @@ export const ChatPage: React.FC = () => {
           type,
           fileMeta,
           replyTo?.id,
+          replyTo,
         );
       } catch (error) {
         const apiError = extractApiError(error);
@@ -904,17 +911,6 @@ export const ChatPage: React.FC = () => {
 
   return (
     <div className="relative flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-surface">
-      {/* Connection status indicator */}
-      {!isConnected && (
-        <div
-          className="absolute inset-x-0 top-0 z-50 bg-warning/95 px-4 py-1.5 text-center text-xs font-medium text-text-inverse backdrop-blur sm:text-sm animate-slide-up-fade"
-          role="alert"
-          aria-live="assertive"
-        >
-          {t("chat:toast.connectionReconnecting")}
-        </div>
-      )}
-
       {/* Sidebar */}
       <div
         className={clsx(
@@ -993,6 +989,7 @@ export const ChatPage: React.FC = () => {
             }}
             messageError={currentMessageError}
             onRetryMessages={handleRetryMessages}
+            connectionState={connectionState}
           />
         ) : (
           <NoChatSelected onNewChat={handleOpenNewChat} />

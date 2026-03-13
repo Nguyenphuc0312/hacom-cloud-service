@@ -47,6 +47,11 @@
   /* Chat bubble density (overridden by SettingsApplier) */
   --chat-bubble-px: 0.75rem;
   --chat-bubble-py: 0.5rem;
+  --chat-lane-padding: clamp(12px, 2vw, 24px);
+  --chat-content-lane: 44rem;
+  --chat-rich-lane: 48rem;
+  --chat-bubble-max: min(34rem, 78vw);
+  --chat-bubble-max-compact: min(30rem, 76vw);
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -280,6 +285,16 @@ body {
     sans-serif;
   background-color: hsl(var(--color-background));
   color: hsl(var(--color-text-primary));
+}
+
+@media (max-width: 768px) {
+  :root {
+    --chat-lane-padding: 12px;
+    --chat-content-lane: min(100%, 44rem);
+    --chat-rich-lane: min(100%, 48rem);
+    --chat-bubble-max: min(32rem, calc(100vw - 88px));
+    --chat-bubble-max-compact: min(28rem, calc(100vw - 80px));
+  }
 }
 
 html.theme-ready,

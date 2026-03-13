@@ -22,10 +22,15 @@
       "uploading": "Uploading",
       "sending": "Sending",
       "sent": "Sent",
+      "delivered": "Delivered",
+      "read": "Read",
       "retry": "Retry",
-      "failedRetry": "Failed to send. Click to retry"
+      "failedRetry": "Failed to send. Click to retry",
+      "failedInline": "Failed to send",
+      "pendingInline": "Syncing"
     },
     "actions": {
+      "react": "React",
       "reply": "Reply",
       "forward": "Forward",
       "copy": "Copy",

@@ -38,7 +38,7 @@ const HighlightedText: React.FC<{ text: string; query: string }> = ({
   return (
     <>
       {parts.map((part, i) =>
-        regex.test(part) ? (
+        i % 2 === 1 ? (
           <mark
             key={i}
             className="rounded bg-warning/30 px-0.5 text-text-primary"

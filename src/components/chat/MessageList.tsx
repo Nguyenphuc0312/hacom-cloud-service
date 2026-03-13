@@ -13,6 +13,7 @@ import { useAutoScrollToBottom } from "../../hooks/useAutoScrollToBottom";
 import {
   useMessageGrouping,
   type TimelineItem,
+  type UnreadTimelineMarker,
 } from "../../hooks/useMessageGrouping";
 import { useVirtualizedMessages } from "../../hooks/useVirtualizedMessages";
 import type { Conversation, Message, Attachment } from "../../types";
@@ -40,6 +41,14 @@ interface MessageListProps {
   selectedMessageIds?: Set<string>;
   onToggleSelect?: (messageId: string) => void;
   currentUsername?: string;
+  unreadMarker?: UnreadTimelineMarker | null;
+  jumpToMessageId?: string | null;
+  jumpRequestVersion?: number;
+  onJumpHandled?: (messageId: string) => void;
+  notice?: {
+    kind: "info" | "warn" | "error";
+    message: string;
+  } | null;
   className?: string;
 }
 
@@ -58,36 +67,36 @@ interface TimelineRowData {
   selectedMessageIds: Set<string>;
   onToggleSelect?: (messageId: string) => void;
   currentUsername?: string;
+  highlightedMessageId: string | null;
 }
 
 const estimateTimelineItemHeight = (item: TimelineItem): number => {
-  // Estimates include child margins (captured by flow-root on the row wrapper)
-  if (item.kind === "date") return 64; // DateDivider: my-4 (32px) + pill ~32px
-  if (item.kind === "system") return 60; // SystemMessage: my-4 (32px) + pill ~28px
-  if (item.kind === "unread") return 40;
+  if (item.kind === "date") return 64;
+  if (item.kind === "system") return 68;
+  if (item.kind === "unread") return 48;
 
   const message = item.message;
-  const marginBottom = item.isGroupEnd ? 8 : 2; // mb-2 / mb-0.5
-  let baseHeight = (item.isGroupEnd ? 56 : 44) + marginBottom;
+  let baseHeight = item.isGroupEnd ? 76 : 62;
 
-  if (message.replyToMessage) baseHeight += 34;
-  if (message.forwardedFrom) baseHeight += 20;
-  if ((message.reactions?.length ?? 0) > 0) baseHeight += 28;
-  if (!item.isOwn && item.showSenderName) baseHeight += 18;
+  if (message.replyToMessage) baseHeight += 52;
+  if (message.forwardedFrom) baseHeight += 22;
+  if ((message.reactions?.length ?? 0) > 0) baseHeight += 32;
+  if (!item.isOwn && item.showSenderName) baseHeight += 20;
+  if (message.status === "failed") baseHeight += 18;
 
   switch (message.type) {
     case "image":
-      baseHeight += 220;
+      baseHeight += 240;
       break;
     case "file":
-      baseHeight += 84;
+      baseHeight += 96;
       break;
     case "voice":
-      baseHeight += 74;
+      baseHeight += 82;
       break;
     default: {
       const textLength = message.content?.length ?? 0;
-      const approximateLines = Math.max(1, Math.ceil(textLength / 36));
+      const approximateLines = Math.max(1, Math.ceil(textLength / 34));
       baseHeight += approximateLines * 18;
       break;
     }
@@ -96,41 +105,82 @@ const estimateTimelineItemHeight = (item: TimelineItem): number => {
   return baseHeight;
 };
 
+const isTargetMessage = (message: Message, targetId: string | null): boolean => {
+  if (!targetId) return false;
+  return (
+    message.id === targetId ||
+    message.localId === targetId ||
+    message.stableId === targetId ||
+    message.clientMessageId === targetId
+  );
+};
+
 const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
   React.memo(({ index, style, data }) => {
     const item = data.items[index];
     const rowRef = React.useRef<HTMLDivElement>(null);
-    const { setItemSize, measureVersion } = data;
+    const { setItemSize } = data;
 
     React.useLayoutEffect(() => {
-      if (!rowRef.current) return;
-      const nextSize = Math.ceil(rowRef.current.getBoundingClientRect().height);
-      setItemSize(index, nextSize);
-    }, [setItemSize, measureVersion, index, item]);
+      const node = rowRef.current;
+      if (!node) return;
+
+      const measure = () => {
+        const nextSize = Math.ceil(node.getBoundingClientRect().height);
+        setItemSize(index, nextSize);
+      };
+
+      measure();
+
+      if (typeof ResizeObserver === "undefined") {
+        const rafId = requestAnimationFrame(measure);
+        return () => cancelAnimationFrame(rafId);
+      }
+
+      const resizeObserver = new ResizeObserver(measure);
+      resizeObserver.observe(node);
+      return () => resizeObserver.disconnect();
+    }, [index, item, setItemSize]);
 
     if (!item) return null;
 
     const messageId = item.kind === "message" ? item.message.id : undefined;
+    const isHighlighted =
+      item.kind === "message" &&
+      isTargetMessage(item.message, data.highlightedMessageId);
 
     return (
       <div style={style}>
-        <div ref={rowRef} className="flow-root">
-          <MessageItem
-            item={item}
-            onReply={data.onReply}
-            onReact={data.onReact}
-            onEdit={data.onEdit}
-            onDelete={data.onDelete}
-            onImageClick={data.onImageClick}
-            onFilePreview={data.onFilePreview}
-            density={data.density}
-            isSelectionMode={data.isSelectionMode}
-            isSelected={
-              messageId ? data.selectedMessageIds.has(messageId) : false
-            }
-            onToggleSelect={data.onToggleSelect}
-            currentUsername={data.currentUsername}
-          />
+        <div
+          ref={rowRef}
+          className="flow-root px-[var(--chat-lane-padding)]"
+          data-message-id={messageId}
+        >
+          <div className="mx-auto max-w-[var(--chat-content-lane)]">
+            <div
+              className={clsx(
+                isHighlighted &&
+                  "rounded-2xl bg-warning/14 ring-2 ring-warning/35 transition-colors duration-300",
+              )}
+            >
+              <MessageItem
+                item={item}
+                onReply={data.onReply}
+                onReact={data.onReact}
+                onEdit={data.onEdit}
+                onDelete={data.onDelete}
+                onImageClick={data.onImageClick}
+                onFilePreview={data.onFilePreview}
+                density={data.density}
+                isSelectionMode={data.isSelectionMode}
+                isSelected={
+                  messageId ? data.selectedMessageIds.has(messageId) : false
+                }
+                onToggleSelect={data.onToggleSelect}
+                currentUsername={data.currentUsername}
+              />
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -143,11 +193,16 @@ const toDayKey = (date: Date | null): string => {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 };
 
-const isMessageDebugEnabled = (): boolean => {
-  if (typeof window === "undefined") return false;
-  return (
-    new URLSearchParams(window.location.search).get("debugMessages") === "1"
-  );
+const getNoticeClassName = (kind: "info" | "warn" | "error"): string => {
+  switch (kind) {
+    case "warn":
+      return "border-warning/30 bg-warning/12 text-warning";
+    case "error":
+      return "border-danger/30 bg-danger/10 text-danger";
+    case "info":
+    default:
+      return "border-primary/20 bg-surface/95 text-text-secondary";
+  }
 };
 
 const MessageListComponent: React.FC<MessageListProps> = ({
@@ -171,6 +226,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   selectedMessageIds = new Set<string>(),
   onToggleSelect,
   currentUsername,
+  unreadMarker,
+  jumpToMessageId,
+  jumpRequestVersion = 0,
+  onJumpHandled,
+  notice,
   className,
 }) => {
   const { t } = useTranslation();
@@ -178,8 +238,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const listRef = React.useRef<VirtualList<TimelineRowData> | null>(null);
   const outerRef = React.useRef<HTMLDivElement | null>(null);
   const stickyDateRafRef = React.useRef<number | null>(null);
+  const highlightTimerRef = React.useRef<number | null>(null);
   const [stickyDate, setStickyDate] = React.useState<Date | null>(null);
-
+  const [highlightedMessageId, setHighlightedMessageId] = React.useState<
+    string | null
+  >(null);
   const [timelineMessageCount, setTimelineMessageCount] = React.useState(
     messages.length,
   );
@@ -189,8 +252,6 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       if (timelineMessageCount === 0) return;
 
       if (behavior === "auto") {
-        // For instant scrolls, use react-window's scrollToItem for reliability
-        // because outerRef.scrollHeight may be based on estimated sizes
         listRef.current?.scrollToItem(timelineMessageCount - 1, "end");
       } else {
         const outer = outerRef.current;
@@ -201,7 +262,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         }
       }
     },
-    [timelineMessageCount, listRef, outerRef],
+    [timelineMessageCount],
   );
 
   const {
@@ -226,6 +287,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     messages: displayMessages,
     currentUserId,
     conversationType: conversation.type,
+    unreadMarker,
   });
 
   const {
@@ -238,6 +300,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     items: timelineItems,
     viewportRef,
     estimateItemSize: estimateTimelineItemHeight,
+    getItemKey: (item, index) =>
+      item.key || `${item.kind}-${index}`,
     listRef,
     outerRef,
   });
@@ -248,7 +312,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
   React.useEffect(() => {
     clearMeasuredSizes();
-  }, [conversation.id, clearMeasuredSizes]);
+  }, [clearMeasuredSizes, conversation.id]);
 
   const rowData = React.useMemo<TimelineRowData>(
     () => ({
@@ -266,22 +330,24 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       selectedMessageIds,
       onToggleSelect,
       currentUsername,
+      highlightedMessageId,
     }),
     [
-      timelineItems,
-      onReply,
-      onReact,
-      onEdit,
-      onDelete,
-      onImageClick,
-      onFilePreview,
-      setItemSize,
-      measureVersion,
-      density,
-      isSelectionMode,
-      selectedMessageIds,
-      onToggleSelect,
       currentUsername,
+      density,
+      highlightedMessageId,
+      isSelectionMode,
+      measureVersion,
+      onDelete,
+      onEdit,
+      onFilePreview,
+      onImageClick,
+      onReact,
+      onReply,
+      onToggleSelect,
+      selectedMessageIds,
+      setItemSize,
+      timelineItems,
     ],
   );
 
@@ -321,12 +387,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
           }
         }
 
-        setStickyDate((previous) => {
-          if (toDayKey(previous) === toDayKey(nextStickyDate)) {
-            return previous;
-          }
-          return nextStickyDate;
-        });
+        setStickyDate((previous) =>
+          toDayKey(previous) === toDayKey(nextStickyDate)
+            ? previous
+            : nextStickyDate,
+        );
         stickyDateRafRef.current = null;
       });
     },
@@ -366,20 +431,35 @@ const MessageListComponent: React.FC<MessageListProps> = ({
             behavior: "smooth",
           });
           break;
-        case "ArrowDown":
-          event.preventDefault();
-          outer.scrollBy({ top: 72, behavior: "smooth" });
-          break;
-        case "ArrowUp":
-          event.preventDefault();
-          outer.scrollBy({ top: -72, behavior: "smooth" });
-          break;
         default:
           break;
       }
     },
-    [jumpToLatest, outerRef],
+    [jumpToLatest],
   );
+
+  React.useEffect(() => {
+    if (!jumpToMessageId) return;
+    const targetIndex = timelineItems.findIndex(
+      (item) =>
+        item.kind === "message" &&
+        isTargetMessage(item.message, jumpToMessageId),
+    );
+    if (targetIndex < 0) return;
+
+    listRef.current?.scrollToItem(targetIndex, "center");
+    setHighlightedMessageId(jumpToMessageId);
+    onJumpHandled?.(jumpToMessageId);
+
+    if (highlightTimerRef.current !== null) {
+      window.clearTimeout(highlightTimerRef.current);
+    }
+    highlightTimerRef.current = window.setTimeout(() => {
+      setHighlightedMessageId((current) =>
+        current === jumpToMessageId ? null : current,
+      );
+    }, 1800);
+  }, [jumpRequestVersion, jumpToMessageId, onJumpHandled, timelineItems]);
 
   React.useEffect(() => {
     if (timelineItems.length === 0) {
@@ -414,36 +494,31 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     }
 
     setStickyDate(null);
-  }, [conversation.id, getItemSize, outerRef, timelineItems]);
+  }, [conversation.id, getItemSize, timelineItems]);
 
-  React.useEffect(() => {
-    if (!isMessageDebugEnabled()) return;
-    if (messages.length === 0) return;
-    if (viewportHeight > 0) return;
-
-    // eslint-disable-next-line no-debugger
-    debugger;
-  }, [messages.length, viewportHeight]);
-
-  React.useEffect(() => {
-    return () => {
+  React.useEffect(
+    () => () => {
       if (stickyDateRafRef.current !== null) {
         cancelAnimationFrame(stickyDateRafRef.current);
       }
-    };
-  }, []);
+      if (highlightTimerRef.current !== null) {
+        window.clearTimeout(highlightTimerRef.current);
+      }
+    },
+    [],
+  );
 
   return (
     <section className={clsx("relative h-full min-h-0 flex-1", className)}>
       {isInitialLoading && (
-        <div className="chat-background h-full min-h-0 overflow-y-auto px-4 py-4">
+        <div className="chat-background h-full min-h-0 overflow-y-auto px-[var(--chat-lane-padding)] py-4">
           <MessageListSkeleton />
         </div>
       )}
 
       {!isInitialLoading && (
         <div
-          className="chat-background h-full min-h-0 overflow-hidden px-4 py-4"
+          className="chat-background h-full min-h-0 overflow-hidden py-4"
           role="log"
           aria-live="polite"
           aria-relevant="additions text"
@@ -451,6 +526,19 @@ const MessageListComponent: React.FC<MessageListProps> = ({
           aria-busy={isLoadingMore}
           aria-label={t("chat:message.inConversationAria")}
         >
+          {notice && (
+            <div className="pointer-events-none absolute inset-x-[var(--chat-lane-padding)] top-2 z-[6] flex justify-center">
+              <div
+                className={clsx(
+                  "pointer-events-auto rounded-full border px-3 py-1 text-xs font-medium shadow-xs backdrop-blur",
+                  getNoticeClassName(notice.kind),
+                )}
+              >
+                {notice.message}
+              </div>
+            </div>
+          )}
+
           {error && messages.length === 0 ? (
             <ErrorState
               message={error}
@@ -477,8 +565,9 @@ const MessageListComponent: React.FC<MessageListProps> = ({
                   itemCount={timelineItems.length}
                   itemSize={getItemSize}
                   itemData={rowData}
+                  itemKey={(index, data) => data.items[index]?.key ?? index}
                   onScroll={handleListScroll}
-                  overscanCount={6}
+                  overscanCount={8}
                 >
                   {TimelineRow}
                 </VirtualList>
@@ -497,11 +586,9 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       )}
 
       {error && messages.length > 0 && (
-        <div className="pointer-events-none absolute inset-x-4 top-2 z-sticky flex justify-center">
-          <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-border bg-surface/95 px-3 py-1 shadow-xs backdrop-blur">
-            <span className="truncate text-xs text-text-secondary">
-              {error}
-            </span>
+        <div className="pointer-events-none absolute inset-x-[var(--chat-lane-padding)] top-2 z-sticky flex justify-center">
+          <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-danger/25 bg-surface/95 px-3 py-1 shadow-xs backdrop-blur">
+            <span className="truncate text-xs text-danger">{error}</span>
             {onRetry && (
               <button
                 type="button"
@@ -585,6 +672,11 @@ const areEqualMessageListProps = (
   previousProps.selectedMessageIds === nextProps.selectedMessageIds &&
   previousProps.onToggleSelect === nextProps.onToggleSelect &&
   previousProps.currentUsername === nextProps.currentUsername &&
+  previousProps.unreadMarker === nextProps.unreadMarker &&
+  previousProps.jumpToMessageId === nextProps.jumpToMessageId &&
+  previousProps.jumpRequestVersion === nextProps.jumpRequestVersion &&
+  previousProps.onJumpHandled === nextProps.onJumpHandled &&
+  previousProps.notice === nextProps.notice &&
   previousProps.className === nextProps.className;
 
 export const MessageList = React.memo(

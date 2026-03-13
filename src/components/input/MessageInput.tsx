@@ -186,10 +186,13 @@ export const MessageInput = React.forwardRef<
   ref,
 ) {
   const { t } = useTranslation();
+  const [isDesktopLayout, setIsDesktopLayout] = React.useState(() =>
+    isDesktopViewport(),
+  );
   const { textareaRef } = useAutoResizeTextarea({
     value,
     minRows: 1,
-    maxRows: 6,
+    maxRows: isDesktopLayout ? 6 : 4,
   });
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -540,6 +543,19 @@ export const MessageInput = React.forwardRef<
   );
 
   React.useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(min-width: 769px) and (pointer: fine)");
+    const handleChange = () => setIsDesktopLayout(mediaQuery.matches);
+
+    handleChange();
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
+
+  React.useEffect(() => {
     if ((mode === "reply" || mode === "edit") && textareaRef.current) {
       textareaRef.current.focus();
     }
@@ -622,7 +638,7 @@ export const MessageInput = React.forwardRef<
       />
 
       {mode === "reply" && replyToMessage && (
-        <div className="flex items-center justify-between border-b border-border bg-surface-overlay px-4 py-2">
+        <div className="flex items-center justify-between border-b border-border bg-surface-overlay px-4 py-1.5">
           <div className="flex min-w-0 items-center gap-2">
             <div className="h-8 w-1 rounded-full bg-primary" />
             <div className="min-w-0">
@@ -651,7 +667,7 @@ export const MessageInput = React.forwardRef<
       )}
 
       {mode === "edit" && editingMessage && (
-        <div className="flex items-center justify-between border-b border-warning/35 bg-warning/15 px-4 py-2">
+        <div className="flex items-center justify-between border-b border-warning/35 bg-warning/15 px-4 py-1.5">
           <div className="flex min-w-0 items-center gap-2">
             <div className="h-8 w-1 rounded-full bg-warning" />
             <div className="min-w-0">
@@ -711,7 +727,7 @@ export const MessageInput = React.forwardRef<
         />
       )}
 
-      <div className="flex items-center gap-2 px-3 py-2 pb-[max(env(safe-area-inset-bottom),8px)] sm:px-4">
+      <div className="flex items-end gap-2 px-3 py-2 pb-[max(env(safe-area-inset-bottom),8px)] sm:px-4">
         <EmojiButton
           value={value}
           onChange={onChange}
@@ -725,7 +741,7 @@ export const MessageInput = React.forwardRef<
             type="button"
             onClick={() => setShowAttachmentMenu((previous) => !previous)}
             className={clsx(
-              "inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors",
+              "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors sm:h-11 sm:w-11",
               showAttachmentMenu
                 ? "bg-primary text-text-inverse"
                 : "text-text-muted hover:bg-surface-overlay hover:text-text-primary",
@@ -753,7 +769,7 @@ export const MessageInput = React.forwardRef<
           type="button"
           onClick={handleInsertMentionTrigger}
           className={clsx(
-            "hidden h-11 w-11 items-center justify-center rounded-full transition-colors md:inline-flex",
+            "hidden h-10 w-10 items-center justify-center rounded-full transition-colors md:inline-flex sm:h-11 sm:w-11",
             "text-text-muted hover:bg-surface-overlay hover:text-text-primary",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             disableToolbar && "cursor-not-allowed opacity-50",
@@ -843,7 +859,7 @@ export const MessageInput = React.forwardRef<
                 : undefined
             }
             className={clsx(
-              "w-full min-h-11 resize-none rounded-2xl border border-border bg-surface px-4 py-2",
+              "w-full min-h-10 resize-none rounded-2xl border border-border bg-surface px-4 py-2",
               "text-sm text-text-primary placeholder:text-text-muted",
               "transition-colors focus:border-border-focus focus:outline-none focus:ring-2 focus:ring-focus/20",
               disabled && "cursor-not-allowed bg-surface-overlay opacity-70",

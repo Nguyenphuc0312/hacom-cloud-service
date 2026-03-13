@@ -11,9 +11,37 @@ export const SystemMessage: React.FC<SystemMessageProps> = ({
   message,
   className,
 }) => {
+  const metadata =
+    message.metadata && typeof message.metadata === "object"
+      ? (message.metadata as Record<string, unknown>)
+      : null;
+  const severityRaw =
+    typeof metadata?.severity === "string"
+      ? metadata.severity
+      : typeof metadata?.level === "string"
+        ? metadata.level
+        : typeof metadata?.variant === "string"
+          ? metadata.variant
+          : "info";
+  const severity =
+    severityRaw === "warn" || severityRaw === "warning"
+      ? "warn"
+      : severityRaw === "error"
+        ? "error"
+        : "info";
+
   return (
     <div className={clsx("my-4 flex justify-center", className)}>
-      <span className="rounded-full bg-surface-overlay px-4 py-1.5 text-xs text-text-secondary">
+      <span
+        className={clsx(
+          "rounded-full border px-4 py-1.5 text-xs",
+          severity === "error"
+            ? "border-danger/25 bg-danger/10 text-danger"
+            : severity === "warn"
+              ? "border-warning/25 bg-warning/12 text-warning"
+              : "border-border bg-surface-overlay text-text-secondary",
+        )}
+      >
         {message.content}
       </span>
     </div>
