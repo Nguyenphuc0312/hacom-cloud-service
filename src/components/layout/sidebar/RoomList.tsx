@@ -20,6 +20,7 @@ import {
   normalizeRoomType,
 } from "../../../lib/conversationAdapter";
 import { rankConversations } from "../../../utils/conversationRanking";
+import { ConversationListSkeleton, ErrorState } from "../../ui";
 import { RoomItem } from "./RoomItem";
 
 interface RoomListProps {
@@ -29,6 +30,9 @@ interface RoomListProps {
   searchQuery: string;
   activeFilter: ConversationFilter;
   collapsed: boolean;
+  showLoadingSkeleton?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
   onSelect: (conversationId: string) => void;
 }
 
@@ -81,7 +85,9 @@ const includesQuery = (
 ): boolean => {
   if (!normalizedQuery) return true;
 
-  if ((conversation.displayName || "").toLowerCase().includes(normalizedQuery)) {
+  if (
+    (conversation.displayName || "").toLowerCase().includes(normalizedQuery)
+  ) {
     return true;
   }
 
@@ -90,8 +96,12 @@ const includesQuery = (
   }
 
   if (
-    (conversation.otherUser?.displayName || "").toLowerCase().includes(normalizedQuery) ||
-    (conversation.otherUser?.username || "").toLowerCase().includes(normalizedQuery)
+    (conversation.otherUser?.displayName || "")
+      .toLowerCase()
+      .includes(normalizedQuery) ||
+    (conversation.otherUser?.username || "")
+      .toLowerCase()
+      .includes(normalizedQuery)
   ) {
     return true;
   }
@@ -201,6 +211,9 @@ export const RoomList: React.FC<RoomListProps> = ({
   searchQuery,
   activeFilter,
   collapsed,
+  showLoadingSkeleton = false,
+  error = null,
+  onRetry,
   onSelect,
 }) => {
   const { t } = useTranslation();
@@ -221,6 +234,8 @@ export const RoomList: React.FC<RoomListProps> = ({
   );
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
+  const hasAnyConversations =
+    Array.isArray(conversations) && conversations.length > 0;
 
   const sortedRooms = useMemo(
     () =>
@@ -448,6 +463,26 @@ export const RoomList: React.FC<RoomListProps> = ({
       selectByCursor();
     }
   };
+
+  if (showLoadingSkeleton) {
+    return (
+      <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+        <ConversationListSkeleton count={collapsed ? 5 : 7} />
+      </div>
+    );
+  }
+
+  if (error && !hasAnyConversations && normalizedQuery.length === 0) {
+    return (
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-4">
+        <ErrorState
+          title={t("error:chat.fetchConversationsFailed")}
+          message={error}
+          onRetry={onRetry}
+        />
+      </div>
+    );
+  }
 
   if (flatItems.length === 0) {
     return (

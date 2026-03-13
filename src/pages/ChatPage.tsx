@@ -128,6 +128,9 @@ export const ChatPage: React.FC = () => {
     updateStoreMessage,
     removeStoreMessage,
     conversations,
+    isLoadingConversations,
+    hasFetchedConversationsOnce,
+    conversationsError,
     fetchConversations,
     fetchMessages,
     storeSendMessage,
@@ -142,6 +145,9 @@ export const ChatPage: React.FC = () => {
       updateStoreMessage: state.updateMessage,
       removeStoreMessage: state.removeMessage,
       conversations: state.conversations,
+      isLoadingConversations: state.isLoadingConversations,
+      hasFetchedConversationsOnce: state.hasFetchedConversationsOnce,
+      conversationsError: state.conversationsError,
       fetchConversations: state.fetchConversations,
       fetchMessages: state.fetchMessages,
       storeSendMessage: state.sendMessage,
@@ -178,13 +184,7 @@ export const ChatPage: React.FC = () => {
   );
 
   // WebSocket
-  const {
-    connectionState,
-    sendTyping,
-    stopTyping,
-    joinRoom,
-    leaveRoom,
-  } =
+  const { connectionState, sendTyping, stopTyping, joinRoom, leaveRoom } =
     useWebSocket();
 
   // Local state
@@ -653,13 +653,10 @@ export const ChatPage: React.FC = () => {
     setProfilePanelTarget(null);
   }, []);
 
-  const openUserProfile = useCallback(
-    (target: ProfilePanelTarget) => {
-      setProfilePanelTarget(target);
-      setIsInfoPanelOpen(true);
-    },
-    [],
-  );
+  const openUserProfile = useCallback((target: ProfilePanelTarget) => {
+    setProfilePanelTarget(target);
+    setIsInfoPanelOpen(true);
+  }, []);
 
   // Handle toggle info panel
   const handleToggleInfoPanel = useCallback(() => {
@@ -841,7 +838,9 @@ export const ChatPage: React.FC = () => {
         const conversationPayloadRecord = conversationPayload as unknown as {
           invitedMemberIds?: unknown[];
         };
-        const invited = Array.isArray(conversationPayloadRecord.invitedMemberIds)
+        const invited = Array.isArray(
+          conversationPayloadRecord.invitedMemberIds,
+        )
           ? conversationPayloadRecord.invitedMemberIds.length
           : 0;
         if (invited > 0) {
@@ -865,6 +864,9 @@ export const ChatPage: React.FC = () => {
   }, []);
 
   const showSidebarOnMobile = !selectedConversationId || isMobileMenuOpen;
+  const showConversationSkeleton =
+    (!hasFetchedConversationsOnce && conversations.length === 0) ||
+    (isLoadingConversations && conversations.length === 0);
 
   useEffect(() => {
     if (!selectedConversationId || !isSelectedDirectConversation || otherUser) {
@@ -946,7 +948,11 @@ export const ChatPage: React.FC = () => {
           conversations={conversations}
           currentUser={currentUserSummary}
           selectedId={selectedConversationId}
+          isLoadingConversations={isLoadingConversations}
+          showConversationSkeleton={showConversationSkeleton}
+          conversationsError={conversationsError}
           onSelectConversation={handleSelectConversation}
+          onRetryConversations={fetchConversations}
           onNewChat={handleOpenNewChat}
           onCurrentUserClick={handleOpenCurrentUserProfile}
         />
@@ -1021,12 +1027,12 @@ export const ChatPage: React.FC = () => {
       {/* Info panel */}
       {(selectedConversation || profilePanelTarget) && (
         <div
-        className={clsx(
-          "fixed inset-y-0 right-0 z-40 w-full max-w-full border-l border-border bg-surface transition-transform duration-300 sm:max-w-[min(26rem,94vw)] lg:relative lg:z-0 lg:w-[clamp(20rem,28vw,24rem)] lg:max-w-none",
-          isInfoPanelOpen ? "translate-x-0" : "translate-x-full lg:hidden",
-        )}
-        style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}
-      >
+          className={clsx(
+            "fixed inset-y-0 right-0 z-40 w-full max-w-full border-l border-border bg-surface transition-transform duration-300 sm:max-w-[min(26rem,94vw)] lg:relative lg:z-0 lg:w-[clamp(20rem,28vw,24rem)] lg:max-w-none",
+            isInfoPanelOpen ? "translate-x-0" : "translate-x-full lg:hidden",
+          )}
+          style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}
+        >
           {profilePanelTarget ? (
             <UserProfile
               userId={profilePanelTarget.userId}

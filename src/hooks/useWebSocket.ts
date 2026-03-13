@@ -26,7 +26,11 @@ import {
   subscribeToAuthRefreshEvents,
 } from "../services/authRefreshCoordinator";
 import { isTokenExpiringSoon } from "../utils/jwtHelpers";
-import { toast } from "../utils/toast";
+import {
+  notifyGlobalToast,
+  notifyRoomInline,
+  notifySidebarState,
+} from "../utils/notificationRouter";
 
 interface UseWebSocketOptions {
   autoConnect?: boolean;
@@ -131,10 +135,13 @@ export const useWebSocket = (
   const flushQueuedMessages = useChatStore((s) => s.flushQueuedMessages);
   const setSendRestriction = useChatStore((s) => s.setSendRestriction);
   const clearSendRestriction = useChatStore((s) => s.clearSendRestriction);
+  const fetchConversations = useChatStore((s) => s.fetchConversations);
   const setSlowModeCooldown = useGroupStore((s) => s.setSlowModeCooldown);
   const upsertInviteLink = useGroupStore((s) => s.upsertInviteLink);
   const upsertJoinRequest = useGroupStore((s) => s.upsertJoinRequest);
-  const markJoinRequestResolved = useGroupStore((s) => s.markJoinRequestResolved);
+  const markJoinRequestResolved = useGroupStore(
+    (s) => s.markJoinRequestResolved,
+  );
 
   const [connectionState, setConnectionState] = useState<ConnectionState>(() =>
     initSocket().getConnectionState(),
@@ -238,12 +245,19 @@ export const useWebSocket = (
     async (reason: string, error: unknown) => {
       if (!wsReauthFailureHandledRef.current) {
         wsReauthFailureHandledRef.current = true;
-        toast.error("Session expired. Please login again.");
+        notifyGlobalToast({
+          level: "error",
+          message: "Session expired. Please login again.",
+          dedupeKey: "auth:session-expired",
+          cooldownMs: 30000,
+        });
         await useAuthStore.getState().handleAuthFailure("refresh_failed");
       }
 
       const message = error instanceof Error ? error.message : "refresh_failed";
-      onError?.(new Error(`WebSocket auth recovery failed (${reason}): ${message}`));
+      onError?.(
+        new Error(`WebSocket auth recovery failed (${reason}): ${message}`),
+      );
     },
     [onError],
   );
@@ -393,6 +407,12 @@ export const useWebSocket = (
       const shouldResync = shouldResyncOnConnectRef.current;
       shouldResyncOnConnectRef.current = false;
 
+      if (shouldResync || !hasConnectedOnceRef.current) {
+        void fetchConversations().catch(() => {
+          // no-op: best effort sidebar resync
+        });
+      }
+
       joinedRoomsRef.current.forEach((roomId) => {
         emitJoinRoom(roomId);
         if (shouldResync) {
@@ -444,8 +464,7 @@ export const useWebSocket = (
       WebSocketEvents.AUTH_UNAUTHORIZED,
       (data) => {
         const payload = asRecord(data);
-        const message =
-          asString(payload?.message) ?? "WebSocket unauthorized";
+        const message = asString(payload?.message) ?? "WebSocket unauthorized";
         const code = asString(payload?.code) ?? "AUTH_UNAUTHORIZED";
         void recoverSocketAuth("ws_unauthorized", code);
         onError?.(new Error(message));
@@ -648,10 +667,7 @@ export const useWebSocket = (
     const unsubFriendRequestNew = socket.on(
       WebSocketEvents.FRIEND_REQUEST_NEW,
       () => {
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("friend:updated"));
-        }
-        toast.info("New friend request");
+        notifySidebarState("friend:updated", { source: "socket" });
       },
     );
     unsubscribersRef.current.push(unsubFriendRequestNew);
@@ -659,10 +675,7 @@ export const useWebSocket = (
     const unsubFriendRequestUpdated = socket.on(
       WebSocketEvents.FRIEND_REQUEST_UPDATED,
       () => {
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("friend:updated"));
-        }
-        toast.info("Friend request updated");
+        notifySidebarState("friend:updated", { source: "socket" });
       },
     );
     unsubscribersRef.current.push(unsubFriendRequestUpdated);
@@ -672,11 +685,12 @@ export const useWebSocket = (
       (data) => {
         const payload = asRecord(data);
         const status = asString(payload?.status);
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("friend:updated"));
-        }
+        notifySidebarState("friend:updated", { source: "socket", status });
         if (status === "blocked" || status === "canceled") {
-          toast.info("Friendship status changed");
+          notifyRoomInline("chat:permission:updated", {
+            source: "friendship",
+            status,
+          });
         }
       },
     );
@@ -714,7 +728,9 @@ export const useWebSocket = (
                 ? candidate.usageLimit
                 : null,
             expireAt:
-              typeof candidate.expireAt === "string" ? candidate.expireAt : null,
+              typeof candidate.expireAt === "string"
+                ? candidate.expireAt
+                : null,
             revokedAt:
               typeof candidate.revokedAt === "string"
                 ? candidate.revokedAt
@@ -725,15 +741,23 @@ export const useWebSocket = (
                 : new Date().toISOString(),
           });
         }
-        toast.info("You received a group invite");
+        notifySidebarState("group:invite:updated", {
+          source: "socket",
+          roomId,
+        });
       },
     );
     unsubscribersRef.current.push(unsubGroupInviteNew);
 
     const unsubGroupInviteUpdated = socket.on(
       WebSocketEvents.GROUP_INVITE_UPDATED,
-      () => {
-        toast.info("Group invite updated");
+      (data) => {
+        const payload = asRecord(data);
+        const roomId = payload ? getConversationId(payload) : null;
+        notifySidebarState("group:invite:updated", {
+          source: "socket",
+          roomId,
+        });
       },
     );
     unsubscribersRef.current.push(unsubGroupInviteUpdated);
@@ -815,7 +839,11 @@ export const useWebSocket = (
               new Date().toISOString(),
           });
         }
-        toast.info("New group join request");
+        notifySidebarState("group:join-request:updated", {
+          source: "socket",
+          roomId,
+          requestId,
+        });
       },
     );
     unsubscribersRef.current.push(unsubGroupJoinRequestNew);
@@ -837,7 +865,12 @@ export const useWebSocket = (
         ) {
           markJoinRequestResolved(roomId, requestId, status);
         }
-        toast.info("Group join request updated");
+        notifySidebarState("group:join-request:updated", {
+          source: "socket",
+          roomId,
+          requestId,
+          status,
+        });
       },
     );
     unsubscribersRef.current.push(unsubGroupJoinRequestResolved);
@@ -872,7 +905,11 @@ export const useWebSocket = (
           setSlowModeCooldown(roomId, retryAfterSeconds);
         }
         if (retryAfterSeconds > 0) {
-          toast.warning(`Slow mode is active. Retry in ${retryAfterSeconds}s`);
+          notifyRoomInline("chat:restriction:updated", {
+            conversationId: roomId,
+            type: "slow_mode",
+            retryAfterSeconds,
+          });
         }
       },
     );
@@ -882,7 +919,8 @@ export const useWebSocket = (
       WebSocketEvents.PERMISSION_CHANGED,
       (data) => {
         const payload = asRecord(data);
-        const allowed = typeof payload?.allowed === "boolean" ? payload.allowed : true;
+        const allowed =
+          typeof payload?.allowed === "boolean" ? payload.allowed : true;
         const scope = asString(payload?.scope);
         const currentUserId = useAuthStore.getState().user?.id;
         const peerUserId =
@@ -904,7 +942,9 @@ export const useWebSocket = (
               }
 
               const participantIds = new Set(
-                (conversation.participants || []).map((participant) => participant.id),
+                (conversation.participants || []).map(
+                  (participant) => participant.id,
+                ),
               );
 
               return (
@@ -930,7 +970,10 @@ export const useWebSocket = (
           }
         }
         if (!allowed) {
-          toast.warning("Direct messaging permission changed");
+          notifyRoomInline("chat:permission:updated", {
+            scope,
+            allowed,
+          });
         }
       },
     );
@@ -1056,6 +1099,7 @@ export const useWebSocket = (
     onError,
     removeConversation,
     recoverSocketAuth,
+    fetchConversations,
     resyncRoom,
     removeMessage,
     flushQueuedMessages,

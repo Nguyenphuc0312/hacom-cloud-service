@@ -9,7 +9,7 @@ import {
   UserGroupIcon,
 } from "@heroicons/react/24/outline";
 import { Badge } from "../common/Badge";
-import { ConfirmDialog } from "../ui";
+import { ConfirmDialog, Spinner } from "../ui";
 import { useLogout, usePresence } from "../../hooks";
 import type {
   Conversation,
@@ -28,7 +28,11 @@ interface SidebarProps {
   conversations: Conversation[];
   currentUser: UserSummary;
   selectedId: string | null;
+  isLoadingConversations?: boolean;
+  showConversationSkeleton?: boolean;
+  conversationsError?: string | null;
   onSelectConversation: (id: string) => void;
+  onRetryConversations?: () => void;
   onNewChat?: () => void;
   onCurrentUserClick?: () => void;
   className?: string;
@@ -40,7 +44,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   conversations,
   currentUser,
   selectedId,
+  isLoadingConversations = false,
+  showConversationSkeleton = false,
+  conversationsError = null,
   onSelectConversation,
+  onRetryConversations,
   onNewChat,
   onCurrentUserClick,
   className,
@@ -157,6 +165,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 );
               })}
             </div>
+            {isLoadingConversations && conversations.length > 0 && (
+              <div className="mt-2 inline-flex items-center gap-2 px-1 text-[11px] text-text-muted">
+                <Spinner size="sm" />
+                <span>
+                  {t("common:status.loading", { defaultValue: "Loading..." })}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -167,6 +183,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           searchQuery={deferredSearchQuery}
           activeFilter={activeFilter}
           collapsed={isCollapsed}
+          showLoadingSkeleton={showConversationSkeleton}
+          error={conversationsError}
+          onRetry={onRetryConversations}
           onSelect={onSelectConversation}
         />
 
