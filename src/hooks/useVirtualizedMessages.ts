@@ -15,6 +15,13 @@ interface UseVirtualizedMessagesResult<ListData> {
   outerRef: React.MutableRefObject<HTMLDivElement | null>;
   viewportHeight: number;
   getItemSize: (index: number) => number;
+  getItemOffset: (index: number) => number;
+  findItemAtOffset: (
+    scrollOffset: number,
+  ) => {
+    index: number;
+    offsetWithinItem: number;
+  } | null;
   setItemSize: (
     index: number,
     size: number,
@@ -41,7 +48,38 @@ export const useVirtualizedMessages = <Item, ListData>({
   const listRef = providedListRef ?? fallbackListRef;
   const outerRef = providedOuterRef ?? fallbackOuterRef;
   const sizeMapRef = React.useRef<Map<string, number>>(new Map());
+  const pendingResetIndexRef = React.useRef<number | null>(null);
+  const pendingResetForceRef = React.useRef(false);
+  const resetAfterIndexRafRef = React.useRef<number | null>(null);
   const [viewportHeight, setViewportHeight] = React.useState(0);
+
+  const scheduleResetAfterIndex = React.useCallback(
+    (index: number, shouldForceUpdate = false) => {
+      pendingResetIndexRef.current =
+        pendingResetIndexRef.current === null
+          ? index
+          : Math.min(pendingResetIndexRef.current, index);
+      pendingResetForceRef.current =
+        pendingResetForceRef.current || shouldForceUpdate;
+
+      if (resetAfterIndexRafRef.current !== null) {
+        return;
+      }
+
+      resetAfterIndexRafRef.current = window.requestAnimationFrame(() => {
+        const nextIndex = pendingResetIndexRef.current;
+        const shouldForce = pendingResetForceRef.current;
+
+        pendingResetIndexRef.current = null;
+        pendingResetForceRef.current = false;
+        resetAfterIndexRafRef.current = null;
+
+        if (nextIndex === null) return;
+        listRef.current?.resetAfterIndex(nextIndex, shouldForce);
+      });
+    },
+    [listRef],
+  );
 
   const setItemSize = React.useCallback(
     (index: number, size: number) => {
@@ -67,7 +105,7 @@ export const useVirtualizedMessages = <Item, ListData>({
       }
 
       sizeMapRef.current.set(key, size);
-      listRef.current?.resetAfterIndex(index);
+      scheduleResetAfterIndex(index);
       return {
         changed: true,
         previousSize: current ?? estimateItemSize(item),
@@ -75,7 +113,7 @@ export const useVirtualizedMessages = <Item, ListData>({
         delta: size - (current ?? estimateItemSize(item)),
       };
     },
-    [estimateItemSize, getItemKey, items, listRef],
+    [estimateItemSize, getItemKey, items, scheduleResetAfterIndex],
   );
 
   const getItemSize = React.useCallback(
@@ -89,8 +127,55 @@ export const useVirtualizedMessages = <Item, ListData>({
     [estimateItemSize, getItemKey, items],
   );
 
+  const getItemOffset = React.useCallback(
+    (targetIndex: number): number => {
+      let accumulatedHeight = 0;
+      for (let index = 0; index < targetIndex; index += 1) {
+        accumulatedHeight += Math.max(1, Math.ceil(getItemSize(index)));
+      }
+      return accumulatedHeight;
+    },
+    [getItemSize],
+  );
+
+  const findItemAtOffset = React.useCallback(
+    (scrollOffset: number) => {
+      if (items.length === 0) return null;
+
+      let accumulatedHeight = 0;
+      let targetIndex = 0;
+
+      for (let index = 0; index < items.length; index += 1) {
+        const rowHeight = Math.max(1, Math.ceil(getItemSize(index)));
+        if (accumulatedHeight + rowHeight > scrollOffset + 1) {
+          targetIndex = index;
+          break;
+        }
+
+        accumulatedHeight += rowHeight;
+        targetIndex = index;
+      }
+
+      if (!items[targetIndex]) {
+        return null;
+      }
+
+      return {
+        index: targetIndex,
+        offsetWithinItem: Math.max(0, scrollOffset - accumulatedHeight),
+      };
+    },
+    [getItemSize, items],
+  );
+
   const clearMeasuredSizes = React.useCallback(() => {
     sizeMapRef.current = new Map();
+    if (resetAfterIndexRafRef.current !== null) {
+      window.cancelAnimationFrame(resetAfterIndexRafRef.current);
+      resetAfterIndexRafRef.current = null;
+    }
+    pendingResetIndexRef.current = null;
+    pendingResetForceRef.current = false;
     listRef.current?.resetAfterIndex(0, true);
   }, [listRef]);
 
@@ -103,9 +188,17 @@ export const useVirtualizedMessages = <Item, ListData>({
       removedAny = true;
     });
     if (removedAny) {
-      listRef.current?.resetAfterIndex(0, false);
+      scheduleResetAfterIndex(0, false);
     }
-  }, [getItemKey, items, listRef]);
+  }, [getItemKey, items, scheduleResetAfterIndex]);
+
+  React.useEffect(() => {
+    return () => {
+      if (resetAfterIndexRafRef.current !== null) {
+        window.cancelAnimationFrame(resetAfterIndexRafRef.current);
+      }
+    };
+  }, []);
 
   React.useEffect(() => {
     const viewportElement = viewportRef.current;
@@ -147,6 +240,8 @@ export const useVirtualizedMessages = <Item, ListData>({
     outerRef,
     viewportHeight,
     getItemSize,
+    getItemOffset,
+    findItemAtOffset,
     setItemSize,
     clearMeasuredSizes,
     measureVersion: viewportHeight,

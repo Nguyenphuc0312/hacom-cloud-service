@@ -1,8 +1,4 @@
-export type ScrollFollowMode =
-  | "following"
-  | "detached"
-  | "buffering"
-  | "prepending";
+export type ScrollFollowMode = "following" | "detached";
 
 export interface ScrollMetricsSnapshot {
   distanceFromBottomPx: number;
@@ -23,11 +19,12 @@ export interface AutoScrollDecision {
   action: "follow" | "buffer";
   behavior: ScrollBehavior;
   nextMode: ScrollFollowMode;
-  nearBottomThresholdPx: number;
+  atBottomThresholdPx: number;
+  detachThresholdPx: number;
   reason:
-    | "explicit_follow"
     | "own_message"
-    | "near_bottom"
+    | "at_bottom"
+    | "within_hysteresis"
     | "stream_follow"
     | "reading_history";
 }
@@ -35,47 +32,51 @@ export interface AutoScrollDecision {
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
-export const computeNearBottomThreshold = ({
+export const computeAtBottomThreshold = ({
   clientHeightPx,
   pendingBufferedCount,
 }: {
   clientHeightPx: number;
   pendingBufferedCount: number;
 }): number => {
-  const baseThreshold = clientHeightPx > 0 ? clientHeightPx * 0.12 : 96;
-  return clamp(baseThreshold + pendingBufferedCount * 4, 40, 160);
+  const baseThreshold = clientHeightPx > 0 ? clientHeightPx * 0.08 : 48;
+  return clamp(baseThreshold + pendingBufferedCount * 2, 24, 72);
 };
 
 export const computeDetachThreshold = ({
-  nearBottomThresholdPx,
+  atBottomThresholdPx,
   clientHeightPx,
 }: {
-  nearBottomThresholdPx: number;
+  atBottomThresholdPx: number;
   clientHeightPx: number;
 }): number => {
-  const extraSlack = clientHeightPx > 0 ? clientHeightPx * 0.08 : 48;
+  const extraSlack = clientHeightPx > 0 ? clientHeightPx * 0.06 : 32;
   return clamp(
-    nearBottomThresholdPx + extraSlack,
-    nearBottomThresholdPx + 24,
-    nearBottomThresholdPx + 96,
+    atBottomThresholdPx + extraSlack,
+    atBottomThresholdPx + 24,
+    atBottomThresholdPx + 56,
   );
 };
 
 const isReadingHistory = ({
   distanceFromBottomPx,
-  nearBottomThresholdPx,
+  detachThresholdPx,
   velocityPxPerMs,
   lastInteractionAgeMs,
-}: ScrollMetricsSnapshot & { nearBottomThresholdPx: number }): boolean =>
-  distanceFromBottomPx > nearBottomThresholdPx * 1.5 &&
-  (velocityPxPerMs < -0.08 || lastInteractionAgeMs < 2200);
+}: ScrollMetricsSnapshot & { detachThresholdPx: number }): boolean =>
+  distanceFromBottomPx > detachThresholdPx &&
+  (velocityPxPerMs < -0.05 || lastInteractionAgeMs < 2000);
 
 export const decideAutoScroll = (
   input: AutoScrollDecisionInput,
 ): AutoScrollDecision => {
-  const nearBottomThresholdPx = computeNearBottomThreshold({
+  const atBottomThresholdPx = computeAtBottomThreshold({
     clientHeightPx: input.clientHeightPx,
     pendingBufferedCount: input.pendingBufferedCount,
+  });
+  const detachThresholdPx = computeDetachThreshold({
+    atBottomThresholdPx,
+    clientHeightPx: input.clientHeightPx,
   });
 
   if (input.latestIsOwnMessage) {
@@ -83,38 +84,34 @@ export const decideAutoScroll = (
       action: "follow",
       behavior: input.appendedCount > 1 ? "auto" : "smooth",
       nextMode: "following",
-      nearBottomThresholdPx,
+      atBottomThresholdPx,
+      detachThresholdPx,
       reason: "own_message",
     };
   }
 
-  if (
-    input.currentMode === "following" &&
-    input.isStreaming
-  ) {
+  if (input.currentMode === "following" && input.isStreaming) {
     return {
       action: "follow",
       behavior: "auto",
       nextMode: "following",
-      nearBottomThresholdPx,
+      atBottomThresholdPx,
+      detachThresholdPx,
       reason: "stream_follow",
     };
   }
 
-  if (input.distanceFromBottomPx <= nearBottomThresholdPx) {
+  if (input.distanceFromBottomPx <= atBottomThresholdPx) {
     return {
       action: "follow",
       behavior: input.appendedCount > 1 ? "auto" : "smooth",
       nextMode: "following",
-      nearBottomThresholdPx,
-      reason: "near_bottom",
+      atBottomThresholdPx,
+      detachThresholdPx,
+      reason: "at_bottom",
     };
   }
 
-  const detachThresholdPx = computeDetachThreshold({
-    nearBottomThresholdPx,
-    clientHeightPx: input.clientHeightPx,
-  });
   if (
     input.currentMode === "following" &&
     input.distanceFromBottomPx <= detachThresholdPx
@@ -123,22 +120,24 @@ export const decideAutoScroll = (
       action: "follow",
       behavior: input.appendedCount > 1 ? "auto" : "smooth",
       nextMode: "following",
-      nearBottomThresholdPx,
-      reason: "near_bottom",
+      atBottomThresholdPx,
+      detachThresholdPx,
+      reason: "within_hysteresis",
     };
   }
 
   if (
     isReadingHistory({
       ...input,
-      nearBottomThresholdPx,
+      detachThresholdPx,
     })
   ) {
     return {
       action: "buffer",
       behavior: "auto",
-      nextMode: "buffering",
-      nearBottomThresholdPx,
+      nextMode: "detached",
+      atBottomThresholdPx,
+      detachThresholdPx,
       reason: "reading_history",
     };
   }
@@ -147,7 +146,8 @@ export const decideAutoScroll = (
     action: "buffer",
     behavior: "auto",
     nextMode: "detached",
-    nearBottomThresholdPx,
+    atBottomThresholdPx,
+    detachThresholdPx,
     reason: "reading_history",
   };
 };
@@ -155,7 +155,6 @@ export const decideAutoScroll = (
 export const deriveFollowModeFromScroll = ({
   distanceFromBottomPx,
   clientHeightPx,
-  velocityPxPerMs,
   pendingBufferedCount,
   currentMode,
 }: {
@@ -165,24 +164,26 @@ export const deriveFollowModeFromScroll = ({
   pendingBufferedCount: number;
   currentMode: ScrollFollowMode;
 }): {
-  isNearBottom: boolean;
-  nearBottomThresholdPx: number;
+  isAtBottom: boolean;
+  atBottomThresholdPx: number;
+  detachThresholdPx: number;
   nextMode: ScrollFollowMode;
 } => {
-  const nearBottomThresholdPx = computeNearBottomThreshold({
+  const atBottomThresholdPx = computeAtBottomThreshold({
     clientHeightPx,
     pendingBufferedCount,
   });
-  const isNearBottom = distanceFromBottomPx <= nearBottomThresholdPx;
+  const isAtBottom = distanceFromBottomPx <= atBottomThresholdPx;
   const detachThresholdPx = computeDetachThreshold({
-    nearBottomThresholdPx,
+    atBottomThresholdPx,
     clientHeightPx,
   });
 
-  if (isNearBottom) {
+  if (isAtBottom) {
     return {
-      isNearBottom,
-      nearBottomThresholdPx,
+      isAtBottom,
+      atBottomThresholdPx,
+      detachThresholdPx,
       nextMode: "following",
     };
   }
@@ -192,15 +193,17 @@ export const deriveFollowModeFromScroll = ({
     distanceFromBottomPx <= detachThresholdPx
   ) {
     return {
-      isNearBottom: false,
-      nearBottomThresholdPx,
+      isAtBottom: false,
+      atBottomThresholdPx,
+      detachThresholdPx,
       nextMode: "following",
     };
   }
 
   return {
-    isNearBottom: false,
-    nearBottomThresholdPx,
-    nextMode: velocityPxPerMs < -0.05 ? "detached" : "buffering",
+    isAtBottom: false,
+    atBottomThresholdPx,
+    detachThresholdPx,
+    nextMode: "detached",
   };
 };

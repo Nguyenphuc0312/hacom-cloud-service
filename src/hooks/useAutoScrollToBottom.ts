@@ -27,12 +27,16 @@ interface UseAutoScrollToBottomResult {
   pendingNewMessages: number;
   showNewMessagesPill: boolean;
   showJumpToBottom: boolean;
+  isAtBottom: boolean;
+  autoFollowEnabled: boolean;
+  followMode: ScrollFollowMode;
   handleScroll: (scrollOffset: number) => void;
   jumpToLatest: (behavior?: ScrollBehavior) => void;
 }
 
 type ScrollMetrics = {
-  isNearBottom: boolean;
+  isAtBottom: boolean;
+  distanceFromBottomPx: number;
   lastOffset: number;
   lastMeasureAt: number;
   velocityPxPerMs: number;
@@ -59,7 +63,9 @@ const filterBufferedMessages = (
 ): Message[] => {
   if (bufferedMessages.length === 0) return source;
   const bufferedKeys = new Set(bufferedMessages.map(getMessageStableKey));
-  return source.filter((message) => !bufferedKeys.has(getMessageStableKey(message)));
+  return source.filter(
+    (message) => !bufferedKeys.has(getMessageStableKey(message)),
+  );
 };
 
 const getTailAppendMessages = (
@@ -100,9 +106,13 @@ export const useAutoScrollToBottom = ({
   const [pendingNewMessages, setPendingNewMessages] = React.useState(0);
   const [showNewMessagesPill, setShowNewMessagesPill] = React.useState(false);
   const [showJumpToBottom, setShowJumpToBottom] = React.useState(false);
+  const [isAtBottom, setIsAtBottom] = React.useState(true);
+  const [followMode, setFollowMode] =
+    React.useState<ScrollFollowMode>("following");
 
   const scrollMetricsRef = React.useRef<ScrollMetrics>({
-    isNearBottom: true,
+    isAtBottom: true,
+    distanceFromBottomPx: 0,
     lastOffset: 0,
     lastMeasureAt: 0,
     velocityPxPerMs: 0,
@@ -116,29 +126,43 @@ export const useAutoScrollToBottom = ({
   const latestMessagesRef = React.useRef<Message[]>(messages);
   const bufferedMessagesRef = React.useRef<Message[]>([]);
   const scrollSnapshotRef = React.useRef({ scrollTop: 0, scrollHeight: 0 });
-  const updatePendingUi = React.useCallback((bufferedMessages: Message[]) => {
-    const count = bufferedMessages.length;
-    setPendingNewMessages(count);
-    setShowNewMessagesPill(count > 0);
-    setShowJumpToBottom(
-      count > 0 || followModeRef.current !== "following",
-    );
-  }, []);
+
+  const syncUiState = React.useCallback(
+    (
+      nextBufferedCount: number,
+      nextMode: ScrollFollowMode,
+      nextIsAtBottom: boolean,
+    ) => {
+      setPendingNewMessages(nextBufferedCount);
+      setShowNewMessagesPill(nextBufferedCount > 0);
+      setShowJumpToBottom(
+        nextBufferedCount > 0 || nextMode !== "following" || !nextIsAtBottom,
+      );
+      setIsAtBottom(nextIsAtBottom);
+      setFollowMode((previous) =>
+        previous === nextMode ? previous : nextMode,
+      );
+    },
+    [],
+  );
 
   const flushLiveBuffer = React.useCallback(
     (behavior?: ScrollBehavior) => {
       followModeRef.current = "following";
       bufferedMessagesRef.current = [];
       setDisplayMessages(latestMessagesRef.current);
-      setPendingNewMessages(0);
-      setShowNewMessagesPill(false);
-      setShowJumpToBottom(!scrollMetricsRef.current.isNearBottom);
+      scrollMetricsRef.current = {
+        ...scrollMetricsRef.current,
+        isAtBottom: true,
+        distanceFromBottomPx: 0,
+      };
+      syncUiState(0, "following", true);
 
       if (behavior) {
         scrollToBottom(behavior);
       }
     },
-    [scrollToBottom],
+    [scrollToBottom, syncUiState],
   );
 
   const jumpToLatest = React.useCallback(
@@ -162,7 +186,8 @@ export const useAutoScrollToBottom = ({
     prevFirstMessageIdRef.current = messages[0]?.id;
     followModeRef.current = "following";
     scrollMetricsRef.current = {
-      isNearBottom: true,
+      isAtBottom: true,
+      distanceFromBottomPx: 0,
       lastOffset: 0,
       lastMeasureAt: 0,
       velocityPxPerMs: 0,
@@ -171,12 +196,10 @@ export const useAutoScrollToBottom = ({
     loadingOlderRef.current = false;
     bufferedMessagesRef.current = [];
     setDisplayMessages(messages);
-    setPendingNewMessages(0);
-    setShowNewMessagesPill(false);
-    setShowJumpToBottom(false);
+    syncUiState(0, "following", true);
 
     scrollToBottom("auto");
-  }, [conversationId, messages, scrollToBottom]);
+  }, [conversationId, messages, scrollToBottom, syncUiState]);
 
   React.useEffect(() => {
     const outer = outerRef.current;
@@ -216,15 +239,19 @@ export const useAutoScrollToBottom = ({
         .filter(Boolean);
       bufferedMessagesRef.current = updatedBufferedMessages;
       setDisplayMessages(filterBufferedMessages(messages, updatedBufferedMessages));
-      updatePendingUi(updatedBufferedMessages);
+      syncUiState(
+        updatedBufferedMessages.length,
+        followModeRef.current,
+        scrollMetricsRef.current.isAtBottom,
+      );
     } else if (tailAppend.length > 0) {
-      const outerDistance =
+      const distanceFromBottom =
         outer?.scrollHeight !== undefined
           ? outer.scrollHeight - outer.scrollTop - outer.clientHeight
-          : Number.POSITIVE_INFINITY;
+          : scrollMetricsRef.current.distanceFromBottomPx;
       const decision = decideAutoScroll({
         currentMode: followModeRef.current,
-        distanceFromBottomPx: outerDistance,
+        distanceFromBottomPx: distanceFromBottom,
         clientHeightPx: outer?.clientHeight ?? 0,
         velocityPxPerMs: scrollMetricsRef.current.velocityPxPerMs,
         lastInteractionAgeMs:
@@ -233,16 +260,18 @@ export const useAutoScrollToBottom = ({
         appendedCount: tailAppend.length,
         pendingBufferedCount: bufferedMessages.length,
       });
-      const canAutoScroll = decision.action === "follow";
 
-      if (canAutoScroll) {
-        setDisplayMessages(messages);
+      if (decision.action === "follow") {
         bufferedMessagesRef.current = [];
-        setPendingNewMessages(0);
-        setShowNewMessagesPill(false);
         followModeRef.current = decision.nextMode;
+        setDisplayMessages(messages);
+        scrollMetricsRef.current = {
+          ...scrollMetricsRef.current,
+          isAtBottom: true,
+          distanceFromBottomPx: 0,
+        };
+        syncUiState(0, decision.nextMode, true);
         scrollToBottom(decision.behavior);
-        setShowJumpToBottom(false);
       } else {
         bufferedMessagesRef.current = dedupeMessagesByStableKey([
           ...bufferedMessages,
@@ -252,11 +281,19 @@ export const useAutoScrollToBottom = ({
         setDisplayMessages(
           filterBufferedMessages(messages, bufferedMessagesRef.current),
         );
-        updatePendingUi(bufferedMessagesRef.current);
+        syncUiState(
+          bufferedMessagesRef.current.length,
+          decision.nextMode,
+          scrollMetricsRef.current.isAtBottom,
+        );
       }
     } else {
       setDisplayMessages(filterBufferedMessages(messages, bufferedMessages));
-      updatePendingUi(bufferedMessages);
+      syncUiState(
+        bufferedMessages.length,
+        followModeRef.current,
+        scrollMetricsRef.current.isAtBottom,
+      );
     }
 
     prevSourceMessagesRef.current = messages;
@@ -267,7 +304,7 @@ export const useAutoScrollToBottom = ({
     onAfterPrepend,
     outerRef,
     scrollToBottom,
-    updatePendingUi,
+    syncUiState,
   ]);
 
   React.useEffect(() => {
@@ -281,11 +318,14 @@ export const useAutoScrollToBottom = ({
       followModeRef.current = "following";
       bufferedMessagesRef.current = [];
       setDisplayMessages([]);
-      setPendingNewMessages(0);
-      setShowNewMessagesPill(false);
-      setShowJumpToBottom(false);
+      scrollMetricsRef.current = {
+        ...scrollMetricsRef.current,
+        isAtBottom: true,
+        distanceFromBottomPx: 0,
+      };
+      syncUiState(0, "following", true);
     }
-  }, [messages.length]);
+  }, [messages.length, syncUiState]);
 
   const handleScroll = React.useCallback(
     (scrollOffset: number) => {
@@ -308,10 +348,10 @@ export const useAutoScrollToBottom = ({
         pendingBufferedCount: bufferedMessagesRef.current.length,
         currentMode: followModeRef.current,
       });
-      const isNearBottom = scrollDecision.isNearBottom;
 
       scrollMetricsRef.current = {
-        isNearBottom,
+        isAtBottom: scrollDecision.isAtBottom,
+        distanceFromBottomPx: distanceFromBottom,
         lastOffset: scrollOffset,
         lastMeasureAt: now,
         velocityPxPerMs,
@@ -323,13 +363,14 @@ export const useAutoScrollToBottom = ({
         if (bufferedMessagesRef.current.length > 0) {
           flushLiveBuffer("auto");
         } else {
-          setPendingNewMessages(0);
-          setShowNewMessagesPill(false);
-          setShowJumpToBottom(false);
+          syncUiState(0, "following", scrollDecision.isAtBottom);
         }
       } else {
-        setShowJumpToBottom(true);
-        setShowNewMessagesPill(bufferedMessagesRef.current.length > 0);
+        syncUiState(
+          bufferedMessagesRef.current.length,
+          "detached",
+          scrollDecision.isAtBottom,
+        );
       }
 
       if (
@@ -358,6 +399,7 @@ export const useAutoScrollToBottom = ({
       onBeforeLoadMore,
       onLoadMore,
       outerRef,
+      syncUiState,
     ],
   );
 
@@ -366,6 +408,9 @@ export const useAutoScrollToBottom = ({
     pendingNewMessages,
     showNewMessagesPill,
     showJumpToBottom,
+    isAtBottom,
+    autoFollowEnabled: followMode === "following",
+    followMode,
     handleScroll,
     jumpToLatest,
   };
