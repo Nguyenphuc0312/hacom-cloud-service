@@ -2,8 +2,10 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
+  ArrowPathIcon,
   ChatBubbleLeftIcon,
   DocumentIcon,
+  ExclamationCircleIcon,
   PhotoIcon,
   SpeakerWaveIcon,
 } from "@heroicons/react/24/outline";
@@ -63,6 +65,57 @@ const isCoarsePointer = (): boolean =>
   typeof window.matchMedia === "function" &&
   window.matchMedia("(pointer: coarse)").matches;
 
+const MessageDeliveryState: React.FC<{
+  message: Message;
+  isOwn: boolean;
+  onRetry: () => void;
+}> = ({ message, isOwn, onRetry }) => {
+  const { t } = useTranslation();
+  const failed = isFailedMessage(message);
+  const pending = isPendingMessage(message);
+
+  if (!isOwn || (!failed && !pending)) {
+    return null;
+  }
+
+  const label =
+    message.status === "uploading"
+      ? t("chat:message.status.uploading")
+      : failed
+        ? t("chat:message.status.failedInline", {
+            defaultValue: "Chua gui duoc",
+          })
+        : t("chat:message.status.sending");
+
+  return (
+    <div
+      className={clsx(
+        "mt-1.5 inline-flex max-w-full items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-medium shadow-xs backdrop-blur-sm",
+        isOwn ? "self-end" : "self-start",
+        failed
+          ? "border-danger/20 bg-danger/10 text-danger"
+          : "border-white/8 bg-[hsl(var(--color-chat-pill)/0.9)] text-text-secondary",
+      )}
+    >
+      {failed ? (
+        <ExclamationCircleIcon className="h-3.5 w-3.5 shrink-0" />
+      ) : (
+        <ArrowPathIcon className="h-3.5 w-3.5 shrink-0 animate-spin" />
+      )}
+      <span className="truncate">{label}</span>
+      {failed && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-danger transition-micro hover:bg-danger/10"
+        >
+          {t("chat:message.status.retry", { defaultValue: "Thu lai" })}
+        </button>
+      )}
+    </div>
+  );
+};
+
 export const MessageCluster: React.FC<MessageClusterProps> = ({
   message,
   isOwn,
@@ -85,6 +138,8 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   const [isRailVisible, setIsRailVisible] = React.useState(false);
   const [isActionsOpen, setIsActionsOpen] = React.useState(false);
   const longPressTimerRef = React.useRef<number | null>(null);
+  const openRailTimerRef = React.useRef<number | null>(null);
+  const closeRailTimerRef = React.useRef<number | null>(null);
   const normalizedConversationType = normalizeRoomType(conversationType);
   const isGroupConversation =
     normalizedConversationType !== RoomType.PRIVATE &&
@@ -100,7 +155,42 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
     longPressTimerRef.current = null;
   }, []);
 
-  React.useEffect(() => clearLongPressTimer, [clearLongPressTimer]);
+  const clearRailTimers = React.useCallback(() => {
+    if (openRailTimerRef.current !== null) {
+      window.clearTimeout(openRailTimerRef.current);
+      openRailTimerRef.current = null;
+    }
+    if (closeRailTimerRef.current !== null) {
+      window.clearTimeout(closeRailTimerRef.current);
+      closeRailTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleRailOpen = React.useCallback(() => {
+    clearRailTimers();
+    openRailTimerRef.current = window.setTimeout(() => {
+      setIsRailVisible(true);
+      openRailTimerRef.current = null;
+    }, 70);
+  }, [clearRailTimers]);
+
+  const scheduleRailClose = React.useCallback((force = false) => {
+    clearRailTimers();
+    closeRailTimerRef.current = window.setTimeout(() => {
+      if (force || !isActionsOpen) {
+        setIsRailVisible(false);
+      }
+      closeRailTimerRef.current = null;
+    }, 90);
+  }, [clearRailTimers, isActionsOpen]);
+
+  React.useEffect(
+    () => () => {
+      clearLongPressTimer();
+      clearRailTimers();
+    },
+    [clearLongPressTimer, clearRailTimers],
+  );
 
   const handleRetry = React.useCallback(() => {
     if (!message.conversationId) return;
@@ -108,13 +198,15 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   }, [message, resendMessage]);
 
   const openActions = React.useCallback(() => {
+    clearRailTimers();
     setIsActionsOpen(true);
     setIsRailVisible(true);
-  }, []);
+  }, [clearRailTimers]);
 
   const closeActions = React.useCallback(() => {
     setIsActionsOpen(false);
-  }, []);
+    scheduleRailClose(true);
+  }, [scheduleRailClose]);
 
   const handleCopy = React.useCallback(() => {
     void navigator.clipboard.writeText(message.content || "");
@@ -127,7 +219,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
       clearLongPressTimer();
       longPressTimerRef.current = window.setTimeout(() => {
         openActions();
-      }, 420);
+      }, 300);
     },
     [clearLongPressTimer, openActions],
   );
@@ -149,13 +241,16 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
         "group/message-cluster w-full",
         className,
       )}
-      onMouseEnter={() => setIsRailVisible(true)}
-      onMouseLeave={() => setIsRailVisible(false)}
-      onFocusCapture={() => setIsRailVisible(true)}
+      onMouseEnter={scheduleRailOpen}
+      onMouseLeave={() => scheduleRailClose()}
+      onFocusCapture={() => {
+        clearRailTimers();
+        setIsRailVisible(true);
+      }}
       onBlurCapture={(event) => {
         const nextFocused = event.relatedTarget as Node | null;
         if (!event.currentTarget.contains(nextFocused)) {
-          setIsRailVisible(false);
+          scheduleRailClose();
         }
       }}
     >
@@ -164,10 +259,12 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
         actionRail={
           <div
             className={clsx(
-              "transition-all duration-150",
-              isRailVisible
-                ? "pointer-events-auto translate-y-0 opacity-100"
-                : "pointer-events-none translate-y-1 opacity-0",
+              "transition-fast",
+              isRailVisible || isActionsOpen
+                ? "pointer-events-auto translate-x-0 opacity-100"
+                : isOwn
+                  ? "pointer-events-none -translate-x-1 opacity-0"
+                  : "pointer-events-none translate-x-1 opacity-0",
             )}
           >
             {actionRail}
@@ -284,8 +381,15 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
               message={message}
               isOwn={isOwn}
               showStatus={isOwn && isGroupEnd}
-              onRetry={isFailedMessage(message) ? handleRetry : undefined}
             />
+
+            {isOwn && isGroupEnd && (
+              <MessageDeliveryState
+                message={message}
+                isOwn={isOwn}
+                onRetry={handleRetry}
+              />
+            )}
 
             {(message.reactions?.length ?? 0) > 0 && (
               <div className={clsx("mt-1", isOwn ? "self-end" : "self-start")}>
@@ -298,14 +402,6 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
 
             {threadCountValue > 0 && (
               <ThreadIndicator threadCount={threadCountValue} isOwn={isOwn} />
-            )}
-
-            {isOwn && isPendingMessage(message) && isGroupEnd && (
-              <div className="mt-0.5 px-1 text-[10px] text-text-muted">
-                {t("chat:message.status.pendingInline", {
-                  defaultValue: "Dang dong bo",
-                })}
-              </div>
             )}
           </div>
         </div>

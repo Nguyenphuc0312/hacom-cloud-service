@@ -10,7 +10,7 @@ import {
   type MessageSemanticFamily,
 } from "../utils/messageTimeline";
 
-const DEFAULT_GROUPING_THRESHOLD_MS = 90 * 1000;
+const DEFAULT_GROUPING_THRESHOLD_MS = 45 * 1000;
 
 export type ClusterBreakReason =
   | "sender"

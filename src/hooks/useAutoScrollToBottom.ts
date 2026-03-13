@@ -3,9 +3,9 @@ import type { Message } from "../types";
 import { getMessageStableKey } from "../utils/messageTimeline";
 
 const LOAD_MORE_TRIGGER_PX = 120;
-const NEAR_BOTTOM_PX = 180;
-const AUTO_SCROLL_DISTANCE_PX = 120;
-const LIVE_BUFFER_IDLE_FLUSH_MS = 1200;
+const NEAR_BOTTOM_PX = 96;
+const AUTO_SCROLL_DISTANCE_PX = 80;
+const PASSIVE_NEAR_BOTTOM_PX = 32;
 
 interface UseAutoScrollToBottomParams {
   conversationId: string;
@@ -94,7 +94,8 @@ const shouldAutoScroll = ({
     velocityPxPerMs >= -0.05 &&
     lastInteractionAgeMs < 2500;
   const passiveNearBottom =
-    distanceFromBottomPx < 48 && lastInteractionAgeMs < 5000;
+    distanceFromBottomPx < PASSIVE_NEAR_BOTTOM_PX &&
+    lastInteractionAgeMs < 5000;
 
   return engagedBottom || passiveNearBottom;
 };
@@ -128,17 +129,6 @@ export const useAutoScrollToBottom = ({
   const latestMessagesRef = React.useRef<Message[]>(messages);
   const bufferedMessagesRef = React.useRef<Message[]>([]);
   const scrollSnapshotRef = React.useRef({ scrollTop: 0, scrollHeight: 0 });
-  const idleFlushTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
-
-  const clearIdleFlushTimer = React.useCallback(() => {
-    if (idleFlushTimerRef.current) {
-      clearTimeout(idleFlushTimerRef.current);
-      idleFlushTimerRef.current = null;
-    }
-  }, []);
-
   const updatePendingUi = React.useCallback((bufferedMessages: Message[]) => {
     const count = bufferedMessages.length;
     setPendingNewMessages(count);
@@ -150,7 +140,6 @@ export const useAutoScrollToBottom = ({
 
   const flushLiveBuffer = React.useCallback(
     (behavior?: ScrollBehavior) => {
-      clearIdleFlushTimer();
       bufferedMessagesRef.current = [];
       setDisplayMessages(latestMessagesRef.current);
       setPendingNewMessages(0);
@@ -161,20 +150,8 @@ export const useAutoScrollToBottom = ({
         scrollToBottom(behavior);
       }
     },
-    [clearIdleFlushTimer, scrollToBottom],
+    [scrollToBottom],
   );
-
-  const scheduleIdleFlush = React.useCallback(() => {
-    clearIdleFlushTimer();
-    if (bufferedMessagesRef.current.length === 0) return;
-
-    const elapsed = Date.now() - scrollMetricsRef.current.lastInteractionAt;
-    const waitMs = Math.max(0, LIVE_BUFFER_IDLE_FLUSH_MS - elapsed);
-
-    idleFlushTimerRef.current = setTimeout(() => {
-      flushLiveBuffer();
-    }, waitMs);
-  }, [clearIdleFlushTimer, flushLiveBuffer]);
 
   const jumpToLatest = React.useCallback(
     (behavior: ScrollBehavior = "smooth") => {
@@ -204,7 +181,6 @@ export const useAutoScrollToBottom = ({
     };
     loadingOlderRef.current = false;
     bufferedMessagesRef.current = [];
-    clearIdleFlushTimer();
     setDisplayMessages(messages);
     setPendingNewMessages(0);
     setShowNewMessagesPill(false);
@@ -221,7 +197,7 @@ export const useAutoScrollToBottom = ({
     return () => {
       clearTimeout(retryTimer);
     };
-  }, [clearIdleFlushTimer, conversationId, messages, scrollToBottom]);
+  }, [conversationId, messages, scrollToBottom]);
 
   React.useEffect(() => {
     const outer = outerRef.current;
@@ -289,7 +265,6 @@ export const useAutoScrollToBottom = ({
           filterBufferedMessages(messages, bufferedMessagesRef.current),
         );
         updatePendingUi(bufferedMessagesRef.current);
-        scheduleIdleFlush();
       }
     } else {
       setDisplayMessages(filterBufferedMessages(messages, bufferedMessages));
@@ -302,7 +277,6 @@ export const useAutoScrollToBottom = ({
     currentUserId,
     messages,
     outerRef,
-    scheduleIdleFlush,
     scrollToBottom,
     updatePendingUi,
   ]);
@@ -315,16 +289,13 @@ export const useAutoScrollToBottom = ({
 
   React.useEffect(() => {
     if (messages.length === 0) {
-      clearIdleFlushTimer();
       bufferedMessagesRef.current = [];
       setDisplayMessages([]);
       setPendingNewMessages(0);
       setShowNewMessagesPill(false);
       setShowJumpToBottom(false);
     }
-  }, [clearIdleFlushTimer, messages.length]);
-
-  React.useEffect(() => () => clearIdleFlushTimer(), [clearIdleFlushTimer]);
+  }, [messages.length]);
 
   const handleScroll = React.useCallback(
     (scrollOffset: number) => {
@@ -361,7 +332,6 @@ export const useAutoScrollToBottom = ({
       } else {
         setShowJumpToBottom(true);
         setShowNewMessagesPill(bufferedMessagesRef.current.length > 0);
-        scheduleIdleFlush();
       }
 
       if (
@@ -388,7 +358,6 @@ export const useAutoScrollToBottom = ({
       isLoadingMore,
       onLoadMore,
       outerRef,
-      scheduleIdleFlush,
     ],
   );
 

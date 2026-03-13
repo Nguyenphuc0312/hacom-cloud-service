@@ -73,9 +73,31 @@ interface ChatWindowProps {
   onFilePreview?: (attachment: Attachment) => void;
   messageError?: string | null;
   onRetryMessages?: () => void | Promise<void>;
+  onReachedLatestMessage?: (message: Message) => void;
   connectionState?: ConnectionState;
   className?: string;
 }
+
+type EphemeralNotice = {
+  kind: "info" | "warn" | "error" | "success";
+  message: string;
+};
+
+const getEphemeralNoticeClassName = (
+  kind: EphemeralNotice["kind"],
+): string => {
+  switch (kind) {
+    case "warn":
+      return "border-warning/25 bg-warning/12 text-warning";
+    case "error":
+      return "border-danger/25 bg-danger/10 text-danger";
+    case "success":
+      return "border-success/20 bg-success/12 text-success";
+    case "info":
+    default:
+      return "border-primary/18 bg-surface/94 text-text-secondary";
+  }
+};
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
   conversation,
@@ -96,6 +118,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onFilePreview,
   messageError,
   onRetryMessages,
+  onReachedLatestMessage,
   connectionState = "connected",
   className,
 }) => {
@@ -277,6 +300,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     active?: boolean;
   } | null>(null);
   const [clockTick, setClockTick] = React.useState(() => Date.now());
+  const [ephemeralNotice, setEphemeralNotice] =
+    React.useState<EphemeralNotice | null>(null);
+  const previousConnectionStateRef = React.useRef<ConnectionState>(connectionState);
+  const ephemeralNoticeTimerRef = React.useRef<number | null>(null);
 
   const slowModeRemainingSeconds = React.useMemo(() => {
     const delta = slowModeUntil - clockTick;
@@ -321,6 +348,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       current && current.id === messageId ? null : current,
     );
   }, []);
+
+  const handleReachedLatest = React.useCallback(
+    (message: Message) => {
+      setUnreadMarker((current) => (current?.active ? null : current));
+      onReachedLatestMessage?.(message);
+    },
+    [onReachedLatestMessage],
+  );
 
   const handleJumpToMessage = React.useCallback(
     async (message: Message) => {
@@ -373,6 +408,58 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       setUnreadMarker(null);
     }
   }, [conversation.id]);
+
+  React.useEffect(() => {
+    const previousState = previousConnectionStateRef.current;
+
+    if (ephemeralNoticeTimerRef.current !== null) {
+      window.clearTimeout(ephemeralNoticeTimerRef.current);
+      ephemeralNoticeTimerRef.current = null;
+    }
+
+    if (connectionState === "reconnecting") {
+      setEphemeralNotice({
+        kind: "warn",
+        message: t("chat:toast.connectionReconnecting"),
+      });
+    } else if (connectionState === "disconnected") {
+      setEphemeralNotice({
+        kind: "error",
+        message: t("chat:toast.connectionOffline", {
+          defaultValue: "Mat ket noi. Dang cho dong bo lai.",
+        }),
+      });
+    } else if (
+      connectionState === "connected" &&
+      (previousState === "reconnecting" || previousState === "disconnected")
+    ) {
+      setEphemeralNotice({
+        kind: "success",
+        message: t("chat:toast.connectionRestored", {
+          defaultValue: "Da ket noi lai",
+        }),
+      });
+      ephemeralNoticeTimerRef.current = window.setTimeout(() => {
+        setEphemeralNotice((current) =>
+          current?.kind === "success" ? null : current,
+        );
+        ephemeralNoticeTimerRef.current = null;
+      }, 2400);
+    } else if (connectionState === "connected") {
+      setEphemeralNotice(null);
+    }
+
+    previousConnectionStateRef.current = connectionState;
+  }, [connectionState, t]);
+
+  React.useEffect(
+    () => () => {
+      if (ephemeralNoticeTimerRef.current !== null) {
+        window.clearTimeout(ephemeralNoticeTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const mentionCandidates = React.useMemo<MentionCandidate[]>(() => {
     const participants = Array.isArray(conversation.participants)
@@ -446,26 +533,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const currentUsername = currentUser.username;
 
-  const timelineNotice = React.useMemo(() => {
-    if (connectionState === "reconnecting") {
-      return {
-        kind: "warn" as const,
-        message: t("chat:toast.connectionReconnecting"),
-      };
-    }
-
-    if (connectionState === "disconnected") {
-      return {
-        kind: "error" as const,
-        message: t("chat:toast.connectionOffline", {
-          defaultValue: "Mat ket noi. Dang cho dong bo lai.",
-        }),
-      };
-    }
-
-    return null;
-  }, [connectionState, t]);
-
   const messageListNode = React.useMemo(
     () => (
       <MessageList
@@ -490,10 +557,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onToggleSelect={toggleMessageSelection}
         currentUsername={currentUsername}
         unreadMarker={unreadMarker}
+        onReachedLatest={handleReachedLatest}
         jumpToMessageId={jumpTargetMessage?.id ?? null}
         jumpRequestVersion={jumpRequestVersion}
         onJumpHandled={handleJumpHandled}
-        notice={timelineNotice}
         className="flex-1 min-h-0"
       />
     ),
@@ -513,11 +580,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       onRetryMessages,
       chatDensity,
       handleJumpHandled,
+      handleReachedLatest,
       isMessageSelectionMode,
       jumpRequestVersion,
       jumpTargetMessage?.id,
       selectedMessageIds,
-      timelineNotice,
       toggleMessageSelection,
       currentUsername,
       unreadMarker,
@@ -577,6 +644,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       )}
 
       {messageListNode}
+
+      {ephemeralNotice && !isMessageSelectionMode && (
+        <div className="pointer-events-none absolute inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-[55] flex justify-center">
+          <div
+            className={clsx(
+              "pointer-events-auto max-w-[min(28rem,calc(100%-2rem))] rounded-full border px-3.5 py-1.5 text-xs font-medium shadow-elev2 backdrop-blur animate-slide-up-fade",
+              getEphemeralNoticeClassName(ephemeralNotice.kind),
+            )}
+            role="status"
+            aria-live="polite"
+          >
+            {ephemeralNotice.message}
+          </div>
+        </div>
+      )}
 
       {/* Selection toolbar */}
       {isMessageSelectionMode && (

@@ -13,33 +13,21 @@ interface MessageMetaProps {
   message: Message;
   isOwn: boolean;
   showStatus?: boolean;
-  onRetry?: () => void;
   className?: string;
 }
 
 const MessageStatusLabel: React.FC<{
   status: Message["status"];
-  onRetry?: () => void;
-}> = ({ status, onRetry }) => {
+}> = ({ status }) => {
   const { t } = useTranslation();
 
   if (status === "uploading") {
-    return (
-      <span className="inline-flex items-center gap-1.5">
-        <span className="inline-block h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
-        {t("chat:message.status.uploading")}
-      </span>
-    );
+    return null;
   }
 
   switch (status) {
     case MessageStatus.SENDING:
-      return (
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
-          {t("chat:message.status.sending")}
-        </span>
-      );
+      return null;
     case MessageStatus.SENT:
       return (
         <span className="inline-flex items-center gap-1">
@@ -68,24 +56,7 @@ const MessageStatusLabel: React.FC<{
         </span>
       );
     case MessageStatus.FAILED:
-      return (
-        <span className="inline-flex items-center gap-2 text-danger">
-          <span>
-            {t("chat:message.status.failedInline", {
-              defaultValue: "Khong gui duoc",
-            })}
-          </span>
-          {onRetry && (
-            <button
-              type="button"
-              onClick={onRetry}
-              className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-danger transition-colors hover:bg-danger/10"
-            >
-              {t("chat:message.status.retry", { defaultValue: "Thu lai" })}
-            </button>
-          )}
-        </span>
-      );
+      return null;
     default:
       return null;
   }
@@ -95,7 +66,6 @@ export const MessageMeta: React.FC<MessageMetaProps> = ({
   message,
   isOwn,
   showStatus = false,
-  onRetry,
   className,
 }) => {
   const { t } = useTranslation();
@@ -127,7 +97,7 @@ export const MessageMeta: React.FC<MessageMetaProps> = ({
       )}
       <span>{timeStr}</span>
       {isOwn && showStatus && (
-        <MessageStatusLabel status={message.status} onRetry={onRetry} />
+        <MessageStatusLabel status={message.status} />
       )}
     </div>
   );

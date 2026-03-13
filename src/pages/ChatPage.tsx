@@ -211,6 +211,7 @@ export const ChatPage: React.FC = () => {
   const roomCreationLockRef = useRef(false);
   const [isValidatingRoom, setIsValidatingRoom] = useState(false);
   const directInfoHydratedRef = useRef<Set<string>>(new Set());
+  const lastReadSyncKeyRef = useRef<string | null>(null);
 
   // Current user as UserSummary for components
   const currentUserSummary = useMemo<UserSummary | null>(
@@ -322,31 +323,19 @@ export const ChatPage: React.FC = () => {
 
   // Load messages when conversation changes & join/leave rooms
   useEffect(() => {
-    let isCancelled = false;
-
     if (selectedConversationId && !isValidatingRoom) {
       const loadPromise = isSelectedConversationHydrated
         ? Promise.resolve()
         : fetchMessages(selectedConversationId).then(() => undefined);
 
-      void loadPromise.finally(() => {
-        if (isCancelled) return;
-        void markAsRead(selectedConversationId).catch(() => {
-          // no-op: best effort to align unread count
-        });
-      });
+      void loadPromise;
       joinRoom(selectedConversationId);
 
       return () => {
-        isCancelled = true;
         stopTyping(selectedConversationId);
         leaveRoom(selectedConversationId);
       };
     }
-
-    return () => {
-      isCancelled = true;
-    };
   }, [
     selectedConversationId,
     isSelectedConversationHydrated,
@@ -354,9 +343,12 @@ export const ChatPage: React.FC = () => {
     fetchMessages,
     joinRoom,
     leaveRoom,
-    markAsRead,
     stopTyping,
   ]);
+
+  useEffect(() => {
+    lastReadSyncKeyRef.current = null;
+  }, [selectedConversationId]);
 
   // Handle select conversation
   const handleSelectConversation = useCallback(
@@ -448,6 +440,33 @@ export const ChatPage: React.FC = () => {
       force: true,
     });
   }, [fetchMessages, selectedConversationId]);
+
+  const handleReachedLatestMessage = useCallback(
+    (message: Message) => {
+      if (!selectedConversationId) return;
+
+      const conversation = useChatStore
+        .getState()
+        .conversations.find((item) => item.id === selectedConversationId);
+      if (!conversation) return;
+
+      const latestKey = `${selectedConversationId}:${message.id}`;
+      if (
+        (conversation.unreadCount ?? 0) <= 0 &&
+        lastReadSyncKeyRef.current === latestKey
+      ) {
+        return;
+      }
+
+      lastReadSyncKeyRef.current = latestKey;
+      void markAsRead(selectedConversationId).catch(() => {
+        if (lastReadSyncKeyRef.current === latestKey) {
+          lastReadSyncKeyRef.current = null;
+        }
+      });
+    },
+    [markAsRead, selectedConversationId],
+  );
 
   useEffect(() => {
     if (!selectedConversationId || isValidatingRoom) return;
@@ -989,6 +1008,7 @@ export const ChatPage: React.FC = () => {
             }}
             messageError={currentMessageError}
             onRetryMessages={handleRetryMessages}
+            onReachedLatestMessage={handleReachedLatestMessage}
             connectionState={connectionState}
           />
         ) : (

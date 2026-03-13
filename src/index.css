@@ -499,12 +499,16 @@ a:focus-visible {
 
   /* Message row hover highlight */
   .msg-row-hover {
-    transition: background-color 150ms ease;
-    border-radius: 6px;
+    transition:
+      background-color 120ms cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 120ms cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: 14px;
   }
 
-  .msg-row-hover:hover {
-    background-color: hsl(var(--color-surface-hover) / 0.4);
+  @media (hover: hover) and (pointer: fine) {
+    .msg-row-hover:hover {
+      background-color: hsl(var(--color-surface-hover) / 0.18);
+    }
   }
 
   .toast-base {

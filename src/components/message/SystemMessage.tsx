@@ -31,10 +31,10 @@ export const SystemMessage: React.FC<SystemMessageProps> = ({
         : "info";
 
   return (
-    <div className={clsx("my-4 flex justify-center", className)}>
+    <div className={clsx("my-5 flex justify-center", className)}>
       <span
         className={clsx(
-          "rounded-full border px-3.5 py-1 text-[11px] backdrop-blur",
+          "rounded-full border px-3.5 py-1 text-[11px] tracking-[0.01em] backdrop-blur",
           severity === "error"
             ? "border-danger/25 bg-danger/10 text-danger"
             : severity === "warn"

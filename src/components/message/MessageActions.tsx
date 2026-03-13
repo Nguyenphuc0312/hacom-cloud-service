@@ -61,7 +61,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
     return (
       <div
         className={clsx(
-          "flex items-center gap-1 rounded-full bg-[hsl(var(--color-chat-pill)/0.92)] p-1 shadow-xs backdrop-blur-sm",
+          "flex items-center gap-0.5 rounded-full border border-white/8 bg-[hsl(var(--color-chat-pill)/0.9)] p-1 shadow-xs backdrop-blur-sm",
           className,
         )}
       >
@@ -69,7 +69,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
           <button
             type="button"
             onClick={onReact}
-            className="rounded-full p-2 text-text-secondary transition-colors hover:bg-white/6 hover:text-text-primary"
+            className="rounded-full p-2 text-text-secondary transition-fast hover:bg-white/6 hover:text-text-primary"
             aria-label={t("chat:message.actions.react", {
               defaultValue: "React",
             })}
@@ -82,7 +82,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
           <button
             type="button"
             onClick={onReply}
-            className="rounded-full p-2 text-text-secondary transition-colors hover:bg-white/6 hover:text-text-primary"
+            className="rounded-full p-2 text-text-secondary transition-fast hover:bg-white/6 hover:text-text-primary"
             aria-label={t("chat:message.actions.reply")}
             title={t("chat:message.actions.reply")}
           >
@@ -93,7 +93,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
           <button
             type="button"
             onClick={onMore}
-            className="rounded-full p-2 text-text-secondary transition-colors hover:bg-white/6 hover:text-text-primary"
+            className="rounded-full p-2 text-text-secondary transition-fast hover:bg-white/6 hover:text-text-primary"
             aria-label={t("chat:header.moreActions")}
             title={t("chat:header.moreActions")}
           >

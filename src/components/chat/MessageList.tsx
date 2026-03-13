@@ -42,13 +42,10 @@ interface MessageListProps {
   onToggleSelect?: (messageId: string) => void;
   currentUsername?: string;
   unreadMarker?: UnreadTimelineMarker | null;
+  onReachedLatest?: (latestMessage: Message) => void;
   jumpToMessageId?: string | null;
   jumpRequestVersion?: number;
   onJumpHandled?: (messageId: string) => void;
-  notice?: {
-    kind: "info" | "warn" | "error";
-    message: string;
-  } | null;
   className?: string;
 }
 
@@ -68,6 +65,7 @@ interface TimelineRowData {
   onToggleSelect?: (messageId: string) => void;
   currentUsername?: string;
   highlightedMessageId: string | null;
+  onTailResize: () => void;
 }
 
 const estimateTimelineItemHeight = (item: TimelineItem): number => {
@@ -128,6 +126,9 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
       const measure = () => {
         const nextSize = Math.ceil(node.getBoundingClientRect().height);
         setItemSize(index, nextSize);
+        if (index === data.items.length - 1) {
+          data.onTailResize();
+        }
       };
 
       measure();
@@ -193,18 +194,6 @@ const toDayKey = (date: Date | null): string => {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 };
 
-const getNoticeClassName = (kind: "info" | "warn" | "error"): string => {
-  switch (kind) {
-    case "warn":
-      return "border-warning/30 bg-warning/12 text-warning";
-    case "error":
-      return "border-danger/30 bg-danger/10 text-danger";
-    case "info":
-    default:
-      return "border-primary/20 bg-surface/95 text-text-secondary";
-  }
-};
-
 const MessageListComponent: React.FC<MessageListProps> = ({
   messages,
   conversation,
@@ -227,10 +216,10 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   onToggleSelect,
   currentUsername,
   unreadMarker,
+  onReachedLatest,
   jumpToMessageId,
   jumpRequestVersion = 0,
   onJumpHandled,
-  notice,
   className,
 }) => {
   const { t } = useTranslation();
@@ -239,6 +228,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const outerRef = React.useRef<HTMLDivElement | null>(null);
   const stickyDateRafRef = React.useRef<number | null>(null);
   const highlightTimerRef = React.useRef<number | null>(null);
+  const tailFollowRafRef = React.useRef<number | null>(null);
   const [stickyDate, setStickyDate] = React.useState<Date | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = React.useState<
     string | null
@@ -331,6 +321,27 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       onToggleSelect,
       currentUsername,
       highlightedMessageId,
+      onTailResize: () => {
+        if (
+          showJumpToBottom ||
+          showNewMessagesPill ||
+          pendingNewMessages > 0
+        ) {
+          return;
+        }
+
+        if (tailFollowRafRef.current !== null) {
+          cancelAnimationFrame(tailFollowRafRef.current);
+        }
+
+        tailFollowRafRef.current = requestAnimationFrame(() => {
+          const outer = outerRef.current;
+          if (outer) {
+            outer.scrollTo({ top: outer.scrollHeight, behavior: "auto" });
+          }
+          tailFollowRafRef.current = null;
+        });
+      },
     }),
     [
       currentUsername,
@@ -345,8 +356,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       onReact,
       onReply,
       onToggleSelect,
+      pendingNewMessages,
       selectedMessageIds,
       setItemSize,
+      showJumpToBottom,
+      showNewMessagesPill,
       timelineItems,
     ],
   );
@@ -496,10 +510,37 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     setStickyDate(null);
   }, [conversation.id, getItemSize, timelineItems]);
 
+  React.useEffect(() => {
+    if (
+      isInitialLoading ||
+      messages.length === 0 ||
+      showJumpToBottom ||
+      showNewMessagesPill ||
+      pendingNewMessages > 0
+    ) {
+      return;
+    }
+
+    const latestMessage = messages[messages.length - 1];
+    if (latestMessage) {
+      onReachedLatest?.(latestMessage);
+    }
+  }, [
+    isInitialLoading,
+    messages,
+    onReachedLatest,
+    pendingNewMessages,
+    showJumpToBottom,
+    showNewMessagesPill,
+  ]);
+
   React.useEffect(
     () => () => {
       if (stickyDateRafRef.current !== null) {
         cancelAnimationFrame(stickyDateRafRef.current);
+      }
+      if (tailFollowRafRef.current !== null) {
+        cancelAnimationFrame(tailFollowRafRef.current);
       }
       if (highlightTimerRef.current !== null) {
         window.clearTimeout(highlightTimerRef.current);
@@ -526,19 +567,6 @@ const MessageListComponent: React.FC<MessageListProps> = ({
           aria-busy={isLoadingMore}
           aria-label={t("chat:message.inConversationAria")}
         >
-          {notice && (
-            <div className="pointer-events-none absolute inset-x-[var(--chat-lane-padding)] top-2 z-[6] flex justify-center">
-              <div
-                className={clsx(
-                  "pointer-events-auto rounded-full border px-3 py-1 text-[11px] font-medium shadow-xs backdrop-blur",
-                  getNoticeClassName(notice.kind),
-                )}
-              >
-                {notice.message}
-              </div>
-            </div>
-          )}
-
           {error && messages.length === 0 ? (
             <ErrorState
               message={error}
@@ -640,7 +668,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
             "flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/8 bg-[hsl(var(--color-chat-pill))] px-3 shadow-elev2",
             "transition-micro hover:bg-white/10 hover:shadow-elev3 hover:-translate-y-0.5",
             "active:scale-95",
-            "animate-bounce-in",
+            "animate-slide-up-fade",
           )}
           aria-label={t("chat:message.newAria")}
         >
@@ -679,10 +707,10 @@ const areEqualMessageListProps = (
   previousProps.onToggleSelect === nextProps.onToggleSelect &&
   previousProps.currentUsername === nextProps.currentUsername &&
   previousProps.unreadMarker === nextProps.unreadMarker &&
+  previousProps.onReachedLatest === nextProps.onReachedLatest &&
   previousProps.jumpToMessageId === nextProps.jumpToMessageId &&
   previousProps.jumpRequestVersion === nextProps.jumpRequestVersion &&
   previousProps.onJumpHandled === nextProps.onJumpHandled &&
-  previousProps.notice === nextProps.notice &&
   previousProps.className === nextProps.className;
 
 export const MessageList = React.memo(

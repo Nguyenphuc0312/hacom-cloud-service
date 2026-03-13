@@ -198,6 +198,7 @@ export const MessageInput = React.forwardRef<
 
   const [showAttachmentMenu, setShowAttachmentMenu] = React.useState(false);
   const [isShareContactOpen, setIsShareContactOpen] = React.useState(false);
+  const [isComposerFocused, setIsComposerFocused] = React.useState(false);
   const [mentionMatch, setMentionMatch] = React.useState<MentionMatch | null>(
     null,
   );
@@ -609,6 +610,15 @@ export const MessageInput = React.forwardRef<
     isUploading || isSending
       ? t("chat:composer.sending")
       : t("chat:composer.sendMessage");
+  const composerVisualState = disabled
+    ? "disabled"
+    : isUploading || isSending
+      ? "sending"
+      : canSend
+        ? "ready"
+        : isComposerFocused
+          ? "focused"
+          : "idle";
 
   return (
     <div className={clsx("bg-transparent px-3 pb-[max(env(safe-area-inset-bottom),10px)] pt-2 sm:px-4", className)}>
@@ -638,7 +648,7 @@ export const MessageInput = React.forwardRef<
       />
 
       {mode === "reply" && replyToMessage && (
-        <div className="mb-2 flex items-center justify-between rounded-[22px] border border-white/8 bg-[hsl(var(--color-chat-composer))] px-4 py-2">
+        <div className="mb-2 flex items-center justify-between rounded-[20px] border border-white/8 bg-[hsl(var(--color-chat-composer)/0.96)] px-3.5 py-2 shadow-xs animate-slide-up-fade">
           <div className="flex min-w-0 items-center gap-2">
             <div className="h-8 w-1 rounded-full bg-primary" />
             <div className="min-w-0">
@@ -667,7 +677,7 @@ export const MessageInput = React.forwardRef<
       )}
 
       {mode === "edit" && editingMessage && (
-        <div className="mb-2 flex items-center justify-between rounded-[22px] border border-warning/35 bg-warning/15 px-4 py-2">
+        <div className="mb-2 flex items-center justify-between rounded-[20px] border border-warning/35 bg-warning/15 px-3.5 py-2 shadow-xs animate-slide-up-fade">
           <div className="flex min-w-0 items-center gap-2">
             <div className="h-8 w-1 rounded-full bg-warning" />
             <div className="min-w-0">
@@ -728,7 +738,22 @@ export const MessageInput = React.forwardRef<
       )}
 
       <div className="flex items-end gap-2">
-        <div className="relative flex min-w-0 flex-1 items-end rounded-[28px] border border-white/8 bg-[hsl(var(--color-chat-composer))] px-2 py-2 shadow-elev1">
+        <div
+          data-composer-state={composerVisualState}
+          className={clsx(
+            "relative flex min-w-0 flex-1 items-end rounded-[28px] border px-2 py-2 transition-micro",
+            composerVisualState === "disabled" &&
+              "border-white/6 bg-[hsl(var(--color-chat-composer)/0.92)] shadow-none",
+            composerVisualState === "sending" &&
+              "border-primary/18 bg-[hsl(var(--color-chat-composer)/0.98)] shadow-elev2",
+            composerVisualState === "ready" &&
+              "border-primary/20 bg-[hsl(var(--color-chat-composer)/0.99)] shadow-elev2",
+            composerVisualState === "focused" &&
+              "border-white/12 bg-[hsl(var(--color-chat-composer)/0.99)] shadow-elev2",
+            composerVisualState === "idle" &&
+              "border-white/8 bg-[hsl(var(--color-chat-composer))] shadow-elev1",
+          )}
+        >
           <EmojiButton
             value={value}
             onChange={onChange}
@@ -798,9 +823,11 @@ export const MessageInput = React.forwardRef<
               updateMentionState(value, caret);
             }}
             onBlur={() => {
+              setIsComposerFocused(false);
               notifyBlur();
               clearMentionState();
             }}
+            onFocus={() => setIsComposerFocused(true)}
             placeholder={t("chat:composer.placeholder")}
             disabled={disabled}
             rows={1}
@@ -872,6 +899,13 @@ export const MessageInput = React.forwardRef<
         <SendButton
           disabled={!canSend}
           isBusy={isUploading || isSending}
+          state={
+            !canSend
+              ? "disabled"
+              : isUploading || isSending
+                ? "sending"
+                : "ready"
+          }
           onClick={() => {
             void handlePrimarySend();
           }}

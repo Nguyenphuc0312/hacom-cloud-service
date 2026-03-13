@@ -49,8 +49,8 @@ export const MessageSurface: React.FC<MessageSurfaceProps> = ({
         hasReplyPreview && "rounded-t-[18px]",
         hasError &&
           (isOwn
-            ? "bg-danger/90"
-            : "bg-danger/10"),
+            ? "ring-1 ring-danger/35"
+            : "bg-danger/6 ring-1 ring-danger/20"),
         className,
       )}
     >
