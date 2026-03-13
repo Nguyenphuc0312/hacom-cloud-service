@@ -359,7 +359,7 @@ export const ChatPage: React.FC = () => {
       if (!selectedConversationId) return;
 
       try {
-        await storeSendMessage(
+        return await storeSendMessage(
           selectedConversationId,
           content,
           type,
@@ -388,6 +388,7 @@ export const ChatPage: React.FC = () => {
         }
 
         toast.error(apiError.message || t("error:chat.sendFailed"));
+        throw error;
       }
     },
     [selectedConversationId, setSlowModeCooldown, storeSendMessage, t],

@@ -12,7 +12,12 @@ import { ConversationLane } from "./ConversationLane";
 import type { MentionCandidate } from "../input/MessageInput";
 import { toast } from "../ui";
 import { useChatStore, useGroupStore, useUIStore } from "../../stores";
-import { useDropZone, useUploadQueue, usePresence } from "../../hooks";
+import {
+  useComposerAvailability,
+  useDropZone,
+  useUploadQueue,
+  usePresence,
+} from "../../hooks";
 import type {
   Attachment,
   Conversation,
@@ -62,7 +67,7 @@ interface ChatWindowProps {
     replyTo?: Message,
     fileMeta?: Attachment | Attachment[],
     type?: MessageType,
-  ) => void | Promise<void>;
+  ) => unknown | Promise<unknown>;
   onReactMessage?: (messageId: string, emoji: string) => void | Promise<void>;
   onEditMessage?: (messageId: string, content: string) => void | Promise<void>;
   onDeleteMessage?: (messageId: string) => void | Promise<void>;
@@ -138,6 +143,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const clearSlowModeCooldown = useGroupStore((s) => s.clearSlowModeCooldown);
   const addMessage = useChatStore((s) => s.addMessage);
   const fetchMessages = useChatStore((s) => s.fetchMessages);
+  const sendRestriction = useChatStore(
+    (state) => state.sendRestrictionsByConversation[conversation.id],
+  );
 
   const [inputValue, setInputValue] = React.useState("");
   const [inputMode, setInputMode] = React.useState<InputMode>("normal");
@@ -265,7 +273,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       setEditingMessage(undefined);
       setInputMode("normal");
 
-      await Promise.resolve(
+      const result = await Promise.resolve(
         onSendMessage(
           outgoingContent,
           replyToMessage,
@@ -278,6 +286,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       if (queueMetas.length > 0) {
         uploadQueue.clearAll();
       }
+      return result;
     },
     [
       editingMessage,
@@ -358,6 +367,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [clockTick, slowModeUntil]);
 
   const isSlowModeBlocked = slowModeRemainingSeconds > 0;
+  const composerAvailability = useComposerAvailability({
+    connectionState,
+    conversation,
+    sendRestriction,
+    slowModeRemainingSeconds,
+  });
 
   React.useEffect(() => {
     if (!isSlowModeBlocked) {
@@ -757,15 +772,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             onCancelEdit={handleCancelEdit}
             onTyping={onTyping}
             sendOnEnter
-            disabled={isSlowModeBlocked}
-            disabledReason={
-              isSlowModeBlocked
-                ? t("chat:slowMode.active", {
-                    defaultValue: "Slow mode active. Try again in {{seconds}}s.",
-                    seconds: slowModeRemainingSeconds,
-                  })
-                : undefined
-            }
+            disabled={!composerAvailability.canType}
+            submitDisabled={!composerAvailability.canSubmit}
+            attachmentsDisabled={!composerAvailability.canAttach}
+            disabledReason={composerAvailability.statusMessage}
+            disabledReasonTone={composerAvailability.statusTone}
+            composerMode={composerAvailability.mode}
             onShareContact={handleShareContact}
             uploadDrafts={uploadQueue.drafts}
             onAddFiles={uploadQueue.addFiles}

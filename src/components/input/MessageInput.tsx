@@ -18,6 +18,7 @@ import {
   useSendMessage,
   useTypingIndicator,
 } from "../../hooks";
+import type { ComposerMode } from "../../hooks/useComposerAvailability";
 import type { AttachmentPickerMode } from "../../hooks/useSendMessage";
 import type { InputMode, Message } from "../../types";
 import type { AttachmentDraft } from "../../types/attachmentDraft";
@@ -42,7 +43,7 @@ interface MessageInputProps {
     content?: string,
     fileMeta?: unknown,
     type?: string,
-  ) => void | Promise<void>;
+  ) => unknown | Promise<unknown>;
   mode: InputMode;
   conversationId?: string;
   mentionCandidates?: MentionCandidate[];
@@ -53,8 +54,12 @@ interface MessageInputProps {
   onTyping?: (isTyping: boolean) => void;
   sendOnEnter?: boolean;
   disabled?: boolean;
+  submitDisabled?: boolean;
+  attachmentsDisabled?: boolean;
   className?: string;
   disabledReason?: string;
+  disabledReasonTone?: "info" | "warn" | "error";
+  composerMode?: ComposerMode;
   currentUserId?: string;
   onShareContact?: (contactUserId: string) => Promise<void>;
 
@@ -169,8 +174,12 @@ export const MessageInput = React.forwardRef<
     onTyping,
     sendOnEnter = true,
     disabled = false,
+    submitDisabled = false,
+    attachmentsDisabled = false,
     className,
     disabledReason,
+    disabledReasonTone = "warn",
+    composerMode = "online",
     currentUserId,
     onShareContact,
     // Multi-file upload queue
@@ -223,7 +232,7 @@ export const MessageInput = React.forwardRef<
     openFilePicker,
   } = useSendMessage({
     conversationId,
-    disabled,
+    disabled: submitDisabled,
     onSend,
   });
 
@@ -294,6 +303,14 @@ export const MessageInput = React.forwardRef<
 
   const handleFileInputChange = React.useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (attachmentsDisabled) {
+        event.target.value = "";
+        if (disabledReason) {
+          toast.error(disabledReason);
+        }
+        return;
+      }
+
       const files = event.target.files;
       if (!files || files.length === 0) return;
 
@@ -305,11 +322,19 @@ export const MessageInput = React.forwardRef<
       }
       event.target.value = "";
     },
-    [onAddFiles, selectFile],
+    [attachmentsDisabled, disabledReason, onAddFiles, selectFile],
   );
 
   const handleAttachmentSelect = React.useCallback(
     (type: string) => {
+      if ((type === "photo" || type === "document") && attachmentsDisabled) {
+        if (disabledReason) {
+          toast.error(disabledReason);
+        }
+        setShowAttachmentMenu(false);
+        return;
+      }
+
       if (type === "photo" || type === "document") {
         openFilePicker(type as AttachmentPickerMode, fileInputRef.current);
       } else if (type === "contact") {
@@ -323,7 +348,15 @@ export const MessageInput = React.forwardRef<
       }
       setShowAttachmentMenu(false);
     },
-    [conversationId, currentUserId, onShareContact, openFilePicker, t],
+    [
+      attachmentsDisabled,
+      conversationId,
+      currentUserId,
+      disabledReason,
+      onShareContact,
+      openFilePicker,
+      t,
+    ],
   );
 
   const handleInsertMentionTrigger = React.useCallback(() => {
@@ -358,8 +391,8 @@ export const MessageInput = React.forwardRef<
   ]);
 
   const handleSendText = React.useCallback(async () => {
-    const sent = await sendTextMessage(value);
-    if (!sent) {
+    const result = await sendTextMessage(value);
+    if (result === "failed") {
       setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
       return;
     }
@@ -367,15 +400,25 @@ export const MessageInput = React.forwardRef<
     onChange("");
     clearMentionState();
     stopTypingNow();
-    setLiveRegionMessage(t("chat:composer.sentAnnouncement"));
+    setLiveRegionMessage(
+      result === "queued"
+        ? t("chat:composer.queuedAnnouncement", {
+            defaultValue: "Message queued",
+          })
+        : t("chat:composer.sentAnnouncement"),
+    );
   }, [clearMentionState, onChange, sendTextMessage, stopTypingNow, t, value]);
 
   const handleSendAttachment = React.useCallback(async () => {
-    const sent = await sendAttachmentMessage();
+    const result = await sendAttachmentMessage();
     setLiveRegionMessage(
-      sent
-        ? t("chat:composer.sentAnnouncement")
-        : t("chat:composer.failedAnnouncement"),
+      result === "failed"
+        ? t("chat:composer.failedAnnouncement")
+        : result === "queued"
+          ? t("chat:composer.queuedAnnouncement", {
+              defaultValue: "Message queued",
+            })
+          : t("chat:composer.sentAnnouncement"),
     );
   }, [sendAttachmentMessage, t]);
 
@@ -385,11 +428,17 @@ export const MessageInput = React.forwardRef<
     if (hasQueueDrafts && hasReadyDrafts) {
       const content = value.trim();
       // Call onSend — ChatWindow.handleSend gathers ready metas
-      await onSend(content || undefined);
+      const result = await onSend(content || undefined);
       onChange("");
       clearMentionState();
       stopTypingNow();
-      setLiveRegionMessage(t("chat:composer.sentAnnouncement"));
+      setLiveRegionMessage(
+        (result as { disposition?: string } | undefined)?.disposition === "queued"
+          ? t("chat:composer.queuedAnnouncement", {
+              defaultValue: "Message queued",
+            })
+          : t("chat:composer.sentAnnouncement"),
+      );
       return;
     }
 
@@ -463,6 +512,35 @@ export const MessageInput = React.forwardRef<
     void handleSendAttachment();
   }, [handleSendAttachment]);
 
+  const hasText = value.trim().length > 0;
+  const hasQueueDrafts = (uploadDrafts?.length ?? 0) > 0;
+  const canSend = hasQueueDrafts
+    ? !submitDisabled &&
+      !isSending &&
+      !hasUploadingDrafts &&
+      (hasReadyDrafts || hasText)
+    : selectedFile
+      ? !submitDisabled &&
+        !isUploading &&
+        !isSending &&
+        composerMode === "online"
+      : !submitDisabled && !isSending && hasText;
+  const disableToolbar = disabled || isUploading;
+  const disableAttachmentActions = attachmentsDisabled || isUploading;
+  const sendButtonLabel =
+    isUploading || isSending
+      ? t("chat:composer.sending")
+      : t("chat:composer.sendMessage");
+  const composerVisualState = disabled
+    ? "disabled"
+    : isUploading || isSending
+      ? "sending"
+      : canSend
+        ? "ready"
+        : isComposerFocused
+          ? "focused"
+          : "idle";
+
   const handleKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (showMentionPanel) {
@@ -523,6 +601,7 @@ export const MessageInput = React.forwardRef<
       if (
         event.key === "Enter" &&
         sendOnEnter &&
+        canSend &&
         !event.shiftKey &&
         !event.nativeEvent.isComposing
       ) {
@@ -539,6 +618,7 @@ export const MessageInput = React.forwardRef<
       mode,
       onCancelEdit,
       onCancelReply,
+      canSend,
       sendOnEnter,
       showMentionPanel,
     ],
@@ -596,31 +676,6 @@ export const MessageInput = React.forwardRef<
     };
   }, [stopTypingNow]);
 
-  const hasText = value.trim().length > 0;
-  const hasQueueDrafts = (uploadDrafts?.length ?? 0) > 0;
-  const canSend = hasQueueDrafts
-    ? !disabled &&
-      !isSending &&
-      !hasUploadingDrafts &&
-      (hasReadyDrafts || hasText)
-    : selectedFile
-      ? !disabled && !isUploading && !isSending
-      : !disabled && !isSending && hasText;
-  const disableToolbar = disabled || isUploading;
-  const sendButtonLabel =
-    isUploading || isSending
-      ? t("chat:composer.sending")
-      : t("chat:composer.sendMessage");
-  const composerVisualState = disabled
-    ? "disabled"
-    : isUploading || isSending
-      ? "sending"
-      : canSend
-        ? "ready"
-        : isComposerFocused
-          ? "focused"
-          : "idle";
-
   return (
     <div
       className={clsx(
@@ -638,8 +693,18 @@ export const MessageInput = React.forwardRef<
           {liveRegionMessage}
         </p>
 
-        {disabled && disabledReason && (
-          <div className="mb-2 rounded-full border border-warning/25 bg-warning/10 px-4 py-1.5 text-xs text-warning">
+        {disabledReason && (
+          <div
+            className={clsx(
+              "mb-2 rounded-full px-4 py-1.5 text-xs",
+              disabledReasonTone === "error" &&
+                "border border-danger/25 bg-danger/10 text-danger",
+              disabledReasonTone === "info" &&
+                "border border-primary/20 bg-primary/10 text-primary",
+              disabledReasonTone === "warn" &&
+                "border border-warning/25 bg-warning/10 text-warning",
+            )}
+          >
             {disabledReason}
           </div>
         )}
@@ -882,12 +947,12 @@ export const MessageInput = React.forwardRef<
                     ? "bg-white/10 text-text-primary"
                     : "text-text-muted hover:bg-white/8 hover:text-text-primary",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-                  disableToolbar && "cursor-not-allowed opacity-50",
+                  disableAttachmentActions && "cursor-not-allowed opacity-50",
                 )}
                 aria-label={t("chat:composer.attachFile")}
                 aria-haspopup="menu"
                 aria-expanded={showAttachmentMenu}
-                disabled={disableToolbar}
+                disabled={disableAttachmentActions}
               >
                 <PaperClipIcon className="h-5 w-5" />
               </button>

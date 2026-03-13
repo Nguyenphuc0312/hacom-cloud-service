@@ -1,5 +1,5 @@
 import type { Conversation, MessageSummary, UserSummary } from "../types";
-import { MessageType, RoomType, UserStatus } from "../types";
+import { MessageStatus, MessageType, RoomType, UserStatus } from "../types";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -148,7 +148,12 @@ const normalizeLastMessage = (source: UnknownRecord): MessageSummary | undefined
       raw.createdAt ?? source.lastMessageAt ?? source.updatedAt,
       new Date(),
     ),
-  };
+    ...(asString(raw.sendState) ? { sendState: asString(raw.sendState) } : {}),
+    ...(asString(raw.status) &&
+    Object.values(MessageStatus).includes(asString(raw.status) as MessageStatus)
+      ? { status: asString(raw.status) }
+      : {}),
+  } as MessageSummary;
 };
 
 const toParticipantsCount = (

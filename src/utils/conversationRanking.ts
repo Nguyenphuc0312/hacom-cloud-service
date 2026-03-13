@@ -123,7 +123,25 @@ const hasConversationFailedSend = (conversation: Conversation): boolean => {
   const failureCount =
     asNumber(record?.failedSendCount) ??
     asNumber(record?.failedMessageCount);
-  return failureCount !== null ? failureCount > 0 : false;
+  if (failureCount !== null) {
+    return failureCount > 0;
+  }
+
+  const lastMessageRecord =
+    conversation.lastMessage &&
+    typeof conversation.lastMessage === "object"
+      ? (conversation.lastMessage as unknown as Record<string, unknown>)
+      : null;
+  const sendState =
+    typeof lastMessageRecord?.sendState === "string"
+      ? lastMessageRecord.sendState
+      : null;
+  const status =
+    typeof lastMessageRecord?.status === "string"
+      ? lastMessageRecord.status
+      : null;
+
+  return sendState === "failed" || status === "failed";
 };
 
 const getConversationActivityTimestamp = (conversation: Conversation): number => {

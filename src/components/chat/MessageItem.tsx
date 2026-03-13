@@ -180,6 +180,7 @@ const areEqualMessageItem = (
     if (prevMsg.id !== nextMsg.id) return false;
     if (prevMsg.content !== nextMsg.content) return false;
     if (prevMsg.status !== nextMsg.status) return false;
+    if (prevMsg.sendState !== nextMsg.sendState) return false;
     if (prevMsg.isEdited !== nextMsg.isEdited) return false;
     if (prevMsg.isDeleted !== nextMsg.isDeleted) return false;
     if (prevMsg.isPinned !== nextMsg.isPinned) return false;

@@ -86,6 +86,14 @@ const MessageDeliveryState: React.FC<{
   const label =
     message.status === "uploading"
       ? t("chat:message.status.uploading")
+      : message.sendState === "queued"
+        ? t("chat:message.status.queued", {
+            defaultValue: "Queued",
+          })
+        : message.sendState === "retrying"
+          ? t("chat:message.status.retrying", {
+              defaultValue: "Retrying",
+            })
       : failed
         ? t("chat:message.status.failedInline", {
             defaultValue: "Chua gui duoc",
@@ -104,6 +112,8 @@ const MessageDeliveryState: React.FC<{
     >
       {failed ? (
         <ExclamationCircleIcon className="h-3.5 w-3.5 shrink-0" />
+      ) : message.sendState === "queued" ? (
+        <ChatBubbleLeftIcon className="h-3.5 w-3.5 shrink-0" />
       ) : (
         <ArrowPathIcon className="h-3.5 w-3.5 shrink-0 animate-spin" />
       )}

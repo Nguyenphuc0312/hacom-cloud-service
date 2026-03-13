@@ -37,10 +37,16 @@ const canCopyMessage = (message: Message): boolean =>
   Boolean(message.content?.trim());
 
 const canReactToMessage = (message: Message): boolean =>
-  message.type !== MessageType.SYSTEM && !message.isDeleted;
+  message.type !== MessageType.SYSTEM &&
+  !message.isDeleted &&
+  !isPendingMessage(message) &&
+  !isFailedMessage(message);
 
 const canReplyToMessage = (message: Message): boolean =>
-  message.type !== MessageType.SYSTEM && !message.isDeleted;
+  message.type !== MessageType.SYSTEM &&
+  !message.isDeleted &&
+  !isPendingMessage(message) &&
+  !isFailedMessage(message);
 
 const canEditMessage = (message: Message, isOwn: boolean): boolean =>
   isOwn &&

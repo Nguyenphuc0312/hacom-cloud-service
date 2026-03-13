@@ -16,6 +16,7 @@ import {
   getConversationAvatar,
   getConversationDisplayName,
   getMessagePreview,
+  getMessagePreviewState,
   getOtherParticipant,
 } from "../../../utils/messageHelpers";
 
@@ -66,6 +67,10 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
 
     return `${senderLabel}: ${messagePreview}`;
   }, [conversation.lastMessage, currentUser.id, directPartner, t]);
+  const previewState = useMemo(
+    () => getMessagePreviewState(conversation.lastMessage, currentUser.id),
+    [conversation.lastMessage, currentUser.id],
+  );
   const timeLabel = useMemo(() => {
     if (!conversation.lastMessage?.createdAt) return "";
     return formatRelativeTime(new Date(conversation.lastMessage.createdAt));
@@ -169,9 +174,13 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
           <p
             className={clsx(
               "truncate text-xs leading-5 text-start",
-              unreadCount > 0
-                ? "font-medium text-text-secondary"
-                : "text-text-muted",
+              previewState === "failed"
+                ? "font-medium text-danger"
+                : previewState
+                  ? "font-medium text-warning"
+                  : unreadCount > 0
+                    ? "font-medium text-text-secondary"
+                    : "text-text-muted",
             )}
           >
             {previewText || t("sidebar:room.noMessagesYet")}

@@ -21,6 +21,10 @@ import { useVirtualizedMessages } from "../../hooks/useVirtualizedMessages";
 import type { Conversation, Message, Attachment } from "../../types";
 import type { ChatDensity } from "../../stores/uiStore";
 import { formatDateDivider } from "../../utils/formatTime";
+import {
+  isFailedMessage,
+  isPendingMessage,
+} from "../../utils/messageTimeline";
 import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 
 interface MessageListProps {
@@ -100,7 +104,7 @@ const estimateTimelineItemHeight = (
   if (message.forwardedFrom) baseHeight += 22;
   if ((message.reactions?.length ?? 0) > 0) baseHeight += 32;
   if (!item.isOwn && item.showSenderName) baseHeight += 20;
-  if (message.status === "failed") baseHeight += 18;
+  if (isFailedMessage(message) || isPendingMessage(message)) baseHeight += 18;
 
   switch (message.type) {
     case "image":

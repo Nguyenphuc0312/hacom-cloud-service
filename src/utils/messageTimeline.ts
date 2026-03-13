@@ -43,10 +43,14 @@ export const hasMessageLayoutDecorator = (message: Message): boolean =>
   );
 
 export const isPendingMessage = (message: Message): boolean =>
-  message.status === MessageStatus.SENDING || message.status === "uploading";
+  message.status === "uploading" ||
+  message.sendState === "queued" ||
+  message.sendState === "sending" ||
+  message.sendState === "retrying" ||
+  (!message.sendState && message.status === MessageStatus.SENDING);
 
 export const isFailedMessage = (message: Message): boolean =>
-  message.status === MessageStatus.FAILED;
+  message.sendState === "failed" || message.status === MessageStatus.FAILED;
 
 export const createReplySnapshot = (
   message?: Message,

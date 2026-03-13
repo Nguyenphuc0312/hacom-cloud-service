@@ -73,6 +73,34 @@ export type {
 
 import type { Conversation, User } from "@hacom/chat-shared-types";
 
+export type MessageSendState =
+  | "queued"
+  | "sending"
+  | "retrying"
+  | "sent"
+  | "failed";
+
+export type MessageQueueReason = "offline" | "reconnecting" | "manual_retry";
+
+export type MessageFailureReason =
+  | "network"
+  | "timeout"
+  | "permission"
+  | "slow_mode"
+  | "server"
+  | "unknown";
+
+export interface SendRestriction {
+  code?: string;
+  reason: string;
+  kind: "blocked" | "permission" | "slow_mode" | "readonly";
+}
+
+export interface SendMessageResult {
+  disposition: "queued" | "sent";
+  messageId: string;
+}
+
 export interface Message extends Omit<
   import("@hacom/chat-shared-types").Message,
   "id" | "status"
@@ -89,6 +117,11 @@ export interface Message extends Omit<
     | "optimistic"
     | "acked_transport"
     | "synced_stream";
+  sendState?: MessageSendState;
+  queuedReason?: MessageQueueReason;
+  failureReason?: MessageFailureReason;
+  sendAttempts?: number;
+  lastSendAttemptAt?: Date;
   status: import("@hacom/chat-shared-types").MessageStatus | "uploading";
 }
 

@@ -4,14 +4,18 @@ import { fileApi } from "../services/api";
 import { UPLOAD_CONFIG } from "../config";
 import { toast } from "../components/ui";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
-import { FileType } from "../types";
+import { FileType, type SendMessageResult } from "../types";
 
 export type AttachmentPickerMode = "photo" | "document";
 
 interface UseSendMessageOptions {
   conversationId?: string;
   disabled?: boolean;
-  onSend: (content?: string, fileMeta?: unknown, type?: string) => void | Promise<void>;
+  onSend: (
+    content?: string,
+    fileMeta?: unknown,
+    type?: string,
+  ) => unknown | Promise<unknown>;
 }
 
 interface UseSendMessageResult {
@@ -22,8 +26,8 @@ interface UseSendMessageResult {
   isUploading: boolean;
   isSending: boolean;
   selectFile: (file: File) => boolean;
-  sendTextMessage: (content: string) => Promise<boolean>;
-  sendAttachmentMessage: () => Promise<boolean>;
+  sendTextMessage: (content: string) => Promise<"sent" | "queued" | "failed">;
+  sendAttachmentMessage: () => Promise<"sent" | "queued" | "failed">;
   clearSelectedFile: () => void;
   cancelUpload: () => void;
   openFilePicker: (mode: AttachmentPickerMode, input: HTMLInputElement | null) => void;
@@ -62,6 +66,11 @@ const isCanceledUploadError = (error: unknown): boolean => {
     value.name === "AbortError" ||
     value.name === "CanceledError"
   );
+};
+
+const resolveDisposition = (result: unknown): "sent" | "queued" => {
+  const candidate = result as SendMessageResult | undefined;
+  return candidate?.disposition === "queued" ? "queued" : "sent";
 };
 
 export const useSendMessage = ({
@@ -135,16 +144,16 @@ export const useSendMessage = ({
   const sendTextMessage = React.useCallback(
     async (content: string) => {
       const text = content.trim();
-      if (!text || disabled || isSending) return false;
+      if (!text || disabled || isSending) return "failed";
 
       setIsSending(true);
       try {
-        await Promise.resolve(onSend(text));
-        return true;
+        const result = await Promise.resolve(onSend(text));
+        return resolveDisposition(result);
       } catch (error) {
         const apiError = extractApiError(error);
         toast.error(apiError.message || t("error:chat.sendFailed"));
-        return false;
+        return "failed";
       } finally {
         setIsSending(false);
       }
@@ -153,7 +162,9 @@ export const useSendMessage = ({
   );
 
   const sendAttachmentMessage = React.useCallback(async () => {
-    if (!selectedFile || !conversationId || disabled || isUploading || isSending) return false;
+    if (!selectedFile || !conversationId || disabled || isUploading || isSending) {
+      return "failed";
+    }
 
     const abortController = new AbortController();
     uploadAbortRef.current = abortController;
@@ -175,22 +186,22 @@ export const useSendMessage = ({
       const messageType = attachmentType === FileType.IMAGE ? "image" : "file";
 
       setIsSending(true);
-      await Promise.resolve(
+      const result = await Promise.resolve(
         onSend(attachment.fileName || selectedFile.name, attachment, messageType),
       );
       clearSelectedFile();
-      return true;
+      return resolveDisposition(result);
     } catch (error) {
       if (isCanceledUploadError(error)) {
         setUploadError(t("error:upload.uploadCanceled"));
-        return false;
+        return "failed";
       }
 
       const apiError = extractApiError(error);
       const errorMessage = apiError.message || t("error:upload.uploadFailed");
       setUploadError(errorMessage);
       toast.error(errorMessage);
-      return false;
+      return "failed";
     } finally {
       uploadAbortRef.current = null;
       setIsUploading(false);

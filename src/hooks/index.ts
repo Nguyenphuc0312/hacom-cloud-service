@@ -26,3 +26,4 @@ export { useMessageSearch } from "./useMessageSearch";
 export { usePinnedMessages } from "./usePinnedMessages";
 export { useFriendship } from "./useFriendship";
 export { usePresence } from "./usePresence";
+export { useComposerAvailability } from "./useComposerAvailability";

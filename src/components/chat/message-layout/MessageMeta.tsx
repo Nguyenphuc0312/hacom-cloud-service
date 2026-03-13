@@ -17,11 +17,21 @@ interface MessageMetaProps {
 }
 
 const MessageStatusLabel: React.FC<{
-  status: Message["status"];
-}> = ({ status }) => {
+  message: Message;
+}> = ({ message }) => {
   const { t } = useTranslation();
+  const { status, sendState } = message;
 
   if (status === "uploading") {
+    return null;
+  }
+
+  if (
+    sendState === "queued" ||
+    sendState === "sending" ||
+    sendState === "retrying" ||
+    sendState === "failed"
+  ) {
     return null;
   }
 
@@ -97,7 +107,7 @@ export const MessageMeta: React.FC<MessageMetaProps> = ({
       )}
       <span>{timeStr}</span>
       {isOwn && showStatus && (
-        <MessageStatusLabel status={message.status} />
+        <MessageStatusLabel message={message} />
       )}
     </div>
   );

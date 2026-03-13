@@ -128,6 +128,9 @@ export const useWebSocket = (
   const updateConversation = useChatStore((s) => s.updateConversation);
   const removeConversation = useChatStore((s) => s.removeConversation);
   const selectConversation = useChatStore((s) => s.selectConversation);
+  const flushQueuedMessages = useChatStore((s) => s.flushQueuedMessages);
+  const setSendRestriction = useChatStore((s) => s.setSendRestriction);
+  const clearSendRestriction = useChatStore((s) => s.clearSendRestriction);
   const setSlowModeCooldown = useGroupStore((s) => s.setSlowModeCooldown);
   const upsertInviteLink = useGroupStore((s) => s.upsertInviteLink);
   const upsertJoinRequest = useGroupStore((s) => s.upsertJoinRequest);
@@ -400,6 +403,7 @@ export const useWebSocket = (
       hasConnectedOnceRef.current = true;
 
       flushEmitQueue();
+      void flushQueuedMessages();
     });
     unsubscribersRef.current.push(unsubConnect);
 
@@ -879,6 +883,52 @@ export const useWebSocket = (
       (data) => {
         const payload = asRecord(data);
         const allowed = typeof payload?.allowed === "boolean" ? payload.allowed : true;
+        const scope = asString(payload?.scope);
+        const currentUserId = useAuthStore.getState().user?.id;
+        const peerUserId =
+          currentUserId && asString(payload?.userId) === currentUserId
+            ? asString(payload?.peerUserId)
+            : currentUserId && asString(payload?.peerUserId) === currentUserId
+              ? asString(payload?.userId)
+              : asString(payload?.peerUserId);
+
+        if (scope === "direct_message" && peerUserId) {
+          const targetConversation = useChatStore
+            .getState()
+            .conversations.find((conversation) => {
+              if (
+                conversation.type !== "direct" &&
+                conversation.type !== "private"
+              ) {
+                return false;
+              }
+
+              const participantIds = new Set(
+                (conversation.participants || []).map((participant) => participant.id),
+              );
+
+              return (
+                conversation.otherUser?.id === peerUserId ||
+                participantIds.has(peerUserId)
+              );
+            });
+
+          if (targetConversation) {
+            if (allowed) {
+              clearSendRestriction(targetConversation.id);
+            } else {
+              const reason =
+                asString(payload?.reason) === "BLOCKED"
+                  ? "Direct messaging is no longer allowed."
+                  : "Direct messaging permission changed.";
+              setSendRestriction(targetConversation.id, {
+                kind: "permission",
+                reason,
+                code: asString(payload?.reason) ?? "PERMISSION_CHANGED",
+              });
+            }
+          }
+        }
         if (!allowed) {
           toast.warning("Direct messaging permission changed");
         }
@@ -1008,8 +1058,11 @@ export const useWebSocket = (
     recoverSocketAuth,
     resyncRoom,
     removeMessage,
+    flushQueuedMessages,
     scheduleRemoteTypingDecay,
     selectConversation,
+    setSendRestriction,
+    clearSendRestriction,
     setTyping,
     setSlowModeCooldown,
     upsertJoinRequest,

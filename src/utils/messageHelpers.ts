@@ -18,6 +18,18 @@ const isDirectType = (conversationType: unknown): boolean => {
   return normalized === RoomType.PRIVATE || normalized === RoomType.DIRECT;
 };
 
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value !== null && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+
+export type MessagePreviewState =
+  | "queued"
+  | "sending"
+  | "retrying"
+  | "failed"
+  | null;
+
 /**
  * Check if message is from current user.
  */
@@ -97,7 +109,6 @@ export function getMessagePreview(
 ): string {
   if (!message) return "";
 
-  const prefix = message.senderId === currentUserId ? "" : "";
   let preview = "";
 
   switch (message.type) {
@@ -128,10 +139,51 @@ export function getMessagePreview(
       preview = message.content;
   }
 
-  const fullPreview = prefix + preview;
+  const previewState = getMessagePreviewState(message, currentUserId);
+  const stateLabel =
+    previewState === "failed"
+      ? i18n.t("chat:message.status.failedInline")
+      : previewState === "queued"
+        ? i18n.t("chat:message.status.queued")
+        : previewState === "retrying"
+          ? i18n.t("chat:message.status.retrying")
+          : previewState === "sending"
+            ? i18n.t("chat:message.status.sending")
+            : "";
+  const fullPreview =
+    stateLabel && preview ? `${stateLabel}: ${preview}` : stateLabel || preview;
   return fullPreview.length > maxLength
     ? `${fullPreview.substring(0, maxLength - 3)}...`
     : fullPreview;
+}
+
+export function getMessagePreviewState(
+  message: Message | MessageSummary | undefined,
+  currentUserId: string,
+): MessagePreviewState {
+  if (!message || message.senderId !== currentUserId) {
+    return null;
+  }
+
+  const record = asRecord(message);
+  const sendState =
+    typeof record?.sendState === "string" ? record.sendState : undefined;
+  const status = typeof record?.status === "string" ? record.status : undefined;
+
+  if (sendState === "failed" || status === MessageStatus.FAILED) {
+    return "failed";
+  }
+  if (sendState === "queued") {
+    return "queued";
+  }
+  if (sendState === "retrying") {
+    return "retrying";
+  }
+  if (sendState === "sending" || status === MessageStatus.SENDING) {
+    return "sending";
+  }
+
+  return null;
 }
 
 /**
