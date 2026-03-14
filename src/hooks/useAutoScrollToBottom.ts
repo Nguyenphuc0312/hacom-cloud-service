@@ -32,6 +32,8 @@ interface UseAutoScrollToBottomResult {
   followMode: ScrollFollowMode;
   handleScroll: (scrollOffset: number) => void;
   jumpToLatest: (behavior?: ScrollBehavior) => void;
+  detachAutoFollow: () => void;
+  syncDetachedScrollState: () => void;
 }
 
 type ScrollMetrics = {
@@ -42,6 +44,13 @@ type ScrollMetrics = {
   velocityPxPerMs: number;
   lastInteractionAt: number;
 };
+
+interface ConversationScrollSession {
+  followMode: ScrollFollowMode;
+  scrollTop: number;
+}
+
+const conversationScrollSessions = new Map<string, ConversationScrollSession>();
 
 const dedupeMessagesByStableKey = (messages: Message[]): Message[] => {
   const seen = new Set<string>();
@@ -126,6 +135,7 @@ export const useAutoScrollToBottom = ({
   const latestMessagesRef = React.useRef<Message[]>(messages);
   const bufferedMessagesRef = React.useRef<Message[]>([]);
   const scrollSnapshotRef = React.useRef({ scrollTop: 0, scrollHeight: 0 });
+  const pendingRestoreScrollTopRef = React.useRef<number | null>(null);
 
   const syncUiState = React.useCallback(
     (
@@ -146,6 +156,25 @@ export const useAutoScrollToBottom = ({
     [],
   );
 
+  const persistScrollSession = React.useCallback(
+    (
+      nextMode: ScrollFollowMode = followModeRef.current,
+      nextScrollTop?: number,
+    ) => {
+      const outer = outerRef.current;
+      const scrollTop =
+        typeof nextScrollTop === "number"
+          ? nextScrollTop
+          : outer?.scrollTop ?? scrollMetricsRef.current.lastOffset;
+
+      conversationScrollSessions.set(conversationId, {
+        followMode: nextMode,
+        scrollTop: Math.max(0, scrollTop),
+      });
+    },
+    [conversationId, outerRef],
+  );
+
   const flushLiveBuffer = React.useCallback(
     (behavior?: ScrollBehavior) => {
       followModeRef.current = "following";
@@ -157,12 +186,13 @@ export const useAutoScrollToBottom = ({
         distanceFromBottomPx: 0,
       };
       syncUiState(0, "following", true);
+      persistScrollSession("following", outerRef.current?.scrollTop ?? 0);
 
       if (behavior) {
         scrollToBottom(behavior);
       }
     },
-    [scrollToBottom, syncUiState],
+    [outerRef, persistScrollSession, scrollToBottom, syncUiState],
   );
 
   const jumpToLatest = React.useCallback(
@@ -181,9 +211,30 @@ export const useAutoScrollToBottom = ({
       prevConversationIdRef.current !== conversationId;
     if (!conversationChanged) return;
 
+    const savedSession = conversationScrollSessions.get(conversationId);
     prevConversationIdRef.current = conversationId;
     prevSourceMessagesRef.current = messages;
     prevFirstMessageIdRef.current = messages[0]?.id;
+    loadingOlderRef.current = false;
+    bufferedMessagesRef.current = [];
+    setDisplayMessages(messages);
+    pendingRestoreScrollTopRef.current = null;
+
+    if (savedSession?.followMode === "detached") {
+      followModeRef.current = "detached";
+      scrollMetricsRef.current = {
+        isAtBottom: false,
+        distanceFromBottomPx: 0,
+        lastOffset: savedSession.scrollTop,
+        lastMeasureAt: 0,
+        velocityPxPerMs: 0,
+        lastInteractionAt: Date.now(),
+      };
+      pendingRestoreScrollTopRef.current = savedSession.scrollTop;
+      syncUiState(0, "detached", false);
+      return;
+    }
+
     followModeRef.current = "following";
     scrollMetricsRef.current = {
       isAtBottom: true,
@@ -193,13 +244,39 @@ export const useAutoScrollToBottom = ({
       velocityPxPerMs: 0,
       lastInteractionAt: Date.now(),
     };
-    loadingOlderRef.current = false;
-    bufferedMessagesRef.current = [];
-    setDisplayMessages(messages);
     syncUiState(0, "following", true);
 
     scrollToBottom("auto");
   }, [conversationId, messages, scrollToBottom, syncUiState]);
+
+  React.useLayoutEffect(() => {
+    const pendingScrollTop = pendingRestoreScrollTopRef.current;
+    const outer = outerRef.current;
+
+    if (pendingScrollTop === null || !outer) {
+      return;
+    }
+
+    const nextScrollTop = Math.max(
+      0,
+      Math.min(pendingScrollTop, outer.scrollHeight - outer.clientHeight),
+    );
+    outer.scrollTop = nextScrollTop;
+    pendingRestoreScrollTopRef.current = null;
+
+    const distanceFromBottom =
+      outer.scrollHeight - nextScrollTop - outer.clientHeight;
+    scrollMetricsRef.current = {
+      ...scrollMetricsRef.current,
+      isAtBottom: distanceFromBottom <= 0,
+      distanceFromBottomPx: distanceFromBottom,
+      lastOffset: nextScrollTop,
+      lastMeasureAt: performance.now(),
+      velocityPxPerMs: 0,
+      lastInteractionAt: Date.now(),
+    };
+    persistScrollSession("detached", nextScrollTop);
+  }, [displayMessages.length, outerRef, persistScrollSession]);
 
   React.useEffect(() => {
     const outer = outerRef.current;
@@ -271,6 +348,7 @@ export const useAutoScrollToBottom = ({
           distanceFromBottomPx: 0,
         };
         syncUiState(0, decision.nextMode, true);
+        persistScrollSession(decision.nextMode, outer?.scrollTop ?? 0);
         scrollToBottom(decision.behavior);
       } else {
         bufferedMessagesRef.current = dedupeMessagesByStableKey([
@@ -285,6 +363,10 @@ export const useAutoScrollToBottom = ({
           bufferedMessagesRef.current.length,
           decision.nextMode,
           scrollMetricsRef.current.isAtBottom,
+        );
+        persistScrollSession(
+          decision.nextMode,
+          outer?.scrollTop ?? scrollMetricsRef.current.lastOffset,
         );
       }
     } else {
@@ -364,6 +446,7 @@ export const useAutoScrollToBottom = ({
           flushLiveBuffer("auto");
         } else {
           syncUiState(0, "following", scrollDecision.isAtBottom);
+          persistScrollSession("following", scrollOffset);
         }
       } else {
         syncUiState(
@@ -371,6 +454,7 @@ export const useAutoScrollToBottom = ({
           "detached",
           scrollDecision.isAtBottom,
         );
+        persistScrollSession("detached", scrollOffset);
       }
 
       if (
@@ -399,8 +483,60 @@ export const useAutoScrollToBottom = ({
       onBeforeLoadMore,
       onLoadMore,
       outerRef,
+      persistScrollSession,
       syncUiState,
     ],
+  );
+
+  const detachAutoFollow = React.useCallback(() => {
+    followModeRef.current = "detached";
+    scrollMetricsRef.current = {
+      ...scrollMetricsRef.current,
+      isAtBottom: false,
+      lastInteractionAt: Date.now(),
+    };
+    syncUiState(
+      bufferedMessagesRef.current.length,
+      "detached",
+      false,
+    );
+    persistScrollSession(
+      "detached",
+      outerRef.current?.scrollTop ?? scrollMetricsRef.current.lastOffset,
+    );
+  }, [outerRef, persistScrollSession, syncUiState]);
+
+  const syncDetachedScrollState = React.useCallback(() => {
+    const outer = outerRef.current;
+    if (!outer) return;
+
+    const nextScrollTop = outer.scrollTop;
+    const distanceFromBottom =
+      outer.scrollHeight - nextScrollTop - outer.clientHeight;
+
+    followModeRef.current = "detached";
+    scrollMetricsRef.current = {
+      ...scrollMetricsRef.current,
+      isAtBottom: false,
+      distanceFromBottomPx: distanceFromBottom,
+      lastOffset: nextScrollTop,
+      lastMeasureAt: performance.now(),
+      velocityPxPerMs: 0,
+      lastInteractionAt: Date.now(),
+    };
+    syncUiState(
+      bufferedMessagesRef.current.length,
+      "detached",
+      false,
+    );
+    persistScrollSession("detached", nextScrollTop);
+  }, [outerRef, persistScrollSession, syncUiState]);
+
+  React.useEffect(
+    () => () => {
+      persistScrollSession();
+    },
+    [persistScrollSession],
   );
 
   return {
@@ -413,6 +549,8 @@ export const useAutoScrollToBottom = ({
     followMode,
     handleScroll,
     jumpToLatest,
+    detachAutoFollow,
+    syncDetachedScrollState,
   };
 };
 

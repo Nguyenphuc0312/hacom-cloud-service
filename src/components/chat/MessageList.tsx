@@ -316,9 +316,12 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     pendingNewMessages,
     showNewMessagesPill,
     showJumpToBottom,
+    isAtBottom,
     autoFollowEnabled,
     handleScroll,
     jumpToLatest,
+    detachAutoFollow,
+    syncDetachedScrollState,
   } = useAutoScrollToBottom({
     conversationId: conversation.id,
     messages,
@@ -559,10 +562,15 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     );
     if (targetIndex < 0) return;
 
+    detachAutoFollow();
     listRef.current?.scrollToItem(targetIndex, "center");
-    anchorController.refreshAnchorSnapshot();
     setHighlightedMessageId(jumpToMessageId);
     onJumpHandled?.(jumpToMessageId);
+
+    const rafId = requestAnimationFrame(() => {
+      syncDetachedScrollState();
+      anchorController.refreshAnchorSnapshot();
+    });
 
     if (highlightTimerRef.current !== null) {
       window.clearTimeout(highlightTimerRef.current);
@@ -572,11 +580,17 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         current === jumpToMessageId ? null : current,
       );
     }, 1800);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+    };
   }, [
+    detachAutoFollow,
     jumpRequestVersion,
     jumpToMessageId,
     onJumpHandled,
     anchorController,
+    syncDetachedScrollState,
     timelineItems,
   ]);
 
@@ -610,7 +624,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       isInitialLoading ||
       messages.length === 0 ||
       pendingNewMessages > 0 ||
-      !autoFollowEnabled
+      !autoFollowEnabled ||
+      !isAtBottom
     ) {
       return;
     }
@@ -621,6 +636,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     }
   }, [
     isInitialLoading,
+    isAtBottom,
     autoFollowEnabled,
     messages,
     onReachedLatest,
