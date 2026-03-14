@@ -175,18 +175,31 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
     const item = data.items[index];
     const rowRef = React.useRef<HTMLDivElement>(null);
     const { setItemSize } = data;
+    const hasCommittedInitialMeasurementRef = React.useRef(false);
+    const measuredItemKeyRef = React.useRef<string | null>(null);
 
     React.useLayoutEffect(() => {
       const node = rowRef.current;
       if (!node || !item) return;
+      const currentItemKey = item.key || `${item.kind}-${index}`;
+
+      if (measuredItemKeyRef.current !== currentItemKey) {
+        measuredItemKeyRef.current = currentItemKey;
+        hasCommittedInitialMeasurementRef.current = false;
+      }
 
       const measure = () => {
         const nextSize = Math.ceil(node.getBoundingClientRect().height);
         const measurement = setItemSize(index, nextSize);
+        if (!hasCommittedInitialMeasurementRef.current) {
+          hasCommittedInitialMeasurementRef.current = true;
+          return;
+        }
+
         if (measurement.changed && Math.abs(measurement.delta) > 1) {
           data.onItemSizeChange({
             index,
-            key: item.key || `${item.kind}-${index}`,
+            key: currentItemKey,
             delta: measurement.delta,
           });
         }
