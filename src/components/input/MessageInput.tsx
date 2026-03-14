@@ -57,6 +57,7 @@ interface MessageInputProps {
   submitDisabled?: boolean;
   attachmentsDisabled?: boolean;
   className?: string;
+  onLayoutHeightChange?: (nextHeight: number) => void;
   disabledReason?: string;
   disabledReasonTone?: "info" | "warn" | "error";
   composerMode?: ComposerMode;
@@ -177,6 +178,7 @@ export const MessageInput = React.forwardRef<
     submitDisabled = false,
     attachmentsDisabled = false,
     className,
+    onLayoutHeightChange,
     disabledReason,
     disabledReasonTone = "warn",
     composerMode = "online",
@@ -196,6 +198,7 @@ export const MessageInput = React.forwardRef<
   ref,
 ) {
   const { t } = useTranslation();
+  const rootRef = React.useRef<HTMLDivElement>(null);
   const [isDesktopLayout, setIsDesktopLayout] = React.useState(() =>
     isDesktopViewport(),
   );
@@ -676,8 +679,61 @@ export const MessageInput = React.forwardRef<
     };
   }, [stopTypingNow]);
 
+  React.useLayoutEffect(() => {
+    if (!onLayoutHeightChange) {
+      return;
+    }
+
+    const node = rootRef.current;
+    if (!node) {
+      return;
+    }
+
+    let frameId: number | null = null;
+    let timeoutId: number | null = null;
+    let previousHeight = 0;
+
+    const reportHeight = () => {
+      const nextHeight = Math.ceil(node.getBoundingClientRect().height);
+      if (Math.abs(nextHeight - previousHeight) <= 1) {
+        return;
+      }
+
+      previousHeight = nextHeight;
+      onLayoutHeightChange(nextHeight);
+    };
+
+    reportHeight();
+
+    if (typeof ResizeObserver === "undefined") {
+      frameId = window.requestAnimationFrame(reportHeight);
+      timeoutId = window.setTimeout(reportHeight, 120);
+      window.addEventListener("resize", reportHeight);
+
+      return () => {
+        if (frameId !== null) {
+          window.cancelAnimationFrame(frameId);
+        }
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
+        window.removeEventListener("resize", reportHeight);
+        onLayoutHeightChange(0);
+      };
+    }
+
+    const resizeObserver = new ResizeObserver(reportHeight);
+    resizeObserver.observe(node);
+
+    return () => {
+      resizeObserver.disconnect();
+      onLayoutHeightChange(0);
+    };
+  }, [onLayoutHeightChange]);
+
   return (
     <div
+      ref={rootRef}
       className={clsx(
         "bg-transparent pb-[max(env(safe-area-inset-bottom),10px)] pt-2",
         className,

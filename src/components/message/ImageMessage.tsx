@@ -38,6 +38,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
       : "4 / 3";
 
   const hasDisplayUrl = Boolean(resolvedUrl);
+  const hasCaption = Boolean(caption);
 
   useEffect(() => {
     setIsLoaded(false);
@@ -102,8 +103,15 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
           )}
         </div>
 
-        {caption && isLoaded && (
-          <p className={clsx("mt-2 text-sm", isOwn ? "text-text-inverse/90" : "text-text-secondary")}>
+        {hasCaption && (
+          <p
+            className={clsx(
+              "mt-2 min-h-5 text-sm transition-opacity duration-150",
+              isOwn ? "text-text-inverse/90" : "text-text-secondary",
+              isLoaded ? "opacity-100" : "opacity-0",
+            )}
+            aria-hidden={!isLoaded}
+          >
             {caption}
           </p>
         )}

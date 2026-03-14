@@ -53,6 +53,7 @@ interface MessageListProps {
   jumpToMessageId?: string | null;
   jumpRequestVersion?: number;
   onJumpHandled?: (messageId: string) => void;
+  composerHeight?: number;
   className?: string;
 }
 
@@ -87,6 +88,34 @@ interface TimelineRowData {
   }) => void;
 }
 
+const hasInlineUrl = (content?: string): boolean =>
+  typeof content === "string" && /https?:\/\/[^\s]+/i.test(content);
+
+const shouldObserveTimelineItemResize = (item: TimelineItem): boolean => {
+  if (item.kind !== "message") {
+    return false;
+  }
+
+  const message = item.message;
+  if (
+    message.type === "image" ||
+    message.type === "file" ||
+    message.type === "voice"
+  ) {
+    return true;
+  }
+
+  return Boolean(
+    message.replyToMessage ||
+      message.forwardedFrom ||
+      (message.reactions?.length ?? 0) > 0 ||
+      (message.attachments?.length ?? 0) > 0 ||
+      isFailedMessage(message) ||
+      isPendingMessage(message) ||
+      hasInlineUrl(message.content),
+  );
+};
+
 const estimateTimelineItemHeight = (
   item: TimelineItem,
   density: ChatDensity,
@@ -104,11 +133,12 @@ const estimateTimelineItemHeight = (
   if (message.forwardedFrom) baseHeight += 22;
   if ((message.reactions?.length ?? 0) > 0) baseHeight += 32;
   if (!item.isOwn && item.showSenderName) baseHeight += 20;
-  if (isFailedMessage(message) || isPendingMessage(message)) baseHeight += 18;
+  if (isFailedMessage(message) || isPendingMessage(message)) baseHeight += 28;
 
   switch (message.type) {
     case "image":
       baseHeight += 240;
+      if (message.content?.trim()) baseHeight += 28;
       break;
     case "file":
       baseHeight += 96;
@@ -120,6 +150,9 @@ const estimateTimelineItemHeight = (
       const textLength = message.content?.length ?? 0;
       const approximateLines = Math.max(1, Math.ceil(textLength / 34));
       baseHeight += approximateLines * 18;
+      if (hasInlineUrl(message.content)) {
+        baseHeight += 58;
+      }
       break;
     }
   }
@@ -161,7 +194,10 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
 
       measure();
 
-      if (typeof ResizeObserver === "undefined") {
+      if (
+        typeof ResizeObserver === "undefined" ||
+        !shouldObserveTimelineItemResize(item)
+      ) {
         const rafId = requestAnimationFrame(measure);
         return () => cancelAnimationFrame(rafId);
       }
@@ -248,6 +284,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   jumpToMessageId,
   jumpRequestVersion = 0,
   onJumpHandled,
+  composerHeight = 0,
   className,
 }) => {
   const { t } = useTranslation();
@@ -265,20 +302,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   >(null);
 
   const scrollToBottom = React.useCallback(
-    (behavior: ScrollBehavior = "smooth") => {
+    (_behavior: ScrollBehavior = "auto") => {
       const itemCount = timelineItemCountRef.current;
       if (itemCount === 0) return;
 
-      if (behavior === "auto") {
-        listRef.current?.scrollToItem(itemCount - 1, "end");
-      } else {
-        const outer = outerRef.current;
-        if (outer) {
-          outer.scrollTo({ top: outer.scrollHeight, behavior });
-        } else {
-          listRef.current?.scrollToItem(itemCount - 1, "end");
-        }
-      }
+      listRef.current?.scrollToItem(itemCount - 1, "end");
     },
     [],
   );
@@ -397,6 +425,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     listRef,
     outerRef,
     viewportHeight,
+    composerHeight,
     autoFollowEnabled,
     scrollToBottom,
   });
@@ -789,6 +818,7 @@ const areEqualMessageListProps = (
   previousProps.jumpToMessageId === nextProps.jumpToMessageId &&
   previousProps.jumpRequestVersion === nextProps.jumpRequestVersion &&
   previousProps.onJumpHandled === nextProps.onJumpHandled &&
+  previousProps.composerHeight === nextProps.composerHeight &&
   previousProps.className === nextProps.className;
 
 export const MessageList = React.memo(

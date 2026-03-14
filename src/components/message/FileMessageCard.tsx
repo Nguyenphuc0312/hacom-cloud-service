@@ -75,6 +75,11 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   const isImage = previewType === "image";
   const isVideo = previewType === "video";
   const showThumbnail = (isImage || isVideo) && fileStatus === "ready";
+  const thumbnailWidth = attachment.width ? Math.min(attachment.width, 280) : 200;
+  const thumbnailAspectRatio =
+    attachment.width && attachment.height
+      ? `${attachment.width} / ${attachment.height}`
+      : "4 / 3";
 
   // Resolve download URL (lazy — not auto-resolved)
   const { resolveUrl, isLoading: isDownloading } = useAttachmentDownloadUrl(
@@ -225,56 +230,54 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
         )}
       >
         {/* Skeleton */}
-        {(!thumbLoaded || isThumbLoading) && !thumbError && (
-          <div
-            className="animate-pulse rounded-lg bg-surface-overlay"
-            style={{
-              width: attachment.width ? Math.min(attachment.width, 280) : 200,
-              height: attachment.height
-                ? Math.min(attachment.height, 200)
-                : 150,
-            }}
-          />
-        )}
+        <div
+          className="relative overflow-hidden rounded-lg bg-surface-overlay"
+          style={{
+            width: thumbnailWidth,
+            maxWidth: "100%",
+            aspectRatio: thumbnailAspectRatio,
+          }}
+        >
+          {(!thumbLoaded || isThumbLoading) && !thumbError && (
+            <div className="absolute inset-0 animate-pulse bg-surface-overlay" />
+          )}
 
-        {/* Error state */}
-        {thumbError && (
-          <div className="flex h-36 w-full items-center justify-center rounded-lg bg-surface-overlay">
-            <ExclamationTriangleIcon className="h-8 w-8 text-text-muted" />
-          </div>
-        )}
+          {thumbError && (
+            <div className="absolute inset-0 flex items-center justify-center bg-surface-overlay">
+              <ExclamationTriangleIcon className="h-8 w-8 text-text-muted" />
+            </div>
+          )}
 
-        {/* Image */}
-        {thumbnailUrl && !thumbError && (
-          <img
-            src={thumbnailUrl}
-            alt={attachment.fileName || t("chat:image.previewAlt")}
-            className={clsx(
-              "max-h-[200px] max-w-[280px] cursor-pointer rounded-lg object-cover transition-all",
-              thumbLoaded ? "opacity-100" : "absolute left-0 top-0 opacity-0",
-              "hover:brightness-90",
-            )}
-            onLoad={() => setThumbLoaded(true)}
-            onError={() => setThumbError(true)}
-            onClick={handlePreview}
-          />
-        )}
-
-        {/* Preview overlay on hover */}
-        {thumbLoaded && isPreviewable && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-text-primary/0 transition-colors group-hover/file:bg-text-primary/20">
-            <button
-              type="button"
+          {thumbnailUrl && !thumbError && (
+            <img
+              src={thumbnailUrl}
+              alt={attachment.fileName || t("chat:image.previewAlt")}
+              className={clsx(
+                "absolute inset-0 h-full w-full cursor-pointer object-cover transition-opacity",
+                thumbLoaded ? "opacity-100" : "opacity-0",
+                "hover:brightness-90",
+              )}
+              onLoad={() => setThumbLoaded(true)}
+              onError={() => setThumbError(true)}
               onClick={handlePreview}
-              className="pointer-events-auto rounded-full bg-surface/90 p-2 opacity-0 shadow-md backdrop-blur transition-opacity group-hover/file:opacity-100"
-              aria-label={t("chat:filePreview.preview", {
-                defaultValue: "Preview",
-              })}
-            >
-              <EyeIcon className="h-5 w-5 text-text-primary" />
-            </button>
-          </div>
-        )}
+            />
+          )}
+
+          {thumbLoaded && isPreviewable && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-text-primary/0 transition-colors group-hover/file:bg-text-primary/20">
+              <button
+                type="button"
+                onClick={handlePreview}
+                className="pointer-events-auto rounded-full bg-surface/90 p-2 opacity-0 shadow-md backdrop-blur transition-opacity group-hover/file:opacity-100"
+                aria-label={t("chat:filePreview.preview", {
+                  defaultValue: "Preview",
+                })}
+              >
+                <EyeIcon className="h-5 w-5 text-text-primary" />
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* File info bar at bottom */}
         <div

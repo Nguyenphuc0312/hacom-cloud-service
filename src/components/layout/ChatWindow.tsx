@@ -314,6 +314,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [clockTick, setClockTick] = React.useState(() => Date.now());
   const [ephemeralNotice, setEphemeralNotice] =
     React.useState<EphemeralNotice | null>(null);
+  const [composerHeight, setComposerHeight] = React.useState(0);
   const [viewportMetrics, setViewportMetrics] = React.useState(() => ({
     width:
       typeof window !== "undefined" ? window.innerWidth : 1280,
@@ -579,6 +580,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     [conversation.id, t],
   );
 
+  const handleComposerLayoutHeightChange = React.useCallback(
+    (nextHeight: number) => {
+      setComposerHeight((previous) =>
+        Math.abs(previous - nextHeight) <= 1 ? previous : nextHeight,
+      );
+    },
+    [],
+  );
+
   // Exit selection on conversation change
   React.useEffect(() => {
     exitSelectionMode();
@@ -639,6 +649,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         jumpToMessageId={jumpTargetMessage?.id ?? null}
         jumpRequestVersion={jumpRequestVersion}
         onJumpHandled={handleJumpHandled}
+        composerHeight={composerHeight}
         className="flex-1 min-h-0"
       />
     ),
@@ -659,6 +670,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       resolvedDensity,
       handleJumpHandled,
       handleReachedLatest,
+      composerHeight,
       isMessageSelectionMode,
       jumpRequestVersion,
       jumpTargetMessage?.id,
@@ -763,6 +775,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             onChange={handleInputChange}
             onSend={handleSend}
             mode={inputMode}
+            onLayoutHeightChange={handleComposerLayoutHeightChange}
             conversationId={conversation.id}
             currentUserId={currentUser.id}
             mentionCandidates={mentionCandidates}

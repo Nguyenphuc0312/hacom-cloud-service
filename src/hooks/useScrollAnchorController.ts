@@ -12,6 +12,8 @@ interface QueuedSizeChange {
   delta: number;
 }
 
+type ScheduledWrite = "pin-bottom" | "restore-anchor";
+
 interface UseScrollAnchorControllerParams<Item, ListData> {
   conversationId: string;
   items: Item[];
@@ -26,6 +28,7 @@ interface UseScrollAnchorControllerParams<Item, ListData> {
   listRef: React.MutableRefObject<VirtualList<ListData> | null>;
   outerRef: React.MutableRefObject<HTMLDivElement | null>;
   viewportHeight: number;
+  composerHeight?: number;
   autoFollowEnabled: boolean;
   scrollToBottom: (behavior?: ScrollBehavior) => void;
 }
@@ -47,17 +50,29 @@ export const useScrollAnchorController = <Item, ListData>({
   listRef,
   outerRef,
   viewportHeight,
+  composerHeight = 0,
   autoFollowEnabled,
   scrollToBottom,
 }: UseScrollAnchorControllerParams<Item, ListData>): UseScrollAnchorControllerResult => {
   const anchorSnapshotRef = React.useRef<AnchorSnapshot | null>(null);
   const pendingPrependRestoreRef = React.useRef(false);
   const previousViewportHeightRef = React.useRef(0);
-  const pinBottomRafRef = React.useRef<number | null>(null);
-  const anchorRestoreRafRef = React.useRef<number | null>(null);
+  const previousComposerHeightRef = React.useRef<number | null>(null);
+  const scheduledWriteRef = React.useRef<ScheduledWrite | null>(null);
+  const scheduledWriteRafRef = React.useRef<number | null>(null);
   const anchorRefreshRafRef = React.useRef<number | null>(null);
   const sizeChangeRafRef = React.useRef<number | null>(null);
   const queuedSizeChangesRef = React.useRef<QueuedSizeChange[]>([]);
+
+  const getWritePriority = React.useCallback((write: ScheduledWrite): number => {
+    switch (write) {
+      case "restore-anchor":
+        return 2;
+      case "pin-bottom":
+      default:
+        return 1;
+    }
+  }, []);
 
   const resolveAnchorIndex = React.useCallback(
     (snapshot: AnchorSnapshot | null): number => {
@@ -116,49 +131,70 @@ export const useScrollAnchorController = <Item, ListData>({
     });
   }, [captureAnchorSnapshot]);
 
-  const schedulePinToBottom = React.useCallback(() => {
-    if (pinBottomRafRef.current !== null) {
-      cancelAnimationFrame(pinBottomRafRef.current);
+  const flushScheduledWrite = React.useCallback(() => {
+    scheduledWriteRafRef.current = null;
+
+    const scheduledWrite = scheduledWriteRef.current;
+    scheduledWriteRef.current = null;
+    if (!scheduledWrite) {
+      return;
     }
 
-    pinBottomRafRef.current = requestAnimationFrame(() => {
+    if (scheduledWrite === "pin-bottom") {
       scrollToBottom("auto");
-      pinBottomRafRef.current = null;
-    });
-  }, [scrollToBottom]);
-
-  const scheduleAnchorRestore = React.useCallback(() => {
-    if (anchorRestoreRafRef.current !== null) {
-      cancelAnimationFrame(anchorRestoreRafRef.current);
+      return;
     }
 
-    anchorRestoreRafRef.current = requestAnimationFrame(() => {
-      const outer = outerRef.current;
-      const snapshot = anchorSnapshotRef.current;
-      if (!outer || !snapshot) {
-        anchorRestoreRafRef.current = null;
-        return;
-      }
+    const outer = outerRef.current;
+    const snapshot = anchorSnapshotRef.current ?? captureAnchorSnapshot();
+    if (!outer || !snapshot) {
+      return;
+    }
 
-      const anchorIndex = resolveAnchorIndex(snapshot);
-      if (anchorIndex < 0) {
-        anchorRestoreRafRef.current = null;
-        return;
-      }
+    const anchorIndex = resolveAnchorIndex(snapshot);
+    if (anchorIndex < 0) {
+      return;
+    }
 
-      const nextOffset =
-        getItemOffset(anchorIndex) + snapshot.offsetWithinItem;
-      listRef.current?.scrollTo(Math.max(0, nextOffset));
-      anchorRestoreRafRef.current = null;
-      refreshAnchorSnapshot();
-    });
+    const nextOffset = getItemOffset(anchorIndex) + snapshot.offsetWithinItem;
+    listRef.current?.scrollTo(Math.max(0, nextOffset));
+    refreshAnchorSnapshot();
   }, [
+    captureAnchorSnapshot,
     getItemOffset,
     listRef,
     outerRef,
     refreshAnchorSnapshot,
     resolveAnchorIndex,
+    scrollToBottom,
   ]);
+
+  const scheduleWriteOncePerFrame = React.useCallback(
+    (write: ScheduledWrite) => {
+      const currentWrite = scheduledWriteRef.current;
+      if (
+        !currentWrite ||
+        getWritePriority(write) >= getWritePriority(currentWrite)
+      ) {
+        scheduledWriteRef.current = write;
+      }
+
+      if (scheduledWriteRafRef.current !== null) {
+        return;
+      }
+
+      scheduledWriteRafRef.current = requestAnimationFrame(flushScheduledWrite);
+    },
+    [flushScheduledWrite, getWritePriority],
+  );
+
+  const schedulePinToBottom = React.useCallback(() => {
+    scheduleWriteOncePerFrame("pin-bottom");
+  }, [scheduleWriteOncePerFrame]);
+
+  const scheduleAnchorRestore = React.useCallback(() => {
+    scheduleWriteOncePerFrame("restore-anchor");
+  }, [scheduleWriteOncePerFrame]);
 
   const handleScrollOffset = React.useCallback(
     (scrollOffset: number) => {
@@ -176,17 +212,29 @@ export const useScrollAnchorController = <Item, ListData>({
       return;
     }
 
-    const queuedChanges = queuedSizeChangesRef.current;
+    const queuedChanges = Array.from(
+      queuedSizeChangesRef.current.reduce((acc, change) => {
+        const current = acc.get(change.index);
+        acc.set(change.index, {
+          index: change.index,
+          delta: (current?.delta ?? 0) + change.delta,
+        });
+        return acc;
+      }, new Map<number, QueuedSizeChange>()).values(),
+    ).filter((change) => Math.abs(change.delta) > 1);
     queuedSizeChangesRef.current = [];
+
+    if (queuedChanges.length === 0) {
+      return;
+    }
 
     if (autoFollowEnabled) {
       schedulePinToBottom();
       return;
     }
 
-    const outer = outerRef.current;
     const snapshot = anchorSnapshotRef.current ?? captureAnchorSnapshot();
-    if (!outer || !snapshot) {
+    if (!snapshot) {
       return;
     }
 
@@ -196,30 +244,14 @@ export const useScrollAnchorController = <Item, ListData>({
     }
 
     const shouldRestoreAnchor = queuedChanges.some(
-      (change) => change.index === anchorIndex,
+      (change) => change.index <= anchorIndex,
     );
     if (shouldRestoreAnchor) {
       scheduleAnchorRestore();
-      return;
     }
-
-    const totalDeltaBeforeAnchor = queuedChanges.reduce((sum, change) => {
-      if (change.index >= anchorIndex) return sum;
-      return sum + change.delta;
-    }, 0);
-
-    if (Math.abs(totalDeltaBeforeAnchor) <= 1) {
-      return;
-    }
-
-    listRef.current?.scrollTo(Math.max(0, outer.scrollTop + totalDeltaBeforeAnchor));
-    refreshAnchorSnapshot();
   }, [
     autoFollowEnabled,
     captureAnchorSnapshot,
-    listRef,
-    outerRef,
-    refreshAnchorSnapshot,
     resolveAnchorIndex,
     scheduleAnchorRestore,
     schedulePinToBottom,
@@ -251,13 +283,9 @@ export const useScrollAnchorController = <Item, ListData>({
   }, [scheduleAnchorRestore]);
 
   React.useEffect(() => {
-    if (pinBottomRafRef.current !== null) {
-      cancelAnimationFrame(pinBottomRafRef.current);
-      pinBottomRafRef.current = null;
-    }
-    if (anchorRestoreRafRef.current !== null) {
-      cancelAnimationFrame(anchorRestoreRafRef.current);
-      anchorRestoreRafRef.current = null;
+    if (scheduledWriteRafRef.current !== null) {
+      cancelAnimationFrame(scheduledWriteRafRef.current);
+      scheduledWriteRafRef.current = null;
     }
     if (anchorRefreshRafRef.current !== null) {
       cancelAnimationFrame(anchorRefreshRafRef.current);
@@ -270,7 +298,9 @@ export const useScrollAnchorController = <Item, ListData>({
     anchorSnapshotRef.current = null;
     pendingPrependRestoreRef.current = false;
     previousViewportHeightRef.current = 0;
+    previousComposerHeightRef.current = null;
     queuedSizeChangesRef.current = [];
+    scheduledWriteRef.current = null;
   }, [conversationId]);
 
   React.useEffect(() => {
@@ -315,13 +345,38 @@ export const useScrollAnchorController = <Item, ListData>({
     viewportHeight,
   ]);
 
+  React.useLayoutEffect(() => {
+    const previousComposerHeight = previousComposerHeightRef.current;
+    previousComposerHeightRef.current = composerHeight;
+
+    if (
+      previousComposerHeight === null ||
+      Math.abs(previousComposerHeight - composerHeight) <= 1
+    ) {
+      return;
+    }
+
+    if (autoFollowEnabled) {
+      schedulePinToBottom();
+      return;
+    }
+
+    if (!anchorSnapshotRef.current) {
+      captureAnchorSnapshot();
+    }
+    scheduleAnchorRestore();
+  }, [
+    autoFollowEnabled,
+    captureAnchorSnapshot,
+    composerHeight,
+    scheduleAnchorRestore,
+    schedulePinToBottom,
+  ]);
+
   React.useEffect(
     () => () => {
-      if (pinBottomRafRef.current !== null) {
-        cancelAnimationFrame(pinBottomRafRef.current);
-      }
-      if (anchorRestoreRafRef.current !== null) {
-        cancelAnimationFrame(anchorRestoreRafRef.current);
+      if (scheduledWriteRafRef.current !== null) {
+        cancelAnimationFrame(scheduledWriteRafRef.current);
       }
       if (anchorRefreshRafRef.current !== null) {
         cancelAnimationFrame(anchorRefreshRafRef.current);

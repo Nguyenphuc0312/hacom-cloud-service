@@ -23,6 +23,74 @@ interface MessageItemProps {
   currentUsername?: string;
 }
 
+const getAttachmentLayoutSignature = (
+  attachments?: Attachment[],
+): string => {
+  if (!attachments || attachments.length === 0) return "";
+
+  return attachments
+    .map((attachment) =>
+      [
+        attachment.id,
+        attachment.type,
+        attachment.fileName,
+        attachment.fileSize,
+        attachment.width,
+        attachment.height,
+        attachment.thumbnailUrl,
+      ].join(":"),
+    )
+    .join("|");
+};
+
+const getReplyLayoutSignature = (message: Message): string => {
+  const reply = message.replyToMessage;
+  if (!reply) return "";
+  const replyAttachments = (
+    reply as Message["replyToMessage"] & { attachments?: Attachment[] }
+  ).attachments;
+
+  return [
+    reply.id,
+    reply.type,
+    reply.senderName,
+    reply.content,
+    reply.isDeleted,
+    getAttachmentLayoutSignature(replyAttachments),
+  ].join(":");
+};
+
+const getForwardedSignature = (message: Message): string => {
+  const forwardedFrom = message.forwardedFrom;
+  if (!forwardedFrom) return "";
+
+  return [
+    "id" in forwardedFrom ? forwardedFrom.id : "",
+    "username" in forwardedFrom ? forwardedFrom.username : "",
+  ].join(":");
+};
+
+const getLayoutSensitiveSignature = (message: Message): string =>
+  [
+    message.type,
+    message.senderName,
+    message.content,
+    message.status,
+    message.sendState,
+    message.isEdited,
+    message.isDeleted,
+    message.isPinned,
+    getReplyLayoutSignature(message),
+    getForwardedSignature(message),
+    getAttachmentLayoutSignature(message.attachments),
+    (message.reactions ?? [])
+      .map((reaction) => `${reaction.emoji}:${reaction.count}`)
+      .join("|"),
+    (message.readBy ?? []).length,
+    (message.mentions ?? []).length,
+    (message as { threadCount?: number }).threadCount ?? 0,
+  ].join("::");
+
 const MessageItemComponent: React.FC<MessageItemProps> = ({
   item,
   onReply,
@@ -178,33 +246,11 @@ const areEqualMessageItem = (
     const nextMsg = next.item.message;
     if (prevMsg === nextMsg) return true; // same reference
     if (prevMsg.id !== nextMsg.id) return false;
-    if (prevMsg.content !== nextMsg.content) return false;
-    if (prevMsg.status !== nextMsg.status) return false;
-    if (prevMsg.sendState !== nextMsg.sendState) return false;
-    if (prevMsg.isEdited !== nextMsg.isEdited) return false;
-    if (prevMsg.isDeleted !== nextMsg.isDeleted) return false;
-    if (prevMsg.isPinned !== nextMsg.isPinned) return false;
 
-    // Compare reactions structurally
-    const prevReactions = prevMsg.reactions;
-    const nextReactions = nextMsg.reactions;
-    if (prevReactions !== nextReactions) {
-      const prevLen = prevReactions?.length ?? 0;
-      const nextLen = nextReactions?.length ?? 0;
-      if (prevLen !== nextLen) return false;
-      if (prevReactions && nextReactions) {
-        for (let i = 0; i < prevLen; i++) {
-          if (
-            prevReactions[i].emoji !== nextReactions[i].emoji ||
-            prevReactions[i].count !== nextReactions[i].count
-          ) {
-            return false;
-          }
-        }
-      }
-    }
-
-    return true;
+    return (
+      getLayoutSensitiveSignature(prevMsg) ===
+      getLayoutSensitiveSignature(nextMsg)
+    );
   }
 
   return false;
