@@ -210,6 +210,7 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
     if (!item) return null;
 
     const messageId = item.kind === "message" ? item.message.id : undefined;
+    const timelineKey = item.key || `${item.kind}-${index}`;
     const isHighlighted =
       item.kind === "message" &&
       isTargetMessage(item.message, data.highlightedMessageId);
@@ -220,6 +221,7 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
           ref={rowRef}
           className="flow-root px-[var(--chat-lane-padding)]"
           data-message-id={messageId}
+          data-timeline-key={timelineKey}
         >
           <div className="mx-auto max-w-[var(--chat-content-lane)]">
             <div

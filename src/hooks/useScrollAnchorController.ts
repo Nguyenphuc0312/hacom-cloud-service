@@ -5,6 +5,7 @@ interface AnchorSnapshot {
   itemKey: string | null;
   index: number;
   offsetWithinItem: number;
+  viewportOffset: number;
 }
 
 interface QueuedSizeChange {
@@ -61,6 +62,7 @@ export const useScrollAnchorController = <Item, ListData>({
   const scheduledWriteRef = React.useRef<ScheduledWrite | null>(null);
   const scheduledWriteRafRef = React.useRef<number | null>(null);
   const anchorRefreshRafRef = React.useRef<number | null>(null);
+  const postRestoreRafRef = React.useRef<number | null>(null);
   const sizeChangeRafRef = React.useRef<number | null>(null);
   const queuedSizeChangesRef = React.useRef<QueuedSizeChange[]>([]);
 
@@ -92,6 +94,34 @@ export const useScrollAnchorController = <Item, ListData>({
     [getItemKey, items],
   );
 
+  const findAnchorElement = React.useCallback(
+    (itemKey: string | null): HTMLElement | null => {
+      if (!itemKey) return null;
+
+      const outer = outerRef.current;
+      if (!outer) return null;
+
+      const nodes = outer.querySelectorAll<HTMLElement>("[data-timeline-key]");
+      for (const node of nodes) {
+        if (node.dataset.timelineKey === itemKey) {
+          return node;
+        }
+      }
+
+      return null;
+    },
+    [outerRef],
+  );
+
+  const getViewportOffset = React.useCallback(
+    (element: HTMLElement, outer: HTMLDivElement): number => {
+      const outerRect = outer.getBoundingClientRect();
+      const elementRect = element.getBoundingClientRect();
+      return elementRect.top - outerRect.top;
+    },
+    [],
+  );
+
   const captureAnchorSnapshot = React.useCallback(
     (scrollOffset?: number): AnchorSnapshot | null => {
       const outer = outerRef.current;
@@ -108,16 +138,29 @@ export const useScrollAnchorController = <Item, ListData>({
       }
 
       const item = items[itemAtOffset.index];
+      const itemKey = item ? getItemKey(item, itemAtOffset.index) : null;
+      const anchorElement = findAnchorElement(itemKey);
       const snapshot = {
-        itemKey: item ? getItemKey(item, itemAtOffset.index) : null,
+        itemKey,
         index: itemAtOffset.index,
         offsetWithinItem: itemAtOffset.offsetWithinItem,
+        viewportOffset:
+          anchorElement && outer
+            ? getViewportOffset(anchorElement, outer)
+            : -itemAtOffset.offsetWithinItem,
       };
 
       anchorSnapshotRef.current = snapshot;
       return snapshot;
     },
-    [findItemAtOffset, getItemKey, items, outerRef],
+    [
+      findAnchorElement,
+      findItemAtOffset,
+      getItemKey,
+      getViewportOffset,
+      items,
+      outerRef,
+    ],
   );
 
   const refreshAnchorSnapshot = React.useCallback(() => {
@@ -151,6 +194,25 @@ export const useScrollAnchorController = <Item, ListData>({
       return;
     }
 
+    const restoreFromDomDelta = (): boolean => {
+      const anchorElement = findAnchorElement(snapshot.itemKey);
+      if (!anchorElement) {
+        return false;
+      }
+
+      const currentViewportOffset = getViewportOffset(anchorElement, outer);
+      const delta = currentViewportOffset - snapshot.viewportOffset;
+      if (Math.abs(delta) > 1) {
+        outer.scrollTop = Math.max(0, outer.scrollTop + delta);
+      }
+      refreshAnchorSnapshot();
+      return true;
+    };
+
+    if (restoreFromDomDelta()) {
+      return;
+    }
+
     const anchorIndex = resolveAnchorIndex(snapshot);
     if (anchorIndex < 0) {
       return;
@@ -158,10 +220,21 @@ export const useScrollAnchorController = <Item, ListData>({
 
     const nextOffset = getItemOffset(anchorIndex) + snapshot.offsetWithinItem;
     listRef.current?.scrollTo(Math.max(0, nextOffset));
-    refreshAnchorSnapshot();
+
+    if (postRestoreRafRef.current !== null) {
+      cancelAnimationFrame(postRestoreRafRef.current);
+    }
+    postRestoreRafRef.current = requestAnimationFrame(() => {
+      postRestoreRafRef.current = null;
+      if (!restoreFromDomDelta()) {
+        refreshAnchorSnapshot();
+      }
+    });
   }, [
     captureAnchorSnapshot,
+    findAnchorElement,
     getItemOffset,
+    getViewportOffset,
     listRef,
     outerRef,
     refreshAnchorSnapshot,
@@ -291,6 +364,10 @@ export const useScrollAnchorController = <Item, ListData>({
       cancelAnimationFrame(anchorRefreshRafRef.current);
       anchorRefreshRafRef.current = null;
     }
+    if (postRestoreRafRef.current !== null) {
+      cancelAnimationFrame(postRestoreRafRef.current);
+      postRestoreRafRef.current = null;
+    }
     if (sizeChangeRafRef.current !== null) {
       cancelAnimationFrame(sizeChangeRafRef.current);
       sizeChangeRafRef.current = null;
@@ -380,6 +457,9 @@ export const useScrollAnchorController = <Item, ListData>({
       }
       if (anchorRefreshRafRef.current !== null) {
         cancelAnimationFrame(anchorRefreshRafRef.current);
+      }
+      if (postRestoreRafRef.current !== null) {
+        cancelAnimationFrame(postRestoreRafRef.current);
       }
       if (sizeChangeRafRef.current !== null) {
         cancelAnimationFrame(sizeChangeRafRef.current);
