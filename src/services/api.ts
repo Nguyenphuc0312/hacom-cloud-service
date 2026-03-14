@@ -905,9 +905,17 @@ export const fileApi = {
       fileSize: file.size,
     });
     const signedData = unwrapApiSuccess(signed);
+    const uploadMethod = signedData.uploadMethod || "PUT";
+    const uploadHeaders = {
+      "Content-Type": mimeType,
+      ...(signedData.uploadHeaders || {}),
+    };
 
-    await axios.put(signedData.uploadUrl, file, {
-      headers: { "Content-Type": mimeType },
+    await axios.request({
+      url: signedData.uploadUrl,
+      method: uploadMethod,
+      data: file,
+      headers: uploadHeaders,
       signal,
       onUploadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {

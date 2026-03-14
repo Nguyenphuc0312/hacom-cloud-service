@@ -73,8 +73,9 @@ const DEFAULT_CONCURRENCY = 3;
 
 function xhrUpload(
   url: string,
+  method: string,
+  headers: Record<string, string>,
   file: File,
-  mimeType: string,
   signal: AbortSignal,
   onProgress: (pct: number) => void,
 ): Promise<void> {
@@ -117,8 +118,10 @@ function xhrUpload(
       );
     });
 
-    xhr.open("PUT", url);
-    xhr.setRequestHeader("Content-Type", mimeType);
+    xhr.open(method, url);
+    for (const [headerName, headerValue] of Object.entries(headers)) {
+      xhr.setRequestHeader(headerName, headerValue);
+    }
     xhr.send(file);
   });
 }
@@ -200,11 +203,17 @@ export function useUploadQueue({
 
         // Step 2: Upload file via XHR
         const mimeType = draft.file.type || "application/octet-stream";
+        const uploadMethod = signed.uploadMethod || "PUT";
+        const uploadHeaders = {
+          "Content-Type": mimeType,
+          ...(signed.uploadHeaders || {}),
+        };
         try {
           await xhrUpload(
             signed.uploadUrl,
+            uploadMethod,
+            uploadHeaders,
             draft.file,
-            mimeType,
             abortController.signal,
             (pct) => updateDraft(draft.localId, { progress: pct }),
           );
@@ -219,10 +228,16 @@ export function useUploadQueue({
               fileSize: draft.file.size,
             });
             const retrySigned = unwrapApiSuccess(retryResponse);
+            const retryUploadMethod = retrySigned.uploadMethod || "PUT";
+            const retryUploadHeaders = {
+              "Content-Type": mimeType,
+              ...(retrySigned.uploadHeaders || {}),
+            };
             await xhrUpload(
               retrySigned.uploadUrl,
+              retryUploadMethod,
+              retryUploadHeaders,
               draft.file,
-              mimeType,
               abortController.signal,
               (pct) => updateDraft(draft.localId, { progress: pct }),
             );
@@ -231,6 +246,8 @@ export function useUploadQueue({
               uploadId: retrySigned.uploadId,
               objectKey: retrySigned.objectKey,
               uploadUrl: retrySigned.uploadUrl,
+              uploadMethod: retrySigned.uploadMethod,
+              uploadHeaders: retrySigned.uploadHeaders,
             });
           } else {
             throw uploadErr;
