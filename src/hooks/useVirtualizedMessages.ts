@@ -16,9 +16,7 @@ interface UseVirtualizedMessagesResult<ListData> {
   viewportHeight: number;
   getItemSize: (index: number) => number;
   getItemOffset: (index: number) => number;
-  findItemAtOffset: (
-    scrollOffset: number,
-  ) => {
+  findItemAtOffset: (scrollOffset: number) => {
     index: number;
     offsetWithinItem: number;
   } | null;
@@ -42,7 +40,10 @@ export const useVirtualizedMessages = <Item, ListData>({
   getItemKey,
   listRef: providedListRef,
   outerRef: providedOuterRef,
-}: UseVirtualizedMessagesParams<Item, ListData>): UseVirtualizedMessagesResult<ListData> => {
+}: UseVirtualizedMessagesParams<
+  Item,
+  ListData
+>): UseVirtualizedMessagesResult<ListData> => {
   const fallbackListRef = React.useRef<VirtualList<ListData> | null>(null);
   const fallbackOuterRef = React.useRef<HTMLDivElement | null>(null);
   const listRef = providedListRef ?? fallbackListRef;
@@ -233,7 +234,10 @@ export const useVirtualizedMessages = <Item, ListData>({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [viewportRef, items.length]);
+    // SCROLL-09: items.length was previously in deps, causing the ResizeObserver to
+    // disconnect and reconnect on every message arrival. Viewport height is independent
+    // of item count; the observer handles all subsequent size changes automatically.
+  }, [viewportRef]);
 
   return {
     listRef,

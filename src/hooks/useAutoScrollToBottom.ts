@@ -111,7 +111,8 @@ export const useAutoScrollToBottom = ({
   outerRef,
   scrollToBottom,
 }: UseAutoScrollToBottomParams): UseAutoScrollToBottomResult => {
-  const [displayMessages, setDisplayMessages] = React.useState<Message[]>(messages);
+  const [displayMessages, setDisplayMessages] =
+    React.useState<Message[]>(messages);
   const [pendingNewMessages, setPendingNewMessages] = React.useState(0);
   const [showNewMessagesPill, setShowNewMessagesPill] = React.useState(false);
   const [showJumpToBottom, setShowJumpToBottom] = React.useState(false);
@@ -165,7 +166,7 @@ export const useAutoScrollToBottom = ({
       const scrollTop =
         typeof nextScrollTop === "number"
           ? nextScrollTop
-          : outer?.scrollTop ?? scrollMetricsRef.current.lastOffset;
+          : (outer?.scrollTop ?? scrollMetricsRef.current.lastOffset);
 
       conversationScrollSessions.set(conversationId, {
         followMode: nextMode,
@@ -315,17 +316,42 @@ export const useAutoScrollToBottom = ({
         })
         .filter(Boolean);
       bufferedMessagesRef.current = updatedBufferedMessages;
-      setDisplayMessages(filterBufferedMessages(messages, updatedBufferedMessages));
+      setDisplayMessages(
+        filterBufferedMessages(messages, updatedBufferedMessages),
+      );
       syncUiState(
         updatedBufferedMessages.length,
         followModeRef.current,
         scrollMetricsRef.current.isAtBottom,
       );
+      // SCROLL-08: tailAppend===null means the message array changed non-contiguously
+      // (e.g., history gap after reconnect resync, or force-refresh). If we are in
+      // following mode with no pending buffered messages, explicitly scroll to bottom
+      // rather than relying on the indirect anchor-controller fallback chain.
+      if (
+        followModeRef.current === "following" &&
+        updatedBufferedMessages.length === 0
+      ) {
+        scrollMetricsRef.current = {
+          ...scrollMetricsRef.current,
+          isAtBottom: true,
+          distanceFromBottomPx: 0,
+        };
+        scrollToBottom("auto");
+      }
     } else if (tailAppend.length > 0) {
-      const distanceFromBottom =
+      // SCROLL-01: When scrollMetricsRef.isAtBottom is true (set after every programmatic
+      // scroll-to-bottom), trust it over a live DOM read. The DOM can be stale in the
+      // frame where react-window has queued the scroll but the VirtualList has not yet
+      // reconciled its estimated total height with the newly-rendered item's measured size,
+      // causing distanceFromBottom to appear > 0 and triggering a false "detach" decision.
+      const liveDistanceFromBottom =
         outer?.scrollHeight !== undefined
           ? outer.scrollHeight - outer.scrollTop - outer.clientHeight
           : scrollMetricsRef.current.distanceFromBottomPx;
+      const distanceFromBottom = scrollMetricsRef.current.isAtBottom
+        ? 0
+        : liveDistanceFromBottom;
       const decision = decideAutoScroll({
         currentMode: followModeRef.current,
         distanceFromBottomPx: distanceFromBottom,
@@ -495,11 +521,7 @@ export const useAutoScrollToBottom = ({
       isAtBottom: false,
       lastInteractionAt: Date.now(),
     };
-    syncUiState(
-      bufferedMessagesRef.current.length,
-      "detached",
-      false,
-    );
+    syncUiState(bufferedMessagesRef.current.length, "detached", false);
     persistScrollSession(
       "detached",
       outerRef.current?.scrollTop ?? scrollMetricsRef.current.lastOffset,
@@ -524,11 +546,7 @@ export const useAutoScrollToBottom = ({
       velocityPxPerMs: 0,
       lastInteractionAt: Date.now(),
     };
-    syncUiState(
-      bufferedMessagesRef.current.length,
-      "detached",
-      false,
-    );
+    syncUiState(bufferedMessagesRef.current.length, "detached", false);
     persistScrollSession("detached", nextScrollTop);
   }, [outerRef, persistScrollSession, syncUiState]);
 
