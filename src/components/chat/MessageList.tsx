@@ -21,10 +21,7 @@ import { useVirtualizedMessages } from "../../hooks/useVirtualizedMessages";
 import type { Conversation, Message, Attachment } from "../../types";
 import type { ChatDensity } from "../../stores/uiStore";
 import { formatDateDivider } from "../../utils/formatTime";
-import {
-  isFailedMessage,
-  isPendingMessage,
-} from "../../utils/messageTimeline";
+import { isFailedMessage, isPendingMessage } from "../../utils/messageTimeline";
 import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 
 interface MessageListProps {
@@ -107,12 +104,12 @@ const shouldObserveTimelineItemResize = (item: TimelineItem): boolean => {
 
   return Boolean(
     message.replyToMessage ||
-      message.forwardedFrom ||
-      (message.reactions?.length ?? 0) > 0 ||
-      (message.attachments?.length ?? 0) > 0 ||
-      isFailedMessage(message) ||
-      isPendingMessage(message) ||
-      hasInlineUrl(message.content),
+    message.forwardedFrom ||
+    (message.reactions?.length ?? 0) > 0 ||
+    (message.attachments?.length ?? 0) > 0 ||
+    isFailedMessage(message) ||
+    isPendingMessage(message) ||
+    hasInlineUrl(message.content),
   );
 };
 
@@ -160,7 +157,10 @@ const estimateTimelineItemHeight = (
   return baseHeight;
 };
 
-const isTargetMessage = (message: Message, targetId: string | null): boolean => {
+const isTargetMessage = (
+  message: Message,
+  targetId: string | null,
+): boolean => {
   if (!targetId) return false;
   return (
     message.id === targetId ||
@@ -310,6 +310,10 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const highlightTimerRef = React.useRef<number | null>(null);
   const capturePrependAnchorRef = React.useRef<() => void>(() => {});
   const restoreAfterPrependRef = React.useRef<() => void>(() => {});
+  const captureAnchorCallbackRef = React.useRef<
+    | (() => { itemKey: string | null; offsetWithinItem: number } | null)
+    | undefined
+  >(undefined);
   const timelineItemCountRef = React.useRef(0);
   const [stickyDate, setStickyDate] = React.useState<Date | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = React.useState<
@@ -337,6 +341,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     jumpToLatest,
     detachAutoFollow,
     syncDetachedScrollState,
+    pendingRestoreAnchor,
+    pendingRestoreAnchorVersion,
   } = useAutoScrollToBottom({
     conversationId: conversation.id,
     messages,
@@ -352,6 +358,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     },
     outerRef,
     scrollToBottom,
+    captureAnchor: () => captureAnchorCallbackRef.current?.() ?? null,
   });
   const topOverlayPlacements = React.useMemo(
     () =>
@@ -421,8 +428,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     items: timelineItems,
     viewportRef,
     estimateItemSize,
-    getItemKey: (item, index) =>
-      item.key || `${item.kind}-${index}`,
+    getItemKey: (item, index) => item.key || `${item.kind}-${index}`,
     listRef,
     outerRef,
   });
@@ -446,10 +452,23 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     composerHeight,
     autoFollowEnabled,
     scrollToBottom,
+    pendingRestoreAnchor,
+    pendingRestoreAnchorVersion,
   });
 
   capturePrependAnchorRef.current = anchorController.capturePrependAnchor;
   restoreAfterPrependRef.current = anchorController.restoreAfterPrepend;
+  // Update captureAnchorCallbackRef each render so useAutoScrollToBottom can
+  // capture the current scroll anchor without a stale-closure issue.
+  captureAnchorCallbackRef.current = () => {
+    const outer = outerRef.current;
+    if (!outer || timelineItems.length === 0) return null;
+    const result = findItemAtOffset(outer.scrollTop);
+    if (!result) return null;
+    const item = timelineItems[result.index];
+    const itemKey = item ? item.key || `${item.kind}-${result.index}` : null;
+    return { itemKey, offsetWithinItem: result.offsetWithinItem };
+  };
 
   const rowData = React.useMemo<TimelineRowData>(
     () => ({
@@ -716,7 +735,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
                   itemData={rowData}
                   itemKey={(index, data) => data.items[index]?.key ?? index}
                   onScroll={handleListScroll}
-                  overscanCount={8}
+                  overscanCount={isLoadingMore && !isInitialLoading ? 20 : 8}
                 >
                   {TimelineRow}
                 </VirtualList>
@@ -730,22 +749,20 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         messages.length > 0 &&
         stickyDate &&
         topOverlayPlacements["sticky-date"]?.visible && (
-        <div className="pointer-events-none absolute left-1/2 top-3 z-[5] -translate-x-1/2">
-          <div
-            className="rounded-full border px-3.5 py-1 text-[11px] font-medium text-text-secondary shadow-xs backdrop-blur"
-            style={{
-              backgroundColor: "hsl(var(--color-chat-pill) / 0.94)",
-              borderColor: "hsl(var(--color-chat-pill-border) / 0.7)",
-            }}
-          >
-            {formatDateDivider(stickyDate)}
+          <div className="pointer-events-none absolute left-1/2 top-3 z-[5] -translate-x-1/2">
+            <div
+              className="rounded-full border px-3.5 py-1 text-[11px] font-medium text-text-secondary shadow-xs backdrop-blur"
+              style={{
+                backgroundColor: "hsl(var(--color-chat-pill) / 0.94)",
+                borderColor: "hsl(var(--color-chat-pill-border) / 0.7)",
+              }}
+            >
+              {formatDateDivider(stickyDate)}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {error &&
-        messages.length > 0 &&
-        topOverlayPlacements.error?.visible && (
+      {error && messages.length > 0 && topOverlayPlacements.error?.visible && (
         <div className="pointer-events-none absolute inset-x-[var(--chat-lane-padding)] top-2 z-sticky flex justify-center">
           <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-danger/25 bg-surface/95 px-3 py-1 shadow-xs backdrop-blur">
             <span className="truncate text-xs text-danger">{error}</span>
@@ -765,10 +782,10 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       {isLoadingMore &&
         !isInitialLoading &&
         topOverlayPlacements.loading?.visible && (
-        <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full border border-border bg-surface/90 px-4 py-1.5 text-xs text-text-secondary shadow-xs animate-slide-up-fade">
-          {t("chat:message.loadMore")}
-        </div>
-      )}
+          <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full border border-border bg-surface/90 px-4 py-1.5 text-xs text-text-secondary shadow-xs animate-slide-up-fade">
+            {t("chat:message.loadMore")}
+          </div>
+        )}
 
       {bottomOverlayPlacements["jump-latest"]?.visible && (
         <div className="pointer-events-none absolute inset-x-0 bottom-4 z-sticky">

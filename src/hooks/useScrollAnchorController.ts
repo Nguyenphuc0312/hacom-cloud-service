@@ -20,9 +20,7 @@ interface UseScrollAnchorControllerParams<Item, ListData> {
   items: Item[];
   getItemKey: (item: Item, index: number) => string;
   getItemOffset: (index: number) => number;
-  findItemAtOffset: (
-    scrollOffset: number,
-  ) => {
+  findItemAtOffset: (scrollOffset: number) => {
     index: number;
     offsetWithinItem: number;
   } | null;
@@ -32,6 +30,11 @@ interface UseScrollAnchorControllerParams<Item, ListData> {
   composerHeight?: number;
   autoFollowEnabled: boolean;
   scrollToBottom: (behavior?: ScrollBehavior) => void;
+  pendingRestoreAnchor?: {
+    itemKey: string | null;
+    offsetWithinItem: number;
+  } | null;
+  pendingRestoreAnchorVersion?: number;
 }
 
 interface UseScrollAnchorControllerResult {
@@ -54,7 +57,12 @@ export const useScrollAnchorController = <Item, ListData>({
   composerHeight = 0,
   autoFollowEnabled,
   scrollToBottom,
-}: UseScrollAnchorControllerParams<Item, ListData>): UseScrollAnchorControllerResult => {
+  pendingRestoreAnchor,
+  pendingRestoreAnchorVersion,
+}: UseScrollAnchorControllerParams<
+  Item,
+  ListData
+>): UseScrollAnchorControllerResult => {
   const anchorSnapshotRef = React.useRef<AnchorSnapshot | null>(null);
   const pendingPrependRestoreRef = React.useRef(false);
   const previousViewportHeightRef = React.useRef(0);
@@ -65,16 +73,25 @@ export const useScrollAnchorController = <Item, ListData>({
   const postRestoreRafRef = React.useRef<number | null>(null);
   const sizeChangeRafRef = React.useRef<number | null>(null);
   const queuedSizeChangesRef = React.useRef<QueuedSizeChange[]>([]);
+  // Suppresses anchor capture while switching conversations to avoid using stale
+  // DOM positions from the previous conversation as the starting anchor snapshot
+  // for the incoming one.
+  const isSwitchingRef = React.useRef(false);
+  const switchSettleRafRef = React.useRef<number | null>(null);
+  const lastAppliedAnchorVersionRef = React.useRef(-1);
 
-  const getWritePriority = React.useCallback((write: ScheduledWrite): number => {
-    switch (write) {
-      case "restore-anchor":
-        return 2;
-      case "pin-bottom":
-      default:
-        return 1;
-    }
-  }, []);
+  const getWritePriority = React.useCallback(
+    (write: ScheduledWrite): number => {
+      switch (write) {
+        case "restore-anchor":
+          return 2;
+        case "pin-bottom":
+        default:
+          return 1;
+      }
+    },
+    [],
+  );
 
   const resolveAnchorIndex = React.useCallback(
     (snapshot: AnchorSnapshot | null): number => {
@@ -124,6 +141,10 @@ export const useScrollAnchorController = <Item, ListData>({
 
   const captureAnchorSnapshot = React.useCallback(
     (scrollOffset?: number): AnchorSnapshot | null => {
+      // During a conversation switch the DOM still reflects the old conversation's
+      // layout. Block capture so we don't seed the new session with a stale anchor.
+      if (isSwitchingRef.current) return null;
+
       const outer = outerRef.current;
       if (!outer || items.length === 0) {
         anchorSnapshotRef.current = null;
@@ -286,14 +307,16 @@ export const useScrollAnchorController = <Item, ListData>({
     }
 
     const queuedChanges = Array.from(
-      queuedSizeChangesRef.current.reduce((acc, change) => {
-        const current = acc.get(change.index);
-        acc.set(change.index, {
-          index: change.index,
-          delta: (current?.delta ?? 0) + change.delta,
-        });
-        return acc;
-      }, new Map<number, QueuedSizeChange>()).values(),
+      queuedSizeChangesRef.current
+        .reduce((acc, change) => {
+          const current = acc.get(change.index);
+          acc.set(change.index, {
+            index: change.index,
+            delta: (current?.delta ?? 0) + change.delta,
+          });
+          return acc;
+        }, new Map<number, QueuedSizeChange>())
+        .values(),
     ).filter((change) => Math.abs(change.delta) > 1);
     queuedSizeChangesRef.current = [];
 
@@ -372,13 +395,54 @@ export const useScrollAnchorController = <Item, ListData>({
       cancelAnimationFrame(sizeChangeRafRef.current);
       sizeChangeRafRef.current = null;
     }
+    if (switchSettleRafRef.current !== null) {
+      cancelAnimationFrame(switchSettleRafRef.current);
+    }
     anchorSnapshotRef.current = null;
     pendingPrependRestoreRef.current = false;
     previousViewportHeightRef.current = 0;
     previousComposerHeightRef.current = null;
     queuedSizeChangesRef.current = [];
     scheduledWriteRef.current = null;
+    // Block anchor captures until the new conversation's DOM is ready.
+    isSwitchingRef.current = true;
+    switchSettleRafRef.current = requestAnimationFrame(() => {
+      isSwitchingRef.current = false;
+      switchSettleRafRef.current = null;
+    });
   }, [conversationId]);
+
+  // Restore a saved scroll anchor when switching back to a conversation.
+  // This effect must be declared BEFORE the items.length effect so that
+  // anchorSnapshotRef is populated before the items effect tries to use it.
+  React.useEffect(() => {
+    if (!pendingRestoreAnchor || items.length === 0) return;
+    const version = pendingRestoreAnchorVersion ?? 0;
+    if (version === lastAppliedAnchorVersionRef.current) return;
+    lastAppliedAnchorVersionRef.current = version;
+
+    const resolvedIndex = pendingRestoreAnchor.itemKey
+      ? items.findIndex(
+          (item, idx) => getItemKey(item, idx) === pendingRestoreAnchor.itemKey,
+        )
+      : -1;
+
+    anchorSnapshotRef.current = {
+      itemKey: pendingRestoreAnchor.itemKey,
+      index: resolvedIndex >= 0 ? resolvedIndex : 0,
+      offsetWithinItem: pendingRestoreAnchor.offsetWithinItem,
+      // Negative offset places the anchor at the viewport-relative position it
+      // had when the session was saved.
+      viewportOffset: -pendingRestoreAnchor.offsetWithinItem,
+    };
+    scheduleAnchorRestore();
+  }, [
+    getItemKey,
+    items,
+    pendingRestoreAnchor,
+    pendingRestoreAnchorVersion,
+    scheduleAnchorRestore,
+  ]);
 
   React.useEffect(() => {
     if (items.length === 0) {
@@ -394,7 +458,12 @@ export const useScrollAnchorController = <Item, ListData>({
     if (!anchorSnapshotRef.current) {
       captureAnchorSnapshot();
     }
-  }, [autoFollowEnabled, captureAnchorSnapshot, items.length, schedulePinToBottom]);
+  }, [
+    autoFollowEnabled,
+    captureAnchorSnapshot,
+    items.length,
+    schedulePinToBottom,
+  ]);
 
   React.useLayoutEffect(() => {
     if (viewportHeight <= 0) return;
@@ -463,6 +532,9 @@ export const useScrollAnchorController = <Item, ListData>({
       }
       if (sizeChangeRafRef.current !== null) {
         cancelAnimationFrame(sizeChangeRafRef.current);
+      }
+      if (switchSettleRafRef.current !== null) {
+        cancelAnimationFrame(switchSettleRafRef.current);
       }
     },
     [],

@@ -22,6 +22,8 @@ interface UseAutoScrollToBottomParams {
   scrollToBottom: (behavior?: ScrollBehavior) => void;
 }
 
+type SessionAnchor = { itemKey: string | null; offsetWithinItem: number };
+
 interface UseAutoScrollToBottomResult {
   displayMessages: Message[];
   pendingNewMessages: number;
@@ -36,6 +38,17 @@ interface UseAutoScrollToBottomResult {
   syncDetachedScrollState: () => void;
 }
 
+// Extended params — captureAnchor is called during scroll events to capture
+// the anchor key for accurate session restore on conversation re-open.
+interface UseAutoScrollToBottomParamsExtended extends UseAutoScrollToBottomParams {
+  captureAnchor?: () => SessionAnchor | null;
+}
+
+interface UseAutoScrollToBottomResultExtended extends UseAutoScrollToBottomResult {
+  pendingRestoreAnchor: SessionAnchor | null;
+  pendingRestoreAnchorVersion: number;
+}
+
 type ScrollMetrics = {
   isAtBottom: boolean;
   distanceFromBottomPx: number;
@@ -48,6 +61,7 @@ type ScrollMetrics = {
 interface ConversationScrollSession {
   followMode: ScrollFollowMode;
   scrollTop: number;
+  anchor?: SessionAnchor;
 }
 
 const conversationScrollSessions = new Map<string, ConversationScrollSession>();
@@ -110,7 +124,8 @@ export const useAutoScrollToBottom = ({
   onAfterPrepend,
   outerRef,
   scrollToBottom,
-}: UseAutoScrollToBottomParams): UseAutoScrollToBottomResult => {
+  captureAnchor,
+}: UseAutoScrollToBottomParamsExtended): UseAutoScrollToBottomResultExtended => {
   const [displayMessages, setDisplayMessages] =
     React.useState<Message[]>(messages);
   const [pendingNewMessages, setPendingNewMessages] = React.useState(0);
@@ -137,6 +152,20 @@ export const useAutoScrollToBottom = ({
   const bufferedMessagesRef = React.useRef<Message[]>([]);
   const scrollSnapshotRef = React.useRef({ scrollTop: 0, scrollHeight: 0 });
   const pendingRestoreScrollTopRef = React.useRef<number | null>(null);
+
+  // Ref to the latest captureAnchor function — updated every render so it is
+  // always current without needing to be listed in effect dependency arrays.
+  const captureAnchorRef = React.useRef(captureAnchor);
+  captureAnchorRef.current = captureAnchor;
+
+  // Pre-captured anchor saved during user scroll events (detached mode).
+  // Using a ref avoids re-running effects; the value is read when persisting.
+  const sessionAnchorRef = React.useRef<SessionAnchor | undefined>(undefined);
+
+  const [pendingRestoreAnchor, setPendingRestoreAnchor] =
+    React.useState<SessionAnchor | null>(null);
+  const [pendingRestoreAnchorVersion, setPendingRestoreAnchorVersion] =
+    React.useState(0);
 
   const syncUiState = React.useCallback(
     (
@@ -171,10 +200,20 @@ export const useAutoScrollToBottom = ({
       conversationScrollSessions.set(conversationId, {
         followMode: nextMode,
         scrollTop: Math.max(0, scrollTop),
+        anchor: nextMode === "detached" ? sessionAnchorRef.current : undefined,
       });
     },
-    [conversationId, outerRef],
+    [conversationId, outerRef], // eslint-disable-line react-hooks/exhaustive-deps
   );
+
+  // captureAnchorRef is read via ref to avoid stale closures in cleanup effects.
+  const updateSessionAnchor = React.useCallback((mode: ScrollFollowMode) => {
+    if (mode === "detached") {
+      sessionAnchorRef.current = captureAnchorRef.current?.() ?? undefined;
+    } else {
+      sessionAnchorRef.current = undefined;
+    }
+  }, []);
 
   const flushLiveBuffer = React.useCallback(
     (behavior?: ScrollBehavior) => {
@@ -186,6 +225,7 @@ export const useAutoScrollToBottom = ({
         isAtBottom: true,
         distanceFromBottomPx: 0,
       };
+      sessionAnchorRef.current = undefined;
       syncUiState(0, "following", true);
       persistScrollSession("following", outerRef.current?.scrollTop ?? 0);
 
@@ -212,6 +252,7 @@ export const useAutoScrollToBottom = ({
       prevConversationIdRef.current !== conversationId;
     if (!conversationChanged) return;
 
+    sessionAnchorRef.current = undefined;
     const savedSession = conversationScrollSessions.get(conversationId);
     prevConversationIdRef.current = conversationId;
     prevSourceMessagesRef.current = messages;
@@ -231,7 +272,14 @@ export const useAutoScrollToBottom = ({
         velocityPxPerMs: 0,
         lastInteractionAt: Date.now(),
       };
-      pendingRestoreScrollTopRef.current = savedSession.scrollTop;
+      if (savedSession.anchor) {
+        // Anchor-based restore: let useScrollAnchorController position precisely.
+        // Skip the pixel-based fallback (pendingRestoreScrollTopRef) so they don't fight.
+        setPendingRestoreAnchor(savedSession.anchor);
+        setPendingRestoreAnchorVersion((v) => v + 1);
+      } else {
+        pendingRestoreScrollTopRef.current = savedSession.scrollTop;
+      }
       syncUiState(0, "detached", false);
       return;
     }
@@ -468,6 +516,7 @@ export const useAutoScrollToBottom = ({
       followModeRef.current = scrollDecision.nextMode;
 
       if (scrollDecision.nextMode === "following") {
+        updateSessionAnchor("following");
         if (bufferedMessagesRef.current.length > 0) {
           flushLiveBuffer("auto");
         } else {
@@ -475,6 +524,7 @@ export const useAutoScrollToBottom = ({
           persistScrollSession("following", scrollOffset);
         }
       } else {
+        updateSessionAnchor("detached");
         syncUiState(
           bufferedMessagesRef.current.length,
           "detached",
@@ -511,6 +561,7 @@ export const useAutoScrollToBottom = ({
       outerRef,
       persistScrollSession,
       syncUiState,
+      updateSessionAnchor,
     ],
   );
 
@@ -521,12 +572,13 @@ export const useAutoScrollToBottom = ({
       isAtBottom: false,
       lastInteractionAt: Date.now(),
     };
+    updateSessionAnchor("detached");
     syncUiState(bufferedMessagesRef.current.length, "detached", false);
     persistScrollSession(
       "detached",
       outerRef.current?.scrollTop ?? scrollMetricsRef.current.lastOffset,
     );
-  }, [outerRef, persistScrollSession, syncUiState]);
+  }, [outerRef, persistScrollSession, syncUiState, updateSessionAnchor]);
 
   const syncDetachedScrollState = React.useCallback(() => {
     const outer = outerRef.current;
@@ -546,9 +598,10 @@ export const useAutoScrollToBottom = ({
       velocityPxPerMs: 0,
       lastInteractionAt: Date.now(),
     };
+    updateSessionAnchor("detached");
     syncUiState(bufferedMessagesRef.current.length, "detached", false);
     persistScrollSession("detached", nextScrollTop);
-  }, [outerRef, persistScrollSession, syncUiState]);
+  }, [outerRef, persistScrollSession, syncUiState, updateSessionAnchor]);
 
   React.useEffect(
     () => () => {
@@ -569,6 +622,8 @@ export const useAutoScrollToBottom = ({
     jumpToLatest,
     detachAutoFollow,
     syncDetachedScrollState,
+    pendingRestoreAnchor,
+    pendingRestoreAnchorVersion,
   };
 };
 

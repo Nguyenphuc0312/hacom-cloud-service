@@ -50,6 +50,10 @@ export const useVirtualizedMessages = <Item, ListData>({
   const outerRef = providedOuterRef ?? fallbackOuterRef;
   const sizeMapRef = React.useRef<Map<string, number>>(new Map());
   const pendingResetIndexRef = React.useRef<number | null>(null);
+  // Prefix-sum cache: prefixSum[i] = start offset of item i = sum of heights 0..i-1.
+  // prefixSum[0] = 0. Rebuilt lazily; dirtyFrom marks the first stale entry.
+  const prefixSumRef = React.useRef<number[]>([]);
+  const prefixSumDirtyFromRef = React.useRef<number>(0);
   const pendingResetForceRef = React.useRef(false);
   const resetAfterIndexRafRef = React.useRef<number | null>(null);
   const [viewportHeight, setViewportHeight] = React.useState(0);
@@ -107,6 +111,10 @@ export const useVirtualizedMessages = <Item, ListData>({
 
       sizeMapRef.current.set(key, size);
       scheduleResetAfterIndex(index);
+      prefixSumDirtyFromRef.current = Math.min(
+        prefixSumDirtyFromRef.current,
+        index + 1,
+      );
       return {
         changed: true,
         previousSize: current ?? estimateItemSize(item),
@@ -128,49 +136,77 @@ export const useVirtualizedMessages = <Item, ListData>({
     [estimateItemSize, getItemKey, items],
   );
 
+  // Lazily builds (or partially rebuilds) the prefix-sum array.
+  // prefixSum[i] = offset of item i = sum of clamped heights for items 0..i-1.
+  // Reconstruction starts from prefixSumDirtyFromRef, so append-at-end is O(1).
+  const ensurePrefixSumBuilt = React.useCallback((): number[] => {
+    const dirtyFrom = prefixSumDirtyFromRef.current;
+    const n = items.length;
+    const prevArr = prefixSumRef.current;
+
+    if (dirtyFrom > n && prevArr.length === n + 1) return prevArr;
+
+    const arr: number[] =
+      prevArr.length === n + 1 ? prevArr : new Array<number>(n + 1);
+    if (arr !== prevArr) prefixSumRef.current = arr;
+
+    if (Math.min(dirtyFrom, n) === 0) arr[0] = 0;
+    for (let i = Math.max(Math.min(dirtyFrom, n), 1); i <= n; i += 1) {
+      const item = items[i - 1];
+      if (!item) {
+        arr[i] = arr[i - 1];
+        continue;
+      }
+      const key = getItemKey(item, i - 1);
+      const measured = sizeMapRef.current.get(key);
+      const size = measured !== undefined ? measured : estimateItemSize(item);
+      arr[i] = arr[i - 1] + Math.max(1, Math.ceil(size));
+    }
+
+    prefixSumDirtyFromRef.current = n + 1; // clean
+    return arr;
+  }, [estimateItemSize, getItemKey, items]);
+
+  // O(1): direct prefix-sum lookup after lazy rebuild.
   const getItemOffset = React.useCallback(
     (targetIndex: number): number => {
-      let accumulatedHeight = 0;
-      for (let index = 0; index < targetIndex; index += 1) {
-        accumulatedHeight += Math.max(1, Math.ceil(getItemSize(index)));
-      }
-      return accumulatedHeight;
+      if (targetIndex <= 0) return 0;
+      const arr = ensurePrefixSumBuilt();
+      return arr[Math.min(targetIndex, items.length)] ?? 0;
     },
-    [getItemSize],
+    [ensurePrefixSumBuilt, items.length],
   );
 
+  // O(log N): binary search on the prefix-sum array.
   const findItemAtOffset = React.useCallback(
     (scrollOffset: number) => {
       if (items.length === 0) return null;
 
-      let accumulatedHeight = 0;
-      let targetIndex = 0;
-
-      for (let index = 0; index < items.length; index += 1) {
-        const rowHeight = Math.max(1, Math.ceil(getItemSize(index)));
-        if (accumulatedHeight + rowHeight > scrollOffset + 1) {
-          targetIndex = index;
-          break;
+      const arr = ensurePrefixSumBuilt();
+      // Find the largest index i such that arr[i] <= scrollOffset.
+      let lo = 0;
+      let hi = items.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >>> 1;
+        if (arr[mid] <= scrollOffset) {
+          lo = mid;
+        } else {
+          hi = mid - 1;
         }
-
-        accumulatedHeight += rowHeight;
-        targetIndex = index;
       }
 
-      if (!items[targetIndex]) {
-        return null;
-      }
-
+      if (!items[lo]) return null;
       return {
-        index: targetIndex,
-        offsetWithinItem: Math.max(0, scrollOffset - accumulatedHeight),
+        index: lo,
+        offsetWithinItem: Math.max(0, scrollOffset - arr[lo]),
       };
     },
-    [getItemSize, items],
+    [ensurePrefixSumBuilt, items],
   );
-
   const clearMeasuredSizes = React.useCallback(() => {
     sizeMapRef.current = new Map();
+    prefixSumRef.current = [];
+    prefixSumDirtyFromRef.current = 0;
     if (resetAfterIndexRafRef.current !== null) {
       window.cancelAnimationFrame(resetAfterIndexRafRef.current);
       resetAfterIndexRafRef.current = null;
@@ -189,6 +225,7 @@ export const useVirtualizedMessages = <Item, ListData>({
       removedAny = true;
     });
     if (removedAny) {
+      prefixSumDirtyFromRef.current = 0;
       scheduleResetAfterIndex(0, false);
     }
   }, [getItemKey, items, scheduleResetAfterIndex]);
