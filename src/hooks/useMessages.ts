@@ -65,6 +65,11 @@ export const useMessages = ({
       ? Boolean(state.messagesHydratedByConversation[conversationId])
       : false,
   );
+  const hasNewerMessages = useChatStore((state) =>
+    conversationId
+      ? (state.hasNewerMessagesByConversation[conversationId] ?? false)
+      : false,
+  );
   const isLoadingByConversation = useChatStore(
     (state) => state.isLoadingMessagesByConversation,
   );
@@ -98,7 +103,7 @@ export const useMessages = ({
       previousConversationRef.current = conversationId;
 
       void (async () => {
-        let skipInitialDeltaSync = false;
+        let skipInitialDeltaSync = isHydrated && !hasNewerMessages;
         if (autoLoad && !isHydrated) {
           const initialFetchResult = await fetchMessages(conversationId);
           skipInitialDeltaSync =
@@ -123,6 +128,7 @@ export const useMessages = ({
     leaveRoom,
     autoLoad,
     fetchMessages,
+    hasNewerMessages,
     isHydrated,
   ]);
 

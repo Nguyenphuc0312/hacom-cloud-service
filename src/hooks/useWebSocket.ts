@@ -458,6 +458,19 @@ export const useWebSocket = (
       roomId: string,
       options?: { reason?: "initial-sync" | "reconnect" | "room-refresh" },
     ) => {
+      const chatState = useChatStore.getState();
+      const willBlockAsKnownLatest =
+        options?.reason === "initial-sync" &&
+        chatState.messagesHydratedByConversation[roomId] &&
+        chatState.hasNewerMessagesByConversation[roomId] === false;
+      if (willBlockAsKnownLatest) {
+        logMessageDebug("useWebSocket", "delta_sync_schedule_skipped", {
+          roomId,
+          reason: options?.reason,
+        });
+        return Promise.resolve();
+      }
+
       const inFlight = roomResyncInFlightRef.current.get(roomId);
       if (inFlight) {
         return inFlight;

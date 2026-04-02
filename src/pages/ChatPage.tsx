@@ -179,6 +179,11 @@ export const ChatPage: React.FC = () => {
       ? Boolean(state.messagesHydratedByConversation[selectedConversationId])
       : false,
   );
+  const selectedConversationHasNewer = useChatStore((state) =>
+    selectedConversationId
+      ? (state.hasNewerMessagesByConversation[selectedConversationId] ?? false)
+      : false,
+  );
 
   // WebSocket
   const { connectionState, sendTyping, stopTyping, joinRoom, leaveRoom } =
@@ -315,11 +320,13 @@ export const ChatPage: React.FC = () => {
     let cancelled = false;
 
     void (async () => {
-      let skipInitialDeltaSync = false;
+      let skipInitialDeltaSync =
+        isSelectedConversationHydrated && !selectedConversationHasNewer;
       logMessageDebug("ChatPage", "conversation_open_started", {
         conversationId: selectedConversationId,
         isHydrated: isSelectedConversationHydrated,
         isValidatingRoom,
+        hasNewer: selectedConversationHasNewer,
       });
       if (!isSelectedConversationHydrated) {
         const initialFetchResult = await fetchMessages(selectedConversationId);
@@ -347,6 +354,7 @@ export const ChatPage: React.FC = () => {
   }, [
     selectedConversationId,
     isSelectedConversationHydrated,
+    selectedConversationHasNewer,
     isValidatingRoom,
     fetchMessages,
     joinRoom,
