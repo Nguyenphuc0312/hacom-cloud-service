@@ -19,14 +19,12 @@ interface MessageBubbleProps {
   onFilePreview?: (attachment: Attachment) => void;
   isSelectionMode?: boolean;
   density?: ChatDensity;
+  onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
   className?: string;
 }
 
-const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
-  density: _density,
-  ...props
-}) => {
+const MessageBubbleComponent: React.FC<MessageBubbleProps> = (props) => {
   return <MessageCluster {...props} />;
 };
 

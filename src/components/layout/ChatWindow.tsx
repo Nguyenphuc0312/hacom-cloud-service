@@ -28,11 +28,12 @@ import type {
 } from "../../types";
 import { MessageType } from "../../types";
 import type { UploadedFileMeta } from "../../types/attachmentDraft";
-import { contactApi } from "../../services/api";
-import { extractApiError } from "../../lib/apiContract";
+import { contactApi, messageApi } from "../../services/api";
+import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import type { ConnectionState } from "../../hooks/useWebSocket";
 import { resolveChatDensity } from "../../utils/densityPolicy";
 import { resolveOverlayPlacements } from "../../utils/overlayResolver";
+import { logScrollTrace } from "../../utils/scrollTrace";
 
 // ── Convert upload queue metadata to Attachment ─────────────────────
 
@@ -56,6 +57,12 @@ function metaToAttachment(meta: UploadedFileMeta): Attachment {
     ...(meta.thumbnailUrl ? { thumbnailUrl: meta.thumbnailUrl } : {}),
   } as Attachment;
 }
+
+const matchesMessageIdentity = (message: Message, targetId: string): boolean =>
+  message.id === targetId ||
+  message.localId === targetId ||
+  message.stableId === targetId ||
+  message.clientMessageId === targetId;
 
 interface ChatWindowProps {
   conversation: Conversation;
@@ -303,8 +310,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [t]);
 
   // Search & pinned panel state
-  const [overlayMode, setOverlayMode] = React.useState<"search" | "pinned" | null>(null);
-  const [jumpTargetMessage, setJumpTargetMessage] = React.useState<Message | null>(null);
+  const [overlayMode, setOverlayMode] = React.useState<
+    "search" | "pinned" | null
+  >(null);
+  const [jumpTargetMessageId, setJumpTargetMessageId] = React.useState<
+    string | null
+  >(null);
   const [jumpRequestVersion, setJumpRequestVersion] = React.useState(0);
   const [unreadMarker, setUnreadMarker] = React.useState<{
     lastReadMessageId?: string;
@@ -406,8 +417,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, []);
 
   const handleJumpHandled = React.useCallback((messageId: string) => {
-    setJumpTargetMessage((current) =>
-      current && current.id === messageId ? null : current,
+    setJumpTargetMessageId((current) =>
+      current === messageId ? null : current,
     );
   }, []);
 
@@ -419,57 +430,103 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     [onReachedLatestMessage],
   );
 
-  const handleJumpToMessage = React.useCallback(
-    async (message: Message) => {
-      const inCache = messages.some(
-        (candidate) =>
-          candidate.id === message.id ||
-          candidate.localId === message.id ||
-          candidate.stableId === message.id,
-      );
+  const queueJumpToMessage = React.useCallback((messageId: string) => {
+    setOverlayMode(null);
+    setJumpTargetMessageId(messageId);
+    setJumpRequestVersion((value) => value + 1);
+    logScrollTrace("jump_requested", {
+      conversationId: conversation.id,
+      messageId,
+    });
+  }, [conversation.id]);
 
-      if (!inCache) {
-        addMessage(conversation.id, message);
-        const cursor = new Date(message.createdAt).toISOString();
-        await Promise.allSettled([
-          fetchMessages(conversation.id, cursor, undefined, {
-            beforeId: message.id,
-            limit: 24,
-          }),
-          fetchMessages(conversation.id, undefined, cursor, {
-            afterId: message.id,
-            limit: 24,
-          }),
-        ]);
+  const ensureMessageLoaded = React.useCallback(
+    async (messageId: string, fallbackMessage?: Message) => {
+      const existingMessage = messages.find((message) =>
+        matchesMessageIdentity(message, messageId),
+      );
+      if (existingMessage) {
+        return existingMessage;
       }
 
-      setOverlayMode(null);
-      setJumpTargetMessage(message);
-      setJumpRequestVersion((value) => value + 1);
+      let targetMessage = fallbackMessage;
+      if (!targetMessage) {
+        const response = await messageApi.getMessageById(messageId);
+        targetMessage = unwrapApiSuccess(response) as Message;
+      }
+
+      addMessage(conversation.id, targetMessage);
+      const cursor = new Date(targetMessage.createdAt).toISOString();
+      await Promise.allSettled([
+        fetchMessages(conversation.id, cursor, undefined, {
+          beforeId: targetMessage.id,
+          limit: 24,
+        }),
+        fetchMessages(conversation.id, undefined, cursor, {
+          afterId: targetMessage.id,
+          limit: 24,
+        }),
+      ]);
+
+      return targetMessage;
     },
     [addMessage, conversation.id, fetchMessages, messages],
   );
 
+  const handleJumpToMessage = React.useCallback(
+    async (message: Message) => {
+      await ensureMessageLoaded(message.id, message);
+      queueJumpToMessage(message.id);
+    },
+    [ensureMessageLoaded, queueJumpToMessage],
+  );
+
+  const handleNavigateToMessage = React.useCallback(
+    async (messageId: string) => {
+      try {
+        await ensureMessageLoaded(messageId);
+        queueJumpToMessage(messageId);
+      } catch (error) {
+        const apiError = extractApiError(error);
+        toast.error(
+          apiError.message ||
+            t("chat:message.replyTargetMissing", {
+              defaultValue: "Unable to open replied message",
+            }),
+        );
+        logScrollTrace("jump_load_failed", {
+          conversationId: conversation.id,
+          messageId,
+          errorMessage: apiError.message || "unknown",
+        });
+      }
+    },
+    [conversation.id, ensureMessageLoaded, queueJumpToMessage, t],
+  );
+
+  const conversationReadSnapshot = conversation as Conversation & {
+    lastReadMessageId?: string;
+    lastReadAt?: Date | string;
+  };
+  const lastReadMessageId = conversationReadSnapshot.lastReadMessageId;
+  const lastReadAt = conversationReadSnapshot.lastReadAt;
+
   // Close panels when switching conversations
   React.useEffect(() => {
     setOverlayMode(null);
-    const snapshot = conversation as Conversation & {
-      lastReadMessageId?: string;
-      lastReadAt?: Date | string;
-    };
     if (
       (conversation.unreadCount ?? 0) > 0 &&
-      (snapshot.lastReadMessageId || snapshot.lastReadAt)
+      (lastReadMessageId || lastReadAt)
     ) {
       setUnreadMarker({
-        lastReadMessageId: snapshot.lastReadMessageId,
-        lastReadAt: snapshot.lastReadAt,
+        lastReadMessageId,
+        lastReadAt,
         active: true,
       });
     } else {
       setUnreadMarker(null);
     }
-  }, [conversation.id]);
+  }, [conversation.id, conversation.unreadCount, lastReadAt, lastReadMessageId]);
 
   React.useEffect(() => {
     const previousState = previousConnectionStateRef.current;
@@ -644,10 +701,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         isSelectionMode={isMessageSelectionMode}
         selectedMessageIds={selectedMessageIds}
         onToggleSelect={toggleMessageSelection}
+        onNavigateToMessage={handleNavigateToMessage}
         currentUsername={currentUsername}
         unreadMarker={unreadMarker}
         onReachedLatest={handleReachedLatest}
-        jumpToMessageId={jumpTargetMessage?.id ?? null}
+        jumpToMessageId={jumpTargetMessageId}
         jumpRequestVersion={jumpRequestVersion}
         onJumpHandled={handleJumpHandled}
         composerHeight={composerHeight}
@@ -660,6 +718,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       currentUser.id,
       handleReact,
       handleReply,
+      handleEdit,
       handleDelete,
       hasMoreMessages,
       isLoadingMessages,
@@ -671,11 +730,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       onRetryMessages,
       resolvedDensity,
       handleJumpHandled,
+      handleNavigateToMessage,
       handleReachedLatest,
       composerHeight,
       isMessageSelectionMode,
       jumpRequestVersion,
-      jumpTargetMessage?.id,
+      jumpTargetMessageId,
       selectedMessageIds,
       toggleMessageSelection,
       currentUsername,

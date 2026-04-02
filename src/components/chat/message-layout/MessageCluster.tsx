@@ -25,6 +25,7 @@ import {
   isFailedMessage,
   isPendingMessage,
 } from "../../../utils/messageTimeline";
+import { logScrollTrace } from "../../../utils/scrollTrace";
 import { MessageBodyRenderer } from "./MessageBodyRenderer";
 import { MessageMeta } from "./MessageMeta";
 import { MessageRow } from "./MessageRow";
@@ -45,6 +46,7 @@ interface MessageClusterProps {
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
   isSelectionMode?: boolean;
+  onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
   className?: string;
 }
@@ -146,6 +148,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   onImageClick,
   onFilePreview,
   isSelectionMode = false,
+  onNavigateToMessage,
   currentUsername,
   className,
 }) => {
@@ -165,6 +168,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
     const candidate = message as unknown as { threadCount?: unknown };
     return typeof candidate.threadCount === "number" ? candidate.threadCount : 0;
   })();
+  const replyTargetMessageId = message.replyTo || message.replyToMessage?.id;
 
   const clearLongPressTimer = React.useCallback(() => {
     if (longPressTimerRef.current === null) return;
@@ -320,6 +324,23 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
     ],
   );
 
+  const handleReplyPreviewClick = React.useCallback(() => {
+    if (!replyTargetMessageId || isSelectionMode) return;
+
+    logScrollTrace("reply_preview_clicked", {
+      conversationId: message.conversationId,
+      messageId: message.id,
+      targetMessageId: replyTargetMessageId,
+    });
+    onNavigateToMessage?.(replyTargetMessageId);
+  }, [
+    isSelectionMode,
+    message.conversationId,
+    message.id,
+    onNavigateToMessage,
+    replyTargetMessageId,
+  ]);
+
   const actionRail =
     actionPolicy.railActions.length > 0 ? (
       <MessageActions
@@ -396,9 +417,15 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
             )}
 
             {message.replyToMessage && (
-              <div
+              <button
+                type="button"
+                onClick={handleReplyPreviewClick}
+                disabled={!replyTargetMessageId || isSelectionMode}
                 className={clsx(
-                  "mb-1 flex w-full items-center gap-2 rounded-2xl border-l-2 px-3 py-2 text-xs",
+                  "mb-1 flex w-full items-center gap-2 rounded-2xl border-l-2 px-3 py-2 text-left text-xs transition-colors",
+                  replyTargetMessageId && !isSelectionMode
+                    ? "cursor-pointer hover:bg-black/5"
+                    : "cursor-default",
                   isOwn
                     ? "border-text-inverse/40 bg-text-inverse/10 text-text-inverse/78"
                     : "border-primary/55 bg-white/5 text-text-secondary",
@@ -423,7 +450,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                       : message.replyToMessage.content}
                   </p>
                 </div>
-              </div>
+              </button>
             )}
 
             <div

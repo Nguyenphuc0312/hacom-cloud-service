@@ -20,6 +20,7 @@ interface MessageItemProps {
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (messageId: string) => void;
+  onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
 }
 
@@ -103,13 +104,19 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   isSelectionMode = false,
   isSelected = false,
   onToggleSelect,
+  onNavigateToMessage,
   currentUsername,
 }) => {
   const isCompact = density === "compact";
   const isExpanded = density === "expanded";
 
   if (item.kind === "date") {
-    return <DateDivider date={item.date} className={isExpanded ? "my-7" : undefined} />;
+    return (
+      <DateDivider
+        date={item.date}
+        className={isExpanded ? "my-7" : undefined}
+      />
+    );
   }
 
   if (item.kind === "unread") {
@@ -181,6 +188,7 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
             onFilePreview={onFilePreview}
             isSelectionMode={isSelectionMode}
             density={density}
+            onNavigateToMessage={onNavigateToMessage}
             currentUsername={currentUsername}
           />
         </div>
@@ -212,7 +220,8 @@ const areEqualMessageItem = (
       prev.onDelete === next.onDelete &&
       prev.onImageClick === next.onImageClick &&
       prev.onFilePreview === next.onFilePreview &&
-      prev.onToggleSelect === next.onToggleSelect
+      prev.onToggleSelect === next.onToggleSelect &&
+      prev.onNavigateToMessage === next.onNavigateToMessage
     );
   }
 
@@ -223,6 +232,7 @@ const areEqualMessageItem = (
   if (prev.isSelectionMode !== next.isSelectionMode) return false;
   if (prev.isSelected !== next.isSelected) return false;
   if (prev.currentUsername !== next.currentUsername) return false;
+  if (prev.onNavigateToMessage !== next.onNavigateToMessage) return false;
 
   if (prev.item.kind === "date" && next.item.kind === "date") {
     return prev.item.date.getTime() === next.item.date.getTime();
