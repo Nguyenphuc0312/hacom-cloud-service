@@ -1,9 +1,12 @@
 import React from "react";
 import type { VariableSizeList as VirtualList } from "react-window";
+import { logMessageDebug } from "../utils/messageDebug";
 
 interface UseVirtualizedMessagesParams<Item, ListData> {
   items: Item[];
   viewportRef: React.RefObject<HTMLDivElement | null>;
+  observeViewport?: boolean;
+  debugLabel?: string;
   estimateItemSize: (item: Item) => number;
   getItemKey: (item: Item, index: number) => string;
   listRef?: React.MutableRefObject<VirtualList<ListData> | null>;
@@ -36,6 +39,8 @@ interface UseVirtualizedMessagesResult<ListData> {
 export const useVirtualizedMessages = <Item, ListData>({
   items,
   viewportRef,
+  observeViewport = true,
+  debugLabel,
   estimateItemSize,
   getItemKey,
   listRef: providedListRef,
@@ -238,14 +243,30 @@ export const useVirtualizedMessages = <Item, ListData>({
     };
   }, []);
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
+    if (!observeViewport) {
+      setViewportHeight((previous) => (previous === 0 ? previous : 0));
+      return;
+    }
+
     const viewportElement = viewportRef.current;
-    if (!viewportElement) return;
+    if (!viewportElement) {
+      logMessageDebug("useVirtualizedMessages", "viewport_measure_waiting", {
+        debugLabel,
+        itemCount: items.length,
+      });
+      return;
+    }
 
     const measure = () => {
       const nextHeight =
         viewportElement.clientHeight ||
         Math.round(viewportElement.getBoundingClientRect().height);
+      logMessageDebug("useVirtualizedMessages", "viewport_measured", {
+        debugLabel,
+        itemCount: items.length,
+        nextHeight,
+      });
       setViewportHeight((previous) =>
         previous === nextHeight ? previous : nextHeight,
       );
@@ -271,10 +292,7 @@ export const useVirtualizedMessages = <Item, ListData>({
     return () => {
       resizeObserver.disconnect();
     };
-    // SCROLL-09: items.length was previously in deps, causing the ResizeObserver to
-    // disconnect and reconnect on every message arrival. Viewport height is independent
-    // of item count; the observer handles all subsequent size changes automatically.
-  }, [viewportRef]);
+  }, [debugLabel, items.length, observeViewport, viewportRef]);
 
   return {
     listRef,

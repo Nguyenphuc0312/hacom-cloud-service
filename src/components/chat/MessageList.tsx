@@ -502,6 +502,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   } = useVirtualizedMessages<TimelineItem, TimelineRowData>({
     items: timelineItems,
     viewportRef,
+    observeViewport: !isInitialLoading && messages.length > 0,
+    debugLabel: conversationId,
     estimateItemSize,
     getItemKey: (item, index) => item.key || `${item.kind}-${index}`,
     listRef,
