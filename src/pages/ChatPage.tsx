@@ -318,11 +318,14 @@ export const ChatPage: React.FC = () => {
     let cancelled = false;
 
     void (async () => {
+      let skipInitialDeltaSync = false;
       if (!isSelectedConversationHydrated) {
-        await fetchMessages(selectedConversationId);
+        const initialFetchResult = await fetchMessages(selectedConversationId);
+        skipInitialDeltaSync =
+          initialFetchResult.applied && !initialFetchResult.hasNext;
       }
       if (!cancelled) {
-        joinRoom(selectedConversationId);
+        joinRoom(selectedConversationId, { skipInitialDeltaSync });
       }
     })();
 

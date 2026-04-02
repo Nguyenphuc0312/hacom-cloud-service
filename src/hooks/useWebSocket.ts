@@ -45,7 +45,10 @@ interface UseWebSocketReturn {
   connect: () => void;
   disconnect: () => void;
   emit: (event: string, data: unknown) => void;
-  joinRoom: (roomId: string) => void;
+  joinRoom: (
+    roomId: string,
+    options?: { skipInitialDeltaSync?: boolean },
+  ) => void;
   leaveRoom: (roomId: string) => void;
   sendMessage: (roomId: string, content: string, type?: string) => void;
   sendTyping: (roomId: string) => void;
@@ -167,7 +170,7 @@ export const useWebSocket = (
   );
 
   const joinedRoomsRef = useRef<Set<string>>(new Set());
-  const pendingRoomSyncRef = useRef<Set<string>>(new Set());
+  const pendingRoomSyncRef = useRef<Map<string, "skip" | "resync">>(new Map());
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const emitQueueRef = useRef<Array<{ event: string; data: unknown }>>([]);
   const hasConnectedOnceRef = useRef(false);
@@ -451,7 +454,7 @@ export const useWebSocket = (
       }
 
       joinedRoomsRef.current.forEach((roomId) => {
-        pendingRoomSyncRef.current.add(roomId);
+        pendingRoomSyncRef.current.set(roomId, shouldResync ? "resync" : "skip");
         emitJoinRoom(roomId);
       });
 
@@ -1096,10 +1099,14 @@ export const useWebSocket = (
       const roomIdsToResync =
         targetRoomIds.length > 0
           ? targetRoomIds.filter((roomId) => joinedRoomsRef.current.has(roomId))
-          : Array.from(pendingRoomSyncRef.current);
+          : Array.from(pendingRoomSyncRef.current.keys());
 
       roomIdsToResync.forEach((roomId) => {
+        const syncStrategy = pendingRoomSyncRef.current.get(roomId) ?? "resync";
         pendingRoomSyncRef.current.delete(roomId);
+        if (syncStrategy === "skip") {
+          return;
+        }
         void scheduleRoomResync(roomId);
       });
     });
@@ -1187,10 +1194,13 @@ export const useWebSocket = (
   }, [clearAllRemoteTypingTimers]);
 
   const joinRoom = useCallback(
-    (roomId: string) => {
+    (roomId: string, options?: { skipInitialDeltaSync?: boolean }) => {
       if (!roomId) return;
       joinedRoomsRef.current.add(roomId);
-      pendingRoomSyncRef.current.add(roomId);
+      pendingRoomSyncRef.current.set(
+        roomId,
+        options?.skipInitialDeltaSync ? "skip" : "resync",
+      );
       emitJoinRoom(roomId);
     },
     [emitJoinRoom],

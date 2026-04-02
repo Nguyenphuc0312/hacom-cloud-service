@@ -661,6 +661,8 @@ export const messageApi = {
           limit?: number;
           before?: string;
           after?: string;
+          beforeId?: string;
+          afterId?: string;
         } = 1,
     limit = 50,
   ) => {
@@ -678,6 +680,8 @@ export const messageApi = {
 
     if (options.before) query.set("before", options.before);
     if (options.after) query.set("after", options.after);
+    if (options.beforeId) query.set("beforeId", options.beforeId);
+    if (options.afterId) query.set("afterId", options.afterId);
     if (!options.before && !options.after) {
       query.set(
         "page",

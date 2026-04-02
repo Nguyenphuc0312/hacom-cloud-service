@@ -108,6 +108,10 @@ interface ChatState {
 interface FetchMessagesResult {
   loaded: number;
   hasMore: boolean;
+  hasNext: boolean;
+  hasPrev: boolean;
+  mode: "initial" | "older" | "newer";
+  applied: boolean;
 }
 
 interface FetchMessagesOptions {
@@ -141,6 +145,7 @@ const EMPTY_MESSAGES: Message[] = [];
 
 const roomMessageFetchInFlight = new Map<string, number>();
 const initialFetchSeqByConversation = new Map<string, number>();
+const messageFetchGenerationByConversation = new Map<string, number>();
 const markAsReadInFlight = new Map<string, Promise<void>>();
 let conversationsFetchPromise: Promise<void> | null = null;
 const pendingMessageSendTimeouts = new Map<
@@ -847,6 +852,42 @@ const mergeMessages = (current: Message[], incoming: Message[]): Message[] =>
     ...(Array.isArray(incoming) ? incoming : []),
   ]);
 
+const replaceMessages = (current: Message[], incoming: Message[]): Message[] => {
+  const existing = Array.isArray(current) ? current : [];
+  const localOnlyMessages = existing.filter((message) => {
+    const isLocalOnly =
+      isTempMessageId(message.id) ||
+      message.sendState === "sending" ||
+      message.sendState === "queued" ||
+      message.sendState === "retrying" ||
+      message.sendState === "failed";
+
+    if (!isLocalOnly) {
+      return false;
+    }
+
+    return !incoming.some((candidate) => matchesMessage(candidate, message));
+  });
+
+  return mergeMessages(incoming, localOnlyMessages);
+};
+
+const prependMessages = (current: Message[], incoming: Message[]): Message[] => {
+  if (!Array.isArray(incoming) || incoming.length === 0) {
+    return Array.isArray(current) ? current : [];
+  }
+
+  return mergeMessages(incoming, current);
+};
+
+const appendMessages = (current: Message[], incoming: Message[]): Message[] => {
+  if (!Array.isArray(incoming) || incoming.length === 0) {
+    return Array.isArray(current) ? current : [];
+  }
+
+  return mergeMessagesAfterCursor(current, incoming);
+};
+
 const findMessageByIdentityIndex = (
   messages: Message[],
   target: Message,
@@ -1357,6 +1398,7 @@ export const useChatStore = create<ChatState>()(
       removeConversation: (id) => {
         roomMessageFetchInFlight.delete(id);
         initialFetchSeqByConversation.delete(id);
+        messageFetchGenerationByConversation.delete(id);
         Array.from(pendingMessageSendTimeouts.keys())
           .filter((key) => key.startsWith(`${id}:`))
           .forEach(clearMessageSendTimeout);
@@ -1483,7 +1525,7 @@ export const useChatStore = create<ChatState>()(
       },
 
       setMessages: (conversationId, messages) => {
-        const normalized = mergeMessages(
+        const normalized = replaceMessages(
           [],
           (Array.isArray(messages) ? messages : [])
             .map((item) => normalizeMessage(item, conversationId))
@@ -1698,6 +1740,11 @@ export const useChatStore = create<ChatState>()(
 
       fetchMessages: async (conversationId, before, after, options) => {
         const isInitialFetch = !before && !after;
+        const fetchMode: FetchMessagesResult["mode"] = after
+          ? "newer"
+          : before
+            ? "older"
+            : "initial";
         const forceRefresh = options?.force === true;
         if (
           isInitialFetch &&
@@ -1707,6 +1754,10 @@ export const useChatStore = create<ChatState>()(
           return {
             loaded: 0,
             hasMore: get().hasMoreMessages[conversationId] ?? false,
+            hasNext: false,
+            hasPrev: get().hasMoreMessages[conversationId] ?? false,
+            mode: fetchMode,
+            applied: false,
           };
         }
 
@@ -1716,9 +1767,18 @@ export const useChatStore = create<ChatState>()(
         const initialFetchSeq = isInitialFetch
           ? (initialFetchSeqByConversation.get(conversationId) ?? 0) + 1
           : null;
+        const fetchGeneration = isInitialFetch
+          ? (messageFetchGenerationByConversation.get(conversationId) ?? 0) + 1
+          : (messageFetchGenerationByConversation.get(conversationId) ?? 0);
 
         if (initialFetchSeq !== null) {
           initialFetchSeqByConversation.set(conversationId, initialFetchSeq);
+        }
+        if (isInitialFetch) {
+          messageFetchGenerationByConversation.set(
+            conversationId,
+            fetchGeneration,
+          );
         }
 
         set((state) => ({
@@ -1811,15 +1871,21 @@ export const useChatStore = create<ChatState>()(
             ) {
               return state;
             }
+            if (
+              messageFetchGenerationByConversation.get(conversationId) !==
+              fetchGeneration
+            ) {
+              return state;
+            }
 
             const existingMessages = state.messages[conversationId] || [];
-            const mergedMessages =
-              after && !before
-                ? mergeMessagesAfterCursor(
-                    existingMessages,
-                    normalized.messages,
-                  )
-                : mergeMessages(existingMessages, normalized.messages);
+            const nextMessages =
+              fetchMode === "initial"
+                ? replaceMessages(existingMessages, normalized.messages)
+                : fetchMode === "older"
+                  ? prependMessages(existingMessages, normalized.messages)
+                  : appendMessages(existingMessages, normalized.messages);
+            const mergedMessages = nextMessages;
             const latestMessage = mergedMessages[mergedMessages.length - 1];
 
             const updatedConversations = state.conversations.map(
@@ -1863,6 +1929,15 @@ export const useChatStore = create<ChatState>()(
           return {
             loaded: normalized.messages.length,
             hasMore: hasMoreForDirection,
+            hasNext: normalized.hasNext,
+            hasPrev: normalized.hasPrev,
+            mode: fetchMode,
+            applied:
+              messageFetchGenerationByConversation.get(conversationId) ===
+                fetchGeneration &&
+              (initialFetchSeq === null ||
+                initialFetchSeqByConversation.get(conversationId) ===
+                  initialFetchSeq),
           };
         } catch (error: unknown) {
           const apiError = extractApiError(error);
@@ -1875,7 +1950,14 @@ export const useChatStore = create<ChatState>()(
               [conversationId]: errorMessage,
             },
           }));
-          return { loaded: 0, hasMore: false };
+          return {
+            loaded: 0,
+            hasMore: false,
+            hasNext: false,
+            hasPrev: false,
+            mode: fetchMode,
+            applied: false,
+          };
         } finally {
           const nextInFlight = Math.max(
             0,
@@ -2120,6 +2202,7 @@ export const useChatStore = create<ChatState>()(
       reset: () => {
         roomMessageFetchInFlight.clear();
         initialFetchSeqByConversation.clear();
+        messageFetchGenerationByConversation.clear();
         markAsReadInFlight.clear();
         conversationsFetchPromise = null;
         clearAllMessageSendTimeouts();
