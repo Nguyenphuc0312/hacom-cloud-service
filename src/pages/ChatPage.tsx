@@ -200,6 +200,8 @@ export const ChatPage: React.FC = () => {
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const roomCreationLockRef = useRef(false);
   const [isValidatingRoom, setIsValidatingRoom] = useState(false);
+  const [lastValidatedConversationId, setLastValidatedConversationId] =
+    useState<string | null>(null);
   const directInfoHydratedRef = useRef<Set<string>>(new Set());
   const lastReadSyncKeyRef = useRef<string | null>(null);
 
@@ -235,6 +237,7 @@ export const ChatPage: React.FC = () => {
     let isCancelled = false;
 
     if (!conversationId) {
+      setLastValidatedConversationId(null);
       if (useChatStore.getState().selectedConversationId !== null) {
         selectConversation(null);
       }
@@ -264,6 +267,8 @@ export const ChatPage: React.FC = () => {
         if (conversationId !== useChatStore.getState().selectedConversationId) {
           selectConversation(conversationId);
         }
+
+        setLastValidatedConversationId(conversationId);
       } catch (error: unknown) {
         if (isCancelled) return;
 
@@ -284,6 +289,7 @@ export const ChatPage: React.FC = () => {
           );
         }
 
+        setLastValidatedConversationId(null);
         selectConversation(null);
         navigate("/chat", { replace: true });
       } finally {
@@ -924,9 +930,13 @@ export const ChatPage: React.FC = () => {
   const showConversationSkeleton =
     (!hasFetchedConversationsOnce && conversations.length === 0) ||
     (isLoadingConversations && conversations.length === 0);
+  const isCurrentRouteValidated = conversationId
+    ? lastValidatedConversationId === conversationId
+    : true;
   const isConversationReady = Boolean(
     selectedConversationId &&
       selectedConversation &&
+      isCurrentRouteValidated &&
       !isValidatingRoom &&
       isSelectedConversationHydrated,
   );
@@ -939,6 +949,7 @@ export const ChatPage: React.FC = () => {
       conversationId: selectedConversationId,
       isValidatingRoom,
       isHydrated: isSelectedConversationHydrated,
+      isCurrentRouteValidated,
       isReady: isConversationReady,
       websocketReady,
       messageCount: conversationMessages.length,
@@ -947,9 +958,11 @@ export const ChatPage: React.FC = () => {
   }, [
     connectionState,
     conversationMessages.length,
+    isCurrentRouteValidated,
     isConversationReady,
     isSelectedConversationHydrated,
     isValidatingRoom,
+    lastValidatedConversationId,
     selectedConversationId,
     websocketReady,
   ]);
