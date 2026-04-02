@@ -505,13 +505,16 @@ export const useAutoScrollToBottom = ({
         pendingBufferedCount: bufferedMessagesRef.current.length,
         currentMode: followModeRef.current,
       });
-      const movingUp =
-        scrollOffset < previousMetrics.lastOffset &&
-        distanceFromBottom > scrollDecision.atBottomThresholdPx;
-      const nextMode = movingUp ? "detached" : scrollDecision.nextMode;
+      const userIntentDetach =
+        followModeRef.current === "following" &&
+        scrollOffset < previousMetrics.lastOffset - 2;
+      const nextMode = userIntentDetach ? "detached" : scrollDecision.nextMode;
+      const nextIsAtBottom = userIntentDetach
+        ? false
+        : scrollDecision.isAtBottom;
 
       scrollMetricsRef.current = {
-        isAtBottom: scrollDecision.isAtBottom,
+        isAtBottom: nextIsAtBottom,
         distanceFromBottomPx: distanceFromBottom,
         lastOffset: scrollOffset,
         lastMeasureAt: now,
@@ -525,7 +528,7 @@ export const useAutoScrollToBottom = ({
         if (bufferedMessagesRef.current.length > 0) {
           flushLiveBuffer("auto");
         } else {
-          syncUiState(0, "following", scrollDecision.isAtBottom);
+          syncUiState(0, "following", nextIsAtBottom);
           persistScrollSession("following", scrollOffset);
         }
       } else {
@@ -533,7 +536,7 @@ export const useAutoScrollToBottom = ({
         syncUiState(
           bufferedMessagesRef.current.length,
           "detached",
-          scrollDecision.isAtBottom,
+          nextIsAtBottom,
         );
         persistScrollSession("detached", scrollOffset);
       }
