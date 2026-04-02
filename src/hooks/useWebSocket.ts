@@ -31,6 +31,7 @@ import {
   notifyRoomInline,
   notifySidebarState,
 } from "../utils/notificationRouter";
+import { logMessageDebug } from "../utils/messageDebug";
 
 interface UseWebSocketOptions {
   autoConnect?: boolean;
@@ -382,6 +383,12 @@ export const useWebSocket = (
         chatState.messagesHydratedByConversation[roomId] &&
         chatState.hasNewerMessagesByConversation[roomId] === false
       ) {
+        logMessageDebug("useWebSocket", "delta_sync_blocked_known_latest", {
+          roomId,
+          reason: options?.reason,
+          hydrated: chatState.messagesHydratedByConversation[roomId],
+          hasNext: chatState.hasNewerMessagesByConversation[roomId],
+        });
         return;
       }
 
@@ -408,11 +415,24 @@ export const useWebSocket = (
       let afterCursor = resolveLatestCursor();
 
       if (!afterCursor) return;
+      logMessageDebug("useWebSocket", "delta_sync_started", {
+        roomId,
+        reason: options?.reason,
+        afterCursor,
+      });
 
       // Fetch missed messages in pages to avoid dropping backlog on long disconnects.
       for (let attempts = 0; attempts < 10; attempts += 1) {
         const result = await fetchMessages(roomId, undefined, afterCursor.at, {
           afterId: afterCursor.id,
+          syncReason: options?.reason,
+        });
+        logMessageDebug("useWebSocket", "delta_sync_page_completed", {
+          roomId,
+          reason: options?.reason,
+          attempt: attempts,
+          afterCursor,
+          result,
         });
 
         if (!result.loaded || !result.hasMore) {
@@ -447,6 +467,10 @@ export const useWebSocket = (
         roomResyncInFlightRef.current.delete(roomId);
       });
       roomResyncInFlightRef.current.set(roomId, request);
+      logMessageDebug("useWebSocket", "delta_sync_scheduled", {
+        roomId,
+        reason: options?.reason,
+      });
       return request;
     },
     [resyncRoom],
@@ -1125,6 +1149,11 @@ export const useWebSocket = (
         const syncStrategy =
           pendingRoomSyncRef.current.get(roomId) ?? "initial-sync";
         pendingRoomSyncRef.current.delete(roomId);
+        logMessageDebug("useWebSocket", "sync_complete_received", {
+          roomId,
+          strategy: syncStrategy,
+          targetRoomIds,
+        });
         if (syncStrategy === "skip") {
           return;
         }
@@ -1222,6 +1251,10 @@ export const useWebSocket = (
         roomId,
         options?.skipInitialDeltaSync ? "skip" : "initial-sync",
       );
+      logMessageDebug("useWebSocket", "join_room_state_registered", {
+        roomId,
+        strategy: options?.skipInitialDeltaSync ? "skip" : "initial-sync",
+      });
       emitJoinRoom(roomId);
     },
     [emitJoinRoom],

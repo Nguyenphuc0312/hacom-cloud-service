@@ -43,6 +43,10 @@ import { rankConversations } from "../utils/conversationRanking";
 import { MessageType, UserStatus } from "../types";
 import { isDirectConversation } from "../lib/conversationAdapter";
 import { getOtherParticipant } from "../utils/messageHelpers";
+import {
+  isMessageDebugEnabled,
+  logMessageDebug,
+} from "../utils/messageDebug";
 import { ErrorCode } from "@hacom/chat-shared-types";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 
@@ -97,13 +101,6 @@ const scheduleIdleTask = (task: () => void): (() => void) => {
   return () => {
     window.clearTimeout(timeoutId);
   };
-};
-
-const isMessageDebugEnabled = (): boolean => {
-  if (typeof window === "undefined") return false;
-  return (
-    new URLSearchParams(window.location.search).get("debugMessages") === "1"
-  );
 };
 
 export const ChatPage: React.FC = () => {
@@ -319,12 +316,25 @@ export const ChatPage: React.FC = () => {
 
     void (async () => {
       let skipInitialDeltaSync = false;
+      logMessageDebug("ChatPage", "conversation_open_started", {
+        conversationId: selectedConversationId,
+        isHydrated: isSelectedConversationHydrated,
+        isValidatingRoom,
+      });
       if (!isSelectedConversationHydrated) {
         const initialFetchResult = await fetchMessages(selectedConversationId);
+        logMessageDebug("ChatPage", "initial_fetch_completed", {
+          conversationId: selectedConversationId,
+          result: initialFetchResult,
+        });
         skipInitialDeltaSync =
           initialFetchResult.applied && !initialFetchResult.hasNext;
       }
       if (!cancelled) {
+        logMessageDebug("ChatPage", "join_room_requested", {
+          conversationId: selectedConversationId,
+          skipInitialDeltaSync,
+        });
         joinRoom(selectedConversationId, { skipInitialDeltaSync });
       }
     })();

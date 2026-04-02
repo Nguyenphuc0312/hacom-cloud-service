@@ -14,6 +14,7 @@ import {
   normalizeRoomType,
 } from "../lib/conversationAdapter";
 import { toast } from "../utils/toast";
+import { isMessageDebugEnabled, logMessageDebug } from "../utils/messageDebug";
 import { createReplySnapshot } from "../utils/messageTimeline";
 import { rankConversations } from "../utils/conversationRanking";
 import i18n from "../i18n";
@@ -120,6 +121,7 @@ interface FetchMessagesOptions {
   limit?: number;
   beforeId?: string;
   afterId?: string;
+  syncReason?: "initial-sync" | "reconnect" | "room-refresh";
 }
 
 const initialState = {
@@ -184,13 +186,6 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
   value !== null && typeof value === "object"
     ? (value as Record<string, unknown>)
     : null;
-
-const isMessageDebugEnabled = (): boolean => {
-  if (typeof window === "undefined") return false;
-  return (
-    new URLSearchParams(window.location.search).get("debugMessages") === "1"
-  );
-};
 
 const asStringValue = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim().length > 0 ? value : undefined;
@@ -1756,7 +1751,32 @@ export const useChatStore = create<ChatState>()(
           : before
             ? "older"
             : "initial";
+        const syncReason = options?.syncReason;
         const forceRefresh = options?.force === true;
+        if (
+          fetchMode === "newer" &&
+          syncReason === "initial-sync" &&
+          get().messagesHydratedByConversation[conversationId] &&
+          get().hasNewerMessagesByConversation[conversationId] === false
+        ) {
+          logMessageDebug("chatStore", "fetch_blocked_known_latest", {
+            conversationId,
+            fetchMode,
+            syncReason,
+            before,
+            after,
+            beforeId: options?.beforeId,
+            afterId: options?.afterId,
+          });
+          return {
+            loaded: 0,
+            hasMore: false,
+            hasNext: false,
+            hasPrev: get().hasMoreMessages[conversationId] ?? false,
+            mode: fetchMode,
+            applied: false,
+          };
+        }
         if (
           isInitialFetch &&
           !forceRefresh &&
@@ -1816,6 +1836,19 @@ export const useChatStore = create<ChatState>()(
           if (beforeId) params.set("beforeId", beforeId);
           if (after) params.set("after", after);
           if (afterId) params.set("afterId", afterId);
+          logMessageDebug("chatStore", "fetch_requested", {
+            conversationId,
+            fetchMode,
+            syncReason,
+            forceRefresh,
+            before,
+            after,
+            beforeId,
+            afterId,
+            limit,
+            initialFetchSeq,
+            fetchGeneration,
+          });
 
           const response = await messageApi.getMessages(conversationId, {
             limit,
@@ -1881,12 +1914,27 @@ export const useChatStore = create<ChatState>()(
               initialFetchSeqByConversation.get(conversationId) !==
                 initialFetchSeq
             ) {
+              logMessageDebug("chatStore", "fetch_stale_initial_ignored", {
+                conversationId,
+                fetchMode,
+                initialFetchSeq,
+                activeInitialFetchSeq:
+                  initialFetchSeqByConversation.get(conversationId) ?? null,
+              });
               return state;
             }
             if (
               messageFetchGenerationByConversation.get(conversationId) !==
               fetchGeneration
             ) {
+              logMessageDebug("chatStore", "fetch_stale_generation_ignored", {
+                conversationId,
+                fetchMode,
+                fetchGeneration,
+                activeGeneration:
+                  messageFetchGenerationByConversation.get(conversationId) ??
+                  null,
+              });
               return state;
             }
 
@@ -1945,6 +1993,16 @@ export const useChatStore = create<ChatState>()(
               },
             };
           });
+          logMessageDebug("chatStore", "fetch_applied", {
+            conversationId,
+            fetchMode,
+            syncReason,
+            loaded: normalized.messages.length,
+            hasNext: normalized.hasNext,
+            hasPrev: normalized.hasPrev,
+            fetchGeneration,
+            initialFetchSeq,
+          });
 
           return {
             loaded: normalized.messages.length,
@@ -1963,6 +2021,16 @@ export const useChatStore = create<ChatState>()(
           const apiError = extractApiError(error);
           const errorMessage =
             apiError.message || i18n.t("error:chat.fetchMessagesFailed");
+          logMessageDebug("chatStore", "fetch_failed", {
+            conversationId,
+            fetchMode,
+            syncReason,
+            before,
+            after,
+            beforeId: options?.beforeId,
+            afterId: options?.afterId,
+            errorMessage,
+          });
           set((state) => ({
             error: errorMessage,
             messageErrors: {
