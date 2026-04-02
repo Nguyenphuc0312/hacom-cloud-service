@@ -44,6 +44,7 @@ interface ChatState {
   isLoadingMessages: boolean;
   isLoadingMessagesByConversation: Record<string, boolean>;
   hasMoreMessages: Record<string, boolean>;
+  hasNewerMessagesByConversation: Record<string, boolean>;
   outboxByConversation: Record<string, string[]>;
   sendRestrictionsByConversation: Record<string, SendRestriction | undefined>;
   messageErrors: Record<string, string | null>;
@@ -135,6 +136,7 @@ const initialState = {
   isLoadingMessages: false,
   isLoadingMessagesByConversation: {},
   hasMoreMessages: {},
+  hasNewerMessagesByConversation: {},
   outboxByConversation: {},
   sendRestrictionsByConversation: {},
   messageErrors: {},
@@ -1418,6 +1420,11 @@ export const useChatStore = create<ChatState>()(
           hasMoreMessages: Object.fromEntries(
             Object.entries(state.hasMoreMessages).filter(([key]) => key !== id),
           ),
+          hasNewerMessagesByConversation: Object.fromEntries(
+            Object.entries(state.hasNewerMessagesByConversation).filter(
+              ([key]) => key !== id,
+            ),
+          ),
           outboxByConversation: Object.fromEntries(
             Object.entries(state.outboxByConversation).filter(
               ([key]) => key !== id,
@@ -1539,6 +1546,10 @@ export const useChatStore = create<ChatState>()(
           messagesHydratedByConversation: {
             ...state.messagesHydratedByConversation,
             [conversationId]: true,
+          },
+          hasNewerMessagesByConversation: {
+            ...state.hasNewerMessagesByConversation,
+            [conversationId]: false,
           },
         }));
       },
@@ -1754,7 +1765,8 @@ export const useChatStore = create<ChatState>()(
           return {
             loaded: 0,
             hasMore: get().hasMoreMessages[conversationId] ?? false,
-            hasNext: false,
+            hasNext:
+              get().hasNewerMessagesByConversation[conversationId] ?? false,
             hasPrev: get().hasMoreMessages[conversationId] ?? false,
             mode: fetchMode,
             applied: false,
@@ -1922,6 +1934,14 @@ export const useChatStore = create<ChatState>()(
                   before || (!before && !after)
                     ? normalized.hasPrev
                     : (state.hasMoreMessages[conversationId] ?? false),
+              },
+              hasNewerMessagesByConversation: {
+                ...state.hasNewerMessagesByConversation,
+                [conversationId]:
+                  fetchMode === "initial" || fetchMode === "newer"
+                    ? normalized.hasNext
+                    : (state.hasNewerMessagesByConversation[conversationId] ??
+                        false),
               },
             };
           });

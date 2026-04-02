@@ -85,6 +85,8 @@ export const useMessages = ({
   const previousConversationRef = useRef<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     if (conversationId) {
       if (
         previousConversationRef.current &&
@@ -93,15 +95,24 @@ export const useMessages = ({
         leaveRoom(previousConversationRef.current);
       }
 
-      joinRoom(conversationId);
       previousConversationRef.current = conversationId;
 
-      if (autoLoad && !isHydrated) {
-        fetchMessages(conversationId);
-      }
+      void (async () => {
+        let skipInitialDeltaSync = false;
+        if (autoLoad && !isHydrated) {
+          const initialFetchResult = await fetchMessages(conversationId);
+          skipInitialDeltaSync =
+            initialFetchResult.applied && !initialFetchResult.hasNext;
+        }
+
+        if (!cancelled) {
+          joinRoom(conversationId, { skipInitialDeltaSync });
+        }
+      })();
     }
 
     return () => {
+      cancelled = true;
       if (conversationId) {
         leaveRoom(conversationId);
       }

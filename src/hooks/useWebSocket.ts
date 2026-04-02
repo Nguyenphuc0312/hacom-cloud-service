@@ -170,7 +170,9 @@ export const useWebSocket = (
   );
 
   const joinedRoomsRef = useRef<Set<string>>(new Set());
-  const pendingRoomSyncRef = useRef<Map<string, "skip" | "resync">>(new Map());
+  const pendingRoomSyncRef = useRef<
+    Map<string, "skip" | "initial-sync" | "reconnect">
+  >(new Map());
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const emitQueueRef = useRef<Array<{ event: string; data: unknown }>>([]);
   const hasConnectedOnceRef = useRef(false);
@@ -370,7 +372,19 @@ export const useWebSocket = (
   );
 
   const resyncRoom = useCallback(
-    async (roomId: string) => {
+    async (
+      roomId: string,
+      options?: { reason?: "initial-sync" | "reconnect" | "room-refresh" },
+    ) => {
+      const chatState = useChatStore.getState();
+      if (
+        options?.reason === "initial-sync" &&
+        chatState.messagesHydratedByConversation[roomId] &&
+        chatState.hasNewerMessagesByConversation[roomId] === false
+      ) {
+        return;
+      }
+
       const resolveLatestCursor = (): MessageCursor | undefined => {
         const roomMessages = useChatStore.getState().messages[roomId] || [];
         for (let index = roomMessages.length - 1; index >= 0; index -= 1) {
@@ -420,13 +434,16 @@ export const useWebSocket = (
   );
 
   const scheduleRoomResync = useCallback(
-    (roomId: string) => {
+    (
+      roomId: string,
+      options?: { reason?: "initial-sync" | "reconnect" | "room-refresh" },
+    ) => {
       const inFlight = roomResyncInFlightRef.current.get(roomId);
       if (inFlight) {
         return inFlight;
       }
 
-      const request = resyncRoom(roomId).finally(() => {
+      const request = resyncRoom(roomId, options).finally(() => {
         roomResyncInFlightRef.current.delete(roomId);
       });
       roomResyncInFlightRef.current.set(roomId, request);
@@ -454,7 +471,10 @@ export const useWebSocket = (
       }
 
       joinedRoomsRef.current.forEach((roomId) => {
-        pendingRoomSyncRef.current.set(roomId, shouldResync ? "resync" : "skip");
+        pendingRoomSyncRef.current.set(
+          roomId,
+          shouldResync ? "reconnect" : "skip",
+        );
         emitJoinRoom(roomId);
       });
 
@@ -804,7 +824,7 @@ export const useWebSocket = (
       const payload = asRecord(data);
       const conversationId = payload ? getConversationId(payload) : null;
       if (conversationId) {
-        void scheduleRoomResync(conversationId);
+        void scheduleRoomResync(conversationId, { reason: "room-refresh" });
       }
     };
 
@@ -1102,12 +1122,13 @@ export const useWebSocket = (
           : Array.from(pendingRoomSyncRef.current.keys());
 
       roomIdsToResync.forEach((roomId) => {
-        const syncStrategy = pendingRoomSyncRef.current.get(roomId) ?? "resync";
+        const syncStrategy =
+          pendingRoomSyncRef.current.get(roomId) ?? "initial-sync";
         pendingRoomSyncRef.current.delete(roomId);
         if (syncStrategy === "skip") {
           return;
         }
-        void scheduleRoomResync(roomId);
+        void scheduleRoomResync(roomId, { reason: syncStrategy });
       });
     });
     unsubscribersRef.current.push(unsubSyncComplete);
@@ -1199,7 +1220,7 @@ export const useWebSocket = (
       joinedRoomsRef.current.add(roomId);
       pendingRoomSyncRef.current.set(
         roomId,
-        options?.skipInitialDeltaSync ? "skip" : "resync",
+        options?.skipInitialDeltaSync ? "skip" : "initial-sync",
       );
       emitJoinRoom(roomId);
     },
