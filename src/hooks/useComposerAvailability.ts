@@ -4,6 +4,7 @@ import type { Conversation, SendRestriction } from "../types";
 import type { ConnectionState } from "./useWebSocket";
 
 export type ComposerMode =
+  | "bootstrapping"
   | "online"
   | "reconnecting"
   | "offline"
@@ -22,6 +23,7 @@ export interface ComposerAvailability {
 interface UseComposerAvailabilityOptions {
   connectionState: ConnectionState;
   conversation: Conversation;
+  isConversationReady?: boolean;
   sendRestriction?: SendRestriction;
   slowModeRemainingSeconds?: number;
 }
@@ -29,12 +31,26 @@ interface UseComposerAvailabilityOptions {
 export const useComposerAvailability = ({
   connectionState,
   conversation,
+  isConversationReady = true,
   sendRestriction,
   slowModeRemainingSeconds = 0,
 }: UseComposerAvailabilityOptions): ComposerAvailability => {
   const { t } = useTranslation();
 
   return React.useMemo(() => {
+    if (!isConversationReady) {
+      return {
+        mode: "bootstrapping",
+        canType: false,
+        canAttach: false,
+        canSubmit: false,
+        statusTone: "info",
+        statusMessage: t("common:loading.default", {
+          defaultValue: "Loading conversation...",
+        }),
+      };
+    }
+
     if (conversation.isBlocked) {
       return {
         mode: "restricted" as const,
@@ -115,6 +131,7 @@ export const useComposerAvailability = ({
   }, [
     connectionState,
     conversation.isBlocked,
+    isConversationReady,
     sendRestriction,
     slowModeRemainingSeconds,
     t,

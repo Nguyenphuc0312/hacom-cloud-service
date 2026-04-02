@@ -91,6 +91,7 @@ interface ChatWindowProps {
   onRetryMessages?: () => void | Promise<void>;
   onReachedLatestMessage?: (message: Message) => void;
   connectionState?: ConnectionState;
+  isConversationReady?: boolean;
   className?: string;
 }
 
@@ -136,6 +137,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onRetryMessages,
   onReachedLatestMessage,
   connectionState = "connected",
+  isConversationReady = true,
   className,
 }) => {
   const { t } = useTranslation();
@@ -422,6 +424,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const composerAvailability = useComposerAvailability({
     connectionState,
     conversation,
+    isConversationReady,
     sendRestriction,
     slowModeRemainingSeconds,
   });

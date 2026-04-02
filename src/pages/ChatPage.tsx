@@ -317,37 +317,30 @@ export const ChatPage: React.FC = () => {
       return;
     }
 
-    let cancelled = false;
-
     void (async () => {
-      let skipInitialDeltaSync =
-        isSelectedConversationHydrated && !selectedConversationHasNewer;
       logMessageDebug("ChatPage", "conversation_open_started", {
         conversationId: selectedConversationId,
         isHydrated: isSelectedConversationHydrated,
         isValidatingRoom,
         hasNewer: selectedConversationHasNewer,
       });
+      logMessageDebug("ChatPage", "join_room_requested", {
+        conversationId: selectedConversationId,
+        skipInitialDeltaSync: false,
+        reason: "conversation_open",
+      });
+      joinRoom(selectedConversationId, { skipInitialDeltaSync: false });
+
       if (!isSelectedConversationHydrated) {
         const initialFetchResult = await fetchMessages(selectedConversationId);
         logMessageDebug("ChatPage", "initial_fetch_completed", {
           conversationId: selectedConversationId,
           result: initialFetchResult,
         });
-        skipInitialDeltaSync =
-          initialFetchResult.applied && !initialFetchResult.hasNext;
-      }
-      if (!cancelled) {
-        logMessageDebug("ChatPage", "join_room_requested", {
-          conversationId: selectedConversationId,
-          skipInitialDeltaSync,
-        });
-        joinRoom(selectedConversationId, { skipInitialDeltaSync });
       }
     })();
 
     return () => {
-      cancelled = true;
       stopTyping(selectedConversationId);
       leaveRoom(selectedConversationId);
     };
@@ -397,6 +390,25 @@ export const ChatPage: React.FC = () => {
         throw error;
       }
 
+      const state = useChatStore.getState();
+      const isConversationHydrated =
+        state.messagesHydratedByConversation[selectedConversationId] === true;
+      if (!isConversationHydrated || isValidatingRoom) {
+        const error = new Error(
+          t("common:loading.default", {
+            defaultValue: "Loading conversation...",
+          }),
+        );
+        logMessageDebug("ChatPage", "send_blocked_conversation_not_ready", {
+          conversationId: selectedConversationId,
+          isConversationHydrated,
+          isValidatingRoom,
+          contentLength: content.trim().length,
+          type,
+        });
+        throw error;
+      }
+
       try {
         return await storeSendMessage(
           selectedConversationId,
@@ -430,7 +442,13 @@ export const ChatPage: React.FC = () => {
         throw error;
       }
     },
-    [selectedConversationId, setSlowModeCooldown, storeSendMessage, t],
+    [
+      isValidatingRoom,
+      selectedConversationId,
+      setSlowModeCooldown,
+      storeSendMessage,
+      t,
+    ],
   );
 
   const handleLoadOlderMessages = useCallback(async () => {
@@ -906,6 +924,32 @@ export const ChatPage: React.FC = () => {
   const showConversationSkeleton =
     (!hasFetchedConversationsOnce && conversations.length === 0) ||
     (isLoadingConversations && conversations.length === 0);
+  const isConversationReady = Boolean(
+    selectedConversationId &&
+      selectedConversation &&
+      !isValidatingRoom &&
+      isSelectedConversationHydrated,
+  );
+
+  useEffect(() => {
+    if (!selectedConversationId) return;
+
+    logMessageDebug("ChatPage", "conversation_readiness_changed", {
+      conversationId: selectedConversationId,
+      isValidatingRoom,
+      isHydrated: isSelectedConversationHydrated,
+      isReady: isConversationReady,
+      messageCount: conversationMessages.length,
+      connectionState,
+    });
+  }, [
+    connectionState,
+    conversationMessages.length,
+    isConversationReady,
+    isSelectedConversationHydrated,
+    isValidatingRoom,
+    selectedConversationId,
+  ]);
 
   useEffect(() => {
     if (!selectedConversationId || !isSelectedDirectConversation || otherUser) {
@@ -1057,6 +1101,7 @@ export const ChatPage: React.FC = () => {
             onRetryMessages={handleRetryMessages}
             onReachedLatestMessage={handleReachedLatestMessage}
             connectionState={connectionState}
+            isConversationReady={isConversationReady}
           />
         ) : (
           <NoChatSelected onNewChat={handleOpenNewChat} />

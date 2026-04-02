@@ -849,8 +849,15 @@ const mergeMessages = (current: Message[], incoming: Message[]): Message[] =>
     ...(Array.isArray(incoming) ? incoming : []),
   ]);
 
-const replaceMessages = (current: Message[], incoming: Message[]): Message[] => {
+const replaceMessages = (
+  current: Message[],
+  incoming: Message[],
+  options?: { preserveMessagesCreatedAfter?: Date },
+): Message[] => {
   const existing = Array.isArray(current) ? current : [];
+  const preserveMessagesCreatedAfterMs = options?.preserveMessagesCreatedAfter
+    ? toDateValue(options.preserveMessagesCreatedAfter)
+    : 0;
   const localOnlyMessages = existing.filter((message) => {
     const isLocalOnly =
       isTempMessageId(message.id) ||
@@ -858,8 +865,11 @@ const replaceMessages = (current: Message[], incoming: Message[]): Message[] => 
       message.sendState === "queued" ||
       message.sendState === "retrying" ||
       message.sendState === "failed";
+    const shouldPreserveBecauseCreatedAfterFetchStarted =
+      preserveMessagesCreatedAfterMs > 0 &&
+      toDateValue(message.createdAt) >= preserveMessagesCreatedAfterMs;
 
-    if (!isLocalOnly) {
+    if (!isLocalOnly && !shouldPreserveBecauseCreatedAfterFetchStarted) {
       return false;
     }
 
@@ -1835,6 +1845,7 @@ export const useChatStore = create<ChatState>()(
           : before
             ? "older"
             : "initial";
+        const fetchRequestedAt = new Date();
         const syncReason = options?.syncReason;
         const forceRefresh = options?.force === true;
         if (
@@ -1921,13 +1932,14 @@ export const useChatStore = create<ChatState>()(
           if (after) params.set("after", after);
           if (afterId) params.set("afterId", afterId);
           logMessageDebug("chatStore", "fetch_requested", {
-            conversationId,
-            fetchMode,
-            syncReason,
-            forceRefresh,
-            before,
-            after,
-            beforeId,
+                conversationId,
+                fetchMode,
+                syncReason,
+                forceRefresh,
+                fetchRequestedAt: fetchRequestedAt.toISOString(),
+                before,
+                after,
+                beforeId,
             afterId,
             limit,
             initialFetchSeq,
@@ -2025,7 +2037,9 @@ export const useChatStore = create<ChatState>()(
             const existingMessages = state.messages[conversationId] || [];
             const nextMessages =
               fetchMode === "initial"
-                ? replaceMessages(existingMessages, normalized.messages)
+                ? replaceMessages(existingMessages, normalized.messages, {
+                    preserveMessagesCreatedAfter: fetchRequestedAt,
+                  })
                 : fetchMode === "older"
                   ? prependMessages(existingMessages, normalized.messages)
                   : appendMessages(existingMessages, normalized.messages);

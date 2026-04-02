@@ -653,6 +653,30 @@ export const useWebSocket = (
     });
     unsubscribersRef.current.push(unsubMessageNew);
 
+    const handleRoomJoined = (data: unknown) => {
+      const payload = asRecord(data);
+      if (!payload) return;
+      const roomId = getConversationId(payload);
+      if (!roomId) return;
+
+      logMessageDebug("useWebSocket", "room_joined_received", {
+        roomId,
+        connectionState: getSocket()?.getConnectionState() ?? "unknown",
+      });
+    };
+
+    const unsubRoomJoined = socket.on(
+      WebSocketEvents.ROOM_JOINED,
+      handleRoomJoined,
+    );
+    unsubscribersRef.current.push(unsubRoomJoined);
+
+    const unsubConversationJoined = socket.on(
+      WebSocketEvents.CONVERSATION_JOINED,
+      handleRoomJoined,
+    );
+    unsubscribersRef.current.push(unsubConversationJoined);
+
     const unsubMessageUpdated = socket.on(
       WebSocketEvents.MESSAGE_UPDATED,
       (data) => {
@@ -1173,6 +1197,9 @@ export const useWebSocket = (
       const payload = asRecord(data);
       const targetRoomIds =
         payload !== null ? getConversationIds(payload) : [];
+      logMessageDebug("useWebSocket", "sync_complete_event_received", {
+        targetRoomIds,
+      });
       const roomIdsToResync =
         targetRoomIds.length > 0
           ? targetRoomIds.filter((roomId) => joinedRoomsRef.current.has(roomId))
