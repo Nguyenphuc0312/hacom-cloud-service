@@ -378,6 +378,7 @@ export const useAutoScrollToBottom = ({
       // rather than relying on the indirect anchor-controller fallback chain.
       if (
         followModeRef.current === "following" &&
+        scrollMetricsRef.current.isAtBottom &&
         updatedBufferedMessages.length === 0
       ) {
         scrollMetricsRef.current = {
@@ -504,6 +505,10 @@ export const useAutoScrollToBottom = ({
         pendingBufferedCount: bufferedMessagesRef.current.length,
         currentMode: followModeRef.current,
       });
+      const movingUp =
+        scrollOffset < previousMetrics.lastOffset &&
+        distanceFromBottom > scrollDecision.atBottomThresholdPx;
+      const nextMode = movingUp ? "detached" : scrollDecision.nextMode;
 
       scrollMetricsRef.current = {
         isAtBottom: scrollDecision.isAtBottom,
@@ -513,9 +518,9 @@ export const useAutoScrollToBottom = ({
         velocityPxPerMs,
         lastInteractionAt: Date.now(),
       };
-      followModeRef.current = scrollDecision.nextMode;
+      followModeRef.current = nextMode;
 
-      if (scrollDecision.nextMode === "following") {
+      if (nextMode === "following") {
         updateSessionAnchor("following");
         if (bufferedMessagesRef.current.length > 0) {
           flushLiveBuffer("auto");

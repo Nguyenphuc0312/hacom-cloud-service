@@ -29,6 +29,7 @@ interface UseScrollAnchorControllerParams<Item, ListData> {
   viewportHeight: number;
   composerHeight?: number;
   autoFollowEnabled: boolean;
+  isAtBottom: boolean;
   scrollToBottom: (behavior?: ScrollBehavior) => void;
   pendingRestoreAnchor?: {
     itemKey: string | null;
@@ -56,6 +57,7 @@ export const useScrollAnchorController = <Item, ListData>({
   viewportHeight,
   composerHeight = 0,
   autoFollowEnabled,
+  isAtBottom,
   scrollToBottom,
   pendingRestoreAnchor,
   pendingRestoreAnchorVersion,
@@ -324,7 +326,7 @@ export const useScrollAnchorController = <Item, ListData>({
       return;
     }
 
-    if (autoFollowEnabled) {
+    if (autoFollowEnabled && isAtBottom) {
       schedulePinToBottom();
       return;
     }
@@ -348,6 +350,7 @@ export const useScrollAnchorController = <Item, ListData>({
   }, [
     autoFollowEnabled,
     captureAnchorSnapshot,
+    isAtBottom,
     resolveAnchorIndex,
     scheduleAnchorRestore,
     schedulePinToBottom,
@@ -450,7 +453,7 @@ export const useScrollAnchorController = <Item, ListData>({
       return;
     }
 
-    if (autoFollowEnabled) {
+    if (autoFollowEnabled && isAtBottom) {
       schedulePinToBottom();
       return;
     }
@@ -461,6 +464,7 @@ export const useScrollAnchorController = <Item, ListData>({
   }, [
     autoFollowEnabled,
     captureAnchorSnapshot,
+    isAtBottom,
     items.length,
     schedulePinToBottom,
   ]);
@@ -478,7 +482,7 @@ export const useScrollAnchorController = <Item, ListData>({
       return;
     }
 
-    if (autoFollowEnabled) {
+    if (autoFollowEnabled && isAtBottom) {
       schedulePinToBottom();
       return;
     }
@@ -486,6 +490,7 @@ export const useScrollAnchorController = <Item, ListData>({
     scheduleAnchorRestore();
   }, [
     autoFollowEnabled,
+    isAtBottom,
     scheduleAnchorRestore,
     schedulePinToBottom,
     viewportHeight,
@@ -502,7 +507,7 @@ export const useScrollAnchorController = <Item, ListData>({
       return;
     }
 
-    if (autoFollowEnabled) {
+    if (autoFollowEnabled && isAtBottom) {
       schedulePinToBottom();
       return;
     }
@@ -515,6 +520,7 @@ export const useScrollAnchorController = <Item, ListData>({
     autoFollowEnabled,
     captureAnchorSnapshot,
     composerHeight,
+    isAtBottom,
     scheduleAnchorRestore,
     schedulePinToBottom,
   ]);

@@ -534,6 +534,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     viewportHeight,
     composerHeight,
     autoFollowEnabled,
+    isAtBottom,
     scrollToBottom,
     pendingRestoreAnchor,
     pendingRestoreAnchorVersion,
