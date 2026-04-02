@@ -324,7 +324,7 @@ export const ChatPage: React.FC = () => {
         isValidatingRoom,
         hasNewer: selectedConversationHasNewer,
       });
-      logMessageDebug("ChatPage", "join_room_requested", {
+      logMessageDebug("ChatPage", "room_join_requested", {
         conversationId: selectedConversationId,
         skipInitialDeltaSync: false,
         reason: "conversation_open",
@@ -930,6 +930,7 @@ export const ChatPage: React.FC = () => {
       !isValidatingRoom &&
       isSelectedConversationHydrated,
   );
+  const websocketReady = connectionState === "connected";
 
   useEffect(() => {
     if (!selectedConversationId) return;
@@ -939,6 +940,7 @@ export const ChatPage: React.FC = () => {
       isValidatingRoom,
       isHydrated: isSelectedConversationHydrated,
       isReady: isConversationReady,
+      websocketReady,
       messageCount: conversationMessages.length,
       connectionState,
     });
@@ -949,6 +951,7 @@ export const ChatPage: React.FC = () => {
     isSelectedConversationHydrated,
     isValidatingRoom,
     selectedConversationId,
+    websocketReady,
   ]);
 
   useEffect(() => {

@@ -538,6 +538,17 @@ const clearAllMessageSendTimeouts = (): void => {
   pendingMessageSendTimeouts.clear();
 };
 
+const getBrowserOnlineState = (): boolean | null => {
+  if (
+    typeof navigator === "undefined" ||
+    typeof navigator.onLine !== "boolean"
+  ) {
+    return null;
+  }
+
+  return navigator.onLine;
+};
+
 const resolveConnectionSendMode = (): "online" | "reconnecting" | "offline" => {
   const connectionState = getSocket()?.getConnectionState() ?? "disconnected";
   if (connectionState === "connected") {
@@ -554,7 +565,7 @@ const resolveConnectionSendMode = (): "online" | "reconnecting" | "offline" => {
 };
 
 const isQueueableNetworkFailure = (error: unknown): boolean => {
-  if (resolveConnectionSendMode() !== "online") {
+  if (getBrowserOnlineState() === false) {
     return true;
   }
   return axios.isAxiosError(error) && !error.response;
@@ -2226,6 +2237,7 @@ export const useChatStore = create<ChatState>()(
         const sendMode = resolveConnectionSendMode();
         const queueKeyReason =
           sendMode === "reconnecting" ? "reconnecting" : "offline";
+        const browserOnline = getBrowserOnlineState();
 
         const localOrder = allocateLocalMessageOrder();
         const clientMessageId = `client-${conversationId}-${localOrder}`;
@@ -2237,8 +2249,8 @@ export const useChatStore = create<ChatState>()(
           localId: tempId,
           localOrder,
           transportStatus: "optimistic",
-          sendState: sendMode === "online" ? "sending" : "queued",
-          queuedReason: sendMode === "online" ? undefined : queueKeyReason,
+          sendState: browserOnline === false ? "queued" : "sending",
+          queuedReason: browserOnline === false ? queueKeyReason : undefined,
           sendAttempts: 0,
           conversationId,
           senderId: sender.id || "current-user",
@@ -2260,24 +2272,26 @@ export const useChatStore = create<ChatState>()(
         };
 
         get().addMessage(conversationId, tempMessage);
-        logMessageDebug("chatStore", "optimistic_message_added", {
+        logMessageDebug("chatStore", "optimistic_message_created", {
           conversationId,
           tempId,
           clientMessageId,
           sendMode,
+          browserOnline,
           queuedReason: tempMessage.queuedReason,
           attachmentCount: fileMetaArr?.length ?? 0,
         });
 
-        if (sendMode !== "online") {
+        if (browserOnline === false) {
           enqueueOutboxMessage(
             conversationId,
             getMessageQueueKey(conversationId, tempMessage),
           );
-          logMessageDebug("chatStore", "optimistic_message_queued", {
+          logMessageDebug("chatStore", "offline_queue_enqueued", {
             conversationId,
             tempId,
             sendMode,
+            browserOnline,
           });
           return {
             disposition: "queued",
@@ -2297,7 +2311,8 @@ export const useChatStore = create<ChatState>()(
         }
 
         const sendMode = resolveConnectionSendMode();
-        if (sendMode !== "online") {
+        const browserOnline = getBrowserOnlineState();
+        if (browserOnline === false) {
           enqueueOutboxMessage(
             conversationId,
             getMessageQueueKey(conversationId, message),
@@ -2305,9 +2320,15 @@ export const useChatStore = create<ChatState>()(
           get().updateMessage(conversationId, message.id, {
             sendState: "queued",
             status: MessageStatus.SENDING,
-            queuedReason:
-              sendMode === "reconnecting" ? "reconnecting" : "manual_retry",
+            queuedReason: "offline",
             failureReason: undefined,
+          });
+          logMessageDebug("chatStore", "offline_queue_enqueued", {
+            conversationId,
+            messageId: message.id,
+            sendMode,
+            browserOnline,
+            trigger: "manual_retry",
           });
           return {
             disposition: "queued",
@@ -2334,6 +2355,11 @@ export const useChatStore = create<ChatState>()(
           ? [conversationId]
           : Object.keys(get().outboxByConversation);
 
+        logMessageDebug("chatStore", "offline_queue_flush_started", {
+          conversationIds,
+          connectionMode: resolveConnectionSendMode(),
+        });
+
         for (const currentConversationId of conversationIds) {
           const queueKeys = [
             ...(get().outboxByConversation[currentConversationId] || []),
@@ -2349,6 +2375,12 @@ export const useChatStore = create<ChatState>()(
             .filter((item) => item.sendState === "queued")
             .sort((a, b) => (a.localOrder ?? 0) - (b.localOrder ?? 0));
 
+          logMessageDebug("chatStore", "offline_queue_flush_conversation", {
+            conversationId: currentConversationId,
+            queueKeyCount: queueKeys.length,
+            queuedMessageCount: queuedMessages.length,
+          });
+
           for (const queuedMessage of queuedMessages) {
             try {
               await dispatchExistingMessage(
@@ -2363,6 +2395,11 @@ export const useChatStore = create<ChatState>()(
             }
           }
         }
+
+        logMessageDebug("chatStore", "offline_queue_flushed", {
+          conversationIds,
+          connectionMode: resolveConnectionSendMode(),
+        });
       },
 
       setSendRestriction: (conversationId, restriction) => {

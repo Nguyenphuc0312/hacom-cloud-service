@@ -189,6 +189,10 @@ export const useWebSocket = (
   useEffect(() => {
     const socket = initSocket();
     const unsub = socket.onStateChange((state) => {
+      logMessageDebug("useWebSocket", "connection_state_changed", {
+        state,
+        joinedRooms: Array.from(joinedRoomsRef.current),
+      });
       setConnectionState(state);
     });
     return () => {
@@ -341,6 +345,12 @@ export const useWebSocket = (
   const flushEmitQueue = useCallback(() => {
     const socket = getSocket();
     if (!socket?.isConnected()) return;
+    const queuedCount = emitQueueRef.current.length;
+    if (queuedCount > 0) {
+      logMessageDebug("useWebSocket", "emit_queue_flush_started", {
+        queuedCount,
+      });
+    }
 
     while (emitQueueRef.current.length > 0) {
       const queued = emitQueueRef.current.shift();
@@ -351,19 +361,36 @@ export const useWebSocket = (
         break;
       }
     }
+
+    if (queuedCount > 0) {
+      logMessageDebug("useWebSocket", "emit_queue_flush_completed", {
+        remainingCount: emitQueueRef.current.length,
+      });
+    }
   }, []);
 
   const emit = useCallback((event: string, data: unknown) => {
     const socket = getSocket();
     if (!socket?.isConnected()) {
       emitQueueRef.current.push({ event, data });
+      logMessageDebug("useWebSocket", "emit_queued_until_connected", {
+        event,
+        queuedCount: emitQueueRef.current.length,
+      });
       return;
     }
+    logMessageDebug("useWebSocket", "emit_sent", {
+      event,
+    });
     socket.send(event, data);
   }, []);
 
   const emitJoinRoom = useCallback(
     (roomId: string) => {
+      logMessageDebug("useWebSocket", "room_join_requested", {
+        roomId,
+        connectionState: getSocket()?.getConnectionState() ?? "unknown",
+      });
       emit(WebSocketEvents.CONVERSATION_JOIN, {
         roomId,
         conversationId: roomId,
@@ -491,11 +518,19 @@ export const useWebSocket = (
 
   const setupSocket = useCallback(() => {
     const socket = initSocket();
+    logMessageDebug("useWebSocket", "listener_setup_started", {
+      existingListenerCount: unsubscribersRef.current.length,
+      connectionState: socket.getConnectionState(),
+    });
 
     unsubscribersRef.current.forEach((unsub) => unsub());
     unsubscribersRef.current = [];
 
     const unsubConnect = socket.on("connect", () => {
+      logMessageDebug("useWebSocket", "socket_connected", {
+        shouldResync: shouldResyncOnConnectRef.current,
+        joinedRooms: Array.from(joinedRoomsRef.current),
+      });
       onConnect?.();
 
       const shouldResync = shouldResyncOnConnectRef.current;
@@ -518,6 +553,10 @@ export const useWebSocket = (
       hasConnectedOnceRef.current = true;
 
       flushEmitQueue();
+      logMessageDebug("useWebSocket", "offline_queue_flush_requested", {
+        reason: "socket_connected",
+        joinedRooms: Array.from(joinedRoomsRef.current),
+      });
       void flushQueuedMessages();
     });
     unsubscribersRef.current.push(unsubConnect);
@@ -659,7 +698,7 @@ export const useWebSocket = (
       const roomId = getConversationId(payload);
       if (!roomId) return;
 
-      logMessageDebug("useWebSocket", "room_joined_received", {
+      logMessageDebug("useWebSocket", "room_joined", {
         roomId,
         connectionState: getSocket()?.getConnectionState() ?? "unknown",
       });
@@ -1247,6 +1286,11 @@ export const useWebSocket = (
     );
     unsubscribersRef.current.push(unsubSettingsUpdated);
 
+    logMessageDebug("useWebSocket", "listener_setup_completed", {
+      listenerCount: unsubscribersRef.current.length,
+      connectionState: socket.getConnectionState(),
+    });
+
     return socket;
   }, [
     addMessage,
@@ -1280,7 +1324,13 @@ export const useWebSocket = (
   const connect = useCallback(() => {
     void (async () => {
       try {
+        logMessageDebug("useWebSocket", "connect_requested", {
+          connectionState: getSocket()?.getConnectionState() ?? "unknown",
+        });
         await ensureFreshAccessToken("ws_connect");
+        logMessageDebug("useWebSocket", "connect_token_ready", {
+          connectionState: getSocket()?.getConnectionState() ?? "unknown",
+        });
         setupSocket();
         connectSocket();
       } catch (error) {
@@ -1290,6 +1340,10 @@ export const useWebSocket = (
   }, [handleWsRefreshFailure, setupSocket]);
 
   const disconnect = useCallback(() => {
+    logMessageDebug("useWebSocket", "disconnect_requested", {
+      joinedRooms: Array.from(joinedRoomsRef.current),
+      queuedEmitCount: emitQueueRef.current.length,
+    });
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = null;
@@ -1391,6 +1445,25 @@ export const useWebSocket = (
     },
     [emit],
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleOnline = () => {
+      logMessageDebug("useWebSocket", "offline_queue_flush_requested", {
+        reason: "browser_online",
+        connectionState: getSocket()?.getConnectionState() ?? "unknown",
+      });
+      void flushQueuedMessages();
+    };
+
+    window.addEventListener("online", handleOnline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [flushQueuedMessages]);
 
   useEffect(() => {
     if (!autoConnect) {

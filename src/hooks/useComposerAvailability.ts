@@ -28,6 +28,17 @@ interface UseComposerAvailabilityOptions {
   slowModeRemainingSeconds?: number;
 }
 
+const getBrowserOnlineState = (): boolean => {
+  if (
+    typeof navigator === "undefined" ||
+    typeof navigator.onLine !== "boolean"
+  ) {
+    return true;
+  }
+
+  return navigator.onLine;
+};
+
 export const useComposerAvailability = ({
   connectionState,
   conversation,
@@ -38,6 +49,9 @@ export const useComposerAvailability = ({
   const { t } = useTranslation();
 
   return React.useMemo(() => {
+    const browserOnline = getBrowserOnlineState();
+    const websocketReady = connectionState === "connected";
+
     if (!isConversationReady) {
       return {
         mode: "bootstrapping",
@@ -90,24 +104,7 @@ export const useComposerAvailability = ({
       };
     }
 
-    if (
-      connectionState === "connecting" ||
-      connectionState === "authenticating" ||
-      connectionState === "reconnecting"
-    ) {
-      return {
-        mode: "reconnecting",
-        canType: true,
-        canAttach: false,
-        canSubmit: true,
-        statusTone: "warn",
-        statusMessage: t("chat:composer.reconnectingHint", {
-          defaultValue: "Reconnecting. New messages will be queued.",
-        }),
-      };
-    }
-
-    if (connectionState === "disconnected" || connectionState === "error") {
+    if (!browserOnline) {
       return {
         mode: "offline",
         canType: true,
@@ -115,7 +112,21 @@ export const useComposerAvailability = ({
         canSubmit: true,
         statusTone: "error",
         statusMessage: t("chat:composer.offlineHint", {
-          defaultValue: "Offline. Messages will send automatically when connection returns.",
+          defaultValue: "Offline. Messages will be queued until the network returns.",
+        }),
+      };
+    }
+
+    if (!websocketReady) {
+      return {
+        mode: "reconnecting",
+        canType: true,
+        canAttach: true,
+        canSubmit: true,
+        statusTone: "warn",
+        statusMessage: t("chat:composer.reconnectingHint", {
+          defaultValue:
+            "Realtime is reconnecting. Sending still works.",
         }),
       };
     }
