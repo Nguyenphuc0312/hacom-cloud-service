@@ -90,6 +90,17 @@ export const decideAutoScroll = (
     };
   }
 
+  if (input.currentMode !== "following") {
+    return {
+      action: "buffer",
+      behavior: "auto",
+      nextMode: "detached",
+      atBottomThresholdPx,
+      detachThresholdPx,
+      reason: "reading_history",
+    };
+  }
+
   if (input.currentMode === "following" && input.isStreaming) {
     return {
       action: "follow",
@@ -156,7 +167,6 @@ export const deriveFollowModeFromScroll = ({
   distanceFromBottomPx,
   clientHeightPx,
   pendingBufferedCount,
-  currentMode,
 }: {
   distanceFromBottomPx: number;
   clientHeightPx: number;
@@ -182,18 +192,6 @@ export const deriveFollowModeFromScroll = ({
   if (isAtBottom) {
     return {
       isAtBottom,
-      atBottomThresholdPx,
-      detachThresholdPx,
-      nextMode: "following",
-    };
-  }
-
-  if (
-    currentMode === "following" &&
-    distanceFromBottomPx <= detachThresholdPx
-  ) {
-    return {
-      isAtBottom: false,
       atBottomThresholdPx,
       detachThresholdPx,
       nextMode: "following",

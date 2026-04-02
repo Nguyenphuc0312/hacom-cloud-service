@@ -505,13 +505,8 @@ export const useAutoScrollToBottom = ({
         pendingBufferedCount: bufferedMessagesRef.current.length,
         currentMode: followModeRef.current,
       });
-      const userIntentDetach =
-        followModeRef.current === "following" &&
-        scrollOffset < previousMetrics.lastOffset - 2;
-      const nextMode = userIntentDetach ? "detached" : scrollDecision.nextMode;
-      const nextIsAtBottom = userIntentDetach
-        ? false
-        : scrollDecision.isAtBottom;
+      const nextMode = scrollDecision.nextMode;
+      const nextIsAtBottom = scrollDecision.isAtBottom;
 
       scrollMetricsRef.current = {
         isAtBottom: nextIsAtBottom,
