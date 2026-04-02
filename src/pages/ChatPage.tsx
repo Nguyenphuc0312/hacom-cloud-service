@@ -179,12 +179,6 @@ export const ChatPage: React.FC = () => {
       ? Boolean(state.messagesHydratedByConversation[selectedConversationId])
       : false,
   );
-  const selectedConversationHasNewer = useChatStore((state) =>
-    selectedConversationId
-      ? (state.hasNewerMessagesByConversation[selectedConversationId] ?? false)
-      : false,
-  );
-
   // WebSocket
   const { connectionState, sendTyping, stopTyping, joinRoom, leaveRoom } =
     useWebSocket();
@@ -324,11 +318,19 @@ export const ChatPage: React.FC = () => {
     }
 
     void (async () => {
+      const chatState = useChatStore.getState();
+      const isConversationHydrated =
+        chatState.messagesHydratedByConversation[selectedConversationId] ===
+        true;
+      const hasNewerMessages =
+        chatState.hasNewerMessagesByConversation[selectedConversationId] ??
+        false;
+
       logMessageDebug("ChatPage", "conversation_open_started", {
         conversationId: selectedConversationId,
-        isHydrated: isSelectedConversationHydrated,
+        isHydrated: isConversationHydrated,
         isValidatingRoom,
-        hasNewer: selectedConversationHasNewer,
+        hasNewer: hasNewerMessages,
       });
       logMessageDebug("ChatPage", "room_join_requested", {
         conversationId: selectedConversationId,
@@ -337,7 +339,7 @@ export const ChatPage: React.FC = () => {
       });
       joinRoom(selectedConversationId, { skipInitialDeltaSync: false });
 
-      if (!isSelectedConversationHydrated) {
+      if (!isConversationHydrated) {
         const initialFetchResult = await fetchMessages(selectedConversationId);
         logMessageDebug("ChatPage", "initial_fetch_completed", {
           conversationId: selectedConversationId,
@@ -352,8 +354,6 @@ export const ChatPage: React.FC = () => {
     };
   }, [
     selectedConversationId,
-    isSelectedConversationHydrated,
-    selectedConversationHasNewer,
     isValidatingRoom,
     fetchMessages,
     joinRoom,
@@ -374,6 +374,18 @@ export const ChatPage: React.FC = () => {
     },
     [selectConversation, navigate],
   );
+
+  const isCurrentRouteValidated = conversationId
+    ? lastValidatedConversationId === conversationId
+    : true;
+  const isConversationHistoryReady = isSelectedConversationHydrated;
+  const isConversationReady = Boolean(
+    selectedConversationId &&
+      selectedConversation &&
+      isCurrentRouteValidated &&
+      !isValidatingRoom,
+  );
+  const websocketReady = connectionState === "connected";
 
   // Handle send message
   const handleSendMessage = useCallback(
@@ -396,10 +408,13 @@ export const ChatPage: React.FC = () => {
         throw error;
       }
 
-      const state = useChatStore.getState();
-      const isConversationHydrated =
-        state.messagesHydratedByConversation[selectedConversationId] === true;
-      if (!isConversationHydrated || isValidatingRoom) {
+      const canSendImmediately = Boolean(
+        selectedConversationId &&
+          selectedConversation &&
+          isCurrentRouteValidated &&
+          !isValidatingRoom,
+      );
+      if (!canSendImmediately) {
         const error = new Error(
           t("common:loading.default", {
             defaultValue: "Loading conversation...",
@@ -407,7 +422,12 @@ export const ChatPage: React.FC = () => {
         );
         logMessageDebug("ChatPage", "send_blocked_conversation_not_ready", {
           conversationId: selectedConversationId,
-          isConversationHydrated,
+          isCurrentRouteValidated,
+          hasSelectedConversation: Boolean(selectedConversation),
+          isHistoryHydrated:
+            useChatStore.getState().messagesHydratedByConversation[
+              selectedConversationId
+            ] === true,
           isValidatingRoom,
           contentLength: content.trim().length,
           type,
@@ -449,7 +469,9 @@ export const ChatPage: React.FC = () => {
       }
     },
     [
+      isCurrentRouteValidated,
       isValidatingRoom,
+      selectedConversation,
       selectedConversationId,
       setSlowModeCooldown,
       storeSendMessage,
@@ -930,17 +952,6 @@ export const ChatPage: React.FC = () => {
   const showConversationSkeleton =
     (!hasFetchedConversationsOnce && conversations.length === 0) ||
     (isLoadingConversations && conversations.length === 0);
-  const isCurrentRouteValidated = conversationId
-    ? lastValidatedConversationId === conversationId
-    : true;
-  const isConversationReady = Boolean(
-    selectedConversationId &&
-      selectedConversation &&
-      isCurrentRouteValidated &&
-      !isValidatingRoom &&
-      isSelectedConversationHydrated,
-  );
-  const websocketReady = connectionState === "connected";
 
   useEffect(() => {
     if (!selectedConversationId) return;
@@ -948,9 +959,11 @@ export const ChatPage: React.FC = () => {
     logMessageDebug("ChatPage", "conversation_readiness_changed", {
       conversationId: selectedConversationId,
       isValidatingRoom,
-      isHydrated: isSelectedConversationHydrated,
+      isHydrated: isConversationHistoryReady,
+      isHistoryReady: isConversationHistoryReady,
       isCurrentRouteValidated,
       isReady: isConversationReady,
+      isSendReady: isConversationReady,
       websocketReady,
       messageCount: conversationMessages.length,
       connectionState,
@@ -960,7 +973,7 @@ export const ChatPage: React.FC = () => {
     conversationMessages.length,
     isCurrentRouteValidated,
     isConversationReady,
-    isSelectedConversationHydrated,
+    isConversationHistoryReady,
     isValidatingRoom,
     lastValidatedConversationId,
     selectedConversationId,
