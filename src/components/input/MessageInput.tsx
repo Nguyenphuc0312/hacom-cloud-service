@@ -693,9 +693,10 @@ export const MessageInput = React.forwardRef<
     let timeoutId: number | null = null;
     let previousHeight = 0;
 
-    const reportHeight = () => {
+    const flushHeightReport = () => {
+      frameId = null;
       const nextHeight = Math.ceil(node.getBoundingClientRect().height);
-      if (Math.abs(nextHeight - previousHeight) <= 1) {
+      if (Math.abs(nextHeight - previousHeight) <= 2) {
         return;
       }
 
@@ -703,12 +704,18 @@ export const MessageInput = React.forwardRef<
       onLayoutHeightChange(nextHeight);
     };
 
-    reportHeight();
+    const scheduleHeightReport = () => {
+      if (frameId !== null) {
+        return;
+      }
+      frameId = window.requestAnimationFrame(flushHeightReport);
+    };
+
+    scheduleHeightReport();
 
     if (typeof ResizeObserver === "undefined") {
-      frameId = window.requestAnimationFrame(reportHeight);
-      timeoutId = window.setTimeout(reportHeight, 120);
-      window.addEventListener("resize", reportHeight);
+      timeoutId = window.setTimeout(flushHeightReport, 120);
+      window.addEventListener("resize", scheduleHeightReport);
 
       return () => {
         if (frameId !== null) {
@@ -717,15 +724,18 @@ export const MessageInput = React.forwardRef<
         if (timeoutId !== null) {
           window.clearTimeout(timeoutId);
         }
-        window.removeEventListener("resize", reportHeight);
+        window.removeEventListener("resize", scheduleHeightReport);
         onLayoutHeightChange(0);
       };
     }
 
-    const resizeObserver = new ResizeObserver(reportHeight);
+    const resizeObserver = new ResizeObserver(scheduleHeightReport);
     resizeObserver.observe(node);
 
     return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
       resizeObserver.disconnect();
       onLayoutHeightChange(0);
     };

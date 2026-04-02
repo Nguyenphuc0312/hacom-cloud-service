@@ -141,6 +141,8 @@ const EMPTY_MESSAGES: Message[] = [];
 
 const roomMessageFetchInFlight = new Map<string, number>();
 const initialFetchSeqByConversation = new Map<string, number>();
+const markAsReadInFlight = new Map<string, Promise<void>>();
+let conversationsFetchPromise: Promise<void> | null = null;
 const pendingMessageSendTimeouts = new Map<
   string,
   ReturnType<typeof setTimeout>
@@ -290,6 +292,7 @@ const normalizeMessage = (
       : sourceRecord;
 
   const sender = asRecord(source.sender);
+  const metadata = asRecord(source.metadata);
   const id =
     asStringValue(source.id) ??
     asStringValue(source._id) ??
@@ -326,7 +329,10 @@ const normalizeMessage = (
   const clientMessageId =
     asStringValue(source.clientMessageId) ??
     asStringValue(source.client_message_id) ??
+    asStringValue(metadata?.clientMessageId) ??
+    asStringValue(metadata?.client_message_id) ??
     asStringValue(source.tempId) ??
+    asStringValue(metadata?.tempId) ??
     asStringValue(source.localId);
   const stableId =
     asStringValue(source.stableId) ??
@@ -424,7 +430,9 @@ const normalizeMessage = (
     clientMessageId,
     localId:
       asStringValue(source.localId) ??
+      asStringValue(metadata?.localId) ??
       asStringValue(source.tempId) ??
+      asStringValue(metadata?.tempId) ??
       asStringValue(source.clientMessageId),
     serverSeq,
     serverTs: serverTs ? toDateObject(serverTs) : undefined,
@@ -496,6 +504,20 @@ const toFiniteNumber = (value: unknown): number | null =>
 
 const getStableMessageId = (message: Message): string =>
   message.stableId || message.clientMessageId || message.localId || message.id;
+
+const matchesMessageIdentityValue = (
+  message: Pick<Message, "id" | "localId" | "clientMessageId" | "stableId">,
+  identity: string,
+): boolean => {
+  if (!identity) return false;
+
+  return (
+    message.id === identity ||
+    message.localId === identity ||
+    message.clientMessageId === identity ||
+    message.stableId === identity
+  );
+};
 
 const getMessageQueueKey = (
   conversationId: string,
@@ -1179,6 +1201,10 @@ export const useChatStore = create<ChatState>()(
           content: message.content,
           type: message.type,
           senderName,
+          clientMessageId:
+            message.clientMessageId || message.stableId || message.localId,
+          tempId: message.localId || message.id,
+          localId: message.localId || message.id,
           ...(senderAvatar ? { senderAvatar } : {}),
           ...(replyToId ? { replyToId } : {}),
           ...(attachments?.length ? { attachments } : {}),
@@ -1375,6 +1401,11 @@ export const useChatStore = create<ChatState>()(
       },
 
       markAsRead: async (conversationId) => {
+        const inFlightRequest = markAsReadInFlight.get(conversationId);
+        if (inFlightRequest) {
+          return inFlightRequest;
+        }
+
         const previousUnreadCount =
           get().conversations.find(
             (conversation) => conversation.id === conversationId,
@@ -1391,47 +1422,64 @@ export const useChatStore = create<ChatState>()(
           ),
         }));
 
-        try {
-          await conversationApi.markAsRead(conversationId);
-        } catch (error) {
-          set((state) => ({
-            conversations: (Array.isArray(state.conversations)
-              ? state.conversations
-              : []
-            ).map((conversation) =>
-              conversation.id === conversationId
-                ? { ...conversation, unreadCount: previousUnreadCount }
-                : conversation,
-            ),
-          }));
-          throw error;
-        }
+        const request = (async () => {
+          try {
+            await conversationApi.markAsRead(conversationId);
+          } catch (error) {
+            set((state) => ({
+              conversations: (Array.isArray(state.conversations)
+                ? state.conversations
+                : []
+              ).map((conversation) =>
+                conversation.id === conversationId
+                  ? { ...conversation, unreadCount: previousUnreadCount }
+                  : conversation,
+              ),
+            }));
+            throw error;
+          } finally {
+            markAsReadInFlight.delete(conversationId);
+          }
+        })();
+
+        markAsReadInFlight.set(conversationId, request);
+        return request;
       },
 
       fetchConversations: async () => {
+        if (conversationsFetchPromise) {
+          return conversationsFetchPromise;
+        }
+
         set({ isLoadingConversations: true, conversationsError: null });
 
-        try {
-          const response = await conversationApi.getConversations(1, 100);
-          const conversations = normalizeConversationsPayload(
-            unwrapApiSuccess(response),
-          );
-          set({
-            conversations,
-            isLoadingConversations: false,
-            hasFetchedConversationsOnce: true,
-          });
-        } catch (error: unknown) {
-          const apiError = extractApiError(error);
-          const errorMessage =
-            apiError.message || i18n.t("error:chat.fetchConversationsFailed");
-          set({
-            conversationsError: errorMessage,
-            error: errorMessage,
-            isLoadingConversations: false,
-            hasFetchedConversationsOnce: true,
-          });
-        }
+        conversationsFetchPromise = (async () => {
+          try {
+            const response = await conversationApi.getConversations(1, 100);
+            const conversations = normalizeConversationsPayload(
+              unwrapApiSuccess(response),
+            );
+            set({
+              conversations,
+              isLoadingConversations: false,
+              hasFetchedConversationsOnce: true,
+            });
+          } catch (error: unknown) {
+            const apiError = extractApiError(error);
+            const errorMessage =
+              apiError.message || i18n.t("error:chat.fetchConversationsFailed");
+            set({
+              conversationsError: errorMessage,
+              error: errorMessage,
+              isLoadingConversations: false,
+              hasFetchedConversationsOnce: true,
+            });
+          } finally {
+            conversationsFetchPromise = null;
+          }
+        })();
+
+        return conversationsFetchPromise;
       },
 
       setMessages: (conversationId, messages) => {
@@ -1511,7 +1559,7 @@ export const useChatStore = create<ChatState>()(
           const currentMessages = state.messages[conversationId] || [];
           const updatedMessages = dedupeAndSortMessages(
             currentMessages.map((message) =>
-              message.id === messageId || message.localId === messageId
+              matchesMessageIdentityValue(message, messageId)
                 ? ({ ...message, ...updates } as Message)
                 : message,
             ),
@@ -1524,8 +1572,15 @@ export const useChatStore = create<ChatState>()(
               if (!lastMessage) return conversation;
 
               const shouldRefreshPreview =
-                conversation.lastMessage?.id === messageId ||
-                conversation.lastMessage?.id === lastMessage.id;
+                matchesMessageIdentityValue(
+                  {
+                    id: conversation.lastMessage?.id || "",
+                    localId: undefined,
+                    clientMessageId: undefined,
+                    stableId: undefined,
+                  },
+                  messageId,
+                ) || matchesMessageIdentityValue(lastMessage, conversation.lastMessage?.id || "");
 
               return shouldRefreshPreview
                 ? {
@@ -1560,7 +1615,7 @@ export const useChatStore = create<ChatState>()(
           const currentMessages = state.messages[conversationId] || [];
           const sortedMessages = sortMessages(currentMessages);
           const boundaryIndex = sortedMessages.findIndex(
-            (message) => message.id === lastMessageId,
+            (message) => matchesMessageIdentityValue(message, lastMessageId),
           );
           const readAt = new Date();
 
@@ -1569,7 +1624,7 @@ export const useChatStore = create<ChatState>()(
             if (message.status === MessageStatus.READ) return message;
 
             if (boundaryIndex < 0) {
-              return message.id === lastMessageId
+              return matchesMessageIdentityValue(message, lastMessageId)
                 ? { ...message, status: MessageStatus.READ, readAt }
                 : message;
             }
@@ -1596,8 +1651,7 @@ export const useChatStore = create<ChatState>()(
         const currentMessage = (
           get().messages[conversationId] || EMPTY_MESSAGES
         ).find(
-          (message) =>
-            message.id === messageId || message.localId === messageId,
+          (message) => matchesMessageIdentityValue(message, messageId),
         );
         if (currentMessage) {
           clearMessageSendTimeout(
@@ -1610,8 +1664,7 @@ export const useChatStore = create<ChatState>()(
         }
         set((state) => {
           const updatedMessages = (state.messages[conversationId] || []).filter(
-            (message) =>
-              message.id !== messageId && message.localId !== messageId,
+            (message) => !matchesMessageIdentityValue(message, messageId),
           );
           const lastMessage = updatedMessages[updatedMessages.length - 1];
 
@@ -1623,7 +1676,7 @@ export const useChatStore = create<ChatState>()(
                 ...conversation,
                 lastMessage: lastMessage
                   ? toMessageSummary(lastMessage)
-                  : conversation.lastMessage,
+                  : undefined,
                 updatedAt: lastMessage?.createdAt || conversation.updatedAt,
               };
             },
@@ -2067,6 +2120,8 @@ export const useChatStore = create<ChatState>()(
       reset: () => {
         roomMessageFetchInFlight.clear();
         initialFetchSeqByConversation.clear();
+        markAsReadInFlight.clear();
+        conversationsFetchPromise = null;
         clearAllMessageSendTimeouts();
         set(initialState);
       },

@@ -625,7 +625,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     () => (
       <MessageList
         messages={messages}
-        conversation={conversation}
+        conversationId={conversation.id}
+        conversationType={conversation.type}
         currentUserId={currentUser.id}
         onReply={handleReply}
         onReact={handleReact}
@@ -654,7 +655,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       />
     ),
     [
-      conversation,
+      conversation.id,
+      conversation.type,
       currentUser.id,
       handleReact,
       handleReply,

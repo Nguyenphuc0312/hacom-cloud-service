@@ -26,7 +26,8 @@ import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 
 interface MessageListProps {
   messages: Message[];
-  conversation: Conversation;
+  conversationId: string;
+  conversationType: Conversation["type"];
   currentUserId: string;
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
@@ -71,7 +72,6 @@ interface TimelineRowData {
     nextSize: number;
     delta: number;
   };
-  measureVersion: number;
   density: ChatDensity;
   isSelectionMode: boolean;
   selectedMessageIds: Set<string>;
@@ -84,6 +84,71 @@ interface TimelineRowData {
     delta: number;
   }) => void;
 }
+
+const areEqualTimelineRowProps = (
+  previousProps: ListChildComponentProps<TimelineRowData>,
+  nextProps: ListChildComponentProps<TimelineRowData>,
+): boolean => {
+  if (previousProps.index !== nextProps.index) {
+    return false;
+  }
+
+  if (
+    previousProps.style.top !== nextProps.style.top ||
+    previousProps.style.height !== nextProps.style.height ||
+    previousProps.style.width !== nextProps.style.width ||
+    previousProps.style.left !== nextProps.style.left
+  ) {
+    return false;
+  }
+
+  const previousItem = previousProps.data.items[previousProps.index];
+  const nextItem = nextProps.data.items[nextProps.index];
+  if (previousItem !== nextItem) {
+    return false;
+  }
+
+  const previousMessageId =
+    previousItem?.kind === "message" ? previousItem.message.id : null;
+  const nextMessageId =
+    nextItem?.kind === "message" ? nextItem.message.id : null;
+  if (previousMessageId !== nextMessageId) {
+    return false;
+  }
+
+  const previousSelected = previousMessageId
+    ? previousProps.data.selectedMessageIds.has(previousMessageId)
+    : false;
+  const nextSelected = nextMessageId
+    ? nextProps.data.selectedMessageIds.has(nextMessageId)
+    : false;
+  if (previousSelected !== nextSelected) {
+    return false;
+  }
+
+  const previousHighlighted =
+    previousItem?.kind === "message" &&
+    isTargetMessage(previousItem.message, previousProps.data.highlightedMessageId);
+  const nextHighlighted =
+    nextItem?.kind === "message" &&
+    isTargetMessage(nextItem.message, nextProps.data.highlightedMessageId);
+
+  return (
+    previousHighlighted === nextHighlighted &&
+    previousProps.data.density === nextProps.data.density &&
+    previousProps.data.isSelectionMode === nextProps.data.isSelectionMode &&
+    previousProps.data.currentUsername === nextProps.data.currentUsername &&
+    previousProps.data.onReply === nextProps.data.onReply &&
+    previousProps.data.onReact === nextProps.data.onReact &&
+    previousProps.data.onEdit === nextProps.data.onEdit &&
+    previousProps.data.onDelete === nextProps.data.onDelete &&
+    previousProps.data.onImageClick === nextProps.data.onImageClick &&
+    previousProps.data.onFilePreview === nextProps.data.onFilePreview &&
+    previousProps.data.onToggleSelect === nextProps.data.onToggleSelect &&
+    previousProps.data.setItemSize === nextProps.data.setItemSize &&
+    previousProps.data.onItemSizeChange === nextProps.data.onItemSizeChange
+  );
+};
 
 const hasInlineUrl = (content?: string): boolean =>
   typeof content === "string" && /https?:\/\/[^\s]+/i.test(content);
@@ -264,7 +329,7 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
         </div>
       </div>
     );
-  });
+  }, areEqualTimelineRowProps);
 
 TimelineRow.displayName = "TimelineRow";
 
@@ -275,7 +340,8 @@ const toDayKey = (date: Date | null): string => {
 
 const MessageListComponent: React.FC<MessageListProps> = ({
   messages,
-  conversation,
+  conversationId,
+  conversationType,
   currentUserId,
   onReply,
   onReact,
@@ -308,6 +374,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const outerRef = React.useRef<HTMLDivElement | null>(null);
   const stickyDateRafRef = React.useRef<number | null>(null);
   const highlightTimerRef = React.useRef<number | null>(null);
+  const scrollToBottomRafRef = React.useRef<number | null>(null);
   const capturePrependAnchorRef = React.useRef<() => void>(() => {});
   const restoreAfterPrependRef = React.useRef<() => void>(() => {});
   const captureAnchorCallbackRef = React.useRef<
@@ -320,14 +387,23 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     string | null
   >(null);
 
+  const flushScrollToBottom = React.useCallback(() => {
+    scrollToBottomRafRef.current = null;
+    const itemCount = timelineItemCountRef.current;
+    if (itemCount === 0) return;
+
+    listRef.current?.scrollToItem(itemCount - 1, "end");
+  }, []);
+
   const scrollToBottom = React.useCallback(
     (_behavior: ScrollBehavior = "auto") => {
-      const itemCount = timelineItemCountRef.current;
-      if (itemCount === 0) return;
+      if (scrollToBottomRafRef.current !== null) {
+        return;
+      }
 
-      listRef.current?.scrollToItem(itemCount - 1, "end");
+      scrollToBottomRafRef.current = requestAnimationFrame(flushScrollToBottom);
     },
-    [],
+    [flushScrollToBottom],
   );
 
   const {
@@ -344,7 +420,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     pendingRestoreAnchor,
     pendingRestoreAnchorVersion,
   } = useAutoScrollToBottom({
-    conversationId: conversation.id,
+    conversationId,
     messages,
     currentUserId,
     hasMore,
@@ -407,7 +483,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const timelineItems = useMessageGrouping({
     messages: displayMessages,
     currentUserId,
-    conversationType: conversation.type,
+    conversationType,
     unreadMarker,
   });
   timelineItemCountRef.current = timelineItems.length;
@@ -423,7 +499,6 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     findItemAtOffset,
     setItemSize,
     clearMeasuredSizes,
-    measureVersion,
   } = useVirtualizedMessages<TimelineItem, TimelineRowData>({
     items: timelineItems,
     viewportRef,
@@ -435,13 +510,19 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
   React.useEffect(() => {
     clearMeasuredSizes();
-  }, [clearMeasuredSizes, conversation.id]);
+  }, [clearMeasuredSizes, conversationId]);
 
-  const anchorController = useScrollAnchorController<
+  const {
+    capturePrependAnchor,
+    restoreAfterPrepend,
+    refreshAnchorSnapshot,
+    handleItemSizeChange,
+    handleScrollOffset,
+  } = useScrollAnchorController<
     TimelineItem,
     TimelineRowData
   >({
-    conversationId: conversation.id,
+    conversationId,
     items: timelineItems,
     getItemKey: (item, index) => item.key || `${item.kind}-${index}`,
     getItemOffset,
@@ -456,8 +537,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     pendingRestoreAnchorVersion,
   });
 
-  capturePrependAnchorRef.current = anchorController.capturePrependAnchor;
-  restoreAfterPrependRef.current = anchorController.restoreAfterPrepend;
+  capturePrependAnchorRef.current = capturePrependAnchor;
+  restoreAfterPrependRef.current = restoreAfterPrepend;
   // Update captureAnchorCallbackRef each render so useAutoScrollToBottom can
   // capture the current scroll anchor without a stale-closure issue.
   captureAnchorCallbackRef.current = () => {
@@ -470,6 +551,13 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     return { itemKey, offsetWithinItem: result.offsetWithinItem };
   };
 
+  const handleTimelineItemSizeChange = React.useCallback(
+    ({ index, delta }: { index: number; key: string; delta: number }) => {
+      handleItemSizeChange({ index, delta });
+    },
+    [handleItemSizeChange],
+  );
+
   const rowData = React.useMemo<TimelineRowData>(
     () => ({
       items: timelineItems,
@@ -480,23 +568,20 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       onImageClick,
       onFilePreview,
       setItemSize,
-      measureVersion,
       density,
       isSelectionMode,
       selectedMessageIds,
       onToggleSelect,
       currentUsername,
       highlightedMessageId,
-      onItemSizeChange: ({ index, delta }) =>
-        anchorController.handleItemSizeChange({ index, delta }),
+      onItemSizeChange: handleTimelineItemSizeChange,
     }),
     [
-      anchorController,
       currentUsername,
       density,
+      handleTimelineItemSizeChange,
       highlightedMessageId,
       isSelectionMode,
-      measureVersion,
       onDelete,
       onEdit,
       onFilePreview,
@@ -514,7 +599,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     ({ scrollOffset, scrollUpdateWasRequested }: ListOnScrollProps) => {
       if (scrollUpdateWasRequested) return;
       handleScroll(scrollOffset);
-      anchorController.handleScrollOffset(scrollOffset);
+      handleScrollOffset(scrollOffset);
 
       if (stickyDateRafRef.current !== null) {
         cancelAnimationFrame(stickyDateRafRef.current);
@@ -544,7 +629,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         stickyDateRafRef.current = null;
       });
     },
-    [anchorController, findItemAtOffset, handleScroll, timelineItems],
+    [findItemAtOffset, handleScroll, handleScrollOffset, timelineItems],
   );
 
   const handleRetry = React.useCallback(() => {
@@ -603,7 +688,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
     const rafId = requestAnimationFrame(() => {
       syncDetachedScrollState();
-      anchorController.refreshAnchorSnapshot();
+      refreshAnchorSnapshot();
     });
 
     if (highlightTimerRef.current !== null) {
@@ -623,9 +708,9 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     jumpRequestVersion,
     jumpToMessageId,
     onJumpHandled,
-    anchorController,
     syncDetachedScrollState,
     timelineItems,
+    refreshAnchorSnapshot,
   ]);
 
   React.useEffect(() => {
@@ -651,7 +736,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     }
 
     setStickyDate(null);
-  }, [conversation.id, findItemAtOffset, timelineItems]);
+  }, [conversationId, findItemAtOffset, timelineItems]);
 
   React.useEffect(() => {
     if (
@@ -681,6 +766,9 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     () => () => {
       if (stickyDateRafRef.current !== null) {
         cancelAnimationFrame(stickyDateRafRef.current);
+      }
+      if (scrollToBottomRafRef.current !== null) {
+        cancelAnimationFrame(scrollToBottomRafRef.current);
       }
       if (highlightTimerRef.current !== null) {
         window.clearTimeout(highlightTimerRef.current);
@@ -842,7 +930,8 @@ const areEqualMessageListProps = (
   nextProps: MessageListProps,
 ): boolean =>
   previousProps.messages === nextProps.messages &&
-  previousProps.conversation === nextProps.conversation &&
+  previousProps.conversationId === nextProps.conversationId &&
+  previousProps.conversationType === nextProps.conversationType &&
   previousProps.currentUserId === nextProps.currentUserId &&
   previousProps.onReply === nextProps.onReply &&
   previousProps.onReact === nextProps.onReact &&

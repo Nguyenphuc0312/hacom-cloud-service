@@ -710,6 +710,9 @@ export const messageApi = {
       replyToId?: string;
       senderName?: string;
       senderAvatar?: string;
+      clientMessageId?: string;
+      tempId?: string;
+      localId?: string;
       attachments?: Array<{
         id: string;
         type: Message["type"] | string;
@@ -737,6 +740,9 @@ export const messageApi = {
             senderName: data.senderName,
             senderAvatar: data.senderAvatar,
             replyTo: data.replyToId,
+            clientMessageId: data.clientMessageId,
+            tempId: data.tempId,
+            localId: data.localId,
             attachments: data.attachments,
           },
         ),
@@ -749,6 +755,9 @@ export const messageApi = {
             senderName: data.senderName,
             senderAvatar: data.senderAvatar,
             replyTo: data.replyToId,
+            clientMessageId: data.clientMessageId,
+            tempId: data.tempId,
+            localId: data.localId,
             attachments: data.attachments,
           },
         ),

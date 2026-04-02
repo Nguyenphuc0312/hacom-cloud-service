@@ -311,19 +311,26 @@ export const ChatPage: React.FC = () => {
 
   // Load messages when conversation changes & join/leave rooms
   useEffect(() => {
-    if (selectedConversationId && !isValidatingRoom) {
-      const loadPromise = isSelectedConversationHydrated
-        ? Promise.resolve()
-        : fetchMessages(selectedConversationId).then(() => undefined);
-
-      void loadPromise;
-      joinRoom(selectedConversationId);
-
-      return () => {
-        stopTyping(selectedConversationId);
-        leaveRoom(selectedConversationId);
-      };
+    if (!selectedConversationId || isValidatingRoom) {
+      return;
     }
+
+    let cancelled = false;
+
+    void (async () => {
+      if (!isSelectedConversationHydrated) {
+        await fetchMessages(selectedConversationId);
+      }
+      if (!cancelled) {
+        joinRoom(selectedConversationId);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      stopTyping(selectedConversationId);
+      leaveRoom(selectedConversationId);
+    };
   }, [
     selectedConversationId,
     isSelectedConversationHydrated,
@@ -438,12 +445,12 @@ export const ChatPage: React.FC = () => {
         .getState()
         .conversations.find((item) => item.id === selectedConversationId);
       if (!conversation) return;
+      if ((conversation.unreadCount ?? 0) <= 0) {
+        return;
+      }
 
       const latestKey = `${selectedConversationId}:${message.id}`;
-      if (
-        (conversation.unreadCount ?? 0) <= 0 &&
-        lastReadSyncKeyRef.current === latestKey
-      ) {
+      if (lastReadSyncKeyRef.current === latestKey) {
         return;
       }
 

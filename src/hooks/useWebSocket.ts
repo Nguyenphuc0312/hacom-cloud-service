@@ -103,6 +103,25 @@ const toCursorValue = (value: unknown): string | undefined => {
   return undefined;
 };
 
+const getConversationIds = (payload: Record<string, unknown>): string[] => {
+  const candidates = [
+    payload.conversationIds,
+    payload.roomIds,
+    payload.rooms,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate
+        .map((item) => asString(item))
+        .filter((item): item is string => typeof item === "string");
+    }
+  }
+
+  const singleConversationId = getConversationId(payload);
+  return singleConversationId ? [singleConversationId] : [];
+};
+
 type MessageCursor = {
   at: string;
   id: string;
@@ -148,10 +167,12 @@ export const useWebSocket = (
   );
 
   const joinedRoomsRef = useRef<Set<string>>(new Set());
+  const pendingRoomSyncRef = useRef<Set<string>>(new Set());
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const emitQueueRef = useRef<Array<{ event: string; data: unknown }>>([]);
   const hasConnectedOnceRef = useRef(false);
   const shouldResyncOnConnectRef = useRef(false);
+  const roomResyncInFlightRef = useRef<Map<string, Promise<void>>>(new Map());
   const remoteTypingTimersRef = useRef<
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
@@ -395,6 +416,22 @@ export const useWebSocket = (
     [fetchMessages],
   );
 
+  const scheduleRoomResync = useCallback(
+    (roomId: string) => {
+      const inFlight = roomResyncInFlightRef.current.get(roomId);
+      if (inFlight) {
+        return inFlight;
+      }
+
+      const request = resyncRoom(roomId).finally(() => {
+        roomResyncInFlightRef.current.delete(roomId);
+      });
+      roomResyncInFlightRef.current.set(roomId, request);
+      return request;
+    },
+    [resyncRoom],
+  );
+
   const setupSocket = useCallback(() => {
     const socket = initSocket();
 
@@ -407,17 +444,15 @@ export const useWebSocket = (
       const shouldResync = shouldResyncOnConnectRef.current;
       shouldResyncOnConnectRef.current = false;
 
-      if (shouldResync || !hasConnectedOnceRef.current) {
+      if (shouldResync) {
         void fetchConversations().catch(() => {
           // no-op: best effort sidebar resync
         });
       }
 
       joinedRoomsRef.current.forEach((roomId) => {
+        pendingRoomSyncRef.current.add(roomId);
         emitJoinRoom(roomId);
-        if (shouldResync) {
-          void resyncRoom(roomId);
-        }
       });
 
       hasConnectedOnceRef.current = true;
@@ -766,7 +801,7 @@ export const useWebSocket = (
       const payload = asRecord(data);
       const conversationId = payload ? getConversationId(payload) : null;
       if (conversationId) {
-        void resyncRoom(conversationId);
+        void scheduleRoomResync(conversationId);
       }
     };
 
@@ -1054,9 +1089,18 @@ export const useWebSocket = (
     );
     unsubscribersRef.current.push(unsubTypingStop);
 
-    const unsubSyncComplete = socket.on(WebSocketEvents.SYNC_COMPLETE, () => {
-      joinedRoomsRef.current.forEach((roomId) => {
-        void resyncRoom(roomId);
+    const unsubSyncComplete = socket.on(WebSocketEvents.SYNC_COMPLETE, (data) => {
+      const payload = asRecord(data);
+      const targetRoomIds =
+        payload !== null ? getConversationIds(payload) : [];
+      const roomIdsToResync =
+        targetRoomIds.length > 0
+          ? targetRoomIds.filter((roomId) => joinedRoomsRef.current.has(roomId))
+          : Array.from(pendingRoomSyncRef.current);
+
+      roomIdsToResync.forEach((roomId) => {
+        pendingRoomSyncRef.current.delete(roomId);
+        void scheduleRoomResync(roomId);
       });
     });
     unsubscribersRef.current.push(unsubSyncComplete);
@@ -1100,10 +1144,10 @@ export const useWebSocket = (
     removeConversation,
     recoverSocketAuth,
     fetchConversations,
-    resyncRoom,
     removeMessage,
     flushQueuedMessages,
     scheduleRemoteTypingDecay,
+    scheduleRoomResync,
     selectConversation,
     setSendRestriction,
     clearSendRestriction,
@@ -1136,6 +1180,8 @@ export const useWebSocket = (
 
     clearAllRemoteTypingTimers();
     joinedRoomsRef.current.clear();
+    pendingRoomSyncRef.current.clear();
+    roomResyncInFlightRef.current.clear();
     emitQueueRef.current = [];
     disconnectSocket();
   }, [clearAllRemoteTypingTimers]);
@@ -1144,6 +1190,7 @@ export const useWebSocket = (
     (roomId: string) => {
       if (!roomId) return;
       joinedRoomsRef.current.add(roomId);
+      pendingRoomSyncRef.current.add(roomId);
       emitJoinRoom(roomId);
     },
     [emitJoinRoom],
@@ -1158,6 +1205,7 @@ export const useWebSocket = (
         conversationId: roomId,
       });
       joinedRoomsRef.current.delete(roomId);
+      pendingRoomSyncRef.current.delete(roomId);
 
       const typingStatuses = useChatStore
         .getState()
