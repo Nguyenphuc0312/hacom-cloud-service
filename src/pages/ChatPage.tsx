@@ -384,7 +384,18 @@ export const ChatPage: React.FC = () => {
       fileMeta?: Attachment | Attachment[] | undefined,
       type: MessageType = MessageType.TEXT,
     ) => {
-      if (!selectedConversationId) return;
+      if (!selectedConversationId) {
+        const error = new Error(
+          t("error:chat.conversationOpenFailed", {
+            defaultValue: "Conversation is not ready yet.",
+          }),
+        );
+        logMessageDebug("ChatPage", "send_blocked_no_selected_conversation", {
+          contentLength: content.trim().length,
+          type,
+        });
+        throw error;
+      }
 
       try {
         return await storeSendMessage(

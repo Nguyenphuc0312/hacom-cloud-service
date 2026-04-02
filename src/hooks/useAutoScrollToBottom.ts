@@ -9,6 +9,7 @@ const LOAD_MORE_TRIGGER_PX = 120;
 interface UseAutoScrollToBottomParams {
   conversationId: string;
   messages: Message[];
+  currentUserId: string;
   hasMore: boolean;
   isLoadingMore: boolean;
   onLoadMore?: () => void | Promise<void>;
@@ -61,6 +62,7 @@ const getTailAppendMessages = (
 export const useAutoScrollToBottom = ({
   conversationId,
   messages,
+  currentUserId,
   hasMore,
   isLoadingMore,
   onLoadMore,
@@ -203,12 +205,27 @@ export const useAutoScrollToBottom = ({
 
     const appendedMessages = getTailAppendMessages(previousMessages, messages);
     if (appendedMessages && appendedMessages.length > 0) {
-      if (isPinnedRef.current) {
+      const shouldForceFollowOwnMessage =
+        previousMessages.length > 0 &&
+        appendedMessages.some((message) => message.senderId === currentUserId);
+
+      if (isPinnedRef.current || shouldForceFollowOwnMessage) {
+        if (shouldForceFollowOwnMessage && !isPinnedRef.current) {
+          updatePinnedState(
+            true,
+            "self-message",
+            outerRef.current?.scrollTop ?? 0,
+            0,
+          );
+        }
         setPendingNewMessages(0);
-        requestScrollToBottom("incoming-message");
+        requestScrollToBottom(
+          shouldForceFollowOwnMessage ? "self-message" : "incoming-message",
+        );
         logScrollTrace("incoming_followed", {
           conversationId,
           appendedCount: appendedMessages.length,
+          forcedByOwnMessage: shouldForceFollowOwnMessage,
         });
       } else {
         setPendingNewMessages((previous) => previous + appendedMessages.length);
@@ -221,7 +238,15 @@ export const useAutoScrollToBottom = ({
 
     prevMessagesRef.current = messages;
     prevFirstMessageIdRef.current = firstMessageId;
-  }, [conversationId, messages, onAfterPrepend, requestScrollToBottom]);
+  }, [
+    conversationId,
+    currentUserId,
+    messages,
+    onAfterPrepend,
+    outerRef,
+    requestScrollToBottom,
+    updatePinnedState,
+  ]);
 
   React.useEffect(() => {
     if (!isLoadingMore) {

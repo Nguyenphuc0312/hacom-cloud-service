@@ -1222,6 +1222,21 @@ export const useChatStore = create<ChatState>()(
       const queueKey = getMessageQueueKey(conversationId, message);
       const nextAttemptCount = (message.sendAttempts ?? 0) + 1;
       const attemptedAt = new Date();
+      logMessageDebug("chatStore", "send_request_started", {
+        conversationId,
+        queueKey,
+        attemptState,
+        messageId: message.id,
+        localId: message.localId,
+        clientMessageId: message.clientMessageId,
+        stableId: message.stableId,
+        contentLength: message.content.length,
+        contentPreview: message.content.slice(0, 120),
+        type: message.type,
+        attachmentCount: attachments?.length ?? 0,
+        replyToId,
+        connectionMode: resolveConnectionSendMode(),
+      });
 
       dequeueOutboxMessage(conversationId, queueKey);
       get().updateMessage(conversationId, message.id, {
@@ -1280,6 +1295,13 @@ export const useChatStore = create<ChatState>()(
           failureReason: undefined,
           status: sentMessage.status || MessageStatus.SENT,
         });
+        logMessageDebug("chatStore", "send_request_succeeded", {
+          conversationId,
+          queueKey,
+          tempMessageId: message.id,
+          sentMessageId: sentMessage.id,
+          serverSeq: sentMessage.serverSeq,
+        });
 
         return {
           disposition: "sent",
@@ -1302,6 +1324,13 @@ export const useChatStore = create<ChatState>()(
             queuedReason,
             failureReason: undefined,
           });
+          logMessageDebug("chatStore", "send_request_queued", {
+            conversationId,
+            queueKey,
+            messageId: message.id,
+            queuedReason,
+            errorMessage: apiError.message || "network_failure",
+          });
           return {
             disposition: "queued",
             messageId: message.id,
@@ -1313,6 +1342,14 @@ export const useChatStore = create<ChatState>()(
             sendState: "failed",
             status: MessageStatus.FAILED,
             failureReason: "slow_mode",
+          });
+          logMessageDebug("chatStore", "send_request_failed", {
+            conversationId,
+            queueKey,
+            messageId: message.id,
+            errorCode,
+            failureReason: "slow_mode",
+            errorMessage: apiError.message || "slow_mode_active",
           });
           throw error;
         }
@@ -1335,6 +1372,14 @@ export const useChatStore = create<ChatState>()(
             status: MessageStatus.FAILED,
             failureReason: "permission",
           });
+          logMessageDebug("chatStore", "send_request_failed", {
+            conversationId,
+            queueKey,
+            messageId: message.id,
+            errorCode,
+            failureReason: "permission",
+            errorMessage: apiError.message || "permission_denied",
+          });
           throw error;
         }
 
@@ -1345,6 +1390,17 @@ export const useChatStore = create<ChatState>()(
             apiError.statusCode >= 500 || errorCode === "INTERNAL_ERROR"
               ? "server"
               : "unknown",
+        });
+        logMessageDebug("chatStore", "send_request_failed", {
+          conversationId,
+          queueKey,
+          messageId: message.id,
+          errorCode,
+          failureReason:
+            apiError.statusCode >= 500 || errorCode === "INTERNAL_ERROR"
+              ? "server"
+              : "unknown",
+          errorMessage: apiError.message || "send_failed",
         });
         throw error;
       }
@@ -1560,6 +1616,18 @@ export const useChatStore = create<ChatState>()(
             incoming,
           );
 
+          logMessageDebug("chatStore", "message_merged", {
+            conversationId,
+            incomingId: incoming.id,
+            incomingLocalId: incoming.localId,
+            incomingClientMessageId: incoming.clientMessageId,
+            inserted,
+            mergedId: mergedMessage.id,
+            mergedLocalId: mergedMessage.localId,
+            mergedClientMessageId: mergedMessage.clientMessageId,
+            sendState: mergedMessage.sendState,
+          });
+
           const currentUserId = useAuthStore.getState().user?.id;
           const isOwnMessage =
             !!currentUserId && mergedMessage.senderId === currentUserId;
@@ -1605,6 +1673,9 @@ export const useChatStore = create<ChatState>()(
       updateMessage: (conversationId, messageId, updates) => {
         set((state) => {
           const currentMessages = state.messages[conversationId] || [];
+          const matchedMessage = currentMessages.find((message) =>
+            matchesMessageIdentityValue(message, messageId),
+          );
           const updatedMessages = dedupeAndSortMessages(
             currentMessages.map((message) =>
               matchesMessageIdentityValue(message, messageId)
@@ -1612,6 +1683,13 @@ export const useChatStore = create<ChatState>()(
                 : message,
             ),
           );
+          logMessageDebug("chatStore", "message_updated", {
+            conversationId,
+            messageId,
+            matchedId: matchedMessage?.id,
+            matchedLocalId: matchedMessage?.localId,
+            updates,
+          });
           const lastMessage = updatedMessages[updatedMessages.length - 1];
 
           const updatedConversations = state.conversations.map(
@@ -1701,6 +1779,12 @@ export const useChatStore = create<ChatState>()(
         ).find(
           (message) => matchesMessageIdentityValue(message, messageId),
         );
+        logMessageDebug("chatStore", "message_removed", {
+          conversationId,
+          messageId,
+          matchedId: currentMessage?.id,
+          matchedLocalId: currentMessage?.localId,
+        });
         if (currentMessage) {
           clearMessageSendTimeout(
             getMessageQueueKey(conversationId, currentMessage),
@@ -2078,7 +2162,19 @@ export const useChatStore = create<ChatState>()(
           : undefined;
         const firstFileName = fileMetaArr?.[0]?.fileName;
         const messageContent = text || firstFileName || "";
+        logMessageDebug("chatStore", "send_intent_received", {
+          conversationId,
+          contentLength: text.length,
+          messageContentLength: messageContent.length,
+          contentPreview: messageContent.slice(0, 120),
+          type,
+          attachmentCount: fileMetaArr?.length ?? 0,
+          replyToId,
+        });
         if (!messageContent) {
+          logMessageDebug("chatStore", "send_blocked_empty", {
+            conversationId,
+          });
           throw new Error(i18n.t("error:chat.sendFailed"));
         }
 
@@ -2094,11 +2190,21 @@ export const useChatStore = create<ChatState>()(
             reason,
             code: "CONVERSATION_BLOCKED",
           });
+          logMessageDebug("chatStore", "send_blocked_conversation", {
+            conversationId,
+            reason,
+          });
           throw new Error(reason);
         }
         const activeRestriction =
           get().sendRestrictionsByConversation[conversationId];
         if (activeRestriction) {
+          logMessageDebug("chatStore", "send_blocked_restriction", {
+            conversationId,
+            restrictionKind: activeRestriction.kind,
+            restrictionCode: activeRestriction.code,
+            reason: activeRestriction.reason,
+          });
           throw new Error(activeRestriction.reason);
         }
 
@@ -2140,12 +2246,25 @@ export const useChatStore = create<ChatState>()(
         };
 
         get().addMessage(conversationId, tempMessage);
+        logMessageDebug("chatStore", "optimistic_message_added", {
+          conversationId,
+          tempId,
+          clientMessageId,
+          sendMode,
+          queuedReason: tempMessage.queuedReason,
+          attachmentCount: fileMetaArr?.length ?? 0,
+        });
 
         if (sendMode !== "online") {
           enqueueOutboxMessage(
             conversationId,
             getMessageQueueKey(conversationId, tempMessage),
           );
+          logMessageDebug("chatStore", "optimistic_message_queued", {
+            conversationId,
+            tempId,
+            sendMode,
+          });
           return {
             disposition: "queued",
             messageId: tempId,

@@ -551,6 +551,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   } = useAutoScrollToBottom({
     conversationId,
     messages,
+    currentUserId,
     hasMore,
     isLoadingMore,
     onLoadMore,

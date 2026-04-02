@@ -3,7 +3,7 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
   AtSymbolIcon,
-  PaperClipIcon,
+  EllipsisHorizontalCircleIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { EmojiButton } from "./EmojiButton";
@@ -23,6 +23,7 @@ import type { AttachmentPickerMode } from "../../hooks/useSendMessage";
 import type { InputMode, Message } from "../../types";
 import type { AttachmentDraft } from "../../types/attachmentDraft";
 import { UPLOAD_CONFIG } from "../../config";
+import { logMessageDebug } from "../../utils/messageDebug";
 import { toast } from "../ui";
 
 export interface MentionCandidate {
@@ -55,6 +56,7 @@ interface MessageInputProps {
   sendOnEnter?: boolean;
   disabled?: boolean;
   submitDisabled?: boolean;
+  submitInFlight?: boolean;
   attachmentsDisabled?: boolean;
   className?: string;
   onLayoutHeightChange?: (nextHeight: number) => void;
@@ -176,6 +178,7 @@ export const MessageInput = React.forwardRef<
     sendOnEnter = true,
     disabled = false,
     submitDisabled = false,
+    submitInFlight = false,
     attachmentsDisabled = false,
     className,
     onLayoutHeightChange,
@@ -363,7 +366,7 @@ export const MessageInput = React.forwardRef<
   );
 
   const handleInsertMentionTrigger = React.useCallback(() => {
-    if (disabled || isUploading || isSending) return;
+    if (disabled || isUploading || isSending || submitInFlight) return;
 
     const textarea = textareaRef.current;
     if (!textarea) {
@@ -388,6 +391,7 @@ export const MessageInput = React.forwardRef<
     isSending,
     isUploading,
     onChange,
+    submitInFlight,
     textareaRef,
     updateMentionState,
     value,
@@ -426,22 +430,42 @@ export const MessageInput = React.forwardRef<
   }, [sendAttachmentMessage, t]);
 
   const handlePrimarySend = React.useCallback(async () => {
+    if (submitInFlight) {
+      return;
+    }
+
     // Multi-file queue path: send text (attachments handled by ChatWindow)
     const hasQueueDrafts = (uploadDrafts?.length ?? 0) > 0;
+    logMessageDebug("MessageInput", "submit_intent", {
+      conversationId,
+      hasQueueDrafts,
+      hasReadyDrafts,
+      hasText: value.trim().length > 0,
+      contentPreview: value.trim().slice(0, 120),
+      selectedFileName: selectedFile?.name,
+      disabled,
+      submitDisabled,
+      submitInFlight,
+    });
     if (hasQueueDrafts && hasReadyDrafts) {
       const content = value.trim();
       // Call onSend — ChatWindow.handleSend gathers ready metas
-      const result = await onSend(content || undefined);
-      onChange("");
-      clearMentionState();
-      stopTypingNow();
-      setLiveRegionMessage(
-        (result as { disposition?: string } | undefined)?.disposition === "queued"
-          ? t("chat:composer.queuedAnnouncement", {
-              defaultValue: "Message queued",
-            })
-          : t("chat:composer.sentAnnouncement"),
-      );
+      try {
+        const result = await onSend(content || undefined);
+        onChange("");
+        clearMentionState();
+        stopTypingNow();
+        setLiveRegionMessage(
+          (result as { disposition?: string } | undefined)?.disposition ===
+            "queued"
+            ? t("chat:composer.queuedAnnouncement", {
+                defaultValue: "Message queued",
+              })
+            : t("chat:composer.sentAnnouncement"),
+        );
+      } catch {
+        setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
+      }
       return;
     }
 
@@ -454,6 +478,8 @@ export const MessageInput = React.forwardRef<
     await handleSendText();
   }, [
     clearMentionState,
+    conversationId,
+    disabled,
     handleSendAttachment,
     handleSendText,
     hasReadyDrafts,
@@ -461,6 +487,8 @@ export const MessageInput = React.forwardRef<
     onSend,
     selectedFile,
     stopTypingNow,
+    submitDisabled,
+    submitInFlight,
     t,
     uploadDrafts?.length,
     value,
@@ -517,26 +545,26 @@ export const MessageInput = React.forwardRef<
 
   const hasText = value.trim().length > 0;
   const hasQueueDrafts = (uploadDrafts?.length ?? 0) > 0;
+  const isSubmitBusy = isUploading || isSending || submitInFlight;
   const canSend = hasQueueDrafts
     ? !submitDisabled &&
-      !isSending &&
+      !isSubmitBusy &&
       !hasUploadingDrafts &&
       (hasReadyDrafts || hasText)
     : selectedFile
       ? !submitDisabled &&
-        !isUploading &&
-        !isSending &&
+        !isSubmitBusy &&
         composerMode === "online"
-      : !submitDisabled && !isSending && hasText;
-  const disableToolbar = disabled || isUploading;
-  const disableAttachmentActions = attachmentsDisabled || isUploading;
+      : !submitDisabled && !isSubmitBusy && hasText;
+  const disableToolbar = disabled || isSubmitBusy;
+  const disableAttachmentActions = attachmentsDisabled || isSubmitBusy;
   const sendButtonLabel =
-    isUploading || isSending
+    isSubmitBusy
       ? t("chat:composer.sending")
       : t("chat:composer.sendMessage");
   const composerVisualState = disabled
     ? "disabled"
-    : isUploading || isSending
+    : isSubmitBusy
       ? "sending"
       : canSend
         ? "ready"
@@ -609,6 +637,10 @@ export const MessageInput = React.forwardRef<
         !event.nativeEvent.isComposing
       ) {
         event.preventDefault();
+        logMessageDebug("MessageInput", "submit_triggered", {
+          conversationId,
+          trigger: "keyboard",
+        });
         void handlePrimarySend();
       }
     },
@@ -622,17 +654,23 @@ export const MessageInput = React.forwardRef<
       onCancelEdit,
       onCancelReply,
       canSend,
+      conversationId,
       sendOnEnter,
       showMentionPanel,
     ],
   );
 
   React.useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    if (
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
+    ) {
       return;
     }
 
-    const mediaQuery = window.matchMedia("(min-width: 769px) and (pointer: fine)");
+    const mediaQuery = window.matchMedia(
+      "(min-width: 769px) and (pointer: fine)",
+    );
     const handleChange = () => setIsDesktopLayout(mediaQuery.matches);
 
     handleChange();
@@ -892,159 +930,164 @@ export const MessageInput = React.forwardRef<
                 "border-white/8 bg-[hsl(var(--color-chat-composer))] shadow-elev1",
             )}
           >
-          <EmojiButton
-            value={value}
-            onChange={onChange}
-            textareaRef={textareaRef}
-            disabled={disableToolbar}
-            className="shrink-0 [&>button]:h-10 [&>button]:w-10"
-          />
-
-          {showMentionPanel && (
-            <div
-              id={mentionListId}
-              role="listbox"
-              aria-label={t("chat:composer.mentionList")}
-              className={clsx(
-                "absolute bottom-full left-2 right-2 z-dropdown mb-2 max-h-52 overflow-y-auto rounded-[20px] border border-white/8 bg-[hsl(var(--color-sidebar-surface))] shadow-elev2",
-                "p-1",
-              )}
-            >
-              {mentionSuggestions.length === 0 ? (
-                <p className="px-3 py-2 text-xs text-text-muted">
-                  {t("chat:composer.noMentionResults")}
-                </p>
-              ) : (
-                mentionSuggestions.map((candidate, index) => {
-                  const isActive = index === activeMentionIndex;
-                  return (
-                    <button
-                      key={`${candidate.id}:${candidate.username}`}
-                      id={`${mentionListId}-option-${index}`}
-                      type="button"
-                      role="option"
-                      aria-selected={isActive}
-                      className={clsx(
-                        "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left",
-                        "transition-colors",
-                        isActive
-                          ? "bg-primary/15 text-text-primary"
-                          : "text-text-secondary hover:bg-white/6",
-                      )}
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        handleMentionSelect(candidate);
-                      }}
-                    >
-                      <span className="truncate text-sm font-medium">
-                        @{candidate.username}
-                      </span>
-                      {candidate.displayName && (
-                        <span className="truncate text-xs text-text-muted">
-                          {candidate.displayName}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          )}
-
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            onSelect={(event) => {
-              const caret = event.currentTarget.selectionStart ?? value.length;
-              updateMentionState(value, caret);
-            }}
-            onBlur={() => {
-              setIsComposerFocused(false);
-              notifyBlur();
-              clearMentionState();
-            }}
-            onFocus={() => setIsComposerFocused(true)}
-            placeholder={t("chat:composer.placeholder")}
-            disabled={disabled}
-            rows={1}
-            role="textbox"
-            aria-multiline="true"
-            aria-label={t("chat:composer.messageInput")}
-            aria-expanded={showMentionPanel}
-            aria-controls={showMentionPanel ? mentionListId : undefined}
-            aria-activedescendant={
-              showMentionPanel && mentionSuggestions.length > 0
-                ? `${mentionListId}-option-${activeMentionIndex}`
-                : undefined
-            }
-            className={clsx(
-              "w-full min-h-10 flex-1 resize-none bg-transparent px-2 py-2.5",
-              "text-sm text-text-primary placeholder:text-text-muted",
-              "transition-colors focus:outline-none",
-              disabled && "cursor-not-allowed opacity-70",
-            )}
-          />
-
-          <div className="flex shrink-0 items-end gap-1">
-            <button
-              type="button"
-              onClick={handleInsertMentionTrigger}
-              className={clsx(
-                "hidden h-10 w-10 items-center justify-center rounded-full transition-colors md:inline-flex",
-                "text-text-muted hover:bg-white/8 hover:text-text-primary",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-                disableToolbar && "cursor-not-allowed opacity-50",
-              )}
-              aria-label={t("chat:composer.mentionTrigger")}
+            <EmojiButton
+              value={value}
+              onChange={onChange}
+              textareaRef={textareaRef}
               disabled={disableToolbar}
-            >
-              <AtSymbolIcon className="h-5 w-5" />
-            </button>
+              className="shrink-0 [&>button]:h-10 [&>button]:w-10"
+            />
 
-            <div className="relative">
+            {showMentionPanel && (
+              <div
+                id={mentionListId}
+                role="listbox"
+                aria-label={t("chat:composer.mentionList")}
+                className={clsx(
+                  "absolute bottom-full left-2 right-2 z-dropdown mb-2 max-h-52 overflow-y-auto rounded-[20px] border border-white/8 bg-[hsl(var(--color-sidebar-surface))] shadow-elev2",
+                  "p-1",
+                )}
+              >
+                {mentionSuggestions.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-text-muted">
+                    {t("chat:composer.noMentionResults")}
+                  </p>
+                ) : (
+                  mentionSuggestions.map((candidate, index) => {
+                    const isActive = index === activeMentionIndex;
+                    return (
+                      <button
+                        key={`${candidate.id}:${candidate.username}`}
+                        id={`${mentionListId}-option-${index}`}
+                        type="button"
+                        role="option"
+                        aria-selected={isActive}
+                        className={clsx(
+                          "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left",
+                          "transition-colors",
+                          isActive
+                            ? "bg-primary/15 text-text-primary"
+                            : "text-text-secondary hover:bg-white/6",
+                        )}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          handleMentionSelect(candidate);
+                        }}
+                      >
+                        <span className="truncate text-sm font-medium">
+                          @{candidate.username}
+                        </span>
+                        {candidate.displayName && (
+                          <span className="truncate text-xs text-text-muted">
+                            {candidate.displayName}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
+
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              onSelect={(event) => {
+                const caret =
+                  event.currentTarget.selectionStart ?? value.length;
+                updateMentionState(value, caret);
+              }}
+              onBlur={() => {
+                setIsComposerFocused(false);
+                notifyBlur();
+                clearMentionState();
+              }}
+              onFocus={() => setIsComposerFocused(true)}
+              placeholder={t("chat:composer.placeholder")}
+              disabled={disabled}
+              rows={1}
+              role="textbox"
+              aria-multiline="true"
+              aria-label={t("chat:composer.messageInput")}
+              aria-expanded={showMentionPanel}
+              aria-controls={showMentionPanel ? mentionListId : undefined}
+              aria-activedescendant={
+                showMentionPanel && mentionSuggestions.length > 0
+                  ? `${mentionListId}-option-${activeMentionIndex}`
+                  : undefined
+              }
+              className={clsx(
+                "w-full min-h-10 flex-1 resize-none bg-transparent px-2 py-2.5",
+                "text-sm text-text-primary placeholder:text-text-muted",
+                "transition-colors focus:outline-none",
+                disabled && "cursor-not-allowed opacity-70",
+              )}
+            />
+
+            <div className="flex shrink-0 items-end gap-1">
               <button
                 type="button"
-                onClick={() => setShowAttachmentMenu((previous) => !previous)}
+                onClick={handleInsertMentionTrigger}
                 className={clsx(
-                  "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
-                  showAttachmentMenu
-                    ? "bg-white/10 text-text-primary"
-                    : "text-text-muted hover:bg-white/8 hover:text-text-primary",
+                  "hidden h-10 w-10 items-center justify-center rounded-full transition-colors md:inline-flex",
+                  "text-text-muted hover:bg-white/8 hover:text-text-primary",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-                  disableAttachmentActions && "cursor-not-allowed opacity-50",
+                  disableToolbar && "cursor-not-allowed opacity-50",
                 )}
-                aria-label={t("chat:composer.attachFile")}
-                aria-haspopup="menu"
-                aria-expanded={showAttachmentMenu}
-                disabled={disableAttachmentActions}
+                aria-label={t("chat:composer.mentionTrigger")}
+                disabled={disableToolbar}
               >
-                <PaperClipIcon className="h-5 w-5" />
+                <AtSymbolIcon className="h-5 w-5" />
               </button>
 
-              {showAttachmentMenu && (
-                <AttachmentMenu
-                  onSelect={handleAttachmentSelect}
-                  onClose={() => setShowAttachmentMenu(false)}
-                  className="absolute bottom-full right-0 z-dropdown mb-2"
-                />
-              )}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowAttachmentMenu((previous) => !previous)}
+                  className={clsx(
+                    "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
+                    showAttachmentMenu
+                      ? "bg-white/10 text-text-primary"
+                      : "text-text-muted hover:bg-white/8 hover:text-text-primary",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+                    disableAttachmentActions && "cursor-not-allowed opacity-50",
+                  )}
+                  aria-label={t("chat:composer.attachFile")}
+                  aria-haspopup="menu"
+                  aria-expanded={showAttachmentMenu}
+                  disabled={disableAttachmentActions}
+                >
+                  <EllipsisHorizontalCircleIcon className="h-5 w-5" />
+                </button>
+
+                {showAttachmentMenu && (
+                  <AttachmentMenu
+                    onSelect={handleAttachmentSelect}
+                    onClose={() => setShowAttachmentMenu(false)}
+                    className="absolute bottom-full right-0 z-dropdown mb-2"
+                  />
+                )}
+              </div>
             </div>
-          </div>
           </div>
 
           <SendButton
             disabled={!canSend}
-            isBusy={isUploading || isSending}
+            isBusy={isSubmitBusy}
             state={
               !canSend
                 ? "disabled"
-                : isUploading || isSending
+                : isSubmitBusy
                   ? "sending"
                   : "ready"
             }
             onClick={() => {
+              logMessageDebug("MessageInput", "submit_triggered", {
+                conversationId,
+                trigger: "button",
+              });
               void handlePrimarySend();
             }}
             ariaLabel={sendButtonLabel}

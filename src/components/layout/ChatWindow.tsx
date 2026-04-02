@@ -33,6 +33,7 @@ import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import type { ConnectionState } from "../../hooks/useWebSocket";
 import { resolveChatDensity } from "../../utils/densityPolicy";
 import { resolveOverlayPlacements } from "../../utils/overlayResolver";
+import { logMessageDebug } from "../../utils/messageDebug";
 import { logScrollTrace } from "../../utils/scrollTrace";
 
 // ── Convert upload queue metadata to Attachment ─────────────────────
@@ -153,6 +154,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const sendRestriction = useChatStore(
     (state) => state.sendRestrictionsByConversation[conversation.id],
   );
+  const [isSendingMessage, setIsSendingMessage] = React.useState(false);
 
   const [inputValue, setInputValue] = React.useState("");
   const [inputMode, setInputMode] = React.useState<InputMode>("normal");
@@ -224,6 +226,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const handleSend = React.useCallback(
     async (content?: string, fileMeta?: unknown, type?: string) => {
+      if (isSendingMessage) {
+        logMessageDebug("ChatWindow", "send_ignored_in_flight", {
+          conversationId: conversation.id,
+        });
+        return;
+      }
+
       if (inputMode === "edit" && editingMessage && onEditMessage) {
         const nextContent = (content || "").trim();
         if (
@@ -275,28 +284,59 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             : allAttachments
           : undefined;
 
-      setInputValue("");
-      setReplyToMessage(undefined);
-      setEditingMessage(undefined);
-      setInputMode("normal");
+      logMessageDebug("ChatWindow", "send_requested", {
+        conversationId: conversation.id,
+        inputMode,
+        contentLength: outgoingContent.length,
+        contentPreview: outgoingContent.slice(0, 120),
+        type: messageType || MessageType.TEXT,
+        attachmentCount: allAttachments.length,
+        replyToId: replyToMessage?.id,
+      });
 
-      const result = await Promise.resolve(
-        onSendMessage(
-          outgoingContent,
-          replyToMessage,
-          attachmentArg,
-          messageType,
-        ),
-      );
+      setIsSendingMessage(true);
 
-      // Clear queue after successful send
-      if (queueMetas.length > 0) {
-        uploadQueue.clearAll();
+      try {
+        const result = await Promise.resolve(
+          onSendMessage(
+            outgoingContent,
+            replyToMessage,
+            attachmentArg,
+            messageType,
+          ),
+        );
+
+        setInputValue("");
+        setReplyToMessage(undefined);
+        setEditingMessage(undefined);
+        setInputMode("normal");
+
+        if (queueMetas.length > 0) {
+          uploadQueue.clearAll();
+        }
+
+        logMessageDebug("ChatWindow", "send_resolved", {
+          conversationId: conversation.id,
+          disposition:
+            (result as { disposition?: string } | undefined)?.disposition ??
+            "unknown",
+        });
+        return result;
+      } catch (error) {
+        logMessageDebug("ChatWindow", "send_rejected", {
+          conversationId: conversation.id,
+          errorMessage:
+            error instanceof Error ? error.message : "unknown_error",
+        });
+        throw error;
+      } finally {
+        setIsSendingMessage(false);
       }
-      return result;
     },
     [
+      conversation.id,
       editingMessage,
+      isSendingMessage,
       inputMode,
       onEditMessage,
       onSendMessage,
@@ -849,6 +889,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             sendOnEnter
             disabled={!composerAvailability.canType}
             submitDisabled={!composerAvailability.canSubmit}
+            submitInFlight={isSendingMessage}
             attachmentsDisabled={!composerAvailability.canAttach}
             disabledReason={composerAvailability.statusMessage}
             disabledReasonTone={composerAvailability.statusTone}

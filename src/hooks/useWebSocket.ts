@@ -616,6 +616,14 @@ export const useWebSocket = (
         clientMessageId ??
         localId ??
         messageId;
+      logMessageDebug("useWebSocket", "socket_message_new_received", {
+        conversationId,
+        messageId,
+        tempId,
+        localId,
+        clientMessageId,
+        stableId,
+      });
       addMessage(conversationId, {
         ...(messagePayload as unknown as Parameters<typeof addMessage>[1]),
         ...(stableId ? { stableId } : {}),
@@ -659,6 +667,10 @@ export const useWebSocket = (
             asString(messagePayload.messageId))
           : null;
         if (!conversationId || !messagePayload || !messageId) return;
+        logMessageDebug("useWebSocket", "socket_message_updated_received", {
+          conversationId,
+          messageId,
+        });
 
         updateMessage(
           conversationId,
@@ -682,6 +694,10 @@ export const useWebSocket = (
           asString(payload._id) ??
           asString(asRecord(payload.message)?.id);
         if (!conversationId || !messageId) return;
+        logMessageDebug("useWebSocket", "socket_message_deleted_received", {
+          conversationId,
+          messageId,
+        });
 
         removeMessage(conversationId, messageId);
       },
@@ -699,6 +715,10 @@ export const useWebSocket = (
         asString(payload.id) ??
         asString(payload._id);
       if (!conversationId || !lastMessageId) return;
+      logMessageDebug("useWebSocket", "socket_message_read_received", {
+        conversationId,
+        lastMessageId,
+      });
 
       markMessagesReadUpTo(
         conversationId,
