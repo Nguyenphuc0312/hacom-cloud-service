@@ -14,6 +14,12 @@ import {
   normalizeRoomType,
 } from "../lib/conversationAdapter";
 import { toast } from "../utils/toast";
+import {
+  buildMessageCorrelationKey,
+  generateClientMessageId,
+  generateTempMessageId,
+  getMessageIdentityKey,
+} from "../utils/messageIdentity";
 import { isMessageDebugEnabled, logMessageDebug } from "../utils/messageDebug";
 import { createReplySnapshot } from "../utils/messageTimeline";
 import { rankConversations } from "../utils/conversationRanking";
@@ -193,6 +199,16 @@ const asStringValue = (value: unknown): string | undefined =>
 const asNumberValue = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) ? value : undefined;
 
+const getCorrelationKeyForMessage = (
+  message: Pick<Message, "conversationId" | "clientMessageId" | "localId" | "id">,
+): string =>
+  buildMessageCorrelationKey({
+    conversationId: message.conversationId,
+    clientMessageId: message.clientMessageId,
+    tempId: message.localId || message.id,
+    localId: message.localId,
+  });
+
 const toDateObject = (value: unknown, fallback: Date = new Date()): Date => {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
   if (typeof value === "string" || typeof value === "number") {
@@ -338,8 +354,8 @@ const normalizeMessage = (
     asStringValue(source.localId);
   const stableId =
     asStringValue(source.stableId) ??
-    clientMessageId ??
     asStringValue(source.localId) ??
+    asStringValue(metadata?.localId) ??
     id;
   const serverTs =
     source.serverTs ?? source.server_ts ?? source.createdAt ?? undefined;
@@ -434,8 +450,7 @@ const normalizeMessage = (
       asStringValue(source.localId) ??
       asStringValue(metadata?.localId) ??
       asStringValue(source.tempId) ??
-      asStringValue(metadata?.tempId) ??
-      asStringValue(source.clientMessageId),
+      asStringValue(metadata?.tempId),
     serverSeq,
     serverTs: serverTs ? toDateObject(serverTs) : undefined,
     localOrder,
@@ -505,7 +520,7 @@ const toFiniteNumber = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
 
 const getStableMessageId = (message: Message): string =>
-  message.stableId || message.clientMessageId || message.localId || message.id;
+  getMessageIdentityKey(message);
 
 const matchesMessageIdentityValue = (
   message: Pick<Message, "id" | "localId" | "clientMessageId" | "stableId">,
@@ -607,13 +622,7 @@ const isTempMessageId = (id: string | undefined): boolean =>
 
 const matchesMessage = (source: Message, target: Message): boolean =>
   (source.stableId !== undefined &&
-    (source.stableId === target.stableId ||
-      source.stableId === target.clientMessageId ||
-      source.stableId === target.localId)) ||
-  (source.clientMessageId !== undefined &&
-    (source.clientMessageId === target.clientMessageId ||
-      source.clientMessageId === target.stableId ||
-      source.clientMessageId === target.localId)) ||
+    source.stableId === target.stableId) ||
   source.id === target.id ||
   (source.localId !== undefined && source.localId === target.id) ||
   (target.localId !== undefined && target.localId === source.id) ||
@@ -669,13 +678,6 @@ const toMessageIdentityKeys = (message: Message): string[] => {
   const keys = new Set<string>();
   if (typeof message.stableId === "string" && message.stableId.length > 0) {
     keys.add(`stable:${message.stableId}`);
-  }
-  if (
-    typeof message.clientMessageId === "string" &&
-    message.clientMessageId.length > 0
-  ) {
-    keys.add(`client:${message.clientMessageId}`);
-    keys.add(`stable:${message.clientMessageId}`);
   }
   if (typeof message.id === "string" && message.id.length > 0) {
     keys.add(`id:${message.id}`);
@@ -918,23 +920,13 @@ const findMessageByIdentityIndex = (
       typeof target.localId === "string" ? target.localId : "";
     const targetStableId =
       typeof target.stableId === "string" ? target.stableId : "";
-    const targetClientMessageId =
-      typeof target.clientMessageId === "string" ? target.clientMessageId : "";
     const itemId = typeof item.id === "string" ? item.id : "";
     const itemLocalId = typeof item.localId === "string" ? item.localId : "";
     const itemStableId = typeof item.stableId === "string" ? item.stableId : "";
-    const itemClientMessageId =
-      typeof item.clientMessageId === "string" ? item.clientMessageId : "";
 
     return (
       (targetStableId.length > 0 &&
-        (itemStableId === targetStableId ||
-          itemClientMessageId === targetStableId ||
-          itemLocalId === targetStableId)) ||
-      (targetClientMessageId.length > 0 &&
-        (itemClientMessageId === targetClientMessageId ||
-          itemStableId === targetClientMessageId ||
-          itemLocalId === targetClientMessageId)) ||
+        (itemStableId === targetStableId || itemLocalId === targetStableId)) ||
       (targetId.length > 0 &&
         (itemId === targetId || itemLocalId === targetId)) ||
       (targetLocalId.length > 0 &&
@@ -1246,6 +1238,7 @@ export const useChatStore = create<ChatState>()(
       logMessageDebug("chatStore", "send_request_started", {
         conversationId,
         queueKey,
+        correlationKey: getCorrelationKeyForMessage(message),
         attemptState,
         messageId: message.id,
         localId: message.localId,
@@ -1319,8 +1312,12 @@ export const useChatStore = create<ChatState>()(
         logMessageDebug("chatStore", "send_request_succeeded", {
           conversationId,
           queueKey,
+          correlationKey: getCorrelationKeyForMessage(message),
           tempMessageId: message.id,
           sentMessageId: sentMessage.id,
+          responseClientMessageId: sentMessage.clientMessageId,
+          responseLocalId: sentMessage.localId,
+          responseContentPreview: sentMessage.content.slice(0, 120),
           serverSeq: sentMessage.serverSeq,
         });
 
@@ -1348,6 +1345,7 @@ export const useChatStore = create<ChatState>()(
           logMessageDebug("chatStore", "send_request_queued", {
             conversationId,
             queueKey,
+            correlationKey: getCorrelationKeyForMessage(message),
             messageId: message.id,
             queuedReason,
             errorMessage: apiError.message || "network_failure",
@@ -1367,6 +1365,7 @@ export const useChatStore = create<ChatState>()(
           logMessageDebug("chatStore", "send_request_failed", {
             conversationId,
             queueKey,
+            correlationKey: getCorrelationKeyForMessage(message),
             messageId: message.id,
             errorCode,
             failureReason: "slow_mode",
@@ -1396,6 +1395,7 @@ export const useChatStore = create<ChatState>()(
           logMessageDebug("chatStore", "send_request_failed", {
             conversationId,
             queueKey,
+            correlationKey: getCorrelationKeyForMessage(message),
             messageId: message.id,
             errorCode,
             failureReason: "permission",
@@ -1415,6 +1415,7 @@ export const useChatStore = create<ChatState>()(
         logMessageDebug("chatStore", "send_request_failed", {
           conversationId,
           queueKey,
+          correlationKey: getCorrelationKeyForMessage(message),
           messageId: message.id,
           errorCode,
           failureReason:
@@ -1639,6 +1640,7 @@ export const useChatStore = create<ChatState>()(
 
           logMessageDebug("chatStore", "message_merged", {
             conversationId,
+            correlationKey: getCorrelationKeyForMessage(mergedMessage),
             incomingId: incoming.id,
             incomingLocalId: incoming.localId,
             incomingClientMessageId: incoming.clientMessageId,
@@ -2240,8 +2242,8 @@ export const useChatStore = create<ChatState>()(
         const browserOnline = getBrowserOnlineState();
 
         const localOrder = allocateLocalMessageOrder();
-        const clientMessageId = `client-${conversationId}-${localOrder}`;
-        const tempId = `temp-${Date.now()}-${Math.random()}`;
+        const clientMessageId = generateClientMessageId(conversationId);
+        const tempId = generateTempMessageId();
         const tempMessage: Message = {
           id: tempId,
           stableId: clientMessageId,
@@ -2274,8 +2276,10 @@ export const useChatStore = create<ChatState>()(
         get().addMessage(conversationId, tempMessage);
         logMessageDebug("chatStore", "optimistic_message_created", {
           conversationId,
+          correlationKey: getCorrelationKeyForMessage(tempMessage),
           tempId,
           clientMessageId,
+          contentPreview: messageContent.slice(0, 120),
           sendMode,
           browserOnline,
           queuedReason: tempMessage.queuedReason,

@@ -32,6 +32,7 @@ import {
   notifySidebarState,
 } from "../utils/notificationRouter";
 import { logMessageDebug } from "../utils/messageDebug";
+import { buildMessageCorrelationKey } from "../utils/messageIdentity";
 
 interface UseWebSocketOptions {
   autoConnect?: boolean;
@@ -646,17 +647,21 @@ export const useWebSocket = (
       const localId =
         asString(messagePayload.localId) ??
         asString(payload.localId) ??
-        asString(payload.clientMessageId) ??
-        asString(messagePayload.clientMessageId) ??
         tempId ??
         undefined;
       const stableId =
         asString(messagePayload.stableId) ??
-        clientMessageId ??
         localId ??
         messageId;
+      const correlationKey = buildMessageCorrelationKey({
+        conversationId,
+        clientMessageId,
+        tempId: tempId ?? undefined,
+        localId,
+      });
       logMessageDebug("useWebSocket", "socket_message_new_received", {
         conversationId,
+        correlationKey,
         messageId,
         tempId,
         localId,
