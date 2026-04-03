@@ -135,6 +135,8 @@ type MessageCursor = {
 const REMOTE_TYPING_DECAY_INTERVAL_MS = 320;
 const REMOTE_TYPING_HALF_LIFE_MS = 1400;
 const REMOTE_TYPING_VISIBLE_THRESHOLD = 0.12;
+const ROOM_JOIN_ACK_TIMEOUT_MS = 2_000;
+const ROOM_JOIN_RETRY_DELAY_MAX_MS = 8_000;
 
 const computeTypingConfidence = (lastEventAt: number, now: number): number =>
   Math.exp(-(now - lastEventAt) / REMOTE_TYPING_HALF_LIFE_MS);
@@ -147,7 +149,6 @@ export const useWebSocket = (
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const addMessage = useChatStore((s) => s.addMessage);
-  const updateMessage = useChatStore((s) => s.updateMessage);
   const removeMessage = useChatStore((s) => s.removeMessage);
   const setTyping = useChatStore((s) => s.setTyping);
   const clearTyping = useChatStore((s) => s.clearTyping);
@@ -172,9 +173,14 @@ export const useWebSocket = (
   );
 
   const joinedRoomsRef = useRef<Set<string>>(new Set());
+  const subscribedRoomsRef = useRef<Set<string>>(new Set());
   const pendingRoomSyncRef = useRef<
     Map<string, "skip" | "initial-sync" | "reconnect">
   >(new Map());
+  const roomJoinRetryTimersRef = useRef<
+    Map<string, ReturnType<typeof setTimeout>>
+  >(new Map());
+  const roomJoinRetryAttemptsRef = useRef<Map<string, number>>(new Map());
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const emitQueueRef = useRef<Array<{ event: string; data: unknown }>>([]);
   const hasConnectedOnceRef = useRef(false);
@@ -225,6 +231,20 @@ export const useWebSocket = (
   const clearAllRemoteTypingTimers = useCallback(() => {
     remoteTypingTimersRef.current.forEach((timer) => clearTimeout(timer));
     remoteTypingTimersRef.current.clear();
+  }, []);
+
+  const clearRoomJoinRetry = useCallback((roomId: string) => {
+    const timer = roomJoinRetryTimersRef.current.get(roomId);
+    if (timer) {
+      clearTimeout(timer);
+      roomJoinRetryTimersRef.current.delete(roomId);
+    }
+  }, []);
+
+  const clearAllRoomJoinRetries = useCallback(() => {
+    roomJoinRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
+    roomJoinRetryTimersRef.current.clear();
+    roomJoinRetryAttemptsRef.current.clear();
   }, []);
 
   const scheduleRemoteTypingDecay = useCallback(
@@ -517,6 +537,68 @@ export const useWebSocket = (
     [resyncRoom],
   );
 
+  const requestRoomJoin = useCallback(
+    (
+      roomId: string,
+      options?: {
+        reason?: "initial" | "reconnect" | "retry";
+      },
+    ) => {
+      if (!roomId || !joinedRoomsRef.current.has(roomId)) {
+        return;
+      }
+
+      emitJoinRoom(roomId);
+      clearRoomJoinRetry(roomId);
+
+      const attempt = roomJoinRetryAttemptsRef.current.get(roomId) ?? 0;
+      const retryDelay = Math.min(
+        ROOM_JOIN_ACK_TIMEOUT_MS * Math.max(attempt + 1, 1),
+        ROOM_JOIN_RETRY_DELAY_MAX_MS,
+      );
+
+      const retryTimer = setTimeout(() => {
+        roomJoinRetryTimersRef.current.delete(roomId);
+
+        if (
+          !joinedRoomsRef.current.has(roomId) ||
+          subscribedRoomsRef.current.has(roomId)
+        ) {
+          return;
+        }
+
+        const connectionState = getSocket()?.getConnectionState() ?? "unknown";
+        if (connectionState !== "connected") {
+          logMessageDebug("useWebSocket", "room_join_retry_waiting_connection", {
+            roomId,
+            reason: options?.reason,
+            connectionState,
+          });
+          return;
+        }
+
+        const nextAttempt = attempt + 1;
+        roomJoinRetryAttemptsRef.current.set(roomId, nextAttempt);
+
+        logMessageDebug("useWebSocket", "room_join_ack_timeout", {
+          roomId,
+          reason: options?.reason,
+          attempt: nextAttempt,
+          retryDelay,
+        });
+
+        if (useChatStore.getState().selectedConversationId === roomId) {
+          void scheduleRoomResync(roomId, { reason: "room-refresh" });
+        }
+
+        requestRoomJoin(roomId, { reason: "retry" });
+      }, retryDelay);
+
+      roomJoinRetryTimersRef.current.set(roomId, retryTimer);
+    },
+    [clearRoomJoinRetry, emitJoinRoom, scheduleRoomResync],
+  );
+
   const setupSocket = useCallback(() => {
     const socket = initSocket();
     logMessageDebug("useWebSocket", "listener_setup_started", {
@@ -544,11 +626,15 @@ export const useWebSocket = (
       }
 
       joinedRoomsRef.current.forEach((roomId) => {
+        subscribedRoomsRef.current.delete(roomId);
+        roomJoinRetryAttemptsRef.current.set(roomId, 0);
         pendingRoomSyncRef.current.set(
           roomId,
           shouldResync ? "reconnect" : "skip",
         );
-        emitJoinRoom(roomId);
+        requestRoomJoin(roomId, {
+          reason: shouldResync ? "reconnect" : "initial",
+        });
       });
 
       hasConnectedOnceRef.current = true;
@@ -574,6 +660,8 @@ export const useWebSocket = (
       if (hasConnectedOnceRef.current) {
         shouldResyncOnConnectRef.current = true;
       }
+      subscribedRoomsRef.current.clear();
+      clearAllRoomJoinRetries();
       if (code === 4401) {
         void recoverSocketAuth("ws_close_4401", "close_4401");
       }
@@ -621,7 +709,10 @@ export const useWebSocket = (
     );
     unsubscribersRef.current.push(unsubReauthRequired);
 
-    const upsertIncomingMessage = (data: unknown) => {
+    const upsertIncomingMessage = (
+      data: unknown,
+      eventType: "message:new" | "message:updated",
+    ) => {
       const payload = asRecord(data);
       if (!payload) return;
 
@@ -659,8 +750,9 @@ export const useWebSocket = (
         tempId: tempId ?? undefined,
         localId,
       });
-      logMessageDebug("useWebSocket", "socket_message_new_received", {
+      logMessageDebug("useWebSocket", `socket_${eventType}_received`, {
         conversationId,
+        eventId: asString(payload.eventId) ?? asString(messagePayload.eventId),
         correlationKey,
         messageId,
         tempId,
@@ -693,7 +785,7 @@ export const useWebSocket = (
     };
 
     const unsubMessageNew = socket.on(WebSocketEvents.MESSAGE_NEW, (data) => {
-      upsertIncomingMessage(data);
+      upsertIncomingMessage(data, "message:new");
     });
     unsubscribersRef.current.push(unsubMessageNew);
 
@@ -703,9 +795,14 @@ export const useWebSocket = (
       const roomId = getConversationId(payload);
       if (!roomId) return;
 
+      subscribedRoomsRef.current.add(roomId);
+      roomJoinRetryAttemptsRef.current.delete(roomId);
+      clearRoomJoinRetry(roomId);
+
       logMessageDebug("useWebSocket", "room_joined", {
         roomId,
         connectionState: getSocket()?.getConnectionState() ?? "unknown",
+        pendingSyncStrategy: pendingRoomSyncRef.current.get(roomId) ?? null,
       });
     };
 
@@ -721,30 +818,34 @@ export const useWebSocket = (
     );
     unsubscribersRef.current.push(unsubConversationJoined);
 
+    const handleRoomLeft = (data: unknown) => {
+      const payload = asRecord(data);
+      if (!payload) return;
+      const roomId = getConversationId(payload);
+      if (!roomId) return;
+
+      subscribedRoomsRef.current.delete(roomId);
+      roomJoinRetryAttemptsRef.current.delete(roomId);
+      clearRoomJoinRetry(roomId);
+
+      logMessageDebug("useWebSocket", "room_left_acknowledged", {
+        roomId,
+      });
+    };
+
+    const unsubRoomLeft = socket.on(WebSocketEvents.ROOM_LEFT, handleRoomLeft);
+    unsubscribersRef.current.push(unsubRoomLeft);
+
+    const unsubConversationLeft = socket.on(
+      WebSocketEvents.CONVERSATION_LEFT,
+      handleRoomLeft,
+    );
+    unsubscribersRef.current.push(unsubConversationLeft);
+
     const unsubMessageUpdated = socket.on(
       WebSocketEvents.MESSAGE_UPDATED,
       (data) => {
-        const payload = asRecord(data);
-        if (!payload) return;
-
-        const conversationId = getConversationId(payload);
-        const messagePayload = getMessagePayload(payload);
-        const messageId = messagePayload
-          ? (asString(messagePayload.id) ??
-            asString(messagePayload._id) ??
-            asString(messagePayload.messageId))
-          : null;
-        if (!conversationId || !messagePayload || !messageId) return;
-        logMessageDebug("useWebSocket", "socket_message_updated_received", {
-          conversationId,
-          messageId,
-        });
-
-        updateMessage(
-          conversationId,
-          messageId,
-          messagePayload as unknown as Parameters<typeof updateMessage>[2],
-        );
+        upsertIncomingMessage(data, "message:updated");
       },
     );
     unsubscribersRef.current.push(unsubMessageUpdated);
@@ -1299,9 +1400,10 @@ export const useWebSocket = (
     return socket;
   }, [
     addMessage,
+    clearAllRoomJoinRetries,
+    clearRoomJoinRetry,
     clearRemoteTypingTimer,
     clearTyping,
-    emitJoinRoom,
     flushEmitQueue,
     markMessagesReadUpTo,
     onConnect,
@@ -1311,6 +1413,7 @@ export const useWebSocket = (
     recoverSocketAuth,
     fetchConversations,
     removeMessage,
+    requestRoomJoin,
     flushQueuedMessages,
     scheduleRemoteTypingDecay,
     scheduleRoomResync,
@@ -1323,7 +1426,6 @@ export const useWebSocket = (
     markJoinRequestResolved,
     upsertInviteLink,
     updateConversation,
-    updateMessage,
   ]);
 
   const connect = useCallback(() => {
@@ -1355,17 +1457,21 @@ export const useWebSocket = (
     }
 
     clearAllRemoteTypingTimers();
+    clearAllRoomJoinRetries();
     joinedRoomsRef.current.clear();
+    subscribedRoomsRef.current.clear();
     pendingRoomSyncRef.current.clear();
     roomResyncInFlightRef.current.clear();
     emitQueueRef.current = [];
     disconnectSocket();
-  }, [clearAllRemoteTypingTimers]);
+  }, [clearAllRemoteTypingTimers, clearAllRoomJoinRetries]);
 
   const joinRoom = useCallback(
     (roomId: string, options?: { skipInitialDeltaSync?: boolean }) => {
       if (!roomId) return;
       joinedRoomsRef.current.add(roomId);
+      subscribedRoomsRef.current.delete(roomId);
+      roomJoinRetryAttemptsRef.current.set(roomId, 0);
       pendingRoomSyncRef.current.set(
         roomId,
         options?.skipInitialDeltaSync ? "skip" : "initial-sync",
@@ -1374,9 +1480,9 @@ export const useWebSocket = (
         roomId,
         strategy: options?.skipInitialDeltaSync ? "skip" : "initial-sync",
       });
-      emitJoinRoom(roomId);
+      requestRoomJoin(roomId, { reason: "initial" });
     },
-    [emitJoinRoom],
+    [requestRoomJoin],
   );
 
   const leaveRoom = useCallback(
@@ -1388,7 +1494,10 @@ export const useWebSocket = (
         conversationId: roomId,
       });
       joinedRoomsRef.current.delete(roomId);
+      subscribedRoomsRef.current.delete(roomId);
       pendingRoomSyncRef.current.delete(roomId);
+      roomJoinRetryAttemptsRef.current.delete(roomId);
+      clearRoomJoinRetry(roomId);
 
       const typingStatuses = useChatStore
         .getState()
@@ -1398,7 +1507,7 @@ export const useWebSocket = (
         clearTyping(roomId, item.userId);
       });
     },
-    [clearRemoteTypingTimer, clearTyping, emit],
+    [clearRemoteTypingTimer, clearRoomJoinRetry, clearTyping, emit],
   );
 
   const sendMessage = useCallback(
