@@ -1,5 +1,6 @@
 import axios from "axios";
 import { buildAuthEndpoint } from "../lib/authPath";
+import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 import { ROUTE_PATHS } from "../router/paths";
 import { disconnectSocket } from "../lib/socket";
 import { cancelPendingRequests } from "../lib/axios";
@@ -53,7 +54,7 @@ export const requestServerLogout = async (): Promise<void> => {
   const payload =
     !isRefreshTokenCookieMode() && refreshToken ? { refreshToken } : undefined;
 
-  await axios.post(buildAuthEndpoint("/logout"), payload, {
+  await axios.post(buildAuthEndpoint(AUTH_ENDPOINTS.logout), payload, {
     timeout: 10000,
     // Stage 1 body-mode: withCredentials=false (no cookies).
     withCredentials: isRefreshTokenCookieMode(),

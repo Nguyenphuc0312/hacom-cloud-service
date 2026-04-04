@@ -1,6 +1,7 @@
 import axios from "axios";
 import { AUTH_CONFIG } from "../config";
 import { buildAuthEndpoint } from "../lib/authPath";
+import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import {
   getAccessToken,
@@ -101,7 +102,7 @@ const performRefresh = async (trigger: AuthRefreshTrigger): Promise<string> => {
 
   const csrfToken = cookieMode ? getCsrfToken() : null;
   const response = await axios.post(
-    buildAuthEndpoint("/refresh"),
+    buildAuthEndpoint(AUTH_ENDPOINTS.refresh),
     refreshToken ? { refreshToken } : undefined,
     {
       withCredentials: cookieMode,

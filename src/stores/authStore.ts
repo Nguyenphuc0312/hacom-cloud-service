@@ -9,9 +9,7 @@ import apiClient, {
   resetAuthFailureState,
   setAuthFailureHandler,
 } from "../lib/axios";
-import type {
-  ApiResponse,
-} from "@hacom/chat-shared-types";
+import type { ApiResponse } from "@hacom/chat-shared-types";
 import type { LoginFormData, RegisterFormData } from "../lib/validations";
 import {
   getAccessToken,
@@ -28,6 +26,7 @@ import {
   requestServerLogout,
   runClientLogoutCleanup,
 } from "../services/authService";
+import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 import i18n from "../i18n";
 import { refreshAccessTokenShared } from "../services/authRefreshCoordinator";
 
@@ -106,7 +105,7 @@ const resolveTokens = (
 };
 
 const fetchCurrentUser = async (accessToken: string): Promise<User> => {
-  const response = await authClient.get<ApiResponse<User>>("/auth/me", {
+  const response = await authClient.get<ApiResponse<User>>(AUTH_ENDPOINTS.me, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   return unwrapApiSuccess(response.data);
@@ -203,7 +202,7 @@ export const useAuthStore = create<AuthState>()(
 
           try {
             const response = await authClient.post<ApiResponse<AuthResponse>>(
-              "/auth/login",
+              AUTH_ENDPOINTS.login,
               {
                 email: data.email,
                 password: data.password,
@@ -292,7 +291,7 @@ export const useAuthStore = create<AuthState>()(
           try {
             // /auth/me needs Bearer token — use authClient with explicit header.
             const response = await authClient.get<ApiResponse<User>>(
-              "/auth/me",
+              AUTH_ENDPOINTS.me,
               { headers: { Authorization: `Bearer ${token}` } },
             );
             const user = unwrapApiSuccess(response.data);
@@ -397,7 +396,8 @@ export const useAuthStore = create<AuthState>()(
 
             if (isRefreshTokenCookieMode() || getRefreshToken()) {
               try {
-                const newAccessToken = await refreshAccessTokenShared("bootstrap");
+                const newAccessToken =
+                  await refreshAccessTokenShared("bootstrap");
                 const user = await fetchCurrentUser(newAccessToken);
                 set({
                   user,

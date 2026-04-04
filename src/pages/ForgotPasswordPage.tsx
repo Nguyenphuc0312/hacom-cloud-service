@@ -13,6 +13,7 @@ import { Button, Input, toast } from "../components/ui";
 import { forgotPasswordSchema } from "../lib/validations";
 import type { ForgotPasswordFormData } from "../lib/validations";
 import { authClient } from "../lib/axios";
+import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 
 export const ForgotPasswordPage: React.FC = () => {
   const { t } = useTranslation();
@@ -40,7 +41,7 @@ export const ForgotPasswordPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      await authClient.post("/auth/forgot-password", data);
+      await authClient.post(AUTH_ENDPOINTS.forgotPassword, data);
       setIsSubmitted(true);
       toast.success(t("auth:toast.forgotPasswordSent"));
     } catch {

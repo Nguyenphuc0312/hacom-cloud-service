@@ -54,7 +54,7 @@ export const API_BASE_URL = resolveHttpBaseUrl(
  */
 export const AUTH_BASE_URL = resolveHttpBaseUrl(
   import.meta.env.VITE_AUTH_BASE_URL,
-  "/auth",
+  "/api/v1/auth",
 );
 
 /**
@@ -89,14 +89,12 @@ if (USE_AUTH_SERVICE && normalizedApiBaseUrl === normalizedAuthBaseUrl) {
 
 if (import.meta.env.DEV && !USE_AUTH_SERVICE) {
   console.warn(
-    "[auth-config] USE_AUTH_SERVICE=false: /auth/* requests will fallback to API_BASE_URL.",
+    "[auth-config] USE_AUTH_SERVICE=false: auth requests will fallback to API_BASE_URL.",
   );
 }
 
 const rawWebSocketUrl =
-  import.meta.env.VITE_WS_URL ||
-  import.meta.env.VITE_WEBSOCKET_URL ||
-  "/ws";
+  import.meta.env.VITE_WS_URL || import.meta.env.VITE_WEBSOCKET_URL || "/ws";
 
 const resolveWebSocketUrl = (value: string): string => {
   if (!value.startsWith("/")) {

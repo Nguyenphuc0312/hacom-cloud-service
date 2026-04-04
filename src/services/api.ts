@@ -26,6 +26,7 @@ import {
   normalizeConversationsPayload,
 } from "../lib/conversationAdapter";
 import { unwrapApiSuccess } from "../lib/apiContract";
+import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 import { getCsrfToken, isRefreshTokenCookieMode } from "./tokenService";
 
 const canonicalConversationPath = (conversationId: string): string =>
@@ -64,18 +65,15 @@ const withLegacyConversationFallback = async <T>(
 export const authApi = {
   login: async (email: string, password: string) => {
     const response = await authClient.post<ApiResponse<LoginResponse>>(
-      "/auth/login",
+      AUTH_ENDPOINTS.login,
       { email, password },
     );
     return response.data;
   },
 
-  register: async (data: {
-    email: string;
-    password: string;
-  }) => {
+  register: async (data: { email: string; password: string }) => {
     const response = await authClient.post<ApiResponse<RegisterResponseDto>>(
-      "/auth/register",
+      AUTH_ENDPOINTS.register,
       data,
     );
     return response.data;
@@ -83,24 +81,22 @@ export const authApi = {
 
   verifyEmail: async (token: string) => {
     const response = await authClient.post<ApiResponse<VerifyEmailResponseDto>>(
-      "/auth/verify-email",
+      AUTH_ENDPOINTS.verifyEmail,
       { token },
     );
     return response.data;
   },
 
   requestEmailVerification: async (email: string) => {
-    const response =
-      await authClient.post<ApiResponse<RequestEmailVerificationResponseDto>>(
-        "/auth/request-email-verification",
-        { email },
-      );
+    const response = await authClient.post<
+      ApiResponse<RequestEmailVerificationResponseDto>
+    >(AUTH_ENDPOINTS.requestEmailVerification, { email });
     return response.data;
   },
 
   logout: async () => {
     const csrfToken = isRefreshTokenCookieMode() ? getCsrfToken() : undefined;
-    await authClient.post("/auth/logout", undefined, {
+    await authClient.post(AUTH_ENDPOINTS.logout, undefined, {
       withCredentials: isRefreshTokenCookieMode(),
       headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
     });
@@ -109,7 +105,7 @@ export const authApi = {
   refreshToken: async (refreshToken?: string) => {
     const csrfToken = isRefreshTokenCookieMode() ? getCsrfToken() : undefined;
     const response = await authClient.post<ApiResponse<RefreshTokenResponse>>(
-      "/auth/refresh",
+      AUTH_ENDPOINTS.refresh,
       refreshToken ? { refreshToken } : undefined,
       {
         withCredentials: isRefreshTokenCookieMode(),
@@ -121,7 +117,7 @@ export const authApi = {
 
   forgotPassword: async (email: string) => {
     const response = await authClient.post<ApiResponse<{ message: string }>>(
-      "/auth/forgot-password",
+      AUTH_ENDPOINTS.forgotPassword,
       { email },
     );
     return response.data;
@@ -133,7 +129,7 @@ export const authApi = {
     confirmPassword: string,
   ) => {
     const response = await authClient.post<ApiResponse<{ message: string }>>(
-      "/auth/reset-password",
+      AUTH_ENDPOINTS.resetPassword,
       { token, newPassword, confirmPassword },
     );
     return response.data;
@@ -144,8 +140,8 @@ export const authApi = {
     newPassword: string;
     confirmPassword: string;
   }) => {
-    const response = await apiClient.post<ApiResponse<{ message: string }>>(
-      "/auth/change-password",
+    const response = await authClient.post<ApiResponse<{ message: string }>>(
+      AUTH_ENDPOINTS.changePassword,
       data,
     );
     return response.data;
@@ -427,7 +423,8 @@ export const conversationApi = {
 
   leaveConversation: async (conversationId: string) => {
     await withLegacyConversationFallback(
-      () => apiClient.post(`${canonicalConversationPath(conversationId)}/leave`),
+      () =>
+        apiClient.post(`${canonicalConversationPath(conversationId)}/leave`),
       () => apiClient.post(`${legacyConversationPath(conversationId)}/leave`),
     );
   },
@@ -472,7 +469,10 @@ export const conversationApi = {
         apiClient.post(
           `${canonicalConversationMessagesPath(conversationId)}/read`,
         ),
-      () => apiClient.post(`${legacyConversationMessagesPath(conversationId)}/read`),
+      () =>
+        apiClient.post(
+          `${legacyConversationMessagesPath(conversationId)}/read`,
+        ),
     );
   },
 

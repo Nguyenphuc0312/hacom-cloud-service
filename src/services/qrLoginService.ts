@@ -6,6 +6,7 @@ import type {
 } from "@hacom/chat-shared-types";
 import { authClient } from "../lib/axios";
 import { unwrapApiSuccess } from "../lib/apiContract";
+import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 
 const WEB_SECRET_HEADER = "X-QR-Web-Secret";
 
@@ -13,7 +14,7 @@ export const qrLoginService = {
   async createSession(): Promise<CreateQrLoginSessionResponseDto> {
     const response = await authClient.post<
       ApiResponse<CreateQrLoginSessionResponseDto>
-    >("/auth/qr-login/sessions");
+    >(AUTH_ENDPOINTS.qrLoginCreateSession);
     return unwrapApiSuccess(response.data);
   },
 
@@ -23,7 +24,7 @@ export const qrLoginService = {
   ): Promise<QrLoginSessionStatusResponseDto> {
     const response = await authClient.get<
       ApiResponse<QrLoginSessionStatusResponseDto>
-    >(`/auth/qr-login/sessions/${sessionId}/status`, {
+    >(AUTH_ENDPOINTS.qrLoginSessionStatus(sessionId), {
       headers: {
         [WEB_SECRET_HEADER]: webSecret,
       },
@@ -33,7 +34,7 @@ export const qrLoginService = {
 
   async exchange(sessionId: string, webSecret: string): Promise<LoginResponse> {
     const response = await authClient.post<ApiResponse<LoginResponse>>(
-      `/auth/qr-login/sessions/${sessionId}/exchange`,
+      AUTH_ENDPOINTS.qrLoginSessionExchange(sessionId),
       undefined,
       {
         headers: {
