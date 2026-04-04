@@ -13,6 +13,7 @@ import type {
   LoginResponse,
   RefreshTokenResponse,
   RegisterResponseDto,
+  RequestEmailVerificationResponseDto,
   RoomMessagesResponse,
   UploadSignedUrlResponse,
   VerifyEmailResponseDto,
@@ -70,11 +71,8 @@ export const authApi = {
   },
 
   register: async (data: {
-    username: string;
     email: string;
     password: string;
-    firstName?: string;
-    lastName?: string;
   }) => {
     const response = await authClient.post<ApiResponse<RegisterResponseDto>>(
       "/auth/register",
@@ -88,6 +86,15 @@ export const authApi = {
       "/auth/verify-email",
       { token },
     );
+    return response.data;
+  },
+
+  requestEmailVerification: async (email: string) => {
+    const response =
+      await authClient.post<ApiResponse<RequestEmailVerificationResponseDto>>(
+        "/auth/request-email-verification",
+        { email },
+      );
     return response.data;
   },
 

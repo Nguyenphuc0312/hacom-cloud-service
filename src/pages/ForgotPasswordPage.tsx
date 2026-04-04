@@ -69,6 +69,9 @@ export const ForgotPasswordPage: React.FC = () => {
                 {getValues("email")}
               </span>
             </p>
+            <p className="mb-6 text-sm text-text-muted">
+              {t("auth:forgot.securityHint")}
+            </p>
 
             <div className="space-y-4">
               <p className="text-sm text-text-muted">

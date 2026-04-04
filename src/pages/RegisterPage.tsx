@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,10 +7,7 @@ import { useTranslation } from "react-i18next";
 import {
   EnvelopeIcon,
   LockClosedIcon,
-  UserIcon,
   ChatBubbleLeftRightIcon,
-  CheckCircleIcon,
-  XCircleIcon,
 } from "@heroicons/react/24/outline";
 import {
   Button,
@@ -22,16 +19,7 @@ import {
 import { registerSchema } from "../lib/validations";
 import type { RegisterFormData } from "../lib/validations";
 import { useAuthStore } from "../stores";
-import apiClient from "../lib/axios";
-
-const useDebounce = <T,>(value: T, delay: number): T => {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-  return debouncedValue;
-};
+import { ROUTE_PATHS } from "../router/paths";
 
 export const RegisterPage: React.FC = () => {
   const { t } = useTranslation();
@@ -44,14 +32,10 @@ export const RegisterPage: React.FC = () => {
     clearError,
   } = useAuthStore();
 
-  const [usernameStatus, setUsernameStatus] = useState<{
-    checking: boolean;
-    available: boolean | null;
-    message: string;
-  }>({ checking: false, available: null, message: "" });
-
   useEffect(() => {
-    if (isAuthenticated) navigate("/chat", { replace: true });
+    if (isAuthenticated) {
+      navigate(ROUTE_PATHS.CHAT, { replace: true });
+    }
   }, [isAuthenticated, navigate]);
 
   useEffect(() => {
@@ -67,80 +51,34 @@ export const RegisterPage: React.FC = () => {
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
-      username: "",
       email: "",
       password: "",
       confirmPassword: "",
-      firstName: "",
-      lastName: "",
       acceptTerms: undefined as unknown as true,
     },
     mode: "onChange",
   });
 
   const password = watch("password");
-  const username = watch("username");
-  const debouncedUsername = useDebounce(username, 500);
 
   useEffect(() => {
-    setFocus("username");
+    setFocus("email");
   }, [setFocus]);
 
-  const checkUsername = useCallback(
-    async (value: string) => {
-      if (!value || value.length < 3) {
-        setUsernameStatus({ checking: false, available: null, message: "" });
-        return;
-      }
-      if (!/^[a-zA-Z0-9_]+$/.test(value)) {
-        setUsernameStatus({
-          checking: false,
-          available: false,
-          message: t("auth:username.invalid"),
-        });
-        return;
-      }
-      setUsernameStatus({
-        checking: true,
-        available: null,
-        message: t("auth:username.checking"),
-      });
-      try {
-        const response = await apiClient.get(`/users/check-username/${value}`);
-        const isAvailable = response.data.data?.available ?? true;
-        setUsernameStatus({
-          checking: false,
-          available: isAvailable,
-          message: isAvailable
-            ? t("auth:username.available")
-            : t("auth:username.taken"),
-        });
-      } catch {
-        setUsernameStatus({ checking: false, available: true, message: "" });
-      }
-    },
-    [t],
-  );
-
-  useEffect(() => {
-    checkUsername(debouncedUsername);
-  }, [debouncedUsername, checkUsername]);
-
   const onSubmit = async (data: RegisterFormData) => {
-    if (usernameStatus.available === false) {
-      toast.error(t("auth:username.taken"));
-      return;
-    }
     try {
+      const normalizedEmail = data.email.trim().toLowerCase();
+
       await registerUser({
-        username: data.username,
-        email: data.email,
+        email: normalizedEmail,
         password: data.password,
-        firstName: data.firstName,
-        lastName: data.lastName,
       });
-      toast.success("Registration submitted. Please check your email to verify your account.");
-      navigate("/login", { replace: true });
+
+      toast.success(t("auth:toast.registerVerificationRequired"));
+      navigate(
+        `${ROUTE_PATHS.VERIFY_EMAIL}?email=${encodeURIComponent(normalizedEmail)}`,
+        { replace: true },
+      );
     } catch (err) {
       toast.error((err as Error).message ?? t("auth:toast.registerFailed"));
     }
@@ -194,71 +132,14 @@ export const RegisterPage: React.FC = () => {
               )}
               aria-live="polite"
             >
-              {error && (
+              {error ? (
                 <div
                   role="alert"
                   className="p-3 sm:p-4 bg-danger/15 border border-danger/35 rounded-xl text-danger text-xs xs:text-sm animate-shake"
                 >
                   {error}
                 </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 xs:grid-cols-2 gap-3 xs:gap-4">
-              <Input
-                {...register("firstName")}
-                label={t("auth:register.firstName")}
-                placeholder={t("auth:placeholders.firstName")}
-                error={errors.firstName?.message}
-                disabled={isLoading}
-              />
-              <Input
-                {...register("lastName")}
-                label={t("auth:register.lastName")}
-                placeholder={t("auth:placeholders.lastName")}
-                error={errors.lastName?.message}
-                disabled={isLoading}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Input
-                {...register("username")}
-                label={t("auth:register.username")}
-                placeholder={t("auth:placeholders.username")}
-                leftIcon={<UserIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
-                error={errors.username?.message}
-                autoComplete="username"
-                disabled={isLoading}
-                rightIcon={
-                  usernameStatus.checking ? (
-                    <div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" />
-                  ) : usernameStatus.available === true ? (
-                    <CheckCircleIcon className="w-4 h-4 sm:w-5 sm:h-5 text-success" />
-                  ) : usernameStatus.available === false ? (
-                    <XCircleIcon className="w-4 h-4 sm:w-5 sm:h-5 text-danger" />
-                  ) : null
-                }
-              />
-              <div
-                className={clsx(
-                  "transition-all duration-150 overflow-hidden",
-                  usernameStatus.message && !errors.username
-                    ? "max-h-8 opacity-100"
-                    : "max-h-0 opacity-0",
-                )}
-              >
-                <p
-                  className={clsx(
-                    "text-xs xs:text-xs",
-                    usernameStatus.available === true && "text-success",
-                    usernameStatus.available === false && "text-danger",
-                    usernameStatus.checking && "text-text-muted",
-                  )}
-                >
-                  {usernameStatus.message}
-                </p>
-              </div>
+              ) : null}
             </div>
 
             <Input
@@ -302,7 +183,7 @@ export const RegisterPage: React.FC = () => {
               {...register("acceptTerms")}
               label={
                 <span className="text-xs xs:text-sm leading-snug">
-                  {t("auth:register.acceptTermsPrefix")} {" "}
+                  {t("auth:register.acceptTermsPrefix")}{" "}
                   <Link
                     to="/terms"
                     className="text-primary hover:underline"
@@ -311,7 +192,7 @@ export const RegisterPage: React.FC = () => {
                   >
                     {t("auth:register.terms")}
                   </Link>{" "}
-                  {t("auth:register.acceptTermsAnd")} {" "}
+                  {t("auth:register.acceptTermsAnd")}{" "}
                   <Link
                     to="/privacy"
                     className="text-primary hover:underline"
@@ -331,9 +212,7 @@ export const RegisterPage: React.FC = () => {
               fullWidth
               size="lg"
               isLoading={isLoading || isSubmitting}
-              disabled={
-                isLoading || isSubmitting || usernameStatus.available === false
-              }
+              disabled={isLoading || isSubmitting}
               aria-busy={isLoading || isSubmitting}
             >
               {t("auth:register.submit")}
@@ -341,9 +220,9 @@ export const RegisterPage: React.FC = () => {
           </form>
 
           <p className="mt-5 sm:mt-6 lg:mt-8 text-center text-xs xs:text-sm text-text-muted">
-            {t("auth:register.haveAccount")} {" "}
+            {t("auth:register.haveAccount")}{" "}
             <Link
-              to="/login"
+              to={ROUTE_PATHS.LOGIN}
               className="font-semibold text-primary hover:text-primary/80 transition-colors"
             >
               {t("auth:register.loginNow")}
@@ -352,7 +231,7 @@ export const RegisterPage: React.FC = () => {
         </section>
 
         <p className="mt-4 sm:mt-5 text-center text-xs xs:text-xs text-text-muted px-2 leading-relaxed">
-          {t("auth:register.footerPrivacyPrefix")} {" "}
+          {t("auth:register.footerPrivacyPrefix")}{" "}
           <Link
             to="/privacy"
             className="underline hover:text-text-secondary transition-colors"

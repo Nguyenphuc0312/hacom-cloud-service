@@ -67,6 +67,7 @@ type RegistrationStatus = "idle" | "verification_required";
 
 interface AuthState {
   user: User | null;
+  pendingVerificationEmail: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   isInitialized: boolean;
@@ -83,6 +84,8 @@ interface AuthState {
   updateStatus: (status: User["status"]) => Promise<void>;
   clearError: () => void;
   initialize: () => Promise<void>;
+  setPendingVerificationEmail: (email: string | null) => void;
+  clearPendingVerificationEmail: () => void;
 
   handleAuthFailure: (reason?: string) => Promise<void>;
   handleRemoteLogout: (reason?: string) => Promise<void>;
@@ -141,6 +144,7 @@ export const useAuthStore = create<AuthState>()(
 
           set({
             user: null,
+            pendingVerificationEmail: null,
             isAuthenticated: false,
             isLoading: false,
             error: null,
@@ -164,6 +168,7 @@ export const useAuthStore = create<AuthState>()(
 
       return {
         user: null,
+        pendingVerificationEmail: null,
         isAuthenticated: false,
         isLoading: false,
         isInitialized: false,
@@ -199,6 +204,7 @@ export const useAuthStore = create<AuthState>()(
 
             set({
               user,
+              pendingVerificationEmail: null,
               isAuthenticated: true,
               isLoading: false,
               isInitialized: true,
@@ -215,6 +221,7 @@ export const useAuthStore = create<AuthState>()(
               error: errorMessage,
               isAuthenticated: false,
               user: null,
+              pendingVerificationEmail: null,
               isInitialized: true,
               registrationStatus: "idle",
             });
@@ -228,21 +235,12 @@ export const useAuthStore = create<AuthState>()(
           try {
             const { authApi } = await import("../services/api");
             const response = await authApi.register(data);
-            const payload = unwrapApiSuccess(response);
-            const stagedUser: User | null = payload.userId
-              ? {
-                  id: payload.userId,
-                  username: data.username,
-                  email: data.email,
-                  firstName: data.firstName,
-                  lastName: data.lastName,
-                  status: "offline",
-                  isVerified: false,
-                }
-              : null;
+            unwrapApiSuccess(response);
+            const pendingEmail = data.email.trim().toLowerCase();
 
             set({
-              user: stagedUser,
+              user: null,
+              pendingVerificationEmail: pendingEmail,
               isAuthenticated: false,
               isLoading: false,
               isInitialized: true,
@@ -256,6 +254,7 @@ export const useAuthStore = create<AuthState>()(
             set({
               isLoading: false,
               error: errorMessage,
+              pendingVerificationEmail: null,
               isInitialized: true,
               registrationStatus: "idle",
             });
@@ -278,6 +277,7 @@ export const useAuthStore = create<AuthState>()(
           if (!token) {
             set({
               user: null,
+              pendingVerificationEmail: null,
               isAuthenticated: false,
               isLoading: false,
               isInitialized: true,
@@ -297,6 +297,7 @@ export const useAuthStore = create<AuthState>()(
             const user = unwrapApiSuccess(response.data);
             set({
               user,
+              pendingVerificationEmail: null,
               isAuthenticated: true,
               isLoading: false,
               isInitialized: true,
@@ -307,6 +308,7 @@ export const useAuthStore = create<AuthState>()(
             runClientLogoutCleanup("refresh_user_failed");
             set({
               user: null,
+              pendingVerificationEmail: null,
               isAuthenticated: false,
               isLoading: false,
               isInitialized: true,
@@ -339,6 +341,18 @@ export const useAuthStore = create<AuthState>()(
 
         clearError: () => set({ error: null }),
 
+        setPendingVerificationEmail: (email) =>
+          set({
+            pendingVerificationEmail: email?.trim().toLowerCase() || null,
+            registrationStatus: email ? "verification_required" : "idle",
+          }),
+
+        clearPendingVerificationEmail: () =>
+          set({
+            pendingVerificationEmail: null,
+            registrationStatus: "idle",
+          }),
+
         initialize: async () => {
           if (initializePromise) {
             return initializePromise;
@@ -353,6 +367,7 @@ export const useAuthStore = create<AuthState>()(
                 const user = await fetchCurrentUser(accessToken);
                 set({
                   user,
+                  pendingVerificationEmail: null,
                   isAuthenticated: true,
                   isLoading: false,
                   isInitialized: true,
@@ -367,6 +382,7 @@ export const useAuthStore = create<AuthState>()(
                   runClientLogoutCleanup("bootstrap_me_failed");
                   set({
                     user: null,
+                    pendingVerificationEmail: null,
                     isAuthenticated: false,
                     isLoading: false,
                     isInitialized: true,
@@ -384,6 +400,7 @@ export const useAuthStore = create<AuthState>()(
                 const user = await fetchCurrentUser(newAccessToken);
                 set({
                   user,
+                  pendingVerificationEmail: null,
                   isAuthenticated: true,
                   isLoading: false,
                   isInitialized: true,
@@ -400,6 +417,7 @@ export const useAuthStore = create<AuthState>()(
             runClientLogoutCleanup("bootstrap_auth_failed");
             set({
               user: null,
+              pendingVerificationEmail: null,
               isAuthenticated: false,
               isLoading: false,
               isInitialized: true,
@@ -437,6 +455,7 @@ export const useAuthStore = create<AuthState>()(
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         user: state.user,
+        pendingVerificationEmail: state.pendingVerificationEmail,
         isAuthenticated: state.isAuthenticated,
       }),
     },

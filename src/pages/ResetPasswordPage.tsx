@@ -132,6 +132,9 @@ export const ResetPasswordPage: React.FC = () => {
             <p className="mb-6 text-text-muted">
               {t("auth:reset.successDescription")}
             </p>
+            <p className="mb-6 text-sm text-text-muted">
+              {t("auth:reset.successSecurityHint")}
+            </p>
             <Link to="/login">
               <Button variant="primary" fullWidth size="lg">
                 {t("auth:reset.goToLogin")}
@@ -162,6 +165,9 @@ export const ResetPasswordPage: React.FC = () => {
               {t("auth:reset.title")}
             </h1>
             <p className="mt-2 text-text-muted">{t("auth:reset.subtitle")}</p>
+            <p className="mt-3 text-sm text-text-muted">
+              {t("auth:reset.securityHint")}
+            </p>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">

@@ -53,22 +53,6 @@ export type LoginFormData = z.infer<typeof loginSchema>;
  */
 export const registerSchema = z
   .object({
-    username: z
-      .string()
-      .min(1, i18nKey("validation:register.usernameRequired"))
-      .min(
-        VALIDATION_CONFIG.USERNAME_MIN_LENGTH,
-        i18nKey("validation:register.usernameMin", {
-          count: VALIDATION_CONFIG.USERNAME_MIN_LENGTH,
-        }),
-      )
-      .max(
-        VALIDATION_CONFIG.USERNAME_MAX_LENGTH,
-        i18nKey("validation:register.usernameMax", {
-          count: VALIDATION_CONFIG.USERNAME_MAX_LENGTH,
-        }),
-      )
-      .regex(/^[a-zA-Z0-9_]+$/, i18nKey("validation:register.usernamePattern")),
     email: z
       .string()
       .min(1, i18nKey("validation:auth.emailRequired"))
@@ -95,8 +79,6 @@ export const registerSchema = z
     confirmPassword: z
       .string()
       .min(1, i18nKey("validation:auth.confirmPasswordRequired")),
-    firstName: z.string().optional(),
-    lastName: z.string().optional(),
     acceptTerms: z.literal(true, {
       errorMap: () => ({ message: i18nKey("validation:auth.acceptTerms") }),
     }),
