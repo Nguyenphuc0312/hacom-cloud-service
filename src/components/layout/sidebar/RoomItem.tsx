@@ -88,12 +88,17 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
       <button
         type="button"
         onClick={() => onSelect(conversation.id)}
+        role="option"
+        aria-selected={isActive}
         className={clsx(
           "group relative mx-2 my-1 flex h-room-item w-room-item items-center justify-center rounded-[20px]",
-          "transition-colors",
-          "hover:bg-white/6",
-          (isActive || isKeyboardActive) &&
-            "bg-white/12 text-primary ring-1 ring-primary/35",
+          "transition-colors duration-200",
+          "hover:bg-surface-hover",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+          isActive && "bg-primary/12 text-primary ring-1 ring-primary/35",
+          !isActive &&
+            isKeyboardActive &&
+            "bg-surface-overlay ring-1 ring-border",
         )}
         aria-label={displayName}
         title={displayName}
@@ -124,11 +129,17 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
     <button
       type="button"
       onClick={() => onSelect(conversation.id)}
+      role="option"
+      aria-selected={isActive}
       className={clsx(
         "mx-2 my-0.5 flex h-room-item w-[calc(100%-var(--space-4))] items-center rounded-[22px] px-3.5",
-        "transition-colors",
-        "hover:bg-white/6",
-        (isActive || isKeyboardActive) && "bg-white/10 ring-1 ring-primary/28",
+        "transition-colors duration-200",
+        "hover:bg-surface-hover",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+        isActive && "bg-primary/12 ring-1 ring-primary/30",
+        !isActive &&
+          isKeyboardActive &&
+          "bg-surface-overlay ring-1 ring-border",
       )}
       aria-label={displayName}
     >

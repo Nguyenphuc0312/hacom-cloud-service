@@ -52,41 +52,49 @@ const ACTIVE_POLLING_STATUSES = new Set<QrLoginSessionStatus>([
 
 const STATUS_COPY: Record<
   QrLoginSessionStatus,
-  { title: string; body: string }
+  {
+    title: string;
+    body: string;
+    toneClass: string;
+    dotClass: string;
+  }
 > = {
   PENDING: {
     title: "Đang chờ quét",
-    body: "Mở Hacom Chat trên điện thoại đã đăng nhập và quét mã này.",
+    body: "Mở Hacom Chat trên điện thoại và quét mã để bắt đầu.",
+    toneClass: "border-primary/30 bg-primary/10 text-primary",
+    dotClass: "bg-primary animate-pulse",
   },
   SCANNED: {
-    title: "Đã quét trên điện thoại",
-    body: "Kiểm tra thông tin trình duyệt trên điện thoại rồi bấm xác nhận.",
+    title: "Đã quét, chờ xác nhận",
+    body: "Kiểm tra điện thoại và xác nhận đăng nhập để tiếp tục.",
+    toneClass: "border-warning/35 bg-warning/15 text-warning",
+    dotClass: "bg-warning animate-pulse",
   },
   APPROVED: {
     title: "Đã xác nhận",
-    body: "Đang hoàn tất đăng nhập trên trình duyệt này.",
+    body: "Đang đăng nhập trên trình duyệt này.",
+    toneClass: "border-success/30 bg-success/12 text-success",
+    dotClass: "bg-success",
   },
   REJECTED: {
     title: "Đã bị từ chối",
     body: "Bạn đã từ chối yêu cầu đăng nhập trên điện thoại.",
+    toneClass: "border-danger/35 bg-danger/12 text-danger",
+    dotClass: "bg-danger",
   },
   EXPIRED: {
     title: "Mã đã hết hạn",
     body: "Tạo mã mới để tiếp tục đăng nhập bằng QR.",
+    toneClass: "border-danger/35 bg-danger/12 text-danger",
+    dotClass: "bg-danger",
   },
   EXCHANGED: {
-    title: "Đã đăng nhập",
-    body: "Phiên QR này đã được sử dụng thành công.",
+    title: "Đăng nhập thành công",
+    body: "Phiên đăng nhập đã hoàn tất.",
+    toneClass: "border-success/30 bg-success/12 text-success",
+    dotClass: "bg-success",
   },
-};
-
-const STATUS_CHIP_CLASS: Record<QrLoginSessionStatus, string> = {
-  PENDING: "border-primary/25 bg-primary/10 text-primary",
-  SCANNED: "border-warning/30 bg-warning/12 text-warning",
-  APPROVED: "border-success/25 bg-success/12 text-success",
-  REJECTED: "border-danger/25 bg-danger/12 text-danger",
-  EXPIRED: "border-danger/25 bg-danger/12 text-danger",
-  EXCHANGED: "border-success/25 bg-success/12 text-success",
 };
 
 const formatCountdown = (expiresAt: string): string => {
@@ -295,17 +303,16 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
   }, [applyLoginResponse, onSuccess, panelState, rememberMe]);
 
   return (
-    <section className="rounded-2xl border border-border bg-surface-overlay/60 p-4 sm:p-5">
-      <div className="flex items-start justify-between gap-4">
+    <section className="rounded-2xl border border-border bg-surface px-4 py-4 sm:px-5 sm:py-5">
+      <header className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-text-primary sm:text-base">
             Đăng nhập bằng QR
           </h2>
           <p className="mt-1 text-xs text-text-muted sm:text-sm">
-            {statusCopy.body}
+            Quét mã bằng điện thoại để đăng nhập nhanh.
           </p>
         </div>
-
         <Button
           type="button"
           variant="ghost"
@@ -313,19 +320,20 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
           onClick={() => void refreshSession()}
           disabled={isRefreshing || isExchanging}
           leftIcon={<ArrowPathIcon className="h-4 w-4" />}
+          className="h-9 rounded-lg"
         >
           Làm mới
         </Button>
-      </div>
+      </header>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-[264px_1fr] sm:items-center">
-        <div className="mx-auto flex h-[264px] w-[264px] items-center justify-center rounded-2xl border border-border bg-white p-3 shadow-sm">
+      <div className="mt-4 space-y-4">
+        <div className="mx-auto flex h-[240px] w-[240px] items-center justify-center rounded-2xl border border-border bg-white p-3 shadow-sm sm:h-[252px] sm:w-[252px]">
           {panelState?.qrImageUrl ? (
             <img
               src={panelState.qrImageUrl}
               alt="QR login"
               className={clsx(
-                "h-full w-full rounded-lg object-contain transition-opacity",
+                "h-full w-full rounded-lg object-contain transition-opacity duration-200",
                 (isRefreshing || isBootstrapping) && "opacity-50",
                 isWaitingForPhone && "animate-pulse",
               )}
@@ -337,91 +345,69 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
           )}
         </div>
 
-        <div className="space-y-3">
-          {panelState && (
-            <div
-              className={clsx(
-                "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium",
-                STATUS_CHIP_CLASS[panelState.status],
-              )}
-            >
-              <span
-                className={clsx(
-                  "h-2 w-2 rounded-full",
-                  panelState.status === QrLoginSessionStatus.PENDING &&
-                    "bg-primary animate-pulse",
-                  panelState.status === QrLoginSessionStatus.SCANNED &&
-                    "bg-warning animate-pulse",
-                  panelState.status === QrLoginSessionStatus.APPROVED &&
-                    "bg-success",
-                  (panelState.status === QrLoginSessionStatus.REJECTED ||
-                    panelState.status === QrLoginSessionStatus.EXPIRED) &&
-                    "bg-danger",
-                  panelState.status === QrLoginSessionStatus.EXCHANGED &&
-                    "bg-success",
-                )}
-              />
-              <span>{statusCopy.title}</span>
-            </div>
-          )}
-
-          <div className="rounded-xl border border-border bg-surface p-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
-              {panelState?.status === QrLoginSessionStatus.APPROVED ||
-              panelState?.status === QrLoginSessionStatus.EXCHANGED ? (
-                <CheckCircleIcon className="h-5 w-5 text-success" />
-              ) : panelState?.status === QrLoginSessionStatus.REJECTED ||
-                panelState?.status === QrLoginSessionStatus.EXPIRED ? (
-                <ExclamationTriangleIcon className="h-5 w-5 text-danger" />
-              ) : (
-                <DevicePhoneMobileIcon className="h-5 w-5 text-primary" />
-              )}
-              <span>{statusCopy.title}</span>
-            </div>
-
-            <div className="mt-3 flex items-center gap-2 text-sm text-text-secondary">
-              <ClockIcon className="h-4 w-4" />
-              <span>Mã còn hiệu lực: {countdown}</span>
-            </div>
-
-            {panelState?.displayHint === "waiting_for_mobile_confirm" && (
-              <p className="mt-3 text-sm text-text-secondary">
-                Điện thoại đã quét mã. Hãy xác nhận trên mobile để tiếp tục.
-              </p>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <span
+            className={clsx(
+              "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium",
+              statusCopy.toneClass,
             )}
+          >
+            <span
+              className={clsx("h-2 w-2 rounded-full", statusCopy.dotClass)}
+            />
+            <span>{statusCopy.title}</span>
+          </span>
 
-            {isExchanging && (
-              <p className="mt-3 text-sm text-primary">
-                Đang trao đổi phiên đăng nhập với máy chủ...
-              </p>
-            )}
-          </div>
-
-          {error && (
-            <div className="rounded-xl border border-danger/35 bg-danger/10 p-3 text-sm text-danger">
-              {error}
-            </div>
-          )}
-
-          <div className="rounded-xl border border-border bg-surface p-3 text-xs leading-5 text-text-muted">
-            Chỉ điện thoại đã đăng nhập mới có thể xác nhận.
-            <br />
-            Trình duyệt chỉ được đăng nhập sau khi bước exchange hoàn tất.
-          </div>
-
-          {(panelState?.status === QrLoginSessionStatus.REJECTED ||
-            panelState?.status === QrLoginSessionStatus.EXPIRED) && (
-            <Button
-              type="button"
-              variant="primary"
-              fullWidth
-              onClick={() => void refreshSession()}
-              isLoading={isRefreshing}
-            >
-              Tạo mã mới
-            </Button>
-          )}
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-overlay px-3 py-1 text-xs text-text-secondary">
+            <ClockIcon className="h-3.5 w-3.5" />
+            <span>{countdown}</span>
+          </span>
         </div>
+
+        <div className="text-center text-sm text-text-secondary">
+          {panelState?.displayHint === "waiting_for_mobile_confirm"
+            ? "Đã quét. Chờ xác nhận trên điện thoại."
+            : statusCopy.body}
+        </div>
+
+        <div className="flex items-center justify-center gap-2 text-xs text-text-muted">
+          {panelState?.status === QrLoginSessionStatus.APPROVED ||
+          panelState?.status === QrLoginSessionStatus.EXCHANGED ? (
+            <CheckCircleIcon className="h-4 w-4 text-success" />
+          ) : panelState?.status === QrLoginSessionStatus.REJECTED ||
+            panelState?.status === QrLoginSessionStatus.EXPIRED ? (
+            <ExclamationTriangleIcon className="h-4 w-4 text-danger" />
+          ) : (
+            <DevicePhoneMobileIcon className="h-4 w-4 text-primary" />
+          )}
+          <span>Chỉ thiết bị đã đăng nhập mới có thể xác nhận.</span>
+        </div>
+
+        {isExchanging && (
+          <p className="text-center text-sm text-primary">
+            Đang hoàn tất đăng nhập...
+          </p>
+        )}
+
+        {error && (
+          <div className="rounded-xl border border-danger/35 bg-danger/10 p-3 text-sm text-danger">
+            {error}
+          </div>
+        )}
+
+        {(panelState?.status === QrLoginSessionStatus.REJECTED ||
+          panelState?.status === QrLoginSessionStatus.EXPIRED) && (
+          <Button
+            type="button"
+            variant="secondary"
+            fullWidth
+            onClick={() => void refreshSession()}
+            isLoading={isRefreshing}
+            className="h-10 rounded-xl"
+          >
+            Tạo mã mới
+          </Button>
+        )}
       </div>
     </section>
   );

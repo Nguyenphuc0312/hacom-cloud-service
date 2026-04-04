@@ -113,6 +113,7 @@ const CONVERSATIONS_PAGE_SIZE = 100;
 export const ChatPage: React.FC = () => {
   const { t } = useTranslation();
   const { conversationId } = useParams<{ conversationId?: string }>();
+  const routeConversationId = conversationId ?? null;
   const navigate = useNavigate();
 
   // Auth store
@@ -191,7 +192,8 @@ export const ChatPage: React.FC = () => {
   const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false);
   const [profilePanelTarget, setProfilePanelTarget] =
     useState<ProfilePanelTarget | null>(null);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(!conversationId);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] =
+    useState(!routeConversationId);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const filePreview = useFilePreview();
@@ -206,6 +208,14 @@ export const ChatPage: React.FC = () => {
     useState<string | null>(null);
   const directInfoHydratedRef = useRef<Set<string>>(new Set());
   const lastReadSyncKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (
+      useChatStore.getState().selectedConversationId !== routeConversationId
+    ) {
+      selectConversation(routeConversationId);
+    }
+  }, [routeConversationId, selectConversation]);
 
   // Current user as UserSummary for components
   const currentUserSummary = useMemo<UserSummary | null>(
@@ -240,9 +250,6 @@ export const ChatPage: React.FC = () => {
 
     if (!conversationId) {
       setLastValidatedConversationId(null);
-      if (useChatStore.getState().selectedConversationId !== null) {
-        selectConversation(null);
-      }
       return;
     }
 
@@ -263,10 +270,6 @@ export const ChatPage: React.FC = () => {
           updateConversation(conversationId, room);
         } else {
           addConversation(room);
-        }
-
-        if (conversationId !== useChatStore.getState().selectedConversationId) {
-          selectConversation(conversationId);
         }
 
         setLastValidatedConversationId(conversationId);
@@ -291,7 +294,6 @@ export const ChatPage: React.FC = () => {
         }
 
         setLastValidatedConversationId(null);
-        selectConversation(null);
         navigate("/chat", { replace: true });
       } finally {
         if (!isCancelled) {
@@ -413,11 +415,13 @@ export const ChatPage: React.FC = () => {
   // Handle select conversation
   const handleSelectConversation = useCallback(
     (id: string) => {
-      selectConversation(id);
       setIsMobileMenuOpen(false);
+      if (id === routeConversationId) {
+        return;
+      }
       navigate(`/chat/${id}`);
     },
-    [selectConversation, navigate],
+    [navigate, routeConversationId],
   );
 
   const isCurrentRouteValidated = conversationId
@@ -747,10 +751,9 @@ export const ChatPage: React.FC = () => {
 
   // Handle back (mobile)
   const handleBack = useCallback(() => {
-    selectConversation(null);
     setIsMobileMenuOpen(true);
     navigate("/chat");
-  }, [selectConversation, navigate]);
+  }, [navigate]);
 
   // Handle new chat
   const handleStartChat = useCallback(
@@ -894,7 +897,7 @@ export const ChatPage: React.FC = () => {
     setIsNewChatModalOpen(true);
   }, []);
 
-  const showSidebarOnMobile = !selectedConversationId || isMobileMenuOpen;
+  const showSidebarOnMobile = !routeConversationId || isMobileMenuOpen;
   const showConversationSkeleton =
     (!hasFetchedConversationsOnce && conversations.length === 0) ||
     (isLoadingConversations && conversations.length === 0);
@@ -1004,7 +1007,7 @@ export const ChatPage: React.FC = () => {
         <Sidebar
           conversations={conversations}
           currentUser={currentUserSummary}
-          selectedId={selectedConversationId}
+          selectedId={routeConversationId}
           isLoadingConversations={isLoadingConversations}
           isLoadingMoreConversations={isLoadingMoreConversations}
           hasMoreConversations={hasMoreConversations}
@@ -1018,7 +1021,7 @@ export const ChatPage: React.FC = () => {
         />
       </div>
 
-      {showSidebarOnMobile && selectedConversationId && (
+      {showSidebarOnMobile && routeConversationId && (
         <button
           type="button"
           className="fixed inset-0 z-20 bg-text-primary/40 lg:hidden"

@@ -62,7 +62,7 @@ type FlatListItem =
 interface RowData {
   items: FlatListItem[];
   currentUser: UserSummary;
-  selectedId: string | null;
+  currentConversationId: string | null;
   collapsed: boolean;
   keyboardActiveRoomId: string | null;
   onSelect: (conversationId: string) => void;
@@ -126,6 +126,11 @@ const includesQuery = (
     .toLowerCase()
     .includes(normalizedQuery);
 };
+
+const isRoomActive = (
+  roomId: string,
+  currentConversationId: string | null,
+): boolean => currentConversationId === roomId;
 
 const toSections = (
   source: Conversation[],
@@ -199,7 +204,7 @@ const Row = ({ index, style, data }: ListChildComponentProps<RowData>) => {
         conversation={item.room}
         currentUser={data.currentUser}
         collapsed={data.collapsed}
-        isActive={data.selectedId === item.room.id}
+        isActive={isRoomActive(item.room.id, data.currentConversationId)}
         isKeyboardActive={data.keyboardActiveRoomId === item.room.id}
         onSelect={data.onSelect}
       />
@@ -228,6 +233,14 @@ export const RoomList: React.FC<RoomListProps> = ({
   const [viewportHeight, setViewportHeight] = useState(0);
   const [keyboardCursor, setKeyboardCursor] = useState(0);
   const [isKeyboardMode, setIsKeyboardMode] = useState(false);
+
+  const handleSelect = useCallback(
+    (conversationId: string) => {
+      setIsKeyboardMode(false);
+      onSelect(conversationId);
+    },
+    [onSelect],
+  );
 
   const sectionTitles = useMemo<Record<SectionId, string>>(
     () => ({
@@ -325,7 +338,7 @@ export const RoomList: React.FC<RoomListProps> = ({
     if (!selectedId) return -1;
     return roomIndexes.findIndex((listIndex) => {
       const item = flatItems[listIndex];
-      return item?.kind === "room" && item.room.id === selectedId;
+      return item?.kind === "room" && isRoomActive(item.room.id, selectedId);
     });
   }, [flatItems, roomIndexes, selectedId]);
 
@@ -358,10 +371,10 @@ export const RoomList: React.FC<RoomListProps> = ({
     return {
       items: flatItems,
       currentUser,
-      selectedId,
+      currentConversationId: selectedId,
       collapsed,
       keyboardActiveRoomId: isKeyboardMode ? keyboardActiveRoomId : null,
-      onSelect,
+      onSelect: handleSelect,
     };
   }, [
     currentUser,
@@ -371,12 +384,18 @@ export const RoomList: React.FC<RoomListProps> = ({
     isKeyboardMode,
     roomIndexes,
     currentCursor,
-    onSelect,
+    handleSelect,
   ]);
 
   useEffect(() => {
     listRef.current?.resetAfterIndex(0, true);
-  }, [rowHeights]);
+  }, [collapsed, flatItems.length]);
+
+  useEffect(() => {
+    if (selectedRoomPosition >= 0 && !isKeyboardMode) {
+      setKeyboardCursor(selectedRoomPosition);
+    }
+  }, [isKeyboardMode, selectedRoomPosition]);
 
   const syncViewportHeight = useCallback(() => {
     const node = containerRef.current;
@@ -442,9 +461,14 @@ export const RoomList: React.FC<RoomListProps> = ({
     const listIndex = roomIndexes[currentCursor];
     const item = flatItems[listIndex];
     if (item && item.kind === "room") {
-      onSelect(item.room.id);
+      handleSelect(item.room.id);
     }
-  }, [currentCursor, flatItems, onSelect, roomIndexes]);
+  }, [currentCursor, flatItems, handleSelect, roomIndexes]);
+
+  const getItemKey = useCallback(
+    (index: number, data: RowData) => data.items[index]?.key ?? `row-${index}`,
+    [],
+  );
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (roomIndexes.length === 0) return;
@@ -525,6 +549,7 @@ export const RoomList: React.FC<RoomListProps> = ({
             itemCount={flatItems.length}
             itemData={rowData}
             itemSize={getItemSize}
+            itemKey={getItemKey}
             overscanCount={12}
           >
             {Row}

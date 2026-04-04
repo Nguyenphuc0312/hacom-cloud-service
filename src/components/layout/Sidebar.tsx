@@ -1,4 +1,10 @@
-﻿import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
+﻿import React, {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -76,6 +82,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const { logout, isLoggingOut } = useLogout();
+  const currentConversationId = selectedId;
+
+  const handleSelectRoom = useCallback(
+    (conversationId: string) => {
+      onSelectConversation(conversationId);
+    },
+    [onSelectConversation],
+  );
 
   // Collect unique DM contact user IDs so presence is subscribed globally
   const dmUserIds = useMemo(() => {
@@ -185,7 +199,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <RoomList
           conversations={conversations}
           currentUser={currentUser}
-          selectedId={selectedId}
+          selectedId={currentConversationId}
           searchQuery={deferredSearchQuery}
           activeFilter={activeFilter}
           collapsed={isCollapsed}
@@ -195,7 +209,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           hasMore={hasMoreConversations}
           isLoadingMore={isLoadingMoreConversations}
           onLoadMore={onLoadMoreConversations}
-          onSelect={onSelectConversation}
+          onSelect={handleSelectRoom}
         />
 
         <div className="border-t border-border/70 px-2 pb-2 pt-1.5">
