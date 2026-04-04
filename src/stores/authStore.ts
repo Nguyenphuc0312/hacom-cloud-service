@@ -34,13 +34,13 @@ import { refreshAccessTokenShared } from "../services/authRefreshCoordinator";
 export interface User {
   id: string;
   username: string;
-  email: string;
+  email?: string;
   firstName?: string;
   lastName?: string;
   avatar?: string;
   bio?: string;
   phone?: string;
-  status: "online" | "offline" | "away" | "dnd";
+  status?: "online" | "offline" | "away" | "dnd" | string;
   role?: string;
   isVerified?: boolean;
   createdAt?: string;
@@ -75,6 +75,7 @@ interface AuthState {
   error: string | null;
 
   login: (data: LoginFormData) => Promise<void>;
+  applyLoginResponse: (payload: AuthResponse, rememberMe?: boolean) => void;
   register: (
     data: Omit<RegisterFormData, "confirmPassword" | "acceptTerms">,
   ) => Promise<void>;
@@ -175,6 +176,28 @@ export const useAuthStore = create<AuthState>()(
         registrationStatus: "idle",
         error: null,
 
+        applyLoginResponse: (payload, rememberMe = false) => {
+          const { user } = payload;
+          const { accessToken, refreshToken } = resolveTokens(payload);
+
+          if (!accessToken) {
+            throw new Error(i18n.t("error:auth.loginTokenMissing"));
+          }
+
+          storeTokens(accessToken, refreshToken ?? undefined, rememberMe);
+          resetAuthFailureState();
+
+          set({
+            user,
+            pendingVerificationEmail: null,
+            isAuthenticated: true,
+            isLoading: false,
+            isInitialized: true,
+            registrationStatus: "idle",
+            error: null,
+          });
+        },
+
         login: async (data: LoginFormData) => {
           set({ isLoading: true, error: null });
 
@@ -188,29 +211,7 @@ export const useAuthStore = create<AuthState>()(
             );
 
             const payload = unwrapApiSuccess(response.data);
-            const { user } = payload;
-            const { accessToken, refreshToken } = resolveTokens(payload);
-
-            if (!accessToken) {
-              throw new Error(i18n.t("error:auth.loginTokenMissing"));
-            }
-
-            storeTokens(
-              accessToken,
-              refreshToken ?? undefined,
-              data.rememberMe,
-            );
-            resetAuthFailureState();
-
-            set({
-              user,
-              pendingVerificationEmail: null,
-              isAuthenticated: true,
-              isLoading: false,
-              isInitialized: true,
-              registrationStatus: "idle",
-              error: null,
-            });
+            get().applyLoginResponse(payload, data.rememberMe);
           } catch (error: unknown) {
             const apiError = extractApiError(error);
             const errorMessage =

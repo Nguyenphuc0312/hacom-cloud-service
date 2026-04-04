@@ -91,14 +91,18 @@ const getStatusLabel = (
   status: User["status"],
   t: (key: string) => string,
 ): string => {
-  const labelMap: Record<User["status"], string> = {
+  const labelMap: Record<string, string> = {
     online: "common:status.online",
     offline: "common:status.offline",
     away: "common:status.away",
     dnd: "common:status.dnd",
   };
 
-  return t(labelMap[status]);
+  if (!status) {
+    return t("common:status.offline");
+  }
+
+  return t(labelMap[status] || "common:status.offline");
 };
 
 export default useAuth;

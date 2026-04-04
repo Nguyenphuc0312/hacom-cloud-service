@@ -10,6 +10,7 @@ import {
   ChatBubbleLeftRightIcon,
 } from "@heroicons/react/24/outline";
 import { Button, Input, Checkbox, toast } from "../components/ui";
+import { QrLoginPanel } from "../components/auth/QrLoginPanel";
 import { loginSchema } from "../lib/validations";
 import type { LoginFormData } from "../lib/validations";
 import { useAuthStore } from "../stores";
@@ -37,6 +38,7 @@ export const LoginPage: React.FC = () => {
     handleSubmit,
     formState: { errors, isSubmitting },
     setFocus,
+    watch,
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "", rememberMe: false },
@@ -45,6 +47,8 @@ export const LoginPage: React.FC = () => {
   useEffect(() => {
     setFocus("email");
   }, [setFocus]);
+
+  const rememberMe = watch("rememberMe");
 
   const onSubmit = async (data: LoginFormData) => {
     try {
@@ -174,6 +178,15 @@ export const LoginPage: React.FC = () => {
               </span>
             </div>
           </div>
+
+          <QrLoginPanel
+            rememberMe={rememberMe}
+            onSuccess={() => {
+              toast.success("Đăng nhập bằng QR thành công");
+              const from = (location.state as { from?: string })?.from ?? "/chat";
+              navigate(from, { replace: true });
+            }}
+          />
 
           <div className="grid grid-cols-1 xs:grid-cols-2 gap-2 xs:gap-3 sm:gap-4">
             <SocialButton
