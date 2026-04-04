@@ -6,7 +6,11 @@
 import axios, { AxiosError, AxiosHeaders } from "axios";
 import type { AxiosInstance, InternalAxiosRequestConfig } from "axios";
 import { API_BASE_URL, AUTH_BASE_URL, USE_AUTH_SERVICE } from "../config";
-import { authBaseUrl, buildAuthEndpoint, normalizeAuthRequestPath } from "./authPath";
+import {
+  authBaseUrl,
+  buildAuthEndpoint,
+  normalizeAuthRequestPath,
+} from "./authPath";
 import i18n from "../i18n";
 import {
   clearTokens,
@@ -40,7 +44,9 @@ const API_CONTRACT_VERSION = "2";
 const toOrigin = (baseUrl: string): string | null => {
   try {
     const fallbackBase =
-      typeof window !== "undefined" ? window.location.origin : "http://localhost";
+      typeof window !== "undefined"
+        ? window.location.origin
+        : "http://localhost";
     return new URL(baseUrl, fallbackBase).origin;
   } catch {
     return null;
@@ -75,7 +81,9 @@ const isPublicEndpoint = (url?: string): boolean => {
   return PUBLIC_ENDPOINT_PATTERNS.some((pattern) => pattern.test(normalized));
 };
 
-const isTrustedRequestOrigin = (config: InternalAxiosRequestConfig): boolean => {
+const isTrustedRequestOrigin = (
+  config: InternalAxiosRequestConfig,
+): boolean => {
   const targetUrl = config.url;
   if (!targetUrl) return false;
 
@@ -83,7 +91,9 @@ const isTrustedRequestOrigin = (config: InternalAxiosRequestConfig): boolean => 
     const fallbackBase = config.baseURL
       ? new URL(
           config.baseURL,
-          typeof window !== "undefined" ? window.location.origin : "http://localhost",
+          typeof window !== "undefined"
+            ? window.location.origin
+            : "http://localhost",
         ).toString()
       : typeof window !== "undefined"
         ? window.location.origin

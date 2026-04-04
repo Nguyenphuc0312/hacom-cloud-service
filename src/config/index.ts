@@ -41,7 +41,9 @@ const isLocalHostUrl = (value: string): boolean => {
 const resolvePathname = (value: string): string => {
   try {
     const fallbackBase =
-      typeof window !== "undefined" ? window.location.origin : "http://placeholder.local";
+      typeof window !== "undefined"
+        ? window.location.origin
+        : "http://placeholder.local";
     const pathname = new URL(value, fallbackBase).pathname.replace(/\/+$/, "");
     return pathname || "/";
   } catch {
@@ -100,7 +102,10 @@ if (USE_AUTH_SERVICE && normalizedApiBaseUrl === normalizedAuthBaseUrl) {
   );
 }
 
-if (USE_AUTH_SERVICE && resolvePathname(normalizedAuthBaseUrl) !== AUTH_CANONICAL_BASE_PATH) {
+if (
+  USE_AUTH_SERVICE &&
+  resolvePathname(normalizedAuthBaseUrl) !== AUTH_CANONICAL_BASE_PATH
+) {
   throw new Error(
     `Invalid auth routing: AUTH_BASE_URL must resolve to ${AUTH_CANONICAL_BASE_PATH}. Configure VITE_AUTH_BASE_URL accordingly.`,
   );
