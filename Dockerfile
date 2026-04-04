@@ -15,6 +15,7 @@ RUN npm ci
 FROM deps AS build
 ARG VITE_APP_BASE_PATH=/
 ARG VITE_API_BASE_URL=/api/v1
+# Canonical auth contract for web client bundles.
 ARG VITE_AUTH_BASE_URL=/api/v1/auth
 ARG VITE_USE_AUTH_SERVICE=true
 ARG VITE_WS_URL=/ws

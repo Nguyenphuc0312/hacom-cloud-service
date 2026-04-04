@@ -196,7 +196,8 @@ const apiClient: AxiosInstance = axios.create({
  * Dedicated Axios client for auth endpoints (Stage 1 – body mode).
  *
  * When USE_AUTH_SERVICE=true the baseURL points to the dedicated
- * chat-auth-service; otherwise it falls back to the api-service so
+ * chat-auth-service canonical public contract (/api/v1/auth/*);
+ * otherwise it falls back to the api-service so
  * rollback is a single env-var toggle.
  *
  * This client does NOT attach Authorization automatically (auth

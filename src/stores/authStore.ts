@@ -320,7 +320,7 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: true });
 
           try {
-            // /auth/me needs Bearer token — use authClient with explicit header.
+            // /api/v1/auth/me needs Bearer token — use authClient with explicit header.
             const response = await authClient.get<ApiResponse<User>>(
               AUTH_ENDPOINTS.me,
               { headers: { Authorization: `Bearer ${token}` } },

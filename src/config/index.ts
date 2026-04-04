@@ -5,6 +5,8 @@
 
 const normalizeBaseUrl = (url: string): string => url.replace(/\/+$/, "");
 
+const AUTH_CANONICAL_BASE_PATH = "/api/v1/auth";
+
 const normalizeAppBasePath = (value?: string): string => {
   const rawValue = value?.trim();
   if (!rawValue || rawValue === "/") {
@@ -33,6 +35,17 @@ const isLocalHostUrl = (value: string): boolean => {
     return ["localhost", "127.0.0.1", "0.0.0.0"].includes(parsedUrl.hostname);
   } catch {
     return false;
+  }
+};
+
+const resolvePathname = (value: string): string => {
+  try {
+    const fallbackBase =
+      typeof window !== "undefined" ? window.location.origin : "http://placeholder.local";
+    const pathname = new URL(value, fallbackBase).pathname.replace(/\/+$/, "");
+    return pathname || "/";
+  } catch {
+    return "/";
   }
 };
 
@@ -84,6 +97,12 @@ if (import.meta.env.DEV) {
 if (USE_AUTH_SERVICE && normalizedApiBaseUrl === normalizedAuthBaseUrl) {
   throw new Error(
     "Invalid auth routing: USE_AUTH_SERVICE=true but AUTH_BASE_URL equals API_BASE_URL. Check VITE_AUTH_BASE_URL and restart dev server.",
+  );
+}
+
+if (USE_AUTH_SERVICE && resolvePathname(normalizedAuthBaseUrl) !== AUTH_CANONICAL_BASE_PATH) {
+  throw new Error(
+    `Invalid auth routing: AUTH_BASE_URL must resolve to ${AUTH_CANONICAL_BASE_PATH}. Configure VITE_AUTH_BASE_URL accordingly.`,
   );
 }
 

@@ -1,3 +1,4 @@
+// Canonical auth endpoint fragments resolved against AUTH_BASE_URL (/api/v1/auth).
 export const AUTH_ENDPOINTS = {
   login: "/login",
   register: "/register",

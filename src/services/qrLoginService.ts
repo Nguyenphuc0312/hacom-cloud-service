@@ -10,6 +10,8 @@ import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 
 const WEB_SECRET_HEADER = "X-QR-Web-Secret";
 
+// All routes are relative and resolved by authClient against AUTH_BASE_URL
+// (canonical /api/v1/auth).
 export const qrLoginService = {
   async createSession(): Promise<CreateQrLoginSessionResponseDto> {
     const response = await authClient.post<

@@ -13,25 +13,30 @@ const resolveBasePathname = (baseUrl: string): string => {
 
 export const authBaseUrl = USE_AUTH_SERVICE ? AUTH_BASE_URL : API_BASE_URL;
 
-const authBaseOwnsAuthPath =
-  USE_AUTH_SERVICE && /\/auth$/i.test(resolveBasePathname(authBaseUrl));
+const authBaseOwnsCanonicalPath =
+  USE_AUTH_SERVICE && /\/api\/v1\/auth$/i.test(resolveBasePathname(authBaseUrl));
 
 export const normalizeAuthRequestPath = (url?: string): string | undefined => {
-  if (!url || !authBaseOwnsAuthPath) {
+  if (!url) {
     return url;
   }
 
   const [path, query = ""] = url.split("?");
-  const normalizedPath = path.replace(/^\/auth(?=\/|$)/i, "") || "/";
+  const normalizedPath =
+    path
+      .replace(/^\/api\/v1\/auth(?=\/|$)/i, "")
+      .replace(/^\/auth(?=\/|$)/i, "") || "/";
   return query ? `${normalizedPath}?${query}` : normalizedPath;
 };
 
 export const buildAuthEndpoint = (path: string): string => {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
 
-  if (authBaseOwnsAuthPath) {
-    return `${authBaseUrl}${normalizedPath}`;
+  if (!authBaseOwnsCanonicalPath && USE_AUTH_SERVICE && import.meta.env.DEV) {
+    console.warn("[auth-config] AUTH_BASE_URL is expected to end with /api/v1/auth", {
+      authBaseUrl,
+    });
   }
 
-  return `${authBaseUrl}/auth${normalizedPath}`;
+  return `${authBaseUrl}${normalizedPath}`;
 };

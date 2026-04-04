@@ -101,6 +101,7 @@ const performRefresh = async (trigger: AuthRefreshTrigger): Promise<string> => {
   }
 
   const csrfToken = cookieMode ? getCsrfToken() : null;
+  // buildAuthEndpoint resolves against canonical AUTH_BASE_URL (/api/v1/auth).
   const response = await axios.post(
     buildAuthEndpoint(AUTH_ENDPOINTS.refresh),
     refreshToken ? { refreshToken } : undefined,

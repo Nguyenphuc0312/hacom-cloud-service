@@ -77,6 +77,8 @@ const withLegacyConversationFallback = async <T>(
 // ============================================
 // AUTH API
 // ============================================
+// Auth endpoints are resolved through authClient using canonical
+// AUTH_BASE_URL (/api/v1/auth by default).
 
 export const authApi = {
   login: async (email: string, password: string) => {
