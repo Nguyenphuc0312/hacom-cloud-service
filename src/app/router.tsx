@@ -1,16 +1,15 @@
 import { createBrowserRouter } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 
 import { RequireAuth } from '@/app/guards/RequireAuth';
-import { RequireRole } from '@/app/guards/RequireRole';
 import { AppLayout } from '@/app/layout/AppLayout';
-import { AdminUsersPage } from '@/features/adminUsers/pages/AdminUsersPage';
-import { AlertsPage } from '@/features/alerts/pages/AlertsPage';
 import { AuditLogPage } from '@/features/audit/pages/AuditLogPage';
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
-import { PerformancePage } from '@/features/performance/pages/PerformancePage';
+import { HREmployeesPage } from '@/features/hr-employees/pages/HREmployeesPage';
 import { ServicesPage } from '@/features/services/pages/ServicesPage';
-import { SmtpSettingsPage } from '@/features/smtp/pages/SmtpSettingsPage';
+import { UserDetailPage } from '@/features/users/pages/UserDetailPage';
+import { UsersPage } from '@/features/users/pages/UsersPage';
 
 export const router = createBrowserRouter([
   {
@@ -34,36 +33,24 @@ export const router = createBrowserRouter([
         element: <ServicesPage />,
       },
       {
-        path: 'performance',
-        element: <PerformancePage />,
+        path: 'users',
+        element: <UsersPage />,
       },
       {
-        path: 'settings/smtp',
-        element: (
-          <RequireRole minimumRole="admin">
-            <SmtpSettingsPage />
-          </RequireRole>
-        ),
+        path: 'users/:id',
+        element: <UserDetailPage />,
       },
       {
-        path: 'alerts',
-        element: <AlertsPage />,
+        path: 'hr-employees',
+        element: <HREmployeesPage />,
       },
       {
         path: 'audit',
-        element: (
-          <RequireRole minimumRole="admin">
-            <AuditLogPage />
-          </RequireRole>
-        ),
+        element: <AuditLogPage />,
       },
       {
-        path: 'admin-users',
-        element: (
-          <RequireRole minimumRole="superadmin">
-            <AdminUsersPage />
-          </RequireRole>
-        ),
+        path: '*',
+        element: <Navigate to="/" replace />,
       },
     ],
   },

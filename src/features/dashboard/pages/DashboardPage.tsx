@@ -1,237 +1,128 @@
-import { useQueries, useQuery } from '@tanstack/react-query';
-import {
-  Card,
-  Col,
-  Row,
-  Statistic,
-  Table,
-  Typography,
-  Button,
-  Space,
-} from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import ReactECharts from 'echarts-for-react';
-import { useMemo, useState } from 'react';
+import { useQueries } from '@tanstack/react-query';
+import { Card, Col, Row, Space, Statistic, Typography } from 'antd';
 
-import { metricsClient, statusClient } from '@/api/clients';
+import { serviceHealthClient, usersClient } from '@/api/clients';
 import { queryKeys } from '@/api/queryKeys';
-import type { RecentIncident, TimeRange, TimeseriesResponse } from '@/api/types';
 import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
 import { PageHeader } from '@/components/PageHeader';
-import { StatusBadge } from '@/components/StatusBadge';
-import { TimeRangePicker } from '@/components/TimeRangePicker';
 import { formatDateTime } from '@/utils/date';
-import { formatMs, formatNumber, formatPercent } from '@/utils/formatters';
 
 const { Text } = Typography;
 
-const stepByRange: Record<TimeRange, string> = {
-  '15m': '15s',
-  '1h': '1m',
-  '6h': '5m',
-  '24h': '15m',
-};
-
-const buildLineChartOption = (seriesName: string, data: TimeseriesResponse) => ({
-  tooltip: { trigger: 'axis' },
-  grid: { left: 36, right: 16, top: 28, bottom: 24 },
-  xAxis: {
-    type: 'category',
-    data: data.points.map((point) => formatDateTime(point.timestamp)),
-    boundaryGap: false,
-  },
-  yAxis: {
-    type: 'value',
-    splitLine: { lineStyle: { type: 'dashed' } },
-  },
-  series: [
-    {
-      name: seriesName,
-      data: data.points.map((point) => point.value),
-      type: 'line',
-      smooth: true,
-      showSymbol: false,
-      areaStyle: { opacity: 0.08 },
-      lineStyle: { width: 2 },
-    },
-  ],
-});
-
 export const DashboardPage = () => {
-  const [range, setRange] = useState<TimeRange>('1h');
-  const refetchInterval = Number(import.meta.env.VITE_DASHBOARD_REFETCH_INTERVAL_MS ?? 15000);
-
-  const overviewQuery = useQuery({
-    queryKey: queryKeys.overview(range),
-    queryFn: statusClient.getOverview,
-    refetchInterval,
-  });
-
-  const [latencyQuery, errorRateQuery, messageRateQuery] = useQueries({
+  const [
+    totalUsersQuery,
+    activeUsersQuery,
+    lockedUsersQuery,
+    pendingUsersQuery,
+    serviceHealthQuery,
+  ] = useQueries({
     queries: [
       {
-        queryKey: queryKeys.metricSeries('latency_p95', range, stepByRange[range], ''),
-        queryFn: () =>
-          metricsClient.getTimeseries({
-            query: 'latency_p95',
-            range,
-            step: stepByRange[range],
-          }),
-        refetchInterval,
+        queryKey: queryKeys.usersList('dashboard-total-users'),
+        queryFn: () => usersClient.list({ page: 1, limit: 1 }),
       },
       {
-        queryKey: queryKeys.metricSeries('error_rate', range, stepByRange[range], ''),
-        queryFn: () =>
-          metricsClient.getTimeseries({
-            query: 'error_rate',
-            range,
-            step: stepByRange[range],
-          }),
-        refetchInterval,
+        queryKey: queryKeys.usersList('dashboard-active-users'),
+        queryFn: () => usersClient.list({ page: 1, limit: 1, accountStatus: 'ACTIVE' }),
       },
       {
-        queryKey: queryKeys.metricSeries('msgs_per_sec', range, stepByRange[range], ''),
+        queryKey: queryKeys.usersList('dashboard-locked-users'),
+        queryFn: () => usersClient.list({ page: 1, limit: 1, accountStatus: 'DISABLED' }),
+      },
+      {
+        queryKey: queryKeys.usersList('dashboard-pending-users'),
         queryFn: () =>
-          metricsClient.getTimeseries({
-            query: 'msgs_per_sec',
-            range,
-            step: stepByRange[range],
-          }),
-        refetchInterval,
+          usersClient.list({ page: 1, limit: 1, accountStatus: 'PENDING_VERIFICATION' }),
+      },
+      {
+        queryKey: queryKeys.serviceHealth,
+        queryFn: serviceHealthClient.getServiceHealth,
       },
     ],
   });
 
-  const incidentsColumns = useMemo<ColumnsType<RecentIncident>>(
-    () => [
-      {
-        title: 'Fingerprint',
-        dataIndex: 'fingerprint',
-      },
-      {
-        title: 'Summary',
-        dataIndex: 'summary',
-      },
-      {
-        title: 'Status',
-        dataIndex: 'status',
-        render: (status: string) => <StatusBadge status={status} />,
-      },
-      {
-        title: 'Severity',
-        dataIndex: 'severity',
-        render: (severity?: string) => severity?.toUpperCase() ?? '-',
-      },
-      {
-        title: 'Started At',
-        dataIndex: 'startsAt',
-        render: (value: string) => formatDateTime(value),
-      },
-    ],
-    [],
-  );
-
-  const hasError =
-    overviewQuery.isError || latencyQuery.isError || errorRateQuery.isError || messageRateQuery.isError;
-
-  if (overviewQuery.isLoading) {
-    return <LoadingState tip="Đang tải dashboard..." />;
+  if (
+    totalUsersQuery.isLoading ||
+    activeUsersQuery.isLoading ||
+    lockedUsersQuery.isLoading ||
+    pendingUsersQuery.isLoading ||
+    serviceHealthQuery.isLoading
+  ) {
+    return <LoadingState tip="Đang tải tổng quan vận hành..." />;
   }
 
-  if (hasError) {
-    return (
-      <ErrorState
-        subTitle="Một hoặc nhiều nguồn dữ liệu dashboard đang lỗi."
-        extra={<Button onClick={() => overviewQuery.refetch()}>Thử lại</Button>}
-      />
-    );
+  if (
+    totalUsersQuery.isError ||
+    activeUsersQuery.isError ||
+    lockedUsersQuery.isError ||
+    pendingUsersQuery.isError ||
+    serviceHealthQuery.isError
+  ) {
+    return <ErrorState subTitle="Không thể tải dữ liệu dashboard." />;
   }
 
-  const overview = overviewQuery.data;
+  const totalUsers = totalUsersQuery.data?.pagination.total ?? 0;
+  const activeUsers = activeUsersQuery.data?.pagination.total ?? 0;
+  const lockedUsers = lockedUsersQuery.data?.pagination.total ?? 0;
+  const pendingVerificationUsers = pendingUsersQuery.data?.pagination.total ?? 0;
+  const services = serviceHealthQuery.data;
 
-  if (!overview) {
-    return <EmptyState description="Không có dữ liệu tổng quan." />;
+  if (!services) {
+    return <EmptyState description="Chưa có dữ liệu service health." />;
   }
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <PageHeader
-        title="Overview Dashboard"
-        description="Theo dõi realtime trạng thái dịch vụ và hiệu năng toàn hệ thống"
-        extra={<TimeRangePicker value={range} onChange={setRange} />}
+        title="Dashboard"
+        description="Tổng quan vận hành MVP dựa trên dữ liệu thật từ admin-service"
       />
 
       <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} lg={8}>
+        <Col xs={24} sm={12} lg={6}>
           <Card>
-            <Statistic
-              title="Services UP/DOWN/DEGRADED"
-              value={`${overview.services.up}/${overview.services.down}/${overview.services.degraded}`}
-              suffix={<Text type="secondary">total {overview.services.total}</Text>}
-            />
+            <Statistic title="Total users" value={totalUsers} />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={8}>
+        <Col xs={24} sm={12} lg={6}>
           <Card>
-            <Statistic title="WS Active Connections" value={formatNumber(overview.wsActiveConnections)} />
+            <Statistic title="Active users" value={activeUsers} />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={8}>
+        <Col xs={24} sm={12} lg={6}>
           <Card>
-            <Statistic title="Messages/s" value={formatNumber(overview.messagesPerSec)} />
+            <Statistic title="Locked users" value={lockedUsers} />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={8}>
+        <Col xs={24} sm={12} lg={6}>
           <Card>
-            <Statistic title="Error rate" value={formatPercent(overview.errorRatePercent)} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={8}>
-          <Card>
-            <Statistic title="Latency p95" value={formatMs(overview.latencyP95Ms)} />
+            <Statistic title="Pending verification" value={pendingVerificationUsers} />
           </Card>
         </Col>
       </Row>
 
       <Row gutter={[16, 16]}>
-        <Col xs={24} lg={8}>
-          <Card title="Latency p95">
-            {latencyQuery.data?.points?.length ? (
-              <ReactECharts option={buildLineChartOption('Latency p95', latencyQuery.data)} style={{ height: 280 }} />
-            ) : (
-              <EmptyState description="Không có dữ liệu latency" />
-            )}
+        <Col xs={24} lg={12}>
+          <Card title="Service Health Summary">
+            <Space direction="vertical" size={4}>
+              <Text>Tổng services: {services.summary.total}</Text>
+              <Text>UP: {services.summary.up}</Text>
+              <Text>DOWN: {services.summary.down}</Text>
+              <Text>DEGRADED: {services.summary.degraded}</Text>
+              <Text type="secondary">Checked at: {formatDateTime(services.checkedAt)}</Text>
+            </Space>
           </Card>
         </Col>
-        <Col xs={24} lg={8}>
-          <Card title="Error rate">
-            {errorRateQuery.data?.points?.length ? (
-              <ReactECharts option={buildLineChartOption('Error Rate', errorRateQuery.data)} style={{ height: 280 }} />
-            ) : (
-              <EmptyState description="Không có dữ liệu error rate" />
-            )}
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card title="Messages/s">
-            {messageRateQuery.data?.points?.length ? (
-              <ReactECharts option={buildLineChartOption('Messages/s', messageRateQuery.data)} style={{ height: 280 }} />
-            ) : (
-              <EmptyState description="Không có dữ liệu messages/s" />
-            )}
+        <Col xs={24} lg={12}>
+          <Card title="Sessions Summary">
+            <Text>
+              Backend Phase 1 chưa có endpoint tổng hợp active sessions toàn hệ thống. Panel giữ
+              trạng thái tối giản để tránh hiển thị số liệu giả.
+            </Text>
           </Card>
         </Col>
       </Row>
-
-      <Card title="Recent Incidents (Top 10)">
-        <Table
-          rowKey="fingerprint"
-          columns={incidentsColumns}
-          dataSource={overview.recentIncidents.slice(0, 10)}
-          pagination={false}
-          locale={{ emptyText: <EmptyState description="Không có incident gần đây" /> }}
-        />
-      </Card>
     </Space>
   );
 };

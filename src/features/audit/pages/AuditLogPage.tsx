@@ -1,34 +1,27 @@
 import { useQuery } from '@tanstack/react-query';
-import { Button, Card, DatePicker, Input, Space, Table } from 'antd';
+import { Button, Card, DatePicker, Form, Input, Space, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import dayjs from 'dayjs';
+import type { Dayjs } from 'dayjs';
 import { useMemo, useState } from 'react';
 
 import { auditClient } from '@/api/clients';
 import { queryKeys } from '@/api/queryKeys';
 import type { AuditEntry, AuditQuery } from '@/api/types';
-import { JsonDiffDrawer } from '@/components/JsonDiffDrawer';
 import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
 import { PageHeader } from '@/components/PageHeader';
 import { formatDateTime } from '@/utils/date';
 
-interface AuditFilterState {
-  from?: string;
-  to?: string;
-  actor?: string;
-  action?: string;
-  resource?: string;
-}
-
 export const AuditLogPage = () => {
-  const [filters, setFilters] = useState<AuditFilterState>({});
-  const [selectedAudit, setSelectedAudit] = useState<AuditEntry | null>(null);
+  const [form] = Form.useForm();
 
-  const queryParams = useMemo<AuditQuery>(() => ({ ...filters }), [filters]);
+  const [filters, setFilters] = useState<AuditQuery>({
+    page: 1,
+    limit: 20,
+  });
 
-  const auditQuery = useQuery({
-    queryKey: queryKeys.audit(JSON.stringify(queryParams)),
-    queryFn: () => auditClient.getAudit(queryParams),
+  const query = useQuery({
+    queryKey: queryKeys.auditLogs(JSON.stringify(filters)),
+    queryFn: () => auditClient.list(filters),
   });
 
   const columns = useMemo<ColumnsType<AuditEntry>>(
@@ -36,111 +29,136 @@ export const AuditLogPage = () => {
       {
         title: 'Time',
         dataIndex: 'time',
-        render: (value: string) => formatDateTime(value),
         width: 180,
+        render: (value: string) => formatDateTime(value),
       },
       {
         title: 'Actor',
-        dataIndex: 'actor',
-        width: 220,
+        dataIndex: 'actorEmail',
+        render: (value: string | null) => value ?? '-',
       },
       {
         title: 'Action',
         dataIndex: 'action',
-        width: 180,
       },
       {
-        title: 'Resource',
-        dataIndex: 'resource',
+        title: 'Entity',
+        key: 'entity',
+        render: (_, record) => {
+          const type = record.entityType ?? '-';
+          const id = record.entityId ?? '-';
+          return `${type} / ${id}`;
+        },
+      },
+      {
+        title: 'Source',
+        dataIndex: 'source',
+        render: (value: string | null) => value ?? '-',
       },
       {
         title: 'IP',
-        dataIndex: 'ip',
-        render: (value?: string) => value ?? '-',
-        width: 150,
-      },
-      {
-        title: 'Diff',
-        width: 120,
-        render: (_, record) => (
-          <Button size="small" onClick={() => setSelectedAudit(record)}>
-            View diff
-          </Button>
-        ),
+        dataIndex: 'ipAddress',
+        render: (value: string | null | undefined) => value ?? '-',
       },
     ],
     [],
   );
 
-  if (auditQuery.isLoading) {
-    return <LoadingState tip="Đang tải audit log..." />;
+  const applyFilters = () => {
+    const values = form.getFieldsValue() as {
+      action?: string;
+      actorEmail?: string;
+      entityType?: string;
+      source?: string;
+      range?: [Dayjs | null, Dayjs | null];
+    };
+
+    setFilters((prev) => ({
+      ...prev,
+      page: 1,
+      action: values.action?.trim() || undefined,
+      actorEmail: values.actorEmail?.trim() || undefined,
+      entityType: values.entityType || undefined,
+      source: values.source || undefined,
+      from: values.range?.[0] ? values.range[0].toISOString() : undefined,
+      to: values.range?.[1] ? values.range[1].toISOString() : undefined,
+    }));
+  };
+
+  if (query.isLoading) {
+    return <LoadingState tip="Đang tải audit logs..." />;
   }
 
-  if (auditQuery.isError) {
-    return <ErrorState subTitle="Không thể tải audit logs." />;
+  if (query.isError) {
+    return (
+      <ErrorState
+        subTitle="Không thể tải audit logs."
+        extra={<Button onClick={() => query.refetch()}>Thử lại</Button>}
+      />
+    );
   }
+
+  const data = query.data;
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <PageHeader title="Audit Logs" description="Theo dõi hành động quản trị và thay đổi cấu hình" />
+      <PageHeader
+        title="Audit Logs"
+        description="Theo dõi lịch sử thao tác quản trị ở chế độ read-only"
+      />
 
       <Card>
-        <Space wrap>
-          <DatePicker.RangePicker
-            showTime
-            onChange={(dates) => {
-              setFilters((prev) => ({
-                ...prev,
-                from: dates?.[0] ? dayjs(dates[0]).toISOString() : undefined,
-                to: dates?.[1] ? dayjs(dates[1]).toISOString() : undefined,
-              }));
-            }}
-          />
-          <Input
-            style={{ width: 180 }}
-            placeholder="Actor"
-            allowClear
-            onChange={(event) =>
-              setFilters((prev) => ({ ...prev, actor: event.target.value || undefined }))
-            }
-          />
-          <Input
-            style={{ width: 180 }}
-            placeholder="Action"
-            allowClear
-            onChange={(event) =>
-              setFilters((prev) => ({ ...prev, action: event.target.value || undefined }))
-            }
-          />
-          <Input
-            style={{ width: 180 }}
-            placeholder="Resource"
-            allowClear
-            onChange={(event) =>
-              setFilters((prev) => ({ ...prev, resource: event.target.value || undefined }))
-            }
-          />
-          <Button onClick={() => auditQuery.refetch()}>Apply filters</Button>
-        </Space>
+        <Form form={form} layout="inline">
+          <Form.Item name="action">
+            <Input allowClear placeholder="Action" style={{ width: 160 }} />
+          </Form.Item>
+          <Form.Item name="actorEmail">
+            <Input allowClear placeholder="Actor email" style={{ width: 220 }} />
+          </Form.Item>
+          <Form.Item name="entityType">
+            <Input allowClear placeholder="Entity type" style={{ width: 160 }} />
+          </Form.Item>
+          <Form.Item name="source">
+            <Input allowClear placeholder="Source" style={{ width: 140 }} />
+          </Form.Item>
+          <Form.Item name="range">
+            <DatePicker.RangePicker showTime />
+          </Form.Item>
+          <Form.Item>
+            <Space>
+              <Button type="primary" onClick={applyFilters}>
+                Áp dụng
+              </Button>
+              <Button
+                onClick={() => {
+                  form.resetFields();
+                  setFilters({ page: 1, limit: 20 });
+                }}
+              >
+                Reset
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
       </Card>
 
       <Card>
         <Table
           rowKey="id"
           columns={columns}
-          dataSource={auditQuery.data?.items ?? []}
-          pagination={{ pageSize: 12 }}
-          locale={{ emptyText: <EmptyState description="Không có audit record" /> }}
+          dataSource={data?.items ?? []}
+          locale={{ emptyText: <EmptyState description="Không có audit record phù hợp." /> }}
+          pagination={{
+            current: data?.pagination.page,
+            pageSize: data?.pagination.limit,
+            total: data?.pagination.total,
+            showSizeChanger: true,
+            onChange: (page, pageSize) => {
+              setFilters((prev) => ({ ...prev, page, limit: pageSize }));
+            },
+          }}
         />
       </Card>
-
-      <JsonDiffDrawer
-        open={Boolean(selectedAudit)}
-        onClose={() => setSelectedAudit(null)}
-        title={`Diff - ${selectedAudit?.action ?? ''}`}
-        before={selectedAudit?.before}
-        after={selectedAudit?.after}
-      />
     </Space>
   );
 };

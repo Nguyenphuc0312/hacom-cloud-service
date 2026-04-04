@@ -1,33 +1,49 @@
 import { axiosInstance } from '@/api/axios';
+import { asPaginationMeta, unwrapApiEnvelope } from '@/api/envelope';
 import type {
-  AdminUser,
-  CreateUserRequest,
-  PasswordResetResponse,
-  UpdateUserRoleRequest,
+  UserActionPayload,
+  UserActionResponse,
+  UserDetail,
+  UserListItem,
+  UsersListQuery,
   UsersListResponse,
 } from '@/api/types';
 
+interface UsersListPayload {
+  items: UserListItem[];
+  pagination: unknown;
+  filters: UsersListResponse['filters'];
+}
+
 export const usersClient = {
-  async getUsers(): Promise<UsersListResponse> {
-    const { data } = await axiosInstance.get<UsersListResponse>('/users');
-    return data;
+  async list(params: UsersListQuery): Promise<UsersListResponse> {
+    const response = await axiosInstance.get('/admin/users', { params });
+    const data = unwrapApiEnvelope<UsersListPayload>(response);
+
+    return {
+      items: Array.isArray(data.items) ? data.items : [],
+      pagination: asPaginationMeta(data.pagination),
+      filters: data.filters ?? {},
+    };
   },
 
-  async createUser(payload: CreateUserRequest): Promise<AdminUser> {
-    const { data } = await axiosInstance.post<AdminUser>('/users', payload);
-    return data;
+  async getById(id: string): Promise<UserDetail> {
+    const response = await axiosInstance.get(`/admin/users/${id}`);
+    return unwrapApiEnvelope<UserDetail>(response);
   },
 
-  async updateRole(id: string, payload: UpdateUserRoleRequest): Promise<void> {
-    await axiosInstance.put(`/users/${id}/role`, payload);
+  async lock(id: string, payload?: UserActionPayload): Promise<UserActionResponse> {
+    const response = await axiosInstance.post(`/admin/users/${id}/lock`, payload ?? {});
+    return unwrapApiEnvelope<UserActionResponse>(response);
   },
 
-  async resetPassword(id: string): Promise<PasswordResetResponse> {
-    const { data } = await axiosInstance.put<PasswordResetResponse>(`/users/${id}/password-reset`);
-    return data;
+  async unlock(id: string, payload?: UserActionPayload): Promise<UserActionResponse> {
+    const response = await axiosInstance.post(`/admin/users/${id}/unlock`, payload ?? {});
+    return unwrapApiEnvelope<UserActionResponse>(response);
   },
 
-  async deactivate(id: string): Promise<void> {
-    await axiosInstance.delete(`/users/${id}`);
+  async revokeSessions(id: string, payload?: UserActionPayload): Promise<UserActionResponse> {
+    const response = await axiosInstance.post(`/admin/users/${id}/revoke-sessions`, payload ?? {});
+    return unwrapApiEnvelope<UserActionResponse>(response);
   },
 };

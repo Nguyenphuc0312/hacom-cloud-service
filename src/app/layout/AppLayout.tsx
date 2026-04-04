@@ -1,26 +1,14 @@
 import {
-  AlertOutlined,
-  BarChartOutlined,
   DashboardOutlined,
   FileTextOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  SettingOutlined,
-  TeamOutlined,
+  SolutionOutlined,
   ToolOutlined,
+  UserOutlined,
 } from '@ant-design/icons';
-import {
-  Avatar,
-  Badge,
-  Breadcrumb,
-  Button,
-  Dropdown,
-  Layout,
-  Menu,
-  Space,
-  Typography,
-} from 'antd';
+import { Avatar, Badge, Breadcrumb, Button, Dropdown, Layout, Menu, Space, Typography } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -29,7 +17,6 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { LoadingState } from '@/components/QueryStates';
 import { useCurrentUser } from '@/app/useCurrentUser';
 import { useAuthStore } from '@/store/authStore';
-import { hasMinimumRole } from '@/utils/role';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -38,43 +25,22 @@ interface NavItem {
   key: string;
   label: string;
   icon: ReactNode;
-  minimumRole: 'viewer' | 'admin' | 'superadmin';
 }
 
 const navItems: NavItem[] = [
-  { key: '/', label: 'Overview', icon: <DashboardOutlined />, minimumRole: 'viewer' },
-  { key: '/services', label: 'Services', icon: <ToolOutlined />, minimumRole: 'viewer' },
-  {
-    key: '/performance',
-    label: 'Performance',
-    icon: <BarChartOutlined />,
-    minimumRole: 'viewer',
-  },
-  {
-    key: '/settings/smtp',
-    label: 'SMTP Settings',
-    icon: <SettingOutlined />,
-    minimumRole: 'admin',
-  },
-  { key: '/alerts', label: 'Alerts', icon: <AlertOutlined />, minimumRole: 'viewer' },
-  { key: '/audit', label: 'Audit Log', icon: <FileTextOutlined />, minimumRole: 'admin' },
-  {
-    key: '/admin-users',
-    label: 'Admin Users',
-    icon: <TeamOutlined />,
-    minimumRole: 'superadmin',
-  },
+  { key: '/', label: 'Dashboard', icon: <DashboardOutlined /> },
+  { key: '/users', label: 'Users', icon: <UserOutlined /> },
+  { key: '/hr-employees', label: 'HR Employees', icon: <SolutionOutlined /> },
+  { key: '/audit', label: 'Audit Logs', icon: <FileTextOutlined /> },
+  { key: '/services', label: 'Services', icon: <ToolOutlined /> },
 ];
 
 const breadcrumbNameMap: Record<string, string> = {
-  '/': 'Overview',
-  '/services': 'Services',
-  '/performance': 'Performance',
-  '/settings': 'Settings',
-  '/settings/smtp': 'SMTP',
-  '/alerts': 'Alerts',
+  '/': 'Dashboard',
+  '/users': 'Users',
+  '/hr-employees': 'HR Employees',
   '/audit': 'Audit Logs',
-  '/admin-users': 'Admin Users',
+  '/services': 'Services',
 };
 
 export const AppLayout = () => {
@@ -86,18 +52,19 @@ export const AppLayout = () => {
   const { user, isLoading } = useCurrentUser();
 
   const allowedItems = useMemo<ItemType[]>(() => {
-    return navItems
-      .filter((item) => hasMinimumRole(user?.role, item.minimumRole))
-      .map((item) => ({
-        key: item.key,
-        icon: item.icon,
-        label: item.label,
-      }));
-  }, [user?.role]);
+    return navItems.map((item) => ({
+      key: item.key,
+      icon: item.icon,
+      label: item.label,
+    }));
+  }, []);
 
   const selectedMenu =
-    navItems.find((item) => location.pathname === item.key || location.pathname.startsWith(`${item.key}/`))
-      ?.key ?? '/';
+    navItems.find((item) =>
+      item.key === '/'
+        ? location.pathname === '/'
+        : location.pathname === item.key || location.pathname.startsWith(`${item.key}/`),
+    )?.key ?? '/';
 
   const breadcrumbItems = useMemo(() => {
     const pathSnippets = location.pathname.split('/').filter(Boolean);
@@ -153,7 +120,9 @@ export const AppLayout = () => {
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
               onClick={() => setCollapsed((prev) => !prev)}
             />
-            <Badge color={environment === 'PROD' ? 'red' : environment === 'STAGING' ? 'gold' : 'green'} />
+            <Badge
+              color={environment === 'PROD' ? 'red' : environment === 'STAGING' ? 'gold' : 'green'}
+            />
             <Text strong>{environment}</Text>
           </Space>
           <Dropdown
@@ -173,7 +142,7 @@ export const AppLayout = () => {
               <div>
                 <Text>{user?.email ?? '-'}</Text>
                 <br />
-                <Text type="secondary">{user?.role ?? 'unknown'}</Text>
+                <Text type="secondary">{user?.username ?? 'admin'}</Text>
               </div>
             </Space>
           </Dropdown>

@@ -1,12 +1,12 @@
 export const queryKeys = {
-  me: ['me'] as const,
-  overview: (range: string) => ['overview', range] as const,
-  services: (status: string) => ['services', status] as const,
-  metricSeries: (query: string, range: string, step: string, service: string) =>
-    ['metric-series', query, range, step, service] as const,
-  slo: (range: string) => ['slo', range] as const,
-  smtpSettings: ['smtp-settings'] as const,
-  incidents: (status: string, severity: string) => ['incidents', status, severity] as const,
-  audit: (params: string) => ['audit', params] as const,
-  users: ['users'] as const,
+  currentAdmin: ['current-admin'] as const,
+  usersList: (params: string) => ['users-list', params] as const,
+  userDetail: (id: string) => ['user-detail', id] as const,
+  userSessions: (id: string, params: string) => ['user-sessions', id, params] as const,
+  userDevices: (id: string, params: string) => ['user-devices', id, params] as const,
+  hrEmployeesList: (params: string) => ['hr-employees-list', params] as const,
+  hrEmployeeDetail: (id: string) => ['hr-employee-detail', id] as const,
+  auditLogs: (params: string) => ['audit-logs', params] as const,
+  serviceHealth: ['service-health'] as const,
+  dashboardSummary: (stamp: string) => ['dashboard-summary', stamp] as const,
 };

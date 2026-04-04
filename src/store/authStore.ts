@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import type { CurrentUser } from '@/api/types';
+import type { CurrentAdmin } from '@/api/types';
 
 interface AuthState {
   accessToken: string | null;
-  user: CurrentUser | null;
-  setAuth: (payload: { accessToken: string; user: CurrentUser | null }) => void;
-  setUser: (user: CurrentUser | null) => void;
+  user: CurrentAdmin | null;
+  setAuth: (payload: { accessToken: string; user: CurrentAdmin | null }) => void;
+  setUser: (user: CurrentAdmin | null) => void;
   clearAuth: () => void;
 }
 

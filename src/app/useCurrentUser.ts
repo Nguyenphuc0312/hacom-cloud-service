@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 
-import { authClient } from '@/api/clients';
+import { currentAdminClient } from '@/api/clients';
 import { queryKeys } from '@/api/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 
@@ -11,8 +11,8 @@ export const useCurrentUser = () => {
   const setUser = useAuthStore((state) => state.setUser);
 
   const meQuery = useQuery({
-    queryKey: queryKeys.me,
-    queryFn: authClient.me,
+    queryKey: queryKeys.currentAdmin,
+    queryFn: currentAdminClient.getCurrentAdmin,
     enabled: Boolean(accessToken),
     retry: false,
   });

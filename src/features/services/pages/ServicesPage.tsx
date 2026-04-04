@@ -1,113 +1,105 @@
 import { useQuery } from '@tanstack/react-query';
-import { Button, Card, Select, Space, Table, Typography } from 'antd';
+import { Button, Card, Space, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
-import { statusClient } from '@/api/clients';
+import { serviceHealthClient } from '@/api/clients';
 import { queryKeys } from '@/api/queryKeys';
-import type { HealthStatus, ServiceStatusItem } from '@/api/types';
+import type { ServiceHealthItem } from '@/api/types';
 import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
 import { PageHeader } from '@/components/PageHeader';
 import { StatusBadge } from '@/components/StatusBadge';
 import { formatDateTime } from '@/utils/date';
 import { formatMs } from '@/utils/formatters';
 
-const statusOptions = [
-  { label: 'All', value: 'all' },
-  { label: 'Up', value: 'up' },
-  { label: 'Down', value: 'down' },
-  { label: 'Degraded', value: 'degraded' },
-];
-
 export const ServicesPage = () => {
-  const [status, setStatus] = useState<'all' | HealthStatus>('all');
-
-  const servicesQuery = useQuery({
-    queryKey: queryKeys.services(status),
-    queryFn: () => statusClient.getServices(status),
+  const healthQuery = useQuery({
+    queryKey: queryKeys.serviceHealth,
+    queryFn: serviceHealthClient.getServiceHealth,
+    refetchInterval: 30_000,
   });
 
-  const columns = useMemo<ColumnsType<ServiceStatusItem>>(
+  const columns = useMemo<ColumnsType<ServiceHealthItem>>(
     () => [
       {
-        title: 'Name',
+        title: 'Service',
         dataIndex: 'name',
       },
       {
-        title: 'Health',
-        dataIndex: 'health',
-        render: (value: string) => <StatusBadge status={value} />,
+        title: 'Status',
+        dataIndex: 'status',
+        render: (value: string) => <StatusBadge status={value} mode="badge" />,
       },
       {
-        title: 'Ready',
-        dataIndex: 'ready',
-        render: (value: boolean) => <StatusBadge status={value ? 'up' : 'down'} />,
-      },
-      {
-        title: 'Checked At',
+        title: 'Checked at',
         dataIndex: 'checkedAt',
         render: (value: string) => formatDateTime(value),
       },
       {
         title: 'Latency',
         dataIndex: 'latencyMs',
-        render: (value?: number) => formatMs(value),
+        render: (value: number) => formatMs(value),
       },
       {
-        title: 'Error',
-        dataIndex: 'error',
-        render: (value?: string) => (
-          <Typography.Text type="danger" ellipsis style={{ maxWidth: 240 }}>
-            {value ?? '-'}
+        title: 'Summary',
+        dataIndex: 'summary',
+        render: (value: string) => (
+          <Typography.Text ellipsis style={{ maxWidth: 260 }}>
+            {value}
           </Typography.Text>
         ),
+      },
+      {
+        title: 'Version/Build/Env',
+        key: 'meta',
+        render: (_, record) => {
+          const parts = [record.version, record.build, record.env].filter(Boolean);
+          return parts.length > 0 ? parts.join(' | ') : '-';
+        },
       },
     ],
     [],
   );
 
-  if (servicesQuery.isLoading) {
-    return <LoadingState tip="Đang tải trạng thái services..." />;
+  if (healthQuery.isLoading) {
+    return <LoadingState tip="Đang tải service health..." />;
   }
 
-  if (servicesQuery.isError) {
+  if (healthQuery.isError) {
     return (
       <ErrorState
-        subTitle="Không thể tải danh sách service."
-        extra={<Button onClick={() => servicesQuery.refetch()}>Retry</Button>}
+        subTitle="Không thể tải service health."
+        extra={<Button onClick={() => healthQuery.refetch()}>Thử lại</Button>}
       />
     );
   }
 
-  const items = servicesQuery.data?.items ?? [];
+  const data = healthQuery.data;
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <PageHeader
-        title="Services Status"
-        description="Theo dõi health và readiness của từng service"
-        extra={
-          <Space>
-            <Select
-              style={{ width: 180 }}
-              value={status}
-              options={statusOptions}
-              onChange={(nextStatus) => setStatus(nextStatus as typeof status)}
-            />
-            <Button onClick={() => servicesQuery.refetch()}>Refresh now</Button>
-          </Space>
-        }
+        title="Services"
+        description="Giám sát trạng thái vận hành cơ bản của các service theo contract Phase 1"
+        extra={<Button onClick={() => healthQuery.refetch()}>Refresh</Button>}
       />
+
+      <Card>
+        <Space size={16} wrap>
+          <Typography.Text strong>Total: {data?.summary.total ?? 0}</Typography.Text>
+          <Typography.Text type="success">Up: {data?.summary.up ?? 0}</Typography.Text>
+          <Typography.Text type="warning">Degraded: {data?.summary.degraded ?? 0}</Typography.Text>
+          <Typography.Text type="danger">Down: {data?.summary.down ?? 0}</Typography.Text>
+        </Space>
+      </Card>
 
       <Card>
         <Table
           rowKey="name"
           columns={columns}
-          dataSource={items}
+          dataSource={data?.items ?? []}
           pagination={{ pageSize: 10 }}
-          locale={{
-            emptyText: <EmptyState description="Không có service nào phù hợp bộ lọc" />,
-          }}
+          locale={{ emptyText: <EmptyState description="Không có dữ liệu service health." /> }}
         />
       </Card>
     </Space>

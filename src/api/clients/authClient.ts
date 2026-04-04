@@ -1,4 +1,5 @@
 import { axiosInstance } from '@/api/axios';
+import { unwrapApiEnvelope } from '@/api/envelope';
 import type { LoginRequest, LoginResponse, MeResponse } from '@/api/types';
 
 export const authClient = {
@@ -8,7 +9,8 @@ export const authClient = {
   },
 
   async me(): Promise<MeResponse> {
-    const { data } = await axiosInstance.get<MeResponse>('/me');
-    return data;
+    const response = await axiosInstance.get('/admin/me');
+    const payload = unwrapApiEnvelope<{ admin: MeResponse }>(response);
+    return payload.admin;
   },
 };

@@ -5,7 +5,7 @@ const { Title, Text } = Typography;
 
 interface PageHeaderProps {
   title: string;
-  description?: string;
+  description?: ReactNode;
   extra?: ReactNode;
 }
 

@@ -1,12 +1,12 @@
 export type Role = 'superadmin' | 'admin' | 'viewer';
 
-export interface CurrentUser {
+export interface CurrentAdmin {
   id: string;
   email: string;
-  role: Role;
-  active?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
+  username?: string;
+  status?: string;
+  isVerified?: boolean;
+  role?: Role;
 }
 
 export interface LoginRequest {
@@ -16,7 +16,7 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   accessToken: string;
-  user?: CurrentUser;
+  user?: CurrentAdmin;
 }
 
-export type MeResponse = CurrentUser;
+export type MeResponse = CurrentAdmin;

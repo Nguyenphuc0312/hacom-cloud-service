@@ -4,9 +4,14 @@ import type { ApiErrorBody } from './types';
 
 const CODE_MESSAGE_MAP: Record<string, string> = {
   INVALID_CREDENTIALS: 'Email hoặc mật khẩu không đúng.',
-  USER_FORBIDDEN: 'Tài khoản không có quyền truy cập.',
-  SMTP_TEST_FAILED: 'Kết nối SMTP thất bại, vui lòng kiểm tra cấu hình.',
-  SMTP_SEND_FAILED: 'Gửi email test thất bại.',
+  FORBIDDEN: 'Tài khoản không có quyền truy cập.',
+  USER_NOT_FOUND: 'Không tìm thấy người dùng.',
+  DUPLICATE_EMPLOYEE_CODE: 'Mã nhân viên đã tồn tại.',
+  HR_EMPLOYEE_NOT_FOUND: 'Không tìm thấy hồ sơ nhân sự.',
+  HR_EMPLOYEE_LINKED_TO_USER: 'Không thể xóa vì nhân sự đã liên kết với tài khoản người dùng.',
+  HR_EMPLOYEE_ALREADY_INACTIVE: 'Nhân sự đã ở trạng thái ngừng hoạt động.',
+  HR_EMPLOYEE_INVALID_INPUT: 'Dữ liệu nhân sự không hợp lệ.',
+  UPSTREAM_ENDPOINT_MISSING: 'Backend chưa hỗ trợ endpoint nội bộ cần thiết cho chức năng này.',
 };
 
 const STATUS_MESSAGE_MAP: Record<number, string> = {
@@ -23,12 +28,15 @@ export const getErrorMessage = (error: unknown, fallback = 'Đã có lỗi xảy
   if (error instanceof AxiosError) {
     const body = error.response?.data as ApiErrorBody | undefined;
 
-    if (body?.code && CODE_MESSAGE_MAP[body.code]) {
-      return CODE_MESSAGE_MAP[body.code];
+    const code = body?.error?.code ?? body?.code;
+    const message = body?.error?.message ?? body?.message;
+
+    if (code && CODE_MESSAGE_MAP[code]) {
+      return CODE_MESSAGE_MAP[code];
     }
 
-    if (body?.message) {
-      return body.message;
+    if (message) {
+      return message;
     }
 
     const status = error.response?.status;
