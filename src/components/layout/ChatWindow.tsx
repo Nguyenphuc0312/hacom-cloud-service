@@ -28,13 +28,14 @@ import type {
 } from "../../types";
 import { MessageType } from "../../types";
 import type { UploadedFileMeta } from "../../types/attachmentDraft";
-import { contactApi, messageApi } from "../../services/api";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import type { ConnectionState } from "../../hooks/useWebSocket";
 import { resolveChatDensity } from "../../utils/densityPolicy";
 import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { logScrollTrace } from "../../utils/scrollTrace";
+import { getMessageByIdUseCase } from "../../features/chat/usecases/getMessageById";
+import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
 
 // ── Convert upload queue metadata to Attachment ─────────────────────
 
@@ -100,9 +101,7 @@ type EphemeralNotice = {
   message: string;
 };
 
-const getEphemeralNoticeClassName = (
-  kind: EphemeralNotice["kind"],
-): string => {
+const getEphemeralNoticeClassName = (kind: EphemeralNotice["kind"]): string => {
   switch (kind) {
     case "warn":
       return "border-warning/25 bg-warning/12 text-warning";
@@ -369,12 +368,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     React.useState<EphemeralNotice | null>(null);
   const [composerHeight, setComposerHeight] = React.useState(0);
   const [viewportMetrics, setViewportMetrics] = React.useState(() => ({
-    width:
-      typeof window !== "undefined" ? window.innerWidth : 1280,
-    height:
-      typeof window !== "undefined" ? window.innerHeight : 900,
+    width: typeof window !== "undefined" ? window.innerWidth : 1280,
+    height: typeof window !== "undefined" ? window.innerHeight : 900,
   }));
-  const previousConnectionStateRef = React.useRef<ConnectionState>(connectionState);
+  const previousConnectionStateRef =
+    React.useRef<ConnectionState>(connectionState);
   const ephemeralNoticeTimerRef = React.useRef<number | null>(null);
 
   const resolvedDensity = React.useMemo(
@@ -473,15 +471,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     [onReachedLatestMessage],
   );
 
-  const queueJumpToMessage = React.useCallback((messageId: string) => {
-    setOverlayMode(null);
-    setJumpTargetMessageId(messageId);
-    setJumpRequestVersion((value) => value + 1);
-    logScrollTrace("jump_requested", {
-      conversationId: conversation.id,
-      messageId,
-    });
-  }, [conversation.id]);
+  const queueJumpToMessage = React.useCallback(
+    (messageId: string) => {
+      setOverlayMode(null);
+      setJumpTargetMessageId(messageId);
+      setJumpRequestVersion((value) => value + 1);
+      logScrollTrace("jump_requested", {
+        conversationId: conversation.id,
+        messageId,
+      });
+    },
+    [conversation.id],
+  );
 
   const ensureMessageLoaded = React.useCallback(
     async (messageId: string, fallbackMessage?: Message) => {
@@ -494,7 +495,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       let targetMessage = fallbackMessage;
       if (!targetMessage) {
-        const response = await messageApi.getMessageById(messageId);
+        const response = await getMessageByIdUseCase(messageId);
         targetMessage = unwrapApiSuccess(response) as Message;
       }
 
@@ -569,7 +570,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     } else {
       setUnreadMarker(null);
     }
-  }, [conversation.id, conversation.unreadCount, lastReadAt, lastReadMessageId]);
+  }, [
+    conversation.id,
+    conversation.unreadCount,
+    lastReadAt,
+    lastReadMessageId,
+  ]);
 
   React.useEffect(() => {
     const previousState = previousConnectionStateRef.current;
@@ -660,7 +666,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const handleShareContact = React.useCallback(
     async (contactUserId: string) => {
       try {
-        await contactApi.shareContact({
+        await shareContactUseCase({
           conversationId: conversation.id,
           contactUserId,
         });
@@ -863,14 +869,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       {/* Selection toolbar */}
       {isMessageSelectionMode &&
         bottomOverlayPlacements["selection-toolbar"]?.visible && (
-        <SelectionToolbar
-          selectedCount={selectedMessageIds.size}
-          onDelete={handleSelectionDelete}
-          onForward={handleSelectionForward}
-          onCopy={handleSelectionCopy}
-          onCancel={exitSelectionMode}
-        />
-      )}
+          <SelectionToolbar
+            selectedCount={selectedMessageIds.size}
+            onDelete={handleSelectionDelete}
+            onForward={handleSelectionForward}
+            onCopy={handleSelectionCopy}
+            onCancel={exitSelectionMode}
+          />
+        )}
 
       {/* Message input - hidden during selection mode */}
       {!isMessageSelectionMode && (

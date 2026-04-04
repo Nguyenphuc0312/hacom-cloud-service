@@ -34,7 +34,6 @@ import {
   useCurrentTypingStatus,
 } from "../stores";
 import { useWebSocket } from "../hooks";
-import { conversationApi, messageApi } from "../services/api";
 import type { Attachment, Message, UserSummary } from "../types";
 import { useFilePreview } from "../hooks/useFilePreview";
 import type { PreviewTarget } from "../hooks/useFilePreview";
@@ -43,12 +42,17 @@ import { rankConversations } from "../utils/conversationRanking";
 import { MessageType, UserStatus } from "../types";
 import { isDirectConversation } from "../lib/conversationAdapter";
 import { getOtherParticipant } from "../utils/messageHelpers";
-import {
-  isMessageDebugEnabled,
-  logMessageDebug,
-} from "../utils/messageDebug";
+import { isMessageDebugEnabled, logMessageDebug } from "../utils/messageDebug";
 import { ErrorCode } from "@hacom/chat-shared-types";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
+import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
+import { createPrivateConversationUseCase } from "../features/chat/usecases/createPrivateConversation";
+import { createGroupConversationUseCase } from "../features/chat/usecases/createGroupConversation";
+import { deleteConversationUseCase } from "../features/chat/usecases/deleteConversation";
+import { addReactionUseCase } from "../features/chat/usecases/addReaction";
+import { removeReactionUseCase } from "../features/chat/usecases/removeReaction";
+import { editMessageUseCase } from "../features/chat/usecases/editMessage";
+import { deleteMessageUseCase } from "../features/chat/usecases/deleteMessage";
 
 type IdleCallbackDeadline = {
   didTimeout: boolean;
@@ -241,8 +245,7 @@ export const ChatPage: React.FC = () => {
     const validateConversation = async () => {
       setIsValidatingRoom(true);
       try {
-        const response =
-          await conversationApi.getConversationById(conversationId);
+        const response = await getConversationByIdUseCase(conversationId);
         const room = unwrapApiSuccess(response);
         if (isCancelled) return;
 
@@ -303,6 +306,7 @@ export const ChatPage: React.FC = () => {
     conversationId,
     navigate,
     selectConversation,
+    t,
     updateConversation,
   ]);
 
@@ -381,9 +385,9 @@ export const ChatPage: React.FC = () => {
   const isConversationHistoryReady = isSelectedConversationHydrated;
   const isConversationReady = Boolean(
     selectedConversationId &&
-      selectedConversation &&
-      isCurrentRouteValidated &&
-      !isValidatingRoom,
+    selectedConversation &&
+    isCurrentRouteValidated &&
+    !isValidatingRoom,
   );
   const websocketReady = connectionState === "connected";
 
@@ -410,9 +414,9 @@ export const ChatPage: React.FC = () => {
 
       const canSendImmediately = Boolean(
         selectedConversationId &&
-          selectedConversation &&
-          isCurrentRouteValidated &&
-          !isValidatingRoom,
+        selectedConversation &&
+        isCurrentRouteValidated &&
+        !isValidatingRoom,
       );
       if (!canSendImmediately) {
         const error = new Error(
@@ -660,8 +664,8 @@ export const ChatPage: React.FC = () => {
 
       try {
         const response = hasReacted
-          ? await messageApi.removeReaction(messageId, emoji)
-          : await messageApi.addReaction(messageId, emoji);
+          ? await removeReactionUseCase({ messageId, emoji })
+          : await addReactionUseCase({ messageId, emoji });
         const updatedMessage = unwrapApiSuccess(response);
 
         updateStoreMessage(selectedConversationId, messageId, {
@@ -678,7 +682,7 @@ export const ChatPage: React.FC = () => {
         toast.error(apiError.message || t("error:generic.requestFailed"));
       }
     },
-    [selectedConversationId, currentUserSummary, updateStoreMessage],
+    [currentUserSummary, selectedConversationId, t, updateStoreMessage],
   );
 
   const handleEditMessage = useCallback(
@@ -686,7 +690,7 @@ export const ChatPage: React.FC = () => {
       if (!selectedConversationId) return;
 
       try {
-        const response = await messageApi.editMessage(messageId, content);
+        const response = await editMessageUseCase({ messageId, content });
         const updatedMessage = unwrapApiSuccess(response);
 
         updateStoreMessage(selectedConversationId, messageId, {
@@ -708,7 +712,7 @@ export const ChatPage: React.FC = () => {
       if (!selectedConversationId) return;
 
       try {
-        await messageApi.deleteMessage(messageId);
+        await deleteMessageUseCase(messageId);
         removeStoreMessage(selectedConversationId, messageId);
         toast.success(t("chat:toast.messageDeleted"));
       } catch (error) {
@@ -779,7 +783,7 @@ export const ChatPage: React.FC = () => {
     if (!window.confirm(t("profile:userProfile.deleteConversation"))) return;
 
     try {
-      await conversationApi.deleteConversation(selectedConversation.id);
+      await deleteConversationUseCase(selectedConversation.id);
       removeConversation(selectedConversation.id);
       closeInfoPanel();
       selectConversation(null);
@@ -818,8 +822,7 @@ export const ChatPage: React.FC = () => {
       roomCreationLockRef.current = true;
       setIsCreatingRoom(true);
       try {
-        const response =
-          await conversationApi.createPrivateConversation(userId);
+        const response = await createPrivateConversationUseCase(userId);
         const payload = unwrapApiSuccess(response);
         const conversationId = payload.id;
         if (!conversationId) {
@@ -873,7 +876,7 @@ export const ChatPage: React.FC = () => {
         setIsCreatingRoom(false);
       }
     },
-    [fetchConversations, isCreatingRoom, navigate, selectConversation],
+    [fetchConversations, isCreatingRoom, navigate, selectConversation, t],
   );
 
   const handleOpenCurrentUserProfile = useCallback(() => {
@@ -902,7 +905,7 @@ export const ChatPage: React.FC = () => {
       roomCreationLockRef.current = true;
       setIsCreatingRoom(true);
       try {
-        const response = await conversationApi.createGroupConversation({
+        const response = await createGroupConversationUseCase({
           name: payload.name,
           memberIds: payload.memberIds,
         });
@@ -940,7 +943,7 @@ export const ChatPage: React.FC = () => {
         setIsCreatingRoom(false);
       }
     },
-    [fetchConversations, isCreatingRoom, navigate, selectConversation],
+    [fetchConversations, isCreatingRoom, navigate, selectConversation, t],
   );
 
   // Handle new chat modal
@@ -991,8 +994,7 @@ export const ChatPage: React.FC = () => {
     directInfoHydratedRef.current.add(selectedConversationId);
 
     let isCancelled = false;
-    void conversationApi
-      .getConversationById(selectedConversationId)
+    void getConversationByIdUseCase(selectedConversationId)
       .then((response) => {
         if (isCancelled) return;
         const conversation = unwrapApiSuccess(response);
