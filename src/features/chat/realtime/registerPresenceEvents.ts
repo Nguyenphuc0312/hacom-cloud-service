@@ -1,34 +1,44 @@
-import type { RealtimeUnsubscribe, SocketLike } from "../types";
+import { WebSocketEvents } from "../../../lib/socket";
+import type {
+  RealtimeEventHandler,
+  RealtimeUnsubscribe,
+  SocketLike,
+} from "../types";
 
 interface PresenceEventHandlers {
-  onTypingStart?: (payload: unknown) => void;
-  onTypingStop?: (payload: unknown) => void;
-  onPresenceChanged?: (payload: unknown) => void;
+  onTypingStart?: RealtimeEventHandler;
+  onTypingStop?: RealtimeEventHandler;
+  onPresenceChanged?: RealtimeEventHandler;
 }
 
 export const registerPresenceEvents = (
   socket: SocketLike,
   handlers: PresenceEventHandlers,
 ): RealtimeUnsubscribe => {
-  if (handlers.onTypingStart) {
-    socket.on("typing.start", handlers.onTypingStart);
-  }
-  if (handlers.onTypingStop) {
-    socket.on("typing.stop", handlers.onTypingStop);
-  }
-  if (handlers.onPresenceChanged) {
-    socket.on("presence.changed", handlers.onPresenceChanged);
-  }
+  const cleanups: RealtimeUnsubscribe[] = [];
+
+  const register = (
+    eventName: string,
+    handler?: RealtimeEventHandler,
+  ): void => {
+    if (!handler) return;
+    const maybeUnsubscribe = socket.on(eventName, handler);
+    if (typeof maybeUnsubscribe === "function") {
+      cleanups.push(maybeUnsubscribe);
+      return;
+    }
+    if (typeof socket.off === "function") {
+      cleanups.push(() => {
+        socket.off?.(eventName, handler);
+      });
+    }
+  };
+
+  register(WebSocketEvents.TYPING_START, handlers.onTypingStart);
+  register(WebSocketEvents.TYPING_STOP, handlers.onTypingStop);
+  register("presence.changed", handlers.onPresenceChanged);
 
   return () => {
-    if (handlers.onTypingStart) {
-      socket.off("typing.start", handlers.onTypingStart);
-    }
-    if (handlers.onTypingStop) {
-      socket.off("typing.stop", handlers.onTypingStop);
-    }
-    if (handlers.onPresenceChanged) {
-      socket.off("presence.changed", handlers.onPresenceChanged);
-    }
+    cleanups.forEach((cleanup) => cleanup());
   };
 };

@@ -28,7 +28,6 @@ import { toast } from "../components/ui";
 import {
   useAuthStore,
   useChatStore,
-  useGroupStore,
   useSelectedConversation,
   useCurrentMessages,
   useCurrentTypingStatus,
@@ -39,7 +38,7 @@ import { useFilePreview } from "../hooks/useFilePreview";
 import type { PreviewTarget } from "../hooks/useFilePreview";
 import { getPreviewType } from "../utils/formatFileSize";
 import { rankConversations } from "../utils/conversationRanking";
-import { MessageType, UserStatus } from "../types";
+import { UserStatus } from "../types";
 import { isDirectConversation } from "../lib/conversationAdapter";
 import { getOtherParticipant } from "../utils/messageHelpers";
 import { isMessageDebugEnabled, logMessageDebug } from "../utils/messageDebug";
@@ -53,6 +52,7 @@ import { addReactionUseCase } from "../features/chat/usecases/addReaction";
 import { removeReactionUseCase } from "../features/chat/usecases/removeReaction";
 import { editMessageUseCase } from "../features/chat/usecases/editMessage";
 import { deleteMessageUseCase } from "../features/chat/usecases/deleteMessage";
+import { useSendMessage } from "../features/chat/hooks/useSendMessage";
 
 type IdleCallbackDeadline = {
   didTimeout: boolean;
@@ -114,7 +114,6 @@ export const ChatPage: React.FC = () => {
 
   // Auth store
   const { user } = useAuthStore();
-  const setSlowModeCooldown = useGroupStore((s) => s.setSlowModeCooldown);
 
   // Chat store — stable functions + data that drives re-renders.
   // Per-conversation loading/error/hasMore are derived separately below to
@@ -134,7 +133,6 @@ export const ChatPage: React.FC = () => {
     conversationsError,
     fetchConversations,
     fetchMessages,
-    storeSendMessage,
     markAsRead,
   } = useChatStore(
     useShallow((state) => ({
@@ -151,7 +149,6 @@ export const ChatPage: React.FC = () => {
       conversationsError: state.conversationsError,
       fetchConversations: state.fetchConversations,
       fetchMessages: state.fetchMessages,
-      storeSendMessage: state.sendMessage,
       markAsRead: state.markAsRead,
     })),
   );
@@ -391,97 +388,13 @@ export const ChatPage: React.FC = () => {
   );
   const websocketReady = connectionState === "connected";
 
-  // Handle send message
-  const handleSendMessage = useCallback(
-    async (
-      content: string,
-      replyTo?: Message,
-      fileMeta?: Attachment | Attachment[] | undefined,
-      type: MessageType = MessageType.TEXT,
-    ) => {
-      if (!selectedConversationId) {
-        const error = new Error(
-          t("error:chat.conversationOpenFailed", {
-            defaultValue: "Conversation is not ready yet.",
-          }),
-        );
-        logMessageDebug("ChatPage", "send_blocked_no_selected_conversation", {
-          contentLength: content.trim().length,
-          type,
-        });
-        throw error;
-      }
-
-      const canSendImmediately = Boolean(
-        selectedConversationId &&
-        selectedConversation &&
-        isCurrentRouteValidated &&
-        !isValidatingRoom,
-      );
-      if (!canSendImmediately) {
-        const error = new Error(
-          t("common:loading.default", {
-            defaultValue: "Loading conversation...",
-          }),
-        );
-        logMessageDebug("ChatPage", "send_blocked_conversation_not_ready", {
-          conversationId: selectedConversationId,
-          isCurrentRouteValidated,
-          hasSelectedConversation: Boolean(selectedConversation),
-          isHistoryHydrated:
-            useChatStore.getState().messagesHydratedByConversation[
-              selectedConversationId
-            ] === true,
-          isValidatingRoom,
-          contentLength: content.trim().length,
-          type,
-        });
-        throw error;
-      }
-
-      try {
-        return await storeSendMessage(
-          selectedConversationId,
-          content,
-          type,
-          fileMeta,
-          replyTo?.id,
-          replyTo,
-        );
-      } catch (error) {
-        const apiError = extractApiError(error);
-        const details =
-          apiError.details && typeof apiError.details === "object"
-            ? (apiError.details as Record<string, unknown>)
-            : null;
-        const retryAfterSeconds =
-          details && typeof details.retryAfterSeconds === "number"
-            ? details.retryAfterSeconds
-            : null;
-
-        if (
-          (apiError.code === ErrorCode.SLOW_MODE_ACTIVE ||
-            String(apiError.code).toUpperCase() === "SLOW_MODE_ACTIVE") &&
-          retryAfterSeconds &&
-          retryAfterSeconds > 0
-        ) {
-          setSlowModeCooldown(selectedConversationId, retryAfterSeconds);
-        }
-
-        toast.error(apiError.message || t("error:chat.sendFailed"));
-        throw error;
-      }
-    },
-    [
-      isCurrentRouteValidated,
-      isValidatingRoom,
-      selectedConversation,
-      selectedConversationId,
-      setSlowModeCooldown,
-      storeSendMessage,
-      t,
-    ],
-  );
+  const handleSendMessage = useSendMessage({
+    selectedConversationId,
+    hasSelectedConversation: Boolean(selectedConversation),
+    isCurrentRouteValidated,
+    isValidatingRoom,
+    source: "ChatPage",
+  });
 
   const handleLoadOlderMessages = useCallback(async () => {
     if (!selectedConversationId) return;

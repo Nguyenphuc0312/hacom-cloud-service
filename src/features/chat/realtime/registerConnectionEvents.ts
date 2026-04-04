@@ -5,15 +5,18 @@ import type {
   SocketLike,
 } from "../types";
 
-interface ChatEventHandlers {
-  onMessageNew?: RealtimeEventHandler;
-  onMessageUpdated?: RealtimeEventHandler;
-  onMessageDeleted?: RealtimeEventHandler;
+interface ConnectionEventHandlers {
+  onConnect?: RealtimeEventHandler;
+  onDisconnect?: RealtimeEventHandler;
+  onConnectError?: RealtimeEventHandler;
+  onWsError?: RealtimeEventHandler;
+  onAuthUnauthorized?: RealtimeEventHandler;
+  onAuthReauthRequired?: RealtimeEventHandler;
 }
 
-export const registerChatEvents = (
+export const registerConnectionEvents = (
   socket: SocketLike,
-  handlers: ChatEventHandlers,
+  handlers: ConnectionEventHandlers,
 ): RealtimeUnsubscribe => {
   const cleanups: RealtimeUnsubscribe[] = [];
 
@@ -34,9 +37,12 @@ export const registerChatEvents = (
     }
   };
 
-  register(WebSocketEvents.MESSAGE_NEW, handlers.onMessageNew);
-  register(WebSocketEvents.MESSAGE_UPDATED, handlers.onMessageUpdated);
-  register(WebSocketEvents.MESSAGE_DELETED, handlers.onMessageDeleted);
+  register("connect", handlers.onConnect);
+  register("disconnect", handlers.onDisconnect);
+  register("connect_error", handlers.onConnectError);
+  register(WebSocketEvents.ERROR, handlers.onWsError);
+  register(WebSocketEvents.AUTH_UNAUTHORIZED, handlers.onAuthUnauthorized);
+  register(WebSocketEvents.AUTH_REAUTH_REQUIRED, handlers.onAuthReauthRequired);
 
   return () => {
     cleanups.forEach((cleanup) => cleanup());

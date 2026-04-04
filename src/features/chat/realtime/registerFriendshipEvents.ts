@@ -5,15 +5,15 @@ import type {
   SocketLike,
 } from "../types";
 
-interface ChatEventHandlers {
-  onMessageNew?: RealtimeEventHandler;
-  onMessageUpdated?: RealtimeEventHandler;
-  onMessageDeleted?: RealtimeEventHandler;
+interface FriendshipEventHandlers {
+  onFriendRequestNew?: RealtimeEventHandler;
+  onFriendRequestUpdated?: RealtimeEventHandler;
+  onFriendStatusChanged?: RealtimeEventHandler;
 }
 
-export const registerChatEvents = (
+export const registerFriendshipEvents = (
   socket: SocketLike,
-  handlers: ChatEventHandlers,
+  handlers: FriendshipEventHandlers,
 ): RealtimeUnsubscribe => {
   const cleanups: RealtimeUnsubscribe[] = [];
 
@@ -34,9 +34,15 @@ export const registerChatEvents = (
     }
   };
 
-  register(WebSocketEvents.MESSAGE_NEW, handlers.onMessageNew);
-  register(WebSocketEvents.MESSAGE_UPDATED, handlers.onMessageUpdated);
-  register(WebSocketEvents.MESSAGE_DELETED, handlers.onMessageDeleted);
+  register(WebSocketEvents.FRIEND_REQUEST_NEW, handlers.onFriendRequestNew);
+  register(
+    WebSocketEvents.FRIEND_REQUEST_UPDATED,
+    handlers.onFriendRequestUpdated,
+  );
+  register(
+    WebSocketEvents.FRIEND_STATUS_CHANGED,
+    handlers.onFriendStatusChanged,
+  );
 
   return () => {
     cleanups.forEach((cleanup) => cleanup());

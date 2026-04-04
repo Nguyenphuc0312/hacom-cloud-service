@@ -22,9 +22,19 @@ import { Input, Spinner, toast } from "../ui";
 import type { Conversation, UserSummary } from "../../types";
 import { RoomMemberRole, UserStatus } from "../../types";
 import { useDebounce } from "../../hooks";
-import { conversationApi, groupApi, userApi } from "../../services/api";
 import { useChatStore, useGroupStore } from "../../stores";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
+import { getConversationMembersUseCase } from "../../features/chat/usecases/getConversationMembers";
+import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
+import { searchUsersUseCase } from "../../features/chat/usecases/searchUsers";
+import { addConversationMembersUseCase } from "../../features/chat/usecases/addConversationMembers";
+import { updateConversationUseCase } from "../../features/chat/usecases/updateConversation";
+import { updateConversationMemberRoleUseCase } from "../../features/chat/usecases/updateConversationMemberRole";
+import { removeConversationMemberUseCase } from "../../features/chat/usecases/removeConversationMember";
+import { leaveConversationUseCase } from "../../features/chat/usecases/leaveConversation";
+import { createGroupInviteLinkUseCase } from "../../features/chat/usecases/createGroupInviteLink";
+import { revokeGroupInviteLinkUseCase } from "../../features/chat/usecases/revokeGroupInviteLink";
+import { resolveGroupJoinRequestUseCase } from "../../features/chat/usecases/resolveGroupJoinRequest";
 
 interface GroupInfoProps {
   conversation: Conversation;
@@ -66,7 +76,9 @@ const asString = (value: unknown): string | undefined =>
 const asStatus = (value: unknown): UserSummary["status"] | undefined => {
   const status = asString(value);
   if (!status) return undefined;
-  return VALID_STATUSES.has(status) ? (status as UserSummary["status"]) : undefined;
+  return VALID_STATUSES.has(status)
+    ? (status as UserSummary["status"])
+    : undefined;
 };
 
 const extractMemberRows = (payload: unknown): unknown[] => {
@@ -104,13 +116,18 @@ const normalizeMember = (raw: unknown): GroupMember | null => {
     : RoomMemberRole.MEMBER;
 
   const username =
-    asString(raw.username) ?? asString(user?.username) ?? asString(raw.nickname) ?? id;
+    asString(raw.username) ??
+    asString(user?.username) ??
+    asString(raw.nickname) ??
+    id;
 
   return {
     id,
     username,
     displayName:
-      asString(raw.displayName) ?? asString(user?.displayName) ?? asString(raw.nickname),
+      asString(raw.displayName) ??
+      asString(user?.displayName) ??
+      asString(raw.nickname),
     avatar: asString(raw.avatar) ?? asString(user?.avatar),
     status: asStatus(raw.status) ?? asStatus(user?.status),
     role,
@@ -142,9 +159,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
-  const [membersByUserId, setMembersByUserId] = useState<Record<string, GroupMember>>(
-    {},
-  );
+  const [membersByUserId, setMembersByUserId] = useState<
+    Record<string, GroupMember>
+  >({});
   const [actingMemberId, setActingMemberId] = useState<string | null>(null);
   const [isRenamingGroup, setIsRenamingGroup] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState(conversation.name || "");
@@ -177,7 +194,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   const createdBy = React.useMemo(() => {
     if (!isRecord(conversation)) return undefined;
-    return asString((conversation as unknown as Record<string, unknown>).createdBy);
+    return asString(
+      (conversation as unknown as Record<string, unknown>).createdBy,
+    );
   }, [conversation]);
 
   const members = React.useMemo<GroupMember[]>(() => {
@@ -193,7 +212,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         status: participant.status,
         role:
           existingMember?.role ||
-          (participant.id === createdBy ? RoomMemberRole.OWNER : RoomMemberRole.MEMBER),
+          (participant.id === createdBy
+            ? RoomMemberRole.OWNER
+            : RoomMemberRole.MEMBER),
       });
     });
 
@@ -215,9 +236,12 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   const currentUserRole =
     membersByUserId[currentUserId]?.role ||
-    (currentUserId === createdBy ? RoomMemberRole.OWNER : RoomMemberRole.MEMBER);
+    (currentUserId === createdBy
+      ? RoomMemberRole.OWNER
+      : RoomMemberRole.MEMBER);
   const isAdmin =
-    currentUserRole === RoomMemberRole.OWNER || currentUserRole === RoomMemberRole.ADMIN;
+    currentUserRole === RoomMemberRole.OWNER ||
+    currentUserRole === RoomMemberRole.ADMIN;
   const canManageRoles = currentUserRole === RoomMemberRole.OWNER;
 
   const canRemoveMember = useCallback(
@@ -233,8 +257,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   const roleLabel = useCallback(
     (role: GroupMemberRole) => {
-      if (role === RoomMemberRole.OWNER) return t("profile:groupInfo.roles.owner");
-      if (role === RoomMemberRole.ADMIN) return t("profile:groupInfo.roles.admin");
+      if (role === RoomMemberRole.OWNER)
+        return t("profile:groupInfo.roles.owner");
+      if (role === RoomMemberRole.ADMIN)
+        return t("profile:groupInfo.roles.admin");
       return t("profile:groupInfo.roles.member");
     },
     [t],
@@ -255,7 +281,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const fetchMembers = useCallback(async () => {
     setIsLoadingMembers(true);
     try {
-      const response = await conversationApi.getMembers(conversation.id, 1, 200);
+      const response = await getConversationMembersUseCase(
+        conversation.id,
+        1,
+        200,
+      );
       const payload = unwrapApiSuccess(response);
       const rows = extractMemberRows(payload);
       const nextMembers = rows
@@ -276,7 +306,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   }, [conversation.id, t]);
 
   const refreshConversation = useCallback(async () => {
-    const response = await conversationApi.getConversationById(conversation.id);
+    const response = await getConversationByIdUseCase(conversation.id);
     const refreshedConversation = unwrapApiSuccess(response);
     updateConversation(conversation.id, refreshedConversation);
   }, [conversation.id, updateConversation]);
@@ -300,7 +330,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
       setIsSearching(true);
       try {
-        const response = await userApi.searchUsers(query, 1, 10);
+        const response = await searchUsersUseCase(query, 1, 10);
         const memberIds = new Set(members.map((member) => member.id));
         const users = unwrapApiSuccess(response).filter(
           (user) => !memberIds.has(user.id) && user.id !== currentUserId,
@@ -323,7 +353,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     async (userId: string) => {
       setIsSubmitting(true);
       try {
-        const response = await conversationApi.addMembers(conversation.id, [userId]);
+        const response = await addConversationMembersUseCase(conversation.id, [
+          userId,
+        ]);
         const updatedConversation = unwrapApiSuccess(response);
         updateConversation(conversation.id, updatedConversation);
         void fetchMembers();
@@ -356,7 +388,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
     setIsSubmitting(true);
     try {
-      await conversationApi.updateConversation(conversation.id, { name: nextName });
+      await updateConversationUseCase(conversation.id, { name: nextName });
       await refreshConversation();
       setIsRenamingGroup(false);
       toast.success(t("profile:toast.groupRenamed"));
@@ -387,7 +419,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
       setActingMemberId(member.id);
       try {
-        await conversationApi.updateMemberRole(conversation.id, member.id, nextRole);
+        await updateConversationMemberRoleUseCase(
+          conversation.id,
+          member.id,
+          nextRole,
+        );
         await fetchMembers();
         toast.success(
           nextRole === RoomMemberRole.ADMIN
@@ -419,7 +455,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
       setActingMemberId(member.id);
       try {
-        await conversationApi.removeMember(conversation.id, member.id);
+        await removeConversationMemberUseCase(conversation.id, member.id);
         await Promise.all([refreshConversation(), fetchMembers()]);
         toast.success(t("profile:toast.memberRemoved"));
       } catch (error) {
@@ -437,7 +473,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
     setIsSubmitting(true);
     try {
-      await conversationApi.leaveConversation(conversation.id);
+      await leaveConversationUseCase(conversation.id);
       removeConversation(conversation.id);
       toast.success(t("profile:toast.leftGroup"));
       onClose();
@@ -454,7 +490,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     { id: "members", label: t("profile:groupInfo.tabs.members") },
     {
       id: "inviteLinks",
-      label: t("profile:groupInfo.tabs.inviteLinks", { defaultValue: "Invite links" }),
+      label: t("profile:groupInfo.tabs.inviteLinks", {
+        defaultValue: "Invite links",
+      }),
     },
     {
       id: "joinRequests",
@@ -472,7 +510,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     const usageLimit = inviteUsageLimitDraft.trim()
       ? Number(inviteUsageLimitDraft.trim())
       : undefined;
-    if (usageLimit !== undefined && (!Number.isFinite(usageLimit) || usageLimit <= 0)) {
+    if (
+      usageLimit !== undefined &&
+      (!Number.isFinite(usageLimit) || usageLimit <= 0)
+    ) {
       toast.error(
         t("profile:groupInfo.invite.invalidUsageLimit", {
           defaultValue: "Usage limit must be greater than 0",
@@ -483,7 +524,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
     setIsCreatingInvite(true);
     try {
-      const response = await groupApi.createInviteLink(conversation.id, {
+      const response = await createGroupInviteLinkUseCase({
+        conversationId: conversation.id,
         name: inviteNameDraft.trim() || undefined,
         expireAt: inviteExpireAtDraft
           ? new Date(inviteExpireAtDraft).toISOString()
@@ -504,13 +546,17 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           typeof payload.inviteUrl === "string" ? payload.inviteUrl : undefined,
         token: typeof payload.token === "string" ? payload.token : undefined,
         tokenPreview:
-          typeof payload.tokenPreview === "string" ? payload.tokenPreview : undefined,
+          typeof payload.tokenPreview === "string"
+            ? payload.tokenPreview
+            : undefined,
         usageCount:
           typeof payload.usageCount === "number" ? payload.usageCount : 0,
         usageLimit:
           typeof payload.usageLimit === "number" ? payload.usageLimit : null,
-        expireAt: typeof payload.expireAt === "string" ? payload.expireAt : null,
-        revokedAt: typeof payload.revokedAt === "string" ? payload.revokedAt : null,
+        expireAt:
+          typeof payload.expireAt === "string" ? payload.expireAt : null,
+        revokedAt:
+          typeof payload.revokedAt === "string" ? payload.revokedAt : null,
         createdAt:
           typeof payload.createdAt === "string"
             ? payload.createdAt
@@ -580,7 +626,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       if (!isAdmin || !linkId) return;
       setRevokingInviteId(linkId);
       try {
-        await groupApi.revokeInviteLink(conversation.id, linkId);
+        await revokeGroupInviteLinkUseCase(conversation.id, linkId);
         markInviteLinkRevoked(conversation.id, linkId);
         toast.success(
           t("profile:groupInfo.invite.revoked", {
@@ -608,7 +654,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
       setResolvingRequestId(requestId);
       try {
-        await groupApi.resolveJoinRequest(conversation.id, requestId, status);
+        await resolveGroupJoinRequestUseCase(
+          conversation.id,
+          requestId,
+          status,
+        );
         markJoinRequestResolved(conversation.id, requestId, status);
         removeJoinRequest(conversation.id, requestId);
         if (status === "approved") {
@@ -719,7 +769,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   {t("profile:groupInfo.membersCount", {
                     count:
                       conversation.participantCount ??
-                      (members.length > 0 ? members.length : participants.length),
+                      (members.length > 0
+                        ? members.length
+                        : participants.length),
                   })}
                 </p>
                 {isAdmin && (
@@ -906,7 +958,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                             <button
                               type="button"
                               disabled={isMemberActionRunning}
-                              onClick={() => void handleToggleMemberRole(member)}
+                              onClick={() =>
+                                void handleToggleMemberRole(member)
+                              }
                               className="text-xs px-2 py-0.5 rounded border border-border text-text-secondary hover:bg-surface-overlay disabled:opacity-60"
                             >
                               {member.role === RoomMemberRole.ADMIN
@@ -991,10 +1045,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                       <Input
                         type="text"
                         value={inviteNameDraft}
-                        onChange={(event) => setInviteNameDraft(event.target.value)}
-                        placeholder={t("profile:groupInfo.invite.namePlaceholder", {
-                          defaultValue: "Name (optional)",
-                        })}
+                        onChange={(event) =>
+                          setInviteNameDraft(event.target.value)
+                        }
+                        placeholder={t(
+                          "profile:groupInfo.invite.namePlaceholder",
+                          {
+                            defaultValue: "Name (optional)",
+                          },
+                        )}
                         disabled={isCreatingInvite}
                       />
                       <Input
@@ -1012,7 +1071,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                       <Input
                         type="datetime-local"
                         value={inviteExpireAtDraft}
-                        onChange={(event) => setInviteExpireAtDraft(event.target.value)}
+                        onChange={(event) =>
+                          setInviteExpireAtDraft(event.target.value)
+                        }
                         disabled={isCreatingInvite}
                       />
                       <div className="flex items-center justify-end gap-2">
@@ -1070,7 +1131,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                                     })}
                                 </p>
                                 <p className="mt-1 truncate text-xs text-text-muted">
-                                  {link.inviteUrl || link.tokenPreview || link.id}
+                                  {link.inviteUrl ||
+                                    link.tokenPreview ||
+                                    link.id}
                                 </p>
                                 <p className="mt-1 text-xs text-text-muted">
                                   {t("profile:groupInfo.invite.usage", {
@@ -1096,7 +1159,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                               <button
                                 type="button"
                                 disabled={!shareValue}
-                                onClick={() => void handleCopyInviteLink(shareValue)}
+                                onClick={() =>
+                                  void handleCopyInviteLink(shareValue)
+                                }
                                 className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover disabled:opacity-50"
                               >
                                 <ClipboardDocumentIcon className="h-3.5 w-3.5" />
@@ -1106,7 +1171,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                                 <button
                                   type="button"
                                   disabled={revokingInviteId === link.id}
-                                  onClick={() => void handleRevokeInvite(link.id)}
+                                  onClick={() =>
+                                    void handleRevokeInvite(link.id)
+                                  }
                                   className="inline-flex items-center gap-1 rounded-md border border-danger/40 px-2 py-1 text-xs text-danger hover:bg-danger/10 disabled:opacity-50"
                                 >
                                   <NoSymbolIcon className="h-3.5 w-3.5" />
@@ -1183,7 +1250,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                           type="button"
                           disabled={resolvingRequestId === request.id}
                           onClick={() =>
-                            void handleResolveJoinRequest(request.id, "approved")
+                            void handleResolveJoinRequest(
+                              request.id,
+                              "approved",
+                            )
                           }
                           className="rounded-md bg-primary px-3 py-1.5 text-xs text-text-inverse hover:opacity-90 disabled:opacity-60"
                         >
@@ -1195,7 +1265,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                           type="button"
                           disabled={resolvingRequestId === request.id}
                           onClick={() =>
-                            void handleResolveJoinRequest(request.id, "rejected")
+                            void handleResolveJoinRequest(
+                              request.id,
+                              "rejected",
+                            )
                           }
                           className="rounded-md border border-danger/40 px-3 py-1.5 text-xs text-danger hover:bg-danger/10 disabled:opacity-60"
                         >
@@ -1224,7 +1297,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-danger"
           >
             <TrashIcon className="w-5 h-5" />
-            <span className="text-sm">{t("profile:userProfile.deleteConversation")}</span>
+            <span className="text-sm">
+              {t("profile:userProfile.deleteConversation")}
+            </span>
           </button>
 
           <button
@@ -1232,7 +1307,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-danger"
           >
             <ExclamationTriangleIcon className="w-5 h-5" />
-            <span className="text-sm">{t("profile:groupInfo.reportGroup")}</span>
+            <span className="text-sm">
+              {t("profile:groupInfo.reportGroup")}
+            </span>
           </button>
 
           <button

@@ -18,10 +18,10 @@ import { EditProfileModal } from "../modals/EditProfileModal";
 import { useAuthStore, usePresenceStore } from "../../stores";
 import { useFriendship } from "../../hooks/useFriendship";
 import { usePresence } from "../../hooks/usePresence";
-import { userApi } from "../../services/api";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import type { UserSummary } from "../../types";
 import { UserStatus } from "../../types";
+import { getUserByIdUseCase } from "../../features/chat/usecases/getUserById";
 
 type ProfileUser = Partial<UserSummary> & {
   id: string;
@@ -49,8 +49,10 @@ const formatDisplayName = (user: ProfileUser | null | undefined): string => {
     typeof user.displayName === "string" ? user.displayName.trim() : "";
   if (displayName) return displayName;
 
-  const firstName = typeof user.firstName === "string" ? user.firstName.trim() : "";
-  const lastName = typeof user.lastName === "string" ? user.lastName.trim() : "";
+  const firstName =
+    typeof user.firstName === "string" ? user.firstName.trim() : "";
+  const lastName =
+    typeof user.lastName === "string" ? user.lastName.trim() : "";
   const fullName = `${firstName} ${lastName}`.trim();
   if (fullName) return fullName;
 
@@ -178,7 +180,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     }
 
     setUser((current) =>
-      current?.id === initialUser?.id && initialUser ? { ...current, ...initialUser } : initialUser ?? current,
+      current?.id === initialUser?.id && initialUser
+        ? { ...current, ...initialUser }
+        : (initialUser ?? current),
     );
   }, [authUser, initialUser, isSelf]);
 
@@ -189,7 +193,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       if (!userId || isSelf) return;
       setIsLoading(true);
       try {
-        const response = await userApi.getUserById(userId);
+        const response = await getUserByIdUseCase(userId);
         const payload = unwrapApiSuccess(response);
         if (!isMounted) return;
 
@@ -390,12 +394,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     if (relationship.kind === "outgoing_request") {
       return (
         <div className="flex gap-2">
-          <Button
-            type="button"
-            fullWidth
-            variant="secondary"
-            disabled
-          >
+          <Button type="button" fullWidth variant="secondary" disabled>
             {t("friends:relationship.outgoing", { defaultValue: "Requested" })}
           </Button>
           <Button
@@ -487,7 +486,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           <div>
             <h3 className="text-base font-semibold text-text-primary">
               {isSelf
-                ? t("friends:relationship.self", { defaultValue: "Your profile" })
+                ? t("friends:relationship.self", {
+                    defaultValue: "Your profile",
+                  })
                 : t("profile:userProfile.title")}
             </h3>
             <p className="text-xs text-text-muted">
@@ -571,9 +572,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 </div>
               </section>
 
-              <section className="space-y-3">
-                {renderActions()}
-              </section>
+              <section className="space-y-3">{renderActions()}</section>
 
               <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className={statCardClass}>
@@ -639,7 +638,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 </div>
               </section>
 
-              {!isSelf && onStartConversation && relationship.kind === "friend" ? (
+              {!isSelf &&
+              onStartConversation &&
+              relationship.kind === "friend" ? (
                 <section className="rounded-2xl border border-border/80 bg-surface px-4 py-4">
                   <div className="flex items-start gap-3">
                     <ChatBubbleLeftRightIcon className="mt-0.5 h-5 w-5 text-text-muted" />

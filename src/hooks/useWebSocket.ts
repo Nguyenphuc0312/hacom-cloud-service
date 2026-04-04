@@ -16,7 +16,6 @@ import {
 } from "../lib/socket";
 import { AUTH_CONFIG } from "../config";
 import { resetAuthFailureState } from "../lib/axios";
-import { conversationApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import { useAuthStore, useChatStore, useGroupStore } from "../stores";
 import { getAccessToken } from "../services/tokenService";
@@ -33,6 +32,16 @@ import {
 } from "../utils/notificationRouter";
 import { logMessageDebug } from "../utils/messageDebug";
 import { buildMessageCorrelationKey } from "../utils/messageIdentity";
+import {
+  registerChatEvents,
+  registerConnectionEvents,
+  registerConversationEvents,
+  registerFriendshipEvents,
+  registerGroupEvents,
+  registerPresenceEvents,
+  registerSyncEvents,
+} from "../features/chat/realtime";
+import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
 
 interface UseWebSocketOptions {
   autoConnect?: boolean;
@@ -109,11 +118,7 @@ const toCursorValue = (value: unknown): string | undefined => {
 };
 
 const getConversationIds = (payload: Record<string, unknown>): string[] => {
-  const candidates = [
-    payload.conversationIds,
-    payload.roomIds,
-    payload.rooms,
-  ];
+  const candidates = [payload.conversationIds, payload.roomIds, payload.rooms];
 
   for (const candidate of candidates) {
     if (Array.isArray(candidate)) {
@@ -569,11 +574,15 @@ export const useWebSocket = (
 
         const connectionState = getSocket()?.getConnectionState() ?? "unknown";
         if (connectionState !== "connected") {
-          logMessageDebug("useWebSocket", "room_join_retry_waiting_connection", {
-            roomId,
-            reason: options?.reason,
-            connectionState,
-          });
+          logMessageDebug(
+            "useWebSocket",
+            "room_join_retry_waiting_connection",
+            {
+              roomId,
+              reason: options?.reason,
+              connectionState,
+            },
+          );
           return;
         }
 
@@ -609,7 +618,7 @@ export const useWebSocket = (
     unsubscribersRef.current.forEach((unsub) => unsub());
     unsubscribersRef.current = [];
 
-    const unsubConnect = socket.on("connect", () => {
+    const handleConnect = () => {
       logMessageDebug("useWebSocket", "socket_connected", {
         shouldResync: shouldResyncOnConnectRef.current,
         joinedRooms: Array.from(joinedRoomsRef.current),
@@ -645,10 +654,9 @@ export const useWebSocket = (
         joinedRooms: Array.from(joinedRoomsRef.current),
       });
       void flushQueuedMessages();
-    });
-    unsubscribersRef.current.push(unsubConnect);
+    };
 
-    const unsubDisconnect = socket.on("disconnect", (data) => {
+    const handleDisconnect = (data: unknown) => {
       const payload = asRecord(data);
       const code =
         typeof payload?.code === "number"
@@ -666,48 +674,47 @@ export const useWebSocket = (
         void recoverSocketAuth("ws_close_4401", "close_4401");
       }
       onDisconnect?.(reason);
-    });
-    unsubscribersRef.current.push(unsubDisconnect);
+    };
 
-    const unsubConnectError = socket.on("connect_error", (data) => {
+    const handleConnectError = (data: unknown) => {
       const message =
         asString(asRecord(data)?.message) ?? "WebSocket connection error";
       onError?.(new Error(message));
-    });
-    unsubscribersRef.current.push(unsubConnectError);
+    };
 
-    const unsubWsError = socket.on(WebSocketEvents.ERROR, (data) => {
+    const handleWsError = (data: unknown) => {
       const message =
         asString(asRecord(data)?.message) ?? "WebSocket server error";
       onError?.(new Error(message));
+    };
+
+    const handleAuthUnauthorized = (data: unknown) => {
+      const payload = asRecord(data);
+      const message = asString(payload?.message) ?? "WebSocket unauthorized";
+      const code = asString(payload?.code) ?? "AUTH_UNAUTHORIZED";
+      void recoverSocketAuth("ws_unauthorized", code);
+      onError?.(new Error(message));
+    };
+
+    const handleAuthReauthRequired = (data: unknown) => {
+      const reason =
+        asString(asRecord(data)?.reason) ?? "reauthentication required";
+      void recoverSocketAuth(
+        "ws_reauth_required",
+        reason,
+        reason === "authenticate_required" ? "reauth" : "reconnect",
+      );
+    };
+
+    const unsubscribeConnectionEvents = registerConnectionEvents(socket, {
+      onConnect: handleConnect,
+      onDisconnect: handleDisconnect,
+      onConnectError: handleConnectError,
+      onWsError: handleWsError,
+      onAuthUnauthorized: handleAuthUnauthorized,
+      onAuthReauthRequired: handleAuthReauthRequired,
     });
-    unsubscribersRef.current.push(unsubWsError);
-
-    const unsubAuthUnauthorized = socket.on(
-      WebSocketEvents.AUTH_UNAUTHORIZED,
-      (data) => {
-        const payload = asRecord(data);
-        const message = asString(payload?.message) ?? "WebSocket unauthorized";
-        const code = asString(payload?.code) ?? "AUTH_UNAUTHORIZED";
-        void recoverSocketAuth("ws_unauthorized", code);
-        onError?.(new Error(message));
-      },
-    );
-    unsubscribersRef.current.push(unsubAuthUnauthorized);
-
-    const unsubReauthRequired = socket.on(
-      WebSocketEvents.AUTH_REAUTH_REQUIRED,
-      (data) => {
-        const reason =
-          asString(asRecord(data)?.reason) ?? "reauthentication required";
-        void recoverSocketAuth(
-          "ws_reauth_required",
-          reason,
-          reason === "authenticate_required" ? "reauth" : "reconnect",
-        );
-      },
-    );
-    unsubscribersRef.current.push(unsubReauthRequired);
+    unsubscribersRef.current.push(unsubscribeConnectionEvents);
 
     const upsertIncomingMessage = (
       data: unknown,
@@ -741,9 +748,7 @@ export const useWebSocket = (
         tempId ??
         undefined;
       const stableId =
-        asString(messagePayload.stableId) ??
-        localId ??
-        messageId;
+        asString(messagePayload.stableId) ?? localId ?? messageId;
       const correlationKey = buildMessageCorrelationKey({
         conversationId,
         clientMessageId,
@@ -784,10 +789,33 @@ export const useWebSocket = (
       }
     };
 
-    const unsubMessageNew = socket.on(WebSocketEvents.MESSAGE_NEW, (data) => {
-      upsertIncomingMessage(data, "message:new");
+    const unsubscribeChatEvents = registerChatEvents(socket, {
+      onMessageNew: (data: unknown) => {
+        upsertIncomingMessage(data, "message:new");
+      },
+      onMessageUpdated: (data: unknown) => {
+        upsertIncomingMessage(data, "message:updated");
+      },
+      onMessageDeleted: (data: unknown) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+
+        const conversationId = getConversationId(payload);
+        const messageId =
+          asString(payload.messageId) ??
+          asString(payload.id) ??
+          asString(payload._id) ??
+          asString(asRecord(payload.message)?.id);
+        if (!conversationId || !messageId) return;
+        logMessageDebug("useWebSocket", "socket_message_deleted_received", {
+          conversationId,
+          messageId,
+        });
+
+        removeMessage(conversationId, messageId);
+      },
     });
-    unsubscribersRef.current.push(unsubMessageNew);
+    unsubscribersRef.current.push(unsubscribeChatEvents);
 
     const handleRoomJoined = (data: unknown) => {
       const payload = asRecord(data);
@@ -806,18 +834,6 @@ export const useWebSocket = (
       });
     };
 
-    const unsubRoomJoined = socket.on(
-      WebSocketEvents.ROOM_JOINED,
-      handleRoomJoined,
-    );
-    unsubscribersRef.current.push(unsubRoomJoined);
-
-    const unsubConversationJoined = socket.on(
-      WebSocketEvents.CONVERSATION_JOINED,
-      handleRoomJoined,
-    );
-    unsubscribersRef.current.push(unsubConversationJoined);
-
     const handleRoomLeft = (data: unknown) => {
       const payload = asRecord(data);
       if (!payload) return;
@@ -832,46 +848,6 @@ export const useWebSocket = (
         roomId,
       });
     };
-
-    const unsubRoomLeft = socket.on(WebSocketEvents.ROOM_LEFT, handleRoomLeft);
-    unsubscribersRef.current.push(unsubRoomLeft);
-
-    const unsubConversationLeft = socket.on(
-      WebSocketEvents.CONVERSATION_LEFT,
-      handleRoomLeft,
-    );
-    unsubscribersRef.current.push(unsubConversationLeft);
-
-    const unsubMessageUpdated = socket.on(
-      WebSocketEvents.MESSAGE_UPDATED,
-      (data) => {
-        upsertIncomingMessage(data, "message:updated");
-      },
-    );
-    unsubscribersRef.current.push(unsubMessageUpdated);
-
-    const unsubMessageDeleted = socket.on(
-      WebSocketEvents.MESSAGE_DELETED,
-      (data) => {
-        const payload = asRecord(data);
-        if (!payload) return;
-
-        const conversationId = getConversationId(payload);
-        const messageId =
-          asString(payload.messageId) ??
-          asString(payload.id) ??
-          asString(payload._id) ??
-          asString(asRecord(payload.message)?.id);
-        if (!conversationId || !messageId) return;
-        logMessageDebug("useWebSocket", "socket_message_deleted_received", {
-          conversationId,
-          messageId,
-        });
-
-        removeMessage(conversationId, messageId);
-      },
-    );
-    unsubscribersRef.current.push(unsubMessageDeleted);
 
     const handleReadReceipt = (data: unknown) => {
       const payload = asRecord(data);
@@ -896,155 +872,79 @@ export const useWebSocket = (
       );
     };
 
-    const unsubRead = socket.on(
-      WebSocketEvents.MESSAGE_READ,
-      handleReadReceipt,
-    );
-    unsubscribersRef.current.push(unsubRead);
+    const handleMemberUpdated = (data: unknown) => {
+      const payload = asRecord(data);
+      if (!payload) return;
 
-    const unsubMemberUpdated = socket.on(
-      WebSocketEvents.MEMBER_UPDATED,
-      (data) => {
-        const payload = asRecord(data);
-        if (!payload) return;
+      const conversationId = getConversationId(payload);
+      if (!conversationId) return;
 
-        const conversationId = getConversationId(payload);
-        if (!conversationId) return;
-
-        void conversationApi
-          .getConversationById(conversationId)
-          .then((response) => {
-            updateConversation(conversationId, unwrapApiSuccess(response));
-          })
-          .catch(() => {
-            // no-op: best effort refresh member/role changes
-          });
-      },
-    );
-    unsubscribersRef.current.push(unsubMemberUpdated);
-
-    const unsubConversationDeleted = socket.on(
-      WebSocketEvents.CONVERSATION_DELETED,
-      (data) => {
-        const payload = asRecord(data);
-        if (!payload) return;
-
-        const conversationId = getConversationId(payload);
-        if (!conversationId) return;
-
-        const currentUserId = useAuthStore.getState().user?.id ?? null;
-        const deletedBy =
-          asString(payload.deletedBy) ?? asString(payload.userId);
-        if (deletedBy && currentUserId && deletedBy !== currentUserId) {
-          return;
-        }
-
-        joinedRoomsRef.current.delete(conversationId);
-        removeConversation(conversationId);
-        if (useChatStore.getState().selectedConversationId === conversationId) {
-          selectConversation(null);
-        }
-      },
-    );
-    unsubscribersRef.current.push(unsubConversationDeleted);
-
-    const unsubFriendRequestNew = socket.on(
-      WebSocketEvents.FRIEND_REQUEST_NEW,
-      () => {
-        notifySidebarState("friend:updated", { source: "socket" });
-      },
-    );
-    unsubscribersRef.current.push(unsubFriendRequestNew);
-
-    const unsubFriendRequestUpdated = socket.on(
-      WebSocketEvents.FRIEND_REQUEST_UPDATED,
-      () => {
-        notifySidebarState("friend:updated", { source: "socket" });
-      },
-    );
-    unsubscribersRef.current.push(unsubFriendRequestUpdated);
-
-    const unsubFriendStatusChanged = socket.on(
-      WebSocketEvents.FRIEND_STATUS_CHANGED,
-      (data) => {
-        const payload = asRecord(data);
-        const status = asString(payload?.status);
-        notifySidebarState("friend:updated", { source: "socket", status });
-        if (status === "blocked" || status === "canceled") {
-          notifyRoomInline("chat:permission:updated", {
-            source: "friendship",
-            status,
-          });
-        }
-      },
-    );
-    unsubscribersRef.current.push(unsubFriendStatusChanged);
-
-    const unsubGroupInviteNew = socket.on(
-      WebSocketEvents.GROUP_INVITE_NEW,
-      (data) => {
-        const payload = asRecord(data);
-        const roomId = payload ? getConversationId(payload) : null;
-        const candidate =
-          asRecord(payload?.inviteLink) ?? asRecord(payload?.link) ?? payload;
-        if (roomId && candidate && typeof candidate.id === "string") {
-          upsertInviteLink(roomId, {
-            id: candidate.id,
-            roomId,
-            name:
-              typeof candidate.name === "string" ? candidate.name : undefined,
-            inviteUrl:
-              typeof candidate.inviteUrl === "string"
-                ? candidate.inviteUrl
-                : undefined,
-            token:
-              typeof candidate.token === "string" ? candidate.token : undefined,
-            tokenPreview:
-              typeof candidate.tokenPreview === "string"
-                ? candidate.tokenPreview
-                : undefined,
-            usageCount:
-              typeof candidate.usageCount === "number"
-                ? candidate.usageCount
-                : 0,
-            usageLimit:
-              typeof candidate.usageLimit === "number"
-                ? candidate.usageLimit
-                : null,
-            expireAt:
-              typeof candidate.expireAt === "string"
-                ? candidate.expireAt
-                : null,
-            revokedAt:
-              typeof candidate.revokedAt === "string"
-                ? candidate.revokedAt
-                : null,
-            createdAt:
-              typeof candidate.createdAt === "string"
-                ? candidate.createdAt
-                : new Date().toISOString(),
-          });
-        }
-        notifySidebarState("group:invite:updated", {
-          source: "socket",
-          roomId,
+      void getConversationByIdUseCase(conversationId)
+        .then((response) => {
+          updateConversation(conversationId, unwrapApiSuccess(response));
+        })
+        .catch(() => {
+          // no-op: best effort refresh member/role changes
         });
-      },
-    );
-    unsubscribersRef.current.push(unsubGroupInviteNew);
+    };
 
-    const unsubGroupInviteUpdated = socket.on(
-      WebSocketEvents.GROUP_INVITE_UPDATED,
-      (data) => {
-        const payload = asRecord(data);
-        const roomId = payload ? getConversationId(payload) : null;
-        notifySidebarState("group:invite:updated", {
-          source: "socket",
-          roomId,
+    const handleConversationDeleted = (data: unknown) => {
+      const payload = asRecord(data);
+      if (!payload) return;
+
+      const conversationId = getConversationId(payload);
+      if (!conversationId) return;
+
+      const currentUserId = useAuthStore.getState().user?.id ?? null;
+      const deletedBy = asString(payload.deletedBy) ?? asString(payload.userId);
+      if (deletedBy && currentUserId && deletedBy !== currentUserId) {
+        return;
+      }
+
+      joinedRoomsRef.current.delete(conversationId);
+      removeConversation(conversationId);
+      if (useChatStore.getState().selectedConversationId === conversationId) {
+        selectConversation(null);
+      }
+    };
+
+    const unsubscribeConversationEvents = registerConversationEvents(socket, {
+      onRoomJoined: handleRoomJoined,
+      onConversationJoined: handleRoomJoined,
+      onRoomLeft: handleRoomLeft,
+      onConversationLeft: handleRoomLeft,
+      onMessageRead: handleReadReceipt,
+      onMemberUpdated: handleMemberUpdated,
+      onConversationDeleted: handleConversationDeleted,
+    });
+    unsubscribersRef.current.push(unsubscribeConversationEvents);
+
+    const handleFriendRequestNew = () => {
+      notifySidebarState("friend:updated", { source: "socket" });
+    };
+
+    const handleFriendRequestUpdated = () => {
+      notifySidebarState("friend:updated", { source: "socket" });
+    };
+
+    const handleFriendStatusChanged = (data: unknown) => {
+      const payload = asRecord(data);
+      const status = asString(payload?.status);
+      notifySidebarState("friend:updated", { source: "socket", status });
+      if (status === "blocked" || status === "canceled") {
+        notifyRoomInline("chat:permission:updated", {
+          source: "friendship",
+          status,
         });
-      },
-    );
-    unsubscribersRef.current.push(unsubGroupInviteUpdated);
+      }
+    };
+
+    const unsubscribeFriendshipEvents = registerFriendshipEvents(socket, {
+      onFriendRequestNew: handleFriendRequestNew,
+      onFriendRequestUpdated: handleFriendRequestUpdated,
+      onFriendStatusChanged: handleFriendStatusChanged,
+    });
+    unsubscribersRef.current.push(unsubscribeFriendshipEvents);
 
     const refreshGroupRoom = (data: unknown) => {
       const payload = asRecord(data);
@@ -1054,214 +954,223 @@ export const useWebSocket = (
       }
     };
 
-    const unsubGroupMemberJoined = socket.on(
-      WebSocketEvents.GROUP_MEMBER_JOINED,
-      (data) => {
-        refreshGroupRoom(data);
-      },
-    );
-    unsubscribersRef.current.push(unsubGroupMemberJoined);
-
-    const unsubGroupMemberLeft = socket.on(
-      WebSocketEvents.GROUP_MEMBER_LEFT,
-      (data) => {
-        refreshGroupRoom(data);
-      },
-    );
-    unsubscribersRef.current.push(unsubGroupMemberLeft);
-
-    const unsubGroupMemberUpdated = socket.on(
-      WebSocketEvents.GROUP_MEMBER_UPDATED,
-      (data) => {
-        refreshGroupRoom(data);
-      },
-    );
-    unsubscribersRef.current.push(unsubGroupMemberUpdated);
-
-    const unsubGroupMemberBanned = socket.on(
-      WebSocketEvents.GROUP_MEMBER_BANNED,
-      (data) => {
-        refreshGroupRoom(data);
-      },
-    );
-    unsubscribersRef.current.push(unsubGroupMemberBanned);
-
-    const unsubGroupSettingsUpdated = socket.on(
-      WebSocketEvents.GROUP_SETTINGS_UPDATED,
-      (data) => {
-        refreshGroupRoom(data);
-      },
-    );
-    unsubscribersRef.current.push(unsubGroupSettingsUpdated);
-
-    const unsubGroupJoinRequestNew = socket.on(
-      WebSocketEvents.GROUP_JOIN_REQUEST_NEW,
-      (data) => {
-        const payload = asRecord(data);
-        const roomId = payload ? getConversationId(payload) : null;
-        const requestId =
-          asString(payload?.requestId) ??
-          asString(payload?.id) ??
-          asString(asRecord(payload?.request)?.id);
-        const userId =
-          asString(payload?.userId) ??
-          asString(payload?.requesterId) ??
-          asString(asRecord(payload?.request)?.userId);
-        if (roomId && requestId && userId) {
-          upsertJoinRequest(roomId, {
-            id: requestId,
-            roomId,
-            userId,
-            status: "pending",
-            note:
-              asString(payload?.note) ??
-              asString(asRecord(payload?.request)?.note) ??
-              undefined,
-            createdAt:
-              asString(payload?.createdAt) ??
-              asString(asRecord(payload?.request)?.createdAt) ??
-              new Date().toISOString(),
-          });
-        }
-        notifySidebarState("group:join-request:updated", {
-          source: "socket",
+    const handleGroupInviteNew = (data: unknown) => {
+      const payload = asRecord(data);
+      const roomId = payload ? getConversationId(payload) : null;
+      const candidate =
+        asRecord(payload?.inviteLink) ?? asRecord(payload?.link) ?? payload;
+      if (roomId && candidate && typeof candidate.id === "string") {
+        upsertInviteLink(roomId, {
+          id: candidate.id,
           roomId,
-          requestId,
+          name: typeof candidate.name === "string" ? candidate.name : undefined,
+          inviteUrl:
+            typeof candidate.inviteUrl === "string"
+              ? candidate.inviteUrl
+              : undefined,
+          token:
+            typeof candidate.token === "string" ? candidate.token : undefined,
+          tokenPreview:
+            typeof candidate.tokenPreview === "string"
+              ? candidate.tokenPreview
+              : undefined,
+          usageCount:
+            typeof candidate.usageCount === "number" ? candidate.usageCount : 0,
+          usageLimit:
+            typeof candidate.usageLimit === "number"
+              ? candidate.usageLimit
+              : null,
+          expireAt:
+            typeof candidate.expireAt === "string" ? candidate.expireAt : null,
+          revokedAt:
+            typeof candidate.revokedAt === "string"
+              ? candidate.revokedAt
+              : null,
+          createdAt:
+            typeof candidate.createdAt === "string"
+              ? candidate.createdAt
+              : new Date().toISOString(),
         });
-      },
-    );
-    unsubscribersRef.current.push(unsubGroupJoinRequestNew);
+      }
+      notifySidebarState("group:invite:updated", {
+        source: "socket",
+        roomId,
+      });
+    };
 
-    const unsubGroupJoinRequestResolved = socket.on(
-      WebSocketEvents.GROUP_JOIN_REQUEST_RESOLVED,
-      (data) => {
-        const payload = asRecord(data);
-        const roomId = payload ? getConversationId(payload) : null;
-        const requestId =
-          asString(payload?.requestId) ??
-          asString(payload?.id) ??
-          asString(asRecord(payload?.request)?.id);
-        const status = asString(payload?.status);
-        if (
-          roomId &&
-          requestId &&
-          (status === "approved" || status === "rejected")
-        ) {
-          markJoinRequestResolved(roomId, requestId, status);
-        }
-        notifySidebarState("group:join-request:updated", {
-          source: "socket",
+    const handleGroupInviteUpdated = (data: unknown) => {
+      const payload = asRecord(data);
+      const roomId = payload ? getConversationId(payload) : null;
+      notifySidebarState("group:invite:updated", {
+        source: "socket",
+        roomId,
+      });
+    };
+
+    const handleGroupJoinRequestNew = (data: unknown) => {
+      const payload = asRecord(data);
+      const roomId = payload ? getConversationId(payload) : null;
+      const requestId =
+        asString(payload?.requestId) ??
+        asString(payload?.id) ??
+        asString(asRecord(payload?.request)?.id);
+      const userId =
+        asString(payload?.userId) ??
+        asString(payload?.requesterId) ??
+        asString(asRecord(payload?.request)?.userId);
+      if (roomId && requestId && userId) {
+        upsertJoinRequest(roomId, {
+          id: requestId,
           roomId,
-          requestId,
-          status,
+          userId,
+          status: "pending",
+          note:
+            asString(payload?.note) ??
+            asString(asRecord(payload?.request)?.note) ??
+            undefined,
+          createdAt:
+            asString(payload?.createdAt) ??
+            asString(asRecord(payload?.request)?.createdAt) ??
+            new Date().toISOString(),
         });
-      },
-    );
-    unsubscribersRef.current.push(unsubGroupJoinRequestResolved);
+      }
+      notifySidebarState("group:join-request:updated", {
+        source: "socket",
+        roomId,
+        requestId,
+      });
+    };
 
-    const unsubGroupPinUpdated = socket.on(
-      WebSocketEvents.GROUP_PIN_UPDATED,
-      (data) => {
-        const payload = asRecord(data);
-        const roomId = payload ? getConversationId(payload) : null;
-        if (roomId && typeof window !== "undefined") {
-          window.dispatchEvent(
-            new CustomEvent("group:pin:updated", {
-              detail: { conversationId: roomId, roomId },
-            }),
-          );
-        }
-        refreshGroupRoom(data);
-      },
-    );
-    unsubscribersRef.current.push(unsubGroupPinUpdated);
+    const handleGroupJoinRequestResolved = (data: unknown) => {
+      const payload = asRecord(data);
+      const roomId = payload ? getConversationId(payload) : null;
+      const requestId =
+        asString(payload?.requestId) ??
+        asString(payload?.id) ??
+        asString(asRecord(payload?.request)?.id);
+      const status = asString(payload?.status);
+      if (
+        roomId &&
+        requestId &&
+        (status === "approved" || status === "rejected")
+      ) {
+        markJoinRequestResolved(roomId, requestId, status);
+      }
+      notifySidebarState("group:join-request:updated", {
+        source: "socket",
+        roomId,
+        requestId,
+        status,
+      });
+    };
 
-    const unsubGroupSlowModeTriggered = socket.on(
-      WebSocketEvents.GROUP_SLOW_MODE_TRIGGERED,
-      (data) => {
-        const payload = asRecord(data);
-        const roomId = payload ? getConversationId(payload) : null;
-        const retryAfterSeconds =
-          typeof payload?.retryAfterSeconds === "number"
-            ? payload.retryAfterSeconds
-            : 0;
-        if (roomId && retryAfterSeconds > 0) {
-          setSlowModeCooldown(roomId, retryAfterSeconds);
-        }
-        if (retryAfterSeconds > 0) {
-          notifyRoomInline("chat:restriction:updated", {
-            conversationId: roomId,
-            type: "slow_mode",
-            retryAfterSeconds,
-          });
-        }
-      },
-    );
-    unsubscribersRef.current.push(unsubGroupSlowModeTriggered);
+    const handleGroupPinUpdated = (data: unknown) => {
+      const payload = asRecord(data);
+      const roomId = payload ? getConversationId(payload) : null;
+      if (roomId && typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("group:pin:updated", {
+            detail: { conversationId: roomId, roomId },
+          }),
+        );
+      }
+      refreshGroupRoom(data);
+    };
 
-    const unsubPermissionChanged = socket.on(
-      WebSocketEvents.PERMISSION_CHANGED,
-      (data) => {
-        const payload = asRecord(data);
-        const allowed =
-          typeof payload?.allowed === "boolean" ? payload.allowed : true;
-        const scope = asString(payload?.scope);
-        const currentUserId = useAuthStore.getState().user?.id;
-        const peerUserId =
-          currentUserId && asString(payload?.userId) === currentUserId
-            ? asString(payload?.peerUserId)
-            : currentUserId && asString(payload?.peerUserId) === currentUserId
-              ? asString(payload?.userId)
-              : asString(payload?.peerUserId);
+    const handleGroupSlowModeTriggered = (data: unknown) => {
+      const payload = asRecord(data);
+      const roomId = payload ? getConversationId(payload) : null;
+      const retryAfterSeconds =
+        typeof payload?.retryAfterSeconds === "number"
+          ? payload.retryAfterSeconds
+          : 0;
+      if (roomId && retryAfterSeconds > 0) {
+        setSlowModeCooldown(roomId, retryAfterSeconds);
+      }
+      if (retryAfterSeconds > 0) {
+        notifyRoomInline("chat:restriction:updated", {
+          conversationId: roomId,
+          type: "slow_mode",
+          retryAfterSeconds,
+        });
+      }
+    };
 
-        if (scope === "direct_message" && peerUserId) {
-          const targetConversation = useChatStore
-            .getState()
-            .conversations.find((conversation) => {
-              if (
-                conversation.type !== "direct" &&
-                conversation.type !== "private"
-              ) {
-                return false;
-              }
+    const handlePermissionChanged = (data: unknown) => {
+      const payload = asRecord(data);
+      const allowed =
+        typeof payload?.allowed === "boolean" ? payload.allowed : true;
+      const scope = asString(payload?.scope);
+      const currentUserId = useAuthStore.getState().user?.id;
+      const peerUserId =
+        currentUserId && asString(payload?.userId) === currentUserId
+          ? asString(payload?.peerUserId)
+          : currentUserId && asString(payload?.peerUserId) === currentUserId
+            ? asString(payload?.userId)
+            : asString(payload?.peerUserId);
 
-              const participantIds = new Set(
-                (conversation.participants || []).map(
-                  (participant) => participant.id,
-                ),
-              );
-
-              return (
-                conversation.otherUser?.id === peerUserId ||
-                participantIds.has(peerUserId)
-              );
-            });
-
-          if (targetConversation) {
-            if (allowed) {
-              clearSendRestriction(targetConversation.id);
-            } else {
-              const reason =
-                asString(payload?.reason) === "BLOCKED"
-                  ? "Direct messaging is no longer allowed."
-                  : "Direct messaging permission changed.";
-              setSendRestriction(targetConversation.id, {
-                kind: "permission",
-                reason,
-                code: asString(payload?.reason) ?? "PERMISSION_CHANGED",
-              });
+      if (scope === "direct_message" && peerUserId) {
+        const targetConversation = useChatStore
+          .getState()
+          .conversations.find((conversation) => {
+            if (
+              conversation.type !== "direct" &&
+              conversation.type !== "private"
+            ) {
+              return false;
             }
+
+            const participantIds = new Set(
+              (conversation.participants || []).map(
+                (participant) => participant.id,
+              ),
+            );
+
+            return (
+              conversation.otherUser?.id === peerUserId ||
+              participantIds.has(peerUserId)
+            );
+          });
+
+        if (targetConversation) {
+          if (allowed) {
+            clearSendRestriction(targetConversation.id);
+          } else {
+            const reason =
+              asString(payload?.reason) === "BLOCKED"
+                ? "Direct messaging is no longer allowed."
+                : "Direct messaging permission changed.";
+            setSendRestriction(targetConversation.id, {
+              kind: "permission",
+              reason,
+              code: asString(payload?.reason) ?? "PERMISSION_CHANGED",
+            });
           }
         }
-        if (!allowed) {
-          notifyRoomInline("chat:permission:updated", {
-            scope,
-            allowed,
-          });
-        }
-      },
-    );
-    unsubscribersRef.current.push(unsubPermissionChanged);
+      }
+      if (!allowed) {
+        notifyRoomInline("chat:permission:updated", {
+          scope,
+          allowed,
+        });
+      }
+    };
+
+    const unsubscribeGroupEvents = registerGroupEvents(socket, {
+      onGroupInviteNew: handleGroupInviteNew,
+      onGroupInviteUpdated: handleGroupInviteUpdated,
+      onGroupMemberJoined: refreshGroupRoom,
+      onGroupMemberLeft: refreshGroupRoom,
+      onGroupMemberUpdated: refreshGroupRoom,
+      onGroupMemberBanned: refreshGroupRoom,
+      onGroupSettingsUpdated: refreshGroupRoom,
+      onGroupJoinRequestNew: handleGroupJoinRequestNew,
+      onGroupJoinRequestResolved: handleGroupJoinRequestResolved,
+      onGroupPinUpdated: handleGroupPinUpdated,
+      onGroupSlowModeTriggered: handleGroupSlowModeTriggered,
+      onPermissionChanged: handlePermissionChanged,
+    });
+    unsubscribersRef.current.push(unsubscribeGroupEvents);
 
     const handleTypingStart = (data: unknown) => {
       const payload = asRecord(data);
@@ -1326,22 +1235,15 @@ export const useWebSocket = (
       clearTyping(conversationId, userId);
     };
 
-    const unsubTypingStart = socket.on(
-      WebSocketEvents.TYPING_START,
-      handleTypingStart,
-    );
-    unsubscribersRef.current.push(unsubTypingStart);
+    const unsubscribePresenceEvents = registerPresenceEvents(socket, {
+      onTypingStart: handleTypingStart,
+      onTypingStop: handleTypingStop,
+    });
+    unsubscribersRef.current.push(unsubscribePresenceEvents);
 
-    const unsubTypingStop = socket.on(
-      WebSocketEvents.TYPING_STOP,
-      handleTypingStop,
-    );
-    unsubscribersRef.current.push(unsubTypingStop);
-
-    const unsubSyncComplete = socket.on(WebSocketEvents.SYNC_COMPLETE, (data) => {
+    const handleSyncComplete = (data: unknown) => {
       const payload = asRecord(data);
-      const targetRoomIds =
-        payload !== null ? getConversationIds(payload) : [];
+      const targetRoomIds = payload !== null ? getConversationIds(payload) : [];
       logMessageDebug("useWebSocket", "sync_complete_event_received", {
         targetRoomIds,
       });
@@ -1364,33 +1266,34 @@ export const useWebSocket = (
         }
         void scheduleRoomResync(roomId, { reason: syncStrategy });
       });
-    });
-    unsubscribersRef.current.push(unsubSyncComplete);
+    };
 
     // Settings update from another device / admin
-    const unsubSettingsUpdated = socket.on(
-      WebSocketEvents.USER_SETTINGS_UPDATED,
-      (data) => {
-        const payload = asRecord(data);
-        if (!payload) return;
+    const handleUserSettingsUpdated = (data: unknown) => {
+      const payload = asRecord(data);
+      if (!payload) return;
 
-        // Validate required fields
-        const version =
-          typeof payload.version === "number" ? payload.version : null;
-        const settings = asRecord(payload.settings);
-        if (version === null || !settings) return;
+      // Validate required fields
+      const version =
+        typeof payload.version === "number" ? payload.version : null;
+      const settings = asRecord(payload.settings);
+      if (version === null || !settings) return;
 
-        // Import dynamically to avoid circular deps at module init time
-        import("../settings/settingsStore").then(({ useSettingsStore }) => {
-          useSettingsStore
-            .getState()
-            .applyRemoteUpdate(
-              payload as unknown as import("@hacom/chat-shared-types").UserSettingsUpdatedPayload,
-            );
-        });
-      },
-    );
-    unsubscribersRef.current.push(unsubSettingsUpdated);
+      // Import dynamically to avoid circular deps at module init time
+      import("../settings/settingsStore").then(({ useSettingsStore }) => {
+        useSettingsStore
+          .getState()
+          .applyRemoteUpdate(
+            payload as unknown as import("@hacom/chat-shared-types").UserSettingsUpdatedPayload,
+          );
+      });
+    };
+
+    const unsubscribeSyncEvents = registerSyncEvents(socket, {
+      onSyncComplete: handleSyncComplete,
+      onUserSettingsUpdated: handleUserSettingsUpdated,
+    });
+    unsubscribersRef.current.push(unsubscribeSyncEvents);
 
     logMessageDebug("useWebSocket", "listener_setup_completed", {
       listenerCount: unsubscribersRef.current.length,

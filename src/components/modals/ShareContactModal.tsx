@@ -5,9 +5,9 @@ import { MagnifyingGlassIcon, UserIcon } from "@heroicons/react/24/outline";
 import { Modal, Input, Button, Spinner } from "../ui";
 import { Avatar } from "../common/Avatar";
 import { useDebounce } from "../../hooks/useDebounce";
-import { userApi } from "../../services/api";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import type { PublicUserSummary } from "@hacom/chat-shared-types";
+import { searchUsersUseCase } from "../../features/chat/usecases/searchUsers";
 
 type TabKey = "my" | "choose";
 
@@ -82,7 +82,7 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
     setIsLoading(true);
     setErrorText(null);
     try {
-      const response = await userApi.searchUsers(rawQuery.trim(), 1, 20);
+      const response = await searchUsersUseCase(rawQuery.trim(), 1, 20);
       const payload = unwrapApiSuccess(response);
       setResults(extractSearchUsers(payload));
     } catch (error) {

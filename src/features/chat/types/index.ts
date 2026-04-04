@@ -1,1 +1,5 @@
-export type { SocketLike, RealtimeUnsubscribe } from "./realtime";
+export type {
+  RealtimeEventHandler,
+  RealtimeUnsubscribe,
+  SocketLike,
+} from "./realtime";
