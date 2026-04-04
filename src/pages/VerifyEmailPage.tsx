@@ -206,12 +206,11 @@ export const VerifyEmailPage: React.FC = () => {
       return;
     }
 
+    // Schedule as a microtask so StrictMode cleanup cannot cancel it like a timeout.
     autoRequestedEmailRef.current = verificationEmail;
-    const timer = window.setTimeout(() => {
+    Promise.resolve().then(() => {
       void requestFreshChallenge();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
+    });
   }, [activeChallenge, requestFreshChallenge, verificationEmail]);
 
   const resetFormError = () => {
