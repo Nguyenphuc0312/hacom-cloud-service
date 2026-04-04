@@ -68,7 +68,7 @@ interface MessageInputProps {
 
   // ── Multi-file upload queue (from ChatWindow) ──
   uploadDrafts?: AttachmentDraft[];
-  onAddFiles?: (files: File[]) => void;
+  onAddFiles?: (files: File[]) => { errors?: string[] } | void;
   onRemoveDraft?: (localId: string) => void;
   onCancelUpload?: (localId: string) => void;
   onRetryUpload?: (localId: string) => void;
@@ -248,7 +248,13 @@ export const MessageInput = React.forwardRef<
     () => ({
       addFile: (file: File) => {
         if (onAddFiles) {
-          onAddFiles([file]);
+          const result = onAddFiles([file]);
+          const validationErrors = result?.errors;
+          if (Array.isArray(validationErrors) && validationErrors.length > 0) {
+            Array.from(new Set(validationErrors))
+              .slice(0, 2)
+              .forEach((message) => toast.error(message));
+          }
         } else {
           selectFile(file);
         }
@@ -311,9 +317,12 @@ export const MessageInput = React.forwardRef<
     (event: React.ChangeEvent<HTMLInputElement>) => {
       if (attachmentsDisabled) {
         event.target.value = "";
-        if (disabledReason) {
-          toast.error(disabledReason);
-        }
+        toast.warning(
+          disabledReason ||
+            t("chat:composer.attachBlocked", {
+              defaultValue: "Attachments are currently unavailable",
+            }),
+        );
         return;
       }
 
@@ -321,7 +330,13 @@ export const MessageInput = React.forwardRef<
       if (!files || files.length === 0) return;
 
       if (onAddFiles) {
-        onAddFiles(Array.from(files));
+        const result = onAddFiles(Array.from(files));
+        const validationErrors = result?.errors;
+        if (Array.isArray(validationErrors) && validationErrors.length > 0) {
+          Array.from(new Set(validationErrors))
+            .slice(0, 2)
+            .forEach((message) => toast.error(message));
+        }
       } else {
         const file = files[0];
         if (file) selectFile(file);
@@ -334,9 +349,12 @@ export const MessageInput = React.forwardRef<
   const handleAttachmentSelect = React.useCallback(
     (type: string) => {
       if ((type === "photo" || type === "document") && attachmentsDisabled) {
-        if (disabledReason) {
-          toast.error(disabledReason);
-        }
+        toast.warning(
+          disabledReason ||
+            t("chat:composer.attachBlocked", {
+              defaultValue: "Attachments are currently unavailable",
+            }),
+        );
         setShowAttachmentMenu(false);
         return;
       }
@@ -552,16 +570,13 @@ export const MessageInput = React.forwardRef<
       !hasUploadingDrafts &&
       (hasReadyDrafts || hasText)
     : selectedFile
-      ? !submitDisabled &&
-        !isSubmitBusy &&
-        composerMode === "online"
+      ? !submitDisabled && !isSubmitBusy && composerMode === "online"
       : !submitDisabled && !isSubmitBusy && hasText;
   const disableToolbar = disabled || isSubmitBusy;
   const disableAttachmentActions = attachmentsDisabled || isSubmitBusy;
-  const sendButtonLabel =
-    isSubmitBusy
-      ? t("chat:composer.sending")
-      : t("chat:composer.sendMessage");
+  const sendButtonLabel = isSubmitBusy
+    ? t("chat:composer.sending")
+    : t("chat:composer.sendMessage");
   const composerVisualState = disabled
     ? "disabled"
     : isSubmitBusy
@@ -1066,6 +1081,11 @@ export const MessageInput = React.forwardRef<
                   <AttachmentMenu
                     onSelect={handleAttachmentSelect}
                     onClose={() => setShowAttachmentMenu(false)}
+                    canShareContact={
+                      Boolean(onShareContact) &&
+                      Boolean(currentUserId) &&
+                      Boolean(conversationId)
+                    }
                     className="absolute bottom-full right-0 z-dropdown mb-2"
                   />
                 )}
@@ -1076,13 +1096,7 @@ export const MessageInput = React.forwardRef<
           <SendButton
             disabled={!canSend}
             isBusy={isSubmitBusy}
-            state={
-              !canSend
-                ? "disabled"
-                : isSubmitBusy
-                  ? "sending"
-                  : "ready"
-            }
+            state={!canSend ? "disabled" : isSubmitBusy ? "sending" : "ready"}
             onClick={() => {
               logMessageDebug("MessageInput", "submit_triggered", {
                 conversationId,

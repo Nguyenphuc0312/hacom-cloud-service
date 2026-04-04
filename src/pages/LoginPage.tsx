@@ -19,6 +19,9 @@ export const LoginPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const [authMethod, setAuthMethod] = React.useState<"password" | "qr">(
+    "password",
+  );
   const { login, isLoading, isAuthenticated, error, clearError } =
     useAuthStore();
 
@@ -45,8 +48,10 @@ export const LoginPage: React.FC = () => {
   });
 
   useEffect(() => {
-    setFocus("email");
-  }, [setFocus]);
+    if (authMethod === "password") {
+      setFocus("email");
+    }
+  }, [authMethod, setFocus]);
 
   const rememberMe = watch("rememberMe");
 
@@ -80,13 +85,13 @@ export const LoginPage: React.FC = () => {
         <div className="absolute -bottom-40 -left-40 w-64 h-64 sm:w-80 sm:h-80 lg:w-96 lg:h-96 bg-secondary/15 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative z-10 w-full mx-auto max-w-sm xs:max-w-sm sm:max-w-md lg:max-w-lg">
+      <div className="relative z-10 w-full mx-auto max-w-sm xs:max-w-sm sm:max-w-md lg:max-w-xl">
         <section
           aria-label={t("auth:login.aria.section")}
-          className="bg-surface rounded-2xl shadow-xl border border-border animate-fade-in p-5 xs:p-6 sm:p-8 lg:p-10"
+          className="bg-surface rounded-2xl shadow-xl border border-border animate-fade-in p-5 xs:p-6 sm:p-7 lg:p-8"
         >
-          <header className="text-center mb-5 sm:mb-6 lg:mb-8">
-            <div className="inline-flex items-center justify-center rounded-2xl mb-3 sm:mb-4 shadow-lg shadow-elev2 bg-primary w-12 h-12 xs:w-14 xs:h-14 sm:w-16 sm:h-16">
+          <header className="text-center mb-5 sm:mb-6">
+            <div className="inline-flex items-center justify-center rounded-2xl mb-3 sm:mb-4 shadow-elev2 bg-primary w-12 h-12 xs:w-14 xs:h-14 sm:w-16 sm:h-16">
               <ChatBubbleLeftRightIcon className="w-6 h-6 xs:w-7 xs:h-7 sm:w-8 sm:h-8 text-text-inverse" />
             </div>
             <h1 className="text-lg xs:text-xl sm:text-2xl font-bold text-text-primary leading-tight">
@@ -97,110 +102,183 @@ export const LoginPage: React.FC = () => {
             </p>
           </header>
 
-          <form
-            onSubmit={handleSubmit(onSubmit)}
-            noValidate
-            className="space-y-3 xs:space-y-4 sm:space-y-5"
+          <div
+            role="tablist"
+            aria-label={t("auth:login.methods", {
+              defaultValue: "Login methods",
+            })}
+            className="mb-4 grid grid-cols-2 rounded-xl border border-border bg-surface-overlay/60 p-1"
           >
-            <div
+            <button
+              type="button"
+              role="tab"
+              id="login-tab-password"
+              aria-controls="login-panel-password"
+              aria-selected={authMethod === "password"}
+              onClick={() => setAuthMethod("password")}
               className={clsx(
-                "transition-all duration-200 overflow-hidden",
-                error ? "max-h-40 opacity-100" : "max-h-0 opacity-0",
+                "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                authMethod === "password"
+                  ? "bg-primary text-text-inverse"
+                  : "text-text-secondary hover:bg-surface-hover",
               )}
-              aria-live="polite"
             >
-              {error && (
-                <div
-                  role="alert"
-                  className="p-3 sm:p-4 bg-danger/15 border border-danger/35 rounded-xl text-danger text-xs xs:text-sm animate-shake"
-                >
-                  {error}
-                </div>
+              {t("auth:login.passwordTab", {
+                defaultValue: "Dang nhap mat khau",
+              })}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="login-tab-qr"
+              aria-controls="login-panel-qr"
+              aria-selected={authMethod === "qr"}
+              onClick={() => setAuthMethod("qr")}
+              className={clsx(
+                "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                authMethod === "qr"
+                  ? "bg-primary text-text-inverse"
+                  : "text-text-secondary hover:bg-surface-hover",
               )}
-            </div>
+            >
+              {t("auth:login.qrTab", { defaultValue: "Quet QR" })}
+            </button>
+          </div>
 
-            <Input
-              {...register("email")}
-              type="email"
-              label={t("auth:login.email")}
-              placeholder={t("auth:placeholders.email")}
-              leftIcon={<EnvelopeIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
-              error={errors.email?.message}
-              autoComplete="email"
-              inputMode="email"
-              disabled={isLoading}
-            />
-
-            <Input
-              {...register("password")}
-              type="password"
-              label={t("auth:login.password")}
-              placeholder={t("auth:placeholders.password")}
-              leftIcon={<LockClosedIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
-              error={errors.password?.message}
-              autoComplete="current-password"
-              disabled={isLoading}
-            />
-
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <Checkbox
-                {...register("rememberMe")}
-                label={t("auth:login.rememberMe")}
-                disabled={isLoading}
-              />
-              <Link
-                to="/forgot-password"
-                className="text-xs xs:text-sm text-primary font-medium hover:text-primary/80 transition-colors duration-200 sm:text-right whitespace-nowrap"
+          {authMethod === "password" && (
+            <div
+              role="tabpanel"
+              id="login-panel-password"
+              aria-labelledby="login-tab-password"
+            >
+              <form
+                onSubmit={handleSubmit(onSubmit)}
+                noValidate
+                className="space-y-3 xs:space-y-4 sm:space-y-5"
               >
-                {t("auth:login.forgotPassword")}
-              </Link>
-            </div>
+                <div
+                  className={clsx(
+                    "transition-all duration-200 overflow-hidden",
+                    error ? "max-h-40 opacity-100" : "max-h-0 opacity-0",
+                  )}
+                  aria-live="polite"
+                >
+                  {error && (
+                    <div
+                      role="alert"
+                      className="p-3 sm:p-4 bg-danger/15 border border-danger/35 rounded-xl text-danger text-xs xs:text-sm animate-shake"
+                    >
+                      {error}
+                    </div>
+                  )}
+                </div>
 
-            <Button
-              type="submit"
-              fullWidth
-              size="lg"
-              isLoading={isLoading || isSubmitting}
-              disabled={isLoading || isSubmitting}
-              aria-busy={isLoading || isSubmitting}
+                <Input
+                  {...register("email")}
+                  type="email"
+                  label={t("auth:login.email")}
+                  placeholder={t("auth:placeholders.email")}
+                  leftIcon={<EnvelopeIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
+                  error={errors.email?.message}
+                  autoComplete="email"
+                  inputMode="email"
+                  disabled={isLoading}
+                />
+
+                <Input
+                  {...register("password")}
+                  type="password"
+                  label={t("auth:login.password")}
+                  placeholder={t("auth:placeholders.password")}
+                  leftIcon={
+                    <LockClosedIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                  }
+                  error={errors.password?.message}
+                  autoComplete="current-password"
+                  disabled={isLoading}
+                />
+
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <Checkbox
+                    {...register("rememberMe")}
+                    label={t("auth:login.rememberMe")}
+                    disabled={isLoading}
+                  />
+                  <Link
+                    to="/forgot-password"
+                    className="text-xs xs:text-sm text-primary font-medium hover:text-primary/80 transition-colors duration-200 sm:text-right whitespace-nowrap"
+                  >
+                    {t("auth:login.forgotPassword")}
+                  </Link>
+                </div>
+
+                <Button
+                  type="submit"
+                  fullWidth
+                  size="lg"
+                  isLoading={isLoading || isSubmitting}
+                  disabled={isLoading || isSubmitting}
+                  aria-busy={isLoading || isSubmitting}
+                >
+                  {t("auth:login.submit")}
+                </Button>
+              </form>
+
+              <div className="relative my-5 sm:my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs xs:text-sm">
+                  <span className="px-3 xs:px-4 bg-surface text-text-muted">
+                    {t("auth:login.orWith")}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 xs:grid-cols-2 gap-2 xs:gap-3 sm:gap-4">
+                <SocialButton
+                  provider="google"
+                  onClick={() =>
+                    toast.info(t("common:toast.featureInDevelopment"))
+                  }
+                />
+                <SocialButton
+                  provider="facebook"
+                  onClick={() =>
+                    toast.info(t("common:toast.featureInDevelopment"))
+                  }
+                />
+              </div>
+            </div>
+          )}
+
+          {authMethod === "qr" && (
+            <div
+              role="tabpanel"
+              id="login-panel-qr"
+              aria-labelledby="login-tab-qr"
+              className="space-y-3"
             >
-              {t("auth:login.submit")}
-            </Button>
-          </form>
-
-          <div className="relative my-5 sm:my-6 lg:my-8">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border" />
+              <p className="text-sm text-text-secondary text-center">
+                {t("auth:login.qrHint", {
+                  defaultValue:
+                    "Quet ma bang app mobile de dang nhap vao trinh duyet",
+                })}
+              </p>
+              <QrLoginPanel
+                rememberMe={rememberMe}
+                onSuccess={() => {
+                  toast.success("Dang nhap bang QR thanh cong");
+                  const from =
+                    (location.state as { from?: string })?.from ?? "/chat";
+                  navigate(from, { replace: true });
+                }}
+              />
             </div>
-            <div className="relative flex justify-center text-xs xs:text-sm">
-              <span className="px-3 xs:px-4 bg-surface text-text-muted">
-                {t("auth:login.orWith")}
-              </span>
-            </div>
-          </div>
-
-          <QrLoginPanel
-            rememberMe={rememberMe}
-            onSuccess={() => {
-              toast.success("Đăng nhập bằng QR thành công");
-              const from = (location.state as { from?: string })?.from ?? "/chat";
-              navigate(from, { replace: true });
-            }}
-          />
-
-          <div className="grid grid-cols-1 xs:grid-cols-2 gap-2 xs:gap-3 sm:gap-4">
-            <SocialButton
-              provider="google"
-              onClick={() => toast.info(t("common:toast.featureInDevelopment"))}
-            />
-            <SocialButton
-              provider="facebook"
-              onClick={() => toast.info(t("common:toast.featureInDevelopment"))}
-            />
-          </div>
+          )}
 
           <p className="mt-5 sm:mt-6 lg:mt-8 text-center text-xs xs:text-sm text-text-muted">
-            {t("auth:login.noAccount")} {" "}
+            {t("auth:login.noAccount")}{" "}
             <Link
               to="/register"
               className="font-semibold text-primary hover:text-primary/80 transition-colors"
@@ -211,14 +289,14 @@ export const LoginPage: React.FC = () => {
         </section>
 
         <p className="mt-4 sm:mt-5 text-center text-xs xs:text-xs text-text-muted px-2 leading-relaxed">
-          {t("auth:login.agreement")} {" "}
+          {t("auth:login.agreement")}{" "}
           <Link
             to="/terms"
             className="underline hover:text-text-secondary transition-colors"
           >
             {t("auth:login.terms")}
           </Link>{" "}
-          {t("auth:login.agreementAnd")} {" "}
+          {t("auth:login.agreementAnd")}{" "}
           <Link
             to="/privacy"
             className="underline hover:text-text-secondary transition-colors"

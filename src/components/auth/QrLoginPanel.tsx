@@ -8,7 +8,10 @@ import {
   DevicePhoneMobileIcon,
   ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
-import { QrLoginSessionStatus, type LoginResponse } from "@hacom/chat-shared-types";
+import {
+  QrLoginSessionStatus,
+  type LoginResponse,
+} from "@hacom/chat-shared-types";
 import { Button } from "../ui";
 import { extractApiError } from "../../lib/apiContract";
 import { qrLoginService } from "../../services/qrLoginService";
@@ -47,7 +50,10 @@ const ACTIVE_POLLING_STATUSES = new Set<QrLoginSessionStatus>([
   QrLoginSessionStatus.APPROVED,
 ]);
 
-const STATUS_COPY: Record<QrLoginSessionStatus, { title: string; body: string }> = {
+const STATUS_COPY: Record<
+  QrLoginSessionStatus,
+  { title: string; body: string }
+> = {
   PENDING: {
     title: "Đang chờ quét",
     body: "Mở Hacom Chat trên điện thoại đã đăng nhập và quét mã này.",
@@ -72,6 +78,15 @@ const STATUS_COPY: Record<QrLoginSessionStatus, { title: string; body: string }>
     title: "Đã đăng nhập",
     body: "Phiên QR này đã được sử dụng thành công.",
   },
+};
+
+const STATUS_CHIP_CLASS: Record<QrLoginSessionStatus, string> = {
+  PENDING: "border-primary/25 bg-primary/10 text-primary",
+  SCANNED: "border-warning/30 bg-warning/12 text-warning",
+  APPROVED: "border-success/25 bg-success/12 text-success",
+  REJECTED: "border-danger/25 bg-danger/12 text-danger",
+  EXPIRED: "border-danger/25 bg-danger/12 text-danger",
+  EXCHANGED: "border-success/25 bg-success/12 text-success",
 };
 
 const formatCountdown = (expiresAt: string): string => {
@@ -107,7 +122,11 @@ const normalizeLoginResponseForStore = (
   refreshToken: payload.refreshToken,
   user: {
     id: payload.user.id,
-    username: payload.user.username || payload.user.displayName || payload.user.email || payload.user.id,
+    username:
+      payload.user.username ||
+      payload.user.displayName ||
+      payload.user.email ||
+      payload.user.id,
     email: payload.user.email,
     firstName: payload.user.firstName,
     lastName: payload.user.lastName,
@@ -139,6 +158,9 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
 
     return STATUS_COPY[panelState.status];
   }, [panelState]);
+  const isWaitingForPhone =
+    panelState?.status === QrLoginSessionStatus.PENDING ||
+    panelState?.status === QrLoginSessionStatus.SCANNED;
 
   const refreshSession = async (): Promise<void> => {
     setError(null);
@@ -252,7 +274,10 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
           panelState.webSecret,
         );
 
-        applyLoginResponse(normalizeLoginResponseForStore(loginResponse), rememberMe);
+        applyLoginResponse(
+          normalizeLoginResponseForStore(loginResponse),
+          rememberMe,
+        );
         setPanelState((current) =>
           current && current.sessionId === panelState.sessionId
             ? { ...current, status: QrLoginSessionStatus.EXCHANGED }
@@ -293,8 +318,8 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
         </Button>
       </div>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-[240px_1fr] sm:items-center">
-        <div className="mx-auto flex h-[240px] w-[240px] items-center justify-center rounded-2xl border border-border bg-white p-3 shadow-sm">
+      <div className="mt-4 grid gap-4 sm:grid-cols-[264px_1fr] sm:items-center">
+        <div className="mx-auto flex h-[264px] w-[264px] items-center justify-center rounded-2xl border border-border bg-white p-3 shadow-sm">
           {panelState?.qrImageUrl ? (
             <img
               src={panelState.qrImageUrl}
@@ -302,6 +327,7 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
               className={clsx(
                 "h-full w-full rounded-lg object-contain transition-opacity",
                 (isRefreshing || isBootstrapping) && "opacity-50",
+                isWaitingForPhone && "animate-pulse",
               )}
             />
           ) : (
@@ -312,6 +338,33 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
         </div>
 
         <div className="space-y-3">
+          {panelState && (
+            <div
+              className={clsx(
+                "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium",
+                STATUS_CHIP_CLASS[panelState.status],
+              )}
+            >
+              <span
+                className={clsx(
+                  "h-2 w-2 rounded-full",
+                  panelState.status === QrLoginSessionStatus.PENDING &&
+                    "bg-primary animate-pulse",
+                  panelState.status === QrLoginSessionStatus.SCANNED &&
+                    "bg-warning animate-pulse",
+                  panelState.status === QrLoginSessionStatus.APPROVED &&
+                    "bg-success",
+                  (panelState.status === QrLoginSessionStatus.REJECTED ||
+                    panelState.status === QrLoginSessionStatus.EXPIRED) &&
+                    "bg-danger",
+                  panelState.status === QrLoginSessionStatus.EXCHANGED &&
+                    "bg-success",
+                )}
+              />
+              <span>{statusCopy.title}</span>
+            </div>
+          )}
+
           <div className="rounded-xl border border-border bg-surface p-3">
             <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
               {panelState?.status === QrLoginSessionStatus.APPROVED ||

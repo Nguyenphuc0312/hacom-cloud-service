@@ -219,12 +219,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   // ── Presence subscription: subscribe to room members' presence ──
   usePresence({ conversationId: conversation.id });
 
-  // ── Drag-and-drop ──
-  const { isDragActive, dropZoneProps, dismiss } = useDropZone({
-    onDrop: uploadQueue.addFiles,
-    disabled: false,
-  });
-
   const handleSend = React.useCallback(
     async (content?: string, fileMeta?: unknown, type?: string) => {
       if (isSendingMessage) {
@@ -426,6 +420,53 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     sendRestriction,
     slowModeRemainingSeconds,
   });
+
+  const emitUploadValidationToasts = React.useCallback(
+    (errors?: string[]) => {
+      if (!errors || errors.length === 0) {
+        return;
+      }
+
+      const uniqueErrors = Array.from(new Set(errors));
+      uniqueErrors.slice(0, 2).forEach((message) => toast.error(message));
+
+      if (uniqueErrors.length > 2) {
+        toast.warning(
+          t("chat:composer.moreUploadErrors", {
+            defaultValue: "{{count}} more file issue(s)",
+            count: uniqueErrors.length - 2,
+          }),
+        );
+      }
+    },
+    [t],
+  );
+
+  const handleAddFiles = React.useCallback(
+    (files: File[]) => {
+      const result = uploadQueue.addFiles(files);
+      emitUploadValidationToasts(result.errors);
+    },
+    [emitUploadValidationToasts, uploadQueue],
+  );
+
+  const { isDragActive, dropZoneProps, dismiss } = useDropZone({
+    onDrop: handleAddFiles,
+    disabled: !composerAvailability.canAttach,
+    onDropRejected: () => {
+      toast.warning(
+        composerAvailability.statusMessage ||
+          t("chat:composer.attachBlocked", {
+            defaultValue: "Attachments are currently unavailable",
+          }),
+      );
+    },
+  });
+
+  const bottomFloatingOffset = React.useMemo(
+    () => Math.max(12, composerHeight + 12),
+    [composerHeight],
+  );
 
   React.useEffect(() => {
     if (!isSlowModeBlocked) {
@@ -740,7 +781,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onDelete={handleDelete}
         hasMore={hasMoreMessages}
         isLoadingMore={Boolean(isLoadingMessages && messages.length > 0)}
-        isInitialLoading={Boolean(isLoadingMessages && messages.length === 0)}
+        isInitialLoading={Boolean(
+          (isLoadingMessages || !isConversationReady) && messages.length === 0,
+        )}
         onLoadMore={onLoadOlderMessages}
         onImageClick={onImageClick}
         onFilePreview={onFilePreview}
@@ -848,7 +891,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {ephemeralNotice &&
         bottomOverlayPlacements["ephemeral-notice"]?.visible && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-[55]">
+          <div
+            className="pointer-events-none absolute inset-x-0 z-[55]"
+            style={{
+              bottom: `calc(env(safe-area-inset-bottom) + ${bottomFloatingOffset}px)`,
+            }}
+          >
             <ConversationLane>
               <div className="flex justify-center">
                 <div
@@ -905,7 +953,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             composerMode={composerAvailability.mode}
             onShareContact={handleShareContact}
             uploadDrafts={uploadQueue.drafts}
-            onAddFiles={uploadQueue.addFiles}
+            onAddFiles={handleAddFiles}
             onRemoveDraft={uploadQueue.removeDraft}
             onCancelUpload={uploadQueue.cancelUpload}
             onRetryUpload={uploadQueue.retryUpload}

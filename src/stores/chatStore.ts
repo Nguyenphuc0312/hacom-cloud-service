@@ -20,7 +20,7 @@ import {
   generateTempMessageId,
   getMessageIdentityKey,
 } from "../utils/messageIdentity";
-import { isMessageDebugEnabled, logMessageDebug } from "../utils/messageDebug";
+import { logMessageDebug } from "../utils/messageDebug";
 import { createReplySnapshot } from "../utils/messageTimeline";
 import { rankConversations } from "../utils/conversationRanking";
 import i18n from "../i18n";
@@ -200,7 +200,10 @@ const asNumberValue = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) ? value : undefined;
 
 const getCorrelationKeyForMessage = (
-  message: Pick<Message, "conversationId" | "clientMessageId" | "localId" | "id">,
+  message: Pick<
+    Message,
+    "conversationId" | "clientMessageId" | "localId" | "id"
+  >,
 ): string =>
   buildMessageCorrelationKey({
     conversationId: message.conversationId,
@@ -621,8 +624,7 @@ const isTempMessageId = (id: string | undefined): boolean =>
   typeof id === "string" && id.startsWith("temp-");
 
 const matchesMessage = (source: Message, target: Message): boolean =>
-  (source.stableId !== undefined &&
-    source.stableId === target.stableId) ||
+  (source.stableId !== undefined && source.stableId === target.stableId) ||
   source.id === target.id ||
   (source.localId !== undefined && source.localId === target.id) ||
   (target.localId !== undefined && target.localId === source.id) ||
@@ -892,7 +894,10 @@ const replaceMessages = (
   return mergeMessages(incoming, localOnlyMessages);
 };
 
-const prependMessages = (current: Message[], incoming: Message[]): Message[] => {
+const prependMessages = (
+  current: Message[],
+  incoming: Message[],
+): Message[] => {
   if (!Array.isArray(incoming) || incoming.length === 0) {
     return Array.isArray(current) ? current : [];
   }
@@ -1729,7 +1734,11 @@ export const useChatStore = create<ChatState>()(
                     stableId: undefined,
                   },
                   messageId,
-                ) || matchesMessageIdentityValue(lastMessage, conversation.lastMessage?.id || "");
+                ) ||
+                matchesMessageIdentityValue(
+                  lastMessage,
+                  conversation.lastMessage?.id || "",
+                );
 
               return shouldRefreshPreview
                 ? {
@@ -1763,8 +1772,8 @@ export const useChatStore = create<ChatState>()(
         set((state) => {
           const currentMessages = state.messages[conversationId] || [];
           const sortedMessages = sortMessages(currentMessages);
-          const boundaryIndex = sortedMessages.findIndex(
-            (message) => matchesMessageIdentityValue(message, lastMessageId),
+          const boundaryIndex = sortedMessages.findIndex((message) =>
+            matchesMessageIdentityValue(message, lastMessageId),
           );
           const readAt = new Date();
 
@@ -1799,9 +1808,7 @@ export const useChatStore = create<ChatState>()(
       removeMessage: (conversationId, messageId) => {
         const currentMessage = (
           get().messages[conversationId] || EMPTY_MESSAGES
-        ).find(
-          (message) => matchesMessageIdentityValue(message, messageId),
-        );
+        ).find((message) => matchesMessageIdentityValue(message, messageId));
         logMessageDebug("chatStore", "message_removed", {
           conversationId,
           messageId,
@@ -1945,14 +1952,14 @@ export const useChatStore = create<ChatState>()(
           if (after) params.set("after", after);
           if (afterId) params.set("afterId", afterId);
           logMessageDebug("chatStore", "fetch_requested", {
-                conversationId,
-                fetchMode,
-                syncReason,
-                forceRefresh,
-                fetchRequestedAt: fetchRequestedAt.toISOString(),
-                before,
-                after,
-                beforeId,
+            conversationId,
+            fetchMode,
+            syncReason,
+            forceRefresh,
+            fetchRequestedAt: fetchRequestedAt.toISOString(),
+            before,
+            after,
+            beforeId,
             afterId,
             limit,
             initialFetchSeq,
@@ -2007,15 +2014,6 @@ export const useChatStore = create<ChatState>()(
           const hasMoreForDirection = after
             ? normalized.hasNext
             : normalized.hasPrev;
-
-          if (
-            isMessageDebugEnabled() &&
-            isInitialFetch &&
-            normalized.messages.length > 0
-          ) {
-            // eslint-disable-next-line no-debugger
-            debugger;
-          }
 
           set((state) => {
             if (
@@ -2100,7 +2098,7 @@ export const useChatStore = create<ChatState>()(
                   fetchMode === "initial" || fetchMode === "newer"
                     ? normalized.hasNext
                     : (state.hasNewerMessagesByConversation[conversationId] ??
-                        false),
+                      false),
               },
             };
           });

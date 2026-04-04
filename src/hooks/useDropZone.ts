@@ -13,6 +13,8 @@ export interface UseDropZoneOptions {
   onDrop: (files: File[]) => void;
   /** Whether drop is disabled (e.g. no conversation selected) */
   disabled?: boolean;
+  /** Called when user drops files while disabled */
+  onDropRejected?: () => void;
 }
 
 export interface UseDropZoneReturn {
@@ -32,6 +34,7 @@ export interface UseDropZoneReturn {
 export function useDropZone({
   onDrop,
   disabled = false,
+  onDropRejected,
 }: UseDropZoneOptions): UseDropZoneReturn {
   const [isDragActive, setIsDragActive] = useState(false);
   const dragCounter = useRef(0);
@@ -53,7 +56,10 @@ export function useDropZone({
     (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      if (disabled) return;
+      if (disabled) {
+        e.dataTransfer.dropEffect = "none";
+        return;
+      }
       // Required to allow drop
       e.dataTransfer.dropEffect = "copy";
     },
@@ -77,14 +83,17 @@ export function useDropZone({
       dragCounter.current = 0;
       setIsDragActive(false);
 
-      if (disabled) return;
+      if (disabled) {
+        onDropRejected?.();
+        return;
+      }
 
       const files = Array.from(e.dataTransfer.files);
       if (files.length > 0) {
         onDrop(files);
       }
     },
-    [disabled, onDrop],
+    [disabled, onDrop, onDropRejected],
   );
 
   const dismiss = useCallback(() => {

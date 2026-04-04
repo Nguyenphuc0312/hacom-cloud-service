@@ -41,9 +41,10 @@ import { rankConversations } from "../utils/conversationRanking";
 import { UserStatus } from "../types";
 import { isDirectConversation } from "../lib/conversationAdapter";
 import { getOtherParticipant } from "../utils/messageHelpers";
-import { isMessageDebugEnabled, logMessageDebug } from "../utils/messageDebug";
+import { logMessageDebug } from "../utils/messageDebug";
 import { ErrorCode } from "@hacom/chat-shared-types";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
+import { conversationApi } from "../services/api";
 import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
 import { createPrivateConversationUseCase } from "../features/chat/usecases/createPrivateConversation";
 import { createGroupConversationUseCase } from "../features/chat/usecases/createGroupConversation";
@@ -106,6 +107,8 @@ const scheduleIdleTask = (task: () => void): (() => void) => {
     window.clearTimeout(timeoutId);
   };
 };
+
+const CONVERSATIONS_PAGE_SIZE = 100;
 
 export const ChatPage: React.FC = () => {
   const { t } = useTranslation();
@@ -193,6 +196,10 @@ export const ChatPage: React.FC = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const filePreview = useFilePreview();
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const [isLoadingMoreConversations, setIsLoadingMoreConversations] =
+    useState(false);
+  const [hasMoreConversations, setHasMoreConversations] = useState(true);
+  const conversationsPageRef = useRef(1);
   const roomCreationLockRef = useRef(false);
   const [isValidatingRoom, setIsValidatingRoom] = useState(false);
   const [lastValidatedConversationId, setLastValidatedConversationId] =
@@ -309,8 +316,45 @@ export const ChatPage: React.FC = () => {
 
   // Load conversations on mount
   useEffect(() => {
-    fetchConversations();
+    void (async () => {
+      await fetchConversations();
+      const initialCount = useChatStore.getState().conversations.length;
+      setHasMoreConversations(initialCount >= CONVERSATIONS_PAGE_SIZE);
+      conversationsPageRef.current = 1;
+    })();
   }, [fetchConversations]);
+
+  const handleLoadMoreConversations = useCallback(async () => {
+    if (isLoadingMoreConversations || !hasMoreConversations) {
+      return;
+    }
+
+    setIsLoadingMoreConversations(true);
+    try {
+      const nextPage = conversationsPageRef.current + 1;
+      const response = await conversationApi.getConversations(
+        nextPage,
+        CONVERSATIONS_PAGE_SIZE,
+      );
+      const fetched = unwrapApiSuccess(response);
+
+      if (!Array.isArray(fetched) || fetched.length === 0) {
+        setHasMoreConversations(false);
+        return;
+      }
+
+      const existing = useChatStore.getState().conversations;
+      const merged = [...existing, ...fetched];
+      useChatStore.getState().setConversations(merged);
+      conversationsPageRef.current = nextPage;
+      setHasMoreConversations(fetched.length >= CONVERSATIONS_PAGE_SIZE);
+    } catch (error) {
+      const apiError = extractApiError(error);
+      toast.error(apiError.message || t("error:chat.fetchConversationsFailed"));
+    } finally {
+      setIsLoadingMoreConversations(false);
+    }
+  }, [hasMoreConversations, isLoadingMoreConversations, t]);
 
   // Load messages when conversation changes & join/leave rooms
   useEffect(() => {
@@ -508,20 +552,6 @@ export const ChatPage: React.FC = () => {
     currentUserSummary?.username,
     isValidatingRoom,
     selectedConversationId,
-  ]);
-
-  useEffect(() => {
-    if (!isMessageDebugEnabled()) return;
-    if (!selectedConversationId) return;
-    if (!isSelectedConversationHydrated) return;
-    if (conversationMessages.length > 0) return;
-
-    // eslint-disable-next-line no-debugger
-    debugger;
-  }, [
-    selectedConversationId,
-    isSelectedConversationHydrated,
-    conversationMessages.length,
   ]);
 
   const handleReactMessage = useCallback(
@@ -976,10 +1006,13 @@ export const ChatPage: React.FC = () => {
           currentUser={currentUserSummary}
           selectedId={selectedConversationId}
           isLoadingConversations={isLoadingConversations}
+          isLoadingMoreConversations={isLoadingMoreConversations}
+          hasMoreConversations={hasMoreConversations}
           showConversationSkeleton={showConversationSkeleton}
           conversationsError={conversationsError}
           onSelectConversation={handleSelectConversation}
           onRetryConversations={fetchConversations}
+          onLoadMoreConversations={handleLoadMoreConversations}
           onNewChat={handleOpenNewChat}
           onCurrentUserClick={handleOpenCurrentUserProfile}
         />
@@ -1015,7 +1048,7 @@ export const ChatPage: React.FC = () => {
             onBack={handleBack}
             onTyping={handleTyping}
             hasMoreMessages={currentHasMore}
-            isLoadingMessages={currentIsLoading}
+            isLoadingMessages={currentIsLoading || !isConversationHistoryReady}
             onLoadOlderMessages={handleLoadOlderMessages}
             onImageClick={setImagePreview}
             onFilePreview={(attachment: Attachment) => {

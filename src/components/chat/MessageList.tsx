@@ -130,7 +130,10 @@ const areEqualTimelineRowProps = (
 
   const previousHighlighted =
     previousItem?.kind === "message" &&
-    isTargetMessage(previousItem.message, previousProps.data.highlightedMessageId);
+    isTargetMessage(
+      previousItem.message,
+      previousProps.data.highlightedMessageId,
+    );
   const nextHighlighted =
     nextItem?.kind === "message" &&
     isTargetMessage(nextItem.message, nextProps.data.highlightedMessageId);
@@ -615,6 +618,10 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       ]),
     [showJumpToBottom, showNewMessagesPill],
   );
+  const floatingBottomOffset = React.useMemo(
+    () => Math.max(12, composerHeight + 12),
+    [composerHeight],
+  );
 
   const handleTimelineItemSizeChange = React.useCallback(
     ({ index, delta }: { index: number; key: string; delta: number }) => {
@@ -1086,7 +1093,12 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         )}
 
       {bottomOverlayPlacements["jump-latest"]?.visible && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-4 z-sticky">
+        <div
+          className="pointer-events-none absolute inset-x-0 z-sticky"
+          style={{
+            bottom: `calc(env(safe-area-inset-bottom) + ${floatingBottomOffset}px)`,
+          }}
+        >
           <ConversationLane>
             <div className="flex justify-end">
               <button
@@ -1108,7 +1120,12 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       )}
 
       {bottomOverlayPlacements["new-pill"]?.visible && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-4 z-sticky">
+        <div
+          className="pointer-events-none absolute inset-x-0 z-sticky"
+          style={{
+            bottom: `calc(env(safe-area-inset-bottom) + ${floatingBottomOffset}px)`,
+          }}
+        >
           <ConversationLane>
             <div className="flex justify-end">
               <button

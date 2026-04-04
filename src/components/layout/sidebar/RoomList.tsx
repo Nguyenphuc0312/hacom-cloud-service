@@ -33,6 +33,9 @@ interface RoomListProps {
   showLoadingSkeleton?: boolean;
   error?: string | null;
   onRetry?: () => void;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
   onSelect: (conversationId: string) => void;
 }
 
@@ -214,6 +217,9 @@ export const RoomList: React.FC<RoomListProps> = ({
   showLoadingSkeleton = false,
   error = null,
   onRetry,
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore,
   onSelect,
 }) => {
   const { t } = useTranslation();
@@ -497,31 +503,53 @@ export const RoomList: React.FC<RoomListProps> = ({
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="min-h-0 flex-1 pb-2"
-      tabIndex={0}
-      role="listbox"
-      aria-label={t("sidebar:room.listAria")}
-      onKeyDown={handleKeyDown}
-      onMouseMove={() => {
-        if (isKeyboardMode) {
-          setIsKeyboardMode(false);
-        }
-      }}
-    >
-      {viewportHeight > 0 && (
-        <VariableSizeList<RowData>
-          ref={listRef}
-          height={viewportHeight}
-          width="100%"
-          itemCount={flatItems.length}
-          itemData={rowData}
-          itemSize={getItemSize}
-          overscanCount={12}
-        >
-          {Row}
-        </VariableSizeList>
+    <div className="min-h-0 flex-1 pb-2 flex flex-col">
+      <div
+        ref={containerRef}
+        className="min-h-0 flex-1"
+        tabIndex={0}
+        role="listbox"
+        aria-label={t("sidebar:room.listAria")}
+        onKeyDown={handleKeyDown}
+        onMouseMove={() => {
+          if (isKeyboardMode) {
+            setIsKeyboardMode(false);
+          }
+        }}
+      >
+        {viewportHeight > 0 && (
+          <VariableSizeList<RowData>
+            ref={listRef}
+            height={viewportHeight}
+            width="100%"
+            itemCount={flatItems.length}
+            itemData={rowData}
+            itemSize={getItemSize}
+            overscanCount={12}
+          >
+            {Row}
+          </VariableSizeList>
+        )}
+      </div>
+
+      {hasMore && (
+        <div className="px-3 pt-1">
+          <button
+            type="button"
+            onClick={() => onLoadMore?.()}
+            disabled={isLoadingMore}
+            className={clsx(
+              "w-full rounded-xl border border-border px-3 py-2 text-xs font-medium transition-colors",
+              isLoadingMore
+                ? "cursor-not-allowed text-text-muted opacity-70"
+                : "text-text-secondary hover:bg-surface-hover",
+            )}
+          >
+            {isLoadingMore
+              ? t("common:status.loading", { defaultValue: "Loading..." })
+              : t("sidebar:actions.loadMore", { defaultValue: "Load more" })}
+          </button>
+        </div>
       )}
     </div>
   );

@@ -92,7 +92,8 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
           "group relative mx-2 my-1 flex h-room-item w-room-item items-center justify-center rounded-[20px]",
           "transition-colors",
           "hover:bg-white/6",
-          (isActive || isKeyboardActive) && "bg-white/12 text-primary",
+          (isActive || isKeyboardActive) &&
+            "bg-white/12 text-primary ring-1 ring-primary/35",
         )}
         aria-label={displayName}
         title={displayName}
@@ -127,7 +128,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         "mx-2 my-0.5 flex h-room-item w-[calc(100%-var(--space-4))] items-center rounded-[22px] px-3.5",
         "transition-colors",
         "hover:bg-white/6",
-        (isActive || isKeyboardActive) && "bg-white/10",
+        (isActive || isKeyboardActive) && "bg-white/10 ring-1 ring-primary/28",
       )}
       aria-label={displayName}
     >
@@ -191,9 +192,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
           <span
             className={clsx(
               "text-[11px] leading-4",
-              unreadCount > 0
-                ? "font-medium text-primary"
-                : "text-text-muted",
+              unreadCount > 0 ? "font-medium text-primary" : "text-text-muted",
             )}
           >
             {timeLabel}

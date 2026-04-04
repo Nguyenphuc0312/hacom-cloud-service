@@ -21,6 +21,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fileApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
+import { UPLOAD_CONFIG } from "../config";
 import type {
   AttachmentDraft,
   AttachmentDraftStatus,
@@ -44,7 +45,7 @@ export interface UseUploadQueueReturn {
   /** Current list of attachment drafts */
   drafts: AttachmentDraft[];
   /** Add files to the queue (from drop or file picker) */
-  addFiles: (files: File[]) => void;
+  addFiles: (files: File[]) => UploadQueueAddFilesResult;
   /** Remove a draft by localId */
   removeDraft: (localId: string) => void;
   /** Cancel an in-progress upload */
@@ -63,6 +64,12 @@ export interface UseUploadQueueReturn {
   getReadyMeta: () => UploadedFileMeta[];
   /** Total count of non-removed drafts */
   activeCount: number;
+}
+
+export interface UploadQueueAddFilesResult {
+  acceptedCount: number;
+  rejectedCount: number;
+  errors: string[];
 }
 
 // ── Constants ───────────────────────────────────────────────────────
@@ -386,12 +393,21 @@ export function useUploadQueue({
   // ─ Public API ─
 
   const addFiles = useCallback(
-    (files: File[]) => {
+    (files: File[]): UploadQueueAddFilesResult => {
+      const allowedTypes = new Set<string>([
+        ...UPLOAD_CONFIG.ALLOWED_FILE_TYPES,
+        "video/mp4",
+      ]);
+      const result: UploadQueueAddFilesResult = {
+        acceptedCount: 0,
+        rejectedCount: 0,
+        errors: [],
+      };
+
       setDrafts((prev) => {
         const active = prev.filter((d) => d.status !== "removed");
 
         let next = [...prev];
-        const errors: string[] = [];
 
         for (const file of files) {
           // Check count limit
@@ -399,23 +415,37 @@ export function useUploadQueue({
           if (
             currentActive.length >= ATTACHMENT_CONSTRAINTS.maxFilesPerMessage
           ) {
-            errors.push(
+            result.errors.push(
               t("error:upload.tooManyFiles", {
                 max: ATTACHMENT_CONSTRAINTS.maxFilesPerMessage,
                 defaultValue: `Maximum ${ATTACHMENT_CONSTRAINTS.maxFilesPerMessage} files allowed`,
               }),
             );
+            result.rejectedCount += 1;
             break;
           }
 
           // Check single file size
           if (file.size > ATTACHMENT_CONSTRAINTS.maxSingleFileSize) {
-            errors.push(
+            result.errors.push(
               t("error:upload.fileTooLargeNamed", {
                 name: file.name,
                 defaultValue: `${file.name} is too large`,
               }),
             );
+            result.rejectedCount += 1;
+            continue;
+          }
+
+          // Check file type
+          if (!allowedTypes.has(file.type)) {
+            result.errors.push(
+              t("error:upload.unsupportedTypeNamed", {
+                name: file.name,
+                defaultValue: `${file.name} has an unsupported file type`,
+              }),
+            );
+            result.rejectedCount += 1;
             continue;
           }
 
@@ -423,30 +453,30 @@ export function useUploadQueue({
           const totalSize =
             currentActive.reduce((sum, d) => sum + d.file.size, 0) + file.size;
           if (totalSize > ATTACHMENT_CONSTRAINTS.maxTotalSize) {
-            errors.push(
+            result.errors.push(
               t("error:upload.totalSizeTooLarge", {
                 defaultValue: "Total file size limit exceeded",
               }),
             );
+            result.rejectedCount += 1;
             break;
           }
 
           // Check duplicates
           const isDuplicate = active.some((d) => isDuplicateFile(d.file, file));
-          if (isDuplicate) continue;
+          if (isDuplicate) {
+            result.rejectedCount += 1;
+            continue;
+          }
 
           next = [...next, createAttachmentDraft(file)];
-        }
-
-        // Show errors via console (toast is done at component level)
-        if (errors.length > 0) {
-          // We'll set error on a virtual way — just log for now
-          // Actual toast is done in the component that calls addFiles
-          console.warn("[useUploadQueue] Validation errors:", errors);
+          result.acceptedCount += 1;
         }
 
         return next;
       });
+
+      return result;
     },
     [t],
   );

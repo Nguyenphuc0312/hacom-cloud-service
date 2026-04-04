@@ -29,10 +29,13 @@ interface SidebarProps {
   currentUser: UserSummary;
   selectedId: string | null;
   isLoadingConversations?: boolean;
+  isLoadingMoreConversations?: boolean;
+  hasMoreConversations?: boolean;
   showConversationSkeleton?: boolean;
   conversationsError?: string | null;
   onSelectConversation: (id: string) => void;
   onRetryConversations?: () => void;
+  onLoadMoreConversations?: () => void;
   onNewChat?: () => void;
   onCurrentUserClick?: () => void;
   className?: string;
@@ -45,10 +48,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentUser,
   selectedId,
   isLoadingConversations = false,
+  isLoadingMoreConversations = false,
+  hasMoreConversations = false,
   showConversationSkeleton = false,
   conversationsError = null,
   onSelectConversation,
   onRetryConversations,
+  onLoadMoreConversations,
   onNewChat,
   onCurrentUserClick,
   className,
@@ -186,6 +192,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           showLoadingSkeleton={showConversationSkeleton}
           error={conversationsError}
           onRetry={onRetryConversations}
+          hasMore={hasMoreConversations}
+          isLoadingMore={isLoadingMoreConversations}
+          onLoadMore={onLoadMoreConversations}
           onSelect={onSelectConversation}
         />
 

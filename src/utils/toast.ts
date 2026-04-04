@@ -4,11 +4,32 @@
 
 import toastLib from "react-hot-toast";
 
+const TOAST_DEDUPE_WINDOW_MS = 1800;
+const toastDedupedAt = new Map<string, number>();
+
+const shouldSuppressToast = (key: string): boolean => {
+  const now = Date.now();
+  const lastShownAt = toastDedupedAt.get(key) ?? 0;
+  if (now - lastShownAt < TOAST_DEDUPE_WINDOW_MS) {
+    return true;
+  }
+  toastDedupedAt.set(key, now);
+  return false;
+};
+
+const buildToastId = (level: string, message: string): string =>
+  `toast:${level}:${message.trim().toLowerCase()}`;
+
 export const toast = {
   success: (message: string) => {
+    const id = buildToastId("success", message);
+    if (shouldSuppressToast(id)) {
+      return;
+    }
+
     toastLib.success(message, {
+      id,
       duration: 3000,
-      position: "top-center",
       className: "toast-base toast-success",
       iconTheme: {
         primary: "hsl(var(--color-text-inverse))",
@@ -18,9 +39,14 @@ export const toast = {
   },
 
   error: (message: string) => {
+    const id = buildToastId("error", message);
+    if (shouldSuppressToast(id)) {
+      return;
+    }
+
     toastLib.error(message, {
+      id,
       duration: 4000,
-      position: "top-center",
       className: "toast-base toast-danger",
       iconTheme: {
         primary: "hsl(var(--color-text-inverse))",
@@ -30,18 +56,28 @@ export const toast = {
   },
 
   info: (message: string) => {
+    const id = buildToastId("info", message);
+    if (shouldSuppressToast(id)) {
+      return;
+    }
+
     toastLib(message, {
+      id,
       duration: 3000,
-      position: "top-center",
       className: "toast-base toast-info",
       icon: "i",
     });
   },
 
   warning: (message: string) => {
+    const id = buildToastId("warning", message);
+    if (shouldSuppressToast(id)) {
+      return;
+    }
+
     toastLib(message, {
+      id,
       duration: 3000,
-      position: "top-center",
       className: "toast-base toast-warning",
       icon: "!",
     });
@@ -57,7 +93,6 @@ export const toast = {
 
   loading: (message: string) => {
     return toastLib.loading(message, {
-      position: "top-center",
       className: "toast-base toast-neutral",
     });
   },
@@ -78,7 +113,6 @@ export const toast = {
         error: msgs.error,
       },
       {
-        position: "top-center",
         className: "toast-base",
       },
     );

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+﻿import React, { useState, useCallback } from "react";
 import clsx from "clsx";
 import {
   XMarkIcon,
@@ -793,26 +793,34 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         <div className="h-px bg-border mx-4" />
 
         <div className="py-2">
-          <div className="flex items-center justify-between px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer">
+          <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-4">
               <BellIcon className="w-5 h-5 text-text-muted" />
-              <span className="text-sm text-text-primary">
-                {t("profile:groupInfo.notifications")}
-              </span>
+              <div>
+                <span className="text-sm text-text-primary">
+                  {t("profile:groupInfo.notifications")}
+                </span>
+                <p className="text-xs text-text-muted">
+                  {t("common:toast.featureInDevelopment", {
+                    defaultValue: "Coming soon",
+                  })}
+                </p>
+              </div>
             </div>
-            <div
-              className={clsx(
-                "w-10 h-6 rounded-full relative",
-                conversation.isMuted ? "bg-border-strong" : "bg-primary",
-              )}
+            <button
+              type="button"
+              disabled
+              title={t("common:toast.featureInDevelopment", {
+                defaultValue: "Coming soon",
+              })}
+              className="w-10 h-6 rounded-full relative bg-border-strong cursor-not-allowed opacity-70"
+              aria-disabled="true"
+              aria-label={t("common:toast.featureInDevelopment", {
+                defaultValue: "Coming soon",
+              })}
             >
-              <div
-                className={clsx(
-                  "absolute top-1 w-4 h-4 bg-surface rounded-full shadow transition-all",
-                  conversation.isMuted ? "left-1" : "right-1",
-                )}
-              />
-            </div>
+              <div className="absolute top-1 left-1 w-4 h-4 bg-surface rounded-full shadow" />
+            </button>
           </div>
         </div>
 
