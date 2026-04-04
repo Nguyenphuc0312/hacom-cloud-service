@@ -70,6 +70,18 @@ export interface EmailVerificationChallengeSnapshot {
   expiresAt: string;
   resendAvailableAt: string;
   purpose: "signup";
+  verificationState:
+    | "pending_otp"
+    | "expired"
+    | "invalidated"
+    | "locked"
+    | "verified"
+    | "recoverable_error"
+    | "missing_context";
+  lockedReason?: string | null;
+  attemptCount?: number | null;
+  maxAttempts?: number | null;
+  lastResolvedAt?: string | null;
 }
 
 interface AuthState {
@@ -317,6 +329,7 @@ export const useAuthStore = create<AuthState>()(
             set({
               user,
               pendingVerificationEmail: null,
+              emailVerificationChallenge: null,
               isAuthenticated: true,
               isLoading: false,
               isInitialized: true,
@@ -362,9 +375,22 @@ export const useAuthStore = create<AuthState>()(
         clearError: () => set({ error: null }),
 
         setPendingVerificationEmail: (email) =>
-          set({
-            pendingVerificationEmail: email?.trim().toLowerCase() || null,
-            registrationStatus: email ? "verification_required" : "idle",
+          set((state) => {
+            const normalizedEmail = email?.trim().toLowerCase() || null;
+            const keepChallenge =
+              normalizedEmail &&
+              state.emailVerificationChallenge &&
+              state.emailVerificationChallenge.email === normalizedEmail
+                ? state.emailVerificationChallenge
+                : null;
+
+            return {
+              pendingVerificationEmail: normalizedEmail,
+              emailVerificationChallenge: keepChallenge,
+              registrationStatus: normalizedEmail
+                ? "verification_required"
+                : "idle",
+            };
           }),
 
         clearPendingVerificationEmail: () =>
