@@ -102,6 +102,15 @@ export const forgotPasswordSchema = z.object({
 
 export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
 
+export const emailOtpSchema = z.object({
+  otp: z
+    .string()
+    .min(6, i18nKey("validation:auth.otpRequired"))
+    .regex(/^\d{6}$/, i18nKey("validation:auth.otpSixDigits")),
+});
+
+export type EmailOtpFormData = z.infer<typeof emailOtpSchema>;
+
 /**
  * Schema đặt lại mật khẩu
  */

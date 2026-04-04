@@ -1,230 +1,369 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
 import {
-  ArrowLeftIcon,
+  ArrowPathIcon,
   CheckCircleIcon,
   ChatBubbleLeftRightIcon,
   EnvelopeIcon,
-  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { ErrorCode } from "@hacom/chat-shared-types";
-import { Button, Input, PageSpinner, toast } from "../components/ui";
+import { Button, PageSpinner, toast } from "../components/ui";
+import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import { authApi } from "../services/api";
-import { extractApiError } from "../lib/apiContract";
-import { useAuthStore } from "../stores/authStore";
-import { forgotPasswordSchema } from "../lib/validations";
-import type { ForgotPasswordFormData } from "../lib/validations";
+import type { EmailVerificationChallengeSnapshot } from "../stores/authStore";
+import { useEmailVerificationChallenge, useResendCooldown } from "../hooks";
+import { EmailOtpInput } from "../components/auth";
 import { ROUTE_PATHS } from "../router/paths";
 
-type VerifyState =
-  | "loading"
-  | "success"
-  | "pending_verification"
-  | "missing_token"
-  | "invalid_token"
-  | "server_error";
-
 const cardClassName =
-  "animate-fade-in rounded-2xl border border-border bg-surface p-8 text-center shadow-xl";
+  "animate-fade-in rounded-2xl border border-border bg-surface p-6 shadow-xl sm:p-8";
 
-const normalizeEmail = (value: string | null): string =>
+const normalizeEmail = (value: string | null | undefined): string =>
   value?.trim().toLowerCase() || "";
+
+const parseDateMs = (value: string | null | undefined): number | null => {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const formatCountdown = (seconds: number): string => {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds % 60;
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+};
+
+const buildChallengeSnapshot = (
+  email: string,
+  challengeId: string,
+  expiresAt: string,
+  resendAvailableAt: string,
+): EmailVerificationChallengeSnapshot => ({
+  challengeId,
+  email,
+  expiresAt,
+  resendAvailableAt,
+  purpose: "signup",
+});
+
+type PageMode =
+  | "booting"
+  | "requesting"
+  | "ready"
+  | "confirming"
+  | "resending"
+  | "verified"
+  | "error";
+
+const OTP_LENGTH = 6;
 
 export const VerifyEmailPage: React.FC = () => {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
-  const token = searchParams.get("token")?.trim() || "";
-  const status = searchParams.get("status")?.trim() || "";
-  const emailFromQuery = normalizeEmail(searchParams.get("email"));
-  const pendingVerificationEmail = useAuthStore(
-    (state) => state.pendingVerificationEmail,
-  );
-  const setPendingVerificationEmail = useAuthStore(
-    (state) => state.setPendingVerificationEmail,
-  );
-  const clearPendingVerificationEmail = useAuthStore(
-    (state) => state.clearPendingVerificationEmail,
-  );
-  const verificationEmail = useMemo(
-    () => normalizeEmail(pendingVerificationEmail) || emailFromQuery,
-    [emailFromQuery, pendingVerificationEmail],
-  );
-  const [verifyState, setVerifyState] = useState<VerifyState>(() => {
-    if (status === "success") {
-      return "success";
-    }
-
-    if (token) {
-      return "loading";
-    }
-
-    if (verificationEmail) {
-      return "pending_verification";
-    }
-
-    return "missing_token";
-  });
-  const requestedTokenRef = useRef<string | null>(null);
-  const [isResending, setIsResending] = useState(false);
+  const queryEmail = normalizeEmail(searchParams.get("email"));
   const {
-    register,
-    handleSubmit,
-    setValue,
-    formState: { errors },
-  } = useForm<ForgotPasswordFormData>({
-    resolver: zodResolver(forgotPasswordSchema),
-    defaultValues: {
-      email: verificationEmail,
-    },
-  });
-
-  useEffect(() => {
-    if (status !== "success" && emailFromQuery) {
-      setPendingVerificationEmail(emailFromQuery);
-    }
-  }, [emailFromQuery, setPendingVerificationEmail, status]);
-
-  useEffect(() => {
-    setValue("email", verificationEmail);
-  }, [setValue, verificationEmail]);
-
-  useEffect(() => {
-    if (status === "success") {
-      clearPendingVerificationEmail();
-      setVerifyState("success");
-      return;
-    }
-
-    if (!token) {
-      setVerifyState(
-        verificationEmail ? "pending_verification" : "missing_token",
-      );
-      return;
-    }
-
-    if (requestedTokenRef.current === token) {
-      return;
-    }
-
-    requestedTokenRef.current = token;
-    setVerifyState("loading");
-
-    void authApi
-      .verifyEmail(token)
-      .then(() => {
-        clearPendingVerificationEmail();
-        setVerifyState("success");
-      })
-      .catch((error: unknown) => {
-        const apiError = extractApiError(error);
-        const isKnownTokenFailure =
-          apiError.statusCode === 400 ||
-          apiError.statusCode === 401 ||
-          apiError.statusCode === 410 ||
-          apiError.code === ErrorCode.INVALID_TOKEN ||
-          apiError.code === ErrorCode.TOKEN_EXPIRED ||
-          apiError.code === ErrorCode.AUTH_INVALID_TOKEN ||
-          apiError.code === ErrorCode.AUTH_TOKEN_EXPIRED;
-
-        setVerifyState(isKnownTokenFailure ? "invalid_token" : "server_error");
-      });
-  }, [
+    pendingVerificationEmail,
+    emailVerificationChallenge: verificationChallenge,
+    setPendingVerificationEmail,
     clearPendingVerificationEmail,
-    status,
-    token,
+    setEmailVerificationChallenge,
+    clearEmailVerificationChallenge,
+  } = useEmailVerificationChallenge();
+
+  const verificationEmail = useMemo(
+    () =>
+      normalizeEmail(pendingVerificationEmail) ||
+      queryEmail ||
+      normalizeEmail(verificationChallenge?.email),
+    [pendingVerificationEmail, queryEmail, verificationChallenge?.email],
+  );
+
+  const [otp, setOtp] = useState("");
+  const [mode, setMode] = useState<PageMode>(() => {
+    if (!verificationEmail) {
+      return "error";
+    }
+
+    return verificationChallenge ? "ready" : "requesting";
+  });
+  const [screenMessage, setScreenMessage] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const autoRequestedEmailRef = useRef<string | null>(null);
+
+  const activeChallenge = useMemo(() => {
+    if (!verificationChallenge) {
+      return null;
+    }
+
+    if (!verificationEmail) {
+      return verificationChallenge;
+    }
+
+    return normalizeEmail(verificationChallenge.email) === verificationEmail
+      ? verificationChallenge
+      : null;
+  }, [verificationChallenge, verificationEmail]);
+
+  const expiresAtMs = parseDateMs(activeChallenge?.expiresAt);
+  const {
+    now,
+    secondsRemaining: resendCooldownSeconds,
+    formattedRemaining: resendCooldownLabel,
+    canResend: canResendAfterCooldown,
+  } = useResendCooldown(activeChallenge?.resendAvailableAt);
+  const expirySeconds =
+    expiresAtMs === null
+      ? null
+      : Math.max(0, Math.ceil((expiresAtMs - now) / 1000));
+  const isChallengeExpired = expirySeconds === 0 && Boolean(activeChallenge);
+  const hasActiveChallenge = Boolean(activeChallenge?.challengeId);
+  const isBusy =
+    mode === "booting" ||
+    mode === "requesting" ||
+    mode === "confirming" ||
+    mode === "resending";
+  const canSubmit =
+    hasActiveChallenge &&
+    !isChallengeExpired &&
+    otp.length === OTP_LENGTH &&
+    !isBusy;
+  const canResendActiveChallenge =
+    hasActiveChallenge &&
+    !isChallengeExpired &&
+    canResendAfterCooldown &&
+    !isBusy;
+  const canRequestFreshChallenge = Boolean(verificationEmail) && !isBusy;
+
+  const requestFreshChallenge = useCallback(async (): Promise<void> => {
+    if (!verificationEmail || mode === "requesting") {
+      return;
+    }
+
+    setMode("requesting");
+    setFormError(null);
+    setScreenMessage(t("auth:verifyEmail.requestingOtp"));
+
+    try {
+      const response = await authApi.requestEmailOtpChallenge({
+        email: verificationEmail,
+        purpose: "signup",
+      });
+      const payload = unwrapApiSuccess(response);
+
+      if (payload.verified || !payload.challengeId) {
+        clearPendingVerificationEmail();
+        clearEmailVerificationChallenge();
+        setMode("verified");
+        setScreenMessage(null);
+        toast.success(t("auth:toast.emailOtpVerified"));
+        return;
+      }
+
+      const snapshot = buildChallengeSnapshot(
+        verificationEmail,
+        payload.challengeId,
+        payload.expiresAt || new Date().toISOString(),
+        payload.resendAvailableAt || new Date().toISOString(),
+      );
+      setPendingVerificationEmail(verificationEmail);
+      setEmailVerificationChallenge(snapshot);
+      setOtp("");
+      setMode("ready");
+      toast.success(t("auth:toast.emailOtpSent"));
+    } catch (error: unknown) {
+      const message = mapOtpErrorMessage(error, t);
+      setMode("error");
+      setFormError(message);
+      setScreenMessage(message);
+    }
+  }, [
+    clearEmailVerificationChallenge,
+    clearPendingVerificationEmail,
+    mode,
+    setEmailVerificationChallenge,
+    setPendingVerificationEmail,
+    t,
     verificationEmail,
   ]);
 
-  const handleResendVerification = async (email: string) => {
-    if (!email || isResending) {
+  useEffect(() => {
+    if (
+      !verificationEmail ||
+      activeChallenge ||
+      autoRequestedEmailRef.current === verificationEmail
+    ) {
       return;
     }
 
-    setIsResending(true);
-    try {
-      const normalizedEmail = normalizeEmail(email);
-      await authApi.requestEmailVerification(normalizedEmail);
-      setPendingVerificationEmail(normalizedEmail);
-      toast.success(t("auth:toast.verificationEmailResent"));
-    } catch {
-      toast.success(t("auth:toast.verificationEmailResentFallback"));
-    } finally {
-      setIsResending(false);
+    autoRequestedEmailRef.current = verificationEmail;
+    const timer = window.setTimeout(() => {
+      void requestFreshChallenge();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [activeChallenge, requestFreshChallenge, verificationEmail]);
+
+  const resetFormError = () => {
+    setFormError(null);
+    setScreenMessage(null);
+  };
+
+  const handleOtpChange = (value: string) => {
+    const numeric = value.replace(/\D/g, "").slice(0, OTP_LENGTH);
+    setOtp(numeric);
+    if (formError) {
+      resetFormError();
     }
   };
 
-  const handleManualResendVerification = async (
-    data: ForgotPasswordFormData,
-  ) => {
-    await handleResendVerification(data.email);
+  const resendChallenge = async (): Promise<void> => {
+    if (!verificationEmail || !activeChallenge) {
+      await requestFreshChallenge();
+      return;
+    }
+
+    if (isChallengeExpired || (resendCooldownSeconds ?? 0) > 0) {
+      return;
+    }
+
+    setMode("resending");
+    setFormError(null);
+    setScreenMessage(t("auth:verifyEmail.resendingOtp"));
+
+    try {
+      const response = await authApi.resendEmailOtpChallenge({
+        challengeId: activeChallenge.challengeId,
+        purpose: "signup",
+      });
+      const payload = unwrapApiSuccess(response);
+      const snapshot = buildChallengeSnapshot(
+        verificationEmail,
+        payload.challengeId || activeChallenge.challengeId,
+        payload.expiresAt || new Date().toISOString(),
+        payload.resendAvailableAt || new Date().toISOString(),
+      );
+      setPendingVerificationEmail(verificationEmail);
+      setEmailVerificationChallenge(snapshot);
+      setOtp("");
+      setMode("ready");
+      toast.success(t("auth:toast.emailOtpResent"));
+    } catch (error: unknown) {
+      const message = mapOtpErrorMessage(error, t);
+      setMode("error");
+      setFormError(message);
+      setScreenMessage(message);
+      if (shouldReplaceChallenge(error)) {
+        clearEmailVerificationChallenge();
+      }
+    }
   };
 
-  const renderActions = (variant: "register_and_login" | "login_only") => (
-    <div className="space-y-4">
-      {verificationEmail && variant === "register_and_login" ? (
-        <Button
-          variant="outline"
-          fullWidth
-          isLoading={isResending}
-          disabled={isResending}
-          onClick={() => void handleResendVerification(verificationEmail)}
-        >
-          {t("auth:verifyEmail.requestNewLink")}
-        </Button>
-      ) : null}
-      {variant === "register_and_login" ? (
-        <Link to={ROUTE_PATHS.REGISTER}>
-          <Button variant="primary" fullWidth>
-            {t("auth:verifyEmail.goToRegister")}
-          </Button>
-        </Link>
-      ) : (
-        <Link to={ROUTE_PATHS.LOGIN}>
-          <Button variant="primary" fullWidth size="lg">
-            {t("auth:verifyEmail.backToLogin")}
-          </Button>
-        </Link>
-      )}
-      {variant === "register_and_login" ? (
-        <Link to={ROUTE_PATHS.LOGIN}>
-          <Button variant="ghost" fullWidth>
-            <ArrowLeftIcon className="mr-2 h-4 w-4" />
-            {t("auth:verifyEmail.backToLogin")}
-          </Button>
-        </Link>
-      ) : null}
-    </div>
-  );
+  const confirmChallenge = async (otpValue = otp): Promise<void> => {
+    if (!activeChallenge || otpValue.length !== OTP_LENGTH) {
+      setFormError(t("auth:verifyEmail.otpRequired"));
+      return;
+    }
 
-  if (verifyState === "loading") {
+    if (isChallengeExpired) {
+      setFormError(t("auth:verifyEmail.otpExpired"));
+      return;
+    }
+
+    setMode("confirming");
+    setFormError(null);
+    setScreenMessage(t("auth:verifyEmail.confirmingOtp"));
+
+    try {
+      const response = await authApi.confirmEmailOtpChallenge({
+        challengeId: activeChallenge.challengeId,
+        otp: otpValue,
+        purpose: "signup",
+      });
+      const payload = unwrapApiSuccess(response);
+
+      if (payload.verified) {
+        clearPendingVerificationEmail();
+        clearEmailVerificationChallenge();
+        setOtp("");
+        setMode("verified");
+        setScreenMessage(null);
+        toast.success(t("auth:toast.emailOtpVerified"));
+      }
+    } catch (error: unknown) {
+      const message = mapOtpErrorMessage(error, t);
+      setMode("ready");
+      setFormError(message);
+      setScreenMessage(message);
+      if (shouldReplaceChallenge(error)) {
+        clearEmailVerificationChallenge();
+      }
+    }
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await confirmChallenge();
+  };
+
+  const expiredLabel =
+    expirySeconds === null
+      ? null
+      : expirySeconds > 0
+        ? formatCountdown(expirySeconds)
+        : t("auth:verifyEmail.expired");
+  const resendLabel =
+    resendCooldownSeconds === null
+      ? null
+      : resendCooldownSeconds > 0
+        ? resendCooldownLabel
+        : null;
+  const missingEmailMessage = !verificationEmail
+    ? t("auth:verifyEmail.missingEmailDescription")
+    : null;
+
+  const pageTitle =
+    mode === "verified"
+      ? t("auth:verifyEmail.successTitle")
+      : t("auth:verifyEmail.title");
+
+  const pageDescription =
+    mode === "verified"
+      ? t("auth:verifyEmail.successDescription")
+      : verificationEmail
+        ? t("auth:verifyEmail.subtitleWithEmail", { email: verificationEmail })
+        : missingEmailMessage || t("auth:verifyEmail.subtitle");
+
+  if (mode === "booting" || mode === "requesting") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 px-4 py-12">
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -right-40 -top-40 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
-          <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-secondary/15 blur-3xl" />
-        </div>
         <div className="relative w-full max-w-md">
           <div className={cardClassName}>
             <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-elev2">
               <ChatBubbleLeftRightIcon className="h-8 w-8 text-text-inverse" />
             </div>
             <h1 className="mb-2 text-2xl font-bold text-text-primary">
-              {t("auth:verifyEmail.title")}
+              {pageTitle}
             </h1>
-            <p className="mb-6 text-text-muted">
-              {t("auth:verifyEmail.subtitle")}
-            </p>
-            <PageSpinner message={t("auth:verifyEmail.subtitle")} />
+            <p className="mb-6 text-text-muted">{pageDescription}</p>
+            <PageSpinner message={screenMessage || pageDescription} />
           </div>
         </div>
       </div>
     );
   }
 
-  if (verifyState === "success") {
+  if (mode === "verified") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 px-4 py-12">
         <div className="relative w-full max-w-md">
@@ -238,111 +377,227 @@ export const VerifyEmailPage: React.FC = () => {
             <p className="mb-6 text-text-muted">
               {t("auth:verifyEmail.successDescription")}
             </p>
-            <p className="mb-6 text-sm text-text-muted">
-              {t("auth:verifyEmail.successNextStep")}
-            </p>
-            <Link to={ROUTE_PATHS.LOGIN}>
-              <Button variant="primary" fullWidth size="lg">
+            <div className="space-y-3">
+              <Link to={ROUTE_PATHS.LOGIN}>
+                <Button variant="primary" fullWidth size="lg">
+                  {t("auth:verifyEmail.backToLogin")}
+                </Button>
+              </Link>
+              <Link to={ROUTE_PATHS.REGISTER}>
+                <Button variant="ghost" fullWidth>
+                  {t("auth:verifyEmail.goToRegister")}
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const expiryBanner = expiredLabel ? (
+    <div className="flex flex-wrap items-center gap-2 text-sm text-text-muted">
+      <span className="rounded-full bg-surface-overlay px-3 py-1">
+        {t("auth:verifyEmail.expiresIn", { time: expiredLabel })}
+      </span>
+      {resendLabel ? (
+        <span className="rounded-full bg-surface-overlay px-3 py-1">
+          {t("auth:verifyEmail.resendIn", { time: resendLabel })}
+        </span>
+      ) : null}
+    </div>
+  ) : null;
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 px-4 py-8 sm:py-12">
+      <div className="relative w-full max-w-xl">
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -right-32 -top-32 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
+          <div className="absolute -bottom-32 -left-32 h-72 w-72 rounded-full bg-secondary/15 blur-3xl" />
+        </div>
+
+        <section
+          className={`${cardClassName} relative`}
+          aria-label={t("auth:verifyEmail.aria.section")}
+        >
+          <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-elev2">
+            <EnvelopeIcon className="h-8 w-8 text-text-inverse" />
+          </div>
+
+          <header className="mb-6 space-y-2">
+            <h1 className="text-2xl font-bold text-text-primary sm:text-3xl">
+              {pageTitle}
+            </h1>
+            <p className="text-text-muted">{pageDescription}</p>
+            {verificationEmail ? (
+              <p className="text-sm text-text-secondary">
+                {t("auth:verifyEmail.sentTo", { email: verificationEmail })}
+              </p>
+            ) : null}
+          </header>
+
+          {screenMessage ? (
+            <div
+              role="status"
+              className="mb-5 rounded-xl border border-border bg-surface-overlay px-4 py-3 text-sm text-text-secondary"
+            >
+              {screenMessage}
+            </div>
+          ) : null}
+
+          {formError || missingEmailMessage ? (
+            <div
+              role="alert"
+              className="mb-5 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
+            >
+              {formError || missingEmailMessage}
+            </div>
+          ) : null}
+
+          <div className="mb-5 space-y-3">
+            {expiryBanner}
+            {!hasActiveChallenge && verificationEmail ? (
+              <p className="text-sm text-text-muted">
+                {t("auth:verifyEmail.noActiveChallenge")}
+              </p>
+            ) : null}
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+            <EmailOtpInput
+              value={otp}
+              onChange={handleOtpChange}
+              onComplete={(value) => {
+                if (value.length === OTP_LENGTH) {
+                  void confirmChallenge(value);
+                }
+              }}
+              length={OTP_LENGTH}
+              label={t("auth:verifyEmail.otpLabel")}
+              hint={t("auth:verifyEmail.otpHint")}
+              error={formError}
+              autoFocus={Boolean(hasActiveChallenge)}
+              disabled={
+                !hasActiveChallenge ||
+                mode === "confirming" ||
+                mode === "resending"
+              }
+            />
+
+            <Button
+              type="submit"
+              fullWidth
+              size="lg"
+              isLoading={mode === "confirming"}
+              disabled={!canSubmit}
+            >
+              {t("auth:verifyEmail.submit")}
+            </Button>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Button
+                type="button"
+                variant="outline"
+                fullWidth
+                leftIcon={<ArrowPathIcon className="h-4 w-4" />}
+                isLoading={mode === "resending"}
+                disabled={
+                  isBusy ||
+                  (!canResendActiveChallenge && !canRequestFreshChallenge)
+                }
+                onClick={() => void resendChallenge()}
+              >
+                {isChallengeExpired
+                  ? t("auth:verifyEmail.requestNewCode")
+                  : t("auth:verifyEmail.resend")}
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                fullWidth
+                disabled={!verificationEmail || isBusy}
+                onClick={() => void requestFreshChallenge()}
+              >
+                {t("auth:verifyEmail.requestFreshCode")}
+              </Button>
+            </div>
+          </form>
+
+          <div className="mt-6 rounded-2xl bg-primary/5 px-4 py-4 text-sm text-text-muted">
+            <p>{t("auth:verifyEmail.securityHint")}</p>
+            {verificationChallenge?.challengeId ? (
+              <p className="mt-2 text-xs text-text-secondary">
+                {t("auth:verifyEmail.reloadHint")}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <Link to={ROUTE_PATHS.LOGIN} className="sm:flex-1">
+              <Button variant="ghost" fullWidth>
                 {t("auth:verifyEmail.backToLogin")}
               </Button>
             </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (verifyState === "pending_verification") {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 px-4 py-12">
-        <div className="relative w-full max-w-md">
-          <div className={cardClassName}>
-            <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-primary/15">
-              <EnvelopeIcon className="h-8 w-8 text-primary" />
-            </div>
-            <h1 className="mb-2 text-2xl font-bold text-text-primary">
-              {t("auth:verifyEmail.pendingTitle")}
-            </h1>
-            <p className="mb-4 text-text-muted">
-              {t("auth:verifyEmail.pendingDescription")}
-            </p>
-            <p className="mb-6 text-sm text-text-muted">
-              {t("auth:verifyEmail.resendHint", { email: verificationEmail })}
-            </p>
-            <p className="mb-6 rounded-xl bg-primary/5 px-4 py-3 text-left text-sm text-text-muted">
-              {t("auth:verifyEmail.pendingHint")}
-            </p>
-            {renderActions("register_and_login")}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const isMissingToken = verifyState === "missing_token";
-  const title = isMissingToken
-    ? t("auth:verifyEmail.missingTokenTitle")
-    : verifyState === "invalid_token"
-      ? t("auth:verifyEmail.invalidTokenTitle")
-      : t("auth:verifyEmail.serverErrorTitle");
-  const description = isMissingToken
-    ? t("auth:verifyEmail.missingTokenDescription")
-    : verifyState === "invalid_token"
-      ? t("auth:verifyEmail.invalidTokenDescription")
-      : t("auth:verifyEmail.serverErrorDescription");
-  const helperText =
-    verificationEmail && verifyState !== "server_error"
-      ? t("auth:verifyEmail.resendHint", { email: verificationEmail })
-      : null;
-  const canManualResend = !verificationEmail && verifyState !== "server_error";
-
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 px-4 py-12">
-      <div className="relative w-full max-w-md">
-        <div className={cardClassName}>
-          <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-danger/15">
-            <ExclamationTriangleIcon className="h-8 w-8 text-danger" />
-          </div>
-          <h1 className="mb-2 text-2xl font-bold text-text-primary">{title}</h1>
-          <p className="mb-6 text-text-muted">{description}</p>
-          {helperText ? (
-            <p className="mb-6 text-sm text-text-muted">{helperText}</p>
-          ) : null}
-          {canManualResend ? (
-            <form
-              onSubmit={handleSubmit(handleManualResendVerification)}
-              className="mb-6 space-y-4 text-left"
-            >
-              <p className="text-sm text-text-muted">
-                {t("auth:verifyEmail.manualResendDescription")}
-              </p>
-              <Input
-                {...register("email")}
-                type="email"
-                label={t("auth:login.email")}
-                placeholder={t("auth:placeholders.email")}
-                leftIcon={<EnvelopeIcon className="h-5 w-5" />}
-                error={errors.email?.message}
-                autoComplete="email"
-                disabled={isResending}
-              />
-              <Button
-                type="submit"
-                variant="outline"
-                fullWidth
-                isLoading={isResending}
-                disabled={isResending}
-              >
-                {t("auth:verifyEmail.requestNewLink")}
+            <Link to={ROUTE_PATHS.REGISTER} className="sm:flex-1">
+              <Button variant="secondary" fullWidth>
+                {t("auth:verifyEmail.goToRegister")}
               </Button>
-            </form>
-          ) : null}
-          {renderActions(
-            verifyState === "server_error" ? "login_only" : "register_and_login",
-          )}
-        </div>
+            </Link>
+          </div>
+        </section>
       </div>
     </div>
+  );
+};
+
+const mapOtpErrorMessage = (
+  error: unknown,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string => {
+  const apiError = extractApiError(error);
+
+  if (apiError.code === ErrorCode.OTP_EXPIRED) {
+    return t("auth:verifyEmail.otpExpired");
+  }
+
+  if (apiError.code === ErrorCode.OTP_TOO_MANY_ATTEMPTS) {
+    return t("auth:verifyEmail.otpLocked");
+  }
+
+  if (apiError.code === ErrorCode.OTP_INVALID) {
+    return t("auth:verifyEmail.otpInvalid");
+  }
+
+  if (apiError.code === ErrorCode.RATE_LIMITED || apiError.statusCode === 429) {
+    return t("auth:verifyEmail.rateLimited");
+  }
+
+  if (
+    apiError.code === ErrorCode.SERVER_SERVICE_UNAVAILABLE ||
+    apiError.statusCode === 503
+  ) {
+    return t("auth:verifyEmail.networkUnavailable");
+  }
+
+  if (apiError.statusCode >= 500) {
+    return t("auth:verifyEmail.serverErrorDescription");
+  }
+
+  if (typeof apiError.message === "string" && apiError.message.trim()) {
+    return apiError.message;
+  }
+
+  return t("auth:verifyEmail.networkUnavailable");
+};
+
+const shouldReplaceChallenge = (error: unknown): boolean => {
+  const apiError = extractApiError(error);
+  return (
+    apiError.code === ErrorCode.OTP_EXPIRED ||
+    apiError.code === ErrorCode.OTP_TOO_MANY_ATTEMPTS ||
+    apiError.code === ErrorCode.OTP_INVALID ||
+    apiError.statusCode === 410
   );
 };
 

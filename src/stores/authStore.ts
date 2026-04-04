@@ -64,9 +64,18 @@ interface LogoutOptions {
 
 type RegistrationStatus = "idle" | "verification_required";
 
+export interface EmailVerificationChallengeSnapshot {
+  challengeId: string;
+  email: string;
+  expiresAt: string;
+  resendAvailableAt: string;
+  purpose: "signup";
+}
+
 interface AuthState {
   user: User | null;
   pendingVerificationEmail: string | null;
+  emailVerificationChallenge: EmailVerificationChallengeSnapshot | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   isInitialized: boolean;
@@ -86,6 +95,10 @@ interface AuthState {
   initialize: () => Promise<void>;
   setPendingVerificationEmail: (email: string | null) => void;
   clearPendingVerificationEmail: () => void;
+  setEmailVerificationChallenge: (
+    challenge: EmailVerificationChallengeSnapshot | null,
+  ) => void;
+  clearEmailVerificationChallenge: () => void;
 
   handleAuthFailure: (reason?: string) => Promise<void>;
   handleRemoteLogout: (reason?: string) => Promise<void>;
@@ -145,6 +158,7 @@ export const useAuthStore = create<AuthState>()(
           set({
             user: null,
             pendingVerificationEmail: null,
+            emailVerificationChallenge: null,
             isAuthenticated: false,
             isLoading: false,
             error: null,
@@ -169,6 +183,7 @@ export const useAuthStore = create<AuthState>()(
       return {
         user: null,
         pendingVerificationEmail: null,
+        emailVerificationChallenge: null,
         isAuthenticated: false,
         isLoading: false,
         isInitialized: false,
@@ -189,6 +204,7 @@ export const useAuthStore = create<AuthState>()(
           set({
             user,
             pendingVerificationEmail: null,
+            emailVerificationChallenge: null,
             isAuthenticated: true,
             isLoading: false,
             isInitialized: true,
@@ -222,6 +238,7 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: false,
               user: null,
               pendingVerificationEmail: null,
+              emailVerificationChallenge: null,
               isInitialized: true,
               registrationStatus: "idle",
             });
@@ -241,6 +258,7 @@ export const useAuthStore = create<AuthState>()(
             set({
               user: null,
               pendingVerificationEmail: pendingEmail,
+              emailVerificationChallenge: null,
               isAuthenticated: false,
               isLoading: false,
               isInitialized: true,
@@ -278,6 +296,7 @@ export const useAuthStore = create<AuthState>()(
             set({
               user: null,
               pendingVerificationEmail: null,
+              emailVerificationChallenge: null,
               isAuthenticated: false,
               isLoading: false,
               isInitialized: true,
@@ -309,6 +328,7 @@ export const useAuthStore = create<AuthState>()(
             set({
               user: null,
               pendingVerificationEmail: null,
+              emailVerificationChallenge: null,
               isAuthenticated: false,
               isLoading: false,
               isInitialized: true,
@@ -353,6 +373,16 @@ export const useAuthStore = create<AuthState>()(
             registrationStatus: "idle",
           }),
 
+        setEmailVerificationChallenge: (challenge) =>
+          set({
+            emailVerificationChallenge: challenge,
+          }),
+
+        clearEmailVerificationChallenge: () =>
+          set({
+            emailVerificationChallenge: null,
+          }),
+
         initialize: async () => {
           if (initializePromise) {
             return initializePromise;
@@ -368,6 +398,7 @@ export const useAuthStore = create<AuthState>()(
                 set({
                   user,
                   pendingVerificationEmail: null,
+                  emailVerificationChallenge: null,
                   isAuthenticated: true,
                   isLoading: false,
                   isInitialized: true,
@@ -383,6 +414,7 @@ export const useAuthStore = create<AuthState>()(
                   set({
                     user: null,
                     pendingVerificationEmail: null,
+                    emailVerificationChallenge: null,
                     isAuthenticated: false,
                     isLoading: false,
                     isInitialized: true,
@@ -402,6 +434,7 @@ export const useAuthStore = create<AuthState>()(
                 set({
                   user,
                   pendingVerificationEmail: null,
+                  emailVerificationChallenge: null,
                   isAuthenticated: true,
                   isLoading: false,
                   isInitialized: true,
@@ -419,6 +452,7 @@ export const useAuthStore = create<AuthState>()(
             set({
               user: null,
               pendingVerificationEmail: null,
+              emailVerificationChallenge: null,
               isAuthenticated: false,
               isLoading: false,
               isInitialized: true,
@@ -457,6 +491,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         user: state.user,
         pendingVerificationEmail: state.pendingVerificationEmail,
+        emailVerificationChallenge: state.emailVerificationChallenge,
         isAuthenticated: state.isAuthenticated,
       }),
     },

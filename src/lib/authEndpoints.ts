@@ -1,8 +1,9 @@
 export const AUTH_ENDPOINTS = {
   login: "/login",
   register: "/register",
-  requestEmailVerification: "/request-email-verification",
-  verifyEmail: "/verify-email",
+  requestEmailOtpChallenge: "/email-verification/challenges/request",
+  confirmEmailOtpChallenge: "/email-verification/challenges/confirm",
+  resendEmailOtpChallenge: "/email-verification/challenges/resend",
   logout: "/logout",
   refresh: "/refresh",
   me: "/me",

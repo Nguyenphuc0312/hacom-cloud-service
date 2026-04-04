@@ -13,10 +13,8 @@ import type {
   LoginResponse,
   RefreshTokenResponse,
   RegisterResponseDto,
-  RequestEmailVerificationResponseDto,
   RoomMessagesResponse,
   UploadSignedUrlResponse,
-  VerifyEmailResponseDto,
 } from "@hacom/chat-shared-types";
 import type { User } from "../stores/authStore";
 import type { Attachment, Conversation, Message } from "../types";
@@ -28,6 +26,24 @@ import {
 import { unwrapApiSuccess } from "../lib/apiContract";
 import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 import { getCsrfToken, isRefreshTokenCookieMode } from "./tokenService";
+
+type EmailOtpChallengePurpose = "signup";
+
+export interface EmailOtpChallengeResponse {
+  challengeId: string | null;
+  expiresAt: string | null;
+  resendAvailableAt: string | null;
+  ttlSeconds: number;
+  maskedEmail: string;
+  sent: boolean;
+  verified?: boolean;
+}
+
+export interface ConfirmEmailOtpChallengeResponse {
+  verified: true;
+  status: string;
+  alreadyVerified?: boolean;
+}
 
 const canonicalConversationPath = (conversationId: string): string =>
   `/conversations/${conversationId}`;
@@ -79,18 +95,35 @@ export const authApi = {
     return response.data;
   },
 
-  verifyEmail: async (token: string) => {
-    const response = await authClient.post<ApiResponse<VerifyEmailResponseDto>>(
-      AUTH_ENDPOINTS.verifyEmail,
-      { token },
-    );
+  requestEmailOtpChallenge: async (data: {
+    email: string;
+    userId?: string;
+    purpose?: EmailOtpChallengePurpose;
+  }) => {
+    const response = await authClient.post<
+      ApiResponse<EmailOtpChallengeResponse>
+    >(AUTH_ENDPOINTS.requestEmailOtpChallenge, data);
     return response.data;
   },
 
-  requestEmailVerification: async (email: string) => {
+  confirmEmailOtpChallenge: async (data: {
+    challengeId: string;
+    otp: string;
+    purpose?: EmailOtpChallengePurpose;
+  }) => {
     const response = await authClient.post<
-      ApiResponse<RequestEmailVerificationResponseDto>
-    >(AUTH_ENDPOINTS.requestEmailVerification, { email });
+      ApiResponse<ConfirmEmailOtpChallengeResponse>
+    >(AUTH_ENDPOINTS.confirmEmailOtpChallenge, data);
+    return response.data;
+  },
+
+  resendEmailOtpChallenge: async (data: {
+    challengeId: string;
+    purpose?: EmailOtpChallengePurpose;
+  }) => {
+    const response = await authClient.post<
+      ApiResponse<EmailOtpChallengeResponse>
+    >(AUTH_ENDPOINTS.resendEmailOtpChallenge, data);
     return response.data;
   },
 
