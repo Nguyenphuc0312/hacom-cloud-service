@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Button, Card, DatePicker, Form, Input, Space, Table } from 'antd';
+import { Button, DatePicker, Form, Input, Space } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import { useMemo, useState } from 'react';
@@ -7,8 +7,11 @@ import { useMemo, useState } from 'react';
 import { auditClient } from '@/api/clients';
 import { queryKeys } from '@/api/queryKeys';
 import type { AuditEntry, AuditQuery } from '@/api/types';
+import { AdminTable } from '@/components/AdminTable';
+import { DataTableShell } from '@/components/DataTableShell';
+import { FilterBar } from '@/components/FilterBar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
-import { PageHeader } from '@/components/PageHeader';
+import { PageShell } from '@/components/PageShell';
 import { formatDateTime } from '@/utils/date';
 
 export const AuditLogPage = () => {
@@ -122,13 +125,11 @@ export const AuditLogPage = () => {
   const data = query.data;
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <PageHeader
-        title="Audit Logs"
-        description="Theo dõi lịch sử thao tác quản trị và kiểm tra truy vết request"
-      />
-
-      <Card>
+    <PageShell
+      title="Audit Logs"
+      description="Theo dõi thao tác quản trị, request trace và kết quả action theo thời gian"
+    >
+      <FilterBar>
         <Form form={form} layout="inline">
           <Form.Item name="action">
             <Input allowClear placeholder="Action" style={{ width: 160 }} />
@@ -161,14 +162,18 @@ export const AuditLogPage = () => {
             </Space>
           </Form.Item>
         </Form>
-      </Card>
+      </FilterBar>
 
-      <Card>
-        <Table
+      <DataTableShell
+        title="Audit records"
+        meta={`${data?.pagination.total ?? 0} record(s) matched current filters`}
+      >
+        <AdminTable
           rowKey="id"
           columns={columns}
+          minHeight={320}
           dataSource={data?.items ?? []}
-          locale={{ emptyText: <EmptyState description="Không có audit record phù hợp." /> }}
+          emptyNode={<EmptyState description="Không có audit record phù hợp." />}
           pagination={{
             current: data?.pagination.page,
             pageSize: data?.pagination.limit,
@@ -179,7 +184,7 @@ export const AuditLogPage = () => {
             },
           }}
         />
-      </Card>
-    </Space>
+      </DataTableShell>
+    </PageShell>
   );
 };

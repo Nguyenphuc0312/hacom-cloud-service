@@ -1,17 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Button,
-  Card,
-  Form,
-  Input,
-  Modal,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from 'antd';
+import { Button, Card, Form, Input, Modal, Select, Space, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -25,8 +13,11 @@ import type {
   HrEmployeeStatus,
   UpdateHrEmployeePayload,
 } from '@/api/types';
+import { AdminTable } from '@/components/AdminTable';
+import { DataTableShell } from '@/components/DataTableShell';
+import { FilterBar } from '@/components/FilterBar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
-import { PageHeader } from '@/components/PageHeader';
+import { PageShell } from '@/components/PageShell';
 import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
 import { useAuthStore } from '@/store/authStore';
 import { formatDateTime } from '@/utils/date';
@@ -268,14 +259,23 @@ export const HREmployeesPage = () => {
         key: 'actions',
         render: (_, record) => (
           <Space>
-            <Button size="small" onClick={() => openEdit(record)}>
+            <Button
+              size="small"
+              onClick={(event) => {
+                event.stopPropagation();
+                openEdit(record);
+              }}
+            >
               {canWriteHrActions ? 'Xem/Sửa' : 'Xem'}
             </Button>
             <Button
               size="small"
               danger
               disabled={!canWriteHrActions}
-              onClick={() => confirmRemove(record)}
+              onClick={(event) => {
+                event.stopPropagation();
+                confirmRemove(record);
+              }}
             >
               Deactivate
             </Button>
@@ -315,17 +315,15 @@ export const HREmployeesPage = () => {
   const data = listQuery.data;
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <PageHeader
-        title="HR Employees"
-        description="CRUD tối thiểu cho hồ sơ nhân sự theo contract backend thực tế"
-        extra={
-          <Button type="primary" disabled={!canWriteHrActions} onClick={openCreate}>
-            Tạo HR employee
-          </Button>
-        }
-      />
-
+    <PageShell
+      title="HR Employees"
+      description="CRUD nhân sự theo contract backend, tối ưu thao tác vận hành hàng ngày"
+      headerExtra={
+        <Button type="primary" disabled={!canWriteHrActions} onClick={openCreate}>
+          Tạo HR employee
+        </Button>
+      }
+    >
       {(!isAdminWriteActionsEnabled || !canManageHrEmployees(currentRole)) && (
         <Card>
           <Typography.Text type="secondary">
@@ -336,7 +334,7 @@ export const HREmployeesPage = () => {
         </Card>
       )}
 
-      <Card>
+      <FilterBar>
         <Form form={filterForm} layout="inline" initialValues={{ status: 'all' }}>
           <Form.Item name="keyword">
             <Input allowClear placeholder="Tìm mã nhân sự, tên, email" style={{ width: 280 }} />
@@ -365,14 +363,22 @@ export const HREmployeesPage = () => {
             </Space>
           </Form.Item>
         </Form>
-      </Card>
+      </FilterBar>
 
-      <Card>
-        <Table
+      <DataTableShell
+        title="HR employees"
+        meta={`${data?.pagination.total ?? 0} record(s) matched current filters`}
+      >
+        <AdminTable
           rowKey="id"
           columns={columns}
+          minHeight={320}
           dataSource={data?.items ?? []}
-          locale={{ emptyText: <EmptyState description="Không có HR employee phù hợp." /> }}
+          emptyNode={<EmptyState description="Không có HR employee phù hợp." />}
+          onRow={(record) => ({
+            onClick: () => openEdit(record),
+            style: { cursor: 'pointer' },
+          })}
           pagination={{
             current: data?.pagination.page,
             pageSize: data?.pagination.limit,
@@ -383,7 +389,7 @@ export const HREmployeesPage = () => {
             },
           }}
         />
-      </Card>
+      </DataTableShell>
 
       <Modal
         open={editorOpen}
@@ -470,6 +476,6 @@ export const HREmployeesPage = () => {
           </Form>
         )}
       </Modal>
-    </Space>
+    </PageShell>
   );
 };

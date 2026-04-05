@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Form, Input, Modal, Select, Space, Table, Tag, Typography, message } from 'antd';
+import { Button, Form, Input, Modal, Select, Space, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import type { SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,6 +15,7 @@ import type {
   UsersListQuery,
 } from '@/api/types';
 import { DataTableShell } from '@/components/DataTableShell';
+import { AdminTable } from '@/components/AdminTable';
 import { FeatureDisabledNotice } from '@/components/FeatureDisabledNotice';
 import { FilterBar } from '@/components/FilterBar';
 import { PageShell } from '@/components/PageShell';
@@ -170,11 +172,23 @@ export const UsersPage = () => {
         render: (value: string | null) => (value ? formatDateTime(value) : '-'),
       },
       {
+        title: 'Updated at',
+        dataIndex: 'updatedAt',
+        sorter: true,
+        render: (value: string | null) => (value ? formatDateTime(value) : '-'),
+      },
+      {
         title: 'Hành động',
         key: 'actions',
         render: (_, record) => (
           <Space wrap>
-            <Button size="small" onClick={() => navigate(`/users/${record.id}`)}>
+            <Button
+              size="small"
+              onClick={(event) => {
+                event.stopPropagation();
+                navigate(`/users/${record.id}`);
+              }}
+            >
               Chi tiết
             </Button>
             <Button
@@ -186,7 +200,10 @@ export const UsersPage = () => {
                 record.accountStatus === 'DISABLED' ||
                 actionMutation.isPending
               }
-              onClick={() => confirmAction('lock', record)}
+              onClick={(event) => {
+                event.stopPropagation();
+                confirmAction('lock', record);
+              }}
             >
               Lock
             </Button>
@@ -198,14 +215,20 @@ export const UsersPage = () => {
                 record.accountStatus !== 'DISABLED' ||
                 actionMutation.isPending
               }
-              onClick={() => confirmAction('unlock', record)}
+              onClick={(event) => {
+                event.stopPropagation();
+                confirmAction('unlock', record);
+              }}
             >
               Unlock
             </Button>
             <Button
               size="small"
               disabled={!canWriteUserActions || actionMutation.isPending}
-              onClick={() => confirmAction('revoke', record)}
+              onClick={(event) => {
+                event.stopPropagation();
+                confirmAction('revoke', record);
+              }}
             >
               Revoke sessions
             </Button>
@@ -238,6 +261,29 @@ export const UsersPage = () => {
           : undefined,
       isActive:
         values.active === 'active' ? true : values.active === 'inactive' ? false : undefined,
+    }));
+  };
+
+  const handleTableChange = (
+    pagination: TablePaginationConfig,
+    _filters: Record<string, unknown>,
+    sorter: SorterResult<UserListItem> | SorterResult<UserListItem>[],
+  ) => {
+    const resolvedSorter = Array.isArray(sorter) ? sorter[0] : sorter;
+    const sortField =
+      resolvedSorter?.field === 'updatedAt'
+        ? 'updated_at'
+        : resolvedSorter?.field === 'createdAt'
+          ? 'created_at'
+          : undefined;
+    const sortOrder = resolvedSorter?.order === 'ascend' ? 'asc' : 'desc';
+
+    setParams((prev) => ({
+      ...prev,
+      page: pagination.current ?? prev.page,
+      limit: pagination.pageSize ?? prev.limit,
+      sortBy: sortField ?? prev.sortBy,
+      sortOrder: sortField ? sortOrder : prev.sortOrder,
     }));
   };
 
@@ -352,24 +398,23 @@ export const UsersPage = () => {
         title="Users list"
         meta={`${data?.pagination.total ?? 0} record(s) matched current filters`}
       >
-        <Table
+        <AdminTable
           rowKey="id"
           columns={columns}
+          minHeight={320}
           dataSource={data?.items ?? []}
-          locale={{ emptyText: <EmptyState description="Không có người dùng phù hợp bộ lọc." /> }}
+          emptyNode={<EmptyState description="Không có người dùng phù hợp bộ lọc." />}
+          onRow={(record) => ({
+            onClick: () => navigate(`/users/${record.id}`),
+            style: { cursor: 'pointer' },
+          })}
           pagination={{
             current: data?.pagination.page,
             pageSize: data?.pagination.limit,
             total: data?.pagination.total,
             showSizeChanger: true,
-            onChange: (page, pageSize) => {
-              setParams((prev) => ({
-                ...prev,
-                page,
-                limit: pageSize,
-              }));
-            },
           }}
+          onChange={handleTableChange}
         />
       </DataTableShell>
     </PageShell>

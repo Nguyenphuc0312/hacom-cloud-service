@@ -1,21 +1,24 @@
 import {
+  AuditOutlined,
   DashboardOutlined,
   FileTextOutlined,
+  SafetyCertificateOutlined,
   LogoutOutlined,
+  MailOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  SearchOutlined,
   SolutionOutlined,
-  ToolOutlined,
-  UserOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 import {
   Avatar,
-  Badge,
   Breadcrumb,
   Button,
   Dropdown,
   Layout,
   Menu,
+  Select,
   Space,
   Tag,
   Typography,
@@ -38,15 +41,32 @@ interface NavItem {
   key: string;
   label: string;
   icon: ReactNode;
-  group: 'overview' | 'identity' | 'governance';
+  group: 'dashboard' | 'users' | 'services' | 'system';
 }
 
 const navItems: NavItem[] = [
-  { key: '/', label: 'Dashboard', icon: <DashboardOutlined />, group: 'overview' },
-  { key: '/services', label: 'Services', icon: <ToolOutlined />, group: 'overview' },
-  { key: '/users', label: 'Users', icon: <UserOutlined />, group: 'identity' },
-  { key: '/hr-employees', label: 'HR Employees', icon: <SolutionOutlined />, group: 'identity' },
-  { key: '/audit', label: 'Audit Logs', icon: <FileTextOutlined />, group: 'governance' },
+  { key: '/', label: 'Dashboard', icon: <DashboardOutlined />, group: 'dashboard' },
+  { key: '/users', label: 'Users', icon: <TeamOutlined />, group: 'users' },
+  { key: '/hr-employees', label: 'HR Employees', icon: <SolutionOutlined />, group: 'users' },
+  {
+    key: '/services/smtp',
+    label: 'SMTP Settings',
+    icon: <MailOutlined />,
+    group: 'services',
+  },
+  {
+    key: '/services/email-templates',
+    label: 'Email Templates',
+    icon: <FileTextOutlined />,
+    group: 'services',
+  },
+  {
+    key: '/services/health',
+    label: 'Service Health',
+    icon: <SafetyCertificateOutlined />,
+    group: 'system',
+  },
+  { key: '/audit', label: 'Audit Logs', icon: <AuditOutlined />, group: 'system' },
 ];
 
 const breadcrumbNameMap: Record<string, string> = {
@@ -55,10 +75,46 @@ const breadcrumbNameMap: Record<string, string> = {
   '/hr-employees': 'HR Employees',
   '/audit': 'Audit Logs',
   '/services': 'Services',
+  '/services/smtp': 'SMTP Settings',
+  '/services/email-templates': 'Email Templates',
+  '/services/health': 'Service Health',
+};
+
+const pickSelectedMenuKey = (pathname: string): string => {
+  if (pathname === '/') {
+    return '/';
+  }
+
+  if (pathname.startsWith('/users')) {
+    return '/users';
+  }
+
+  if (pathname.startsWith('/hr-employees')) {
+    return '/hr-employees';
+  }
+
+  if (pathname.startsWith('/services/email-templates')) {
+    return '/services/email-templates';
+  }
+
+  if (pathname.startsWith('/services/smtp')) {
+    return '/services/smtp';
+  }
+
+  if (pathname.startsWith('/services/health') || pathname.startsWith('/services')) {
+    return '/services/health';
+  }
+
+  if (pathname.startsWith('/audit')) {
+    return '/audit';
+  }
+
+  return '/';
 };
 
 export const AppLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
+  const [quickNavValue, setQuickNavValue] = useState<string | undefined>();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -82,31 +138,47 @@ export const AppLayout = () => {
     return [
       {
         type: 'group',
-        key: 'group-overview',
-        label: 'Overview',
-        children: navItems.filter((item) => item.group === 'overview').map(toChild),
+        key: 'group-dashboard',
+        label: 'Dashboard',
+        children: navItems.filter((item) => item.group === 'dashboard').map(toChild),
       },
       {
         type: 'group',
-        key: 'group-identity',
-        label: 'Identity & Organization',
-        children: navItems.filter((item) => item.group === 'identity').map(toChild),
+        key: 'group-users',
+        label: 'Users',
+        children: navItems.filter((item) => item.group === 'users').map(toChild),
       },
       {
         type: 'group',
-        key: 'group-governance',
-        label: 'Governance',
-        children: navItems.filter((item) => item.group === 'governance').map(toChild),
+        key: 'group-services',
+        label: 'Services',
+        children: navItems.filter((item) => item.group === 'services').map(toChild),
+      },
+      {
+        type: 'group',
+        key: 'group-system',
+        label: 'System',
+        children: navItems.filter((item) => item.group === 'system').map(toChild),
       },
     ];
   }, []);
 
-  const selectedMenu =
-    navItems.find((item) =>
-      item.key === '/'
-        ? location.pathname === '/'
-        : location.pathname === item.key || location.pathname.startsWith(`${item.key}/`),
-    )?.key ?? '/';
+  const selectedMenu = pickSelectedMenuKey(location.pathname);
+
+  const quickSearchOptions = useMemo(
+    () =>
+      navItems.map((item) => ({
+        value: item.key,
+        title: item.label,
+        label: (
+          <Space size={8}>
+            {item.icon}
+            <span>{item.label}</span>
+          </Space>
+        ),
+      })),
+    [],
+  );
 
   const breadcrumbItems = useMemo(() => {
     const pathSnippets = location.pathname.split('/').filter(Boolean);
@@ -128,7 +200,13 @@ export const AppLayout = () => {
     navigate('/login', { replace: true });
   };
 
-  const environment = (import.meta.env.VITE_APP_ENV ?? 'DEV').toUpperCase();
+  const environment = (import.meta.env.VITE_APP_ENV ?? 'server-test').toUpperCase();
+  const envColor =
+    environment === 'PROD' || environment === 'PRODUCTION'
+      ? 'red'
+      : environment === 'STAGING'
+        ? 'gold'
+        : 'blue';
 
   if (isLoading) {
     return <LoadingState tip="Đang khởi tạo phiên làm việc..." />;
@@ -141,22 +219,24 @@ export const AppLayout = () => {
         collapsible
         collapsed={collapsed}
         width={260}
+        collapsedWidth={80}
         className="app-sider"
         breakpoint="lg"
         onBreakpoint={(broken) => setCollapsed(broken)}
       >
-        <div className="brand">{collapsed ? 'CA' : 'Chat Admin'}</div>
+        <div className="brand">{collapsed ? 'CA' : 'Chat Admin Console'}</div>
         <Menu
           theme="dark"
           mode="inline"
           selectedKeys={[selectedMenu]}
           items={menuItems}
+          aria-label="Main admin navigation"
           onClick={({ key }) => navigate(String(key))}
         />
         <div className="app-sider-footer">
           <Text type="secondary">System context</Text>
           <Text>Environment: {environment}</Text>
-          <Text type="secondary">Role-aware actions enabled by policy</Text>
+          <Text type="secondary">RBAC + release policy enforced</Text>
         </div>
       </Sider>
       <Layout>
@@ -166,11 +246,28 @@ export const AppLayout = () => {
               type="text"
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
               onClick={() => setCollapsed((prev) => !prev)}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             />
-            <Badge
-              color={environment === 'PROD' ? 'red' : environment === 'STAGING' ? 'gold' : 'green'}
+            <Select
+              className="header-search"
+              showSearch
+              allowClear
+              placeholder="Quick navigate"
+              value={quickNavValue}
+              options={quickSearchOptions}
+              filterOption={(input, option) =>
+                String(option?.title ?? '')
+                  .toLowerCase()
+                  .includes(input.toLowerCase())
+              }
+              onSelect={(value) => {
+                setQuickNavValue(undefined);
+                navigate(value);
+              }}
+              onClear={() => setQuickNavValue(undefined)}
+              suffixIcon={<SearchOutlined />}
             />
-            <Text strong>{environment}</Text>
+            <Tag color={envColor}>{environment}</Tag>
             <Tag color={isAuthServiceUnavailable ? 'gold' : 'green'}>
               {isAuthServiceUnavailable ? 'Auth integration degraded' : 'Auth integration healthy'}
             </Tag>
