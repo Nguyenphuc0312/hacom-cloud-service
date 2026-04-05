@@ -9,6 +9,8 @@ import type { ServiceHealthItem } from '@/api/types';
 import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
 import { PageHeader } from '@/components/PageHeader';
 import { StatusBadge } from '@/components/StatusBadge';
+import { EmailTemplatesCard } from '../components/EmailTemplatesCard';
+import { SmtpSettingsCard } from '../components/SmtpSettingsCard';
 import { formatDateTime } from '@/utils/date';
 import { formatMs } from '@/utils/formatters';
 
@@ -80,9 +82,12 @@ export const ServicesPage = () => {
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <PageHeader
         title="Services"
-        description="Giám sát trạng thái vận hành cơ bản của các service theo contract Phase 1"
+        description="Giám sát trạng thái vận hành cơ bản của các service, quản trị SMTP và email template"
         extra={<Button onClick={() => healthQuery.refetch()}>Refresh</Button>}
       />
+
+      <SmtpSettingsCard />
+      <EmailTemplatesCard />
 
       <Card>
         <Space size={16} wrap>

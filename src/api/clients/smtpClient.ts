@@ -1,32 +1,40 @@
 import { axiosInstance } from '@/api/axios';
+import { unwrapApiEnvelope } from '@/api/envelope';
 import type {
   SendTestEmailRequest,
-  SmtpSettings,
+  SmtpSettingsPayload,
   TestConnectionResponse,
   UpdateSmtpSettingsRequest,
 } from '@/api/types';
 
 export const smtpClient = {
-  async getSettings(): Promise<SmtpSettings> {
-    const { data } = await axiosInstance.get<SmtpSettings>('/settings/smtp');
-    return data;
+  async getSettings(): Promise<SmtpSettingsPayload> {
+    const response = await axiosInstance.get('/admin/settings/smtp');
+    return unwrapApiEnvelope<SmtpSettingsPayload>(response);
   },
 
-  async updateSettings(payload: UpdateSmtpSettingsRequest): Promise<SmtpSettings> {
-    const { data } = await axiosInstance.put<SmtpSettings>('/settings/smtp', payload);
-    return data;
+  async updateSettings(payload: UpdateSmtpSettingsRequest): Promise<SmtpSettingsPayload> {
+    const response = await axiosInstance.put('/admin/settings/smtp', payload);
+    return unwrapApiEnvelope<SmtpSettingsPayload>(response);
   },
 
-  async testConnection(): Promise<TestConnectionResponse> {
-    const { data } = await axiosInstance.post<TestConnectionResponse>('/settings/smtp/test-connection');
-    return data;
+  async activateDraft(): Promise<SmtpSettingsPayload> {
+    const response = await axiosInstance.post('/admin/settings/smtp/activate');
+    return unwrapApiEnvelope<SmtpSettingsPayload>(response);
+  },
+
+  async deactivateActive(): Promise<SmtpSettingsPayload> {
+    const response = await axiosInstance.post('/admin/settings/smtp/deactivate');
+    return unwrapApiEnvelope<SmtpSettingsPayload>(response);
+  },
+
+  async testConnection(payload?: UpdateSmtpSettingsRequest): Promise<TestConnectionResponse> {
+    const response = await axiosInstance.post('/admin/settings/smtp/test-connection', payload);
+    return unwrapApiEnvelope<TestConnectionResponse>(response);
   },
 
   async sendTestEmail(payload: SendTestEmailRequest): Promise<TestConnectionResponse> {
-    const { data } = await axiosInstance.post<TestConnectionResponse>(
-      '/settings/smtp/send-test-email',
-      payload,
-    );
-    return data;
+    const response = await axiosInstance.post('/admin/settings/smtp/send-test-email', payload);
+    return unwrapApiEnvelope<TestConnectionResponse>(response);
   },
 };

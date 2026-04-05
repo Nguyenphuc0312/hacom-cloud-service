@@ -2,6 +2,7 @@ export * from './alerts';
 export * from './audit';
 export * from './auth';
 export * from './common';
+export * from './email-templates';
 export * from './hr-employees';
 export * from './metrics';
 export * from './service-health';
