@@ -109,6 +109,7 @@ export const HREmployeesPage = () => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.hrEmployeesList(JSON.stringify(params)),
       });
+      void queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
     },
     onError: (error) => {
       message.error(getErrorMessage(error));
@@ -127,6 +128,7 @@ export const HREmployeesPage = () => {
       if (editingId) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.hrEmployeeDetail(editingId) });
       }
+      void queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
     },
     onError: (error) => {
       message.error(getErrorMessage(error));
@@ -140,6 +142,7 @@ export const HREmployeesPage = () => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.hrEmployeesList(JSON.stringify(params)),
       });
+      void queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
     },
     onError: (error) => {
       message.error(getErrorMessage(error));
@@ -175,7 +178,7 @@ export const HREmployeesPage = () => {
 
   const openCreate = () => {
     if (!isAdminWriteActionsEnabled) {
-      message.info('HR write actions are disabled in Phase 2 read-only rollout.');
+      message.info('HR write actions are disabled by release configuration.');
       return;
     }
 
@@ -193,7 +196,7 @@ export const HREmployeesPage = () => {
   const confirmRemove = useCallback(
     (employee: HrEmployee) => {
       if (!isAdminWriteActionsEnabled) {
-        message.info('HR write actions are disabled in Phase 2 read-only rollout.');
+        message.info('HR write actions are disabled by release configuration.');
         return;
       }
 
@@ -312,7 +315,7 @@ export const HREmployeesPage = () => {
       {!isAdminWriteActionsEnabled && (
         <Card>
           <Typography.Text type="secondary">
-            HR write actions (create/update/deactivate) are disabled for Phase 2 read-only rollout.
+            HR write actions (create/update/deactivate) are disabled by release configuration.
           </Typography.Text>
         </Card>
       )}

@@ -21,10 +21,22 @@ export const axiosInstance = axios.create({
   timeout: 15000,
 });
 
+const buildRequestId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  return `rid-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+};
+
 axiosInstance.interceptors.request.use((config) => {
   const token = getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  if (!config.headers['x-request-id']) {
+    config.headers['x-request-id'] = buildRequestId();
   }
 
   return config;

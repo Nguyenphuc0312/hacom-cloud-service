@@ -68,6 +68,7 @@ export const UserDetailPage = () => {
         queryKey: queryKeys.userSessions(userId, JSON.stringify({ page: sessionsPage, limit: 10 })),
       });
       void queryClient.invalidateQueries({ queryKey: queryKeys.usersList('') });
+      void queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
     },
     onError: (error) => {
       message.error(getErrorMessage(error));
@@ -76,7 +77,7 @@ export const UserDetailPage = () => {
 
   const confirmAction = (action: 'lock' | 'unlock' | 'revoke') => {
     if (!isAdminWriteActionsEnabled) {
-      message.info('Write actions are disabled in Phase 2 read-only rollout.');
+      message.info('Write actions are disabled by release configuration.');
       return;
     }
 
@@ -201,7 +202,7 @@ export const UserDetailPage = () => {
       {!isAdminWriteActionsEnabled && (
         <Card>
           <Typography.Text type="secondary">
-            Write actions (lock/unlock/revoke sessions) are disabled for Phase 2 read-only rollout.
+            Write actions (lock/unlock/revoke sessions) are disabled by release configuration.
           </Typography.Text>
         </Card>
       )}

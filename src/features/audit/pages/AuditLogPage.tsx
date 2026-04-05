@@ -24,6 +24,16 @@ export const AuditLogPage = () => {
     queryFn: () => auditClient.list(filters),
   });
 
+  const readMetaValue = (metadata: unknown, key: string): string | null => {
+    if (!metadata || typeof metadata !== 'object') {
+      return null;
+    }
+
+    const record = metadata as Record<string, unknown>;
+    const value = record[key];
+    return typeof value === 'string' && value.trim() ? value : null;
+  };
+
   const columns = useMemo<ColumnsType<AuditEntry>>(
     () => [
       {
@@ -59,6 +69,17 @@ export const AuditLogPage = () => {
         title: 'IP',
         dataIndex: 'ipAddress',
         render: (value: string | null | undefined) => value ?? '-',
+      },
+      {
+        title: 'Request ID',
+        key: 'requestId',
+        render: (_, record) => readMetaValue(record.metadata, 'requestId') ?? '-',
+      },
+      {
+        title: 'Result',
+        key: 'actionResult',
+        render: (_, record) =>
+          readMetaValue(record.metadata, 'actionResult') ?? (record.action ? 'success' : '-'),
       },
     ],
     [],
@@ -104,7 +125,7 @@ export const AuditLogPage = () => {
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <PageHeader
         title="Audit Logs"
-        description="Theo dõi lịch sử thao tác quản trị ở chế độ read-only"
+        description="Theo dõi lịch sử thao tác quản trị và kiểm tra truy vết request"
       />
 
       <Card>
