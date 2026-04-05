@@ -1,11 +1,5 @@
-import {
-  LockOutlined,
-  LogoutOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  UserOutlined,
-} from '@ant-design/icons';
-import { Breadcrumb, Button, Layout, Menu, Space, Tag, Typography } from 'antd';
+import { LogoutOutlined, UserOutlined } from '@ant-design/icons';
+import { Breadcrumb, Layout, Menu, Typography } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -17,16 +11,15 @@ import {
   pickSelectedMenuKey,
   type NavItem,
 } from '@/app/layout/navigationConfig';
+import { Header as AdminHeader } from '@/components/Header';
 import { LoadingState } from '@/components/QueryStates';
 import { CommandPalette, type CommandPaletteItem } from '@/components/CommandPalette';
-import { CommandPaletteTrigger } from '@/components/CommandPaletteTrigger';
-import { HeaderUserMenu } from '@/components/HeaderUserMenu';
 import { SystemDegradedBanner } from '@/components/SystemDegradedBanner';
 import { useCurrentUser } from '@/app/useCurrentUser';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { useAuthStore } from '@/store/authStore';
 
-const { Header, Sider, Content } = Layout;
+const { Header: AntHeader, Sider, Content } = Layout;
 const { Text } = Typography;
 
 export const AppLayout = () => {
@@ -119,22 +112,12 @@ export const AppLayout = () => {
     () => [
       {
         id: 'open-my-profile',
-        label: 'My Profile / Account',
+        label: 'Profile',
         description: 'Open your account details',
-        category: 'Management',
+        category: 'Settings',
         icon: <UserOutlined />,
         keywords: ['my profile', 'account', 'me'],
         onSelect: openMyProfile,
-      },
-      {
-        id: 'change-password',
-        label: 'Change password',
-        description: 'Password management flow is not available yet',
-        category: 'Settings',
-        icon: <LockOutlined />,
-        keywords: ['password', 'security', 'credentials'],
-        disabled: true,
-        onSelect: () => undefined,
       },
       ...commandRouteItems.map((item) => ({
         ...item,
@@ -149,7 +132,7 @@ export const AppLayout = () => {
         id: 'logout',
         label: 'Logout',
         description: 'Sign out from current admin session',
-        category: 'Actions',
+        category: 'System',
         icon: <LogoutOutlined />,
         keywords: ['logout', 'sign out', 'exit'],
         onSelect: logout,
@@ -202,34 +185,20 @@ export const AppLayout = () => {
         </div>
       </Sider>
       <Layout>
-        <Header className="app-header">
-          <div className="app-header-left">
-            <Space size={10} className="app-header-controls">
-              <Button
-                type="text"
-                icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                onClick={() => setCollapsed((prev) => !prev)}
-                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              />
-              <CommandPaletteTrigger onOpen={openPalette} />
-            </Space>
-            <Space size={8} className="app-header-status">
-              <Tag color={envColor}>{environment}</Tag>
-              <Tag color={isAuthServiceUnavailable ? 'gold' : 'green'}>
-                {isAuthServiceUnavailable
-                  ? 'Auth integration degraded'
-                  : 'Auth integration healthy'}
-              </Tag>
-            </Space>
-          </div>
-
-          <HeaderUserMenu
+        <AntHeader className="app-header">
+          <AdminHeader
+            collapsed={collapsed}
+            environment={environment}
+            envColor={envColor}
+            isAuthServiceUnavailable={isAuthServiceUnavailable}
             user={user}
+            onToggleSidebar={() => setCollapsed((prev) => !prev)}
+            onOpenPalette={openPalette}
             onOpenProfile={openMyProfile}
             onOpenSettings={openSettings}
             onLogout={logout}
           />
-        </Header>
+        </AntHeader>
         <Content className="app-content">
           <SystemDegradedBanner
             visible={isAuthServiceUnavailable}

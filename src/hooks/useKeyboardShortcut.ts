@@ -8,6 +8,7 @@ interface UseKeyboardShortcutOptions {
   ctrlOrMeta?: boolean;
   shift?: boolean;
   alt?: boolean;
+  allowRepeat?: boolean;
 }
 
 export const useKeyboardShortcut = ({
@@ -18,6 +19,7 @@ export const useKeyboardShortcut = ({
   ctrlOrMeta = false,
   shift,
   alt,
+  allowRepeat = false,
 }: UseKeyboardShortcutOptions) => {
   const triggerRef = useRef(onTrigger);
 
@@ -32,6 +34,10 @@ export const useKeyboardShortcut = ({
 
     const lowerKey = key.toLowerCase();
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (!allowRepeat && event.repeat) {
+        return;
+      }
+
       if (event.key.toLowerCase() !== lowerKey) {
         return;
       }
@@ -57,5 +63,5 @@ export const useKeyboardShortcut = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [alt, ctrlOrMeta, enabled, key, preventDefault, shift]);
+  }, [allowRepeat, alt, ctrlOrMeta, enabled, key, preventDefault, shift]);
 };

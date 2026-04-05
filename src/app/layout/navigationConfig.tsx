@@ -4,7 +4,6 @@ import {
   FileTextOutlined,
   MailOutlined,
   SafetyCertificateOutlined,
-  SettingOutlined,
   SolutionOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
@@ -85,7 +84,7 @@ export const pickSelectedMenuKey = (pathname: string): string => {
   return '/';
 };
 
-export type CommandCategory = 'Navigation' | 'Settings' | 'Management' | 'Monitoring' | 'Actions';
+export type CommandCategory = 'Navigation' | 'System' | 'Settings';
 
 export interface CommandRouteItem {
   id: string;
@@ -112,7 +111,7 @@ export const commandRouteItems: CommandRouteItem[] = [
     id: 'go-users',
     label: 'Users / Accounts',
     description: 'Manage admin users and permissions',
-    category: 'Management',
+    category: 'Navigation',
     icon: <TeamOutlined />,
     keywords: ['users', 'accounts', 'admins'],
     route: '/users',
@@ -121,7 +120,7 @@ export const commandRouteItems: CommandRouteItem[] = [
     id: 'go-hr-employees',
     label: 'HR Employees',
     description: 'Review and manage employee records',
-    category: 'Management',
+    category: 'Navigation',
     icon: <SolutionOutlined />,
     keywords: ['hr', 'employees', 'people'],
     route: '/hr-employees',
@@ -148,36 +147,18 @@ export const commandRouteItems: CommandRouteItem[] = [
     id: 'go-service-health',
     label: 'Service Health / Monitoring',
     description: 'Check integrations and API health status',
-    category: 'Monitoring',
+    category: 'System',
     icon: <SafetyCertificateOutlined />,
     keywords: ['health', 'monitoring', 'status', 'services'],
     route: '/services/health',
   },
   {
     id: 'go-logs',
-    label: 'Logs',
+    label: 'Audit Logs',
     description: 'Open audit logs and security events',
-    category: 'Monitoring',
+    category: 'Navigation',
     icon: <AuditOutlined />,
     keywords: ['logs', 'audit', 'events'],
     route: '/audit',
-  },
-  {
-    id: 'go-roles-permissions',
-    label: 'Roles / Permissions',
-    description: 'Permission matrix is not available yet',
-    category: 'Settings',
-    icon: <TeamOutlined />,
-    keywords: ['roles', 'permissions', 'rbac'],
-    disabled: true,
-  },
-  {
-    id: 'go-system-settings',
-    label: 'System Settings',
-    description: 'Global settings are not available yet',
-    category: 'Settings',
-    icon: <SettingOutlined />,
-    keywords: ['system', 'settings', 'config'],
-    disabled: true,
   },
 ];

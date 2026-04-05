@@ -20,8 +20,9 @@ export const useCommandPalette = () => {
   useKeyboardShortcut({
     key: 'k',
     ctrlOrMeta: true,
+    shift: false,
     preventDefault: true,
-    onTrigger: togglePalette,
+    onTrigger: openPalette,
   });
 
   return {

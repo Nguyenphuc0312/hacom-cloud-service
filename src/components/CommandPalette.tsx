@@ -6,13 +6,7 @@ import type { ReactNode } from 'react';
 
 import type { CommandCategory } from '@/app/layout/navigationConfig';
 
-const CATEGORY_ORDER: CommandCategory[] = [
-  'Navigation',
-  'Management',
-  'Settings',
-  'Monitoring',
-  'Actions',
-];
+const CATEGORY_ORDER: CommandCategory[] = ['Navigation', 'System', 'Settings'];
 
 export interface CommandPaletteItem {
   id: string;
@@ -109,6 +103,7 @@ export const CommandPalette = ({ open, onClose, items }: CommandPaletteProps) =>
     }
 
     setQuery('');
+    setActiveItemId(undefined);
     const frame = window.requestAnimationFrame(() => {
       inputRef.current?.focus({ cursor: 'end' });
     });
@@ -135,21 +130,26 @@ export const CommandPalette = ({ open, onClose, items }: CommandPaletteProps) =>
     <Modal
       open={open}
       centered
-      width={680}
+      width={640}
       title={null}
       footer={null}
       onCancel={onClose}
       destroyOnClose
       className="command-palette-modal"
+      styles={{
+        mask: {
+          backgroundColor: 'rgba(15, 23, 42, 0.42)',
+          backdropFilter: 'blur(2px)',
+        },
+      }}
     >
       <div className="command-palette-input-wrap">
         <Input
           ref={inputRef}
-          size="large"
           value={query}
           className="command-palette-input"
           prefix={<SearchOutlined />}
-          placeholder="Search pages, settings, actions..."
+          placeholder="Search pages, settings..."
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown') {
@@ -202,7 +202,7 @@ export const CommandPalette = ({ open, onClose, items }: CommandPaletteProps) =>
                     role="option"
                     disabled={item.disabled}
                     aria-selected={isActive}
-                    className={`command-palette-item ${isActive ? 'is-active' : ''}`}
+                    className={'command-palette-item ' + (isActive ? 'is-active' : '')}
                     onMouseEnter={() => !item.disabled && setActiveItemId(item.id)}
                     onClick={() => handleSelect(item)}
                   >
