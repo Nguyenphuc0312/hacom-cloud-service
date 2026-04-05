@@ -3,6 +3,10 @@ import axios from 'axios';
 import { getAccessToken, useAuthStore } from '@/store/authStore';
 
 const baseURL = import.meta.env.VITE_ADMIN_API_BASE_URL;
+const rawBasePath = import.meta.env.BASE_URL || '/';
+const normalizedBasePath = rawBasePath.endsWith('/') ? rawBasePath : `${rawBasePath}/`;
+const loginPath = `${normalizedBasePath}login`;
+const loginPathname = new URL(loginPath, window.location.origin).pathname;
 
 if (!baseURL) {
   // Fail fast for missing env setup.
@@ -34,8 +38,8 @@ axiosInstance.interceptors.response.use(
 
     if (status === 401 && !requestUrl.includes('/auth/login')) {
       useAuthStore.getState().clearAuth();
-      if (window.location.pathname !== '/login') {
-        window.location.replace('/login');
+      if (window.location.pathname !== loginPathname) {
+        window.location.replace(loginPath);
       }
     }
 

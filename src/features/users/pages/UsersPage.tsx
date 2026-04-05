@@ -27,6 +27,7 @@ import type {
 } from '@/api/types';
 import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
 import { PageHeader } from '@/components/PageHeader';
+import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
 import { formatDateTime } from '@/utils/date';
 
 const accountStatusOptions = [
@@ -96,6 +97,11 @@ export const UsersPage = () => {
 
   const confirmAction = useCallback(
     (action: 'lock' | 'unlock' | 'revoke', user: UserListItem) => {
+      if (!isAdminWriteActionsEnabled) {
+        message.info('Write actions are disabled in Phase 2 read-only rollout.');
+        return;
+      }
+
       const titleMap: Record<typeof action, string> = {
         lock: 'Khóa tài khoản',
         unlock: 'Mở khóa tài khoản',
@@ -173,21 +179,29 @@ export const UsersPage = () => {
             <Button
               size="small"
               danger
-              disabled={record.accountStatus === 'DISABLED' || actionMutation.isPending}
+              disabled={
+                !isAdminWriteActionsEnabled ||
+                record.accountStatus === 'DISABLED' ||
+                actionMutation.isPending
+              }
               onClick={() => confirmAction('lock', record)}
             >
               Lock
             </Button>
             <Button
               size="small"
-              disabled={record.accountStatus !== 'DISABLED' || actionMutation.isPending}
+              disabled={
+                !isAdminWriteActionsEnabled ||
+                record.accountStatus !== 'DISABLED' ||
+                actionMutation.isPending
+              }
               onClick={() => confirmAction('unlock', record)}
             >
               Unlock
             </Button>
             <Button
               size="small"
-              disabled={actionMutation.isPending}
+              disabled={!isAdminWriteActionsEnabled || actionMutation.isPending}
               onClick={() => confirmAction('revoke', record)}
             >
               Revoke sessions
@@ -245,6 +259,14 @@ export const UsersPage = () => {
         title="Users"
         description="Tra cứu người dùng, xem trạng thái tài khoản và thực hiện action quản trị tối thiểu"
       />
+
+      {!isAdminWriteActionsEnabled && (
+        <Card>
+          <Typography.Text type="secondary">
+            Write actions (lock/unlock/revoke sessions) are disabled for Phase 2 read-only rollout.
+          </Typography.Text>
+        </Card>
+      )}
 
       <Card>
         <Form

@@ -10,6 +10,7 @@ import { queryKeys } from '@/api/queryKeys';
 import type { UserActionPayload, UserDevice, UserSession } from '@/api/types';
 import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
 import { PageHeader } from '@/components/PageHeader';
+import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
 import { formatDateTime } from '@/utils/date';
 
 export const UserDetailPage = () => {
@@ -74,6 +75,11 @@ export const UserDetailPage = () => {
   });
 
   const confirmAction = (action: 'lock' | 'unlock' | 'revoke') => {
+    if (!isAdminWriteActionsEnabled) {
+      message.info('Write actions are disabled in Phase 2 read-only rollout.');
+      return;
+    }
+
     const titleMap: Record<typeof action, string> = {
       lock: 'Khóa tài khoản',
       unlock: 'Mở khóa tài khoản',
@@ -174,21 +180,31 @@ export const UserDetailPage = () => {
           <Space>
             <Button
               danger
-              disabled={user.accountStatus === 'DISABLED'}
+              disabled={!isAdminWriteActionsEnabled || user.accountStatus === 'DISABLED'}
               onClick={() => confirmAction('lock')}
             >
               Lock
             </Button>
             <Button
-              disabled={user.accountStatus !== 'DISABLED'}
+              disabled={!isAdminWriteActionsEnabled || user.accountStatus !== 'DISABLED'}
               onClick={() => confirmAction('unlock')}
             >
               Unlock
             </Button>
-            <Button onClick={() => confirmAction('revoke')}>Revoke sessions</Button>
+            <Button disabled={!isAdminWriteActionsEnabled} onClick={() => confirmAction('revoke')}>
+              Revoke sessions
+            </Button>
           </Space>
         }
       />
+
+      {!isAdminWriteActionsEnabled && (
+        <Card>
+          <Typography.Text type="secondary">
+            Write actions (lock/unlock/revoke sessions) are disabled for Phase 2 read-only rollout.
+          </Typography.Text>
+        </Card>
+      )}
 
       <Card>
         <Descriptions column={{ xs: 1, md: 2, lg: 3 }}>

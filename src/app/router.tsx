@@ -1,5 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom';
-import { Navigate } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 import { RequireAuth } from '@/app/guards/RequireAuth';
 import { AppLayout } from '@/app/layout/AppLayout';
@@ -11,7 +10,7 @@ import { ServicesPage } from '@/features/services/pages/ServicesPage';
 import { UserDetailPage } from '@/features/users/pages/UserDetailPage';
 import { UsersPage } from '@/features/users/pages/UsersPage';
 
-export const router = createBrowserRouter([
+const routes = [
   {
     path: '/login',
     element: <LoginPage />,
@@ -54,4 +53,12 @@ export const router = createBrowserRouter([
       },
     ],
   },
-]);
+];
+
+const rawBaseName = import.meta.env.BASE_URL || '/';
+const baseName =
+  rawBaseName.endsWith('/') && rawBaseName !== '/' ? rawBaseName.slice(0, -1) : rawBaseName;
+
+export const router = createBrowserRouter(routes, {
+  basename: baseName === '/' ? undefined : baseName,
+});

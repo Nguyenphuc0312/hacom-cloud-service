@@ -27,6 +27,7 @@ import type {
 } from '@/api/types';
 import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
 import { PageHeader } from '@/components/PageHeader';
+import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
 import { formatDateTime } from '@/utils/date';
 
 const statusOptions: Array<{ label: string; value: 'all' | HrEmployeeStatus }> = [
@@ -173,6 +174,11 @@ export const HREmployeesPage = () => {
   };
 
   const openCreate = () => {
+    if (!isAdminWriteActionsEnabled) {
+      message.info('HR write actions are disabled in Phase 2 read-only rollout.');
+      return;
+    }
+
     setCreating(true);
     setEditingId(null);
     setEditorOpen(true);
@@ -186,6 +192,11 @@ export const HREmployeesPage = () => {
 
   const confirmRemove = useCallback(
     (employee: HrEmployee) => {
+      if (!isAdminWriteActionsEnabled) {
+        message.info('HR write actions are disabled in Phase 2 read-only rollout.');
+        return;
+      }
+
       Modal.confirm({
         title: 'Deactivate/Delete HR employee',
         content:
@@ -241,9 +252,14 @@ export const HREmployeesPage = () => {
         render: (_, record) => (
           <Space>
             <Button size="small" onClick={() => openEdit(record)}>
-              Xem/Sửa
+              {isAdminWriteActionsEnabled ? 'Xem/Sửa' : 'Xem'}
             </Button>
-            <Button size="small" danger onClick={() => confirmRemove(record)}>
+            <Button
+              size="small"
+              danger
+              disabled={!isAdminWriteActionsEnabled}
+              onClick={() => confirmRemove(record)}
+            >
               Deactivate
             </Button>
           </Space>
@@ -287,11 +303,19 @@ export const HREmployeesPage = () => {
         title="HR Employees"
         description="CRUD tối thiểu cho hồ sơ nhân sự theo contract backend thực tế"
         extra={
-          <Button type="primary" onClick={openCreate}>
+          <Button type="primary" disabled={!isAdminWriteActionsEnabled} onClick={openCreate}>
             Tạo HR employee
           </Button>
         }
       />
+
+      {!isAdminWriteActionsEnabled && (
+        <Card>
+          <Typography.Text type="secondary">
+            HR write actions (create/update/deactivate) are disabled for Phase 2 read-only rollout.
+          </Typography.Text>
+        </Card>
+      )}
 
       <Card>
         <Form form={filterForm} layout="inline" initialValues={{ status: 'all' }}>
@@ -344,8 +368,14 @@ export const HREmployeesPage = () => {
 
       <Modal
         open={editorOpen}
-        title={creating ? 'Tạo HR employee' : 'Chi tiết/Sửa HR employee'}
-        okText={creating ? 'Tạo' : 'Lưu'}
+        title={
+          creating
+            ? 'Tạo HR employee'
+            : isAdminWriteActionsEnabled
+              ? 'Chi tiết/Sửa HR employee'
+              : 'Chi tiết HR employee'
+        }
+        okText={!isAdminWriteActionsEnabled ? 'Đóng' : creating ? 'Tạo' : 'Lưu'}
         cancelText="Hủy"
         confirmLoading={createMutation.isPending || updateMutation.isPending}
         onCancel={() => {
@@ -355,6 +385,11 @@ export const HREmployeesPage = () => {
           editForm.resetFields();
         }}
         onOk={() => {
+          if (!isAdminWriteActionsEnabled) {
+            setEditorOpen(false);
+            return;
+          }
+
           void submitEditor();
         }}
       >
@@ -363,7 +398,12 @@ export const HREmployeesPage = () => {
         ) : !creating && detailQuery.isError ? (
           <ErrorState subTitle="Không tải được chi tiết HR employee." />
         ) : (
-          <Form<FormValues> form={editForm} layout="vertical" requiredMark={false}>
+          <Form<FormValues>
+            form={editForm}
+            layout="vertical"
+            requiredMark={false}
+            disabled={!isAdminWriteActionsEnabled}
+          >
             <Form.Item
               name="employeeCode"
               label="Employee code"
