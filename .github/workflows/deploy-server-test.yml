@@ -174,7 +174,7 @@ jobs:
                     --build-arg VITE_ADMIN_WRITE_ACTIONS_ENABLED="${VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN}" \
                     --tag "${IMAGE_REF}" \
                     --push \
-                    .
+                    ./chat-admin-panel
 
             - name: Verify pushed manifest
               run: |
