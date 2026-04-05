@@ -5,6 +5,9 @@ import type { ApiErrorBody } from './types';
 const CODE_MESSAGE_MAP: Record<string, string> = {
   INVALID_CREDENTIALS: 'Email hoặc mật khẩu không đúng.',
   FORBIDDEN: 'Tài khoản không có quyền truy cập.',
+  DB_SCHEMA_NOT_READY:
+    'Hệ thống đang cập nhật dữ liệu nền (migration). Vui lòng thử lại sau ít phút.',
+  DB_UNAVAILABLE: 'Không kết nối được cơ sở dữ liệu. Vui lòng thử lại sau.',
   AUTH_UPSTREAM_UNREACHABLE: 'Dịch vụ xác thực admin đang tạm thời gián đoạn. Vui lòng thử lại.',
   AUTH_UPSTREAM_ENDPOINT_NOT_FOUND:
     'Dịch vụ xác thực admin chưa sẵn sàng endpoint nội bộ cần thiết.',
