@@ -4,8 +4,8 @@ import type { LoginRequest, LoginResponse, MeResponse } from '@/api/types';
 
 export const authClient = {
   async login(payload: LoginRequest): Promise<LoginResponse> {
-    const { data } = await axiosInstance.post<LoginResponse>('/auth/login', payload);
-    return data;
+    const response = await axiosInstance.post('/auth/login', payload);
+    return unwrapApiEnvelope<LoginResponse>(response);
   },
 
   async me(): Promise<MeResponse> {

@@ -22,6 +22,8 @@ export const LoginPage = () => {
   const location = useLocation();
   const accessToken = useAuthStore((state) => state.accessToken);
   const setAuth = useAuthStore((state) => state.setAuth);
+  const setUser = useAuthStore((state) => state.setUser);
+  const clearAuth = useAuthStore((state) => state.clearAuth);
 
   const from = useMemo(() => {
     const state = location.state as { from?: { pathname?: string } } | null;
@@ -31,10 +33,21 @@ export const LoginPage = () => {
   const loginMutation = useMutation({
     mutationFn: authClient.login,
     onSuccess: async (data) => {
-      const user = data.user ?? (await authClient.me());
-      setAuth({ accessToken: data.accessToken, user });
-      message.success('Đăng nhập thành công.');
-      navigate(from, { replace: true });
+      // Persist token first so subsequent /admin/me call carries Bearer auth.
+      setAuth({ accessToken: data.accessToken, user: data.user ?? null });
+
+      try {
+        if (!data.user) {
+          const me = await authClient.me();
+          setUser(me);
+        }
+
+        message.success('Đăng nhập thành công.');
+        navigate(from, { replace: true });
+      } catch (error) {
+        clearAuth();
+        message.error(getErrorMessage(error));
+      }
     },
     onError: (error) => {
       message.error(getErrorMessage(error));
@@ -66,7 +79,11 @@ export const LoginPage = () => {
           onFinish={onFinish}
           style={{ marginTop: 20 }}
         >
-          <Form.Item label="Email" name="email" rules={[{ required: true, message: 'Vui lòng nhập email.' }]}>
+          <Form.Item
+            label="Email"
+            name="email"
+            rules={[{ required: true, message: 'Vui lòng nhập email.' }]}
+          >
             <Input placeholder="admin@company.com" size="large" autoComplete="email" />
           </Form.Item>
 
