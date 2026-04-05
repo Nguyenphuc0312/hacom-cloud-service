@@ -7,6 +7,7 @@ interface StatCardProps {
   error?: boolean;
   suffix?: string;
   hint?: string;
+  compact?: boolean;
 }
 
 export const StatCard = ({
@@ -16,9 +17,10 @@ export const StatCard = ({
   error = false,
   suffix,
   hint,
+  compact = false,
 }: StatCardProps) => {
   return (
-    <Card className="stat-card">
+    <Card className={`stat-card${compact ? ' stat-card--compact' : ''}`}>
       {loading ? (
         <Skeleton active paragraph={{ rows: 1 }} title={{ width: '70%' }} />
       ) : error ? (
@@ -29,7 +31,12 @@ export const StatCard = ({
         </div>
       ) : (
         <>
-          <Statistic title={title} value={value} suffix={suffix} />
+          <Statistic
+            title={title}
+            value={value}
+            suffix={suffix}
+            valueStyle={compact ? { fontSize: 28, lineHeight: 1.15 } : undefined}
+          />
           {hint ? (
             <Typography.Text type="secondary" className="stat-card-hint">
               {hint}

@@ -1,18 +1,29 @@
 import { useQueries, useQuery } from '@tanstack/react-query';
-import { Card, Col, List, Row, Space, Tag, Typography } from 'antd';
+import {
+  ArrowRightOutlined,
+  CheckCircleFilled,
+  CloseCircleFilled,
+  ExclamationCircleFilled,
+  WarningFilled,
+} from '@ant-design/icons';
+import { Alert, Button, Card, Col, List, Row, Space, Typography } from 'antd';
+import { useNavigate } from 'react-router-dom';
 
 import { serviceHealthClient, usersClient } from '@/api/clients';
 import { alertsClient } from '@/api/clients/alertsClient';
 import { queryKeys } from '@/api/queryKeys';
-import { DataTableShell } from '@/components/DataTableShell';
 import { PageShell } from '@/components/PageShell';
 import { QueryStateView } from '@/components/QueryStates';
 import { StatCard } from '@/components/StatCard';
+import { StatusBadge } from '@/components/StatusBadge';
 import { formatDateTime } from '@/utils/date';
+import { formatMs } from '@/utils/formatters';
 
 const { Text } = Typography;
+type OverallTone = 'healthy' | 'degraded' | 'down';
 
 export const DashboardPage = () => {
+  const navigate = useNavigate();
   const [
     totalUsersQuery,
     activeUsersQuery,
@@ -79,77 +90,97 @@ export const DashboardPage = () => {
   const lockedUsers = lockedUsersQuery.data?.pagination.total ?? 0;
   const pendingVerificationUsers = pendingUsersQuery.data?.pagination.total ?? 0;
   const services = serviceHealthQuery.data;
+
   const hasServiceHealth = Boolean(services);
-  const isServiceDegraded =
-    !hasServiceHealth ||
-    serviceHealthQuery.isError ||
-    (services?.summary.degraded ?? 0) > 0 ||
-    (services?.summary.down ?? 0) > 0;
+  const serviceItems = services?.items ?? [];
+  const downServices = services?.summary.down ?? 0;
+  const degradedServices = services?.summary.degraded ?? 0;
   const firingIncidents = incidentsQuery.data?.items ?? [];
 
-  const quickWarnings: string[] = [];
-  if ((services?.summary.down ?? 0) > 0) {
-    quickWarnings.push(`${services?.summary.down ?? 0} service(s) DOWN`);
-  }
+  const overallTone: OverallTone =
+    downServices > 0
+      ? 'down'
+      : degradedServices > 0 || firingIncidents.length > 0 || serviceHealthQuery.isError
+        ? 'degraded'
+        : 'healthy';
 
-  if ((services?.summary.degraded ?? 0) > 0) {
-    quickWarnings.push(`${services?.summary.degraded ?? 0} service(s) DEGRADED`);
-  }
+  const overallConfig = {
+    healthy: {
+      title: 'Healthy',
+      subtitle: 'Tất cả service phụ thuộc đang ổn định và không có incident đang firing.',
+      icon: <CheckCircleFilled />,
+    },
+    degraded: {
+      title: 'Degraded',
+      subtitle: 'Một phần hệ thống cần theo dõi thêm. Ưu tiên kiểm tra service và incidents.',
+      icon: <ExclamationCircleFilled />,
+    },
+    down: {
+      title: 'Down',
+      subtitle: 'Có service đang down. Cần xử lý ngay để tránh ảnh hưởng nghiệp vụ admin.',
+      icon: <CloseCircleFilled />,
+    },
+  }[overallTone];
 
-  if (firingIncidents.length > 0) {
-    quickWarnings.push(`${firingIncidents.length} active incident(s)`);
-  }
+  const dependencyList = [...serviceItems].sort((left, right) => {
+    const weight = (status: string): number => {
+      if (status === 'down') return 0;
+      if (status === 'degraded') return 1;
+      if (status === 'up') return 2;
+      return 3;
+    };
+    return weight(left.status) - weight(right.status);
+  });
 
   return (
     <PageShell
       title="Dashboard"
-      description="Control center cho trạng thái vận hành admin feature và phụ thuộc chính"
+      description="Control center cho vận hành admin: status hệ thống, users overview và tín hiệu incident"
       headerExtra={
         hasServiceHealth ? (
           <Text type="secondary">Last checked: {formatDateTime(services!.checkedAt)}</Text>
         ) : null
       }
     >
-      <DataTableShell
-        title="Overall system health"
-        meta="Ưu tiên hiển thị tín hiệu degraded, integration risk và data freshness"
-      >
-        <Space size={8} wrap>
-          <Tag color={isServiceDegraded ? 'gold' : 'green'}>
-            {isServiceDegraded ? 'DEGRADED' : 'HEALTHY'}
-          </Tag>
-          <Tag color={serviceHealthQuery.isError ? 'red' : 'blue'}>
-            {serviceHealthQuery.isError ? 'Service health unavailable' : 'Service health connected'}
-          </Tag>
-          <Tag
-            color={incidentsQuery.isError ? 'gold' : firingIncidents.length > 0 ? 'red' : 'green'}
-          >
-            {incidentsQuery.isError
-              ? 'Incident feed unavailable'
-              : firingIncidents.length > 0
-                ? `${firingIncidents.length} incident(s)`
-                : 'No active incidents'}
-          </Tag>
-        </Space>
-        {quickWarnings.length > 0 ? (
-          <List
-            size="small"
-            dataSource={quickWarnings}
-            renderItem={(item) => <List.Item>{item}</List.Item>}
-            style={{ marginTop: 12 }}
-          />
-        ) : (
-          <Text type="secondary" style={{ display: 'block', marginTop: 12 }}>
-            Chưa có warning quan trọng ở mức toàn hệ thống.
-          </Text>
-        )}
-      </DataTableShell>
+      <Card className={`dashboard-hero dashboard-hero--${overallTone}`}>
+        <div className="dashboard-hero-icon">{overallConfig.icon}</div>
+        <div className="dashboard-hero-body">
+          <Text className="dashboard-hero-eyebrow">System Status</Text>
+          <Typography.Title level={2} className="dashboard-hero-title">
+            {overallConfig.title}
+          </Typography.Title>
+          <Text className="dashboard-hero-subtitle">{overallConfig.subtitle}</Text>
+          <Space size={8} wrap className="dashboard-hero-badges">
+            <StatusBadge status={overallTone === 'down' ? 'down' : overallTone} />
+            <StatusBadge status={serviceHealthQuery.isError ? 'warning' : 'healthy'} />
+            <StatusBadge status={firingIncidents.length > 0 ? 'firing' : 'resolved'} />
+          </Space>
+        </div>
+        <div className="dashboard-hero-metrics">
+          <div className="dashboard-hero-metric">
+            <Text type="secondary">Down services</Text>
+            <strong>{downServices}</strong>
+          </div>
+          <div className="dashboard-hero-metric">
+            <Text type="secondary">Degraded services</Text>
+            <strong>{degradedServices}</strong>
+          </div>
+          <div className="dashboard-hero-metric">
+            <Text type="secondary">Active incidents</Text>
+            <strong>{firingIncidents.length}</strong>
+          </div>
+          <Button type="default" onClick={() => navigate('/services/health')}>
+            Open services console <ArrowRightOutlined />
+          </Button>
+        </div>
+      </Card>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
           <StatCard
             title="Total users"
             value={totalUsers}
+            compact
             loading={!totalUsersQuery.data && totalUsersQuery.isLoading}
             error={totalUsersQuery.isError}
           />
@@ -158,6 +189,7 @@ export const DashboardPage = () => {
           <StatCard
             title="Active users"
             value={activeUsers}
+            compact
             loading={!activeUsersQuery.data && activeUsersQuery.isLoading}
             error={activeUsersQuery.isError}
           />
@@ -166,6 +198,7 @@ export const DashboardPage = () => {
           <StatCard
             title="Locked users"
             value={lockedUsers}
+            compact
             loading={!lockedUsersQuery.data && lockedUsersQuery.isLoading}
             error={lockedUsersQuery.isError}
           />
@@ -174,6 +207,7 @@ export const DashboardPage = () => {
           <StatCard
             title="Pending verification"
             value={pendingVerificationUsers}
+            compact
             loading={!pendingUsersQuery.data && pendingUsersQuery.isLoading}
             error={pendingUsersQuery.isError}
           />
@@ -182,69 +216,101 @@ export const DashboardPage = () => {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={12}>
-          <Card title="Service dependency status">
+          <Card
+            className="dashboard-section-card"
+            title="Service dependency"
+            extra={
+              <Button type="link" onClick={() => navigate('/services/health')}>
+                Health details
+              </Button>
+            }
+          >
             {serviceHealthQuery.isError ? (
               <QueryStateView
                 kind="degraded"
                 compact
                 title="Service health chưa khả dụng"
                 description="Không thể đồng bộ trạng thái phụ thuộc từ admin-service."
+                onRetry={() => {
+                  void serviceHealthQuery.refetch();
+                }}
               />
-            ) : hasServiceHealth ? (
-              <Space direction="vertical" size={4}>
-                <Text>Total services: {services!.summary.total}</Text>
-                <Text>UP: {services!.summary.up}</Text>
-                <Text>DOWN: {services!.summary.down}</Text>
-                <Text>DEGRADED: {services!.summary.degraded}</Text>
-                <Text type="secondary">Freshness: {formatDateTime(services!.checkedAt)}</Text>
-              </Space>
+            ) : hasServiceHealth && dependencyList.length > 0 ? (
+              <List
+                dataSource={dependencyList}
+                renderItem={(service) => (
+                  <List.Item className="dashboard-service-item">
+                    <button
+                      type="button"
+                      className="dashboard-service-button"
+                      onClick={() =>
+                        navigate(`/services/health?service=${encodeURIComponent(service.name)}`)
+                      }
+                    >
+                      <span className="dashboard-service-main">
+                        <Text strong>{service.name}</Text>
+                        <Text type="secondary">{service.summary || 'No summary'}</Text>
+                      </span>
+                      <span className="dashboard-service-meta">
+                        <StatusBadge status={service.status} />
+                        <Text type="secondary">{formatMs(service.latencyMs)}</Text>
+                      </span>
+                    </button>
+                  </List.Item>
+                )}
+              />
             ) : (
               <QueryStateView kind="empty" description="Chưa có dữ liệu service health." />
             )}
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Recent incidents">
-            {incidentsQuery.isError ? (
-              <QueryStateView
-                kind="stale"
-                compact
-                title="Incident feed unavailable"
-                description="Tạm thời chưa tải được nguồn incidents."
+          <Card className="dashboard-section-card" title="Recent incidents">
+            {incidentsQuery.isLoading && !incidentsQuery.data ? (
+              <QueryStateView kind="loading" compact />
+            ) : incidentsQuery.isError ? (
+              <Alert
+                type="warning"
+                showIcon
+                message="Incident feed unavailable"
+                description="Tạm thời chưa tải được nguồn incident. Hãy thử lại sau."
               />
             ) : firingIncidents.length === 0 ? (
-              <QueryStateView
-                kind="empty"
-                compact
-                description="Không có active incident cần xử lý ngay."
+              <Alert
+                type="success"
+                showIcon
+                message="No active incidents"
+                description="Hiện tại không có alert đang firing."
               />
             ) : (
-              <List
-                size="small"
-                dataSource={firingIncidents.slice(0, 5)}
-                renderItem={(incident) => (
-                  <List.Item>
-                    <Space direction="vertical" size={0}>
-                      <Text strong>{incident.title}</Text>
-                      <Text type="secondary">{formatDateTime(incident.startsAt)}</Text>
-                    </Space>
-                  </List.Item>
-                )}
-              />
+              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                <Alert
+                  type="error"
+                  showIcon
+                  icon={<WarningFilled />}
+                  message={`${firingIncidents.length} incident(s) đang firing`}
+                  description="Ưu tiên xử lý các incident severity cao trước."
+                />
+                <List
+                  size="small"
+                  dataSource={firingIncidents.slice(0, 6)}
+                  renderItem={(incident) => (
+                    <List.Item>
+                      <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                        <Space size={8}>
+                          <StatusBadge status={incident.status} />
+                          <Text strong>{incident.title}</Text>
+                        </Space>
+                        <Text type="secondary">{formatDateTime(incident.startsAt)}</Text>
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              </Space>
             )}
           </Card>
         </Col>
       </Row>
-
-      <DataTableShell
-        title="Sessions readiness"
-        meta="Placeholder an toàn cho data contract sẽ có ở phase tiếp theo"
-      >
-        <Text>
-          Backend Phase 1 chưa có endpoint tổng hợp active sessions toàn hệ thống. Cấu trúc widget
-          đã sẵn sàng để nối dữ liệu thật ở các phase tiếp theo.
-        </Text>
-      </DataTableShell>
     </PageShell>
   );
 };

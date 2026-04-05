@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { Button, Card, Space, Tabs, Typography } from 'antd';
+import { Alert, Button, Card, Space, Tabs, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { serviceHealthClient } from '@/api/clients';
 import { queryKeys } from '@/api/queryKeys';
@@ -21,6 +21,7 @@ const SECTION_KEYS = ['health', 'smtp', 'email-templates'] as const;
 
 export const ServicesPage = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { section } = useParams<{ section?: string }>();
   const activeSection = SECTION_KEYS.includes(
     (section ?? 'health') as (typeof SECTION_KEYS)[number],
@@ -39,6 +40,47 @@ export const ServicesPage = () => {
     queryFn: serviceHealthClient.getServiceHealth,
     refetchInterval: 30_000,
   });
+
+  const focusedService = searchParams.get('service')?.trim() ?? '';
+  const focusedServiceNormalized = focusedService.toLowerCase();
+  const healthItems = healthQuery.data?.items;
+
+  const focusedServiceRecord = useMemo(
+    () =>
+      focusedServiceNormalized
+        ? ((healthItems ?? []).find(
+            (item) => item.name.toLowerCase() === focusedServiceNormalized,
+          ) ?? null)
+        : null,
+    [focusedServiceNormalized, healthItems],
+  );
+
+  const healthItemsForTable = useMemo(() => {
+    const baseItems = healthItems ?? [];
+
+    if (!focusedServiceNormalized) {
+      return baseItems;
+    }
+
+    const exactMatch = baseItems.find(
+      (item) => item.name.toLowerCase() === focusedServiceNormalized,
+    );
+
+    if (exactMatch) {
+      return [
+        exactMatch,
+        ...baseItems.filter((item) => item.name.toLowerCase() !== focusedServiceNormalized),
+      ];
+    }
+
+    return baseItems.filter((item) => item.name.toLowerCase().includes(focusedServiceNormalized));
+  }, [focusedServiceNormalized, healthItems]);
+
+  const clearFocusedService = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('service');
+    setSearchParams(next, { replace: true });
+  };
 
   const columns = useMemo<ColumnsType<ServiceHealthItem>>(
     () => [
@@ -124,6 +166,39 @@ export const ServicesPage = () => {
             label: 'Service Health',
             children: (
               <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                {focusedService ? (
+                  focusedServiceRecord ? (
+                    <Alert
+                      type="info"
+                      showIcon
+                      message={`Focused service: ${focusedServiceRecord.name}`}
+                      description={
+                        <Space size={10} wrap>
+                          <StatusBadge status={focusedServiceRecord.status} />
+                          <Typography.Text type="secondary">
+                            {focusedServiceRecord.summary || 'No summary'}
+                          </Typography.Text>
+                          <Button size="small" onClick={clearFocusedService}>
+                            Clear focus
+                          </Button>
+                        </Space>
+                      }
+                    />
+                  ) : (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      message={`No service matched '${focusedService}'`}
+                      description="Tên service có thể đã thay đổi hoặc chưa xuất hiện trong lần check gần nhất."
+                      action={
+                        <Button size="small" onClick={clearFocusedService}>
+                          Clear focus
+                        </Button>
+                      }
+                    />
+                  )
+                ) : null}
+
                 <Card>
                   <Space size={16} wrap>
                     <Typography.Text strong>Total: {data?.summary.total ?? 0}</Typography.Text>
@@ -143,7 +218,12 @@ export const ServicesPage = () => {
                     rowKey="name"
                     columns={columns}
                     minHeight={300}
-                    dataSource={data?.items ?? []}
+                    dataSource={healthItemsForTable}
+                    rowClassName={(record) =>
+                      record.name.toLowerCase() === focusedServiceNormalized
+                        ? 'service-row-focused'
+                        : ''
+                    }
                     pagination={{ pageSize: 10 }}
                     emptyNode={<EmptyState description="Không có dữ liệu service health." />}
                   />
