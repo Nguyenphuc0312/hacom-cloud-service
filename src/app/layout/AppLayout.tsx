@@ -8,7 +8,18 @@ import {
   ToolOutlined,
   UserOutlined,
 } from '@ant-design/icons';
-import { Avatar, Badge, Breadcrumb, Button, Dropdown, Layout, Menu, Space, Typography } from 'antd';
+import {
+  Alert,
+  Avatar,
+  Badge,
+  Breadcrumb,
+  Button,
+  Dropdown,
+  Layout,
+  Menu,
+  Space,
+  Typography,
+} from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -50,7 +61,14 @@ export const AppLayout = () => {
   const location = useLocation();
 
   const clearAuth = useAuthStore((state) => state.clearAuth);
-  const { user, isLoading } = useCurrentUser();
+  const {
+    user,
+    isLoading,
+    isAuthServiceUnavailable,
+    currentUserErrorMessage,
+    retryCurrentUser,
+    isRetryingCurrentUser,
+  } = useCurrentUser();
 
   const allowedItems = useMemo<ItemType[]>(() => {
     return navItems.map((item) => ({
@@ -151,6 +169,22 @@ export const AppLayout = () => {
           </Dropdown>
         </Header>
         <Content className="app-content">
+          {isAuthServiceUnavailable ? (
+            <Alert
+              type="warning"
+              showIcon
+              message="Admin auth service unavailable"
+              description={
+                currentUserErrorMessage ?? 'Cannot verify current admin profile right now.'
+              }
+              action={
+                <Button size="small" onClick={retryCurrentUser} loading={isRetryingCurrentUser}>
+                  Retry
+                </Button>
+              }
+              style={{ marginBottom: 12 }}
+            />
+          ) : null}
           <Breadcrumb items={breadcrumbItems} style={{ marginBottom: 16 }} />
           <Outlet />
         </Content>

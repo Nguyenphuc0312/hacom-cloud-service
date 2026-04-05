@@ -5,6 +5,9 @@ import type { ApiErrorBody } from './types';
 const CODE_MESSAGE_MAP: Record<string, string> = {
   INVALID_CREDENTIALS: 'Email hoặc mật khẩu không đúng.',
   FORBIDDEN: 'Tài khoản không có quyền truy cập.',
+  AUTH_UPSTREAM_UNREACHABLE: 'Dịch vụ xác thực admin đang tạm thời gián đoạn. Vui lòng thử lại.',
+  AUTH_UPSTREAM_ENDPOINT_NOT_FOUND:
+    'Dịch vụ xác thực admin chưa sẵn sàng endpoint nội bộ cần thiết.',
   USER_NOT_FOUND: 'Không tìm thấy người dùng.',
   DUPLICATE_EMPLOYEE_CODE: 'Mã nhân viên đã tồn tại.',
   HR_EMPLOYEE_NOT_FOUND: 'Không tìm thấy hồ sơ nhân sự.',
@@ -12,6 +15,23 @@ const CODE_MESSAGE_MAP: Record<string, string> = {
   HR_EMPLOYEE_ALREADY_INACTIVE: 'Nhân sự đã ở trạng thái ngừng hoạt động.',
   HR_EMPLOYEE_INVALID_INPUT: 'Dữ liệu nhân sự không hợp lệ.',
   UPSTREAM_ENDPOINT_MISSING: 'Backend chưa hỗ trợ endpoint nội bộ cần thiết cho chức năng này.',
+};
+
+export const getApiErrorCode = (error: unknown): string | undefined => {
+  if (!(error instanceof AxiosError)) {
+    return undefined;
+  }
+
+  const body = error.response?.data as ApiErrorBody | undefined;
+  return body?.error?.code ?? body?.code;
+};
+
+export const getApiErrorStatus = (error: unknown): number | undefined => {
+  if (!(error instanceof AxiosError)) {
+    return undefined;
+  }
+
+  return error.response?.status;
 };
 
 const STATUS_MESSAGE_MAP: Record<number, string> = {
