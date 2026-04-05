@@ -28,7 +28,9 @@ import type {
 import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
 import { PageHeader } from '@/components/PageHeader';
 import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
+import { useAuthStore } from '@/store/authStore';
 import { formatDateTime } from '@/utils/date';
+import { canManageHrEmployees } from '@/utils/role';
 
 const statusOptions: Array<{ label: string; value: 'all' | HrEmployeeStatus }> = [
   { label: 'Tất cả status', value: 'all' },
@@ -52,6 +54,8 @@ export const HREmployeesPage = () => {
   const [filterForm] = Form.useForm();
   const [editForm] = Form.useForm<FormValues>();
   const queryClient = useQueryClient();
+  const currentRole = useAuthStore((state) => state.user?.role);
+  const canWriteHrActions = isAdminWriteActionsEnabled && canManageHrEmployees(currentRole);
 
   const [params, setParams] = useState<HrEmployeeListQuery>({
     page: 1,
@@ -182,6 +186,11 @@ export const HREmployeesPage = () => {
       return;
     }
 
+    if (!canManageHrEmployees(currentRole)) {
+      message.warning('Role hiện tại không có quyền thực hiện HR write actions.');
+      return;
+    }
+
     setCreating(true);
     setEditingId(null);
     setEditorOpen(true);
@@ -200,6 +209,11 @@ export const HREmployeesPage = () => {
         return;
       }
 
+      if (!canManageHrEmployees(currentRole)) {
+        message.warning('Role hiện tại không có quyền thực hiện HR write actions.');
+        return;
+      }
+
       Modal.confirm({
         title: 'Deactivate/Delete HR employee',
         content:
@@ -211,7 +225,7 @@ export const HREmployeesPage = () => {
         },
       });
     },
-    [deleteMutation],
+    [currentRole, deleteMutation],
   );
 
   const columns = useMemo<ColumnsType<HrEmployee>>(
@@ -255,12 +269,12 @@ export const HREmployeesPage = () => {
         render: (_, record) => (
           <Space>
             <Button size="small" onClick={() => openEdit(record)}>
-              {isAdminWriteActionsEnabled ? 'Xem/Sửa' : 'Xem'}
+              {canWriteHrActions ? 'Xem/Sửa' : 'Xem'}
             </Button>
             <Button
               size="small"
               danger
-              disabled={!isAdminWriteActionsEnabled}
+              disabled={!canWriteHrActions}
               onClick={() => confirmRemove(record)}
             >
               Deactivate
@@ -269,7 +283,7 @@ export const HREmployeesPage = () => {
         ),
       },
     ],
-    [confirmRemove],
+    [canWriteHrActions, confirmRemove],
   );
 
   const applyFilters = () => {
@@ -306,16 +320,18 @@ export const HREmployeesPage = () => {
         title="HR Employees"
         description="CRUD tối thiểu cho hồ sơ nhân sự theo contract backend thực tế"
         extra={
-          <Button type="primary" disabled={!isAdminWriteActionsEnabled} onClick={openCreate}>
+          <Button type="primary" disabled={!canWriteHrActions} onClick={openCreate}>
             Tạo HR employee
           </Button>
         }
       />
 
-      {!isAdminWriteActionsEnabled && (
+      {(!isAdminWriteActionsEnabled || !canManageHrEmployees(currentRole)) && (
         <Card>
           <Typography.Text type="secondary">
-            HR write actions (create/update/deactivate) are disabled by release configuration.
+            {!isAdminWriteActionsEnabled
+              ? 'HR write actions (create/update/deactivate) are disabled by release configuration.'
+              : 'Role hiện tại không có quyền create/update/deactivate HR employee.'}
           </Typography.Text>
         </Card>
       )}
@@ -374,11 +390,11 @@ export const HREmployeesPage = () => {
         title={
           creating
             ? 'Tạo HR employee'
-            : isAdminWriteActionsEnabled
+            : canWriteHrActions
               ? 'Chi tiết/Sửa HR employee'
               : 'Chi tiết HR employee'
         }
-        okText={!isAdminWriteActionsEnabled ? 'Đóng' : creating ? 'Tạo' : 'Lưu'}
+        okText={!canWriteHrActions ? 'Đóng' : creating ? 'Tạo' : 'Lưu'}
         cancelText="Hủy"
         confirmLoading={createMutation.isPending || updateMutation.isPending}
         onCancel={() => {
@@ -388,7 +404,7 @@ export const HREmployeesPage = () => {
           editForm.resetFields();
         }}
         onOk={() => {
-          if (!isAdminWriteActionsEnabled) {
+          if (!canWriteHrActions) {
             setEditorOpen(false);
             return;
           }
@@ -405,7 +421,7 @@ export const HREmployeesPage = () => {
             form={editForm}
             layout="vertical"
             requiredMark={false}
-            disabled={!isAdminWriteActionsEnabled}
+            disabled={!canWriteHrActions}
           >
             <Form.Item
               name="employeeCode"

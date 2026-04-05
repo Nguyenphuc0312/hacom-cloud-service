@@ -22,7 +22,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'chat-admin-auth',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({ accessToken: state.accessToken, user: state.user }),
     },
   ),

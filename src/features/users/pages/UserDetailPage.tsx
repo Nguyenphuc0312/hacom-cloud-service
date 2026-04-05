@@ -11,12 +11,16 @@ import type { UserActionPayload, UserDevice, UserSession } from '@/api/types';
 import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
 import { PageHeader } from '@/components/PageHeader';
 import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
+import { useAuthStore } from '@/store/authStore';
 import { formatDateTime } from '@/utils/date';
+import { canManageUsers } from '@/utils/role';
 
 export const UserDetailPage = () => {
   const params = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const userId = params.id ?? '';
+  const currentRole = useAuthStore((state) => state.user?.role);
+  const canWriteUserActions = isAdminWriteActionsEnabled && canManageUsers(currentRole);
 
   const [sessionsPage, setSessionsPage] = useState(1);
   const [devicesPage, setDevicesPage] = useState(1);
@@ -78,6 +82,11 @@ export const UserDetailPage = () => {
   const confirmAction = (action: 'lock' | 'unlock' | 'revoke') => {
     if (!isAdminWriteActionsEnabled) {
       message.info('Write actions are disabled by release configuration.');
+      return;
+    }
+
+    if (!canManageUsers(currentRole)) {
+      message.warning('Role hiện tại không có quyền thực hiện user write actions.');
       return;
     }
 
@@ -181,28 +190,30 @@ export const UserDetailPage = () => {
           <Space>
             <Button
               danger
-              disabled={!isAdminWriteActionsEnabled || user.accountStatus === 'DISABLED'}
+              disabled={!canWriteUserActions || user.accountStatus === 'DISABLED'}
               onClick={() => confirmAction('lock')}
             >
               Lock
             </Button>
             <Button
-              disabled={!isAdminWriteActionsEnabled || user.accountStatus !== 'DISABLED'}
+              disabled={!canWriteUserActions || user.accountStatus !== 'DISABLED'}
               onClick={() => confirmAction('unlock')}
             >
               Unlock
             </Button>
-            <Button disabled={!isAdminWriteActionsEnabled} onClick={() => confirmAction('revoke')}>
+            <Button disabled={!canWriteUserActions} onClick={() => confirmAction('revoke')}>
               Revoke sessions
             </Button>
           </Space>
         }
       />
 
-      {!isAdminWriteActionsEnabled && (
+      {(!isAdminWriteActionsEnabled || !canManageUsers(currentRole)) && (
         <Card>
           <Typography.Text type="secondary">
-            Write actions (lock/unlock/revoke sessions) are disabled by release configuration.
+            {!isAdminWriteActionsEnabled
+              ? 'Write actions (lock/unlock/revoke sessions) are disabled by release configuration.'
+              : 'Role hiện tại chỉ có quyền xem, không có quyền lock/unlock/revoke sessions.'}
           </Typography.Text>
         </Card>
       )}

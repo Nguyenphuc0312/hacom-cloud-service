@@ -17,6 +17,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { LoadingState } from '@/components/QueryStates';
 import { useCurrentUser } from '@/app/useCurrentUser';
 import { useAuthStore } from '@/store/authStore';
+import { toDisplayRole } from '@/utils/role';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -142,7 +143,9 @@ export const AppLayout = () => {
               <div>
                 <Text>{user?.email ?? '-'}</Text>
                 <br />
-                <Text type="secondary">{user?.username ?? 'admin'}</Text>
+                <Text type="secondary">
+                  {user?.username ?? 'admin'} · {toDisplayRole(user?.role)}
+                </Text>
               </div>
             </Space>
           </Dropdown>

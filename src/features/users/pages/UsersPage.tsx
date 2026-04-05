@@ -28,7 +28,9 @@ import type {
 import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
 import { PageHeader } from '@/components/PageHeader';
 import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
+import { useAuthStore } from '@/store/authStore';
 import { formatDateTime } from '@/utils/date';
+import { canManageUsers } from '@/utils/role';
 
 const accountStatusOptions = [
   { label: 'Tất cả', value: 'all' },
@@ -49,6 +51,8 @@ export const UsersPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
+  const currentRole = useAuthStore((state) => state.user?.role);
+  const canWriteUserActions = isAdminWriteActionsEnabled && canManageUsers(currentRole);
 
   const [params, setParams] = useState<UsersListQuery>({
     page: 1,
@@ -103,6 +107,11 @@ export const UsersPage = () => {
         return;
       }
 
+      if (!canManageUsers(currentRole)) {
+        message.warning('Role hiện tại không có quyền thực hiện user write actions.');
+        return;
+      }
+
       const titleMap: Record<typeof action, string> = {
         lock: 'Khóa tài khoản',
         unlock: 'Mở khóa tài khoản',
@@ -129,7 +138,7 @@ export const UsersPage = () => {
         },
       });
     },
-    [actionMutation],
+    [actionMutation, currentRole],
   );
 
   const columns = useMemo<ColumnsType<UserListItem>>(
@@ -182,6 +191,7 @@ export const UsersPage = () => {
               danger
               disabled={
                 !isAdminWriteActionsEnabled ||
+                !canWriteUserActions ||
                 record.accountStatus === 'DISABLED' ||
                 actionMutation.isPending
               }
@@ -193,6 +203,7 @@ export const UsersPage = () => {
               size="small"
               disabled={
                 !isAdminWriteActionsEnabled ||
+                !canWriteUserActions ||
                 record.accountStatus !== 'DISABLED' ||
                 actionMutation.isPending
               }
@@ -202,7 +213,7 @@ export const UsersPage = () => {
             </Button>
             <Button
               size="small"
-              disabled={!isAdminWriteActionsEnabled || actionMutation.isPending}
+              disabled={!canWriteUserActions || actionMutation.isPending}
               onClick={() => confirmAction('revoke', record)}
             >
               Revoke sessions
@@ -211,7 +222,7 @@ export const UsersPage = () => {
         ),
       },
     ],
-    [actionMutation.isPending, confirmAction, navigate],
+    [actionMutation.isPending, canWriteUserActions, confirmAction, navigate],
   );
 
   const applyFilters = () => {
@@ -261,10 +272,12 @@ export const UsersPage = () => {
         description="Tra cứu người dùng, xem trạng thái tài khoản và thực hiện action quản trị tối thiểu"
       />
 
-      {!isAdminWriteActionsEnabled && (
+      {(!isAdminWriteActionsEnabled || !canManageUsers(currentRole)) && (
         <Card>
           <Typography.Text type="secondary">
-            Write actions (lock/unlock/revoke sessions) are disabled by release configuration.
+            {!isAdminWriteActionsEnabled
+              ? 'Write actions (lock/unlock/revoke sessions) are disabled by release configuration.'
+              : 'Role hiện tại chỉ có quyền xem, không có quyền lock/unlock/revoke sessions.'}
           </Typography.Text>
         </Card>
       )}
