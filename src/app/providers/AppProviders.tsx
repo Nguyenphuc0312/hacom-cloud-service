@@ -18,7 +18,14 @@ export const AppProviders = ({ children }: PropsWithChildren) => {
       theme={{
         token: {
           colorPrimary: '#0f766e',
-          borderRadius: 8,
+          colorInfo: '#2563eb',
+          colorSuccess: '#15803d',
+          colorWarning: '#b45309',
+          colorError: '#b91c1c',
+          colorBgLayout: '#edf3f8',
+          colorBorderSecondary: '#dbe3ea',
+          borderRadius: 10,
+          fontFamily: 'IBM Plex Sans, Segoe UI, Tahoma, sans-serif',
         },
       }}
     >

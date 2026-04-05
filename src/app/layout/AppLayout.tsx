@@ -9,7 +9,6 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import {
-  Alert,
   Avatar,
   Badge,
   Breadcrumb,
@@ -18,6 +17,7 @@ import {
   Layout,
   Menu,
   Space,
+  Tag,
   Typography,
 } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
@@ -26,6 +26,7 @@ import type { ReactNode } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { LoadingState } from '@/components/QueryStates';
+import { SystemDegradedBanner } from '@/components/SystemDegradedBanner';
 import { useCurrentUser } from '@/app/useCurrentUser';
 import { useAuthStore } from '@/store/authStore';
 import { toDisplayRole } from '@/utils/role';
@@ -37,14 +38,15 @@ interface NavItem {
   key: string;
   label: string;
   icon: ReactNode;
+  group: 'overview' | 'identity' | 'governance';
 }
 
 const navItems: NavItem[] = [
-  { key: '/', label: 'Dashboard', icon: <DashboardOutlined /> },
-  { key: '/users', label: 'Users', icon: <UserOutlined /> },
-  { key: '/hr-employees', label: 'HR Employees', icon: <SolutionOutlined /> },
-  { key: '/audit', label: 'Audit Logs', icon: <FileTextOutlined /> },
-  { key: '/services', label: 'Services', icon: <ToolOutlined /> },
+  { key: '/', label: 'Dashboard', icon: <DashboardOutlined />, group: 'overview' },
+  { key: '/services', label: 'Services', icon: <ToolOutlined />, group: 'overview' },
+  { key: '/users', label: 'Users', icon: <UserOutlined />, group: 'identity' },
+  { key: '/hr-employees', label: 'HR Employees', icon: <SolutionOutlined />, group: 'identity' },
+  { key: '/audit', label: 'Audit Logs', icon: <FileTextOutlined />, group: 'governance' },
 ];
 
 const breadcrumbNameMap: Record<string, string> = {
@@ -70,12 +72,33 @@ export const AppLayout = () => {
     isRetryingCurrentUser,
   } = useCurrentUser();
 
-  const allowedItems = useMemo<ItemType[]>(() => {
-    return navItems.map((item) => ({
+  const menuItems = useMemo<ItemType[]>(() => {
+    const toChild = (item: NavItem): ItemType => ({
       key: item.key,
       icon: item.icon,
       label: item.label,
-    }));
+    });
+
+    return [
+      {
+        type: 'group',
+        key: 'group-overview',
+        label: 'Overview',
+        children: navItems.filter((item) => item.group === 'overview').map(toChild),
+      },
+      {
+        type: 'group',
+        key: 'group-identity',
+        label: 'Identity & Organization',
+        children: navItems.filter((item) => item.group === 'identity').map(toChild),
+      },
+      {
+        type: 'group',
+        key: 'group-governance',
+        label: 'Governance',
+        children: navItems.filter((item) => item.group === 'governance').map(toChild),
+      },
+    ];
   }, []);
 
   const selectedMenu =
@@ -127,13 +150,18 @@ export const AppLayout = () => {
           theme="dark"
           mode="inline"
           selectedKeys={[selectedMenu]}
-          items={allowedItems}
+          items={menuItems}
           onClick={({ key }) => navigate(String(key))}
         />
+        <div className="app-sider-footer">
+          <Text type="secondary">System context</Text>
+          <Text>Environment: {environment}</Text>
+          <Text type="secondary">Role-aware actions enabled by policy</Text>
+        </div>
       </Sider>
       <Layout>
         <Header className="app-header">
-          <Space>
+          <Space size={12}>
             <Button
               type="text"
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
@@ -143,6 +171,9 @@ export const AppLayout = () => {
               color={environment === 'PROD' ? 'red' : environment === 'STAGING' ? 'gold' : 'green'}
             />
             <Text strong>{environment}</Text>
+            <Tag color={isAuthServiceUnavailable ? 'gold' : 'green'}>
+              {isAuthServiceUnavailable ? 'Auth integration degraded' : 'Auth integration healthy'}
+            </Tag>
           </Space>
           <Dropdown
             menu={{
@@ -169,22 +200,15 @@ export const AppLayout = () => {
           </Dropdown>
         </Header>
         <Content className="app-content">
-          {isAuthServiceUnavailable ? (
-            <Alert
-              type="warning"
-              showIcon
-              message="Admin auth service unavailable"
-              description={
-                currentUserErrorMessage ?? 'Cannot verify current admin profile right now.'
-              }
-              action={
-                <Button size="small" onClick={retryCurrentUser} loading={isRetryingCurrentUser}>
-                  Retry
-                </Button>
-              }
-              style={{ marginBottom: 12 }}
-            />
-          ) : null}
+          <SystemDegradedBanner
+            visible={isAuthServiceUnavailable}
+            title="Admin auth integration degraded"
+            description={
+              currentUserErrorMessage ?? 'Cannot verify current admin profile right now.'
+            }
+            onRetry={retryCurrentUser}
+            retrying={isRetryingCurrentUser}
+          />
           <Breadcrumb items={breadcrumbItems} style={{ marginBottom: 16 }} />
           <Outlet />
         </Content>

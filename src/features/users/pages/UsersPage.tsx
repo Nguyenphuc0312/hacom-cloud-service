@@ -1,17 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Button,
-  Card,
-  Form,
-  Input,
-  Modal,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from 'antd';
+import { Button, Form, Input, Modal, Select, Space, Table, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -25,8 +13,11 @@ import type {
   UserPresenceStatus,
   UsersListQuery,
 } from '@/api/types';
-import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
-import { PageHeader } from '@/components/PageHeader';
+import { DataTableShell } from '@/components/DataTableShell';
+import { FeatureDisabledNotice } from '@/components/FeatureDisabledNotice';
+import { FilterBar } from '@/components/FilterBar';
+import { PageShell } from '@/components/PageShell';
+import { EmptyState, QueryStateView } from '@/components/QueryStates';
 import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
 import { useAuthStore } from '@/store/authStore';
 import { formatDateTime } from '@/utils/date';
@@ -251,38 +242,59 @@ export const UsersPage = () => {
   };
 
   if (usersQuery.isLoading) {
-    return <LoadingState tip="Đang tải danh sách người dùng..." />;
+    return (
+      <PageShell
+        title="Users"
+        description="Quản trị người dùng và chính sách thao tác write an toàn"
+      >
+        <QueryStateView kind="loading" title="Đang tải danh sách người dùng..." />
+      </PageShell>
+    );
   }
 
   if (usersQuery.isError) {
     return (
-      <ErrorState
-        subTitle="Không thể tải users list."
-        extra={<Button onClick={() => usersQuery.refetch()}>Thử lại</Button>}
-      />
+      <PageShell
+        title="Users"
+        description="Quản trị người dùng và chính sách thao tác write an toàn"
+      >
+        <QueryStateView
+          kind="error"
+          description="Không thể tải users list."
+          onRetry={() => {
+            void usersQuery.refetch();
+          }}
+        />
+      </PageShell>
     );
   }
 
   const data = usersQuery.data;
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <PageHeader
-        title="Users"
-        description="Tra cứu người dùng, xem trạng thái tài khoản và thực hiện action quản trị tối thiểu"
-      />
-
+    <PageShell
+      title="Users"
+      description="Tra cứu người dùng, xem trạng thái tài khoản và thực hiện action quản trị tối thiểu"
+      headerExtra={
+        <Typography.Text type="secondary">
+          Last updated:{' '}
+          {usersQuery.dataUpdatedAt
+            ? formatDateTime(new Date(usersQuery.dataUpdatedAt).toISOString())
+            : '-'}
+        </Typography.Text>
+      }
+    >
       {(!isAdminWriteActionsEnabled || !canManageUsers(currentRole)) && (
-        <Card>
-          <Typography.Text type="secondary">
-            {!isAdminWriteActionsEnabled
+        <FeatureDisabledNotice
+          description={
+            !isAdminWriteActionsEnabled
               ? 'Write actions (lock/unlock/revoke sessions) are disabled by release configuration.'
-              : 'Role hiện tại chỉ có quyền xem, không có quyền lock/unlock/revoke sessions.'}
-          </Typography.Text>
-        </Card>
+              : 'Role hiện tại chỉ có quyền xem, không có quyền lock/unlock/revoke sessions.'
+          }
+        />
       )}
 
-      <Card>
+      <FilterBar>
         <Form
           form={form}
           layout="inline"
@@ -334,9 +346,12 @@ export const UsersPage = () => {
             </Space>
           </Form.Item>
         </Form>
-      </Card>
+      </FilterBar>
 
-      <Card>
+      <DataTableShell
+        title="Users list"
+        meta={`${data?.pagination.total ?? 0} record(s) matched current filters`}
+      >
         <Table
           rowKey="id"
           columns={columns}
@@ -356,7 +371,7 @@ export const UsersPage = () => {
             },
           }}
         />
-      </Card>
-    </Space>
+      </DataTableShell>
+    </PageShell>
   );
 };
