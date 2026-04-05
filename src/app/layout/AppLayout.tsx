@@ -1,122 +1,39 @@
 import {
-  AuditOutlined,
-  DashboardOutlined,
-  FileTextOutlined,
-  SafetyCertificateOutlined,
+  LockOutlined,
   LogoutOutlined,
-  MailOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  SearchOutlined,
-  SolutionOutlined,
-  TeamOutlined,
+  UserOutlined,
 } from '@ant-design/icons';
-import {
-  Avatar,
-  Breadcrumb,
-  Button,
-  Dropdown,
-  Layout,
-  Menu,
-  Select,
-  Space,
-  Tag,
-  Typography,
-} from 'antd';
+import { Breadcrumb, Button, Layout, Menu, Space, Tag, Typography } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
-import { useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
+import {
+  breadcrumbNameMap,
+  commandRouteItems,
+  navItems,
+  pickSelectedMenuKey,
+  type NavItem,
+} from '@/app/layout/navigationConfig';
 import { LoadingState } from '@/components/QueryStates';
+import { CommandPalette, type CommandPaletteItem } from '@/components/CommandPalette';
+import { CommandPaletteTrigger } from '@/components/CommandPaletteTrigger';
+import { HeaderUserMenu } from '@/components/HeaderUserMenu';
 import { SystemDegradedBanner } from '@/components/SystemDegradedBanner';
 import { useCurrentUser } from '@/app/useCurrentUser';
+import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { useAuthStore } from '@/store/authStore';
-import { toDisplayRole } from '@/utils/role';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
 
-interface NavItem {
-  key: string;
-  label: string;
-  icon: ReactNode;
-  group: 'dashboard' | 'users' | 'services' | 'system';
-}
-
-const navItems: NavItem[] = [
-  { key: '/', label: 'Dashboard', icon: <DashboardOutlined />, group: 'dashboard' },
-  { key: '/users', label: 'Users', icon: <TeamOutlined />, group: 'users' },
-  { key: '/hr-employees', label: 'HR Employees', icon: <SolutionOutlined />, group: 'users' },
-  {
-    key: '/services/smtp',
-    label: 'SMTP Settings',
-    icon: <MailOutlined />,
-    group: 'services',
-  },
-  {
-    key: '/services/email-templates',
-    label: 'Email Templates',
-    icon: <FileTextOutlined />,
-    group: 'services',
-  },
-  {
-    key: '/services/health',
-    label: 'Service Health',
-    icon: <SafetyCertificateOutlined />,
-    group: 'system',
-  },
-  { key: '/audit', label: 'Audit Logs', icon: <AuditOutlined />, group: 'system' },
-];
-
-const breadcrumbNameMap: Record<string, string> = {
-  '/': 'Dashboard',
-  '/users': 'Users',
-  '/hr-employees': 'HR Employees',
-  '/audit': 'Audit Logs',
-  '/services': 'Services',
-  '/services/smtp': 'SMTP Settings',
-  '/services/email-templates': 'Email Templates',
-  '/services/health': 'Service Health',
-};
-
-const pickSelectedMenuKey = (pathname: string): string => {
-  if (pathname === '/') {
-    return '/';
-  }
-
-  if (pathname.startsWith('/users')) {
-    return '/users';
-  }
-
-  if (pathname.startsWith('/hr-employees')) {
-    return '/hr-employees';
-  }
-
-  if (pathname.startsWith('/services/email-templates')) {
-    return '/services/email-templates';
-  }
-
-  if (pathname.startsWith('/services/smtp')) {
-    return '/services/smtp';
-  }
-
-  if (pathname.startsWith('/services/health') || pathname.startsWith('/services')) {
-    return '/services/health';
-  }
-
-  if (pathname.startsWith('/audit')) {
-    return '/audit';
-  }
-
-  return '/';
-};
-
 export const AppLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
-  const [quickNavValue, setQuickNavValue] = useState<string | undefined>();
   const navigate = useNavigate();
   const location = useLocation();
+  const { isOpen: isCommandPaletteOpen, openPalette, closePalette } = useCommandPalette();
 
   const clearAuth = useAuthStore((state) => state.clearAuth);
   const {
@@ -165,21 +82,6 @@ export const AppLayout = () => {
 
   const selectedMenu = pickSelectedMenuKey(location.pathname);
 
-  const quickSearchOptions = useMemo(
-    () =>
-      navItems.map((item) => ({
-        value: item.key,
-        title: item.label,
-        label: (
-          <Space size={8}>
-            {item.icon}
-            <span>{item.label}</span>
-          </Space>
-        ),
-      })),
-    [],
-  );
-
   const breadcrumbItems = useMemo(() => {
     const pathSnippets = location.pathname.split('/').filter(Boolean);
     const paths = pathSnippets.map((_, index) => `/${pathSnippets.slice(0, index + 1).join('/')}`);
@@ -195,10 +97,70 @@ export const AppLayout = () => {
     return items;
   }, [location.pathname]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     clearAuth();
     navigate('/login', { replace: true });
-  };
+  }, [clearAuth, navigate]);
+
+  const openMyProfile = useCallback(() => {
+    if (user?.id) {
+      navigate(`/users/${user.id}`);
+      return;
+    }
+
+    navigate('/users');
+  }, [navigate, user?.id]);
+
+  const openSettings = useCallback(() => {
+    navigate('/services/smtp');
+  }, [navigate]);
+
+  const commandPaletteItems = useMemo<CommandPaletteItem[]>(
+    () => [
+      {
+        id: 'open-my-profile',
+        label: 'My Profile / Account',
+        description: 'Open your account details',
+        category: 'Management',
+        icon: <UserOutlined />,
+        keywords: ['my profile', 'account', 'me'],
+        onSelect: openMyProfile,
+      },
+      {
+        id: 'change-password',
+        label: 'Change password',
+        description: 'Password management flow is not available yet',
+        category: 'Settings',
+        icon: <LockOutlined />,
+        keywords: ['password', 'security', 'credentials'],
+        disabled: true,
+        onSelect: () => undefined,
+      },
+      ...commandRouteItems.map((item) => ({
+        ...item,
+        disabled: item.disabled ?? !item.route,
+        onSelect: () => {
+          if (item.route) {
+            navigate(item.route);
+          }
+        },
+      })),
+      {
+        id: 'logout',
+        label: 'Logout',
+        description: 'Sign out from current admin session',
+        category: 'Actions',
+        icon: <LogoutOutlined />,
+        keywords: ['logout', 'sign out', 'exit'],
+        onSelect: logout,
+      },
+    ],
+    [logout, navigate, openMyProfile],
+  );
+
+  useEffect(() => {
+    closePalette();
+  }, [closePalette, location.pathname]);
 
   const environment = (import.meta.env.VITE_APP_ENV ?? 'server-test').toUpperCase();
   const envColor =
@@ -241,60 +203,32 @@ export const AppLayout = () => {
       </Sider>
       <Layout>
         <Header className="app-header">
-          <Space size={12}>
-            <Button
-              type="text"
-              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => setCollapsed((prev) => !prev)}
-              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            />
-            <Select
-              className="header-search"
-              showSearch
-              allowClear
-              placeholder="Quick navigate"
-              value={quickNavValue}
-              options={quickSearchOptions}
-              filterOption={(input, option) =>
-                String(option?.title ?? '')
-                  .toLowerCase()
-                  .includes(input.toLowerCase())
-              }
-              onSelect={(value) => {
-                setQuickNavValue(undefined);
-                navigate(value);
-              }}
-              onClear={() => setQuickNavValue(undefined)}
-              suffixIcon={<SearchOutlined />}
-            />
-            <Tag color={envColor}>{environment}</Tag>
-            <Tag color={isAuthServiceUnavailable ? 'gold' : 'green'}>
-              {isAuthServiceUnavailable ? 'Auth integration degraded' : 'Auth integration healthy'}
-            </Tag>
-          </Space>
-          <Dropdown
-            menu={{
-              items: [
-                {
-                  key: 'logout',
-                  icon: <LogoutOutlined />,
-                  label: 'Logout',
-                  onClick: logout,
-                },
-              ],
-            }}
-          >
-            <Space className="user-chip">
-              <Avatar>{user?.email?.charAt(0).toUpperCase() ?? 'A'}</Avatar>
-              <div>
-                <Text>{user?.email ?? '-'}</Text>
-                <br />
-                <Text type="secondary">
-                  {user?.username ?? 'admin'} · {toDisplayRole(user?.role)}
-                </Text>
-              </div>
+          <div className="app-header-left">
+            <Space size={10} className="app-header-controls">
+              <Button
+                type="text"
+                icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                onClick={() => setCollapsed((prev) => !prev)}
+                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              />
+              <CommandPaletteTrigger onOpen={openPalette} />
             </Space>
-          </Dropdown>
+            <Space size={8} className="app-header-status">
+              <Tag color={envColor}>{environment}</Tag>
+              <Tag color={isAuthServiceUnavailable ? 'gold' : 'green'}>
+                {isAuthServiceUnavailable
+                  ? 'Auth integration degraded'
+                  : 'Auth integration healthy'}
+              </Tag>
+            </Space>
+          </div>
+
+          <HeaderUserMenu
+            user={user}
+            onOpenProfile={openMyProfile}
+            onOpenSettings={openSettings}
+            onLogout={logout}
+          />
         </Header>
         <Content className="app-content">
           <SystemDegradedBanner
@@ -309,6 +243,11 @@ export const AppLayout = () => {
           <Breadcrumb items={breadcrumbItems} style={{ marginBottom: 16 }} />
           <Outlet />
         </Content>
+        <CommandPalette
+          open={isCommandPaletteOpen}
+          onClose={closePalette}
+          items={commandPaletteItems}
+        />
       </Layout>
     </Layout>
   );
