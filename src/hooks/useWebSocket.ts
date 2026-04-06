@@ -33,6 +33,8 @@ import {
 import { logMessageDebug } from "../utils/messageDebug";
 import { buildMessageCorrelationKey } from "../utils/messageIdentity";
 import {
+  emitFriendshipRealtimeDetail,
+  requestFriendshipResync,
   registerChatEvents,
   registerConnectionEvents,
   registerConversationEvents,
@@ -40,6 +42,7 @@ import {
   registerGroupEvents,
   registerPresenceEvents,
   registerSyncEvents,
+  toFriendshipRealtimeDetail,
 } from "../features/chat/realtime";
 import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
 
@@ -632,6 +635,7 @@ export const useWebSocket = (
         void fetchConversations().catch(() => {
           // no-op: best effort sidebar resync
         });
+        requestFriendshipResync("socket_reconnect");
       }
 
       joinedRoomsRef.current.forEach((roomId) => {
@@ -919,18 +923,23 @@ export const useWebSocket = (
     });
     unsubscribersRef.current.push(unsubscribeConversationEvents);
 
-    const handleFriendRequestNew = () => {
-      notifySidebarState("friend:updated", { source: "socket" });
-    };
+    const handleFriendshipEvent = (eventType: string, data: unknown) => {
+      const detail = toFriendshipRealtimeDetail(eventType, data);
+      const status = detail.status;
 
-    const handleFriendRequestUpdated = () => {
-      notifySidebarState("friend:updated", { source: "socket" });
-    };
+      emitFriendshipRealtimeDetail(detail);
+      notifySidebarState("friendship:updated", {
+        source: "socket",
+        eventType: detail.eventType,
+        status,
+      });
+      // Backward compatibility for views still listening to the old sidebar event.
+      notifySidebarState("friend:updated", {
+        source: "socket",
+        eventType: detail.eventType,
+        status,
+      });
 
-    const handleFriendStatusChanged = (data: unknown) => {
-      const payload = asRecord(data);
-      const status = asString(payload?.status);
-      notifySidebarState("friend:updated", { source: "socket", status });
       if (status === "blocked" || status === "canceled") {
         notifyRoomInline("chat:permission:updated", {
           source: "friendship",
@@ -940,9 +949,15 @@ export const useWebSocket = (
     };
 
     const unsubscribeFriendshipEvents = registerFriendshipEvents(socket, {
-      onFriendRequestNew: handleFriendRequestNew,
-      onFriendRequestUpdated: handleFriendRequestUpdated,
-      onFriendStatusChanged: handleFriendStatusChanged,
+      onFriendshipRequestCreated: (data) =>
+        handleFriendshipEvent(WebSocketEvents.FRIENDSHIP_REQUEST_CREATED, data),
+      onFriendshipRequestUpdated: (data) =>
+        handleFriendshipEvent(WebSocketEvents.FRIENDSHIP_REQUEST_UPDATED, data),
+      onFriendshipRelationUpdated: (data) =>
+        handleFriendshipEvent(
+          WebSocketEvents.FRIENDSHIP_RELATION_UPDATED,
+          data,
+        ),
     });
     unsubscribersRef.current.push(unsubscribeFriendshipEvents);
 

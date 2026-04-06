@@ -6,9 +6,9 @@ import type {
 } from "../types";
 
 interface FriendshipEventHandlers {
-  onFriendRequestNew?: RealtimeEventHandler;
-  onFriendRequestUpdated?: RealtimeEventHandler;
-  onFriendStatusChanged?: RealtimeEventHandler;
+  onFriendshipRequestCreated?: RealtimeEventHandler;
+  onFriendshipRequestUpdated?: RealtimeEventHandler;
+  onFriendshipRelationUpdated?: RealtimeEventHandler;
 }
 
 export const registerFriendshipEvents = (
@@ -34,14 +34,31 @@ export const registerFriendshipEvents = (
     }
   };
 
-  register(WebSocketEvents.FRIEND_REQUEST_NEW, handlers.onFriendRequestNew);
+  register(
+    WebSocketEvents.FRIENDSHIP_REQUEST_CREATED,
+    handlers.onFriendshipRequestCreated,
+  );
+  register(
+    WebSocketEvents.FRIEND_REQUEST_NEW,
+    handlers.onFriendshipRequestCreated,
+  );
+
+  register(
+    WebSocketEvents.FRIENDSHIP_REQUEST_UPDATED,
+    handlers.onFriendshipRequestUpdated,
+  );
   register(
     WebSocketEvents.FRIEND_REQUEST_UPDATED,
-    handlers.onFriendRequestUpdated,
+    handlers.onFriendshipRequestUpdated,
+  );
+
+  register(
+    WebSocketEvents.FRIENDSHIP_RELATION_UPDATED,
+    handlers.onFriendshipRelationUpdated,
   );
   register(
     WebSocketEvents.FRIEND_STATUS_CHANGED,
-    handlers.onFriendStatusChanged,
+    handlers.onFriendshipRelationUpdated,
   );
 
   return () => {

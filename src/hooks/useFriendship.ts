@@ -3,8 +3,9 @@
  * Friendship directory driven by backend relation DTO contract.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  ApiResponse,
   FriendshipActionResult,
   FriendshipActorRole,
   FriendshipCapabilitiesDto,
@@ -13,6 +14,11 @@ import type {
 import { friendshipApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import type { User } from "../stores/authStore";
+import {
+  requestFriendshipResync,
+  subscribeFriendshipRealtime,
+  subscribeFriendshipResync,
+} from "../features/chat/realtime";
 
 export type FriendshipStatusType = FriendshipRelationDto["status"];
 
@@ -241,9 +247,117 @@ const toBlockedRecord = (
   };
 };
 
-const emitFriendUpdated = (): void => {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent("friend:updated"));
+const asRelationDto = (value: unknown): FriendshipRelationDto | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.relationId === "string" &&
+    typeof record.status === "string" &&
+    record.requester !== null &&
+    record.addressee !== null
+  ) {
+    return record as unknown as FriendshipRelationDto;
+  }
+
+  return null;
+};
+
+const extractWriteRelation = (
+  payload: unknown,
+): FriendshipRelationDto | null => {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  const directRelation = asRelationDto(record.friendship);
+  if (directRelation) {
+    return directRelation;
+  }
+
+  if (record.data && typeof record.data === "object") {
+    const nested = record.data as Record<string, unknown>;
+    const nestedRelation = asRelationDto(nested.friendship);
+    if (nestedRelation) {
+      return nestedRelation;
+    }
+  }
+
+  return asRelationDto(payload);
+};
+
+interface FriendshipDirectorySnapshot {
+  friends: FriendRecord[];
+  incomingRequests: FriendRequest[];
+  sentRequests: FriendRequest[];
+  blockedUsers: BlockedUser[];
+  pendingCount: number;
+}
+
+const removeByRelationId = <T extends { relationId: string }>(
+  rows: T[],
+  relationId: string,
+): T[] => rows.filter((item) => item.relationId !== relationId);
+
+const upsertFront = <T extends { relationId: string }>(
+  rows: T[],
+  nextRow: T,
+): T[] => {
+  return [nextRow, ...removeByRelationId(rows, nextRow.relationId)];
+};
+
+export const applyRelationToSnapshot = (
+  snapshot: FriendshipDirectorySnapshot,
+  relation: FriendshipRelationDto,
+): FriendshipDirectorySnapshot => {
+  const next: FriendshipDirectorySnapshot = {
+    friends: removeByRelationId(snapshot.friends, relation.relationId),
+    incomingRequests: removeByRelationId(
+      snapshot.incomingRequests,
+      relation.relationId,
+    ),
+    sentRequests: removeByRelationId(
+      snapshot.sentRequests,
+      relation.relationId,
+    ),
+    blockedUsers: removeByRelationId(
+      snapshot.blockedUsers,
+      relation.relationId,
+    ),
+    pendingCount: snapshot.pendingCount,
+  };
+
+  if (relation.status === "accepted") {
+    const friend = toFriendRecord(relation);
+    if (friend) {
+      next.friends = upsertFront(next.friends, friend);
+    }
+  }
+
+  if (relation.status === "blocked") {
+    const blockedUser = toBlockedRecord(relation);
+    if (blockedUser) {
+      next.blockedUsers = upsertFront(next.blockedUsers, blockedUser);
+    }
+  }
+
+  if (relation.status === "pending") {
+    const request = toRequestRecord(relation);
+    if (request) {
+      if (relation.actorRole === "addressee") {
+        next.incomingRequests = upsertFront(next.incomingRequests, request);
+      }
+      if (relation.actorRole === "requester") {
+        next.sentRequests = upsertFront(next.sentRequests, request);
+      }
+    }
+  }
+
+  next.pendingCount = next.incomingRequests.length;
+  return next;
 };
 
 interface DeriveRelationshipStateInput {
@@ -326,6 +440,38 @@ export const useFriendship = (): UseFriendshipReturn => {
   const [pendingCount, setPendingCount] = useState(0);
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [isBlockedLoading, setIsBlockedLoading] = useState(false);
+  const resyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const snapshotRef = useRef<FriendshipDirectorySnapshot>({
+    friends: [],
+    incomingRequests: [],
+    sentRequests: [],
+    blockedUsers: [],
+    pendingCount: 0,
+  });
+
+  const syncSnapshot = useCallback(
+    (nextSnapshot: FriendshipDirectorySnapshot) => {
+      snapshotRef.current = nextSnapshot;
+      setFriends(nextSnapshot.friends);
+      setIncomingRequests(nextSnapshot.incomingRequests);
+      setSentRequests(nextSnapshot.sentRequests);
+      setBlockedUsers(nextSnapshot.blockedUsers);
+      setPendingCount(nextSnapshot.pendingCount);
+    },
+    [],
+  );
+
+  const applyRelationSnapshot = useCallback(
+    (relation: FriendshipRelationDto) => {
+      const nextSnapshot = applyRelationToSnapshot(
+        snapshotRef.current,
+        relation,
+      );
+      syncSnapshot(nextSnapshot);
+    },
+    [syncSnapshot],
+  );
 
   const fetchFriends = useCallback(async () => {
     setIsFriendsLoading(true);
@@ -335,13 +481,20 @@ export const useFriendship = (): UseFriendshipReturn => {
       const list = asRelations(payload)
         .map((relation) => toFriendRecord(relation))
         .filter((item): item is FriendRecord => item !== null);
-      setFriends(list);
+
+      syncSnapshot({
+        ...snapshotRef.current,
+        friends: list,
+      });
     } catch {
-      setFriends([]);
+      syncSnapshot({
+        ...snapshotRef.current,
+        friends: [],
+      });
     } finally {
       setIsFriendsLoading(false);
     }
-  }, []);
+  }, [syncSnapshot]);
 
   const fetchIncomingRequests = useCallback(async () => {
     setIsIncomingLoading(true);
@@ -351,15 +504,22 @@ export const useFriendship = (): UseFriendshipReturn => {
       const list = asRelations(payload)
         .map((relation) => toRequestRecord(relation))
         .filter((item): item is FriendRequest => item !== null);
-      setIncomingRequests(list);
-      setPendingCount(list.length);
+
+      syncSnapshot({
+        ...snapshotRef.current,
+        incomingRequests: list,
+        pendingCount: list.length,
+      });
     } catch {
-      setIncomingRequests([]);
-      setPendingCount(0);
+      syncSnapshot({
+        ...snapshotRef.current,
+        incomingRequests: [],
+        pendingCount: 0,
+      });
     } finally {
       setIsIncomingLoading(false);
     }
-  }, []);
+  }, [syncSnapshot]);
 
   const fetchSentRequests = useCallback(async () => {
     setIsSentLoading(true);
@@ -369,13 +529,20 @@ export const useFriendship = (): UseFriendshipReturn => {
       const list = asRelations(payload)
         .map((relation) => toRequestRecord(relation))
         .filter((item): item is FriendRequest => item !== null);
-      setSentRequests(list);
+
+      syncSnapshot({
+        ...snapshotRef.current,
+        sentRequests: list,
+      });
     } catch {
-      setSentRequests([]);
+      syncSnapshot({
+        ...snapshotRef.current,
+        sentRequests: [],
+      });
     } finally {
       setIsSentLoading(false);
     }
-  }, []);
+  }, [syncSnapshot]);
 
   const fetchPendingCount = useCallback(async () => {
     try {
@@ -387,11 +554,15 @@ export const useFriendship = (): UseFriendshipReturn => {
         typeof (payload as { count?: unknown }).count === "number"
           ? (payload as { count: number }).count
           : 0;
-      setPendingCount(count);
+
+      syncSnapshot({
+        ...snapshotRef.current,
+        pendingCount: count,
+      });
     } catch {
-      setPendingCount((current) => current);
+      // keep last known pending count on network errors
     }
-  }, []);
+  }, [syncSnapshot]);
 
   const fetchBlockedUsers = useCallback(async () => {
     setIsBlockedLoading(true);
@@ -401,13 +572,20 @@ export const useFriendship = (): UseFriendshipReturn => {
       const list = asRelations(payload)
         .map((relation) => toBlockedRecord(relation))
         .filter((item): item is BlockedUser => item !== null);
-      setBlockedUsers(list);
+
+      syncSnapshot({
+        ...snapshotRef.current,
+        blockedUsers: list,
+      });
     } catch {
-      setBlockedUsers([]);
+      syncSnapshot({
+        ...snapshotRef.current,
+        blockedUsers: [],
+      });
     } finally {
       setIsBlockedLoading(false);
     }
-  }, []);
+  }, [syncSnapshot]);
 
   const refreshDirectory = useCallback(async () => {
     await Promise.all([
@@ -425,102 +603,140 @@ export const useFriendship = (): UseFriendshipReturn => {
     fetchSentRequests,
   ]);
 
-  const sendFriendRequest = useCallback(
-    async (userId: string): Promise<boolean> => {
+  const scheduleDirectoryResync = useCallback(
+    (
+      reason:
+        | "missing_relation_payload"
+        | "socket_reconnect"
+        | "explicit_refresh",
+    ) => {
+      if (resyncTimerRef.current) {
+        clearTimeout(resyncTimerRef.current);
+      }
+
+      resyncTimerRef.current = setTimeout(
+        () => {
+          void refreshDirectory();
+        },
+        reason === "socket_reconnect" ? 120 : 180,
+      );
+    },
+    [refreshDirectory],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (resyncTimerRef.current) {
+        clearTimeout(resyncTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const unsubscribeRealtime = subscribeFriendshipRealtime((detail) => {
+      if (detail.relation) {
+        applyRelationSnapshot(detail.relation);
+        return;
+      }
+
+      scheduleDirectoryResync("missing_relation_payload");
+    });
+
+    const unsubscribeResync = subscribeFriendshipResync((detail) => {
+      scheduleDirectoryResync(detail.reason);
+    });
+
+    return () => {
+      unsubscribeRealtime();
+      unsubscribeResync();
+    };
+  }, [applyRelationSnapshot, scheduleDirectoryResync]);
+
+  const handleFriendshipWrite = useCallback(
+    async (
+      request: () => Promise<ApiResponse<unknown>>,
+      fallbackResyncReason:
+        | "missing_relation_payload"
+        | "socket_reconnect"
+        | "explicit_refresh" = "explicit_refresh",
+    ): Promise<boolean> => {
       try {
-        await friendshipApi.sendFriendRequest(userId);
-        await refreshDirectory();
-        emitFriendUpdated();
+        const response = await request();
+        const payload = unwrapApiSuccess(response);
+        const relation = extractWriteRelation(payload);
+
+        if (relation) {
+          applyRelationSnapshot(relation);
+        } else {
+          requestFriendshipResync(fallbackResyncReason);
+          scheduleDirectoryResync(fallbackResyncReason);
+        }
+
         return true;
       } catch {
         return false;
       }
     },
-    [refreshDirectory],
+    [applyRelationSnapshot, scheduleDirectoryResync],
+  );
+
+  const sendFriendRequest = useCallback(
+    async (userId: string): Promise<boolean> => {
+      return handleFriendshipWrite(() =>
+        friendshipApi.sendFriendRequest(userId),
+      );
+    },
+    [handleFriendshipWrite],
   );
 
   const acceptFriendRequest = useCallback(
     async (requestId: string): Promise<boolean> => {
-      try {
-        await friendshipApi.acceptFriendRequest(requestId);
-        await refreshDirectory();
-        emitFriendUpdated();
-        return true;
-      } catch {
-        return false;
-      }
+      return handleFriendshipWrite(() =>
+        friendshipApi.acceptFriendRequest(requestId),
+      );
     },
-    [refreshDirectory],
+    [handleFriendshipWrite],
   );
 
   const rejectFriendRequest = useCallback(
     async (requestId: string): Promise<boolean> => {
-      try {
-        await friendshipApi.rejectFriendRequest(requestId);
-        await refreshDirectory();
-        emitFriendUpdated();
-        return true;
-      } catch {
-        return false;
-      }
+      return handleFriendshipWrite(() =>
+        friendshipApi.rejectFriendRequest(requestId),
+      );
     },
-    [refreshDirectory],
+    [handleFriendshipWrite],
   );
 
   const cancelFriendRequest = useCallback(
     async (requestId: string): Promise<boolean> => {
-      try {
-        await friendshipApi.cancelFriendRequest(requestId);
-        await refreshDirectory();
-        emitFriendUpdated();
-        return true;
-      } catch {
-        return false;
-      }
+      return handleFriendshipWrite(() =>
+        friendshipApi.cancelFriendRequest(requestId),
+      );
     },
-    [refreshDirectory],
+    [handleFriendshipWrite],
   );
 
   const removeFriend = useCallback(
     async (friendshipId: string): Promise<boolean> => {
-      try {
-        await friendshipApi.removeFriend(friendshipId);
-        await refreshDirectory();
-        emitFriendUpdated();
-        return true;
-      } catch {
-        return false;
-      }
+      return handleFriendshipWrite(() =>
+        friendshipApi.removeFriend(friendshipId),
+      );
     },
-    [refreshDirectory],
+    [handleFriendshipWrite],
   );
 
   const blockUser = useCallback(
     async (userId: string): Promise<boolean> => {
-      try {
-        await friendshipApi.blockUser(userId);
-        await refreshDirectory();
-        emitFriendUpdated();
-        return true;
-      } catch {
-        return false;
-      }
+      return handleFriendshipWrite(() => friendshipApi.blockUser(userId));
     },
-    [refreshDirectory],
+    [handleFriendshipWrite],
   );
 
   const unblockUser = useCallback(
     async (userId: string): Promise<boolean> => {
-      try {
-        await friendshipApi.unblockUser(userId);
-        await refreshDirectory();
-        emitFriendUpdated();
-        return true;
-      } catch {
-        return false;
-      }
+      return handleFriendshipWrite(() => friendshipApi.unblockUser(userId));
     },
-    [refreshDirectory],
+    [handleFriendshipWrite],
   );
 
   const getRelationshipState = useCallback(

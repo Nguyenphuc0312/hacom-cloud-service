@@ -283,19 +283,6 @@ export const FriendsPage: React.FC = () => {
   }, [refreshDirectory]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const handler = () => {
-      void refreshDirectory();
-    };
-
-    window.addEventListener("friend:updated", handler);
-    return () => {
-      window.removeEventListener("friend:updated", handler);
-    };
-  }, [refreshDirectory]);
-
-  useEffect(() => {
     const nextQuery = searchParams.get("q") || "";
     setQuery((current) => (current === nextQuery ? current : nextQuery));
     if (nextQuery.trim().length >= 2) {

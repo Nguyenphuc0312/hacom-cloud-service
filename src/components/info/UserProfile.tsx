@@ -233,19 +233,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     void refreshDirectory();
   }, [refreshDirectory]);
 
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const handler = () => {
-      void refreshDirectory();
-    };
-
-    window.addEventListener("friend:updated", handler);
-    return () => {
-      window.removeEventListener("friend:updated", handler);
-    };
-  }, [refreshDirectory]);
-
   const displayName = formatDisplayName(user);
   const username = user?.username ? `@${user.username}` : null;
   const effectiveStatus = livePresence

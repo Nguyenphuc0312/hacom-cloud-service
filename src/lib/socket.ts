@@ -705,6 +705,9 @@ export const WebSocketEvents = {
   MESSAGE_READ: WsEventNames.MESSAGE_READ,
   MEMBER_UPDATED: WsEventNames.MEMBER_UPDATED,
   CONVERSATION_DELETED: WsEventNames.CONVERSATION_DELETED,
+  FRIENDSHIP_REQUEST_CREATED: "friendship:request:created",
+  FRIENDSHIP_REQUEST_UPDATED: "friendship:request:updated",
+  FRIENDSHIP_RELATION_UPDATED: "friendship:relation:updated",
   FRIEND_REQUEST_NEW: WsEventNames.FRIEND_REQUEST_NEW,
   FRIEND_REQUEST_UPDATED: WsEventNames.FRIEND_REQUEST_UPDATED,
   FRIEND_STATUS_CHANGED: WsEventNames.FRIEND_STATUS_CHANGED,
@@ -734,6 +737,3 @@ export const WebSocketEvents = {
 } as const;
 
 export default wsManager;
-
-
-

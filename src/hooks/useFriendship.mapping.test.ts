@@ -5,6 +5,7 @@ import type {
 } from "@hacom/chat-shared-types";
 import { FriendshipStatus } from "@hacom/chat-shared-types";
 import {
+  applyRelationToSnapshot,
   deriveRelationshipState,
   mapRelationToFriendRecord,
   mapRelationToRequestRecord,
@@ -158,5 +159,85 @@ describe("useFriendship contract mappers", () => {
     const request = mapRelationToRequestRecord(legacyPayload);
 
     expect(request).toBeNull();
+  });
+
+  it("applies realtime snapshot transition pending -> accepted", () => {
+    const pendingRelation = makeRelation({
+      relationId: "fr-live-1",
+      status: FriendshipStatus.PENDING,
+      actorRole: "addressee",
+      capabilities: baseCapabilities({ canAccept: true, canDecline: true }),
+    });
+
+    const acceptedRelation = makeRelation({
+      relationId: "fr-live-1",
+      status: FriendshipStatus.ACCEPTED,
+      actorRole: "friend",
+      capabilities: baseCapabilities({ canMessage: true, canUnfriend: true }),
+    });
+
+    const pendingSnapshot = applyRelationToSnapshot(
+      {
+        friends: [],
+        incomingRequests: [],
+        sentRequests: [],
+        blockedUsers: [],
+        pendingCount: 0,
+      },
+      pendingRelation,
+    );
+
+    expect(pendingSnapshot.incomingRequests).toHaveLength(1);
+    expect(pendingSnapshot.pendingCount).toBe(1);
+    expect(pendingSnapshot.friends).toHaveLength(0);
+
+    const acceptedSnapshot = applyRelationToSnapshot(
+      pendingSnapshot,
+      acceptedRelation,
+    );
+
+    expect(acceptedSnapshot.incomingRequests).toHaveLength(0);
+    expect(acceptedSnapshot.pendingCount).toBe(0);
+    expect(acceptedSnapshot.friends).toHaveLength(1);
+    expect(acceptedSnapshot.friends[0]?.relationStatus).toBe(
+      FriendshipStatus.ACCEPTED,
+    );
+  });
+
+  it("applies realtime snapshot transition accepted -> blocked", () => {
+    const acceptedRelation = makeRelation({
+      relationId: "fr-live-2",
+      status: FriendshipStatus.ACCEPTED,
+      actorRole: "friend",
+      capabilities: baseCapabilities({ canMessage: true, canUnfriend: true }),
+    });
+    const blockedRelation = makeRelation({
+      relationId: "fr-live-2",
+      status: FriendshipStatus.BLOCKED,
+      actorRole: "requester",
+      capabilities: baseCapabilities({ canUnblock: true }),
+    });
+
+    const acceptedSnapshot = applyRelationToSnapshot(
+      {
+        friends: [],
+        incomingRequests: [],
+        sentRequests: [],
+        blockedUsers: [],
+        pendingCount: 0,
+      },
+      acceptedRelation,
+    );
+
+    const blockedSnapshot = applyRelationToSnapshot(
+      acceptedSnapshot,
+      blockedRelation,
+    );
+
+    expect(blockedSnapshot.friends).toHaveLength(0);
+    expect(blockedSnapshot.blockedUsers).toHaveLength(1);
+    expect(blockedSnapshot.blockedUsers[0]?.relationStatus).toBe(
+      FriendshipStatus.BLOCKED,
+    );
   });
 });
