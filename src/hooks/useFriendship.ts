@@ -1,96 +1,57 @@
 /**
  * @fileoverview useFriendship hook
- * Friendship directory driven by backend relation DTO contract.
+ * Friendship directory backed by a centralized zustand store.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect } from "react";
 import type {
   ApiResponse,
-  FriendshipActionResult,
   FriendshipActorRole,
   FriendshipCapabilitiesDto,
   FriendshipRelationDto,
 } from "@hacom/chat-shared-types";
 import { friendshipApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
-import type { User } from "../stores/authStore";
+import { useAuthStore, type User } from "../stores";
 import {
-  requestFriendshipResync,
-  subscribeFriendshipRealtime,
-  subscribeFriendshipResync,
-} from "../features/chat/realtime";
+  EMPTY_CAPABILITIES,
+  NONE_RELATION_CAPABILITIES,
+  applyRelationToSnapshot,
+  deriveRelationshipState,
+  extractWriteRelation,
+  mapRelationToBlockedRecord,
+  mapRelationToFriendRecord,
+  mapRelationToRequestRecord,
+  removeByRelationId,
+  toFriendshipUser,
+  upsertFront,
+  useFriendshipStore,
+  type BlockedUser,
+  type FriendRecord,
+  type FriendRequest,
+  type FriendshipDirectorySnapshot,
+  type FriendshipStatusType,
+  type RelationshipState,
+} from "../stores/friendshipStore";
 
-export type FriendshipStatusType = FriendshipRelationDto["status"];
-
-export interface FriendRequest {
-  relationId: string;
-  createdAt: string;
-  updatedAt: string;
-  requester: User;
-  addressee: User;
-  friend: User | null;
-  status: FriendshipStatusType;
-  actorRole: FriendshipActorRole;
-  capabilities: FriendshipCapabilitiesDto;
-  actionResult: FriendshipActionResult;
-}
-
-export interface FriendRecord extends User {
-  relationId: string;
-  capabilities: FriendshipCapabilitiesDto;
-  actorRole: FriendshipActorRole;
-  relationStatus: FriendshipStatusType;
-  actionResult: FriendshipActionResult;
-}
-
-export interface BlockedUser extends User {
-  relationId: string;
-  capabilities: FriendshipCapabilitiesDto;
-  actorRole: FriendshipActorRole;
-  relationStatus: FriendshipStatusType;
-  actionResult: FriendshipActionResult;
-}
-
-const EMPTY_CAPABILITIES: FriendshipCapabilitiesDto = {
-  canSendRequest: false,
-  canAccept: false,
-  canDecline: false,
-  canCancel: false,
-  canUnfriend: false,
-  canBlock: false,
-  canUnblock: false,
-  canMessage: false,
+export type {
+  BlockedUser,
+  FriendRecord,
+  FriendRequest,
+  FriendshipStatusType,
+  RelationshipState,
 };
 
-const NONE_RELATION_CAPABILITIES: FriendshipCapabilitiesDto = {
-  ...EMPTY_CAPABILITIES,
-  canSendRequest: true,
-  canBlock: true,
+export {
+  EMPTY_CAPABILITIES,
+  NONE_RELATION_CAPABILITIES,
+  toFriendshipUser,
+  mapRelationToFriendRecord,
+  mapRelationToRequestRecord,
+  mapRelationToBlockedRecord,
+  applyRelationToSnapshot,
+  deriveRelationshipState,
 };
-
-export type RelationshipState =
-  | { kind: "self"; capabilities: FriendshipCapabilitiesDto }
-  | { kind: "not_friend"; capabilities: FriendshipCapabilitiesDto }
-  | {
-      kind: "outgoing_request";
-      requestId: string;
-      capabilities: FriendshipCapabilitiesDto;
-    }
-  | {
-      kind: "incoming_request";
-      requestId: string;
-      capabilities: FriendshipCapabilitiesDto;
-    }
-  | {
-      kind: "friend";
-      friendshipId: string;
-      capabilities: FriendshipCapabilitiesDto;
-    }
-  | {
-      kind: "blocked";
-      friendshipId: string;
-      capabilities: FriendshipCapabilitiesDto;
-    };
 
 interface UseFriendshipReturn {
   friends: FriendRecord[];
@@ -135,608 +96,399 @@ interface UseFriendshipReturn {
   }>;
 }
 
-export const toFriendshipUser = (
-  user:
-    | FriendshipRelationDto["requester"]
-    | FriendshipRelationDto["friend"]
-    | null,
-): User | null => {
+type WriteResyncReason =
+  | "socket_reconnect"
+  | "missing_relation_payload"
+  | "explicit_refresh";
+
+const nowIso = (): string => new Date().toISOString();
+
+const nowMs = (): number => {
+  if (
+    typeof performance !== "undefined" &&
+    typeof performance.now === "function"
+  ) {
+    return performance.now();
+  }
+
+  return Date.now();
+};
+
+const buildActionKey = (action: string, targetId: string): string =>
+  `${action}:${targetId}`;
+
+const toAuthUser = (
+  user: ReturnType<typeof useAuthStore.getState>["user"],
+): User => {
   if (!user) {
-    return null;
+    return {
+      id: "me",
+      username: "me",
+      status: "offline",
+    };
   }
 
   return {
     id: user.id,
-    username: user.username,
-    firstName: user.displayName ?? undefined,
-    lastName: undefined,
-    avatar: user.avatarUrl ?? undefined,
-    status: "offline",
+    username: user.username ?? user.email ?? user.phone ?? user.id,
+    firstName: user.firstName ?? undefined,
+    lastName: user.lastName ?? undefined,
+    avatar: user.avatar ?? undefined,
+    status: user.status ?? "offline",
   };
 };
 
-const isRelationArrayPayload = (
-  payload: unknown,
-): payload is FriendshipRelationDto[] => {
-  return Array.isArray(payload);
-};
+const toUnknownUser = (userId: string): User => ({
+  id: userId,
+  username: userId,
+  status: "offline",
+});
 
-const asRelations = (payload: unknown): FriendshipRelationDto[] => {
-  if (isRelationArrayPayload(payload)) {
-    return payload;
-  }
-
-  if (!payload || typeof payload !== "object") {
-    return [];
-  }
-
-  const record = payload as Record<string, unknown>;
-  if (Array.isArray(record.data)) {
-    return record.data as FriendshipRelationDto[];
-  }
-
-  if (
-    record.data &&
-    typeof record.data === "object" &&
-    Array.isArray((record.data as Record<string, unknown>).data)
-  ) {
-    return (record.data as Record<string, unknown>)
-      .data as FriendshipRelationDto[];
-  }
-
-  return [];
-};
-
-const toFriendRecord = (
-  relation: FriendshipRelationDto,
-): FriendRecord | null => {
-  const friend = toFriendshipUser(relation.friend);
-  if (!friend) {
-    return null;
-  }
-
-  return {
-    ...friend,
-    relationId: relation.relationId,
-    capabilities: relation.capabilities,
-    actorRole: relation.actorRole,
-    relationStatus: relation.status,
-    actionResult: relation.actionResult,
-  };
-};
-
-const toRequestRecord = (
-  relation: FriendshipRelationDto,
-): FriendRequest | null => {
-  const requester = toFriendshipUser(relation.requester);
-  const addressee = toFriendshipUser(relation.addressee);
-
-  if (!requester || !addressee) {
-    return null;
-  }
-
-  return {
-    relationId: relation.relationId,
-    createdAt: relation.createdAt,
-    updatedAt: relation.updatedAt,
-    requester,
-    addressee,
-    friend: toFriendshipUser(relation.friend),
-    status: relation.status,
-    actorRole: relation.actorRole,
-    capabilities: relation.capabilities,
-    actionResult: relation.actionResult,
-  };
-};
-
-const toBlockedRecord = (
-  relation: FriendshipRelationDto,
-): BlockedUser | null => {
-  const friend = toFriendshipUser(relation.friend);
-  if (!friend) {
-    return null;
-  }
-
-  return {
-    ...friend,
-    relationId: relation.relationId,
-    capabilities: relation.capabilities,
-    actorRole: relation.actorRole,
-    relationStatus: relation.status,
-    actionResult: relation.actionResult,
-  };
-};
-
-const asRelationDto = (value: unknown): FriendshipRelationDto | null => {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const record = value as Record<string, unknown>;
-  if (
-    typeof record.relationId === "string" &&
-    typeof record.status === "string" &&
-    record.requester !== null &&
-    record.addressee !== null
-  ) {
-    return record as unknown as FriendshipRelationDto;
-  }
-
-  return null;
-};
-
-const extractWriteRelation = (
-  payload: unknown,
-): FriendshipRelationDto | null => {
-  if (!payload || typeof payload !== "object") {
-    return null;
-  }
-
-  const record = payload as Record<string, unknown>;
-  const directRelation = asRelationDto(record.friendship);
-  if (directRelation) {
-    return directRelation;
-  }
-
-  if (record.data && typeof record.data === "object") {
-    const nested = record.data as Record<string, unknown>;
-    const nestedRelation = asRelationDto(nested.friendship);
-    if (nestedRelation) {
-      return nestedRelation;
-    }
-  }
-
-  return asRelationDto(payload);
-};
-
-interface FriendshipDirectorySnapshot {
-  friends: FriendRecord[];
-  incomingRequests: FriendRequest[];
-  sentRequests: FriendRequest[];
-  blockedUsers: BlockedUser[];
-  pendingCount: number;
-}
-
-const removeByRelationId = <T extends { relationId: string }>(
-  rows: T[],
-  relationId: string,
-): T[] => rows.filter((item) => item.relationId !== relationId);
-
-const upsertFront = <T extends { relationId: string }>(
-  rows: T[],
-  nextRow: T,
-): T[] => {
-  return [nextRow, ...removeByRelationId(rows, nextRow.relationId)];
-};
-
-export const applyRelationToSnapshot = (
+const optimisticSendRequestSnapshot = (
   snapshot: FriendshipDirectorySnapshot,
-  relation: FriendshipRelationDto,
+  userId: string,
+  currentUser: User,
 ): FriendshipDirectorySnapshot => {
-  const next: FriendshipDirectorySnapshot = {
-    friends: removeByRelationId(snapshot.friends, relation.relationId),
-    incomingRequests: removeByRelationId(
-      snapshot.incomingRequests,
-      relation.relationId,
-    ),
-    sentRequests: removeByRelationId(
-      snapshot.sentRequests,
-      relation.relationId,
-    ),
-    blockedUsers: removeByRelationId(
-      snapshot.blockedUsers,
-      relation.relationId,
-    ),
-    pendingCount: snapshot.pendingCount,
+  const timestamp = nowIso();
+  const relationId = `optimistic:request:${userId}:${Date.now()}`;
+
+  const optimisticRequest: FriendRequest = {
+    relationId,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    requester: currentUser,
+    addressee: toUnknownUser(userId),
+    friend: null,
+    status: "pending" as FriendshipStatusType,
+    actorRole: "requester",
+    capabilities: {
+      ...EMPTY_CAPABILITIES,
+      canCancel: true,
+      canBlock: true,
+    },
+    actionResult: "created",
   };
 
-  if (relation.status === "accepted") {
-    const friend = toFriendRecord(relation);
-    if (friend) {
-      next.friends = upsertFront(next.friends, friend);
-    }
-  }
-
-  if (relation.status === "blocked") {
-    const blockedUser = toBlockedRecord(relation);
-    if (blockedUser) {
-      next.blockedUsers = upsertFront(next.blockedUsers, blockedUser);
-    }
-  }
-
-  if (relation.status === "pending") {
-    const request = toRequestRecord(relation);
-    if (request) {
-      if (relation.actorRole === "addressee") {
-        next.incomingRequests = upsertFront(next.incomingRequests, request);
-      }
-      if (relation.actorRole === "requester") {
-        next.sentRequests = upsertFront(next.sentRequests, request);
-      }
-    }
-  }
-
-  next.pendingCount = next.incomingRequests.length;
-  return next;
+  return {
+    ...snapshot,
+    sentRequests: upsertFront(snapshot.sentRequests, optimisticRequest),
+  };
 };
 
-interface DeriveRelationshipStateInput {
-  userId: string;
-  currentUserId?: string | null;
-  blockedUsers: BlockedUser[];
-  friends: FriendRecord[];
-  incomingRequests: FriendRequest[];
-  sentRequests: FriendRequest[];
-}
+const optimisticAcceptSnapshot = (
+  snapshot: FriendshipDirectorySnapshot,
+  requestId: string,
+): FriendshipDirectorySnapshot => {
+  const incoming = snapshot.incomingRequests.find(
+    (item) => item.relationId === requestId,
+  );
+  const nextIncoming = removeByRelationId(snapshot.incomingRequests, requestId);
 
-export const deriveRelationshipState = (
-  input: DeriveRelationshipStateInput,
-): RelationshipState => {
-  const {
-    userId,
-    currentUserId,
-    blockedUsers,
-    friends,
-    incomingRequests,
-    sentRequests,
-  } = input;
+  let nextFriends = snapshot.friends;
 
-  if (currentUserId && userId === currentUserId) {
-    return { kind: "self", capabilities: EMPTY_CAPABILITIES };
-  }
-
-  const blocked = blockedUsers.find((item) => item.id === userId);
-  if (blocked) {
-    return {
-      kind: "blocked",
-      friendshipId: blocked.relationId,
-      capabilities: blocked.capabilities,
+  if (incoming) {
+    const friendRecord: FriendRecord = {
+      ...incoming.requester,
+      relationId: incoming.relationId,
+      capabilities: {
+        ...incoming.capabilities,
+        canMessage: true,
+        canUnfriend: true,
+      },
+      actorRole: "friend",
+      relationStatus: "accepted" as FriendshipStatusType,
+      actionResult: "accepted",
+      createdAt: incoming.createdAt,
+      updatedAt: nowIso(),
     };
+
+    nextFriends = upsertFront(snapshot.friends, friendRecord);
   }
 
-  const friend = friends.find((item) => item.id === userId);
-  if (friend) {
-    return {
-      kind: "friend",
-      friendshipId: friend.relationId,
-      capabilities: friend.capabilities,
-    };
-  }
+  return {
+    ...snapshot,
+    incomingRequests: nextIncoming,
+    friends: nextFriends,
+    pendingCount: nextIncoming.length,
+  };
+};
 
-  const incoming = incomingRequests.find(
+const optimisticRejectSnapshot = (
+  snapshot: FriendshipDirectorySnapshot,
+  requestId: string,
+): FriendshipDirectorySnapshot => {
+  const nextIncoming = removeByRelationId(snapshot.incomingRequests, requestId);
+
+  return {
+    ...snapshot,
+    incomingRequests: nextIncoming,
+    pendingCount: nextIncoming.length,
+  };
+};
+
+const optimisticCancelSnapshot = (
+  snapshot: FriendshipDirectorySnapshot,
+  requestId: string,
+): FriendshipDirectorySnapshot => {
+  return {
+    ...snapshot,
+    sentRequests: removeByRelationId(snapshot.sentRequests, requestId),
+  };
+};
+
+const optimisticRemoveFriendSnapshot = (
+  snapshot: FriendshipDirectorySnapshot,
+  friendshipId: string,
+): FriendshipDirectorySnapshot => ({
+  ...snapshot,
+  friends: removeByRelationId(snapshot.friends, friendshipId),
+});
+
+const optimisticBlockSnapshot = (
+  snapshot: FriendshipDirectorySnapshot,
+  userId: string,
+): FriendshipDirectorySnapshot => {
+  const timestamp = nowIso();
+  const existingFriend = snapshot.friends.find((item) => item.id === userId);
+  const incomingRequest = snapshot.incomingRequests.find(
     (item) => item.requester.id === userId,
   );
-  if (incoming) {
-    return {
-      kind: "incoming_request",
-      requestId: incoming.relationId,
-      capabilities: incoming.capabilities,
-    };
-  }
+  const sentRequest = snapshot.sentRequests.find(
+    (item) => item.addressee.id === userId,
+  );
 
-  const outgoing = sentRequests.find((item) => item.addressee.id === userId);
-  if (outgoing) {
-    return {
-      kind: "outgoing_request",
-      requestId: outgoing.relationId,
-      capabilities: outgoing.capabilities,
-    };
-  }
+  const relationId =
+    existingFriend?.relationId ??
+    incomingRequest?.relationId ??
+    sentRequest?.relationId ??
+    `optimistic:block:${userId}:${Date.now()}`;
 
-  return { kind: "not_friend", capabilities: NONE_RELATION_CAPABILITIES };
+  const profile =
+    existingFriend ??
+    incomingRequest?.requester ??
+    sentRequest?.addressee ??
+    toUnknownUser(userId);
+
+  const blocked: BlockedUser = {
+    ...profile,
+    relationId,
+    capabilities: {
+      ...EMPTY_CAPABILITIES,
+      canUnblock: true,
+    },
+    actorRole: "requester",
+    relationStatus: "blocked" as FriendshipStatusType,
+    actionResult: "blocked",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+
+  const nextIncoming = snapshot.incomingRequests.filter(
+    (item) => item.requester.id !== userId,
+  );
+
+  return {
+    ...snapshot,
+    friends: snapshot.friends.filter((item) => item.id !== userId),
+    incomingRequests: nextIncoming,
+    sentRequests: snapshot.sentRequests.filter(
+      (item) => item.addressee.id !== userId,
+    ),
+    blockedUsers: upsertFront(snapshot.blockedUsers, blocked),
+    pendingCount: nextIncoming.length,
+  };
 };
 
-export const mapRelationToFriendRecord = toFriendRecord;
-export const mapRelationToRequestRecord = toRequestRecord;
-export const mapRelationToBlockedRecord = toBlockedRecord;
+const optimisticUnblockSnapshot = (
+  snapshot: FriendshipDirectorySnapshot,
+  userId: string,
+): FriendshipDirectorySnapshot => ({
+  ...snapshot,
+  blockedUsers: snapshot.blockedUsers.filter((item) => item.id !== userId),
+});
 
 export const useFriendship = (): UseFriendshipReturn => {
-  const [friends, setFriends] = useState<FriendRecord[]>([]);
-  const [isFriendsLoading, setIsFriendsLoading] = useState(false);
-  const [incomingRequests, setIncomingRequests] = useState<FriendRequest[]>([]);
-  const [isIncomingLoading, setIsIncomingLoading] = useState(false);
-  const [sentRequests, setSentRequests] = useState<FriendRequest[]>([]);
-  const [isSentLoading, setIsSentLoading] = useState(false);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
-  const [isBlockedLoading, setIsBlockedLoading] = useState(false);
-  const resyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const snapshotRef = useRef<FriendshipDirectorySnapshot>({
-    friends: [],
-    incomingRequests: [],
-    sentRequests: [],
-    blockedUsers: [],
-    pendingCount: 0,
-  });
-
-  const syncSnapshot = useCallback(
-    (nextSnapshot: FriendshipDirectorySnapshot) => {
-      snapshotRef.current = nextSnapshot;
-      setFriends(nextSnapshot.friends);
-      setIncomingRequests(nextSnapshot.incomingRequests);
-      setSentRequests(nextSnapshot.sentRequests);
-      setBlockedUsers(nextSnapshot.blockedUsers);
-      setPendingCount(nextSnapshot.pendingCount);
-    },
-    [],
+  const friends = useFriendshipStore((state) => state.friends);
+  const isFriendsLoading = useFriendshipStore(
+    (state) => state.isFriendsLoading,
+  );
+  const fetchFriends = useFriendshipStore((state) => state.fetchFriends);
+  const incomingRequests = useFriendshipStore(
+    (state) => state.incomingRequests,
+  );
+  const isIncomingLoading = useFriendshipStore(
+    (state) => state.isIncomingLoading,
+  );
+  const fetchIncomingRequests = useFriendshipStore(
+    (state) => state.fetchIncomingRequests,
+  );
+  const sentRequests = useFriendshipStore((state) => state.sentRequests);
+  const isSentLoading = useFriendshipStore((state) => state.isSentLoading);
+  const fetchSentRequests = useFriendshipStore(
+    (state) => state.fetchSentRequests,
+  );
+  const pendingCount = useFriendshipStore((state) => state.pendingCount);
+  const fetchPendingCount = useFriendshipStore(
+    (state) => state.fetchPendingCount,
+  );
+  const blockedUsers = useFriendshipStore((state) => state.blockedUsers);
+  const isBlockedLoading = useFriendshipStore(
+    (state) => state.isBlockedLoading,
+  );
+  const fetchBlockedUsers = useFriendshipStore(
+    (state) => state.fetchBlockedUsers,
+  );
+  const hasHydrated = useFriendshipStore((state) => state.hasHydrated);
+  const refreshDirectoryStore = useFriendshipStore(
+    (state) => state.refreshDirectory,
   );
 
-  const applyRelationSnapshot = useCallback(
-    (relation: FriendshipRelationDto) => {
-      const nextSnapshot = applyRelationToSnapshot(
-        snapshotRef.current,
-        relation,
-      );
-      syncSnapshot(nextSnapshot);
-    },
-    [syncSnapshot],
-  );
-
-  const fetchFriends = useCallback(async () => {
-    setIsFriendsLoading(true);
-    try {
-      const response = await friendshipApi.getFriends();
-      const payload = unwrapApiSuccess(response);
-      const list = asRelations(payload)
-        .map((relation) => toFriendRecord(relation))
-        .filter((item): item is FriendRecord => item !== null);
-
-      syncSnapshot({
-        ...snapshotRef.current,
-        friends: list,
-      });
-    } catch {
-      syncSnapshot({
-        ...snapshotRef.current,
-        friends: [],
-      });
-    } finally {
-      setIsFriendsLoading(false);
-    }
-  }, [syncSnapshot]);
-
-  const fetchIncomingRequests = useCallback(async () => {
-    setIsIncomingLoading(true);
-    try {
-      const response = await friendshipApi.getPendingRequests();
-      const payload = unwrapApiSuccess(response);
-      const list = asRelations(payload)
-        .map((relation) => toRequestRecord(relation))
-        .filter((item): item is FriendRequest => item !== null);
-
-      syncSnapshot({
-        ...snapshotRef.current,
-        incomingRequests: list,
-        pendingCount: list.length,
-      });
-    } catch {
-      syncSnapshot({
-        ...snapshotRef.current,
-        incomingRequests: [],
-        pendingCount: 0,
-      });
-    } finally {
-      setIsIncomingLoading(false);
-    }
-  }, [syncSnapshot]);
-
-  const fetchSentRequests = useCallback(async () => {
-    setIsSentLoading(true);
-    try {
-      const response = await friendshipApi.getSentRequests();
-      const payload = unwrapApiSuccess(response);
-      const list = asRelations(payload)
-        .map((relation) => toRequestRecord(relation))
-        .filter((item): item is FriendRequest => item !== null);
-
-      syncSnapshot({
-        ...snapshotRef.current,
-        sentRequests: list,
-      });
-    } catch {
-      syncSnapshot({
-        ...snapshotRef.current,
-        sentRequests: [],
-      });
-    } finally {
-      setIsSentLoading(false);
-    }
-  }, [syncSnapshot]);
-
-  const fetchPendingCount = useCallback(async () => {
-    try {
-      const response = await friendshipApi.getPendingCount();
-      const payload = unwrapApiSuccess(response);
-      const count =
-        payload &&
-        typeof payload === "object" &&
-        typeof (payload as { count?: unknown }).count === "number"
-          ? (payload as { count: number }).count
-          : 0;
-
-      syncSnapshot({
-        ...snapshotRef.current,
-        pendingCount: count,
-      });
-    } catch {
-      // keep last known pending count on network errors
-    }
-  }, [syncSnapshot]);
-
-  const fetchBlockedUsers = useCallback(async () => {
-    setIsBlockedLoading(true);
-    try {
-      const response = await friendshipApi.getBlockedUsers();
-      const payload = unwrapApiSuccess(response);
-      const list = asRelations(payload)
-        .map((relation) => toBlockedRecord(relation))
-        .filter((item): item is BlockedUser => item !== null);
-
-      syncSnapshot({
-        ...snapshotRef.current,
-        blockedUsers: list,
-      });
-    } catch {
-      syncSnapshot({
-        ...snapshotRef.current,
-        blockedUsers: [],
-      });
-    } finally {
-      setIsBlockedLoading(false);
-    }
-  }, [syncSnapshot]);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   const refreshDirectory = useCallback(async () => {
-    await Promise.all([
-      fetchFriends(),
-      fetchIncomingRequests(),
-      fetchSentRequests(),
-      fetchBlockedUsers(),
-      fetchPendingCount(),
-    ]);
-  }, [
-    fetchBlockedUsers,
-    fetchFriends,
-    fetchIncomingRequests,
-    fetchPendingCount,
-    fetchSentRequests,
-  ]);
-
-  const scheduleDirectoryResync = useCallback(
-    (
-      reason:
-        | "missing_relation_payload"
-        | "socket_reconnect"
-        | "explicit_refresh",
-    ) => {
-      if (resyncTimerRef.current) {
-        clearTimeout(resyncTimerRef.current);
-      }
-
-      resyncTimerRef.current = setTimeout(
-        () => {
-          void refreshDirectory();
-        },
-        reason === "socket_reconnect" ? 120 : 180,
-      );
-    },
-    [refreshDirectory],
-  );
+    await refreshDirectoryStore({
+      reason: "explicit_refresh",
+      includeFullSnapshot: true,
+    });
+  }, [refreshDirectoryStore]);
 
   useEffect(() => {
-    return () => {
-      if (resyncTimerRef.current) {
-        clearTimeout(resyncTimerRef.current);
-      }
-    };
-  }, []);
+    if (!isAuthenticated || hasHydrated) {
+      return;
+    }
 
-  useEffect(() => {
-    const unsubscribeRealtime = subscribeFriendshipRealtime((detail) => {
-      if (detail.relation) {
-        applyRelationSnapshot(detail.relation);
-        return;
-      }
+    void refreshDirectory();
+  }, [hasHydrated, isAuthenticated, refreshDirectory]);
 
-      scheduleDirectoryResync("missing_relation_payload");
-    });
-
-    const unsubscribeResync = subscribeFriendshipResync((detail) => {
-      scheduleDirectoryResync(detail.reason);
-    });
-
-    return () => {
-      unsubscribeRealtime();
-      unsubscribeResync();
-    };
-  }, [applyRelationSnapshot, scheduleDirectoryResync]);
-
-  const handleFriendshipWrite = useCallback(
+  const runOptimisticWrite = useCallback(
     async (
+      actionKey: string,
       request: () => Promise<ApiResponse<unknown>>,
-      fallbackResyncReason:
-        | "missing_relation_payload"
-        | "socket_reconnect"
-        | "explicit_refresh" = "explicit_refresh",
+      optimisticUpdate?: (
+        snapshot: FriendshipDirectorySnapshot,
+      ) => FriendshipDirectorySnapshot,
+      fallbackResyncReason: WriteResyncReason = "explicit_refresh",
     ): Promise<boolean> => {
+      const state = useFriendshipStore.getState();
+      if (state.isActionPending(actionKey)) {
+        return false;
+      }
+
+      const startedAt = nowMs();
+      const snapshot = state.createSnapshot();
+
+      state.setActionPending(actionKey, true);
+      if (optimisticUpdate) {
+        state.applySnapshot(optimisticUpdate(snapshot));
+      }
+
       try {
         const response = await request();
         const payload = unwrapApiSuccess(response);
         const relation = extractWriteRelation(payload);
 
         if (relation) {
-          applyRelationSnapshot(relation);
+          useFriendshipStore.getState().applyRelation(relation);
         } else {
-          requestFriendshipResync(fallbackResyncReason);
-          scheduleDirectoryResync(fallbackResyncReason);
+          const store = useFriendshipStore.getState();
+          store.markUiInconsistency(`write_missing_relation:${actionKey}`);
+          store.triggerResync(fallbackResyncReason);
         }
 
+        useFriendshipStore
+          .getState()
+          .recordActionResult(actionKey, "success", nowMs() - startedAt);
         return true;
       } catch {
+        const store = useFriendshipStore.getState();
+        store.restoreSnapshot(snapshot);
+        store.recordActionResult(actionKey, "rollback", nowMs() - startedAt);
         return false;
+      } finally {
+        useFriendshipStore.getState().setActionPending(actionKey, false);
       }
     },
-    [applyRelationSnapshot, scheduleDirectoryResync],
+    [],
   );
 
   const sendFriendRequest = useCallback(
     async (userId: string): Promise<boolean> => {
-      return handleFriendshipWrite(() =>
-        friendshipApi.sendFriendRequest(userId),
+      const currentUser = toAuthUser(useAuthStore.getState().user);
+
+      return runOptimisticWrite(
+        buildActionKey("send", userId),
+        () => friendshipApi.sendFriendRequest(userId),
+        (snapshot) =>
+          optimisticSendRequestSnapshot(snapshot, userId, currentUser),
       );
     },
-    [handleFriendshipWrite],
+    [runOptimisticWrite],
   );
 
   const acceptFriendRequest = useCallback(
     async (requestId: string): Promise<boolean> => {
-      return handleFriendshipWrite(() =>
-        friendshipApi.acceptFriendRequest(requestId),
+      return runOptimisticWrite(
+        buildActionKey("accept", requestId),
+        () => friendshipApi.acceptFriendRequest(requestId),
+        (snapshot) => optimisticAcceptSnapshot(snapshot, requestId),
       );
     },
-    [handleFriendshipWrite],
+    [runOptimisticWrite],
   );
 
   const rejectFriendRequest = useCallback(
     async (requestId: string): Promise<boolean> => {
-      return handleFriendshipWrite(() =>
-        friendshipApi.rejectFriendRequest(requestId),
+      return runOptimisticWrite(
+        buildActionKey("reject", requestId),
+        () => friendshipApi.rejectFriendRequest(requestId),
+        (snapshot) => optimisticRejectSnapshot(snapshot, requestId),
       );
     },
-    [handleFriendshipWrite],
+    [runOptimisticWrite],
   );
 
   const cancelFriendRequest = useCallback(
     async (requestId: string): Promise<boolean> => {
-      return handleFriendshipWrite(() =>
-        friendshipApi.cancelFriendRequest(requestId),
+      return runOptimisticWrite(
+        buildActionKey("cancel", requestId),
+        () => friendshipApi.cancelFriendRequest(requestId),
+        (snapshot) => optimisticCancelSnapshot(snapshot, requestId),
       );
     },
-    [handleFriendshipWrite],
+    [runOptimisticWrite],
   );
 
   const removeFriend = useCallback(
     async (friendshipId: string): Promise<boolean> => {
-      return handleFriendshipWrite(() =>
-        friendshipApi.removeFriend(friendshipId),
+      return runOptimisticWrite(
+        buildActionKey("unfriend", friendshipId),
+        () => friendshipApi.removeFriend(friendshipId),
+        (snapshot) => optimisticRemoveFriendSnapshot(snapshot, friendshipId),
       );
     },
-    [handleFriendshipWrite],
+    [runOptimisticWrite],
   );
 
   const blockUser = useCallback(
     async (userId: string): Promise<boolean> => {
-      return handleFriendshipWrite(() => friendshipApi.blockUser(userId));
+      return runOptimisticWrite(
+        buildActionKey("block", userId),
+        () => friendshipApi.blockUser(userId),
+        (snapshot) => optimisticBlockSnapshot(snapshot, userId),
+      );
     },
-    [handleFriendshipWrite],
+    [runOptimisticWrite],
   );
 
   const unblockUser = useCallback(
     async (userId: string): Promise<boolean> => {
-      return handleFriendshipWrite(() => friendshipApi.unblockUser(userId));
+      return runOptimisticWrite(
+        buildActionKey("unblock", userId),
+        () => friendshipApi.unblockUser(userId),
+        (snapshot) => optimisticUnblockSnapshot(snapshot, userId),
+      );
     },
-    [handleFriendshipWrite],
+    [runOptimisticWrite],
   );
 
   const getRelationshipState = useCallback(
@@ -771,6 +523,8 @@ export const useFriendship = (): UseFriendshipReturn => {
           actorRole: "none" as FriendshipActorRole,
         };
       }
+
+      useFriendshipStore.getState().applyRelation(relation);
 
       return {
         status: relation.status,

@@ -18,6 +18,7 @@ import { AUTH_CONFIG } from "../config";
 import { resetAuthFailureState } from "../lib/axios";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import { useAuthStore, useChatStore, useGroupStore } from "../stores";
+import { useFriendshipStore } from "../stores/friendshipStore";
 import { getAccessToken } from "../services/tokenService";
 import {
   ensureFreshAccessToken,
@@ -33,8 +34,6 @@ import {
 import { logMessageDebug } from "../utils/messageDebug";
 import { buildMessageCorrelationKey } from "../utils/messageIdentity";
 import {
-  emitFriendshipRealtimeDetail,
-  requestFriendshipResync,
   registerChatEvents,
   registerConnectionEvents,
   registerConversationEvents,
@@ -635,7 +634,7 @@ export const useWebSocket = (
         void fetchConversations().catch(() => {
           // no-op: best effort sidebar resync
         });
-        requestFriendshipResync("socket_reconnect");
+        useFriendshipStore.getState().triggerResync("socket_reconnect");
       }
 
       joinedRoomsRef.current.forEach((roomId) => {
@@ -927,7 +926,7 @@ export const useWebSocket = (
       const detail = toFriendshipRealtimeDetail(eventType, data);
       const status = detail.status;
 
-      emitFriendshipRealtimeDetail(detail);
+      useFriendshipStore.getState().applyRealtimeDetail(detail);
       notifySidebarState("friendship:updated", {
         source: "socket",
         eventType: detail.eventType,
