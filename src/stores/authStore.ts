@@ -386,7 +386,10 @@ export const useAuthStore = create<AuthState>()(
             const { authApi } = await import("../services/api");
             const response = await authApi.register(data);
             const registerPayload = unwrapApiSuccess(response);
-            const payloadRecord = registerPayload as Record<string, unknown>;
+            const payloadRecord = registerPayload as unknown as Record<
+              string,
+              unknown
+            >;
             const payloadEmail = normalizeStringValue(payloadRecord.email);
             const pendingEmail =
               payloadEmail || data.email.trim().toLowerCase();
