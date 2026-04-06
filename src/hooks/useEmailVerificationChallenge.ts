@@ -1,5 +1,8 @@
 import { useEffect, useMemo } from "react";
-import type { EmailVerificationChallengeSnapshot } from "../stores/authStore";
+import type {
+  EmailVerificationChallengeSnapshot,
+  VerificationFlowSource,
+} from "../stores/authStore";
 import { useAuthStore } from "../stores/authStore";
 
 const AUTH_STORAGE_KEY = "auth-storage";
@@ -7,9 +10,20 @@ const AUTH_STORAGE_KEY = "auth-storage";
 interface PersistedAuthState {
   state?: {
     pendingVerificationEmail?: string | null;
+    pendingVerificationSource?: VerificationFlowSource | null;
     emailVerificationChallenge?: unknown;
   };
 }
+
+const normalizeVerificationSource = (
+  value: unknown,
+): VerificationFlowSource | null => {
+  if (value === "signup" || value === "external") {
+    return value;
+  }
+
+  return null;
+};
 
 const normalizeEmail = (value: unknown): string | null => {
   if (typeof value !== "string") {
@@ -109,6 +123,9 @@ export const useEmailVerificationChallenge = () => {
   const emailVerificationChallenge = useAuthStore(
     (state) => state.emailVerificationChallenge,
   );
+  const pendingVerificationSource = useAuthStore(
+    (state) => state.pendingVerificationSource,
+  );
   const setPendingVerificationEmail = useAuthStore(
     (state) => state.setPendingVerificationEmail,
   );
@@ -125,9 +142,14 @@ export const useEmailVerificationChallenge = () => {
   const challengeContext = useMemo(
     () => ({
       pendingVerificationEmail,
+      pendingVerificationSource,
       emailVerificationChallenge,
     }),
-    [emailVerificationChallenge, pendingVerificationEmail],
+    [
+      emailVerificationChallenge,
+      pendingVerificationEmail,
+      pendingVerificationSource,
+    ],
   );
 
   useEffect(() => {
@@ -145,11 +167,17 @@ export const useEmailVerificationChallenge = () => {
         const normalizedPendingEmail = normalizeEmail(
           parsed.state?.pendingVerificationEmail,
         );
+        const normalizedPendingSource = normalizeVerificationSource(
+          parsed.state?.pendingVerificationSource,
+        );
         const normalizedChallenge = normalizeChallengeSnapshot(
           parsed.state?.emailVerificationChallenge,
         );
         useAuthStore.setState({
           pendingVerificationEmail: normalizedPendingEmail,
+          pendingVerificationSource: normalizedPendingEmail
+            ? normalizedPendingSource || "external"
+            : null,
           emailVerificationChallenge:
             normalizedChallenge &&
             (!normalizedPendingEmail ||
@@ -186,10 +214,18 @@ export const useEmailVerificationChallenge = () => {
         return;
       }
 
+      const normalizedPendingEmail = normalizeEmail(
+        persisted.state?.pendingVerificationEmail,
+      );
+      const normalizedPendingSource = normalizeVerificationSource(
+        persisted.state?.pendingVerificationSource,
+      );
+
       useAuthStore.setState({
-        pendingVerificationEmail: normalizeEmail(
-          persisted.state?.pendingVerificationEmail,
-        ),
+        pendingVerificationEmail: normalizedPendingEmail,
+        pendingVerificationSource: normalizedPendingEmail
+          ? normalizedPendingSource || "external"
+          : null,
         emailVerificationChallenge: normalizeChallengeSnapshot(
           persisted.state?.emailVerificationChallenge,
         ),

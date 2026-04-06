@@ -5,7 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   ArrowPathIcon,
@@ -17,7 +17,10 @@ import { ErrorCode } from "@hacom/chat-shared-types";
 import { Button, PageSpinner, toast } from "../components/ui";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import { authApi } from "../services/api";
-import type { EmailVerificationChallengeSnapshot } from "../stores/authStore";
+import type {
+  EmailVerificationChallengeSnapshot,
+  VerificationFlowSource,
+} from "../stores/authStore";
 import { useEmailVerificationChallenge, useResendCooldown } from "../hooks";
 import {
   EmailOtpInput,
@@ -76,6 +79,50 @@ const formatCountdown = (seconds: number): string => {
 const isEmailLike = (value: string): boolean => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 };
+
+const normalizeVerificationSource = (
+  value: unknown,
+): VerificationFlowSource | null => {
+  if (value === "signup" || value === "external") {
+    return value;
+  }
+
+  return null;
+};
+
+const normalizeChallengeId = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return normalized || null;
+};
+
+const normalizeIsoDateString = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const parsed = Date.parse(normalized);
+  if (Number.isNaN(parsed)) {
+    return null;
+  }
+
+  return new Date(parsed).toISOString();
+};
+
+interface VerifyEmailLocationState {
+  source?: VerificationFlowSource;
+  email?: string;
+  challengeId?: string | null;
+  expiresAt?: string | null;
+}
 
 const buildChallengeSnapshot = (
   email: string,
@@ -226,10 +273,22 @@ const resolveApiError = (
 
 export const VerifyEmailPage: React.FC = () => {
   const { t } = useTranslation();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
+  const navigationState = (location.state as VerifyEmailLocationState) || null;
   const queryEmail = normalizeEmail(searchParams.get("email"));
+  const stateEmail = normalizeEmail(navigationState?.email);
+  const querySource = normalizeVerificationSource(searchParams.get("source"));
+  const stateSource = normalizeVerificationSource(navigationState?.source);
+  const queryChallengeId = normalizeChallengeId(
+    searchParams.get("challengeId"),
+  );
+  const stateChallengeId = normalizeChallengeId(navigationState?.challengeId);
+  const queryExpiresAt = normalizeIsoDateString(searchParams.get("expiresAt"));
+  const stateExpiresAt = normalizeIsoDateString(navigationState?.expiresAt);
   const {
     pendingVerificationEmail,
+    pendingVerificationSource,
     emailVerificationChallenge: verificationChallenge,
     setPendingVerificationEmail,
     clearPendingVerificationEmail,
@@ -241,9 +300,27 @@ export const VerifyEmailPage: React.FC = () => {
     () =>
       normalizeEmail(pendingVerificationEmail) ||
       queryEmail ||
+      stateEmail ||
       normalizeEmail(verificationChallenge?.email),
-    [pendingVerificationEmail, queryEmail, verificationChallenge?.email],
+    [
+      pendingVerificationEmail,
+      queryEmail,
+      stateEmail,
+      verificationChallenge?.email,
+    ],
   );
+
+  const verificationSource = useMemo<VerificationFlowSource | null>(() => {
+    return stateSource || querySource || pendingVerificationSource || null;
+  }, [pendingVerificationSource, querySource, stateSource]);
+
+  const incomingChallengeId = useMemo(() => {
+    return stateChallengeId || queryChallengeId || null;
+  }, [queryChallengeId, stateChallengeId]);
+
+  const incomingChallengeExpiresAt = useMemo(() => {
+    return stateExpiresAt || queryExpiresAt || null;
+  }, [queryExpiresAt, stateExpiresAt]);
 
   const activeChallenge = useMemo(() => {
     if (!verificationChallenge) {
@@ -280,6 +357,8 @@ export const VerifyEmailPage: React.FC = () => {
       : Math.max(0, Math.ceil((expiresAtMs - now) / 1000));
   const isChallengeExpired = expirySeconds === 0 && Boolean(activeChallenge);
   const hasActiveChallenge = Boolean(activeChallenge?.challengeId);
+  const shouldAutoRequestChallenge =
+    Boolean(verificationEmail) && !hasActiveChallenge && !incomingChallengeId;
 
   const derivedChallengeState = useMemo(() => {
     if (!activeChallenge) {
@@ -316,6 +395,36 @@ export const VerifyEmailPage: React.FC = () => {
     !isBusy;
 
   const canRequestFreshChallenge = Boolean(verificationEmail) && !isBusy;
+
+  useEffect(() => {
+    if (!verificationEmail || !incomingChallengeId || hasActiveChallenge) {
+      return;
+    }
+
+    const nowMs = Date.now();
+    const snapshot = buildChallengeSnapshot(
+      verificationEmail,
+      incomingChallengeId,
+      incomingChallengeExpiresAt ||
+        new Date(nowMs + 10 * 60 * 1000).toISOString(),
+      new Date(nowMs + 60 * 1000).toISOString(),
+      "pending_otp",
+    );
+
+    setEmailVerificationChallenge(snapshot);
+    setPendingVerificationEmail(
+      verificationEmail,
+      verificationSource || "external",
+    );
+  }, [
+    hasActiveChallenge,
+    incomingChallengeExpiresAt,
+    incomingChallengeId,
+    setEmailVerificationChallenge,
+    setPendingVerificationEmail,
+    verificationEmail,
+    verificationSource,
+  ]);
 
   const markChallengeState = useCallback(
     (
@@ -363,7 +472,9 @@ export const VerifyEmailPage: React.FC = () => {
         autoRequestedEmailRef.current = targetEmail;
       }
 
-      setPendingVerificationEmail(targetEmail);
+      const contextSource =
+        verificationSource === "signup" ? "signup" : "external";
+      setPendingVerificationEmail(targetEmail, contextSource);
       setRecoveryEmail(targetEmail);
       setMode("requesting_challenge");
       setFormError(null);
@@ -419,6 +530,7 @@ export const VerifyEmailPage: React.FC = () => {
       setPendingVerificationEmail,
       t,
       verificationEmail,
+      verificationSource,
     ],
   );
 
@@ -446,7 +558,12 @@ export const VerifyEmailPage: React.FC = () => {
           return;
         }
         setRecoveryEmail(verificationEmail);
-        setMode("requesting_challenge");
+        if (shouldAutoRequestChallenge) {
+          setMode("requesting_challenge");
+          return;
+        }
+
+        setMode("pending_otp");
       });
       return;
     }
@@ -462,7 +579,14 @@ export const VerifyEmailPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeChallenge, derivedChallengeState, mode, t, verificationEmail]);
+  }, [
+    activeChallenge,
+    derivedChallengeState,
+    mode,
+    shouldAutoRequestChallenge,
+    t,
+    verificationEmail,
+  ]);
 
   useEffect(() => {
     if (

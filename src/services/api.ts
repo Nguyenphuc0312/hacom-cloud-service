@@ -29,6 +29,23 @@ import { getCsrfToken, isRefreshTokenCookieMode } from "./tokenService";
 
 type EmailOtpChallengePurpose = "signup";
 
+export interface RegisterVerificationChallengeContext {
+  challengeId?: string | null;
+  expiresAt?: string | null;
+  resendAvailableAt?: string | null;
+  ttlSeconds?: number;
+  purpose?: EmailOtpChallengePurpose;
+}
+
+export interface RegisterResponseWithVerificationContext extends RegisterResponseDto {
+  challengeId?: string | null;
+  expiresAt?: string | null;
+  resendAvailableAt?: string | null;
+  ttlSeconds?: number;
+  purpose?: EmailOtpChallengePurpose;
+  emailVerificationChallenge?: RegisterVerificationChallengeContext | null;
+}
+
 export interface EmailOtpChallengeResponse {
   challengeId: string | null;
   expiresAt: string | null;
@@ -90,10 +107,9 @@ export const authApi = {
   },
 
   register: async (data: { email: string; password: string }) => {
-    const response = await authClient.post<ApiResponse<RegisterResponseDto>>(
-      AUTH_ENDPOINTS.register,
-      data,
-    );
+    const response = await authClient.post<
+      ApiResponse<RegisterResponseWithVerificationContext>
+    >(AUTH_ENDPOINTS.register, data);
     return response.data;
   },
 

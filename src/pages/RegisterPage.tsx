@@ -69,16 +69,40 @@ export const RegisterPage: React.FC = () => {
     try {
       const normalizedEmail = data.email.trim().toLowerCase();
 
-      await registerUser({
+      const registerResult = await registerUser({
         email: normalizedEmail,
         password: data.password,
       });
 
+      if (!registerResult.verificationRequired) {
+        toast.success("Đăng ký thành công.");
+        navigate(ROUTE_PATHS.LOGIN, { replace: true });
+        return;
+      }
+
+      const verificationEmail = registerResult.email || normalizedEmail;
+      const registerChallengeId = registerResult.challengeId;
+      const verifyQuery = new URLSearchParams({
+        email: verificationEmail,
+        source: "signup",
+      });
+      if (registerChallengeId) {
+        verifyQuery.set("challengeId", registerChallengeId);
+      }
+      if (registerResult.expiresAt) {
+        verifyQuery.set("expiresAt", registerResult.expiresAt);
+      }
+
       toast.success(t("auth:toast.registerVerificationRequired"));
-      navigate(
-        `${ROUTE_PATHS.VERIFY_EMAIL}?email=${encodeURIComponent(normalizedEmail)}`,
-        { replace: true },
-      );
+      navigate(`${ROUTE_PATHS.VERIFY_EMAIL}?${verifyQuery.toString()}`, {
+        replace: true,
+        state: {
+          source: "signup" as const,
+          email: verificationEmail,
+          challengeId: registerChallengeId || null,
+          expiresAt: registerResult.expiresAt,
+        },
+      });
     } catch (err) {
       toast.error((err as Error).message ?? t("auth:toast.registerFailed"));
     }
