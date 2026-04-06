@@ -62,7 +62,8 @@ const extractArray = <T,>(payload: unknown): T[] => {
 };
 
 const toDisplayName = (user: ContactUser): string => {
-  const displayName = typeof user.displayName === "string" ? user.displayName.trim() : "";
+  const displayName =
+    typeof user.displayName === "string" ? user.displayName.trim() : "";
   if (displayName) return displayName;
 
   const fullName = `${user.firstName || ""} ${user.lastName || ""}`.trim();
@@ -109,8 +110,10 @@ const normalizeSearchResults = (payload: unknown): ContactUser[] => {
       const id = typeof row.id === "string" ? row.id : "";
       if (!id) return null;
 
-      const firstName = typeof row.firstName === "string" ? row.firstName : undefined;
-      const lastName = typeof row.lastName === "string" ? row.lastName : undefined;
+      const firstName =
+        typeof row.firstName === "string" ? row.firstName : undefined;
+      const lastName =
+        typeof row.lastName === "string" ? row.lastName : undefined;
       const displayName =
         (typeof row.displayName === "string" && row.displayName) ||
         `${firstName || ""} ${lastName || ""}`.trim() ||
@@ -118,8 +121,7 @@ const normalizeSearchResults = (payload: unknown): ContactUser[] => {
 
       return toContactUser({
         id,
-        username:
-          typeof row.username === "string" ? row.username : undefined,
+        username: typeof row.username === "string" ? row.username : undefined,
         displayName,
         firstName,
         lastName,
@@ -168,7 +170,7 @@ const ContactRow: React.FC<ContactRowProps> = ({
   const status =
     livePresence?.state === "online"
       ? UserStatus.ONLINE
-      : user.status ?? UserStatus.OFFLINE;
+      : (user.status ?? UserStatus.OFFLINE);
 
   const defaultSubtitle =
     status === UserStatus.ONLINE
@@ -253,14 +255,20 @@ export const FriendsPage: React.FC = () => {
   const [searchResults, setSearchResults] = useState<ContactUser[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [actingKey, setActingKey] = useState<string | null>(null);
-  const [previewTarget, setPreviewTarget] = useState<PreviewTarget | null>(null);
+  const [previewTarget, setPreviewTarget] = useState<PreviewTarget | null>(
+    null,
+  );
   const debouncedQuery = useDebounce(query, 250);
 
   const visiblePresenceIds = useMemo(() => {
     const ids = new Set<string>();
     friends.forEach((user) => ids.add(user.id));
-    incomingRequests.forEach((request) => request.sender?.id && ids.add(request.sender.id));
-    sentRequests.forEach((request) => request.receiver?.id && ids.add(request.receiver.id));
+    incomingRequests.forEach(
+      (request) => request.requester?.id && ids.add(request.requester.id),
+    );
+    sentRequests.forEach(
+      (request) => request.addressee?.id && ids.add(request.addressee.id),
+    );
     searchResults.forEach((user) => ids.add(user.id));
     return Array.from(ids);
   }, [friends, incomingRequests, searchResults, sentRequests]);
@@ -332,7 +340,8 @@ export const FriendsPage: React.FC = () => {
     async (userId: string) => {
       setActingKey(`message:${userId}`);
       try {
-        const response = await conversationApi.createPrivateConversation(userId);
+        const response =
+          await conversationApi.createPrivateConversation(userId);
         const room = unwrapApiSuccess(response) as { id?: string };
         if (room.id) {
           navigate(`${ROUTE_PATHS.CHAT}/${room.id}`);
@@ -362,7 +371,9 @@ export const FriendsPage: React.FC = () => {
       try {
         const success = await action();
         if (!success) {
-          toast.error(t("friends:actionFailed", { defaultValue: "Action failed" }));
+          toast.error(
+            t("friends:actionFailed", { defaultValue: "Action failed" }),
+          );
           return;
         }
         toast.success(successMessage);
@@ -375,6 +386,7 @@ export const FriendsPage: React.FC = () => {
 
   const renderRelationshipAction = (user: ContactUser) => {
     const relationship = getRelationshipState(user.id, currentUserId);
+    const capabilities = relationship.capabilities;
     const actionKeyPrefix = user.id;
 
     switch (relationship.kind) {
@@ -385,6 +397,9 @@ export const FriendsPage: React.FC = () => {
           </span>
         );
       case "friend":
+        if (!capabilities.canMessage) {
+          return null;
+        }
         return (
           <Button
             type="button"
@@ -402,40 +417,51 @@ export const FriendsPage: React.FC = () => {
       case "incoming_request":
         return (
           <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              isLoading={actingKey === `accept:${actionKeyPrefix}`}
-              onClick={(event) => {
-                stopPropagation(event);
-                void handleRelationshipAction(
-                  `accept:${actionKeyPrefix}`,
-                  () => acceptFriendRequest(relationship.requestId),
-                  t("friends:requestAccepted", { defaultValue: "Request accepted" }),
-                );
-              }}
-            >
-              {t("friends:accept", { defaultValue: "Accept" })}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              isLoading={actingKey === `decline:${actionKeyPrefix}`}
-              onClick={(event) => {
-                stopPropagation(event);
-                void handleRelationshipAction(
-                  `decline:${actionKeyPrefix}`,
-                  () => rejectFriendRequest(relationship.requestId),
-                  t("friends:requestRejected", { defaultValue: "Request declined" }),
-                );
-              }}
-            >
-              {t("friends:reject", { defaultValue: "Decline" })}
-            </Button>
+            {capabilities.canAccept ? (
+              <Button
+                type="button"
+                size="sm"
+                isLoading={actingKey === `accept:${actionKeyPrefix}`}
+                onClick={(event) => {
+                  stopPropagation(event);
+                  void handleRelationshipAction(
+                    `accept:${actionKeyPrefix}`,
+                    () => acceptFriendRequest(relationship.requestId),
+                    t("friends:requestAccepted", {
+                      defaultValue: "Request accepted",
+                    }),
+                  );
+                }}
+              >
+                {t("friends:accept", { defaultValue: "Accept" })}
+              </Button>
+            ) : null}
+            {capabilities.canDecline ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                isLoading={actingKey === `decline:${actionKeyPrefix}`}
+                onClick={(event) => {
+                  stopPropagation(event);
+                  void handleRelationshipAction(
+                    `decline:${actionKeyPrefix}`,
+                    () => rejectFriendRequest(relationship.requestId),
+                    t("friends:requestRejected", {
+                      defaultValue: "Request declined",
+                    }),
+                  );
+                }}
+              >
+                {t("friends:reject", { defaultValue: "Decline" })}
+              </Button>
+            ) : null}
           </div>
         );
       case "outgoing_request":
+        if (!capabilities.canCancel) {
+          return null;
+        }
         return (
           <Button
             type="button"
@@ -457,6 +483,9 @@ export const FriendsPage: React.FC = () => {
           </Button>
         );
       case "blocked":
+        if (!capabilities.canUnblock) {
+          return null;
+        }
         return (
           <Button
             type="button"
@@ -476,6 +505,9 @@ export const FriendsPage: React.FC = () => {
           </Button>
         );
       default:
+        if (!capabilities.canSendRequest) {
+          return null;
+        }
         return (
           <Button
             type="button"
@@ -487,7 +519,9 @@ export const FriendsPage: React.FC = () => {
               void handleRelationshipAction(
                 `add:${actionKeyPrefix}`,
                 () => sendFriendRequest(user.id),
-                t("friends:requestSent", { defaultValue: "Friend request sent" }),
+                t("friends:requestSent", {
+                  defaultValue: "Friend request sent",
+                }),
               );
             }}
           >
@@ -551,7 +585,8 @@ export const FriendsPage: React.FC = () => {
           </p>
           <p className="mt-2 text-sm text-text-secondary">
             {t("friends:empty.friendsBody", {
-              defaultValue: "Use Discover to find people and start building your network.",
+              defaultValue:
+                "Use Discover to find people and start building your network.",
             })}
           </p>
         </div>
@@ -573,25 +608,28 @@ export const FriendsPage: React.FC = () => {
     );
   };
 
-  const requestItems = requestTab === "incoming" ? incomingRequests : sentRequests;
+  const requestItems =
+    requestTab === "incoming" ? incomingRequests : sentRequests;
 
   const renderRequestsTab = () => (
     <div className="space-y-4">
       <div className="flex rounded-2xl bg-surface-overlay p-1">
-        {([
-          {
-            id: "incoming",
-            label: t("friends:requests.incoming", {
-              defaultValue: "Incoming",
-            }),
-            count: incomingRequests.length,
-          },
-          {
-            id: "sent",
-            label: t("friends:requests.sent", { defaultValue: "Sent" }),
-            count: sentRequests.length,
-          },
-        ] as const).map((tab) => {
+        {(
+          [
+            {
+              id: "incoming",
+              label: t("friends:requests.incoming", {
+                defaultValue: "Incoming",
+              }),
+              count: incomingRequests.length,
+            },
+            {
+              id: "sent",
+              label: t("friends:requests.sent", { defaultValue: "Sent" }),
+              count: sentRequests.length,
+            },
+          ] as const
+        ).map((tab) => {
           const active = tab.id === requestTab;
           return (
             <button
@@ -636,17 +674,20 @@ export const FriendsPage: React.FC = () => {
           <p className="mt-2 text-sm text-text-secondary">
             {requestTab === "incoming"
               ? t("friends:empty.requestsIncomingBody", {
-                  defaultValue: "When someone adds you, the request will appear here.",
+                  defaultValue:
+                    "When someone adds you, the request will appear here.",
                 })
               : t("friends:empty.requestsSentBody", {
-                  defaultValue: "People you invite will appear here until they respond.",
+                  defaultValue:
+                    "People you invite will appear here until they respond.",
                 })}
           </p>
         </div>
       ) : (
         <div className="space-y-1">
           {requestItems.map((request) => {
-            const user = requestTab === "incoming" ? request.sender : request.receiver;
+            const user =
+              requestTab === "incoming" ? request.requester : request.addressee;
             if (!user) return null;
             const contactUser = toContactUser(user);
 
@@ -663,11 +704,13 @@ export const FriendsPage: React.FC = () => {
 
             return (
               <ContactRow
-                key={request.id}
+                key={request.relationId}
                 user={contactUser}
                 subtitle={subtitle}
                 selected={previewTarget?.userId === contactUser.id}
-                onClick={() => setPreviewTarget(profileFromSummary(contactUser))}
+                onClick={() =>
+                  setPreviewTarget(profileFromSummary(contactUser))
+                }
                 action={renderRelationshipAction(contactUser)}
               />
             );
@@ -713,7 +756,8 @@ export const FriendsPage: React.FC = () => {
           </p>
           <p className="mt-2 text-sm text-text-secondary">
             {t("friends:discoverHintBody", {
-              defaultValue: "Try a different keyword or check the username spelling.",
+              defaultValue:
+                "Try a different keyword or check the username spelling.",
             })}
           </p>
         </div>
@@ -753,7 +797,8 @@ export const FriendsPage: React.FC = () => {
           </p>
           <p className="mt-2 text-sm text-text-secondary">
             {t("friends:empty.blockedBody", {
-              defaultValue: "Blocked contacts will appear here so you can review them later.",
+              defaultValue:
+                "Blocked contacts will appear here so you can review them later.",
             })}
           </p>
         </div>
@@ -861,7 +906,8 @@ export const FriendsPage: React.FC = () => {
             </p>
             <p className="mt-2 text-sm text-text-secondary">
               {t("friends:previewBody", {
-                defaultValue: "Select any friend, request or search result to inspect the profile without leaving this screen.",
+                defaultValue:
+                  "Select any friend, request or search result to inspect the profile without leaving this screen.",
               })}
             </p>
           </div>

@@ -145,6 +145,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     acceptFriendRequest,
     rejectFriendRequest,
     cancelFriendRequest,
+    removeFriend,
     blockUser,
     unblockUser,
   } = useFriendship();
@@ -254,6 +255,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     : user?.status;
   const lastSeenAt = livePresence?.lastSeenAt;
   const relationship = getRelationshipState(userId, currentUserId);
+  const capabilities = relationship.capabilities;
 
   const presenceLabel = formatPresenceLabel(effectiveStatus, lastSeenAt, t);
   const relationshipLabel = formatRelationshipLabel(relationship.kind, t);
@@ -321,15 +323,182 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     if (relationship.kind === "friend") {
       return (
         <div className="flex gap-2">
+          {capabilities.canMessage ? (
+            <Button
+              type="button"
+              fullWidth
+              leftIcon={<ChatBubbleLeftRightIcon className="h-4 w-4" />}
+              isLoading={actingKey === "message"}
+              onClick={() => void handleMessage()}
+            >
+              {t("friends:message", { defaultValue: "Message" })}
+            </Button>
+          ) : null}
+          {capabilities.canUnfriend ? (
+            <Button
+              type="button"
+              variant="secondary"
+              isLoading={actingKey === "unfriend"}
+              onClick={() =>
+                void handleAsyncAction(
+                  "unfriend",
+                  () => removeFriend(relationship.friendshipId),
+                  t("friends:unfriendSuccess", {
+                    defaultValue: "Removed friend",
+                  }),
+                  t("friends:actionFailed", { defaultValue: "Action failed" }),
+                )
+              }
+            >
+              {t("friends:unfriend", { defaultValue: "Unfriend" })}
+            </Button>
+          ) : null}
+          {capabilities.canBlock ? (
+            <Button
+              type="button"
+              variant="secondary"
+              leftIcon={<NoSymbolIcon className="h-4 w-4" />}
+              isLoading={actingKey === "block"}
+              onClick={() =>
+                void handleAsyncAction(
+                  "block",
+                  () => blockUser(userId),
+                  t("friends:blockSuccess", { defaultValue: "User blocked" }),
+                  t("friends:actionFailed", { defaultValue: "Action failed" }),
+                )
+              }
+            >
+              {t("profile:userProfile.blockUser")}
+            </Button>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (relationship.kind === "incoming_request") {
+      return (
+        <div className="flex gap-2">
+          {capabilities.canAccept ? (
+            <Button
+              type="button"
+              fullWidth
+              isLoading={actingKey === "accept"}
+              onClick={() =>
+                void handleAsyncAction(
+                  "accept",
+                  () => acceptFriendRequest(relationship.requestId),
+                  t("friends:requestAccepted", {
+                    defaultValue: "Request accepted",
+                  }),
+                  t("friends:actionFailed", { defaultValue: "Action failed" }),
+                )
+              }
+            >
+              {t("friends:accept", { defaultValue: "Accept" })}
+            </Button>
+          ) : null}
+          {capabilities.canDecline ? (
+            <Button
+              type="button"
+              variant="secondary"
+              isLoading={actingKey === "decline"}
+              onClick={() =>
+                void handleAsyncAction(
+                  "decline",
+                  () => rejectFriendRequest(relationship.requestId),
+                  t("friends:requestRejected", {
+                    defaultValue: "Request declined",
+                  }),
+                  t("friends:actionFailed", { defaultValue: "Action failed" }),
+                )
+              }
+            >
+              {t("friends:reject", { defaultValue: "Decline" })}
+            </Button>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (relationship.kind === "outgoing_request") {
+      return (
+        <div className="flex gap-2">
+          <Button type="button" fullWidth variant="secondary" disabled>
+            {t("friends:relationship.outgoing", { defaultValue: "Requested" })}
+          </Button>
+          {capabilities.canCancel ? (
+            <Button
+              type="button"
+              variant="ghost"
+              isLoading={actingKey === "cancel"}
+              onClick={() =>
+                void handleAsyncAction(
+                  "cancel",
+                  () => cancelFriendRequest(relationship.requestId),
+                  t("friends:requestCancelled", {
+                    defaultValue: "Request cancelled",
+                  }),
+                  t("friends:actionFailed", { defaultValue: "Action failed" }),
+                )
+              }
+            >
+              {t("friends:sentRequests.cancel", { defaultValue: "Cancel" })}
+            </Button>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (relationship.kind === "blocked") {
+      return (
+        <div className="flex gap-2">
+          {capabilities.canUnblock ? (
+            <Button
+              type="button"
+              fullWidth
+              variant="secondary"
+              isLoading={actingKey === "unblock"}
+              onClick={() =>
+                void handleAsyncAction(
+                  "unblock",
+                  () => unblockUser(userId),
+                  t("friends:unblockSuccess", {
+                    defaultValue: "User unblocked",
+                  }),
+                  t("friends:actionFailed", { defaultValue: "Action failed" }),
+                )
+              }
+            >
+              {t("friends:unblock", { defaultValue: "Unblock" })}
+            </Button>
+          ) : null}
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex gap-2">
+        {capabilities.canSendRequest ? (
           <Button
             type="button"
             fullWidth
-            leftIcon={<ChatBubbleLeftRightIcon className="h-4 w-4" />}
-            isLoading={actingKey === "message"}
-            onClick={() => void handleMessage()}
+            leftIcon={<UserPlusIcon className="h-4 w-4" />}
+            isLoading={actingKey === "add"}
+            onClick={() =>
+              void handleAsyncAction(
+                "add",
+                () => sendFriendRequest(userId),
+                t("friends:requestSent", {
+                  defaultValue: "Friend request sent",
+                }),
+                t("friends:actionFailed", { defaultValue: "Action failed" }),
+              )
+            }
           >
-            {t("friends:message", { defaultValue: "Message" })}
+            {t("friends:addFriend", { defaultValue: "Add friend" })}
           </Button>
+        ) : null}
+        {capabilities.canBlock ? (
           <Button
             type="button"
             variant="secondary"
@@ -346,135 +515,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           >
             {t("profile:userProfile.blockUser")}
           </Button>
-        </div>
-      );
-    }
-
-    if (relationship.kind === "incoming_request") {
-      return (
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            fullWidth
-            isLoading={actingKey === "accept"}
-            onClick={() =>
-              void handleAsyncAction(
-                "accept",
-                () => acceptFriendRequest(relationship.requestId),
-                t("friends:requestAccepted", {
-                  defaultValue: "Request accepted",
-                }),
-                t("friends:actionFailed", { defaultValue: "Action failed" }),
-              )
-            }
-          >
-            {t("friends:accept", { defaultValue: "Accept" })}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            isLoading={actingKey === "decline"}
-            onClick={() =>
-              void handleAsyncAction(
-                "decline",
-                () => rejectFriendRequest(relationship.requestId),
-                t("friends:requestRejected", {
-                  defaultValue: "Request declined",
-                }),
-                t("friends:actionFailed", { defaultValue: "Action failed" }),
-              )
-            }
-          >
-            {t("friends:reject", { defaultValue: "Decline" })}
-          </Button>
-        </div>
-      );
-    }
-
-    if (relationship.kind === "outgoing_request") {
-      return (
-        <div className="flex gap-2">
-          <Button type="button" fullWidth variant="secondary" disabled>
-            {t("friends:relationship.outgoing", { defaultValue: "Requested" })}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            isLoading={actingKey === "cancel"}
-            onClick={() =>
-              void handleAsyncAction(
-                "cancel",
-                () => cancelFriendRequest(relationship.requestId),
-                t("friends:requestCancelled", {
-                  defaultValue: "Request cancelled",
-                }),
-                t("friends:actionFailed", { defaultValue: "Action failed" }),
-              )
-            }
-          >
-            {t("friends:sentRequests.cancel", { defaultValue: "Cancel" })}
-          </Button>
-        </div>
-      );
-    }
-
-    if (relationship.kind === "blocked") {
-      return (
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            fullWidth
-            variant="secondary"
-            isLoading={actingKey === "unblock"}
-            onClick={() =>
-              void handleAsyncAction(
-                "unblock",
-                () => unblockUser(userId),
-                t("friends:unblockSuccess", { defaultValue: "User unblocked" }),
-                t("friends:actionFailed", { defaultValue: "Action failed" }),
-              )
-            }
-          >
-            {t("friends:unblock", { defaultValue: "Unblock" })}
-          </Button>
-        </div>
-      );
-    }
-
-    return (
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          fullWidth
-          leftIcon={<UserPlusIcon className="h-4 w-4" />}
-          isLoading={actingKey === "add"}
-          onClick={() =>
-            void handleAsyncAction(
-              "add",
-              () => sendFriendRequest(userId),
-              t("friends:requestSent", { defaultValue: "Friend request sent" }),
-              t("friends:actionFailed", { defaultValue: "Action failed" }),
-            )
-          }
-        >
-          {t("friends:addFriend", { defaultValue: "Add friend" })}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          leftIcon={<NoSymbolIcon className="h-4 w-4" />}
-          isLoading={actingKey === "block"}
-          onClick={() =>
-            void handleAsyncAction(
-              "block",
-              () => blockUser(userId),
-              t("friends:blockSuccess", { defaultValue: "User blocked" }),
-              t("friends:actionFailed", { defaultValue: "Action failed" }),
-            )
-          }
-        >
-          {t("profile:userProfile.blockUser")}
-        </Button>
+        ) : null}
       </div>
     );
   };

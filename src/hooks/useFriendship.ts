@@ -1,42 +1,90 @@
 /**
  * @fileoverview useFriendship hook
- * Shared relationship directory for friends, requests, blocked users and
- * relationship-aware actions used by profile + contacts surfaces.
+ * Friendship directory driven by backend relation DTO contract.
  */
 
 import { useCallback, useState } from "react";
+import type {
+  FriendshipActionResult,
+  FriendshipActorRole,
+  FriendshipCapabilitiesDto,
+  FriendshipRelationDto,
+} from "@hacom/chat-shared-types";
 import { friendshipApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import type { User } from "../stores/authStore";
 
-export type FriendshipStatusType =
-  | "none"
-  | "pending"
-  | "accepted"
-  | "declined"
-  | "canceled"
-  | "blocked";
-
-export type RelationshipState =
-  | { kind: "self" }
-  | { kind: "not_friend" }
-  | { kind: "outgoing_request"; requestId: string }
-  | { kind: "incoming_request"; requestId: string }
-  | { kind: "friend"; friendshipId?: string }
-  | { kind: "blocked" };
+export type FriendshipStatusType = FriendshipRelationDto["status"];
 
 export interface FriendRequest {
-  id: string;
+  relationId: string;
   createdAt: string;
-  sender?: User;
-  receiver?: User;
+  updatedAt: string;
+  requester: User;
+  addressee: User;
+  friend: User | null;
+  status: FriendshipStatusType;
+  actorRole: FriendshipActorRole;
+  capabilities: FriendshipCapabilitiesDto;
+  actionResult: FriendshipActionResult;
 }
 
-interface FriendRecord extends User {
-  friendshipId?: string;
+export interface FriendRecord extends User {
+  relationId: string;
+  capabilities: FriendshipCapabilitiesDto;
+  actorRole: FriendshipActorRole;
+  relationStatus: FriendshipStatusType;
+  actionResult: FriendshipActionResult;
 }
 
-interface BlockedUser extends User {}
+export interface BlockedUser extends User {
+  relationId: string;
+  capabilities: FriendshipCapabilitiesDto;
+  actorRole: FriendshipActorRole;
+  relationStatus: FriendshipStatusType;
+  actionResult: FriendshipActionResult;
+}
+
+const EMPTY_CAPABILITIES: FriendshipCapabilitiesDto = {
+  canSendRequest: false,
+  canAccept: false,
+  canDecline: false,
+  canCancel: false,
+  canUnfriend: false,
+  canBlock: false,
+  canUnblock: false,
+  canMessage: false,
+};
+
+const NONE_RELATION_CAPABILITIES: FriendshipCapabilitiesDto = {
+  ...EMPTY_CAPABILITIES,
+  canSendRequest: true,
+  canBlock: true,
+};
+
+export type RelationshipState =
+  | { kind: "self"; capabilities: FriendshipCapabilitiesDto }
+  | { kind: "not_friend"; capabilities: FriendshipCapabilitiesDto }
+  | {
+      kind: "outgoing_request";
+      requestId: string;
+      capabilities: FriendshipCapabilitiesDto;
+    }
+  | {
+      kind: "incoming_request";
+      requestId: string;
+      capabilities: FriendshipCapabilitiesDto;
+    }
+  | {
+      kind: "friend";
+      friendshipId: string;
+      capabilities: FriendshipCapabilitiesDto;
+    }
+  | {
+      kind: "blocked";
+      friendshipId: string;
+      capabilities: FriendshipCapabilitiesDto;
+    };
 
 interface UseFriendshipReturn {
   friends: FriendRecord[];
@@ -76,99 +124,120 @@ interface UseFriendshipReturn {
   checkFriendshipStatus: (userId: string) => Promise<{
     status: FriendshipStatusType;
     friendshipId?: string;
+    capabilities: FriendshipCapabilitiesDto;
+    actorRole: FriendshipActorRole;
   }>;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object";
+export const toFriendshipUser = (
+  user:
+    | FriendshipRelationDto["requester"]
+    | FriendshipRelationDto["friend"]
+    | null,
+): User | null => {
+  if (!user) {
+    return null;
+  }
 
-const asString = (value: unknown): string | undefined =>
-  typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+  return {
+    id: user.id,
+    username: user.username,
+    firstName: user.displayName ?? undefined,
+    lastName: undefined,
+    avatar: user.avatarUrl ?? undefined,
+    status: "offline",
+  };
+};
 
-const asOptionalString = (value: unknown): string | undefined =>
-  typeof value === "string" ? value : undefined;
+const isRelationArrayPayload = (
+  payload: unknown,
+): payload is FriendshipRelationDto[] => {
+  return Array.isArray(payload);
+};
 
-const extractList = (payload: unknown): unknown[] => {
-  if (Array.isArray(payload)) return payload;
-  if (!isRecord(payload)) return [];
+const asRelations = (payload: unknown): FriendshipRelationDto[] => {
+  if (isRelationArrayPayload(payload)) {
+    return payload;
+  }
 
-  if (Array.isArray(payload.data)) return payload.data;
-  if (Array.isArray(payload.requests)) return payload.requests;
-  if (Array.isArray(payload.users)) return payload.users;
-  if (Array.isArray(payload.friends)) return payload.friends;
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
 
-  if (isRecord(payload.data)) {
-    const nested = payload.data;
-    if (Array.isArray(nested.data)) return nested.data;
-    if (Array.isArray(nested.requests)) return nested.requests;
-    if (Array.isArray(nested.users)) return nested.users;
-    if (Array.isArray(nested.friends)) return nested.friends;
+  const record = payload as Record<string, unknown>;
+  if (Array.isArray(record.data)) {
+    return record.data as FriendshipRelationDto[];
+  }
+
+  if (
+    record.data &&
+    typeof record.data === "object" &&
+    Array.isArray((record.data as Record<string, unknown>).data)
+  ) {
+    return (record.data as Record<string, unknown>)
+      .data as FriendshipRelationDto[];
   }
 
   return [];
 };
 
-const normalizeUser = (value: unknown): User | undefined => {
-  if (!isRecord(value)) return undefined;
-
-  const id = asString(value.id);
-  const username = asString(value.username);
-  const email = asOptionalString(value.email) ?? "";
-  const statusRaw = asString(value.status) ?? "offline";
-
-  if (!id || !username) return undefined;
-
-  const firstName = asOptionalString(value.firstName);
-  const lastName = asOptionalString(value.lastName);
+const toFriendRecord = (
+  relation: FriendshipRelationDto,
+): FriendRecord | null => {
+  const friend = toFriendshipUser(relation.friend);
+  if (!friend) {
+    return null;
+  }
 
   return {
-    id,
-    username,
-    email,
-    firstName,
-    lastName,
-    avatar:
-      asOptionalString(value.avatar) ??
-      asOptionalString(value.avatarUrl) ??
-      undefined,
-    bio: asOptionalString(value.bio),
-    phone: asOptionalString(value.phone),
-    status:
-      statusRaw === "online" ||
-      statusRaw === "offline" ||
-      statusRaw === "away" ||
-      statusRaw === "dnd"
-        ? statusRaw
-        : "offline",
-    role: asOptionalString(value.role),
-    isVerified:
-      typeof value.isVerified === "boolean" ? value.isVerified : undefined,
-    createdAt: asOptionalString(value.createdAt),
+    ...friend,
+    relationId: relation.relationId,
+    capabilities: relation.capabilities,
+    actorRole: relation.actorRole,
+    relationStatus: relation.status,
+    actionResult: relation.actionResult,
   };
 };
 
-const normalizeRequest = (value: unknown): FriendRequest | null => {
-  if (!isRecord(value)) return null;
+const toRequestRecord = (
+  relation: FriendshipRelationDto,
+): FriendRequest | null => {
+  const requester = toFriendshipUser(relation.requester);
+  const addressee = toFriendshipUser(relation.addressee);
 
-  const id = asString(value.id);
-  if (!id) return null;
+  if (!requester || !addressee) {
+    return null;
+  }
 
   return {
-    id,
-    createdAt: asOptionalString(value.createdAt) ?? new Date().toISOString(),
-    sender: normalizeUser(value.sender),
-    receiver: normalizeUser(value.receiver),
+    relationId: relation.relationId,
+    createdAt: relation.createdAt,
+    updatedAt: relation.updatedAt,
+    requester,
+    addressee,
+    friend: toFriendshipUser(relation.friend),
+    status: relation.status,
+    actorRole: relation.actorRole,
+    capabilities: relation.capabilities,
+    actionResult: relation.actionResult,
   };
 };
 
-const normalizeFriend = (value: unknown): FriendRecord | null => {
-  const user = normalizeUser(value);
-  if (!user) return null;
+const toBlockedRecord = (
+  relation: FriendshipRelationDto,
+): BlockedUser | null => {
+  const friend = toFriendshipUser(relation.friend);
+  if (!friend) {
+    return null;
+  }
 
-  const record = isRecord(value) ? value : null;
   return {
-    ...user,
-    friendshipId: asOptionalString(record?.friendshipId),
+    ...friend,
+    relationId: relation.relationId,
+    capabilities: relation.capabilities,
+    actorRole: relation.actorRole,
+    relationStatus: relation.status,
+    actionResult: relation.actionResult,
   };
 };
 
@@ -176,6 +245,76 @@ const emitFriendUpdated = (): void => {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent("friend:updated"));
 };
+
+interface DeriveRelationshipStateInput {
+  userId: string;
+  currentUserId?: string | null;
+  blockedUsers: BlockedUser[];
+  friends: FriendRecord[];
+  incomingRequests: FriendRequest[];
+  sentRequests: FriendRequest[];
+}
+
+export const deriveRelationshipState = (
+  input: DeriveRelationshipStateInput,
+): RelationshipState => {
+  const {
+    userId,
+    currentUserId,
+    blockedUsers,
+    friends,
+    incomingRequests,
+    sentRequests,
+  } = input;
+
+  if (currentUserId && userId === currentUserId) {
+    return { kind: "self", capabilities: EMPTY_CAPABILITIES };
+  }
+
+  const blocked = blockedUsers.find((item) => item.id === userId);
+  if (blocked) {
+    return {
+      kind: "blocked",
+      friendshipId: blocked.relationId,
+      capabilities: blocked.capabilities,
+    };
+  }
+
+  const friend = friends.find((item) => item.id === userId);
+  if (friend) {
+    return {
+      kind: "friend",
+      friendshipId: friend.relationId,
+      capabilities: friend.capabilities,
+    };
+  }
+
+  const incoming = incomingRequests.find(
+    (item) => item.requester.id === userId,
+  );
+  if (incoming) {
+    return {
+      kind: "incoming_request",
+      requestId: incoming.relationId,
+      capabilities: incoming.capabilities,
+    };
+  }
+
+  const outgoing = sentRequests.find((item) => item.addressee.id === userId);
+  if (outgoing) {
+    return {
+      kind: "outgoing_request",
+      requestId: outgoing.relationId,
+      capabilities: outgoing.capabilities,
+    };
+  }
+
+  return { kind: "not_friend", capabilities: NONE_RELATION_CAPABILITIES };
+};
+
+export const mapRelationToFriendRecord = toFriendRecord;
+export const mapRelationToRequestRecord = toRequestRecord;
+export const mapRelationToBlockedRecord = toBlockedRecord;
 
 export const useFriendship = (): UseFriendshipReturn => {
   const [friends, setFriends] = useState<FriendRecord[]>([]);
@@ -193,10 +332,10 @@ export const useFriendship = (): UseFriendshipReturn => {
     try {
       const response = await friendshipApi.getFriends();
       const payload = unwrapApiSuccess(response);
-      const nextFriends = extractList(payload)
-        .map((item) => normalizeFriend(item))
+      const list = asRelations(payload)
+        .map((relation) => toFriendRecord(relation))
         .filter((item): item is FriendRecord => item !== null);
-      setFriends(nextFriends);
+      setFriends(list);
     } catch {
       setFriends([]);
     } finally {
@@ -209,11 +348,11 @@ export const useFriendship = (): UseFriendshipReturn => {
     try {
       const response = await friendshipApi.getPendingRequests();
       const payload = unwrapApiSuccess(response);
-      const nextIncoming = extractList(payload)
-        .map((item) => normalizeRequest(item))
+      const list = asRelations(payload)
+        .map((relation) => toRequestRecord(relation))
         .filter((item): item is FriendRequest => item !== null);
-      setIncomingRequests(nextIncoming);
-      setPendingCount(nextIncoming.length);
+      setIncomingRequests(list);
+      setPendingCount(list.length);
     } catch {
       setIncomingRequests([]);
       setPendingCount(0);
@@ -227,10 +366,10 @@ export const useFriendship = (): UseFriendshipReturn => {
     try {
       const response = await friendshipApi.getSentRequests();
       const payload = unwrapApiSuccess(response);
-      const nextSent = extractList(payload)
-        .map((item) => normalizeRequest(item))
+      const list = asRelations(payload)
+        .map((relation) => toRequestRecord(relation))
         .filter((item): item is FriendRequest => item !== null);
-      setSentRequests(nextSent);
+      setSentRequests(list);
     } catch {
       setSentRequests([]);
     } finally {
@@ -241,13 +380,14 @@ export const useFriendship = (): UseFriendshipReturn => {
   const fetchPendingCount = useCallback(async () => {
     try {
       const response = await friendshipApi.getPendingCount();
-      const payload = unwrapApiSuccess(response) as
-        | { count?: number; data?: { count?: number } }
-        | undefined;
-      const count = payload?.count ?? payload?.data?.count;
-      setPendingCount(
-        typeof count === "number" && Number.isFinite(count) ? count : 0,
-      );
+      const payload = unwrapApiSuccess(response);
+      const count =
+        payload &&
+        typeof payload === "object" &&
+        typeof (payload as { count?: unknown }).count === "number"
+          ? (payload as { count: number }).count
+          : 0;
+      setPendingCount(count);
     } catch {
       setPendingCount((current) => current);
     }
@@ -258,10 +398,10 @@ export const useFriendship = (): UseFriendshipReturn => {
     try {
       const response = await friendshipApi.getBlockedUsers();
       const payload = unwrapApiSuccess(response);
-      const nextBlocked = extractList(payload)
-        .map((item) => normalizeUser(item))
-        .filter((item): item is BlockedUser => item !== undefined);
-      setBlockedUsers(nextBlocked);
+      const list = asRelations(payload)
+        .map((relation) => toBlockedRecord(relation))
+        .filter((item): item is BlockedUser => item !== null);
+      setBlockedUsers(list);
     } catch {
       setBlockedUsers([]);
     } finally {
@@ -275,11 +415,13 @@ export const useFriendship = (): UseFriendshipReturn => {
       fetchIncomingRequests(),
       fetchSentRequests(),
       fetchBlockedUsers(),
+      fetchPendingCount(),
     ]);
   }, [
     fetchBlockedUsers,
     fetchFriends,
     fetchIncomingRequests,
+    fetchPendingCount,
     fetchSentRequests,
   ]);
 
@@ -287,242 +429,147 @@ export const useFriendship = (): UseFriendshipReturn => {
     async (userId: string): Promise<boolean> => {
       try {
         await friendshipApi.sendFriendRequest(userId);
-        await fetchSentRequests();
+        await refreshDirectory();
         emitFriendUpdated();
         return true;
       } catch {
         return false;
       }
     },
-    [fetchSentRequests],
+    [refreshDirectory],
   );
 
   const acceptFriendRequest = useCallback(
     async (requestId: string): Promise<boolean> => {
-      const acceptedRequest =
-        incomingRequests.find((request) => request.id === requestId) ?? null;
-
-      setIncomingRequests((current) =>
-        current.filter((request) => request.id !== requestId),
-      );
-      setPendingCount((current) => Math.max(0, current - 1));
-
-      if (acceptedRequest?.sender) {
-        const nextFriend: FriendRecord = {
-          ...acceptedRequest.sender,
-          friendshipId: undefined,
-        };
-        setFriends((current) => {
-          if (current.some((friend) => friend.id === acceptedRequest.sender?.id)) {
-            return current;
-          }
-          return [...current, nextFriend];
-        });
-      }
-
       try {
         await friendshipApi.acceptFriendRequest(requestId);
+        await refreshDirectory();
         emitFriendUpdated();
         return true;
       } catch {
-        if (acceptedRequest) {
-          setIncomingRequests((current) => [acceptedRequest, ...current]);
-          setPendingCount((current) => current + 1);
-          if (acceptedRequest.sender) {
-            setFriends((current) =>
-              current.filter((friend) => friend.id !== acceptedRequest.sender?.id),
-            );
-          }
-        }
         return false;
       }
     },
-    [incomingRequests],
+    [refreshDirectory],
   );
 
   const rejectFriendRequest = useCallback(
     async (requestId: string): Promise<boolean> => {
-      const rejectedRequest =
-        incomingRequests.find((request) => request.id === requestId) ?? null;
-
-      setIncomingRequests((current) =>
-        current.filter((request) => request.id !== requestId),
-      );
-      setPendingCount((current) => Math.max(0, current - 1));
-
       try {
         await friendshipApi.rejectFriendRequest(requestId);
+        await refreshDirectory();
         emitFriendUpdated();
         return true;
       } catch {
-        if (rejectedRequest) {
-          setIncomingRequests((current) => [rejectedRequest, ...current]);
-          setPendingCount((current) => current + 1);
-        }
         return false;
       }
     },
-    [incomingRequests],
+    [refreshDirectory],
   );
 
   const cancelFriendRequest = useCallback(
     async (requestId: string): Promise<boolean> => {
-      const previous = sentRequests;
-      setSentRequests((current) =>
-        current.filter((request) => request.id !== requestId),
-      );
-
       try {
         await friendshipApi.cancelFriendRequest(requestId);
+        await refreshDirectory();
         emitFriendUpdated();
         return true;
       } catch {
-        setSentRequests(previous);
         return false;
       }
     },
-    [sentRequests],
+    [refreshDirectory],
   );
 
   const removeFriend = useCallback(
     async (friendshipId: string): Promise<boolean> => {
-      const previous = friends;
-      setFriends((current) =>
-        current.filter((friend) => friend.friendshipId !== friendshipId),
-      );
-
       try {
         await friendshipApi.removeFriend(friendshipId);
+        await refreshDirectory();
         emitFriendUpdated();
         return true;
       } catch {
-        setFriends(previous);
         return false;
       }
     },
-    [friends],
+    [refreshDirectory],
   );
 
   const blockUser = useCallback(
     async (userId: string): Promise<boolean> => {
-      const blockedCandidate =
-        friends.find((friend) => friend.id === userId) ??
-        incomingRequests.find((request) => request.sender?.id === userId)?.sender ??
-        sentRequests.find((request) => request.receiver?.id === userId)?.receiver ??
-        null;
-
-      const previousFriends = friends;
-      const previousIncoming = incomingRequests;
-      const previousSent = sentRequests;
-      const previousBlocked = blockedUsers;
-
-      setFriends((current) => current.filter((friend) => friend.id !== userId));
-      setIncomingRequests((current) =>
-        current.filter((request) => request.sender?.id !== userId),
-      );
-      setSentRequests((current) =>
-        current.filter((request) => request.receiver?.id !== userId),
-      );
-      setPendingCount((current) =>
-        Math.max(
-          0,
-          current -
-            incomingRequests.filter((request) => request.sender?.id === userId)
-              .length,
-        ),
-      );
-      if (blockedCandidate) {
-        setBlockedUsers((current) => {
-          if (current.some((user) => user.id === blockedCandidate.id)) {
-            return current;
-          }
-          return [...current, blockedCandidate];
-        });
-      }
-
       try {
         await friendshipApi.blockUser(userId);
+        await refreshDirectory();
         emitFriendUpdated();
         return true;
       } catch {
-        setFriends(previousFriends);
-        setIncomingRequests(previousIncoming);
-        setSentRequests(previousSent);
-        setBlockedUsers(previousBlocked);
-        setPendingCount(previousIncoming.length);
         return false;
       }
     },
-    [blockedUsers, friends, incomingRequests, sentRequests],
+    [refreshDirectory],
   );
 
   const unblockUser = useCallback(
     async (userId: string): Promise<boolean> => {
-      const previous = blockedUsers;
-      setBlockedUsers((current) => current.filter((user) => user.id !== userId));
-
       try {
         await friendshipApi.unblockUser(userId);
+        await refreshDirectory();
         emitFriendUpdated();
         return true;
       } catch {
-        setBlockedUsers(previous);
         return false;
       }
     },
-    [blockedUsers],
+    [refreshDirectory],
   );
 
   const getRelationshipState = useCallback(
     (userId: string, currentUserId?: string | null): RelationshipState => {
-      if (currentUserId && userId === currentUserId) {
-        return { kind: "self" };
-      }
-
-      if (blockedUsers.some((user) => user.id === userId)) {
-        return { kind: "blocked" };
-      }
-
-      const friend = friends.find((item) => item.id === userId);
-      if (friend) {
-        return { kind: "friend", friendshipId: friend.friendshipId };
-      }
-
-      const incoming = incomingRequests.find((item) => item.sender?.id === userId);
-      if (incoming) {
-        return { kind: "incoming_request", requestId: incoming.id };
-      }
-
-      const outgoing = sentRequests.find((item) => item.receiver?.id === userId);
-      if (outgoing) {
-        return { kind: "outgoing_request", requestId: outgoing.id };
-      }
-
-      return { kind: "not_friend" };
+      return deriveRelationshipState({
+        userId,
+        currentUserId,
+        blockedUsers,
+        friends,
+        incomingRequests,
+        sentRequests,
+      });
     },
     [blockedUsers, friends, incomingRequests, sentRequests],
   );
 
-  const checkFriendshipStatus = useCallback(
-    async (
-      userId: string,
-    ): Promise<{ status: FriendshipStatusType; friendshipId?: string }> => {
-      try {
-        const response = await friendshipApi.getFriendshipStatus(userId);
-        const data = unwrapApiSuccess(response) as {
-          status?: FriendshipStatusType;
-          friendship?: { id?: string };
-        };
+  const checkFriendshipStatus = useCallback(async (userId: string) => {
+    try {
+      const response = await friendshipApi.getFriendshipStatus(userId);
+      const data = unwrapApiSuccess(response);
+      const relation =
+        data &&
+        typeof data === "object" &&
+        (data as { friendship?: FriendshipRelationDto }).friendship
+          ? (data as { friendship: FriendshipRelationDto }).friendship
+          : null;
+
+      if (!relation) {
         return {
-          status: data.status || "none",
-          friendshipId: data.friendship?.id,
+          status: "none" as FriendshipStatusType,
+          capabilities: NONE_RELATION_CAPABILITIES,
+          actorRole: "none" as FriendshipActorRole,
         };
-      } catch {
-        return { status: "none" };
       }
-    },
-    [],
-  );
+
+      return {
+        status: relation.status,
+        friendshipId: relation.relationId || undefined,
+        capabilities: relation.capabilities,
+        actorRole: relation.actorRole,
+      };
+    } catch {
+      return {
+        status: "none" as FriendshipStatusType,
+        capabilities: NONE_RELATION_CAPABILITIES,
+        actorRole: "none" as FriendshipActorRole,
+      };
+    }
+  }, []);
 
   return {
     friends,

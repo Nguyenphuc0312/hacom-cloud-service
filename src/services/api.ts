@@ -9,6 +9,10 @@ import type {
   ApiResponse,
   CompleteUploadResponse,
   CreateMessageResponse,
+  FriendshipPendingCountDto,
+  FriendshipStatusResponseDto,
+  FriendshipWriteResponseDto,
+  FriendshipRelationDto,
   GetDownloadUrlResponse,
   LoginResponse,
   RefreshTokenResponse,
@@ -1060,8 +1064,15 @@ export const friendshipApi = {
   getFriends: async () => {
     const response = await apiClient.get<
       ApiResponse<{
-        friends: User[];
-        total: number;
+        data: FriendshipRelationDto[];
+        pagination: {
+          page: number;
+          limit: number;
+          total: number;
+          totalPages: number;
+          hasNext: boolean;
+          hasPrev: boolean;
+        };
       }>
     >("/friends");
     return response.data;
@@ -1070,90 +1081,113 @@ export const friendshipApi = {
   getPendingRequests: async () => {
     const response = await apiClient.get<
       ApiResponse<{
-        requests: Array<{ id: string; sender: User; createdAt: string }>;
+        data: FriendshipRelationDto[];
+        pagination: {
+          page: number;
+          limit: number;
+          total: number;
+          totalPages: number;
+          hasNext: boolean;
+          hasPrev: boolean;
+        };
       }>
     >("/friends/requests/received");
     return response.data;
   },
 
   sendFriendRequest: async (userId: string) => {
-    const response = await apiClient.post<ApiResponse<{ message: string }>>(
-      "/friends/requests",
-      { userId },
-    );
+    const response = await apiClient.post<
+      ApiResponse<FriendshipWriteResponseDto>
+    >("/friends/requests", { userId });
     return response.data;
   },
 
   acceptFriendRequest: async (requestId: string) => {
-    const response = await apiClient.post<ApiResponse<{ message: string }>>(
-      `/friends/requests/${requestId}/accept`,
-    );
+    const response = await apiClient.post<
+      ApiResponse<FriendshipWriteResponseDto>
+    >(`/friends/requests/${requestId}/accept`);
     return response.data;
   },
 
   rejectFriendRequest: async (requestId: string) => {
-    const response = await apiClient.post<ApiResponse<{ message: string }>>(
-      `/friends/requests/${requestId}/decline`,
-    );
+    const response = await apiClient.post<
+      ApiResponse<FriendshipWriteResponseDto>
+    >(`/friends/requests/${requestId}/decline`);
     return response.data;
   },
 
   removeFriend: async (friendshipId: string) => {
-    await apiClient.delete(`/friends/${friendshipId}`);
+    const response = await apiClient.delete<
+      ApiResponse<FriendshipWriteResponseDto>
+    >(`/friends/${friendshipId}`);
+    return response.data;
   },
 
   getSentRequests: async () => {
     const response = await apiClient.get<
       ApiResponse<{
-        requests: Array<{ id: string; receiver: User; createdAt: string }>;
+        data: FriendshipRelationDto[];
+        pagination: {
+          page: number;
+          limit: number;
+          total: number;
+          totalPages: number;
+          hasNext: boolean;
+          hasPrev: boolean;
+        };
       }>
     >("/friends/requests/sent");
     return response.data;
   },
 
   cancelFriendRequest: async (requestId: string) => {
-    await apiClient.delete(`/friends/requests/${requestId}`);
+    const response = await apiClient.delete<
+      ApiResponse<FriendshipWriteResponseDto>
+    >(`/friends/requests/${requestId}`);
+    return response.data;
   },
 
   getPendingCount: async () => {
-    const response = await apiClient.get<ApiResponse<{ count: number }>>(
-      "/friends/requests/count",
-    );
+    const response = await apiClient.get<
+      ApiResponse<FriendshipPendingCountDto>
+    >("/friends/requests/count");
     return response.data;
   },
 
   blockUser: async (userId: string) => {
-    const response = await apiClient.post<ApiResponse<{ message: string }>>(
-      "/friends/block",
-      { userId },
-    );
+    const response = await apiClient.post<
+      ApiResponse<FriendshipWriteResponseDto>
+    >("/friends/block", { userId });
     return response.data;
   },
 
   unblockUser: async (userId: string) => {
-    await apiClient.delete(`/friends/unblock/${userId}`);
+    const response = await apiClient.delete<
+      ApiResponse<FriendshipWriteResponseDto>
+    >(`/friends/unblock/${userId}`);
+    return response.data;
   },
 
   getBlockedUsers: async () => {
-    const response =
-      await apiClient.get<ApiResponse<{ users: User[]; total: number }>>(
-        "/friends/blocked",
-      );
+    const response = await apiClient.get<
+      ApiResponse<{
+        data: FriendshipRelationDto[];
+        pagination: {
+          page: number;
+          limit: number;
+          total: number;
+          totalPages: number;
+          hasNext: boolean;
+          hasPrev: boolean;
+        };
+      }>
+    >("/friends/blocked");
     return response.data;
   },
 
   getFriendshipStatus: async (userId: string) => {
     const response = await apiClient.get<
-      ApiResponse<{
-        status:
-          | "none"
-          | "pending"
-          | "accepted"
-          | "declined"
-          | "canceled"
-          | "blocked";
-        friendship?: { id: string };
-      }>
+      ApiResponse<FriendshipStatusResponseDto>
     >(`/friends/status/${userId}`);
     return response.data;
   },

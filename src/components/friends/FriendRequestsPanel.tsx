@@ -19,77 +19,58 @@ import {
 import { Spinner, toast } from "../ui";
 import { Avatar } from "../common/Avatar";
 import { Badge } from "../common/Badge";
-import { friendshipApi } from "../../services/api";
-import { useFriendship } from "../../hooks/useFriendship";
-import { unwrapApiSuccess } from "../../lib/apiContract";
+import {
+  useFriendship,
+  type FriendRequest as FriendshipRequest,
+} from "../../hooks/useFriendship";
 import { extractApiError } from "../../lib/apiContract";
 
 type Tab = "received" | "sent";
 
-interface FriendRequest {
-  id: string;
-  sender?: {
-    id: string;
-    username: string;
-    displayName?: string;
-    avatar?: string;
-  };
-  receiver?: {
-    id: string;
-    username: string;
-    displayName?: string;
-    avatar?: string;
-  };
-  createdAt: string;
-}
-
 interface FriendRequestsPanelProps {
   className?: string;
 }
+
+const getUserDisplayName = (
+  user:
+    | FriendshipRequest["requester"]
+    | FriendshipRequest["addressee"]
+    | undefined,
+): string => {
+  if (!user) {
+    return "?";
+  }
+
+  const fullName = [user.firstName, user.lastName]
+    .filter((value): value is string => Boolean(value && value.trim()))
+    .join(" ")
+    .trim();
+
+  return fullName || user.username || user.id;
+};
 
 export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
   const {
+    incomingRequests,
+    isIncomingLoading,
+    fetchIncomingRequests,
     sentRequests,
     pendingCount,
     fetchSentRequests,
     fetchPendingCount,
+    acceptFriendRequest,
+    rejectFriendRequest,
     cancelFriendRequest,
   } = useFriendship();
 
   const [activeTab, setActiveTab] = useState<Tab>("received");
-  const [receivedRequests, setReceivedRequests] = useState<FriendRequest[]>([]);
-  const [isLoadingReceived, setIsLoadingReceived] = useState(false);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
-  // Fetch received (pending) requests
-  const fetchReceived = useCallback(async () => {
-    setIsLoadingReceived(true);
-    try {
-      const response = await friendshipApi.getPendingRequests();
-      const payload = unwrapApiSuccess(response) as
-        | FriendRequest[]
-        | { data?: FriendRequest[]; requests?: FriendRequest[] };
-      if (Array.isArray(payload)) {
-        setReceivedRequests(payload);
-      } else if (Array.isArray(payload?.data)) {
-        setReceivedRequests(payload.data);
-      } else if (Array.isArray(payload?.requests)) {
-        setReceivedRequests(payload.requests);
-      } else {
-        setReceivedRequests([]);
-      }
-    } catch {
-      // silent fail — empty state shown
-    } finally {
-      setIsLoadingReceived(false);
-    }
-  }, []);
-
   useEffect(() => {
-    fetchReceived();
+    fetchIncomingRequests();
     fetchPendingCount();
     fetchSentRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -99,7 +80,7 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
     if (typeof window === "undefined") return;
 
     const handler = () => {
-      void fetchReceived();
+      void fetchIncomingRequests();
       void fetchPendingCount();
       void fetchSentRequests();
     };
@@ -108,15 +89,17 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
     return () => {
       window.removeEventListener("friend:updated", handler);
     };
-  }, [fetchPendingCount, fetchReceived, fetchSentRequests]);
+  }, [fetchIncomingRequests, fetchPendingCount, fetchSentRequests]);
 
   const handleAccept = useCallback(
     async (requestId: string) => {
       setProcessingIds((prev) => new Set(prev).add(requestId));
       try {
-        await friendshipApi.acceptFriendRequest(requestId);
-        setReceivedRequests((prev) => prev.filter((r) => r.id !== requestId));
-        fetchPendingCount();
+        const success = await acceptFriendRequest(requestId);
+        if (!success) {
+          throw new Error("accept_failed");
+        }
+        await fetchPendingCount();
         toast.success(t("friends:requestAccepted"));
       } catch (err) {
         const apiError = extractApiError(err);
@@ -129,16 +112,18 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
         });
       }
     },
-    [fetchPendingCount, t],
+    [acceptFriendRequest, fetchPendingCount, t],
   );
 
   const handleReject = useCallback(
     async (requestId: string) => {
       setProcessingIds((prev) => new Set(prev).add(requestId));
       try {
-        await friendshipApi.rejectFriendRequest(requestId);
-        setReceivedRequests((prev) => prev.filter((r) => r.id !== requestId));
-        fetchPendingCount();
+        const success = await rejectFriendRequest(requestId);
+        if (!success) {
+          throw new Error("reject_failed");
+        }
+        await fetchPendingCount();
         toast.success(t("friends:requestRejected"));
       } catch (err) {
         const apiError = extractApiError(err);
@@ -151,7 +136,7 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
         });
       }
     },
-    [fetchPendingCount, t],
+    [fetchPendingCount, rejectFriendRequest, t],
   );
 
   const handleCancel = useCallback(
@@ -185,8 +170,9 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
     },
   ];
 
-  const isLoading = activeTab === "received" ? isLoadingReceived : false;
-  const items = activeTab === "received" ? receivedRequests : sentRequests;
+  const isLoading = activeTab === "received" ? isIncomingLoading : false;
+  const items: FriendshipRequest[] =
+    activeTab === "received" ? incomingRequests : sentRequests;
 
   return (
     <div className={clsx("flex flex-col", className)}>
@@ -235,23 +221,20 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
             {items.map((request) => {
               const user =
                 activeTab === "received"
-                  ? (request as FriendRequest).sender
-                  : (request as FriendRequest).receiver;
-              const isProcessing = processingIds.has(request.id);
+                  ? request.requester
+                  : request.addressee;
+              const displayName = getUserDisplayName(user);
+              const isProcessing = processingIds.has(request.relationId);
 
               return (
                 <li
-                  key={request.id}
+                  key={request.relationId}
                   className="flex items-center gap-3 px-4 py-3"
                 >
-                  <Avatar
-                    src={user?.avatar}
-                    alt={user?.displayName || user?.username || "?"}
-                    size="md"
-                  />
+                  <Avatar src={user?.avatar} alt={displayName} size="md" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-text-primary">
-                      {user?.displayName || user?.username}
+                      {displayName}
                     </p>
                     <p className="truncate text-xs text-text-muted">
                       @{user?.username}
@@ -262,7 +245,7 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
-                        onClick={() => handleAccept(request.id)}
+                        onClick={() => handleAccept(request.relationId)}
                         disabled={isProcessing}
                         className={clsx(
                           "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
@@ -276,7 +259,7 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleReject(request.id)}
+                        onClick={() => handleReject(request.relationId)}
                         disabled={isProcessing}
                         className={clsx(
                           "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
@@ -292,7 +275,7 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
                   ) : (
                     <button
                       type="button"
-                      onClick={() => handleCancel(request.id)}
+                      onClick={() => handleCancel(request.relationId)}
                       disabled={isProcessing}
                       className={clsx(
                         "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
