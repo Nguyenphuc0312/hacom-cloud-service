@@ -839,7 +839,7 @@ export const MessageInput = React.forwardRef<
         />
 
         {mode === "reply" && replyToMessage && (
-          <div className="mb-2 flex items-center justify-between rounded-[20px] border border-white/8 bg-[hsl(var(--color-chat-composer)/0.96)] px-3.5 py-2 shadow-xs animate-slide-up-fade">
+          <div className="mb-2 flex items-center justify-between rounded-xl border border-border bg-surface px-3 py-2 shadow-xs animate-slide-up-fade">
             <div className="flex min-w-0 items-center gap-2">
               <div className="h-8 w-1 rounded-full bg-primary" />
               <div className="min-w-0">
@@ -868,7 +868,7 @@ export const MessageInput = React.forwardRef<
         )}
 
         {mode === "edit" && editingMessage && (
-          <div className="mb-2 flex items-center justify-between rounded-[20px] border border-warning/35 bg-warning/15 px-3.5 py-2 shadow-xs animate-slide-up-fade">
+          <div className="mb-2 flex items-center justify-between rounded-xl border border-warning/35 bg-warning/15 px-3 py-2 shadow-xs animate-slide-up-fade">
             <div className="flex min-w-0 items-center gap-2">
               <div className="h-8 w-1 rounded-full bg-warning" />
               <div className="min-w-0">
@@ -932,17 +932,17 @@ export const MessageInput = React.forwardRef<
           <div
             data-composer-state={composerVisualState}
             className={clsx(
-              "relative flex min-w-0 flex-1 items-end rounded-[28px] border px-2 py-2 transition-micro",
+              "relative flex min-w-0 flex-1 items-end rounded-2xl border px-2 py-2 transition-micro",
               composerVisualState === "disabled" &&
-                "border-white/6 bg-[hsl(var(--color-chat-composer)/0.92)] shadow-none",
+                "border-disabled-border bg-disabled-bg shadow-none",
               composerVisualState === "sending" &&
-                "border-primary/18 bg-[hsl(var(--color-chat-composer)/0.98)] shadow-elev2",
+                "border-primary/30 bg-surface shadow-elev2",
               composerVisualState === "ready" &&
-                "border-primary/20 bg-[hsl(var(--color-chat-composer)/0.99)] shadow-elev2",
+                "border-primary/30 bg-surface shadow-elev2",
               composerVisualState === "focused" &&
-                "border-white/12 bg-[hsl(var(--color-chat-composer)/0.99)] shadow-elev2",
+                "border-border-focus bg-surface shadow-elev2",
               composerVisualState === "idle" &&
-                "border-white/8 bg-[hsl(var(--color-chat-composer))] shadow-elev1",
+                "border-border bg-surface shadow-elev1",
             )}
           >
             <EmojiButton
@@ -959,7 +959,7 @@ export const MessageInput = React.forwardRef<
                 role="listbox"
                 aria-label={t("chat:composer.mentionList")}
                 className={clsx(
-                  "absolute bottom-full left-2 right-2 z-dropdown mb-2 max-h-52 overflow-y-auto rounded-[20px] border border-white/8 bg-[hsl(var(--color-sidebar-surface))] shadow-elev2",
+                  "absolute bottom-full left-2 right-2 z-dropdown mb-2 max-h-52 overflow-y-auto rounded-xl border border-border bg-surface-raised shadow-elev2",
                   "p-1",
                 )}
               >
@@ -982,7 +982,7 @@ export const MessageInput = React.forwardRef<
                           "transition-colors",
                           isActive
                             ? "bg-primary/15 text-text-primary"
-                            : "text-text-secondary hover:bg-white/6",
+                            : "text-text-secondary hover:bg-surface-hover",
                         )}
                         onMouseDown={(event) => {
                           event.preventDefault();
@@ -1047,7 +1047,7 @@ export const MessageInput = React.forwardRef<
                 onClick={handleInsertMentionTrigger}
                 className={clsx(
                   "hidden h-10 w-10 items-center justify-center rounded-full transition-colors md:inline-flex",
-                  "text-text-muted hover:bg-white/8 hover:text-text-primary",
+                  "text-text-muted hover:bg-surface-hover hover:text-text-primary",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                   disableToolbar && "cursor-not-allowed opacity-50",
                 )}
@@ -1064,8 +1064,8 @@ export const MessageInput = React.forwardRef<
                   className={clsx(
                     "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
                     showAttachmentMenu
-                      ? "bg-white/10 text-text-primary"
-                      : "text-text-muted hover:bg-white/8 hover:text-text-primary",
+                      ? "bg-surface-active text-text-primary"
+                      : "text-text-muted hover:bg-surface-hover hover:text-text-primary",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                     disableAttachmentActions && "cursor-not-allowed opacity-50",
                   )}

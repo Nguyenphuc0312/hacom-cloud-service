@@ -91,7 +91,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         role="option"
         aria-selected={isActive}
         className={clsx(
-          "group relative mx-2 my-1 flex h-room-item w-room-item items-center justify-center rounded-[20px]",
+          "group relative mx-2 my-1 flex h-room-item w-room-item items-center justify-center rounded-xl",
           "transition-colors duration-200",
           "hover:bg-surface-hover",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
@@ -117,7 +117,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
               count={unreadCount}
               size="sm"
               variant={unreadMention ? "danger" : "primary"}
-              className="min-w-[18px] text-[10px]"
+              className="min-w-5 text-caption"
             />
           </span>
         )}
@@ -132,7 +132,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
       role="option"
       aria-selected={isActive}
       className={clsx(
-        "mx-2 my-0.5 flex h-room-item w-[calc(100%-var(--space-4))] items-center rounded-[22px] px-3.5",
+        "mx-2 my-0.5 flex h-room-item w-[calc(100%-var(--space-4))] items-center rounded-xl px-3",
         "transition-colors duration-200",
         "hover:bg-surface-hover",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
@@ -156,7 +156,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
           <div className="mb-0.5 flex items-center gap-1.5">
             <p
               className={clsx(
-                "truncate text-[14px] leading-5 text-text-primary",
+                "truncate text-body-sm text-text-primary",
                 unreadCount > 0 && "font-semibold",
               )}
             >
@@ -202,7 +202,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         <div className="flex h-full min-w-room-meta flex-col items-end justify-between py-1">
           <span
             className={clsx(
-              "text-[11px] leading-4",
+              "text-caption",
               unreadCount > 0 ? "font-medium text-primary" : "text-text-muted",
             )}
           >
@@ -220,7 +220,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
                     ? "muted"
                     : "primary"
               }
-              className="min-w-[18px] px-1.5 text-[10px]"
+              className="min-w-5 px-1.5 text-caption"
             />
           ) : (
             <span className="h-4" aria-hidden="true" />

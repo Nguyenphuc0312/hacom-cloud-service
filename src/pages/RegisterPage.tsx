@@ -9,6 +9,7 @@ import {
   LockClosedIcon,
   ChatBubbleLeftRightIcon,
 } from "@heroicons/react/24/outline";
+import { AuthCard, AuthShell } from "../components/auth";
 import {
   Button,
   Input,
@@ -109,163 +110,144 @@ export const RegisterPage: React.FC = () => {
   };
 
   return (
-    <div
-      className={clsx(
-        "relative isolate",
-        "grid place-items-center",
-        "[min-height:100dvh]",
-        "overflow-y-auto",
-        "bg-gradient-to-br from-primary/10 via-background to-secondary/10",
-        "px-4 py-8 sm:py-10",
-      )}
-    >
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 overflow-hidden pointer-events-none"
+    <AuthShell maxWidth="md">
+      <AuthCard
+        ariaLabel={t("auth:register.aria.section")}
+        className="p-5 sm:p-7"
       >
-        <div className="absolute -top-40 -left-40 w-64 h-64 sm:w-80 sm:h-80 lg:w-96 lg:h-96 bg-secondary/15 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -right-40 w-64 h-64 sm:w-80 sm:h-80 lg:w-96 lg:h-96 bg-primary/10 rounded-full blur-3xl" />
-      </div>
+        <header className="mb-6 text-center">
+          <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-text-inverse shadow-elev1 sm:h-14 sm:w-14">
+            <ChatBubbleLeftRightIcon className="h-7 w-7 sm:h-8 sm:w-8" />
+          </div>
+          <h1 className="text-title text-text-primary sm:text-2xl">
+            {t("auth:register.title")}
+          </h1>
+          <p className="mt-2 text-body-sm text-text-muted">
+            {t("auth:register.subtitle")}
+          </p>
+        </header>
 
-      <div className="relative z-10 w-full mx-auto max-w-sm xs:max-w-sm sm:max-w-lg lg:max-w-xl">
-        <section
-          aria-label={t("auth:register.aria.section")}
-          className="bg-surface rounded-2xl shadow-xl border border-border animate-fade-in p-5 xs:p-6 sm:p-8 lg:p-10"
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          noValidate
+          className="space-y-4"
         >
-          <header className="text-center mb-5 sm:mb-6 lg:mb-8">
-            <div className="inline-flex items-center justify-center rounded-2xl mb-3 sm:mb-4 shadow-lg shadow-elev2 bg-primary w-12 h-12 xs:w-14 xs:h-14 sm:w-16 sm:h-16">
-              <ChatBubbleLeftRightIcon className="w-6 h-6 xs:w-7 xs:h-7 sm:w-8 sm:h-8 text-text-inverse" />
-            </div>
-            <h1 className="text-lg xs:text-xl sm:text-2xl font-bold text-text-primary leading-tight">
-              {t("auth:register.title")}
-            </h1>
-            <p className="text-xs xs:text-sm sm:text-base text-text-muted mt-1 sm:mt-2">
-              {t("auth:register.subtitle")}
-            </p>
-          </header>
-
-          <form
-            onSubmit={handleSubmit(onSubmit)}
-            noValidate
-            className="space-y-3 xs:space-y-4 sm:space-y-5"
+          <div
+            className={clsx(
+              "transition-all duration-200 overflow-hidden",
+              error ? "max-h-40 opacity-100" : "max-h-0 opacity-0",
+            )}
+            aria-live="polite"
           >
-            <div
-              className={clsx(
-                "transition-all duration-200 overflow-hidden",
-                error ? "max-h-40 opacity-100" : "max-h-0 opacity-0",
-              )}
-              aria-live="polite"
-            >
-              {error ? (
-                <div
-                  role="alert"
-                  className="p-3 sm:p-4 bg-danger/15 border border-danger/35 rounded-xl text-danger text-xs xs:text-sm animate-shake"
-                >
-                  {error}
-                </div>
-              ) : null}
-            </div>
+            {error ? (
+              <div
+                role="alert"
+                className="animate-shake rounded-lg border border-danger/35 bg-danger/15 p-3 text-body-sm text-danger"
+              >
+                {error}
+              </div>
+            ) : null}
+          </div>
 
+          <Input
+            {...register("email")}
+            type="email"
+            label={t("auth:register.email")}
+            placeholder={t("auth:placeholders.email")}
+            leftIcon={<EnvelopeIcon className="h-5 w-5" />}
+            error={errors.email?.message}
+            autoComplete="email"
+            inputMode="email"
+            disabled={isLoading}
+          />
+
+          <div className="space-y-2">
             <Input
-              {...register("email")}
-              type="email"
-              label={t("auth:register.email")}
-              placeholder={t("auth:placeholders.email")}
-              leftIcon={<EnvelopeIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
-              error={errors.email?.message}
-              autoComplete="email"
-              inputMode="email"
-              disabled={isLoading}
-            />
-
-            <div className="space-y-2">
-              <Input
-                {...register("password")}
-                type="password"
-                label={t("auth:register.password")}
-                placeholder={t("auth:placeholders.password")}
-                leftIcon={<LockClosedIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
-                error={errors.password?.message}
-                autoComplete="new-password"
-                disabled={isLoading}
-              />
-              <PasswordStrength password={password ?? ""} />
-            </div>
-
-            <Input
-              {...register("confirmPassword")}
+              {...register("password")}
               type="password"
-              label={t("auth:register.confirmPassword")}
+              label={t("auth:register.password")}
               placeholder={t("auth:placeholders.password")}
-              leftIcon={<LockClosedIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
-              error={errors.confirmPassword?.message}
+              leftIcon={<LockClosedIcon className="h-5 w-5" />}
+              error={errors.password?.message}
               autoComplete="new-password"
               disabled={isLoading}
             />
+            <PasswordStrength password={password ?? ""} />
+          </div>
 
-            <Checkbox
-              {...register("acceptTerms")}
-              label={
-                <span className="text-xs xs:text-sm leading-snug">
-                  {t("auth:register.acceptTermsPrefix")}{" "}
-                  <Link
-                    to="/terms"
-                    className="text-primary hover:underline"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {t("auth:register.terms")}
-                  </Link>{" "}
-                  {t("auth:register.acceptTermsAnd")}{" "}
-                  <Link
-                    to="/privacy"
-                    className="text-primary hover:underline"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {t("auth:register.privacy")}
-                  </Link>
-                </span>
-              }
-              error={errors.acceptTerms?.message}
-              disabled={isLoading}
-            />
+          <Input
+            {...register("confirmPassword")}
+            type="password"
+            label={t("auth:register.confirmPassword")}
+            placeholder={t("auth:placeholders.password")}
+            leftIcon={<LockClosedIcon className="h-5 w-5" />}
+            error={errors.confirmPassword?.message}
+            autoComplete="new-password"
+            disabled={isLoading}
+          />
 
-            <Button
-              type="submit"
-              fullWidth
-              size="lg"
-              isLoading={isLoading || isSubmitting}
-              disabled={isLoading || isSubmitting}
-              aria-busy={isLoading || isSubmitting}
-            >
-              {t("auth:register.submit")}
-            </Button>
-          </form>
+          <Checkbox
+            {...register("acceptTerms")}
+            label={
+              <span className="text-body-sm leading-snug">
+                {t("auth:register.acceptTermsPrefix")}{" "}
+                <Link
+                  to="/terms"
+                  className="text-primary hover:underline"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {t("auth:register.terms")}
+                </Link>{" "}
+                {t("auth:register.acceptTermsAnd")}{" "}
+                <Link
+                  to="/privacy"
+                  className="text-primary hover:underline"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {t("auth:register.privacy")}
+                </Link>
+              </span>
+            }
+            error={errors.acceptTerms?.message}
+            disabled={isLoading}
+          />
 
-          <p className="mt-5 sm:mt-6 lg:mt-8 text-center text-xs xs:text-sm text-text-muted">
-            {t("auth:register.haveAccount")}{" "}
-            <Link
-              to={ROUTE_PATHS.LOGIN}
-              className="font-semibold text-primary hover:text-primary/80 transition-colors"
-            >
-              {t("auth:register.loginNow")}
-            </Link>
-          </p>
-        </section>
-
-        <p className="mt-4 sm:mt-5 text-center text-xs xs:text-xs text-text-muted px-2 leading-relaxed">
-          {t("auth:register.footerPrivacyPrefix")}{" "}
-          <Link
-            to="/privacy"
-            className="underline hover:text-text-secondary transition-colors"
+          <Button
+            type="submit"
+            fullWidth
+            size="lg"
+            isLoading={isLoading || isSubmitting}
+            disabled={isLoading || isSubmitting}
+            aria-busy={isLoading || isSubmitting}
           >
-            {t("auth:register.privacy")}
-          </Link>{" "}
-          {t("auth:register.footerPrivacySuffix")}
+            {t("auth:register.submit")}
+          </Button>
+        </form>
+
+        <p className="mt-6 text-center text-body-sm text-text-muted">
+          {t("auth:register.haveAccount")}{" "}
+          <Link
+            to={ROUTE_PATHS.LOGIN}
+            className="font-semibold text-primary hover:text-primary/80 transition-colors"
+          >
+            {t("auth:register.loginNow")}
+          </Link>
         </p>
-      </div>
-    </div>
+      </AuthCard>
+
+      <p className="mt-4 px-2 text-center text-caption leading-relaxed text-text-muted">
+        {t("auth:register.footerPrivacyPrefix")}{" "}
+        <Link
+          to="/privacy"
+          className="underline hover:text-text-secondary transition-colors"
+        >
+          {t("auth:register.privacy")}
+        </Link>{" "}
+        {t("auth:register.footerPrivacySuffix")}
+      </p>
+    </AuthShell>
   );
 };
 

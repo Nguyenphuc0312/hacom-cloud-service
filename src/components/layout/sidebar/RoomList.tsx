@@ -186,7 +186,7 @@ const Row = ({ index, style, data }: ListChildComponentProps<RowData>) => {
       <div style={style} className="px-4">
         <div
           className={clsx(
-            "flex h-full items-center text-[11px] font-medium uppercase tracking-[0.12em] text-text-muted/80",
+            "flex h-full items-center text-caption font-medium uppercase tracking-[0.08em] text-text-muted/80",
             data.collapsed && "justify-center",
           )}
         >

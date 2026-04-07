@@ -1,8 +1,13 @@
 ﻿import React, { useMemo } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon, PencilSquareIcon } from "@heroicons/react/24/outline";
+import {
+  ChevronDoubleLeftIcon,
+  ChevronDoubleRightIcon,
+  PencilSquareIcon,
+} from "@heroicons/react/24/outline";
 import { Avatar } from "../../common/Avatar";
+import { IconButtonSurface } from "../../ui";
 import type { UserSummary } from "../../../types";
 
 interface SidebarHeaderProps {
@@ -45,9 +50,6 @@ const resolveStatusLabel = (
   return key ? t(key) : t("common:status.offline");
 };
 
-const iconButtonClasses =
-  "inline-flex h-10 w-10 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-white/8 hover:text-text-primary";
-
 export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   currentUser,
   collapsed,
@@ -67,13 +69,13 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   );
 
   return (
-    <div className="px-3 pb-2 pt-3">
+    <div className="px-3 py-3">
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"
           onClick={onCurrentUserClick}
           className={clsx(
-            "flex min-w-0 flex-1 items-center rounded-[22px] text-left transition-colors hover:bg-white/6",
+            "flex min-w-0 flex-1 items-center rounded-xl text-left transition-micro hover:bg-surface-hover",
             collapsed ? "justify-center px-0 py-2" : "gap-3 px-2 py-2.5",
           )}
           title={collapsed ? currentUserName : undefined}
@@ -89,30 +91,29 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
 
           {!collapsed && (
             <div className="min-w-0">
-              <p className="truncate text-[15px] font-semibold text-text-primary">
+              <p className="truncate text-title-sm text-text-primary">
                 {currentUserName}
               </p>
-              <p className="truncate text-xs text-text-muted">{currentStatusLabel}</p>
+              <p className="truncate text-caption text-text-muted">
+                {currentStatusLabel}
+              </p>
             </div>
           )}
         </button>
 
         <div className="flex shrink-0 items-center gap-1">
           {!collapsed && (
-            <button
-              type="button"
+            <IconButtonSurface
               onClick={onNewChat}
-              className={iconButtonClasses}
               aria-label={t("sidebar:header.startNewChat")}
             >
               <PencilSquareIcon className="h-5 w-5" />
-            </button>
+            </IconButtonSurface>
           )}
 
-          <button
-            type="button"
+          <IconButtonSurface
             onClick={onToggleCollapsed}
-            className={clsx("hidden lg:inline-flex", iconButtonClasses)}
+            className="hidden lg:inline-flex"
             aria-label={
               collapsed
                 ? t("sidebar:header.expandSidebar")
@@ -124,7 +125,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
             ) : (
               <ChevronDoubleLeftIcon className="h-5 w-5" />
             )}
-          </button>
+          </IconButtonSurface>
         </div>
       </div>
     </div>

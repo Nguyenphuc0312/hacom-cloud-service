@@ -19,6 +19,26 @@ export default {
         ],
       },
       fontSize: {
+        caption: [
+          "var(--font-size-caption, 0.75rem)",
+          { lineHeight: "var(--line-height-caption, 1rem)" },
+        ],
+        "body-sm": [
+          "var(--font-size-body-sm, 0.875rem)",
+          { lineHeight: "var(--line-height-body-sm, 1.25rem)" },
+        ],
+        body: [
+          "var(--font-size-body, 1rem)",
+          { lineHeight: "var(--line-height-body, 1.5rem)" },
+        ],
+        "title-sm": [
+          "var(--font-size-title-sm, 1.125rem)",
+          { lineHeight: "var(--line-height-title-sm, 1.5rem)" },
+        ],
+        title: [
+          "var(--font-size-title, 1.25rem)",
+          { lineHeight: "var(--line-height-title, 1.75rem)" },
+        ],
         xs: [
           "var(--font-size-xs, 0.75rem)",
           { lineHeight: "var(--line-height-xs, 1rem)" },
@@ -90,6 +110,15 @@ export default {
           inverse: withOpacity("--color-text-inverse", "0 0% 100%"),
           disabled: withOpacity("--color-text-disabled", "215 13% 65%"),
         },
+        token: {
+          background: withOpacity("--surface-background", "210 33% 98%"),
+          elevated: withOpacity("--surface-elevated", "0 0% 100%"),
+          hover: withOpacity("--surface-hover", "220 18% 97%"),
+          active: withOpacity("--surface-active", "215 20% 87%"),
+          border: withOpacity("--surface-border", "215 20% 87%"),
+          muted: withOpacity("--surface-text-muted", "215 13% 65%"),
+          primary: withOpacity("--surface-text-primary", "222 47% 11%"),
+        },
         disabled: {
           bg: withOpacity("--color-disabled-bg", "220 18% 97%"),
           border: withOpacity("--color-disabled-border", "215 20% 87%"),
@@ -155,6 +184,7 @@ export default {
         md: "var(--radius-md, 0.75rem)",
         lg: "var(--radius-lg, 1rem)",
         xl: "var(--radius-xl, 1.25rem)",
+        "2xl": "var(--radius-2xl, 1.5rem)",
       },
       boxShadow: {
         xs: "var(--shadow-xs, 0 1px 2px hsl(215 25% 15% / 0.08))",
@@ -170,6 +200,7 @@ export default {
         2: "var(--space-2, 8px)",
         3: "var(--space-3, 12px)",
         4: "var(--space-4, 16px)",
+        5: "var(--space-5, 20px)",
         6: "var(--space-6, 24px)",
         8: "var(--space-8, 32px)",
         10: "var(--space-10, 40px)",

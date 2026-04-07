@@ -20,8 +20,8 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
 
   if (collapsed) {
     return (
-      <div className="px-3 py-2">
-        <div className="flex h-11 items-center justify-center rounded-full bg-white/6 text-text-muted">
+      <div className="px-3 pb-2">
+        <div className="flex h-10 items-center justify-center rounded-xl border border-border/70 bg-surface-overlay text-text-muted">
           <MagnifyingGlassIcon className="h-5 w-5" aria-hidden="true" />
         </div>
       </div>
@@ -29,7 +29,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
   }
 
   return (
-    <div className="px-3 py-2">
+    <div className="px-3 pb-2">
       <label className="relative block">
         <MagnifyingGlassIcon
           className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-muted"
@@ -48,9 +48,9 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
           }}
           placeholder={t("sidebar:search.placeholder")}
           className={clsx(
-            "h-12 w-full rounded-full border border-transparent bg-white/6 pl-11 pr-10 text-sm",
+            "h-11 w-full rounded-xl border border-border bg-surface-overlay pl-11 pr-10 text-body-sm",
             "text-text-primary placeholder:text-text-muted",
-            "transition-colors focus:border-white/12 focus:bg-white/8 focus:outline-none focus:ring-1 focus:ring-white/10",
+            "transition-micro focus:border-border-focus focus:bg-surface focus:outline-none focus:ring-2 focus:ring-focus/20",
           )}
           aria-label={t("sidebar:search.aria")}
         />
@@ -59,7 +59,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
           <button
             type="button"
             onClick={() => onChange("")}
-            className="absolute right-3 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-white/8 hover:text-text-primary"
+            className="absolute right-3 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-text-muted transition-micro hover:bg-surface-hover hover:text-text-primary"
             aria-label={t("sidebar:search.clearAria")}
           >
             <XMarkIcon className="h-4 w-4" />
@@ -71,7 +71,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
         <button
           type="button"
           onClick={() => onSearchUsers(value.trim())}
-          className="mt-2 w-full rounded-2xl border border-white/8 bg-white/3 px-3 py-2 text-left text-xs font-medium text-text-secondary transition-colors hover:bg-white/6 hover:text-text-primary"
+          className="mt-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-left text-caption font-medium text-text-secondary transition-micro hover:bg-surface-hover hover:text-text-primary"
         >
           {t("friends:tabs.search", { defaultValue: "Search users" })}:{" "}
           <span className="font-semibold">{value.trim()}</span>

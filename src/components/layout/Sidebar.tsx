@@ -166,10 +166,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     type="button"
                     onClick={() => setActiveFilter(tab.id)}
                     className={clsx(
-                      "inline-flex h-7 items-center gap-2 rounded-full px-3 text-[11px] font-medium transition-colors",
+                      "inline-flex h-8 items-center gap-2 rounded-lg px-3 text-caption font-medium transition-micro",
                       isActive
-                        ? "bg-white/12 text-text-primary"
-                        : "text-text-muted hover:bg-white/6 hover:text-text-secondary",
+                        ? "bg-surface text-text-primary shadow-xs"
+                        : "text-text-muted hover:bg-surface-hover hover:text-text-secondary",
                     )}
                     aria-pressed={isActive}
                   >
@@ -186,7 +186,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               })}
             </div>
             {isLoadingConversations && conversations.length > 0 && (
-              <div className="mt-2 inline-flex items-center gap-2 px-1 text-[11px] text-text-muted">
+              <div className="mt-2 inline-flex items-center gap-2 px-1 text-caption text-text-muted">
                 <Spinner size="sm" />
                 <span>
                   {t("common:status.loading", { defaultValue: "Loading..." })}
@@ -212,16 +212,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onSelect={handleSelectRoom}
         />
 
-        <div className="border-t border-border/70 px-2 pb-2 pt-1.5">
+        <div className="border-t border-border/70 px-2 pb-2 pt-2">
           {/* Friends button */}
           <button
             type="button"
             onClick={() => navigate(ROUTE_PATHS.FRIENDS)}
             className={clsx(
-              "inline-flex w-full items-center rounded-2xl px-3 py-2.5 text-sm font-medium transition-colors",
+              "inline-flex w-full items-center rounded-lg px-3 py-2.5 text-body-sm font-medium transition-micro",
               location.pathname.startsWith(ROUTE_PATHS.FRIENDS)
-                ? "bg-white/10 text-text-primary"
-                : "text-text-secondary hover:bg-white/6 hover:text-text-primary",
+                ? "bg-surface-active text-text-primary"
+                : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
               isCollapsed && "justify-center px-0",
             )}
             aria-label={t("friends:title", { defaultValue: "Friends" })}
@@ -239,10 +239,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             type="button"
             onClick={() => navigate(ROUTE_PATHS.SETTINGS)}
             className={clsx(
-              "inline-flex w-full items-center rounded-2xl px-3 py-2.5 text-sm font-medium transition-colors",
+              "inline-flex w-full items-center rounded-lg px-3 py-2.5 text-body-sm font-medium transition-micro",
               location.pathname.startsWith(ROUTE_PATHS.SETTINGS)
-                ? "bg-white/10 text-text-primary"
-                : "text-text-secondary hover:bg-white/6 hover:text-text-primary",
+                ? "bg-surface-active text-text-primary"
+                : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
               isCollapsed && "justify-center px-0",
             )}
             aria-label={t("settings.pageTitle", { defaultValue: "Settings" })}
@@ -261,7 +261,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             disabled={isLoggingOut}
             onClick={() => setIsLogoutConfirmOpen(true)}
             className={clsx(
-              "inline-flex w-full items-center rounded-2xl px-3 py-2.5 text-sm font-medium transition-colors",
+              "inline-flex w-full items-center rounded-lg px-3 py-2.5 text-body-sm font-medium transition-micro",
               "text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50",
               isCollapsed && "justify-center px-0",
             )}

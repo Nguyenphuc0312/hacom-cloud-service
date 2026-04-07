@@ -13,7 +13,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../common/Avatar";
-import { Button, Spinner, toast } from "../ui";
+import { Button, PanelSection, Spinner, toast } from "../ui";
 import { EditProfileModal } from "../modals/EditProfileModal";
 import { useAuthStore, usePresenceStore } from "../../stores";
 import { useFriendship } from "../../hooks/useFriendship";
@@ -118,7 +118,7 @@ const badgeToneByRelationship: Record<string, string> = {
 };
 
 const statCardClass =
-  "rounded-2xl border border-border/80 bg-surface px-3 py-3 transition-colors";
+  "rounded-lg border border-border/80 bg-surface px-3 py-2.5 transition-colors";
 
 export const UserProfile: React.FC<UserProfileProps> = ({
   userId,
@@ -510,16 +510,16 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   return (
     <>
       <div className={clsx("flex h-full flex-col bg-surface", className)}>
-        <div className="flex items-center justify-between border-b border-border/80 px-4 py-3">
+        <div className="flex items-center justify-between border-b border-border/80 px-4 py-2.5">
           <div>
-            <h3 className="text-base font-semibold text-text-primary">
+            <h3 className="text-title-sm text-text-primary">
               {isSelf
                 ? t("friends:relationship.self", {
                     defaultValue: "Your profile",
                   })
                 : t("profile:userProfile.title")}
             </h3>
-            <p className="text-xs text-text-muted">
+            <p className="text-caption text-text-muted">
               {t("friends:profileHint", {
                 defaultValue: "Quick actions and contact details",
               })}
@@ -529,7 +529,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1.5 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary"
+            className="icon-button-surface h-9 w-9"
             aria-label={t("common:actions.close")}
           >
             <XMarkIcon className="h-5 w-5" />
@@ -542,9 +542,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               <Spinner size="md" />
             </div>
           ) : (
-            <div className="space-y-6 px-4 py-5">
-              <section className="rounded-[28px] border border-border/80 bg-gradient-to-b from-surface to-surface-overlay/60 px-5 py-6">
-                <div className="flex flex-col items-start gap-4 sm:items-center sm:text-center">
+            <div className="space-y-4 px-4 py-4">
+              <PanelSection className="rounded-2xl bg-surface px-4 py-4 shadow-xs">
+                <div className="flex flex-col items-start gap-3 sm:items-center sm:text-center">
                   <Avatar
                     src={user?.avatar}
                     alt={displayName}
@@ -553,14 +553,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     showStatus
                   />
 
-                  <div className="w-full min-w-0 space-y-2">
+                  <div className="w-full min-w-0 space-y-1.5">
                     <div className="flex flex-wrap items-center gap-2 sm:justify-center">
-                      <h2 className="truncate text-2xl font-semibold text-text-primary">
+                      <h2 className="truncate text-title text-text-primary">
                         {displayName}
                       </h2>
                       <span
                         className={clsx(
-                          "inline-flex rounded-full px-2.5 py-1 text-xs font-medium",
+                          "inline-flex rounded-full px-2.5 py-1 text-caption font-medium",
                           badgeToneByRelationship[relationship.kind],
                         )}
                       >
@@ -569,14 +569,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     </div>
 
                     {username && (
-                      <p className="truncate text-sm text-text-secondary">
+                      <p className="truncate text-body-sm text-text-secondary">
                         {username}
                       </p>
                     )}
 
                     <p
                       className={clsx(
-                        "text-sm",
+                        "text-body-sm",
                         effectiveStatus === UserStatus.ONLINE
                           ? "text-success"
                           : "text-text-secondary",
@@ -585,7 +585,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                       {presenceLabel}
                     </p>
 
-                    <p className="mx-auto max-w-sm text-sm leading-6 text-text-secondary">
+                    <p className="mx-auto max-w-sm text-body-sm leading-6 text-text-secondary">
                       {user?.bio?.trim() ||
                         (isSelf
                           ? t("profile:userProfile.emptyBioSelf", {
@@ -598,7 +598,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     </p>
                   </div>
                 </div>
-              </section>
+              </PanelSection>
 
               <section className="space-y-3">{renderActions()}</section>
 
@@ -669,7 +669,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               {!isSelf &&
               onStartConversation &&
               relationship.kind === "friend" ? (
-                <section className="rounded-2xl border border-border/80 bg-surface px-4 py-4">
+                <PanelSection className="rounded-lg bg-surface px-4 py-3">
                   <div className="flex items-start gap-3">
                     <ChatBubbleLeftRightIcon className="mt-0.5 h-5 w-5 text-text-muted" />
                     <div className="min-w-0 flex-1">
@@ -686,7 +686,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                       </p>
                     </div>
                   </div>
-                </section>
+                </PanelSection>
               ) : null}
 
               {onDeleteConversation ? (
@@ -696,7 +696,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     onClick={() => {
                       void onDeleteConversation();
                     }}
-                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-danger transition-colors hover:bg-danger/8"
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-danger transition-micro hover:bg-danger/8"
                   >
                     <TrashIcon className="h-5 w-5" />
                     <span className="text-sm font-medium">

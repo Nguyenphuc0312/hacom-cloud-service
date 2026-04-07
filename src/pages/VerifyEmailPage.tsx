@@ -23,14 +23,15 @@ import type {
 } from "../stores/authStore";
 import { useEmailVerificationChallenge, useResendCooldown } from "../hooks";
 import {
+  AuthCard,
+  AuthShell,
   EmailOtpInput,
   RequestVerificationCodeForm,
   VerificationStatusPanel,
 } from "../components/auth";
 import { ROUTE_PATHS } from "../router/paths";
 
-const cardClassName =
-  "animate-fade-in rounded-2xl border border-border bg-surface p-6 shadow-xl sm:p-8";
+const cardClassName = "p-6 sm:p-7";
 
 const OTP_LENGTH = 6;
 
@@ -868,54 +869,50 @@ export const VerifyEmailPage: React.FC = () => {
 
   if (mode === "booting" || mode === "requesting_challenge") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 px-4 py-12">
-        <div className="relative w-full max-w-md">
-          <div className={cardClassName}>
-            <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-elev2">
-              <ChatBubbleLeftRightIcon className="h-8 w-8 text-text-inverse" />
-            </div>
-            <h1 className="mb-2 text-2xl font-bold text-text-primary">
-              {pageTitle}
-            </h1>
-            <p className="mb-6 text-text-muted">{pageDescription}</p>
-            <PageSpinner
-              message={screenMessage || statusDescriptor.description}
-            />
+      <AuthShell maxWidth="md">
+        <AuthCard className={cardClassName}>
+          <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-elev2">
+            <ChatBubbleLeftRightIcon className="h-8 w-8 text-text-inverse" />
           </div>
-        </div>
-      </div>
+          <h1 className="mb-2 text-2xl font-bold text-text-primary">
+            {pageTitle}
+          </h1>
+          <p className="mb-6 text-text-muted">{pageDescription}</p>
+          <PageSpinner
+            message={screenMessage || statusDescriptor.description}
+          />
+        </AuthCard>
+      </AuthShell>
     );
   }
 
   if (mode === "verified") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 px-4 py-12">
-        <div className="relative w-full max-w-md">
-          <div className={cardClassName}>
-            <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-success/15">
-              <CheckCircleIcon className="h-8 w-8 text-success" />
-            </div>
-            <h1 className="mb-2 text-2xl font-bold text-text-primary">
-              {t("auth:verifyEmail.successTitle")}
-            </h1>
-            <p className="mb-6 text-text-muted">
-              {t("auth:verifyEmail.successDescription")}
-            </p>
-            <div className="space-y-3">
-              <Link to={ROUTE_PATHS.LOGIN}>
-                <Button variant="primary" fullWidth size="lg">
-                  {t("auth:verifyEmail.backToLogin")}
-                </Button>
-              </Link>
-              <Link to={ROUTE_PATHS.REGISTER}>
-                <Button variant="ghost" fullWidth>
-                  {t("auth:verifyEmail.goToRegister")}
-                </Button>
-              </Link>
-            </div>
+      <AuthShell maxWidth="md">
+        <AuthCard className={cardClassName}>
+          <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-success/15">
+            <CheckCircleIcon className="h-8 w-8 text-success" />
           </div>
-        </div>
-      </div>
+          <h1 className="mb-2 text-2xl font-bold text-text-primary">
+            {t("auth:verifyEmail.successTitle")}
+          </h1>
+          <p className="mb-6 text-text-muted">
+            {t("auth:verifyEmail.successDescription")}
+          </p>
+          <div className="space-y-3">
+            <Link to={ROUTE_PATHS.LOGIN}>
+              <Button variant="primary" fullWidth size="lg">
+                {t("auth:verifyEmail.backToLogin")}
+              </Button>
+            </Link>
+            <Link to={ROUTE_PATHS.REGISTER}>
+              <Button variant="ghost" fullWidth>
+                {t("auth:verifyEmail.goToRegister")}
+              </Button>
+            </Link>
+          </div>
+        </AuthCard>
+      </AuthShell>
     );
   }
 
@@ -933,175 +930,168 @@ export const VerifyEmailPage: React.FC = () => {
   ) : null;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 px-4 py-8 sm:py-12">
-      <div className="relative w-full max-w-xl">
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -right-32 -top-32 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
-          <div className="absolute -bottom-32 -left-32 h-72 w-72 rounded-full bg-secondary/15 blur-3xl" />
+    <AuthShell maxWidth="md">
+      <AuthCard
+        className={`${cardClassName} relative`}
+        ariaLabel={t("auth:verifyEmail.aria.section")}
+      >
+        <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-elev2">
+          <EnvelopeIcon className="h-8 w-8 text-text-inverse" />
         </div>
 
-        <section
-          className={`${cardClassName} relative`}
-          aria-label={t("auth:verifyEmail.aria.section")}
-        >
-          <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-elev2">
-            <EnvelopeIcon className="h-8 w-8 text-text-inverse" />
-          </div>
-
-          <header className="mb-6 space-y-2">
-            <h1 className="text-2xl font-bold text-text-primary sm:text-3xl">
-              {pageTitle}
-            </h1>
-            <p className="text-text-muted">{pageDescription}</p>
-            {verificationEmail ? (
-              <p className="text-sm text-text-secondary">
-                {t("auth:verifyEmail.sentTo", { email: verificationEmail })}
-              </p>
-            ) : null}
-          </header>
-
-          <div className="mb-5">
-            <VerificationStatusPanel
-              title={statusDescriptor.title}
-              description={statusDescriptor.description}
-              helperText={statusDescriptor.helperText}
-              tone={statusDescriptor.tone}
-            />
-          </div>
-
-          {screenMessage && mode !== "recoverable_error" ? (
-            <div
-              role="status"
-              className="mb-5 rounded-xl border border-border bg-surface-overlay px-4 py-3 text-sm text-text-secondary"
-            >
-              {screenMessage}
-            </div>
+        <header className="mb-6 space-y-2">
+          <h1 className="text-2xl font-bold text-text-primary sm:text-3xl">
+            {pageTitle}
+          </h1>
+          <p className="text-text-muted">{pageDescription}</p>
+          {verificationEmail ? (
+            <p className="text-sm text-text-secondary">
+              {t("auth:verifyEmail.sentTo", { email: verificationEmail })}
+            </p>
           ) : null}
+        </header>
 
-          {formError || missingEmailMessage ? (
-            <div
-              role="alert"
-              className="mb-5 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
-            >
-              {formError || missingEmailMessage}
-            </div>
-          ) : null}
+        <div className="mb-5">
+          <VerificationStatusPanel
+            title={statusDescriptor.title}
+            description={statusDescriptor.description}
+            helperText={statusDescriptor.helperText}
+            tone={statusDescriptor.tone}
+          />
+        </div>
 
-          <div className="mb-5 space-y-3">
-            {expiryBanner}
-            {!hasActiveChallenge && verificationEmail && isOtpState ? (
-              <p className="text-sm text-text-muted">
-                {t("auth:verifyEmail.noActiveChallenge")}
-              </p>
-            ) : null}
+        {screenMessage && mode !== "recoverable_error" ? (
+          <div
+            role="status"
+            className="mb-5 rounded-xl border border-border bg-surface-overlay px-4 py-3 text-sm text-text-secondary"
+          >
+            {screenMessage}
           </div>
+        ) : null}
 
-          {showRecoveryForm ? (
-            <RequestVerificationCodeForm
-              email={recoveryEmail}
-              onEmailChange={setRecoveryEmail}
-              onSubmit={handleRecoverySubmit}
-              isLoading={isBusy}
-              error={formError}
-              emailLabel={t("auth:verifyEmail.recoveryEmailLabel")}
-              emailPlaceholder={t("auth:verifyEmail.recoveryEmailPlaceholder")}
-              submitLabel={t("auth:verifyEmail.requestFreshCode")}
-            />
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-              <EmailOtpInput
-                value={otp}
-                onChange={handleOtpChange}
-                onComplete={(value) => {
-                  if (
-                    value.length === OTP_LENGTH &&
-                    (mode === "pending_otp" || mode === "recoverable_error")
-                  ) {
-                    void confirmChallenge(value);
-                  }
-                }}
-                length={OTP_LENGTH}
-                label={t("auth:verifyEmail.otpLabel")}
-                hint={t("auth:verifyEmail.otpHint")}
-                error={formError}
-                autoFocus={Boolean(hasActiveChallenge)}
-                disabled={
-                  !hasActiveChallenge ||
-                  mode === "confirming_otp" ||
-                  mode === "resending_otp"
+        {formError || missingEmailMessage ? (
+          <div
+            role="alert"
+            className="mb-5 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
+          >
+            {formError || missingEmailMessage}
+          </div>
+        ) : null}
+
+        <div className="mb-5 space-y-3">
+          {expiryBanner}
+          {!hasActiveChallenge && verificationEmail && isOtpState ? (
+            <p className="text-sm text-text-muted">
+              {t("auth:verifyEmail.noActiveChallenge")}
+            </p>
+          ) : null}
+        </div>
+
+        {showRecoveryForm ? (
+          <RequestVerificationCodeForm
+            email={recoveryEmail}
+            onEmailChange={setRecoveryEmail}
+            onSubmit={handleRecoverySubmit}
+            isLoading={isBusy}
+            error={formError}
+            emailLabel={t("auth:verifyEmail.recoveryEmailLabel")}
+            emailPlaceholder={t("auth:verifyEmail.recoveryEmailPlaceholder")}
+            submitLabel={t("auth:verifyEmail.requestFreshCode")}
+          />
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+            <EmailOtpInput
+              value={otp}
+              onChange={handleOtpChange}
+              onComplete={(value) => {
+                if (
+                  value.length === OTP_LENGTH &&
+                  (mode === "pending_otp" || mode === "recoverable_error")
+                ) {
+                  void confirmChallenge(value);
                 }
-              />
+              }}
+              length={OTP_LENGTH}
+              label={t("auth:verifyEmail.otpLabel")}
+              hint={t("auth:verifyEmail.otpHint")}
+              error={formError}
+              autoFocus={Boolean(hasActiveChallenge)}
+              disabled={
+                !hasActiveChallenge ||
+                mode === "confirming_otp" ||
+                mode === "resending_otp"
+              }
+            />
+
+            <Button
+              type="submit"
+              fullWidth
+              size="lg"
+              isLoading={mode === "confirming_otp"}
+              disabled={!canSubmit}
+            >
+              {t("auth:verifyEmail.submit")}
+            </Button>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Button
+                type="button"
+                variant="outline"
+                fullWidth
+                leftIcon={<ArrowPathIcon className="h-4 w-4" />}
+                isLoading={mode === "resending_otp"}
+                disabled={
+                  isBusy ||
+                  (!canResendActiveChallenge && !canRequestFreshChallenge)
+                }
+                onClick={() => void resendChallenge()}
+              >
+                {isChallengeExpired
+                  ? t("auth:verifyEmail.requestNewCode")
+                  : t("auth:verifyEmail.resend")}
+              </Button>
 
               <Button
-                type="submit"
+                type="button"
+                variant="ghost"
                 fullWidth
-                size="lg"
-                isLoading={mode === "confirming_otp"}
-                disabled={!canSubmit}
+                disabled={!verificationEmail || isBusy}
+                onClick={() =>
+                  void requestFreshChallenge(
+                    verificationEmail || recoveryEmail,
+                    "manual",
+                  )
+                }
               >
-                {t("auth:verifyEmail.submit")}
+                {t("auth:verifyEmail.requestFreshCode")}
               </Button>
+            </div>
+          </form>
+        )}
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  fullWidth
-                  leftIcon={<ArrowPathIcon className="h-4 w-4" />}
-                  isLoading={mode === "resending_otp"}
-                  disabled={
-                    isBusy ||
-                    (!canResendActiveChallenge && !canRequestFreshChallenge)
-                  }
-                  onClick={() => void resendChallenge()}
-                >
-                  {isChallengeExpired
-                    ? t("auth:verifyEmail.requestNewCode")
-                    : t("auth:verifyEmail.resend")}
-                </Button>
+        <div className="mt-6 rounded-2xl bg-primary/5 px-4 py-4 text-sm text-text-muted">
+          <p>{t("auth:verifyEmail.securityHint")}</p>
+          {verificationChallenge?.challengeId ? (
+            <p className="mt-2 text-xs text-text-secondary">
+              {t("auth:verifyEmail.reloadHint")}
+            </p>
+          ) : null}
+        </div>
 
-                <Button
-                  type="button"
-                  variant="ghost"
-                  fullWidth
-                  disabled={!verificationEmail || isBusy}
-                  onClick={() =>
-                    void requestFreshChallenge(
-                      verificationEmail || recoveryEmail,
-                      "manual",
-                    )
-                  }
-                >
-                  {t("auth:verifyEmail.requestFreshCode")}
-                </Button>
-              </div>
-            </form>
-          )}
-
-          <div className="mt-6 rounded-2xl bg-primary/5 px-4 py-4 text-sm text-text-muted">
-            <p>{t("auth:verifyEmail.securityHint")}</p>
-            {verificationChallenge?.challengeId ? (
-              <p className="mt-2 text-xs text-text-secondary">
-                {t("auth:verifyEmail.reloadHint")}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <Link to={ROUTE_PATHS.LOGIN} className="sm:flex-1">
-              <Button variant="ghost" fullWidth>
-                {t("auth:verifyEmail.backToLogin")}
-              </Button>
-            </Link>
-            <Link to={ROUTE_PATHS.REGISTER} className="sm:flex-1">
-              <Button variant="secondary" fullWidth>
-                {t("auth:verifyEmail.goToRegister")}
-              </Button>
-            </Link>
-          </div>
-        </section>
-      </div>
-    </div>
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <Link to={ROUTE_PATHS.LOGIN} className="sm:flex-1">
+            <Button variant="ghost" fullWidth>
+              {t("auth:verifyEmail.backToLogin")}
+            </Button>
+          </Link>
+          <Link to={ROUTE_PATHS.REGISTER} className="sm:flex-1">
+            <Button variant="secondary" fullWidth>
+              {t("auth:verifyEmail.goToRegister")}
+            </Button>
+          </Link>
+        </div>
+      </AuthCard>
+    </AuthShell>
   );
 };
 

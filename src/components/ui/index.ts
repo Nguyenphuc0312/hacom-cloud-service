@@ -6,6 +6,12 @@ export { Spinner, PageSpinner, LoadingText } from "./Spinner";
 export { Button, IconButton } from "./Button";
 export { Input, Textarea } from "./Input";
 export { Checkbox } from "./Checkbox";
+export {
+  SurfaceCard,
+  PanelSection,
+  TabTrigger,
+  IconButtonSurface,
+} from "./Surface";
 export { ToastProvider } from "./Toast";
 export { toast } from "../../utils/toast";
 export { PasswordStrength } from "./PasswordStrength";

@@ -18,7 +18,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "../common/Avatar";
-import { Input, Spinner, toast } from "../ui";
+import { Input, Spinner, TabTrigger, toast } from "../ui";
 import type { Conversation, UserSummary } from "../../types";
 import { RoomMemberRole, UserStatus } from "../../types";
 import { useDebounce } from "../../hooks";
@@ -700,15 +700,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   );
 
   return (
-    <div className={clsx("flex flex-col h-full bg-surface", className)}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <h3 className="font-semibold text-text-primary">
+    <div className={clsx("flex h-full flex-col bg-surface", className)}>
+      <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+        <h3 className="text-title-sm text-text-primary">
           {t("profile:groupInfo.title")}
         </h3>
         <button
           type="button"
           onClick={onClose}
-          className="p-1 rounded-full hover:bg-surface-overlay transition-colors"
+          className="icon-button-surface h-9 w-9"
           aria-label={t("common:actions.close")}
         >
           <XMarkIcon className="w-5 h-5 text-text-muted" />
@@ -716,18 +716,18 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="flex flex-col items-center py-6 px-4">
+        <div className="flex flex-col items-center px-4 py-4">
           <Avatar src={conversation.avatar} alt={conversation.name} size="xl" />
 
-          <div className="mt-4 text-center">
-            <h2 className="text-xl font-semibold text-text-primary flex items-center gap-2 justify-center">
+          <div className="mt-3 text-center">
+            <h2 className="flex items-center justify-center gap-2 text-title text-text-primary">
               {isRenamingGroup
                 ? t("profile:groupInfo.renameGroup")
                 : conversation.name || t("common:labels.group")}
             </h2>
 
             {isRenamingGroup ? (
-              <div className="mt-3 w-full min-w-[16rem] space-y-2">
+              <div className="mt-3 w-full min-w-64 space-y-2">
                 <Input
                   type="text"
                   value={groupNameDraft}
@@ -752,7 +752,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                       setIsRenamingGroup(false);
                       setGroupNameDraft(conversation.name || "");
                     }}
-                    className="px-3 py-1.5 text-sm rounded-md border border-border text-text-muted hover:bg-surface-hover"
+                    className="rounded-md border border-border px-3 py-1.5 text-body-sm text-text-muted hover:bg-surface-hover"
                   >
                     {t("common:actions.cancel")}
                   </button>
@@ -760,7 +760,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     type="button"
                     disabled={isSubmitting}
                     onClick={() => void handleRenameGroup()}
-                    className="px-3 py-1.5 text-sm rounded-md bg-primary text-text-inverse hover:opacity-90 disabled:opacity-60 inline-flex items-center gap-1.5"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-body-sm text-text-inverse hover:opacity-90 disabled:opacity-60"
                   >
                     <CheckIcon className="w-4 h-4" />
                     {t("common:actions.save")}
@@ -769,7 +769,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               </div>
             ) : (
               <div className="mt-1 flex items-center justify-center gap-2">
-                <p className="text-sm text-text-muted">
+                <p className="text-body-sm text-text-muted">
                   {t("profile:groupInfo.membersCount", {
                     count:
                       conversation.participantCount ??
@@ -783,7 +783,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     type="button"
                     onClick={() => setIsRenamingGroup(true)}
                     disabled={isSubmitting}
-                    className="p-1 hover:bg-surface-overlay rounded-full"
+                    className="rounded-md p-1 hover:bg-surface-overlay"
                     aria-label={t("profile:groupInfo.renameGroup")}
                   >
                     <PencilIcon className="w-4 h-4 text-text-muted" />
@@ -794,7 +794,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           </div>
         </div>
 
-        <div className="h-px bg-border mx-4" />
+        <div className="mx-4 h-px bg-border" />
 
         <div className="py-2">
           <div className="flex items-center justify-between px-4 py-3">
@@ -827,23 +827,18 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           </div>
         </div>
 
-        <div className="h-px bg-border mx-4" />
+        <div className="mx-4 h-px bg-border" />
 
-        <div className="flex border-b border-border">
+        <div className="flex border-b border-border px-1">
           {tabs.map((tab) => (
-            <button
-              type="button"
+            <TabTrigger
               key={tab.id}
+              active={activeTab === tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={clsx(
-                "flex-1 py-3 text-sm font-medium transition-colors",
-                activeTab === tab.id
-                  ? "text-primary border-b-2 border-primary"
-                  : "text-text-muted hover:text-text-secondary",
-              )}
+              className="flex-1"
             >
               {tab.label}
-            </button>
+            </TabTrigger>
           ))}
         </div>
 
@@ -855,7 +850,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   type="button"
                   disabled={isSubmitting}
                   onClick={() => setShowAddMember((prev) => !prev)}
-                  className="w-full flex items-center gap-4 px-4 py-3 hover:bg-surface-hover transition-colors text-primary"
+                  className="flex w-full items-center gap-4 px-4 py-2.5 text-primary transition-micro hover:bg-surface-hover"
                 >
                   <UserPlusIcon className="w-5 h-5" />
                   <span className="text-sm font-medium">
@@ -865,7 +860,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               )}
 
               {showAddMember && (
-                <div className="px-4 pb-3 space-y-2">
+                <div className="space-y-2 px-4 pb-3">
                   <Input
                     type="text"
                     value={searchQuery}
@@ -890,7 +885,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                           type="button"
                           onClick={() => void handleAddMember(user.id)}
                           disabled={isSubmitting}
-                          className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-surface-hover"
+                          className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-surface-hover"
                         >
                           <Avatar
                             src={user.avatar}
@@ -934,7 +929,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   return (
                     <div
                       key={member.id}
-                      className="flex items-start gap-3 px-4 py-3 hover:bg-surface-hover transition-colors"
+                      className="flex items-start gap-3 px-4 py-2.5 transition-micro hover:bg-surface-hover"
                     >
                       <Avatar
                         src={member.avatar}
@@ -958,7 +953,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <span
                             className={clsx(
-                              "px-2 py-0.5 text-xs rounded-full",
+                              "rounded-full px-2 py-0.5 text-caption",
                               roleBadgeClass(member.role),
                             )}
                           >
@@ -1009,7 +1004,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 {[1, 2, 3, 4, 5, 6].map((i) => (
                   <div
                     key={i}
-                    className="aspect-square bg-surface-overlay rounded-lg flex items-center justify-center"
+                    className="flex aspect-square items-center justify-center rounded-lg bg-surface-overlay"
                   >
                     <PhotoIcon className="w-8 h-8 text-border-strong" />
                   </div>

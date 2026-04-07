@@ -36,16 +36,18 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   return (
     <div
       className={clsx(
-        "flex flex-col items-center justify-center px-6 py-12 text-center",
+        "flex flex-col items-center justify-center px-6 py-8 text-center",
         className,
       )}
     >
       {icon && <div className="mb-4 h-20 w-20 text-text-muted/55">{icon}</div>}
 
-      <h3 className="mb-2 text-lg font-medium text-text-primary">{title}</h3>
+      <h3 className="mb-2 text-title-sm text-text-primary">{title}</h3>
 
       {description && (
-        <p className="mb-6 max-w-sm text-sm text-text-secondary">{description}</p>
+        <p className="mb-5 max-w-sm text-body-sm text-text-secondary">
+          {description}
+        </p>
       )}
 
       {action && (
@@ -135,18 +137,16 @@ export const ErrorState: React.FC<{
   title?: string;
   message?: string;
   onRetry?: () => void;
-}> = ({
-  title,
-  message,
-  onRetry,
-}) => {
+}> = ({ title, message, onRetry }) => {
   const { t } = useTranslation();
   const resolvedTitle = title ?? t("error:generic.unexpected");
   const resolvedMessage = message ?? t("error:generic.requestFailed");
 
   return (
     <EmptyState
-      icon={<ExclamationTriangleIcon className="h-full w-full text-danger/55" />}
+      icon={
+        <ExclamationTriangleIcon className="h-full w-full text-danger/55" />
+      }
       title={resolvedTitle}
       description={resolvedMessage}
       action={
@@ -172,7 +172,7 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
   const { t } = useTranslation();
 
   return (
-    <section className="chat-background flex flex-1 flex-col items-center justify-center px-6 py-10 text-text-secondary">
+    <section className="chat-background flex flex-1 flex-col items-center justify-center px-6 py-8 text-text-secondary">
       <div className="mb-5 h-24 w-24 text-text-muted/60 sm:mb-6 sm:h-32 sm:w-32">
         <svg
           viewBox="0 0 24 24"
@@ -187,24 +187,19 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
           />
         </svg>
       </div>
-      <h2 className="mb-2 text-lg font-semibold text-text-primary sm:text-xl">
+      <h2 className="mb-2 text-title text-text-primary sm:text-title">
         {t("chat:empty.noChatTitle")}
       </h2>
-      <p className="mb-5 max-w-sm text-center text-sm leading-6 text-text-secondary">
+      <p className="mb-5 max-w-sm text-center text-body-sm text-text-secondary">
         {t("chat:empty.noChatDescription")}
       </p>
       {onNewChat && (
-        <button
-          type="button"
-          onClick={onNewChat}
-          className="min-h-11 rounded-lg bg-primary px-5 py-2 text-sm font-medium text-text-inverse transition-colors hover:bg-primary/90"
-        >
+        <Button type="button" onClick={onNewChat} size="md">
           {t("chat:empty.startNewChat")}
-        </button>
+        </Button>
       )}
     </section>
   );
 };
 
 export default EmptyState;
-

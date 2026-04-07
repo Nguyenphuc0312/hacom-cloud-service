@@ -303,7 +303,7 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
   }, [applyLoginResponse, onSuccess, panelState, rememberMe]);
 
   return (
-    <section className="rounded-2xl border border-border bg-surface px-4 py-4 sm:px-5 sm:py-5">
+    <section className="panel-section rounded-xl bg-surface px-4 py-4 sm:px-5 sm:py-5">
       <header className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-text-primary sm:text-base">
@@ -327,7 +327,7 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
       </header>
 
       <div className="mt-4 space-y-4">
-        <div className="mx-auto flex h-[240px] w-[240px] items-center justify-center rounded-2xl border border-border bg-white p-3 shadow-sm sm:h-[252px] sm:w-[252px]">
+        <div className="mx-auto flex h-60 w-60 items-center justify-center rounded-xl border border-border bg-white p-3 shadow-sm sm:h-64 sm:w-64">
           {panelState?.qrImageUrl ? (
             <img
               src={panelState.qrImageUrl}
