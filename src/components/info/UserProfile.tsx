@@ -71,7 +71,6 @@ const formatPresenceLabel = (
   if (lastSeenAt) {
     return t("common:status.lastSeen", {
       time: new Date(lastSeenAt).toLocaleString(),
-      defaultValue: `Last seen ${new Date(lastSeenAt).toLocaleString()}`,
     });
   }
 
@@ -90,21 +89,17 @@ const formatRelationshipLabel = (
 ): string => {
   switch (kind) {
     case "self":
-      return t("friends:relationship.self", { defaultValue: "Your profile" });
+      return t("friends:relationship.self");
     case "friend":
-      return t("friends:relationship.friend", { defaultValue: "Friend" });
+      return t("friends:relationship.friend");
     case "incoming_request":
-      return t("friends:relationship.incoming", {
-        defaultValue: "Wants to connect",
-      });
+      return t("friends:relationship.incoming");
     case "outgoing_request":
-      return t("friends:relationship.outgoing", { defaultValue: "Requested" });
+      return t("friends:relationship.outgoing");
     case "blocked":
-      return t("friends:relationship.blocked", { defaultValue: "Blocked" });
+      return t("friends:relationship.blocked");
     default:
-      return t("friends:relationship.notFriend", {
-        defaultValue: "Not in contacts",
-      });
+      return t("friends:relationship.notFriend");
   }
 };
 
@@ -280,12 +275,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       await Promise.resolve(onStartConversation(userId));
     } catch (error) {
       const apiError = extractApiError(error);
-      toast.error(
-        apiError.message ||
-          t("error:chat.startConversationFailed", {
-            defaultValue: "Unable to start conversation",
-          }),
-      );
+      toast.error(apiError.message || t("error:chat.startConversationFailed"));
     } finally {
       setActingKey(null);
     }
@@ -318,7 +308,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               isLoading={actingKey === "message"}
               onClick={() => void handleMessage()}
             >
-              {t("friends:message", { defaultValue: "Message" })}
+              {t("friends:message")}
             </Button>
           ) : null}
           {capabilities.canUnfriend ? (
@@ -330,14 +320,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 void handleAsyncAction(
                   "unfriend",
                   () => removeFriend(relationship.friendshipId),
-                  t("friends:unfriendSuccess", {
-                    defaultValue: "Removed friend",
-                  }),
-                  t("friends:actionFailed", { defaultValue: "Action failed" }),
+                  t("friends:unfriendSuccess"),
+                  t("friends:actionFailed"),
                 )
               }
             >
-              {t("friends:unfriend", { defaultValue: "Unfriend" })}
+              {t("friends:unfriend")}
             </Button>
           ) : null}
           {capabilities.canBlock ? (
@@ -350,8 +338,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 void handleAsyncAction(
                   "block",
                   () => blockUser(userId),
-                  t("friends:blockSuccess", { defaultValue: "User blocked" }),
-                  t("friends:actionFailed", { defaultValue: "Action failed" }),
+                  t("friends:blockSuccess"),
+                  t("friends:actionFailed"),
                 )
               }
             >
@@ -374,14 +362,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 void handleAsyncAction(
                   "accept",
                   () => acceptFriendRequest(relationship.requestId),
-                  t("friends:requestAccepted", {
-                    defaultValue: "Request accepted",
-                  }),
-                  t("friends:actionFailed", { defaultValue: "Action failed" }),
+                  t("friends:requestAccepted"),
+                  t("friends:actionFailed"),
                 )
               }
             >
-              {t("friends:accept", { defaultValue: "Accept" })}
+              {t("friends:accept")}
             </Button>
           ) : null}
           {capabilities.canDecline ? (
@@ -393,14 +379,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 void handleAsyncAction(
                   "decline",
                   () => rejectFriendRequest(relationship.requestId),
-                  t("friends:requestRejected", {
-                    defaultValue: "Request declined",
-                  }),
-                  t("friends:actionFailed", { defaultValue: "Action failed" }),
+                  t("friends:requestRejected"),
+                  t("friends:actionFailed"),
                 )
               }
             >
-              {t("friends:reject", { defaultValue: "Decline" })}
+              {t("friends:reject")}
             </Button>
           ) : null}
         </div>
@@ -411,7 +395,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       return (
         <div className="flex gap-2">
           <Button type="button" fullWidth variant="secondary" disabled>
-            {t("friends:relationship.outgoing", { defaultValue: "Requested" })}
+            {t("friends:relationship.outgoing")}
           </Button>
           {capabilities.canCancel ? (
             <Button
@@ -422,14 +406,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 void handleAsyncAction(
                   "cancel",
                   () => cancelFriendRequest(relationship.requestId),
-                  t("friends:requestCancelled", {
-                    defaultValue: "Request cancelled",
-                  }),
-                  t("friends:actionFailed", { defaultValue: "Action failed" }),
+                  t("friends:requestCancelled"),
+                  t("friends:actionFailed"),
                 )
               }
             >
-              {t("friends:sentRequests.cancel", { defaultValue: "Cancel" })}
+              {t("friends:sentRequests.cancel")}
             </Button>
           ) : null}
         </div>
@@ -449,14 +431,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 void handleAsyncAction(
                   "unblock",
                   () => unblockUser(userId),
-                  t("friends:unblockSuccess", {
-                    defaultValue: "User unblocked",
-                  }),
-                  t("friends:actionFailed", { defaultValue: "Action failed" }),
+                  t("friends:unblockSuccess"),
+                  t("friends:actionFailed"),
                 )
               }
             >
-              {t("friends:unblock", { defaultValue: "Unblock" })}
+              {t("friends:unblock")}
             </Button>
           ) : null}
         </div>
@@ -475,14 +455,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               void handleAsyncAction(
                 "add",
                 () => sendFriendRequest(userId),
-                t("friends:requestSent", {
-                  defaultValue: "Friend request sent",
-                }),
-                t("friends:actionFailed", { defaultValue: "Action failed" }),
+                t("friends:requestSent"),
+                t("friends:actionFailed"),
               )
             }
           >
-            {t("friends:addFriend", { defaultValue: "Add friend" })}
+            {t("friends:addFriend")}
           </Button>
         ) : null}
         {capabilities.canBlock ? (
@@ -495,8 +473,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               void handleAsyncAction(
                 "block",
                 () => blockUser(userId),
-                t("friends:blockSuccess", { defaultValue: "User blocked" }),
-                t("friends:actionFailed", { defaultValue: "Action failed" }),
+                t("friends:blockSuccess"),
+                t("friends:actionFailed"),
               )
             }
           >
@@ -514,15 +492,11 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           <div>
             <h3 className="text-title-sm text-text-primary">
               {isSelf
-                ? t("friends:relationship.self", {
-                    defaultValue: "Your profile",
-                  })
+                ? t("friends:relationship.self")
                 : t("profile:userProfile.title")}
             </h3>
             <p className="text-caption text-text-muted">
-              {t("friends:profileHint", {
-                defaultValue: "Quick actions and contact details",
-              })}
+              {t("friends:profileHint")}
             </p>
           </div>
 
@@ -588,13 +562,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     <p className="mx-auto max-w-sm text-body-sm leading-6 text-text-secondary">
                       {user?.bio?.trim() ||
                         (isSelf
-                          ? t("profile:userProfile.emptyBioSelf", {
-                              defaultValue:
-                                "Add a short bio so people know who they're chatting with.",
-                            })
-                          : t("profile:userProfile.emptyBioOther", {
-                              defaultValue: "No bio added yet.",
-                            }))}
+                          ? t("profile:userProfile.emptyBioSelf")
+                          : t("profile:userProfile.emptyBioOther"))}
                     </p>
                   </div>
                 </div>
@@ -608,7 +577,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     <ClockIcon className="mt-0.5 h-5 w-5 text-text-muted" />
                     <div>
                       <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
-                        {t("common:statusLabel", { defaultValue: "Status" })}
+                        {t("common:statusLabel")}
                       </p>
                       <p className="mt-1 text-sm text-text-primary">
                         {presenceLabel}
@@ -639,7 +608,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                       <CalendarDaysIcon className="mt-0.5 h-5 w-5 text-text-muted" />
                       <div>
                         <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
-                          {t("friends:joined", { defaultValue: "Joined" })}
+                          {t("friends:joined")}
                         </p>
                         <p className="mt-1 text-sm text-text-primary">
                           {new Date(user.createdAt).toLocaleDateString()}
@@ -654,9 +623,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     <UserPlusIcon className="mt-0.5 h-5 w-5 text-text-muted" />
                     <div>
                       <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
-                        {t("friends:relationshipLabel", {
-                          defaultValue: "Relationship",
-                        })}
+                        {t("friends:relationshipLabel")}
                       </p>
                       <p className="mt-1 text-sm text-text-primary">
                         {relationshipLabel}
@@ -674,15 +641,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     <ChatBubbleLeftRightIcon className="mt-0.5 h-5 w-5 text-text-muted" />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-text-primary">
-                        {t("friends:startChatTitle", {
-                          defaultValue: "Open this conversation quickly",
-                        })}
+                        {t("friends:startChatTitle")}
                       </p>
                       <p className="mt-1 text-sm text-text-secondary">
-                        {t("friends:startChatHint", {
-                          defaultValue:
-                            "Use Message to jump back into chat without leaving context.",
-                        })}
+                        {t("friends:startChatHint")}
                       </p>
                     </div>
                   </div>

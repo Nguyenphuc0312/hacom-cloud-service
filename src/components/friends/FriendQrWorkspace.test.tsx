@@ -4,7 +4,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { FriendshipCapabilitiesDto } from "@hacom/chat-shared-types";
 import { FriendQrWorkspace } from "./FriendQrWorkspace";
-import { invalidQrCodeMessage } from "../../features/friend-qr/shareCode";
 
 const qrcodeToDataUrlMock = vi.fn(async (value: string, options?: unknown) => {
   void value;
@@ -202,7 +201,7 @@ describe("FriendQrWorkspace", () => {
     expect(
       await screen.findByText("share-code-1234567890"),
     ).toBeInTheDocument();
-    expect(await screen.findByAltText("Friend QR")).toBeInTheDocument();
+    expect(await screen.findByAltText("friends:tabs.qr")).toBeInTheDocument();
     expect(qrcodeToDataUrlMock).toHaveBeenCalled();
   });
 
@@ -210,15 +209,17 @@ describe("FriendQrWorkspace", () => {
     renderWorkspace();
 
     await screen.findByText("share-code-1234567890");
-    await userEvent.click(screen.getByRole("button", { name: "Reset QR" }));
-    await userEvent.click(screen.getByRole("button", { name: "Reset ngay" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "friends:qr.reset" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "friends:qr.resetDialogConfirm" }),
+    );
 
     expect(
       await screen.findByText("share-code-reset-123456"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/QR cu khong con su dung duoc/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText("friends:qr.resetNotice")).toBeInTheDocument();
   });
 
   it("resolve code thanh cong mo mini profile", async () => {
@@ -230,12 +231,16 @@ describe("FriendQrWorkspace", () => {
     renderWorkspace();
 
     await userEvent.type(
-      screen.getByPlaceholderText("Nhap share code hoac deep link"),
+      screen.getByPlaceholderText("friends:qr.resolvePlaceholder"),
       "share-code-1234567890",
     );
-    await userEvent.click(screen.getByRole("button", { name: "Resolve" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "friends:qr.resolve" }),
+    );
 
-    expect(await screen.findByText("Mini profile")).toBeInTheDocument();
+    expect(
+      await screen.findByText("friends:qr.miniProfileTitle"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Friend One")).toBeInTheDocument();
   });
 
@@ -251,7 +256,9 @@ describe("FriendQrWorkspace", () => {
       expect(resolveCodeMock).toHaveBeenCalledWith("share-code-1234567890");
     });
 
-    expect(await screen.findByText("Mini profile")).toBeInTheDocument();
+    expect(
+      await screen.findByText("friends:qr.miniProfileTitle"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Friend One")).toBeInTheDocument();
   });
 
@@ -281,14 +288,18 @@ describe("FriendQrWorkspace", () => {
     renderWorkspace();
 
     await userEvent.type(
-      screen.getByPlaceholderText("Nhap share code hoac deep link"),
+      screen.getByPlaceholderText("friends:qr.resolvePlaceholder"),
       "self-code-1234567890",
     );
-    await userEvent.click(screen.getByRole("button", { name: "Resolve" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "friends:qr.resolve" }),
+    );
 
-    expect(await screen.findByText("Day la ho so cua ban")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Add Friend" }),
+      await screen.findByText("friends:qr.selfProfile"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "friends:addFriend" }),
     ).not.toBeInTheDocument();
   });
 
@@ -301,13 +312,17 @@ describe("FriendQrWorkspace", () => {
     renderWorkspace();
 
     await userEvent.type(
-      screen.getByPlaceholderText("Nhap share code hoac deep link"),
+      screen.getByPlaceholderText("friends:qr.resolvePlaceholder"),
       "share-code-1234567890",
     );
-    await userEvent.click(screen.getByRole("button", { name: "Resolve" }));
-    await screen.findByText("Mini profile");
+    await userEvent.click(
+      screen.getByRole("button", { name: "friends:qr.resolve" }),
+    );
+    await screen.findByText("friends:qr.miniProfileTitle");
 
-    await userEvent.click(screen.getByRole("button", { name: "Add Friend" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "friends:addFriend" }),
+    );
 
     await waitFor(() => {
       expect(sendFriendRequestMock).toHaveBeenCalledWith("u-1");
@@ -321,6 +336,8 @@ describe("FriendQrWorkspace", () => {
 
     renderWorkspace({ initialShareCode: "old-reset-code-12345678" });
 
-    expect(await screen.findByText(invalidQrCodeMessage)).toBeInTheDocument();
+    expect(
+      await screen.findByText("friends:qr.invalidCode"),
+    ).toBeInTheDocument();
   });
 });

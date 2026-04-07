@@ -179,7 +179,6 @@ const ContactRow: React.FC<ContactRowProps> = ({
       : livePresence?.lastSeenAt
         ? t("common:status.lastSeen", {
             time: new Date(livePresence.lastSeenAt).toLocaleString(),
-            defaultValue: `Last seen ${new Date(livePresence.lastSeenAt).toLocaleString()}`,
           })
         : user.username
           ? `@${user.username}`
@@ -317,12 +316,7 @@ export const FriendsPage: React.FC = () => {
         setSearchResults(normalizeSearchResults(payload));
       } catch (error) {
         const apiError = extractApiError(error);
-        toast.error(
-          apiError.message ||
-            t("profile:toast.searchUsersFailed", {
-              defaultValue: "Unable to search users",
-            }),
-        );
+        toast.error(apiError.message || t("profile:toast.searchUsersFailed"));
         setSearchResults([]);
       } finally {
         setIsSearching(false);
@@ -349,10 +343,7 @@ export const FriendsPage: React.FC = () => {
       } catch (error) {
         const apiError = extractApiError(error);
         toast.error(
-          apiError.message ||
-            t("error:chat.startConversationFailed", {
-              defaultValue: "Unable to start conversation",
-            }),
+          apiError.message || t("error:chat.startConversationFailed"),
         );
       } finally {
         setActingKey(null);
@@ -371,9 +362,7 @@ export const FriendsPage: React.FC = () => {
       try {
         const success = await action();
         if (!success) {
-          toast.error(
-            t("friends:actionFailed", { defaultValue: "Action failed" }),
-          );
+          toast.error(t("friends:actionFailed"));
           return;
         }
         toast.success(successMessage);
@@ -393,7 +382,7 @@ export const FriendsPage: React.FC = () => {
       case "self":
         return (
           <span className="rounded-full bg-surface-overlay px-2.5 py-1 text-xs font-medium text-text-secondary">
-            {t("friends:relationship.self", { defaultValue: "You" })}
+            {t("friends:relationship.self")}
           </span>
         );
       case "friend":
@@ -411,7 +400,7 @@ export const FriendsPage: React.FC = () => {
               void handleMessage(user.id);
             }}
           >
-            {t("friends:message", { defaultValue: "Message" })}
+            {t("friends:message")}
           </Button>
         );
       case "incoming_request":
@@ -427,13 +416,11 @@ export const FriendsPage: React.FC = () => {
                   void handleRelationshipAction(
                     `accept:${actionKeyPrefix}`,
                     () => acceptFriendRequest(relationship.requestId),
-                    t("friends:requestAccepted", {
-                      defaultValue: "Request accepted",
-                    }),
+                    t("friends:requestAccepted"),
                   );
                 }}
               >
-                {t("friends:accept", { defaultValue: "Accept" })}
+                {t("friends:accept")}
               </Button>
             ) : null}
             {capabilities.canDecline ? (
@@ -447,13 +434,11 @@ export const FriendsPage: React.FC = () => {
                   void handleRelationshipAction(
                     `decline:${actionKeyPrefix}`,
                     () => rejectFriendRequest(relationship.requestId),
-                    t("friends:requestRejected", {
-                      defaultValue: "Request declined",
-                    }),
+                    t("friends:requestRejected"),
                   );
                 }}
               >
-                {t("friends:reject", { defaultValue: "Decline" })}
+                {t("friends:reject")}
               </Button>
             ) : null}
           </div>
@@ -473,13 +458,11 @@ export const FriendsPage: React.FC = () => {
               void handleRelationshipAction(
                 `cancel:${actionKeyPrefix}`,
                 () => cancelFriendRequest(relationship.requestId),
-                t("friends:requestCancelled", {
-                  defaultValue: "Request cancelled",
-                }),
+                t("friends:requestCancelled"),
               );
             }}
           >
-            {t("friends:sentRequests.cancel", { defaultValue: "Cancel" })}
+            {t("friends:sentRequests.cancel")}
           </Button>
         );
       case "blocked":
@@ -497,11 +480,11 @@ export const FriendsPage: React.FC = () => {
               void handleRelationshipAction(
                 `unblock:${actionKeyPrefix}`,
                 () => unblockUser(user.id),
-                t("friends:unblockSuccess", { defaultValue: "User unblocked" }),
+                t("friends:unblockSuccess"),
               );
             }}
           >
-            {t("friends:unblock", { defaultValue: "Unblock" })}
+            {t("friends:unblock")}
           </Button>
         );
       default:
@@ -519,13 +502,11 @@ export const FriendsPage: React.FC = () => {
               void handleRelationshipAction(
                 `add:${actionKeyPrefix}`,
                 () => sendFriendRequest(user.id),
-                t("friends:requestSent", {
-                  defaultValue: "Friend request sent",
-                }),
+                t("friends:requestSent"),
               );
             }}
           >
-            {t("friends:addFriend", { defaultValue: "Add friend" })}
+            {t("friends:addFriend")}
           </Button>
         );
     }
@@ -534,26 +515,26 @@ export const FriendsPage: React.FC = () => {
   const tabs = [
     {
       id: "friends" as const,
-      label: t("friends:tabs.friends", { defaultValue: "Friends" }),
+      label: t("friends:tabs.friends"),
       count: friends.length,
     },
     {
       id: "requests" as const,
-      label: t("friends:tabs.requests", { defaultValue: "Requests" }),
+      label: t("friends:tabs.requests"),
       count: pendingCount,
     },
     {
       id: "discover" as const,
-      label: t("friends:tabs.discover", { defaultValue: "Discover" }),
+      label: t("friends:tabs.discover"),
     },
     {
       id: "blocked" as const,
-      label: t("friends:tabs.blocked", { defaultValue: "Blocked" }),
+      label: t("friends:tabs.blocked"),
       count: blockedUsers.length,
     },
     {
       id: "qr" as const,
-      label: t("friends:tabs.qr", { defaultValue: "QR ket ban" }),
+      label: t("friends:tabs.qr"),
     },
   ];
 
@@ -583,15 +564,10 @@ export const FriendsPage: React.FC = () => {
         <div className="rounded-3xl border border-dashed border-border px-6 py-10 text-center">
           <UserGroupIcon className="mx-auto h-10 w-10 text-text-muted/60" />
           <p className="mt-4 text-base font-medium text-text-primary">
-            {t("friends:empty.friendsTitle", {
-              defaultValue: "Your contacts will show up here",
-            })}
+            {t("friends:empty.friendsTitle")}
           </p>
           <p className="mt-2 text-sm text-text-secondary">
-            {t("friends:empty.friendsBody", {
-              defaultValue:
-                "Use Discover to find people and start building your network.",
-            })}
+            {t("friends:empty.friendsBody")}
           </p>
         </div>
       );
@@ -622,14 +598,12 @@ export const FriendsPage: React.FC = () => {
           [
             {
               id: "incoming",
-              label: t("friends:requests.incoming", {
-                defaultValue: "Incoming",
-              }),
+              label: t("friends:requests.incoming"),
               count: incomingRequests.length,
             },
             {
               id: "sent",
-              label: t("friends:requests.sent", { defaultValue: "Sent" }),
+              label: t("friends:requests.sent"),
               count: sentRequests.length,
             },
           ] as const
@@ -668,23 +642,13 @@ export const FriendsPage: React.FC = () => {
         <div className="rounded-3xl border border-dashed border-border px-6 py-10 text-center">
           <p className="text-base font-medium text-text-primary">
             {requestTab === "incoming"
-              ? t("friends:empty.requestsIncomingTitle", {
-                  defaultValue: "No incoming requests",
-                })
-              : t("friends:empty.requestsSentTitle", {
-                  defaultValue: "No sent requests",
-                })}
+              ? t("friends:empty.requestsIncomingTitle")
+              : t("friends:empty.requestsSentTitle")}
           </p>
           <p className="mt-2 text-sm text-text-secondary">
             {requestTab === "incoming"
-              ? t("friends:empty.requestsIncomingBody", {
-                  defaultValue:
-                    "When someone adds you, the request will appear here.",
-                })
-              : t("friends:empty.requestsSentBody", {
-                  defaultValue:
-                    "People you invite will appear here until they respond.",
-                })}
+              ? t("friends:empty.requestsIncomingBody")
+              : t("friends:empty.requestsSentBody")}
           </p>
         </div>
       ) : (
@@ -698,11 +662,9 @@ export const FriendsPage: React.FC = () => {
             const subtitle =
               requestTab === "incoming"
                 ? t("friends:requestReceivedAt", {
-                    defaultValue: "Received {{date}}",
                     date: new Date(request.createdAt).toLocaleDateString(),
                   })
                 : t("friends:requestSentAt", {
-                    defaultValue: "Sent {{date}}",
                     date: new Date(request.createdAt).toLocaleDateString(),
                   });
 
@@ -730,9 +692,7 @@ export const FriendsPage: React.FC = () => {
         type="text"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder={t("friends:searchPlaceholder", {
-          defaultValue: "Search by username, name, email or phone",
-        })}
+        placeholder={t("friends:searchPlaceholder")}
         leftIcon={<MagnifyingGlassIcon className="h-5 w-5" />}
       />
 
@@ -743,26 +703,19 @@ export const FriendsPage: React.FC = () => {
       ) : debouncedQuery.trim().length < 2 ? (
         <div className="rounded-3xl border border-dashed border-border px-6 py-10 text-center">
           <p className="text-base font-medium text-text-primary">
-            {t("friends:discoverHintTitle", {
-              defaultValue: "Find people without breaking your flow",
-            })}
+            {t("friends:discoverHintTitle")}
           </p>
           <p className="mt-2 text-sm text-text-secondary">
-            {t("friends:searchHint", {
-              defaultValue: "Enter at least 2 characters",
-            })}
+            {t("friends:searchHint")}
           </p>
         </div>
       ) : searchResults.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-border px-6 py-10 text-center">
           <p className="text-base font-medium text-text-primary">
-            {t("friends:noSearchResult", { defaultValue: "No users found" })}
+            {t("friends:noSearchResult")}
           </p>
           <p className="mt-2 text-sm text-text-secondary">
-            {t("friends:discoverHintBody", {
-              defaultValue:
-                "Try a different keyword or check the username spelling.",
-            })}
+            {t("friends:discoverHintBody")}
           </p>
         </div>
       ) : (
@@ -795,15 +748,10 @@ export const FriendsPage: React.FC = () => {
         <div className="rounded-3xl border border-dashed border-border px-6 py-10 text-center">
           <NoSymbolIcon className="mx-auto h-10 w-10 text-text-muted/60" />
           <p className="mt-4 text-base font-medium text-text-primary">
-            {t("friends:empty.blockedTitle", {
-              defaultValue: "No blocked users",
-            })}
+            {t("friends:empty.blockedTitle")}
           </p>
           <p className="mt-2 text-sm text-text-secondary">
-            {t("friends:empty.blockedBody", {
-              defaultValue:
-                "Blocked contacts will appear here so you can review them later.",
-            })}
+            {t("friends:empty.blockedBody")}
           </p>
         </div>
       );
@@ -837,19 +785,17 @@ export const FriendsPage: React.FC = () => {
               type="button"
               onClick={() => navigate(ROUTE_PATHS.CHAT)}
               className="flex h-9 w-9 items-center justify-center rounded-xl text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
-              aria-label={t("common:actions.back", { defaultValue: "Back" })}
+              aria-label={t("common:actions.back")}
             >
               <ArrowLeftIcon className="h-5 w-5" />
             </button>
 
             <div className="min-w-0">
               <h1 className="text-lg font-semibold text-text-primary">
-                {t("friends:title", { defaultValue: "Friends" })}
+                {t("friends:title")}
               </h1>
               <p className="text-xs text-text-secondary">
-                {t("friends:subtitle", {
-                  defaultValue: "Contacts, requests and quick profile actions",
-                })}
+                {t("friends:subtitle")}
               </p>
             </div>
 
@@ -909,15 +855,10 @@ export const FriendsPage: React.FC = () => {
           <div className="flex h-full flex-col items-center justify-center px-8 text-center">
             <UserGroupIcon className="h-12 w-12 text-text-muted/50" />
             <p className="mt-4 text-base font-medium text-text-primary">
-              {t("friends:previewTitle", {
-                defaultValue: "Preview a contact",
-              })}
+              {t("friends:previewTitle")}
             </p>
             <p className="mt-2 text-sm text-text-secondary">
-              {t("friends:previewBody", {
-                defaultValue:
-                  "Select any friend, request or search result to inspect the profile without leaving this screen.",
-              })}
+              {t("friends:previewBody")}
             </p>
           </div>
         )}
@@ -938,7 +879,7 @@ export const FriendsPage: React.FC = () => {
             type="button"
             className="fixed inset-0 z-30 bg-text-primary/45 lg:hidden"
             onClick={() => setPreviewTarget(null)}
-            aria-label={t("common:actions.close", { defaultValue: "Close" })}
+            aria-label={t("common:actions.close")}
           />
         </>
       ) : null}

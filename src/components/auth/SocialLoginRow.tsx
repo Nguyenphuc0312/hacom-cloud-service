@@ -14,12 +14,12 @@ interface SocialLoginRowProps {
 const providerConfig: Record<
   SocialProvider,
   {
-    label: string;
+    labelKey: string;
     icon: React.ReactNode;
   }
 > = {
   google: {
-    label: "Google",
+    labelKey: "auth:login.socialProviders.google",
     icon: (
       <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
         <path
@@ -30,7 +30,7 @@ const providerConfig: Record<
     ),
   },
   facebook: {
-    label: "Facebook",
+    labelKey: "auth:login.socialProviders.facebook",
     icon: (
       <svg
         className="h-4 w-4 shrink-0 text-[#1877F2]"
@@ -52,15 +52,13 @@ export const SocialLoginRow: React.FC<SocialLoginRowProps> = ({
 }) => {
   const { t } = useTranslation();
   const disabledReason =
-    unavailableMessage ||
-    t("common:toast.featureInDevelopment", {
-      defaultValue: "This sign-in method is currently unavailable.",
-    });
+    unavailableMessage || t("auth:login.socialUnavailable");
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       {(Object.keys(providerConfig) as SocialProvider[]).map((provider) => {
         const config = providerConfig[provider];
+        const providerLabel = t(config.labelKey);
         const providerEnabled = enabledProviders.includes(provider);
         const isUnavailable = !providerEnabled || !onProviderClick;
         const isActionDisabled = disabled || isUnavailable;
@@ -83,11 +81,11 @@ export const SocialLoginRow: React.FC<SocialLoginRowProps> = ({
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
               "disabled:cursor-not-allowed disabled:opacity-60",
             )}
-            aria-label={t("auth:login.socialAria", { provider: config.label })}
+            aria-label={t("auth:login.socialAria", { provider: providerLabel })}
             aria-disabled={isActionDisabled}
           >
             {config.icon}
-            <span>{config.label}</span>
+            <span>{providerLabel}</span>
           </button>
         );
       })}

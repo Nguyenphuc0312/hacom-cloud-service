@@ -318,12 +318,7 @@ export const MessageInput = React.forwardRef<
     (event: React.ChangeEvent<HTMLInputElement>) => {
       if (attachmentsDisabled) {
         event.target.value = "";
-        toast.warning(
-          disabledReason ||
-            t("chat:composer.attachBlocked", {
-              defaultValue: "Attachments are currently unavailable",
-            }),
-        );
+        toast.warning(disabledReason || t("chat:composer.attachBlocked"));
         return;
       }
 
@@ -344,18 +339,13 @@ export const MessageInput = React.forwardRef<
       }
       event.target.value = "";
     },
-    [attachmentsDisabled, disabledReason, onAddFiles, selectFile],
+    [attachmentsDisabled, disabledReason, onAddFiles, selectFile, t],
   );
 
   const handleAttachmentSelect = React.useCallback(
     (type: string) => {
       if ((type === "photo" || type === "document") && attachmentsDisabled) {
-        toast.warning(
-          disabledReason ||
-            t("chat:composer.attachBlocked", {
-              defaultValue: "Attachments are currently unavailable",
-            }),
-        );
+        toast.warning(disabledReason || t("chat:composer.attachBlocked"));
         setShowAttachmentMenu(false);
         return;
       }
@@ -428,9 +418,7 @@ export const MessageInput = React.forwardRef<
     stopTypingNow();
     setLiveRegionMessage(
       result === "queued"
-        ? t("chat:composer.queuedAnnouncement", {
-            defaultValue: "Message queued",
-          })
+        ? t("chat:composer.queuedAnnouncement")
         : t("chat:composer.sentAnnouncement"),
     );
   }, [clearMentionState, onChange, sendTextMessage, stopTypingNow, t, value]);
@@ -441,9 +429,7 @@ export const MessageInput = React.forwardRef<
       result === "failed"
         ? t("chat:composer.failedAnnouncement")
         : result === "queued"
-          ? t("chat:composer.queuedAnnouncement", {
-              defaultValue: "Message queued",
-            })
+          ? t("chat:composer.queuedAnnouncement")
           : t("chat:composer.sentAnnouncement"),
     );
   }, [sendAttachmentMessage, t]);
@@ -477,9 +463,7 @@ export const MessageInput = React.forwardRef<
         setLiveRegionMessage(
           (result as { disposition?: string } | undefined)?.disposition ===
             "queued"
-            ? t("chat:composer.queuedAnnouncement", {
-                defaultValue: "Message queued",
-              })
+            ? t("chat:composer.queuedAnnouncement")
             : t("chat:composer.sentAnnouncement"),
         );
       } catch {
@@ -1118,12 +1102,8 @@ export const MessageInput = React.forwardRef<
         <div className="mt-1 flex items-center justify-between px-1 text-caption text-text-muted">
           <span>
             {sendOnEnter
-              ? t("chat:composer.shortcutHint", {
-                  defaultValue: "Enter to send, Shift+Enter for new line",
-                })
-              : t("chat:composer.shortcutHintManual", {
-                  defaultValue: "Use Send button to send",
-                })}
+              ? t("chat:composer.shortcutHint")
+              : t("chat:composer.shortcutHintManual")}
           </span>
 
           <button

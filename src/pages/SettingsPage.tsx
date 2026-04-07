@@ -30,7 +30,7 @@ import { useAuthStore } from "../stores";
 import { ROUTE_PATHS } from "../router/paths";
 
 const SettingsPage: React.FC = () => {
-  const { t } = useTranslation("settings");
+  const { t } = useTranslation(["settings", "common"]);
   const navigate = useNavigate();
   const {
     syncFromServer,
@@ -56,7 +56,7 @@ const SettingsPage: React.FC = () => {
 
   const formatTimestamp = (value: string | null) => {
     if (!value) {
-      return t("common.status.unknown", { defaultValue: "Unknown" });
+      return t("common:status.unknown");
     }
 
     return new Date(value).toLocaleString();
@@ -79,7 +79,7 @@ const SettingsPage: React.FC = () => {
             "text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
           )}
-          aria-label={t("common.actions.back")}
+          aria-label={t("common:actions.back")}
         >
           <ArrowLeftIcon className="h-5 w-5" />
         </button>
@@ -92,9 +92,7 @@ const SettingsPage: React.FC = () => {
         <div className="inline-flex min-h-5 items-center gap-1.5 text-xs text-text-muted">
           {isSyncing && <ArrowPathIcon className="h-4 w-4 animate-spin" />}
           <span>
-            {isSyncing
-              ? t("common.loading.syncing", { defaultValue: "Syncing..." })
-              : t("common.status.idle", { defaultValue: "Idle" })}
+            {isSyncing ? t("common:loading.syncing") : t("common:status.idle")}
           </span>
         </div>
 
@@ -117,10 +115,7 @@ const SettingsPage: React.FC = () => {
           <div className="mx-auto flex max-w-2xl flex-wrap items-center gap-2 text-sm text-danger">
             <ExclamationTriangleIcon className="h-4 w-4 shrink-0" />
             <span className="flex-1">
-              {syncError ||
-                t("common.error.syncFailed", {
-                  defaultValue: "Could not sync settings.",
-                })}
+              {syncError || t("common:error.syncFailed")}
             </span>
             <button
               type="button"
@@ -134,7 +129,7 @@ const SettingsPage: React.FC = () => {
                   : "hover:bg-danger/10",
               )}
             >
-              {t("common.actions.retry", { defaultValue: "Retry" })}
+              {t("common:actions.retry")}
             </button>
           </div>
         </div>
@@ -156,14 +151,12 @@ const SettingsPage: React.FC = () => {
           <div className="pb-6 text-center text-xs text-text-muted">
             <p>{t("version", { version: 2 })}</p>
             <p className="mt-1">
-              {t("common.status.lastSynced", {
-                defaultValue: "Last synced: {{time}}",
+              {t("common:status.lastSynced", {
                 time: formatTimestamp(lastSyncedAt),
               })}
             </p>
             <p className="mt-1">
-              {t("common.status.lastUpdated", {
-                defaultValue: "Last updated locally: {{time}}",
+              {t("common:status.lastUpdated", {
                 time: formatTimestamp(updatedAt || null),
               })}
             </p>

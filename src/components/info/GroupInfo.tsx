@@ -143,9 +143,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 }) => {
   const { t } = useTranslation(["profile", "common"]);
   const unavailableActionClass = "cursor-not-allowed opacity-60";
-  const unavailableActionTitle = t("common:toast.featureInDevelopment", {
-    defaultValue: "This action is unavailable in this build.",
-  });
+  const unavailableActionTitle = t("profile:groupInfo.unavailableAction");
 
   const participants = React.useMemo(
     () =>
@@ -494,15 +492,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     { id: "members", label: t("profile:groupInfo.tabs.members") },
     {
       id: "inviteLinks",
-      label: t("profile:groupInfo.tabs.inviteLinks", {
-        defaultValue: "Invite links",
-      }),
+      label: t("profile:groupInfo.tabs.inviteLinks"),
     },
     {
       id: "joinRequests",
-      label: t("profile:groupInfo.tabs.joinRequests", {
-        defaultValue: "Join requests",
-      }),
+      label: t("profile:groupInfo.tabs.joinRequests"),
     },
     { id: "media", label: t("profile:groupInfo.tabs.media") },
     { id: "files", label: t("profile:groupInfo.tabs.files") },
@@ -518,11 +512,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       usageLimit !== undefined &&
       (!Number.isFinite(usageLimit) || usageLimit <= 0)
     ) {
-      toast.error(
-        t("profile:groupInfo.invite.invalidUsageLimit", {
-          defaultValue: "Usage limit must be greater than 0",
-        }),
-      );
+      toast.error(t("profile:groupInfo.invite.invalidUsageLimit"));
       return;
     }
 
@@ -579,18 +569,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       setInviteNameDraft("");
       setInviteUsageLimitDraft("");
       setInviteExpireAtDraft("");
-      toast.success(
-        t("profile:groupInfo.invite.created", {
-          defaultValue: "Invite link created",
-        }),
-      );
+      toast.success(t("profile:groupInfo.invite.created"));
     } catch (error) {
       const apiError = extractApiError(error);
       toast.error(
-        apiError.message ||
-          t("profile:groupInfo.invite.createFailed", {
-            defaultValue: "Unable to create invite link",
-          }),
+        apiError.message || t("profile:groupInfo.invite.createFailed"),
       );
     } finally {
       setIsCreatingInvite(false);
@@ -611,15 +594,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       if (!value) return;
       try {
         await navigator.clipboard.writeText(value);
-        toast.success(
-          t("profile:groupInfo.invite.copied", { defaultValue: "Copied" }),
-        );
+        toast.success(t("profile:groupInfo.invite.copied"));
       } catch {
-        toast.error(
-          t("profile:groupInfo.invite.copyFailed", {
-            defaultValue: "Copy failed",
-          }),
-        );
+        toast.error(t("profile:groupInfo.invite.copyFailed"));
       }
     },
     [t],
@@ -632,18 +609,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       try {
         await revokeGroupInviteLinkUseCase(conversation.id, linkId);
         markInviteLinkRevoked(conversation.id, linkId);
-        toast.success(
-          t("profile:groupInfo.invite.revoked", {
-            defaultValue: "Invite link revoked",
-          }),
-        );
+        toast.success(t("profile:groupInfo.invite.revoked"));
       } catch (error) {
         const apiError = extractApiError(error);
         toast.error(
-          apiError.message ||
-            t("profile:groupInfo.invite.revokeFailed", {
-              defaultValue: "Unable to revoke invite link",
-            }),
+          apiError.message || t("profile:groupInfo.invite.revokeFailed"),
         );
       } finally {
         setRevokingInviteId(null);
@@ -670,20 +640,13 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         }
         toast.success(
           status === "approved"
-            ? t("profile:groupInfo.joinRequests.approved", {
-                defaultValue: "Join request approved",
-              })
-            : t("profile:groupInfo.joinRequests.rejected", {
-                defaultValue: "Join request rejected",
-              }),
+            ? t("profile:groupInfo.joinRequests.approved")
+            : t("profile:groupInfo.joinRequests.rejected"),
         );
       } catch (error) {
         const apiError = extractApiError(error);
         toast.error(
-          apiError.message ||
-            t("profile:groupInfo.joinRequests.resolveFailed", {
-              defaultValue: "Unable to resolve join request",
-            }),
+          apiError.message || t("profile:groupInfo.joinRequests.resolveFailed"),
         );
       } finally {
         setResolvingRequestId(null);
@@ -805,9 +768,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   {t("profile:groupInfo.notifications")}
                 </span>
                 <p className="text-xs text-text-muted">
-                  {t("common:toast.featureInDevelopment", {
-                    defaultValue: "Coming soon",
-                  })}
+                  {t("profile:groupInfo.comingSoon")}
                 </p>
               </div>
             </div>
@@ -1034,9 +995,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             <div className="space-y-3 p-4">
               {!isAdmin ? (
                 <p className="text-sm text-text-muted">
-                  {t("profile:groupInfo.invite.noPermission", {
-                    defaultValue: "Only admins can manage invite links.",
-                  })}
+                  {t("profile:groupInfo.invite.noPermission")}
                 </p>
               ) : (
                 <div className="space-y-3">
@@ -1046,9 +1005,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-text-secondary hover:bg-surface-hover"
                   >
                     <LinkIcon className="h-4 w-4" />
-                    {t("profile:groupInfo.invite.create", {
-                      defaultValue: "Create invite link",
-                    })}
+                    {t("profile:groupInfo.invite.create")}
                   </button>
 
                   {showCreateInviteForm && (
@@ -1061,9 +1018,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                         }
                         placeholder={t(
                           "profile:groupInfo.invite.namePlaceholder",
-                          {
-                            defaultValue: "Name (optional)",
-                          },
                         )}
                         disabled={isCreatingInvite}
                       />
@@ -1075,7 +1029,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                         }
                         placeholder={t(
                           "profile:groupInfo.invite.usageLimitPlaceholder",
-                          { defaultValue: "Usage limit (optional)" },
                         )}
                         disabled={isCreatingInvite}
                       />
@@ -1109,9 +1062,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                         >
                           {isCreatingInvite
                             ? t("common:loading.processing")
-                            : t("profile:groupInfo.invite.create", {
-                                defaultValue: "Create invite link",
-                              })}
+                            : t("profile:groupInfo.invite.create")}
                         </button>
                       </div>
                     </div>
@@ -1119,9 +1070,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
                   {inviteLinks.length === 0 ? (
                     <p className="text-sm text-text-muted">
-                      {t("profile:groupInfo.invite.empty", {
-                        defaultValue: "No invite links yet.",
-                      })}
+                      {t("profile:groupInfo.invite.empty")}
                     </p>
                   ) : (
                     <div className="space-y-2">
@@ -1137,9 +1086,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                               <div className="min-w-0">
                                 <p className="truncate text-sm font-medium text-text-primary">
                                   {link.name ||
-                                    t("profile:groupInfo.invite.unnamed", {
-                                      defaultValue: "Invite link",
-                                    })}
+                                    t("profile:groupInfo.invite.unnamed")}
                                 </p>
                                 <p className="mt-1 truncate text-xs text-text-muted">
                                   {link.inviteUrl ||
@@ -1148,7 +1095,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                                 </p>
                                 <p className="mt-1 text-xs text-text-muted">
                                   {t("profile:groupInfo.invite.usage", {
-                                    defaultValue: "Usage: {{count}}/{{limit}}",
                                     count: link.usageCount || 0,
                                     limit:
                                       typeof link.usageLimit === "number"
@@ -1159,9 +1105,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                               </div>
                               {isRevoked && (
                                 <span className="rounded-full bg-danger/10 px-2 py-0.5 text-xs text-danger">
-                                  {t("profile:groupInfo.invite.revokedLabel", {
-                                    defaultValue: "Revoked",
-                                  })}
+                                  {t("profile:groupInfo.invite.revokedLabel")}
                                 </span>
                               )}
                             </div>
@@ -1190,9 +1134,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                                   <NoSymbolIcon className="h-3.5 w-3.5" />
                                   {revokingInviteId === link.id
                                     ? t("common:loading.processing")
-                                    : t("profile:groupInfo.invite.revoke", {
-                                        defaultValue: "Revoke",
-                                      })}
+                                    : t("profile:groupInfo.invite.revoke")}
                                 </button>
                               )}
                             </div>
@@ -1210,15 +1152,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             <div className="space-y-2 p-4">
               {!isAdmin ? (
                 <p className="text-sm text-text-muted">
-                  {t("profile:groupInfo.joinRequests.noPermission", {
-                    defaultValue: "Only admins can resolve join requests.",
-                  })}
+                  {t("profile:groupInfo.joinRequests.noPermission")}
                 </p>
               ) : joinRequests.length === 0 ? (
                 <p className="text-sm text-text-muted">
-                  {t("profile:groupInfo.joinRequests.empty", {
-                    defaultValue: "No pending join requests.",
-                  })}
+                  {t("profile:groupInfo.joinRequests.empty")}
                 </p>
               ) : (
                 joinRequests.map((request) => {
@@ -1268,9 +1206,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                           }
                           className="rounded-md bg-primary px-3 py-1.5 text-xs text-text-inverse hover:opacity-90 disabled:opacity-60"
                         >
-                          {t("common:actions.approve", {
-                            defaultValue: "Approve",
-                          })}
+                          {t("common:actions.approve")}
                         </button>
                         <button
                           type="button"
@@ -1283,9 +1219,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                           }
                           className="rounded-md border border-danger/40 px-3 py-1.5 text-xs text-danger hover:bg-danger/10 disabled:opacity-60"
                         >
-                          {t("common:actions.reject", {
-                            defaultValue: "Reject",
-                          })}
+                          {t("common:actions.reject")}
                         </button>
                       </div>
                     </div>

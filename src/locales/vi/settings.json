@@ -1,5 +1,6 @@
 {
   "pageTitle": "Cài đặt",
+  "description": "Điều chỉnh các tùy chọn của bạn",
   "resetAll": "Đặt lại mặc định",
   "version": "Cài đặt v{{version}}",
   "appearance": {

@@ -73,7 +73,10 @@
     "retryUpload": "Retry",
     "sendFile": "Send file",
     "filePreviewAlt": "File preview",
-    "fileSizeLimit": "Limit {{size}}"
+    "fileSizeLimit": "Limit {{size}}",
+    "attachBlocked": "Attachments are currently unavailable",
+    "shortcutHint": "Enter to send, Shift+Enter for new line",
+    "shortcutHintManual": "Use Send button to send"
   },
   "dropZone": {
     "title": "Drop files here",

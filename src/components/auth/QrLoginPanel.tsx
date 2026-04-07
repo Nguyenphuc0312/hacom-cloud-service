@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import QRCode from "qrcode";
+import { useTranslation } from "react-i18next";
 import {
   ArrowPathIcon,
   CheckCircleIcon,
@@ -50,48 +51,34 @@ const ACTIVE_POLLING_STATUSES = new Set<QrLoginSessionStatus>([
   QrLoginSessionStatus.APPROVED,
 ]);
 
-const STATUS_COPY: Record<
+const STATUS_STYLES: Record<
   QrLoginSessionStatus,
   {
-    title: string;
-    body: string;
     toneClass: string;
     dotClass: string;
   }
 > = {
   PENDING: {
-    title: "Đang chờ quét",
-    body: "Mở Hacom Chat trên điện thoại và quét mã để bắt đầu.",
     toneClass: "border-primary/30 bg-primary/10 text-primary",
     dotClass: "bg-primary animate-pulse",
   },
   SCANNED: {
-    title: "Đã quét, chờ xác nhận",
-    body: "Kiểm tra điện thoại và xác nhận đăng nhập để tiếp tục.",
     toneClass: "border-warning/35 bg-warning/15 text-warning",
     dotClass: "bg-warning animate-pulse",
   },
   APPROVED: {
-    title: "Đã xác nhận",
-    body: "Đang đăng nhập trên trình duyệt này.",
     toneClass: "border-success/30 bg-success/12 text-success",
     dotClass: "bg-success",
   },
   REJECTED: {
-    title: "Đã bị từ chối",
-    body: "Bạn đã từ chối yêu cầu đăng nhập trên điện thoại.",
     toneClass: "border-danger/35 bg-danger/12 text-danger",
     dotClass: "bg-danger",
   },
   EXPIRED: {
-    title: "Mã đã hết hạn",
-    body: "Tạo mã mới để tiếp tục đăng nhập bằng QR.",
     toneClass: "border-danger/35 bg-danger/12 text-danger",
     dotClass: "bg-danger",
   },
   EXCHANGED: {
-    title: "Đăng nhập thành công",
-    body: "Phiên đăng nhập đã hoàn tất.",
     toneClass: "border-success/30 bg-success/12 text-success",
     dotClass: "bg-success",
   },
@@ -150,6 +137,7 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
   rememberMe = false,
   onSuccess,
 }) => {
+  const { t } = useTranslation("auth");
   const applyLoginResponse = useAuthStore((state) => state.applyLoginResponse);
   const [panelState, setPanelState] = useState<QrPanelState | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
@@ -160,12 +148,17 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
   const exchangeStartedRef = useRef<string | null>(null);
 
   const statusCopy = useMemo(() => {
-    if (!panelState) {
-      return STATUS_COPY.PENDING;
-    }
+    const status = panelState?.status ?? QrLoginSessionStatus.PENDING;
+    const statusKey = status.toLowerCase();
+    const styles = STATUS_STYLES[status];
 
-    return STATUS_COPY[panelState.status];
-  }, [panelState]);
+    return {
+      title: t(`qrLogin.status.${statusKey}.title`),
+      body: t(`qrLogin.status.${statusKey}.body`),
+      toneClass: styles.toneClass,
+      dotClass: styles.dotClass,
+    };
+  }, [panelState?.status, t]);
   const isWaitingForPhone =
     panelState?.status === QrLoginSessionStatus.PENDING ||
     panelState?.status === QrLoginSessionStatus.SCANNED;
@@ -195,7 +188,7 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
       setCountdown(formatCountdown(session.expiresAt));
     } catch (cause) {
       const apiError = extractApiError(cause);
-      setError(apiError.message || "Không thể tạo mã QR đăng nhập.");
+      setError(apiError.message || t("qrLogin.errorCreateSession"));
       setPanelState(null);
     } finally {
       setIsBootstrapping(false);
@@ -249,7 +242,7 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
         });
       } catch (cause) {
         const apiError = extractApiError(cause);
-        setError(apiError.message || "Không thể kiểm tra trạng thái QR login.");
+        setError(apiError.message || t("qrLogin.errorCheckStatus"));
       }
     };
 
@@ -295,22 +288,22 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
       } catch (cause) {
         exchangeStartedRef.current = null;
         const apiError = extractApiError(cause);
-        setError(apiError.message || "Không thể hoàn tất đăng nhập bằng QR.");
+        setError(apiError.message || t("qrLogin.errorExchange"));
       } finally {
         setIsExchanging(false);
       }
     })();
-  }, [applyLoginResponse, onSuccess, panelState, rememberMe]);
+  }, [applyLoginResponse, onSuccess, panelState, rememberMe, t]);
 
   return (
     <section className="panel-section rounded-xl bg-surface px-4 py-4 sm:px-5 sm:py-5">
       <header className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-text-primary sm:text-base">
-            Đăng nhập bằng QR
+            {t("qrLogin.title")}
           </h2>
           <p className="mt-1 text-xs text-text-muted sm:text-sm">
-            Quét mã bằng điện thoại để đăng nhập nhanh.
+            {t("qrLogin.subtitle")}
           </p>
         </div>
         <Button
@@ -322,7 +315,7 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
           leftIcon={<ArrowPathIcon className="h-4 w-4" />}
           className="h-9 rounded-lg"
         >
-          Làm mới
+          {t("qrLogin.refresh")}
         </Button>
       </header>
 
@@ -331,7 +324,7 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
           {panelState?.qrImageUrl ? (
             <img
               src={panelState.qrImageUrl}
-              alt="QR login"
+              alt={t("qrLogin.alt")}
               className={clsx(
                 "h-full w-full rounded-lg object-contain transition-opacity duration-200",
                 (isRefreshing || isBootstrapping) && "opacity-50",
@@ -340,7 +333,7 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center rounded-lg bg-surface text-sm text-text-muted">
-              Đang tạo mã QR...
+              {t("qrLogin.creating")}
             </div>
           )}
         </div>
@@ -366,7 +359,7 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
 
         <div className="text-center text-sm text-text-secondary">
           {panelState?.displayHint === "waiting_for_mobile_confirm"
-            ? "Đã quét. Chờ xác nhận trên điện thoại."
+            ? t("qrLogin.displayHintWaitingConfirm")
             : statusCopy.body}
         </div>
 
@@ -380,12 +373,12 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
           ) : (
             <DevicePhoneMobileIcon className="h-4 w-4 text-primary" />
           )}
-          <span>Chỉ thiết bị đã đăng nhập mới có thể xác nhận.</span>
+          <span>{t("qrLogin.securityHint")}</span>
         </div>
 
         {isExchanging && (
           <p className="text-center text-sm text-primary">
-            Đang hoàn tất đăng nhập...
+            {t("qrLogin.exchanging")}
           </p>
         )}
 
@@ -405,7 +398,7 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
             isLoading={isRefreshing}
             className="h-10 rounded-xl"
           >
-            Tạo mã mới
+            {t("qrLogin.createNew")}
           </Button>
         )}
       </div>

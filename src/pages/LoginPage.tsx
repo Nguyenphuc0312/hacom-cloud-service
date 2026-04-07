@@ -12,7 +12,7 @@ import type { LoginFormData } from "../lib/validations";
 import { useAuthStore } from "../stores";
 
 export const LoginPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation("auth");
   const navigate = useNavigate();
   const location = useLocation();
   const [authMethod, setAuthMethod] = React.useState<"password" | "qr">(
@@ -64,24 +64,22 @@ export const LoginPage: React.FC = () => {
 
   return (
     <AuthShell maxWidth="md">
-      <AuthCard ariaLabel={t("auth:login.aria.section")}>
+      <AuthCard ariaLabel={t("login.aria.section")}>
         <header className="mb-6 text-center">
           <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-text-inverse shadow-sm">
             <ChatBubbleLeftRightIcon className="h-5 w-5" />
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-text-primary">
-            {t("auth:login.title")}
+            {t("login.title")}
           </h1>
           <p className="mt-1.5 text-sm text-text-muted">
-            {t("auth:login.subtitle")}
+            {t("login.subtitle")}
           </p>
         </header>
 
         <div
           role="tablist"
-          aria-label={t("auth:login.methods", {
-            defaultValue: "Login methods",
-          })}
+          aria-label={t("login.methods")}
           className="mb-5 grid grid-cols-2 rounded-2xl border border-border bg-surface-overlay/70 p-1"
         >
           <TabTrigger
@@ -92,9 +90,7 @@ export const LoginPage: React.FC = () => {
             aria-selected={authMethod === "password"}
             onClick={() => setAuthMethod("password")}
           >
-            {t("auth:login.passwordTab", {
-              defaultValue: "Dang nhap mat khau",
-            })}
+            {t("login.passwordTab")}
           </TabTrigger>
           <TabTrigger
             role="tab"
@@ -104,7 +100,7 @@ export const LoginPage: React.FC = () => {
             aria-selected={authMethod === "qr"}
             onClick={() => setAuthMethod("qr")}
           >
-            {t("auth:login.qrTab", { defaultValue: "Quet QR" })}
+            {t("login.qrTab")}
           </TabTrigger>
         </div>
 
@@ -128,15 +124,12 @@ export const LoginPage: React.FC = () => {
             className="space-y-4"
           >
             <p className="text-center text-sm text-text-secondary">
-              {t("auth:login.qrHint", {
-                defaultValue:
-                  "Quet ma bang app mobile de dang nhap vao trinh duyet",
-              })}
+              {t("login.qrHint")}
             </p>
             <QrLoginPanel
               rememberMe={rememberMe}
               onSuccess={() => {
-                toast.success("Dang nhap bang QR thanh cong");
+                toast.success(t("toast.loginQrSuccess"));
                 const from =
                   (location.state as { from?: string })?.from ?? "/chat";
                 navigate(from, { replace: true });
@@ -146,30 +139,30 @@ export const LoginPage: React.FC = () => {
         )}
 
         <p className="mt-6 text-center text-sm text-text-muted">
-          {t("auth:login.noAccount")}{" "}
+          {t("login.noAccount")}{" "}
           <Link
             to="/register"
             className="font-semibold text-primary hover:text-primary/80 transition-colors"
           >
-            {t("auth:login.signupNow")}
+            {t("login.signupNow")}
           </Link>
         </p>
       </AuthCard>
 
       <p className="mt-4 px-2 text-center text-caption leading-relaxed text-text-muted">
-        {t("auth:login.agreement")}{" "}
+        {t("login.agreement")}{" "}
         <Link
           to="/terms"
           className="underline hover:text-text-secondary transition-colors"
         >
-          {t("auth:login.terms")}
+          {t("login.terms")}
         </Link>{" "}
-        {t("auth:login.agreementAnd")}{" "}
+        {t("login.agreementAnd")}{" "}
         <Link
           to="/privacy"
           className="underline hover:text-text-secondary transition-colors"
         >
-          {t("auth:login.privacy")}
+          {t("login.privacy")}
         </Link>
       </p>
     </AuthShell>

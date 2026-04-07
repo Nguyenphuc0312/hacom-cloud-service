@@ -267,10 +267,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       {
         id: "nav-chat",
         group: "navigation",
-        label: t("chat:header.searchInChat", { defaultValue: "Go to chats" }),
-        description: t("common:labels.conversation", {
-          defaultValue: "Open your chat workspace",
-        }),
+        label: t("chat:header.searchInChat"),
+        description: t("common:commandPalette.openChatWorkspace"),
         keywords: ["chat", "messages", "home"],
         icon: ChatBubbleLeftRightIcon,
         execute: () => navigate(ROUTE_PATHS.CHAT),
@@ -278,10 +276,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       {
         id: "nav-friends",
         group: "navigation",
-        label: t("friends:title", { defaultValue: "Friends" }),
-        description: t("friends:tabs.search", {
-          defaultValue: "Find friends and contacts",
-        }),
+        label: t("friends:title"),
+        description: t("common:commandPalette.findFriends"),
         keywords: ["friends", "contacts", "users"],
         icon: UserGroupIcon,
         execute: () => navigate(ROUTE_PATHS.FRIENDS),
@@ -289,10 +285,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       {
         id: "nav-settings",
         group: "navigation",
-        label: t("settings:pageTitle", { defaultValue: "Settings" }),
-        description: t("settings:description", {
-          defaultValue: "Adjust your preferences",
-        }),
+        label: t("settings:pageTitle"),
+        description: t("settings:description"),
         keywords: ["settings", "preferences", "theme"],
         icon: Cog6ToothIcon,
         execute: () => navigate(ROUTE_PATHS.SETTINGS),
@@ -307,9 +301,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         id: "action-new-chat",
         group: "actions",
         label: t("chat:empty.startNewChat"),
-        description: t("chat:empty.noChatDescription", {
-          defaultValue: "Start a new direct or group conversation",
-        }),
+        description: t("common:commandPalette.newConversation"),
         keywords: ["new", "chat", "message", "compose"],
         icon: PlusIcon,
         shortcut: openShortcut,
@@ -366,12 +358,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           group: "users",
           label: candidate.label,
           description: directConversationId
-            ? t("chat:empty.noChatDescription", {
-                defaultValue: "Open existing direct conversation",
-              })
-            : t("friends:tabs.search", {
-                defaultValue: "Search this user in Friends",
-              }),
+            ? t("common:commandPalette.openDirectConversation")
+            : t("common:commandPalette.searchInFriends"),
           keywords: [candidate.username ?? "", "user", "person", "friend"],
           icon: UserCircleIcon,
           execute: () => {
@@ -447,12 +435,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   const groupTitleById = React.useMemo<Record<CommandGroup, string>>(
     () => ({
-      navigation: t("common:labels.navigation", { defaultValue: "Navigate" }),
-      actions: t("common:actions.title", { defaultValue: "Quick actions" }),
-      conversations: t("common:labels.conversation", {
-        defaultValue: "Conversations",
-      }),
-      users: t("friends:title", { defaultValue: "People" }),
+      navigation: t("common:labels.navigation"),
+      actions: t("common:actions.title"),
+      conversations: t("common:labels.conversation"),
+      users: t("common:labels.people"),
     }),
     [t],
   );
@@ -626,32 +612,23 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={handleInputKeyDown}
-              placeholder={t("common:actions.search", {
-                defaultValue: "Search chats, people, or actions",
-              })}
+              placeholder={t("common:commandPalette.searchPlaceholder")}
               className="w-full bg-transparent text-body-sm text-text-primary placeholder:text-text-muted focus:outline-none"
-              aria-label={t("common:actions.search", {
-                defaultValue: "Search command palette",
-              })}
+              aria-label={t("common:commandPalette.searchAria")}
             />
             <span className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-overlay px-2 py-1 text-caption text-text-muted">
               <span>Esc</span>
             </span>
           </label>
           <p className="mt-2 text-caption text-text-muted">
-            {t("common:labels.shortcut", {
-              defaultValue: "Shortcut",
-            })}
-            : {openShortcut}
+            {t("common:labels.shortcut")}: {openShortcut}
           </p>
         </div>
 
         <div className="flex-1 overflow-y-auto px-2 py-2 sm:px-3">
           {groupedCommands.length === 0 && (
             <div className="flex h-full items-center justify-center px-6 text-center text-sm text-text-muted">
-              {t("common:status.empty", {
-                defaultValue: "No matching commands",
-              })}
+              {t("common:status.empty")}
             </div>
           )}
 

@@ -73,7 +73,10 @@
     "retryUpload": "Thử lại",
     "sendFile": "Gửi tệp",
     "filePreviewAlt": "Xem trước tệp",
-    "fileSizeLimit": "Giới hạn {{size}}"
+    "fileSizeLimit": "Giới hạn {{size}}",
+    "attachBlocked": "Tính năng đính kèm hiện không khả dụng",
+    "shortcutHint": "Enter để gửi, Shift+Enter để xuống dòng",
+    "shortcutHintManual": "Dùng nút Gửi để gửi tin nhắn"
   },
   "dropZone": {
     "title": "Thả tệp vào đây",

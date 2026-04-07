@@ -1,6 +1,7 @@
 import React from "react";
 import clsx from "clsx";
 import QRCode from "qrcode";
+import { useTranslation } from "react-i18next";
 import {
   CameraIcon,
   CheckCircleIcon,
@@ -26,10 +27,7 @@ import {
 } from "../../services/api";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import { ROUTE_PATHS } from "../../router/paths";
-import {
-  parseShareCodeInput,
-  invalidQrCodeMessage,
-} from "../../features/friend-qr/shareCode";
+import { parseShareCodeInput } from "../../features/friend-qr/shareCode";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 interface FriendQrWorkspaceProps {
@@ -50,9 +48,10 @@ type BarcodeDetectorConstructor = new (options?: {
 
 const getDisplayName = (
   user: ReturnType<typeof useAuthStore.getState>["user"],
+  fallback: string,
 ): string => {
   if (!user) {
-    return "Unknown user";
+    return fallback;
   }
 
   const fullName = `${user.firstName || ""} ${user.lastName || ""}`.trim();
@@ -63,22 +62,10 @@ const getDisplayName = (
   return user.username || user.email || user.id;
 };
 
-const toFriendlyResolveMessage = (message: string | undefined): string => {
-  if (!message) {
-    return invalidQrCodeMessage;
-  }
-
-  const normalized = message.toLowerCase();
-  if (normalized.includes("invalid") || normalized.includes("expired")) {
-    return invalidQrCodeMessage;
-  }
-
-  return message;
-};
-
 export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
   initialShareCode,
 }) => {
+  const { t } = useTranslation(["friends", "common"]);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -151,11 +138,11 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
       setMyQr(payload);
     } catch (error) {
       const apiError = extractApiError(error);
-      toast.error(apiError.message || "Khong the tai QR ban be");
+      toast.error(apiError.message || t("friends:qr.errorLoadQr"));
     } finally {
       setIsMyQrLoading(false);
     }
-  }, []);
+  }, [t]);
 
   React.useEffect(() => {
     void refreshMyQr();
@@ -215,11 +202,11 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
         toast.success(successMessage);
         return true;
       } catch {
-        toast.error("Khong the sao chep. Vui long thu lai");
+        toast.error(t("friends:qr.copyFailed"));
         return false;
       }
     },
-    [],
+    [t],
   );
 
   const handleShare = React.useCallback(async () => {
@@ -227,8 +214,8 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
       return;
     }
 
-    const shareTitle = "Ho so ket ban";
-    const shareText = `Ket ban voi toi qua ma QR: ${myQr.deepLink}`;
+    const shareTitle = t("friends:qr.myCodeTitle");
+    const shareText = `${t("friends:qr.resolveTitle")}: ${myQr.deepLink}`;
 
     const maybeNavigator = navigator as Navigator & {
       share?: (data: ShareData) => Promise<void>;
@@ -247,8 +234,8 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
       }
     }
 
-    await copyText(myQr.deepLink, "Da sao chep lien ket QR");
-  }, [copyText, myQr]);
+    await copyText(myQr.deepLink, t("friends:qr.shareCopied"));
+  }, [copyText, myQr, t]);
 
   const handleResetQr = React.useCallback(async () => {
     setIsResetting(true);
@@ -256,18 +243,16 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
       const response = await friendQrApi.resetMyFriendQr();
       const payload = unwrapApiSuccess(response);
       setMyQr(payload);
-      setResetNotice(
-        "QR cu khong con su dung duoc. Hay chia se ma moi de ket ban.",
-      );
-      toast.success("Da tao QR moi thanh cong");
+      setResetNotice(t("friends:qr.resetNotice"));
+      toast.success(t("friends:qr.resetSuccess"));
       setIsResetConfirmOpen(false);
     } catch (error) {
       const apiError = extractApiError(error);
-      toast.error(apiError.message || "Khong the reset QR");
+      toast.error(apiError.message || t("friends:qr.errorResetQr"));
     } finally {
       setIsResetting(false);
     }
-  }, []);
+  }, [t]);
 
   const applyResolvedRelation = React.useCallback(
     (relation: FriendshipRelationDto | null) => {
@@ -282,9 +267,24 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
 
   const resolveCode = React.useCallback(
     async (rawInput: string) => {
+      const toFriendlyResolveMessage = (
+        message: string | undefined,
+      ): string => {
+        if (!message) {
+          return t("friends:qr.invalidCode");
+        }
+
+        const normalized = message.toLowerCase();
+        if (normalized.includes("invalid") || normalized.includes("expired")) {
+          return t("friends:qr.invalidCode");
+        }
+
+        return message;
+      };
+
       const parsedCode = parseShareCodeInput(rawInput);
       if (!parsedCode) {
-        setResolveError(invalidQrCodeMessage);
+        setResolveError(t("friends:qr.invalidCode"));
         return;
       }
 
@@ -308,7 +308,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
         setIsResolving(false);
       }
     },
-    [applyResolvedRelation],
+    [applyResolvedRelation, t],
   );
 
   React.useEffect(() => {
@@ -373,7 +373,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
       const createBitmap = maybeWindow.createImageBitmap;
 
       if (!DetectorCtor || !createBitmap) {
-        toast.error("Trinh duyet hien tai khong ho tro quet QR tu anh");
+        toast.error(t("friends:qr.errorScanNotSupported"));
         return;
       }
 
@@ -385,25 +385,25 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
         const rawValue = results[0]?.rawValue;
 
         if (!rawValue) {
-          setResolveError("Khong tim thay ma QR hop le trong anh");
+          setResolveError(t("friends:qr.errorScanNotFound"));
           return;
         }
 
         const parsed = parseShareCodeInput(rawValue);
         if (!parsed) {
-          setResolveError(invalidQrCodeMessage);
+          setResolveError(t("friends:qr.invalidCode"));
           return;
         }
 
         setResolveInput(parsed);
         await resolveCode(parsed);
       } catch {
-        setResolveError("Khong the quet QR tu anh. Vui long thu lai");
+        setResolveError(t("friends:qr.errorScanFailed"));
       } finally {
         setIsScanningImage(false);
       }
     },
-    [resolveCode],
+    [resolveCode, t],
   );
 
   const resolvedProfile = resolved?.profile ?? null;
@@ -421,7 +421,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
       try {
         const success = await action();
         if (!success) {
-          toast.error("Khong the thuc hien thao tac");
+          toast.error(t("friends:actionFailed"));
           return;
         }
 
@@ -450,11 +450,11 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
       setIsProfileOpen(false);
     } catch (error) {
       const apiError = extractApiError(error);
-      toast.error(apiError.message || "Khong the mo cuoc tro chuyen");
+      toast.error(apiError.message || t("friends:qr.errorOpenConversation"));
     } finally {
       setIsProfileActionLoading(null);
     }
-  }, [navigate, resolvedProfile?.id]);
+  }, [navigate, resolvedProfile?.id, t]);
 
   const renderProfileActions = () => {
     if (!relationship || !resolvedProfile) {
@@ -466,7 +466,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
     if (relationship.kind === "self") {
       return (
         <p className="rounded-xl bg-surface-overlay px-3 py-2 text-sm text-text-secondary">
-          Day la ho so cua ban
+          {t("friends:qr.selfProfile")}
         </p>
       );
     }
@@ -481,7 +481,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
               isLoading={isProfileActionLoading === "message"}
               onClick={() => void handleOpenMessage()}
             >
-              Message
+              {t("friends:message")}
             </Button>
           ) : null}
           {capabilities.canBlock ? (
@@ -494,11 +494,11 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
                 void handleProfileAction(
                   "block",
                   () => blockUser(resolvedProfile.id),
-                  "Da chan nguoi dung",
+                  t("friends:qr.toastBlocked"),
                 )
               }
             >
-              Block
+              {t("profile:userProfile.blockUser")}
             </Button>
           ) : null}
         </div>
@@ -516,11 +516,11 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
                 void handleProfileAction(
                   "accept",
                   () => acceptFriendRequest(relationship.requestId),
-                  "Da chap nhan loi moi ket ban",
+                  t("friends:qr.toastAccepted"),
                 )
               }
             >
-              Accept
+              {t("friends:accept")}
             </Button>
           ) : null}
           {capabilities.canDecline ? (
@@ -532,11 +532,11 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
                 void handleProfileAction(
                   "decline",
                   () => rejectFriendRequest(relationship.requestId),
-                  "Da tu choi loi moi",
+                  t("friends:qr.toastDeclined"),
                 )
               }
             >
-              Decline
+              {t("friends:reject")}
             </Button>
           ) : null}
         </div>
@@ -547,7 +547,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
       return (
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="secondary" disabled>
-            Pending
+            {t("friends:qr.pending")}
           </Button>
           {capabilities.canCancel ? (
             <Button
@@ -558,11 +558,11 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
                 void handleProfileAction(
                   "cancel",
                   () => cancelFriendRequest(relationship.requestId),
-                  "Da huy loi moi ket ban",
+                  t("friends:qr.toastCancelled"),
                 )
               }
             >
-              Cancel
+              {t("friends:sentRequests.cancel")}
             </Button>
           ) : null}
         </div>
@@ -579,11 +579,11 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
             void handleProfileAction(
               "unblock",
               () => unblockUser(resolvedProfile.id),
-              "Da bo chan nguoi dung",
+              t("friends:qr.toastUnblocked"),
             )
           }
         >
-          Unblock
+          {t("friends:unblock")}
         </Button>
       ) : null;
     }
@@ -599,11 +599,11 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
               void handleProfileAction(
                 "add",
                 () => sendFriendRequest(resolvedProfile.id),
-                "Da gui loi moi ket ban",
+                t("friends:qr.toastSent"),
               )
             }
           >
-            Add Friend
+            {t("friends:addFriend")}
           </Button>
         ) : null}
         {capabilities.canBlock ? (
@@ -616,11 +616,11 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
               void handleProfileAction(
                 "block",
                 () => blockUser(resolvedProfile.id),
-                "Da chan nguoi dung",
+                t("friends:qr.toastBlocked"),
               )
             }
           >
-            Block
+            {t("profile:userProfile.blockUser")}
           </Button>
         ) : null}
       </div>
@@ -634,24 +634,25 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
 
     switch (relationship.kind) {
       case "self":
-        return "Ho so cua ban";
+        return t("friends:relationship.self");
       case "friend":
-        return "Da la ban be";
+        return t("friends:relationship.friend");
       case "incoming_request":
-        return "Da nhan loi moi ket ban";
+        return t("friends:relationship.incoming");
       case "outgoing_request":
-        return "Dang cho xac nhan";
+        return t("friends:relationship.outgoing");
       case "blocked":
-        return "Da chan";
+        return t("friends:relationship.blocked");
       default:
-        return "Chua ket ban";
+        return t("friends:relationship.notFriend");
     }
-  }, [relationship]);
+  }, [relationship, t]);
 
-  const resolvedDisplayName = resolvedProfile?.displayName || "Unknown user";
+  const resolvedDisplayName =
+    resolvedProfile?.displayName || t("friends:qr.unknownUser");
   const resolvedUsername = resolvedProfile?.username
     ? `@${resolvedProfile.username}`
-    : "Khong co username";
+    : t("friends:qr.missingUsername");
 
   return (
     <div className="space-y-6">
@@ -660,17 +661,17 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
           <div className="flex items-center gap-3">
             <Avatar
               src={currentUser?.avatar}
-              alt={getDisplayName(currentUser)}
+              alt={getDisplayName(currentUser, t("friends:qr.unknownUser"))}
               size="lg"
             />
             <div>
               <p className="text-base font-semibold text-text-primary">
-                {getDisplayName(currentUser)}
+                {getDisplayName(currentUser, t("friends:qr.unknownUser"))}
               </p>
               <p className="text-sm text-text-secondary">
                 {currentUser?.username
                   ? `@${currentUser.username}`
-                  : "Khong co username"}
+                  : t("friends:qr.missingUsername")}
               </p>
             </div>
           </div>
@@ -682,24 +683,24 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
             {myQrImageUrl ? (
               <img
                 src={myQrImageUrl}
-                alt="Friend QR"
+                alt={t("friends:tabs.qr")}
                 className="h-full w-full rounded-lg"
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-sm text-text-secondary">
-                Dang tao QR...
+                {t("auth:qrLogin.creating")}
               </div>
             )}
           </div>
 
           <div className="space-y-3">
             <p className="text-sm text-text-secondary">
-              Chia se ma nay de nguoi khac quet va mo mini profile cua ban.
+              {t("friends:qr.myCodeHint")}
             </p>
 
             <div className="rounded-xl border border-border bg-surface-overlay px-3 py-2">
               <p className="text-xs uppercase tracking-wide text-text-muted">
-                Share Code
+                {t("friends:qr.shareCode")}
               </p>
               <p className="mt-1 break-all text-sm font-medium text-text-primary">
                 {myQr?.shareCode || "--"}
@@ -708,7 +709,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
 
             <div className="rounded-xl border border-border bg-surface-overlay px-3 py-2">
               <p className="text-xs uppercase tracking-wide text-text-muted">
-                Deep Link
+                {t("friends:qr.deepLink")}
               </p>
               <p className="mt-1 break-all text-sm text-text-primary">
                 {myQr?.deepLink || "--"}
@@ -717,7 +718,9 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
 
             {myQr?.updatedAt ? (
               <p className="text-xs text-text-muted">
-                Cap nhat luc {new Date(myQr.updatedAt).toLocaleString()}
+                {t("friends:qr.updatedAt", {
+                  time: new Date(myQr.updatedAt).toLocaleString(),
+                })}
               </p>
             ) : null}
 
@@ -735,7 +738,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
                 onClick={() => void refreshMyQr()}
                 disabled={isMyQrLoading}
               >
-                Refresh
+                {t("friends:qr.refresh")}
               </Button>
               <Button
                 type="button"
@@ -743,31 +746,37 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
                 onClick={() => void handleShare()}
                 disabled={!myQr}
               >
-                Share
+                {t("friends:qr.share")}
               </Button>
               <Button
                 type="button"
                 variant="secondary"
                 onClick={() =>
                   myQr
-                    ? void copyText(myQr.deepLink, "Da sao chep lien ket")
+                    ? void copyText(
+                        myQr.deepLink,
+                        t("friends:qr.deepLinkCopied"),
+                      )
                     : undefined
                 }
                 disabled={!myQr}
               >
-                Copy link
+                {t("friends:qr.copyLink")}
               </Button>
               <Button
                 type="button"
                 variant="secondary"
                 onClick={() =>
                   myQr
-                    ? void copyText(myQr.shareCode, "Da sao chep share code")
+                    ? void copyText(
+                        myQr.shareCode,
+                        t("friends:qr.shareCodeCopied"),
+                      )
                     : undefined
                 }
                 disabled={!myQr}
               >
-                Copy code
+                {t("friends:qr.copyCode")}
               </Button>
               <Button
                 type="button"
@@ -776,7 +785,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
                 onClick={() => setIsResetConfirmOpen(true)}
                 disabled={!myQr}
               >
-                Reset QR
+                {t("friends:qr.reset")}
               </Button>
             </div>
           </div>
@@ -787,20 +796,19 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
         <div className="flex items-center gap-2">
           <QrCodeIcon className="h-5 w-5 text-primary" />
           <h3 className="text-base font-semibold text-text-primary">
-            Resolve QR / Share Code
+            {t("friends:qr.resolveTitle")}
           </h3>
         </div>
 
         <p className="mt-2 text-sm text-text-secondary">
-          Dan deep link, nhap share code, hoac quet tu anh neu trinh duyet ho
-          tro.
+          {t("friends:qr.resolveHint")}
         </p>
 
         <div className="mt-4 flex flex-col gap-3 sm:flex-row">
           <Input
             value={resolveInput}
             onChange={(event) => setResolveInput(event.target.value)}
-            placeholder="Nhap share code hoac deep link"
+            placeholder={t("friends:qr.resolvePlaceholder")}
             containerClassName="flex-1"
           />
           <Button
@@ -809,7 +817,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
             leftIcon={<CheckCircleIcon className="h-4 w-4" />}
             onClick={() => void resolveCode(resolveInput)}
           >
-            Resolve
+            {t("friends:qr.resolve")}
           </Button>
           <Button
             type="button"
@@ -819,7 +827,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
             isLoading={isScanningImage}
             onClick={() => fileInputRef.current?.click()}
           >
-            Scan QR
+            {t("friends:qr.scanImage")}
           </Button>
         </div>
 
@@ -841,8 +849,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
 
         {!supportsImageScan ? (
           <p className="mt-3 text-xs text-text-muted">
-            Trinh duyet hien tai khong ho tro scan QR tu anh. Ban van co the
-            nhap share code.
+            {t("friends:qr.scanNotSupported")}
           </p>
         ) : null}
 
@@ -857,10 +864,10 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
         isOpen={isResetConfirmOpen}
         onClose={() => setIsResetConfirmOpen(false)}
         onConfirm={() => void handleResetQr()}
-        title="Reset QR ket ban"
-        message="Ban co chac muon tao QR moi? QR cu se het hieu luc ngay lap tuc."
-        confirmText="Reset ngay"
-        cancelText="Huy"
+        title={t("friends:qr.resetDialogTitle")}
+        message={t("friends:qr.resetDialogMessage")}
+        confirmText={t("friends:qr.resetDialogConfirm")}
+        cancelText={t("common:actions.cancel")}
         variant="warning"
         isLoading={isResetting}
       />
@@ -868,7 +875,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
       <Modal
         isOpen={isProfileOpen && Boolean(resolvedProfile)}
         onClose={() => setIsProfileOpen(false)}
-        title="Mini profile"
+        title={t("friends:qr.miniProfileTitle")}
         size="md"
       >
         {resolvedProfile ? (
@@ -900,7 +907,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
                   : "border-border/60 bg-surface text-text-muted",
               )}
             >
-              {profileBio || "Chua co gioi thieu ngan"}
+              {profileBio || t("friends:qr.noBio")}
             </p>
 
             {renderProfileActions()}

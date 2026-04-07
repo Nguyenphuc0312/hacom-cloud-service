@@ -1,5 +1,6 @@
 {
   "pageTitle": "Settings",
+  "description": "Adjust your preferences",
   "resetAll": "Reset to defaults",
   "version": "Settings v{{version}}",
   "appearance": {
