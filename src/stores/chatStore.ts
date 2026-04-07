@@ -1524,7 +1524,11 @@ export const useChatStore = create<ChatState>()(
       },
 
       selectConversation: (id) => {
-        set({ selectedConversationId: id });
+        set((state) =>
+          state.selectedConversationId === id
+            ? state
+            : { selectedConversationId: id },
+        );
       },
 
       markAsRead: async (conversationId) => {

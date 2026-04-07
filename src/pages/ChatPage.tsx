@@ -77,6 +77,11 @@ interface ProfilePanelTarget {
   } | null;
 }
 
+interface ConversationValidationError {
+  conversationId: string;
+  message: string;
+}
+
 type WindowWithIdleCallback = Window & {
   requestIdleCallback?: (
     callback: (deadline: IdleCallbackDeadline) => void,
@@ -119,6 +124,7 @@ export const ChatPage: React.FC = () => {
   const { conversationId } = useParams<{ conversationId?: string }>();
   const routeConversationId = conversationId ?? null;
   const navigate = useNavigate();
+  const shouldTraceRenderLoop = import.meta.env.DEV;
 
   // Auth store
   const {
@@ -215,16 +221,64 @@ export const ChatPage: React.FC = () => {
   const [isValidatingRoom, setIsValidatingRoom] = useState(false);
   const [lastValidatedConversationId, setLastValidatedConversationId] =
     useState<string | null>(null);
+  const [conversationValidationError, setConversationValidationError] =
+    useState<ConversationValidationError | null>(null);
+  const [validationRetryToken, setValidationRetryToken] = useState(0);
   const directInfoHydratedRef = useRef<Set<string>>(new Set());
   const lastReadSyncKeyRef = useRef<string | null>(null);
+  const renderCountRef = useRef(0);
+  const validatingConversationIdRef = useRef<string | null>(null);
+
+  const conversationAccessDeniedMessage = t(
+    "error:chat.conversationAccessDenied",
+  );
+  const conversationOpenFailedMessage = t("error:chat.conversationOpenFailed");
 
   useEffect(() => {
-    if (
-      useChatStore.getState().selectedConversationId !== routeConversationId
-    ) {
+    if (!shouldTraceRenderLoop) {
+      return;
+    }
+
+    renderCountRef.current += 1;
+    logMessageDebug("ChatPage", "render_count", {
+      renderCount: renderCountRef.current,
+      routeConversationId,
+      selectedConversationId,
+      lastValidatedConversationId,
+      isValidatingRoom,
+    });
+  });
+
+  useEffect(() => {
+    if (!shouldTraceRenderLoop) {
+      return;
+    }
+
+    logMessageDebug("ChatPage", "route_param_changed", {
+      routeConversationId,
+      selectedConversationId,
+      lastValidatedConversationId,
+    });
+  }, [
+    lastValidatedConversationId,
+    routeConversationId,
+    selectedConversationId,
+    shouldTraceRenderLoop,
+  ]);
+
+  useEffect(() => {
+    const storeSelectedConversationId =
+      useChatStore.getState().selectedConversationId;
+    if (storeSelectedConversationId !== routeConversationId) {
+      if (shouldTraceRenderLoop) {
+        logMessageDebug("ChatPage", "selected_conversation_sync", {
+          from: storeSelectedConversationId,
+          to: routeConversationId,
+        });
+      }
       selectConversation(routeConversationId);
     }
-  }, [routeConversationId, selectConversation]);
+  }, [routeConversationId, selectConversation, shouldTraceRenderLoop]);
 
   // Current user as UserSummary for components
   const currentUserSummary = useMemo<UserSummary | null>(
@@ -258,30 +312,98 @@ export const ChatPage: React.FC = () => {
     let isCancelled = false;
 
     if (!conversationId) {
-      setLastValidatedConversationId(null);
+      if (validatingConversationIdRef.current) {
+        validatingConversationIdRef.current = null;
+      }
+      setLastValidatedConversationId((previous) =>
+        previous === null ? previous : null,
+      );
+      setConversationValidationError(null);
+      setIsValidatingRoom(false);
       return;
     }
 
+    const chatState = useChatStore.getState();
+    const hasConversationInStore = chatState.conversations.some(
+      (conversation) => conversation.id === conversationId,
+    );
+
+    if (
+      lastValidatedConversationId === conversationId &&
+      hasConversationInStore
+    ) {
+      if (shouldTraceRenderLoop) {
+        logMessageDebug("ChatPage", "conversation_validation_skipped_cached", {
+          conversationId,
+        });
+      }
+      return;
+    }
+
+    if (validatingConversationIdRef.current === conversationId) {
+      if (shouldTraceRenderLoop) {
+        logMessageDebug(
+          "ChatPage",
+          "conversation_validation_skipped_in_flight",
+          {
+            conversationId,
+          },
+        );
+      }
+      return;
+    }
+
+    validatingConversationIdRef.current = conversationId;
+
     const validateConversation = async () => {
       setIsValidatingRoom(true);
+      setConversationValidationError((previous) =>
+        previous?.conversationId === conversationId ? null : previous,
+      );
+      if (shouldTraceRenderLoop) {
+        logMessageDebug("ChatPage", "conversation_validation_requested", {
+          conversationId,
+        });
+      }
       try {
         const response = await getConversationByIdUseCase(conversationId);
         const room = unwrapApiSuccess(response);
         if (isCancelled) return;
 
-        const roomExists = useChatStore
+        const existingRoom = useChatStore
           .getState()
-          .conversations.some(
+          .conversations.find(
             (conversation) => conversation.id === conversationId,
           );
 
-        if (roomExists) {
-          updateConversation(conversationId, room);
-        } else {
+        const shouldUpdateExistingRoom = Boolean(
+          existingRoom &&
+          (existingRoom.updatedAt !== room.updatedAt ||
+            existingRoom.unreadCount !== room.unreadCount ||
+            existingRoom.lastMessage?.id !== room.lastMessage?.id ||
+            existingRoom.displayName !== room.displayName ||
+            existingRoom.name !== room.name ||
+            existingRoom.avatar !== room.avatar ||
+            existingRoom.participants?.length !== room.participants?.length),
+        );
+
+        if (!existingRoom) {
           addConversation(room);
+        } else if (shouldUpdateExistingRoom) {
+          updateConversation(conversationId, room);
         }
 
-        setLastValidatedConversationId(conversationId);
+        setLastValidatedConversationId((previous) =>
+          previous === conversationId ? previous : conversationId,
+        );
+        setConversationValidationError(null);
+        if (shouldTraceRenderLoop) {
+          logMessageDebug("ChatPage", "conversation_validation_succeeded", {
+            conversationId,
+            roomInserted: !existingRoom,
+            roomUpdated: shouldUpdateExistingRoom,
+          });
+        }
       } catch (error: unknown) {
         if (isCancelled) return;
 
@@ -295,17 +417,34 @@ export const ChatPage: React.FC = () => {
         ]);
 
         if (roomInvalidCodes.has(code)) {
-          toast.error(t("error:chat.conversationAccessDenied"));
+          setConversationValidationError(null);
+          toast.error(conversationAccessDeniedMessage);
+          navigate("/chat", { replace: true });
         } else {
-          toast.error(
-            apiError.message || t("error:chat.conversationOpenFailed"),
-          );
+          const message = apiError.message || conversationOpenFailedMessage;
+          setConversationValidationError({
+            conversationId,
+            message,
+          });
+          toast.error(message);
         }
 
-        setLastValidatedConversationId(null);
-        navigate("/chat", { replace: true });
+        setLastValidatedConversationId((previous) =>
+          previous === null ? previous : null,
+        );
+        if (shouldTraceRenderLoop) {
+          logMessageDebug("ChatPage", "conversation_validation_failed", {
+            conversationId,
+            code,
+            message: apiError.message,
+          });
+        }
       } finally {
-        if (!isCancelled) {
+        if (
+          !isCancelled &&
+          validatingConversationIdRef.current === conversationId
+        ) {
+          validatingConversationIdRef.current = null;
           setIsValidatingRoom(false);
         }
       }
@@ -318,11 +457,14 @@ export const ChatPage: React.FC = () => {
     };
   }, [
     addConversation,
+    conversationAccessDeniedMessage,
     conversationId,
+    conversationOpenFailedMessage,
+    lastValidatedConversationId,
     navigate,
-    selectConversation,
-    t,
+    shouldTraceRenderLoop,
     updateConversation,
+    validationRetryToken,
   ]);
 
   // Load conversations on mount
@@ -1023,6 +1165,16 @@ export const ChatPage: React.FC = () => {
     });
   }, [fetchConversations, refreshUser]);
 
+  const handleRetryConversationValidation = useCallback(() => {
+    if (!routeConversationId) {
+      return;
+    }
+
+    setConversationValidationError(null);
+    setLastValidatedConversationId(null);
+    setValidationRetryToken((current) => current + 1);
+  }, [routeConversationId]);
+
   if (!currentUserSummary) {
     if (!isAuthInitialized || isAuthLoading) {
       return (
@@ -1153,6 +1305,18 @@ export const ChatPage: React.FC = () => {
             connectionState={connectionState}
             isConversationReady={isConversationReady}
           />
+        ) : routeConversationId &&
+          conversationValidationError?.conversationId ===
+            routeConversationId ? (
+          <div className="flex h-full items-center justify-center px-6">
+            <ErrorState
+              title={t("error:chat.conversationOpenFailed", {
+                defaultValue: "Unable to open conversation",
+              })}
+              message={conversationValidationError.message}
+              onRetry={handleRetryConversationValidation}
+            />
+          </div>
         ) : (
           <NoChatSelected onNewChat={handleOpenNewChat} />
         )}
