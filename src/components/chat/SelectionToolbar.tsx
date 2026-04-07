@@ -17,7 +17,7 @@ import {
 interface SelectionToolbarProps {
   selectedCount: number;
   onDelete: () => void;
-  onForward: () => void;
+  onForward?: () => void;
   onCopy: () => void;
   onCancel: () => void;
   className?: string;
@@ -42,12 +42,18 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
       label: t("chat:message.actions.copy", { defaultValue: "Copy" }),
       onClick: onCopy,
     },
-    {
-      id: "forward",
-      icon: ArrowUturnRightIcon,
-      label: t("chat:message.actions.forward", { defaultValue: "Forward" }),
-      onClick: onForward,
-    },
+    ...(onForward
+      ? [
+          {
+            id: "forward",
+            icon: ArrowUturnRightIcon,
+            label: t("chat:message.actions.forward", {
+              defaultValue: "Forward",
+            }),
+            onClick: onForward,
+          },
+        ]
+      : []),
     {
       id: "delete",
       icon: TrashIcon,

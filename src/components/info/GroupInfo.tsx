@@ -142,6 +142,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   className,
 }) => {
   const { t } = useTranslation(["profile", "common"]);
+  const unavailableActionClass = "cursor-not-allowed opacity-60";
+  const unavailableActionTitle = t("common:toast.featureInDevelopment", {
+    defaultValue: "This action is unavailable in this build.",
+  });
 
   const participants = React.useMemo(
     () =>
@@ -810,14 +814,13 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             <button
               type="button"
               disabled
-              title={t("common:toast.featureInDevelopment", {
-                defaultValue: "Coming soon",
-              })}
-              className="w-10 h-6 rounded-full relative bg-border-strong cursor-not-allowed opacity-70"
+              title={unavailableActionTitle}
+              className={clsx(
+                "w-10 h-6 rounded-full relative bg-border-strong",
+                unavailableActionClass,
+              )}
               aria-disabled="true"
-              aria-label={t("common:toast.featureInDevelopment", {
-                defaultValue: "Coming soon",
-              })}
+              aria-label={unavailableActionTitle}
             >
               <div className="absolute top-1 left-1 w-4 h-4 bg-surface rounded-full shadow" />
             </button>
@@ -1014,7 +1017,12 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               </div>
               <button
                 type="button"
-                className="w-full mt-4 py-2 text-sm text-primary font-medium hover:bg-surface-hover rounded-lg"
+                disabled
+                title={unavailableActionTitle}
+                className={clsx(
+                  "w-full mt-4 py-2 text-sm text-primary font-medium rounded-lg",
+                  unavailableActionClass,
+                )}
               >
                 {t("profile:groupInfo.viewAllMedia")}
               </button>
@@ -1312,7 +1320,12 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
           <button
             type="button"
-            className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-danger"
+            disabled
+            title={unavailableActionTitle}
+            className={clsx(
+              "w-full flex items-center gap-4 px-4 py-3 text-danger",
+              unavailableActionClass,
+            )}
           >
             <ExclamationTriangleIcon className="w-5 h-5" />
             <span className="text-sm">

@@ -29,6 +29,8 @@ export const useSettings = () => {
   const resetSettings = useSettingsStore((s) => s.resetSettings);
   const syncFromServer = useSettingsStore((s) => s.syncFromServer);
   const isSyncing = useSettingsStore((s) => s.isSyncing);
+  const syncError = useSettingsStore((s) => s.syncError);
+  const lastSyncedAt = useSettingsStore((s) => s.lastSyncedAt);
 
   return {
     ...settings,
@@ -36,6 +38,8 @@ export const useSettings = () => {
     resetSettings,
     syncFromServer,
     isSyncing,
+    syncError,
+    lastSyncedAt,
   };
 };
 

@@ -6,7 +6,9 @@ export type SocialProvider = "google" | "facebook";
 
 interface SocialLoginRowProps {
   disabled?: boolean;
-  onProviderClick: (provider: SocialProvider) => void;
+  onProviderClick?: (provider: SocialProvider) => void;
+  enabledProviders?: SocialProvider[];
+  unavailableMessage?: string;
 }
 
 const providerConfig: Record<
@@ -45,20 +47,35 @@ const providerConfig: Record<
 export const SocialLoginRow: React.FC<SocialLoginRowProps> = ({
   disabled = false,
   onProviderClick,
+  enabledProviders = [],
+  unavailableMessage,
 }) => {
   const { t } = useTranslation();
+  const disabledReason =
+    unavailableMessage ||
+    t("common:toast.featureInDevelopment", {
+      defaultValue: "This sign-in method is currently unavailable.",
+    });
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       {(Object.keys(providerConfig) as SocialProvider[]).map((provider) => {
         const config = providerConfig[provider];
+        const providerEnabled = enabledProviders.includes(provider);
+        const isUnavailable = !providerEnabled || !onProviderClick;
+        const isActionDisabled = disabled || isUnavailable;
 
         return (
           <button
             key={provider}
             type="button"
-            disabled={disabled}
-            onClick={() => onProviderClick(provider)}
+            disabled={isActionDisabled}
+            onClick={() => {
+              if (!isActionDisabled && onProviderClick) {
+                onProviderClick(provider);
+              }
+            }}
+            title={isUnavailable ? disabledReason : undefined}
             className={clsx(
               "inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface px-3 text-sm font-medium text-text-secondary",
               "transition-colors duration-200",
@@ -67,6 +84,7 @@ export const SocialLoginRow: React.FC<SocialLoginRowProps> = ({
               "disabled:cursor-not-allowed disabled:opacity-60",
             )}
             aria-label={t("auth:login.socialAria", { provider: config.label })}
+            aria-disabled={isActionDisabled}
           >
             {config.icon}
             <span>{config.label}</span>

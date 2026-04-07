@@ -18,7 +18,7 @@ import { Sidebar } from "../components/layout/Sidebar";
 import { ChatWindow } from "../components/layout/ChatWindow";
 import { UserProfile } from "../components/info/UserProfile";
 import { GroupInfo } from "../components/info/GroupInfo";
-import { NoChatSelected, Spinner } from "../components/ui";
+import { ErrorState, NoChatSelected, Spinner } from "../components/ui";
 import {
   NewChatModal,
   ImagePreviewModal,
@@ -117,7 +117,12 @@ export const ChatPage: React.FC = () => {
   const navigate = useNavigate();
 
   // Auth store
-  const { user } = useAuthStore();
+  const {
+    user,
+    isLoading: isAuthLoading,
+    isInitialized: isAuthInitialized,
+    refreshUser,
+  } = useAuthStore();
 
   // Chat store — stable functions + data that drives re-renders.
   // Per-conversation loading/error/hasMore are derived separately below to
@@ -988,8 +993,51 @@ export const ChatPage: React.FC = () => {
     };
   }, [handleStartChat, openUserProfile]);
 
+  const handleRetryBootstrap = useCallback(() => {
+    void refreshUser().then(() => {
+      if (useAuthStore.getState().user) {
+        void fetchConversations();
+      }
+    });
+  }, [fetchConversations, refreshUser]);
+
   if (!currentUserSummary) {
-    return null;
+    if (!isAuthInitialized || isAuthLoading) {
+      return (
+        <div className="flex h-[100dvh] items-center justify-center bg-[hsl(var(--color-chat-canvas))] px-6">
+          <div className="w-full max-w-xl space-y-5 rounded-2xl border border-border/80 bg-surface/90 p-6 shadow-elev1">
+            <div className="flex items-center gap-3">
+              <Spinner size="md" />
+              <p className="text-sm font-medium text-text-secondary">
+                {t("common:loading.checkingAuth", {
+                  defaultValue: "Checking your session...",
+                })}
+              </p>
+            </div>
+            <div className="space-y-3">
+              <div className="h-3 w-1/2 animate-pulse rounded-full bg-surface-overlay" />
+              <div className="h-3 w-full animate-pulse rounded-full bg-surface-overlay" />
+              <div className="h-3 w-4/5 animate-pulse rounded-full bg-surface-overlay" />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex h-[100dvh] items-center justify-center bg-[hsl(var(--color-chat-canvas))] px-6">
+        <ErrorState
+          title={t("error:auth.profileMissing", {
+            defaultValue: "Unable to load profile",
+          })}
+          message={t("error:auth.profileRetryHint", {
+            defaultValue:
+              "We could not load your session profile. Please retry.",
+          })}
+          onRetry={handleRetryBootstrap}
+        />
+      </div>
+    );
   }
 
   return (

@@ -340,10 +340,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     ],
   );
 
-  const handleFeatureInDevelopment = React.useCallback(() => {
-    toast.info(t("common:toast.featureInDevelopment"));
-  }, [t]);
-
   // Search & pinned panel state
   const [overlayMode, setOverlayMode] = React.useState<
     "search" | "pinned" | null
@@ -759,13 +755,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     exitSelectionMode();
   }, [messages, selectedMessageIds, exitSelectionMode, t]);
 
-  const handleSelectionForward = React.useCallback(() => {
-    toast.info(
-      t("common:toast.featureInDevelopment", { defaultValue: "Coming soon" }),
-    );
-    exitSelectionMode();
-  }, [exitSelectionMode, t]);
-
   const currentUsername = currentUser.username;
 
   const messageListNode = React.useMemo(
@@ -852,8 +841,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         typingStatus={typingStatus}
         onBack={onBack}
         onInfoClick={onToggleInfoPanel}
-        onCallClick={handleFeatureInDevelopment}
-        onVideoCallClick={handleFeatureInDevelopment}
         onSearchClick={handleSearchClick}
         onPinnedClick={handlePinnedClick}
         onSelectionMode={enterSelectionMode}
@@ -920,7 +907,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <SelectionToolbar
             selectedCount={selectedMessageIds.size}
             onDelete={handleSelectionDelete}
-            onForward={handleSelectionForward}
             onCopy={handleSelectionCopy}
             onCancel={exitSelectionMode}
           />

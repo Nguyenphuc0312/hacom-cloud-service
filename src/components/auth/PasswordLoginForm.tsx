@@ -16,7 +16,8 @@ interface PasswordLoginFormProps {
   isSubmitting: boolean;
   authError?: string | null;
   onSubmit: React.FormEventHandler<HTMLFormElement>;
-  onSocialLogin: (provider: SocialProvider) => void;
+  showSocialLogin?: boolean;
+  onSocialLogin?: (provider: SocialProvider) => void;
 }
 
 export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
@@ -26,6 +27,7 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
   isSubmitting,
   authError,
   onSubmit,
+  showSocialLogin = false,
   onSocialLogin,
 }) => {
   const { t } = useTranslation();
@@ -100,18 +102,22 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
         </Button>
       </form>
 
-      <div className="relative my-5">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-border" />
-        </div>
-        <div className="relative flex justify-center text-xs">
-          <span className="bg-surface px-3 text-text-muted">
-            {t("auth:login.orWith")}
-          </span>
-        </div>
-      </div>
+      {showSocialLogin && onSocialLogin && (
+        <>
+          <div className="relative my-5">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-surface px-3 text-text-muted">
+                {t("auth:login.orWith")}
+              </span>
+            </div>
+          </div>
 
-      <SocialLoginRow disabled={isBusy} onProviderClick={onSocialLogin} />
+          <SocialLoginRow disabled={isBusy} onProviderClick={onSocialLogin} />
+        </>
+      )}
     </div>
   );
 };

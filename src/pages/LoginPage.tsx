@@ -7,10 +7,7 @@ import { useTranslation } from "react-i18next";
 import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
 import { toast } from "../components/ui";
 import { QrLoginPanel } from "../components/auth/QrLoginPanel";
-import {
-  PasswordLoginForm,
-  type SocialProvider,
-} from "../components/auth/PasswordLoginForm";
+import { PasswordLoginForm } from "../components/auth/PasswordLoginForm";
 import { loginSchema } from "../lib/validations";
 import type { LoginFormData } from "../lib/validations";
 import { useAuthStore } from "../stores";
@@ -64,11 +61,6 @@ export const LoginPage: React.FC = () => {
     } catch (err) {
       toast.error((err as Error).message ?? t("auth:toast.loginFailed"));
     }
-  };
-
-  const handleSocialLogin = (provider: SocialProvider) => {
-    void provider;
-    toast.info(t("common:toast.featureInDevelopment"));
   };
 
   return (
@@ -158,7 +150,7 @@ export const LoginPage: React.FC = () => {
               isSubmitting={isSubmitting}
               authError={error}
               onSubmit={handleSubmit(onSubmit)}
-              onSocialLogin={handleSocialLogin}
+              showSocialLogin={false}
             />
           )}
 
