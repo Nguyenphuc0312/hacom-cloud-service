@@ -188,9 +188,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {isLoadingConversations && conversations.length > 0 && (
               <div className="mt-2 inline-flex items-center gap-2 px-1 text-caption text-text-muted">
                 <Spinner size="sm" />
-                <span>
-                  {t("common:status.loading", { defaultValue: "Loading..." })}
-                </span>
+                <span>{t("common:loading.default")}</span>
               </div>
             )}
           </div>
@@ -224,14 +222,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
               isCollapsed && "justify-center px-0",
             )}
-            aria-label={t("friends:title", { defaultValue: "Friends" })}
+            aria-label={t("friends:title")}
           >
             <UserGroupIcon className="h-5 w-5 shrink-0" />
-            {!isCollapsed && (
-              <span className="ml-2">
-                {t("friends:title", { defaultValue: "Friends" })}
-              </span>
-            )}
+            {!isCollapsed && <span className="ml-2">{t("friends:title")}</span>}
           </button>
 
           {/* Settings button */}
@@ -245,13 +239,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
               isCollapsed && "justify-center px-0",
             )}
-            aria-label={t("settings.pageTitle", { defaultValue: "Settings" })}
+            aria-label={t("settings.pageTitle")}
           >
             <Cog6ToothIcon className="h-5 w-5 shrink-0" />
             {!isCollapsed && (
-              <span className="ml-2">
-                {t("settings.pageTitle", { defaultValue: "Settings" })}
-              </span>
+              <span className="ml-2">{t("settings.pageTitle")}</span>
             )}
           </button>
 

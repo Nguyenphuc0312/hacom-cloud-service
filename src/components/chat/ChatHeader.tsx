@@ -140,7 +140,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       if (livePresence?.lastSeenAt) {
         return t("common:status.lastSeen", {
           time: new Date(livePresence.lastSeenAt).toLocaleString(),
-          defaultValue: `Last seen ${new Date(livePresence.lastSeenAt).toLocaleString()}`,
         });
       }
       return t("common:status.offline");
@@ -186,7 +185,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     if (onPinnedClick) {
       nextActions.push({
         id: "pinned",
-        label: t("chat:pinned.title", { defaultValue: "Pinned messages" }),
+        label: t("chat:pinned.title"),
         icon: MapPinIcon,
         onClick: onPinnedClick,
       });
@@ -195,7 +194,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     if (onSelectionMode) {
       nextActions.push({
         id: "select",
-        label: t("chat:selection.enter", { defaultValue: "Select messages" }),
+        label: t("chat:selection.enter"),
         icon: CheckCircleIcon,
         onClick: onSelectionMode,
       });
@@ -207,7 +206,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   return (
     <header
       className={clsx(
-        "sticky top-0 z-sticky border-b border-border/70 py-2 backdrop-blur",
+        "sticky top-0 z-sticky border-b border-border/70 py-1.5 backdrop-blur",
         className,
       )}
       style={{ backgroundColor: "hsl(var(--color-chat-canvas) / 0.92)" }}

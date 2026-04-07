@@ -206,6 +206,41 @@ export function getMessageStatusIcon(status: MessageStatus): string {
   }
 }
 
+export function getUserDisplayName(
+  user: Partial<UserSummary> | null | undefined,
+): string {
+  if (!user) {
+    return "";
+  }
+
+  const userRecord = asRecord(user);
+
+  const firstName =
+    typeof userRecord?.firstName === "string"
+      ? userRecord.firstName.trim()
+      : "";
+  const lastName =
+    typeof userRecord?.lastName === "string" ? userRecord.lastName.trim() : "";
+  const fullName = `${firstName} ${lastName}`.trim();
+  if (fullName) {
+    return fullName;
+  }
+
+  const displayName =
+    typeof user.displayName === "string" ? user.displayName.trim() : "";
+  if (displayName) {
+    return displayName;
+  }
+
+  const username =
+    typeof user.username === "string" ? user.username.trim() : "";
+  if (username) {
+    return username;
+  }
+
+  return typeof user.id === "string" ? user.id : "";
+}
+
 /**
  * Get conversation display name.
  */
@@ -213,10 +248,6 @@ export function getConversationDisplayName(
   conversation: Conversation,
   currentUserId: string,
 ): string {
-  if (conversation.displayName?.trim()) {
-    return conversation.displayName.trim();
-  }
-
   if (!isDirectConversation(conversation)) {
     return (
       conversation.name?.trim() ||
@@ -226,12 +257,12 @@ export function getConversationDisplayName(
   }
 
   const otherParticipant = getOtherParticipant(conversation, currentUserId);
+  const participantDisplayName = getUserDisplayName(otherParticipant);
 
   return (
-    otherParticipant?.displayName ||
-    otherParticipant?.username ||
-    conversation.displayName ||
-    conversation.name ||
+    participantDisplayName ||
+    conversation.displayName?.trim() ||
+    conversation.name?.trim() ||
     i18n.t("common:labels.conversation")
   );
 }

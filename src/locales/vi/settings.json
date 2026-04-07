@@ -12,6 +12,14 @@
     "themeSystem": "Theo hệ thống",
     "accentLabel": "Màu chủ đạo",
     "accentDesc": "Chọn màu chính cho nút và liên kết",
+    "accentColors": {
+      "blue": "Xanh dương",
+      "green": "Xanh lá",
+      "purple": "Tím",
+      "orange": "Cam",
+      "pink": "Hồng",
+      "teal": "Xanh ngọc"
+    },
     "fontSizeLabel": "Cỡ chữ",
     "fontSizeDesc": "Áp dụng cho bong chat tin nhắn",
     "fontSmall": "Nhỏ",

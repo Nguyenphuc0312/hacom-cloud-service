@@ -788,7 +788,7 @@ export const MessageInput = React.forwardRef<
     <div
       ref={rootRef}
       className={clsx(
-        "bg-transparent pb-[max(env(safe-area-inset-bottom),10px)] pt-2",
+        "bg-transparent pb-[max(env(safe-area-inset-bottom),10px)] pt-1",
         className,
       )}
     >

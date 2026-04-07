@@ -132,46 +132,74 @@ const isRoomActive = (
   currentConversationId: string | null,
 ): boolean => currentConversationId === roomId;
 
+type RoomBucket = Exclude<SectionId, "unread">;
+
+const resolveRoomBucket = (room: Conversation): RoomBucket => {
+  if (isDirectConversation(room)) {
+    return "direct";
+  }
+
+  const normalizedType = normalizeRoomType(
+    room.type,
+    room.participants?.length,
+  );
+  if (
+    normalizedType === RoomType.CHANNEL ||
+    normalizedType === RoomType.PUBLIC ||
+    normalizedType === RoomType.SUPPORT ||
+    normalizedType === RoomType.BOT
+  ) {
+    return "channels";
+  }
+
+  return "groups";
+};
+
 const toSections = (
   source: Conversation[],
   activeFilter: ConversationFilter,
 ): RoomSection[] => {
-  const toType = (room: Conversation): RoomType =>
-    normalizeRoomType(room.type, room.participants?.length);
-  const unread = source.filter((room) => (room.unreadCount || 0) > 0);
-  const channels = source.filter((room) => toType(room) === RoomType.CHANNEL);
-  const groups = source.filter((room) => toType(room) === RoomType.GROUP);
-  const direct = source.filter((room) => isDirectConversation(room));
+  const buckets: Record<RoomBucket, Conversation[]> = {
+    channels: [],
+    groups: [],
+    direct: [],
+  };
+
+  source.forEach((room) => {
+    const bucket = resolveRoomBucket(room);
+    buckets[bucket].push(room);
+  });
+
+  const unreadBuckets: Record<RoomBucket, Conversation[]> = {
+    channels: buckets.channels.filter((room) => (room.unreadCount || 0) > 0),
+    groups: buckets.groups.filter((room) => (room.unreadCount || 0) > 0),
+    direct: buckets.direct.filter((room) => (room.unreadCount || 0) > 0),
+  };
+
+  const buildSections = (
+    entries: ReadonlyArray<[SectionId, Conversation[]]>,
+  ): RoomSection[] =>
+    entries
+      .filter(([, rooms]) => rooms.length > 0)
+      .map(([id, rooms]) => ({ id, rooms }));
 
   switch (activeFilter) {
     case "unread":
-      return unread.length > 0 ? [{ id: "unread", rooms: unread }] : [];
+      return buildSections([
+        ["direct", unreadBuckets.direct],
+        ["groups", unreadBuckets.groups],
+        ["channels", unreadBuckets.channels],
+      ]);
     case "channels":
-      return channels.length > 0 ? [{ id: "channels", rooms: channels }] : [];
+      return buildSections([["channels", buckets.channels]]);
     case "groups":
-      return groups.length > 0 ? [{ id: "groups", rooms: groups }] : [];
-    default: {
-      const readChannel = channels.filter(
-        (room) => (room.unreadCount || 0) === 0,
-      );
-      const readGroup = groups.filter((room) => (room.unreadCount || 0) === 0);
-      const readDirect = direct.filter((room) => (room.unreadCount || 0) === 0);
-
-      const sections: RoomSection[] = [];
-      if (unread.length > 0) {
-        sections.push({ id: "unread", rooms: unread });
-      }
-      if (readChannel.length > 0) {
-        sections.push({ id: "channels", rooms: readChannel });
-      }
-      if (readGroup.length > 0) {
-        sections.push({ id: "groups", rooms: readGroup });
-      }
-      if (readDirect.length > 0) {
-        sections.push({ id: "direct", rooms: readDirect });
-      }
-      return sections;
-    }
+      return buildSections([["groups", buckets.groups]]);
+    default:
+      return buildSections([
+        ["direct", buckets.direct],
+        ["groups", buckets.groups],
+        ["channels", buckets.channels],
+      ]);
   }
 };
 

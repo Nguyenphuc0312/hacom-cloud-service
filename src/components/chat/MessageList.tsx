@@ -1000,7 +1000,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
       {!isInitialLoading && (
         <div
-          className="chat-background h-full min-h-0 overflow-hidden pb-3 pt-2"
+          className="chat-background h-full min-h-0 overflow-hidden pb-2 pt-1"
           role="log"
           aria-live="polite"
           aria-relevant="additions text"

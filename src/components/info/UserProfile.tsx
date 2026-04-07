@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import {
   CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
-  ClockIcon,
   NoSymbolIcon,
   PencilSquareIcon,
   PhoneIcon,
@@ -571,67 +570,41 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
               <section className="space-y-3">{renderActions()}</section>
 
-              <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className={statCardClass}>
-                  <div className="flex items-start gap-3">
-                    <ClockIcon className="mt-0.5 h-5 w-5 text-text-muted" />
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
-                        {t("common:statusLabel")}
-                      </p>
-                      <p className="mt-1 text-sm text-text-primary">
-                        {presenceLabel}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {user?.phone ? (
-                  <div className={statCardClass}>
-                    <div className="flex items-start gap-3">
-                      <PhoneIcon className="mt-0.5 h-5 w-5 text-text-muted" />
-                      <div>
-                        <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
-                          {t("profile:editProfileModal.phone")}
-                        </p>
-                        <p className="mt-1 text-sm text-text-primary">
-                          {user.phone}
-                        </p>
+              {(user?.phone || user?.createdAt) && (
+                <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {user?.phone ? (
+                    <div className={statCardClass}>
+                      <div className="flex items-start gap-3">
+                        <PhoneIcon className="mt-0.5 h-5 w-5 text-text-muted" />
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
+                            {t("profile:editProfileModal.phone")}
+                          </p>
+                          <p className="mt-1 text-sm text-text-primary">
+                            {user.phone}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ) : null}
+                  ) : null}
 
-                {user?.createdAt ? (
-                  <div className={statCardClass}>
-                    <div className="flex items-start gap-3">
-                      <CalendarDaysIcon className="mt-0.5 h-5 w-5 text-text-muted" />
-                      <div>
-                        <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
-                          {t("friends:joined")}
-                        </p>
-                        <p className="mt-1 text-sm text-text-primary">
-                          {new Date(user.createdAt).toLocaleDateString()}
-                        </p>
+                  {user?.createdAt ? (
+                    <div className={statCardClass}>
+                      <div className="flex items-start gap-3">
+                        <CalendarDaysIcon className="mt-0.5 h-5 w-5 text-text-muted" />
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
+                            {t("friends:joined")}
+                          </p>
+                          <p className="mt-1 text-sm text-text-primary">
+                            {new Date(user.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ) : null}
-
-                <div className={statCardClass}>
-                  <div className="flex items-start gap-3">
-                    <UserPlusIcon className="mt-0.5 h-5 w-5 text-text-muted" />
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
-                        {t("friends:relationshipLabel")}
-                      </p>
-                      <p className="mt-1 text-sm text-text-primary">
-                        {relationshipLabel}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </section>
+                  ) : null}
+                </section>
+              )}
 
               {!isSelf &&
               onStartConversation &&

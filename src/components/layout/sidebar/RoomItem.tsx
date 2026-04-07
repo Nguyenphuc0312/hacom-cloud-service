@@ -18,6 +18,7 @@ import {
   getMessagePreview,
   getMessagePreviewState,
   getOtherParticipant,
+  getUserDisplayName,
 } from "../../../utils/messageHelpers";
 
 interface RoomItemProps {
@@ -57,12 +58,16 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
     const messagePreview = getMessagePreview(lastMessage, currentUser.id, 44);
     if (!messagePreview) return "";
 
+    const senderParticipant = (conversation.participants || []).find(
+      (participant) => participant.id === lastMessage.senderId,
+    );
+
     const senderLabel =
       lastMessage.senderId === currentUser.id
         ? t("chat:message.you")
-        : lastMessage.senderName?.trim() ||
-          directPartner?.displayName ||
-          directPartner?.username ||
+        : getUserDisplayName(senderParticipant) ||
+          getUserDisplayName(directPartner) ||
+          lastMessage.senderName?.trim() ||
           t("common:labels.conversation");
 
     return `${senderLabel}: ${messagePreview}`;
