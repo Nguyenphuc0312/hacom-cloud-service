@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useRef, useState } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import type { Attachment } from "../../types";
@@ -22,29 +22,28 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [isError, setIsError] = useState(false);
+  const [loadedSource, setLoadedSource] = useState<string | null>(null);
+  const [failedSource, setFailedSource] = useState<string | null>(null);
   const [showFullScreen, setShowFullScreen] = useState(false);
-  const [didRefreshOnError, setDidRefreshOnError] = useState(false);
-  const { url: resolvedUrl, isLoading, resolveUrl } = useAttachmentDownloadUrl(
-    conversationId,
-    attachment,
-    { autoResolve: true },
-  );
+  const refreshedSourceRef = useRef<string | null>(null);
+  const {
+    url: resolvedUrl,
+    isLoading,
+    resolveUrl,
+  } = useAttachmentDownloadUrl(conversationId, attachment, {
+    autoResolve: true,
+  });
   const mediaWidth = attachment.width ? Math.min(attachment.width, 300) : 240;
   const aspectRatio =
     attachment.width && attachment.height
       ? `${attachment.width} / ${attachment.height}`
       : "4 / 3";
 
-  const hasDisplayUrl = Boolean(resolvedUrl);
+  const activeSource = resolvedUrl || null;
+  const hasDisplayUrl = Boolean(activeSource);
   const hasCaption = Boolean(caption);
-
-  useEffect(() => {
-    setIsLoaded(false);
-    setIsError(false);
-    setDidRefreshOnError(false);
-  }, [resolvedUrl]);
+  const isLoaded = Boolean(activeSource && loadedSource === activeSource);
+  const isError = Boolean(activeSource && failedSource === activeSource);
 
   const handleImageClick = async () => {
     const imageUrl = resolvedUrl || (await resolveUrl());
@@ -62,12 +61,17 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   };
 
   const handleImageError = () => {
-    if (!didRefreshOnError) {
-      setDidRefreshOnError(true);
+    if (!activeSource) {
+      return;
+    }
+
+    if (refreshedSourceRef.current !== activeSource) {
+      refreshedSourceRef.current = activeSource;
       void resolveUrl(true);
       return;
     }
-    setIsError(true);
+
+    setFailedSource(activeSource);
   };
 
   return (
@@ -97,7 +101,13 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
               src={resolvedUrl}
               alt={caption || attachment.fileName || t("chat:image.previewAlt")}
               onClick={() => void handleImageClick()}
-              onLoad={() => setIsLoaded(true)}
+              onLoad={() => {
+                if (!activeSource) return;
+                setLoadedSource(activeSource);
+                setFailedSource((previous) =>
+                  previous === activeSource ? null : previous,
+                );
+              }}
               onError={handleImageError}
             />
           )}
@@ -154,4 +164,3 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
 };
 
 export default ImageMessage;
-

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { PlayIcon, PauseIcon } from "@heroicons/react/24/solid";
@@ -28,17 +28,13 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
-  const [didRefreshOnError, setDidRefreshOnError] = useState(false);
+  const refreshedSourceRef = useRef<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const { url: resolvedUrl, resolveUrl } = useAttachmentDownloadUrl(
     conversationId,
     attachment,
     { autoResolve: true },
   );
-
-  useEffect(() => {
-    setDidRefreshOnError(false);
-  }, [resolvedUrl]);
 
   const duration = attachment.duration || 0;
 
@@ -69,8 +65,11 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
   };
 
   const handleAudioError = () => {
-    if (!didRefreshOnError) {
-      setDidRefreshOnError(true);
+    const activeSource = resolvedUrl || null;
+    if (!activeSource) return;
+
+    if (refreshedSourceRef.current !== activeSource) {
+      refreshedSourceRef.current = activeSource;
       void resolveUrl(true);
     }
   };
@@ -96,7 +95,12 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
   }, [attachment.id, resolvedUrl]);
 
   return (
-    <div className={clsx("flex min-w-voice-message-min items-center gap-3", className)}>
+    <div
+      className={clsx(
+        "flex min-w-voice-message-min items-center gap-3",
+        className,
+      )}
+    >
       <audio
         ref={audioRef}
         src={resolvedUrl}
@@ -157,7 +161,12 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
           })}
         </div>
 
-        <p className={clsx("mt-1 text-xs", isOwn ? "text-text-inverse/70" : "text-text-muted")}>
+        <p
+          className={clsx(
+            "mt-1 text-xs",
+            isOwn ? "text-text-inverse/70" : "text-text-muted",
+          )}
+        >
           {isPlaying || currentTime > 0
             ? `${formatDuration(currentTime)} / ${formatDuration(duration)}`
             : formatDuration(duration)}
@@ -168,5 +177,3 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
 };
 
 export default VoiceMessage;
-
-

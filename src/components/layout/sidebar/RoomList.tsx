@@ -414,22 +414,6 @@ export const RoomList: React.FC<RoomListProps> = ({
     listRef.current?.resetAfterIndex(0, true);
   }, [collapsed, flatItems.length]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    if (selectedRoomPosition >= 0 && !isKeyboardMode) {
-      Promise.resolve().then(() => {
-        if (!cancelled) {
-          setKeyboardCursor(selectedRoomPosition);
-        }
-      });
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isKeyboardMode, selectedRoomPosition]);
-
   const syncViewportHeight = useCallback(() => {
     const node = containerRef.current;
     if (!node) return;
