@@ -145,6 +145,35 @@ const resolveMemberName = (
   );
 };
 
+const areMemberMapsEqual = (
+  previous: Record<string, GroupMember>,
+  next: Record<string, GroupMember>,
+): boolean => {
+  const previousKeys = Object.keys(previous);
+  const nextKeys = Object.keys(next);
+  if (previousKeys.length !== nextKeys.length) {
+    return false;
+  }
+
+  for (const key of previousKeys) {
+    const previousMember = previous[key];
+    const nextMember = next[key];
+    if (!nextMember) return false;
+    if (
+      previousMember.id !== nextMember.id ||
+      previousMember.username !== nextMember.username ||
+      previousMember.displayName !== nextMember.displayName ||
+      previousMember.avatar !== nextMember.avatar ||
+      previousMember.status !== nextMember.status ||
+      previousMember.role !== nextMember.role
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
 export const GroupInfo: React.FC<GroupInfoProps> = ({
   conversation,
   currentUserId,
@@ -189,7 +218,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   );
 
   const debouncedQuery = useDebounce(searchQuery, 300);
-  const { updateConversation, removeConversation } = useChatStore();
+  const updateConversation = useChatStore((state) => state.updateConversation);
+  const removeConversation = useChatStore((state) => state.removeConversation);
+  const loadMembersFailedMessage = t("profile:toast.loadMembersFailed");
   const inviteLinks = useGroupStore(
     (state) => state.inviteLinksByRoom[conversation.id] || [],
   );
@@ -309,14 +340,16 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       nextMembers.forEach((member) => {
         nextById[member.id] = member;
       });
-      setMembersByUserId(nextById);
+      setMembersByUserId((previous) =>
+        areMemberMapsEqual(previous, nextById) ? previous : nextById,
+      );
     } catch (error) {
       const apiError = extractApiError(error);
-      toast.error(apiError.message || t("profile:toast.loadMembersFailed"));
+      toast.error(apiError.message || loadMembersFailedMessage);
     } finally {
       setIsLoadingMembers(false);
     }
-  }, [conversation.id, t]);
+  }, [conversation.id, loadMembersFailedMessage]);
 
   const refreshConversation = useCallback(async () => {
     const response = await getConversationByIdUseCase(conversation.id);
@@ -337,7 +370,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const searchUsers = useCallback(
     async (query: string) => {
       if (!query.trim() || query.length < 2) {
-        setSearchResults([]);
+        setSearchResults((previous) => (previous.length === 0 ? previous : []));
         return;
       }
 
@@ -350,7 +383,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         );
         setSearchResults(users as unknown as UserSummary[]);
       } catch {
-        setSearchResults([]);
+        setSearchResults((previous) => (previous.length === 0 ? previous : []));
       } finally {
         setIsSearching(false);
       }

@@ -1067,6 +1067,8 @@ export const ChatPage: React.FC = () => {
   }, []);
 
   const showSidebarOnMobile = !routeConversationId || isMobileMenuOpen;
+  const shouldRenderInfoContent =
+    isInfoPanelOpen || Boolean(profilePanelTarget);
   const showConversationSkeleton =
     (!hasFetchedConversationsOnce && conversations.length === 0) ||
     (isLoadingConversations && conversations.length === 0);
@@ -1331,52 +1333,54 @@ export const ChatPage: React.FC = () => {
           )}
           style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}
         >
-          {profilePanelTarget ? (
-            <UserProfile
-              userId={profilePanelTarget.userId}
-              currentUserId={currentUserSummary.id}
-              initialUser={profilePanelTarget.initialUser ?? null}
-              onClose={closeInfoPanel}
-              onDeleteConversation={
-                selectedConversation &&
-                isSelectedDirectConversation &&
-                otherUser?.id === profilePanelTarget.userId
-                  ? handleDeleteConversation
-                  : undefined
-              }
-              onStartConversation={handleStartChat}
-            />
-          ) : isSelectedDirectConversation ? (
-            otherUser ? (
+          {shouldRenderInfoContent ? (
+            profilePanelTarget ? (
               <UserProfile
-                userId={otherUser.id}
+                userId={profilePanelTarget.userId}
                 currentUserId={currentUserSummary.id}
-                initialUser={{
-                  id: otherUser.id,
-                  username: otherUser.username,
-                  displayName: otherUser.displayName,
-                  avatar: otherUser.avatar,
-                  status: otherUser.status,
-                }}
+                initialUser={profilePanelTarget.initialUser ?? null}
                 onClose={closeInfoPanel}
-                onDeleteConversation={handleDeleteConversation}
+                onDeleteConversation={
+                  selectedConversation &&
+                  isSelectedDirectConversation &&
+                  otherUser?.id === profilePanelTarget.userId
+                    ? handleDeleteConversation
+                    : undefined
+                }
                 onStartConversation={handleStartChat}
               />
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-                <Spinner size="md" />
-                <p className="text-sm text-text-muted">
-                  {t("common:loading.default")}
-                </p>
-              </div>
-            )
-          ) : selectedConversation ? (
-            <GroupInfo
-              conversation={selectedConversation}
-              currentUserId={currentUserSummary.id}
-              onClose={closeInfoPanel}
-              onDeleteConversation={handleDeleteConversation}
-            />
+            ) : isSelectedDirectConversation ? (
+              otherUser ? (
+                <UserProfile
+                  userId={otherUser.id}
+                  currentUserId={currentUserSummary.id}
+                  initialUser={{
+                    id: otherUser.id,
+                    username: otherUser.username,
+                    displayName: otherUser.displayName,
+                    avatar: otherUser.avatar,
+                    status: otherUser.status,
+                  }}
+                  onClose={closeInfoPanel}
+                  onDeleteConversation={handleDeleteConversation}
+                  onStartConversation={handleStartChat}
+                />
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+                  <Spinner size="md" />
+                  <p className="text-sm text-text-muted">
+                    {t("common:loading.default")}
+                  </p>
+                </div>
+              )
+            ) : selectedConversation ? (
+              <GroupInfo
+                conversation={selectedConversation}
+                currentUserId={currentUserSummary.id}
+                onClose={closeInfoPanel}
+                onDeleteConversation={handleDeleteConversation}
+              />
+            ) : null
           ) : null}
         </div>
       )}
