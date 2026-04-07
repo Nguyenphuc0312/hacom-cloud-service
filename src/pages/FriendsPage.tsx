@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   ArrowLeftIcon,
@@ -224,6 +224,7 @@ const ContactRow: React.FC<ContactRowProps> = ({
 export const FriendsPage: React.FC = () => {
   const { t } = useTranslation(["friends", "common", "profile", "error"]);
   const navigate = useNavigate();
+  const { shareCode } = useParams<{ shareCode?: string }>();
   const [searchParams] = useSearchParams();
   const currentUser = useAuthStore((state) => state.user);
   const currentUserId = currentUser?.id ?? null;
@@ -248,7 +249,7 @@ export const FriendsPage: React.FC = () => {
   } = useFriendship();
 
   const initialQuery = searchParams.get("q") || "";
-  const initialQrCode = searchParams.get("code") || "";
+  const initialQrCode = shareCode || searchParams.get("code") || "";
   const [activeTab, setActiveTab] = useState<TabKey>(
     initialQrCode.trim().length > 0
       ? "qr"
@@ -290,7 +291,7 @@ export const FriendsPage: React.FC = () => {
 
   useEffect(() => {
     const nextQuery = searchParams.get("q") || "";
-    const nextQrCode = searchParams.get("code") || "";
+    const nextQrCode = shareCode || searchParams.get("code") || "";
     setQuery((current) => (current === nextQuery ? current : nextQuery));
     if (nextQrCode.trim().length > 0) {
       setActiveTab("qr");
@@ -300,7 +301,7 @@ export const FriendsPage: React.FC = () => {
     if (nextQuery.trim().length >= 2) {
       setActiveTab("discover");
     }
-  }, [searchParams]);
+  }, [searchParams, shareCode]);
 
   const searchUsers = useCallback(
     async (rawQuery: string) => {
@@ -823,7 +824,9 @@ export const FriendsPage: React.FC = () => {
     );
   };
 
-  const renderQrTab = () => <FriendQrWorkspace />;
+  const renderQrTab = () => (
+    <FriendQrWorkspace initialShareCode={shareCode ?? null} />
+  );
 
   return (
     <div className="flex h-full min-h-0 bg-background">

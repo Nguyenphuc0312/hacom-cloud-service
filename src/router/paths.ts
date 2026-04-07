@@ -11,6 +11,7 @@ export const ROUTE_PATHS = {
   CHAT: "/chat",
   CHAT_DETAIL: "/chat/:conversationId?",
   FRIENDS: "/friends",
+  FRIEND_DISCOVERY: "/friend-discovery/:shareCode",
   JOIN_BY_TOKEN: "/join/:token",
   SETTINGS: "/settings",
 } as const;

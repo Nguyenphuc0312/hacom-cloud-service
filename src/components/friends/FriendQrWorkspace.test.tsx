@@ -139,10 +139,10 @@ const makeSuccess = <T,>(data: T) => ({
   data,
 });
 
-const renderWorkspace = () => {
+const renderWorkspace = (options?: { initialShareCode?: string | null }) => {
   return render(
     <MemoryRouter>
-      <FriendQrWorkspace />
+      <FriendQrWorkspace initialShareCode={options?.initialShareCode} />
     </MemoryRouter>,
   );
 };
@@ -239,6 +239,22 @@ describe("FriendQrWorkspace", () => {
     expect(screen.getByText("Friend One")).toBeInTheDocument();
   });
 
+  it("resolve deep link tu route shareCode", async () => {
+    relationshipByUserId.set("u-1", {
+      kind: "not_friend",
+      capabilities: baseCapabilities({ canSendRequest: true, canBlock: true }),
+    });
+
+    renderWorkspace({ initialShareCode: "share-code-1234567890" });
+
+    await waitFor(() => {
+      expect(resolveCodeMock).toHaveBeenCalledWith("share-code-1234567890");
+    });
+
+    expect(await screen.findByText("Mini profile")).toBeInTheDocument();
+    expect(screen.getByText("Friend One")).toBeInTheDocument();
+  });
+
   it("self QR hien self state", async () => {
     resolveCodeMock.mockResolvedValueOnce(
       makeSuccess({
@@ -298,18 +314,12 @@ describe("FriendQrWorkspace", () => {
     });
   });
 
-  it("code invalid hien error state", async () => {
+  it("mo deep link code cu sau reset fail dung", async () => {
     resolveCodeMock.mockRejectedValueOnce(
       new Error("Friend QR code is invalid or expired"),
     );
 
-    renderWorkspace();
-
-    await userEvent.type(
-      screen.getByPlaceholderText("Nhap share code hoac deep link"),
-      "invalid-code",
-    );
-    await userEvent.click(screen.getByRole("button", { name: "Resolve" }));
+    renderWorkspace({ initialShareCode: "old-reset-code-12345678" });
 
     expect(await screen.findByText(invalidQrCodeMessage)).toBeInTheDocument();
   });

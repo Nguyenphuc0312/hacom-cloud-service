@@ -32,6 +32,10 @@ import {
 } from "../../features/friend-qr/shareCode";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+interface FriendQrWorkspaceProps {
+  initialShareCode?: string | null;
+}
+
 type BarcodeDetectorResult = {
   rawValue?: string;
 };
@@ -72,7 +76,9 @@ const toFriendlyResolveMessage = (message: string | undefined): string => {
   return message;
 };
 
-export const FriendQrWorkspace: React.FC = () => {
+export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
+  initialShareCode,
+}) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -110,6 +116,15 @@ export const FriendQrWorkspace: React.FC = () => {
 
   const autoResolvedFromUrlRef = React.useRef(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const initialDeepLinkCode = React.useMemo(() => {
+    const routeCode = initialShareCode?.trim();
+    if (routeCode) {
+      return routeCode;
+    }
+
+    const queryCode = searchParams.get("code")?.trim();
+    return queryCode || "";
+  }, [initialShareCode, searchParams]);
 
   const supportsImageScan = React.useMemo(() => {
     if (typeof window === "undefined") {
@@ -185,14 +200,13 @@ export const FriendQrWorkspace: React.FC = () => {
       return;
     }
 
-    const fromQuery = searchParams.get("code");
-    if (!fromQuery) {
+    if (!initialDeepLinkCode) {
       return;
     }
 
     autoResolvedFromUrlRef.current = true;
-    setResolveInput(fromQuery);
-  }, [searchParams]);
+    setResolveInput(initialDeepLinkCode);
+  }, [initialDeepLinkCode]);
 
   const copyText = React.useCallback(
     async (value: string, successMessage: string) => {
