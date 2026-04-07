@@ -68,9 +68,9 @@ interface RowData {
   onSelect: (conversationId: string) => void;
 }
 
-const SECTION_HEIGHT = 24;
-const EXPANDED_ROOM_HEIGHT = 72;
-const COLLAPSED_ROOM_HEIGHT = 60;
+const SECTION_HEIGHT = 22;
+const EXPANDED_ROOM_HEIGHT = 68;
+const COLLAPSED_ROOM_HEIGHT = 56;
 
 const measureViewportHeight = (node: HTMLDivElement): number => {
   if (node.clientHeight > 0) return node.clientHeight;

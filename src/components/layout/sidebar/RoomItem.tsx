@@ -59,7 +59,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
 
     const senderLabel =
       lastMessage.senderId === currentUser.id
-        ? "Bạn"
+        ? t("chat:message.you")
         : lastMessage.senderName?.trim() ||
           directPartner?.displayName ||
           directPartner?.username ||
@@ -91,11 +91,11 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         role="option"
         aria-selected={isActive}
         className={clsx(
-          "group relative mx-2 my-1 flex h-room-item w-room-item items-center justify-center rounded-xl",
-          "transition-colors duration-200",
+          "group relative mx-2 my-1 flex h-room-item w-room-item items-center justify-center rounded-lg",
+          "transition-micro",
           "hover:bg-surface-hover",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-          isActive && "bg-primary/12 text-primary ring-1 ring-primary/35",
+          isActive && "bg-primary/14 text-primary ring-1 ring-primary/45",
           !isActive &&
             isKeyboardActive &&
             "bg-surface-overlay ring-1 ring-border",
@@ -132,18 +132,28 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
       role="option"
       aria-selected={isActive}
       className={clsx(
-        "mx-2 my-0.5 flex h-room-item w-[calc(100%-var(--space-4))] items-center rounded-xl px-3",
-        "transition-colors duration-200",
+        "relative mx-2 my-0.5 flex h-room-item w-[calc(100%-var(--space-4))] items-center rounded-lg px-2.5",
+        "transition-micro",
         "hover:bg-surface-hover",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-        isActive && "bg-primary/12 ring-1 ring-primary/30",
+        isActive && "bg-primary/12 ring-1 ring-primary/35",
         !isActive &&
           isKeyboardActive &&
           "bg-surface-overlay ring-1 ring-border",
       )}
       aria-label={displayName}
     >
-      <div className="grid w-full grid-cols-[auto,1fr,auto] items-center gap-3">
+      {(isActive || unreadCount > 0) && (
+        <span
+          className={clsx(
+            "absolute left-1 top-1/2 h-9 -translate-y-1/2 rounded-full",
+            isActive ? "w-1 bg-primary" : "w-0.5 bg-primary/60",
+          )}
+          aria-hidden="true"
+        />
+      )}
+
+      <div className="grid w-full grid-cols-[auto,1fr,auto] items-center gap-2.5">
         <Avatar
           src={avatarSrc}
           alt={displayName}
@@ -153,10 +163,10 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         />
 
         <div className="min-w-0">
-          <div className="mb-0.5 flex items-center gap-1.5">
+          <div className="mb-0.5 flex items-center gap-1">
             <p
               className={clsx(
-                "truncate text-body-sm text-text-primary",
+                "truncate text-body-sm leading-5 text-text-primary",
                 unreadCount > 0 && "font-semibold",
               )}
             >
@@ -185,7 +195,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
 
           <p
             className={clsx(
-              "truncate text-xs leading-5 text-start",
+              "truncate text-caption leading-4 text-start",
               previewState === "failed"
                 ? "font-medium text-danger"
                 : previewState
@@ -202,8 +212,10 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         <div className="flex h-full min-w-room-meta flex-col items-end justify-between py-1">
           <span
             className={clsx(
-              "text-caption",
-              unreadCount > 0 ? "font-medium text-primary" : "text-text-muted",
+              "text-caption tabular-nums",
+              unreadCount > 0
+                ? "font-semibold text-primary"
+                : "text-text-muted",
             )}
           >
             {timeLabel}
@@ -220,7 +232,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
                     ? "muted"
                     : "primary"
               }
-              className="min-w-5 px-1.5 text-caption"
+              className="min-w-5 px-1.5 text-caption shadow-xs"
             />
           ) : (
             <span className="h-4" aria-hidden="true" />

@@ -2,6 +2,7 @@
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { emitCommandPaletteOpen } from "../../../lib/commandPalette";
 
 interface SidebarSearchProps {
   value: string;
@@ -17,6 +18,11 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
   onSearchUsers,
 }) => {
   const { t } = useTranslation();
+  const openShortcut =
+    typeof navigator !== "undefined" &&
+    /Mac|iPhone|iPad/.test(navigator.platform)
+      ? "Cmd K"
+      : "Ctrl K";
 
   if (collapsed) {
     return (
@@ -48,14 +54,15 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
           }}
           placeholder={t("sidebar:search.placeholder")}
           className={clsx(
-            "h-11 w-full rounded-xl border border-border bg-surface-overlay pl-11 pr-10 text-body-sm",
+            "h-11 w-full rounded-xl border border-border bg-surface-overlay pl-11 text-body-sm",
+            value.trim().length > 0 ? "pr-10" : "pr-[88px]",
             "text-text-primary placeholder:text-text-muted",
             "transition-micro focus:border-border-focus focus:bg-surface focus:outline-none focus:ring-2 focus:ring-focus/20",
           )}
           aria-label={t("sidebar:search.aria")}
         />
 
-        {value.trim().length > 0 && (
+        {value.trim().length > 0 ? (
           <button
             type="button"
             onClick={() => onChange("")}
@@ -63,6 +70,17 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
             aria-label={t("sidebar:search.clearAria")}
           >
             <XMarkIcon className="h-4 w-4" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={emitCommandPaletteOpen}
+            className="absolute right-3 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-caption text-text-muted transition-micro hover:bg-surface-hover hover:text-text-secondary"
+            aria-label={t("common:actions.search", {
+              defaultValue: "Open command palette",
+            })}
+          >
+            <span className="font-medium">{openShortcut}</span>
           </button>
         )}
       </label>

@@ -13,6 +13,7 @@ import {
   ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { Button } from "./Button";
+import { emitCommandPaletteOpen } from "../../lib/commandPalette";
 
 interface EmptyStateProps {
   title: string;
@@ -170,6 +171,11 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
   onNewChat,
 }) => {
   const { t } = useTranslation();
+  const openShortcut =
+    typeof navigator !== "undefined" &&
+    /Mac|iPhone|iPad/.test(navigator.platform)
+      ? "Cmd K"
+      : "Ctrl K";
 
   return (
     <section className="chat-background flex flex-1 flex-col items-center justify-center px-6 py-8 text-text-secondary">
@@ -198,6 +204,19 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
           {t("chat:empty.startNewChat")}
         </Button>
       )}
+
+      <button
+        type="button"
+        onClick={emitCommandPaletteOpen}
+        className="mt-4 inline-flex items-center gap-2 rounded-lg border border-border bg-surface/90 px-3 py-1.5 text-caption text-text-muted transition-micro hover:bg-surface-hover hover:text-text-secondary"
+      >
+        <span>
+          {t("common:actions.search", { defaultValue: "Quick jump" })}
+        </span>
+        <span className="rounded border border-border px-1.5 py-0.5 font-medium">
+          {openShortcut}
+        </span>
+      </button>
     </section>
   );
 };

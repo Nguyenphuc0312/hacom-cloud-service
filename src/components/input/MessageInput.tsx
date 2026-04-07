@@ -23,6 +23,7 @@ import type { AttachmentPickerMode } from "../../hooks/useSendMessage";
 import type { InputMode, Message } from "../../types";
 import type { AttachmentDraft } from "../../types/attachmentDraft";
 import { UPLOAD_CONFIG } from "../../config";
+import { emitCommandPaletteOpen } from "../../lib/commandPalette";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { toast } from "../ui";
 
@@ -577,6 +578,11 @@ export const MessageInput = React.forwardRef<
   const sendButtonLabel = isSubmitBusy
     ? t("chat:composer.sending")
     : t("chat:composer.sendMessage");
+  const openShortcut =
+    typeof navigator !== "undefined" &&
+    /Mac|iPhone|iPad/.test(navigator.platform)
+      ? "Cmd K"
+      : "Ctrl K";
   const composerVisualState = disabled
     ? "disabled"
     : isSubmitBusy
@@ -932,7 +938,7 @@ export const MessageInput = React.forwardRef<
           <div
             data-composer-state={composerVisualState}
             className={clsx(
-              "relative flex min-w-0 flex-1 items-end rounded-2xl border px-2 py-2 transition-micro",
+              "relative flex min-w-0 flex-1 items-end rounded-2xl border px-2 py-1.5 transition-micro",
               composerVisualState === "disabled" &&
                 "border-disabled-border bg-disabled-bg shadow-none",
               composerVisualState === "sending" &&
@@ -1034,7 +1040,7 @@ export const MessageInput = React.forwardRef<
                   : undefined
               }
               className={clsx(
-                "w-full min-h-10 flex-1 resize-none bg-transparent px-2 py-2.5",
+                "w-full min-h-10 flex-1 resize-none bg-transparent px-2 py-2",
                 "text-sm text-text-primary placeholder:text-text-muted",
                 "transition-colors focus:outline-none",
                 disabled && "cursor-not-allowed opacity-70",
@@ -1107,6 +1113,26 @@ export const MessageInput = React.forwardRef<
             ariaLabel={sendButtonLabel}
             className="mb-0.5 shrink-0"
           />
+        </div>
+
+        <div className="mt-1 flex items-center justify-between px-1 text-caption text-text-muted">
+          <span>
+            {sendOnEnter
+              ? t("chat:composer.shortcutHint", {
+                  defaultValue: "Enter to send, Shift+Enter for new line",
+                })
+              : t("chat:composer.shortcutHintManual", {
+                  defaultValue: "Use Send button to send",
+                })}
+          </span>
+
+          <button
+            type="button"
+            onClick={emitCommandPaletteOpen}
+            className="rounded-md border border-border bg-surface px-2 py-0.5 text-caption transition-micro hover:bg-surface-hover hover:text-text-secondary"
+          >
+            {openShortcut}
+          </button>
         </div>
 
         {onShareContact && currentUserId && (

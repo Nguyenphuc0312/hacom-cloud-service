@@ -54,6 +54,10 @@ import { removeReactionUseCase } from "../features/chat/usecases/removeReaction"
 import { editMessageUseCase } from "../features/chat/usecases/editMessage";
 import { deleteMessageUseCase } from "../features/chat/usecases/deleteMessage";
 import { useSendMessage } from "../features/chat/hooks/useSendMessage";
+import {
+  CHAT_OPEN_NEW_CHAT_EVENT,
+  consumeOpenNewChatIntent,
+} from "../lib/commandPalette";
 
 type IdleCallbackDeadline = {
   didTimeout: boolean;
@@ -900,6 +904,24 @@ export const ChatPage: React.FC = () => {
   // Handle new chat modal
   const handleOpenNewChat = useCallback(() => {
     setIsNewChatModalOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (consumeOpenNewChatIntent()) {
+      setIsNewChatModalOpen(true);
+    }
+
+    const openFromCommandPalette = () => {
+      setIsNewChatModalOpen(true);
+    };
+
+    window.addEventListener(CHAT_OPEN_NEW_CHAT_EVENT, openFromCommandPalette);
+    return () => {
+      window.removeEventListener(
+        CHAT_OPEN_NEW_CHAT_EVENT,
+        openFromCommandPalette,
+      );
+    };
   }, []);
 
   const showSidebarOnMobile = !routeConversationId || isMobileMenuOpen;

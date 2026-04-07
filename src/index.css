@@ -51,10 +51,10 @@
   --space-10: 40px;
   --space-12: 48px;
 
-  --size-room-item: 68px;
-  --size-room-meta: 40px;
+  --size-room-item: 64px;
+  --size-room-meta: 36px;
   --size-sidebar-collapsed: 84px;
-  --size-sidebar-expanded: 320px;
+  --size-sidebar-expanded: 304px;
   --size-voice-message-min: 200px;
 
   /* Chat bubble density (overridden by SettingsApplier) */

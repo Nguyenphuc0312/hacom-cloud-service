@@ -50,10 +50,10 @@ interface HeaderAction {
 }
 
 const iconButtonClass = clsx(
-  "inline-flex h-10 w-10 items-center justify-center rounded-full",
-  "text-text-secondary transition-micro",
-  "hover:bg-white/8 hover:text-text-primary",
-  "active:scale-95 active:bg-white/10",
+  "inline-flex h-9 w-9 items-center justify-center rounded-lg border border-transparent",
+  "text-text-muted transition-micro",
+  "hover:border-border hover:bg-surface-hover hover:text-text-primary",
+  "active:scale-[0.98] active:bg-surface-active",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
 );
 
@@ -202,24 +202,18 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     }
 
     return nextActions;
-  }, [
-    onCallClick,
-    onPinnedClick,
-    onSelectionMode,
-    onVideoCallClick,
-    t,
-  ]);
+  }, [onCallClick, onPinnedClick, onSelectionMode, onVideoCallClick, t]);
 
   return (
     <header
       className={clsx(
-        "sticky top-0 z-sticky border-b border-white/6 py-2.5 backdrop-blur",
+        "sticky top-0 z-sticky border-b border-border/70 py-2 backdrop-blur",
         className,
       )}
-      style={{ backgroundColor: "hsl(var(--color-chat-canvas) / 0.84)" }}
+      style={{ backgroundColor: "hsl(var(--color-chat-canvas) / 0.92)" }}
     >
       <ConversationLane>
-        <div className="flex min-h-11 items-center gap-2">
+        <div className="flex min-h-10 items-center gap-2">
           {onBack && (
             <button
               type="button"
@@ -257,7 +251,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             )}
           >
-            <h2 className="truncate text-[15px] font-semibold text-text-primary sm:text-base">
+            <h2 className="truncate text-body-sm font-semibold text-text-primary sm:text-body">
               {displayName}
             </h2>
 
@@ -270,7 +264,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             ) : (
               <p
                 className={clsx(
-                  "truncate text-[12px]",
+                  "truncate text-caption",
                   isOnline ? "text-text-secondary" : "text-text-muted",
                 )}
               >
@@ -280,7 +274,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           </button>
 
           <div className="relative ml-1">
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5 rounded-xl border border-border/80 bg-surface/90 p-1 shadow-xs">
               {onSearchClick && (
                 <button
                   type="button"
@@ -318,7 +312,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               <div
                 ref={menuRef}
                 className={clsx(
-                  "absolute right-0 top-full z-dropdown mt-2 min-w-52 overflow-hidden rounded-[18px] border border-white/8 bg-[hsl(var(--color-sidebar-surface))] p-1.5 shadow-elev2",
+                  "absolute right-0 top-full z-dropdown mt-2 min-w-52 overflow-hidden rounded-xl border border-border bg-surface-raised p-1.5 shadow-elev2",
                   "animate-slide-up-fade",
                 )}
                 role="menu"
@@ -337,8 +331,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                       type="button"
                       role="menuitem"
                       className={clsx(
-                        "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-text-secondary",
-                        "transition-micro hover:bg-white/6 hover:text-text-primary active:bg-white/8",
+                        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-text-secondary",
+                        "transition-micro hover:bg-surface-hover hover:text-text-primary active:bg-surface-active",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                       )}
                       onClick={() => {
