@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { ConversationItem } from "./ConversationItem";
 import type { Conversation, ConversationFilter } from "../../types";
+import { isDirectConversation } from "../../lib/conversationAdapter";
 import {
   sortConversations,
   filterConversations,
@@ -41,6 +42,9 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     case "groups":
       filtered = filtered.filter((c) => c.type === "group");
       break;
+    case "direct":
+      filtered = filtered.filter((c) => isDirectConversation(c));
+      break;
     case "channels":
       filtered = filtered.filter((c) => c.type === "channel");
       break;
@@ -78,7 +82,9 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           />
         </svg>
         <p className="text-sm">
-          {searchQuery ? t("sidebar:room.emptyBySearch") : t("sidebar:room.empty")}
+          {searchQuery
+            ? t("sidebar:room.emptyBySearch")
+            : t("sidebar:room.empty")}
         </p>
       </div>
     );

@@ -77,6 +77,41 @@
     "system": "System default",
     "systemDesc": "Use your browser's language setting"
   },
+  "security": {
+    "title": "Security",
+    "description": "Update your password and secure your account",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "changePassword": "Change password",
+    "changeSuccess": "Password changed successfully",
+    "wrongPassword": "Current password is incorrect",
+    "changeFailed": "Unable to change password"
+  },
+  "blockedUsers": {
+    "title": "Blocked users",
+    "description": "People you blocked cannot message you",
+    "empty": "You have not blocked anyone",
+    "unblock": "Unblock",
+    "unblockSuccess": "Unblocked {{name}}",
+    "unblockFailed": "Unable to unblock user"
+  },
+  "dangerZone": {
+    "title": "Danger zone",
+    "description": "Irreversible actions for your account",
+    "deleteAccount": "Delete account",
+    "deleteWarning": "This action permanently removes your messages and profile.",
+    "deleteButton": "Delete",
+    "passwordRequired": "Please enter your password",
+    "deleteSuccess": "Account deleted",
+    "wrongPassword": "Incorrect password",
+    "deleteFailed": "Unable to delete account",
+    "confirmTitle": "Confirm account deletion",
+    "confirmDescription": "Enter your current password to permanently delete your account.",
+    "passwordPlaceholder": "Enter your current password",
+    "cancel": "Cancel",
+    "confirmDelete": "Delete permanently"
+  },
   "preview": {
     "contact": "John Doe",
     "received": "Hey! How are you? 👋",

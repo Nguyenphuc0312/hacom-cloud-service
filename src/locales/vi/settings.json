@@ -77,6 +77,41 @@
     "system": "Mặc định hệ thống",
     "systemDesc": "Sử dụng ngôn ngữ của trình duyệt"
   },
+  "security": {
+    "title": "Bảo mật",
+    "description": "Cập nhật mật khẩu để bảo vệ tài khoản",
+    "currentPassword": "Mật khẩu hiện tại",
+    "newPassword": "Mật khẩu mới",
+    "confirmPassword": "Xác nhận mật khẩu mới",
+    "changePassword": "Đổi mật khẩu",
+    "changeSuccess": "Đổi mật khẩu thành công",
+    "wrongPassword": "Mật khẩu hiện tại không đúng",
+    "changeFailed": "Không thể đổi mật khẩu"
+  },
+  "blockedUsers": {
+    "title": "Người dùng đã chặn",
+    "description": "Những người bạn chặn sẽ không thể nhắn tin cho bạn",
+    "empty": "Bạn chưa chặn ai",
+    "unblock": "Bỏ chặn",
+    "unblockSuccess": "Đã bỏ chặn {{name}}",
+    "unblockFailed": "Không thể bỏ chặn người dùng"
+  },
+  "dangerZone": {
+    "title": "Vùng nguy hiểm",
+    "description": "Các thao tác không thể hoàn tác trên tài khoản",
+    "deleteAccount": "Xóa tài khoản",
+    "deleteWarning": "Thao tác này sẽ xóa vĩnh viễn tin nhắn và hồ sơ của bạn.",
+    "deleteButton": "Xóa",
+    "passwordRequired": "Vui lòng nhập mật khẩu",
+    "deleteSuccess": "Đã xóa tài khoản",
+    "wrongPassword": "Mật khẩu không đúng",
+    "deleteFailed": "Không thể xóa tài khoản",
+    "confirmTitle": "Xác nhận xóa tài khoản",
+    "confirmDescription": "Nhập mật khẩu hiện tại để xóa vĩnh viễn tài khoản của bạn.",
+    "passwordPlaceholder": "Nhập mật khẩu hiện tại",
+    "cancel": "Hủy",
+    "confirmDelete": "Xóa vĩnh viễn"
+  },
   "preview": {
     "contact": "Nguyễn Văn A",
     "received": "Chào bạn! Khỏe không? 👋",

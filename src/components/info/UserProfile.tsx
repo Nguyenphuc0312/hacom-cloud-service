@@ -21,6 +21,7 @@ import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import type { UserSummary } from "../../types";
 import { UserStatus } from "../../types";
 import { getUserByIdUseCase } from "../../features/chat/usecases/getUserById";
+import { getUserDisplayName } from "../../utils/messageHelpers";
 
 type ProfileUser = Partial<UserSummary> & {
   id: string;
@@ -44,18 +45,7 @@ interface UserProfileProps {
 const formatDisplayName = (user: ProfileUser | null | undefined): string => {
   if (!user) return "";
 
-  const displayName =
-    typeof user.displayName === "string" ? user.displayName.trim() : "";
-  if (displayName) return displayName;
-
-  const firstName =
-    typeof user.firstName === "string" ? user.firstName.trim() : "";
-  const lastName =
-    typeof user.lastName === "string" ? user.lastName.trim() : "";
-  const fullName = `${firstName} ${lastName}`.trim();
-  if (fullName) return fullName;
-
-  return typeof user.username === "string" ? user.username : user.id;
+  return getUserDisplayName(user, { allowTechnicalFallback: true }) || user.id;
 };
 
 const formatPresenceLabel = (

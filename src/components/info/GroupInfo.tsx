@@ -35,6 +35,7 @@ import { leaveConversationUseCase } from "../../features/chat/usecases/leaveConv
 import { createGroupInviteLinkUseCase } from "../../features/chat/usecases/createGroupInviteLink";
 import { revokeGroupInviteLinkUseCase } from "../../features/chat/usecases/revokeGroupInviteLink";
 import { resolveGroupJoinRequestUseCase } from "../../features/chat/usecases/resolveGroupJoinRequest";
+import { getUserDisplayName } from "../../utils/messageHelpers";
 
 interface GroupInfoProps {
   conversation: Conversation;
@@ -134,6 +135,16 @@ const normalizeMember = (raw: unknown): GroupMember | null => {
   };
 };
 
+const resolveMemberName = (
+  member: Partial<UserSummary> | null | undefined,
+): string => {
+  return (
+    getUserDisplayName(member, {
+      allowTechnicalFallback: true,
+    }) || ""
+  );
+};
+
 export const GroupInfo: React.FC<GroupInfoProps> = ({
   conversation,
   currentUserId,
@@ -230,8 +241,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       const roleDiff = ROLE_PRIORITY[a.role] - ROLE_PRIORITY[b.role];
       if (roleDiff !== 0) return roleDiff;
 
-      const aName = (a.displayName || a.username).toLowerCase();
-      const bName = (b.displayName || b.username).toLowerCase();
+      const aName = resolveMemberName(a).toLowerCase();
+      const bName = resolveMemberName(b).toLowerCase();
       return aName.localeCompare(bName);
     });
   }, [createdBy, membersByUserId, participants]);
@@ -446,7 +457,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     async (member: GroupMember) => {
       if (!canRemoveMember(member)) return;
 
-      const displayName = member.displayName || member.username;
+      const displayName = resolveMemberName(member) || member.id;
       if (
         !window.confirm(
           t("profile:groupInfo.removeMemberConfirm", { name: displayName }),
@@ -850,14 +861,14 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                         >
                           <Avatar
                             src={user.avatar}
-                            alt={user.displayName || user.username}
+                            alt={resolveMemberName(user) || user.id}
                             size="sm"
                             status={user.status}
                             showStatus
                           />
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-text-primary truncate">
-                              {user.displayName || user.username}
+                              {resolveMemberName(user) || user.id}
                             </p>
                             <p className="text-xs text-text-muted truncate">
                               @{user.username}
@@ -894,14 +905,14 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     >
                       <Avatar
                         src={member.avatar}
-                        alt={member.displayName || member.username}
+                        alt={resolveMemberName(member) || member.id}
                         size="md"
                         status={member.status}
                         showStatus
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-text-primary truncate">
-                          {member.displayName || member.username}
+                          {resolveMemberName(member) || member.id}
                           {member.id === currentUserId && (
                             <span className="ml-2 text-xs text-text-muted">
                               {t("profile:groupInfo.youSuffix")}
@@ -1163,8 +1174,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   const user =
                     membersByUserId[request.userId] ||
                     members.find((member) => member.id === request.userId);
-                  const displayName =
-                    user?.displayName || user?.username || request.userId;
+                  const displayName = resolveMemberName(user) || request.userId;
 
                   return (
                     <div

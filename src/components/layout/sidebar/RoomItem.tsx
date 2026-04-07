@@ -6,6 +6,7 @@ import {
   BookmarkIcon,
   SpeakerXMarkIcon,
 } from "@heroicons/react/24/solid";
+import { UserGroupIcon, UserIcon } from "@heroicons/react/24/outline";
 import { Avatar } from "../../common/Avatar";
 import { Badge } from "../../common/Badge";
 import type { Conversation, UserSummary } from "../../../types";
@@ -71,7 +72,13 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
           t("common:labels.conversation");
 
     return `${senderLabel}: ${messagePreview}`;
-  }, [conversation.lastMessage, currentUser.id, directPartner, t]);
+  }, [
+    conversation.lastMessage,
+    conversation.participants,
+    currentUser.id,
+    directPartner,
+    t,
+  ]);
   const previewState = useMemo(
     () => getMessagePreviewState(conversation.lastMessage, currentUser.id),
     [conversation.lastMessage, currentUser.id],
@@ -84,6 +91,15 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
   const unreadCount = conversation.unreadCount || 0;
   const unreadMention = hasConversationMention(conversation, currentUser);
   const isDirect = isDirectConversation(conversation);
+  const conversationTypeLabel = isDirect
+    ? t("sidebar:room.type.direct")
+    : t("sidebar:room.type.group");
+  const participantCountLabel =
+    !isDirect && (conversation.participants?.length ?? 0) > 0
+      ? t("chat:header.members", {
+          count: conversation.participants?.length ?? 0,
+        })
+      : "";
 
   const avatarSrc = getConversationAvatar(conversation, currentUser.id);
   const avatarStatus = isDirect ? directPartner?.status : undefined;
@@ -126,6 +142,20 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
             />
           </span>
         )}
+
+        <span
+          className={clsx(
+            "absolute bottom-1.5 right-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full border border-border/70 bg-surface-raised text-text-muted",
+            isActive && "text-primary",
+          )}
+          aria-label={conversationTypeLabel}
+        >
+          {isDirect ? (
+            <UserIcon className="h-2.5 w-2.5" />
+          ) : (
+            <UserGroupIcon className="h-2.5 w-2.5" />
+          )}
+        </span>
       </button>
     );
   }
@@ -178,6 +208,22 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
               {displayName}
             </p>
 
+            <span
+              className={clsx(
+                "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
+                isDirect
+                  ? "border-primary/25 bg-primary/10 text-primary"
+                  : "border-border bg-surface-overlay text-text-secondary",
+              )}
+            >
+              {isDirect ? (
+                <UserIcon className="mr-1 h-3 w-3" aria-hidden="true" />
+              ) : (
+                <UserGroupIcon className="mr-1 h-3 w-3" aria-hidden="true" />
+              )}
+              {conversationTypeLabel}
+            </span>
+
             {conversation.isMuted && (
               <SpeakerXMarkIcon
                 className="h-4 w-4 shrink-0 text-text-muted"
@@ -212,6 +258,11 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
           >
             {previewText || t("sidebar:room.noMessagesYet")}
           </p>
+          {!isDirect && participantCountLabel && (
+            <p className="mt-0.5 truncate text-[11px] text-text-muted">
+              {participantCountLabel}
+            </p>
+          )}
         </div>
 
         <div className="flex h-full min-w-room-meta flex-col items-end justify-between py-1">

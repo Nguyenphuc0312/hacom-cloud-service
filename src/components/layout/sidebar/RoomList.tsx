@@ -14,12 +14,12 @@ import type {
   ConversationFilter,
   UserSummary,
 } from "../../../types";
-import { RoomType } from "../../../types";
-import {
-  isDirectConversation,
-  normalizeRoomType,
-} from "../../../lib/conversationAdapter";
+import { isDirectConversation } from "../../../lib/conversationAdapter";
 import { rankConversations } from "../../../utils/conversationRanking";
+import {
+  getConversationDisplayName,
+  getUserDisplayName,
+} from "../../../utils/messageHelpers";
 import { ConversationListSkeleton, ErrorState } from "../../ui";
 import { RoomItem } from "./RoomItem";
 
@@ -39,7 +39,7 @@ interface RoomListProps {
   onSelect: (conversationId: string) => void;
 }
 
-type SectionId = "unread" | "channels" | "groups" | "direct";
+type SectionId = "groups" | "direct";
 
 interface RoomSection {
   id: SectionId;
@@ -85,8 +85,17 @@ const measureViewportHeight = (node: HTMLDivElement): number => {
 const includesQuery = (
   conversation: Conversation,
   normalizedQuery: string,
+  currentUserId: string,
 ): boolean => {
   if (!normalizedQuery) return true;
+
+  const resolvedConversationName = getConversationDisplayName(
+    conversation,
+    currentUserId,
+  ).toLowerCase();
+  if (resolvedConversationName.includes(normalizedQuery)) {
+    return true;
+  }
 
   if (
     (conversation.displayName || "").toLowerCase().includes(normalizedQuery)
@@ -111,7 +120,9 @@ const includesQuery = (
 
   const participantMatch = (conversation.participants || []).some(
     (participant) => {
-      const displayName = (participant.displayName || "").toLowerCase();
+      const displayName = getUserDisplayName(participant, {
+        allowTechnicalFallback: true,
+      }).toLowerCase();
       const username = (participant.username || "").toLowerCase();
       return (
         displayName.includes(normalizedQuery) ||
@@ -132,26 +143,12 @@ const isRoomActive = (
   currentConversationId: string | null,
 ): boolean => currentConversationId === roomId;
 
-type RoomBucket = Exclude<SectionId, "unread">;
+type RoomBucket = SectionId;
 
 const resolveRoomBucket = (room: Conversation): RoomBucket => {
   if (isDirectConversation(room)) {
     return "direct";
   }
-
-  const normalizedType = normalizeRoomType(
-    room.type,
-    room.participants?.length,
-  );
-  if (
-    normalizedType === RoomType.CHANNEL ||
-    normalizedType === RoomType.PUBLIC ||
-    normalizedType === RoomType.SUPPORT ||
-    normalizedType === RoomType.BOT
-  ) {
-    return "channels";
-  }
-
   return "groups";
 };
 
@@ -160,7 +157,6 @@ const toSections = (
   activeFilter: ConversationFilter,
 ): RoomSection[] => {
   const buckets: Record<RoomBucket, Conversation[]> = {
-    channels: [],
     groups: [],
     direct: [],
   };
@@ -171,7 +167,6 @@ const toSections = (
   });
 
   const unreadBuckets: Record<RoomBucket, Conversation[]> = {
-    channels: buckets.channels.filter((room) => (room.unreadCount || 0) > 0),
     groups: buckets.groups.filter((room) => (room.unreadCount || 0) > 0),
     direct: buckets.direct.filter((room) => (room.unreadCount || 0) > 0),
   };
@@ -188,17 +183,17 @@ const toSections = (
       return buildSections([
         ["direct", unreadBuckets.direct],
         ["groups", unreadBuckets.groups],
-        ["channels", unreadBuckets.channels],
       ]);
+    case "direct":
+      return buildSections([["direct", buckets.direct]]);
     case "channels":
-      return buildSections([["channels", buckets.channels]]);
+      return buildSections([["groups", buckets.groups]]);
     case "groups":
       return buildSections([["groups", buckets.groups]]);
     default:
       return buildSections([
         ["direct", buckets.direct],
         ["groups", buckets.groups],
-        ["channels", buckets.channels],
       ]);
   }
 };
@@ -303,9 +298,9 @@ export const RoomList: React.FC<RoomListProps> = ({
 
   const queriedRooms = useMemo(() => {
     return sortedRooms.filter((conversation) =>
-      includesQuery(conversation, normalizedQuery),
+      includesQuery(conversation, normalizedQuery, currentUser.id),
     );
-  }, [sortedRooms, normalizedQuery]);
+  }, [sortedRooms, normalizedQuery, currentUser.id]);
 
   const sections = useMemo(
     () => toSections(queriedRooms, activeFilter),
@@ -420,9 +415,19 @@ export const RoomList: React.FC<RoomListProps> = ({
   }, [collapsed, flatItems.length]);
 
   useEffect(() => {
+    let cancelled = false;
+
     if (selectedRoomPosition >= 0 && !isKeyboardMode) {
-      setKeyboardCursor(selectedRoomPosition);
+      Promise.resolve().then(() => {
+        if (!cancelled) {
+          setKeyboardCursor(selectedRoomPosition);
+        }
+      });
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [isKeyboardMode, selectedRoomPosition]);
 
   const syncViewportHeight = useCallback(() => {

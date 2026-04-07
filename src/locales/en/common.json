@@ -53,6 +53,7 @@
     "busy": "Busy",
     "invisible": "Invisible",
     "idle": "Idle",
+    "loading": "Loading...",
     "empty": "No matching results",
     "unknown": "Unknown",
     "lastSeen": "Last seen {{time}}",

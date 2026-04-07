@@ -2528,6 +2528,15 @@ export const useFilteredConversations = () => {
             ) === "group",
         );
         break;
+      case "direct":
+        filtered = filtered.filter((conversation) => {
+          const type = normalizeRoomType(
+            conversation.type,
+            conversation.participants?.length,
+          );
+          return type === "direct" || type === "private";
+        });
+        break;
       case "channels":
         filtered = filtered.filter(
           (conversation) =>

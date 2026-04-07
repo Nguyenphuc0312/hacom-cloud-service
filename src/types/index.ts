@@ -165,7 +165,12 @@ export interface ContextMenuItem {
   disabled?: boolean;
 }
 
-export type ConversationFilter = "all" | "unread" | "groups" | "channels";
+export type ConversationFilter =
+  | "all"
+  | "unread"
+  | "groups"
+  | "channels"
+  | "direct";
 
 export type InputMode = "normal" | "reply" | "edit";
 

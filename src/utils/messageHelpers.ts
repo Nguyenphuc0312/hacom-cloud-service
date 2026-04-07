@@ -23,6 +23,27 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
     ? (value as Record<string, unknown>)
     : null;
 
+const asTrimmedString = (value: unknown): string =>
+  typeof value === "string" ? value.trim() : "";
+
+const looksLikeTechnicalIdentifier = (value: string): boolean => {
+  if (!value) return false;
+
+  // Most employee/user codes are compact, no-space identifiers with digits/separators.
+  if (/\s/.test(value)) return false;
+
+  const hasDigit = /\d/.test(value);
+  const hasSeparator = /[_-]/.test(value);
+  const isVeryShort = value.length <= 2;
+
+  return !isVeryShort && (hasDigit || hasSeparator);
+};
+
+interface DisplayNameOptions {
+  conversationTitle?: string;
+  allowTechnicalFallback?: boolean;
+}
+
 export type MessagePreviewState =
   | "queued"
   | "sending"
@@ -208,6 +229,7 @@ export function getMessageStatusIcon(status: MessageStatus): string {
 
 export function getUserDisplayName(
   user: Partial<UserSummary> | null | undefined,
+  options: DisplayNameOptions = {},
 ): string {
   if (!user) {
     return "";
@@ -215,30 +237,69 @@ export function getUserDisplayName(
 
   const userRecord = asRecord(user);
 
-  const firstName =
-    typeof userRecord?.firstName === "string"
-      ? userRecord.firstName.trim()
+  const displayName = asTrimmedString(user.displayName);
+  const fullName =
+    asTrimmedString(userRecord?.fullName) ||
+    asTrimmedString(
+      [
+        asTrimmedString(userRecord?.firstName),
+        asTrimmedString(userRecord?.lastName),
+      ]
+        .filter(Boolean)
+        .join(" "),
+    );
+  const genericName = asTrimmedString(userRecord?.name);
+  const conversationTitle = asTrimmedString(options.conversationTitle);
+
+  const employeeCode =
+    asTrimmedString(userRecord?.employeeCode) ||
+    asTrimmedString(userRecord?.staffCode) ||
+    asTrimmedString(userRecord?.code);
+  const username = asTrimmedString(user.username);
+  const id = asTrimmedString(user.id);
+
+  const preferredDisplayName =
+    displayName && !looksLikeTechnicalIdentifier(displayName)
+      ? displayName
       : "";
-  const lastName =
-    typeof userRecord?.lastName === "string" ? userRecord.lastName.trim() : "";
-  const fullName = `${firstName} ${lastName}`.trim();
+
+  if (preferredDisplayName) {
+    return preferredDisplayName;
+  }
+
   if (fullName) {
     return fullName;
   }
 
-  const displayName =
-    typeof user.displayName === "string" ? user.displayName.trim() : "";
+  if (genericName) {
+    return genericName;
+  }
+
+  if (conversationTitle) {
+    return conversationTitle;
+  }
+
+  if (options.allowTechnicalFallback === false) {
+    return "";
+  }
+
   if (displayName) {
     return displayName;
   }
 
-  const username =
-    typeof user.username === "string" ? user.username.trim() : "";
+  if (employeeCode) {
+    return employeeCode;
+  }
+
   if (username) {
     return username;
   }
 
-  return typeof user.id === "string" ? user.id : "";
+  if (id) {
+    return id;
+  }
+
+  return "";
 }
 
 /**
@@ -248,23 +309,47 @@ export function getConversationDisplayName(
   conversation: Conversation,
   currentUserId: string,
 ): string {
+  const conversationName = asTrimmedString(conversation.name);
+  const conversationDisplayName = asTrimmedString(conversation.displayName);
+  const conversationTitle = conversationName || conversationDisplayName;
+
   if (!isDirectConversation(conversation)) {
-    return (
-      conversation.name?.trim() ||
-      conversation.displayName?.trim() ||
-      i18n.t("common:labels.conversation")
-    );
+    if (conversationTitle) {
+      return conversationTitle;
+    }
+
+    const participantFallback = (conversation.participants || [])
+      .map((participant) =>
+        getUserDisplayName(participant, {
+          allowTechnicalFallback: false,
+        }),
+      )
+      .filter(Boolean)
+      .slice(0, 2)
+      .join(", ");
+
+    return participantFallback || i18n.t("common:labels.group");
   }
 
   const otherParticipant = getOtherParticipant(conversation, currentUserId);
-  const participantDisplayName = getUserDisplayName(otherParticipant);
+  const participantDisplayName = getUserDisplayName(otherParticipant, {
+    conversationTitle,
+    allowTechnicalFallback: false,
+  });
 
-  return (
-    participantDisplayName ||
-    conversation.displayName?.trim() ||
-    conversation.name?.trim() ||
-    i18n.t("common:labels.conversation")
-  );
+  if (participantDisplayName) {
+    return participantDisplayName;
+  }
+
+  if (conversationTitle) {
+    return conversationTitle;
+  }
+
+  const technicalFallbackName = getUserDisplayName(otherParticipant, {
+    allowTechnicalFallback: true,
+  });
+
+  return technicalFallbackName || i18n.t("common:labels.conversation");
 }
 
 /**

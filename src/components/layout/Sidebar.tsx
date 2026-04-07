@@ -71,9 +71,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const tabs: { id: ConversationFilter; label: string }[] = [
     { id: "all", label: t("sidebar:tabs.all") },
-    { id: "unread", label: t("sidebar:tabs.unread") },
+    { id: "direct", label: t("sidebar:tabs.direct") },
     { id: "groups", label: t("sidebar:tabs.groups") },
-    { id: "channels", label: t("sidebar:tabs.channels") },
   ];
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -158,7 +157,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {tabs.map((tab) => {
                 const isActive = activeFilter === tab.id;
-                const showUnreadCount = tab.id === "unread" && unreadTotal > 0;
 
                 return (
                   <button
@@ -174,7 +172,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     aria-pressed={isActive}
                   >
                     {tab.label}
-                    {showUnreadCount && (
+                    {tab.id === "all" && unreadTotal > 0 && (
                       <Badge
                         count={unreadTotal}
                         size="sm"
@@ -239,11 +237,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
               isCollapsed && "justify-center px-0",
             )}
-            aria-label={t("settings.pageTitle")}
+            aria-label={t("settings:pageTitle")}
           >
             <Cog6ToothIcon className="h-5 w-5 shrink-0" />
             {!isCollapsed && (
-              <span className="ml-2">{t("settings.pageTitle")}</span>
+              <span className="ml-2">{t("settings:pageTitle")}</span>
             )}
           </button>
 

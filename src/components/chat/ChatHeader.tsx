@@ -122,7 +122,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     setIsMenuOpen(false);
   }, [conversation.id]);
 
-  const statusText = React.useMemo(() => {
+  const statusText = (() => {
     if (isTyping) return "";
 
     if (normalizedType === "group") {
@@ -146,19 +146,17 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     }
 
     return "";
-  }, [
-    conversation.participants?.length,
-    isOnline,
-    isTyping,
-    livePresence?.lastSeenAt,
-    normalizedType,
-    otherUser,
-    t,
-  ]);
+  })();
 
   const displayName =
     getConversationDisplayName(conversation, currentUserId) ||
     t("common:labels.conversation");
+  const conversationTypeLabel =
+    normalizedType === "group"
+      ? t("sidebar:room.type.group")
+      : normalizedType === "channel"
+        ? t("sidebar:tabs.channels")
+        : t("sidebar:room.type.direct");
   const avatarSrc = getConversationAvatar(conversation, currentUserId);
 
   const menuActions = React.useMemo<HeaderAction[]>(() => {
@@ -250,9 +248,14 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             )}
           >
-            <h2 className="truncate text-body-sm font-semibold text-text-primary sm:text-body">
-              {displayName}
-            </h2>
+            <div className="flex min-w-0 items-center gap-2">
+              <h2 className="truncate text-body-sm font-semibold text-text-primary sm:text-body">
+                {displayName}
+              </h2>
+              <span className="hidden shrink-0 rounded-full border border-border bg-surface-overlay px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-text-muted sm:inline-flex">
+                {conversationTypeLabel}
+              </span>
+            </div>
 
             {isTyping ? (
               <TypingIndicator

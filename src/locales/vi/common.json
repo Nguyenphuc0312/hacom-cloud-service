@@ -53,6 +53,7 @@
     "busy": "Bận",
     "invisible": "Ẩn",
     "idle": "Rảnh",
+    "loading": "Đang tải...",
     "empty": "Không có kết quả phù hợp",
     "unknown": "Không xác định",
     "lastSeen": "Truy cập lần cuối {{time}}",

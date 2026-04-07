@@ -9,6 +9,7 @@ import {
 import { Avatar } from "../../common/Avatar";
 import { IconButtonSurface } from "../../ui";
 import type { UserSummary } from "../../../types";
+import { getUserDisplayName } from "../../../utils/messageHelpers";
 
 interface SidebarHeaderProps {
   currentUser: UserSummary;
@@ -19,15 +20,7 @@ interface SidebarHeaderProps {
 }
 
 const resolveDisplayName = (user: UserSummary, fallback: string): string => {
-  const byDisplayName =
-    typeof user.displayName === "string" ? user.displayName.trim() : "";
-  if (byDisplayName) return byDisplayName;
-
-  const byUsername =
-    typeof user.username === "string" ? user.username.trim() : "";
-  if (byUsername) return byUsername;
-
-  return fallback;
+  return getUserDisplayName(user, { allowTechnicalFallback: true }) || fallback;
 };
 
 const resolveStatusLabel = (
