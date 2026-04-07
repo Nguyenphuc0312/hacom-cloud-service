@@ -10,6 +10,7 @@ import {
   UserPlusIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../components/common/Avatar";
+import { FriendQrWorkspace } from "../components/friends";
 import { UserProfile } from "../components/info/UserProfile";
 import { Button, Input, Spinner, toast } from "../components/ui";
 import { useAuthStore, usePresenceStore } from "../stores";
@@ -21,7 +22,7 @@ import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import { ROUTE_PATHS } from "../router/paths";
 import { UserStatus } from "../types";
 
-type TabKey = "friends" | "requests" | "discover" | "blocked";
+type TabKey = "friends" | "requests" | "discover" | "blocked" | "qr";
 type RequestTabKey = "incoming" | "sent";
 
 interface ContactUser {
@@ -247,8 +248,13 @@ export const FriendsPage: React.FC = () => {
   } = useFriendship();
 
   const initialQuery = searchParams.get("q") || "";
+  const initialQrCode = searchParams.get("code") || "";
   const [activeTab, setActiveTab] = useState<TabKey>(
-    initialQuery.trim().length >= 2 ? "discover" : "friends",
+    initialQrCode.trim().length > 0
+      ? "qr"
+      : initialQuery.trim().length >= 2
+        ? "discover"
+        : "friends",
   );
   const [requestTab, setRequestTab] = useState<RequestTabKey>("incoming");
   const [query, setQuery] = useState(initialQuery);
@@ -284,7 +290,13 @@ export const FriendsPage: React.FC = () => {
 
   useEffect(() => {
     const nextQuery = searchParams.get("q") || "";
+    const nextQrCode = searchParams.get("code") || "";
     setQuery((current) => (current === nextQuery ? current : nextQuery));
+    if (nextQrCode.trim().length > 0) {
+      setActiveTab("qr");
+      return;
+    }
+
     if (nextQuery.trim().length >= 2) {
       setActiveTab("discover");
     }
@@ -537,6 +549,10 @@ export const FriendsPage: React.FC = () => {
       id: "blocked" as const,
       label: t("friends:tabs.blocked", { defaultValue: "Blocked" }),
       count: blockedUsers.length,
+    },
+    {
+      id: "qr" as const,
+      label: t("friends:tabs.qr", { defaultValue: "QR ket ban" }),
     },
   ];
 
@@ -807,6 +823,8 @@ export const FriendsPage: React.FC = () => {
     );
   };
 
+  const renderQrTab = () => <FriendQrWorkspace />;
+
   return (
     <div className="flex h-full min-h-0 bg-background">
       <section className="flex min-w-0 flex-1 flex-col border-r border-border/70 bg-background">
@@ -871,6 +889,7 @@ export const FriendsPage: React.FC = () => {
           {activeTab === "requests" && renderRequestsTab()}
           {activeTab === "discover" && renderDiscoverTab()}
           {activeTab === "blocked" && renderBlockedTab()}
+          {activeTab === "qr" && renderQrTab()}
         </main>
       </section>
 

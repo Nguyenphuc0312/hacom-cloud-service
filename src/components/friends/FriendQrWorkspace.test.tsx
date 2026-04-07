@@ -1,0 +1,316 @@
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { FriendshipCapabilitiesDto } from "@hacom/chat-shared-types";
+import { FriendQrWorkspace } from "./FriendQrWorkspace";
+import { invalidQrCodeMessage } from "../../features/friend-qr/shareCode";
+
+const qrcodeToDataUrlMock = vi.fn(async (value: string, options?: unknown) => {
+  void value;
+  void options;
+  return "data:image/png;base64,mock";
+});
+
+vi.mock("qrcode", () => ({
+  default: {
+    toDataURL: (value: string, options?: unknown) =>
+      qrcodeToDataUrlMock(value, options),
+  },
+}));
+
+const authState = {
+  user: {
+    id: "me-1",
+    username: "me_user",
+    firstName: "Me",
+    lastName: "User",
+    avatar: "https://cdn.example.com/me.png",
+    bio: "My bio",
+  },
+};
+
+vi.mock("../../stores", () => ({
+  useAuthStore: (selector: (state: typeof authState) => unknown) =>
+    selector(authState),
+}));
+
+const applyRelationMock = vi.fn();
+
+vi.mock("../../stores/friendshipStore", () => ({
+  useFriendshipStore: {
+    getState: () => ({
+      applyRelation: applyRelationMock,
+    }),
+  },
+}));
+
+type RelationshipState =
+  | { kind: "self"; capabilities: FriendshipCapabilitiesDto }
+  | { kind: "not_friend"; capabilities: FriendshipCapabilitiesDto }
+  | {
+      kind: "outgoing_request";
+      requestId: string;
+      capabilities: FriendshipCapabilitiesDto;
+    }
+  | {
+      kind: "incoming_request";
+      requestId: string;
+      capabilities: FriendshipCapabilitiesDto;
+    }
+  | {
+      kind: "friend";
+      friendshipId: string;
+      capabilities: FriendshipCapabilitiesDto;
+    }
+  | {
+      kind: "blocked";
+      friendshipId: string;
+      capabilities: FriendshipCapabilitiesDto;
+    };
+
+const baseCapabilities = (
+  overrides?: Partial<FriendshipCapabilitiesDto>,
+): FriendshipCapabilitiesDto => ({
+  canSendRequest: false,
+  canAccept: false,
+  canDecline: false,
+  canCancel: false,
+  canUnfriend: false,
+  canBlock: false,
+  canUnblock: false,
+  canMessage: false,
+  ...overrides,
+});
+
+const relationshipByUserId = new Map<string, RelationshipState>();
+
+const sendFriendRequestMock = vi.fn(async () => true);
+const acceptFriendRequestMock = vi.fn(async () => true);
+const rejectFriendRequestMock = vi.fn(async () => true);
+const cancelFriendRequestMock = vi.fn(async () => true);
+const blockUserMock = vi.fn(async () => true);
+const unblockUserMock = vi.fn(async () => true);
+
+vi.mock("../../hooks/useFriendship", () => ({
+  useFriendship: () => ({
+    getRelationshipState: (userId: string) =>
+      relationshipByUserId.get(userId) || {
+        kind: "not_friend",
+        capabilities: baseCapabilities({
+          canSendRequest: true,
+          canBlock: true,
+        }),
+      },
+    sendFriendRequest: sendFriendRequestMock,
+    acceptFriendRequest: acceptFriendRequestMock,
+    rejectFriendRequest: rejectFriendRequestMock,
+    cancelFriendRequest: cancelFriendRequestMock,
+    blockUser: blockUserMock,
+    unblockUser: unblockUserMock,
+  }),
+}));
+
+const getMyFriendQrMock = vi.fn();
+const resetMyFriendQrMock = vi.fn();
+const resolveCodeMock = vi.fn();
+const getUserByIdMock = vi.fn();
+const createPrivateConversationMock = vi.fn();
+
+vi.mock("../../services/api", () => ({
+  friendQrApi: {
+    getMyFriendQr: (...args: unknown[]) => getMyFriendQrMock(...args),
+    resetMyFriendQr: (...args: unknown[]) => resetMyFriendQrMock(...args),
+    resolveCode: (...args: unknown[]) => resolveCodeMock(...args),
+  },
+  userApi: {
+    getUserById: (...args: unknown[]) => getUserByIdMock(...args),
+  },
+  conversationApi: {
+    createPrivateConversation: (...args: unknown[]) =>
+      createPrivateConversationMock(...args),
+  },
+}));
+
+const makeSuccess = <T,>(data: T) => ({
+  success: true as const,
+  statusCode: 200,
+  message: "OK",
+  data,
+});
+
+const renderWorkspace = () => {
+  return render(
+    <MemoryRouter>
+      <FriendQrWorkspace />
+    </MemoryRouter>,
+  );
+};
+
+describe("FriendQrWorkspace", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    relationshipByUserId.clear();
+
+    getMyFriendQrMock.mockResolvedValue(
+      makeSuccess({
+        shareCode: "share-code-1234567890",
+        deepLink: "hacom://friend/profile?code=share-code-1234567890",
+        updatedAt: "2026-04-07T08:00:00.000Z",
+      }),
+    );
+
+    resetMyFriendQrMock.mockResolvedValue(
+      makeSuccess({
+        shareCode: "share-code-reset-123456",
+        deepLink: "hacom://friend/profile?code=share-code-reset-123456",
+        updatedAt: "2026-04-07T09:00:00.000Z",
+      }),
+    );
+
+    resolveCodeMock.mockResolvedValue(
+      makeSuccess({
+        profile: {
+          id: "u-1",
+          username: "friend_1",
+          displayName: "Friend One",
+          avatarUrl: "https://cdn.example.com/friend.png",
+        },
+        relationship: {
+          context: "other",
+          friendship: null,
+        },
+        capabilities: baseCapabilities({ canSendRequest: true }),
+        source: "qr",
+      }),
+    );
+
+    getUserByIdMock.mockResolvedValue(
+      makeSuccess({
+        id: "u-1",
+        username: "friend_1",
+        bio: "Bio from user service",
+      }),
+    );
+
+    createPrivateConversationMock.mockResolvedValue(makeSuccess({ id: "c-1" }));
+  });
+
+  it("render QR cua toi", async () => {
+    renderWorkspace();
+
+    expect(
+      await screen.findByText("share-code-1234567890"),
+    ).toBeInTheDocument();
+    expect(await screen.findByAltText("Friend QR")).toBeInTheDocument();
+    expect(qrcodeToDataUrlMock).toHaveBeenCalled();
+  });
+
+  it("reset QR thanh cong", async () => {
+    renderWorkspace();
+
+    await screen.findByText("share-code-1234567890");
+    await userEvent.click(screen.getByRole("button", { name: "Reset QR" }));
+    await userEvent.click(screen.getByRole("button", { name: "Reset ngay" }));
+
+    expect(
+      await screen.findByText("share-code-reset-123456"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/QR cu khong con su dung duoc/i),
+    ).toBeInTheDocument();
+  });
+
+  it("resolve code thanh cong mo mini profile", async () => {
+    relationshipByUserId.set("u-1", {
+      kind: "not_friend",
+      capabilities: baseCapabilities({ canSendRequest: true, canBlock: true }),
+    });
+
+    renderWorkspace();
+
+    await userEvent.type(
+      screen.getByPlaceholderText("Nhap share code hoac deep link"),
+      "share-code-1234567890",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Resolve" }));
+
+    expect(await screen.findByText("Mini profile")).toBeInTheDocument();
+    expect(screen.getByText("Friend One")).toBeInTheDocument();
+  });
+
+  it("self QR hien self state", async () => {
+    resolveCodeMock.mockResolvedValueOnce(
+      makeSuccess({
+        profile: {
+          id: "me-1",
+          username: "me_user",
+          displayName: "Me User",
+          avatarUrl: "https://cdn.example.com/me.png",
+        },
+        relationship: {
+          context: "self",
+          friendship: null,
+        },
+        capabilities: baseCapabilities(),
+        source: "qr",
+      }),
+    );
+
+    relationshipByUserId.set("me-1", {
+      kind: "self",
+      capabilities: baseCapabilities(),
+    });
+
+    renderWorkspace();
+
+    await userEvent.type(
+      screen.getByPlaceholderText("Nhap share code hoac deep link"),
+      "self-code-1234567890",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Resolve" }));
+
+    expect(await screen.findByText("Day la ho so cua ban")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Add Friend" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("add friend tu mini profile", async () => {
+    relationshipByUserId.set("u-1", {
+      kind: "not_friend",
+      capabilities: baseCapabilities({ canSendRequest: true }),
+    });
+
+    renderWorkspace();
+
+    await userEvent.type(
+      screen.getByPlaceholderText("Nhap share code hoac deep link"),
+      "share-code-1234567890",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Resolve" }));
+    await screen.findByText("Mini profile");
+
+    await userEvent.click(screen.getByRole("button", { name: "Add Friend" }));
+
+    await waitFor(() => {
+      expect(sendFriendRequestMock).toHaveBeenCalledWith("u-1");
+    });
+  });
+
+  it("code invalid hien error state", async () => {
+    resolveCodeMock.mockRejectedValueOnce(
+      new Error("Friend QR code is invalid or expired"),
+    );
+
+    renderWorkspace();
+
+    await userEvent.type(
+      screen.getByPlaceholderText("Nhap share code hoac deep link"),
+      "invalid-code",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Resolve" }));
+
+    expect(await screen.findByText(invalidQrCodeMessage)).toBeInTheDocument();
+  });
+});

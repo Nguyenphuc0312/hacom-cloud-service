@@ -9,6 +9,7 @@ import type {
   ApiResponse,
   CompleteUploadResponse,
   CreateMessageResponse,
+  FriendshipCapabilitiesDto,
   FriendshipPendingCountDto,
   FriendshipStatusResponseDto,
   FriendshipWriteResponseDto,
@@ -1056,6 +1057,56 @@ export const contactApi = {
   },
 };
 
+export interface FriendQrPayloadDto {
+  shareCode: string;
+  deepLink: string;
+  updatedAt: string;
+}
+
+export interface FriendDiscoveryProfileDto {
+  id: string;
+  username: string | null;
+  displayName: string;
+  avatarUrl: string | null;
+  bio?: string | null;
+}
+
+export interface FriendDiscoveryRelationshipDto {
+  context: "self" | "other";
+  friendship: FriendshipRelationDto | null;
+}
+
+export interface FriendDiscoveryResolvedDto {
+  profile: FriendDiscoveryProfileDto;
+  relationship: FriendDiscoveryRelationshipDto;
+  capabilities: FriendshipCapabilitiesDto;
+  source: "qr";
+}
+
+export const friendQrApi = {
+  getMyFriendQr: async () => {
+    const response =
+      await apiClient.get<ApiResponse<FriendQrPayloadDto>>("/me/friend-qr");
+    return response.data;
+  },
+
+  resetMyFriendQr: async () => {
+    const response = await apiClient.post<ApiResponse<FriendQrPayloadDto>>(
+      "/me/friend-qr/reset",
+    );
+    return response.data;
+  },
+
+  resolveCode: async (shareCode: string) => {
+    const response = await apiClient.post<
+      ApiResponse<FriendDiscoveryResolvedDto>
+    >("/friend-discovery/resolve-code", {
+      shareCode,
+    });
+    return response.data;
+  },
+};
+
 // ============================================
 // FRIENDSHIP API
 // ============================================
@@ -1202,5 +1253,6 @@ export default {
   file: fileApi,
   contact: contactApi,
   friendship: friendshipApi,
+  friendQr: friendQrApi,
   group: groupApi,
 };
