@@ -6,7 +6,8 @@ import type {
 } from "../types";
 
 interface GroupEventHandlers {
-  onGroupInviteNew?: RealtimeEventHandler;
+  onGroupInviteUser?: RealtimeEventHandler;
+  onGroupInviteLinkCreated?: RealtimeEventHandler;
   onGroupInviteUpdated?: RealtimeEventHandler;
   onGroupMemberJoined?: RealtimeEventHandler;
   onGroupMemberLeft?: RealtimeEventHandler;
@@ -43,7 +44,11 @@ export const registerGroupEvents = (
     }
   };
 
-  register(WebSocketEvents.GROUP_INVITE_NEW, handlers.onGroupInviteNew);
+  register(WebSocketEvents.GROUP_INVITE_USER, handlers.onGroupInviteUser);
+  register(
+    WebSocketEvents.GROUP_INVITE_LINK_CREATED,
+    handlers.onGroupInviteLinkCreated,
+  );
   register(WebSocketEvents.GROUP_INVITE_UPDATED, handlers.onGroupInviteUpdated);
   register(WebSocketEvents.GROUP_MEMBER_JOINED, handlers.onGroupMemberJoined);
   register(WebSocketEvents.GROUP_MEMBER_LEFT, handlers.onGroupMemberLeft);

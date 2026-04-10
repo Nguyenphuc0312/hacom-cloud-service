@@ -6,7 +6,8 @@ import type {
 } from "../types";
 
 interface SyncEventHandlers {
-  onSyncComplete?: RealtimeEventHandler;
+  onConversationResynced?: RealtimeEventHandler;
+  onResyncRequired?: RealtimeEventHandler;
   onUserSettingsUpdated?: RealtimeEventHandler;
 }
 
@@ -33,7 +34,11 @@ export const registerSyncEvents = (
     }
   };
 
-  register(WebSocketEvents.SYNC_COMPLETE, handlers.onSyncComplete);
+  register(
+    WebSocketEvents.CONVERSATION_RESYNCED,
+    handlers.onConversationResynced,
+  );
+  register(WebSocketEvents.RESYNC_REQUIRED, handlers.onResyncRequired);
   register(
     WebSocketEvents.USER_SETTINGS_UPDATED,
     handlers.onUserSettingsUpdated,

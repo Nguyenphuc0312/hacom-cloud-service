@@ -23,6 +23,7 @@ import type { Conversation, UserSummary } from "../../types";
 import { RoomMemberRole, UserStatus } from "../../types";
 import { useDebounce } from "../../hooks";
 import { useChatStore, useGroupStore } from "../../stores";
+import type { InviteLinkItem, JoinRequestItem } from "../../stores/groupStore";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import { getConversationMembersUseCase } from "../../features/chat/usecases/getConversationMembers";
 import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
@@ -35,6 +36,7 @@ import { leaveConversationUseCase } from "../../features/chat/usecases/leaveConv
 import { createGroupInviteLinkUseCase } from "../../features/chat/usecases/createGroupInviteLink";
 import { revokeGroupInviteLinkUseCase } from "../../features/chat/usecases/revokeGroupInviteLink";
 import { resolveGroupJoinRequestUseCase } from "../../features/chat/usecases/resolveGroupJoinRequest";
+import { groupApi } from "../../services/api";
 import { getUserDisplayName } from "../../utils/messageHelpers";
 
 interface GroupInfoProps {
@@ -228,9 +230,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     (state) => state.joinRequestsByRoom[conversation.id] || [],
   );
   const upsertInviteLink = useGroupStore((state) => state.upsertInviteLink);
+  const setInviteLinks = useGroupStore((state) => state.setInviteLinks);
   const markInviteLinkRevoked = useGroupStore(
     (state) => state.markInviteLinkRevoked,
   );
+  const setJoinRequests = useGroupStore((state) => state.setJoinRequests);
   const markJoinRequestResolved = useGroupStore(
     (state) => state.markJoinRequestResolved,
   );
@@ -366,6 +370,119 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   React.useEffect(() => {
     void fetchMembers();
   }, [fetchMembers]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    if (!isAdmin) {
+      setInviteLinks(conversation.id, []);
+      setJoinRequests(conversation.id, []);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const hydrateRealtimeState = async () => {
+      try {
+        const [inviteLinksResponse, joinRequestsResponse] = await Promise.all([
+          groupApi.getInviteLinks(conversation.id),
+          groupApi.getJoinRequests(conversation.id),
+        ]);
+
+        if (cancelled) return;
+
+        const inviteLinksPayload = unwrapApiSuccess(inviteLinksResponse);
+        const joinRequestsPayload = unwrapApiSuccess(joinRequestsResponse);
+
+        const normalizedInviteLinks: InviteLinkItem[] = Array.isArray(
+          inviteLinksPayload,
+        )
+          ? inviteLinksPayload.reduce<InviteLinkItem[]>((items, item) => {
+              if (!isRecord(item) || typeof item.id !== "string") {
+                return items;
+              }
+
+              items.push({
+                id: item.id,
+                roomId:
+                  asString(item.roomId) ??
+                  asString(item.conversationId) ??
+                  conversation.id,
+                name: asString(item.name),
+                inviteUrl: asString(item.inviteUrl),
+                token: asString(item.token),
+                tokenPreview: asString(item.tokenPreview),
+                usageCount:
+                  typeof item.usageCount === "number" ? item.usageCount : 0,
+                usageLimit:
+                  typeof item.usageLimit === "number"
+                    ? item.usageLimit
+                    : null,
+                expireAt: asString(item.expireAt) ?? null,
+                revokedAt: asString(item.revokedAt) ?? null,
+                createdAt:
+                  asString(item.createdAt) ?? new Date().toISOString(),
+              });
+
+              return items;
+            }, [])
+          : [];
+
+        const normalizedJoinRequests: JoinRequestItem[] = Array.isArray(
+          joinRequestsPayload,
+        )
+          ? joinRequestsPayload.reduce<JoinRequestItem[]>((items, item) => {
+              if (!isRecord(item) || typeof item.id !== "string") {
+                return items;
+              }
+
+              const status = asString(item.status);
+              if (
+                status !== "pending" &&
+                status !== "approved" &&
+                status !== "rejected"
+              ) {
+                return items;
+              }
+
+              items.push({
+                id: item.id,
+                roomId:
+                  asString(item.roomId) ??
+                  asString(item.conversationId) ??
+                  conversation.id,
+                userId: asString(item.userId) ?? "",
+                status,
+                note: asString(item.note),
+                createdAt:
+                  asString(item.requestedAt) ??
+                  asString(item.createdAt) ??
+                  new Date().toISOString(),
+                resolvedAt: asString(item.resolvedAt),
+              });
+
+              return items;
+            }, [])
+          : [];
+
+        setInviteLinks(conversation.id, normalizedInviteLinks);
+        setJoinRequests(conversation.id, normalizedJoinRequests);
+      } catch {
+        // no-op: keep local state if bootstrap snapshot is temporarily unavailable
+      }
+    };
+
+    void hydrateRealtimeState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    conversation.id,
+    isAdmin,
+    setInviteLinks,
+    setJoinRequests,
+  ]);
 
   const searchUsers = useCallback(
     async (query: string) => {

@@ -280,9 +280,20 @@ export const userApi = {
 // ============================================
 
 export const conversationApi = {
-  getConversations: async (page = 1, limit = 50) => {
+  getConversations: async (
+    page = 1,
+    limit = 50,
+    options?: { updatedAfter?: string },
+  ) => {
+    const query = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    if (options?.updatedAfter) {
+      query.set("updatedAfter", options.updatedAfter);
+    }
     const response = await apiClient.get<ApiResponse<unknown>>(
-      `/conversations?page=${page}&limit=${limit}`,
+      `/conversations?${query.toString()}`,
     );
 
     if (!response.data.success) {
@@ -293,6 +304,33 @@ export const conversationApi = {
       ...response.data,
       data: normalizeConversationsPayload(response.data.data),
     };
+  },
+
+  getUnreadSummary: async () => {
+    const response = await apiClient.get<
+      ApiResponse<{
+        totalUnreadCount: number;
+        conversations: Array<{
+          conversationId: string;
+          unreadCount: number;
+          lastReadMessageId: string | null;
+          lastReadAt: string | null;
+        }>;
+      }>
+    >("/conversations/unread-summary");
+    return response.data;
+  },
+
+  getGroupInviteInbox: async (
+    status?: "pending" | "accepted" | "declined",
+  ) => {
+    const query = status
+      ? `?status=${encodeURIComponent(status)}`
+      : "";
+    const response = await apiClient.get<ApiResponse<unknown[]>>(
+      `/conversations/group-invites${query}`,
+    );
+    return response.data;
   },
 
   getConversationById: async (conversationId: string) => {
@@ -591,6 +629,13 @@ export const groupApi = {
     return response.data;
   },
 
+  getInviteLinks: async (groupId: string) => {
+    const response = await apiClient.get<ApiResponse<unknown[]>>(
+      `/groups/${groupId}/invite-links`,
+    );
+    return response.data;
+  },
+
   revokeInviteLink: async (groupId: string, linkId: string) => {
     await apiClient.delete(`/groups/${groupId}/invite-links/${linkId}`);
   },
@@ -607,6 +652,19 @@ export const groupApi = {
     const response = await apiClient.post<ApiResponse<unknown>>(
       `/groups/${groupId}/join-requests`,
       { note },
+    );
+    return response.data;
+  },
+
+  getJoinRequests: async (
+    groupId: string,
+    status?: "pending" | "approved" | "rejected" | "canceled",
+  ) => {
+    const query = status
+      ? `?status=${encodeURIComponent(status)}`
+      : "";
+    const response = await apiClient.get<ApiResponse<unknown[]>>(
+      `/groups/${groupId}/join-requests${query}`,
     );
     return response.data;
   },

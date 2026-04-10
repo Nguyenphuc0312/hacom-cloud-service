@@ -1660,9 +1660,6 @@ export const useChatStore = create<ChatState>()(
             sendState: mergedMessage.sendState,
           });
 
-          const currentUserId = useAuthStore.getState().user?.id;
-          const isOwnMessage =
-            !!currentUserId && mergedMessage.senderId === currentUserId;
           const isOpenConversation =
             state.selectedConversationId === conversationId;
 
@@ -1672,9 +1669,7 @@ export const useChatStore = create<ChatState>()(
 
               const unreadCount = isOpenConversation
                 ? 0
-                : inserted && !isOwnMessage
-                  ? (conversation.unreadCount || 0) + 1
-                  : conversation.unreadCount;
+                : conversation.unreadCount;
 
               const lastMessage = messages[messages.length - 1];
               if (!lastMessage) return { ...conversation, unreadCount };

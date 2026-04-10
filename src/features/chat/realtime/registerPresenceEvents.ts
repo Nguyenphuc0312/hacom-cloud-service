@@ -36,7 +36,7 @@ export const registerPresenceEvents = (
 
   register(WebSocketEvents.TYPING_START, handlers.onTypingStart);
   register(WebSocketEvents.TYPING_STOP, handlers.onTypingStop);
-  register("presence.changed", handlers.onPresenceChanged);
+  register(WebSocketEvents.PRESENCE_UPDATE, handlers.onPresenceChanged);
 
   return () => {
     cleanups.forEach((cleanup) => cleanup());
