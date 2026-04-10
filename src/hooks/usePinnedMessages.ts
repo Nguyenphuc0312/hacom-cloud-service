@@ -31,8 +31,7 @@ export const usePinnedMessages = (
     try {
       const response = await messageApi.getPinnedMessages(conversationId);
       if (response.success) {
-        const data = response.data as { messages: Message[] };
-        setPinnedMessages(data.messages ?? []);
+        setPinnedMessages(response.data.messages ?? []);
       }
     } catch (err) {
       const apiErr = extractApiError(err);

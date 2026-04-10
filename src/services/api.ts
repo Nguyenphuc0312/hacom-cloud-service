@@ -96,6 +96,41 @@ const withLegacyConversationFallback = async <T>(
   }
 };
 
+const normalizeUnreadCountPayload = (
+  payload: unknown,
+): { unreadCount: number } => {
+  if (payload && typeof payload === "object") {
+    const unread = (payload as { unreadCount?: unknown }).unreadCount;
+    if (typeof unread === "number" && Number.isFinite(unread)) {
+      return { unreadCount: unread };
+    }
+
+    const legacyCount = (payload as { count?: unknown }).count;
+    if (typeof legacyCount === "number" && Number.isFinite(legacyCount)) {
+      return { unreadCount: legacyCount };
+    }
+  }
+
+  return { unreadCount: 0 };
+};
+
+const normalizePinnedMessagesPayload = (
+  payload: unknown,
+): { messages: Message[] } => {
+  if (Array.isArray(payload)) {
+    return { messages: payload as Message[] };
+  }
+
+  if (payload && typeof payload === "object") {
+    const messages = (payload as { messages?: unknown }).messages;
+    if (Array.isArray(messages)) {
+      return { messages: messages as Message[] };
+    }
+  }
+
+  return { messages: [] };
+};
+
 // ============================================
 // AUTH API
 // ============================================
@@ -321,12 +356,8 @@ export const conversationApi = {
     return response.data;
   },
 
-  getGroupInviteInbox: async (
-    status?: "pending" | "accepted" | "declined",
-  ) => {
-    const query = status
-      ? `?status=${encodeURIComponent(status)}`
-      : "";
+  getGroupInviteInbox: async (status?: "pending" | "accepted" | "declined") => {
+    const query = status ? `?status=${encodeURIComponent(status)}` : "";
     const response = await apiClient.get<ApiResponse<unknown[]>>(
       `/conversations/group-invites${query}`,
     );
@@ -573,15 +604,19 @@ export const conversationApi = {
   getUnreadCount: async (conversationId: string) => {
     const response = await withLegacyConversationFallback(
       () =>
-        apiClient.get<ApiResponse<{ unreadCount: number }>>(
+        apiClient.get<ApiResponse<unknown>>(
           `${canonicalConversationMessagesPath(conversationId)}/unread`,
         ),
       () =>
-        apiClient.get<ApiResponse<{ unreadCount: number }>>(
+        apiClient.get<ApiResponse<unknown>>(
           `${legacyConversationMessagesPath(conversationId)}/unread`,
         ),
     );
-    return response.data;
+
+    return {
+      ...response.data,
+      data: normalizeUnreadCountPayload(response.data.data),
+    };
   },
 };
 
@@ -660,9 +695,7 @@ export const groupApi = {
     groupId: string,
     status?: "pending" | "approved" | "rejected" | "canceled",
   ) => {
-    const query = status
-      ? `?status=${encodeURIComponent(status)}`
-      : "";
+    const query = status ? `?status=${encodeURIComponent(status)}` : "";
     const response = await apiClient.get<ApiResponse<unknown[]>>(
       `/groups/${groupId}/join-requests${query}`,
     );
@@ -971,15 +1004,19 @@ export const messageApi = {
   getPinnedMessages: async (conversationId: string) => {
     const response = await withLegacyConversationFallback(
       () =>
-        apiClient.get<ApiResponse<{ messages: Message[] }>>(
+        apiClient.get<ApiResponse<unknown>>(
           `${canonicalConversationMessagesPath(conversationId)}/pinned`,
         ),
       () =>
-        apiClient.get<ApiResponse<{ messages: Message[] }>>(
+        apiClient.get<ApiResponse<unknown>>(
           `${legacyConversationMessagesPath(conversationId)}/pinned`,
         ),
     );
-    return response.data;
+
+    return {
+      ...response.data,
+      data: normalizePinnedMessagesPayload(response.data.data),
+    };
   },
 };
 

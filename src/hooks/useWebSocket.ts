@@ -139,11 +139,57 @@ type MessageCursor = {
   id: string;
 };
 
+export type PendingRoomSyncStrategy = "skip" | "initial-sync" | "reconnect";
+
+type DrainedPendingRoomSync = {
+  roomId: string;
+  strategy: PendingRoomSyncStrategy;
+};
+
+export const drainPendingRoomSync = (
+  pendingMap: Map<string, PendingRoomSyncStrategy>,
+  joinedRooms: Set<string>,
+  targetRoomIds: string[],
+): DrainedPendingRoomSync[] => {
+  const roomIdsToDrain =
+    targetRoomIds.length > 0
+      ? targetRoomIds.filter((roomId) => joinedRooms.has(roomId))
+      : Array.from(pendingMap.keys());
+
+  const drained: DrainedPendingRoomSync[] = [];
+  roomIdsToDrain.forEach((roomId) => {
+    const strategy = pendingMap.get(roomId) ?? "initial-sync";
+    pendingMap.delete(roomId);
+    drained.push({ roomId, strategy });
+  });
+
+  return drained;
+};
+
+export const drainPendingRoomSyncForResyncRequired = (
+  pendingMap: Map<string, PendingRoomSyncStrategy>,
+  joinedRooms: Set<string>,
+): DrainedPendingRoomSync[] => {
+  return Array.from(joinedRooms).map((roomId) => {
+    const pending = pendingMap.get(roomId);
+    pendingMap.delete(roomId);
+
+    return {
+      roomId,
+      strategy:
+        pending === "initial-sync" || pending === "reconnect"
+          ? pending
+          : "reconnect",
+    };
+  });
+};
+
 const REMOTE_TYPING_DECAY_INTERVAL_MS = 320;
 const REMOTE_TYPING_HALF_LIFE_MS = 1400;
 const REMOTE_TYPING_VISIBLE_THRESHOLD = 0.12;
 const ROOM_JOIN_ACK_TIMEOUT_MS = 2_000;
 const ROOM_JOIN_RETRY_DELAY_MAX_MS = 8_000;
+const ROOM_SYNC_FALLBACK_TIMEOUT_MS = 2_500;
 
 const computeTypingConfidence = (lastEventAt: number, now: number): number =>
   Math.exp(-(now - lastEventAt) / REMOTE_TYPING_HALF_LIFE_MS);
@@ -181,10 +227,13 @@ export const useWebSocket = (
 
   const joinedRoomsRef = useRef<Set<string>>(new Set());
   const subscribedRoomsRef = useRef<Set<string>>(new Set());
-  const pendingRoomSyncRef = useRef<
-    Map<string, "skip" | "initial-sync" | "reconnect">
-  >(new Map());
+  const pendingRoomSyncRef = useRef<Map<string, PendingRoomSyncStrategy>>(
+    new Map(),
+  );
   const roomJoinRetryTimersRef = useRef<
+    Map<string, ReturnType<typeof setTimeout>>
+  >(new Map());
+  const roomSyncFallbackTimersRef = useRef<
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
   const roomJoinRetryAttemptsRef = useRef<Map<string, number>>(new Map());
@@ -255,6 +304,19 @@ export const useWebSocket = (
     roomJoinRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
     roomJoinRetryTimersRef.current.clear();
     roomJoinRetryAttemptsRef.current.clear();
+  }, []);
+
+  const clearRoomSyncFallback = useCallback((roomId: string) => {
+    const timer = roomSyncFallbackTimersRef.current.get(roomId);
+    if (timer) {
+      clearTimeout(timer);
+      roomSyncFallbackTimersRef.current.delete(roomId);
+    }
+  }, []);
+
+  const clearAllRoomSyncFallbacks = useCallback(() => {
+    roomSyncFallbackTimersRef.current.forEach((timer) => clearTimeout(timer));
+    roomSyncFallbackTimersRef.current.clear();
   }, []);
 
   const scheduleRemoteTypingDecay = useCallback(
@@ -574,6 +636,27 @@ export const useWebSocket = (
     [fetchConversations, updateConversation],
   );
 
+  const reconcileConversationAuthoritative = useCallback(
+    (
+      roomId: string,
+      reason: "skip" | "initial-sync" | "reconnect" | "room-refresh",
+    ): Promise<void> => {
+      if (reason === "skip") {
+        return refreshConversationSnapshot(roomId).catch(() => {
+          // no-op: best effort authoritative refresh
+        });
+      }
+
+      return Promise.allSettled([
+        scheduleRoomResync(roomId, { reason }),
+        refreshConversationSnapshot(roomId),
+      ]).then(() => {
+        // no-op: best effort authoritative reconcile
+      });
+    },
+    [refreshConversationSnapshot, scheduleRoomResync],
+  );
+
   const requestRoomJoin = useCallback(
     (
       roomId: string,
@@ -668,6 +751,7 @@ export const useWebSocket = (
       }
 
       joinedRoomsRef.current.forEach((roomId) => {
+        clearRoomSyncFallback(roomId);
         subscribedRoomsRef.current.delete(roomId);
         roomJoinRetryAttemptsRef.current.set(roomId, 0);
         pendingRoomSyncRef.current.set(
@@ -702,6 +786,7 @@ export const useWebSocket = (
         shouldResyncOnConnectRef.current = true;
       }
       subscribedRoomsRef.current.clear();
+      clearAllRoomSyncFallbacks();
       clearAllRoomJoinRetries();
       if (code === 4401) {
         void recoverSocketAuth("ws_close_4401", "close_4401");
@@ -874,6 +959,33 @@ export const useWebSocket = (
         connectionState: getSocket()?.getConnectionState() ?? "unknown",
         pendingSyncStrategy: pendingRoomSyncRef.current.get(roomId) ?? null,
       });
+
+      const syncStrategy = pendingRoomSyncRef.current.get(roomId);
+      if (!syncStrategy) {
+        return;
+      }
+
+      clearRoomSyncFallback(roomId);
+      const fallbackTimer = setTimeout(() => {
+        roomSyncFallbackTimersRef.current.delete(roomId);
+
+        const stillPending = pendingRoomSyncRef.current.get(roomId);
+        if (!stillPending) {
+          return;
+        }
+
+        pendingRoomSyncRef.current.delete(roomId);
+        logMessageDebug("useWebSocket", "room_sync_fallback_applied", {
+          roomId,
+          strategy: stillPending,
+        });
+
+        const fallbackReason =
+          stillPending === "skip" ? "room-refresh" : stillPending;
+        void reconcileConversationAuthoritative(roomId, fallbackReason);
+      }, ROOM_SYNC_FALLBACK_TIMEOUT_MS);
+
+      roomSyncFallbackTimersRef.current.set(roomId, fallbackTimer);
     };
 
     const handleRoomLeft = (data: unknown) => {
@@ -885,6 +997,7 @@ export const useWebSocket = (
       subscribedRoomsRef.current.delete(roomId);
       roomJoinRetryAttemptsRef.current.delete(roomId);
       clearRoomJoinRetry(roomId);
+      clearRoomSyncFallback(roomId);
 
       logMessageDebug("useWebSocket", "room_left_acknowledged", {
         roomId,
@@ -1287,24 +1400,21 @@ export const useWebSocket = (
       logMessageDebug("useWebSocket", "conversation_resynced_received", {
         targetRoomIds,
       });
-      const roomIdsToResync =
-        targetRoomIds.length > 0
-          ? targetRoomIds.filter((roomId) => joinedRoomsRef.current.has(roomId))
-          : Array.from(pendingRoomSyncRef.current.keys());
+      const drainedRooms = drainPendingRoomSync(
+        pendingRoomSyncRef.current,
+        joinedRoomsRef.current,
+        targetRoomIds,
+      );
 
-      roomIdsToResync.forEach((roomId) => {
-        const syncStrategy =
-          pendingRoomSyncRef.current.get(roomId) ?? "initial-sync";
-        pendingRoomSyncRef.current.delete(roomId);
+      drainedRooms.forEach(({ roomId, strategy }) => {
+        clearRoomSyncFallback(roomId);
         logMessageDebug("useWebSocket", "conversation_resynced_applied", {
           roomId,
-          strategy: syncStrategy,
+          strategy,
           targetRoomIds,
         });
-        if (syncStrategy === "skip") {
-          return;
-        }
-        void scheduleRoomResync(roomId, { reason: syncStrategy });
+
+        void reconcileConversationAuthoritative(roomId, strategy);
       });
     };
 
@@ -1345,8 +1455,14 @@ export const useWebSocket = (
           ["rooms", "conversations", "groups"].includes(scope),
         )
       ) {
-        joinedRoomsRef.current.forEach((roomId) => {
-          void scheduleRoomResync(roomId, { reason: "reconnect" });
+        const drainedRooms = drainPendingRoomSyncForResyncRequired(
+          pendingRoomSyncRef.current,
+          joinedRoomsRef.current,
+        );
+
+        drainedRooms.forEach(({ roomId, strategy }) => {
+          clearRoomSyncFallback(roomId);
+          void reconcileConversationAuthoritative(roomId, strategy);
         });
       }
 
@@ -1359,10 +1475,7 @@ export const useWebSocket = (
         useFriendshipStore.getState().triggerResync("socket_reconnect");
       }
 
-      if (
-        scopes.length === 0 ||
-        scopes.includes("user_settings")
-      ) {
+      if (scopes.length === 0 || scopes.includes("user_settings")) {
         void import("../settings/settingsStore").then(({ useSettingsStore }) =>
           useSettingsStore.getState().syncFromServer(),
         );
@@ -1406,7 +1519,9 @@ export const useWebSocket = (
   }, [
     addMessage,
     clearAllRoomJoinRetries,
+    clearAllRoomSyncFallbacks,
     clearRoomJoinRetry,
+    clearRoomSyncFallback,
     clearRemoteTypingTimer,
     clearTyping,
     flushEmitQueue,
@@ -1421,6 +1536,7 @@ export const useWebSocket = (
     requestRoomJoin,
     flushQueuedMessages,
     refreshConversationSnapshot,
+    reconcileConversationAuthoritative,
     scheduleRemoteTypingDecay,
     scheduleRoomResync,
     selectConversation,
@@ -1464,13 +1580,18 @@ export const useWebSocket = (
 
     clearAllRemoteTypingTimers();
     clearAllRoomJoinRetries();
+    clearAllRoomSyncFallbacks();
     joinedRoomsRef.current.clear();
     subscribedRoomsRef.current.clear();
     pendingRoomSyncRef.current.clear();
     roomResyncInFlightRef.current.clear();
     emitQueueRef.current = [];
     disconnectSocket();
-  }, [clearAllRemoteTypingTimers, clearAllRoomJoinRetries]);
+  }, [
+    clearAllRemoteTypingTimers,
+    clearAllRoomJoinRetries,
+    clearAllRoomSyncFallbacks,
+  ]);
 
   const joinRoom = useCallback(
     (roomId: string, options?: { skipInitialDeltaSync?: boolean }) => {
@@ -1504,6 +1625,7 @@ export const useWebSocket = (
       pendingRoomSyncRef.current.delete(roomId);
       roomJoinRetryAttemptsRef.current.delete(roomId);
       clearRoomJoinRetry(roomId);
+      clearRoomSyncFallback(roomId);
 
       const typingStatuses = useChatStore
         .getState()
@@ -1513,7 +1635,13 @@ export const useWebSocket = (
         clearTyping(roomId, item.userId);
       });
     },
-    [clearRemoteTypingTimer, clearRoomJoinRetry, clearTyping, emit],
+    [
+      clearRemoteTypingTimer,
+      clearRoomJoinRetry,
+      clearRoomSyncFallback,
+      clearTyping,
+      emit,
+    ],
   );
 
   const sendMessage = useCallback(
