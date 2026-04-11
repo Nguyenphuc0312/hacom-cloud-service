@@ -196,9 +196,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         : "text-text-muted hover:bg-surface-hover hover:text-text-secondary",
                     )}
                   >
-                    {/* ─── FIX: Render label — đây là bug chính trong code gốc ─── */}
-                    <span>{tab.label}</span>
-
                     {/* Badge chỉ hiện khi có unread, không chỉ tab "all" */}
                     {tabUnread > 0 && (
                       <Badge
