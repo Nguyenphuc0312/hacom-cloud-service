@@ -1,4 +1,8 @@
-export interface SmtpSettings {
+export type SmtpSettingStatus = 'DRAFT' | 'ACTIVE' | 'INACTIVE';
+
+export interface SmtpSettingRecord {
+  id: string;
+  status: SmtpSettingStatus;
   host: string;
   port: number;
   secure: boolean;
@@ -7,8 +11,17 @@ export interface SmtpSettings {
   fromName: string;
   fromEmail: string;
   replyTo?: string;
+  createdBy?: string | null;
+  updatedBy?: string | null;
+  activatedAt?: string | null;
+  deactivatedAt?: string | null;
+  createdAt?: string;
   updatedAt?: string;
-  updatedBy?: string;
+}
+
+export interface SmtpSettingsPayload {
+  active: SmtpSettingRecord | null;
+  draft: SmtpSettingRecord | null;
 }
 
 export interface UpdateSmtpSettingsRequest {
@@ -29,6 +42,6 @@ export interface TestConnectionResponse {
 
 export interface SendTestEmailRequest {
   to: string;
-  subject: string;
-  text: string;
+  subject?: string;
+  text?: string;
 }

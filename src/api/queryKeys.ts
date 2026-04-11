@@ -7,6 +7,9 @@ export const queryKeys = {
   hrEmployeesList: (params: string) => ['hr-employees-list', params] as const,
   hrEmployeeDetail: (id: string) => ['hr-employee-detail', id] as const,
   auditLogs: (params: string) => ['audit-logs', params] as const,
+  smtpSettings: ['smtp-settings'] as const,
+  emailTemplates: ['email-templates'] as const,
+  emailTemplateDetail: (code: string) => ['email-template-detail', code] as const,
   serviceHealth: ['service-health'] as const,
   dashboardSummary: (stamp: string) => ['dashboard-summary', stamp] as const,
 };

@@ -1,20 +1,53 @@
-import { createBrowserRouter } from 'react-router-dom';
-import { Navigate } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import type { ReactNode } from 'react';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 import { RequireAuth } from '@/app/guards/RequireAuth';
 import { AppLayout } from '@/app/layout/AppLayout';
-import { AuditLogPage } from '@/features/audit/pages/AuditLogPage';
-import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
-import { LoginPage } from '@/features/auth/pages/LoginPage';
-import { HREmployeesPage } from '@/features/hr-employees/pages/HREmployeesPage';
-import { ServicesPage } from '@/features/services/pages/ServicesPage';
-import { UserDetailPage } from '@/features/users/pages/UserDetailPage';
-import { UsersPage } from '@/features/users/pages/UsersPage';
+import { QueryStateView } from '@/components/QueryStates';
 
-export const router = createBrowserRouter([
+const LoginPage = lazy(() =>
+  import('@/features/auth/pages/LoginPage').then((module) => ({ default: module.LoginPage })),
+);
+const DashboardPage = lazy(() =>
+  import('@/features/dashboard/pages/DashboardPage').then((module) => ({
+    default: module.DashboardPage,
+  })),
+);
+const UsersPage = lazy(() =>
+  import('@/features/users/pages/UsersPage').then((module) => ({ default: module.UsersPage })),
+);
+const UserDetailPage = lazy(() =>
+  import('@/features/users/pages/UserDetailPage').then((module) => ({
+    default: module.UserDetailPage,
+  })),
+);
+const HREmployeesPage = lazy(() =>
+  import('@/features/hr-employees/pages/HREmployeesPage').then((module) => ({
+    default: module.HREmployeesPage,
+  })),
+);
+const AuditLogPage = lazy(() =>
+  import('@/features/audit/pages/AuditLogPage').then((module) => ({
+    default: module.AuditLogPage,
+  })),
+);
+const ServicesPage = lazy(() =>
+  import('@/features/services/pages/ServicesPage').then((module) => ({
+    default: module.ServicesPage,
+  })),
+);
+
+const withSuspense = (element: ReactNode) => (
+  <Suspense fallback={<QueryStateView kind="loading" title="Đang tải trang..." />}>
+    {element}
+  </Suspense>
+);
+
+const routes = [
   {
     path: '/login',
-    element: <LoginPage />,
+    element: withSuspense(<LoginPage />),
   },
   {
     path: '/',
@@ -26,27 +59,31 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <DashboardPage />,
+        element: withSuspense(<DashboardPage />),
       },
       {
         path: 'services',
-        element: <ServicesPage />,
+        element: <Navigate to="/services/health" replace />,
+      },
+      {
+        path: 'services/:section',
+        element: withSuspense(<ServicesPage />),
       },
       {
         path: 'users',
-        element: <UsersPage />,
+        element: withSuspense(<UsersPage />),
       },
       {
         path: 'users/:id',
-        element: <UserDetailPage />,
+        element: withSuspense(<UserDetailPage />),
       },
       {
         path: 'hr-employees',
-        element: <HREmployeesPage />,
+        element: withSuspense(<HREmployeesPage />),
       },
       {
         path: 'audit',
-        element: <AuditLogPage />,
+        element: withSuspense(<AuditLogPage />),
       },
       {
         path: '*',
@@ -54,4 +91,12 @@ export const router = createBrowserRouter([
       },
     ],
   },
-]);
+];
+
+const rawBaseName = import.meta.env.BASE_URL || '/';
+const baseName =
+  rawBaseName.endsWith('/') && rawBaseName !== '/' ? rawBaseName.slice(0, -1) : rawBaseName;
+
+export const router = createBrowserRouter(routes, {
+  basename: baseName === '/' ? undefined : baseName,
+});

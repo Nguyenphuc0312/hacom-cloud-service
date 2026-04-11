@@ -1,70 +1,79 @@
-import {
-  DashboardOutlined,
-  FileTextOutlined,
-  LogoutOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  SolutionOutlined,
-  ToolOutlined,
-  UserOutlined,
-} from '@ant-design/icons';
-import { Avatar, Badge, Breadcrumb, Button, Dropdown, Layout, Menu, Space, Typography } from 'antd';
+import { LogoutOutlined, UserOutlined } from '@ant-design/icons';
+import { Breadcrumb, Layout, Menu, Typography } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
-import { useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
+import {
+  breadcrumbNameMap,
+  commandRouteItems,
+  navItems,
+  pickSelectedMenuKey,
+  type NavItem,
+} from '@/app/layout/navigationConfig';
+import { Header as AdminHeader } from '@/components/Header';
 import { LoadingState } from '@/components/QueryStates';
+import { CommandPalette, type CommandPaletteItem } from '@/components/CommandPalette';
+import { SystemDegradedBanner } from '@/components/SystemDegradedBanner';
 import { useCurrentUser } from '@/app/useCurrentUser';
+import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { useAuthStore } from '@/store/authStore';
 
-const { Header, Sider, Content } = Layout;
+const { Header: AntHeader, Sider, Content } = Layout;
 const { Text } = Typography;
-
-interface NavItem {
-  key: string;
-  label: string;
-  icon: ReactNode;
-}
-
-const navItems: NavItem[] = [
-  { key: '/', label: 'Dashboard', icon: <DashboardOutlined /> },
-  { key: '/users', label: 'Users', icon: <UserOutlined /> },
-  { key: '/hr-employees', label: 'HR Employees', icon: <SolutionOutlined /> },
-  { key: '/audit', label: 'Audit Logs', icon: <FileTextOutlined /> },
-  { key: '/services', label: 'Services', icon: <ToolOutlined /> },
-];
-
-const breadcrumbNameMap: Record<string, string> = {
-  '/': 'Dashboard',
-  '/users': 'Users',
-  '/hr-employees': 'HR Employees',
-  '/audit': 'Audit Logs',
-  '/services': 'Services',
-};
 
 export const AppLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { isOpen: isCommandPaletteOpen, openPalette, closePalette } = useCommandPalette();
 
   const clearAuth = useAuthStore((state) => state.clearAuth);
-  const { user, isLoading } = useCurrentUser();
+  const {
+    user,
+    isLoading,
+    isAuthServiceUnavailable,
+    currentUserErrorMessage,
+    retryCurrentUser,
+    isRetryingCurrentUser,
+  } = useCurrentUser();
 
-  const allowedItems = useMemo<ItemType[]>(() => {
-    return navItems.map((item) => ({
+  const menuItems = useMemo<ItemType[]>(() => {
+    const toChild = (item: NavItem): ItemType => ({
       key: item.key,
       icon: item.icon,
       label: item.label,
-    }));
+    });
+
+    return [
+      {
+        type: 'group',
+        key: 'group-dashboard',
+        label: 'Dashboard',
+        children: navItems.filter((item) => item.group === 'dashboard').map(toChild),
+      },
+      {
+        type: 'group',
+        key: 'group-users',
+        label: 'Users',
+        children: navItems.filter((item) => item.group === 'users').map(toChild),
+      },
+      {
+        type: 'group',
+        key: 'group-services',
+        label: 'Services',
+        children: navItems.filter((item) => item.group === 'services').map(toChild),
+      },
+      {
+        type: 'group',
+        key: 'group-system',
+        label: 'System',
+        children: navItems.filter((item) => item.group === 'system').map(toChild),
+      },
+    ];
   }, []);
 
-  const selectedMenu =
-    navItems.find((item) =>
-      item.key === '/'
-        ? location.pathname === '/'
-        : location.pathname === item.key || location.pathname.startsWith(`${item.key}/`),
-    )?.key ?? '/';
+  const selectedMenu = pickSelectedMenuKey(location.pathname);
 
   const breadcrumbItems = useMemo(() => {
     const pathSnippets = location.pathname.split('/').filter(Boolean);
@@ -81,12 +90,68 @@ export const AppLayout = () => {
     return items;
   }, [location.pathname]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     clearAuth();
     navigate('/login', { replace: true });
-  };
+  }, [clearAuth, navigate]);
 
-  const environment = (import.meta.env.VITE_APP_ENV ?? 'DEV').toUpperCase();
+  const openMyProfile = useCallback(() => {
+    if (user?.id) {
+      navigate(`/users/${user.id}`);
+      return;
+    }
+
+    navigate('/users');
+  }, [navigate, user?.id]);
+
+  const openSettings = useCallback(() => {
+    navigate('/services/smtp');
+  }, [navigate]);
+
+  const commandPaletteItems = useMemo<CommandPaletteItem[]>(
+    () => [
+      {
+        id: 'open-my-profile',
+        label: 'Profile',
+        description: 'Open your account details',
+        category: 'Settings',
+        icon: <UserOutlined />,
+        keywords: ['my profile', 'account', 'me'],
+        onSelect: openMyProfile,
+      },
+      ...commandRouteItems.map((item) => ({
+        ...item,
+        disabled: item.disabled ?? !item.route,
+        onSelect: () => {
+          if (item.route) {
+            navigate(item.route);
+          }
+        },
+      })),
+      {
+        id: 'logout',
+        label: 'Logout',
+        description: 'Sign out from current admin session',
+        category: 'System',
+        icon: <LogoutOutlined />,
+        keywords: ['logout', 'sign out', 'exit'],
+        onSelect: logout,
+      },
+    ],
+    [logout, navigate, openMyProfile],
+  );
+
+  useEffect(() => {
+    closePalette();
+  }, [closePalette, location.pathname]);
+
+  const environment = (import.meta.env.VITE_APP_ENV ?? 'server-test').toUpperCase();
+  const envColor =
+    environment === 'PROD' || environment === 'PRODUCTION'
+      ? 'red'
+      : environment === 'STAGING'
+        ? 'gold'
+        : 'blue';
 
   if (isLoading) {
     return <LoadingState tip="Đang khởi tạo phiên làm việc..." />;
@@ -99,58 +164,59 @@ export const AppLayout = () => {
         collapsible
         collapsed={collapsed}
         width={260}
+        collapsedWidth={80}
         className="app-sider"
         breakpoint="lg"
         onBreakpoint={(broken) => setCollapsed(broken)}
       >
-        <div className="brand">{collapsed ? 'CA' : 'Chat Admin'}</div>
+        <div className="brand">{collapsed ? 'CA' : 'Chat Admin Console'}</div>
         <Menu
           theme="dark"
           mode="inline"
           selectedKeys={[selectedMenu]}
-          items={allowedItems}
+          items={menuItems}
+          aria-label="Main admin navigation"
           onClick={({ key }) => navigate(String(key))}
         />
+        <div className="app-sider-footer">
+          <Text type="secondary">System context</Text>
+          <Text>Environment: {environment}</Text>
+          <Text type="secondary">RBAC + release policy enforced</Text>
+        </div>
       </Sider>
       <Layout>
-        <Header className="app-header">
-          <Space>
-            <Button
-              type="text"
-              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => setCollapsed((prev) => !prev)}
-            />
-            <Badge
-              color={environment === 'PROD' ? 'red' : environment === 'STAGING' ? 'gold' : 'green'}
-            />
-            <Text strong>{environment}</Text>
-          </Space>
-          <Dropdown
-            menu={{
-              items: [
-                {
-                  key: 'logout',
-                  icon: <LogoutOutlined />,
-                  label: 'Logout',
-                  onClick: logout,
-                },
-              ],
-            }}
-          >
-            <Space className="user-chip">
-              <Avatar>{user?.email?.charAt(0).toUpperCase() ?? 'A'}</Avatar>
-              <div>
-                <Text>{user?.email ?? '-'}</Text>
-                <br />
-                <Text type="secondary">{user?.username ?? 'admin'}</Text>
-              </div>
-            </Space>
-          </Dropdown>
-        </Header>
+        <AntHeader className="app-header">
+          <AdminHeader
+            collapsed={collapsed}
+            environment={environment}
+            envColor={envColor}
+            isAuthServiceUnavailable={isAuthServiceUnavailable}
+            user={user}
+            onToggleSidebar={() => setCollapsed((prev) => !prev)}
+            onOpenPalette={openPalette}
+            onOpenProfile={openMyProfile}
+            onOpenSettings={openSettings}
+            onLogout={logout}
+          />
+        </AntHeader>
         <Content className="app-content">
+          <SystemDegradedBanner
+            visible={isAuthServiceUnavailable}
+            title="Admin auth integration degraded"
+            description={
+              currentUserErrorMessage ?? 'Cannot verify current admin profile right now.'
+            }
+            onRetry={retryCurrentUser}
+            retrying={isRetryingCurrentUser}
+          />
           <Breadcrumb items={breadcrumbItems} style={{ marginBottom: 16 }} />
           <Outlet />
         </Content>
+        <CommandPalette
+          open={isCommandPaletteOpen}
+          onClose={closePalette}
+          items={commandPaletteItems}
+        />
       </Layout>
     </Layout>
   );

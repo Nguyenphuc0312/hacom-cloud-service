@@ -1,17 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Button,
-  Card,
-  Form,
-  Input,
-  Modal,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from 'antd';
+import { Button, Card, Form, Input, Modal, Select, Space, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -25,9 +13,15 @@ import type {
   HrEmployeeStatus,
   UpdateHrEmployeePayload,
 } from '@/api/types';
+import { AdminTable } from '@/components/AdminTable';
+import { DataTableShell } from '@/components/DataTableShell';
+import { FilterBar } from '@/components/FilterBar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
-import { PageHeader } from '@/components/PageHeader';
+import { PageShell } from '@/components/PageShell';
+import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
+import { useAuthStore } from '@/store/authStore';
 import { formatDateTime } from '@/utils/date';
+import { canManageHrEmployees } from '@/utils/role';
 
 const statusOptions: Array<{ label: string; value: 'all' | HrEmployeeStatus }> = [
   { label: 'Tất cả status', value: 'all' },
@@ -51,6 +45,8 @@ export const HREmployeesPage = () => {
   const [filterForm] = Form.useForm();
   const [editForm] = Form.useForm<FormValues>();
   const queryClient = useQueryClient();
+  const currentRole = useAuthStore((state) => state.user?.role);
+  const canWriteHrActions = isAdminWriteActionsEnabled && canManageHrEmployees(currentRole);
 
   const [params, setParams] = useState<HrEmployeeListQuery>({
     page: 1,
@@ -108,6 +104,7 @@ export const HREmployeesPage = () => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.hrEmployeesList(JSON.stringify(params)),
       });
+      void queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
     },
     onError: (error) => {
       message.error(getErrorMessage(error));
@@ -126,6 +123,7 @@ export const HREmployeesPage = () => {
       if (editingId) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.hrEmployeeDetail(editingId) });
       }
+      void queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
     },
     onError: (error) => {
       message.error(getErrorMessage(error));
@@ -139,6 +137,7 @@ export const HREmployeesPage = () => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.hrEmployeesList(JSON.stringify(params)),
       });
+      void queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
     },
     onError: (error) => {
       message.error(getErrorMessage(error));
@@ -173,6 +172,16 @@ export const HREmployeesPage = () => {
   };
 
   const openCreate = () => {
+    if (!isAdminWriteActionsEnabled) {
+      message.info('HR write actions are disabled by release configuration.');
+      return;
+    }
+
+    if (!canManageHrEmployees(currentRole)) {
+      message.warning('Role hiện tại không có quyền thực hiện HR write actions.');
+      return;
+    }
+
     setCreating(true);
     setEditingId(null);
     setEditorOpen(true);
@@ -186,6 +195,16 @@ export const HREmployeesPage = () => {
 
   const confirmRemove = useCallback(
     (employee: HrEmployee) => {
+      if (!isAdminWriteActionsEnabled) {
+        message.info('HR write actions are disabled by release configuration.');
+        return;
+      }
+
+      if (!canManageHrEmployees(currentRole)) {
+        message.warning('Role hiện tại không có quyền thực hiện HR write actions.');
+        return;
+      }
+
       Modal.confirm({
         title: 'Deactivate/Delete HR employee',
         content:
@@ -197,7 +216,7 @@ export const HREmployeesPage = () => {
         },
       });
     },
-    [deleteMutation],
+    [currentRole, deleteMutation],
   );
 
   const columns = useMemo<ColumnsType<HrEmployee>>(
@@ -240,17 +259,31 @@ export const HREmployeesPage = () => {
         key: 'actions',
         render: (_, record) => (
           <Space>
-            <Button size="small" onClick={() => openEdit(record)}>
-              Xem/Sửa
+            <Button
+              size="small"
+              onClick={(event) => {
+                event.stopPropagation();
+                openEdit(record);
+              }}
+            >
+              {canWriteHrActions ? 'Xem/Sửa' : 'Xem'}
             </Button>
-            <Button size="small" danger onClick={() => confirmRemove(record)}>
+            <Button
+              size="small"
+              danger
+              disabled={!canWriteHrActions}
+              onClick={(event) => {
+                event.stopPropagation();
+                confirmRemove(record);
+              }}
+            >
               Deactivate
             </Button>
           </Space>
         ),
       },
     ],
-    [confirmRemove],
+    [canWriteHrActions, confirmRemove],
   );
 
   const applyFilters = () => {
@@ -282,18 +315,26 @@ export const HREmployeesPage = () => {
   const data = listQuery.data;
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <PageHeader
-        title="HR Employees"
-        description="CRUD tối thiểu cho hồ sơ nhân sự theo contract backend thực tế"
-        extra={
-          <Button type="primary" onClick={openCreate}>
-            Tạo HR employee
-          </Button>
-        }
-      />
+    <PageShell
+      title="HR Employees"
+      description="CRUD nhân sự theo contract backend, tối ưu thao tác vận hành hàng ngày"
+      headerExtra={
+        <Button type="primary" disabled={!canWriteHrActions} onClick={openCreate}>
+          Tạo HR employee
+        </Button>
+      }
+    >
+      {(!isAdminWriteActionsEnabled || !canManageHrEmployees(currentRole)) && (
+        <Card>
+          <Typography.Text type="secondary">
+            {!isAdminWriteActionsEnabled
+              ? 'HR write actions (create/update/deactivate) are disabled by release configuration.'
+              : 'Role hiện tại không có quyền create/update/deactivate HR employee.'}
+          </Typography.Text>
+        </Card>
+      )}
 
-      <Card>
+      <FilterBar>
         <Form form={filterForm} layout="inline" initialValues={{ status: 'all' }}>
           <Form.Item name="keyword">
             <Input allowClear placeholder="Tìm mã nhân sự, tên, email" style={{ width: 280 }} />
@@ -322,14 +363,22 @@ export const HREmployeesPage = () => {
             </Space>
           </Form.Item>
         </Form>
-      </Card>
+      </FilterBar>
 
-      <Card>
-        <Table
+      <DataTableShell
+        title="HR employees"
+        meta={`${data?.pagination.total ?? 0} record(s) matched current filters`}
+      >
+        <AdminTable
           rowKey="id"
           columns={columns}
+          minHeight={320}
           dataSource={data?.items ?? []}
-          locale={{ emptyText: <EmptyState description="Không có HR employee phù hợp." /> }}
+          emptyNode={<EmptyState description="Không có HR employee phù hợp." />}
+          onRow={(record) => ({
+            onClick: () => openEdit(record),
+            style: { cursor: 'pointer' },
+          })}
           pagination={{
             current: data?.pagination.page,
             pageSize: data?.pagination.limit,
@@ -340,12 +389,18 @@ export const HREmployeesPage = () => {
             },
           }}
         />
-      </Card>
+      </DataTableShell>
 
       <Modal
         open={editorOpen}
-        title={creating ? 'Tạo HR employee' : 'Chi tiết/Sửa HR employee'}
-        okText={creating ? 'Tạo' : 'Lưu'}
+        title={
+          creating
+            ? 'Tạo HR employee'
+            : canWriteHrActions
+              ? 'Chi tiết/Sửa HR employee'
+              : 'Chi tiết HR employee'
+        }
+        okText={!canWriteHrActions ? 'Đóng' : creating ? 'Tạo' : 'Lưu'}
         cancelText="Hủy"
         confirmLoading={createMutation.isPending || updateMutation.isPending}
         onCancel={() => {
@@ -355,6 +410,11 @@ export const HREmployeesPage = () => {
           editForm.resetFields();
         }}
         onOk={() => {
+          if (!canWriteHrActions) {
+            setEditorOpen(false);
+            return;
+          }
+
           void submitEditor();
         }}
       >
@@ -363,7 +423,12 @@ export const HREmployeesPage = () => {
         ) : !creating && detailQuery.isError ? (
           <ErrorState subTitle="Không tải được chi tiết HR employee." />
         ) : (
-          <Form<FormValues> form={editForm} layout="vertical" requiredMark={false}>
+          <Form<FormValues>
+            form={editForm}
+            layout="vertical"
+            requiredMark={false}
+            disabled={!canWriteHrActions}
+          >
             <Form.Item
               name="employeeCode"
               label="Employee code"
@@ -411,6 +476,6 @@ export const HREmployeesPage = () => {
           </Form>
         )}
       </Modal>
-    </Space>
+    </PageShell>
   );
 };

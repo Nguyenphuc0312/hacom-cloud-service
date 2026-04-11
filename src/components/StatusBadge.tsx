@@ -8,13 +8,28 @@ interface StatusBadgeProps {
 const statusMap: Record<string, { color: string; text: string }> = {
   up: { color: 'green', text: 'UP' },
   ready: { color: 'green', text: 'READY' },
+  healthy: { color: 'green', text: 'HEALTHY' },
+  active: { color: 'green', text: 'ACTIVE' },
+  enabled: { color: 'green', text: 'ENABLED' },
+
   degraded: { color: 'gold', text: 'DEGRADED' },
-  down: { color: 'red', text: 'DOWN' },
-  unknown: { color: 'default', text: 'UNKNOWN' },
-  firing: { color: 'red', text: 'FIRING' },
-  resolved: { color: 'green', text: 'RESOLVED' },
-  ok: { color: 'green', text: 'OK' },
   warn: { color: 'gold', text: 'WARN' },
+  warning: { color: 'gold', text: 'WARNING' },
+  pending: { color: 'gold', text: 'PENDING' },
+  pending_verification: { color: 'gold', text: 'PENDING_VERIFICATION' },
+
+  down: { color: 'red', text: 'DOWN' },
+  danger: { color: 'red', text: 'DANGER' },
+  error: { color: 'red', text: 'ERROR' },
+  firing: { color: 'red', text: 'FIRING' },
+  disabled: { color: 'red', text: 'DISABLED' },
+  locked: { color: 'red', text: 'LOCKED' },
+  suspended: { color: 'red', text: 'SUSPENDED' },
+
+  inactive: { color: 'default', text: 'INACTIVE' },
+  resolved: { color: 'default', text: 'RESOLVED' },
+  unknown: { color: 'default', text: 'UNKNOWN' },
+  ok: { color: 'green', text: 'OK' },
   alert: { color: 'red', text: 'ALERT' },
 };
 

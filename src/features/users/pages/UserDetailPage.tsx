@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Descriptions, Modal, Space, Table, Tag, Typography, message } from 'antd';
+import { Button, Card, Descriptions, Modal, Space, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -8,14 +8,21 @@ import { sessionsClient, usersClient } from '@/api/clients';
 import { getErrorMessage } from '@/api/error';
 import { queryKeys } from '@/api/queryKeys';
 import type { UserActionPayload, UserDevice, UserSession } from '@/api/types';
+import { AdminTable } from '@/components/AdminTable';
+import { DataTableShell } from '@/components/DataTableShell';
 import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
-import { PageHeader } from '@/components/PageHeader';
+import { PageShell } from '@/components/PageShell';
+import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
+import { useAuthStore } from '@/store/authStore';
 import { formatDateTime } from '@/utils/date';
+import { canManageUsers } from '@/utils/role';
 
 export const UserDetailPage = () => {
   const params = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const userId = params.id ?? '';
+  const currentRole = useAuthStore((state) => state.user?.role);
+  const canWriteUserActions = isAdminWriteActionsEnabled && canManageUsers(currentRole);
 
   const [sessionsPage, setSessionsPage] = useState(1);
   const [devicesPage, setDevicesPage] = useState(1);
@@ -67,6 +74,7 @@ export const UserDetailPage = () => {
         queryKey: queryKeys.userSessions(userId, JSON.stringify({ page: sessionsPage, limit: 10 })),
       });
       void queryClient.invalidateQueries({ queryKey: queryKeys.usersList('') });
+      void queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
     },
     onError: (error) => {
       message.error(getErrorMessage(error));
@@ -74,6 +82,16 @@ export const UserDetailPage = () => {
   });
 
   const confirmAction = (action: 'lock' | 'unlock' | 'revoke') => {
+    if (!isAdminWriteActionsEnabled) {
+      message.info('Write actions are disabled by release configuration.');
+      return;
+    }
+
+    if (!canManageUsers(currentRole)) {
+      message.warning('Role hiện tại không có quyền thực hiện user write actions.');
+      return;
+    }
+
     const titleMap: Record<typeof action, string> = {
       lock: 'Khóa tài khoản',
       unlock: 'Mở khóa tài khoản',
@@ -161,34 +179,44 @@ export const UserDetailPage = () => {
   const user = detailQuery.data;
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <PageHeader
-        title="User Detail"
-        description={
-          <Space>
-            <Typography.Text>{user.email}</Typography.Text>
-            <Link to="/users">Quay lại danh sách</Link>
-          </Space>
-        }
-        extra={
-          <Space>
-            <Button
-              danger
-              disabled={user.accountStatus === 'DISABLED'}
-              onClick={() => confirmAction('lock')}
-            >
-              Lock
-            </Button>
-            <Button
-              disabled={user.accountStatus !== 'DISABLED'}
-              onClick={() => confirmAction('unlock')}
-            >
-              Unlock
-            </Button>
-            <Button onClick={() => confirmAction('revoke')}>Revoke sessions</Button>
-          </Space>
-        }
-      />
+    <PageShell
+      title="User Detail"
+      description={
+        <Space>
+          <Typography.Text>{user.email}</Typography.Text>
+          <Link to="/users">Quay lại danh sách</Link>
+        </Space>
+      }
+      headerExtra={
+        <Space>
+          <Button
+            danger
+            disabled={!canWriteUserActions || user.accountStatus === 'DISABLED'}
+            onClick={() => confirmAction('lock')}
+          >
+            Lock
+          </Button>
+          <Button
+            disabled={!canWriteUserActions || user.accountStatus !== 'DISABLED'}
+            onClick={() => confirmAction('unlock')}
+          >
+            Unlock
+          </Button>
+          <Button disabled={!canWriteUserActions} onClick={() => confirmAction('revoke')}>
+            Revoke sessions
+          </Button>
+        </Space>
+      }
+    >
+      {(!isAdminWriteActionsEnabled || !canManageUsers(currentRole)) && (
+        <Card>
+          <Typography.Text type="secondary">
+            {!isAdminWriteActionsEnabled
+              ? 'Write actions (lock/unlock/revoke sessions) are disabled by release configuration.'
+              : 'Role hiện tại chỉ có quyền xem, không có quyền lock/unlock/revoke sessions.'}
+          </Typography.Text>
+        </Card>
+      )}
 
       <Card>
         <Descriptions column={{ xs: 1, md: 2, lg: 3 }}>
@@ -215,16 +243,17 @@ export const UserDetailPage = () => {
         </Descriptions>
       </Card>
 
-      <Card title="Sessions">
+      <DataTableShell title="Sessions">
         {sessionsQuery.isError ? (
           <ErrorState subTitle="Không thể tải sessions." />
         ) : (
-          <Table
+          <AdminTable
             rowKey="id"
-            loading={sessionsQuery.isLoading}
             columns={sessionColumns}
+            loading={sessionsQuery.isLoading}
+            minHeight={280}
             dataSource={sessionsQuery.data?.items ?? []}
-            locale={{ emptyText: <EmptyState description="Không có session" /> }}
+            emptyNode={<EmptyState description="Không có session" />}
             pagination={{
               current: sessionsQuery.data?.pagination.page,
               pageSize: sessionsQuery.data?.pagination.limit,
@@ -233,18 +262,19 @@ export const UserDetailPage = () => {
             }}
           />
         )}
-      </Card>
+      </DataTableShell>
 
-      <Card title="Devices">
+      <DataTableShell title="Devices">
         {devicesQuery.isError ? (
           <ErrorState subTitle="Không thể tải devices." />
         ) : (
-          <Table
+          <AdminTable
             rowKey="id"
-            loading={devicesQuery.isLoading}
             columns={deviceColumns}
+            loading={devicesQuery.isLoading}
+            minHeight={280}
             dataSource={devicesQuery.data?.items ?? []}
-            locale={{ emptyText: <EmptyState description="Không có device" /> }}
+            emptyNode={<EmptyState description="Không có device" />}
             pagination={{
               current: devicesQuery.data?.pagination.page,
               pageSize: devicesQuery.data?.pagination.limit,
@@ -253,7 +283,7 @@ export const UserDetailPage = () => {
             }}
           />
         )}
-      </Card>
-    </Space>
+      </DataTableShell>
+    </PageShell>
   );
 };

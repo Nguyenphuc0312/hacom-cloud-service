@@ -1,18 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Button,
-  Card,
-  Form,
-  Input,
-  Modal,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from 'antd';
+import { Button, Form, Input, Modal, Select, Space, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import type { SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -25,9 +14,16 @@ import type {
   UserPresenceStatus,
   UsersListQuery,
 } from '@/api/types';
-import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
-import { PageHeader } from '@/components/PageHeader';
+import { DataTableShell } from '@/components/DataTableShell';
+import { AdminTable } from '@/components/AdminTable';
+import { FeatureDisabledNotice } from '@/components/FeatureDisabledNotice';
+import { FilterBar } from '@/components/FilterBar';
+import { PageShell } from '@/components/PageShell';
+import { EmptyState, QueryStateView } from '@/components/QueryStates';
+import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
+import { useAuthStore } from '@/store/authStore';
 import { formatDateTime } from '@/utils/date';
+import { canManageUsers } from '@/utils/role';
 
 const accountStatusOptions = [
   { label: 'Tất cả', value: 'all' },
@@ -48,6 +44,8 @@ export const UsersPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
+  const currentRole = useAuthStore((state) => state.user?.role);
+  const canWriteUserActions = isAdminWriteActionsEnabled && canManageUsers(currentRole);
 
   const [params, setParams] = useState<UsersListQuery>({
     page: 1,
@@ -88,6 +86,7 @@ export const UsersPage = () => {
 
       void queryClient.invalidateQueries({ queryKey: queryKeys.usersList(JSON.stringify(params)) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.userDetail(variables.userId) });
+      void queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
     },
     onError: (error) => {
       message.error(getErrorMessage(error));
@@ -96,6 +95,16 @@ export const UsersPage = () => {
 
   const confirmAction = useCallback(
     (action: 'lock' | 'unlock' | 'revoke', user: UserListItem) => {
+      if (!isAdminWriteActionsEnabled) {
+        message.info('Write actions are disabled by release configuration.');
+        return;
+      }
+
+      if (!canManageUsers(currentRole)) {
+        message.warning('Role hiện tại không có quyền thực hiện user write actions.');
+        return;
+      }
+
       const titleMap: Record<typeof action, string> = {
         lock: 'Khóa tài khoản',
         unlock: 'Mở khóa tài khoản',
@@ -122,7 +131,7 @@ export const UsersPage = () => {
         },
       });
     },
-    [actionMutation],
+    [actionMutation, currentRole],
   );
 
   const columns = useMemo<ColumnsType<UserListItem>>(
@@ -163,32 +172,63 @@ export const UsersPage = () => {
         render: (value: string | null) => (value ? formatDateTime(value) : '-'),
       },
       {
+        title: 'Updated at',
+        dataIndex: 'updatedAt',
+        sorter: true,
+        render: (value: string | null) => (value ? formatDateTime(value) : '-'),
+      },
+      {
         title: 'Hành động',
         key: 'actions',
         render: (_, record) => (
           <Space wrap>
-            <Button size="small" onClick={() => navigate(`/users/${record.id}`)}>
+            <Button
+              size="small"
+              onClick={(event) => {
+                event.stopPropagation();
+                navigate(`/users/${record.id}`);
+              }}
+            >
               Chi tiết
             </Button>
             <Button
               size="small"
               danger
-              disabled={record.accountStatus === 'DISABLED' || actionMutation.isPending}
-              onClick={() => confirmAction('lock', record)}
+              disabled={
+                !isAdminWriteActionsEnabled ||
+                !canWriteUserActions ||
+                record.accountStatus === 'DISABLED' ||
+                actionMutation.isPending
+              }
+              onClick={(event) => {
+                event.stopPropagation();
+                confirmAction('lock', record);
+              }}
             >
               Lock
             </Button>
             <Button
               size="small"
-              disabled={record.accountStatus !== 'DISABLED' || actionMutation.isPending}
-              onClick={() => confirmAction('unlock', record)}
+              disabled={
+                !isAdminWriteActionsEnabled ||
+                !canWriteUserActions ||
+                record.accountStatus !== 'DISABLED' ||
+                actionMutation.isPending
+              }
+              onClick={(event) => {
+                event.stopPropagation();
+                confirmAction('unlock', record);
+              }}
             >
               Unlock
             </Button>
             <Button
               size="small"
-              disabled={actionMutation.isPending}
-              onClick={() => confirmAction('revoke', record)}
+              disabled={!canWriteUserActions || actionMutation.isPending}
+              onClick={(event) => {
+                event.stopPropagation();
+                confirmAction('revoke', record);
+              }}
             >
               Revoke sessions
             </Button>
@@ -196,7 +236,7 @@ export const UsersPage = () => {
         ),
       },
     ],
-    [actionMutation.isPending, confirmAction, navigate],
+    [actionMutation.isPending, canWriteUserActions, confirmAction, navigate],
   );
 
   const applyFilters = () => {
@@ -224,29 +264,83 @@ export const UsersPage = () => {
     }));
   };
 
+  const handleTableChange = (
+    pagination: TablePaginationConfig,
+    _filters: Record<string, unknown>,
+    sorter: SorterResult<UserListItem> | SorterResult<UserListItem>[],
+  ) => {
+    const resolvedSorter = Array.isArray(sorter) ? sorter[0] : sorter;
+    const sortField =
+      resolvedSorter?.field === 'updatedAt'
+        ? 'updated_at'
+        : resolvedSorter?.field === 'createdAt'
+          ? 'created_at'
+          : undefined;
+    const sortOrder = resolvedSorter?.order === 'ascend' ? 'asc' : 'desc';
+
+    setParams((prev) => ({
+      ...prev,
+      page: pagination.current ?? prev.page,
+      limit: pagination.pageSize ?? prev.limit,
+      sortBy: sortField ?? prev.sortBy,
+      sortOrder: sortField ? sortOrder : prev.sortOrder,
+    }));
+  };
+
   if (usersQuery.isLoading) {
-    return <LoadingState tip="Đang tải danh sách người dùng..." />;
+    return (
+      <PageShell
+        title="Users"
+        description="Quản trị người dùng và chính sách thao tác write an toàn"
+      >
+        <QueryStateView kind="loading" title="Đang tải danh sách người dùng..." />
+      </PageShell>
+    );
   }
 
   if (usersQuery.isError) {
     return (
-      <ErrorState
-        subTitle="Không thể tải users list."
-        extra={<Button onClick={() => usersQuery.refetch()}>Thử lại</Button>}
-      />
+      <PageShell
+        title="Users"
+        description="Quản trị người dùng và chính sách thao tác write an toàn"
+      >
+        <QueryStateView
+          kind="error"
+          description="Không thể tải users list."
+          onRetry={() => {
+            void usersQuery.refetch();
+          }}
+        />
+      </PageShell>
     );
   }
 
   const data = usersQuery.data;
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <PageHeader
-        title="Users"
-        description="Tra cứu người dùng, xem trạng thái tài khoản và thực hiện action quản trị tối thiểu"
-      />
+    <PageShell
+      title="Users"
+      description="Tra cứu người dùng, xem trạng thái tài khoản và thực hiện action quản trị tối thiểu"
+      headerExtra={
+        <Typography.Text type="secondary">
+          Last updated:{' '}
+          {usersQuery.dataUpdatedAt
+            ? formatDateTime(new Date(usersQuery.dataUpdatedAt).toISOString())
+            : '-'}
+        </Typography.Text>
+      }
+    >
+      {(!isAdminWriteActionsEnabled || !canManageUsers(currentRole)) && (
+        <FeatureDisabledNotice
+          description={
+            !isAdminWriteActionsEnabled
+              ? 'Write actions (lock/unlock/revoke sessions) are disabled by release configuration.'
+              : 'Role hiện tại chỉ có quyền xem, không có quyền lock/unlock/revoke sessions.'
+          }
+        />
+      )}
 
-      <Card>
+      <FilterBar>
         <Form
           form={form}
           layout="inline"
@@ -298,29 +392,31 @@ export const UsersPage = () => {
             </Space>
           </Form.Item>
         </Form>
-      </Card>
+      </FilterBar>
 
-      <Card>
-        <Table
+      <DataTableShell
+        title="Users list"
+        meta={`${data?.pagination.total ?? 0} record(s) matched current filters`}
+      >
+        <AdminTable
           rowKey="id"
           columns={columns}
+          minHeight={320}
           dataSource={data?.items ?? []}
-          locale={{ emptyText: <EmptyState description="Không có người dùng phù hợp bộ lọc." /> }}
+          emptyNode={<EmptyState description="Không có người dùng phù hợp bộ lọc." />}
+          onRow={(record) => ({
+            onClick: () => navigate(`/users/${record.id}`),
+            style: { cursor: 'pointer' },
+          })}
           pagination={{
             current: data?.pagination.page,
             pageSize: data?.pagination.limit,
             total: data?.pagination.total,
             showSizeChanger: true,
-            onChange: (page, pageSize) => {
-              setParams((prev) => ({
-                ...prev,
-                page,
-                limit: pageSize,
-              }));
-            },
           }}
+          onChange={handleTableChange}
         />
-      </Card>
-    </Space>
+      </DataTableShell>
+    </PageShell>
   );
 };

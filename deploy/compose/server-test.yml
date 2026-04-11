@@ -1,0 +1,23 @@
+name: ${COMPOSE_PROJECT_NAME:-chat-admin-panel-server-test}
+
+services:
+  chat-admin-panel:
+    image: ${CHAT_ADMIN_PANEL_IMAGE:?CHAT_ADMIN_PANEL_IMAGE is required}
+    restart: unless-stopped
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      chat-platform:
+        aliases:
+          - chat-admin-panel
+
+networks:
+  chat-platform:
+    external: true
+    name: chat-platform
