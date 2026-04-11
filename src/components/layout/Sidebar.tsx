@@ -120,16 +120,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     window.localStorage.setItem(COLLAPSED_STORAGE_KEY, isCollapsed ? "1" : "0");
   }, [isCollapsed]);
 
-  // ─── Tổng unread count cho tất cả conversations ───────────────────────────
-  const unreadTotal = useMemo(
-    () =>
-      (Array.isArray(conversations) ? conversations : []).reduce(
-        (sum, conversation) => sum + (conversation.unreadCount || 0),
-        0,
-      ),
-    [conversations],
-  );
-
   // ─── Unread count riêng theo filter để hiển thị trên từng tab ────────────
   const unreadByFilter = useMemo(() => {
     const safeConversations = Array.isArray(conversations) ? conversations : [];
