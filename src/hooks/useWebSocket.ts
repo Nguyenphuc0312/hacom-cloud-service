@@ -846,7 +846,10 @@ export const useWebSocket = (
       const messageId = messagePayload
         ? (asString(messagePayload.id) ??
           asString(messagePayload._id) ??
-          asString(messagePayload.messageId))
+          asString(messagePayload.messageId) ??
+          asString(messagePayload.stableId) ??
+          asString(messagePayload.localId) ??
+          asString(messagePayload.tempId))
         : null;
       if (!conversationId || !messagePayload || !messageId) return;
 
@@ -931,7 +934,14 @@ export const useWebSocket = (
           asString(payload.messageId) ??
           asString(payload.id) ??
           asString(payload._id) ??
-          asString(asRecord(payload.message)?.id);
+          asString(payload.stableId) ??
+          asString(payload.localId) ??
+          asString(payload.tempId) ??
+          asString(asRecord(payload.message)?.id) ??
+          asString(asRecord(payload.message)?.messageId) ??
+          asString(asRecord(payload.message)?.stableId) ??
+          asString(asRecord(payload.message)?.localId) ??
+          asString(asRecord(payload.message)?.tempId);
         if (!conversationId || !messageId) return;
         logMessageDebug("useWebSocket", "socket_message_deleted_received", {
           conversationId,
