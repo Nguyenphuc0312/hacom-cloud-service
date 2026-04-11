@@ -14,11 +14,13 @@ import type {
   ConversationFilter,
   UserSummary,
 } from "../../../types";
-import { RoomType } from "../../../types";
+import { isDirectConversation } from "../../../lib/conversationAdapter";
+import { rankConversations } from "../../../utils/conversationRanking";
 import {
-  isDirectConversation,
-  normalizeRoomType,
-} from "../../../lib/conversationAdapter";
+  getConversationDisplayName,
+  getUserDisplayName,
+} from "../../../utils/messageHelpers";
+import { ConversationListSkeleton, ErrorState } from "../../ui";
 import { RoomItem } from "./RoomItem";
 
 interface RoomListProps {
@@ -28,10 +30,16 @@ interface RoomListProps {
   searchQuery: string;
   activeFilter: ConversationFilter;
   collapsed: boolean;
+  showLoadingSkeleton?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
   onSelect: (conversationId: string) => void;
 }
 
-type SectionId = "unread" | "channels" | "groups" | "direct";
+type SectionId = "groups" | "direct";
 
 interface RoomSection {
   id: SectionId;
@@ -54,15 +62,15 @@ type FlatListItem =
 interface RowData {
   items: FlatListItem[];
   currentUser: UserSummary;
-  selectedId: string | null;
+  currentConversationId: string | null;
   collapsed: boolean;
   keyboardActiveRoomId: string | null;
   onSelect: (conversationId: string) => void;
 }
 
-const SECTION_HEIGHT = 30;
-const EXPANDED_ROOM_HEIGHT = 80;
-const COLLAPSED_ROOM_HEIGHT = 64;
+const SECTION_HEIGHT = 22;
+const EXPANDED_ROOM_HEIGHT = 68;
+const COLLAPSED_ROOM_HEIGHT = 56;
 
 const measureViewportHeight = (node: HTMLDivElement): number => {
   if (node.clientHeight > 0) return node.clientHeight;
@@ -74,26 +82,24 @@ const measureViewportHeight = (node: HTMLDivElement): number => {
   return 0;
 };
 
-const toTimestamp = (value: unknown): number => {
-  const date = new Date(value as string | number | Date);
-  const timestamp = date.getTime();
-  return Number.isNaN(timestamp) ? 0 : timestamp;
-};
-
-const sortByPriority = (items: Conversation[]): Conversation[] =>
-  [...items].sort((a, b) => {
-    if (a.isPinned && !b.isPinned) return -1;
-    if (!a.isPinned && b.isPinned) return 1;
-    return toTimestamp(b.updatedAt) - toTimestamp(a.updatedAt);
-  });
-
 const includesQuery = (
   conversation: Conversation,
   normalizedQuery: string,
+  currentUserId: string,
 ): boolean => {
   if (!normalizedQuery) return true;
 
-  if ((conversation.displayName || "").toLowerCase().includes(normalizedQuery)) {
+  const resolvedConversationName = getConversationDisplayName(
+    conversation,
+    currentUserId,
+  ).toLowerCase();
+  if (resolvedConversationName.includes(normalizedQuery)) {
+    return true;
+  }
+
+  if (
+    (conversation.displayName || "").toLowerCase().includes(normalizedQuery)
+  ) {
     return true;
   }
 
@@ -102,15 +108,21 @@ const includesQuery = (
   }
 
   if (
-    (conversation.otherUser?.displayName || "").toLowerCase().includes(normalizedQuery) ||
-    (conversation.otherUser?.username || "").toLowerCase().includes(normalizedQuery)
+    (conversation.otherUser?.displayName || "")
+      .toLowerCase()
+      .includes(normalizedQuery) ||
+    (conversation.otherUser?.username || "")
+      .toLowerCase()
+      .includes(normalizedQuery)
   ) {
     return true;
   }
 
   const participantMatch = (conversation.participants || []).some(
     (participant) => {
-      const displayName = (participant.displayName || "").toLowerCase();
+      const displayName = getUserDisplayName(participant, {
+        allowTechnicalFallback: true,
+      }).toLowerCase();
       const username = (participant.username || "").toLowerCase();
       return (
         displayName.includes(normalizedQuery) ||
@@ -126,46 +138,63 @@ const includesQuery = (
     .includes(normalizedQuery);
 };
 
+const isRoomActive = (
+  roomId: string,
+  currentConversationId: string | null,
+): boolean => currentConversationId === roomId;
+
+type RoomBucket = SectionId;
+
+const resolveRoomBucket = (room: Conversation): RoomBucket => {
+  if (isDirectConversation(room)) {
+    return "direct";
+  }
+  return "groups";
+};
+
 const toSections = (
   source: Conversation[],
   activeFilter: ConversationFilter,
 ): RoomSection[] => {
-  const toType = (room: Conversation): RoomType =>
-    normalizeRoomType(room.type, room.participants?.length);
-  const unread = source.filter((room) => (room.unreadCount || 0) > 0);
-  const channels = source.filter((room) => toType(room) === RoomType.CHANNEL);
-  const groups = source.filter((room) => toType(room) === RoomType.GROUP);
-  const direct = source.filter((room) => isDirectConversation(room));
+  const buckets: Record<RoomBucket, Conversation[]> = {
+    groups: [],
+    direct: [],
+  };
+
+  source.forEach((room) => {
+    const bucket = resolveRoomBucket(room);
+    buckets[bucket].push(room);
+  });
+
+  const unreadBuckets: Record<RoomBucket, Conversation[]> = {
+    groups: buckets.groups.filter((room) => (room.unreadCount || 0) > 0),
+    direct: buckets.direct.filter((room) => (room.unreadCount || 0) > 0),
+  };
+
+  const buildSections = (
+    entries: ReadonlyArray<[SectionId, Conversation[]]>,
+  ): RoomSection[] =>
+    entries
+      .filter(([, rooms]) => rooms.length > 0)
+      .map(([id, rooms]) => ({ id, rooms }));
 
   switch (activeFilter) {
     case "unread":
-      return unread.length > 0 ? [{ id: "unread", rooms: unread }] : [];
+      return buildSections([
+        ["direct", unreadBuckets.direct],
+        ["groups", unreadBuckets.groups],
+      ]);
+    case "direct":
+      return buildSections([["direct", buckets.direct]]);
     case "channels":
-      return channels.length > 0 ? [{ id: "channels", rooms: channels }] : [];
+      return buildSections([["groups", buckets.groups]]);
     case "groups":
-      return groups.length > 0 ? [{ id: "groups", rooms: groups }] : [];
-    default: {
-      const readChannel = channels.filter(
-        (room) => (room.unreadCount || 0) === 0,
-      );
-      const readGroup = groups.filter((room) => (room.unreadCount || 0) === 0);
-      const readDirect = direct.filter((room) => (room.unreadCount || 0) === 0);
-
-      const sections: RoomSection[] = [];
-      if (unread.length > 0) {
-        sections.push({ id: "unread", rooms: unread });
-      }
-      if (readChannel.length > 0) {
-        sections.push({ id: "channels", rooms: readChannel });
-      }
-      if (readGroup.length > 0) {
-        sections.push({ id: "groups", rooms: readGroup });
-      }
-      if (readDirect.length > 0) {
-        sections.push({ id: "direct", rooms: readDirect });
-      }
-      return sections;
-    }
+      return buildSections([["groups", buckets.groups]]);
+    default:
+      return buildSections([
+        ["direct", buckets.direct],
+        ["groups", buckets.groups],
+      ]);
   }
 };
 
@@ -177,10 +206,10 @@ const Row = ({ index, style, data }: ListChildComponentProps<RowData>) => {
 
   if (item.kind === "section") {
     return (
-      <div style={style} className="px-3">
+      <div style={style} className="px-4">
         <div
           className={clsx(
-            "flex h-full items-center text-xs font-semibold uppercase tracking-wide text-text-muted",
+            "flex h-full items-center text-caption font-medium uppercase tracking-[0.08em] text-text-muted/80",
             data.collapsed && "justify-center",
           )}
         >
@@ -198,7 +227,7 @@ const Row = ({ index, style, data }: ListChildComponentProps<RowData>) => {
         conversation={item.room}
         currentUser={data.currentUser}
         collapsed={data.collapsed}
-        isActive={data.selectedId === item.room.id}
+        isActive={isRoomActive(item.room.id, data.currentConversationId)}
         isKeyboardActive={data.keyboardActiveRoomId === item.room.id}
         onSelect={data.onSelect}
       />
@@ -213,6 +242,12 @@ export const RoomList: React.FC<RoomListProps> = ({
   searchQuery,
   activeFilter,
   collapsed,
+  showLoadingSkeleton = false,
+  error = null,
+  onRetry,
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore,
   onSelect,
 }) => {
   const { t } = useTranslation();
@@ -221,6 +256,14 @@ export const RoomList: React.FC<RoomListProps> = ({
   const [viewportHeight, setViewportHeight] = useState(0);
   const [keyboardCursor, setKeyboardCursor] = useState(0);
   const [isKeyboardMode, setIsKeyboardMode] = useState(false);
+
+  const handleSelect = useCallback(
+    (conversationId: string) => {
+      setIsKeyboardMode(false);
+      onSelect(conversationId);
+    },
+    [onSelect],
+  );
 
   const sectionTitles = useMemo<Record<SectionId, string>>(
     () => ({
@@ -233,17 +276,31 @@ export const RoomList: React.FC<RoomListProps> = ({
   );
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
+  const hasAnyConversations =
+    Array.isArray(conversations) && conversations.length > 0;
 
   const sortedRooms = useMemo(
-    () => sortByPriority(Array.isArray(conversations) ? conversations : []),
-    [conversations],
+    () =>
+      rankConversations(Array.isArray(conversations) ? conversations : [], {
+        currentUserId: currentUser.id,
+        currentUsername: currentUser.username,
+        currentDisplayName: currentUser.displayName,
+        activeConversationId: selectedId,
+      }),
+    [
+      conversations,
+      currentUser.displayName,
+      currentUser.id,
+      currentUser.username,
+      selectedId,
+    ],
   );
 
   const queriedRooms = useMemo(() => {
     return sortedRooms.filter((conversation) =>
-      includesQuery(conversation, normalizedQuery),
+      includesQuery(conversation, normalizedQuery, currentUser.id),
     );
-  }, [sortedRooms, normalizedQuery]);
+  }, [sortedRooms, normalizedQuery, currentUser.id]);
 
   const sections = useMemo(
     () => toSections(queriedRooms, activeFilter),
@@ -304,7 +361,7 @@ export const RoomList: React.FC<RoomListProps> = ({
     if (!selectedId) return -1;
     return roomIndexes.findIndex((listIndex) => {
       const item = flatItems[listIndex];
-      return item?.kind === "room" && item.room.id === selectedId;
+      return item?.kind === "room" && isRoomActive(item.room.id, selectedId);
     });
   }, [flatItems, roomIndexes, selectedId]);
 
@@ -337,10 +394,10 @@ export const RoomList: React.FC<RoomListProps> = ({
     return {
       items: flatItems,
       currentUser,
-      selectedId,
+      currentConversationId: selectedId,
       collapsed,
       keyboardActiveRoomId: isKeyboardMode ? keyboardActiveRoomId : null,
-      onSelect,
+      onSelect: handleSelect,
     };
   }, [
     currentUser,
@@ -350,12 +407,12 @@ export const RoomList: React.FC<RoomListProps> = ({
     isKeyboardMode,
     roomIndexes,
     currentCursor,
-    onSelect,
+    handleSelect,
   ]);
 
   useEffect(() => {
     listRef.current?.resetAfterIndex(0, true);
-  }, [rowHeights]);
+  }, [collapsed, flatItems.length]);
 
   const syncViewportHeight = useCallback(() => {
     const node = containerRef.current;
@@ -421,9 +478,14 @@ export const RoomList: React.FC<RoomListProps> = ({
     const listIndex = roomIndexes[currentCursor];
     const item = flatItems[listIndex];
     if (item && item.kind === "room") {
-      onSelect(item.room.id);
+      handleSelect(item.room.id);
     }
-  }, [currentCursor, flatItems, onSelect, roomIndexes]);
+  }, [currentCursor, flatItems, handleSelect, roomIndexes]);
+
+  const getItemKey = useCallback(
+    (index: number, data: RowData) => data.items[index]?.key ?? `row-${index}`,
+    [],
+  );
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (roomIndexes.length === 0) return;
@@ -449,6 +511,26 @@ export const RoomList: React.FC<RoomListProps> = ({
     }
   };
 
+  if (showLoadingSkeleton) {
+    return (
+      <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+        <ConversationListSkeleton count={collapsed ? 5 : 7} />
+      </div>
+    );
+  }
+
+  if (error && !hasAnyConversations && normalizedQuery.length === 0) {
+    return (
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-4">
+        <ErrorState
+          title={t("error:chat.fetchConversationsFailed")}
+          message={error}
+          onRetry={onRetry}
+        />
+      </div>
+    );
+  }
+
   if (flatItems.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-center">
@@ -462,31 +544,54 @@ export const RoomList: React.FC<RoomListProps> = ({
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="min-h-0 flex-1"
-      tabIndex={0}
-      role="listbox"
-      aria-label={t("sidebar:room.listAria")}
-      onKeyDown={handleKeyDown}
-      onMouseMove={() => {
-        if (isKeyboardMode) {
-          setIsKeyboardMode(false);
-        }
-      }}
-    >
-      {viewportHeight > 0 && (
-        <VariableSizeList<RowData>
-          ref={listRef}
-          height={viewportHeight}
-          width="100%"
-          itemCount={flatItems.length}
-          itemData={rowData}
-          itemSize={getItemSize}
-          overscanCount={12}
-        >
-          {Row}
-        </VariableSizeList>
+    <div className="min-h-0 flex-1 pb-2 flex flex-col">
+      <div
+        ref={containerRef}
+        className="min-h-0 flex-1"
+        tabIndex={0}
+        role="listbox"
+        aria-label={t("sidebar:room.listAria")}
+        onKeyDown={handleKeyDown}
+        onMouseMove={() => {
+          if (isKeyboardMode) {
+            setIsKeyboardMode(false);
+          }
+        }}
+      >
+        {viewportHeight > 0 && (
+          <VariableSizeList<RowData>
+            ref={listRef}
+            height={viewportHeight}
+            width="100%"
+            itemCount={flatItems.length}
+            itemData={rowData}
+            itemSize={getItemSize}
+            itemKey={getItemKey}
+            overscanCount={12}
+          >
+            {Row}
+          </VariableSizeList>
+        )}
+      </div>
+
+      {hasMore && (
+        <div className="px-3 pt-1">
+          <button
+            type="button"
+            onClick={() => onLoadMore?.()}
+            disabled={isLoadingMore}
+            className={clsx(
+              "w-full rounded-xl border border-border px-3 py-2 text-xs font-medium transition-colors",
+              isLoadingMore
+                ? "cursor-not-allowed text-text-muted opacity-70"
+                : "text-text-secondary hover:bg-surface-hover",
+            )}
+          >
+            {isLoadingMore
+              ? t("common:status.loading", { defaultValue: "Loading..." })
+              : t("sidebar:actions.loadMore", { defaultValue: "Load more" })}
+          </button>
+        </div>
       )}
     </div>
   );

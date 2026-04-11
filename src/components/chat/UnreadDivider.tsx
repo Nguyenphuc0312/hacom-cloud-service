@@ -16,17 +16,15 @@ export const UnreadDivider: React.FC<UnreadDividerProps> = ({ className }) => {
 
   return (
     <div
-      className={clsx("my-3 flex items-center gap-3", className)}
+      className={clsx("my-5 flex items-center justify-center", className)}
       role="separator"
       aria-label={t("chat:message.unreadDivider", {
         defaultValue: "New messages",
       })}
     >
-      <div className="h-px flex-1 bg-primary/40" />
-      <span className="shrink-0 rounded-full border border-primary/30 bg-primary/8 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
+      <span className="shrink-0 rounded-full border border-primary/18 bg-primary/12 px-3.5 py-1 text-[11px] font-semibold tracking-[0.01em] text-primary">
         {t("chat:message.unreadDivider", { defaultValue: "New messages" })}
       </span>
-      <div className="h-px flex-1 bg-primary/40" />
     </div>
   );
 };

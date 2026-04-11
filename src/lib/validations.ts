@@ -53,22 +53,6 @@ export type LoginFormData = z.infer<typeof loginSchema>;
  */
 export const registerSchema = z
   .object({
-    username: z
-      .string()
-      .min(1, i18nKey("validation:register.usernameRequired"))
-      .min(
-        VALIDATION_CONFIG.USERNAME_MIN_LENGTH,
-        i18nKey("validation:register.usernameMin", {
-          count: VALIDATION_CONFIG.USERNAME_MIN_LENGTH,
-        }),
-      )
-      .max(
-        VALIDATION_CONFIG.USERNAME_MAX_LENGTH,
-        i18nKey("validation:register.usernameMax", {
-          count: VALIDATION_CONFIG.USERNAME_MAX_LENGTH,
-        }),
-      )
-      .regex(/^[a-zA-Z0-9_]+$/, i18nKey("validation:register.usernamePattern")),
     email: z
       .string()
       .min(1, i18nKey("validation:auth.emailRequired"))
@@ -95,8 +79,6 @@ export const registerSchema = z
     confirmPassword: z
       .string()
       .min(1, i18nKey("validation:auth.confirmPasswordRequired")),
-    firstName: z.string().optional(),
-    lastName: z.string().optional(),
     acceptTerms: z.literal(true, {
       errorMap: () => ({ message: i18nKey("validation:auth.acceptTerms") }),
     }),
@@ -119,6 +101,15 @@ export const forgotPasswordSchema = z.object({
 });
 
 export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
+
+export const emailOtpSchema = z.object({
+  otp: z
+    .string()
+    .min(6, i18nKey("validation:auth.otpRequired"))
+    .regex(/^\d{6}$/, i18nKey("validation:auth.otpSixDigits")),
+});
+
+export type EmailOtpFormData = z.infer<typeof emailOtpSchema>;
 
 /**
  * Schema đặt lại mật khẩu

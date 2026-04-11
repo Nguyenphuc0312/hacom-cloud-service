@@ -23,11 +23,11 @@ const renderRouteElement = (
 };
 
 export const buildPublicRouteObjects = (): RouteObject[] =>
-  publicRoutes.map(({ path, index, component }) => ({
+  publicRoutes.map(({ path, index, component, guestOnly = true }) => ({
     path,
     index,
     element: renderRouteElement(component as React.ComponentType, {
-      guestOnly: true,
+      guestOnly,
     }),
   }));
 

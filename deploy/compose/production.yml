@@ -4,12 +4,6 @@ services:
   chat-web-client:
     image: ${CHAT_WEB_CLIENT_IMAGE:?CHAT_WEB_CLIENT_IMAGE is required}
     restart: unless-stopped
-    env_file:
-      - ../../.env.runtime
-    environment:
-      API_UPSTREAM: http://chat-api:3001
-      AUTH_UPSTREAM: http://chat-auth:3101
-      WS_UPSTREAM: http://chat-websocket:8080
     expose:
       - "80"
     healthcheck:

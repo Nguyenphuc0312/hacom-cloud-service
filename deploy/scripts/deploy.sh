@@ -10,15 +10,6 @@ set -a
 . ./.release.env
 set +a
 
-: "${SERVER_ENV_PATH:?SERVER_ENV_PATH is required}"
-
-ln -sfn "${SERVER_ENV_PATH}" .env.runtime
-test -f .env.runtime
-
-set -a
-. ./.env.runtime
-set +a
-
 : "${COMPOSE_FILE:?COMPOSE_FILE is required}"
 : "${RUNTIME_SERVICE:?RUNTIME_SERVICE is required}"
 : "${HEALTHCHECK_URL:=http://127.0.0.1/healthz}"

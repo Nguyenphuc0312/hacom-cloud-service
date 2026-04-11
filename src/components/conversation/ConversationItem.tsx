@@ -13,6 +13,7 @@ import {
   getConversationAvatar,
   getConversationDisplayName,
   getMessagePreview,
+  getMessagePreviewState,
   getOtherParticipant,
 } from "../../utils/messageHelpers";
 
@@ -49,6 +50,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
     : otherParticipant?.status;
   const lastMessage = conversation.lastMessage;
   const preview = getMessagePreview(lastMessage, currentUserId);
+  const previewState = getMessagePreviewState(lastMessage, currentUserId);
   const timeStr = lastMessage
     ? formatRelativeTime(new Date(lastMessage.createdAt))
     : "";
@@ -137,9 +139,13 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
             <span
               className={clsx(
                 "text-sm truncate",
-                conversation.unreadCount > 0
-                  ? "text-text-secondary font-medium"
-                  : "text-text-muted",
+                previewState === "failed"
+                  ? "font-medium text-danger"
+                  : previewState
+                    ? "font-medium text-warning"
+                    : conversation.unreadCount > 0
+                      ? "text-text-secondary font-medium"
+                      : "text-text-muted",
               )}
             >
               {preview}

@@ -21,6 +21,7 @@ declare module "react-window" {
     itemSize: (index: number) => number;
     itemData: T;
     overscanCount?: number;
+    itemKey?: (index: number, data: T) => string | number;
     onScroll?: (props: ListOnScrollProps) => void;
     outerRef?: React.Ref<HTMLElement | null>;
     className?: string;

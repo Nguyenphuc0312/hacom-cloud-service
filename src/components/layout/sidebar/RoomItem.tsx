@@ -6,16 +6,20 @@ import {
   BookmarkIcon,
   SpeakerXMarkIcon,
 } from "@heroicons/react/24/solid";
+import { UserGroupIcon, UserIcon } from "@heroicons/react/24/outline";
 import { Avatar } from "../../common/Avatar";
 import { Badge } from "../../common/Badge";
 import type { Conversation, UserSummary } from "../../../types";
 import { isDirectConversation } from "../../../lib/conversationAdapter";
 import { formatRelativeTime } from "../../../utils/formatTime";
+import { hasConversationMention } from "../../../utils/conversationRanking";
 import {
   getConversationAvatar,
   getConversationDisplayName,
   getMessagePreview,
+  getMessagePreviewState,
   getOtherParticipant,
+  getUserDisplayName,
 } from "../../../utils/messageHelpers";
 
 interface RoomItemProps {
@@ -26,41 +30,6 @@ interface RoomItemProps {
   isKeyboardActive: boolean;
   onSelect: (conversationId: string) => void;
 }
-
-const normalizeMentionToken = (value: unknown): string => {
-  if (typeof value !== "string") return "";
-  return value.trim().toLowerCase().replace(/\s+/g, "");
-};
-
-const hasMention = (
-  conversation: Conversation,
-  currentUser: UserSummary,
-): boolean => {
-  if ((conversation.unreadCount || 0) <= 0) return false;
-  if (
-    !conversation.lastMessage ||
-    conversation.lastMessage.senderId === currentUser.id
-  ) {
-    return false;
-  }
-
-  const content = conversation.lastMessage.content || "";
-  const normalizedContent = content.toLowerCase().replace(/\s+/g, "");
-  const usernameToken = normalizeMentionToken(currentUser.username);
-  const displayNameToken = normalizeMentionToken(currentUser.displayName);
-
-  if (/@(all|channel|here)\b/i.test(content)) return true;
-
-  if (usernameToken && normalizedContent.includes(`@${usernameToken}`)) {
-    return true;
-  }
-
-  if (displayNameToken && normalizedContent.includes(`@${displayNameToken}`)) {
-    return true;
-  }
-
-  return false;
-};
 
 const BaseRoomItem: React.FC<RoomItemProps> = ({
   conversation,
@@ -90,24 +59,47 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
     const messagePreview = getMessagePreview(lastMessage, currentUser.id, 44);
     if (!messagePreview) return "";
 
+    const senderParticipant = (conversation.participants || []).find(
+      (participant) => participant.id === lastMessage.senderId,
+    );
+
     const senderLabel =
       lastMessage.senderId === currentUser.id
-        ? "Bạn"
-        : lastMessage.senderName?.trim() ||
-          directPartner?.displayName ||
-          directPartner?.username ||
+        ? t("chat:message.you")
+        : getUserDisplayName(senderParticipant) ||
+          getUserDisplayName(directPartner) ||
+          lastMessage.senderName?.trim() ||
           t("common:labels.conversation");
 
     return `${senderLabel}: ${messagePreview}`;
-  }, [conversation.lastMessage, currentUser.id, directPartner, t]);
+  }, [
+    conversation.lastMessage,
+    conversation.participants,
+    currentUser.id,
+    directPartner,
+    t,
+  ]);
+  const previewState = useMemo(
+    () => getMessagePreviewState(conversation.lastMessage, currentUser.id),
+    [conversation.lastMessage, currentUser.id],
+  );
   const timeLabel = useMemo(() => {
     if (!conversation.lastMessage?.createdAt) return "";
     return formatRelativeTime(new Date(conversation.lastMessage.createdAt));
   }, [conversation.lastMessage]);
 
   const unreadCount = conversation.unreadCount || 0;
-  const unreadMention = hasMention(conversation, currentUser);
+  const unreadMention = hasConversationMention(conversation, currentUser);
   const isDirect = isDirectConversation(conversation);
+  const conversationTypeLabel = isDirect
+    ? t("sidebar:room.type.direct")
+    : t("sidebar:room.type.group");
+  const participantCountLabel =
+    !isDirect && (conversation.participants?.length ?? 0) > 0
+      ? t("chat:header.members", {
+          count: conversation.participants?.length ?? 0,
+        })
+      : "";
 
   const avatarSrc = getConversationAvatar(conversation, currentUser.id);
   const avatarStatus = isDirect ? directPartner?.status : undefined;
@@ -117,11 +109,17 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
       <button
         type="button"
         onClick={() => onSelect(conversation.id)}
+        role="option"
+        aria-selected={isActive}
         className={clsx(
           "group relative mx-2 my-1 flex h-room-item w-room-item items-center justify-center rounded-lg",
-          "transition-colors",
-          "hover:bg-surface-overlay",
-          (isActive || isKeyboardActive) && "bg-primary/15 text-primary",
+          "transition-micro",
+          "hover:bg-surface-hover",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+          isActive && "bg-primary/14 text-primary ring-1 ring-primary/45",
+          !isActive &&
+            isKeyboardActive &&
+            "bg-surface-overlay ring-1 ring-border",
         )}
         aria-label={displayName}
         title={displayName}
@@ -140,9 +138,24 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
               count={unreadCount}
               size="sm"
               variant={unreadMention ? "danger" : "primary"}
+              className="min-w-5 text-caption"
             />
           </span>
         )}
+
+        <span
+          className={clsx(
+            "absolute bottom-1.5 right-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full border border-border/70 bg-surface-raised text-text-muted",
+            isActive && "text-primary",
+          )}
+          aria-label={conversationTypeLabel}
+        >
+          {isDirect ? (
+            <UserIcon className="h-2.5 w-2.5" />
+          ) : (
+            <UserGroupIcon className="h-2.5 w-2.5" />
+          )}
+        </span>
       </button>
     );
   }
@@ -151,15 +164,31 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
     <button
       type="button"
       onClick={() => onSelect(conversation.id)}
+      role="option"
+      aria-selected={isActive}
       className={clsx(
-        "mx-2 my-1 flex h-room-item w-[calc(100%-var(--space-4))] items-center rounded-lg px-3",
-        "transition-colors",
-        "hover:bg-surface-overlay",
-        (isActive || isKeyboardActive) && "bg-primary/15",
+        "relative mx-2 my-0.5 flex h-room-item w-[calc(100%-var(--space-4))] items-center rounded-lg px-2.5",
+        "transition-micro",
+        "hover:bg-surface-hover",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+        isActive && "bg-primary/12 ring-1 ring-primary/35",
+        !isActive &&
+          isKeyboardActive &&
+          "bg-surface-overlay ring-1 ring-border",
       )}
       aria-label={displayName}
     >
-      <div className="grid w-full grid-cols-[auto,1fr,auto] items-center gap-3">
+      {(isActive || unreadCount > 0) && (
+        <span
+          className={clsx(
+            "absolute left-1 top-1/2 h-9 -translate-y-1/2 rounded-full",
+            isActive ? "w-1 bg-primary" : "w-0.5 bg-primary/60",
+          )}
+          aria-hidden="true"
+        />
+      )}
+
+      <div className="grid w-full grid-cols-[auto,1fr,auto] items-center gap-2.5">
         <Avatar
           src={avatarSrc}
           alt={displayName}
@@ -169,15 +198,31 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         />
 
         <div className="min-w-0">
-          <div className="mb-1 flex items-center gap-2">
+          <div className="mb-0.5 flex items-center gap-1">
             <p
               className={clsx(
-                "truncate text-sm leading-5 text-text-primary",
+                "truncate text-body-sm leading-5 text-text-primary",
                 unreadCount > 0 && "font-semibold",
               )}
             >
               {displayName}
             </p>
+
+            <span
+              className={clsx(
+                "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
+                isDirect
+                  ? "border-primary/25 bg-primary/10 text-primary"
+                  : "border-border bg-surface-overlay text-text-secondary",
+              )}
+            >
+              {isDirect ? (
+                <UserIcon className="mr-1 h-3 w-3" aria-hidden="true" />
+              ) : (
+                <UserGroupIcon className="mr-1 h-3 w-3" aria-hidden="true" />
+              )}
+              {conversationTypeLabel}
+            </span>
 
             {conversation.isMuted && (
               <SpeakerXMarkIcon
@@ -201,20 +246,29 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
 
           <p
             className={clsx(
-              "truncate text-xs leading-5 text-start",
-              unreadCount > 0
-                ? "font-medium text-text-secondary"
-                : "text-text-muted",
+              "truncate text-caption leading-4 text-start",
+              previewState === "failed"
+                ? "font-medium text-danger"
+                : previewState
+                  ? "font-medium text-warning"
+                  : unreadCount > 0
+                    ? "font-medium text-text-secondary"
+                    : "text-text-muted",
             )}
           >
             {previewText || t("sidebar:room.noMessagesYet")}
           </p>
+          {!isDirect && participantCountLabel && (
+            <p className="mt-0.5 truncate text-[11px] text-text-muted">
+              {participantCountLabel}
+            </p>
+          )}
         </div>
 
         <div className="flex h-full min-w-room-meta flex-col items-end justify-between py-1">
           <span
             className={clsx(
-              "text-xs leading-4",
+              "text-caption tabular-nums",
               unreadCount > 0
                 ? "font-semibold text-primary"
                 : "text-text-muted",
@@ -234,6 +288,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
                     ? "muted"
                     : "primary"
               }
+              className="min-w-5 px-1.5 text-caption shadow-xs"
             />
           ) : (
             <span className="h-4" aria-hidden="true" />

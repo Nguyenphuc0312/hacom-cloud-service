@@ -12,6 +12,7 @@
   },
   "tabs": {
     "all": "All",
+    "direct": "Direct",
     "unread": "Unread",
     "groups": "Groups",
     "channels": "Channels"
@@ -23,6 +24,10 @@
       "groups": "Groups",
       "direct": "Direct messages"
     },
+    "type": {
+      "direct": "Direct",
+      "group": "Group"
+    },
     "mentioned": "Mentioned",
     "noMessagesYet": "No messages yet",
     "emptyBySearch": "No room matches your search.",
@@ -31,6 +36,9 @@
   },
   "sidebar": {
     "aria": "Sidebar"
+  },
+  "actions": {
+    "loadMore": "Load more"
   },
   "logout": {
     "button": "Sign out",

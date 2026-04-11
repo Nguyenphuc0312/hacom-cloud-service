@@ -11,21 +11,37 @@
     "members": "{{count}} thành viên"
   },
   "typing": {
-    "user": "{{name}} đang nhập..."
+    "user": "{{name}} đang nhập...",
+    "default": "Đang nhập...",
+    "recording": "Đang ghi âm...",
+    "uploading": "Đang tải tệp..."
   },
   "message": {
     "you": "Bạn",
+    "deleted": "Tin nhắn đã bị xóa",
+    "editedAt": "Đã chỉnh sửa lúc {{time}}",
+    "jumpToLatest": "Đến tin mới nhất",
+    "replyTargetMissing": "Tin nhắn gốc không còn khả dụng",
+    "threadReplies": "{{count}} phản hồi",
+    "unreadDivider": "Tin nhắn chưa đọc",
     "edited": "đã chỉnh sửa",
     "forwardedFrom": "Chuyển tiếp từ {{name}}",
     "bubbleAria": "{{name}} lúc {{time}}",
     "status": {
       "uploading": "Đang tải lên",
+      "queued": "Đang chờ gửi",
       "sending": "Đang gửi",
+      "retrying": "Đang gửi lại",
       "sent": "Đã gửi",
+      "delivered": "Đã nhận",
+      "read": "Đã xem",
       "retry": "Gửi lại",
-      "failedRetry": "Gửi thất bại. Bấm để gửi lại"
+      "failedRetry": "Gửi thất bại. Bấm để gửi lại",
+      "failedInline": "Không gửi được",
+      "pendingInline": "Đang đồng bộ"
     },
     "actions": {
+      "react": "Thả cảm xúc",
       "reply": "Trả lời",
       "forward": "Chuyển tiếp",
       "copy": "Sao chép",
@@ -54,14 +70,92 @@
     "sendMessage": "Gửi tin nhắn",
     "sending": "Đang gửi tin nhắn",
     "sentAnnouncement": "Đã gửi tin nhắn",
+    "queuedAnnouncement": "Tin nhắn đã được xếp hàng đợi",
     "failedAnnouncement": "Gửi tin nhắn thất bại",
+    "reconnectingHint": "Đang kết nối lại. Tin nhắn mới sẽ được xếp hàng đợi.",
+    "offlineHint": "Bạn đang offline. Tin nhắn sẽ tự gửi khi kết nối trở lại.",
+    "permissionDenied": "Bạn không còn quyền gửi tin nhắn trong cuộc trò chuyện này.",
+    "blockedConversation": "Bạn không thể gửi tin nhắn trong cuộc trò chuyện này.",
     "recordVoice": "Ghi âm",
     "uploading": "Đang tải lên...",
     "cancelUpload": "Hủy",
     "retryUpload": "Thử lại",
     "sendFile": "Gửi tệp",
     "filePreviewAlt": "Xem trước tệp",
-    "fileSizeLimit": "Giới hạn {{size}}"
+    "fileSizeLimit": "Giới hạn {{size}}",
+    "attachBlocked": "Tính năng đính kèm hiện không khả dụng",
+    "shortcutHint": "Enter để gửi, Shift+Enter để xuống dòng",
+    "shortcutHintManual": "Dùng nút Gửi để gửi tin nhắn",
+    "moreUploadErrors": "và thêm {{count}} tệp"
+  },
+  "density": {
+    "label": "Mật độ hiển thị",
+    "auto": "Tự động",
+    "comfortable": "Thoải mái",
+    "compact": "Gọn",
+    "expanded": "Rộng"
+  },
+  "pinned": {
+    "title": "Tin nhắn ghim",
+    "empty": "Chưa có tin nhắn ghim",
+    "jumpTo": "Đi tới tin nhắn"
+  },
+  "selection": {
+    "enter": "Chọn tin nhắn",
+    "toolbar": "Thao tác chọn",
+    "selected": "Đã chọn {{count}}",
+    "selected_one": "Đã chọn {{count}}",
+    "selected_other": "Đã chọn {{count}}"
+  },
+  "search": {
+    "title": "Tìm kiếm tin nhắn",
+    "placeholder": "Tìm trong cuộc trò chuyện",
+    "error": "Không thể tìm kiếm tin nhắn",
+    "noResults": "Không có tin nhắn phù hợp",
+    "noResultsDescription": "Hãy thử từ khóa khác.",
+    "resultCount": "{{count}} kết quả",
+    "resultCount_one": "{{count}} kết quả",
+    "resultCount_other": "{{count}} kết quả"
+  },
+  "contactShare": {
+    "title": "Chia sẻ liên hệ",
+    "description": "Chia sẻ danh thiếp của bạn hoặc gửi một người trong danh bạ.",
+    "myContact": "Liên hệ của tôi",
+    "chooseContact": "Chọn liên hệ",
+    "shareMyCard": "Chia sẻ danh thiếp của tôi",
+    "privacyNote": "Chỉ thông tin hồ sơ bạn cho phép mới được chia sẻ.",
+    "shareNow": "Chia sẻ ngay",
+    "searchPlaceholder": "Tìm theo tên hoặc username",
+    "searchHint": "Nhập ít nhất {{min}} ký tự",
+    "noResults": "Không tìm thấy liên hệ",
+    "shareAction": "Chia sẻ",
+    "viewProfile": "Xem hồ sơ",
+    "sent": "Đã chia sẻ liên hệ",
+    "failed": "Không thể chia sẻ liên hệ"
+  },
+  "filePreview": {
+    "loading": "Đang tải xem trước...",
+    "urlError": "Không thể tải xem trước tệp",
+    "retry": "Thử lại",
+    "videoNotSupported": "Trình duyệt của bạn không hỗ trợ phát video.",
+    "pdfFallback": "Không thể hiển thị PDF. Hãy mở trong tab mới.",
+    "noPreview": "Không có xem trước cho loại tệp này",
+    "modalLabel": "Xem trước tệp",
+    "zoomOut": "Thu nhỏ",
+    "zoomIn": "Phóng to",
+    "fitToScreen": "Vừa màn hình",
+    "close": "Đóng xem trước",
+    "previous": "Tệp trước",
+    "next": "Tệp tiếp theo",
+    "instructions": "Dùng phím mũi tên để chuyển tệp",
+    "blocked": "Tệp bị chặn bởi chính sách bảo mật",
+    "deleted": "Tệp không còn tồn tại",
+    "scanning": "Đang quét tệp",
+    "preview": "Xem trước tệp",
+    "playVideo": "Phát video"
+  },
+  "slowMode": {
+    "active": "Chế độ chậm đang bật. Thử lại sau {{seconds}} giây"
   },
   "dropZone": {
     "title": "Thả tệp vào đây",
@@ -171,7 +265,9 @@
     "deleteFailed": "Không thể xóa tin nhắn",
     "resendSuccess": "Gửi lại thành công",
     "resendFailed": "Gửi lại không thành công",
-    "connectionReconnecting": "Đang kết nối lại..."
+    "connectionReconnecting": "Đang kết nối lại...",
+    "connectionOffline": "Bạn đang ngoại tuyến. Tin nhắn sẽ được xếp hàng đợi.",
+    "connectionRestored": "Kết nối đã được khôi phục"
   },
   "preview": {
     "photo": "Ảnh",

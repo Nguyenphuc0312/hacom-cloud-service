@@ -6,7 +6,12 @@
 import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { Bars3Icon, Bars2Icon } from "@heroicons/react/24/outline";
+import {
+  AdjustmentsHorizontalIcon,
+  Bars2Icon,
+  Bars3Icon,
+  RectangleStackIcon,
+} from "@heroicons/react/24/outline";
 import type { ChatDensity } from "../../stores/uiStore";
 
 interface DensityToggleProps {
@@ -15,9 +20,27 @@ interface DensityToggleProps {
   className?: string;
 }
 
-const densityOptions: { value: ChatDensity; icon: typeof Bars3Icon }[] = [
-  { value: "comfortable", icon: Bars3Icon },
-  { value: "compact", icon: Bars2Icon },
+const densityOptions: {
+  value: ChatDensity;
+  icon: typeof Bars3Icon;
+  labelKey: string;
+}[] = [
+  {
+    value: "auto",
+    icon: AdjustmentsHorizontalIcon,
+    labelKey: "chat:density.auto",
+  },
+  {
+    value: "comfortable",
+    icon: Bars3Icon,
+    labelKey: "chat:density.comfortable",
+  },
+  { value: "compact", icon: Bars2Icon, labelKey: "chat:density.compact" },
+  {
+    value: "expanded",
+    icon: RectangleStackIcon,
+    labelKey: "chat:density.expanded",
+  },
 ];
 
 export const DensityToggle: React.FC<DensityToggleProps> = ({
@@ -36,7 +59,7 @@ export const DensityToggle: React.FC<DensityToggleProps> = ({
       role="radiogroup"
       aria-label={t("chat:density.label", { defaultValue: "Display density" })}
     >
-      {densityOptions.map(({ value, icon: Icon }) => (
+      {densityOptions.map(({ value, icon: Icon, labelKey }) => (
         <button
           key={value}
           type="button"
@@ -49,8 +72,8 @@ export const DensityToggle: React.FC<DensityToggleProps> = ({
               ? "bg-surface text-text-primary shadow-xs"
               : "text-text-secondary hover:text-text-primary",
           )}
-          title={t(`chat:density.${value}`, { defaultValue: value })}
-          aria-label={t(`chat:density.${value}`, { defaultValue: value })}
+          title={t(labelKey, { defaultValue: value })}
+          aria-label={t(labelKey, { defaultValue: value })}
         >
           <Icon className="h-4 w-4" />
         </button>

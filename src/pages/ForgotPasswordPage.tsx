@@ -9,10 +9,12 @@ import {
   ArrowLeftIcon,
   CheckCircleIcon,
 } from "@heroicons/react/24/outline";
+import { AuthCard, AuthShell } from "../components/auth";
 import { Button, Input, toast } from "../components/ui";
 import { forgotPasswordSchema } from "../lib/validations";
 import type { ForgotPasswordFormData } from "../lib/validations";
 import { authClient } from "../lib/axios";
+import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 
 export const ForgotPasswordPage: React.FC = () => {
   const { t } = useTranslation();
@@ -40,7 +42,7 @@ export const ForgotPasswordPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      await authClient.post("/auth/forgot-password", data);
+      await authClient.post(AUTH_ENDPOINTS.forgotPassword, data);
       setIsSubmitted(true);
       toast.success(t("auth:toast.forgotPasswordSent"));
     } catch {
@@ -53,101 +55,95 @@ export const ForgotPasswordPage: React.FC = () => {
 
   if (isSubmitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 px-4 py-12">
-        <div className="relative w-full max-w-md">
-          <div className="bg-surface rounded-2xl shadow-xl border border-border p-8 text-center animate-fade-in">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-success/15 rounded-full mb-6">
-              <CheckCircleIcon className="w-8 h-8 text-success" />
-            </div>
-
-            <h1 className="text-2xl font-bold text-text-primary mb-2">
-              {t("auth:forgot.successTitle")}
-            </h1>
-            <p className="text-text-muted mb-6">
-              {t("auth:forgot.successDescription")}{" "}
-              <span className="font-medium text-text-primary">
-                {getValues("email")}
-              </span>
-            </p>
-
-            <div className="space-y-4">
-              <p className="text-sm text-text-muted">
-                {t("auth:forgot.successHint")}
-              </p>
-              <Button
-                variant="outline"
-                fullWidth
-                onClick={() => setIsSubmitted(false)}
-              >
-                {t("auth:forgot.tryAnotherEmail")}
-              </Button>
-              <Link to="/login">
-                <Button variant="ghost" fullWidth>
-                  <ArrowLeftIcon className="w-4 h-4 mr-2" />
-                  {t("auth:forgot.backToLogin")}
-                </Button>
-              </Link>
-            </div>
+      <AuthShell maxWidth="md">
+        <AuthCard className="p-8 text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-success/15 rounded-full mb-6">
+            <CheckCircleIcon className="w-8 h-8 text-success" />
           </div>
-        </div>
-      </div>
+
+          <h1 className="text-2xl font-bold text-text-primary mb-2">
+            {t("auth:forgot.successTitle")}
+          </h1>
+          <p className="text-text-muted mb-6">
+            {t("auth:forgot.successDescription")}{" "}
+            <span className="font-medium text-text-primary">
+              {getValues("email")}
+            </span>
+          </p>
+          <p className="mb-6 text-sm text-text-muted">
+            {t("auth:forgot.securityHint")}
+          </p>
+
+          <div className="space-y-4">
+            <p className="text-sm text-text-muted">
+              {t("auth:forgot.successHint")}
+            </p>
+            <Button
+              variant="outline"
+              fullWidth
+              onClick={() => setIsSubmitted(false)}
+            >
+              {t("auth:forgot.tryAnotherEmail")}
+            </Button>
+            <Link to="/login">
+              <Button variant="ghost" fullWidth>
+                <ArrowLeftIcon className="w-4 h-4 mr-2" />
+                {t("auth:forgot.backToLogin")}
+              </Button>
+            </Link>
+          </div>
+        </AuthCard>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 px-4 py-12">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-secondary/15 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative w-full max-w-md">
-        <div className="bg-surface rounded-2xl shadow-xl border border-border p-8 animate-fade-in">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl mb-4 shadow-lg shadow-elev2">
-              <ChatBubbleLeftRightIcon className="w-8 h-8 text-text-inverse" />
-            </div>
-            <h1 className="text-2xl font-bold text-text-primary">
-              {t("auth:forgot.title")}
-            </h1>
-            <p className="text-text-muted mt-2">{t("auth:forgot.subtitle")}</p>
+    <AuthShell maxWidth="md">
+      <AuthCard className="p-8">
+        <div className="mb-8 text-center">
+          <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-elev2">
+            <ChatBubbleLeftRightIcon className="w-8 h-8 text-text-inverse" />
           </div>
-
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            <Input
-              {...register("email")}
-              type="email"
-              label={t("auth:login.email")}
-              placeholder={t("auth:placeholders.email")}
-              leftIcon={<EnvelopeIcon className="w-5 h-5" />}
-              error={errors.email?.message}
-              autoComplete="email"
-              disabled={isLoading}
-            />
-
-            <Button
-              type="submit"
-              fullWidth
-              size="lg"
-              isLoading={isLoading}
-              disabled={isLoading}
-            >
-              {t("auth:forgot.submit")}
-            </Button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <Link
-              to="/login"
-              className="inline-flex items-center text-sm text-text-muted hover:text-text-secondary"
-            >
-              <ArrowLeftIcon className="w-4 h-4 mr-1" />
-              {t("auth:forgot.backToLogin")}
-            </Link>
-          </div>
+          <h1 className="text-2xl font-bold text-text-primary">
+            {t("auth:forgot.title")}
+          </h1>
+          <p className="text-text-muted mt-2">{t("auth:forgot.subtitle")}</p>
         </div>
-      </div>
-    </div>
+
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          <Input
+            {...register("email")}
+            type="email"
+            label={t("auth:login.email")}
+            placeholder={t("auth:placeholders.email")}
+            leftIcon={<EnvelopeIcon className="w-5 h-5" />}
+            error={errors.email?.message}
+            autoComplete="email"
+            disabled={isLoading}
+          />
+
+          <Button
+            type="submit"
+            fullWidth
+            size="lg"
+            isLoading={isLoading}
+            disabled={isLoading}
+          >
+            {t("auth:forgot.submit")}
+          </Button>
+        </form>
+
+        <div className="mt-6 text-center">
+          <Link
+            to="/login"
+            className="inline-flex items-center text-sm text-text-muted hover:text-text-secondary"
+          >
+            <ArrowLeftIcon className="w-4 h-4 mr-1" />
+            {t("auth:forgot.backToLogin")}
+          </Link>
+        </div>
+      </AuthCard>
+    </AuthShell>
   );
 };
 

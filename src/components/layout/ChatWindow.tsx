@@ -8,10 +8,16 @@ import { DropOverlay } from "../input/DropOverlay";
 import { MessageInput } from "../input/MessageInput";
 import { SearchPanel } from "../chat/SearchPanel";
 import { PinnedMessagesPanel } from "../chat/PinnedMessagesPanel";
+import { ConversationLane } from "./ConversationLane";
 import type { MentionCandidate } from "../input/MessageInput";
 import { toast } from "../ui";
-import { useGroupStore, useUIStore } from "../../stores";
-import { useDropZone, useUploadQueue, usePresence } from "../../hooks";
+import { useChatStore, useGroupStore, useUIStore } from "../../stores";
+import {
+  useComposerAvailability,
+  useDropZone,
+  useUploadQueue,
+  usePresence,
+} from "../../hooks";
 import type {
   Attachment,
   Conversation,
@@ -22,8 +28,14 @@ import type {
 } from "../../types";
 import { MessageType } from "../../types";
 import type { UploadedFileMeta } from "../../types/attachmentDraft";
-import { contactApi } from "../../services/api";
-import { extractApiError } from "../../lib/apiContract";
+import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
+import type { ConnectionState } from "../../hooks/useWebSocket";
+import { resolveChatDensity } from "../../utils/densityPolicy";
+import { resolveOverlayPlacements } from "../../utils/overlayResolver";
+import { logMessageDebug } from "../../utils/messageDebug";
+import { logScrollTrace } from "../../utils/scrollTrace";
+import { getMessageByIdUseCase } from "../../features/chat/usecases/getMessageById";
+import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
 
 // ── Convert upload queue metadata to Attachment ─────────────────────
 
@@ -48,6 +60,12 @@ function metaToAttachment(meta: UploadedFileMeta): Attachment {
   } as Attachment;
 }
 
+const matchesMessageIdentity = (message: Message, targetId: string): boolean =>
+  message.id === targetId ||
+  message.localId === targetId ||
+  message.stableId === targetId ||
+  message.clientMessageId === targetId;
+
 interface ChatWindowProps {
   conversation: Conversation;
   messages: Message[];
@@ -58,7 +76,7 @@ interface ChatWindowProps {
     replyTo?: Message,
     fileMeta?: Attachment | Attachment[],
     type?: MessageType,
-  ) => void | Promise<void>;
+  ) => unknown | Promise<unknown>;
   onReactMessage?: (messageId: string, emoji: string) => void | Promise<void>;
   onEditMessage?: (messageId: string, content: string) => void | Promise<void>;
   onDeleteMessage?: (messageId: string) => void | Promise<void>;
@@ -72,8 +90,30 @@ interface ChatWindowProps {
   onFilePreview?: (attachment: Attachment) => void;
   messageError?: string | null;
   onRetryMessages?: () => void | Promise<void>;
+  onReachedLatestMessage?: (message: Message) => void;
+  connectionState?: ConnectionState;
+  isConversationReady?: boolean;
   className?: string;
 }
+
+type EphemeralNotice = {
+  kind: "info" | "warn" | "error" | "success";
+  message: string;
+};
+
+const getEphemeralNoticeClassName = (kind: EphemeralNotice["kind"]): string => {
+  switch (kind) {
+    case "warn":
+      return "border-warning/25 bg-warning/12 text-warning";
+    case "error":
+      return "border-danger/25 bg-danger/10 text-danger";
+    case "success":
+      return "border-success/20 bg-success/12 text-success";
+    case "info":
+    default:
+      return "border-primary/18 bg-surface/94 text-text-secondary";
+  }
+};
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
   conversation,
@@ -94,6 +134,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onFilePreview,
   messageError,
   onRetryMessages,
+  onReachedLatestMessage,
+  connectionState = "connected",
+  isConversationReady = true,
   className,
 }) => {
   const { t } = useTranslation();
@@ -107,6 +150,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     (state) => state.slowModeUntilByRoom[conversation.id] || 0,
   );
   const clearSlowModeCooldown = useGroupStore((s) => s.clearSlowModeCooldown);
+  const addMessage = useChatStore((s) => s.addMessage);
+  const fetchMessages = useChatStore((s) => s.fetchMessages);
+  const sendRestriction = useChatStore(
+    (state) => state.sendRestrictionsByConversation[conversation.id],
+  );
+  const [isSendingMessage, setIsSendingMessage] = React.useState(false);
 
   const [inputValue, setInputValue] = React.useState("");
   const [inputMode, setInputMode] = React.useState<InputMode>("normal");
@@ -170,14 +219,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   // ── Presence subscription: subscribe to room members' presence ──
   usePresence({ conversationId: conversation.id });
 
-  // ── Drag-and-drop ──
-  const { isDragActive, dropZoneProps, dismiss } = useDropZone({
-    onDrop: uploadQueue.addFiles,
-    disabled: false,
-  });
-
   const handleSend = React.useCallback(
     async (content?: string, fileMeta?: unknown, type?: string) => {
+      if (isSendingMessage) {
+        logMessageDebug("ChatWindow", "send_ignored_in_flight", {
+          conversationId: conversation.id,
+        });
+        return;
+      }
+
       if (inputMode === "edit" && editingMessage && onEditMessage) {
         const nextContent = (content || "").trim();
         if (
@@ -229,27 +279,59 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             : allAttachments
           : undefined;
 
-      setInputValue("");
-      setReplyToMessage(undefined);
-      setEditingMessage(undefined);
-      setInputMode("normal");
+      logMessageDebug("ChatWindow", "send_requested", {
+        conversationId: conversation.id,
+        inputMode,
+        contentLength: outgoingContent.length,
+        contentPreview: outgoingContent.slice(0, 120),
+        type: messageType || MessageType.TEXT,
+        attachmentCount: allAttachments.length,
+        replyToId: replyToMessage?.id,
+      });
 
-      await Promise.resolve(
-        onSendMessage(
-          outgoingContent,
-          replyToMessage,
-          attachmentArg,
-          messageType,
-        ),
-      );
+      setIsSendingMessage(true);
 
-      // Clear queue after successful send
-      if (queueMetas.length > 0) {
-        uploadQueue.clearAll();
+      try {
+        const result = await Promise.resolve(
+          onSendMessage(
+            outgoingContent,
+            replyToMessage,
+            attachmentArg,
+            messageType,
+          ),
+        );
+
+        setInputValue("");
+        setReplyToMessage(undefined);
+        setEditingMessage(undefined);
+        setInputMode("normal");
+
+        if (queueMetas.length > 0) {
+          uploadQueue.clearAll();
+        }
+
+        logMessageDebug("ChatWindow", "send_resolved", {
+          conversationId: conversation.id,
+          disposition:
+            (result as { disposition?: string } | undefined)?.disposition ??
+            "unknown",
+        });
+        return result;
+      } catch (error) {
+        logMessageDebug("ChatWindow", "send_rejected", {
+          conversationId: conversation.id,
+          errorMessage:
+            error instanceof Error ? error.message : "unknown_error",
+        });
+        throw error;
+      } finally {
+        setIsSendingMessage(false);
       }
     },
     [
+      conversation.id,
       editingMessage,
+      isSendingMessage,
       inputMode,
       onEditMessage,
       onSendMessage,
@@ -258,14 +340,67 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     ],
   );
 
-  const handleFeatureInDevelopment = React.useCallback(() => {
-    toast.info(t("common:toast.featureInDevelopment"));
-  }, [t]);
-
   // Search & pinned panel state
-  const [isSearchOpen, setIsSearchOpen] = React.useState(false);
-  const [isPinnedOpen, setIsPinnedOpen] = React.useState(false);
+  const [overlayMode, setOverlayMode] = React.useState<
+    "search" | "pinned" | null
+  >(null);
+  const [jumpTargetMessageId, setJumpTargetMessageId] = React.useState<
+    string | null
+  >(null);
+  const [jumpRequestVersion, setJumpRequestVersion] = React.useState(0);
+  const [unreadMarker, setUnreadMarker] = React.useState<{
+    lastReadMessageId?: string;
+    lastReadAt?: Date | string;
+    active?: boolean;
+  } | null>(null);
   const [clockTick, setClockTick] = React.useState(() => Date.now());
+  const [ephemeralNotice, setEphemeralNotice] =
+    React.useState<EphemeralNotice | null>(null);
+  const [composerHeight, setComposerHeight] = React.useState(0);
+  const [viewportMetrics, setViewportMetrics] = React.useState(() => ({
+    width: typeof window !== "undefined" ? window.innerWidth : 1280,
+    height: typeof window !== "undefined" ? window.innerHeight : 900,
+  }));
+  const previousConnectionStateRef =
+    React.useRef<ConnectionState>(connectionState);
+  const ephemeralNoticeTimerRef = React.useRef<number | null>(null);
+
+  const resolvedDensity = React.useMemo(
+    () =>
+      resolveChatDensity({
+        preference: chatDensity,
+        viewportWidth: viewportMetrics.width,
+        viewportHeight: viewportMetrics.height,
+        messages,
+        conversationType: conversation.type,
+      }),
+    [
+      chatDensity,
+      conversation.type,
+      messages,
+      viewportMetrics.height,
+      viewportMetrics.width,
+    ],
+  );
+
+  const bottomOverlayPlacements = React.useMemo(
+    () =>
+      resolveOverlayPlacements([
+        {
+          id: "selection-toolbar",
+          visible: isMessageSelectionMode,
+          priority: 120,
+          slot: "bottom-center",
+        },
+        {
+          id: "ephemeral-notice",
+          visible: Boolean(ephemeralNotice) && !isMessageSelectionMode,
+          priority: 60,
+          slot: "bottom-center",
+        },
+      ]),
+    [ephemeralNotice, isMessageSelectionMode],
+  );
 
   const slowModeRemainingSeconds = React.useMemo(() => {
     const delta = slowModeUntil - clockTick;
@@ -274,6 +409,60 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [clockTick, slowModeUntil]);
 
   const isSlowModeBlocked = slowModeRemainingSeconds > 0;
+  const composerAvailability = useComposerAvailability({
+    connectionState,
+    conversation,
+    isConversationReady,
+    sendRestriction,
+    slowModeRemainingSeconds,
+  });
+
+  const emitUploadValidationToasts = React.useCallback(
+    (errors?: string[]) => {
+      if (!errors || errors.length === 0) {
+        return;
+      }
+
+      const uniqueErrors = Array.from(new Set(errors));
+      uniqueErrors.slice(0, 2).forEach((message) => toast.error(message));
+
+      if (uniqueErrors.length > 2) {
+        toast.warning(
+          t("chat:composer.moreUploadErrors", {
+            defaultValue: "{{count}} more file issue(s)",
+            count: uniqueErrors.length - 2,
+          }),
+        );
+      }
+    },
+    [t],
+  );
+
+  const handleAddFiles = React.useCallback(
+    (files: File[]) => {
+      const result = uploadQueue.addFiles(files);
+      emitUploadValidationToasts(result.errors);
+    },
+    [emitUploadValidationToasts, uploadQueue],
+  );
+
+  const { isDragActive, dropZoneProps, dismiss } = useDropZone({
+    onDrop: handleAddFiles,
+    disabled: !composerAvailability.canAttach,
+    onDropRejected: () => {
+      toast.warning(
+        composerAvailability.statusMessage ||
+          t("chat:composer.attachBlocked", {
+            defaultValue: "Attachments are currently unavailable",
+          }),
+      );
+    },
+  });
+
+  const bottomFloatingOffset = React.useMemo(
+    () => Math.max(12, composerHeight + 12),
+    [composerHeight],
+  );
 
   React.useEffect(() => {
     if (!isSlowModeBlocked) {
@@ -298,24 +487,201 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   ]);
 
   const handleSearchClick = React.useCallback(() => {
-    setIsSearchOpen((prev) => !prev);
-    setIsPinnedOpen(false);
+    setOverlayMode((prev) => (prev === "search" ? null : "search"));
   }, []);
 
   const handlePinnedClick = React.useCallback(() => {
-    setIsPinnedOpen((prev) => !prev);
-    setIsSearchOpen(false);
+    setOverlayMode((prev) => (prev === "pinned" ? null : "pinned"));
   }, []);
 
-  const handleSelectSearchMessage = React.useCallback(() => {
-    setIsSearchOpen(false);
+  const handleJumpHandled = React.useCallback((messageId: string) => {
+    setJumpTargetMessageId((current) =>
+      current === messageId ? null : current,
+    );
   }, []);
+
+  const handleReachedLatest = React.useCallback(
+    (message: Message) => {
+      setUnreadMarker((current) => (current?.active ? null : current));
+      onReachedLatestMessage?.(message);
+    },
+    [onReachedLatestMessage],
+  );
+
+  const queueJumpToMessage = React.useCallback(
+    (messageId: string) => {
+      setOverlayMode(null);
+      setJumpTargetMessageId(messageId);
+      setJumpRequestVersion((value) => value + 1);
+      logScrollTrace("jump_requested", {
+        conversationId: conversation.id,
+        messageId,
+      });
+    },
+    [conversation.id],
+  );
+
+  const ensureMessageLoaded = React.useCallback(
+    async (messageId: string, fallbackMessage?: Message) => {
+      const existingMessage = messages.find((message) =>
+        matchesMessageIdentity(message, messageId),
+      );
+      if (existingMessage) {
+        return existingMessage;
+      }
+
+      let targetMessage = fallbackMessage;
+      if (!targetMessage) {
+        const response = await getMessageByIdUseCase(messageId);
+        targetMessage = unwrapApiSuccess(response) as Message;
+      }
+
+      addMessage(conversation.id, targetMessage);
+      const cursor = new Date(targetMessage.createdAt).toISOString();
+      await Promise.allSettled([
+        fetchMessages(conversation.id, cursor, undefined, {
+          beforeId: targetMessage.id,
+          limit: 24,
+        }),
+        fetchMessages(conversation.id, undefined, cursor, {
+          afterId: targetMessage.id,
+          limit: 24,
+        }),
+      ]);
+
+      return targetMessage;
+    },
+    [addMessage, conversation.id, fetchMessages, messages],
+  );
+
+  const handleJumpToMessage = React.useCallback(
+    async (message: Message) => {
+      await ensureMessageLoaded(message.id, message);
+      queueJumpToMessage(message.id);
+    },
+    [ensureMessageLoaded, queueJumpToMessage],
+  );
+
+  const handleNavigateToMessage = React.useCallback(
+    async (messageId: string) => {
+      try {
+        await ensureMessageLoaded(messageId);
+        queueJumpToMessage(messageId);
+      } catch (error) {
+        const apiError = extractApiError(error);
+        toast.error(
+          apiError.message ||
+            t("chat:message.replyTargetMissing", {
+              defaultValue: "Unable to open replied message",
+            }),
+        );
+        logScrollTrace("jump_load_failed", {
+          conversationId: conversation.id,
+          messageId,
+          errorMessage: apiError.message || "unknown",
+        });
+      }
+    },
+    [conversation.id, ensureMessageLoaded, queueJumpToMessage, t],
+  );
+
+  const conversationReadSnapshot = conversation as Conversation & {
+    lastReadMessageId?: string;
+    lastReadAt?: Date | string;
+  };
+  const lastReadMessageId = conversationReadSnapshot.lastReadMessageId;
+  const lastReadAt = conversationReadSnapshot.lastReadAt;
 
   // Close panels when switching conversations
   React.useEffect(() => {
-    setIsSearchOpen(false);
-    setIsPinnedOpen(false);
-  }, [conversation.id]);
+    setOverlayMode(null);
+    if (
+      (conversation.unreadCount ?? 0) > 0 &&
+      (lastReadMessageId || lastReadAt)
+    ) {
+      setUnreadMarker({
+        lastReadMessageId,
+        lastReadAt,
+        active: true,
+      });
+    } else {
+      setUnreadMarker(null);
+    }
+  }, [
+    conversation.id,
+    conversation.unreadCount,
+    lastReadAt,
+    lastReadMessageId,
+  ]);
+
+  React.useEffect(() => {
+    const previousState = previousConnectionStateRef.current;
+
+    if (ephemeralNoticeTimerRef.current !== null) {
+      window.clearTimeout(ephemeralNoticeTimerRef.current);
+      ephemeralNoticeTimerRef.current = null;
+    }
+
+    if (connectionState === "reconnecting") {
+      setEphemeralNotice({
+        kind: "warn",
+        message: t("chat:toast.connectionReconnecting"),
+      });
+    } else if (connectionState === "disconnected") {
+      setEphemeralNotice({
+        kind: "error",
+        message: t("chat:toast.connectionOffline", {
+          defaultValue: "Mat ket noi. Dang cho dong bo lai.",
+        }),
+      });
+    } else if (
+      connectionState === "connected" &&
+      (previousState === "reconnecting" || previousState === "disconnected")
+    ) {
+      setEphemeralNotice({
+        kind: "success",
+        message: t("chat:toast.connectionRestored", {
+          defaultValue: "Da ket noi lai",
+        }),
+      });
+      ephemeralNoticeTimerRef.current = window.setTimeout(() => {
+        setEphemeralNotice((current) =>
+          current?.kind === "success" ? null : current,
+        );
+        ephemeralNoticeTimerRef.current = null;
+      }, 2400);
+    } else if (connectionState === "connected") {
+      setEphemeralNotice(null);
+    }
+
+    previousConnectionStateRef.current = connectionState;
+  }, [connectionState, t]);
+
+  React.useEffect(
+    () => () => {
+      if (ephemeralNoticeTimerRef.current !== null) {
+        window.clearTimeout(ephemeralNoticeTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleResize = () => {
+      setViewportMetrics({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   const mentionCandidates = React.useMemo<MentionCandidate[]>(() => {
     const participants = Array.isArray(conversation.participants)
@@ -337,7 +703,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const handleShareContact = React.useCallback(
     async (contactUserId: string) => {
       try {
-        await contactApi.shareContact({
+        await shareContactUseCase({
           conversationId: conversation.id,
           contactUserId,
         });
@@ -355,6 +721,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       }
     },
     [conversation.id, t],
+  );
+
+  const handleComposerLayoutHeightChange = React.useCallback(
+    (nextHeight: number) => {
+      setComposerHeight((previous) =>
+        Math.abs(previous - nextHeight) <= 1 ? previous : nextHeight,
+      );
+    },
+    [],
   );
 
   // Exit selection on conversation change
@@ -380,20 +755,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     exitSelectionMode();
   }, [messages, selectedMessageIds, exitSelectionMode, t]);
 
-  const handleSelectionForward = React.useCallback(() => {
-    toast.info(
-      t("common:toast.featureInDevelopment", { defaultValue: "Coming soon" }),
-    );
-    exitSelectionMode();
-  }, [exitSelectionMode, t]);
-
   const currentUsername = currentUser.username;
 
   const messageListNode = React.useMemo(
     () => (
       <MessageList
         messages={messages}
-        conversation={conversation}
+        conversationId={conversation.id}
+        conversationType={conversation.type}
         currentUserId={currentUser.id}
         onReply={handleReply}
         onReact={handleReact}
@@ -401,25 +770,36 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onDelete={handleDelete}
         hasMore={hasMoreMessages}
         isLoadingMore={Boolean(isLoadingMessages && messages.length > 0)}
-        isInitialLoading={Boolean(isLoadingMessages && messages.length === 0)}
+        isInitialLoading={Boolean(
+          (isLoadingMessages || !isConversationReady) && messages.length === 0,
+        )}
         onLoadMore={onLoadOlderMessages}
         onImageClick={onImageClick}
         onFilePreview={onFilePreview}
         error={messageError}
         onRetry={onRetryMessages}
-        density={chatDensity}
+        density={resolvedDensity}
         isSelectionMode={isMessageSelectionMode}
         selectedMessageIds={selectedMessageIds}
         onToggleSelect={toggleMessageSelection}
+        onNavigateToMessage={handleNavigateToMessage}
         currentUsername={currentUsername}
+        unreadMarker={unreadMarker}
+        onReachedLatest={handleReachedLatest}
+        jumpToMessageId={jumpTargetMessageId}
+        jumpRequestVersion={jumpRequestVersion}
+        onJumpHandled={handleJumpHandled}
+        composerHeight={composerHeight}
         className="flex-1 min-h-0"
       />
     ),
     [
-      conversation,
+      conversation.id,
+      conversation.type,
       currentUser.id,
       handleReact,
       handleReply,
+      handleEdit,
       handleDelete,
       hasMoreMessages,
       isLoadingMessages,
@@ -429,11 +809,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       onFilePreview,
       onLoadOlderMessages,
       onRetryMessages,
-      chatDensity,
+      resolvedDensity,
+      handleJumpHandled,
+      handleNavigateToMessage,
+      handleReachedLatest,
+      composerHeight,
       isMessageSelectionMode,
+      jumpRequestVersion,
+      jumpTargetMessageId,
       selectedMessageIds,
       toggleMessageSelection,
       currentUsername,
+      unreadMarker,
     ],
   );
 
@@ -454,42 +841,76 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         typingStatus={typingStatus}
         onBack={onBack}
         onInfoClick={onToggleInfoPanel}
-        onCallClick={handleFeatureInDevelopment}
-        onVideoCallClick={handleFeatureInDevelopment}
         onSearchClick={handleSearchClick}
         onPinnedClick={handlePinnedClick}
         onSelectionMode={enterSelectionMode}
       />
 
-      {/* Search panel overlay */}
-      {isSearchOpen && (
-        <SearchPanel
-          conversationId={conversation.id}
-          onSelectMessage={handleSelectSearchMessage}
-          onClose={() => setIsSearchOpen(false)}
-        />
-      )}
-
-      {/* Pinned messages panel overlay */}
-      {isPinnedOpen && (
-        <PinnedMessagesPanel
-          conversationId={conversation.id}
-          onClose={() => setIsPinnedOpen(false)}
-        />
+      {overlayMode && (
+        <div className="pointer-events-none absolute inset-0 z-[45]">
+          <button
+            type="button"
+            className="pointer-events-auto absolute inset-0 bg-text-primary/18 backdrop-blur-[1px]"
+            onClick={() => setOverlayMode(null)}
+            aria-label={t("common:actions.close")}
+          />
+          <div className="pointer-events-auto absolute inset-y-0 right-0 w-full max-w-[min(24rem,100%)] border-l border-border bg-surface shadow-elev3 animate-slide-up-fade">
+            {overlayMode === "search" ? (
+              <SearchPanel
+                conversationId={conversation.id}
+                onSelectMessage={handleJumpToMessage}
+                onClose={() => setOverlayMode(null)}
+                className="h-full"
+              />
+            ) : (
+              <PinnedMessagesPanel
+                conversationId={conversation.id}
+                onClose={() => setOverlayMode(null)}
+                onJumpToMessage={handleJumpToMessage}
+                className="h-full"
+              />
+            )}
+          </div>
+        </div>
       )}
 
       {messageListNode}
 
+      {ephemeralNotice &&
+        bottomOverlayPlacements["ephemeral-notice"]?.visible && (
+          <div
+            className="pointer-events-none absolute inset-x-0 z-[55]"
+            style={{
+              bottom: `calc(env(safe-area-inset-bottom) + ${bottomFloatingOffset}px)`,
+            }}
+          >
+            <ConversationLane>
+              <div className="flex justify-center">
+                <div
+                  className={clsx(
+                    "pointer-events-auto max-w-[min(28rem,100%)] rounded-full border px-3.5 py-1.5 text-xs font-medium shadow-elev2 backdrop-blur animate-slide-up-fade",
+                    getEphemeralNoticeClassName(ephemeralNotice.kind),
+                  )}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {ephemeralNotice.message}
+                </div>
+              </div>
+            </ConversationLane>
+          </div>
+        )}
+
       {/* Selection toolbar */}
-      {isMessageSelectionMode && (
-        <SelectionToolbar
-          selectedCount={selectedMessageIds.size}
-          onDelete={handleSelectionDelete}
-          onForward={handleSelectionForward}
-          onCopy={handleSelectionCopy}
-          onCancel={exitSelectionMode}
-        />
-      )}
+      {isMessageSelectionMode &&
+        bottomOverlayPlacements["selection-toolbar"]?.visible && (
+          <SelectionToolbar
+            selectedCount={selectedMessageIds.size}
+            onDelete={handleSelectionDelete}
+            onCopy={handleSelectionCopy}
+            onCancel={exitSelectionMode}
+          />
+        )}
 
       {/* Message input - hidden during selection mode */}
       {!isMessageSelectionMode && (
@@ -499,6 +920,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             onChange={handleInputChange}
             onSend={handleSend}
             mode={inputMode}
+            onLayoutHeightChange={handleComposerLayoutHeightChange}
             conversationId={conversation.id}
             currentUserId={currentUser.id}
             mentionCandidates={mentionCandidates}
@@ -508,18 +930,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             onCancelEdit={handleCancelEdit}
             onTyping={onTyping}
             sendOnEnter
-            disabled={isSlowModeBlocked}
-            disabledReason={
-              isSlowModeBlocked
-                ? t("chat:slowMode.active", {
-                    defaultValue: "Slow mode active. Try again in {{seconds}}s.",
-                    seconds: slowModeRemainingSeconds,
-                  })
-                : undefined
-            }
+            disabled={!composerAvailability.canType}
+            submitDisabled={!composerAvailability.canSubmit}
+            submitInFlight={isSendingMessage}
+            attachmentsDisabled={!composerAvailability.canAttach}
+            disabledReason={composerAvailability.statusMessage}
+            disabledReasonTone={composerAvailability.statusTone}
+            composerMode={composerAvailability.mode}
             onShareContact={handleShareContact}
             uploadDrafts={uploadQueue.drafts}
-            onAddFiles={uploadQueue.addFiles}
+            onAddFiles={handleAddFiles}
             onRemoveDraft={uploadQueue.removeDraft}
             onCancelUpload={uploadQueue.cancelUpload}
             onRetryUpload={uploadQueue.retryUpload}

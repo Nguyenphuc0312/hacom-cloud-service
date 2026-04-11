@@ -10,10 +10,11 @@ import {
 import { Modal, Input, Button, Spinner, EmptySearchResults } from "../ui";
 import { Avatar } from "../common/Avatar";
 import { useDebounce } from "../../hooks";
-import { friendshipApi, userApi } from "../../services/api";
 import { toast } from "../ui";
 import type { User as UserType } from "../../types";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
+import { searchUsersUseCase } from "../../features/chat/usecases/searchUsers";
+import { sendFriendRequestUseCase } from "../../features/chat/usecases/sendFriendRequest";
 
 interface User {
   id: string;
@@ -23,7 +24,13 @@ interface User {
   avatar?: string;
   status?: UserType["status"] | "online" | "offline" | "away" | "dnd";
   isFriend?: boolean;
-  friendshipStatus?: "none" | "pending" | "accepted" | "declined" | "canceled" | "blocked";
+  friendshipStatus?:
+    | "none"
+    | "pending"
+    | "accepted"
+    | "declined"
+    | "canceled"
+    | "blocked";
 }
 
 interface NewChatModalProps {
@@ -65,42 +72,45 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
     return user.friendshipStatus === "accepted";
   }, []);
 
-  const searchUsers = useCallback(async (query: string) => {
-    if (!query.trim() || query.length < 2) {
-      setUsers([]);
-      return;
-    }
+  const searchUsers = useCallback(
+    async (query: string) => {
+      if (!query.trim() || query.length < 2) {
+        setUsers([]);
+        return;
+      }
 
-    setIsLoading(true);
-    try {
-      const response = await userApi.searchUsers(query);
-      const payload = unwrapApiSuccess(response) as
-        | User[]
-        | { data?: User[] };
-      const userList = Array.isArray(payload)
-        ? payload
-        : Array.isArray(payload?.data)
-          ? payload.data
-          : [];
-      const normalizedUsers = userList.map((user) => ({
-        id: user.id,
-        username: user.username,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        avatar: user.avatar,
-        status: user.status,
-        isFriend: user.isFriend,
-        friendshipStatus: user.friendshipStatus || "none",
-      }));
-      setUsers(normalizedUsers);
-    } catch (error) {
-      const apiError = extractApiError(error);
-      toast.error(apiError.message || t("profile:toast.searchUsersFailed"));
-      setUsers([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [t]);
+      setIsLoading(true);
+      try {
+        const response = await searchUsersUseCase(query);
+        const payload = unwrapApiSuccess(response) as
+          | User[]
+          | { data?: User[] };
+        const userList = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.data)
+            ? payload.data
+            : [];
+        const normalizedUsers = userList.map((user) => ({
+          id: user.id,
+          username: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          avatar: user.avatar,
+          status: user.status,
+          isFriend: user.isFriend,
+          friendshipStatus: user.friendshipStatus || "none",
+        }));
+        setUsers(normalizedUsers);
+      } catch (error) {
+        const apiError = extractApiError(error);
+        toast.error(apiError.message || t("profile:toast.searchUsersFailed"));
+        setUsers([]);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [t],
+  );
 
   useEffect(() => {
     searchUsers(debouncedQuery);
@@ -158,7 +168,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
 
       setPendingFriendRequestIds((prev) => new Set(prev).add(userId));
       try {
-        await friendshipApi.sendFriendRequest(userId);
+        await sendFriendRequestUseCase(userId);
         setUsers((prev) =>
           prev.map((user) =>
             user.id === userId
@@ -338,9 +348,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                     disabled={isBusy}
                     className={clsx(
                       "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-left",
-                      isSelected
-                        ? "bg-primary/15"
-                        : "hover:bg-surface-overlay",
+                      isSelected ? "bg-primary/15" : "hover:bg-surface-overlay",
                       isBusy && "opacity-60 cursor-not-allowed",
                     )}
                   >
@@ -359,10 +367,16 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                       </p>
                     </div>
                     {!isGroupMode && isPending && (
-                      <Spinner size="sm" variant="primary" className="shrink-0" />
+                      <Spinner
+                        size="sm"
+                        variant="primary"
+                        className="shrink-0"
+                      />
                     )}
-                    {!isGroupMode && !canStartDirectChat(user) && !isPending && (
-                      user.friendshipStatus === "pending" ? (
+                    {!isGroupMode &&
+                      !canStartDirectChat(user) &&
+                      !isPending &&
+                      (user.friendshipStatus === "pending" ? (
                         <span className="rounded-lg bg-surface-overlay px-2 py-1 text-xs text-text-muted">
                           {t("profile:newChatModal.requestSent", {
                             defaultValue: "Requested",
@@ -386,8 +400,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                                 defaultValue: "Add friend",
                               })}
                         </button>
-                      )
-                    )}
+                      ))}
                     {isGroupMode && (
                       <div
                         className={clsx(

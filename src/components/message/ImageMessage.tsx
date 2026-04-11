@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useRef, useState } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import type { Attachment } from "../../types";
@@ -22,23 +22,28 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [isError, setIsError] = useState(false);
+  const [loadedSource, setLoadedSource] = useState<string | null>(null);
+  const [failedSource, setFailedSource] = useState<string | null>(null);
   const [showFullScreen, setShowFullScreen] = useState(false);
-  const [didRefreshOnError, setDidRefreshOnError] = useState(false);
-  const { url: resolvedUrl, isLoading, resolveUrl } = useAttachmentDownloadUrl(
-    conversationId,
-    attachment,
-    { autoResolve: true },
-  );
+  const refreshedSourceRef = useRef<string | null>(null);
+  const {
+    url: resolvedUrl,
+    isLoading,
+    resolveUrl,
+  } = useAttachmentDownloadUrl(conversationId, attachment, {
+    autoResolve: true,
+  });
+  const mediaWidth = attachment.width ? Math.min(attachment.width, 300) : 240;
+  const aspectRatio =
+    attachment.width && attachment.height
+      ? `${attachment.width} / ${attachment.height}`
+      : "4 / 3";
 
-  const hasDisplayUrl = Boolean(resolvedUrl);
-
-  useEffect(() => {
-    setIsLoaded(false);
-    setIsError(false);
-    setDidRefreshOnError(false);
-  }, [resolvedUrl]);
+  const activeSource = resolvedUrl || null;
+  const hasDisplayUrl = Boolean(activeSource);
+  const hasCaption = Boolean(caption);
+  const isLoaded = Boolean(activeSource && loadedSource === activeSource);
+  const isError = Boolean(activeSource && failedSource === activeSource);
 
   const handleImageClick = async () => {
     const imageUrl = resolvedUrl || (await resolveUrl());
@@ -56,57 +61,67 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   };
 
   const handleImageError = () => {
-    if (!didRefreshOnError) {
-      setDidRefreshOnError(true);
+    if (!activeSource) {
+      return;
+    }
+
+    if (refreshedSourceRef.current !== activeSource) {
+      refreshedSourceRef.current = activeSource;
       void resolveUrl(true);
       return;
     }
-    setIsError(true);
+
+    setFailedSource(activeSource);
   };
 
   return (
     <>
       <div className={clsx("relative", className)}>
-        {(!isLoaded || isLoading || !hasDisplayUrl) && !isError && (
-          <div
-            className="animate-pulse rounded-lg bg-surface-overlay"
-            style={{
-              width: attachment.width ? Math.min(attachment.width, 300) : 200,
-              height: attachment.height
-                ? Math.min(attachment.height, 200)
-                : 150,
-            }}
-          />
-        )}
+        <div
+          className="relative overflow-hidden rounded-lg bg-surface-overlay"
+          style={{ width: mediaWidth, maxWidth: "100%", aspectRatio }}
+        >
+          {(!isLoaded || isLoading || !hasDisplayUrl) && !isError && (
+            <div className="absolute inset-0 animate-pulse bg-surface-overlay" />
+          )}
 
-        {isError && (
-          <div className="flex items-center justify-center rounded-lg bg-surface-overlay p-4 text-sm text-text-muted">
-            {t("chat:image.failedToLoad")}
-          </div>
-        )}
+          {isError && (
+            <div className="absolute inset-0 flex items-center justify-center p-4 text-sm text-text-muted">
+              {t("chat:image.failedToLoad")}
+            </div>
+          )}
 
-        {hasDisplayUrl && (
-          <img
+          {hasDisplayUrl && (
+            <img
+              className={clsx(
+                "absolute inset-0 h-full w-full cursor-pointer object-cover transition-opacity duration-150",
+                isLoaded ? "opacity-100" : "opacity-0",
+                "hover:opacity-95",
+              )}
+              src={resolvedUrl}
+              alt={caption || attachment.fileName || t("chat:image.previewAlt")}
+              onClick={() => void handleImageClick()}
+              onLoad={() => {
+                if (!activeSource) return;
+                setLoadedSource(activeSource);
+                setFailedSource((previous) =>
+                  previous === activeSource ? null : previous,
+                );
+              }}
+              onError={handleImageError}
+            />
+          )}
+        </div>
+
+        {hasCaption && (
+          <p
             className={clsx(
-              "h-auto max-w-full cursor-pointer rounded object-cover transition-opacity",
-              isLoaded ? "opacity-100" : "absolute left-0 top-0 opacity-0",
-              "hover:opacity-95",
+              "mt-2 min-h-5 text-sm transition-opacity duration-150",
+              isOwn ? "text-text-inverse/90" : "text-text-secondary",
+              isLoaded ? "opacity-100" : "opacity-0",
             )}
-            style={{
-              maxWidth: "300px",
-              maxHeight: 300,
-              objectFit: "cover",
-            }}
-            src={resolvedUrl}
-            alt={caption || attachment.fileName || t("chat:image.previewAlt")}
-            onClick={() => void handleImageClick()}
-            onLoad={() => setIsLoaded(true)}
-            onError={handleImageError}
-          />
-        )}
-
-        {caption && isLoaded && (
-          <p className={clsx("mt-2 text-sm", isOwn ? "text-text-inverse/90" : "text-text-secondary")}>
+            aria-hidden={!isLoaded}
+          >
             {caption}
           </p>
         )}
@@ -149,4 +164,3 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
 };
 
 export default ImageMessage;
-

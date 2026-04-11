@@ -16,6 +16,7 @@ import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
+import { AuthCard, AuthShell } from "../components/auth";
 import { Button, Input, toast } from "../components/ui";
 import { PasswordStrength } from "../components/ui";
 import { resetPasswordSchema } from "../lib/validations";
@@ -86,137 +87,131 @@ export const ResetPasswordPage: React.FC = () => {
   // Invalid/expired token state
   if (tokenError) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 px-4 py-12">
-        <div className="relative w-full max-w-md">
-          <div className="animate-fade-in rounded-2xl border border-border bg-surface p-8 text-center shadow-xl">
-            <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-danger/15">
-              <ExclamationTriangleIcon className="h-8 w-8 text-danger" />
-            </div>
-            <h1 className="mb-2 text-2xl font-bold text-text-primary">
-              {t("auth:reset.invalidToken")}
-            </h1>
-            <p className="mb-6 text-text-muted">
-              {t("auth:reset.invalidTokenDescription")}
-            </p>
-            <div className="space-y-4">
-              <Link to="/forgot-password">
-                <Button variant="primary" fullWidth>
-                  {t("auth:reset.requestNewLink")}
-                </Button>
-              </Link>
-              <Link to="/login">
-                <Button variant="ghost" fullWidth>
-                  <ArrowLeftIcon className="mr-2 h-4 w-4" />
-                  {t("auth:forgot.backToLogin")}
-                </Button>
-              </Link>
-            </div>
+      <AuthShell maxWidth="md">
+        <AuthCard className="p-8 text-center">
+          <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-danger/15">
+            <ExclamationTriangleIcon className="h-8 w-8 text-danger" />
           </div>
-        </div>
-      </div>
+          <h1 className="mb-2 text-2xl font-bold text-text-primary">
+            {t("auth:reset.invalidToken")}
+          </h1>
+          <p className="mb-6 text-text-muted">
+            {t("auth:reset.invalidTokenDescription")}
+          </p>
+          <div className="space-y-4">
+            <Link to="/forgot-password">
+              <Button variant="primary" fullWidth>
+                {t("auth:reset.requestNewLink")}
+              </Button>
+            </Link>
+            <Link to="/login">
+              <Button variant="ghost" fullWidth>
+                <ArrowLeftIcon className="mr-2 h-4 w-4" />
+                {t("auth:forgot.backToLogin")}
+              </Button>
+            </Link>
+          </div>
+        </AuthCard>
+      </AuthShell>
     );
   }
 
   // Success state
   if (isSubmitted) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 px-4 py-12">
-        <div className="relative w-full max-w-md">
-          <div className="animate-fade-in rounded-2xl border border-border bg-surface p-8 text-center shadow-xl">
-            <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-success/15">
-              <CheckCircleIcon className="h-8 w-8 text-success" />
-            </div>
-            <h1 className="mb-2 text-2xl font-bold text-text-primary">
-              {t("auth:reset.successTitle")}
-            </h1>
-            <p className="mb-6 text-text-muted">
-              {t("auth:reset.successDescription")}
-            </p>
-            <Link to="/login">
-              <Button variant="primary" fullWidth size="lg">
-                {t("auth:reset.goToLogin")}
-              </Button>
-            </Link>
+      <AuthShell maxWidth="md">
+        <AuthCard className="p-8 text-center">
+          <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-success/15">
+            <CheckCircleIcon className="h-8 w-8 text-success" />
           </div>
-        </div>
-      </div>
+          <h1 className="mb-2 text-2xl font-bold text-text-primary">
+            {t("auth:reset.successTitle")}
+          </h1>
+          <p className="mb-6 text-text-muted">
+            {t("auth:reset.successDescription")}
+          </p>
+          <p className="mb-6 text-sm text-text-muted">
+            {t("auth:reset.successSecurityHint")}
+          </p>
+          <Link to="/login">
+            <Button variant="primary" fullWidth size="lg">
+              {t("auth:reset.goToLogin")}
+            </Button>
+          </Link>
+        </AuthCard>
+      </AuthShell>
     );
   }
 
   // Reset form
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 px-4 py-12">
-      {/* Background decoration */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -right-40 -top-40 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-secondary/15 blur-3xl" />
-      </div>
-
-      <div className="relative w-full max-w-md">
-        <div className="animate-fade-in rounded-2xl border border-border bg-surface p-8 shadow-xl">
-          <div className="mb-8 text-center">
-            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-elev2">
-              <ChatBubbleLeftRightIcon className="h-8 w-8 text-text-inverse" />
-            </div>
-            <h1 className="text-2xl font-bold text-text-primary">
-              {t("auth:reset.title")}
-            </h1>
-            <p className="mt-2 text-text-muted">{t("auth:reset.subtitle")}</p>
+    <AuthShell maxWidth="md">
+      <AuthCard className="p-8">
+        <div className="mb-8 text-center">
+          <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-elev2">
+            <ChatBubbleLeftRightIcon className="h-8 w-8 text-text-inverse" />
           </div>
+          <h1 className="text-2xl font-bold text-text-primary">
+            {t("auth:reset.title")}
+          </h1>
+          <p className="mt-2 text-text-muted">{t("auth:reset.subtitle")}</p>
+          <p className="mt-3 text-sm text-text-muted">
+            {t("auth:reset.securityHint")}
+          </p>
+        </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            <div>
-              <Input
-                {...register("password")}
-                type="password"
-                label={t("auth:register.password")}
-                placeholder={t("auth:placeholders.password")}
-                leftIcon={<LockClosedIcon className="h-5 w-5" />}
-                error={errors.password?.message}
-                autoComplete="new-password"
-                disabled={isLoading}
-              />
-              {passwordValue && (
-                <div className="mt-2">
-                  <PasswordStrength password={passwordValue} />
-                </div>
-              )}
-            </div>
-
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          <div>
             <Input
-              {...register("confirmPassword")}
+              {...register("password")}
               type="password"
-              label={t("auth:register.confirmPassword")}
+              label={t("auth:register.password")}
               placeholder={t("auth:placeholders.password")}
               leftIcon={<LockClosedIcon className="h-5 w-5" />}
-              error={errors.confirmPassword?.message}
+              error={errors.password?.message}
               autoComplete="new-password"
               disabled={isLoading}
             />
-
-            <Button
-              type="submit"
-              fullWidth
-              size="lg"
-              isLoading={isLoading}
-              disabled={isLoading}
-            >
-              {t("auth:reset.submit")}
-            </Button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <Link
-              to="/login"
-              className="inline-flex items-center text-sm text-text-muted hover:text-text-secondary"
-            >
-              <ArrowLeftIcon className="mr-1 h-4 w-4" />
-              {t("auth:forgot.backToLogin")}
-            </Link>
+            {passwordValue && (
+              <div className="mt-2">
+                <PasswordStrength password={passwordValue} />
+              </div>
+            )}
           </div>
+
+          <Input
+            {...register("confirmPassword")}
+            type="password"
+            label={t("auth:register.confirmPassword")}
+            placeholder={t("auth:placeholders.password")}
+            leftIcon={<LockClosedIcon className="h-5 w-5" />}
+            error={errors.confirmPassword?.message}
+            autoComplete="new-password"
+            disabled={isLoading}
+          />
+
+          <Button
+            type="submit"
+            fullWidth
+            size="lg"
+            isLoading={isLoading}
+            disabled={isLoading}
+          >
+            {t("auth:reset.submit")}
+          </Button>
+        </form>
+
+        <div className="mt-6 text-center">
+          <Link
+            to="/login"
+            className="inline-flex items-center text-sm text-text-muted hover:text-text-secondary"
+          >
+            <ArrowLeftIcon className="mr-1 h-4 w-4" />
+            {t("auth:forgot.backToLogin")}
+          </Link>
         </div>
-      </div>
-    </div>
+      </AuthCard>
+    </AuthShell>
   );
 };
 

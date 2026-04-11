@@ -50,7 +50,7 @@ const AttachmentTrayComponent: React.FC<AttachmentTrayProps> = ({
   return (
     <div
       className={clsx(
-        "border-b border-border bg-surface-overlay",
+        "mb-2 w-full rounded-[22px] border border-white/8 bg-[hsl(var(--color-chat-composer))]",
         "animate-content-fade",
         className,
       )}
@@ -98,8 +98,8 @@ const AttachmentTrayComponent: React.FC<AttachmentTrayProps> = ({
           type="button"
           onClick={onClearAll}
           className={clsx(
-            "flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-text-muted",
-            "hover:bg-surface-active hover:text-text-primary transition-colors",
+            "flex items-center gap-1 rounded-full px-2 py-1 text-xs text-text-muted",
+            "hover:bg-white/8 hover:text-text-primary transition-colors",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
           )}
           aria-label={t("chat:attachmentTray.clearAll", {

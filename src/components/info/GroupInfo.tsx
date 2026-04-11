@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+﻿import React, { useState, useCallback } from "react";
 import clsx from "clsx";
 import {
   XMarkIcon,
@@ -18,13 +18,26 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "../common/Avatar";
-import { Input, Spinner, toast } from "../ui";
+import { Input, Spinner, TabTrigger, toast } from "../ui";
 import type { Conversation, UserSummary } from "../../types";
 import { RoomMemberRole, UserStatus } from "../../types";
 import { useDebounce } from "../../hooks";
-import { conversationApi, groupApi, userApi } from "../../services/api";
 import { useChatStore, useGroupStore } from "../../stores";
+import type { InviteLinkItem, JoinRequestItem } from "../../stores/groupStore";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
+import { getConversationMembersUseCase } from "../../features/chat/usecases/getConversationMembers";
+import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
+import { searchUsersUseCase } from "../../features/chat/usecases/searchUsers";
+import { addConversationMembersUseCase } from "../../features/chat/usecases/addConversationMembers";
+import { updateConversationUseCase } from "../../features/chat/usecases/updateConversation";
+import { updateConversationMemberRoleUseCase } from "../../features/chat/usecases/updateConversationMemberRole";
+import { removeConversationMemberUseCase } from "../../features/chat/usecases/removeConversationMember";
+import { leaveConversationUseCase } from "../../features/chat/usecases/leaveConversation";
+import { createGroupInviteLinkUseCase } from "../../features/chat/usecases/createGroupInviteLink";
+import { revokeGroupInviteLinkUseCase } from "../../features/chat/usecases/revokeGroupInviteLink";
+import { resolveGroupJoinRequestUseCase } from "../../features/chat/usecases/resolveGroupJoinRequest";
+import { groupApi } from "../../services/api";
+import { getUserDisplayName } from "../../utils/messageHelpers";
 
 interface GroupInfoProps {
   conversation: Conversation;
@@ -66,7 +79,9 @@ const asString = (value: unknown): string | undefined =>
 const asStatus = (value: unknown): UserSummary["status"] | undefined => {
   const status = asString(value);
   if (!status) return undefined;
-  return VALID_STATUSES.has(status) ? (status as UserSummary["status"]) : undefined;
+  return VALID_STATUSES.has(status)
+    ? (status as UserSummary["status"])
+    : undefined;
 };
 
 const extractMemberRows = (payload: unknown): unknown[] => {
@@ -104,17 +119,61 @@ const normalizeMember = (raw: unknown): GroupMember | null => {
     : RoomMemberRole.MEMBER;
 
   const username =
-    asString(raw.username) ?? asString(user?.username) ?? asString(raw.nickname) ?? id;
+    asString(raw.username) ??
+    asString(user?.username) ??
+    asString(raw.nickname) ??
+    id;
 
   return {
     id,
     username,
     displayName:
-      asString(raw.displayName) ?? asString(user?.displayName) ?? asString(raw.nickname),
+      asString(raw.displayName) ??
+      asString(user?.displayName) ??
+      asString(raw.nickname),
     avatar: asString(raw.avatar) ?? asString(user?.avatar),
     status: asStatus(raw.status) ?? asStatus(user?.status),
     role,
   };
+};
+
+const resolveMemberName = (
+  member: Partial<UserSummary> | null | undefined,
+): string => {
+  return (
+    getUserDisplayName(member, {
+      allowTechnicalFallback: true,
+    }) || ""
+  );
+};
+
+const areMemberMapsEqual = (
+  previous: Record<string, GroupMember>,
+  next: Record<string, GroupMember>,
+): boolean => {
+  const previousKeys = Object.keys(previous);
+  const nextKeys = Object.keys(next);
+  if (previousKeys.length !== nextKeys.length) {
+    return false;
+  }
+
+  for (const key of previousKeys) {
+    const previousMember = previous[key];
+    const nextMember = next[key];
+    if (!nextMember) return false;
+    if (
+      previousMember.id !== nextMember.id ||
+      previousMember.username !== nextMember.username ||
+      previousMember.displayName !== nextMember.displayName ||
+      previousMember.avatar !== nextMember.avatar ||
+      previousMember.status !== nextMember.status ||
+      previousMember.role !== nextMember.role
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 };
 
 export const GroupInfo: React.FC<GroupInfoProps> = ({
@@ -125,6 +184,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   className,
 }) => {
   const { t } = useTranslation(["profile", "common"]);
+  const unavailableActionClass = "cursor-not-allowed opacity-60";
+  const unavailableActionTitle = t("profile:groupInfo.unavailableAction");
 
   const participants = React.useMemo(
     () =>
@@ -142,9 +203,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
-  const [membersByUserId, setMembersByUserId] = useState<Record<string, GroupMember>>(
-    {},
-  );
+  const [membersByUserId, setMembersByUserId] = useState<
+    Record<string, GroupMember>
+  >({});
   const [actingMemberId, setActingMemberId] = useState<string | null>(null);
   const [isRenamingGroup, setIsRenamingGroup] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState(conversation.name || "");
@@ -159,7 +220,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   );
 
   const debouncedQuery = useDebounce(searchQuery, 300);
-  const { updateConversation, removeConversation } = useChatStore();
+  const updateConversation = useChatStore((state) => state.updateConversation);
+  const removeConversation = useChatStore((state) => state.removeConversation);
+  const loadMembersFailedMessage = t("profile:toast.loadMembersFailed");
   const inviteLinks = useGroupStore(
     (state) => state.inviteLinksByRoom[conversation.id] || [],
   );
@@ -167,9 +230,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     (state) => state.joinRequestsByRoom[conversation.id] || [],
   );
   const upsertInviteLink = useGroupStore((state) => state.upsertInviteLink);
+  const setInviteLinks = useGroupStore((state) => state.setInviteLinks);
   const markInviteLinkRevoked = useGroupStore(
     (state) => state.markInviteLinkRevoked,
   );
+  const setJoinRequests = useGroupStore((state) => state.setJoinRequests);
   const markJoinRequestResolved = useGroupStore(
     (state) => state.markJoinRequestResolved,
   );
@@ -177,7 +242,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   const createdBy = React.useMemo(() => {
     if (!isRecord(conversation)) return undefined;
-    return asString((conversation as unknown as Record<string, unknown>).createdBy);
+    return asString(
+      (conversation as unknown as Record<string, unknown>).createdBy,
+    );
   }, [conversation]);
 
   const members = React.useMemo<GroupMember[]>(() => {
@@ -193,7 +260,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         status: participant.status,
         role:
           existingMember?.role ||
-          (participant.id === createdBy ? RoomMemberRole.OWNER : RoomMemberRole.MEMBER),
+          (participant.id === createdBy
+            ? RoomMemberRole.OWNER
+            : RoomMemberRole.MEMBER),
       });
     });
 
@@ -207,17 +276,20 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       const roleDiff = ROLE_PRIORITY[a.role] - ROLE_PRIORITY[b.role];
       if (roleDiff !== 0) return roleDiff;
 
-      const aName = (a.displayName || a.username).toLowerCase();
-      const bName = (b.displayName || b.username).toLowerCase();
+      const aName = resolveMemberName(a).toLowerCase();
+      const bName = resolveMemberName(b).toLowerCase();
       return aName.localeCompare(bName);
     });
   }, [createdBy, membersByUserId, participants]);
 
   const currentUserRole =
     membersByUserId[currentUserId]?.role ||
-    (currentUserId === createdBy ? RoomMemberRole.OWNER : RoomMemberRole.MEMBER);
+    (currentUserId === createdBy
+      ? RoomMemberRole.OWNER
+      : RoomMemberRole.MEMBER);
   const isAdmin =
-    currentUserRole === RoomMemberRole.OWNER || currentUserRole === RoomMemberRole.ADMIN;
+    currentUserRole === RoomMemberRole.OWNER ||
+    currentUserRole === RoomMemberRole.ADMIN;
   const canManageRoles = currentUserRole === RoomMemberRole.OWNER;
 
   const canRemoveMember = useCallback(
@@ -233,8 +305,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   const roleLabel = useCallback(
     (role: GroupMemberRole) => {
-      if (role === RoomMemberRole.OWNER) return t("profile:groupInfo.roles.owner");
-      if (role === RoomMemberRole.ADMIN) return t("profile:groupInfo.roles.admin");
+      if (role === RoomMemberRole.OWNER)
+        return t("profile:groupInfo.roles.owner");
+      if (role === RoomMemberRole.ADMIN)
+        return t("profile:groupInfo.roles.admin");
       return t("profile:groupInfo.roles.member");
     },
     [t],
@@ -255,7 +329,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const fetchMembers = useCallback(async () => {
     setIsLoadingMembers(true);
     try {
-      const response = await conversationApi.getMembers(conversation.id, 1, 200);
+      const response = await getConversationMembersUseCase(
+        conversation.id,
+        1,
+        200,
+      );
       const payload = unwrapApiSuccess(response);
       const rows = extractMemberRows(payload);
       const nextMembers = rows
@@ -266,17 +344,19 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       nextMembers.forEach((member) => {
         nextById[member.id] = member;
       });
-      setMembersByUserId(nextById);
+      setMembersByUserId((previous) =>
+        areMemberMapsEqual(previous, nextById) ? previous : nextById,
+      );
     } catch (error) {
       const apiError = extractApiError(error);
-      toast.error(apiError.message || t("profile:toast.loadMembersFailed"));
+      toast.error(apiError.message || loadMembersFailedMessage);
     } finally {
       setIsLoadingMembers(false);
     }
-  }, [conversation.id, t]);
+  }, [conversation.id, loadMembersFailedMessage]);
 
   const refreshConversation = useCallback(async () => {
-    const response = await conversationApi.getConversationById(conversation.id);
+    const response = await getConversationByIdUseCase(conversation.id);
     const refreshedConversation = unwrapApiSuccess(response);
     updateConversation(conversation.id, refreshedConversation);
   }, [conversation.id, updateConversation]);
@@ -291,23 +371,136 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     void fetchMembers();
   }, [fetchMembers]);
 
+  React.useEffect(() => {
+    let cancelled = false;
+
+    if (!isAdmin) {
+      setInviteLinks(conversation.id, []);
+      setJoinRequests(conversation.id, []);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const hydrateRealtimeState = async () => {
+      try {
+        const [inviteLinksResponse, joinRequestsResponse] = await Promise.all([
+          groupApi.getInviteLinks(conversation.id),
+          groupApi.getJoinRequests(conversation.id),
+        ]);
+
+        if (cancelled) return;
+
+        const inviteLinksPayload = unwrapApiSuccess(inviteLinksResponse);
+        const joinRequestsPayload = unwrapApiSuccess(joinRequestsResponse);
+
+        const normalizedInviteLinks: InviteLinkItem[] = Array.isArray(
+          inviteLinksPayload,
+        )
+          ? inviteLinksPayload.reduce<InviteLinkItem[]>((items, item) => {
+              if (!isRecord(item) || typeof item.id !== "string") {
+                return items;
+              }
+
+              items.push({
+                id: item.id,
+                roomId:
+                  asString(item.roomId) ??
+                  asString(item.conversationId) ??
+                  conversation.id,
+                name: asString(item.name),
+                inviteUrl: asString(item.inviteUrl),
+                token: asString(item.token),
+                tokenPreview: asString(item.tokenPreview),
+                usageCount:
+                  typeof item.usageCount === "number" ? item.usageCount : 0,
+                usageLimit:
+                  typeof item.usageLimit === "number"
+                    ? item.usageLimit
+                    : null,
+                expireAt: asString(item.expireAt) ?? null,
+                revokedAt: asString(item.revokedAt) ?? null,
+                createdAt:
+                  asString(item.createdAt) ?? new Date().toISOString(),
+              });
+
+              return items;
+            }, [])
+          : [];
+
+        const normalizedJoinRequests: JoinRequestItem[] = Array.isArray(
+          joinRequestsPayload,
+        )
+          ? joinRequestsPayload.reduce<JoinRequestItem[]>((items, item) => {
+              if (!isRecord(item) || typeof item.id !== "string") {
+                return items;
+              }
+
+              const status = asString(item.status);
+              if (
+                status !== "pending" &&
+                status !== "approved" &&
+                status !== "rejected"
+              ) {
+                return items;
+              }
+
+              items.push({
+                id: item.id,
+                roomId:
+                  asString(item.roomId) ??
+                  asString(item.conversationId) ??
+                  conversation.id,
+                userId: asString(item.userId) ?? "",
+                status,
+                note: asString(item.note),
+                createdAt:
+                  asString(item.requestedAt) ??
+                  asString(item.createdAt) ??
+                  new Date().toISOString(),
+                resolvedAt: asString(item.resolvedAt),
+              });
+
+              return items;
+            }, [])
+          : [];
+
+        setInviteLinks(conversation.id, normalizedInviteLinks);
+        setJoinRequests(conversation.id, normalizedJoinRequests);
+      } catch {
+        // no-op: keep local state if bootstrap snapshot is temporarily unavailable
+      }
+    };
+
+    void hydrateRealtimeState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    conversation.id,
+    isAdmin,
+    setInviteLinks,
+    setJoinRequests,
+  ]);
+
   const searchUsers = useCallback(
     async (query: string) => {
       if (!query.trim() || query.length < 2) {
-        setSearchResults([]);
+        setSearchResults((previous) => (previous.length === 0 ? previous : []));
         return;
       }
 
       setIsSearching(true);
       try {
-        const response = await userApi.searchUsers(query, 1, 10);
+        const response = await searchUsersUseCase(query, 1, 10);
         const memberIds = new Set(members.map((member) => member.id));
         const users = unwrapApiSuccess(response).filter(
           (user) => !memberIds.has(user.id) && user.id !== currentUserId,
         );
         setSearchResults(users as unknown as UserSummary[]);
       } catch {
-        setSearchResults([]);
+        setSearchResults((previous) => (previous.length === 0 ? previous : []));
       } finally {
         setIsSearching(false);
       }
@@ -323,7 +516,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     async (userId: string) => {
       setIsSubmitting(true);
       try {
-        const response = await conversationApi.addMembers(conversation.id, [userId]);
+        const response = await addConversationMembersUseCase(conversation.id, [
+          userId,
+        ]);
         const updatedConversation = unwrapApiSuccess(response);
         updateConversation(conversation.id, updatedConversation);
         void fetchMembers();
@@ -356,7 +551,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
     setIsSubmitting(true);
     try {
-      await conversationApi.updateConversation(conversation.id, { name: nextName });
+      await updateConversationUseCase(conversation.id, { name: nextName });
       await refreshConversation();
       setIsRenamingGroup(false);
       toast.success(t("profile:toast.groupRenamed"));
@@ -387,7 +582,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
       setActingMemberId(member.id);
       try {
-        await conversationApi.updateMemberRole(conversation.id, member.id, nextRole);
+        await updateConversationMemberRoleUseCase(
+          conversation.id,
+          member.id,
+          nextRole,
+        );
         await fetchMembers();
         toast.success(
           nextRole === RoomMemberRole.ADMIN
@@ -408,7 +607,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     async (member: GroupMember) => {
       if (!canRemoveMember(member)) return;
 
-      const displayName = member.displayName || member.username;
+      const displayName = resolveMemberName(member) || member.id;
       if (
         !window.confirm(
           t("profile:groupInfo.removeMemberConfirm", { name: displayName }),
@@ -419,7 +618,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
       setActingMemberId(member.id);
       try {
-        await conversationApi.removeMember(conversation.id, member.id);
+        await removeConversationMemberUseCase(conversation.id, member.id);
         await Promise.all([refreshConversation(), fetchMembers()]);
         toast.success(t("profile:toast.memberRemoved"));
       } catch (error) {
@@ -437,7 +636,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
     setIsSubmitting(true);
     try {
-      await conversationApi.leaveConversation(conversation.id);
+      await leaveConversationUseCase(conversation.id);
       removeConversation(conversation.id);
       toast.success(t("profile:toast.leftGroup"));
       onClose();
@@ -454,13 +653,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     { id: "members", label: t("profile:groupInfo.tabs.members") },
     {
       id: "inviteLinks",
-      label: t("profile:groupInfo.tabs.inviteLinks", { defaultValue: "Invite links" }),
+      label: t("profile:groupInfo.tabs.inviteLinks"),
     },
     {
       id: "joinRequests",
-      label: t("profile:groupInfo.tabs.joinRequests", {
-        defaultValue: "Join requests",
-      }),
+      label: t("profile:groupInfo.tabs.joinRequests"),
     },
     { id: "media", label: t("profile:groupInfo.tabs.media") },
     { id: "files", label: t("profile:groupInfo.tabs.files") },
@@ -472,18 +669,18 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     const usageLimit = inviteUsageLimitDraft.trim()
       ? Number(inviteUsageLimitDraft.trim())
       : undefined;
-    if (usageLimit !== undefined && (!Number.isFinite(usageLimit) || usageLimit <= 0)) {
-      toast.error(
-        t("profile:groupInfo.invite.invalidUsageLimit", {
-          defaultValue: "Usage limit must be greater than 0",
-        }),
-      );
+    if (
+      usageLimit !== undefined &&
+      (!Number.isFinite(usageLimit) || usageLimit <= 0)
+    ) {
+      toast.error(t("profile:groupInfo.invite.invalidUsageLimit"));
       return;
     }
 
     setIsCreatingInvite(true);
     try {
-      const response = await groupApi.createInviteLink(conversation.id, {
+      const response = await createGroupInviteLinkUseCase({
+        conversationId: conversation.id,
         name: inviteNameDraft.trim() || undefined,
         expireAt: inviteExpireAtDraft
           ? new Date(inviteExpireAtDraft).toISOString()
@@ -504,13 +701,17 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           typeof payload.inviteUrl === "string" ? payload.inviteUrl : undefined,
         token: typeof payload.token === "string" ? payload.token : undefined,
         tokenPreview:
-          typeof payload.tokenPreview === "string" ? payload.tokenPreview : undefined,
+          typeof payload.tokenPreview === "string"
+            ? payload.tokenPreview
+            : undefined,
         usageCount:
           typeof payload.usageCount === "number" ? payload.usageCount : 0,
         usageLimit:
           typeof payload.usageLimit === "number" ? payload.usageLimit : null,
-        expireAt: typeof payload.expireAt === "string" ? payload.expireAt : null,
-        revokedAt: typeof payload.revokedAt === "string" ? payload.revokedAt : null,
+        expireAt:
+          typeof payload.expireAt === "string" ? payload.expireAt : null,
+        revokedAt:
+          typeof payload.revokedAt === "string" ? payload.revokedAt : null,
         createdAt:
           typeof payload.createdAt === "string"
             ? payload.createdAt
@@ -529,18 +730,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       setInviteNameDraft("");
       setInviteUsageLimitDraft("");
       setInviteExpireAtDraft("");
-      toast.success(
-        t("profile:groupInfo.invite.created", {
-          defaultValue: "Invite link created",
-        }),
-      );
+      toast.success(t("profile:groupInfo.invite.created"));
     } catch (error) {
       const apiError = extractApiError(error);
       toast.error(
-        apiError.message ||
-          t("profile:groupInfo.invite.createFailed", {
-            defaultValue: "Unable to create invite link",
-          }),
+        apiError.message || t("profile:groupInfo.invite.createFailed"),
       );
     } finally {
       setIsCreatingInvite(false);
@@ -561,15 +755,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       if (!value) return;
       try {
         await navigator.clipboard.writeText(value);
-        toast.success(
-          t("profile:groupInfo.invite.copied", { defaultValue: "Copied" }),
-        );
+        toast.success(t("profile:groupInfo.invite.copied"));
       } catch {
-        toast.error(
-          t("profile:groupInfo.invite.copyFailed", {
-            defaultValue: "Copy failed",
-          }),
-        );
+        toast.error(t("profile:groupInfo.invite.copyFailed"));
       }
     },
     [t],
@@ -580,20 +768,13 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       if (!isAdmin || !linkId) return;
       setRevokingInviteId(linkId);
       try {
-        await groupApi.revokeInviteLink(conversation.id, linkId);
+        await revokeGroupInviteLinkUseCase(conversation.id, linkId);
         markInviteLinkRevoked(conversation.id, linkId);
-        toast.success(
-          t("profile:groupInfo.invite.revoked", {
-            defaultValue: "Invite link revoked",
-          }),
-        );
+        toast.success(t("profile:groupInfo.invite.revoked"));
       } catch (error) {
         const apiError = extractApiError(error);
         toast.error(
-          apiError.message ||
-            t("profile:groupInfo.invite.revokeFailed", {
-              defaultValue: "Unable to revoke invite link",
-            }),
+          apiError.message || t("profile:groupInfo.invite.revokeFailed"),
         );
       } finally {
         setRevokingInviteId(null);
@@ -608,7 +789,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
       setResolvingRequestId(requestId);
       try {
-        await groupApi.resolveJoinRequest(conversation.id, requestId, status);
+        await resolveGroupJoinRequestUseCase(
+          conversation.id,
+          requestId,
+          status,
+        );
         markJoinRequestResolved(conversation.id, requestId, status);
         removeJoinRequest(conversation.id, requestId);
         if (status === "approved") {
@@ -616,20 +801,13 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         }
         toast.success(
           status === "approved"
-            ? t("profile:groupInfo.joinRequests.approved", {
-                defaultValue: "Join request approved",
-              })
-            : t("profile:groupInfo.joinRequests.rejected", {
-                defaultValue: "Join request rejected",
-              }),
+            ? t("profile:groupInfo.joinRequests.approved")
+            : t("profile:groupInfo.joinRequests.rejected"),
         );
       } catch (error) {
         const apiError = extractApiError(error);
         toast.error(
-          apiError.message ||
-            t("profile:groupInfo.joinRequests.resolveFailed", {
-              defaultValue: "Unable to resolve join request",
-            }),
+          apiError.message || t("profile:groupInfo.joinRequests.resolveFailed"),
         );
       } finally {
         setResolvingRequestId(null);
@@ -646,15 +824,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   );
 
   return (
-    <div className={clsx("flex flex-col h-full bg-surface", className)}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <h3 className="font-semibold text-text-primary">
+    <div className={clsx("flex h-full flex-col bg-surface", className)}>
+      <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+        <h3 className="text-title-sm text-text-primary">
           {t("profile:groupInfo.title")}
         </h3>
         <button
           type="button"
           onClick={onClose}
-          className="p-1 rounded-full hover:bg-surface-overlay transition-colors"
+          className="icon-button-surface h-9 w-9"
           aria-label={t("common:actions.close")}
         >
           <XMarkIcon className="w-5 h-5 text-text-muted" />
@@ -662,18 +840,18 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="flex flex-col items-center py-6 px-4">
+        <div className="flex flex-col items-center px-4 py-4">
           <Avatar src={conversation.avatar} alt={conversation.name} size="xl" />
 
-          <div className="mt-4 text-center">
-            <h2 className="text-xl font-semibold text-text-primary flex items-center gap-2 justify-center">
+          <div className="mt-3 text-center">
+            <h2 className="flex items-center justify-center gap-2 text-title text-text-primary">
               {isRenamingGroup
                 ? t("profile:groupInfo.renameGroup")
                 : conversation.name || t("common:labels.group")}
             </h2>
 
             {isRenamingGroup ? (
-              <div className="mt-3 w-full min-w-[16rem] space-y-2">
+              <div className="mt-3 w-full min-w-64 space-y-2">
                 <Input
                   type="text"
                   value={groupNameDraft}
@@ -698,7 +876,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                       setIsRenamingGroup(false);
                       setGroupNameDraft(conversation.name || "");
                     }}
-                    className="px-3 py-1.5 text-sm rounded-md border border-border text-text-muted hover:bg-surface-hover"
+                    className="rounded-md border border-border px-3 py-1.5 text-body-sm text-text-muted hover:bg-surface-hover"
                   >
                     {t("common:actions.cancel")}
                   </button>
@@ -706,7 +884,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     type="button"
                     disabled={isSubmitting}
                     onClick={() => void handleRenameGroup()}
-                    className="px-3 py-1.5 text-sm rounded-md bg-primary text-text-inverse hover:opacity-90 disabled:opacity-60 inline-flex items-center gap-1.5"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-body-sm text-text-inverse hover:opacity-90 disabled:opacity-60"
                   >
                     <CheckIcon className="w-4 h-4" />
                     {t("common:actions.save")}
@@ -715,11 +893,13 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               </div>
             ) : (
               <div className="mt-1 flex items-center justify-center gap-2">
-                <p className="text-sm text-text-muted">
+                <p className="text-body-sm text-text-muted">
                   {t("profile:groupInfo.membersCount", {
                     count:
                       conversation.participantCount ??
-                      (members.length > 0 ? members.length : participants.length),
+                      (members.length > 0
+                        ? members.length
+                        : participants.length),
                   })}
                 </p>
                 {isAdmin && (
@@ -727,7 +907,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     type="button"
                     onClick={() => setIsRenamingGroup(true)}
                     disabled={isSubmitting}
-                    className="p-1 hover:bg-surface-overlay rounded-full"
+                    className="rounded-md p-1 hover:bg-surface-overlay"
                     aria-label={t("profile:groupInfo.renameGroup")}
                   >
                     <PencilIcon className="w-4 h-4 text-text-muted" />
@@ -738,49 +918,49 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           </div>
         </div>
 
-        <div className="h-px bg-border mx-4" />
+        <div className="mx-4 h-px bg-border" />
 
         <div className="py-2">
-          <div className="flex items-center justify-between px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer">
+          <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-4">
               <BellIcon className="w-5 h-5 text-text-muted" />
-              <span className="text-sm text-text-primary">
-                {t("profile:groupInfo.notifications")}
-              </span>
+              <div>
+                <span className="text-sm text-text-primary">
+                  {t("profile:groupInfo.notifications")}
+                </span>
+                <p className="text-xs text-text-muted">
+                  {t("profile:groupInfo.comingSoon")}
+                </p>
+              </div>
             </div>
-            <div
+            <button
+              type="button"
+              disabled
+              title={unavailableActionTitle}
               className={clsx(
-                "w-10 h-6 rounded-full relative",
-                conversation.isMuted ? "bg-border-strong" : "bg-primary",
+                "w-10 h-6 rounded-full relative bg-border-strong",
+                unavailableActionClass,
               )}
+              aria-disabled="true"
+              aria-label={unavailableActionTitle}
             >
-              <div
-                className={clsx(
-                  "absolute top-1 w-4 h-4 bg-surface rounded-full shadow transition-all",
-                  conversation.isMuted ? "left-1" : "right-1",
-                )}
-              />
-            </div>
+              <div className="absolute top-1 left-1 w-4 h-4 bg-surface rounded-full shadow" />
+            </button>
           </div>
         </div>
 
-        <div className="h-px bg-border mx-4" />
+        <div className="mx-4 h-px bg-border" />
 
-        <div className="flex border-b border-border">
+        <div className="flex border-b border-border px-1">
           {tabs.map((tab) => (
-            <button
-              type="button"
+            <TabTrigger
               key={tab.id}
+              active={activeTab === tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={clsx(
-                "flex-1 py-3 text-sm font-medium transition-colors",
-                activeTab === tab.id
-                  ? "text-primary border-b-2 border-primary"
-                  : "text-text-muted hover:text-text-secondary",
-              )}
+              className="flex-1"
             >
               {tab.label}
-            </button>
+            </TabTrigger>
           ))}
         </div>
 
@@ -792,7 +972,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   type="button"
                   disabled={isSubmitting}
                   onClick={() => setShowAddMember((prev) => !prev)}
-                  className="w-full flex items-center gap-4 px-4 py-3 hover:bg-surface-hover transition-colors text-primary"
+                  className="flex w-full items-center gap-4 px-4 py-2.5 text-primary transition-micro hover:bg-surface-hover"
                 >
                   <UserPlusIcon className="w-5 h-5" />
                   <span className="text-sm font-medium">
@@ -802,7 +982,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               )}
 
               {showAddMember && (
-                <div className="px-4 pb-3 space-y-2">
+                <div className="space-y-2 px-4 pb-3">
                   <Input
                     type="text"
                     value={searchQuery}
@@ -827,18 +1007,18 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                           type="button"
                           onClick={() => void handleAddMember(user.id)}
                           disabled={isSubmitting}
-                          className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-surface-hover"
+                          className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-surface-hover"
                         >
                           <Avatar
                             src={user.avatar}
-                            alt={user.displayName || user.username}
+                            alt={resolveMemberName(user) || user.id}
                             size="sm"
                             status={user.status}
                             showStatus
                           />
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-text-primary truncate">
-                              {user.displayName || user.username}
+                              {resolveMemberName(user) || user.id}
                             </p>
                             <p className="text-xs text-text-muted truncate">
                               @{user.username}
@@ -871,18 +1051,18 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   return (
                     <div
                       key={member.id}
-                      className="flex items-start gap-3 px-4 py-3 hover:bg-surface-hover transition-colors"
+                      className="flex items-start gap-3 px-4 py-2.5 transition-micro hover:bg-surface-hover"
                     >
                       <Avatar
                         src={member.avatar}
-                        alt={member.displayName || member.username}
+                        alt={resolveMemberName(member) || member.id}
                         size="md"
                         status={member.status}
                         showStatus
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-text-primary truncate">
-                          {member.displayName || member.username}
+                          {resolveMemberName(member) || member.id}
                           {member.id === currentUserId && (
                             <span className="ml-2 text-xs text-text-muted">
                               {t("profile:groupInfo.youSuffix")}
@@ -895,7 +1075,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <span
                             className={clsx(
-                              "px-2 py-0.5 text-xs rounded-full",
+                              "rounded-full px-2 py-0.5 text-caption",
                               roleBadgeClass(member.role),
                             )}
                           >
@@ -906,7 +1086,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                             <button
                               type="button"
                               disabled={isMemberActionRunning}
-                              onClick={() => void handleToggleMemberRole(member)}
+                              onClick={() =>
+                                void handleToggleMemberRole(member)
+                              }
                               className="text-xs px-2 py-0.5 rounded border border-border text-text-secondary hover:bg-surface-overlay disabled:opacity-60"
                             >
                               {member.role === RoomMemberRole.ADMIN
@@ -944,7 +1126,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 {[1, 2, 3, 4, 5, 6].map((i) => (
                   <div
                     key={i}
-                    className="aspect-square bg-surface-overlay rounded-lg flex items-center justify-center"
+                    className="flex aspect-square items-center justify-center rounded-lg bg-surface-overlay"
                   >
                     <PhotoIcon className="w-8 h-8 text-border-strong" />
                   </div>
@@ -952,7 +1134,12 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               </div>
               <button
                 type="button"
-                className="w-full mt-4 py-2 text-sm text-primary font-medium hover:bg-surface-hover rounded-lg"
+                disabled
+                title={unavailableActionTitle}
+                className={clsx(
+                  "w-full mt-4 py-2 text-sm text-primary font-medium rounded-lg",
+                  unavailableActionClass,
+                )}
               >
                 {t("profile:groupInfo.viewAllMedia")}
               </button>
@@ -969,9 +1156,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             <div className="space-y-3 p-4">
               {!isAdmin ? (
                 <p className="text-sm text-text-muted">
-                  {t("profile:groupInfo.invite.noPermission", {
-                    defaultValue: "Only admins can manage invite links.",
-                  })}
+                  {t("profile:groupInfo.invite.noPermission")}
                 </p>
               ) : (
                 <div className="space-y-3">
@@ -981,9 +1166,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-text-secondary hover:bg-surface-hover"
                   >
                     <LinkIcon className="h-4 w-4" />
-                    {t("profile:groupInfo.invite.create", {
-                      defaultValue: "Create invite link",
-                    })}
+                    {t("profile:groupInfo.invite.create")}
                   </button>
 
                   {showCreateInviteForm && (
@@ -991,10 +1174,12 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                       <Input
                         type="text"
                         value={inviteNameDraft}
-                        onChange={(event) => setInviteNameDraft(event.target.value)}
-                        placeholder={t("profile:groupInfo.invite.namePlaceholder", {
-                          defaultValue: "Name (optional)",
-                        })}
+                        onChange={(event) =>
+                          setInviteNameDraft(event.target.value)
+                        }
+                        placeholder={t(
+                          "profile:groupInfo.invite.namePlaceholder",
+                        )}
                         disabled={isCreatingInvite}
                       />
                       <Input
@@ -1005,14 +1190,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                         }
                         placeholder={t(
                           "profile:groupInfo.invite.usageLimitPlaceholder",
-                          { defaultValue: "Usage limit (optional)" },
                         )}
                         disabled={isCreatingInvite}
                       />
                       <Input
                         type="datetime-local"
                         value={inviteExpireAtDraft}
-                        onChange={(event) => setInviteExpireAtDraft(event.target.value)}
+                        onChange={(event) =>
+                          setInviteExpireAtDraft(event.target.value)
+                        }
                         disabled={isCreatingInvite}
                       />
                       <div className="flex items-center justify-end gap-2">
@@ -1037,9 +1223,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                         >
                           {isCreatingInvite
                             ? t("common:loading.processing")
-                            : t("profile:groupInfo.invite.create", {
-                                defaultValue: "Create invite link",
-                              })}
+                            : t("profile:groupInfo.invite.create")}
                         </button>
                       </div>
                     </div>
@@ -1047,9 +1231,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
                   {inviteLinks.length === 0 ? (
                     <p className="text-sm text-text-muted">
-                      {t("profile:groupInfo.invite.empty", {
-                        defaultValue: "No invite links yet.",
-                      })}
+                      {t("profile:groupInfo.invite.empty")}
                     </p>
                   ) : (
                     <div className="space-y-2">
@@ -1065,16 +1247,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                               <div className="min-w-0">
                                 <p className="truncate text-sm font-medium text-text-primary">
                                   {link.name ||
-                                    t("profile:groupInfo.invite.unnamed", {
-                                      defaultValue: "Invite link",
-                                    })}
+                                    t("profile:groupInfo.invite.unnamed")}
                                 </p>
                                 <p className="mt-1 truncate text-xs text-text-muted">
-                                  {link.inviteUrl || link.tokenPreview || link.id}
+                                  {link.inviteUrl ||
+                                    link.tokenPreview ||
+                                    link.id}
                                 </p>
                                 <p className="mt-1 text-xs text-text-muted">
                                   {t("profile:groupInfo.invite.usage", {
-                                    defaultValue: "Usage: {{count}}/{{limit}}",
                                     count: link.usageCount || 0,
                                     limit:
                                       typeof link.usageLimit === "number"
@@ -1085,9 +1266,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                               </div>
                               {isRevoked && (
                                 <span className="rounded-full bg-danger/10 px-2 py-0.5 text-xs text-danger">
-                                  {t("profile:groupInfo.invite.revokedLabel", {
-                                    defaultValue: "Revoked",
-                                  })}
+                                  {t("profile:groupInfo.invite.revokedLabel")}
                                 </span>
                               )}
                             </div>
@@ -1096,7 +1275,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                               <button
                                 type="button"
                                 disabled={!shareValue}
-                                onClick={() => void handleCopyInviteLink(shareValue)}
+                                onClick={() =>
+                                  void handleCopyInviteLink(shareValue)
+                                }
                                 className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover disabled:opacity-50"
                               >
                                 <ClipboardDocumentIcon className="h-3.5 w-3.5" />
@@ -1106,15 +1287,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                                 <button
                                   type="button"
                                   disabled={revokingInviteId === link.id}
-                                  onClick={() => void handleRevokeInvite(link.id)}
+                                  onClick={() =>
+                                    void handleRevokeInvite(link.id)
+                                  }
                                   className="inline-flex items-center gap-1 rounded-md border border-danger/40 px-2 py-1 text-xs text-danger hover:bg-danger/10 disabled:opacity-50"
                                 >
                                   <NoSymbolIcon className="h-3.5 w-3.5" />
                                   {revokingInviteId === link.id
                                     ? t("common:loading.processing")
-                                    : t("profile:groupInfo.invite.revoke", {
-                                        defaultValue: "Revoke",
-                                      })}
+                                    : t("profile:groupInfo.invite.revoke")}
                                 </button>
                               )}
                             </div>
@@ -1132,23 +1313,18 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             <div className="space-y-2 p-4">
               {!isAdmin ? (
                 <p className="text-sm text-text-muted">
-                  {t("profile:groupInfo.joinRequests.noPermission", {
-                    defaultValue: "Only admins can resolve join requests.",
-                  })}
+                  {t("profile:groupInfo.joinRequests.noPermission")}
                 </p>
               ) : joinRequests.length === 0 ? (
                 <p className="text-sm text-text-muted">
-                  {t("profile:groupInfo.joinRequests.empty", {
-                    defaultValue: "No pending join requests.",
-                  })}
+                  {t("profile:groupInfo.joinRequests.empty")}
                 </p>
               ) : (
                 joinRequests.map((request) => {
                   const user =
                     membersByUserId[request.userId] ||
                     members.find((member) => member.id === request.userId);
-                  const displayName =
-                    user?.displayName || user?.username || request.userId;
+                  const displayName = resolveMemberName(user) || request.userId;
 
                   return (
                     <div
@@ -1183,25 +1359,27 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                           type="button"
                           disabled={resolvingRequestId === request.id}
                           onClick={() =>
-                            void handleResolveJoinRequest(request.id, "approved")
+                            void handleResolveJoinRequest(
+                              request.id,
+                              "approved",
+                            )
                           }
                           className="rounded-md bg-primary px-3 py-1.5 text-xs text-text-inverse hover:opacity-90 disabled:opacity-60"
                         >
-                          {t("common:actions.approve", {
-                            defaultValue: "Approve",
-                          })}
+                          {t("common:actions.approve")}
                         </button>
                         <button
                           type="button"
                           disabled={resolvingRequestId === request.id}
                           onClick={() =>
-                            void handleResolveJoinRequest(request.id, "rejected")
+                            void handleResolveJoinRequest(
+                              request.id,
+                              "rejected",
+                            )
                           }
                           className="rounded-md border border-danger/40 px-3 py-1.5 text-xs text-danger hover:bg-danger/10 disabled:opacity-60"
                         >
-                          {t("common:actions.reject", {
-                            defaultValue: "Reject",
-                          })}
+                          {t("common:actions.reject")}
                         </button>
                       </div>
                     </div>
@@ -1224,15 +1402,24 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
             className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-danger"
           >
             <TrashIcon className="w-5 h-5" />
-            <span className="text-sm">{t("profile:userProfile.deleteConversation")}</span>
+            <span className="text-sm">
+              {t("profile:userProfile.deleteConversation")}
+            </span>
           </button>
 
           <button
             type="button"
-            className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-danger"
+            disabled
+            title={unavailableActionTitle}
+            className={clsx(
+              "w-full flex items-center gap-4 px-4 py-3 text-danger",
+              unavailableActionClass,
+            )}
           >
             <ExclamationTriangleIcon className="w-5 h-5" />
-            <span className="text-sm">{t("profile:groupInfo.reportGroup")}</span>
+            <span className="text-sm">
+              {t("profile:groupInfo.reportGroup")}
+            </span>
           </button>
 
           <button

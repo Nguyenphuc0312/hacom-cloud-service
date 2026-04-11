@@ -4,8 +4,11 @@
     "shortName": "HC"
   },
   "actions": {
+    "title": "Thao tác nhanh",
     "cancel": "Hủy",
     "confirm": "Xác nhận",
+    "approve": "Duyệt",
+    "reject": "Từ chối",
     "retry": "Thử lại",
     "close": "Đóng",
     "save": "Lưu",
@@ -29,13 +32,17 @@
     "default": "Đang tải...",
     "page": "Đang tải trang...",
     "checkingAuth": "Đang kiểm tra đăng nhập...",
-    "processing": "Đang xử lý..."
+    "processing": "Đang xử lý...",
+    "syncing": "Đang đồng bộ..."
   },
   "labels": {
     "user": "Người dùng",
     "conversation": "Cuộc trò chuyện",
     "channel": "Kênh",
-    "group": "Nhóm"
+    "group": "Nhóm",
+    "navigation": "Điều hướng",
+    "shortcut": "Phím tắt",
+    "people": "Mọi người"
   },
   "statusLabel": "Trạng thái",
   "status": {
@@ -44,9 +51,28 @@
     "away": "Tạm vắng",
     "dnd": "Không làm phiền",
     "busy": "Bận",
-    "invisible": "Ẩn"
+    "invisible": "Ẩn",
+    "idle": "Rảnh",
+    "loading": "Đang tải...",
+    "empty": "Không có kết quả phù hợp",
+    "unknown": "Không xác định",
+    "lastSeen": "Truy cập lần cuối {{time}}",
+    "lastSynced": "Đồng bộ lần cuối: {{time}}",
+    "lastUpdated": "Cập nhật cục bộ lần cuối: {{time}}"
+  },
+  "error": {
+    "syncFailed": "Không thể đồng bộ cài đặt."
   },
   "toast": {
     "featureInDevelopment": "Tính năng đang phát triển"
+  },
+  "commandPalette": {
+    "openChatWorkspace": "Mở không gian trò chuyện",
+    "findFriends": "Tìm bạn bè và danh bạ",
+    "newConversation": "Bắt đầu cuộc trò chuyện mới (cá nhân hoặc nhóm)",
+    "openDirectConversation": "Mở cuộc trò chuyện trực tiếp hiện có",
+    "searchInFriends": "Tìm người này trong trang Bạn bè",
+    "searchPlaceholder": "Tìm cuộc trò chuyện, người dùng hoặc thao tác",
+    "searchAria": "Tìm trong bảng lệnh"
   }
 }

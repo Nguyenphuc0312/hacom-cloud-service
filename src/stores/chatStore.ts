@@ -2,16 +2,27 @@
  * @fileoverview Chat store (Zustand)
  */
 
+import axios from "axios";
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
+import { getSocket } from "../lib/socket";
 import {
   normalizeConversation,
   normalizeConversationsPayload,
   normalizeRoomType,
 } from "../lib/conversationAdapter";
 import { toast } from "../utils/toast";
+import {
+  buildMessageCorrelationKey,
+  generateClientMessageId,
+  generateTempMessageId,
+  getMessageIdentityKey,
+} from "../utils/messageIdentity";
+import { logMessageDebug } from "../utils/messageDebug";
+import { createReplySnapshot } from "../utils/messageTimeline";
+import { rankConversations } from "../utils/conversationRanking";
 import i18n from "../i18n";
 import { useAuthStore } from "./authStore";
 import { conversationApi, messageApi } from "../services/api";
@@ -20,6 +31,8 @@ import type {
   Message,
   TypingStatus,
   ConversationFilter,
+  SendMessageResult,
+  SendRestriction,
 } from "../types";
 import { MessageType, MessageStatus } from "../types";
 import type { Attachment } from "../types";
@@ -33,9 +46,14 @@ interface ChatState {
   searchQuery: string;
   activeFilter: ConversationFilter;
   isLoadingConversations: boolean;
+  hasFetchedConversationsOnce: boolean;
+  conversationsError: string | null;
   isLoadingMessages: boolean;
   isLoadingMessagesByConversation: Record<string, boolean>;
   hasMoreMessages: Record<string, boolean>;
+  hasNewerMessagesByConversation: Record<string, boolean>;
+  outboxByConversation: Record<string, string[]>;
+  sendRestrictionsByConversation: Record<string, SendRestriction | undefined>;
   messageErrors: Record<string, string | null>;
   error: string | null;
 
@@ -72,8 +90,18 @@ interface ChatState {
     type?: MessageType,
     fileMeta?: Attachment | Attachment[],
     replyToId?: string,
-  ) => Promise<void>;
-  resendMessage: (conversationId: string, message: Message) => Promise<void>;
+    replyToSnapshot?: Message,
+  ) => Promise<SendMessageResult>;
+  resendMessage: (
+    conversationId: string,
+    message: Message,
+  ) => Promise<SendMessageResult>;
+  flushQueuedMessages: (conversationId?: string) => Promise<void>;
+  setSendRestriction: (
+    conversationId: string,
+    restriction: SendRestriction,
+  ) => void;
+  clearSendRestriction: (conversationId: string) => void;
 
   setTyping: (status: TypingStatus) => void;
   clearTyping: (conversationId: string, userId: string) => void;
@@ -88,6 +116,10 @@ interface ChatState {
 interface FetchMessagesResult {
   loaded: number;
   hasMore: boolean;
+  hasNext: boolean;
+  hasPrev: boolean;
+  mode: "initial" | "older" | "newer";
+  applied: boolean;
 }
 
 interface FetchMessagesOptions {
@@ -95,6 +127,7 @@ interface FetchMessagesOptions {
   limit?: number;
   beforeId?: string;
   afterId?: string;
+  syncReason?: "initial-sync" | "reconnect" | "room-refresh";
 }
 
 const initialState = {
@@ -106,9 +139,14 @@ const initialState = {
   searchQuery: "",
   activeFilter: "all" as ConversationFilter,
   isLoadingConversations: false,
+  hasFetchedConversationsOnce: false,
+  conversationsError: null,
   isLoadingMessages: false,
   isLoadingMessagesByConversation: {},
   hasMoreMessages: {},
+  hasNewerMessagesByConversation: {},
+  outboxByConversation: {},
+  sendRestrictionsByConversation: {},
   messageErrors: {},
   error: null,
 };
@@ -117,6 +155,21 @@ const EMPTY_MESSAGES: Message[] = [];
 
 const roomMessageFetchInFlight = new Map<string, number>();
 const initialFetchSeqByConversation = new Map<string, number>();
+const messageFetchGenerationByConversation = new Map<string, number>();
+const markAsReadInFlight = new Map<string, Promise<void>>();
+let conversationsFetchPromise: Promise<void> | null = null;
+const pendingMessageSendTimeouts = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+>();
+const MESSAGE_SEND_TIMEOUT_MS = 25_000;
+let nextLocalMessageOrder = 1;
+
+const allocateLocalMessageOrder = (): number => {
+  const allocated = nextLocalMessageOrder;
+  nextLocalMessageOrder += 1;
+  return allocated;
+};
 
 const buildLoadingStateFromInFlightMap = (): {
   isLoadingMessages: boolean;
@@ -140,18 +193,24 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
     ? (value as Record<string, unknown>)
     : null;
 
-const isMessageDebugEnabled = (): boolean => {
-  if (typeof window === "undefined") return false;
-  return (
-    new URLSearchParams(window.location.search).get("debugMessages") === "1"
-  );
-};
-
 const asStringValue = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim().length > 0 ? value : undefined;
 
 const asNumberValue = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) ? value : undefined;
+
+const getCorrelationKeyForMessage = (
+  message: Pick<
+    Message,
+    "conversationId" | "clientMessageId" | "localId" | "id"
+  >,
+): string =>
+  buildMessageCorrelationKey({
+    conversationId: message.conversationId,
+    clientMessageId: message.clientMessageId,
+    tempId: message.localId || message.id,
+    localId: message.localId,
+  });
 
 const toDateObject = (value: unknown, fallback: Date = new Date()): Date => {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
@@ -254,6 +313,7 @@ const normalizeMessage = (
       : sourceRecord;
 
   const sender = asRecord(source.sender);
+  const metadata = asRecord(source.metadata);
   const id =
     asStringValue(source.id) ??
     asStringValue(source._id) ??
@@ -287,13 +347,127 @@ const normalizeMessage = (
   const status = statusValues.has(rawStatus ?? "")
     ? (rawStatus as Message["status"])
     : MessageStatus.SENT;
+  const clientMessageId =
+    asStringValue(source.clientMessageId) ??
+    asStringValue(source.client_message_id) ??
+    asStringValue(metadata?.clientMessageId) ??
+    asStringValue(metadata?.client_message_id) ??
+    asStringValue(source.tempId) ??
+    asStringValue(metadata?.tempId) ??
+    asStringValue(source.localId);
+  const stableId =
+    asStringValue(source.stableId) ??
+    asStringValue(source.localId) ??
+    asStringValue(metadata?.localId) ??
+    id;
+  const serverTs =
+    source.serverTs ?? source.server_ts ?? source.createdAt ?? undefined;
+  const localOrder =
+    asNumberValue(source.localOrder) ??
+    asNumberValue(source.local_order) ??
+    undefined;
+  const serverSeq =
+    asNumberValue(source.serverSeq) ??
+    asNumberValue(source.server_seq) ??
+    asNumberValue(source.seq) ??
+    asNumberValue(source.sequence) ??
+    undefined;
+  const transportStatus = (() => {
+    const explicit =
+      asStringValue(source.transportStatus) ??
+      asStringValue(source.transport_status);
+    if (
+      explicit === "draft" ||
+      explicit === "optimistic" ||
+      explicit === "acked_transport" ||
+      explicit === "synced_stream"
+    ) {
+      return explicit;
+    }
+
+    if (id.startsWith("temp-") || status === MessageStatus.SENDING) {
+      return "optimistic" as const;
+    }
+
+    return serverSeq !== undefined
+      ? ("synced_stream" as const)
+      : ("acked_transport" as const);
+  })();
+  const explicitSendState =
+    asStringValue(source.sendState) ?? asStringValue(source.send_state);
+  const sendState = (() => {
+    if (
+      explicitSendState === "queued" ||
+      explicitSendState === "sending" ||
+      explicitSendState === "retrying" ||
+      explicitSendState === "sent" ||
+      explicitSendState === "failed"
+    ) {
+      return explicitSendState;
+    }
+
+    if (status === MessageStatus.FAILED) {
+      return "failed" as const;
+    }
+
+    if (status === MessageStatus.SENDING || id.startsWith("temp-")) {
+      return "sending" as const;
+    }
+
+    return "sent" as const;
+  })();
+  const queuedReason = (() => {
+    const value =
+      asStringValue(source.queuedReason) ?? asStringValue(source.queued_reason);
+    if (
+      value === "offline" ||
+      value === "reconnecting" ||
+      value === "manual_retry"
+    ) {
+      return value;
+    }
+    return undefined;
+  })();
+  const failureReason = (() => {
+    const value =
+      asStringValue(source.failureReason) ??
+      asStringValue(source.failure_reason);
+    if (
+      value === "network" ||
+      value === "timeout" ||
+      value === "permission" ||
+      value === "slow_mode" ||
+      value === "server" ||
+      value === "unknown"
+    ) {
+      return value;
+    }
+    return undefined;
+  })();
 
   return {
     id,
+    stableId,
+    clientMessageId,
     localId:
       asStringValue(source.localId) ??
+      asStringValue(metadata?.localId) ??
       asStringValue(source.tempId) ??
-      asStringValue(source.clientMessageId),
+      asStringValue(metadata?.tempId),
+    serverSeq,
+    serverTs: serverTs ? toDateObject(serverTs) : undefined,
+    localOrder,
+    transportStatus,
+    sendState,
+    queuedReason,
+    failureReason,
+    sendAttempts:
+      asNumberValue(source.sendAttempts) ?? asNumberValue(source.send_attempts),
+    lastSendAttemptAt: source.lastSendAttemptAt
+      ? toDateObject(source.lastSendAttemptAt)
+      : source.last_send_attempt_at
+        ? toDateObject(source.last_send_attempt_at)
+        : undefined,
     conversationId,
     senderId,
     senderName,
@@ -345,9 +519,99 @@ const toDateValue = (value: unknown): number => {
   return 0;
 };
 
+const toFiniteNumber = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null;
+
+const getStableMessageId = (message: Message): string =>
+  getMessageIdentityKey(message);
+
+const matchesMessageIdentityValue = (
+  message: Pick<Message, "id" | "localId" | "clientMessageId" | "stableId">,
+  identity: string,
+): boolean => {
+  if (!identity) return false;
+
+  return (
+    message.id === identity ||
+    message.localId === identity ||
+    message.clientMessageId === identity ||
+    message.stableId === identity
+  );
+};
+
+const getMessageQueueKey = (
+  conversationId: string,
+  message: Pick<Message, "id" | "localId" | "clientMessageId" | "stableId">,
+): string => `${conversationId}:${getStableMessageId(message as Message)}`;
+
+const clearMessageSendTimeout = (queueKey: string): void => {
+  const timer = pendingMessageSendTimeouts.get(queueKey);
+  if (!timer) return;
+  clearTimeout(timer);
+  pendingMessageSendTimeouts.delete(queueKey);
+};
+
+const clearAllMessageSendTimeouts = (): void => {
+  pendingMessageSendTimeouts.forEach((timer) => clearTimeout(timer));
+  pendingMessageSendTimeouts.clear();
+};
+
+const getBrowserOnlineState = (): boolean | null => {
+  if (
+    typeof navigator === "undefined" ||
+    typeof navigator.onLine !== "boolean"
+  ) {
+    return null;
+  }
+
+  return navigator.onLine;
+};
+
+const resolveConnectionSendMode = (): "online" | "reconnecting" | "offline" => {
+  const connectionState = getSocket()?.getConnectionState() ?? "disconnected";
+  if (connectionState === "connected") {
+    return "online";
+  }
+  if (
+    connectionState === "connecting" ||
+    connectionState === "authenticating" ||
+    connectionState === "reconnecting"
+  ) {
+    return "reconnecting";
+  }
+  return "offline";
+};
+
+const isQueueableNetworkFailure = (error: unknown): boolean => {
+  if (getBrowserOnlineState() === false) {
+    return true;
+  }
+  return axios.isAxiosError(error) && !error.response;
+};
+
 const compareMessages = (a: Message, b: Message): number => {
+  const aSeq = toFiniteNumber(a.serverSeq);
+  const bSeq = toFiniteNumber(b.serverSeq);
+  if (aSeq !== null && bSeq !== null && aSeq !== bSeq) {
+    return aSeq - bSeq;
+  }
+  if (aSeq !== null && bSeq === null) return -1;
+  if (aSeq === null && bSeq !== null) return 1;
+
+  const serverTimeDiff = toDateValue(a.serverTs) - toDateValue(b.serverTs);
+  if (serverTimeDiff !== 0) return serverTimeDiff;
+
+  const localOrderDiff =
+    (toFiniteNumber(a.localOrder) ?? Number.MAX_SAFE_INTEGER) -
+    (toFiniteNumber(b.localOrder) ?? Number.MAX_SAFE_INTEGER);
+  if (localOrderDiff !== 0) return localOrderDiff;
+
   const timeDiff = toDateValue(a.createdAt) - toDateValue(b.createdAt);
   if (timeDiff !== 0) return timeDiff;
+
+  const stableDiff = getStableMessageId(a).localeCompare(getStableMessageId(b));
+  if (stableDiff !== 0) return stableDiff;
+
   const aId = typeof a.id === "string" ? a.id : "";
   const bId = typeof b.id === "string" ? b.id : "";
   return aId.localeCompare(bId);
@@ -360,6 +624,7 @@ const isTempMessageId = (id: string | undefined): boolean =>
   typeof id === "string" && id.startsWith("temp-");
 
 const matchesMessage = (source: Message, target: Message): boolean =>
+  (source.stableId !== undefined && source.stableId === target.stableId) ||
   source.id === target.id ||
   (source.localId !== undefined && source.localId === target.id) ||
   (target.localId !== undefined && target.localId === source.id) ||
@@ -413,6 +678,9 @@ const findMessageIndex = (messages: Message[], target: Message): number =>
 
 const toMessageIdentityKeys = (message: Message): string[] => {
   const keys = new Set<string>();
+  if (typeof message.stableId === "string" && message.stableId.length > 0) {
+    keys.add(`stable:${message.stableId}`);
+  }
   if (typeof message.id === "string" && message.id.length > 0) {
     keys.add(`id:${message.id}`);
     keys.add(`local:${message.id}`);
@@ -420,6 +688,7 @@ const toMessageIdentityKeys = (message: Message): string[] => {
   if (typeof message.localId === "string" && message.localId.length > 0) {
     keys.add(`id:${message.localId}`);
     keys.add(`local:${message.localId}`);
+    keys.add(`stable:${message.localId}`);
   }
   return Array.from(keys);
 };
@@ -456,6 +725,37 @@ const mergeDefinedMessageFields = (
   return merged as unknown as Message;
 };
 
+const resolveMergedSendState = (
+  current: Message,
+  incoming: Message,
+): Message["sendState"] => {
+  const currentState = current.sendState;
+  const incomingState = incoming.sendState;
+  const incomingHasServerAck =
+    incoming.status === MessageStatus.SENT ||
+    incoming.status === MessageStatus.DELIVERED ||
+    incoming.status === MessageStatus.READ ||
+    !isTempMessageId(incoming.id);
+
+  if (incomingHasServerAck && incomingState !== "failed") {
+    return "sent";
+  }
+  if (incomingState === "failed") {
+    return "failed";
+  }
+  if (incomingState) {
+    return incomingState;
+  }
+  if (
+    current.status === MessageStatus.SENT ||
+    current.status === MessageStatus.DELIVERED ||
+    current.status === MessageStatus.READ
+  ) {
+    return "sent";
+  }
+  return currentState;
+};
+
 const mergeMessageRecords = (current: Message, incoming: Message): Message => {
   const merged = mergeDefinedMessageFields(current, incoming);
 
@@ -473,6 +773,32 @@ const mergeMessageRecords = (current: Message, incoming: Message): Message => {
       : isTempMessageId(incoming.id)
         ? incoming.id
         : undefined);
+  merged.clientMessageId =
+    incoming.clientMessageId || current.clientMessageId || merged.localId;
+  merged.stableId =
+    current.stableId ||
+    incoming.stableId ||
+    merged.clientMessageId ||
+    merged.localId ||
+    merged.id;
+  merged.localOrder =
+    incoming.localOrder ?? current.localOrder ?? allocateLocalMessageOrder();
+
+  const currentTransport = current.transportStatus;
+  const incomingTransport = incoming.transportStatus;
+  merged.transportStatus =
+    incomingTransport === "synced_stream" ||
+    currentTransport === "synced_stream"
+      ? "synced_stream"
+      : incomingTransport === "acked_transport" ||
+          currentTransport === "acked_transport"
+        ? "acked_transport"
+        : incomingTransport || currentTransport;
+  merged.sendState = resolveMergedSendState(current, incoming);
+  if (merged.sendState === "sent") {
+    merged.queuedReason = undefined;
+    merged.failureReason = undefined;
+  }
 
   return merged;
 };
@@ -538,6 +864,55 @@ const mergeMessages = (current: Message[], incoming: Message[]): Message[] =>
     ...(Array.isArray(incoming) ? incoming : []),
   ]);
 
+const replaceMessages = (
+  current: Message[],
+  incoming: Message[],
+  options?: { preserveMessagesCreatedAfter?: Date },
+): Message[] => {
+  const existing = Array.isArray(current) ? current : [];
+  const preserveMessagesCreatedAfterMs = options?.preserveMessagesCreatedAfter
+    ? toDateValue(options.preserveMessagesCreatedAfter)
+    : 0;
+  const localOnlyMessages = existing.filter((message) => {
+    const isLocalOnly =
+      isTempMessageId(message.id) ||
+      message.sendState === "sending" ||
+      message.sendState === "queued" ||
+      message.sendState === "retrying" ||
+      message.sendState === "failed";
+    const shouldPreserveBecauseCreatedAfterFetchStarted =
+      preserveMessagesCreatedAfterMs > 0 &&
+      toDateValue(message.createdAt) >= preserveMessagesCreatedAfterMs;
+
+    if (!isLocalOnly && !shouldPreserveBecauseCreatedAfterFetchStarted) {
+      return false;
+    }
+
+    return !incoming.some((candidate) => matchesMessage(candidate, message));
+  });
+
+  return mergeMessages(incoming, localOnlyMessages);
+};
+
+const prependMessages = (
+  current: Message[],
+  incoming: Message[],
+): Message[] => {
+  if (!Array.isArray(incoming) || incoming.length === 0) {
+    return Array.isArray(current) ? current : [];
+  }
+
+  return mergeMessages(incoming, current);
+};
+
+const appendMessages = (current: Message[], incoming: Message[]): Message[] => {
+  if (!Array.isArray(incoming) || incoming.length === 0) {
+    return Array.isArray(current) ? current : [];
+  }
+
+  return mergeMessagesAfterCursor(current, incoming);
+};
+
 const findMessageByIdentityIndex = (
   messages: Message[],
   target: Message,
@@ -548,10 +923,15 @@ const findMessageByIdentityIndex = (
     const targetId = typeof target.id === "string" ? target.id : "";
     const targetLocalId =
       typeof target.localId === "string" ? target.localId : "";
+    const targetStableId =
+      typeof target.stableId === "string" ? target.stableId : "";
     const itemId = typeof item.id === "string" ? item.id : "";
     const itemLocalId = typeof item.localId === "string" ? item.localId : "";
+    const itemStableId = typeof item.stableId === "string" ? item.stableId : "";
 
     return (
+      (targetStableId.length > 0 &&
+        (itemStableId === targetStableId || itemLocalId === targetStableId)) ||
       (targetId.length > 0 &&
         (itemId === targetId || itemLocalId === targetId)) ||
       (targetLocalId.length > 0 &&
@@ -575,15 +955,18 @@ const mergeMessagesAfterCursor = (
   return sortMessages(base);
 };
 
-const toMessageSummary = (message: Message): Conversation["lastMessage"] => ({
-  id: message.id,
-  senderId: message.senderId,
-  senderName: message.senderName,
-  content: message.content,
-  type: message.type,
-  isDeleted: message.isDeleted,
-  createdAt: message.createdAt,
-});
+const toMessageSummary = (message: Message): Conversation["lastMessage"] =>
+  ({
+    id: message.id,
+    senderId: message.senderId,
+    senderName: message.senderName,
+    content: message.content,
+    type: message.type,
+    isDeleted: message.isDeleted,
+    createdAt: message.createdAt,
+    ...(message.sendState ? { sendState: message.sendState } : {}),
+    ...(message.status ? { status: message.status } : {}),
+  }) as Conversation["lastMessage"];
 
 const normalizeMessagesResponse = (
   rawData: unknown,
@@ -718,462 +1101,584 @@ const getReplyToId = (replyTo: Message["replyTo"]): string | undefined => {
   return undefined;
 };
 
+const findMessageByQueueKey = (
+  messages: Message[],
+  queueKey: string,
+): Message | undefined =>
+  messages.find(
+    (message) =>
+      getMessageQueueKey(message.conversationId, message) === queueKey,
+  );
+
 export const useChatStore = create<ChatState>()(
-  subscribeWithSelector((set, get) => ({
-    ...initialState,
+  subscribeWithSelector((set, get) => {
+    const setSendRestrictionInternal = (
+      conversationId: string,
+      restriction: SendRestriction,
+    ): void => {
+      if (!conversationId) return;
+      set((state) => ({
+        sendRestrictionsByConversation: {
+          ...state.sendRestrictionsByConversation,
+          [conversationId]: restriction,
+        },
+      }));
+    };
 
-    setConversations: (conversations) => {
-      set({
-        conversations: normalizeConversationsPayload(
-          Array.isArray(conversations) ? conversations : [],
-        ),
+    const clearSendRestrictionInternal = (conversationId: string): void => {
+      if (!conversationId) return;
+      set((state) => {
+        if (!(conversationId in state.sendRestrictionsByConversation)) {
+          return state;
+        }
+        const nextRestrictions = { ...state.sendRestrictionsByConversation };
+        delete nextRestrictions[conversationId];
+        return {
+          sendRestrictionsByConversation: nextRestrictions,
+        };
       });
-    },
+    };
 
-    addConversation: (conversation) => {
-      const normalized = normalizeConversation(conversation);
-      if (!normalized) return;
+    const enqueueOutboxMessage = (
+      conversationId: string,
+      queueKey: string,
+    ): void => {
+      if (!conversationId || !queueKey) return;
+      set((state) => {
+        const current = state.outboxByConversation[conversationId] || [];
+        if (current.includes(queueKey)) {
+          return state;
+        }
+        return {
+          outboxByConversation: {
+            ...state.outboxByConversation,
+            [conversationId]: [...current, queueKey],
+          },
+        };
+      });
+    };
 
-      set((state) => ({
-        conversations: [
-          normalized,
-          ...(Array.isArray(state.conversations) ? state.conversations : []),
-        ].filter(
-          (item, index, list) =>
-            list.findIndex((candidate) => candidate.id === item.id) === index,
-        ),
-      }));
-    },
+    const dequeueOutboxMessage = (
+      conversationId: string,
+      queueKey: string,
+    ): void => {
+      if (!conversationId || !queueKey) return;
+      set((state) => {
+        const current = state.outboxByConversation[conversationId] || [];
+        if (current.length === 0 || !current.includes(queueKey)) {
+          return state;
+        }
+        const nextMessages = current.filter((item) => item !== queueKey);
+        const nextOutbox = { ...state.outboxByConversation };
+        if (nextMessages.length > 0) {
+          nextOutbox[conversationId] = nextMessages;
+        } else {
+          delete nextOutbox[conversationId];
+        }
+        return {
+          outboxByConversation: nextOutbox,
+        };
+      });
+    };
 
-    updateConversation: (id, updates) => {
-      set((state) => ({
-        conversations: (Array.isArray(state.conversations)
-          ? state.conversations
-          : []
-        ).map((conversation) =>
-          conversation.id === id
-            ? (normalizeConversation({ ...conversation, ...updates }) ?? {
-                ...conversation,
-                ...updates,
-              })
-            : conversation,
-        ),
-      }));
-    },
+    const scheduleSendTimeout = (
+      conversationId: string,
+      queueKey: string,
+    ): void => {
+      clearMessageSendTimeout(queueKey);
+      pendingMessageSendTimeouts.set(
+        queueKey,
+        setTimeout(() => {
+          pendingMessageSendTimeouts.delete(queueKey);
+          const currentMessage = findMessageByQueueKey(
+            get().messages[conversationId] || EMPTY_MESSAGES,
+            queueKey,
+          );
+          if (
+            !currentMessage ||
+            (currentMessage.sendState !== "sending" &&
+              currentMessage.sendState !== "retrying")
+          ) {
+            return;
+          }
 
-    removeConversation: (id) => {
-      roomMessageFetchInFlight.delete(id);
-      initialFetchSeqByConversation.delete(id);
-      set((state) => ({
-        conversations: (Array.isArray(state.conversations)
-          ? state.conversations
-          : []
-        ).filter((conversation) => conversation.id !== id),
-        messages: Object.fromEntries(
-          Object.entries(state.messages).filter(([key]) => key !== id),
-        ),
-        messagesHydratedByConversation: Object.fromEntries(
-          Object.entries(state.messagesHydratedByConversation).filter(
-            ([key]) => key !== id,
-          ),
-        ),
-        hasMoreMessages: Object.fromEntries(
-          Object.entries(state.hasMoreMessages).filter(([key]) => key !== id),
-        ),
-        messageErrors: Object.fromEntries(
-          Object.entries(state.messageErrors).filter(([key]) => key !== id),
-        ),
-        selectedConversationId:
-          state.selectedConversationId === id
-            ? null
-            : state.selectedConversationId,
-      }));
-    },
+          const nextQueuedReason =
+            resolveConnectionSendMode() === "reconnecting"
+              ? "reconnecting"
+              : "offline";
 
-    selectConversation: (id) => {
-      set({ selectedConversationId: id });
-    },
+          if (resolveConnectionSendMode() === "online") {
+            get().updateMessage(conversationId, currentMessage.id, {
+              sendState: "failed",
+              status: MessageStatus.FAILED,
+              failureReason: "timeout",
+            });
+            return;
+          }
 
-    markAsRead: async (conversationId) => {
-      const previousUnreadCount =
-        get().conversations.find(
-          (conversation) => conversation.id === conversationId,
-        )?.unreadCount ?? 0;
+          enqueueOutboxMessage(conversationId, queueKey);
+          get().updateMessage(conversationId, currentMessage.id, {
+            sendState: "queued",
+            status: MessageStatus.SENDING,
+            queuedReason: nextQueuedReason,
+            failureReason: undefined,
+          });
+        }, MESSAGE_SEND_TIMEOUT_MS),
+      );
+    };
 
-      set((state) => ({
-        conversations: (Array.isArray(state.conversations)
-          ? state.conversations
-          : []
-        ).map((conversation) =>
-          conversation.id === conversationId
-            ? { ...conversation, unreadCount: 0 }
-            : conversation,
-        ),
-      }));
+    const dispatchExistingMessage = async (
+      conversationId: string,
+      message: Message,
+      attemptState: "sending" | "retrying",
+    ): Promise<SendMessageResult> => {
+      const replyToId = getReplyToId(message.replyTo);
+      const attachments = toAttachmentPayload(message.attachments);
+      const sender = resolveSenderIdentity();
+      const senderName = message.senderName?.trim() || sender.senderName;
+      const senderAvatar = message.senderAvatar || sender.senderAvatar;
+      const queueKey = getMessageQueueKey(conversationId, message);
+      const nextAttemptCount = (message.sendAttempts ?? 0) + 1;
+      const attemptedAt = new Date();
+      logMessageDebug("chatStore", "send_request_started", {
+        conversationId,
+        queueKey,
+        correlationKey: getCorrelationKeyForMessage(message),
+        attemptState,
+        messageId: message.id,
+        localId: message.localId,
+        clientMessageId: message.clientMessageId,
+        stableId: message.stableId,
+        contentLength: message.content.length,
+        contentPreview: message.content.slice(0, 120),
+        type: message.type,
+        attachmentCount: attachments?.length ?? 0,
+        replyToId,
+        connectionMode: resolveConnectionSendMode(),
+      });
+
+      dequeueOutboxMessage(conversationId, queueKey);
+      get().updateMessage(conversationId, message.id, {
+        sendState: attemptState,
+        status: MessageStatus.SENDING,
+        queuedReason: undefined,
+        failureReason: undefined,
+        sendAttempts: nextAttemptCount,
+        lastSendAttemptAt: attemptedAt,
+      });
+      scheduleSendTimeout(conversationId, queueKey);
 
       try {
-        await conversationApi.markAsRead(conversationId);
+        const response = await messageApi.sendMessage(conversationId, {
+          content: message.content,
+          type: message.type,
+          senderName,
+          clientMessageId:
+            message.clientMessageId || message.stableId || message.localId,
+          tempId: message.localId || message.id,
+          localId: message.localId || message.id,
+          ...(senderAvatar ? { senderAvatar } : {}),
+          ...(replyToId ? { replyToId } : {}),
+          ...(attachments?.length ? { attachments } : {}),
+        });
+        clearMessageSendTimeout(queueKey);
+
+        const sentMessage = normalizeMessage(
+          unwrapApiSuccess(response),
+          conversationId,
+        );
+        if (!sentMessage) {
+          throw new Error(i18n.t("error:chat.invalidSendResponse"));
+        }
+
+        clearSendRestrictionInternal(conversationId);
+        get().addMessage(conversationId, {
+          ...sentMessage,
+          stableId:
+            message.stableId ||
+            message.clientMessageId ||
+            message.localId ||
+            message.id,
+          clientMessageId:
+            message.clientMessageId || message.localId || message.id,
+          localId: message.localId || message.id,
+          localOrder: message.localOrder,
+          transportStatus:
+            sentMessage.serverSeq !== undefined
+              ? "synced_stream"
+              : "acked_transport",
+          sendState: "sent",
+          sendAttempts: nextAttemptCount,
+          lastSendAttemptAt: attemptedAt,
+          queuedReason: undefined,
+          failureReason: undefined,
+          status: sentMessage.status || MessageStatus.SENT,
+        });
+        logMessageDebug("chatStore", "send_request_succeeded", {
+          conversationId,
+          queueKey,
+          correlationKey: getCorrelationKeyForMessage(message),
+          tempMessageId: message.id,
+          sentMessageId: sentMessage.id,
+          responseClientMessageId: sentMessage.clientMessageId,
+          responseLocalId: sentMessage.localId,
+          responseContentPreview: sentMessage.content.slice(0, 120),
+          serverSeq: sentMessage.serverSeq,
+        });
+
+        return {
+          disposition: "sent",
+          messageId: sentMessage.id,
+        };
       } catch (error) {
+        clearMessageSendTimeout(queueKey);
+        const apiError = extractApiError(error);
+        const errorCode = String(apiError.code || "").toUpperCase();
+
+        if (isQueueableNetworkFailure(error)) {
+          const queuedReason =
+            resolveConnectionSendMode() === "reconnecting"
+              ? "reconnecting"
+              : "offline";
+          enqueueOutboxMessage(conversationId, queueKey);
+          get().updateMessage(conversationId, message.id, {
+            sendState: "queued",
+            status: MessageStatus.SENDING,
+            queuedReason,
+            failureReason: undefined,
+          });
+          logMessageDebug("chatStore", "send_request_queued", {
+            conversationId,
+            queueKey,
+            correlationKey: getCorrelationKeyForMessage(message),
+            messageId: message.id,
+            queuedReason,
+            errorMessage: apiError.message || "network_failure",
+          });
+          return {
+            disposition: "queued",
+            messageId: message.id,
+          };
+        }
+
+        if (errorCode === "SLOW_MODE_ACTIVE") {
+          get().updateMessage(conversationId, message.id, {
+            sendState: "failed",
+            status: MessageStatus.FAILED,
+            failureReason: "slow_mode",
+          });
+          logMessageDebug("chatStore", "send_request_failed", {
+            conversationId,
+            queueKey,
+            correlationKey: getCorrelationKeyForMessage(message),
+            messageId: message.id,
+            errorCode,
+            failureReason: "slow_mode",
+            errorMessage: apiError.message || "slow_mode_active",
+          });
+          throw error;
+        }
+
+        if (
+          errorCode === "FORBIDDEN" ||
+          errorCode === "PERMISSION_DENIED" ||
+          errorCode === "ROOM_INSUFFICIENT_PERMISSIONS" ||
+          errorCode === "USER_BLOCKED" ||
+          errorCode === "AUTH_FORBIDDEN"
+        ) {
+          setSendRestrictionInternal(conversationId, {
+            code: errorCode,
+            reason:
+              apiError.message || i18n.t("chat:composer.permissionDenied"),
+            kind: "permission",
+          });
+          get().updateMessage(conversationId, message.id, {
+            sendState: "failed",
+            status: MessageStatus.FAILED,
+            failureReason: "permission",
+          });
+          logMessageDebug("chatStore", "send_request_failed", {
+            conversationId,
+            queueKey,
+            correlationKey: getCorrelationKeyForMessage(message),
+            messageId: message.id,
+            errorCode,
+            failureReason: "permission",
+            errorMessage: apiError.message || "permission_denied",
+          });
+          throw error;
+        }
+
+        get().updateMessage(conversationId, message.id, {
+          sendState: "failed",
+          status: MessageStatus.FAILED,
+          failureReason:
+            apiError.statusCode >= 500 || errorCode === "INTERNAL_ERROR"
+              ? "server"
+              : "unknown",
+        });
+        logMessageDebug("chatStore", "send_request_failed", {
+          conversationId,
+          queueKey,
+          correlationKey: getCorrelationKeyForMessage(message),
+          messageId: message.id,
+          errorCode,
+          failureReason:
+            apiError.statusCode >= 500 || errorCode === "INTERNAL_ERROR"
+              ? "server"
+              : "unknown",
+          errorMessage: apiError.message || "send_failed",
+        });
+        throw error;
+      }
+    };
+
+    return {
+      ...initialState,
+
+      setConversations: (conversations) => {
+        set({
+          conversations: normalizeConversationsPayload(
+            Array.isArray(conversations) ? conversations : [],
+          ),
+        });
+      },
+
+      addConversation: (conversation) => {
+        const normalized = normalizeConversation(conversation);
+        if (!normalized) return;
+
+        set((state) => ({
+          conversations: [
+            normalized,
+            ...(Array.isArray(state.conversations) ? state.conversations : []),
+          ].filter(
+            (item, index, list) =>
+              list.findIndex((candidate) => candidate.id === item.id) === index,
+          ),
+        }));
+      },
+
+      updateConversation: (id, updates) => {
+        set((state) => ({
+          conversations: (Array.isArray(state.conversations)
+            ? state.conversations
+            : []
+          ).map((conversation) =>
+            conversation.id === id
+              ? (normalizeConversation({ ...conversation, ...updates }) ?? {
+                  ...conversation,
+                  ...updates,
+                })
+              : conversation,
+          ),
+        }));
+      },
+
+      removeConversation: (id) => {
+        roomMessageFetchInFlight.delete(id);
+        initialFetchSeqByConversation.delete(id);
+        messageFetchGenerationByConversation.delete(id);
+        Array.from(pendingMessageSendTimeouts.keys())
+          .filter((key) => key.startsWith(`${id}:`))
+          .forEach(clearMessageSendTimeout);
+        set((state) => ({
+          conversations: (Array.isArray(state.conversations)
+            ? state.conversations
+            : []
+          ).filter((conversation) => conversation.id !== id),
+          messages: Object.fromEntries(
+            Object.entries(state.messages).filter(([key]) => key !== id),
+          ),
+          messagesHydratedByConversation: Object.fromEntries(
+            Object.entries(state.messagesHydratedByConversation).filter(
+              ([key]) => key !== id,
+            ),
+          ),
+          hasMoreMessages: Object.fromEntries(
+            Object.entries(state.hasMoreMessages).filter(([key]) => key !== id),
+          ),
+          hasNewerMessagesByConversation: Object.fromEntries(
+            Object.entries(state.hasNewerMessagesByConversation).filter(
+              ([key]) => key !== id,
+            ),
+          ),
+          outboxByConversation: Object.fromEntries(
+            Object.entries(state.outboxByConversation).filter(
+              ([key]) => key !== id,
+            ),
+          ),
+          sendRestrictionsByConversation: Object.fromEntries(
+            Object.entries(state.sendRestrictionsByConversation).filter(
+              ([key]) => key !== id,
+            ),
+          ),
+          messageErrors: Object.fromEntries(
+            Object.entries(state.messageErrors).filter(([key]) => key !== id),
+          ),
+          selectedConversationId:
+            state.selectedConversationId === id
+              ? null
+              : state.selectedConversationId,
+        }));
+      },
+
+      selectConversation: (id) => {
+        set((state) =>
+          state.selectedConversationId === id
+            ? state
+            : { selectedConversationId: id },
+        );
+      },
+
+      markAsRead: async (conversationId) => {
+        const inFlightRequest = markAsReadInFlight.get(conversationId);
+        if (inFlightRequest) {
+          return inFlightRequest;
+        }
+
+        const previousUnreadCount =
+          get().conversations.find(
+            (conversation) => conversation.id === conversationId,
+          )?.unreadCount ?? 0;
+
         set((state) => ({
           conversations: (Array.isArray(state.conversations)
             ? state.conversations
             : []
           ).map((conversation) =>
             conversation.id === conversationId
-              ? { ...conversation, unreadCount: previousUnreadCount }
+              ? { ...conversation, unreadCount: 0 }
               : conversation,
           ),
         }));
-        throw error;
-      }
-    },
 
-    fetchConversations: async () => {
-      set({ isLoadingConversations: true, error: null });
-
-      try {
-        const response = await conversationApi.getConversations(1, 100);
-        const conversations = normalizeConversationsPayload(
-          unwrapApiSuccess(response),
-        );
-        set({
-          conversations,
-          isLoadingConversations: false,
-        });
-      } catch (error: unknown) {
-        const apiError = extractApiError(error);
-        const errorMessage =
-          apiError.message || i18n.t("error:chat.fetchConversationsFailed");
-        set({
-          error: errorMessage,
-          isLoadingConversations: false,
-        });
-      }
-    },
-
-    setMessages: (conversationId, messages) => {
-      const normalized = mergeMessages(
-        [],
-        (Array.isArray(messages) ? messages : [])
-          .map((item) => normalizeMessage(item, conversationId))
-          .filter((item): item is Message => item !== null),
-      );
-      set((state) => ({
-        messages: {
-          ...state.messages,
-          [conversationId]: normalized,
-        },
-        messagesHydratedByConversation: {
-          ...state.messagesHydratedByConversation,
-          [conversationId]: true,
-        },
-      }));
-    },
-
-    addMessage: (conversationId, message) => {
-      const incoming = normalizeMessage(message, conversationId);
-      if (!incoming) return;
-
-      set((state) => {
-        const currentMessages = state.messages[conversationId] || [];
-        const { messages, inserted, mergedMessage } = upsertMessage(
-          currentMessages,
-          incoming,
-        );
-
-        const currentUserId = useAuthStore.getState().user?.id;
-        const isOwnMessage =
-          !!currentUserId && mergedMessage.senderId === currentUserId;
-        const isOpenConversation =
-          state.selectedConversationId === conversationId;
-
-        const updatedConversations = state.conversations.map((conversation) => {
-          if (conversation.id !== conversationId) return conversation;
-
-          const unreadCount = isOpenConversation
-            ? 0
-            : inserted && !isOwnMessage
-              ? (conversation.unreadCount || 0) + 1
-              : conversation.unreadCount;
-
-          const lastMessage = messages[messages.length - 1];
-          if (!lastMessage) return { ...conversation, unreadCount };
-
-          return {
-            ...conversation,
-            unreadCount,
-            lastMessage: toMessageSummary(lastMessage),
-            updatedAt: lastMessage.createdAt,
-          };
-        });
-
-        return {
-          conversations: updatedConversations,
-          messages: {
-            ...state.messages,
-            [conversationId]: messages,
-          },
-          messagesHydratedByConversation: {
-            ...state.messagesHydratedByConversation,
-            [conversationId]: true,
-          },
-        };
-      });
-    },
-
-    updateMessage: (conversationId, messageId, updates) => {
-      set((state) => {
-        const currentMessages = state.messages[conversationId] || [];
-        const updatedMessages = dedupeAndSortMessages(
-          currentMessages.map((message) =>
-            message.id === messageId || message.localId === messageId
-              ? ({ ...message, ...updates } as Message)
-              : message,
-          ),
-        );
-        const lastMessage = updatedMessages[updatedMessages.length - 1];
-
-        const updatedConversations = state.conversations.map((conversation) => {
-          if (conversation.id !== conversationId) return conversation;
-          if (!lastMessage) return conversation;
-
-          const shouldRefreshPreview =
-            conversation.lastMessage?.id === messageId ||
-            conversation.lastMessage?.id === lastMessage.id;
-
-          return shouldRefreshPreview
-            ? {
-                ...conversation,
-                lastMessage: toMessageSummary(lastMessage),
-                updatedAt: lastMessage.createdAt,
-              }
-            : conversation;
-        });
-
-        return {
-          conversations: updatedConversations,
-          messages: {
-            ...state.messages,
-            [conversationId]: updatedMessages,
-          },
-          messagesHydratedByConversation: {
-            ...state.messagesHydratedByConversation,
-            [conversationId]: true,
-          },
-        };
-      });
-    },
-
-    markMessagesReadUpTo: (conversationId, lastMessageId, readerId) => {
-      const currentUserId = useAuthStore.getState().user?.id;
-      if (!currentUserId) return;
-      if (readerId && readerId === currentUserId) return;
-
-      set((state) => {
-        const currentMessages = state.messages[conversationId] || [];
-        const sortedMessages = sortMessages(currentMessages);
-        const boundaryIndex = sortedMessages.findIndex(
-          (message) => message.id === lastMessageId,
-        );
-        const readAt = new Date();
-
-        const updatedMessages = sortedMessages.map((message, index) => {
-          if (message.senderId !== currentUserId) return message;
-          if (message.status === MessageStatus.READ) return message;
-
-          if (boundaryIndex < 0) {
-            return message.id === lastMessageId
-              ? { ...message, status: MessageStatus.READ, readAt }
-              : message;
-          }
-
-          return index <= boundaryIndex
-            ? { ...message, status: MessageStatus.READ, readAt }
-            : message;
-        });
-
-        return {
-          messages: {
-            ...state.messages,
-            [conversationId]: updatedMessages,
-          },
-          messagesHydratedByConversation: {
-            ...state.messagesHydratedByConversation,
-            [conversationId]: true,
-          },
-        };
-      });
-    },
-
-    removeMessage: (conversationId, messageId) => {
-      set((state) => {
-        const updatedMessages = (state.messages[conversationId] || []).filter(
-          (message) =>
-            message.id !== messageId && message.localId !== messageId,
-        );
-        const lastMessage = updatedMessages[updatedMessages.length - 1];
-
-        const updatedConversations = state.conversations.map((conversation) => {
-          if (conversation.id !== conversationId) return conversation;
-
-          return {
-            ...conversation,
-            lastMessage: lastMessage
-              ? toMessageSummary(lastMessage)
-              : conversation.lastMessage,
-            updatedAt: lastMessage?.createdAt || conversation.updatedAt,
-          };
-        });
-
-        return {
-          conversations: updatedConversations,
-          messages: {
-            ...state.messages,
-            [conversationId]: updatedMessages,
-          },
-          messagesHydratedByConversation: {
-            ...state.messagesHydratedByConversation,
-            [conversationId]: true,
-          },
-        };
-      });
-    },
-
-    fetchMessages: async (conversationId, before, after, options) => {
-      const isInitialFetch = !before && !after;
-      const forceRefresh = options?.force === true;
-      if (
-        isInitialFetch &&
-        !forceRefresh &&
-        get().messagesHydratedByConversation[conversationId]
-      ) {
-        return {
-          loaded: 0,
-          hasMore: get().hasMoreMessages[conversationId] ?? false,
-        };
-      }
-
-      const currentInFlight = roomMessageFetchInFlight.get(conversationId) ?? 0;
-      roomMessageFetchInFlight.set(conversationId, currentInFlight + 1);
-      const initialFetchSeq = isInitialFetch
-        ? (initialFetchSeqByConversation.get(conversationId) ?? 0) + 1
-        : null;
-
-      if (initialFetchSeq !== null) {
-        initialFetchSeqByConversation.set(conversationId, initialFetchSeq);
-      }
-
-      set((state) => ({
-        ...buildLoadingStateFromInFlightMap(),
-        error: null,
-        messageErrors: {
-          ...state.messageErrors,
-          [conversationId]: null,
-        },
-      }));
-
-      try {
-        const limit =
-          typeof options?.limit === "number" &&
-          Number.isFinite(options.limit) &&
-          options.limit > 0
-            ? Math.min(100, Math.floor(options.limit))
-            : 50;
-        const beforeId = asStringValue(options?.beforeId);
-        const afterId = asStringValue(options?.afterId);
-        const params = new URLSearchParams({ limit: String(limit) });
-        if (before) params.set("before", before);
-        if (beforeId) params.set("beforeId", beforeId);
-        if (after) params.set("after", after);
-        if (afterId) params.set("afterId", afterId);
-
-        const response = await messageApi.getMessages(conversationId, {
-          limit,
-          ...(before ? { before } : {}),
-          ...(beforeId ? { beforeId } : {}),
-          ...(after ? { after } : {}),
-          ...(afterId ? { afterId } : {}),
-        });
-        const responseEnvelope = asRecord(response);
-        const responseMeta = asRecord(responseEnvelope?.meta);
-        const payload = unwrapApiSuccess(response);
-        let normalized = normalizeMessagesResponse(payload, responseMeta);
-
-        if (
-          after &&
-          !afterId &&
-          Array.isArray(normalized.messages) &&
-          normalized.messages.length === 0
-        ) {
+        const request = (async () => {
           try {
-            const parsedAfter = Date.parse(after);
-            if (!Number.isNaN(parsedAfter)) {
-              const earlierTs = Math.max(0, parsedAfter - 1);
-              const earlier = new Date(earlierTs).toISOString();
-              const retryResp = await messageApi.getMessages(conversationId, {
-                limit,
-                after: earlier,
-              });
-              const retryPayload = unwrapApiSuccess(retryResp);
-              const retryMeta = asRecord(asRecord(retryResp)?.meta) ?? responseMeta;
-              const retryNormalized = normalizeMessagesResponse(
-                retryPayload,
-                retryMeta,
-              );
-              if (
-                Array.isArray(retryNormalized.messages) &&
-                retryNormalized.messages.length > 0
-              ) {
-                normalized = retryNormalized;
-              }
-            }
-          } catch {
-            // ignore retry errors
+            await conversationApi.markAsRead(conversationId);
+          } catch (error) {
+            set((state) => ({
+              conversations: (Array.isArray(state.conversations)
+                ? state.conversations
+                : []
+              ).map((conversation) =>
+                conversation.id === conversationId
+                  ? { ...conversation, unreadCount: previousUnreadCount }
+                  : conversation,
+              ),
+            }));
+            throw error;
+          } finally {
+            markAsReadInFlight.delete(conversationId);
           }
-        }
-        const hasMoreForDirection = after
-          ? normalized.hasNext
-          : normalized.hasPrev;
+        })();
 
-        if (
-          isMessageDebugEnabled() &&
-          isInitialFetch &&
-          normalized.messages.length > 0
-        ) {
-          // eslint-disable-next-line no-debugger
-          debugger;
+        markAsReadInFlight.set(conversationId, request);
+        return request;
+      },
+
+      fetchConversations: async () => {
+        if (conversationsFetchPromise) {
+          return conversationsFetchPromise;
         }
+
+        set({ isLoadingConversations: true, conversationsError: null });
+
+        conversationsFetchPromise = (async () => {
+          try {
+            const response = await conversationApi.getConversations(1, 100);
+            const conversations = normalizeConversationsPayload(
+              unwrapApiSuccess(response),
+            );
+            set({
+              conversations,
+              isLoadingConversations: false,
+              hasFetchedConversationsOnce: true,
+            });
+          } catch (error: unknown) {
+            const apiError = extractApiError(error);
+            const errorMessage =
+              apiError.message || i18n.t("error:chat.fetchConversationsFailed");
+            set({
+              conversationsError: errorMessage,
+              error: errorMessage,
+              isLoadingConversations: false,
+              hasFetchedConversationsOnce: true,
+            });
+          } finally {
+            conversationsFetchPromise = null;
+          }
+        })();
+
+        return conversationsFetchPromise;
+      },
+
+      setMessages: (conversationId, messages) => {
+        const normalized = replaceMessages(
+          [],
+          (Array.isArray(messages) ? messages : [])
+            .map((item) => normalizeMessage(item, conversationId))
+            .filter((item): item is Message => item !== null),
+        );
+        set((state) => ({
+          messages: {
+            ...state.messages,
+            [conversationId]: normalized,
+          },
+          messagesHydratedByConversation: {
+            ...state.messagesHydratedByConversation,
+            [conversationId]: true,
+          },
+          hasNewerMessagesByConversation: {
+            ...state.hasNewerMessagesByConversation,
+            [conversationId]: false,
+          },
+        }));
+      },
+
+      addMessage: (conversationId, message) => {
+        const incoming = normalizeMessage(message, conversationId);
+        if (!incoming) return;
 
         set((state) => {
-          if (
-            initialFetchSeq !== null &&
-            initialFetchSeqByConversation.get(conversationId) !==
-              initialFetchSeq
-          ) {
-            return state;
-          }
+          const currentMessages = state.messages[conversationId] || [];
+          const { messages, inserted, mergedMessage } = upsertMessage(
+            currentMessages,
+            incoming,
+          );
 
-          const existingMessages = state.messages[conversationId] || [];
-          const mergedMessages =
-            after && !before
-              ? mergeMessagesAfterCursor(existingMessages, normalized.messages)
-              : mergeMessages(existingMessages, normalized.messages);
-          const latestMessage = mergedMessages[mergedMessages.length - 1];
+          logMessageDebug("chatStore", "message_merged", {
+            conversationId,
+            correlationKey: getCorrelationKeyForMessage(mergedMessage),
+            incomingId: incoming.id,
+            incomingLocalId: incoming.localId,
+            incomingClientMessageId: incoming.clientMessageId,
+            inserted,
+            mergedId: mergedMessage.id,
+            mergedLocalId: mergedMessage.localId,
+            mergedClientMessageId: mergedMessage.clientMessageId,
+            sendState: mergedMessage.sendState,
+          });
+
+          const isOpenConversation =
+            state.selectedConversationId === conversationId;
 
           const updatedConversations = state.conversations.map(
             (conversation) => {
-              if (conversation.id !== conversationId || !latestMessage) {
-                return conversation;
-              }
+              if (conversation.id !== conversationId) return conversation;
+
+              const unreadCount = isOpenConversation
+                ? 0
+                : conversation.unreadCount;
+
+              const lastMessage = messages[messages.length - 1];
+              if (!lastMessage) return { ...conversation, unreadCount };
 
               return {
                 ...conversation,
-                lastMessage: toMessageSummary(latestMessage),
-                updatedAt: latestMessage.createdAt,
-                unreadCount:
-                  state.selectedConversationId === conversationId
-                    ? 0
-                    : conversation.unreadCount,
+                unreadCount,
+                lastMessage: toMessageSummary(lastMessage),
+                updatedAt: lastMessage.createdAt,
               };
             },
           );
@@ -1182,225 +1687,788 @@ export const useChatStore = create<ChatState>()(
             conversations: updatedConversations,
             messages: {
               ...state.messages,
-              [conversationId]: mergedMessages,
+              [conversationId]: messages,
             },
             messagesHydratedByConversation: {
               ...state.messagesHydratedByConversation,
               [conversationId]: true,
             },
-            hasMoreMessages: {
-              ...state.hasMoreMessages,
-              [conversationId]:
-                before || (!before && !after)
-                  ? normalized.hasPrev
-                  : (state.hasMoreMessages[conversationId] ?? false),
+          };
+        });
+      },
+
+      updateMessage: (conversationId, messageId, updates) => {
+        set((state) => {
+          const currentMessages = state.messages[conversationId] || [];
+          const matchedMessage = currentMessages.find((message) =>
+            matchesMessageIdentityValue(message, messageId),
+          );
+          const updatedMessages = dedupeAndSortMessages(
+            currentMessages.map((message) =>
+              matchesMessageIdentityValue(message, messageId)
+                ? ({ ...message, ...updates } as Message)
+                : message,
+            ),
+          );
+          logMessageDebug("chatStore", "message_updated", {
+            conversationId,
+            messageId,
+            matchedId: matchedMessage?.id,
+            matchedLocalId: matchedMessage?.localId,
+            updates,
+          });
+          const lastMessage = updatedMessages[updatedMessages.length - 1];
+
+          const updatedConversations = state.conversations.map(
+            (conversation) => {
+              if (conversation.id !== conversationId) return conversation;
+              if (!lastMessage) return conversation;
+
+              const shouldRefreshPreview =
+                matchesMessageIdentityValue(
+                  {
+                    id: conversation.lastMessage?.id || "",
+                    localId: undefined,
+                    clientMessageId: undefined,
+                    stableId: undefined,
+                  },
+                  messageId,
+                ) ||
+                matchesMessageIdentityValue(
+                  lastMessage,
+                  conversation.lastMessage?.id || "",
+                );
+
+              return shouldRefreshPreview
+                ? {
+                    ...conversation,
+                    lastMessage: toMessageSummary(lastMessage),
+                    updatedAt: lastMessage.createdAt,
+                  }
+                : conversation;
+            },
+          );
+
+          return {
+            conversations: updatedConversations,
+            messages: {
+              ...state.messages,
+              [conversationId]: updatedMessages,
+            },
+            messagesHydratedByConversation: {
+              ...state.messagesHydratedByConversation,
+              [conversationId]: true,
             },
           };
         });
+      },
 
-        return {
-          loaded: normalized.messages.length,
-          hasMore: hasMoreForDirection,
-        };
-      } catch (error: unknown) {
-        const apiError = extractApiError(error);
-        const errorMessage =
-          apiError.message || i18n.t("error:chat.fetchMessagesFailed");
-        set((state) => ({
-          error: errorMessage,
-          messageErrors: {
-            ...state.messageErrors,
-            [conversationId]: errorMessage,
-          },
-        }));
-        return { loaded: 0, hasMore: false };
-      } finally {
-        const nextInFlight = Math.max(
-          0,
-          (roomMessageFetchInFlight.get(conversationId) ?? 1) - 1,
-        );
-        if (nextInFlight === 0) {
-          roomMessageFetchInFlight.delete(conversationId);
-        } else {
-          roomMessageFetchInFlight.set(conversationId, nextInFlight);
-        }
+      markMessagesReadUpTo: (conversationId, lastMessageId, readerId) => {
+        const currentUserId = useAuthStore.getState().user?.id;
+        if (!currentUserId) return;
+        if (readerId && readerId === currentUserId) return;
 
-        set(buildLoadingStateFromInFlightMap());
-      }
-    },
+        set((state) => {
+          const currentMessages = state.messages[conversationId] || [];
+          const sortedMessages = sortMessages(currentMessages);
+          const boundaryIndex = sortedMessages.findIndex((message) =>
+            matchesMessageIdentityValue(message, lastMessageId),
+          );
+          const readAt = new Date();
 
-    sendMessage: async (
-      conversationId,
-      content,
-      type = MessageType.TEXT,
-      fileMeta,
-      replyToId,
-    ) => {
-      const text = content.trim();
-      // Normalise fileMeta to an array (or undefined)
-      const fileMetaArr: Attachment[] | undefined = fileMeta
-        ? Array.isArray(fileMeta)
-          ? fileMeta
-          : [fileMeta]
-        : undefined;
-      const firstFileName = fileMetaArr?.[0]?.fileName;
-      const messageContent = text || firstFileName || "";
-      if (!messageContent) return;
+          const updatedMessages = sortedMessages.map((message, index) => {
+            if (message.senderId !== currentUserId) return message;
+            if (message.status === MessageStatus.READ) return message;
 
-      const sender = resolveSenderIdentity();
+            if (boundaryIndex < 0) {
+              return matchesMessageIdentityValue(message, lastMessageId)
+                ? { ...message, status: MessageStatus.READ, readAt }
+                : message;
+            }
 
-      const tempId = `temp-${Date.now()}-${Math.random()}`;
-      const tempMessage: Message = {
-        id: tempId,
-        localId: tempId,
-        conversationId,
-        senderId: sender.id || "current-user",
-        senderName: sender.senderName,
-        senderAvatar: sender.senderAvatar,
-        content: messageContent,
-        type,
-        status: MessageStatus.SENDING,
-        isEdited: false,
-        isPinned: false,
-        isDeleted: false,
-        isSystem: false,
-        createdAt: new Date(),
-        ...(replyToId ? { replyTo: replyToId } : {}),
-        ...(fileMetaArr?.length ? { attachments: fileMetaArr } : {}),
-      };
+            return index <= boundaryIndex
+              ? { ...message, status: MessageStatus.READ, readAt }
+              : message;
+          });
 
-      get().addMessage(conversationId, tempMessage);
-
-      try {
-        const attachments = fileMetaArr
-          ? toAttachmentPayload(fileMetaArr)
-          : undefined;
-        const response = await messageApi.sendMessage(conversationId, {
-          content: messageContent,
-          type,
-          senderName: sender.senderName,
-          ...(sender.senderAvatar
-            ? { senderAvatar: sender.senderAvatar }
-            : {}),
-          ...(replyToId ? { replyToId } : {}),
-          ...(attachments?.length ? { attachments } : {}),
-        });
-        const message = normalizeMessage(
-          unwrapApiSuccess(response),
-          conversationId,
-        );
-        if (!message) {
-          throw new Error(i18n.t("error:chat.invalidSendResponse"));
-        }
-
-        get().addMessage(conversationId, {
-          ...message,
-          localId: tempId,
-          status: message.status || MessageStatus.SENT,
-        });
-      } catch (error) {
-        get().updateMessage(conversationId, tempId, {
-          status: MessageStatus.FAILED,
-        });
-        throw error;
-      }
-    },
-
-    resendMessage: async (conversationId: string, message: Message) => {
-      get().updateMessage(conversationId, message.id, {
-        status: MessageStatus.SENDING,
-      });
-
-      const replyToId = getReplyToId(message.replyTo);
-      const attachments = toAttachmentPayload(message.attachments);
-      const sender = resolveSenderIdentity();
-      const senderName = message.senderName?.trim() || sender.senderName;
-      const senderAvatar = message.senderAvatar || sender.senderAvatar;
-
-      try {
-        const response = await messageApi.sendMessage(conversationId, {
-          content: message.content,
-          type: message.type,
-          senderName,
-          ...(senderAvatar ? { senderAvatar } : {}),
-          ...(replyToId ? { replyToId } : {}),
-          ...(attachments?.length ? { attachments } : {}),
-        });
-        const resentMessage = normalizeMessage(
-          unwrapApiSuccess(response),
-          conversationId,
-        );
-        if (!resentMessage) {
-          throw new Error(i18n.t("error:chat.invalidResendResponse"));
-        }
-
-        get().addMessage(conversationId, {
-          ...resentMessage,
-          localId: message.localId || message.id,
-          status: resentMessage.status || MessageStatus.SENT,
-        });
-        toast.success(i18n.t("chat:toast.resendSuccess"));
-      } catch {
-        get().updateMessage(conversationId, message.id, {
-          status: MessageStatus.FAILED,
-        });
-        toast.error(i18n.t("chat:toast.resendFailed"));
-      }
-    },
-
-    setTyping: (status) => {
-      set((state) => {
-        const exists = state.typingStatuses.some(
-          (typing) =>
-            typing.conversationId === status.conversationId &&
-            typing.userId === status.userId,
-        );
-
-        if (exists) {
           return {
-            typingStatuses: state.typingStatuses.map((typing) =>
-              typing.conversationId === status.conversationId &&
-              typing.userId === status.userId
-                ? status
-                : typing,
-            ),
+            messages: {
+              ...state.messages,
+              [conversationId]: updatedMessages,
+            },
+            messagesHydratedByConversation: {
+              ...state.messagesHydratedByConversation,
+              [conversationId]: true,
+            },
+          };
+        });
+      },
+
+      removeMessage: (conversationId, messageId) => {
+        const currentMessage = (
+          get().messages[conversationId] || EMPTY_MESSAGES
+        ).find((message) => matchesMessageIdentityValue(message, messageId));
+        logMessageDebug("chatStore", "message_removed", {
+          conversationId,
+          messageId,
+          matchedId: currentMessage?.id,
+          matchedLocalId: currentMessage?.localId,
+        });
+        if (currentMessage) {
+          clearMessageSendTimeout(
+            getMessageQueueKey(conversationId, currentMessage),
+          );
+          dequeueOutboxMessage(
+            conversationId,
+            getMessageQueueKey(conversationId, currentMessage),
+          );
+        }
+        set((state) => {
+          const updatedMessages = (state.messages[conversationId] || []).filter(
+            (message) => !matchesMessageIdentityValue(message, messageId),
+          );
+          const lastMessage = updatedMessages[updatedMessages.length - 1];
+
+          const updatedConversations = state.conversations.map(
+            (conversation) => {
+              if (conversation.id !== conversationId) return conversation;
+
+              return {
+                ...conversation,
+                lastMessage: lastMessage
+                  ? toMessageSummary(lastMessage)
+                  : undefined,
+                updatedAt: lastMessage?.createdAt || conversation.updatedAt,
+              };
+            },
+          );
+
+          return {
+            conversations: updatedConversations,
+            messages: {
+              ...state.messages,
+              [conversationId]: updatedMessages,
+            },
+            messagesHydratedByConversation: {
+              ...state.messagesHydratedByConversation,
+              [conversationId]: true,
+            },
+          };
+        });
+      },
+
+      fetchMessages: async (conversationId, before, after, options) => {
+        const isInitialFetch = !before && !after;
+        const fetchMode: FetchMessagesResult["mode"] = after
+          ? "newer"
+          : before
+            ? "older"
+            : "initial";
+        const fetchRequestedAt = new Date();
+        const syncReason = options?.syncReason;
+        const forceRefresh = options?.force === true;
+        if (
+          fetchMode === "newer" &&
+          syncReason === "initial-sync" &&
+          get().messagesHydratedByConversation[conversationId] &&
+          get().hasNewerMessagesByConversation[conversationId] === false
+        ) {
+          logMessageDebug("chatStore", "fetch_blocked_known_latest", {
+            conversationId,
+            fetchMode,
+            syncReason,
+            before,
+            after,
+            beforeId: options?.beforeId,
+            afterId: options?.afterId,
+          });
+          return {
+            loaded: 0,
+            hasMore: false,
+            hasNext: false,
+            hasPrev: get().hasMoreMessages[conversationId] ?? false,
+            mode: fetchMode,
+            applied: false,
+          };
+        }
+        if (
+          isInitialFetch &&
+          !forceRefresh &&
+          get().messagesHydratedByConversation[conversationId]
+        ) {
+          return {
+            loaded: 0,
+            hasMore: get().hasMoreMessages[conversationId] ?? false,
+            hasNext:
+              get().hasNewerMessagesByConversation[conversationId] ?? false,
+            hasPrev: get().hasMoreMessages[conversationId] ?? false,
+            mode: fetchMode,
+            applied: false,
           };
         }
 
-        return {
-          typingStatuses: [...state.typingStatuses, status],
+        const currentInFlight =
+          roomMessageFetchInFlight.get(conversationId) ?? 0;
+        roomMessageFetchInFlight.set(conversationId, currentInFlight + 1);
+        const initialFetchSeq = isInitialFetch
+          ? (initialFetchSeqByConversation.get(conversationId) ?? 0) + 1
+          : null;
+        const fetchGeneration = isInitialFetch
+          ? (messageFetchGenerationByConversation.get(conversationId) ?? 0) + 1
+          : (messageFetchGenerationByConversation.get(conversationId) ?? 0);
+
+        if (initialFetchSeq !== null) {
+          initialFetchSeqByConversation.set(conversationId, initialFetchSeq);
+        }
+        if (isInitialFetch) {
+          messageFetchGenerationByConversation.set(
+            conversationId,
+            fetchGeneration,
+          );
+        }
+
+        set((state) => ({
+          ...buildLoadingStateFromInFlightMap(),
+          error: null,
+          messageErrors: {
+            ...state.messageErrors,
+            [conversationId]: null,
+          },
+        }));
+
+        try {
+          const limit =
+            typeof options?.limit === "number" &&
+            Number.isFinite(options.limit) &&
+            options.limit > 0
+              ? Math.min(100, Math.floor(options.limit))
+              : 50;
+          const beforeId = asStringValue(options?.beforeId);
+          const afterId = asStringValue(options?.afterId);
+          const params = new URLSearchParams({ limit: String(limit) });
+          if (before) params.set("before", before);
+          if (beforeId) params.set("beforeId", beforeId);
+          if (after) params.set("after", after);
+          if (afterId) params.set("afterId", afterId);
+          logMessageDebug("chatStore", "fetch_requested", {
+            conversationId,
+            fetchMode,
+            syncReason,
+            forceRefresh,
+            fetchRequestedAt: fetchRequestedAt.toISOString(),
+            before,
+            after,
+            beforeId,
+            afterId,
+            limit,
+            initialFetchSeq,
+            fetchGeneration,
+          });
+
+          const response = await messageApi.getMessages(conversationId, {
+            limit,
+            ...(before ? { before } : {}),
+            ...(beforeId ? { beforeId } : {}),
+            ...(after ? { after } : {}),
+            ...(afterId ? { afterId } : {}),
+          });
+          const responseEnvelope = asRecord(response);
+          const responseMeta = asRecord(responseEnvelope?.meta);
+          const payload = unwrapApiSuccess(response);
+          let normalized = normalizeMessagesResponse(payload, responseMeta);
+
+          if (
+            after &&
+            !afterId &&
+            Array.isArray(normalized.messages) &&
+            normalized.messages.length === 0
+          ) {
+            try {
+              const parsedAfter = Date.parse(after);
+              if (!Number.isNaN(parsedAfter)) {
+                const earlierTs = Math.max(0, parsedAfter - 1);
+                const earlier = new Date(earlierTs).toISOString();
+                const retryResp = await messageApi.getMessages(conversationId, {
+                  limit,
+                  after: earlier,
+                });
+                const retryPayload = unwrapApiSuccess(retryResp);
+                const retryMeta =
+                  asRecord(asRecord(retryResp)?.meta) ?? responseMeta;
+                const retryNormalized = normalizeMessagesResponse(
+                  retryPayload,
+                  retryMeta,
+                );
+                if (
+                  Array.isArray(retryNormalized.messages) &&
+                  retryNormalized.messages.length > 0
+                ) {
+                  normalized = retryNormalized;
+                }
+              }
+            } catch {
+              // ignore retry errors
+            }
+          }
+          const hasMoreForDirection = after
+            ? normalized.hasNext
+            : normalized.hasPrev;
+
+          set((state) => {
+            if (
+              initialFetchSeq !== null &&
+              initialFetchSeqByConversation.get(conversationId) !==
+                initialFetchSeq
+            ) {
+              logMessageDebug("chatStore", "fetch_stale_initial_ignored", {
+                conversationId,
+                fetchMode,
+                initialFetchSeq,
+                activeInitialFetchSeq:
+                  initialFetchSeqByConversation.get(conversationId) ?? null,
+              });
+              return state;
+            }
+            if (
+              messageFetchGenerationByConversation.get(conversationId) !==
+              fetchGeneration
+            ) {
+              logMessageDebug("chatStore", "fetch_stale_generation_ignored", {
+                conversationId,
+                fetchMode,
+                fetchGeneration,
+                activeGeneration:
+                  messageFetchGenerationByConversation.get(conversationId) ??
+                  null,
+              });
+              return state;
+            }
+
+            const existingMessages = state.messages[conversationId] || [];
+            const nextMessages =
+              fetchMode === "initial"
+                ? replaceMessages(existingMessages, normalized.messages, {
+                    preserveMessagesCreatedAfter: fetchRequestedAt,
+                  })
+                : fetchMode === "older"
+                  ? prependMessages(existingMessages, normalized.messages)
+                  : appendMessages(existingMessages, normalized.messages);
+            const mergedMessages = nextMessages;
+            const latestMessage = mergedMessages[mergedMessages.length - 1];
+
+            const updatedConversations = state.conversations.map(
+              (conversation) => {
+                if (conversation.id !== conversationId || !latestMessage) {
+                  return conversation;
+                }
+
+                return {
+                  ...conversation,
+                  lastMessage: toMessageSummary(latestMessage),
+                  updatedAt: latestMessage.createdAt,
+                  unreadCount:
+                    state.selectedConversationId === conversationId
+                      ? 0
+                      : conversation.unreadCount,
+                };
+              },
+            );
+
+            return {
+              conversations: updatedConversations,
+              messages: {
+                ...state.messages,
+                [conversationId]: mergedMessages,
+              },
+              messagesHydratedByConversation: {
+                ...state.messagesHydratedByConversation,
+                [conversationId]: true,
+              },
+              hasMoreMessages: {
+                ...state.hasMoreMessages,
+                [conversationId]:
+                  before || (!before && !after)
+                    ? normalized.hasPrev
+                    : (state.hasMoreMessages[conversationId] ?? false),
+              },
+              hasNewerMessagesByConversation: {
+                ...state.hasNewerMessagesByConversation,
+                [conversationId]:
+                  fetchMode === "initial" || fetchMode === "newer"
+                    ? normalized.hasNext
+                    : (state.hasNewerMessagesByConversation[conversationId] ??
+                      false),
+              },
+            };
+          });
+          logMessageDebug("chatStore", "fetch_applied", {
+            conversationId,
+            fetchMode,
+            syncReason,
+            loaded: normalized.messages.length,
+            hasNext: normalized.hasNext,
+            hasPrev: normalized.hasPrev,
+            fetchGeneration,
+            initialFetchSeq,
+          });
+
+          return {
+            loaded: normalized.messages.length,
+            hasMore: hasMoreForDirection,
+            hasNext: normalized.hasNext,
+            hasPrev: normalized.hasPrev,
+            mode: fetchMode,
+            applied:
+              messageFetchGenerationByConversation.get(conversationId) ===
+                fetchGeneration &&
+              (initialFetchSeq === null ||
+                initialFetchSeqByConversation.get(conversationId) ===
+                  initialFetchSeq),
+          };
+        } catch (error: unknown) {
+          const apiError = extractApiError(error);
+          const errorMessage =
+            apiError.message || i18n.t("error:chat.fetchMessagesFailed");
+          logMessageDebug("chatStore", "fetch_failed", {
+            conversationId,
+            fetchMode,
+            syncReason,
+            before,
+            after,
+            beforeId: options?.beforeId,
+            afterId: options?.afterId,
+            errorMessage,
+          });
+          set((state) => ({
+            error: errorMessage,
+            messageErrors: {
+              ...state.messageErrors,
+              [conversationId]: errorMessage,
+            },
+          }));
+          return {
+            loaded: 0,
+            hasMore: false,
+            hasNext: false,
+            hasPrev: false,
+            mode: fetchMode,
+            applied: false,
+          };
+        } finally {
+          const nextInFlight = Math.max(
+            0,
+            (roomMessageFetchInFlight.get(conversationId) ?? 1) - 1,
+          );
+          if (nextInFlight === 0) {
+            roomMessageFetchInFlight.delete(conversationId);
+          } else {
+            roomMessageFetchInFlight.set(conversationId, nextInFlight);
+          }
+
+          set(buildLoadingStateFromInFlightMap());
+        }
+      },
+
+      sendMessage: async (
+        conversationId,
+        content,
+        type = MessageType.TEXT,
+        fileMeta,
+        replyToId,
+        replyToSnapshot,
+      ) => {
+        const text = content.trim();
+        // Normalise fileMeta to an array (or undefined)
+        const fileMetaArr: Attachment[] | undefined = fileMeta
+          ? Array.isArray(fileMeta)
+            ? fileMeta
+            : [fileMeta]
+          : undefined;
+        const firstFileName = fileMetaArr?.[0]?.fileName;
+        const messageContent = text || firstFileName || "";
+        logMessageDebug("chatStore", "send_intent_received", {
+          conversationId,
+          contentLength: text.length,
+          messageContentLength: messageContent.length,
+          contentPreview: messageContent.slice(0, 120),
+          type,
+          attachmentCount: fileMetaArr?.length ?? 0,
+          replyToId,
+        });
+        if (!messageContent) {
+          logMessageDebug("chatStore", "send_blocked_empty", {
+            conversationId,
+          });
+          throw new Error(i18n.t("error:chat.sendFailed"));
+        }
+
+        const conversation = get().conversations.find(
+          (item) => item.id === conversationId,
+        );
+        if (conversation?.isBlocked) {
+          const reason = i18n.t("chat:composer.blockedConversation", {
+            defaultValue: "You cannot send messages in this conversation.",
+          });
+          setSendRestrictionInternal(conversationId, {
+            kind: "blocked",
+            reason,
+            code: "CONVERSATION_BLOCKED",
+          });
+          logMessageDebug("chatStore", "send_blocked_conversation", {
+            conversationId,
+            reason,
+          });
+          throw new Error(reason);
+        }
+        const activeRestriction =
+          get().sendRestrictionsByConversation[conversationId];
+        if (activeRestriction) {
+          logMessageDebug("chatStore", "send_blocked_restriction", {
+            conversationId,
+            restrictionKind: activeRestriction.kind,
+            restrictionCode: activeRestriction.code,
+            reason: activeRestriction.reason,
+          });
+          throw new Error(activeRestriction.reason);
+        }
+
+        const sender = resolveSenderIdentity();
+        const sendMode = resolveConnectionSendMode();
+        const queueKeyReason =
+          sendMode === "reconnecting" ? "reconnecting" : "offline";
+        const browserOnline = getBrowserOnlineState();
+
+        const localOrder = allocateLocalMessageOrder();
+        const clientMessageId = generateClientMessageId(conversationId);
+        const tempId = generateTempMessageId();
+        const tempMessage: Message = {
+          id: tempId,
+          stableId: clientMessageId,
+          clientMessageId,
+          localId: tempId,
+          localOrder,
+          transportStatus: "optimistic",
+          sendState: browserOnline === false ? "queued" : "sending",
+          queuedReason: browserOnline === false ? queueKeyReason : undefined,
+          sendAttempts: 0,
+          conversationId,
+          senderId: sender.id || "current-user",
+          senderName: sender.senderName,
+          senderAvatar: sender.senderAvatar,
+          content: messageContent,
+          type,
+          status: MessageStatus.SENDING,
+          isEdited: false,
+          isPinned: false,
+          isDeleted: false,
+          isSystem: false,
+          createdAt: new Date(),
+          ...(replyToId ? { replyTo: replyToId } : {}),
+          ...(replyToSnapshot
+            ? { replyToMessage: createReplySnapshot(replyToSnapshot) }
+            : {}),
+          ...(fileMetaArr?.length ? { attachments: fileMetaArr } : {}),
         };
-      });
-    },
 
-    clearTyping: (conversationId, userId) => {
-      set((state) => ({
-        typingStatuses: state.typingStatuses.filter(
-          (typing) =>
-            !(
-              typing.conversationId === conversationId &&
-              typing.userId === userId
-            ),
-        ),
-      }));
-    },
+        get().addMessage(conversationId, tempMessage);
+        logMessageDebug("chatStore", "optimistic_message_created", {
+          conversationId,
+          correlationKey: getCorrelationKeyForMessage(tempMessage),
+          tempId,
+          clientMessageId,
+          contentPreview: messageContent.slice(0, 120),
+          sendMode,
+          browserOnline,
+          queuedReason: tempMessage.queuedReason,
+          attachmentCount: fileMetaArr?.length ?? 0,
+        });
 
-    setSearchQuery: (query) => {
-      set({ searchQuery: query });
-    },
+        if (browserOnline === false) {
+          enqueueOutboxMessage(
+            conversationId,
+            getMessageQueueKey(conversationId, tempMessage),
+          );
+          logMessageDebug("chatStore", "offline_queue_enqueued", {
+            conversationId,
+            tempId,
+            sendMode,
+            browserOnline,
+          });
+          return {
+            disposition: "queued",
+            messageId: tempId,
+          };
+        }
 
-    setActiveFilter: (filter) => {
-      set({ activeFilter: filter });
-    },
+        return dispatchExistingMessage(conversationId, tempMessage, "sending");
+      },
 
-    clearError: () => set({ error: null }),
+      resendMessage: async (conversationId: string, message: Message) => {
+        const activeRestriction =
+          get().sendRestrictionsByConversation[conversationId];
+        if (activeRestriction) {
+          toast.error(activeRestriction.reason);
+          throw new Error(activeRestriction.reason);
+        }
 
-    reset: () => {
-      roomMessageFetchInFlight.clear();
-      initialFetchSeqByConversation.clear();
-      set(initialState);
-    },
-  })),
+        const sendMode = resolveConnectionSendMode();
+        const browserOnline = getBrowserOnlineState();
+        if (browserOnline === false) {
+          enqueueOutboxMessage(
+            conversationId,
+            getMessageQueueKey(conversationId, message),
+          );
+          get().updateMessage(conversationId, message.id, {
+            sendState: "queued",
+            status: MessageStatus.SENDING,
+            queuedReason: "offline",
+            failureReason: undefined,
+          });
+          logMessageDebug("chatStore", "offline_queue_enqueued", {
+            conversationId,
+            messageId: message.id,
+            sendMode,
+            browserOnline,
+            trigger: "manual_retry",
+          });
+          return {
+            disposition: "queued",
+            messageId: message.id,
+          };
+        }
+
+        try {
+          const result = await dispatchExistingMessage(
+            conversationId,
+            message,
+            "retrying",
+          );
+          toast.success(i18n.t("chat:toast.resendSuccess"));
+          return result;
+        } catch (error) {
+          toast.error(i18n.t("chat:toast.resendFailed"));
+          throw error;
+        }
+      },
+
+      flushQueuedMessages: async (conversationId?: string) => {
+        const conversationIds = conversationId
+          ? [conversationId]
+          : Object.keys(get().outboxByConversation);
+
+        logMessageDebug("chatStore", "offline_queue_flush_started", {
+          conversationIds,
+          connectionMode: resolveConnectionSendMode(),
+        });
+
+        for (const currentConversationId of conversationIds) {
+          const queueKeys = [
+            ...(get().outboxByConversation[currentConversationId] || []),
+          ];
+          const queuedMessages = queueKeys
+            .map((queueKey) =>
+              findMessageByQueueKey(
+                get().messages[currentConversationId] || EMPTY_MESSAGES,
+                queueKey,
+              ),
+            )
+            .filter((item): item is Message => item !== undefined)
+            .filter((item) => item.sendState === "queued")
+            .sort((a, b) => (a.localOrder ?? 0) - (b.localOrder ?? 0));
+
+          logMessageDebug("chatStore", "offline_queue_flush_conversation", {
+            conversationId: currentConversationId,
+            queueKeyCount: queueKeys.length,
+            queuedMessageCount: queuedMessages.length,
+          });
+
+          for (const queuedMessage of queuedMessages) {
+            try {
+              await dispatchExistingMessage(
+                currentConversationId,
+                queuedMessage,
+                queuedMessage.sendAttempts && queuedMessage.sendAttempts > 0
+                  ? "retrying"
+                  : "sending",
+              );
+            } catch {
+              // Best effort flush. Terminal errors are reflected on the message row.
+            }
+          }
+        }
+
+        logMessageDebug("chatStore", "offline_queue_flushed", {
+          conversationIds,
+          connectionMode: resolveConnectionSendMode(),
+        });
+      },
+
+      setSendRestriction: (conversationId, restriction) => {
+        setSendRestrictionInternal(conversationId, restriction);
+      },
+
+      clearSendRestriction: (conversationId) => {
+        clearSendRestrictionInternal(conversationId);
+      },
+
+      setTyping: (status) => {
+        set((state) => {
+          const exists = state.typingStatuses.some(
+            (typing) =>
+              typing.conversationId === status.conversationId &&
+              typing.userId === status.userId,
+          );
+
+          if (exists) {
+            return {
+              typingStatuses: state.typingStatuses.map((typing) =>
+                typing.conversationId === status.conversationId &&
+                typing.userId === status.userId
+                  ? status
+                  : typing,
+              ),
+            };
+          }
+
+          return {
+            typingStatuses: [...state.typingStatuses, status],
+          };
+        });
+      },
+
+      clearTyping: (conversationId, userId) => {
+        set((state) => ({
+          typingStatuses: state.typingStatuses.filter(
+            (typing) =>
+              !(
+                typing.conversationId === conversationId &&
+                typing.userId === userId
+              ),
+          ),
+        }));
+      },
+
+      setSearchQuery: (query) => {
+        set({ searchQuery: query });
+      },
+
+      setActiveFilter: (filter) => {
+        set({ activeFilter: filter });
+      },
+
+      clearError: () => set({ error: null, conversationsError: null }),
+
+      reset: () => {
+        roomMessageFetchInFlight.clear();
+        initialFetchSeqByConversation.clear();
+        messageFetchGenerationByConversation.clear();
+        markAsReadInFlight.clear();
+        conversationsFetchPromise = null;
+        clearAllMessageSendTimeouts();
+        set(initialState);
+      },
+    };
+  }),
 );
 
 export const useSelectedConversation = () => {
@@ -1416,11 +2484,25 @@ export const useSelectedConversation = () => {
 export const useCurrentTypingStatus = () => {
   return useChatStore((state) => {
     if (!state.selectedConversationId) return null;
-    return state.typingStatuses.find(
-      (typing) =>
-        typing.conversationId === state.selectedConversationId &&
-        typing.isTyping,
-    );
+    const priority = {
+      recording: 3,
+      uploading: 2,
+      typing: 1,
+      online: 0,
+    } as const;
+    return state.typingStatuses
+      .filter(
+        (typing) =>
+          typing.conversationId === state.selectedConversationId &&
+          typing.isTyping,
+      )
+      .sort((a, b) => {
+        const priorityDiff =
+          (priority[b.activity || "typing"] ?? 1) -
+          (priority[a.activity || "typing"] ?? 1);
+        if (priorityDiff !== 0) return priorityDiff;
+        return (b.confidence ?? 0) - (a.confidence ?? 0);
+      })[0];
   });
 };
 
@@ -1445,6 +2527,15 @@ export const useFilteredConversations = () => {
             ) === "group",
         );
         break;
+      case "direct":
+        filtered = filtered.filter((conversation) => {
+          const type = normalizeRoomType(
+            conversation.type,
+            conversation.participants?.length,
+          );
+          return type === "direct" || type === "private";
+        });
+        break;
       case "channels":
         filtered = filtered.filter(
           (conversation) =>
@@ -1461,14 +2552,21 @@ export const useFilteredConversations = () => {
       filtered = filtered.filter(
         (conversation) =>
           conversation.name?.toLowerCase().includes(query) ||
+          conversation.displayName?.toLowerCase().includes(query) ||
           conversation.lastMessage?.content?.toLowerCase().includes(query),
       );
     }
 
-    return filtered.slice().sort((a, b) => {
-      if (a.isPinned && !b.isPinned) return -1;
-      if (!a.isPinned && b.isPinned) return 1;
-      return toDateValue(b.updatedAt) - toDateValue(a.updatedAt);
+    const currentUser = useAuthStore.getState().user;
+    const currentDisplayName = currentUser
+      ? `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim() ||
+        currentUser.username
+      : undefined;
+    return rankConversations(filtered, {
+      currentUserId: currentUser?.id,
+      currentUsername: currentUser?.username,
+      currentDisplayName,
+      activeConversationId: state.selectedConversationId,
     });
   });
 };

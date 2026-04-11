@@ -133,7 +133,12 @@ export interface ContextMenuItem {
 }
 
 // Filter types
-export type ConversationFilter = "all" | "unread" | "groups" | "channels";
+export type ConversationFilter =
+  | "all"
+  | "unread"
+  | "groups"
+  | "channels"
+  | "direct";
 
 // Input modes
 export type InputMode = "normal" | "reply" | "edit";

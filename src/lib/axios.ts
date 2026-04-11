@@ -5,22 +5,21 @@
 
 import axios, { AxiosError, AxiosHeaders } from "axios";
 import type { AxiosInstance, InternalAxiosRequestConfig } from "axios";
-import type { ApiResponse } from "@hacom/chat-shared-types";
 import { API_BASE_URL, AUTH_BASE_URL, USE_AUTH_SERVICE } from "../config";
-import { authBaseUrl, buildAuthEndpoint, normalizeAuthRequestPath } from "./authPath";
+import {
+  authBaseUrl,
+  buildAuthEndpoint,
+  normalizeAuthRequestPath,
+} from "./authPath";
 import i18n from "../i18n";
 import {
   clearTokens,
-  getCsrfToken,
   getAccessToken,
-  getRefreshToken,
   isAuthSessionActive,
   isRefreshTokenCookieMode,
-  isRememberMeEnabled,
-  storeTokens,
-  updateAccessToken,
 } from "../services/tokenService";
 import { updateSocketAuth } from "./socket";
+import { refreshAccessTokenShared } from "../services/authRefreshCoordinator";
 
 type AuthFailureReason = "missing_refresh_token" | "refresh_failed";
 type AuthFailureHandler = (reason: AuthFailureReason) => void | Promise<void>;
@@ -45,7 +44,9 @@ const API_CONTRACT_VERSION = "2";
 const toOrigin = (baseUrl: string): string | null => {
   try {
     const fallbackBase =
-      typeof window !== "undefined" ? window.location.origin : "http://localhost";
+      typeof window !== "undefined"
+        ? window.location.origin
+        : "http://localhost";
     return new URL(baseUrl, fallbackBase).origin;
   } catch {
     return null;
@@ -66,7 +67,6 @@ const TRUSTED_BASE_ORIGINS = (() => {
 
 let authFailureHandler: AuthFailureHandler | null = null;
 let authFailureNotified = false;
-let refreshPromise: Promise<string> | null = null;
 let refreshEndpointLogged = false;
 
 const pendingRequestControllers = new Map<string, AbortController>();
@@ -81,14 +81,23 @@ const isPublicEndpoint = (url?: string): boolean => {
   return PUBLIC_ENDPOINT_PATTERNS.some((pattern) => pattern.test(normalized));
 };
 
-const isTrustedRequestOrigin = (config: InternalAxiosRequestConfig): boolean => {
+const isTrustedRequestOrigin = (
+  config: InternalAxiosRequestConfig,
+): boolean => {
   const targetUrl = config.url;
   if (!targetUrl) return false;
 
   try {
-    const fallbackBase =
-      config.baseURL ??
-      (typeof window !== "undefined" ? window.location.origin : API_BASE_URL);
+    const fallbackBase = config.baseURL
+      ? new URL(
+          config.baseURL,
+          typeof window !== "undefined"
+            ? window.location.origin
+            : "http://localhost",
+        ).toString()
+      : typeof window !== "undefined"
+        ? window.location.origin
+        : API_BASE_URL;
     const resolved = new URL(targetUrl, fallbackBase);
     return TRUSTED_BASE_ORIGINS.has(resolved.origin);
   } catch {
@@ -143,83 +152,13 @@ const notifyAuthFailure = (reason: AuthFailureReason): void => {
   }
 };
 
-const extractTokenPayload = (
-  rawResponseData: unknown,
-): { accessToken: string | null; refreshToken: string | null } => {
-  const contractPayload = rawResponseData as ApiResponse<{
-    accessToken?: string;
-    refreshToken?: string;
-    tokens?: {
-      accessToken?: string;
-      refreshToken?: string;
-    };
-  }>;
-
-  if (
-    contractPayload &&
-    typeof contractPayload === "object" &&
-    contractPayload.success
-  ) {
-    const responseData = contractPayload.data;
-    const accessTokenCandidate =
-      responseData.tokens?.accessToken ?? responseData.accessToken;
-    const refreshTokenCandidate =
-      responseData.tokens?.refreshToken ?? responseData.refreshToken;
-
-    return {
-      accessToken:
-        typeof accessTokenCandidate === "string" ? accessTokenCandidate : null,
-      refreshToken:
-        typeof refreshTokenCandidate === "string"
-          ? refreshTokenCandidate
-          : null,
-    };
-  }
-
-  const topLevel =
-    rawResponseData && typeof rawResponseData === "object"
-      ? (rawResponseData as Record<string, unknown>)
-      : {};
-
-  const payload =
-    topLevel.data && typeof topLevel.data === "object"
-      ? (topLevel.data as Record<string, unknown>)
-      : topLevel;
-
-  const nestedTokens =
-    payload.tokens && typeof payload.tokens === "object"
-      ? (payload.tokens as Record<string, unknown>)
-      : null;
-
-  const accessTokenCandidate = nestedTokens?.accessToken ?? payload.accessToken;
-  const refreshTokenCandidate =
-    nestedTokens?.refreshToken ?? payload.refreshToken;
-
-  return {
-    accessToken:
-      typeof accessTokenCandidate === "string" ? accessTokenCandidate : null,
-    refreshToken:
-      typeof refreshTokenCandidate === "string" ? refreshTokenCandidate : null,
-  };
-};
-
-// Lock refresh with a shared promise so all 401 requests wait for one refresh call.
 const refreshAccessToken = async (): Promise<string> => {
   if (!isAuthSessionActive()) {
     notifyAuthFailure("refresh_failed");
     throw new Error(i18n.t("error:auth.sessionInactive"));
   }
 
-  const cookieMode = isRefreshTokenCookieMode();
-  const storedRefreshToken = getRefreshToken();
-
-  if (!cookieMode && !storedRefreshToken) {
-    notifyAuthFailure("missing_refresh_token");
-    throw new Error(i18n.t("error:auth.missingRefreshToken"));
-  }
-
   try {
-    const csrfToken = cookieMode ? getCsrfToken() : null;
     const refreshEndpoint = buildAuthEndpoint("/refresh");
     if (import.meta.env.DEV && !refreshEndpointLogged) {
       refreshEndpointLogged = true;
@@ -228,36 +167,7 @@ const refreshAccessToken = async (): Promise<string> => {
         refreshEndpoint,
       });
     }
-    const response = await axios.post(
-      refreshEndpoint,
-      storedRefreshToken ? { refreshToken: storedRefreshToken } : undefined,
-      {
-        withCredentials: cookieMode,
-        headers: {
-          "Content-Type": "application/json",
-          [API_CONTRACT_HEADER]: API_CONTRACT_VERSION,
-          ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
-        },
-      },
-    );
-
-    const { accessToken, refreshToken } = extractTokenPayload(response.data);
-    if (!accessToken) {
-      throw new Error(i18n.t("error:auth.refreshMissingToken"));
-    }
-
-    if (cookieMode) {
-      updateAccessToken(accessToken);
-    } else {
-      if (!refreshToken) {
-        throw new Error(i18n.t("error:auth.missingRefreshToken"));
-      }
-      storeTokens(
-        accessToken,
-        refreshToken,
-        isRememberMeEnabled(),
-      );
-    }
+    const accessToken = await refreshAccessTokenShared("http_401");
     updateSocketAuth(accessToken);
 
     authFailureNotified = false;
@@ -266,16 +176,6 @@ const refreshAccessToken = async (): Promise<string> => {
     notifyAuthFailure("refresh_failed");
     throw error;
   }
-};
-
-const getRefreshPromise = async (): Promise<string> => {
-  if (!refreshPromise) {
-    refreshPromise = refreshAccessToken().finally(() => {
-      refreshPromise = null;
-    });
-  }
-
-  return refreshPromise;
 };
 
 export const setAuthFailureHandler = (handler: AuthFailureHandler): void => {
@@ -306,7 +206,8 @@ const apiClient: AxiosInstance = axios.create({
  * Dedicated Axios client for auth endpoints (Stage 1 – body mode).
  *
  * When USE_AUTH_SERVICE=true the baseURL points to the dedicated
- * chat-auth-service; otherwise it falls back to the api-service so
+ * chat-auth-service canonical public contract (/api/v1/auth/*);
+ * otherwise it falls back to the api-service so
  * rollback is a single env-var toggle.
  *
  * This client does NOT attach Authorization automatically (auth
@@ -397,7 +298,7 @@ apiClient.interceptors.response.use(
     originalRequest._retry = true;
 
     try {
-      const newAccessToken = await getRefreshPromise();
+      const newAccessToken = await refreshAccessToken();
       setAuthHeader(originalRequest, newAccessToken);
       return apiClient(originalRequest);
     } catch (refreshError) {

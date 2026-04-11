@@ -29,3 +29,12 @@ export type { PresenceState, UserPresenceInfo } from "./presenceStore";
 
 export { useGroupStore } from "./groupStore";
 export type { InviteLinkItem, JoinRequestItem } from "./groupStore";
+
+export { useFriendshipStore } from "./friendshipStore";
+export type {
+  BlockedUser,
+  FriendRecord,
+  FriendRequest,
+  FriendshipStatusType,
+  RelationshipState,
+} from "./friendshipStore";

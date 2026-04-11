@@ -39,6 +39,7 @@ interface GroupStoreState {
   markInviteLinkRevoked: (roomId: string, linkId: string, revokedAt?: string) => void;
 
   upsertJoinRequest: (roomId: string, request: JoinRequestItem) => void;
+  setJoinRequests: (roomId: string, requests: JoinRequestItem[]) => void;
   markJoinRequestResolved: (
     roomId: string,
     requestId: string,
@@ -158,6 +159,16 @@ export const useGroupStore = create<GroupStoreState>()(
           },
         };
       });
+    },
+
+    setJoinRequests: (roomId, requests) => {
+      if (!roomId) return;
+      set((state) => ({
+        joinRequestsByRoom: {
+          ...state.joinRequestsByRoom,
+          [roomId]: Array.isArray(requests) ? requests : [],
+        },
+      }));
     },
 
     markJoinRequestResolved: (roomId, requestId, status) => {

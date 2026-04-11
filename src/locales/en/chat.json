@@ -11,21 +11,37 @@
     "members": "{{count}} members"
   },
   "typing": {
-    "user": "{{name}} is typing..."
+    "user": "{{name}} is typing...",
+    "default": "Typing...",
+    "recording": "Recording audio...",
+    "uploading": "Uploading files..."
   },
   "message": {
     "you": "You",
+    "deleted": "Message deleted",
+    "editedAt": "Edited {{time}}",
+    "jumpToLatest": "Jump to latest",
+    "replyTargetMissing": "Original message is unavailable",
+    "threadReplies": "{{count}} replies",
+    "unreadDivider": "Unread messages",
     "edited": "edited",
     "forwardedFrom": "Forwarded from {{name}}",
     "bubbleAria": "{{name}} at {{time}}",
     "status": {
       "uploading": "Uploading",
+      "queued": "Queued",
       "sending": "Sending",
+      "retrying": "Retrying",
       "sent": "Sent",
+      "delivered": "Delivered",
+      "read": "Read",
       "retry": "Retry",
-      "failedRetry": "Failed to send. Click to retry"
+      "failedRetry": "Failed to send. Click to retry",
+      "failedInline": "Failed to send",
+      "pendingInline": "Syncing"
     },
     "actions": {
+      "react": "React",
       "reply": "Reply",
       "forward": "Forward",
       "copy": "Copy",
@@ -54,14 +70,92 @@
     "sendMessage": "Send message",
     "sending": "Sending message",
     "sentAnnouncement": "Message sent",
+    "queuedAnnouncement": "Message queued",
     "failedAnnouncement": "Message failed to send",
+    "reconnectingHint": "Reconnecting. New messages will be queued.",
+    "offlineHint": "Offline. Messages will send automatically when connection returns.",
+    "permissionDenied": "You can no longer send messages in this conversation.",
+    "blockedConversation": "You cannot send messages in this conversation.",
     "recordVoice": "Record voice message",
     "uploading": "Uploading...",
     "cancelUpload": "Cancel",
     "retryUpload": "Retry",
     "sendFile": "Send file",
     "filePreviewAlt": "File preview",
-    "fileSizeLimit": "Limit {{size}}"
+    "fileSizeLimit": "Limit {{size}}",
+    "attachBlocked": "Attachments are currently unavailable",
+    "shortcutHint": "Enter to send, Shift+Enter for new line",
+    "shortcutHintManual": "Use Send button to send",
+    "moreUploadErrors": "and {{count}} more files"
+  },
+  "density": {
+    "label": "Display density",
+    "auto": "Auto",
+    "comfortable": "Comfortable",
+    "compact": "Compact",
+    "expanded": "Expanded"
+  },
+  "pinned": {
+    "title": "Pinned messages",
+    "empty": "No pinned messages",
+    "jumpTo": "Jump to message"
+  },
+  "selection": {
+    "enter": "Select messages",
+    "toolbar": "Selection actions",
+    "selected": "{{count}} selected",
+    "selected_one": "{{count}} selected",
+    "selected_other": "{{count}} selected"
+  },
+  "search": {
+    "title": "Search messages",
+    "placeholder": "Search in this conversation",
+    "error": "Unable to search messages",
+    "noResults": "No matching messages",
+    "noResultsDescription": "Try a different keyword.",
+    "resultCount": "{{count}} results",
+    "resultCount_one": "{{count}} result",
+    "resultCount_other": "{{count}} results"
+  },
+  "contactShare": {
+    "title": "Share contact",
+    "description": "Share your card or send someone from your contacts.",
+    "myContact": "My contact",
+    "chooseContact": "Choose contact",
+    "shareMyCard": "Share my profile card",
+    "privacyNote": "Only profile information you allow will be shared.",
+    "shareNow": "Share now",
+    "searchPlaceholder": "Search by name or username",
+    "searchHint": "Type at least {{min}} characters",
+    "noResults": "No contacts found",
+    "shareAction": "Share",
+    "viewProfile": "View profile",
+    "sent": "Contact shared",
+    "failed": "Unable to share contact"
+  },
+  "filePreview": {
+    "loading": "Loading preview...",
+    "urlError": "Could not load file preview",
+    "retry": "Retry",
+    "videoNotSupported": "Your browser does not support video playback.",
+    "pdfFallback": "Cannot render PDF preview. Open in a new tab.",
+    "noPreview": "Preview unavailable for this file type",
+    "modalLabel": "File preview",
+    "zoomOut": "Zoom out",
+    "zoomIn": "Zoom in",
+    "fitToScreen": "Fit to screen",
+    "close": "Close preview",
+    "previous": "Previous file",
+    "next": "Next file",
+    "instructions": "Use arrow keys to navigate files",
+    "blocked": "File blocked by security policy",
+    "deleted": "File no longer available",
+    "scanning": "Scanning file",
+    "preview": "Preview file",
+    "playVideo": "Play video"
+  },
+  "slowMode": {
+    "active": "Slow mode active. Try again in {{seconds}}s"
   },
   "dropZone": {
     "title": "Drop files here",
@@ -171,7 +265,9 @@
     "deleteFailed": "Unable to delete message",
     "resendSuccess": "Resent successfully",
     "resendFailed": "Resend failed",
-    "connectionReconnecting": "Reconnecting..."
+    "connectionReconnecting": "Reconnecting...",
+    "connectionOffline": "You are offline. Messages will be queued.",
+    "connectionRestored": "Connection restored"
   },
   "preview": {
     "photo": "Photo",

@@ -7,7 +7,9 @@
     "searchInConversation": "Search in conversation",
     "blockUser": "Block user",
     "report": "Report",
-    "deleteConversation": "Delete conversation"
+    "deleteConversation": "Delete conversation",
+    "emptyBioSelf": "Add a short bio so people know who they're chatting with.",
+    "emptyBioOther": "No bio added yet."
   },
   "groupInfo": {
     "title": "Group information",
@@ -18,7 +20,9 @@
     "tabs": {
       "members": "Members",
       "media": "Media",
-      "files": "Files"
+      "files": "Files",
+      "inviteLinks": "Invite links",
+      "joinRequests": "Join requests"
     },
     "addMember": "Add member",
     "searchMemberPlaceholder": "Search members...",
@@ -40,9 +44,36 @@
     },
     "viewAllMedia": "View all media",
     "noSharedFiles": "No shared files",
+    "unavailableAction": "This action is unavailable in this build.",
+    "comingSoon": "Coming soon",
     "reportGroup": "Report group",
     "leaveGroup": "Leave group",
-    "leaveConfirm": "Are you sure you want to leave this group?"
+    "leaveConfirm": "Are you sure you want to leave this group?",
+    "invite": {
+      "invalidUsageLimit": "Usage limit must be greater than 0",
+      "created": "Invite link created",
+      "createFailed": "Unable to create invite link",
+      "copied": "Copied",
+      "copyFailed": "Copy failed",
+      "revoked": "Invite link revoked",
+      "revokeFailed": "Unable to revoke invite link",
+      "noPermission": "Only admins can manage invite links.",
+      "create": "Create invite link",
+      "namePlaceholder": "Name (optional)",
+      "usageLimitPlaceholder": "Usage limit (optional)",
+      "empty": "No invite links yet.",
+      "unnamed": "Invite link",
+      "usage": "Usage: {{count}}/{{limit}}",
+      "revokedLabel": "Revoked",
+      "revoke": "Revoke"
+    },
+    "joinRequests": {
+      "approved": "Join request approved",
+      "rejected": "Join request rejected",
+      "resolveFailed": "Unable to resolve join request",
+      "noPermission": "Only admins can resolve join requests.",
+      "empty": "No pending join requests."
+    }
   },
   "newChatModal": {
     "title": "New conversation",

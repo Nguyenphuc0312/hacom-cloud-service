@@ -9,6 +9,11 @@ import type {
   ApiResponse,
   CompleteUploadResponse,
   CreateMessageResponse,
+  FriendshipCapabilitiesDto,
+  FriendshipPendingCountDto,
+  FriendshipStatusResponseDto,
+  FriendshipWriteResponseDto,
+  FriendshipRelationDto,
   GetDownloadUrlResponse,
   LoginResponse,
   RefreshTokenResponse,
@@ -24,7 +29,43 @@ import {
   normalizeConversationsPayload,
 } from "../lib/conversationAdapter";
 import { unwrapApiSuccess } from "../lib/apiContract";
+import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 import { getCsrfToken, isRefreshTokenCookieMode } from "./tokenService";
+
+type EmailOtpChallengePurpose = "signup";
+
+export interface RegisterVerificationChallengeContext {
+  challengeId?: string | null;
+  expiresAt?: string | null;
+  resendAvailableAt?: string | null;
+  ttlSeconds?: number;
+  purpose?: EmailOtpChallengePurpose;
+}
+
+export interface RegisterResponseWithVerificationContext extends RegisterResponseDto {
+  challengeId?: string | null;
+  expiresAt?: string | null;
+  resendAvailableAt?: string | null;
+  ttlSeconds?: number;
+  purpose?: EmailOtpChallengePurpose;
+  emailVerificationChallenge?: RegisterVerificationChallengeContext | null;
+}
+
+export interface EmailOtpChallengeResponse {
+  challengeId: string | null;
+  expiresAt: string | null;
+  resendAvailableAt: string | null;
+  ttlSeconds: number;
+  maskedEmail: string;
+  sent: boolean;
+  verified?: boolean;
+}
+
+export interface ConfirmEmailOtpChallengeResponse {
+  verified: true;
+  status: string;
+  alreadyVerified?: boolean;
+}
 
 const canonicalConversationPath = (conversationId: string): string =>
   `/conversations/${conversationId}`;
@@ -55,36 +96,98 @@ const withLegacyConversationFallback = async <T>(
   }
 };
 
+const normalizeUnreadCountPayload = (
+  payload: unknown,
+): { unreadCount: number } => {
+  if (payload && typeof payload === "object") {
+    const unread = (payload as { unreadCount?: unknown }).unreadCount;
+    if (typeof unread === "number" && Number.isFinite(unread)) {
+      return { unreadCount: unread };
+    }
+
+    const legacyCount = (payload as { count?: unknown }).count;
+    if (typeof legacyCount === "number" && Number.isFinite(legacyCount)) {
+      return { unreadCount: legacyCount };
+    }
+  }
+
+  return { unreadCount: 0 };
+};
+
+const normalizePinnedMessagesPayload = (
+  payload: unknown,
+): { messages: Message[] } => {
+  if (Array.isArray(payload)) {
+    return { messages: payload as Message[] };
+  }
+
+  if (payload && typeof payload === "object") {
+    const messages = (payload as { messages?: unknown }).messages;
+    if (Array.isArray(messages)) {
+      return { messages: messages as Message[] };
+    }
+  }
+
+  return { messages: [] };
+};
+
 // ============================================
 // AUTH API
 // ============================================
+// Auth endpoints are resolved through authClient using canonical
+// AUTH_BASE_URL (/api/v1/auth by default).
 
 export const authApi = {
   login: async (email: string, password: string) => {
     const response = await authClient.post<ApiResponse<LoginResponse>>(
-      "/auth/login",
+      AUTH_ENDPOINTS.login,
       { email, password },
     );
     return response.data;
   },
 
-  register: async (data: {
-    username: string;
+  register: async (data: { email: string; password: string }) => {
+    const response = await authClient.post<
+      ApiResponse<RegisterResponseWithVerificationContext>
+    >(AUTH_ENDPOINTS.register, data);
+    return response.data;
+  },
+
+  requestEmailOtpChallenge: async (data: {
     email: string;
-    password: string;
-    firstName?: string;
-    lastName?: string;
+    userId?: string;
+    purpose?: EmailOtpChallengePurpose;
   }) => {
-    const response = await authClient.post<ApiResponse<RegisterResponseDto>>(
-      "/auth/register",
-      data,
-    );
+    const response = await authClient.post<
+      ApiResponse<EmailOtpChallengeResponse>
+    >(AUTH_ENDPOINTS.requestEmailOtpChallenge, data);
+    return response.data;
+  },
+
+  confirmEmailOtpChallenge: async (data: {
+    challengeId: string;
+    otp: string;
+    purpose?: EmailOtpChallengePurpose;
+  }) => {
+    const response = await authClient.post<
+      ApiResponse<ConfirmEmailOtpChallengeResponse>
+    >(AUTH_ENDPOINTS.confirmEmailOtpChallenge, data);
+    return response.data;
+  },
+
+  resendEmailOtpChallenge: async (data: {
+    challengeId: string;
+    purpose?: EmailOtpChallengePurpose;
+  }) => {
+    const response = await authClient.post<
+      ApiResponse<EmailOtpChallengeResponse>
+    >(AUTH_ENDPOINTS.resendEmailOtpChallenge, data);
     return response.data;
   },
 
   logout: async () => {
     const csrfToken = isRefreshTokenCookieMode() ? getCsrfToken() : undefined;
-    await authClient.post("/auth/logout", undefined, {
+    await authClient.post(AUTH_ENDPOINTS.logout, undefined, {
       withCredentials: isRefreshTokenCookieMode(),
       headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
     });
@@ -93,7 +196,7 @@ export const authApi = {
   refreshToken: async (refreshToken?: string) => {
     const csrfToken = isRefreshTokenCookieMode() ? getCsrfToken() : undefined;
     const response = await authClient.post<ApiResponse<RefreshTokenResponse>>(
-      "/auth/refresh",
+      AUTH_ENDPOINTS.refresh,
       refreshToken ? { refreshToken } : undefined,
       {
         withCredentials: isRefreshTokenCookieMode(),
@@ -105,7 +208,7 @@ export const authApi = {
 
   forgotPassword: async (email: string) => {
     const response = await authClient.post<ApiResponse<{ message: string }>>(
-      "/auth/forgot-password",
+      AUTH_ENDPOINTS.forgotPassword,
       { email },
     );
     return response.data;
@@ -117,7 +220,7 @@ export const authApi = {
     confirmPassword: string,
   ) => {
     const response = await authClient.post<ApiResponse<{ message: string }>>(
-      "/auth/reset-password",
+      AUTH_ENDPOINTS.resetPassword,
       { token, newPassword, confirmPassword },
     );
     return response.data;
@@ -128,8 +231,8 @@ export const authApi = {
     newPassword: string;
     confirmPassword: string;
   }) => {
-    const response = await apiClient.post<ApiResponse<{ message: string }>>(
-      "/auth/change-password",
+    const response = await authClient.post<ApiResponse<{ message: string }>>(
+      AUTH_ENDPOINTS.changePassword,
       data,
     );
     return response.data;
@@ -212,9 +315,20 @@ export const userApi = {
 // ============================================
 
 export const conversationApi = {
-  getConversations: async (page = 1, limit = 50) => {
+  getConversations: async (
+    page = 1,
+    limit = 50,
+    options?: { updatedAfter?: string },
+  ) => {
+    const query = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    if (options?.updatedAfter) {
+      query.set("updatedAfter", options.updatedAfter);
+    }
     const response = await apiClient.get<ApiResponse<unknown>>(
-      `/conversations?page=${page}&limit=${limit}`,
+      `/conversations?${query.toString()}`,
     );
 
     if (!response.data.success) {
@@ -225,6 +339,29 @@ export const conversationApi = {
       ...response.data,
       data: normalizeConversationsPayload(response.data.data),
     };
+  },
+
+  getUnreadSummary: async () => {
+    const response = await apiClient.get<
+      ApiResponse<{
+        totalUnreadCount: number;
+        conversations: Array<{
+          conversationId: string;
+          unreadCount: number;
+          lastReadMessageId: string | null;
+          lastReadAt: string | null;
+        }>;
+      }>
+    >("/conversations/unread-summary");
+    return response.data;
+  },
+
+  getGroupInviteInbox: async (status?: "pending" | "accepted" | "declined") => {
+    const query = status ? `?status=${encodeURIComponent(status)}` : "";
+    const response = await apiClient.get<ApiResponse<unknown[]>>(
+      `/conversations/group-invites${query}`,
+    );
+    return response.data;
   },
 
   getConversationById: async (conversationId: string) => {
@@ -411,7 +548,8 @@ export const conversationApi = {
 
   leaveConversation: async (conversationId: string) => {
     await withLegacyConversationFallback(
-      () => apiClient.post(`${canonicalConversationPath(conversationId)}/leave`),
+      () =>
+        apiClient.post(`${canonicalConversationPath(conversationId)}/leave`),
       () => apiClient.post(`${legacyConversationPath(conversationId)}/leave`),
     );
   },
@@ -456,22 +594,29 @@ export const conversationApi = {
         apiClient.post(
           `${canonicalConversationMessagesPath(conversationId)}/read`,
         ),
-      () => apiClient.post(`${legacyConversationMessagesPath(conversationId)}/read`),
+      () =>
+        apiClient.post(
+          `${legacyConversationMessagesPath(conversationId)}/read`,
+        ),
     );
   },
 
   getUnreadCount: async (conversationId: string) => {
     const response = await withLegacyConversationFallback(
       () =>
-        apiClient.get<ApiResponse<{ unreadCount: number }>>(
+        apiClient.get<ApiResponse<unknown>>(
           `${canonicalConversationMessagesPath(conversationId)}/unread`,
         ),
       () =>
-        apiClient.get<ApiResponse<{ unreadCount: number }>>(
+        apiClient.get<ApiResponse<unknown>>(
           `${legacyConversationMessagesPath(conversationId)}/unread`,
         ),
     );
-    return response.data;
+
+    return {
+      ...response.data,
+      data: normalizeUnreadCountPayload(response.data.data),
+    };
   },
 };
 
@@ -519,6 +664,13 @@ export const groupApi = {
     return response.data;
   },
 
+  getInviteLinks: async (groupId: string) => {
+    const response = await apiClient.get<ApiResponse<unknown[]>>(
+      `/groups/${groupId}/invite-links`,
+    );
+    return response.data;
+  },
+
   revokeInviteLink: async (groupId: string, linkId: string) => {
     await apiClient.delete(`/groups/${groupId}/invite-links/${linkId}`);
   },
@@ -535,6 +687,17 @@ export const groupApi = {
     const response = await apiClient.post<ApiResponse<unknown>>(
       `/groups/${groupId}/join-requests`,
       { note },
+    );
+    return response.data;
+  },
+
+  getJoinRequests: async (
+    groupId: string,
+    status?: "pending" | "approved" | "rejected" | "canceled",
+  ) => {
+    const query = status ? `?status=${encodeURIComponent(status)}` : "";
+    const response = await apiClient.get<ApiResponse<unknown[]>>(
+      `/groups/${groupId}/join-requests${query}`,
     );
     return response.data;
   },
@@ -652,6 +815,8 @@ export const messageApi = {
           limit?: number;
           before?: string;
           after?: string;
+          beforeId?: string;
+          afterId?: string;
         } = 1,
     limit = 50,
   ) => {
@@ -669,6 +834,8 @@ export const messageApi = {
 
     if (options.before) query.set("before", options.before);
     if (options.after) query.set("after", options.after);
+    if (options.beforeId) query.set("beforeId", options.beforeId);
+    if (options.afterId) query.set("afterId", options.afterId);
     if (!options.before && !options.after) {
       query.set(
         "page",
@@ -701,6 +868,9 @@ export const messageApi = {
       replyToId?: string;
       senderName?: string;
       senderAvatar?: string;
+      clientMessageId?: string;
+      tempId?: string;
+      localId?: string;
       attachments?: Array<{
         id: string;
         type: Message["type"] | string;
@@ -728,6 +898,9 @@ export const messageApi = {
             senderName: data.senderName,
             senderAvatar: data.senderAvatar,
             replyTo: data.replyToId,
+            clientMessageId: data.clientMessageId,
+            tempId: data.tempId,
+            localId: data.localId,
             attachments: data.attachments,
           },
         ),
@@ -740,6 +913,9 @@ export const messageApi = {
             senderName: data.senderName,
             senderAvatar: data.senderAvatar,
             replyTo: data.replyToId,
+            clientMessageId: data.clientMessageId,
+            tempId: data.tempId,
+            localId: data.localId,
             attachments: data.attachments,
           },
         ),
@@ -828,15 +1004,19 @@ export const messageApi = {
   getPinnedMessages: async (conversationId: string) => {
     const response = await withLegacyConversationFallback(
       () =>
-        apiClient.get<ApiResponse<{ messages: Message[] }>>(
+        apiClient.get<ApiResponse<unknown>>(
           `${canonicalConversationMessagesPath(conversationId)}/pinned`,
         ),
       () =>
-        apiClient.get<ApiResponse<{ messages: Message[] }>>(
+        apiClient.get<ApiResponse<unknown>>(
           `${legacyConversationMessagesPath(conversationId)}/pinned`,
         ),
     );
-    return response.data;
+
+    return {
+      ...response.data,
+      data: normalizePinnedMessagesPayload(response.data.data),
+    };
   },
 };
 
@@ -896,9 +1076,17 @@ export const fileApi = {
       fileSize: file.size,
     });
     const signedData = unwrapApiSuccess(signed);
+    const uploadMethod = signedData.uploadMethod || "PUT";
+    const uploadHeaders = {
+      "Content-Type": mimeType,
+      ...(signedData.uploadHeaders || {}),
+    };
 
-    await axios.put(signedData.uploadUrl, file, {
-      headers: { "Content-Type": mimeType },
+    await axios.request({
+      url: signedData.uploadUrl,
+      method: uploadMethod,
+      data: file,
+      headers: uploadHeaders,
       signal,
       onUploadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {
@@ -964,6 +1152,56 @@ export const contactApi = {
   },
 };
 
+export interface FriendQrPayloadDto {
+  shareCode: string;
+  deepLink: string;
+  updatedAt: string;
+}
+
+export interface FriendDiscoveryProfileDto {
+  id: string;
+  username: string | null;
+  displayName: string;
+  avatarUrl: string | null;
+  bio?: string | null;
+}
+
+export interface FriendDiscoveryRelationshipDto {
+  context: "self" | "other";
+  friendship: FriendshipRelationDto | null;
+}
+
+export interface FriendDiscoveryResolvedDto {
+  profile: FriendDiscoveryProfileDto;
+  relationship: FriendDiscoveryRelationshipDto;
+  capabilities: FriendshipCapabilitiesDto;
+  source: "qr";
+}
+
+export const friendQrApi = {
+  getMyFriendQr: async () => {
+    const response =
+      await apiClient.get<ApiResponse<FriendQrPayloadDto>>("/me/friend-qr");
+    return response.data;
+  },
+
+  resetMyFriendQr: async () => {
+    const response = await apiClient.post<ApiResponse<FriendQrPayloadDto>>(
+      "/me/friend-qr/reset",
+    );
+    return response.data;
+  },
+
+  resolveCode: async (shareCode: string) => {
+    const response = await apiClient.post<
+      ApiResponse<FriendDiscoveryResolvedDto>
+    >("/friend-discovery/resolve-code", {
+      shareCode,
+    });
+    return response.data;
+  },
+};
+
 // ============================================
 // FRIENDSHIP API
 // ============================================
@@ -972,8 +1210,15 @@ export const friendshipApi = {
   getFriends: async () => {
     const response = await apiClient.get<
       ApiResponse<{
-        friends: User[];
-        total: number;
+        data: FriendshipRelationDto[];
+        pagination: {
+          page: number;
+          limit: number;
+          total: number;
+          totalPages: number;
+          hasNext: boolean;
+          hasPrev: boolean;
+        };
       }>
     >("/friends");
     return response.data;
@@ -982,90 +1227,113 @@ export const friendshipApi = {
   getPendingRequests: async () => {
     const response = await apiClient.get<
       ApiResponse<{
-        requests: Array<{ id: string; sender: User; createdAt: string }>;
+        data: FriendshipRelationDto[];
+        pagination: {
+          page: number;
+          limit: number;
+          total: number;
+          totalPages: number;
+          hasNext: boolean;
+          hasPrev: boolean;
+        };
       }>
     >("/friends/requests/received");
     return response.data;
   },
 
   sendFriendRequest: async (userId: string) => {
-    const response = await apiClient.post<ApiResponse<{ message: string }>>(
-      "/friends/requests",
-      { userId },
-    );
+    const response = await apiClient.post<
+      ApiResponse<FriendshipWriteResponseDto>
+    >("/friends/requests", { userId });
     return response.data;
   },
 
   acceptFriendRequest: async (requestId: string) => {
-    const response = await apiClient.post<ApiResponse<{ message: string }>>(
-      `/friends/requests/${requestId}/accept`,
-    );
+    const response = await apiClient.post<
+      ApiResponse<FriendshipWriteResponseDto>
+    >(`/friends/requests/${requestId}/accept`);
     return response.data;
   },
 
   rejectFriendRequest: async (requestId: string) => {
-    const response = await apiClient.post<ApiResponse<{ message: string }>>(
-      `/friends/requests/${requestId}/decline`,
-    );
+    const response = await apiClient.post<
+      ApiResponse<FriendshipWriteResponseDto>
+    >(`/friends/requests/${requestId}/decline`);
     return response.data;
   },
 
   removeFriend: async (friendshipId: string) => {
-    await apiClient.delete(`/friends/${friendshipId}`);
+    const response = await apiClient.delete<
+      ApiResponse<FriendshipWriteResponseDto>
+    >(`/friends/${friendshipId}`);
+    return response.data;
   },
 
   getSentRequests: async () => {
     const response = await apiClient.get<
       ApiResponse<{
-        requests: Array<{ id: string; receiver: User; createdAt: string }>;
+        data: FriendshipRelationDto[];
+        pagination: {
+          page: number;
+          limit: number;
+          total: number;
+          totalPages: number;
+          hasNext: boolean;
+          hasPrev: boolean;
+        };
       }>
     >("/friends/requests/sent");
     return response.data;
   },
 
   cancelFriendRequest: async (requestId: string) => {
-    await apiClient.delete(`/friends/requests/${requestId}`);
+    const response = await apiClient.delete<
+      ApiResponse<FriendshipWriteResponseDto>
+    >(`/friends/requests/${requestId}`);
+    return response.data;
   },
 
   getPendingCount: async () => {
-    const response = await apiClient.get<ApiResponse<{ count: number }>>(
-      "/friends/requests/count",
-    );
+    const response = await apiClient.get<
+      ApiResponse<FriendshipPendingCountDto>
+    >("/friends/requests/count");
     return response.data;
   },
 
   blockUser: async (userId: string) => {
-    const response = await apiClient.post<ApiResponse<{ message: string }>>(
-      "/friends/block",
-      { userId },
-    );
+    const response = await apiClient.post<
+      ApiResponse<FriendshipWriteResponseDto>
+    >("/friends/block", { userId });
     return response.data;
   },
 
   unblockUser: async (userId: string) => {
-    await apiClient.delete(`/friends/unblock/${userId}`);
+    const response = await apiClient.delete<
+      ApiResponse<FriendshipWriteResponseDto>
+    >(`/friends/unblock/${userId}`);
+    return response.data;
   },
 
   getBlockedUsers: async () => {
-    const response =
-      await apiClient.get<ApiResponse<{ users: User[]; total: number }>>(
-        "/friends/blocked",
-      );
+    const response = await apiClient.get<
+      ApiResponse<{
+        data: FriendshipRelationDto[];
+        pagination: {
+          page: number;
+          limit: number;
+          total: number;
+          totalPages: number;
+          hasNext: boolean;
+          hasPrev: boolean;
+        };
+      }>
+    >("/friends/blocked");
     return response.data;
   },
 
   getFriendshipStatus: async (userId: string) => {
     const response = await apiClient.get<
-      ApiResponse<{
-        status:
-          | "none"
-          | "pending"
-          | "accepted"
-          | "declined"
-          | "canceled"
-          | "blocked";
-        friendship?: { id: string };
-      }>
+      ApiResponse<FriendshipStatusResponseDto>
     >(`/friends/status/${userId}`);
     return response.data;
   },
@@ -1080,5 +1348,6 @@ export default {
   file: fileApi,
   contact: contactApi,
   friendship: friendshipApi,
+  friendQr: friendQrApi,
   group: groupApi,
 };

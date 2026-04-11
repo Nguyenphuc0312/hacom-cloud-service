@@ -20,8 +20,77 @@ interface MessageItemProps {
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (messageId: string) => void;
+  onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
 }
+
+const getAttachmentLayoutSignature = (
+  attachments?: Attachment[],
+): string => {
+  if (!attachments || attachments.length === 0) return "";
+
+  return attachments
+    .map((attachment) =>
+      [
+        attachment.id,
+        attachment.type,
+        attachment.fileName,
+        attachment.fileSize,
+        attachment.width,
+        attachment.height,
+        attachment.thumbnailUrl,
+      ].join(":"),
+    )
+    .join("|");
+};
+
+const getReplyLayoutSignature = (message: Message): string => {
+  const reply = message.replyToMessage;
+  if (!reply) return "";
+  const replyAttachments = (
+    reply as Message["replyToMessage"] & { attachments?: Attachment[] }
+  ).attachments;
+
+  return [
+    reply.id,
+    reply.type,
+    reply.senderName,
+    reply.content,
+    reply.isDeleted,
+    getAttachmentLayoutSignature(replyAttachments),
+  ].join(":");
+};
+
+const getForwardedSignature = (message: Message): string => {
+  const forwardedFrom = message.forwardedFrom;
+  if (!forwardedFrom) return "";
+
+  return [
+    "id" in forwardedFrom ? forwardedFrom.id : "",
+    "username" in forwardedFrom ? forwardedFrom.username : "",
+  ].join(":");
+};
+
+const getLayoutSensitiveSignature = (message: Message): string =>
+  [
+    message.type,
+    message.senderName,
+    message.content,
+    message.status,
+    message.sendState,
+    message.isEdited,
+    message.isDeleted,
+    message.isPinned,
+    getReplyLayoutSignature(message),
+    getForwardedSignature(message),
+    getAttachmentLayoutSignature(message.attachments),
+    (message.reactions ?? [])
+      .map((reaction) => `${reaction.emoji}:${reaction.count}`)
+      .join("|"),
+    (message.readBy ?? []).length,
+    (message.mentions ?? []).length,
+    (message as { threadCount?: number }).threadCount ?? 0,
+  ].join("::");
 
 const MessageItemComponent: React.FC<MessageItemProps> = ({
   item,
@@ -35,23 +104,30 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   isSelectionMode = false,
   isSelected = false,
   onToggleSelect,
+  onNavigateToMessage,
   currentUsername,
 }) => {
   const isCompact = density === "compact";
+  const isExpanded = density === "expanded";
 
   if (item.kind === "date") {
-    return <DateDivider date={item.date} />;
+    return (
+      <DateDivider
+        date={item.date}
+        className={isExpanded ? "my-7" : undefined}
+      />
+    );
   }
 
   if (item.kind === "unread") {
-    return <UnreadDivider />;
+    return <UnreadDivider className={isExpanded ? "my-6" : undefined} />;
   }
 
   if (item.kind === "system") {
     return (
       <SystemMessage
         message={item.message}
-        className={isCompact ? "my-1" : "my-2"}
+        className={isCompact ? "my-1" : isExpanded ? "my-3" : "my-2"}
       />
     );
   }
@@ -67,11 +143,15 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
       className={clsx(
         item.isGroupEnd
           ? isCompact
-            ? "mb-1"
-            : "mb-2"
+            ? "mb-2.5"
+            : isExpanded
+              ? "mb-5"
+            : "mb-3.5"
           : isCompact
             ? "mb-px"
-            : "mb-0.5",
+            : isExpanded
+              ? "mb-1"
+            : "mb-[3px]",
         "msg-row-hover -mx-1 px-1",
         isSelectionMode && "cursor-pointer",
         isSelected && "bg-primary/6 rounded-md",
@@ -106,7 +186,9 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
             onDelete={onDelete}
             onImageClick={onImageClick}
             onFilePreview={onFilePreview}
+            isSelectionMode={isSelectionMode}
             density={density}
+            onNavigateToMessage={onNavigateToMessage}
             currentUsername={currentUsername}
           />
         </div>
@@ -138,7 +220,8 @@ const areEqualMessageItem = (
       prev.onDelete === next.onDelete &&
       prev.onImageClick === next.onImageClick &&
       prev.onFilePreview === next.onFilePreview &&
-      prev.onToggleSelect === next.onToggleSelect
+      prev.onToggleSelect === next.onToggleSelect &&
+      prev.onNavigateToMessage === next.onNavigateToMessage
     );
   }
 
@@ -149,6 +232,7 @@ const areEqualMessageItem = (
   if (prev.isSelectionMode !== next.isSelectionMode) return false;
   if (prev.isSelected !== next.isSelected) return false;
   if (prev.currentUsername !== next.currentUsername) return false;
+  if (prev.onNavigateToMessage !== next.onNavigateToMessage) return false;
 
   if (prev.item.kind === "date" && next.item.kind === "date") {
     return prev.item.date.getTime() === next.item.date.getTime();
@@ -172,32 +256,11 @@ const areEqualMessageItem = (
     const nextMsg = next.item.message;
     if (prevMsg === nextMsg) return true; // same reference
     if (prevMsg.id !== nextMsg.id) return false;
-    if (prevMsg.content !== nextMsg.content) return false;
-    if (prevMsg.status !== nextMsg.status) return false;
-    if (prevMsg.isEdited !== nextMsg.isEdited) return false;
-    if (prevMsg.isDeleted !== nextMsg.isDeleted) return false;
-    if (prevMsg.isPinned !== nextMsg.isPinned) return false;
 
-    // Compare reactions structurally
-    const prevReactions = prevMsg.reactions;
-    const nextReactions = nextMsg.reactions;
-    if (prevReactions !== nextReactions) {
-      const prevLen = prevReactions?.length ?? 0;
-      const nextLen = nextReactions?.length ?? 0;
-      if (prevLen !== nextLen) return false;
-      if (prevReactions && nextReactions) {
-        for (let i = 0; i < prevLen; i++) {
-          if (
-            prevReactions[i].emoji !== nextReactions[i].emoji ||
-            prevReactions[i].count !== nextReactions[i].count
-          ) {
-            return false;
-          }
-        }
-      }
-    }
-
-    return true;
+    return (
+      getLayoutSensitiveSignature(prevMsg) ===
+      getLayoutSensitiveSignature(nextMsg)
+    );
   }
 
   return false;

@@ -15,7 +15,8 @@ RUN npm ci
 FROM deps AS build
 ARG VITE_APP_BASE_PATH=/
 ARG VITE_API_BASE_URL=/api/v1
-ARG VITE_AUTH_BASE_URL=/auth-api/v1
+# Canonical auth contract for web client bundles.
+ARG VITE_AUTH_BASE_URL=/api/v1/auth
 ARG VITE_USE_AUTH_SERVICE=true
 ARG VITE_WS_URL=/ws
 ARG VITE_WS_USE_QUERY_TOKEN=false
@@ -40,10 +41,6 @@ WORKDIR /workspace/chat-web-client
 RUN npm run build
 
 FROM nginx:1.27-alpine AS production
-ENV API_UPSTREAM=http://chat-api:3001
-ENV AUTH_UPSTREAM=http://chat-auth:3101
-ENV WS_UPSTREAM=http://chat-websocket:8080
-
 COPY chat-web-client/nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /workspace/chat-web-client/dist /usr/share/nginx/html
 

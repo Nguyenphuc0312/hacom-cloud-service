@@ -1,17 +1,8 @@
 /**
- * @fileoverview Types cho Chat Web Client
- *
- * ⚠️ QUAN TRỌNG:
- * - Types chính được import từ @hacom/chat-shared-types
- * - File này chỉ chứa các types RIÊNG cho frontend (UI state, React components)
- * - KHÔNG duplicate types đã có trong shared-types
+ * @fileoverview Frontend type exports and UI-specific extensions.
  */
 
-// ============================================
-// RE-EXPORT TỪ SHARED-TYPES
-// ============================================
-
-// Entities
+// Re-export shared domain entities
 export type {
   User,
   UserSummary,
@@ -31,7 +22,7 @@ export type {
   TypingUser,
 } from "@hacom/chat-shared-types";
 
-// Enums
+// Re-export shared enums
 export {
   UserStatus,
   MessageType,
@@ -43,7 +34,7 @@ export {
   EventType,
 } from "@hacom/chat-shared-types";
 
-// DTOs
+// Re-export shared DTOs
 export type {
   SendMessageDto,
   EditMessageDto,
@@ -59,7 +50,7 @@ export type {
   UpdateUserStatusDto,
 } from "@hacom/chat-shared-types";
 
-// Utility types
+// Re-export shared API utility types
 export type {
   ApiResponse,
   ApiSuccess,
@@ -72,7 +63,7 @@ export type {
   PaginatedResponse,
 } from "@hacom/chat-shared-types";
 
-// WebSocket events
+// Re-export shared WebSocket payload types
 export type {
   MessageNewEvent,
   MessageUpdateEvent,
@@ -80,36 +71,70 @@ export type {
   MessageReactionEvent,
 } from "@hacom/chat-shared-types";
 
-// ============================================
-// FRONTEND-SPECIFIC TYPES
-// Các types chỉ dùng trong frontend
-// ============================================
+import type { Conversation, User } from "@hacom/chat-shared-types";
 
-import type { User, Conversation } from "@hacom/chat-shared-types";
+export type MessageSendState =
+  | "queued"
+  | "sending"
+  | "retrying"
+  | "sent"
+  | "failed";
 
-// Bổ sung Message type cho frontend (kế thừa từ shared, thêm localId)
+export type MessageQueueReason = "offline" | "reconnecting" | "manual_retry";
+
+export type MessageFailureReason =
+  | "network"
+  | "timeout"
+  | "permission"
+  | "slow_mode"
+  | "server"
+  | "unknown";
+
+export interface SendRestriction {
+  code?: string;
+  reason: string;
+  kind: "blocked" | "permission" | "slow_mode" | "readonly";
+}
+
+export interface SendMessageResult {
+  disposition: "queued" | "sent";
+  messageId: string;
+}
+
 export interface Message extends Omit<
   import("@hacom/chat-shared-types").Message,
   "id" | "status"
 > {
   id: string;
-  localId?: string; // id tạm phía client để mapping
+  localId?: string;
+  stableId?: string;
+  clientMessageId?: string;
+  serverSeq?: number;
+  serverTs?: Date;
+  localOrder?: number;
+  transportStatus?:
+    | "draft"
+    | "optimistic"
+    | "acked_transport"
+    | "synced_stream";
+  sendState?: MessageSendState;
+  queuedReason?: MessageQueueReason;
+  failureReason?: MessageFailureReason;
+  sendAttempts?: number;
+  lastSendAttemptAt?: Date;
   status: import("@hacom/chat-shared-types").MessageStatus | "uploading";
 }
 
-/**
- * Typing status for UI display
- */
 export interface TypingStatus {
   conversationId: string;
   userId: string;
   userName: string;
   isTyping: boolean;
+  activity?: "typing" | "recording" | "uploading" | "online";
+  confidence?: number;
+  lastEventAt?: number;
 }
 
-/**
- * Location types for map display
- */
 export interface Location {
   latitude: number;
   longitude: number;
@@ -117,9 +142,6 @@ export interface Location {
   name?: string;
 }
 
-/**
- * App state types - Frontend specific
- */
 export interface ChatState {
   currentUser: User | null;
   conversations: Conversation[];
@@ -133,9 +155,6 @@ export interface ChatState {
   error: string | null;
 }
 
-/**
- * Context menu types
- */
 export interface ContextMenuItem {
   id: string;
   label: string;
@@ -146,14 +165,13 @@ export interface ContextMenuItem {
   disabled?: boolean;
 }
 
-/**
- * Filter types
- */
-export type ConversationFilter = "all" | "unread" | "groups" | "channels";
+export type ConversationFilter =
+  | "all"
+  | "unread"
+  | "groups"
+  | "channels"
+  | "direct";
 
-/**
- * Input modes for message composer
- */
 export type InputMode = "normal" | "reply" | "edit";
 
 export interface InputState {
@@ -162,19 +180,10 @@ export interface InputState {
   editingMessage?: Message;
 }
 
-/**
- * Notification permission state
- */
 export type NotificationPermission = "default" | "granted" | "denied";
 
-/**
- * Theme options
- */
 export type Theme = "light" | "dark" | "system";
 
-/**
- * WebSocket connection state
- */
 export type ConnectionState =
   | "connecting"
   | "connected"
@@ -188,9 +197,6 @@ export interface WebSocketState {
   error: string | null;
 }
 
-/**
- * UI Component props
- */
 export interface MessageListProps {
   messages: Message[];
   currentUserId: string;
@@ -214,9 +220,6 @@ export interface MessageInputProps {
   disabled?: boolean;
 }
 
-/**
- * Form states
- */
 export interface LoginFormData {
   email: string;
   password: string;
@@ -233,9 +236,6 @@ export interface RegisterFormData {
   acceptTerms: boolean;
 }
 
-/**
- * Search state
- */
 export interface SearchState {
   query: string;
   results: {
@@ -246,9 +246,6 @@ export interface SearchState {
   isSearching: boolean;
 }
 
-/**
- * Upload state
- */
 export interface UploadState {
   files: File[];
   progress: number;
@@ -256,9 +253,6 @@ export interface UploadState {
   error: string | null;
 }
 
-/**
- * Modal state
- */
 export interface ModalState {
   isOpen: boolean;
   type: ModalType | null;
@@ -274,9 +268,6 @@ export type ModalType =
   | "imagePreview"
   | "deleteConfirm";
 
-/**
- * Toast notification
- */
 export interface ToastNotification {
   id: string;
   type: "success" | "error" | "warning" | "info";
@@ -284,9 +275,6 @@ export interface ToastNotification {
   duration?: number;
 }
 
-/**
- * Sidebar state
- */
 export interface SidebarState {
   isCollapsed: boolean;
   activeSection: "chats" | "contacts" | "settings";

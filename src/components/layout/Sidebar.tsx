@@ -1,4 +1,10 @@
-﻿import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
+﻿import React, {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -9,7 +15,7 @@ import {
   UserGroupIcon,
 } from "@heroicons/react/24/outline";
 import { Badge } from "../common/Badge";
-import { ConfirmDialog } from "../ui";
+import { ConfirmDialog, Spinner } from "../ui";
 import { useLogout, usePresence } from "../../hooks";
 import type {
   Conversation,
@@ -28,8 +34,16 @@ interface SidebarProps {
   conversations: Conversation[];
   currentUser: UserSummary;
   selectedId: string | null;
+  isLoadingConversations?: boolean;
+  isLoadingMoreConversations?: boolean;
+  hasMoreConversations?: boolean;
+  showConversationSkeleton?: boolean;
+  conversationsError?: string | null;
   onSelectConversation: (id: string) => void;
+  onRetryConversations?: () => void;
+  onLoadMoreConversations?: () => void;
   onNewChat?: () => void;
+  onCurrentUserClick?: () => void;
   className?: string;
 }
 
@@ -39,8 +53,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   conversations,
   currentUser,
   selectedId,
+  isLoadingConversations = false,
+  isLoadingMoreConversations = false,
+  hasMoreConversations = false,
+  showConversationSkeleton = false,
+  conversationsError = null,
   onSelectConversation,
+  onRetryConversations,
+  onLoadMoreConversations,
   onNewChat,
+  onCurrentUserClick,
   className,
 }) => {
   const { t } = useTranslation();
@@ -49,9 +71,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const tabs: { id: ConversationFilter; label: string }[] = [
     { id: "all", label: t("sidebar:tabs.all") },
-    { id: "unread", label: t("sidebar:tabs.unread") },
+    { id: "direct", label: t("sidebar:tabs.direct") },
     { id: "groups", label: t("sidebar:tabs.groups") },
-    { id: "channels", label: t("sidebar:tabs.channels") },
   ];
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -60,6 +81,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const { logout, isLoggingOut } = useLogout();
+  const currentConversationId = selectedId;
+
+  const handleSelectRoom = useCallback(
+    (conversationId: string) => {
+      onSelectConversation(conversationId);
+    },
+    [onSelectConversation],
+  );
 
   // Collect unique DM contact user IDs so presence is subscribed globally
   const dmUserIds = useMemo(() => {
@@ -111,6 +140,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           collapsed={isCollapsed}
           onToggleCollapsed={() => setIsCollapsed((current) => !current)}
           onNewChat={onNewChat}
+          onCurrentUserClick={onCurrentUserClick}
         />
 
         <SidebarSearch
@@ -123,11 +153,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
 
         {!isCollapsed && (
-          <div className="border-b border-border px-3 py-2">
-            <div className="flex items-center gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="px-3 pb-2 pt-1">
+            <div className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {tabs.map((tab) => {
                 const isActive = activeFilter === tab.id;
-                const showUnreadCount = tab.id === "unread" && unreadTotal > 0;
 
                 return (
                   <button
@@ -135,15 +164,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     type="button"
                     onClick={() => setActiveFilter(tab.id)}
                     className={clsx(
-                      "inline-flex h-8 items-center gap-2 rounded-full px-3 text-xs font-medium transition-colors",
+                      "inline-flex h-8 items-center gap-2 rounded-lg px-3 text-caption font-medium transition-micro",
                       isActive
-                        ? "bg-primary/15 text-primary"
-                        : "text-text-secondary hover:bg-surface-overlay hover:text-text-primary",
+                        ? "bg-surface text-text-primary shadow-xs"
+                        : "text-text-muted hover:bg-surface-hover hover:text-text-secondary",
                     )}
                     aria-pressed={isActive}
                   >
                     {tab.label}
-                    {showUnreadCount && (
+                    {tab.id === "all" && unreadTotal > 0 && (
                       <Badge
                         count={unreadTotal}
                         size="sm"
@@ -154,39 +183,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 );
               })}
             </div>
+            {isLoadingConversations && conversations.length > 0 && (
+              <div className="mt-2 inline-flex items-center gap-2 px-1 text-caption text-text-muted">
+                <Spinner size="sm" />
+                <span>{t("common:loading.default")}</span>
+              </div>
+            )}
           </div>
         )}
 
         <RoomList
           conversations={conversations}
           currentUser={currentUser}
-          selectedId={selectedId}
+          selectedId={currentConversationId}
           searchQuery={deferredSearchQuery}
           activeFilter={activeFilter}
           collapsed={isCollapsed}
-          onSelect={onSelectConversation}
+          showLoadingSkeleton={showConversationSkeleton}
+          error={conversationsError}
+          onRetry={onRetryConversations}
+          hasMore={hasMoreConversations}
+          isLoadingMore={isLoadingMoreConversations}
+          onLoadMore={onLoadMoreConversations}
+          onSelect={handleSelectRoom}
         />
 
-        <div className="border-t border-border p-2">
+        <div className="border-t border-border/70 px-2 pb-2 pt-2">
           {/* Friends button */}
           <button
             type="button"
             onClick={() => navigate(ROUTE_PATHS.FRIENDS)}
             className={clsx(
-              "inline-flex w-full items-center rounded-lg px-2 py-2 text-sm font-medium transition-colors",
+              "inline-flex w-full items-center rounded-lg px-3 py-2.5 text-body-sm font-medium transition-micro",
               location.pathname.startsWith(ROUTE_PATHS.FRIENDS)
-                ? "bg-primary/10 text-primary"
+                ? "bg-surface-active text-text-primary"
                 : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
               isCollapsed && "justify-center px-0",
             )}
-            aria-label={t("friends:title", { defaultValue: "Friends" })}
+            aria-label={t("friends:title")}
           >
             <UserGroupIcon className="h-5 w-5 shrink-0" />
-            {!isCollapsed && (
-              <span className="ml-2">
-                {t("friends:title", { defaultValue: "Friends" })}
-              </span>
-            )}
+            {!isCollapsed && <span className="ml-2">{t("friends:title")}</span>}
           </button>
 
           {/* Settings button */}
@@ -194,19 +231,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             type="button"
             onClick={() => navigate(ROUTE_PATHS.SETTINGS)}
             className={clsx(
-              "inline-flex w-full items-center rounded-lg px-2 py-2 text-sm font-medium transition-colors",
+              "inline-flex w-full items-center rounded-lg px-3 py-2.5 text-body-sm font-medium transition-micro",
               location.pathname.startsWith(ROUTE_PATHS.SETTINGS)
-                ? "bg-primary/10 text-primary"
+                ? "bg-surface-active text-text-primary"
                 : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
               isCollapsed && "justify-center px-0",
             )}
-            aria-label={t("settings.pageTitle", { defaultValue: "Settings" })}
+            aria-label={t("settings:pageTitle")}
           >
             <Cog6ToothIcon className="h-5 w-5 shrink-0" />
             {!isCollapsed && (
-              <span className="ml-2">
-                {t("settings.pageTitle", { defaultValue: "Settings" })}
-              </span>
+              <span className="ml-2">{t("settings:pageTitle")}</span>
             )}
           </button>
 
@@ -216,7 +251,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             disabled={isLoggingOut}
             onClick={() => setIsLogoutConfirmOpen(true)}
             className={clsx(
-              "inline-flex w-full items-center rounded-lg px-2 py-2 text-sm font-medium transition-colors",
+              "inline-flex w-full items-center rounded-lg px-3 py-2.5 text-body-sm font-medium transition-micro",
               "text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50",
               isCollapsed && "justify-center px-0",
             )}

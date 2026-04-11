@@ -18,7 +18,7 @@ import { Sidebar } from "../components/layout/Sidebar";
 import { ChatWindow } from "../components/layout/ChatWindow";
 import { UserProfile } from "../components/info/UserProfile";
 import { GroupInfo } from "../components/info/GroupInfo";
-import { NoChatSelected, Spinner } from "../components/ui";
+import { ErrorState, NoChatSelected, Spinner } from "../components/ui";
 import {
   NewChatModal,
   ImagePreviewModal,
@@ -28,27 +28,59 @@ import { toast } from "../components/ui";
 import {
   useAuthStore,
   useChatStore,
-  useGroupStore,
   useSelectedConversation,
   useCurrentMessages,
   useCurrentTypingStatus,
 } from "../stores";
 import { useWebSocket } from "../hooks";
-import { conversationApi, messageApi } from "../services/api";
-import type { Attachment, Conversation, Message, UserSummary } from "../types";
+import type { Attachment, Message, UserSummary } from "../types";
 import { useFilePreview } from "../hooks/useFilePreview";
 import type { PreviewTarget } from "../hooks/useFilePreview";
 import { getPreviewType } from "../utils/formatFileSize";
-import { MessageType, UserStatus } from "../types";
+import { rankConversations } from "../utils/conversationRanking";
+import { UserStatus } from "../types";
 import { isDirectConversation } from "../lib/conversationAdapter";
 import { getOtherParticipant } from "../utils/messageHelpers";
+import { logMessageDebug } from "../utils/messageDebug";
 import { ErrorCode } from "@hacom/chat-shared-types";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
+import { conversationApi } from "../services/api";
+import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
+import { createPrivateConversationUseCase } from "../features/chat/usecases/createPrivateConversation";
+import { createGroupConversationUseCase } from "../features/chat/usecases/createGroupConversation";
+import { deleteConversationUseCase } from "../features/chat/usecases/deleteConversation";
+import { addReactionUseCase } from "../features/chat/usecases/addReaction";
+import { removeReactionUseCase } from "../features/chat/usecases/removeReaction";
+import { editMessageUseCase } from "../features/chat/usecases/editMessage";
+import { deleteMessageUseCase } from "../features/chat/usecases/deleteMessage";
+import { useSendMessage } from "../features/chat/hooks/useSendMessage";
+import {
+  CHAT_OPEN_NEW_CHAT_EVENT,
+  consumeOpenNewChatIntent,
+} from "../lib/commandPalette";
 
 type IdleCallbackDeadline = {
   didTimeout: boolean;
   timeRemaining: () => number;
 };
+
+interface ProfilePanelTarget {
+  userId: string;
+  initialUser?: {
+    id: string;
+    username?: string;
+    displayName?: string;
+    firstName?: string;
+    lastName?: string;
+    avatar?: string;
+    status?: UserStatus;
+  } | null;
+}
+
+interface ConversationValidationError {
+  conversationId: string;
+  message: string;
+}
 
 type WindowWithIdleCallback = Window & {
   requestIdleCallback?: (
@@ -57,19 +89,6 @@ type WindowWithIdleCallback = Window & {
   ) => number;
   cancelIdleCallback?: (handle: number) => void;
 };
-
-const toTimestamp = (value: unknown): number => {
-  const parsed = new Date(value as string | number | Date);
-  const timestamp = parsed.getTime();
-  return Number.isNaN(timestamp) ? 0 : timestamp;
-};
-
-const sortConversationsByPriority = (source: Conversation[]): Conversation[] =>
-  [...source].sort((a, b) => {
-    if (a.isPinned && !b.isPinned) return -1;
-    if (!a.isPinned && b.isPinned) return 1;
-    return toTimestamp(b.updatedAt) - toTimestamp(a.updatedAt);
-  });
 
 const scheduleIdleTask = (task: () => void): (() => void) => {
   if (typeof window === "undefined") return () => {};
@@ -98,21 +117,22 @@ const scheduleIdleTask = (task: () => void): (() => void) => {
   };
 };
 
-const isMessageDebugEnabled = (): boolean => {
-  if (typeof window === "undefined") return false;
-  return (
-    new URLSearchParams(window.location.search).get("debugMessages") === "1"
-  );
-};
+const CONVERSATIONS_PAGE_SIZE = 100;
 
 export const ChatPage: React.FC = () => {
   const { t } = useTranslation();
   const { conversationId } = useParams<{ conversationId?: string }>();
+  const routeConversationId = conversationId ?? null;
   const navigate = useNavigate();
+  const shouldTraceRenderLoop = import.meta.env.DEV;
 
   // Auth store
-  const { user } = useAuthStore();
-  const setSlowModeCooldown = useGroupStore((s) => s.setSlowModeCooldown);
+  const {
+    user,
+    isLoading: isAuthLoading,
+    isInitialized: isAuthInitialized,
+    refreshUser,
+  } = useAuthStore();
 
   // Chat store — stable functions + data that drives re-renders.
   // Per-conversation loading/error/hasMore are derived separately below to
@@ -127,9 +147,11 @@ export const ChatPage: React.FC = () => {
     updateStoreMessage,
     removeStoreMessage,
     conversations,
+    isLoadingConversations,
+    hasFetchedConversationsOnce,
+    conversationsError,
     fetchConversations,
     fetchMessages,
-    storeSendMessage,
     markAsRead,
   } = useChatStore(
     useShallow((state) => ({
@@ -141,9 +163,11 @@ export const ChatPage: React.FC = () => {
       updateStoreMessage: state.updateMessage,
       removeStoreMessage: state.removeMessage,
       conversations: state.conversations,
+      isLoadingConversations: state.isLoadingConversations,
+      hasFetchedConversationsOnce: state.hasFetchedConversationsOnce,
+      conversationsError: state.conversationsError,
       fetchConversations: state.fetchConversations,
       fetchMessages: state.fetchMessages,
-      storeSendMessage: state.sendMessage,
       markAsRead: state.markAsRead,
     })),
   );
@@ -175,21 +199,86 @@ export const ChatPage: React.FC = () => {
       ? Boolean(state.messagesHydratedByConversation[selectedConversationId])
       : false,
   );
-
   // WebSocket
-  const { isConnected, sendTyping, stopTyping, joinRoom, leaveRoom } =
+  const { connectionState, sendTyping, stopTyping, joinRoom, leaveRoom } =
     useWebSocket();
 
   // Local state
   const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(!conversationId);
+  const [profilePanelTarget, setProfilePanelTarget] =
+    useState<ProfilePanelTarget | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] =
+    useState(!routeConversationId);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const filePreview = useFilePreview();
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const [isLoadingMoreConversations, setIsLoadingMoreConversations] =
+    useState(false);
+  const [hasMoreConversations, setHasMoreConversations] = useState(true);
+  const conversationsPageRef = useRef(1);
   const roomCreationLockRef = useRef(false);
   const [isValidatingRoom, setIsValidatingRoom] = useState(false);
+  const [lastValidatedConversationId, setLastValidatedConversationId] =
+    useState<string | null>(null);
+  const [conversationValidationError, setConversationValidationError] =
+    useState<ConversationValidationError | null>(null);
+  const [validationRetryToken, setValidationRetryToken] = useState(0);
   const directInfoHydratedRef = useRef<Set<string>>(new Set());
+  const lastReadSyncKeyRef = useRef<string | null>(null);
+  const renderCountRef = useRef(0);
+  const validatingConversationIdRef = useRef<string | null>(null);
+
+  const conversationAccessDeniedMessage = t(
+    "error:chat.conversationAccessDenied",
+  );
+  const conversationOpenFailedMessage = t("error:chat.conversationOpenFailed");
+
+  useEffect(() => {
+    if (!shouldTraceRenderLoop) {
+      return;
+    }
+
+    renderCountRef.current += 1;
+    logMessageDebug("ChatPage", "render_count", {
+      renderCount: renderCountRef.current,
+      routeConversationId,
+      selectedConversationId,
+      lastValidatedConversationId,
+      isValidatingRoom,
+    });
+  });
+
+  useEffect(() => {
+    if (!shouldTraceRenderLoop) {
+      return;
+    }
+
+    logMessageDebug("ChatPage", "route_param_changed", {
+      routeConversationId,
+      selectedConversationId,
+      lastValidatedConversationId,
+    });
+  }, [
+    lastValidatedConversationId,
+    routeConversationId,
+    selectedConversationId,
+    shouldTraceRenderLoop,
+  ]);
+
+  useEffect(() => {
+    const storeSelectedConversationId =
+      useChatStore.getState().selectedConversationId;
+    if (storeSelectedConversationId !== routeConversationId) {
+      if (shouldTraceRenderLoop) {
+        logMessageDebug("ChatPage", "selected_conversation_sync", {
+          from: storeSelectedConversationId,
+          to: routeConversationId,
+        });
+      }
+      selectConversation(routeConversationId);
+    }
+  }, [routeConversationId, selectConversation, shouldTraceRenderLoop]);
 
   // Current user as UserSummary for components
   const currentUserSummary = useMemo<UserSummary | null>(
@@ -209,39 +298,111 @@ export const ChatPage: React.FC = () => {
     [user],
   );
 
+  const isSelectedDirectConversation =
+    isDirectConversation(selectedConversation);
+
+  // Get other user for direct chat
+  const otherUser =
+    selectedConversation && isSelectedDirectConversation && currentUserSummary
+      ? getOtherParticipant(selectedConversation, currentUserSummary.id)
+      : null;
+
   // Validate room in URL then sync to store.
   useEffect(() => {
     let isCancelled = false;
 
     if (!conversationId) {
-      if (useChatStore.getState().selectedConversationId !== null) {
-        selectConversation(null);
+      if (validatingConversationIdRef.current) {
+        validatingConversationIdRef.current = null;
+      }
+      setLastValidatedConversationId((previous) =>
+        previous === null ? previous : null,
+      );
+      setConversationValidationError(null);
+      setIsValidatingRoom(false);
+      return;
+    }
+
+    const chatState = useChatStore.getState();
+    const hasConversationInStore = chatState.conversations.some(
+      (conversation) => conversation.id === conversationId,
+    );
+
+    if (
+      lastValidatedConversationId === conversationId &&
+      hasConversationInStore
+    ) {
+      if (shouldTraceRenderLoop) {
+        logMessageDebug("ChatPage", "conversation_validation_skipped_cached", {
+          conversationId,
+        });
       }
       return;
     }
 
+    if (validatingConversationIdRef.current === conversationId) {
+      if (shouldTraceRenderLoop) {
+        logMessageDebug(
+          "ChatPage",
+          "conversation_validation_skipped_in_flight",
+          {
+            conversationId,
+          },
+        );
+      }
+      return;
+    }
+
+    validatingConversationIdRef.current = conversationId;
+
     const validateConversation = async () => {
       setIsValidatingRoom(true);
+      setConversationValidationError((previous) =>
+        previous?.conversationId === conversationId ? null : previous,
+      );
+      if (shouldTraceRenderLoop) {
+        logMessageDebug("ChatPage", "conversation_validation_requested", {
+          conversationId,
+        });
+      }
       try {
-        const response =
-          await conversationApi.getConversationById(conversationId);
+        const response = await getConversationByIdUseCase(conversationId);
         const room = unwrapApiSuccess(response);
         if (isCancelled) return;
 
-        const roomExists = useChatStore
+        const existingRoom = useChatStore
           .getState()
-          .conversations.some(
+          .conversations.find(
             (conversation) => conversation.id === conversationId,
           );
 
-        if (roomExists) {
-          updateConversation(conversationId, room);
-        } else {
+        const shouldUpdateExistingRoom = Boolean(
+          existingRoom &&
+          (existingRoom.updatedAt !== room.updatedAt ||
+            existingRoom.unreadCount !== room.unreadCount ||
+            existingRoom.lastMessage?.id !== room.lastMessage?.id ||
+            existingRoom.displayName !== room.displayName ||
+            existingRoom.name !== room.name ||
+            existingRoom.avatar !== room.avatar ||
+            existingRoom.participants?.length !== room.participants?.length),
+        );
+
+        if (!existingRoom) {
           addConversation(room);
+        } else if (shouldUpdateExistingRoom) {
+          updateConversation(conversationId, room);
         }
 
-        if (conversationId !== useChatStore.getState().selectedConversationId) {
-          selectConversation(conversationId);
+        setLastValidatedConversationId((previous) =>
+          previous === conversationId ? previous : conversationId,
+        );
+        setConversationValidationError(null);
+        if (shouldTraceRenderLoop) {
+          logMessageDebug("ChatPage", "conversation_validation_succeeded", {
+            conversationId,
+            roomInserted: !existingRoom,
+            roomUpdated: shouldUpdateExistingRoom,
+          });
         }
       } catch (error: unknown) {
         if (isCancelled) return;
@@ -256,17 +417,34 @@ export const ChatPage: React.FC = () => {
         ]);
 
         if (roomInvalidCodes.has(code)) {
-          toast.error(t("error:chat.conversationAccessDenied"));
+          setConversationValidationError(null);
+          toast.error(conversationAccessDeniedMessage);
+          navigate("/chat", { replace: true });
         } else {
-          toast.error(
-            apiError.message || t("error:chat.conversationOpenFailed"),
-          );
+          const message = apiError.message || conversationOpenFailedMessage;
+          setConversationValidationError({
+            conversationId,
+            message,
+          });
+          toast.error(message);
         }
 
-        selectConversation(null);
-        navigate("/chat", { replace: true });
+        setLastValidatedConversationId((previous) =>
+          previous === null ? previous : null,
+        );
+        if (shouldTraceRenderLoop) {
+          logMessageDebug("ChatPage", "conversation_validation_failed", {
+            conversationId,
+            code,
+            message: apiError.message,
+          });
+        }
       } finally {
-        if (!isCancelled) {
+        if (
+          !isCancelled &&
+          validatingConversationIdRef.current === conversationId
+        ) {
+          validatingConversationIdRef.current = null;
           setIsValidatingRoom(false);
         }
       }
@@ -279,108 +457,143 @@ export const ChatPage: React.FC = () => {
     };
   }, [
     addConversation,
+    conversationAccessDeniedMessage,
     conversationId,
+    conversationOpenFailedMessage,
+    lastValidatedConversationId,
     navigate,
-    selectConversation,
+    shouldTraceRenderLoop,
     updateConversation,
+    validationRetryToken,
   ]);
 
   // Load conversations on mount
   useEffect(() => {
-    fetchConversations();
+    void (async () => {
+      await fetchConversations();
+      const initialCount = useChatStore.getState().conversations.length;
+      setHasMoreConversations(initialCount >= CONVERSATIONS_PAGE_SIZE);
+      conversationsPageRef.current = 1;
+    })();
   }, [fetchConversations]);
+
+  const handleLoadMoreConversations = useCallback(async () => {
+    if (isLoadingMoreConversations || !hasMoreConversations) {
+      return;
+    }
+
+    setIsLoadingMoreConversations(true);
+    try {
+      const nextPage = conversationsPageRef.current + 1;
+      const response = await conversationApi.getConversations(
+        nextPage,
+        CONVERSATIONS_PAGE_SIZE,
+      );
+      const fetched = unwrapApiSuccess(response);
+
+      if (!Array.isArray(fetched) || fetched.length === 0) {
+        setHasMoreConversations(false);
+        return;
+      }
+
+      const existing = useChatStore.getState().conversations;
+      const merged = [...existing, ...fetched];
+      useChatStore.getState().setConversations(merged);
+      conversationsPageRef.current = nextPage;
+      setHasMoreConversations(fetched.length >= CONVERSATIONS_PAGE_SIZE);
+    } catch (error) {
+      const apiError = extractApiError(error);
+      toast.error(apiError.message || t("error:chat.fetchConversationsFailed"));
+    } finally {
+      setIsLoadingMoreConversations(false);
+    }
+  }, [hasMoreConversations, isLoadingMoreConversations, t]);
 
   // Load messages when conversation changes & join/leave rooms
   useEffect(() => {
-    let isCancelled = false;
-
-    if (selectedConversationId && !isValidatingRoom) {
-      const loadPromise = isSelectedConversationHydrated
-        ? Promise.resolve()
-        : fetchMessages(selectedConversationId).then(() => undefined);
-
-      void loadPromise.finally(() => {
-        if (isCancelled) return;
-        void markAsRead(selectedConversationId).catch(() => {
-          // no-op: best effort to align unread count
-        });
-      });
-      joinRoom(selectedConversationId);
-
-      return () => {
-        isCancelled = true;
-        stopTyping(selectedConversationId);
-        leaveRoom(selectedConversationId);
-      };
+    if (!selectedConversationId || isValidatingRoom) {
+      return;
     }
 
+    void (async () => {
+      const chatState = useChatStore.getState();
+      const isConversationHydrated =
+        chatState.messagesHydratedByConversation[selectedConversationId] ===
+        true;
+      const hasNewerMessages =
+        chatState.hasNewerMessagesByConversation[selectedConversationId] ??
+        false;
+
+      logMessageDebug("ChatPage", "conversation_open_started", {
+        conversationId: selectedConversationId,
+        isHydrated: isConversationHydrated,
+        isValidatingRoom,
+        hasNewer: hasNewerMessages,
+      });
+      logMessageDebug("ChatPage", "room_join_requested", {
+        conversationId: selectedConversationId,
+        skipInitialDeltaSync: false,
+        reason: "conversation_open",
+      });
+      joinRoom(selectedConversationId, { skipInitialDeltaSync: false });
+
+      if (!isConversationHydrated) {
+        const initialFetchResult = await fetchMessages(selectedConversationId);
+        logMessageDebug("ChatPage", "initial_fetch_completed", {
+          conversationId: selectedConversationId,
+          result: initialFetchResult,
+        });
+      }
+    })();
+
     return () => {
-      isCancelled = true;
+      stopTyping(selectedConversationId);
+      leaveRoom(selectedConversationId);
     };
   }, [
     selectedConversationId,
-    isSelectedConversationHydrated,
     isValidatingRoom,
     fetchMessages,
     joinRoom,
     leaveRoom,
-    markAsRead,
     stopTyping,
   ]);
+
+  useEffect(() => {
+    lastReadSyncKeyRef.current = null;
+  }, [selectedConversationId]);
 
   // Handle select conversation
   const handleSelectConversation = useCallback(
     (id: string) => {
-      selectConversation(id);
       setIsMobileMenuOpen(false);
+      if (id === routeConversationId) {
+        return;
+      }
       navigate(`/chat/${id}`);
     },
-    [selectConversation, navigate],
+    [navigate, routeConversationId],
   );
 
-  // Handle send message
-  const handleSendMessage = useCallback(
-    async (
-      content: string,
-      replyTo?: Message,
-      fileMeta?: Attachment | Attachment[] | undefined,
-      type: MessageType = MessageType.TEXT,
-    ) => {
-      if (!selectedConversationId) return;
-
-      try {
-        await storeSendMessage(
-          selectedConversationId,
-          content,
-          type,
-          fileMeta,
-          replyTo?.id,
-        );
-      } catch (error) {
-        const apiError = extractApiError(error);
-        const details =
-          apiError.details && typeof apiError.details === "object"
-            ? (apiError.details as Record<string, unknown>)
-            : null;
-        const retryAfterSeconds =
-          details && typeof details.retryAfterSeconds === "number"
-            ? details.retryAfterSeconds
-            : null;
-
-        if (
-          (apiError.code === ErrorCode.SLOW_MODE_ACTIVE ||
-            String(apiError.code).toUpperCase() === "SLOW_MODE_ACTIVE") &&
-          retryAfterSeconds &&
-          retryAfterSeconds > 0
-        ) {
-          setSlowModeCooldown(selectedConversationId, retryAfterSeconds);
-        }
-
-        toast.error(apiError.message || t("error:chat.sendFailed"));
-      }
-    },
-    [selectedConversationId, setSlowModeCooldown, storeSendMessage, t],
+  const isCurrentRouteValidated = conversationId
+    ? lastValidatedConversationId === conversationId
+    : true;
+  const isConversationHistoryReady = isSelectedConversationHydrated;
+  const isConversationReady = Boolean(
+    selectedConversationId &&
+    selectedConversation &&
+    isCurrentRouteValidated &&
+    !isValidatingRoom,
   );
+  const websocketReady = connectionState === "connected";
+
+  const handleSendMessage = useSendMessage({
+    selectedConversationId,
+    hasSelectedConversation: Boolean(selectedConversation),
+    isCurrentRouteValidated,
+    isValidatingRoom,
+    source: "ChatPage",
+  });
 
   const handleLoadOlderMessages = useCallback(async () => {
     if (!selectedConversationId) return;
@@ -418,11 +631,44 @@ export const ChatPage: React.FC = () => {
     });
   }, [fetchMessages, selectedConversationId]);
 
+  const handleReachedLatestMessage = useCallback(
+    (message: Message) => {
+      if (!selectedConversationId) return;
+
+      const conversation = useChatStore
+        .getState()
+        .conversations.find((item) => item.id === selectedConversationId);
+      if (!conversation) return;
+      if ((conversation.unreadCount ?? 0) <= 0) {
+        return;
+      }
+
+      const latestKey = `${selectedConversationId}:${message.id}`;
+      if (lastReadSyncKeyRef.current === latestKey) {
+        return;
+      }
+
+      lastReadSyncKeyRef.current = latestKey;
+      void markAsRead(selectedConversationId).catch(() => {
+        if (lastReadSyncKeyRef.current === latestKey) {
+          lastReadSyncKeyRef.current = null;
+        }
+      });
+    },
+    [markAsRead, selectedConversationId],
+  );
+
   useEffect(() => {
     if (!selectedConversationId || isValidatingRoom) return;
 
-    const orderedConversations = sortConversationsByPriority(
+    const orderedConversations = rankConversations(
       Array.isArray(conversations) ? conversations : [],
+      {
+        currentUserId: currentUserSummary?.id,
+        currentUsername: currentUserSummary?.username,
+        currentDisplayName: currentUserSummary?.displayName,
+        activeConversationId: selectedConversationId,
+      },
     );
     const currentIndex = orderedConversations.findIndex(
       (conversation) => conversation.id === selectedConversationId,
@@ -454,20 +700,13 @@ export const ChatPage: React.FC = () => {
       isCancelled = true;
       cancelScheduledTask();
     };
-  }, [conversations, isValidatingRoom, selectedConversationId]);
-
-  useEffect(() => {
-    if (!isMessageDebugEnabled()) return;
-    if (!selectedConversationId) return;
-    if (!isSelectedConversationHydrated) return;
-    if (conversationMessages.length > 0) return;
-
-    // eslint-disable-next-line no-debugger
-    debugger;
   }, [
+    conversations,
+    currentUserSummary?.displayName,
+    currentUserSummary?.id,
+    currentUserSummary?.username,
+    isValidatingRoom,
     selectedConversationId,
-    isSelectedConversationHydrated,
-    conversationMessages.length,
   ]);
 
   const handleReactMessage = useCallback(
@@ -523,8 +762,8 @@ export const ChatPage: React.FC = () => {
 
       try {
         const response = hasReacted
-          ? await messageApi.removeReaction(messageId, emoji)
-          : await messageApi.addReaction(messageId, emoji);
+          ? await removeReactionUseCase({ messageId, emoji })
+          : await addReactionUseCase({ messageId, emoji });
         const updatedMessage = unwrapApiSuccess(response);
 
         updateStoreMessage(selectedConversationId, messageId, {
@@ -541,7 +780,7 @@ export const ChatPage: React.FC = () => {
         toast.error(apiError.message || t("error:generic.requestFailed"));
       }
     },
-    [selectedConversationId, currentUserSummary, updateStoreMessage],
+    [currentUserSummary, selectedConversationId, t, updateStoreMessage],
   );
 
   const handleEditMessage = useCallback(
@@ -549,7 +788,7 @@ export const ChatPage: React.FC = () => {
       if (!selectedConversationId) return;
 
       try {
-        const response = await messageApi.editMessage(messageId, content);
+        const response = await editMessageUseCase({ messageId, content });
         const updatedMessage = unwrapApiSuccess(response);
 
         updateStoreMessage(selectedConversationId, messageId, {
@@ -571,7 +810,7 @@ export const ChatPage: React.FC = () => {
       if (!selectedConversationId) return;
 
       try {
-        await messageApi.deleteMessage(messageId);
+        await deleteMessageUseCase(messageId);
         removeStoreMessage(selectedConversationId, messageId);
         toast.success(t("chat:toast.messageDeleted"));
       } catch (error) {
@@ -596,19 +835,55 @@ export const ChatPage: React.FC = () => {
     [selectedConversationId, sendTyping, stopTyping],
   );
 
+  const closeInfoPanel = useCallback(() => {
+    setIsInfoPanelOpen(false);
+    setProfilePanelTarget(null);
+  }, []);
+
+  const openUserProfile = useCallback((target: ProfilePanelTarget) => {
+    setProfilePanelTarget(target);
+    setIsInfoPanelOpen(true);
+  }, []);
+
   // Handle toggle info panel
   const handleToggleInfoPanel = useCallback(() => {
-    setIsInfoPanelOpen((prev) => !prev);
-  }, []);
+    if (isInfoPanelOpen) {
+      closeInfoPanel();
+      return;
+    }
+
+    if (isSelectedDirectConversation && otherUser) {
+      openUserProfile({
+        userId: otherUser.id,
+        initialUser: {
+          id: otherUser.id,
+          username: otherUser.username,
+          displayName: otherUser.displayName,
+          avatar: otherUser.avatar,
+          status: otherUser.status,
+        },
+      });
+      return;
+    }
+
+    setProfilePanelTarget(null);
+    setIsInfoPanelOpen(true);
+  }, [
+    closeInfoPanel,
+    isInfoPanelOpen,
+    isSelectedDirectConversation,
+    openUserProfile,
+    otherUser,
+  ]);
 
   const handleDeleteConversation = useCallback(async () => {
     if (!selectedConversation) return;
     if (!window.confirm(t("profile:userProfile.deleteConversation"))) return;
 
     try {
-      await conversationApi.deleteConversation(selectedConversation.id);
+      await deleteConversationUseCase(selectedConversation.id);
       removeConversation(selectedConversation.id);
-      setIsInfoPanelOpen(false);
+      closeInfoPanel();
       selectConversation(null);
       navigate("/chat");
       toast.success(t("chat:toast.messageDeleted"));
@@ -617,6 +892,7 @@ export const ChatPage: React.FC = () => {
       toast.error(apiError.message || t("error:generic.requestFailed"));
     }
   }, [
+    closeInfoPanel,
     navigate,
     removeConversation,
     selectConversation,
@@ -626,10 +902,9 @@ export const ChatPage: React.FC = () => {
 
   // Handle back (mobile)
   const handleBack = useCallback(() => {
-    selectConversation(null);
     setIsMobileMenuOpen(true);
     navigate("/chat");
-  }, [selectConversation, navigate]);
+  }, [navigate]);
 
   // Handle new chat
   const handleStartChat = useCallback(
@@ -644,8 +919,7 @@ export const ChatPage: React.FC = () => {
       roomCreationLockRef.current = true;
       setIsCreatingRoom(true);
       try {
-        const response =
-          await conversationApi.createPrivateConversation(userId);
+        const response = await createPrivateConversationUseCase(userId);
         const payload = unwrapApiSuccess(response);
         const conversationId = payload.id;
         if (!conversationId) {
@@ -699,8 +973,22 @@ export const ChatPage: React.FC = () => {
         setIsCreatingRoom(false);
       }
     },
-    [fetchConversations, isCreatingRoom, navigate, selectConversation],
+    [fetchConversations, isCreatingRoom, navigate, selectConversation, t],
   );
+
+  const handleOpenCurrentUserProfile = useCallback(() => {
+    if (!currentUserSummary) return;
+    openUserProfile({
+      userId: currentUserSummary.id,
+      initialUser: {
+        id: currentUserSummary.id,
+        username: currentUserSummary.username,
+        displayName: currentUserSummary.displayName,
+        avatar: currentUserSummary.avatar,
+        status: currentUserSummary.status,
+      },
+    });
+  }, [currentUserSummary, openUserProfile]);
 
   const handleCreateGroup = useCallback(
     async (payload: { name: string; memberIds: string[] }) => {
@@ -714,7 +1002,7 @@ export const ChatPage: React.FC = () => {
       roomCreationLockRef.current = true;
       setIsCreatingRoom(true);
       try {
-        const response = await conversationApi.createGroupConversation({
+        const response = await createGroupConversationUseCase({
           name: payload.name,
           memberIds: payload.memberIds,
         });
@@ -735,7 +1023,9 @@ export const ChatPage: React.FC = () => {
         const conversationPayloadRecord = conversationPayload as unknown as {
           invitedMemberIds?: unknown[];
         };
-        const invited = Array.isArray(conversationPayloadRecord.invitedMemberIds)
+        const invited = Array.isArray(
+          conversationPayloadRecord.invitedMemberIds,
+        )
           ? conversationPayloadRecord.invitedMemberIds.length
           : 0;
         if (invited > 0) {
@@ -750,7 +1040,7 @@ export const ChatPage: React.FC = () => {
         setIsCreatingRoom(false);
       }
     },
-    [fetchConversations, isCreatingRoom, navigate, selectConversation],
+    [fetchConversations, isCreatingRoom, navigate, selectConversation, t],
   );
 
   // Handle new chat modal
@@ -758,16 +1048,57 @@ export const ChatPage: React.FC = () => {
     setIsNewChatModalOpen(true);
   }, []);
 
-  const showSidebarOnMobile = !selectedConversationId || isMobileMenuOpen;
+  useEffect(() => {
+    if (consumeOpenNewChatIntent()) {
+      setIsNewChatModalOpen(true);
+    }
 
-  const isSelectedDirectConversation =
-    isDirectConversation(selectedConversation);
+    const openFromCommandPalette = () => {
+      setIsNewChatModalOpen(true);
+    };
 
-  // Get other user for direct chat
-  const otherUser =
-    selectedConversation && isSelectedDirectConversation && currentUserSummary
-      ? getOtherParticipant(selectedConversation, currentUserSummary.id)
-      : null;
+    window.addEventListener(CHAT_OPEN_NEW_CHAT_EVENT, openFromCommandPalette);
+    return () => {
+      window.removeEventListener(
+        CHAT_OPEN_NEW_CHAT_EVENT,
+        openFromCommandPalette,
+      );
+    };
+  }, []);
+
+  const showSidebarOnMobile = !routeConversationId || isMobileMenuOpen;
+  const shouldRenderInfoContent =
+    isInfoPanelOpen || Boolean(profilePanelTarget);
+  const showConversationSkeleton =
+    (!hasFetchedConversationsOnce && conversations.length === 0) ||
+    (isLoadingConversations && conversations.length === 0);
+
+  useEffect(() => {
+    if (!selectedConversationId) return;
+
+    logMessageDebug("ChatPage", "conversation_readiness_changed", {
+      conversationId: selectedConversationId,
+      isValidatingRoom,
+      isHydrated: isConversationHistoryReady,
+      isHistoryReady: isConversationHistoryReady,
+      isCurrentRouteValidated,
+      isReady: isConversationReady,
+      isSendReady: isConversationReady,
+      websocketReady,
+      messageCount: conversationMessages.length,
+      connectionState,
+    });
+  }, [
+    connectionState,
+    conversationMessages.length,
+    isCurrentRouteValidated,
+    isConversationReady,
+    isConversationHistoryReady,
+    isValidatingRoom,
+    lastValidatedConversationId,
+    selectedConversationId,
+    websocketReady,
+  ]);
 
   useEffect(() => {
     if (!selectedConversationId || !isSelectedDirectConversation || otherUser) {
@@ -780,8 +1111,7 @@ export const ChatPage: React.FC = () => {
     directInfoHydratedRef.current.add(selectedConversationId);
 
     let isCancelled = false;
-    void conversationApi
-      .getConversationById(selectedConversationId)
+    void getConversationByIdUseCase(selectedConversationId)
       .then((response) => {
         if (isCancelled) return;
         const conversation = unwrapApiSuccess(response);
@@ -810,7 +1140,10 @@ export const ChatPage: React.FC = () => {
       if (!userId) return;
 
       void handleStartChat(userId).then(() => {
-        setIsInfoPanelOpen(true);
+        openUserProfile({
+          userId,
+          initialUser: { id: userId },
+        });
       });
     };
 
@@ -824,29 +1157,71 @@ export const ChatPage: React.FC = () => {
         handler as EventListener,
       );
     };
-  }, [handleStartChat]);
+  }, [handleStartChat, openUserProfile]);
+
+  const handleRetryBootstrap = useCallback(() => {
+    void refreshUser().then(() => {
+      if (useAuthStore.getState().user) {
+        void fetchConversations();
+      }
+    });
+  }, [fetchConversations, refreshUser]);
+
+  const handleRetryConversationValidation = useCallback(() => {
+    if (!routeConversationId) {
+      return;
+    }
+
+    setConversationValidationError(null);
+    setLastValidatedConversationId(null);
+    setValidationRetryToken((current) => current + 1);
+  }, [routeConversationId]);
 
   if (!currentUserSummary) {
-    return null;
+    if (!isAuthInitialized || isAuthLoading) {
+      return (
+        <div className="flex h-[100dvh] items-center justify-center bg-[hsl(var(--color-chat-canvas))] px-6">
+          <div className="w-full max-w-xl space-y-5 rounded-2xl border border-border/80 bg-surface/90 p-6 shadow-elev1">
+            <div className="flex items-center gap-3">
+              <Spinner size="md" />
+              <p className="text-sm font-medium text-text-secondary">
+                {t("common:loading.checkingAuth", {
+                  defaultValue: "Checking your session...",
+                })}
+              </p>
+            </div>
+            <div className="space-y-3">
+              <div className="h-3 w-1/2 animate-pulse rounded-full bg-surface-overlay" />
+              <div className="h-3 w-full animate-pulse rounded-full bg-surface-overlay" />
+              <div className="h-3 w-4/5 animate-pulse rounded-full bg-surface-overlay" />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex h-[100dvh] items-center justify-center bg-[hsl(var(--color-chat-canvas))] px-6">
+        <ErrorState
+          title={t("error:auth.profileMissing", {
+            defaultValue: "Unable to load profile",
+          })}
+          message={t("error:auth.profileRetryHint", {
+            defaultValue:
+              "We could not load your session profile. Please retry.",
+          })}
+          onRetry={handleRetryBootstrap}
+        />
+      </div>
+    );
   }
 
   return (
-    <div className="relative flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-surface">
-      {/* Connection status indicator */}
-      {!isConnected && (
-        <div
-          className="absolute inset-x-0 top-0 z-50 bg-warning/95 px-4 py-1.5 text-center text-xs font-medium text-text-inverse backdrop-blur sm:text-sm animate-slide-up-fade"
-          role="alert"
-          aria-live="assertive"
-        >
-          {t("chat:toast.connectionReconnecting")}
-        </div>
-      )}
-
+    <div className="relative flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-[hsl(var(--color-chat-canvas))]">
       {/* Sidebar */}
       <div
         className={clsx(
-          "absolute inset-y-0 left-0 z-30 w-full max-w-full bg-surface transition-transform duration-300 sm:max-w-[min(24rem,92vw)] lg:relative lg:z-0 lg:w-auto lg:max-w-none lg:flex-shrink-0",
+          "absolute inset-y-0 left-0 z-30 w-full max-w-full transition-transform duration-300 sm:max-w-[min(24rem,92vw)] lg:relative lg:z-0 lg:w-auto lg:max-w-none lg:flex-shrink-0",
           showSidebarOnMobile
             ? "translate-x-0"
             : "-translate-x-full lg:translate-x-0",
@@ -856,13 +1231,21 @@ export const ChatPage: React.FC = () => {
         <Sidebar
           conversations={conversations}
           currentUser={currentUserSummary}
-          selectedId={selectedConversationId}
+          selectedId={routeConversationId}
+          isLoadingConversations={isLoadingConversations}
+          isLoadingMoreConversations={isLoadingMoreConversations}
+          hasMoreConversations={hasMoreConversations}
+          showConversationSkeleton={showConversationSkeleton}
+          conversationsError={conversationsError}
           onSelectConversation={handleSelectConversation}
+          onRetryConversations={fetchConversations}
+          onLoadMoreConversations={handleLoadMoreConversations}
           onNewChat={handleOpenNewChat}
+          onCurrentUserClick={handleOpenCurrentUserProfile}
         />
       </div>
 
-      {showSidebarOnMobile && selectedConversationId && (
+      {showSidebarOnMobile && routeConversationId && (
         <button
           type="button"
           className="fixed inset-0 z-20 bg-text-primary/40 lg:hidden"
@@ -892,7 +1275,7 @@ export const ChatPage: React.FC = () => {
             onBack={handleBack}
             onTyping={handleTyping}
             hasMoreMessages={currentHasMore}
-            isLoadingMessages={currentIsLoading}
+            isLoadingMessages={currentIsLoading || !isConversationHistoryReady}
             onLoadOlderMessages={handleLoadOlderMessages}
             onImageClick={setImagePreview}
             onFilePreview={(attachment: Attachment) => {
@@ -920,43 +1303,85 @@ export const ChatPage: React.FC = () => {
             }}
             messageError={currentMessageError}
             onRetryMessages={handleRetryMessages}
+            onReachedLatestMessage={handleReachedLatestMessage}
+            connectionState={connectionState}
+            isConversationReady={isConversationReady}
           />
+        ) : routeConversationId &&
+          conversationValidationError?.conversationId ===
+            routeConversationId ? (
+          <div className="flex h-full items-center justify-center px-6">
+            <ErrorState
+              title={t("error:chat.conversationOpenFailed", {
+                defaultValue: "Unable to open conversation",
+              })}
+              message={conversationValidationError.message}
+              onRetry={handleRetryConversationValidation}
+            />
+          </div>
         ) : (
           <NoChatSelected onNewChat={handleOpenNewChat} />
         )}
       </div>
 
       {/* Info panel */}
-      {selectedConversation && (
+      {(selectedConversation || profilePanelTarget) && (
         <div
           className={clsx(
             "fixed inset-y-0 right-0 z-40 w-full max-w-full border-l border-border bg-surface transition-transform duration-300 sm:max-w-[min(26rem,94vw)] lg:relative lg:z-0 lg:w-[clamp(20rem,28vw,24rem)] lg:max-w-none",
             isInfoPanelOpen ? "translate-x-0" : "translate-x-full lg:hidden",
           )}
+          style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}
         >
-          {isSelectedDirectConversation ? (
-            otherUser ? (
+          {shouldRenderInfoContent ? (
+            profilePanelTarget ? (
               <UserProfile
-                user={otherUser}
-                onClose={handleToggleInfoPanel}
+                userId={profilePanelTarget.userId}
+                currentUserId={currentUserSummary.id}
+                initialUser={profilePanelTarget.initialUser ?? null}
+                onClose={closeInfoPanel}
+                onDeleteConversation={
+                  selectedConversation &&
+                  isSelectedDirectConversation &&
+                  otherUser?.id === profilePanelTarget.userId
+                    ? handleDeleteConversation
+                    : undefined
+                }
+                onStartConversation={handleStartChat}
+              />
+            ) : isSelectedDirectConversation ? (
+              otherUser ? (
+                <UserProfile
+                  userId={otherUser.id}
+                  currentUserId={currentUserSummary.id}
+                  initialUser={{
+                    id: otherUser.id,
+                    username: otherUser.username,
+                    displayName: otherUser.displayName,
+                    avatar: otherUser.avatar,
+                    status: otherUser.status,
+                  }}
+                  onClose={closeInfoPanel}
+                  onDeleteConversation={handleDeleteConversation}
+                  onStartConversation={handleStartChat}
+                />
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+                  <Spinner size="md" />
+                  <p className="text-sm text-text-muted">
+                    {t("common:loading.default")}
+                  </p>
+                </div>
+              )
+            ) : selectedConversation ? (
+              <GroupInfo
+                conversation={selectedConversation}
+                currentUserId={currentUserSummary.id}
+                onClose={closeInfoPanel}
                 onDeleteConversation={handleDeleteConversation}
               />
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-                <Spinner size="md" />
-                <p className="text-sm text-text-muted">
-                  {t("common:loading.default")}
-                </p>
-              </div>
-            )
-          ) : (
-            <GroupInfo
-              conversation={selectedConversation}
-              currentUserId={currentUserSummary.id}
-              onClose={handleToggleInfoPanel}
-              onDeleteConversation={handleDeleteConversation}
-            />
-          )}
+            ) : null
+          ) : null}
         </div>
       )}
 
@@ -965,9 +1390,9 @@ export const ChatPage: React.FC = () => {
         <button
           type="button"
           className="fixed inset-0 z-30 bg-text-primary/50 lg:hidden"
-          onClick={handleToggleInfoPanel}
+          onClick={closeInfoPanel}
           onKeyDown={(e) => {
-            if (e.key === "Escape") handleToggleInfoPanel();
+            if (e.key === "Escape") closeInfoPanel();
           }}
           aria-label={t("common:actions.close")}
         />

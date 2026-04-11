@@ -4,8 +4,11 @@
     "shortName": "HC"
   },
   "actions": {
+    "title": "Quick actions",
     "cancel": "Cancel",
     "confirm": "Confirm",
+    "approve": "Approve",
+    "reject": "Reject",
     "retry": "Retry",
     "close": "Close",
     "save": "Save",
@@ -29,13 +32,17 @@
     "default": "Loading...",
     "page": "Loading page...",
     "checkingAuth": "Checking authentication...",
-    "processing": "Processing..."
+    "processing": "Processing...",
+    "syncing": "Syncing..."
   },
   "labels": {
     "user": "User",
     "conversation": "Conversation",
     "channel": "Channel",
-    "group": "Group"
+    "group": "Group",
+    "navigation": "Navigate",
+    "shortcut": "Shortcut",
+    "people": "People"
   },
   "statusLabel": "Status",
   "status": {
@@ -44,9 +51,28 @@
     "away": "Away",
     "dnd": "Do not disturb",
     "busy": "Busy",
-    "invisible": "Invisible"
+    "invisible": "Invisible",
+    "idle": "Idle",
+    "loading": "Loading...",
+    "empty": "No matching results",
+    "unknown": "Unknown",
+    "lastSeen": "Last seen {{time}}",
+    "lastSynced": "Last synced: {{time}}",
+    "lastUpdated": "Last updated locally: {{time}}"
+  },
+  "error": {
+    "syncFailed": "Could not sync settings."
   },
   "toast": {
     "featureInDevelopment": "This feature is in development"
+  },
+  "commandPalette": {
+    "openChatWorkspace": "Open your chat workspace",
+    "findFriends": "Find friends and contacts",
+    "newConversation": "Start a new direct or group conversation",
+    "openDirectConversation": "Open existing direct conversation",
+    "searchInFriends": "Search this user in Friends",
+    "searchPlaceholder": "Search chats, people, or actions",
+    "searchAria": "Search command palette"
   }
 }

@@ -70,7 +70,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="mb-2 block text-sm font-medium text-text-secondary"
+            className="mb-2 block text-body-sm font-medium text-text-secondary"
           >
             {label}
           </label>
@@ -89,8 +89,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             type={inputType}
             disabled={disabled}
             className={clsx(
-              "w-full rounded-md border bg-surface px-4 py-2",
-              "text-text-primary placeholder:text-text-muted",
+              "w-full rounded-lg border bg-surface px-4 py-2.5",
+              "text-body-sm text-text-primary placeholder:text-text-muted",
               "transition-all duration-200",
               "focus:outline-none focus:ring-2 focus:ring-offset-0",
               !error &&
@@ -101,7 +101,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               isValid &&
                 !error &&
                 "border-success pr-10 focus:border-success focus:ring-success/20",
-              disabled && "cursor-not-allowed bg-surface-overlay opacity-70",
+              disabled &&
+                "cursor-not-allowed border-disabled-border bg-disabled-bg text-text-disabled opacity-70",
               leftIcon && "pl-11",
               (rightIcon || isPasswordType) && "pr-11",
               className,
@@ -140,14 +141,14 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         </div>
 
         {displayError && (
-          <p className="mt-2 flex items-center gap-1 text-sm text-danger">
+          <p className="mt-2 flex items-center gap-1 text-body-sm text-danger">
             <ExclamationCircleIcon className="h-4 w-4 shrink-0" />
             {displayError}
           </p>
         )}
 
         {hint && !error && (
-          <p className="mt-2 text-sm text-text-muted">{hint}</p>
+          <p className="mt-2 text-body-sm text-text-muted">{hint}</p>
         )}
       </div>
     );
@@ -200,7 +201,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         {label && (
           <label
             htmlFor={textareaId}
-            className="mb-2 block text-sm font-medium text-text-secondary"
+            className="mb-2 block text-body-sm font-medium text-text-secondary"
           >
             {label}
           </label>
@@ -211,27 +212,28 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           id={textareaId}
           disabled={disabled}
           className={clsx(
-            "w-full resize-none rounded-md border bg-surface px-4 py-2",
-            "text-text-primary placeholder:text-text-muted",
+            "w-full resize-none rounded-lg border bg-surface px-4 py-2.5",
+            "text-body-sm text-text-primary placeholder:text-text-muted",
             "transition-all duration-200",
             "focus:outline-none focus:ring-2 focus:ring-offset-0",
             !error && "border-border focus:border-primary focus:ring-focus/20",
             error && "border-danger focus:border-danger focus:ring-danger/20",
-            disabled && "cursor-not-allowed bg-surface-overlay opacity-70",
+            disabled &&
+              "cursor-not-allowed border-disabled-border bg-disabled-bg text-text-disabled opacity-70",
             className,
           )}
           {...props}
         />
 
         {displayError && (
-          <p className="mt-2 flex items-center gap-1 text-sm text-danger">
+          <p className="mt-2 flex items-center gap-1 text-body-sm text-danger">
             <ExclamationCircleIcon className="h-4 w-4 shrink-0" />
             {displayError}
           </p>
         )}
 
         {hint && !error && (
-          <p className="mt-2 text-sm text-text-muted">{hint}</p>
+          <p className="mt-2 text-body-sm text-text-muted">{hint}</p>
         )}
       </div>
     );

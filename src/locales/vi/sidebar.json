@@ -12,6 +12,7 @@
   },
   "tabs": {
     "all": "Tất cả",
+    "direct": "Cá nhân",
     "unread": "Chưa đọc",
     "groups": "Nhóm",
     "channels": "Kênh"
@@ -23,6 +24,10 @@
       "groups": "Nhóm",
       "direct": "Tin nhắn trực tiếp"
     },
+    "type": {
+      "direct": "Cá nhân",
+      "group": "Nhóm"
+    },
     "mentioned": "Được nhắc đến",
     "noMessagesYet": "Chưa có tin nhắn",
     "emptyBySearch": "Không có phòng phù hợp với tìm kiếm.",
@@ -31,6 +36,9 @@
   },
   "sidebar": {
     "aria": "Thanh bên"
+  },
+  "actions": {
+    "loadMore": "Tải thêm"
   },
   "logout": {
     "button": "Đăng xuất",

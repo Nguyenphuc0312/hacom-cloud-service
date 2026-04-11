@@ -1,8 +1,10 @@
 import React from "react";
 import type { Message } from "../types";
+import { getMessageStableKey } from "../utils/messageTimeline";
+import { resolvePinnedToBottom } from "../utils/scrollController";
+import { logScrollTrace } from "../utils/scrollTrace";
 
 const LOAD_MORE_TRIGGER_PX = 120;
-const NEAR_BOTTOM_PX = 180;
 
 interface UseAutoScrollToBottomParams {
   conversationId: string;
@@ -11,17 +13,51 @@ interface UseAutoScrollToBottomParams {
   hasMore: boolean;
   isLoadingMore: boolean;
   onLoadMore?: () => void | Promise<void>;
+  onBeforeLoadMore?: () => void;
+  onAfterPrepend?: () => void;
   outerRef: React.RefObject<HTMLDivElement | null>;
-  scrollToBottom: (behavior?: ScrollBehavior) => void;
+  requestScrollToBottom: (reason: string) => void;
 }
 
 interface UseAutoScrollToBottomResult {
   pendingNewMessages: number;
-  showNewMessagesPill: boolean;
-  showJumpToBottom: boolean;
+  isPinnedToBottom: boolean;
   handleScroll: (scrollOffset: number) => void;
-  jumpToLatest: (behavior?: ScrollBehavior) => void;
+  jumpToLatest: () => void;
+  detachAutoFollow: (reason?: string) => void;
+  syncScrollStateFromDom: (reason?: string) => void;
+  pendingRestoreScrollTop: number | null;
+  pendingRestoreVersion: number;
 }
+
+interface ConversationScrollSession {
+  isPinnedToBottom: boolean;
+  scrollTop: number;
+}
+
+const conversationScrollSessions = new Map<string, ConversationScrollSession>();
+
+const getTailAppendMessages = (
+  previousMessages: Message[],
+  nextMessages: Message[],
+): Message[] | null => {
+  if (previousMessages.length === 0) {
+    return nextMessages;
+  }
+
+  const previousLastKey = getMessageStableKey(
+    previousMessages[previousMessages.length - 1],
+  );
+  const previousLastIndex = nextMessages.findIndex(
+    (message) => getMessageStableKey(message) === previousLastKey,
+  );
+
+  if (previousLastIndex < 0) {
+    return null;
+  }
+
+  return nextMessages.slice(previousLastIndex + 1);
+};
 
 export const useAutoScrollToBottom = ({
   conversationId,
@@ -30,36 +66,95 @@ export const useAutoScrollToBottom = ({
   hasMore,
   isLoadingMore,
   onLoadMore,
+  onBeforeLoadMore,
+  onAfterPrepend,
   outerRef,
-  scrollToBottom,
+  requestScrollToBottom,
 }: UseAutoScrollToBottomParams): UseAutoScrollToBottomResult => {
   const [pendingNewMessages, setPendingNewMessages] = React.useState(0);
-  const [showNewMessagesPill, setShowNewMessagesPill] = React.useState(false);
-  const [showJumpToBottom, setShowJumpToBottom] = React.useState(false);
+  const [isPinnedToBottom, setIsPinnedToBottom] = React.useState(true);
+  const [pendingRestoreScrollTop, setPendingRestoreScrollTop] =
+    React.useState<number | null>(null);
+  const [pendingRestoreVersion, setPendingRestoreVersion] = React.useState(0);
 
-  const nearBottomRef = React.useRef(true);
+  const isPinnedRef = React.useRef(true);
   const loadingOlderRef = React.useRef(false);
-  const pendingNewMessagesRef = React.useRef(0);
-  const prevMessageCountRef = React.useRef(0);
-  const prevFirstMessageIdRef = React.useRef<string | undefined>(undefined);
-  const prevLastMessageIdRef = React.useRef<string | undefined>(undefined);
   const prevConversationIdRef = React.useRef<string | null>(null);
-  const scrollSnapshotRef = React.useRef({ scrollTop: 0, scrollHeight: 0 });
+  const prevMessagesRef = React.useRef<Message[]>(messages);
+  const prevFirstMessageIdRef = React.useRef<string | undefined>(messages[0]?.id);
 
-  const resetPill = React.useCallback(() => {
-    pendingNewMessagesRef.current = 0;
-    setPendingNewMessages(0);
-    setShowNewMessagesPill(false);
-    setShowJumpToBottom(false);
-  }, []);
-
-  const jumpToLatest = React.useCallback(
-    (behavior: ScrollBehavior = "smooth") => {
-      resetPill();
-      scrollToBottom(behavior);
+  const persistSession = React.useCallback(
+    (
+      nextPinnedToBottom: boolean = isPinnedRef.current,
+      nextScrollTop?: number,
+    ) => {
+      const outer = outerRef.current;
+      conversationScrollSessions.set(conversationId, {
+        isPinnedToBottom: nextPinnedToBottom,
+        scrollTop: Math.max(0, nextScrollTop ?? outer?.scrollTop ?? 0),
+      });
     },
-    [resetPill, scrollToBottom],
+    [conversationId, outerRef],
   );
+
+  const updatePinnedState = React.useCallback(
+    (
+      nextPinnedToBottom: boolean,
+      reason: string,
+      nextScrollTop?: number,
+      nextPendingNewMessages?: number,
+    ) => {
+      isPinnedRef.current = nextPinnedToBottom;
+      setIsPinnedToBottom((previous) =>
+        previous === nextPinnedToBottom ? previous : nextPinnedToBottom,
+      );
+
+      if (typeof nextPendingNewMessages === "number") {
+        setPendingNewMessages(nextPendingNewMessages);
+      } else if (nextPinnedToBottom) {
+        setPendingNewMessages(0);
+      }
+
+      persistSession(nextPinnedToBottom, nextScrollTop);
+      logScrollTrace("follow_state_changed", {
+        conversationId,
+        reason,
+        isPinnedToBottom: nextPinnedToBottom,
+        scrollTop: nextScrollTop ?? outerRef.current?.scrollTop ?? 0,
+      });
+    },
+    [conversationId, outerRef, persistSession],
+  );
+
+  const syncScrollStateFromDom = React.useCallback(
+    (reason: string = "sync-from-dom") => {
+      const outer = outerRef.current;
+      if (!outer) return;
+
+      const nextScrollTop = outer.scrollTop;
+      const nextPinnedToBottom = resolvePinnedToBottom(outer).isPinnedToBottom;
+      updatePinnedState(nextPinnedToBottom, reason, nextScrollTop);
+    },
+    [outerRef, updatePinnedState],
+  );
+
+  const detachAutoFollow = React.useCallback(
+    (reason: string = "detach") => {
+      const outer = outerRef.current;
+      updatePinnedState(
+        false,
+        reason,
+        outer?.scrollTop ?? 0,
+        pendingNewMessages,
+      );
+    },
+    [outerRef, pendingNewMessages, updatePinnedState],
+  );
+
+  const jumpToLatest = React.useCallback(() => {
+    updatePinnedState(true, "jump-to-latest", outerRef.current?.scrollTop ?? 0, 0);
+    requestScrollToBottom("jump-to-latest");
+  }, [outerRef, requestScrollToBottom, updatePinnedState]);
 
   React.useEffect(() => {
     const conversationChanged =
@@ -67,67 +162,91 @@ export const useAutoScrollToBottom = ({
     if (!conversationChanged) return;
 
     prevConversationIdRef.current = conversationId;
-    prevMessageCountRef.current = messages.length;
+    prevMessagesRef.current = messages;
     prevFirstMessageIdRef.current = messages[0]?.id;
-    prevLastMessageIdRef.current = messages[messages.length - 1]?.id;
-    nearBottomRef.current = true;
     loadingOlderRef.current = false;
-    resetPill();
+    setPendingNewMessages(0);
 
-    // Scroll to bottom immediately, then retry after rows have measured
-    // to account for height estimation inaccuracies.
-    scrollToBottom("auto");
-    requestAnimationFrame(() => {
-      scrollToBottom("auto");
-    });
-    const retryTimer = setTimeout(() => {
-      scrollToBottom("auto");
-    }, 80);
+    const savedSession = conversationScrollSessions.get(conversationId);
+    if (savedSession && !savedSession.isPinnedToBottom) {
+      isPinnedRef.current = false;
+      setIsPinnedToBottom(false);
+      setPendingRestoreScrollTop(savedSession.scrollTop);
+      setPendingRestoreVersion((value) => value + 1);
+      logScrollTrace("conversation_restore_requested", {
+        conversationId,
+        scrollTop: savedSession.scrollTop,
+      });
+      return;
+    }
 
-    return () => {
-      clearTimeout(retryTimer);
-    };
-  }, [conversationId, messages, resetPill, scrollToBottom]);
+    isPinnedRef.current = true;
+    setIsPinnedToBottom(true);
+    setPendingRestoreScrollTop(null);
+    requestScrollToBottom("conversation-change");
+  }, [conversationId, messages, requestScrollToBottom]);
 
   React.useEffect(() => {
-    const outer = outerRef.current;
+    const previousMessages = prevMessagesRef.current;
     const firstMessageId = messages[0]?.id;
-    const lastMessage = messages[messages.length - 1];
-    const lastMessageId = lastMessage?.id;
-    const messageCountDiff = messages.length - prevMessageCountRef.current;
-    const hasTailChanged =
-      !!lastMessageId && lastMessageId !== prevLastMessageIdRef.current;
-    const incomingCount =
-      messageCountDiff > 0 ? messageCountDiff : hasTailChanged ? 1 : 0;
-    const isOwnLatestMessage =
-      !!lastMessage && lastMessage.senderId === currentUserId;
 
     if (
       loadingOlderRef.current &&
-      outer &&
       firstMessageId &&
       prevFirstMessageIdRef.current &&
       firstMessageId !== prevFirstMessageIdRef.current
     ) {
-      const scrollDelta =
-        outer.scrollHeight - scrollSnapshotRef.current.scrollHeight;
-      outer.scrollTop = scrollSnapshotRef.current.scrollTop + scrollDelta;
       loadingOlderRef.current = false;
-    } else if (incomingCount > 0) {
-      if (nearBottomRef.current || isOwnLatestMessage) {
-        resetPill();
-        scrollToBottom(incomingCount === 1 ? "smooth" : "auto");
+      onAfterPrepend?.();
+      prevMessagesRef.current = messages;
+      prevFirstMessageIdRef.current = firstMessageId;
+      return;
+    }
+
+    const appendedMessages = getTailAppendMessages(previousMessages, messages);
+    if (appendedMessages && appendedMessages.length > 0) {
+      const shouldForceFollowOwnMessage =
+        previousMessages.length > 0 &&
+        appendedMessages.some((message) => message.senderId === currentUserId);
+
+      if (isPinnedRef.current || shouldForceFollowOwnMessage) {
+        if (shouldForceFollowOwnMessage && !isPinnedRef.current) {
+          updatePinnedState(
+            true,
+            "self-message",
+            outerRef.current?.scrollTop ?? 0,
+            0,
+          );
+        }
+        setPendingNewMessages(0);
+        requestScrollToBottom(
+          shouldForceFollowOwnMessage ? "self-message" : "incoming-message",
+        );
+        logScrollTrace("incoming_followed", {
+          conversationId,
+          appendedCount: appendedMessages.length,
+          forcedByOwnMessage: shouldForceFollowOwnMessage,
+        });
       } else {
-        pendingNewMessagesRef.current += incomingCount;
-        setPendingNewMessages(pendingNewMessagesRef.current);
-        setShowNewMessagesPill(true);
+        setPendingNewMessages((previous) => previous + appendedMessages.length);
+        logScrollTrace("incoming_buffered_for_reader", {
+          conversationId,
+          appendedCount: appendedMessages.length,
+        });
       }
     }
 
-    prevMessageCountRef.current = messages.length;
+    prevMessagesRef.current = messages;
     prevFirstMessageIdRef.current = firstMessageId;
-    prevLastMessageIdRef.current = lastMessageId;
-  }, [messages, currentUserId, outerRef, resetPill, scrollToBottom]);
+  }, [
+    conversationId,
+    currentUserId,
+    messages,
+    onAfterPrepend,
+    outerRef,
+    requestScrollToBottom,
+    updatePinnedState,
+  ]);
 
   React.useEffect(() => {
     if (!isLoadingMore) {
@@ -136,25 +255,25 @@ export const useAutoScrollToBottom = ({
   }, [isLoadingMore]);
 
   React.useEffect(() => {
-    if (messages.length === 0) {
-      resetPill();
-    }
-  }, [messages.length, resetPill]);
+    if (messages.length !== 0) return;
+
+    isPinnedRef.current = true;
+    setPendingNewMessages(0);
+    setIsPinnedToBottom(true);
+  }, [messages.length]);
 
   const handleScroll = React.useCallback(
     (scrollOffset: number) => {
       const outer = outerRef.current;
       if (!outer) return;
 
-      const isNearBottom =
-        outer.scrollHeight - scrollOffset - outer.clientHeight < NEAR_BOTTOM_PX;
-      nearBottomRef.current = isNearBottom;
+      const { isPinnedToBottom: nextPinnedToBottom } =
+        resolvePinnedToBottom(outer);
 
-      if (isNearBottom) {
-        resetPill();
+      if (nextPinnedToBottom !== isPinnedRef.current) {
+        updatePinnedState(nextPinnedToBottom, "user-scroll", scrollOffset);
       } else {
-        setShowJumpToBottom(true);
-        setShowNewMessagesPill(pendingNewMessagesRef.current > 0);
+        persistSession(nextPinnedToBottom, scrollOffset);
       }
 
       if (
@@ -164,26 +283,46 @@ export const useAutoScrollToBottom = ({
         !loadingOlderRef.current &&
         scrollOffset < LOAD_MORE_TRIGGER_PX
       ) {
+        onBeforeLoadMore?.();
         loadingOlderRef.current = true;
-        scrollSnapshotRef.current = {
-          scrollTop: scrollOffset,
-          scrollHeight: outer.scrollHeight,
-        };
+        logScrollTrace("load_more_requested", {
+          conversationId,
+          scrollOffset,
+        });
 
         Promise.resolve(onLoadMore()).catch(() => {
           loadingOlderRef.current = false;
         });
       }
     },
-    [outerRef, resetPill, onLoadMore, hasMore, isLoadingMore],
+    [
+      conversationId,
+      hasMore,
+      isLoadingMore,
+      onBeforeLoadMore,
+      onLoadMore,
+      outerRef,
+      persistSession,
+      updatePinnedState,
+    ],
+  );
+
+  React.useEffect(
+    () => () => {
+      persistSession();
+    },
+    [persistSession],
   );
 
   return {
     pendingNewMessages,
-    showNewMessagesPill,
-    showJumpToBottom,
+    isPinnedToBottom,
     handleScroll,
     jumpToLatest,
+    detachAutoFollow,
+    syncScrollStateFromDom,
+    pendingRestoreScrollTop,
+    pendingRestoreVersion,
   };
 };
 

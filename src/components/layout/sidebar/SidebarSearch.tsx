@@ -2,6 +2,7 @@
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { emitCommandPaletteOpen } from "../../../lib/commandPalette";
 
 interface SidebarSearchProps {
   value: string;
@@ -17,11 +18,16 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
   onSearchUsers,
 }) => {
   const { t } = useTranslation();
+  const openShortcut =
+    typeof navigator !== "undefined" &&
+    /Mac|iPhone|iPad/.test(navigator.platform)
+      ? "Cmd K"
+      : "Ctrl K";
 
   if (collapsed) {
     return (
-      <div className="border-b border-border px-3 py-2">
-        <div className="flex h-9 items-center justify-center rounded-lg bg-surface-overlay text-text-muted">
+      <div className="px-3 pb-2">
+        <div className="flex h-10 items-center justify-center rounded-xl border border-border/70 bg-surface-overlay text-text-muted">
           <MagnifyingGlassIcon className="h-5 w-5" aria-hidden="true" />
         </div>
       </div>
@@ -29,10 +35,10 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
   }
 
   return (
-    <div className="border-b border-border px-3 py-2">
+    <div className="px-3 pb-2">
       <label className="relative block">
         <MagnifyingGlassIcon
-          className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-text-muted"
+          className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-muted"
           aria-hidden="true"
         />
 
@@ -48,21 +54,33 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
           }}
           placeholder={t("sidebar:search.placeholder")}
           className={clsx(
-            "h-10 w-full rounded-lg border border-transparent bg-surface-overlay pl-10 pr-9 text-sm",
+            "h-11 w-full rounded-xl border border-border bg-surface-overlay pl-11 text-body-sm",
+            value.trim().length > 0 ? "pr-10" : "pr-[88px]",
             "text-text-primary placeholder:text-text-muted",
-            "transition-colors focus:border-primary focus:bg-surface focus:outline-none",
+            "transition-micro focus:border-border-focus focus:bg-surface focus:outline-none focus:ring-2 focus:ring-focus/20",
           )}
           aria-label={t("sidebar:search.aria")}
         />
 
-        {value.trim().length > 0 && (
+        {value.trim().length > 0 ? (
           <button
             type="button"
             onClick={() => onChange("")}
-            className="absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface hover:text-text-primary"
+            className="absolute right-3 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-text-muted transition-micro hover:bg-surface-hover hover:text-text-primary"
             aria-label={t("sidebar:search.clearAria")}
           >
             <XMarkIcon className="h-4 w-4" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={emitCommandPaletteOpen}
+            className="absolute right-3 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-caption text-text-muted transition-micro hover:bg-surface-hover hover:text-text-secondary"
+            aria-label={t("common:actions.search", {
+              defaultValue: "Open command palette",
+            })}
+          >
+            <span className="font-medium">{openShortcut}</span>
           </button>
         )}
       </label>
@@ -71,7 +89,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
         <button
           type="button"
           onClick={() => onSearchUsers(value.trim())}
-          className="mt-2 w-full rounded-lg border border-border px-3 py-2 text-left text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
+          className="mt-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-left text-caption font-medium text-text-secondary transition-micro hover:bg-surface-hover hover:text-text-primary"
         >
           {t("friends:tabs.search", { defaultValue: "Search users" })}:{" "}
           <span className="font-semibold">{value.trim()}</span>

@@ -13,12 +13,14 @@ import {
 interface AttachmentMenuProps {
   onSelect: (type: string) => void;
   onClose: () => void;
+  canShareContact?: boolean;
   className?: string;
 }
 
 export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
   onSelect,
   onClose,
+  canShareContact = false,
   className,
 }) => {
   const { t } = useTranslation();
@@ -30,36 +32,42 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
       label: t("chat:attachment.types.photo"),
       icon: PhotoIcon,
       color: "bg-primary/15 text-primary",
+      enabled: true,
     },
     {
       id: "document",
       label: t("chat:attachment.types.document"),
       icon: DocumentIcon,
       color: "bg-secondary/15 text-secondary",
+      enabled: true,
     },
     {
       id: "location",
       label: t("chat:attachment.types.location"),
       icon: MapPinIcon,
       color: "bg-success/15 text-success",
+      enabled: false,
     },
     {
       id: "contact",
       label: t("chat:attachment.types.contact"),
       icon: UserIcon,
       color: "bg-warning/15 text-warning",
+      enabled: canShareContact,
     },
     {
       id: "audio",
       label: t("chat:attachment.types.audio"),
       icon: MusicalNoteIcon,
       color: "bg-accent/15 text-accent",
+      enabled: false,
     },
     {
       id: "poll",
       label: t("chat:attachment.types.poll"),
       icon: ChartBarIcon,
       color: "bg-danger/15 text-danger",
+      enabled: false,
     },
   ];
 
@@ -131,14 +139,36 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
           role="menuitem"
           tabIndex={0}
           onClick={() => onSelect(type.id)}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-surface-overlay focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
+          disabled={!type.enabled}
+          title={
+            !type.enabled
+              ? t("common:toast.featureInDevelopment", {
+                  defaultValue: "Coming soon",
+                })
+              : undefined
+          }
+          className={clsx(
+            "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+            type.enabled
+              ? "hover:bg-surface-overlay"
+              : "cursor-not-allowed opacity-55",
+          )}
         >
           <div className={clsx("p-2 rounded-lg", type.color)}>
             <type.icon className="w-5 h-5" />
           </div>
-          <span className="text-sm font-medium text-text-secondary">
-            {type.label}
-          </span>
+          <div className="min-w-0">
+            <span className="text-sm font-medium text-text-secondary">
+              {type.label}
+            </span>
+            {!type.enabled && (
+              <p className="text-[11px] text-text-muted">
+                {t("common:toast.featureInDevelopment", {
+                  defaultValue: "Coming soon",
+                })}
+              </p>
+            )}
+          </div>
         </button>
       ))}
     </div>

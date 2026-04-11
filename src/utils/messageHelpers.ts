@@ -10,12 +10,46 @@ import {
   normalizeRoomType,
 } from "../lib/conversationAdapter";
 import { isSameDay } from "./formatTime";
+import { rankConversations } from "./conversationRanking";
 import i18n from "../i18n";
 
 const isDirectType = (conversationType: unknown): boolean => {
   const normalized = normalizeRoomType(conversationType);
   return normalized === RoomType.PRIVATE || normalized === RoomType.DIRECT;
 };
+
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value !== null && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+
+const asTrimmedString = (value: unknown): string =>
+  typeof value === "string" ? value.trim() : "";
+
+const looksLikeTechnicalIdentifier = (value: string): boolean => {
+  if (!value) return false;
+
+  // Most employee/user codes are compact, no-space identifiers with digits/separators.
+  if (/\s/.test(value)) return false;
+
+  const hasDigit = /\d/.test(value);
+  const hasSeparator = /[_-]/.test(value);
+  const isVeryShort = value.length <= 2;
+
+  return !isVeryShort && (hasDigit || hasSeparator);
+};
+
+interface DisplayNameOptions {
+  conversationTitle?: string;
+  allowTechnicalFallback?: boolean;
+}
+
+export type MessagePreviewState =
+  | "queued"
+  | "sending"
+  | "retrying"
+  | "failed"
+  | null;
 
 /**
  * Check if message is from current user.
@@ -96,7 +130,6 @@ export function getMessagePreview(
 ): string {
   if (!message) return "";
 
-  const prefix = message.senderId === currentUserId ? "" : "";
   let preview = "";
 
   switch (message.type) {
@@ -127,10 +160,51 @@ export function getMessagePreview(
       preview = message.content;
   }
 
-  const fullPreview = prefix + preview;
+  const previewState = getMessagePreviewState(message, currentUserId);
+  const stateLabel =
+    previewState === "failed"
+      ? i18n.t("chat:message.status.failedInline")
+      : previewState === "queued"
+        ? i18n.t("chat:message.status.queued")
+        : previewState === "retrying"
+          ? i18n.t("chat:message.status.retrying")
+          : previewState === "sending"
+            ? i18n.t("chat:message.status.sending")
+            : "";
+  const fullPreview =
+    stateLabel && preview ? `${stateLabel}: ${preview}` : stateLabel || preview;
   return fullPreview.length > maxLength
     ? `${fullPreview.substring(0, maxLength - 3)}...`
     : fullPreview;
+}
+
+export function getMessagePreviewState(
+  message: Message | MessageSummary | undefined,
+  currentUserId: string,
+): MessagePreviewState {
+  if (!message || message.senderId !== currentUserId) {
+    return null;
+  }
+
+  const record = asRecord(message);
+  const sendState =
+    typeof record?.sendState === "string" ? record.sendState : undefined;
+  const status = typeof record?.status === "string" ? record.status : undefined;
+
+  if (sendState === "failed" || status === MessageStatus.FAILED) {
+    return "failed";
+  }
+  if (sendState === "queued") {
+    return "queued";
+  }
+  if (sendState === "retrying") {
+    return "retrying";
+  }
+  if (sendState === "sending" || status === MessageStatus.SENDING) {
+    return "sending";
+  }
+
+  return null;
 }
 
 /**
@@ -153,6 +227,81 @@ export function getMessageStatusIcon(status: MessageStatus): string {
   }
 }
 
+export function getUserDisplayName(
+  user: Partial<UserSummary> | null | undefined,
+  options: DisplayNameOptions = {},
+): string {
+  if (!user) {
+    return "";
+  }
+
+  const userRecord = asRecord(user);
+
+  const displayName = asTrimmedString(user.displayName);
+  const fullName =
+    asTrimmedString(userRecord?.fullName) ||
+    asTrimmedString(
+      [
+        asTrimmedString(userRecord?.firstName),
+        asTrimmedString(userRecord?.lastName),
+      ]
+        .filter(Boolean)
+        .join(" "),
+    );
+  const genericName = asTrimmedString(userRecord?.name);
+  const conversationTitle = asTrimmedString(options.conversationTitle);
+
+  const employeeCode =
+    asTrimmedString(userRecord?.employeeCode) ||
+    asTrimmedString(userRecord?.staffCode) ||
+    asTrimmedString(userRecord?.code);
+  const username = asTrimmedString(user.username);
+  const id = asTrimmedString(user.id);
+
+  const preferredDisplayName =
+    displayName && !looksLikeTechnicalIdentifier(displayName)
+      ? displayName
+      : "";
+
+  if (preferredDisplayName) {
+    return preferredDisplayName;
+  }
+
+  if (fullName) {
+    return fullName;
+  }
+
+  if (genericName) {
+    return genericName;
+  }
+
+  if (conversationTitle) {
+    return conversationTitle;
+  }
+
+  if (options.allowTechnicalFallback === false) {
+    return "";
+  }
+
+  if (displayName) {
+    return displayName;
+  }
+
+  if (employeeCode) {
+    return employeeCode;
+  }
+
+  if (username) {
+    return username;
+  }
+
+  if (id) {
+    return id;
+  }
+
+  return "";
+}
+
 /**
  * Get conversation display name.
  */
@@ -160,27 +309,47 @@ export function getConversationDisplayName(
   conversation: Conversation,
   currentUserId: string,
 ): string {
-  if (conversation.displayName?.trim()) {
-    return conversation.displayName.trim();
-  }
+  const conversationName = asTrimmedString(conversation.name);
+  const conversationDisplayName = asTrimmedString(conversation.displayName);
+  const conversationTitle = conversationName || conversationDisplayName;
 
   if (!isDirectConversation(conversation)) {
-    return (
-      conversation.name?.trim() ||
-      conversation.displayName?.trim() ||
-      i18n.t("common:labels.conversation")
-    );
+    if (conversationTitle) {
+      return conversationTitle;
+    }
+
+    const participantFallback = (conversation.participants || [])
+      .map((participant) =>
+        getUserDisplayName(participant, {
+          allowTechnicalFallback: false,
+        }),
+      )
+      .filter(Boolean)
+      .slice(0, 2)
+      .join(", ");
+
+    return participantFallback || i18n.t("common:labels.group");
   }
 
   const otherParticipant = getOtherParticipant(conversation, currentUserId);
+  const participantDisplayName = getUserDisplayName(otherParticipant, {
+    conversationTitle,
+    allowTechnicalFallback: false,
+  });
 
-  return (
-    otherParticipant?.displayName ||
-    otherParticipant?.username ||
-    conversation.displayName ||
-    conversation.name ||
-    i18n.t("common:labels.conversation")
-  );
+  if (participantDisplayName) {
+    return participantDisplayName;
+  }
+
+  if (conversationTitle) {
+    return conversationTitle;
+  }
+
+  const technicalFallbackName = getUserDisplayName(otherParticipant, {
+    allowTechnicalFallback: true,
+  });
+
+  return technicalFallbackName || i18n.t("common:labels.conversation");
 }
 
 /**
@@ -229,19 +398,18 @@ export function getOtherParticipant(
 }
 
 /**
- * Sort conversations (pinned first, then updatedAt).
+ * Sort conversations with product ranking signals (pin, unread, mention, recency).
  */
 export function sortConversations(
   conversations?: Conversation[] | null,
+  options?: {
+    currentUserId?: string;
+    currentUsername?: string;
+    currentDisplayName?: string;
+    activeConversationId?: string | null;
+  },
 ): Conversation[] {
-  if (!Array.isArray(conversations)) return [];
-
-  return [...conversations].sort((a, b) => {
-    if (a.isPinned && !b.isPinned) return -1;
-    if (!a.isPinned && b.isPinned) return 1;
-
-    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-  });
+  return rankConversations(conversations, options);
 }
 
 /**

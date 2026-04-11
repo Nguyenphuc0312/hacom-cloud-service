@@ -27,6 +27,12 @@ interface SettingsState extends SettingsSchema {
   /** Indicates if server sync is in flight */
   isSyncing: boolean;
 
+  /** Latest sync error message for UI feedback */
+  syncError: string | null;
+
+  /** Last timestamp a server sync completed successfully */
+  lastSyncedAt: string | null;
+
   /** Apply a partial patch (deep-merged per section) */
   updateSettings: (patch: SettingsPatch) => void;
 
@@ -54,12 +60,30 @@ interface SettingsState extends SettingsSchema {
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 const SYNC_DEBOUNCE_MS = 1500;
 
-const debouncedServerSync = (settings: SettingsSchema) => {
+const resolveSyncErrorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+  return "Unable to sync settings right now. Please retry.";
+};
+
+const debouncedServerSync = (
+  settings: SettingsSchema,
+  handlers?: {
+    onSuccess?: () => void;
+    onError?: (message: string) => void;
+  },
+) => {
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => {
-    syncSettingsToServer(settings).catch((err) =>
-      console.warn("[settingsStore] server sync failed", err),
-    );
+    syncSettingsToServer(settings)
+      .then(() => {
+        handlers?.onSuccess?.();
+      })
+      .catch((err) => {
+        console.warn("[settingsStore] server sync failed", err);
+        handlers?.onError?.(resolveSyncErrorMessage(err));
+      });
   }, SYNC_DEBOUNCE_MS);
 };
 
@@ -80,6 +104,8 @@ export const useSettingsStore = create<SettingsState>()(
     // Hydrate from localStorage on creation
     ...loadSettings(),
     isSyncing: false,
+    syncError: null,
+    lastSyncedAt: null,
 
     updateSettings: (patch) => {
       const current = get();
@@ -100,26 +126,52 @@ export const useSettingsStore = create<SettingsState>()(
 
       // Optimistic local persistence
       saveSettings(next);
-      set(next);
+      set({ ...next, syncError: null });
 
       // Debounced background sync
-      debouncedServerSync(next);
+      debouncedServerSync(next, {
+        onSuccess: () =>
+          set({
+            syncError: null,
+            lastSyncedAt: new Date().toISOString(),
+          }),
+        onError: (message) => set({ syncError: message }),
+      });
     },
 
     resetSettings: () => {
       const reset = { ...defaultSettings, updatedAt: new Date().toISOString() };
       saveSettings(reset);
-      set(reset);
-      debouncedServerSync(reset);
+      set({ ...reset, syncError: null });
+      debouncedServerSync(reset, {
+        onSuccess: () =>
+          set({
+            syncError: null,
+            lastSyncedAt: new Date().toISOString(),
+          }),
+        onError: (message) => set({ syncError: message }),
+      });
     },
 
     syncFromServer: async () => {
-      set({ isSyncing: true });
+      set({ isSyncing: true, syncError: null });
       try {
         const remote = await fetchSettingsFromServer();
         if (!remote) {
           // No server settings → push local to server
-          debouncedServerSync(get());
+          debouncedServerSync(get(), {
+            onSuccess: () =>
+              set({
+                syncError: null,
+                lastSyncedAt: new Date().toISOString(),
+              }),
+            onError: (message) => set({ syncError: message }),
+          });
+          set({
+            isSyncing: false,
+            syncError: null,
+            lastSyncedAt: new Date().toISOString(),
+          });
           return;
         }
 
@@ -127,9 +179,15 @@ export const useSettingsStore = create<SettingsState>()(
         // Conflict resolution: server wins if newer version
         const merged = mergeSettings(local, remote);
         saveSettings(merged);
-        set({ ...merged, isSyncing: false });
+        set({
+          ...merged,
+          isSyncing: false,
+          syncError: null,
+          lastSyncedAt: new Date().toISOString(),
+        });
       } catch (err) {
         console.warn("[settingsStore] syncFromServer failed", err);
+        set({ syncError: resolveSyncErrorMessage(err) });
       } finally {
         set({ isSyncing: false });
       }
@@ -156,7 +214,11 @@ export const useSettingsStore = create<SettingsState>()(
       };
 
       saveSettings(updated);
-      set(updated);
+      set({
+        ...updated,
+        syncError: null,
+        lastSyncedAt: new Date().toISOString(),
+      });
 
       console.info("[settingsStore] Applied remote settings update", {
         version: payload.version,

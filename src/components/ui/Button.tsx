@@ -9,7 +9,14 @@ import { useTranslation } from "react-i18next";
 import { Spinner } from "./Spinner";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "outline" | "ghost" | "danger" | "link";
+  variant?:
+    | "primary"
+    | "secondary"
+    | "outline"
+    | "ghost"
+    | "danger"
+    | "destructive"
+    | "link";
   size?: "xs" | "sm" | "md" | "lg";
   isLoading?: boolean;
   leftIcon?: React.ReactNode;
@@ -19,23 +26,25 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses = {
   primary:
-    "bg-primary text-text-inverse shadow-xs hover:bg-primary/90 focus:ring-focus/30",
+    "border border-primary bg-primary text-text-inverse shadow-xs hover:bg-primary-hover active:bg-primary-active focus:ring-focus/25",
   secondary:
-    "border border-border bg-surface-overlay text-text-primary hover:bg-surface focus:ring-focus/20",
+    "border border-border bg-surface-overlay text-text-primary hover:bg-surface-hover active:bg-surface-active focus:ring-focus/20",
   outline:
-    "border border-primary text-primary hover:bg-primary/10 focus:ring-focus/30",
+    "border border-primary/40 bg-transparent text-primary hover:bg-primary/10 active:bg-primary/15 focus:ring-focus/25",
   ghost:
-    "text-text-secondary hover:bg-surface-overlay hover:text-text-primary focus:ring-focus/20",
+    "border border-transparent bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary active:bg-surface-active focus:ring-focus/20",
   danger:
-    "bg-danger text-text-inverse shadow-xs hover:bg-danger/90 focus:ring-danger/30",
+    "border border-danger bg-danger text-text-inverse shadow-xs hover:bg-danger-hover active:bg-danger-hover focus:ring-danger/30",
+  destructive:
+    "border border-danger bg-danger text-text-inverse shadow-xs hover:bg-danger-hover active:bg-danger-hover focus:ring-danger/30",
   link: "h-auto p-0 text-primary hover:text-primary/80 hover:underline",
 };
 
 const sizeClasses = {
-  xs: "rounded-sm px-2 py-1 text-xs",
-  sm: "rounded-md px-3 py-2 text-sm",
-  md: "rounded-md px-4 py-2 text-sm",
-  lg: "rounded-lg px-6 py-3 text-base",
+  xs: "rounded-sm px-2 py-1 text-caption",
+  sm: "rounded-md px-3 py-2 text-body-sm",
+  md: "rounded-md px-4 py-2 text-body-sm",
+  lg: "rounded-lg px-5 py-3 text-body",
 };
 
 const iconSizeClasses = {
@@ -59,26 +68,27 @@ export const Button: React.FC<ButtonProps> = ({
 }) => {
   const { t } = useTranslation();
   const isDisabled = disabled || isLoading;
+  const resolvedVariant = variant === "danger" ? "destructive" : variant;
 
   return (
     <button
       disabled={isDisabled}
       className={clsx(
-        "inline-flex items-center justify-center gap-2 font-medium",
+        "inline-flex min-h-10 items-center justify-center gap-2 font-medium",
         "transition-micro",
         "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface",
-        "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60",
+        "disabled:cursor-not-allowed disabled:border-disabled-border disabled:bg-disabled-bg disabled:text-text-disabled disabled:opacity-65",
         !isDisabled &&
-          variant === "primary" &&
+          resolvedVariant === "primary" &&
           "hover:shadow-sm hover:-translate-y-px",
         !isDisabled &&
-          variant === "danger" &&
+          resolvedVariant === "destructive" &&
           "hover:shadow-sm hover:-translate-y-px",
-        variant !== "link" && variantClasses[variant],
-        variant !== "link" && sizeClasses[size],
+        resolvedVariant !== "link" && variantClasses[resolvedVariant],
+        resolvedVariant !== "link" && sizeClasses[size],
         variant === "link" && variantClasses.link,
         fullWidth && "w-full",
-        !isDisabled && variant !== "link" && "active:scale-[0.98]",
+        !isDisabled && resolvedVariant !== "link" && "active:scale-[0.98]",
         className,
       )}
       {...props}
@@ -88,7 +98,7 @@ export const Button: React.FC<ButtonProps> = ({
           <Spinner
             size={size === "lg" ? "sm" : "xs"}
             variant={
-              variant === "primary" || variant === "danger"
+              resolvedVariant === "primary" || resolvedVariant === "destructive"
                 ? "inverse"
                 : "neutral"
             }
@@ -129,7 +139,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
   const iconButtonSizes = {
     xs: "h-6 w-6",
     sm: "h-8 w-8",
-    md: "h-10 w-10",
+    md: "h-10 w-10 rounded-md",
     lg: "h-12 w-12",
   };
 

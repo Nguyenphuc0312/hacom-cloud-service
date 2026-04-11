@@ -13,6 +13,7 @@ const JoinByLinkPage = lazy(() => import("../../pages/JoinByLinkPage"));
 export const privateRoutes: AppRouteConfig[] = [
   { path: ROUTE_PATHS.CHAT_DETAIL, component: ChatPage },
   { path: ROUTE_PATHS.FRIENDS, component: FriendsPage },
+  { path: ROUTE_PATHS.FRIEND_DISCOVERY, component: FriendsPage },
   { path: ROUTE_PATHS.JOIN_BY_TOKEN, component: JoinByLinkPage },
   { path: ROUTE_PATHS.SETTINGS, component: SettingsPage },
   // Example for future admin route:

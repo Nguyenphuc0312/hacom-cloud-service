@@ -12,7 +12,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 
 export type Theme = "light" | "dark" | "system";
 export type ThemeBrand = "blue" | "green" | "purple";
-export type ChatDensity = "comfortable" | "compact";
+export type ChatDensity = "auto" | "comfortable" | "compact" | "expanded";
 export type ModalType =
   | "createGroup"
   | "editProfile"
@@ -201,16 +201,25 @@ export const useUIStore = create<UIState>()(
       // ============================================
       // CHAT DENSITY
       // ============================================
-      chatDensity: "comfortable",
+      chatDensity: "auto",
 
       setChatDensity: (density) => {
         set({ chatDensity: density });
       },
 
       toggleChatDensity: () => {
+        const densityOrder: ChatDensity[] = [
+          "auto",
+          "comfortable",
+          "compact",
+          "expanded",
+        ];
         set((state) => ({
           chatDensity:
-            state.chatDensity === "comfortable" ? "compact" : "comfortable",
+            densityOrder[
+              (densityOrder.indexOf(state.chatDensity) + 1) %
+                densityOrder.length
+            ],
         }));
       },
 

@@ -1,5 +1,5 @@
 import type { Conversation, MessageSummary, UserSummary } from "../types";
-import { MessageType, RoomType, UserStatus } from "../types";
+import { MessageStatus, MessageType, RoomType, UserStatus } from "../types";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -110,7 +110,9 @@ const normalizeParticipants = (
   return Array.from(result.values());
 };
 
-const normalizeLastMessage = (source: UnknownRecord): MessageSummary | undefined => {
+const normalizeLastMessage = (
+  source: UnknownRecord,
+): MessageSummary | undefined => {
   const raw =
     (isRecord(source.lastMessage) ? source.lastMessage : null) ??
     (isRecord(source.last_message) ? source.last_message : null);
@@ -148,7 +150,12 @@ const normalizeLastMessage = (source: UnknownRecord): MessageSummary | undefined
       raw.createdAt ?? source.lastMessageAt ?? source.updatedAt,
       new Date(),
     ),
-  };
+    ...(asString(raw.sendState) ? { sendState: asString(raw.sendState) } : {}),
+    ...(asString(raw.status) &&
+    Object.values(MessageStatus).includes(asString(raw.status) as MessageStatus)
+      ? { status: asString(raw.status) }
+      : {}),
+  } as MessageSummary;
 };
 
 const toParticipantsCount = (
@@ -222,12 +229,20 @@ export const normalizeRoomType = (
 
 export const isDirectConversation = (
   conversation:
-    | Pick<Conversation, "type" | "participants" | "otherUser" | "participantCount">
+    | Pick<
+        Conversation,
+        "type" | "participants" | "otherUser" | "participantCount"
+      >
     | null
     | undefined,
 ): boolean => {
   if (!conversation) {
     return false;
+  }
+
+  const rawType = asString(conversation.type)?.toLowerCase();
+  if (rawType && Object.values(RoomType).includes(rawType as RoomType)) {
+    return rawType === RoomType.DIRECT || rawType === RoomType.PRIVATE;
   }
 
   const participantCount =
@@ -237,7 +252,10 @@ export const isDirectConversation = (
       : undefined);
   const normalizedType = normalizeRoomType(conversation.type, participantCount);
 
-  if (normalizedType === RoomType.DIRECT || normalizedType === RoomType.PRIVATE) {
+  if (
+    normalizedType === RoomType.DIRECT ||
+    normalizedType === RoomType.PRIVATE
+  ) {
     return true;
   }
 
@@ -248,7 +266,9 @@ export const isDirectConversation = (
   return participantCount === 2;
 };
 
-export const normalizeConversation = (payload: unknown): Conversation | null => {
+export const normalizeConversation = (
+  payload: unknown,
+): Conversation | null => {
   if (!isRecord(payload)) {
     return null;
   }
@@ -312,13 +332,21 @@ export const normalizeConversation = (payload: unknown): Conversation | null => 
     ...(asString(payload.currentUserId)
       ? { currentUserId: asString(payload.currentUserId) }
       : {}),
-    ...(asString(payload.createdBy) ? { createdBy: asString(payload.createdBy) } : {}),
-    ...(payload.createdAt ? { createdAt: toDate(payload.createdAt, updatedAt) } : {}),
+    ...(asString(payload.createdBy)
+      ? { createdBy: asString(payload.createdBy) }
+      : {}),
+    ...(payload.createdAt
+      ? { createdAt: toDate(payload.createdAt, updatedAt) }
+      : {}),
     ...(payload.lastMessageAt
       ? { lastMessageAt: toDate(payload.lastMessageAt, updatedAt) }
       : {}),
-    ...(asString(payload.directKey) ? { directKey: asString(payload.directKey) } : {}),
-    ...(payload.joinedAt ? { joinedAt: toDate(payload.joinedAt, updatedAt) } : {}),
+    ...(asString(payload.directKey)
+      ? { directKey: asString(payload.directKey) }
+      : {}),
+    ...(payload.joinedAt
+      ? { joinedAt: toDate(payload.joinedAt, updatedAt) }
+      : {}),
     ...(payload.lastReadAt
       ? { lastReadAt: toDate(payload.lastReadAt, updatedAt) }
       : {}),
@@ -333,7 +361,9 @@ export const normalizeConversation = (payload: unknown): Conversation | null => 
   };
 };
 
-export const normalizeConversationsPayload = (payload: unknown): Conversation[] =>
+export const normalizeConversationsPayload = (
+  payload: unknown,
+): Conversation[] =>
   extractConversationRows(payload)
     .map((room) => normalizeConversation(room))
     .filter((room): room is Conversation => room !== null);

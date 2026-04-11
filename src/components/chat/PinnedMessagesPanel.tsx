@@ -38,8 +38,7 @@ export const PinnedMessagesPanel: React.FC<PinnedMessagesPanelProps> = ({
   return (
     <div
       className={clsx(
-        "flex flex-col border-b border-border bg-surface",
-        "animate-slide-up-fade",
+        "flex h-full flex-col bg-surface",
         className,
       )}
       role="region"
@@ -67,7 +66,7 @@ export const PinnedMessagesPanel: React.FC<PinnedMessagesPanelProps> = ({
       </div>
 
       {/* Content */}
-      <div className="max-h-64 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {/* Loading */}
         {isLoading && (
           <div className="flex items-center justify-center py-6">

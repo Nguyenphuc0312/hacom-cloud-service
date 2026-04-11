@@ -7,7 +7,9 @@
     "searchInConversation": "Tìm trong cuộc trò chuyện",
     "blockUser": "Chặn người dùng",
     "report": "Báo cáo",
-    "deleteConversation": "Xóa cuộc trò chuyện"
+    "deleteConversation": "Xóa cuộc trò chuyện",
+    "emptyBioSelf": "Hãy thêm vài dòng giới thiệu để mọi người biết bạn là ai.",
+    "emptyBioOther": "Người này chưa thêm giới thiệu."
   },
   "groupInfo": {
     "title": "Thông tin nhóm",
@@ -18,7 +20,9 @@
     "tabs": {
       "members": "Thành viên",
       "media": "Phương tiện",
-      "files": "Tệp"
+      "files": "Tệp",
+      "inviteLinks": "Liên kết mời",
+      "joinRequests": "Yêu cầu tham gia"
     },
     "addMember": "Thêm thành viên",
     "searchMemberPlaceholder": "Tìm kiếm thành viên...",
@@ -40,9 +44,36 @@
     },
     "viewAllMedia": "Xem tất cả phương tiện",
     "noSharedFiles": "Chưa có tệp được chia sẻ",
+    "unavailableAction": "Thao tác này hiện chưa khả dụng trong bản build này.",
+    "comingSoon": "Sắp ra mắt",
     "reportGroup": "Báo cáo nhóm",
     "leaveGroup": "Rời nhóm",
-    "leaveConfirm": "Bạn có chắc muốn rời nhóm này?"
+    "leaveConfirm": "Bạn có chắc muốn rời nhóm này?",
+    "invite": {
+      "invalidUsageLimit": "Giới hạn lượt dùng phải lớn hơn 0",
+      "created": "Đã tạo liên kết mời",
+      "createFailed": "Không thể tạo liên kết mời",
+      "copied": "Đã sao chép",
+      "copyFailed": "Sao chép thất bại",
+      "revoked": "Đã thu hồi liên kết mời",
+      "revokeFailed": "Không thể thu hồi liên kết mời",
+      "noPermission": "Chỉ quản trị viên mới có thể quản lý liên kết mời.",
+      "create": "Tạo liên kết mời",
+      "namePlaceholder": "Tên liên kết (tùy chọn)",
+      "usageLimitPlaceholder": "Giới hạn lượt dùng (tùy chọn)",
+      "empty": "Chưa có liên kết mời nào.",
+      "unnamed": "Liên kết mời",
+      "usage": "Lượt dùng: {{count}}/{{limit}}",
+      "revokedLabel": "Đã thu hồi",
+      "revoke": "Thu hồi"
+    },
+    "joinRequests": {
+      "approved": "Đã duyệt yêu cầu tham gia",
+      "rejected": "Đã từ chối yêu cầu tham gia",
+      "resolveFailed": "Không thể xử lý yêu cầu tham gia",
+      "noPermission": "Chỉ quản trị viên mới có thể xử lý yêu cầu tham gia.",
+      "empty": "Không có yêu cầu tham gia đang chờ."
+    }
   },
   "newChatModal": {
     "title": "Cuộc trò chuyện mới",

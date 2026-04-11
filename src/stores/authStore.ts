@@ -9,19 +9,13 @@ import apiClient, {
   resetAuthFailureState,
   setAuthFailureHandler,
 } from "../lib/axios";
-import type {
-  ApiResponse,
-  RefreshTokenResponse,
-} from "@hacom/chat-shared-types";
+import type { ApiResponse } from "@hacom/chat-shared-types";
 import type { LoginFormData, RegisterFormData } from "../lib/validations";
 import {
   getAccessToken,
-  getCsrfToken,
   getRefreshToken,
   isRefreshTokenCookieMode,
-  isRememberMeEnabled,
   storeTokens,
-  updateAccessToken,
 } from "../services/tokenService";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import { toast } from "../components/ui";
@@ -32,18 +26,20 @@ import {
   requestServerLogout,
   runClientLogoutCleanup,
 } from "../services/authService";
+import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 import i18n from "../i18n";
+import { refreshAccessTokenShared } from "../services/authRefreshCoordinator";
 
 export interface User {
   id: string;
   username: string;
-  email: string;
+  email?: string;
   firstName?: string;
   lastName?: string;
   avatar?: string;
   bio?: string;
   phone?: string;
-  status: "online" | "offline" | "away" | "dnd";
+  status?: "online" | "offline" | "away" | "dnd" | string;
   role?: string;
   isVerified?: boolean;
   createdAt?: string;
@@ -67,16 +63,40 @@ interface LogoutOptions {
 }
 
 type RegistrationStatus = "idle" | "verification_required";
+export type VerificationFlowSource = "signup" | "external";
 
-interface RefreshPayload extends RefreshTokenResponse {
-  tokens?: {
-    accessToken?: string;
-    refreshToken?: string;
-  };
+export interface EmailVerificationChallengeSnapshot {
+  challengeId: string;
+  email: string;
+  expiresAt: string;
+  resendAvailableAt: string;
+  purpose: "signup";
+  verificationState:
+    | "pending_otp"
+    | "expired"
+    | "invalidated"
+    | "locked"
+    | "verified"
+    | "recoverable_error"
+    | "missing_context";
+  lockedReason?: string | null;
+  attemptCount?: number | null;
+  maxAttempts?: number | null;
+  lastResolvedAt?: string | null;
+}
+
+export interface RegisterFlowResult {
+  verificationRequired: boolean;
+  email: string;
+  challengeId: string | null;
+  expiresAt: string | null;
 }
 
 interface AuthState {
   user: User | null;
+  pendingVerificationEmail: string | null;
+  pendingVerificationSource: VerificationFlowSource | null;
+  emailVerificationChallenge: EmailVerificationChallengeSnapshot | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   isInitialized: boolean;
@@ -84,15 +104,25 @@ interface AuthState {
   error: string | null;
 
   login: (data: LoginFormData) => Promise<void>;
+  applyLoginResponse: (payload: AuthResponse, rememberMe?: boolean) => void;
   register: (
     data: Omit<RegisterFormData, "confirmPassword" | "acceptTerms">,
-  ) => Promise<void>;
+  ) => Promise<RegisterFlowResult>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   updateUser: (data: Partial<User>) => void;
   updateStatus: (status: User["status"]) => Promise<void>;
   clearError: () => void;
   initialize: () => Promise<void>;
+  setPendingVerificationEmail: (
+    email: string | null,
+    source?: VerificationFlowSource,
+  ) => void;
+  clearPendingVerificationEmail: () => void;
+  setEmailVerificationChallenge: (
+    challenge: EmailVerificationChallengeSnapshot | null,
+  ) => void;
+  clearEmailVerificationChallenge: () => void;
 
   handleAuthFailure: (reason?: string) => Promise<void>;
   handleRemoteLogout: (reason?: string) => Promise<void>;
@@ -111,60 +141,11 @@ const resolveTokens = (
   return { accessToken, refreshToken };
 };
 
-const resolveRefreshTokens = (
-  payload: RefreshPayload,
-): { accessToken: string | null; refreshToken: string | null } => {
-  const accessToken =
-    payload.tokens?.accessToken ?? payload.accessToken ?? null;
-  const refreshToken =
-    payload.tokens?.refreshToken ?? payload.refreshToken ?? null;
-  return { accessToken, refreshToken };
-};
-
 const fetchCurrentUser = async (accessToken: string): Promise<User> => {
-  const response = await authClient.get<ApiResponse<User>>("/auth/me", {
+  const response = await authClient.get<ApiResponse<User>>(AUTH_ENDPOINTS.me, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   return unwrapApiSuccess(response.data);
-};
-
-const refreshAccessTokenForBootstrap = async (): Promise<string> => {
-  const cookieMode = isRefreshTokenCookieMode();
-  const refreshToken = getRefreshToken();
-
-  if (!cookieMode && !refreshToken) {
-    throw new Error(i18n.t("error:auth.missingRefreshToken"));
-  }
-
-  const csrfToken = cookieMode ? getCsrfToken() : null;
-  const response = await authClient.post<ApiResponse<RefreshPayload>>(
-    "/auth/refresh",
-    refreshToken ? { refreshToken } : undefined,
-    {
-      withCredentials: cookieMode,
-      headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
-    },
-  );
-
-  const payload = unwrapApiSuccess(response.data);
-  const { accessToken, refreshToken: rotatedRefreshToken } =
-    resolveRefreshTokens(payload);
-
-  if (!accessToken) {
-    throw new Error(i18n.t("error:auth.refreshMissingToken"));
-  }
-
-  if (cookieMode) {
-    updateAccessToken(accessToken);
-  } else {
-    if (!rotatedRefreshToken) {
-      throw new Error(i18n.t("error:auth.missingRefreshToken"));
-    }
-    storeTokens(accessToken, rotatedRefreshToken, isRememberMeEnabled());
-  }
-
-  resetAuthFailureState();
-  return accessToken;
 };
 
 const resetChatState = async (): Promise<void> => {
@@ -174,6 +155,111 @@ const resetChatState = async (): Promise<void> => {
   usePresenceStore.getState().clearAll();
   const { useGroupStore } = await import("./groupStore");
   useGroupStore.getState().reset();
+};
+
+const normalizeStringValue = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return normalized || null;
+};
+
+const normalizeIsoDateValue = (value: unknown): string | null => {
+  const normalized = normalizeStringValue(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const parsed = Date.parse(normalized);
+  if (Number.isNaN(parsed)) {
+    return null;
+  }
+
+  return new Date(parsed).toISOString();
+};
+
+const normalizeTtlSeconds = (value: unknown): number | null => {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  return Math.floor(value);
+};
+
+const normalizeBooleanValue = (value: unknown): boolean | null => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  return null;
+};
+
+const pickChallengeContainer = (
+  payload: unknown,
+): Record<string, unknown> | null => {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const root = payload as Record<string, unknown>;
+  const challengeCandidates: unknown[] = [
+    root.emailVerificationChallenge,
+    root.verificationChallenge,
+    root.challenge,
+    root,
+  ];
+
+  for (const candidate of challengeCandidates) {
+    if (!candidate || typeof candidate !== "object") {
+      continue;
+    }
+
+    const record = candidate as Record<string, unknown>;
+    if (normalizeStringValue(record.challengeId)) {
+      return record;
+    }
+  }
+
+  return null;
+};
+
+const buildRegisterChallengeSnapshot = (
+  payload: unknown,
+  email: string,
+): EmailVerificationChallengeSnapshot | null => {
+  const challenge = pickChallengeContainer(payload);
+  if (!challenge) {
+    return null;
+  }
+
+  const challengeId = normalizeStringValue(challenge.challengeId);
+  if (!challengeId) {
+    return null;
+  }
+
+  const nowMs = Date.now();
+  const ttlSeconds = normalizeTtlSeconds(challenge.ttlSeconds) ?? 600;
+  const expiresAt =
+    normalizeIsoDateValue(challenge.expiresAt) ??
+    new Date(nowMs + ttlSeconds * 1000).toISOString();
+  const resendAvailableAt =
+    normalizeIsoDateValue(challenge.resendAvailableAt) ??
+    new Date(nowMs + 60 * 1000).toISOString();
+
+  return {
+    challengeId,
+    email,
+    expiresAt,
+    resendAvailableAt,
+    purpose: "signup",
+    verificationState: "pending_otp",
+    lockedReason: null,
+    attemptCount: null,
+    maxAttempts: null,
+    lastResolvedAt: new Date().toISOString(),
+  };
 };
 
 export const useAuthStore = create<AuthState>()(
@@ -200,6 +286,9 @@ export const useAuthStore = create<AuthState>()(
 
           set({
             user: null,
+            pendingVerificationEmail: null,
+            pendingVerificationSource: null,
+            emailVerificationChallenge: null,
             isAuthenticated: false,
             isLoading: false,
             error: null,
@@ -223,18 +312,45 @@ export const useAuthStore = create<AuthState>()(
 
       return {
         user: null,
+        pendingVerificationEmail: null,
+        pendingVerificationSource: null,
+        emailVerificationChallenge: null,
         isAuthenticated: false,
         isLoading: false,
         isInitialized: false,
         registrationStatus: "idle",
         error: null,
 
+        applyLoginResponse: (payload, rememberMe = false) => {
+          const { user } = payload;
+          const { accessToken, refreshToken } = resolveTokens(payload);
+
+          if (!accessToken) {
+            throw new Error(i18n.t("error:auth.loginTokenMissing"));
+          }
+
+          storeTokens(accessToken, refreshToken ?? undefined, rememberMe);
+          resetAuthFailureState();
+
+          set({
+            user,
+            pendingVerificationEmail: null,
+            pendingVerificationSource: null,
+            emailVerificationChallenge: null,
+            isAuthenticated: true,
+            isLoading: false,
+            isInitialized: true,
+            registrationStatus: "idle",
+            error: null,
+          });
+        },
+
         login: async (data: LoginFormData) => {
           set({ isLoading: true, error: null });
 
           try {
             const response = await authClient.post<ApiResponse<AuthResponse>>(
-              "/auth/login",
+              AUTH_ENDPOINTS.login,
               {
                 email: data.email,
                 password: data.password,
@@ -242,28 +358,7 @@ export const useAuthStore = create<AuthState>()(
             );
 
             const payload = unwrapApiSuccess(response.data);
-            const { user } = payload;
-            const { accessToken, refreshToken } = resolveTokens(payload);
-
-            if (!accessToken) {
-              throw new Error(i18n.t("error:auth.loginTokenMissing"));
-            }
-
-            storeTokens(
-              accessToken,
-              refreshToken ?? undefined,
-              data.rememberMe,
-            );
-            resetAuthFailureState();
-
-            set({
-              user,
-              isAuthenticated: true,
-              isLoading: false,
-              isInitialized: true,
-              registrationStatus: "idle",
-              error: null,
-            });
+            get().applyLoginResponse(payload, data.rememberMe);
           } catch (error: unknown) {
             const apiError = extractApiError(error);
             const errorMessage =
@@ -274,6 +369,9 @@ export const useAuthStore = create<AuthState>()(
               error: errorMessage,
               isAuthenticated: false,
               user: null,
+              pendingVerificationEmail: null,
+              pendingVerificationSource: null,
+              emailVerificationChallenge: null,
               isInitialized: true,
               registrationStatus: "idle",
             });
@@ -287,27 +385,60 @@ export const useAuthStore = create<AuthState>()(
           try {
             const { authApi } = await import("../services/api");
             const response = await authApi.register(data);
-            const payload = unwrapApiSuccess(response);
-            const stagedUser: User | null = payload.userId
-              ? {
-                  id: payload.userId,
-                  username: data.username,
-                  email: data.email,
-                  firstName: data.firstName,
-                  lastName: data.lastName,
-                  status: "offline",
-                  isVerified: false,
-                }
-              : null;
+            const registerPayload = unwrapApiSuccess(response);
+            const payloadRecord = registerPayload as unknown as Record<
+              string,
+              unknown
+            >;
+            const payloadEmail = normalizeStringValue(payloadRecord.email);
+            const pendingEmail =
+              payloadEmail || data.email.trim().toLowerCase();
+            const challengeContainer = pickChallengeContainer(registerPayload);
+            const challengeId = normalizeStringValue(
+              challengeContainer?.challengeId,
+            );
+            const expiresAt = normalizeIsoDateValue(
+              challengeContainer?.expiresAt,
+            );
+            const verificationRequired =
+              normalizeBooleanValue(payloadRecord.verificationRequired) ?? true;
+            const challengeSnapshot = buildRegisterChallengeSnapshot(
+              registerPayload,
+              pendingEmail,
+            );
 
-            set({
-              user: stagedUser,
-              isAuthenticated: false,
-              isLoading: false,
-              isInitialized: true,
-              registrationStatus: "verification_required",
-              error: null,
-            });
+            if (verificationRequired) {
+              set({
+                user: null,
+                pendingVerificationEmail: pendingEmail,
+                pendingVerificationSource: "signup",
+                emailVerificationChallenge: challengeSnapshot,
+                isAuthenticated: false,
+                isLoading: false,
+                isInitialized: true,
+                registrationStatus: "verification_required",
+                error: null,
+              });
+            } else {
+              set({
+                user: null,
+                pendingVerificationEmail: null,
+                pendingVerificationSource: null,
+                emailVerificationChallenge: null,
+                isAuthenticated: false,
+                isLoading: false,
+                isInitialized: true,
+                registrationStatus: "idle",
+                error: null,
+              });
+            }
+
+            return {
+              verificationRequired,
+              email: pendingEmail,
+              challengeId,
+              expiresAt,
+            };
           } catch (error: unknown) {
             const apiError = extractApiError(error);
             const errorMessage =
@@ -315,6 +446,9 @@ export const useAuthStore = create<AuthState>()(
             set({
               isLoading: false,
               error: errorMessage,
+              pendingVerificationEmail: null,
+              pendingVerificationSource: null,
+              emailVerificationChallenge: null,
               isInitialized: true,
               registrationStatus: "idle",
             });
@@ -337,6 +471,9 @@ export const useAuthStore = create<AuthState>()(
           if (!token) {
             set({
               user: null,
+              pendingVerificationEmail: null,
+              pendingVerificationSource: null,
+              emailVerificationChallenge: null,
               isAuthenticated: false,
               isLoading: false,
               isInitialized: true,
@@ -348,14 +485,17 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: true });
 
           try {
-            // /auth/me needs Bearer token — use authClient with explicit header.
+            // /api/v1/auth/me needs Bearer token — use authClient with explicit header.
             const response = await authClient.get<ApiResponse<User>>(
-              "/auth/me",
+              AUTH_ENDPOINTS.me,
               { headers: { Authorization: `Bearer ${token}` } },
             );
             const user = unwrapApiSuccess(response.data);
             set({
               user,
+              pendingVerificationEmail: null,
+              pendingVerificationSource: null,
+              emailVerificationChallenge: null,
               isAuthenticated: true,
               isLoading: false,
               isInitialized: true,
@@ -366,6 +506,9 @@ export const useAuthStore = create<AuthState>()(
             runClientLogoutCleanup("refresh_user_failed");
             set({
               user: null,
+              pendingVerificationEmail: null,
+              pendingVerificationSource: null,
+              emailVerificationChallenge: null,
               isAuthenticated: false,
               isLoading: false,
               isInitialized: true,
@@ -398,6 +541,50 @@ export const useAuthStore = create<AuthState>()(
 
         clearError: () => set({ error: null }),
 
+        setPendingVerificationEmail: (email, source) =>
+          set((state) => {
+            const normalizedEmail = email?.trim().toLowerCase() || null;
+            const keepChallenge =
+              normalizedEmail &&
+              state.emailVerificationChallenge &&
+              state.emailVerificationChallenge.email === normalizedEmail
+                ? state.emailVerificationChallenge
+                : null;
+            const nextSource = normalizedEmail
+              ? source || state.pendingVerificationSource || "external"
+              : null;
+
+            return {
+              pendingVerificationEmail: normalizedEmail,
+              pendingVerificationSource: nextSource,
+              emailVerificationChallenge: keepChallenge,
+              registrationStatus: normalizedEmail
+                ? "verification_required"
+                : "idle",
+            };
+          }),
+
+        clearPendingVerificationEmail: () =>
+          set({
+            pendingVerificationEmail: null,
+            pendingVerificationSource: null,
+            registrationStatus: "idle",
+          }),
+
+        setEmailVerificationChallenge: (challenge) =>
+          set((state) => ({
+            emailVerificationChallenge: challenge,
+            pendingVerificationSource:
+              challenge && !state.pendingVerificationSource
+                ? "external"
+                : state.pendingVerificationSource,
+          })),
+
+        clearEmailVerificationChallenge: () =>
+          set({
+            emailVerificationChallenge: null,
+          }),
+
         initialize: async () => {
           if (initializePromise) {
             return initializePromise;
@@ -412,6 +599,9 @@ export const useAuthStore = create<AuthState>()(
                 const user = await fetchCurrentUser(accessToken);
                 set({
                   user,
+                  pendingVerificationEmail: null,
+                  pendingVerificationSource: null,
+                  emailVerificationChallenge: null,
                   isAuthenticated: true,
                   isLoading: false,
                   isInitialized: true,
@@ -426,6 +616,9 @@ export const useAuthStore = create<AuthState>()(
                   runClientLogoutCleanup("bootstrap_me_failed");
                   set({
                     user: null,
+                    pendingVerificationEmail: null,
+                    pendingVerificationSource: null,
+                    emailVerificationChallenge: null,
                     isAuthenticated: false,
                     isLoading: false,
                     isInitialized: true,
@@ -439,16 +632,21 @@ export const useAuthStore = create<AuthState>()(
 
             if (isRefreshTokenCookieMode() || getRefreshToken()) {
               try {
-                const newAccessToken = await refreshAccessTokenForBootstrap();
+                const newAccessToken =
+                  await refreshAccessTokenShared("bootstrap");
                 const user = await fetchCurrentUser(newAccessToken);
                 set({
                   user,
+                  pendingVerificationEmail: null,
+                  pendingVerificationSource: null,
+                  emailVerificationChallenge: null,
                   isAuthenticated: true,
                   isLoading: false,
                   isInitialized: true,
                   registrationStatus: "idle",
                   error: null,
                 });
+                resetAuthFailureState();
                 return;
               } catch {
                 // Fallback to local logout below.
@@ -458,6 +656,9 @@ export const useAuthStore = create<AuthState>()(
             runClientLogoutCleanup("bootstrap_auth_failed");
             set({
               user: null,
+              pendingVerificationEmail: null,
+              pendingVerificationSource: null,
+              emailVerificationChallenge: null,
               isAuthenticated: false,
               isLoading: false,
               isInitialized: true,
@@ -495,6 +696,9 @@ export const useAuthStore = create<AuthState>()(
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         user: state.user,
+        pendingVerificationEmail: state.pendingVerificationEmail,
+        pendingVerificationSource: state.pendingVerificationSource,
+        emailVerificationChallenge: state.emailVerificationChallenge,
         isAuthenticated: state.isAuthenticated,
       }),
     },

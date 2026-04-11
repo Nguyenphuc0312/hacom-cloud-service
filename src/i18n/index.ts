@@ -19,6 +19,9 @@ export const appNamespaces = [
   "group",
 ] as const;
 
+const isProduction =
+  typeof import.meta !== "undefined" && Boolean(import.meta.env?.PROD);
+
 if (!i18n.isInitialized) {
   void i18n
     .use(LanguageDetector)
@@ -32,9 +35,13 @@ if (!i18n.isInitialized) {
     .init({
       ns: appNamespaces,
       defaultNS: defaultNamespace,
+      fallbackNS: defaultNamespace,
       supportedLngs: [...supportedLanguages],
       fallbackLng: "vi",
       load: "languageOnly",
+      returnNull: false,
+      returnEmptyString: false,
+      parseMissingKeyHandler: (key) => (isProduction ? "" : `[${key}]`),
       interpolation: {
         escapeValue: false,
       },
