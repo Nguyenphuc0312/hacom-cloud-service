@@ -15,10 +15,16 @@ import type { User as UserType } from "../../types";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import { searchUsersUseCase } from "../../features/chat/usecases/searchUsers";
 import { sendFriendRequestUseCase } from "../../features/chat/usecases/sendFriendRequest";
+import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 
 interface User {
   id: string;
   username: string;
+  displayName?: string;
+  fullNameFromHR?: string;
+  full_name_from_hr?: string;
+  employeeCode?: string;
+  employee_code?: string;
   firstName?: string;
   lastName?: string;
   avatar?: string;
@@ -93,6 +99,12 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
         const normalizedUsers = userList.map((user) => ({
           id: user.id,
           username: user.username,
+          displayName: (user as { displayName?: string }).displayName,
+          fullNameFromHR: (user as { fullNameFromHR?: string }).fullNameFromHR,
+          full_name_from_hr: (user as { full_name_from_hr?: string })
+            .full_name_from_hr,
+          employeeCode: (user as { employeeCode?: string }).employeeCode,
+          employee_code: (user as { employee_code?: string }).employee_code,
           firstName: user.firstName,
           lastName: user.lastName,
           avatar: user.avatar,
@@ -227,10 +239,11 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
   };
 
   const getDisplayName = (user: User) => {
-    if (user.firstName || user.lastName) {
-      return `${user.firstName || ""} ${user.lastName || ""}`.trim();
-    }
-    return user.username;
+    return (
+      resolveUserDisplayName(user, {
+        allowLegacyFallback: true,
+      }) || user.username
+    );
   };
 
   return (

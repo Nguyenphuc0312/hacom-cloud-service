@@ -23,7 +23,14 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const { t } = useTranslation();
   const location = useLocation();
-  const { isAuthenticated, isInitialized, initialize, user } = useAuthStore();
+  const {
+    isAuthenticated,
+    isInitialized,
+    initialize,
+    user,
+    authStatus,
+    activationContext,
+  } = useAuthStore();
 
   useEffect(() => {
     if (!isInitialized) {
@@ -33,6 +40,20 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   if (!isInitialized) {
     return <PageSpinner message={t("common:loading.checkingAuth")} />;
+  }
+
+  if (authStatus === "activation_required" && activationContext) {
+    return (
+      <Navigate
+        to={ROUTE_PATHS.ACTIVATION}
+        state={{ from: location.pathname }}
+        replace
+      />
+    );
+  }
+
+  if (authStatus === "locked_or_disabled") {
+    return <Navigate to={ROUTE_PATHS.LOGIN} replace />;
   }
 
   if (!isAuthenticated) {
@@ -59,7 +80,14 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
 export const GuestRoute: React.FC<GuardProps> = ({ children }) => {
   const { t } = useTranslation();
-  const { isAuthenticated, isInitialized, initialize } = useAuthStore();
+  const location = useLocation();
+  const {
+    isAuthenticated,
+    isInitialized,
+    initialize,
+    authStatus,
+    activationContext,
+  } = useAuthStore();
 
   useEffect(() => {
     if (!isInitialized) {
@@ -71,9 +99,48 @@ export const GuestRoute: React.FC<GuardProps> = ({ children }) => {
     return <PageSpinner message={t("common:loading.default")} />;
   }
 
-  if (isAuthenticated) {
+  if (isAuthenticated || authStatus === "authenticated") {
     return <Navigate to={ROUTE_PATHS.CHAT} replace />;
   }
 
+  if (
+    authStatus === "activation_required" &&
+    activationContext &&
+    location.pathname !== ROUTE_PATHS.ACTIVATION
+  ) {
+    return <Navigate to={ROUTE_PATHS.ACTIVATION} replace />;
+  }
+
   return <>{children}</>;
+};
+
+export const ActivationRoute: React.FC<GuardProps> = ({ children }) => {
+  const { t } = useTranslation();
+  const {
+    isInitialized,
+    initialize,
+    isAuthenticated,
+    authStatus,
+    activationContext,
+  } = useAuthStore();
+
+  useEffect(() => {
+    if (!isInitialized) {
+      void initialize();
+    }
+  }, [isInitialized, initialize]);
+
+  if (!isInitialized) {
+    return <PageSpinner message={t("common:loading.checkingAuth")} />;
+  }
+
+  if (isAuthenticated || authStatus === "authenticated") {
+    return <Navigate to={ROUTE_PATHS.CHAT} replace />;
+  }
+
+  if (authStatus === "activation_required" && activationContext) {
+    return <>{children}</>;
+  }
+
+  return <Navigate to={ROUTE_PATHS.LOGIN} replace />;
 };

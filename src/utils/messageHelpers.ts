@@ -12,6 +12,7 @@ import {
 import { isSameDay } from "./formatTime";
 import { rankConversations } from "./conversationRanking";
 import i18n from "../i18n";
+import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 
 const isDirectType = (conversationType: unknown): boolean => {
   const normalized = normalizeRoomType(conversationType);
@@ -25,19 +26,6 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
 
 const asTrimmedString = (value: unknown): string =>
   typeof value === "string" ? value.trim() : "";
-
-const looksLikeTechnicalIdentifier = (value: string): boolean => {
-  if (!value) return false;
-
-  // Most employee/user codes are compact, no-space identifiers with digits/separators.
-  if (/\s/.test(value)) return false;
-
-  const hasDigit = /\d/.test(value);
-  const hasSeparator = /[_-]/.test(value);
-  const isVeryShort = value.length <= 2;
-
-  return !isVeryShort && (hasDigit || hasSeparator);
-};
 
 interface DisplayNameOptions {
   conversationTitle?: string;
@@ -236,43 +224,21 @@ export function getUserDisplayName(
   }
 
   const userRecord = asRecord(user);
-
-  const displayName = asTrimmedString(user.displayName);
-  const fullName =
-    asTrimmedString(userRecord?.fullName) ||
-    asTrimmedString(
-      [
-        asTrimmedString(userRecord?.firstName),
-        asTrimmedString(userRecord?.lastName),
-      ]
-        .filter(Boolean)
-        .join(" "),
-    );
-  const genericName = asTrimmedString(userRecord?.name);
+  const primaryName = resolveUserDisplayName(
+    {
+      ...(userRecord || {}),
+      displayName: user.displayName,
+      username: user.username,
+      id: user.id,
+    },
+    {
+      allowLegacyFallback: false,
+    },
+  );
   const conversationTitle = asTrimmedString(options.conversationTitle);
 
-  const employeeCode =
-    asTrimmedString(userRecord?.employeeCode) ||
-    asTrimmedString(userRecord?.staffCode) ||
-    asTrimmedString(userRecord?.code);
-  const username = asTrimmedString(user.username);
-  const id = asTrimmedString(user.id);
-
-  const preferredDisplayName =
-    displayName && !looksLikeTechnicalIdentifier(displayName)
-      ? displayName
-      : "";
-
-  if (preferredDisplayName) {
-    return preferredDisplayName;
-  }
-
-  if (fullName) {
-    return fullName;
-  }
-
-  if (genericName) {
-    return genericName;
+  if (primaryName) {
+    return primaryName;
   }
 
   if (conversationTitle) {
@@ -283,23 +249,17 @@ export function getUserDisplayName(
     return "";
   }
 
-  if (displayName) {
-    return displayName;
-  }
-
-  if (employeeCode) {
-    return employeeCode;
-  }
-
-  if (username) {
-    return username;
-  }
-
-  if (id) {
-    return id;
-  }
-
-  return "";
+  return resolveUserDisplayName(
+    {
+      ...(userRecord || {}),
+      displayName: user.displayName,
+      username: user.username,
+      id: user.id,
+    },
+    {
+      allowLegacyFallback: true,
+    },
+  );
 }
 
 /**

@@ -960,6 +960,8 @@ export const MessageInput = React.forwardRef<
                 ) : (
                   mentionSuggestions.map((candidate, index) => {
                     const isActive = index === activeMentionIndex;
+                    const mentionLabel =
+                      candidate.displayName || candidate.username;
                     return (
                       <button
                         key={`${candidate.id}:${candidate.username}`}
@@ -980,13 +982,17 @@ export const MessageInput = React.forwardRef<
                         }}
                       >
                         <span className="truncate text-sm font-medium">
+                          {mentionLabel}
+                        </span>
+                        <span className="truncate text-xs text-text-muted">
                           @{candidate.username}
                         </span>
-                        {candidate.displayName && (
-                          <span className="truncate text-xs text-text-muted">
-                            {candidate.displayName}
-                          </span>
-                        )}
+                        {candidate.displayName &&
+                          candidate.displayName !== candidate.username && (
+                            <span className="truncate text-xs text-text-muted">
+                              {candidate.displayName}
+                            </span>
+                          )}
                       </button>
                     );
                   })

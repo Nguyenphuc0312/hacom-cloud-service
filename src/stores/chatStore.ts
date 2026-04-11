@@ -23,6 +23,7 @@ import {
 import { logMessageDebug } from "../utils/messageDebug";
 import { createReplySnapshot } from "../utils/messageTimeline";
 import { rankConversations } from "../utils/conversationRanking";
+import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import i18n from "../i18n";
 import { useAuthStore } from "./authStore";
 import { conversationApi, messageApi } from "../services/api";
@@ -331,11 +332,20 @@ const normalizeMessage = (
     asStringValue(source.userId) ??
     asStringValue(sender?.id) ??
     "unknown-user";
+  const resolvedSenderDisplayName = resolveUserDisplayName(
+    {
+      ...(sender || {}),
+      ...(source as Record<string, unknown>),
+      id: senderId,
+      username:
+        asStringValue(source.username) ?? asStringValue(sender?.username),
+      displayName:
+        asStringValue(source.displayName) ?? asStringValue(sender?.displayName),
+    },
+    { allowLegacyFallback: true },
+  );
   const senderName =
-    asStringValue(source.senderName) ??
-    asStringValue(source.username) ??
-    asStringValue(sender?.displayName) ??
-    asStringValue(sender?.username) ??
+    (asStringValue(source.senderName) ?? resolvedSenderDisplayName) ||
     i18n.t("common:labels.user");
   const senderAvatar =
     asStringValue(source.senderAvatar) ??
@@ -1081,9 +1091,9 @@ const resolveSenderIdentity = (): {
 } => {
   const currentUser = useAuthStore.getState().user;
   const senderName =
-    `${currentUser?.firstName || ""} ${currentUser?.lastName || ""}`.trim() ||
-    currentUser?.username?.trim() ||
-    i18n.t("chat:message.you");
+    resolveUserDisplayName(currentUser, {
+      allowLegacyFallback: true,
+    }) || i18n.t("chat:message.you");
 
   return {
     id: currentUser?.id || null,
@@ -2559,8 +2569,9 @@ export const useFilteredConversations = () => {
 
     const currentUser = useAuthStore.getState().user;
     const currentDisplayName = currentUser
-      ? `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim() ||
-        currentUser.username
+      ? resolveUserDisplayName(currentUser, {
+          allowLegacyFallback: true,
+        })
       : undefined;
     return rankConversations(filtered, {
       currentUserId: currentUser?.id,

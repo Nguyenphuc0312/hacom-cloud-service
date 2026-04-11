@@ -3,13 +3,21 @@ import type { ReactElement } from "react";
 import type { RouteObject } from "react-router-dom";
 import { publicRoutes } from "./config/publicRoutes";
 import { privateRoutes } from "./config/privateRoutes";
-import { GuestRoute, ProtectedRoute } from "./guards/RouteGuards";
+import {
+  ActivationRoute,
+  GuestRoute,
+  ProtectedRoute,
+} from "./guards/RouteGuards";
 
 const renderRouteElement = (
   Component: React.ComponentType,
-  options?: { guestOnly?: boolean; roles?: string[] },
+  options?: { guestOnly?: boolean; activationOnly?: boolean; roles?: string[] },
 ): ReactElement => {
   const page = <Component />;
+
+  if (options?.activationOnly) {
+    return <ActivationRoute>{page}</ActivationRoute>;
+  }
 
   if (options?.guestOnly) {
     return <GuestRoute>{page}</GuestRoute>;
@@ -23,13 +31,16 @@ const renderRouteElement = (
 };
 
 export const buildPublicRouteObjects = (): RouteObject[] =>
-  publicRoutes.map(({ path, index, component, guestOnly = true }) => ({
-    path,
-    index,
-    element: renderRouteElement(component as React.ComponentType, {
-      guestOnly,
+  publicRoutes.map(
+    ({ path, index, component, guestOnly = true, activationOnly = false }) => ({
+      path,
+      index,
+      element: renderRouteElement(component as React.ComponentType, {
+        guestOnly,
+        activationOnly,
+      }),
     }),
-  }));
+  );
 
 export const buildPrivateRouteObjects = (): RouteObject[] =>
   privateRoutes.map(({ path, index, component, roles }) => ({

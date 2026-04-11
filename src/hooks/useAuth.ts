@@ -6,7 +6,7 @@ import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores";
-import type { User } from "../stores";
+import type { LoginResult, User } from "../stores/authStore";
 import { toast } from "../components/ui";
 import type { LoginFormData, RegisterFormData } from "../lib/validations";
 import { useLogout } from "./useLogout";
@@ -17,7 +17,7 @@ export interface UseAuthReturn {
   isLoading: boolean;
   error: string | null;
 
-  login: (data: LoginFormData) => Promise<void>;
+  login: (data: LoginFormData) => Promise<LoginResult>;
   register: (
     data: Omit<RegisterFormData, "confirmPassword" | "acceptTerms">,
   ) => Promise<void>;
@@ -43,8 +43,11 @@ export const useAuth = (): UseAuthReturn => {
 
   const login = useCallback(
     async (data: LoginFormData) => {
-      await storeLogin(data);
-      navigate("/chat", { replace: true });
+      const result = await storeLogin(data);
+      if (result === "authenticated") {
+        navigate("/chat", { replace: true });
+      }
+      return result;
     },
     [storeLogin, navigate],
   );

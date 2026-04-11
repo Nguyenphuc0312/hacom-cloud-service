@@ -99,6 +99,30 @@
     "save": "Save changes",
     "phonePlaceholder": "+84 912 345 678"
   },
+  "settings": {
+    "title": "Profile settings",
+    "description": "Manage your display name, avatar, and background image.",
+    "avatar": "Avatar",
+    "background": "Background",
+    "backgroundPreview": "Background preview",
+    "noBackground": "No background image",
+    "chooseAvatar": "Choose avatar",
+    "chooseBackground": "Choose background",
+    "displayName": "Display name",
+    "displayNamePlaceholder": "Enter display name",
+    "bio": "Bio",
+    "readOnlyTitle": "HR source fields (read-only)",
+    "employeeCode": "Employee code",
+    "hrLegalName": "HR legal name",
+    "corporateEmail": "Corporate email",
+    "save": "Save profile",
+    "saved": "Profile updated.",
+    "saveFailed": "Unable to update profile.",
+    "upload": {
+      "unsupportedType": "Only JPG, PNG, WEBP, or GIF images are supported.",
+      "exceedsSize": "Image exceeds {{maxMb}}MB limit."
+    }
+  },
   "imagePreview": {
     "defaultAlt": "Image preview",
     "zoomOut": "Zoom out",

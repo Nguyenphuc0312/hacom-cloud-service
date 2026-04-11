@@ -99,6 +99,30 @@
     "save": "Lưu thay đổi",
     "phonePlaceholder": "+84 912 345 678"
   },
+  "settings": {
+    "title": "Hồ sơ cá nhân",
+    "description": "Quản lý tên hiển thị, avatar và ảnh nền của bạn.",
+    "avatar": "Ảnh đại diện",
+    "background": "Ảnh nền",
+    "backgroundPreview": "Xem trước ảnh nền",
+    "noBackground": "Chưa có ảnh nền",
+    "chooseAvatar": "Chọn ảnh đại diện",
+    "chooseBackground": "Chọn ảnh nền",
+    "displayName": "Tên hiển thị",
+    "displayNamePlaceholder": "Nhập tên hiển thị",
+    "bio": "Giới thiệu",
+    "readOnlyTitle": "Thông tin nguồn HR (chỉ xem)",
+    "employeeCode": "Mã nhân viên",
+    "hrLegalName": "Họ tên HR",
+    "corporateEmail": "Email công ty",
+    "save": "Lưu hồ sơ",
+    "saved": "Đã cập nhật hồ sơ.",
+    "saveFailed": "Không thể cập nhật hồ sơ.",
+    "upload": {
+      "unsupportedType": "Chỉ hỗ trợ ảnh JPG, PNG, WEBP hoặc GIF.",
+      "exceedsSize": "Ảnh vượt quá {{maxMb}}MB."
+    }
+  },
   "imagePreview": {
     "defaultAlt": "Xem trước ảnh",
     "zoomOut": "Thu nhỏ",

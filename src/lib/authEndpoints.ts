@@ -2,6 +2,10 @@
 export const AUTH_ENDPOINTS = {
   login: "/login",
   register: "/register",
+  activationRequest: "/activation/request",
+  activationResend: "/activation/resend",
+  activationVerify: "/activation/verify",
+  setInitialPassword: "/activation/set-password",
   requestEmailOtpChallenge: "/email-verification/challenges/request",
   confirmEmailOtpChallenge: "/email-verification/challenges/confirm",
   resendEmailOtpChallenge: "/email-verification/challenges/resend",

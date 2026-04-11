@@ -28,6 +28,7 @@ import {
 import { useSettings } from "../settings";
 import { useAuthStore } from "../stores";
 import { ROUTE_PATHS } from "../router/paths";
+import { ProfileSettingsSection } from "../features/profile/components/ProfileSettingsSection";
 
 const SettingsPage: React.FC = () => {
   const { t } = useTranslation(["settings", "common"]);
@@ -138,6 +139,7 @@ const SettingsPage: React.FC = () => {
       {/* ───── Content ───── */}
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-2xl space-y-4 px-4 py-5 sm:px-6">
+          <ProfileSettingsSection />
           <LanguageSection />
           <AppearanceSection />
           <NotificationSection />

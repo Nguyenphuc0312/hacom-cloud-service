@@ -3,7 +3,7 @@
  */
 
 export { useAuthStore } from "./authStore";
-export type { User } from "./authStore";
+export type { LoginResult, User } from "./authStore";
 
 export {
   useChatStore,

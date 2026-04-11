@@ -41,6 +41,7 @@ import { rankConversations } from "../utils/conversationRanking";
 import { UserStatus } from "../types";
 import { isDirectConversation } from "../lib/conversationAdapter";
 import { getOtherParticipant } from "../utils/messageHelpers";
+import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import { logMessageDebug } from "../utils/messageDebug";
 import { ErrorCode } from "@hacom/chat-shared-types";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
@@ -288,7 +289,7 @@ export const ChatPage: React.FC = () => {
             id: user.id,
             username: user.username,
             displayName:
-              `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
+              resolveUserDisplayName(user, { allowLegacyFallback: true }) ||
               user.username,
             avatar: user.avatar,
             status: user.status as UserStatus,

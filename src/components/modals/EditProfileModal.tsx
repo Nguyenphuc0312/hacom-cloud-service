@@ -1,15 +1,13 @@
 ﻿import React, { useState, useRef } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { CameraIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { Modal, Input, Textarea, Button, toast } from "../ui";
 import { Avatar } from "../common/Avatar";
-import { updateProfileSchema } from "../../lib/validations";
-import type { UpdateProfileFormData } from "../../lib/validations";
 import { useAuthStore } from "../../stores";
-import apiClient from "../../lib/axios";
+import { userApi } from "../../services/api";
+import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
+import { unwrapApiSuccess } from "../../lib/apiContract";
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -22,25 +20,31 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const { user, updateUser } = useAuthStore();
+  const [displayName, setDisplayName] = useState(user?.displayName || "");
+  const [bio, setBio] = useState(user?.bio || "");
+  const [phone, setPhone] = useState(user?.phone || "");
   const [isLoading, setIsLoading] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isDirty },
-    reset,
-  } = useForm<UpdateProfileFormData>({
-    resolver: zodResolver(updateProfileSchema),
-    defaultValues: {
-      firstName: user?.firstName || "",
-      lastName: user?.lastName || "",
-      bio: user?.bio || "",
-      phone: user?.phone || "",
-    },
-  });
+  const employeeCode =
+    (user as { employeeCode?: string; employee_code?: string } | null)
+      ?.employeeCode ||
+    (user as { employeeCode?: string; employee_code?: string } | null)
+      ?.employee_code ||
+    "-";
+  const hrLegalName =
+    (user as { fullNameFromHR?: string; full_name_from_hr?: string } | null)
+      ?.fullNameFromHR ||
+    (user as { fullNameFromHR?: string; full_name_from_hr?: string } | null)
+      ?.full_name_from_hr ||
+    "-";
+  const corporateEmail =
+    (user as { corporateEmail?: string; email?: string } | null)
+      ?.corporateEmail ||
+    user?.email ||
+    "-";
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -68,30 +72,42 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
     }
   };
 
-  const onSubmit = async (data: UpdateProfileFormData) => {
+  const hasChanges =
+    displayName !== (user?.displayName || "") ||
+    bio !== (user?.bio || "") ||
+    phone !== (user?.phone || "") ||
+    Boolean(avatarFile);
+
+  const onSubmit = async () => {
     setIsLoading(true);
 
     try {
+      let uploadedAvatar = user?.avatar;
+
       if (avatarFile) {
-        const formData = new FormData();
-        formData.append("avatar", avatarFile);
-
-        const avatarResponse = await apiClient.put("/users/avatar", formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-
-        updateUser({ avatar: avatarResponse.data.data.avatar });
+        const avatarResponse = await userApi.updateAvatar(avatarFile);
+        uploadedAvatar =
+          unwrapApiSuccess(avatarResponse).avatar || uploadedAvatar;
       }
 
-      const response = await apiClient.put("/users/profile", data);
-      updateUser(response.data.data);
+      const response = await userApi.patchProfile({
+        displayName: displayName.trim() || undefined,
+        bio: bio.trim() || undefined,
+        phone: phone.trim() || undefined,
+      });
+      const profileData = unwrapApiSuccess(response);
+      updateUser({
+        ...profileData,
+        avatar: uploadedAvatar,
+      });
 
       toast.success(t("profile:toast.profileUpdateSuccess"));
       onClose();
     } catch (err) {
       toast.error(
         (err as { response?: { data?: { error?: { message?: string } } } })
-          ?.response?.data?.error?.message || t("profile:toast.profileUpdateFailed"),
+          ?.response?.data?.error?.message ||
+          t("profile:toast.profileUpdateFailed"),
       );
     } finally {
       setIsLoading(false);
@@ -99,14 +115,15 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   };
 
   const handleClose = () => {
-    reset();
+    setDisplayName(user?.displayName || "");
+    setBio(user?.bio || "");
+    setPhone(user?.phone || "");
     handleRemoveAvatar();
     onClose();
   };
 
-  const displayName = user
-    ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username
-    : "";
+  const displayLabel =
+    resolveUserDisplayName(user, { allowLegacyFallback: true }) || "";
 
   return (
     <Modal
@@ -115,12 +132,18 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
       title={t("profile:editProfileModal.title")}
       size="md"
     >
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void onSubmit();
+        }}
+        className="space-y-6"
+      >
         <div className="flex flex-col items-center">
           <div className="relative">
             <Avatar
               src={avatarPreview || user?.avatar}
-              alt={displayName}
+              alt={displayLabel}
               size="xl"
               className="w-24 h-24"
             />
@@ -169,40 +192,57 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <Input
-            {...register("firstName")}
-            label={t("profile:editProfileModal.firstName")}
-            placeholder={t("auth:placeholders.firstName")}
-            error={errors.firstName?.message}
-            disabled={isLoading}
-          />
-          <Input
-            {...register("lastName")}
-            label={t("profile:editProfileModal.lastName")}
-            placeholder={t("auth:placeholders.lastName")}
-            error={errors.lastName?.message}
-            disabled={isLoading}
-          />
-        </div>
+        <Input
+          value={displayName}
+          onChange={(event) => setDisplayName(event.target.value)}
+          label={t("profile:settings.displayName")}
+          placeholder={t("profile:settings.displayNamePlaceholder")}
+          disabled={isLoading}
+        />
 
         <Input
-          {...register("phone")}
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
           label={t("profile:editProfileModal.phone")}
           placeholder={t("profile:editProfileModal.phonePlaceholder")}
-          error={errors.phone?.message}
           disabled={isLoading}
         />
 
         <Textarea
-          {...register("bio")}
+          value={bio}
+          onChange={(event) => setBio(event.target.value)}
           label={t("profile:editProfileModal.bio")}
           placeholder={t("profile:editProfileModal.bioPlaceholder")}
           rows={3}
-          error={errors.bio?.message}
           disabled={isLoading}
           hint={t("profile:editProfileModal.bioHint", { count: 500 })}
         />
+
+        <div className="rounded-xl border border-border bg-surface-overlay p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
+            {t("profile:settings.readOnlyTitle")}
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Input
+              label={t("profile:settings.employeeCode")}
+              value={employeeCode}
+              readOnly
+              disabled
+            />
+            <Input
+              label={t("profile:settings.hrLegalName")}
+              value={hrLegalName}
+              readOnly
+              disabled
+            />
+            <Input
+              label={t("profile:settings.corporateEmail")}
+              value={corporateEmail}
+              readOnly
+              disabled
+            />
+          </div>
+        </div>
 
         <div className="flex gap-3 pt-2">
           <Button
@@ -218,7 +258,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
             type="submit"
             fullWidth
             isLoading={isLoading}
-            disabled={isLoading || (!isDirty && !avatarFile)}
+            disabled={isLoading || !hasChanges}
           >
             {t("profile:editProfileModal.save")}
           </Button>

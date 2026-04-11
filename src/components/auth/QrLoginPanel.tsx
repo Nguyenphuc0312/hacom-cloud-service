@@ -117,11 +117,14 @@ const normalizeLoginResponseForStore = (
   refreshToken: payload.refreshToken,
   user: {
     id: payload.user.id,
-    username:
-      payload.user.username ||
-      payload.user.displayName ||
-      payload.user.email ||
-      payload.user.id,
+    username: payload.user.username || payload.user.id,
+    displayName: payload.user.displayName,
+    fullNameFromHR: (payload.user as { fullNameFromHR?: string })
+      .fullNameFromHR,
+    full_name_from_hr: (payload.user as { full_name_from_hr?: string })
+      .full_name_from_hr,
+    employeeCode: (payload.user as { employeeCode?: string }).employeeCode,
+    employee_code: (payload.user as { employee_code?: string }).employee_code,
     email: payload.user.email,
     firstName: payload.user.firstName,
     lastName: payload.user.lastName,

@@ -56,11 +56,18 @@ const normalizeUserSummary = (value: unknown): UserSummary | null => {
 
   const username =
     asString(source.username) ??
+    asString(source.employeeCode) ??
+    asString(source.employee_code) ??
     asString(source.userName) ??
     asString(source.nickname) ??
     id;
   const displayName =
     asString(source.displayName) ??
+    asString(source.display_name) ??
+    asString(source.fullNameFromHR) ??
+    asString(source.full_name_from_hr) ??
+    asString(source.employeeCode) ??
+    asString(source.employee_code) ??
     asString(source.fullName) ??
     asString(source.name) ??
     username;
@@ -133,8 +140,18 @@ const normalizeLastMessage = (
     "unknown-user";
   const senderName =
     asString(raw.senderName) ??
+    asString(raw.displayName) ??
+    asString(raw.display_name) ??
+    asString(raw.fullNameFromHR) ??
+    asString(raw.full_name_from_hr) ??
+    asString(raw.employeeCode) ??
+    asString(raw.employee_code) ??
     asString(raw.username) ??
     asString(sender?.displayName) ??
+    asString(sender?.fullNameFromHR) ??
+    asString(sender?.full_name_from_hr) ??
+    asString(sender?.employeeCode) ??
+    asString(sender?.employee_code) ??
     asString(sender?.username) ??
     "Unknown user";
   const type = asString(raw.type) ?? MessageType.TEXT;

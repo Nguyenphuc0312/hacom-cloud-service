@@ -34,6 +34,7 @@ import { resolveChatDensity } from "../../utils/densityPolicy";
 import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { logScrollTrace } from "../../utils/scrollTrace";
+import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { getMessageByIdUseCase } from "../../features/chat/usecases/getMessageById";
 import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
 
@@ -690,14 +691,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
     return participants
       .filter((participant) => participant.id !== currentUser.id)
-      .map((participant) => ({
-        id: participant.id,
-        username:
-          participant.username?.trim() ||
-          participant.displayName?.trim() ||
-          participant.id,
-        displayName: participant.displayName?.trim() || undefined,
-      }));
+      .map((participant) => {
+        const participantRecord = participant as unknown as Record<
+          string,
+          unknown
+        >;
+        const employeeCode =
+          (typeof participantRecord.employeeCode === "string" &&
+            participantRecord.employeeCode.trim()) ||
+          (typeof participantRecord.employee_code === "string" &&
+            participantRecord.employee_code.trim()) ||
+          "";
+
+        return {
+          id: participant.id,
+          username:
+            participant.username?.trim() || employeeCode || participant.id,
+          displayName:
+            resolveUserDisplayName(participant, {
+              allowLegacyFallback: false,
+            }) || undefined,
+        };
+      });
   }, [conversation.participants, currentUser.id]);
 
   const handleShareContact = React.useCallback(

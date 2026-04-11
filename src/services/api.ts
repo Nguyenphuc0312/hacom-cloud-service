@@ -67,6 +67,26 @@ export interface ConfirmEmailOtpChallengeResponse {
   alreadyVerified?: boolean;
 }
 
+export interface ActivationOtpResponse {
+  sent: boolean;
+  maskedEmail?: string | null;
+  resendAvailableAt?: string | null;
+  nextAction?: "VERIFY_OTP" | "SET_PASSWORD";
+}
+
+export interface ActivationVerifyResponse {
+  user?: User;
+  accessToken?: string;
+  refreshToken?: string;
+  tokens?: {
+    accessToken?: string;
+    refreshToken?: string;
+  };
+  nextAction?: "VERIFY_OTP" | "SET_PASSWORD";
+  requiresPasswordSetup?: boolean;
+  verificationProof?: string | null;
+}
+
 const canonicalConversationPath = (conversationId: string): string =>
   `/conversations/${conversationId}`;
 
@@ -143,6 +163,35 @@ export const authApi = {
       AUTH_ENDPOINTS.login,
       { email, password },
     );
+    return response.data;
+  },
+
+  requestActivationOtp: async (data: { activationTicket: string }) => {
+    const response = await authClient.post<ApiResponse<ActivationOtpResponse>>(
+      AUTH_ENDPOINTS.activationRequest,
+      data,
+    );
+    return response.data;
+  },
+
+  resendActivationOtp: async (data: { activationTicket: string }) => {
+    const response = await authClient.post<ApiResponse<ActivationOtpResponse>>(
+      AUTH_ENDPOINTS.activationResend,
+      data,
+    );
+    return response.data;
+  },
+
+  verifyActivationOtp: async (data: {
+    activationTicket: string;
+    otp?: string;
+    password?: string;
+    confirmPassword?: string;
+    verificationProof?: string;
+  }) => {
+    const response = await authClient.post<
+      ApiResponse<ActivationVerifyResponse>
+    >(AUTH_ENDPOINTS.activationVerify, data);
     return response.data;
   },
 
@@ -255,6 +304,27 @@ export const userApi = {
       data,
     );
     return response.data;
+  },
+
+  patchProfile: async (data: Partial<User>) => {
+    try {
+      const response = await apiClient.patch<ApiResponse<User>>(
+        "/users/profile",
+        data,
+      );
+      return response.data;
+    } catch (error) {
+      if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+        throw error;
+      }
+
+      // Backward-compatible fallback for legacy profile update contract.
+      const response = await apiClient.put<ApiResponse<User>>(
+        "/users/profile",
+        data,
+      );
+      return response.data;
+    }
   },
 
   updateAvatar: async (file: File) => {
@@ -612,10 +682,11 @@ export const conversationApi = {
           `${legacyConversationMessagesPath(conversationId)}/unread`,
         ),
     );
+    const payload = unwrapApiSuccess(response.data);
 
     return {
       ...response.data,
-      data: normalizeUnreadCountPayload(response.data.data),
+      data: normalizeUnreadCountPayload(payload),
     };
   },
 };
@@ -1012,10 +1083,11 @@ export const messageApi = {
           `${legacyConversationMessagesPath(conversationId)}/pinned`,
         ),
     );
+    const payload = unwrapApiSuccess(response.data);
 
     return {
       ...response.data,
-      data: normalizePinnedMessagesPayload(response.data.data),
+      data: normalizePinnedMessagesPayload(payload),
     };
   },
 };

@@ -152,9 +152,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         username: authUser.username,
         firstName: authUser.firstName,
         lastName: authUser.lastName,
-        displayName:
-          `${authUser.firstName || ""} ${authUser.lastName || ""}`.trim() ||
-          authUser.username,
+        displayName: authUser.displayName || authUser.username,
         avatar: authUser.avatar,
         bio: authUser.bio,
         phone: authUser.phone,
@@ -187,9 +185,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           username: payload.username,
           firstName: payload.firstName,
           lastName: payload.lastName,
-          displayName:
-            `${payload.firstName || ""} ${payload.lastName || ""}`.trim() ||
-            payload.username,
+          displayName: payload.displayName || payload.username,
           avatar: payload.avatar,
           bio: payload.bio,
           phone: payload.phone,
