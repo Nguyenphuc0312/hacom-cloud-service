@@ -69,11 +69,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
 
-  const tabs: { id: ConversationFilter; label: string }[] = [
-    { id: "all", label: t("sidebar:tabs.all") },
-    { id: "direct", label: t("sidebar:tabs.direct") },
-    { id: "groups", label: t("sidebar:tabs.groups") },
-  ];
+  // ─── FIX: Khai báo tabs bên ngoài JSX để reuse ───────────────────────────
+  const tabs: { id: ConversationFilter; label: string }[] = useMemo(
+    () => [
+      { id: "all", label: t("sidebar:tabs.all") },
+      { id: "direct", label: t("sidebar:tabs.direct") },
+      { id: "groups", label: t("sidebar:tabs.groups") },
+    ],
+    [t],
+  );
 
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
@@ -104,6 +108,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Subscribe to presence for all DM contacts visible in the sidebar
   usePresence({ userIds: dmUserIds, enabled: dmUserIds.length > 0 });
 
+  // ─── Hydrate collapsed state từ localStorage (tránh flicker) ─────────────
   useEffect(() => {
     if (typeof window === "undefined") return;
     const storedValue = window.localStorage.getItem(COLLAPSED_STORAGE_KEY);
@@ -115,6 +120,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     window.localStorage.setItem(COLLAPSED_STORAGE_KEY, isCollapsed ? "1" : "0");
   }, [isCollapsed]);
 
+  // ─── Tổng unread count cho tất cả conversations ───────────────────────────
   const unreadTotal = useMemo(
     () =>
       (Array.isArray(conversations) ? conversations : []).reduce(
@@ -124,6 +130,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
     [conversations],
   );
 
+  // ─── Unread count riêng theo filter để hiển thị trên từng tab ────────────
+  const unreadByFilter = useMemo(() => {
+    const safeConversations = Array.isArray(conversations) ? conversations : [];
+    return {
+      all: safeConversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0),
+      direct: safeConversations
+        .filter((c) => isDirectConversation(c))
+        .reduce((sum, c) => sum + (c.unreadCount || 0), 0),
+      groups: safeConversations
+        .filter((c) => !isDirectConversation(c))
+        .reduce((sum, c) => sum + (c.unreadCount || 0), 0),
+    };
+  }, [conversations]);
+
   const handleLogoutConfirm = async () => {
     try {
       await logout();
@@ -132,9 +152,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
+  // ─── Helper: active state cho bottom nav ─────────────────────────────────
+  const isNavActive = (path: string) => location.pathname.startsWith(path);
+
   return (
     <>
       <SidebarContainer collapsed={isCollapsed} className={className}>
+        {/* ── Header ─────────────────────────────────────────────────────── */}
         <SidebarHeader
           currentUser={currentUser}
           collapsed={isCollapsed}
@@ -143,6 +167,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onCurrentUserClick={onCurrentUserClick}
         />
 
+        {/* ── Search ─────────────────────────────────────────────────────── */}
         <SidebarSearch
           value={searchQuery}
           collapsed={isCollapsed}
@@ -152,29 +177,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
           }
         />
 
+        {/* ── Filter Tabs ─────────────────────────────────────────────────── */}
         {!isCollapsed && (
           <div className="px-3 pb-2 pt-1">
-            <div className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div
+              className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              role="tablist"
+              aria-label={t("sidebar:tabs.label")}
+            >
               {tabs.map((tab) => {
                 const isActive = activeFilter === tab.id;
+                // ─── FIX: Lấy unread count của từng tab ─────────────────
+                const tabUnread =
+                  unreadByFilter[tab.id as keyof typeof unreadByFilter] ?? 0;
 
                 return (
                   <button
                     key={tab.id}
                     type="button"
+                    role="tab"
+                    aria-selected={isActive}
                     onClick={() => setActiveFilter(tab.id)}
                     className={clsx(
-                      "inline-flex h-8 items-center gap-2 rounded-lg px-3 text-caption font-medium transition-micro",
+                      // ─── FIX: Tăng padding để text có không gian ──────
+                      "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-caption font-medium transition-micro",
                       isActive
                         ? "bg-surface text-text-primary shadow-xs"
                         : "text-text-muted hover:bg-surface-hover hover:text-text-secondary",
                     )}
-                    aria-pressed={isActive}
                   >
-                    {tab.label}
-                    {tab.id === "all" && unreadTotal > 0 && (
+                    {/* ─── FIX: Render label — đây là bug chính trong code gốc ─── */}
+                    <span>{tab.label}</span>
+
+                    {/* Badge chỉ hiện khi có unread, không chỉ tab "all" */}
+                    {tabUnread > 0 && (
                       <Badge
-                        count={unreadTotal}
+                        count={tabUnread}
                         size="sm"
                         variant={isActive ? "primary" : "muted"}
                       />
@@ -183,6 +221,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 );
               })}
             </div>
+
+            {/* Loading indicator khi đang fetch thêm conversations */}
             {isLoadingConversations && conversations.length > 0 && (
               <div className="mt-2 inline-flex items-center gap-2 px-1 text-caption text-text-muted">
                 <Spinner size="sm" />
@@ -192,6 +232,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
+        {/* ── Room List ───────────────────────────────────────────────────── */}
         <RoomList
           conversations={conversations}
           currentUser={currentUser}
@@ -208,36 +249,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onSelect={handleSelectRoom}
         />
 
+        {/* ── Bottom Nav ──────────────────────────────────────────────────── */}
         <div className="border-t border-border/70 px-2 pb-2 pt-2">
-          {/* Friends button */}
+          {/* Friends */}
           <button
             type="button"
             onClick={() => navigate(ROUTE_PATHS.FRIENDS)}
             className={clsx(
               "inline-flex w-full items-center rounded-lg px-3 py-2.5 text-body-sm font-medium transition-micro",
-              location.pathname.startsWith(ROUTE_PATHS.FRIENDS)
+              isNavActive(ROUTE_PATHS.FRIENDS)
                 ? "bg-surface-active text-text-primary"
                 : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
               isCollapsed && "justify-center px-0",
             )}
             aria-label={t("friends:title")}
+            // ─── UX: tooltip khi collapsed ────────────────────────────────
+            title={isCollapsed ? t("friends:title") : undefined}
           >
             <UserGroupIcon className="h-5 w-5 shrink-0" />
             {!isCollapsed && <span className="ml-2">{t("friends:title")}</span>}
           </button>
 
-          {/* Settings button */}
+          {/* Settings */}
           <button
             type="button"
             onClick={() => navigate(ROUTE_PATHS.SETTINGS)}
             className={clsx(
               "inline-flex w-full items-center rounded-lg px-3 py-2.5 text-body-sm font-medium transition-micro",
-              location.pathname.startsWith(ROUTE_PATHS.SETTINGS)
+              isNavActive(ROUTE_PATHS.SETTINGS)
                 ? "bg-surface-active text-text-primary"
                 : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
               isCollapsed && "justify-center px-0",
             )}
             aria-label={t("settings:pageTitle")}
+            title={isCollapsed ? t("settings:pageTitle") : undefined}
           >
             <Cog6ToothIcon className="h-5 w-5 shrink-0" />
             {!isCollapsed && (
@@ -245,7 +290,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </button>
 
-          {/* Logout button */}
+          {/* Logout */}
           <button
             type="button"
             disabled={isLoggingOut}
@@ -256,6 +301,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               isCollapsed && "justify-center px-0",
             )}
             aria-label={t("sidebar:logout.button")}
+            title={isCollapsed ? t("sidebar:logout.button") : undefined}
           >
             <ArrowLeftOnRectangleIcon className="h-5 w-5 shrink-0" />
             {!isCollapsed && (
@@ -269,6 +315,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </SidebarContainer>
 
+      {/* ── Logout Confirm Dialog ────────────────────────────────────────── */}
       <ConfirmDialog
         isOpen={isLogoutConfirmOpen}
         onClose={() => {
