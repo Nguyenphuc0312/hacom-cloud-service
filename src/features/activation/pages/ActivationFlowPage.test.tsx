@@ -151,7 +151,9 @@ describe("ActivationFlowPage", () => {
   });
 
   it("prevents duplicate OTP request submit while request is pending", async () => {
-    let resolveRequest: ((value: unknown) => void) | null = null;
+    let resolveRequest: (value: unknown) => void = () => {
+      throw new Error("resolveRequest not initialized");
+    };
     requestOtpMock.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -177,7 +179,7 @@ describe("ActivationFlowPage", () => {
 
     expect(requestOtpMock).toHaveBeenCalledTimes(1);
 
-    resolveRequest?.({
+    resolveRequest({
       maskedEmail: "u***@company.test",
       nextAction: "VERIFY_OTP",
       resendAvailableAt: null,

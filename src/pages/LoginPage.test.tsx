@@ -63,7 +63,9 @@ describe("LoginPage", () => {
   });
 
   it("prevents duplicate password login submit while request is pending", async () => {
-    let resolveLogin: ((value: unknown) => void) | null = null;
+    let resolveLogin: (value: unknown) => void = () => {
+      throw new Error("resolveLogin not initialized");
+    };
     loginMock.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -104,7 +106,7 @@ describe("LoginPage", () => {
       expect(loginMock).toHaveBeenCalledTimes(1);
     });
 
-    resolveLogin?.("authenticated");
+    resolveLogin("authenticated");
 
     await waitFor(() => {
       expect(screen.getByText("chat-page")).toBeInTheDocument();

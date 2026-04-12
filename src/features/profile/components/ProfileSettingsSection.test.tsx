@@ -146,7 +146,9 @@ describe("ProfileSettingsSection", () => {
   });
 
   it("prevents duplicate profile save submit while save is pending", async () => {
-    let resolvePatch: ((value: unknown) => void) | null = null;
+    let resolvePatch: (value: unknown) => void = () => {
+      throw new Error("resolvePatch not initialized");
+    };
     patchProfileMock.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -169,7 +171,7 @@ describe("ProfileSettingsSection", () => {
 
     expect(patchProfileMock).toHaveBeenCalledTimes(1);
 
-    resolvePatch?.({
+    resolvePatch({
       success: true,
       data: {
         displayName: "Updated Name",
