@@ -68,9 +68,9 @@ interface RowData {
   onSelect: (conversationId: string) => void;
 }
 
-const SECTION_HEIGHT = 22;
-const EXPANDED_ROOM_HEIGHT = 68;
-const COLLAPSED_ROOM_HEIGHT = 56;
+const SECTION_HEIGHT = 28;
+const EXPANDED_ROOM_HEIGHT = 76;
+const COLLAPSED_ROOM_HEIGHT = 60;
 
 const measureViewportHeight = (node: HTMLDivElement): number => {
   if (node.clientHeight > 0) return node.clientHeight;
@@ -209,13 +209,18 @@ const Row = ({ index, style, data }: ListChildComponentProps<RowData>) => {
       <div style={style} className="px-4">
         <div
           className={clsx(
-            "flex h-full items-center text-caption font-medium uppercase tracking-[0.08em] text-text-muted/80",
+            "flex h-full items-center text-[11px] font-semibold tracking-[0.02em] text-text-muted",
             data.collapsed && "justify-center",
           )}
         >
-          {data.collapsed
-            ? item.title.charAt(0)
-            : `${item.title} (${item.count})`}
+          {data.collapsed ? (
+            item.title.charAt(0)
+          ) : (
+            <>
+              <span>{item.title}</span>
+              <span className="ml-2 text-text-muted/70">{item.count}</span>
+            </>
+          )}
         </div>
       </div>
     );
@@ -544,7 +549,7 @@ export const RoomList: React.FC<RoomListProps> = ({
   }
 
   return (
-    <div className="min-h-0 flex-1 pb-2 flex flex-col">
+    <div className="flex min-h-0 flex-1 flex-col pb-2">
       <div
         ref={containerRef}
         className="min-h-0 flex-1"
@@ -581,7 +586,7 @@ export const RoomList: React.FC<RoomListProps> = ({
             onClick={() => onLoadMore?.()}
             disabled={isLoadingMore}
             className={clsx(
-              "w-full rounded-xl border border-border px-3 py-2 text-xs font-medium transition-colors",
+              "w-full rounded-2xl border border-border/70 bg-surface px-3 py-2.5 text-xs font-medium shadow-xs transition-colors",
               isLoadingMore
                 ? "cursor-not-allowed text-text-muted opacity-70"
                 : "text-text-secondary hover:bg-surface-hover",

@@ -19,7 +19,7 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({
     <aside
       className={clsx(
         "flex h-full min-h-0 w-full flex-col overflow-hidden",
-        "border-r border-border/70 bg-[hsl(var(--color-sidebar-surface))]",
+        "border-r border-border/60 bg-[hsl(var(--color-sidebar-surface))]",
         "lg:transition-[width] lg:duration-200",
         collapsed ? "lg:w-sidebar-collapsed" : "lg:w-sidebar-expanded",
         className,

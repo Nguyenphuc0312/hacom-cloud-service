@@ -14,7 +14,6 @@ import {
   Cog6ToothIcon,
   UserGroupIcon,
 } from "@heroicons/react/24/outline";
-import { Badge } from "../common/Badge";
 import { ConfirmDialog, Spinner } from "../ui";
 import { useLogout, usePresence } from "../../hooks";
 import type {
@@ -120,20 +119,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     window.localStorage.setItem(COLLAPSED_STORAGE_KEY, isCollapsed ? "1" : "0");
   }, [isCollapsed]);
 
-  // ─── Unread count riêng theo filter để hiển thị trên từng tab ────────────
-  const unreadByFilter = useMemo(() => {
-    const safeConversations = Array.isArray(conversations) ? conversations : [];
-    return {
-      all: safeConversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0),
-      direct: safeConversations
-        .filter((c) => isDirectConversation(c))
-        .reduce((sum, c) => sum + (c.unreadCount || 0), 0),
-      groups: safeConversations
-        .filter((c) => !isDirectConversation(c))
-        .reduce((sum, c) => sum + (c.unreadCount || 0), 0),
-    };
-  }, [conversations]);
-
   const handleLogoutConfirm = async () => {
     try {
       await logout();
@@ -169,17 +154,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* ── Filter Tabs ─────────────────────────────────────────────────── */}
         {!isCollapsed && (
-          <div className="px-3 pb-2 pt-1">
+          <div className="px-3 pb-3 pt-1">
             <div
-              className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-border/70 bg-surface-overlay/80 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               role="tablist"
               aria-label={t("sidebar:tabs.label")}
             >
               {tabs.map((tab) => {
                 const isActive = activeFilter === tab.id;
-                // ─── FIX: Lấy unread count của từng tab ─────────────────
-                const tabUnread =
-                  unreadByFilter[tab.id as keyof typeof unreadByFilter] ?? 0;
 
                 return (
                   <button
@@ -189,21 +171,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     aria-selected={isActive}
                     onClick={() => setActiveFilter(tab.id)}
                     className={clsx(
-                      // ─── FIX: Tăng padding để text có không gian ──────
-                      "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-caption font-medium transition-micro",
+                      "inline-flex h-9 min-w-fit items-center justify-center rounded-xl px-4 text-body-sm font-medium transition-micro",
                       isActive
                         ? "bg-surface text-text-primary shadow-xs"
-                        : "text-text-muted hover:bg-surface-hover hover:text-text-secondary",
+                        : "text-text-muted hover:bg-surface hover:text-text-secondary",
                     )}
                   >
-                    {/* Badge chỉ hiện khi có unread, không chỉ tab "all" */}
-                    {tabUnread > 0 && (
-                      <Badge
-                        count={tabUnread}
-                        size="sm"
-                        variant={isActive ? "primary" : "muted"}
-                      />
-                    )}
+                    <span className="whitespace-nowrap">{tab.label}</span>
                   </button>
                 );
               })}
@@ -237,15 +211,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
 
         {/* ── Bottom Nav ──────────────────────────────────────────────────── */}
-        <div className="border-t border-border/70 px-2 pb-2 pt-2">
+        <div className="border-t border-border/60 px-3 pb-3 pt-3">
+          <div className="space-y-1 rounded-[1.75rem] border border-border/70 bg-surface/80 p-2 shadow-xs backdrop-blur-sm">
           {/* Friends */}
           <button
             type="button"
             onClick={() => navigate(ROUTE_PATHS.FRIENDS)}
             className={clsx(
-              "inline-flex w-full items-center rounded-lg px-3 py-2.5 text-body-sm font-medium transition-micro",
+              "inline-flex w-full items-center rounded-xl px-3 py-2.5 text-body-sm font-medium transition-micro",
               isNavActive(ROUTE_PATHS.FRIENDS)
-                ? "bg-surface-active text-text-primary"
+                ? "bg-primary/12 text-primary"
                 : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
               isCollapsed && "justify-center px-0",
             )}
@@ -262,9 +237,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             type="button"
             onClick={() => navigate(ROUTE_PATHS.SETTINGS)}
             className={clsx(
-              "inline-flex w-full items-center rounded-lg px-3 py-2.5 text-body-sm font-medium transition-micro",
+              "inline-flex w-full items-center rounded-xl px-3 py-2.5 text-body-sm font-medium transition-micro",
               isNavActive(ROUTE_PATHS.SETTINGS)
-                ? "bg-surface-active text-text-primary"
+                ? "bg-primary/12 text-primary"
                 : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
               isCollapsed && "justify-center px-0",
             )}
@@ -283,7 +258,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             disabled={isLoggingOut}
             onClick={() => setIsLogoutConfirmOpen(true)}
             className={clsx(
-              "inline-flex w-full items-center rounded-lg px-3 py-2.5 text-body-sm font-medium transition-micro",
+              "inline-flex w-full items-center rounded-xl px-3 py-2.5 text-body-sm font-medium transition-micro",
               "text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50",
               isCollapsed && "justify-center px-0",
             )}
@@ -299,6 +274,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </span>
             )}
           </button>
+          </div>
         </div>
       </SidebarContainer>
 

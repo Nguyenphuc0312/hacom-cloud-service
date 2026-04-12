@@ -62,14 +62,14 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   );
 
   return (
-    <div className="px-3 py-3">
-      <div className="flex items-center justify-between gap-2">
+    <div className="px-3 pb-2 pt-3">
+      <div className="flex items-center justify-between gap-2 rounded-[1.75rem] border border-border/70 bg-surface/85 px-2.5 py-2 shadow-xs backdrop-blur-sm">
         <button
           type="button"
           onClick={onCurrentUserClick}
           className={clsx(
-            "flex min-w-0 flex-1 items-center rounded-xl text-left transition-micro hover:bg-surface-hover",
-            collapsed ? "justify-center px-0 py-2" : "gap-3 px-2 py-2.5",
+            "flex min-w-0 flex-1 items-center rounded-[1.25rem] text-left transition-micro hover:bg-surface-hover",
+            collapsed ? "justify-center px-0 py-2" : "gap-3 px-2.5 py-2.5",
           )}
           title={collapsed ? currentUserName : undefined}
           aria-label={currentUserName}
@@ -84,7 +84,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
 
           {!collapsed && (
             <div className="min-w-0">
-              <p className="truncate text-title-sm text-text-primary">
+              <p className="truncate text-body-sm font-semibold text-text-primary">
                 {currentUserName}
               </p>
               <p className="truncate text-caption text-text-muted">
@@ -98,6 +98,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           {!collapsed && (
             <IconButtonSurface
               onClick={onNewChat}
+              className="bg-primary text-text-inverse shadow-xs hover:bg-primary-hover hover:text-text-inverse"
               aria-label={t("sidebar:header.startNewChat")}
             >
               <PencilSquareIcon className="h-5 w-5" />
