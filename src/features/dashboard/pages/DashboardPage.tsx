@@ -6,7 +6,7 @@ import {
   ExclamationCircleFilled,
   WarningFilled,
 } from '@ant-design/icons';
-import { Alert, Button, Card, Col, List, Row, Space, Typography } from 'antd';
+import { Alert, Button, Col, List, Row, Space, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 
 import { serviceHealthClient, usersClient } from '@/api/clients';
@@ -15,6 +15,8 @@ import { queryKeys } from '@/api/queryKeys';
 import { PageShell } from '@/components/PageShell';
 import { QueryStateView } from '@/components/QueryStates';
 import { StatCard } from '@/components/StatCard';
+import { WidgetCard } from '@/components/WidgetCard';
+import { ActivityListCard } from '@/components/ActivityListCard';
 import { StatusBadge } from '@/components/StatusBadge';
 import { formatDateTime } from '@/utils/date';
 import { formatMs } from '@/utils/formatters';
@@ -142,13 +144,22 @@ export const DashboardPage = () => {
         ) : null
       }
     >
-      <Card className={`dashboard-hero dashboard-hero--${overallTone}`}>
-        <div className="dashboard-hero-icon">{overallConfig.icon}</div>
+      <WidgetCard
+        className={`dashboard-hero dashboard-hero--${overallTone}`}
+        title={
+          <Space size={8} align="center">
+            <span className="dashboard-hero-icon">{overallConfig.icon}</span>
+            <span>{overallConfig.title}</span>
+          </Space>
+        }
+        actions={
+          <Button type="default" onClick={() => navigate('/services/health')}>
+            Open services console <ArrowRightOutlined />
+          </Button>
+        }
+      >
         <div className="dashboard-hero-body">
           <Text className="dashboard-hero-eyebrow">System Status</Text>
-          <Typography.Title level={2} className="dashboard-hero-title">
-            {overallConfig.title}
-          </Typography.Title>
           <Text className="dashboard-hero-subtitle">{overallConfig.subtitle}</Text>
           <Space size={8} wrap className="dashboard-hero-badges">
             <StatusBadge status={overallTone === 'down' ? 'down' : overallTone} />
@@ -169,57 +180,65 @@ export const DashboardPage = () => {
             <Text type="secondary">Active incidents</Text>
             <strong>{firingIncidents.length}</strong>
           </div>
-          <Button type="default" onClick={() => navigate('/services/health')}>
-            Open services console <ArrowRightOutlined />
-          </Button>
         </div>
-      </Card>
+      </WidgetCard>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
           <StatCard
             title="Total users"
             value={totalUsers}
-            compact
-            loading={!totalUsersQuery.data && totalUsersQuery.isLoading}
-            error={totalUsersQuery.isError}
+            icon={<UserOutlined />}
+            meta={
+              totalUsersQuery.isError ? (
+                <span style={{ color: 'var(--state-error)' }}>!</span>
+              ) : null
+            }
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <StatCard
             title="Active users"
             value={activeUsers}
-            compact
-            loading={!activeUsersQuery.data && activeUsersQuery.isLoading}
-            error={activeUsersQuery.isError}
+            icon={<CheckCircleFilled style={{ color: 'var(--state-success)' }} />}
+            meta={
+              activeUsersQuery.isError ? (
+                <span style={{ color: 'var(--state-error)' }}>!</span>
+              ) : null
+            }
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <StatCard
             title="Locked users"
             value={lockedUsers}
-            compact
-            loading={!lockedUsersQuery.data && lockedUsersQuery.isLoading}
-            error={lockedUsersQuery.isError}
+            icon={<CloseCircleFilled style={{ color: 'var(--state-error)' }} />}
+            meta={
+              lockedUsersQuery.isError ? (
+                <span style={{ color: 'var(--state-error)' }}>!</span>
+              ) : null
+            }
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <StatCard
             title="Pending verification"
             value={pendingVerificationUsers}
-            compact
-            loading={!pendingUsersQuery.data && pendingUsersQuery.isLoading}
-            error={pendingUsersQuery.isError}
+            icon={<ExclamationCircleFilled style={{ color: 'var(--state-warning)' }} />}
+            meta={
+              pendingUsersQuery.isError ? (
+                <span style={{ color: 'var(--state-error)' }}>!</span>
+              ) : null
+            }
           />
         </Col>
       </Row>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={12}>
-          <Card
-            className="dashboard-section-card"
+          <WidgetCard
             title="Service dependency"
-            extra={
+            actions={
               <Button type="link" onClick={() => navigate('/services/health')}>
                 Health details
               </Button>
@@ -262,53 +281,41 @@ export const DashboardPage = () => {
             ) : (
               <QueryStateView kind="empty" description="Chưa có dữ liệu service health." />
             )}
-          </Card>
+          </WidgetCard>
         </Col>
         <Col xs={24} lg={12}>
-          <Card className="dashboard-section-card" title="Recent incidents">
-            {incidentsQuery.isLoading && !incidentsQuery.data ? (
-              <QueryStateView kind="loading" compact />
-            ) : incidentsQuery.isError ? (
-              <Alert
-                type="warning"
-                showIcon
-                message="Incident feed unavailable"
-                description="Tạm thời chưa tải được nguồn incident. Hãy thử lại sau."
-              />
-            ) : firingIncidents.length === 0 ? (
-              <Alert
-                type="success"
-                showIcon
-                message="No active incidents"
-                description="Hiện tại không có alert đang firing."
-              />
-            ) : (
-              <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                <Alert
-                  type="error"
-                  showIcon
-                  icon={<WarningFilled />}
-                  message={`${firingIncidents.length} incident(s) đang firing`}
-                  description="Ưu tiên xử lý các incident severity cao trước."
-                />
-                <List
-                  size="small"
-                  dataSource={firingIncidents.slice(0, 6)}
-                  renderItem={(incident) => (
-                    <List.Item>
-                      <Space direction="vertical" size={2} style={{ width: '100%' }}>
-                        <Space size={8}>
-                          <StatusBadge status={incident.status} />
-                          <Text strong>{incident.title}</Text>
-                        </Space>
-                        <Text type="secondary">{formatDateTime(incident.startsAt)}</Text>
-                      </Space>
-                    </List.Item>
-                  )}
-                />
-              </Space>
-            )}
-          </Card>
+          <ActivityListCard
+            title="Recent incidents"
+            actions={null}
+            items={
+              incidentsQuery.isLoading && !incidentsQuery.data
+                ? []
+                : incidentsQuery.isError
+                  ? []
+                  : firingIncidents.slice(0, 6).map((incident) => ({
+                      icon: <StatusBadge status={incident.status} />,
+                      content: <Text strong>{incident.title}</Text>,
+                      meta: <Text type="secondary">{formatDateTime(incident.startsAt)}</Text>,
+                    }))
+            }
+          />
+          {incidentsQuery.isLoading && !incidentsQuery.data ? (
+            <QueryStateView kind="loading" compact />
+          ) : incidentsQuery.isError ? (
+            <Alert
+              type="warning"
+              showIcon
+              message="Incident feed unavailable"
+              description="Tạm thời chưa tải được nguồn incident. Hãy thử lại sau."
+            />
+          ) : firingIncidents.length === 0 ? (
+            <Alert
+              type="success"
+              showIcon
+              message="No active incidents"
+              description="Hiện tại không có alert đang firing."
+            />
+          ) : null}
         </Col>
       </Row>
     </PageShell>

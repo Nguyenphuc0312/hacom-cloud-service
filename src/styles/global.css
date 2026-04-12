@@ -1,3 +1,344 @@
+/* Data Table Pattern */
+.ds-table-shell {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  padding: 0;
+  margin-bottom: var(--space-7);
+  display: flex;
+  flex-direction: column;
+}
+.ds-table-shell-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6) var(--space-3) var(--space-6);
+  flex-wrap: wrap;
+}
+.ds-table-shell-title {
+  font-size: var(--font-lg);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+}
+.ds-table-shell-toolbar {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.ds-table-shell-body {
+  padding: 0 var(--space-6);
+}
+.ds-table-shell-footer {
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.ds-table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.ds-table-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-7) 0;
+  color: var(--text-muted);
+  font-size: var(--font-md);
+}
+.ds-table-empty-icon {
+  font-size: 36px;
+  margin-bottom: var(--space-3);
+}
+.ds-table-empty-desc {
+  font-size: var(--font-md);
+}
+
+.ds-table-loading-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-7) 0;
+}
+.ds-table-loading-skeleton {
+  height: 32px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  width: 100%;
+  animation: ds-table-loading 1.2s infinite linear alternate;
+}
+@keyframes ds-table-loading {
+  0% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.ds-table-pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-2) 0 0 0;
+}
+
+.ds-table-row-action-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  border-radius: var(--radius-full);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+.ds-table-row-action-btn:hover {
+  background: var(--bg-elevated);
+  color: var(--brand-primary);
+}
+
+/* Table row, header, badge, selected/hover state (for Ant Design Table override) */
+.ant-table-wrapper .ant-table {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.ant-table-thead > tr > th {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-weight: var(--font-semibold);
+  font-size: var(--font-sm);
+  border-bottom: 1px solid var(--border-default);
+  height: 44px;
+}
+.ant-table-tbody > tr > td {
+  height: 44px;
+  font-size: var(--font-md);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.ant-table-tbody > tr:hover > td {
+  background: var(--bg-elevated);
+}
+.ant-table-row-selected > td {
+  background: #eaf2ff !important;
+}
+.ant-table-selection-column {
+  width: 44px !important;
+  min-width: 44px !important;
+  max-width: 44px !important;
+}
+.ant-table-cell-row-hover {
+  background: var(--bg-elevated) !important;
+}
+.ant-table-pagination {
+  margin: 0;
+  padding: 0;
+}
+.ant-table-tbody .ds-badge {
+  margin: 0 2px;
+}
+/* Dashboard Card System */
+.ds-stat-card,
+.ds-summary-card,
+.ds-widget-card,
+.ds-chart-card,
+.ds-activity-card,
+.ds-quick-action-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* StatCard */
+.ds-stat-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.ds-stat-card-title {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  font-weight: var(--font-medium);
+}
+.ds-stat-card-icon {
+  font-size: 20px;
+  color: var(--brand-primary);
+  margin-left: auto;
+}
+.ds-stat-card-value-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  margin-bottom: 2px;
+}
+.ds-stat-card-value {
+  font-size: 2.2rem;
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+.ds-stat-card-delta {
+  font-size: var(--font-sm);
+  color: var(--state-success);
+  font-weight: var(--font-semibold);
+}
+.ds-stat-card-meta {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* SummaryCard */
+.ds-summary-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.ds-summary-card-title {
+  font-size: var(--font-md);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+.ds-summary-card-icon {
+  font-size: 20px;
+  color: var(--brand-primary);
+}
+.ds-summary-card-body {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+/* WidgetCard, ChartCard */
+.ds-widget-card-header,
+.ds-chart-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.ds-widget-card-title,
+.ds-chart-card-title {
+  font-size: var(--font-md);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+.ds-widget-card-actions,
+.ds-chart-card-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.ds-widget-card-body,
+.ds-chart-card-body {
+  min-height: 120px;
+  padding-top: 2px;
+}
+
+/* ActivityListCard */
+.ds-activity-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.ds-activity-card-title {
+  font-size: var(--font-md);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+.ds-activity-card-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+.ds-activity-card-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.ds-activity-card-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+.ds-activity-card-item-icon {
+  font-size: 16px;
+  color: var(--brand-primary);
+  margin-top: 2px;
+}
+.ds-activity-card-item-content {
+  flex: 1 1 auto;
+}
+.ds-activity-card-item-meta {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* QuickActionCard */
+.ds-quick-action-card-title {
+  font-size: var(--font-md);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-3);
+}
+.ds-quick-action-card-actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.ds-quick-action-btn {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  height: 64px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+  border: 1px solid var(--border-subtle);
+  color: var(--brand-primary);
+  font-size: 22px;
+  font-weight: var(--font-medium);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+.ds-quick-action-btn:hover {
+  background: var(--bg-surface);
+  color: var(--brand-primary-hover);
+}
+.ds-quick-action-label {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
 /* Page Header Pattern */
 .ds-page-header {
   display: flex;

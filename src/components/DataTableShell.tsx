@@ -1,26 +1,29 @@
-import { Card, Space, Typography } from 'antd';
-import type { ReactNode } from 'react';
-import { commonMessages } from '../shared/messages/common';
+import React from 'react';
+import clsx from 'clsx';
 
 interface DataTableShellProps {
-  title?: ReactNode;
-  meta?: ReactNode;
-  actions?: ReactNode;
-  children: ReactNode;
+  title?: React.ReactNode;
+  toolbar?: React.ReactNode;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  className?: string;
 }
 
-  return (
-    <Card className="data-table-shell">
-      {title || meta || actions ? (
-        <div className="data-table-shell-header">
-          <Space direction="vertical" size={2}>
-            {title ? <Typography.Text strong>{title}</Typography.Text> : null}
-            {meta ? <Typography.Text type="secondary">{meta}</Typography.Text> : null}
-          </Space>
-          {actions ? <div>{actions}</div> : null}
-        </div>
-      ) : null}
-      {children}
-    </Card>
-  );
-};
+export const DataTableShell: React.FC<DataTableShellProps> = ({
+  title,
+  toolbar,
+  children,
+  footer,
+  className,
+}) => (
+  <div className={clsx('ds-table-shell', className)}>
+    {(title || toolbar) && (
+      <div className="ds-table-shell-header">
+        {title && <div className="ds-table-shell-title">{title}</div>}
+        {toolbar && <div className="ds-table-shell-toolbar">{toolbar}</div>}
+      </div>
+    )}
+    <div className="ds-table-shell-body">{children}</div>
+    {footer && <div className="ds-table-shell-footer">{footer}</div>}
+  </div>
+);
