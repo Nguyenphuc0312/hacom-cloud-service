@@ -118,7 +118,7 @@ export const ActivationFlowPage: React.FC = () => {
   );
 
   const startOtpVerification = React.useCallback(() => {
-    setAuthStatus("otp_verifying");
+    setAuthStatus("verifying_activation");
     setError(null);
   }, [setAuthStatus]);
 
@@ -141,7 +141,13 @@ export const ActivationFlowPage: React.FC = () => {
         activationTicket: activationContext.activationTicket,
       });
       setStep("verify_otp");
-      setResendSeconds(60);
+      if (result.resendAvailableAt) {
+        const delta =
+          new Date(result.resendAvailableAt).getTime() - Date.now();
+        setResendSeconds(delta > 0 ? Math.ceil(delta / 1000) : 0);
+      } else {
+        setResendSeconds(60);
+      }
       setActivationContext({
         ...activationContext,
         maskedEmail: result.maskedEmail,
@@ -167,7 +173,13 @@ export const ActivationFlowPage: React.FC = () => {
       const result = await activationAuthApi.resendOtp({
         activationTicket: activationContext.activationTicket,
       });
-      setResendSeconds(60);
+      if (result.resendAvailableAt) {
+        const delta =
+          new Date(result.resendAvailableAt).getTime() - Date.now();
+        setResendSeconds(delta > 0 ? Math.ceil(delta / 1000) : 0);
+      } else {
+        setResendSeconds(60);
+      }
       setActivationContext({
         ...activationContext,
         maskedEmail: result.maskedEmail,
@@ -186,6 +198,11 @@ export const ActivationFlowPage: React.FC = () => {
   const handleVerifyOtp = React.useCallback(async () => {
     if (!activationContext) return;
 
+    if (password !== confirmPassword) {
+      setError(t("activation.setPassword.mismatch"));
+      return;
+    }
+
     startOtpVerification();
     setIsBusy(true);
 
@@ -193,6 +210,7 @@ export const ActivationFlowPage: React.FC = () => {
       const result = await activationAuthApi.verifyOtp({
         activationTicket: activationContext.activationTicket,
         otp,
+        newPassword: password,
       });
 
       if (finalizeAuthenticated(result)) {
@@ -219,9 +237,11 @@ export const ActivationFlowPage: React.FC = () => {
     }
   }, [
     activationContext,
+    confirmPassword,
     finalizeAuthenticated,
     finishActivationPending,
     otp,
+    password,
     setActivationContext,
     startOtpVerification,
     t,
@@ -242,6 +262,7 @@ export const ActivationFlowPage: React.FC = () => {
       const result = await activationAuthApi.setInitialPassword({
         activationTicket: activationContext.activationTicket,
         otp,
+        newPassword: password,
         password,
         confirmPassword,
         verificationProof: activationContext.verificationProof || undefined,
@@ -298,7 +319,11 @@ export const ActivationFlowPage: React.FC = () => {
         {step === "verify_otp" && (
           <VerifyOtpForm
             otp={otp}
+            password={password}
+            confirmPassword={confirmPassword}
             onOtpChange={setOtp}
+            onPasswordChange={setPassword}
+            onConfirmPasswordChange={setConfirmPassword}
             isSubmitting={isBusy}
             canResend={resendSeconds <= 0}
             resendCountdownLabel={formatCountdown(resendSeconds)}

@@ -26,6 +26,7 @@ import {
   isPendingMessage,
 } from "../../../utils/messageTimeline";
 import { logScrollTrace } from "../../../utils/scrollTrace";
+import { resolveUserDisplayName } from "../../../features/chat/identity/resolveUserDisplayName";
 import { MessageBodyRenderer } from "./MessageBodyRenderer";
 import { MessageMeta } from "./MessageMeta";
 import { MessageRow } from "./MessageRow";
@@ -168,6 +169,26 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
     const candidate = message as unknown as { threadCount?: unknown };
     return typeof candidate.threadCount === "number" ? candidate.threadCount : 0;
   })();
+  const senderDisplayName = resolveUserDisplayName({
+    displayName: message.senderName,
+    username: message.senderId,
+  });
+  const replySenderDisplayName = message.replyToMessage
+    ? resolveUserDisplayName({
+        displayName: message.replyToMessage.senderName,
+        username: message.replyToMessage.senderId,
+      })
+    : null;
+  const forwardedFromName = message.forwardedFrom
+    ? resolveUserDisplayName({
+        displayName:
+          (message.forwardedFrom as { displayName?: string | null }).displayName ||
+          message.forwardedFrom.username,
+        username: message.forwardedFrom.username,
+        employeeCode: (message.forwardedFrom as { employeeCode?: string | null })
+          .employeeCode,
+      })
+    : null;
   const replyTargetMessageId = message.replyTo || message.replyToMessage?.id;
 
   const clearLongPressTimer = React.useCallback(() => {
@@ -396,7 +417,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
               {showAvatar ? (
                 <Avatar
                   src={message.senderAvatar}
-                  alt={message.senderName}
+                  alt={senderDisplayName}
                   size="sm"
                 />
               ) : null}
@@ -412,7 +433,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
           >
             {isGroupConversation && !isOwn && showSenderName && (
               <span className="mb-1 px-1 text-[11px] font-semibold text-primary/90">
-                {message.senderName}
+                {senderDisplayName}
               </span>
             )}
 
@@ -440,7 +461,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                 />
                 <div className="min-w-0">
                   <span className="font-semibold">
-                    {message.replyToMessage.senderName}
+                    {replySenderDisplayName}
                   </span>
                   <p className="mt-0.5 truncate leading-snug opacity-90">
                     {message.replyToMessage.isDeleted
@@ -482,7 +503,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                       <path d="M12 2l9 9h-6v4H9v-4H3l9-9zm0 18h10v2H2v-2h10z" />
                     </svg>
                     {t("chat:message.forwardedFrom", {
-                      name: message.forwardedFrom.username,
+                      name: forwardedFromName,
                     })}
                   </div>
                 )}

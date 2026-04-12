@@ -8,6 +8,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../../stores";
 import { PageSpinner } from "../../components/ui";
 import { ROUTE_PATHS } from "../paths";
+import { isBlockedAuthStatus } from "../../features/auth/model/authState";
 
 interface GuardProps {
   children: React.ReactNode;
@@ -38,7 +39,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     }
   }, [isInitialized, initialize]);
 
-  if (!isInitialized) {
+  if (!isInitialized || authStatus === "loading") {
     return <PageSpinner message={t("common:loading.checkingAuth")} />;
   }
 
@@ -52,7 +53,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  if (authStatus === "locked_or_disabled") {
+  if (isBlockedAuthStatus(authStatus)) {
     return <Navigate to={ROUTE_PATHS.LOGIN} replace />;
   }
 
@@ -95,7 +96,7 @@ export const GuestRoute: React.FC<GuardProps> = ({ children }) => {
     }
   }, [isInitialized, initialize]);
 
-  if (!isInitialized) {
+  if (!isInitialized || authStatus === "loading") {
     return <PageSpinner message={t("common:loading.default")} />;
   }
 
@@ -130,12 +131,16 @@ export const ActivationRoute: React.FC<GuardProps> = ({ children }) => {
     }
   }, [isInitialized, initialize]);
 
-  if (!isInitialized) {
+  if (!isInitialized || authStatus === "loading") {
     return <PageSpinner message={t("common:loading.checkingAuth")} />;
   }
 
   if (isAuthenticated || authStatus === "authenticated") {
     return <Navigate to={ROUTE_PATHS.CHAT} replace />;
+  }
+
+  if (isBlockedAuthStatus(authStatus)) {
+    return <Navigate to={ROUTE_PATHS.LOGIN} replace />;
   }
 
   if (authStatus === "activation_required" && activationContext) {

@@ -33,7 +33,13 @@ import type {
   ActivationContext,
   AuthStatus,
   LockedAccountContext,
+  PersistedAuthStatus,
 } from "../features/auth/model/authState";
+import {
+  normalizePersistedAuthStatus,
+  resolveLockedAccountStatus,
+} from "../features/auth/model/authState";
+import { loginAuthApi, normalizeAuthResponse } from "../features/auth/api/authApi";
 import { resolveAuthFailure } from "../features/auth/utils/authErrorMapper";
 
 export interface User {
@@ -109,7 +115,8 @@ export interface RegisterFlowResult {
 export type LoginResult =
   | "authenticated"
   | "activation_required"
-  | "locked_or_disabled";
+  | "locked"
+  | "disabled";
 
 interface AuthState {
   user: User | null;
@@ -126,7 +133,7 @@ interface AuthState {
   error: string | null;
 
   login: (data: LoginFormData) => Promise<LoginResult>;
-  applyLoginResponse: (payload: AuthResponse, rememberMe?: boolean) => void;
+  applyLoginResponse: (payload: unknown, rememberMe?: boolean) => void;
   setAuthStatus: (status: AuthStatus) => void;
   setActivationContext: (context: ActivationContext | null) => void;
   setLockedAccount: (locked: LockedAccountContext | null) => void;
@@ -170,8 +177,14 @@ const fetchCurrentUser = async (accessToken: string): Promise<User> => {
   const response = await authClient.get<ApiResponse<User>>(AUTH_ENDPOINTS.me, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  return unwrapApiSuccess(response.data);
+  return normalizeAuthResponse({
+    user: unwrapApiSuccess(response.data),
+    accessToken,
+  }).user as unknown as User;
 };
+
+const normalizeLoginPayload = (payload: unknown): AuthResponse =>
+  normalizeAuthResponse(payload) as unknown as AuthResponse;
 
 const resetChatState = async (): Promise<void> => {
   const { useChatStore } = await import("./chatStore");
@@ -340,7 +353,7 @@ export const useAuthStore = create<AuthState>()(
 
       return {
         user: null,
-        authStatus: "anonymous",
+        authStatus: "idle",
         activationContext: null,
         lockedAccount: null,
         pendingVerificationEmail: null,
@@ -353,8 +366,9 @@ export const useAuthStore = create<AuthState>()(
         error: null,
 
         applyLoginResponse: (payload, rememberMe = false) => {
-          const { user } = payload;
-          const { accessToken, refreshToken } = resolveTokens(payload);
+          const normalizedPayload = normalizeLoginPayload(payload);
+          const { user } = normalizedPayload;
+          const { accessToken, refreshToken } = resolveTokens(normalizedPayload);
 
           if (!accessToken) {
             throw new Error(i18n.t("error:auth.loginTokenMissing"));
@@ -395,7 +409,7 @@ export const useAuthStore = create<AuthState>()(
         setLockedAccount: (locked) =>
           set({
             lockedAccount: locked,
-            authStatus: locked ? "locked_or_disabled" : get().authStatus,
+            authStatus: locked ? locked.status : get().authStatus,
             isAuthenticated: locked ? false : get().isAuthenticated,
           }),
 
@@ -403,21 +417,16 @@ export const useAuthStore = create<AuthState>()(
           set({
             isLoading: true,
             error: null,
-            authStatus: "authenticating",
+            authStatus: "loading",
             lockedAccount: null,
           });
 
           try {
-            const response = await authClient.post<ApiResponse<AuthResponse>>(
-              AUTH_ENDPOINTS.login,
-              {
-                loginIdentifier: data.email,
-                email: data.email,
-                password: data.password,
-              },
-            );
-
-            const payload = unwrapApiSuccess(response.data);
+            const payload = await loginAuthApi.login({
+              loginIdentifier: data.email,
+              email: data.email,
+              password: data.password,
+            });
             get().applyLoginResponse(payload, data.rememberMe);
             return "authenticated";
           } catch (error: unknown) {
@@ -444,12 +453,14 @@ export const useAuthStore = create<AuthState>()(
               return "activation_required";
             }
 
-            if (failure.kind === "locked_or_disabled") {
+            if (failure.kind === "locked" || failure.kind === "disabled") {
+              const lockedStatus = resolveLockedAccountStatus(failure.code);
               set({
                 isLoading: false,
                 error: failure.message,
-                authStatus: "locked_or_disabled",
+                authStatus: lockedStatus,
                 lockedAccount: {
+                  status: lockedStatus,
                   code: failure.code,
                   message: failure.message,
                 },
@@ -462,7 +473,7 @@ export const useAuthStore = create<AuthState>()(
                 isInitialized: true,
                 registrationStatus: "idle",
               });
-              return "locked_or_disabled";
+              return lockedStatus;
             }
 
             const errorMessage =
@@ -608,7 +619,7 @@ export const useAuthStore = create<AuthState>()(
             return;
           }
 
-          set({ isLoading: true });
+          set({ isLoading: true, authStatus: "loading" });
 
           try {
             // /api/v1/auth/me needs Bearer token — use authClient with explicit header.
@@ -723,7 +734,7 @@ export const useAuthStore = create<AuthState>()(
           }
 
           initializePromise = (async () => {
-            set({ isLoading: true, error: null });
+            set({ isLoading: true, error: null, authStatus: "loading" });
 
             const accessToken = getAccessToken();
             if (accessToken) {
@@ -751,7 +762,7 @@ export const useAuthStore = create<AuthState>()(
                   runClientLogoutCleanup("bootstrap_me_failed");
                   set({
                     user: null,
-                    authStatus: "anonymous",
+                    authStatus: "bootstrap_error",
                     activationContext: null,
                     lockedAccount: null,
                     pendingVerificationEmail: null,
@@ -761,7 +772,7 @@ export const useAuthStore = create<AuthState>()(
                     isLoading: false,
                     isInitialized: true,
                     registrationStatus: "idle",
-                    error: null,
+                    error: apiError.message || i18n.t("error:auth.loginFailed"),
                   });
                   return;
                 }
@@ -848,6 +859,28 @@ export const useAuthStore = create<AuthState>()(
         emailVerificationChallenge: state.emailVerificationChallenge,
         isAuthenticated: state.isAuthenticated,
       }),
+      merge: (persistedState, currentState) => {
+        const persisted = (persistedState ?? {}) as Partial<AuthState> & {
+          authStatus?: PersistedAuthStatus;
+        };
+        const merged = {
+          ...currentState,
+          ...persisted,
+        };
+
+        return {
+          ...merged,
+          authStatus: normalizePersistedAuthStatus(
+            persisted.authStatus,
+            persisted.lockedAccount ?? null,
+          ),
+          isAuthenticated:
+            normalizePersistedAuthStatus(
+              persisted.authStatus,
+              persisted.lockedAccount ?? null,
+            ) === "authenticated",
+        };
+      },
     },
   ),
 );

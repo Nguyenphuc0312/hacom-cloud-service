@@ -3,6 +3,8 @@ export interface UserIdentityCandidate {
   username?: string | null;
   displayName?: string | null;
   display_name?: string | null;
+  fullName?: string | null;
+  full_name?: string | null;
   fullNameFromHR?: string | null;
   full_name_from_hr?: string | null;
   fullNameHR?: string | null;
@@ -38,7 +40,7 @@ export const resolveUserDisplayName = (
   options: ResolveUserDisplayNameOptions = {},
 ): string => {
   if (!user) {
-    return "";
+    return "Unknown user";
   }
 
   const displayName = asString(user.displayName) || asString(user.display_name);
@@ -46,8 +48,12 @@ export const resolveUserDisplayName = (
     asString(user.fullNameFromHR) ||
     asString(user.full_name_from_hr) ||
     asString(user.fullNameHR) ||
-    asString(user.hrLegalName) ||
+    asString(user.hrLegalName);
+  const fullName =
+    asString(user.fullName) ||
+    asString(user.full_name) ||
     joinName([user.firstName, user.lastName]);
+  const username = asString(user.username) || asString(user.name);
   const employeeCode =
     asString(user.employeeCode) ||
     asString(user.employee_code) ||
@@ -61,13 +67,21 @@ export const resolveUserDisplayName = (
     return fullNameFromHr;
   }
 
+  if (fullName) {
+    return fullName;
+  }
+
+  if (username) {
+    return username;
+  }
+
   if (employeeCode) {
     return employeeCode;
   }
 
   if (options.allowLegacyFallback) {
-    return asString(user.name) || asString(user.username) || asString(user.id);
+    return asString(user.id) || "Unknown user";
   }
 
-  return "";
+  return "Unknown user";
 };

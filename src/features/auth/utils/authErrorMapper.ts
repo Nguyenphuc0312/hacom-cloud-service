@@ -4,6 +4,7 @@ import type {
   ActivationContext,
   ActivationNextAction,
 } from "../model/authState";
+import { resolveLockedAccountStatus } from "../model/authState";
 
 interface ApiErrorEnvelope {
   statusCode: number;
@@ -14,7 +15,8 @@ interface ApiErrorEnvelope {
 
 export type AuthFailureKind =
   | "activation_required"
-  | "locked_or_disabled"
+  | "locked"
+  | "disabled"
   | "otp_invalid"
   | "otp_expired"
   | "otp_rate_limited"
@@ -86,6 +88,9 @@ const resolveActivationContext = (
     nextAction: resolveActivationNextAction(
       details?.nextAction ?? details?.next_action,
     ),
+    requiresPasswordSetup:
+      details?.requiresPasswordSetup === true ||
+      details?.requires_password_setup === true,
     resendAvailableAt:
       asString(details?.resendAvailableAt) ||
       asString(details?.resend_available_at),
@@ -165,8 +170,9 @@ export const resolveAuthFailure = (
     envelope.code === ErrorCode.AUTH_ACCOUNT_LOCKED ||
     envelope.code === ErrorCode.ACCOUNT_DISABLED
   ) {
+    const kind = resolveLockedAccountStatus(envelope.code);
     return {
-      kind: "locked_or_disabled",
+      kind,
       code: envelope.code,
       message,
     };

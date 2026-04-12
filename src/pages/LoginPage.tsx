@@ -90,7 +90,7 @@ export const LoginPage: React.FC = () => {
         return;
       }
 
-      if (result === "locked_or_disabled") {
+      if (result === "locked" || result === "disabled") {
         toast.error(error || t("auth:activation.locked.defaultMessage"));
       }
     } catch (err) {

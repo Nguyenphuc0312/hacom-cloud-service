@@ -1,11 +1,16 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "../../../components/ui";
+import { Button, Input } from "../../../components/ui";
 import { EmailOtpInput } from "../../../components/auth";
+import { calculatePasswordStrength } from "../../../lib/validations";
 
 interface VerifyOtpFormProps {
   otp: string;
+  password: string;
+  confirmPassword: string;
   onOtpChange: (value: string) => void;
+  onPasswordChange: (value: string) => void;
+  onConfirmPasswordChange: (value: string) => void;
   isSubmitting: boolean;
   canResend: boolean;
   resendCountdownLabel: string;
@@ -16,7 +21,11 @@ interface VerifyOtpFormProps {
 
 export const VerifyOtpForm: React.FC<VerifyOtpFormProps> = ({
   otp,
+  password,
+  confirmPassword,
   onOtpChange,
+  onPasswordChange,
+  onConfirmPasswordChange,
   isSubmitting,
   canResend,
   resendCountdownLabel,
@@ -25,6 +34,13 @@ export const VerifyOtpForm: React.FC<VerifyOtpFormProps> = ({
   onResend,
 }) => {
   const { t } = useTranslation("auth");
+  const strength = calculatePasswordStrength(password);
+  const strengthLabel =
+    strength === "strong"
+      ? t("activation.setPassword.strong")
+      : strength === "medium"
+        ? t("activation.setPassword.medium")
+        : t("activation.setPassword.weak");
 
   return (
     <section className="space-y-4">
@@ -44,6 +60,28 @@ export const VerifyOtpForm: React.FC<VerifyOtpFormProps> = ({
         error={error || undefined}
         hint={t("activation.verifyOtp.hint")}
         label={t("activation.verifyOtp.otpLabel")}
+      />
+
+      <Input
+        type="password"
+        value={password}
+        onChange={(event) => onPasswordChange(event.target.value)}
+        label={t("activation.setPassword.password")}
+        placeholder={t("auth:placeholders.password")}
+        disabled={isSubmitting}
+      />
+
+      <p className="text-xs text-text-muted">
+        {t("activation.setPassword.strength", { level: strengthLabel })}
+      </p>
+
+      <Input
+        type="password"
+        value={confirmPassword}
+        onChange={(event) => onConfirmPasswordChange(event.target.value)}
+        label={t("activation.setPassword.confirmPassword")}
+        placeholder={t("auth:placeholders.password")}
+        disabled={isSubmitting}
       />
 
       <div className="flex items-center justify-between gap-3 text-xs text-text-muted">
@@ -71,7 +109,13 @@ export const VerifyOtpForm: React.FC<VerifyOtpFormProps> = ({
         fullWidth
         size="lg"
         isLoading={isSubmitting}
-        disabled={isSubmitting || otp.length !== 6}
+        disabled={
+          isSubmitting ||
+          otp.length !== 6 ||
+          password.length < 8 ||
+          confirmPassword.length < 8 ||
+          password !== confirmPassword
+        }
         onClick={() => {
           void onSubmit();
         }}
