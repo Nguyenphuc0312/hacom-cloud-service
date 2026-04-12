@@ -1,10 +1,27 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as AntdModule from 'antd';
 
 import { useAuthStore } from '@/store/authStore';
 
 const validateMutateAsyncMock = vi.fn();
 const commitMutateAsyncMock = vi.fn();
+
+vi.mock('antd', async () => {
+  const actual = (await vi.importActual('antd')) as typeof AntdModule;
+  return {
+    ...actual,
+    message: {
+      success: vi.fn(),
+      error: vi.fn(),
+      warning: vi.fn(),
+      info: vi.fn(),
+      loading: vi.fn(),
+      open: vi.fn(),
+      destroy: vi.fn(),
+    },
+  };
+});
 
 vi.mock('../hooks/useHrEmployeeMutations', () => ({
   useValidateHrImportMutation: () => ({
@@ -172,17 +189,19 @@ describe('HrImportWizard', () => {
       expect(validateMutateAsyncMock).toHaveBeenCalledTimes(1);
     });
 
-    resolveValidate({
-      batchId: 'batch-2',
-      summary: {
-        totalRows: 1,
-        validRows: 1,
-        invalidRows: 0,
-        warningCount: 0,
-      },
-      previewRows: [],
-      errors: [],
-      warnings: [],
+    await act(async () => {
+      resolveValidate({
+        batchId: 'batch-2',
+        summary: {
+          totalRows: 1,
+          validRows: 1,
+          invalidRows: 0,
+          warningCount: 0,
+        },
+        previewRows: [],
+        errors: [],
+        warnings: [],
+      });
     });
 
     await waitFor(() => {

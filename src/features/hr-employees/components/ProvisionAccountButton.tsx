@@ -6,10 +6,7 @@ import type { HrEmployee } from '@/api/types';
 import { useAuthStore } from '@/store/authStore';
 import { useProvisionHrEmployeeAccountMutation } from '../hooks/useHrEmployeeMutations';
 
-export const getProvisionDisableReason = (
-  employee: HrEmployee,
-  canWrite: boolean,
-): string | null => {
+const getProvisionDisableReason = (employee: HrEmployee, canWrite: boolean): string | null => {
   if (!canWrite) {
     return 'Provision action is disabled by current role or release flag.';
   }

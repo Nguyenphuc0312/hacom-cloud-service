@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveStatusBadgeConfig } from './StatusBadge';
+import { resolveStatusBadgeConfig } from './statusBadgeUtils';
 
 describe('resolveStatusBadgeConfig', () => {
   it('maps provisioning and activation states to stable badge text', () => {

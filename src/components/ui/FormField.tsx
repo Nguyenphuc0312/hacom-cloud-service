@@ -1,1 +1,1 @@
-export * from '../FormField';
+export { FormField } from '../FormField';

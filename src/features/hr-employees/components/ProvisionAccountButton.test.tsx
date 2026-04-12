@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as AntdModule from 'antd';
 
 import { useAuthStore } from '@/store/authStore';
 
@@ -9,7 +10,7 @@ const { confirmMock, mutateAsyncMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('antd', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('antd')>();
+  const actual = (await importOriginal()) as typeof AntdModule;
   return {
     ...actual,
     Modal: {

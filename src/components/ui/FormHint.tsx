@@ -1,1 +1,1 @@
-export * from '../FormHint';
+export { FormHint } from '../FormHint';

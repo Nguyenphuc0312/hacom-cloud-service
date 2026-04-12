@@ -1,1 +1,1 @@
-export * from '../FormError';
+export { FormError } from '../FormError';

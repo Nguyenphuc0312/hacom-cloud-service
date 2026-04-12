@@ -210,22 +210,26 @@ export const HREmployeesPage = () => {
     setDetailOpen(true);
   };
 
-  const confirmRemove = (employee: HrEmployee) => {
-    if (!canWriteHrActions) {
-      message.info('HR write actions are disabled by release configuration.');
-      return;
-    }
+  const confirmRemove = useCallback(
+    (employee: HrEmployee) => {
+      if (!canWriteHrActions) {
+        message.info('HR write actions are disabled by release configuration.');
+        return;
+      }
 
-    Modal.confirm({
-      title: 'Deactivate/Delete HR employee',
-      content: 'Hanh dong nay tuan theo semantics backend hien tai (deactivate hoac soft delete).',
-      okText: 'Confirm',
-      cancelText: 'Cancel',
-      onOk: async () => {
-        await deleteMutation.mutateAsync(employee.id);
-      },
-    });
-  };
+      Modal.confirm({
+        title: 'Deactivate/Delete HR employee',
+        content:
+          'Hanh dong nay tuan theo semantics backend hien tai (deactivate hoac soft delete).',
+        okText: 'Confirm',
+        cancelText: 'Cancel',
+        onOk: async () => {
+          await deleteMutation.mutateAsync(employee.id);
+        },
+      });
+    },
+    [canWriteHrActions, deleteMutation],
+  );
 
   const columns = useMemo<ColumnsType<HrEmployee>>(
     () => [
@@ -315,7 +319,7 @@ export const HREmployeesPage = () => {
         ),
       },
     ],
-    [canWriteHrActions, refreshHrViews],
+    [canWriteHrActions, confirmRemove, refreshHrViews],
   );
 
   const applyFilters = () => {
