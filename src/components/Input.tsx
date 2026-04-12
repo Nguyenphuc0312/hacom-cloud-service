@@ -1,8 +1,9 @@
 import React from 'react';
 import clsx from 'clsx';
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  size?: 'sm' | 'md' | 'lg';
+type InputSize = 'sm' | 'md' | 'lg';
+interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
+  size?: InputSize;
 }
 
 export const Input: React.FC<InputProps> = ({ size = 'md', className, ...props }) => {

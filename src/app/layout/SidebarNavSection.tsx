@@ -1,7 +1,14 @@
-import React from 'react';
 import { SidebarNavItem } from './SidebarNavItem';
+import type { NavItem as NavItemType } from './navigationConfig';
+import type { ReactNode } from 'react';
 
-export const SidebarNavSection = ({ label, items, icon }) => (
+interface SidebarNavSectionProps {
+  label: string;
+  items: NavItemType[];
+  icon?: ReactNode;
+}
+
+export const SidebarNavSection = ({ label, items, icon }: SidebarNavSectionProps) => (
   <div className="ds-sidebar-section">
     <div className="ds-sidebar-section-label">
       {icon && <span className="ds-sidebar-section-icon">{icon}</span>}
@@ -9,7 +16,7 @@ export const SidebarNavSection = ({ label, items, icon }) => (
     </div>
     <div className="ds-sidebar-section-list">
       {items.map((item) => (
-        <React.Fragment key={item.key}>
+        <span key={item.key}>
           <SidebarNavItem item={item} />
           {item.children && item.children.length > 0 && (
             <div className="ds-sidebar-submenu">
@@ -18,7 +25,7 @@ export const SidebarNavSection = ({ label, items, icon }) => (
               ))}
             </div>
           )}
-        </React.Fragment>
+        </span>
       ))}
     </div>
   </div>

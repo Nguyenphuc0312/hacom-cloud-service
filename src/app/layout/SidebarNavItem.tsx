@@ -1,16 +1,21 @@
-import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-// Optionally pass isSubmenu for submenu styling
-export const SidebarNavItem = ({ item, isSubmenu = false }) => {
+import type { NavItem as NavItemType } from './navigationConfig';
+
+interface SidebarNavItemProps {
+  item: NavItemType;
+  isSubmenu?: boolean;
+}
+
+export const SidebarNavItem = ({ item, isSubmenu = false }: SidebarNavItemProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   // Role-based visibility (if roles prop present)
   // TODO: Replace with actual user roles from context/store if available
   if (item.roles && item.roles.length > 0) {
-    // Example: const userRoles = useCurrentUser()?.roles || [];
-    const userRoles = [];
-    if (!item.roles.some((role) => userRoles.includes(role))) return null;
+    // Example: const userRoles: string[] = useCurrentUser()?.roles || [];
+    const userRoles: string[] = [];
+    if (!item.roles.some((role: string) => userRoles.includes(role))) return null;
   }
   const active = location.pathname.startsWith(item.route);
   return (

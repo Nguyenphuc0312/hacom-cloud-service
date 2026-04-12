@@ -1,25 +1,30 @@
 import React from 'react';
 import clsx from 'clsx';
 
+
 interface DataTableShellProps {
   title?: React.ReactNode;
   toolbar?: React.ReactNode;
+  meta?: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
   className?: string;
 }
 
-export const DataTableShell: React.FC<DataTableShellProps> = ({
   title,
   toolbar,
+  meta,
   children,
   footer,
   className,
 }) => (
   <div className={clsx('ds-table-shell', className)}>
-    {(title || toolbar) && (
+    {(title || toolbar || meta) && (
       <div className="ds-table-shell-header">
-        {title && <div className="ds-table-shell-title">{title}</div>}
+        <div style={{ flex: 1 }}>
+          {title && <div className="ds-table-shell-title">{title}</div>}
+          {meta && <div className="ds-table-shell-meta">{meta}</div>}
+        </div>
         {toolbar && <div className="ds-table-shell-toolbar">{toolbar}</div>}
       </div>
     )}
