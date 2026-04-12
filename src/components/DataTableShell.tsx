@@ -1,5 +1,6 @@
 import { Card, Space, Typography } from 'antd';
 import type { ReactNode } from 'react';
+import { commonMessages } from '../shared/messages/common';
 
 interface DataTableShellProps {
   title?: ReactNode;
@@ -8,7 +9,6 @@ interface DataTableShellProps {
   children: ReactNode;
 }
 
-export const DataTableShell = ({ title, meta, actions, children }: DataTableShellProps) => {
   return (
     <Card className="data-table-shell">
       {title || meta || actions ? (
