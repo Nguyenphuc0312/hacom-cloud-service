@@ -14,7 +14,7 @@ export const FormSection: React.FC<FormSectionProps> = ({
   children,
   className,
 }) => (
-  <section className={clsx('ds-form-section', className)}>
+  <section className={clsx('ds-form-section', 'ds-section-card', className)}>
     {(title || description) && (
       <div className="ds-form-section-header">
         {title && <div className="ds-form-section-title">{title}</div>}

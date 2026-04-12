@@ -18,7 +18,7 @@ interface PageShellProps {
 
 export const PageShell = ({ title, description, headerExtra, children }: PageShellProps) => {
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+    <section className="ds-page-shell">
       <PageHeader>
         <div>
           <PageHeaderTitle>
@@ -34,7 +34,9 @@ export const PageShell = ({ title, description, headerExtra, children }: PageShe
         </div>
         {headerExtra ? <PageHeaderMeta>{headerExtra}</PageHeaderMeta> : null}
       </PageHeader>
-      {children}
-    </Space>
+      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        {children}
+      </Space>
+    </section>
   );
 };

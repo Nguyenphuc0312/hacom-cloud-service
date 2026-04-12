@@ -6,5 +6,5 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 export const Card: React.FC<CardProps> = ({ as: Component = 'div', className, ...props }) => {
-  return <Component className={clsx('ds-card', className)} {...props} />;
+  return <Component className={clsx('ds-card', 'ds-surface-card', className)} {...props} />;
 };
