@@ -2,9 +2,9 @@ import React from 'react';
 import clsx from 'clsx';
 
 interface FormSectionProps {
-  title?: string;
-  description?: string;
-  children: React.ReactNode;
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  children?: React.ReactNode;
   className?: string;
 }
 
@@ -24,3 +24,5 @@ export const FormSection: React.FC<FormSectionProps> = ({
     <div className="ds-form-section-body">{children}</div>
   </section>
 );
+
+export default FormSection;

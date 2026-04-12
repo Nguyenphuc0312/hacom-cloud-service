@@ -1,3 +1,5 @@
+@import './tokens.css';
+
 /* --- INTERACTIVE STATES & POLISH --- */
 
 /* Buttons */
@@ -223,6 +225,53 @@ textarea:disabled {
 }
 .ds-scroll-container::-webkit-scrollbar-track {
   background: var(--bg-elevated);
+}
+
+/* Skip link for keyboard users */
+.ds-skip-link {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  z-index: 9999;
+}
+.ds-skip-link:focus {
+  left: var(--space-6);
+  top: var(--space-3);
+  width: auto;
+  height: auto;
+  padding: var(--space-2) var(--space-3);
+  background: var(--brand-primary);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+
+/* Screen-reader only helper */
+.ds-sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* Focus-visible styles for interactive elements */
+.ds-sidebar-item:focus-visible,
+.ds-btn:focus-visible,
+.ds-topbar-toggle:focus-visible,
+.ds-input:focus-visible,
+.ds-table-row-action-btn:focus-visible,
+.ds-page-header-actions button:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--brand-primary-alpha);
 }
 
 /* Sticky header/toolbar */
@@ -1096,6 +1145,46 @@ textarea:disabled {
   opacity: 0.7;
 }
 
+/* Collapsed sidebar adjustments */
+.ds-admin-shell.is-collapsed .ds-admin-sidebar {
+  width: 72px;
+  min-width: 72px;
+  max-width: 72px;
+}
+.ds-admin-shell.is-collapsed .ds-admin-sidebar-logo {
+  font-size: 14px;
+  padding: 8px 0;
+}
+.ds-admin-shell.is-collapsed .ds-sidebar-section-label {
+  display: none;
+}
+.ds-admin-shell.is-collapsed .ds-sidebar-section-list {
+  gap: 6px;
+}
+.ds-admin-shell.is-collapsed .ds-sidebar-item {
+  justify-content: center;
+  padding: 0;
+  gap: 0;
+}
+.ds-admin-shell.is-collapsed .ds-sidebar-item-label {
+  display: none;
+}
+.ds-admin-shell.is-collapsed .ds-sidebar-item-badge {
+  display: none;
+}
+.ds-admin-shell.is-collapsed .ds-admin-sidebar-footer {
+  display: none;
+}
+.ds-topbar-toggle.ds-btn--icon {
+  background: none;
+  border: none;
+  padding: 6px;
+  min-width: 40px;
+}
+.ds-topbar-toggle .ds-icon {
+  font-size: 18px;
+}
+
 /* Card, Section, Page Container */
 .ds-card,
 .ds-section,
@@ -1302,8 +1391,6 @@ textarea:disabled {
   }
 }
 
-@import './tokens.css';
-
 :root {
   font-family: 'IBM Plex Sans', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   color: var(--text-primary);
@@ -1332,8 +1419,8 @@ body {
 }
 
 .app-sider {
-  background: linear-gradient(180deg, #1f2937 0%, #111827 100%) !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-surface) !important;
+  border-right: 1px solid var(--border-default);
 }
 
 .app-sider .brand {
@@ -1341,12 +1428,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #e8effa;
+  color: var(--brand-primary);
   font-size: 17px;
-  letter-spacing: 0.16px;
+  letter-spacing: 0.04em;
   font-weight: 700;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 0 var(--space-1);
+  border-bottom: 1px solid var(--border-default);
+  padding: 0 var(--space-2);
   text-align: center;
 }
 
@@ -1357,7 +1444,7 @@ body {
 }
 
 .app-sider .ant-menu-item-group-title {
-  color: var(--admin-sider-muted) !important;
+  color: var(--text-muted) !important;
   font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1386,11 +1473,11 @@ body {
 
 .app-sider-footer {
   padding: var(--space-2) var(--space-2);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
   gap: 4px;
-  color: #dbe5f1;
+  color: var(--text-secondary);
 }
 
 .app-header {
@@ -1720,6 +1807,41 @@ body {
 .page-shell-extra {
   display: flex;
   align-items: center;
+}
+
+/* Design-system Page Header */
+.ds-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  width: 100%;
+  flex-wrap: wrap;
+  padding-bottom: var(--space-2);
+}
+.ds-page-header > div {
+  min-width: 0;
+}
+.ds-page-header-title {
+  font-size: var(--font-xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+}
+.ds-page-header-description {
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.ds-page-header-actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+.ds-page-header-meta {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--text-muted);
 }
 
 .filter-bar {

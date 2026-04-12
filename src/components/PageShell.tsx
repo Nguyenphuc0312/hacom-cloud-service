@@ -1,5 +1,11 @@
 import { Space, Typography } from 'antd';
 import type { ReactNode } from 'react';
+import {
+  PageHeader,
+  PageHeaderTitle,
+  PageHeaderDescription,
+  PageHeaderMeta,
+} from '@/components/PageHeader';
 
 const { Text } = Typography;
 
@@ -13,19 +19,21 @@ interface PageShellProps {
 export const PageShell = ({ title, description, headerExtra, children }: PageShellProps) => {
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <div className="page-shell-header">
+      <PageHeader>
         <div>
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            {title}
-          </Typography.Title>
+          <PageHeaderTitle>
+            <Typography.Title level={3} style={{ margin: 0 }}>
+              {title}
+            </Typography.Title>
+          </PageHeaderTitle>
           {description ? (
-            <Text type="secondary" className="page-shell-description">
-              {description}
-            </Text>
+            <PageHeaderDescription>
+              <Text type="secondary">{description}</Text>
+            </PageHeaderDescription>
           ) : null}
         </div>
-        {headerExtra ? <div className="page-shell-extra">{headerExtra}</div> : null}
-      </div>
+        {headerExtra ? <PageHeaderMeta>{headerExtra}</PageHeaderMeta> : null}
+      </PageHeader>
       {children}
     </Space>
   );

@@ -2,11 +2,20 @@ import React from 'react';
 import { SidebarNavSection } from './SidebarNavSection';
 import { navItems, SIDEBAR_SECTIONS } from './navigationConfig';
 
-export const AdminSidebar: React.FC = () => {
+interface AdminSidebarProps {
+  collapsed?: boolean;
+  id?: string;
+}
+
+export const AdminSidebar: React.FC<AdminSidebarProps> = ({ collapsed = false, id }) => {
   return (
-    <aside className="ds-admin-sidebar">
-      <div className="ds-admin-sidebar-logo">Chat Admin</div>
-      <nav className="ds-admin-sidebar-nav">
+    <aside
+      id={id}
+      className={`ds-admin-sidebar ${collapsed ? 'is-collapsed' : ''}`}
+      aria-label="Primary navigation"
+    >
+      <div className="ds-admin-sidebar-logo">{collapsed ? 'CA' : 'Chat Admin'}</div>
+      <nav className="ds-admin-sidebar-nav" role="navigation" aria-label="Main navigation">
         {SIDEBAR_SECTIONS.map((section) => {
           const items = navItems.filter((item) => item.section === section.key);
           if (!items.length) return null;
