@@ -1,0 +1,91 @@
+:root {
+  /* Primitive colors */
+  --color-white: #fff;
+  --color-black: #101a2b;
+  --color-gray-50: #f8fafc;
+  --color-gray-100: #f1f5f9;
+  --color-gray-200: #e2e8f0;
+  --color-gray-300: #cbd5e1;
+  --color-gray-400: #94a3b8;
+  --color-gray-500: #64748b;
+  --color-gray-600: #475569;
+  --color-gray-700: #334155;
+  --color-gray-800: #1e293b;
+  --color-gray-900: #0f172a;
+  --color-blue-50: #eff6ff;
+  --color-blue-100: #dbeafe;
+  --color-blue-500: #2563eb;
+  --color-blue-600: #1d4ed8;
+  --color-blue-700: #1e40af;
+  --color-green-500: #22c55e;
+  --color-yellow-500: #eab308;
+  --color-red-500: #ef4444;
+  --color-orange-500: #f59e42;
+  --color-cyan-500: #06b6d4;
+
+  /* Spacing scale */
+  --space-0: 0px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+
+  /* Radius scale */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-full: 999px;
+
+  /* Shadow scale */
+  --shadow-xs: 0 1px 2px rgba(16, 26, 43, 0.03);
+  --shadow-sm: 0 2px 8px rgba(16, 26, 43, 0.04);
+  --shadow-md: 0 4px 16px rgba(16, 26, 43, 0.06);
+  --shadow-lg: 0 8px 32px rgba(16, 26, 43, 0.08);
+
+  /* Font sizes */
+  --font-xs: 12px;
+  --font-sm: 14px;
+  --font-md: 16px;
+  --font-lg: 20px;
+  --font-xl: 28px;
+  --font-2xl: 36px;
+
+  /* Font weights */
+  --font-regular: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+
+  /* Line heights */
+  --lh-xs: 1.2;
+  --lh-sm: 1.35;
+  --lh-md: 1.5;
+  --lh-lg: 1.7;
+
+  /* Transitions */
+  --transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 320ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Semantic tokens */
+  --bg-page: var(--color-gray-50);
+  --bg-surface: var(--color-white);
+  --bg-elevated: var(--color-blue-50);
+  --text-primary: var(--color-black);
+  --text-secondary: var(--color-gray-700);
+  --text-muted: var(--color-gray-500);
+  --border-default: var(--color-gray-200);
+  --border-subtle: var(--color-gray-100);
+  --brand-primary: var(--color-blue-600);
+  --brand-primary-hover: var(--color-blue-700);
+  --state-success: var(--color-green-500);
+  --state-warning: var(--color-yellow-500);
+  --state-error: var(--color-red-500);
+  --state-info: var(--color-cyan-500);
+}
