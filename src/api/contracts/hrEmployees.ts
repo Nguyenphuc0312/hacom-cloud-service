@@ -185,6 +185,10 @@ export const normalizeHrImportCommitResult = (value: unknown): HrImportCommitRes
     committed: asBoolean(record.committed),
     importedRows: asNumber(record.importedRows),
     invalidRowCount: asNumber(record.invalidRowCount),
+    inserted: asNumber(record.inserted, asNumber(record.importedRows)) || 0,
+    updated: asNumber(record.updated),
+    skipped: asNumber(record.skipped),
+    failed: asNumber(record.failed, asNumber(record.invalidRowCount)) || 0,
   };
 };
 

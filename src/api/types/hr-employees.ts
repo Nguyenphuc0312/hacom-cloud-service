@@ -135,6 +135,10 @@ export interface HrImportCommitResult {
   committed: boolean;
   importedRows: number;
   invalidRowCount: number;
+  inserted?: number | null;
+  updated?: number | null;
+  skipped?: number | null;
+  failed?: number | null;
 }
 
 export interface HrImportErrorReport {
