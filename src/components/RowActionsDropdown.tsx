@@ -1,11 +1,12 @@
 import React from 'react';
-import { Dropdown, Menu } from 'antd';
+import { Dropdown } from 'antd';
+import type { MenuProps } from 'antd';
 import { MoreOutlined } from '@ant-design/icons';
 
 interface RowActionsDropdownProps {
   actions: Array<{
     key: string;
-    label: string;
+    label: React.ReactNode;
     icon?: React.ReactNode;
     onClick?: () => void;
     danger?: boolean;
@@ -13,28 +14,25 @@ interface RowActionsDropdownProps {
   }>;
 }
 
-export const RowActionsDropdown: React.FC<RowActionsDropdownProps> = ({ actions }) => (
-  <Dropdown
-    overlay={
-      <Menu>
-        {actions.map((action) => (
-          <Menu.Item
-            key={action.key}
-            icon={action.icon}
-            danger={action.danger}
-            disabled={action.disabled}
-            onClick={action.onClick}
-          >
-            {action.label}
-          </Menu.Item>
-        ))}
-      </Menu>
-    }
-    trigger={['click']}
-    placement="bottomRight"
-  >
-    <button className="ds-table-row-action-btn" aria-label="Hành động">
-      <MoreOutlined />
-    </button>
-  </Dropdown>
-);
+export const RowActionsDropdown: React.FC<RowActionsDropdownProps> = ({ actions }) => {
+  const items: MenuProps['items'] = actions.map((action) => ({
+    key: action.key,
+    label: action.label,
+    icon: action.icon,
+    danger: action.danger,
+    disabled: action.disabled,
+  }));
+
+  const onMenuClick: MenuProps['onClick'] = ({ key }) => {
+    const act = actions.find((a) => a.key === key);
+    if (act && act.onClick) act.onClick();
+  };
+
+  return (
+    <Dropdown menu={{ items, onClick: onMenuClick }} trigger={['click']} placement="bottomRight">
+      <button className="ds-table-row-action-btn" aria-label="Hành động">
+        <MoreOutlined />
+      </button>
+    </Dropdown>
+  );
+};

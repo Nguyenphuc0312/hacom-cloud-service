@@ -4,7 +4,7 @@ import {
   CheckCircleFilled,
   CloseCircleFilled,
   ExclamationCircleFilled,
-  WarningFilled,
+  UserOutlined,
 } from '@ant-design/icons';
 import { Alert, Button, Col, List, Row, Space, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
