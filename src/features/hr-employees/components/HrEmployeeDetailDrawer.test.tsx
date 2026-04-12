@@ -76,7 +76,9 @@ describe('HrEmployeeDetailDrawer', () => {
   });
 
   it('prevents duplicate refresh action while refresh is pending', async () => {
-    let resolveRefresh: (() => void) | null = null;
+    let resolveRefresh: () => void = () => {
+      throw new Error('resolveRefresh not initialized');
+    };
     const detailPayload = {
       id: 'hr-1',
       employeeCode: 'EMP001',
@@ -123,6 +125,6 @@ describe('HrEmployeeDetailDrawer', () => {
       expect(getByIdMock).toHaveBeenCalledTimes(2);
     });
 
-    resolveRefresh?.();
+    resolveRefresh();
   });
 });

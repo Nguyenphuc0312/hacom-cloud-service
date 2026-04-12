@@ -139,7 +139,9 @@ describe('HrImportWizard', () => {
   });
 
   it('prevents duplicate validate submit while validation is in flight', async () => {
-    let resolveValidate: ((value: unknown) => void) | null = null;
+    let resolveValidate: (value: unknown) => void = () => {
+      throw new Error('resolveValidate not initialized');
+    };
     validateMutateAsyncMock.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -170,7 +172,7 @@ describe('HrImportWizard', () => {
       expect(validateMutateAsyncMock).toHaveBeenCalledTimes(1);
     });
 
-    resolveValidate?.({
+    resolveValidate({
       batchId: 'batch-2',
       summary: {
         totalRows: 1,

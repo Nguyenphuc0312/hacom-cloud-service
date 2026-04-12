@@ -95,7 +95,9 @@ describe('ProvisionAccountButton', () => {
   });
 
   it('prevents duplicate provision submit inside confirm onOk', async () => {
-    let resolveMutation: (() => void) | null = null;
+    let resolveMutation: () => void = () => {
+      throw new Error('resolveMutation not initialized');
+    };
     mutateAsyncMock.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -134,6 +136,6 @@ describe('ProvisionAccountButton', () => {
 
     expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
 
-    resolveMutation?.();
+    resolveMutation();
   });
 });
