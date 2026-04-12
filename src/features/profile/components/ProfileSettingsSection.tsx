@@ -1,6 +1,8 @@
 import React from "react";
+import axios from "axios";
 import { useTranslation } from "react-i18next";
 import {
+  Cog6ToothIcon,
   IdentificationIcon,
   PhotoIcon,
   UserCircleIcon,
@@ -24,6 +26,8 @@ const ALLOWED_IMAGE_TYPES = new Set([
 const AVATAR_MAX_SIZE = 5 * 1024 * 1024;
 const BACKGROUND_MAX_SIZE = 8 * 1024 * 1024;
 
+type UploadSupportState = "unknown" | "supported" | "unsupported";
+
 const validateImageFile = (
   file: File,
   maxSize: number,
@@ -44,47 +48,81 @@ const validateImageFile = (
 
 const fileToPreviewUrl = (file: File): string => URL.createObjectURL(file);
 
+const isUnsupportedUploadError = (error: unknown): boolean =>
+  axios.isAxiosError(error) &&
+  [404, 405, 501].includes(error.response?.status ?? 0);
+
+const readUserValue = (
+  user: Record<string, unknown> | null | undefined,
+  ...keys: string[]
+): string | null => {
+  if (!user) {
+    return null;
+  }
+
+  for (const key of keys) {
+    const value = user[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
+};
+
 export const ProfileSettingsSection: React.FC = () => {
   const { t } = useTranslation(["profile", "common"]);
   const { user, updateUser } = useAuthStore();
+  const userRecord = (user as Record<string, unknown> | null) ?? null;
 
   const [displayName, setDisplayName] = React.useState(user?.displayName || "");
   const [bio, setBio] = React.useState(user?.bio || "");
   const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
   const [backgroundFile, setBackgroundFile] = React.useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null);
-  const [backgroundPreview, setBackgroundPreview] = React.useState<
-    string | null
-  >(
-    (user as { backgroundImageUrl?: string | null } | null)
-      ?.backgroundImageUrl || null,
+  const [backgroundPreview, setBackgroundPreview] = React.useState<string | null>(
+    readUserValue(userRecord, "backgroundImageUrl", "background_image_url"),
   );
   const [isSaving, setIsSaving] = React.useState(false);
+  const [avatarSupport, setAvatarSupport] =
+    React.useState<UploadSupportState>("unknown");
+  const [backgroundSupport, setBackgroundSupport] =
+    React.useState<UploadSupportState>("unknown");
 
   const avatarInputRef = React.useRef<HTMLInputElement | null>(null);
   const backgroundInputRef = React.useRef<HTMLInputElement | null>(null);
 
-  const employeeCode =
-    (user as { employeeCode?: string; employee_code?: string } | null)
-      ?.employeeCode ||
-    (user as { employeeCode?: string; employee_code?: string } | null)
-      ?.employee_code ||
-    "-";
-  const hrLegalName =
-    (user as { fullNameFromHR?: string; full_name_from_hr?: string } | null)
-      ?.fullNameFromHR ||
-    (user as { fullNameFromHR?: string; full_name_from_hr?: string } | null)
-      ?.full_name_from_hr ||
-    "-";
-  const corporateEmail =
-    (user as { corporateEmail?: string; email?: string } | null)
-      ?.corporateEmail ||
-    user?.email ||
-    "-";
+  const employeeCode = readUserValue(
+    userRecord,
+    "employeeCode",
+    "employee_code",
+  );
+  const hrLegalName = readUserValue(
+    userRecord,
+    "fullNameFromHR",
+    "full_name_from_hr",
+    "fullName",
+    "full_name",
+  );
+  const corporateEmail = readUserValue(
+    userRecord,
+    "corporateEmail",
+    "emailFromHr",
+    "email_from_hr",
+    "email",
+  );
+  const departmentName = readUserValue(
+    userRecord,
+    "departmentName",
+    "department_name",
+    "orgUnit",
+    "org_unit",
+  );
+  const unitCode = readUserValue(userRecord, "unitCode", "unit_code");
 
   React.useEffect(() => {
     return () => {
-      if (avatarPreview) {
+      if (avatarPreview?.startsWith("blob:")) {
         URL.revokeObjectURL(avatarPreview);
       }
       if (backgroundPreview?.startsWith("blob:")) {
@@ -96,7 +134,14 @@ export const ProfileSettingsSection: React.FC = () => {
   React.useEffect(() => {
     setDisplayName(user?.displayName || "");
     setBio(user?.bio || "");
-  }, [user?.bio, user?.displayName]);
+    setBackgroundPreview(
+      readUserValue(
+        (user as Record<string, unknown> | null) ?? null,
+        "backgroundImageUrl",
+        "background_image_url",
+      ),
+    );
+  }, [user?.bio, user?.displayName, user]);
 
   const handleAvatarPick = (file: File): void => {
     const validationError = validateImageFile(file, AVATAR_MAX_SIZE, t);
@@ -106,7 +151,8 @@ export const ProfileSettingsSection: React.FC = () => {
     }
 
     setAvatarFile(file);
-    if (avatarPreview) {
+    setAvatarSupport("supported");
+    if (avatarPreview?.startsWith("blob:")) {
       URL.revokeObjectURL(avatarPreview);
     }
     setAvatarPreview(fileToPreviewUrl(file));
@@ -120,6 +166,7 @@ export const ProfileSettingsSection: React.FC = () => {
     }
 
     setBackgroundFile(file);
+    setBackgroundSupport("supported");
     if (backgroundPreview?.startsWith("blob:")) {
       URL.revokeObjectURL(backgroundPreview);
     }
@@ -134,25 +181,37 @@ export const ProfileSettingsSection: React.FC = () => {
       const response = await apiClient.put("/users/background", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+      setBackgroundSupport("supported");
       return (
         response.data?.data?.backgroundImageUrl ||
         response.data?.data?.background ||
         ""
       );
-    } catch {
-      // Backward-compatible fallback for transitional backends.
-      const response = await apiClient.put(
-        "/users/profile/background",
-        formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        },
-      );
-      return (
-        response.data?.data?.backgroundImageUrl ||
-        response.data?.data?.background ||
-        ""
-      );
+    } catch (primaryError) {
+      if (isUnsupportedUploadError(primaryError)) {
+        try {
+          const fallbackResponse = await apiClient.put(
+            "/users/profile/background",
+            formData,
+            {
+              headers: { "Content-Type": "multipart/form-data" },
+            },
+          );
+          setBackgroundSupport("supported");
+          return (
+            fallbackResponse.data?.data?.backgroundImageUrl ||
+            fallbackResponse.data?.data?.background ||
+            ""
+          );
+        } catch (fallbackError) {
+          if (isUnsupportedUploadError(fallbackError)) {
+            setBackgroundSupport("unsupported");
+          }
+          throw fallbackError;
+        }
+      }
+
+      throw primaryError;
     }
   };
 
@@ -172,13 +231,21 @@ export const ProfileSettingsSection: React.FC = () => {
     try {
       let uploadedAvatar = user.avatar;
       let uploadedBackground =
-        (user as { backgroundImageUrl?: string | null }).backgroundImageUrl ||
+        readUserValue(userRecord, "backgroundImageUrl", "background_image_url") ||
         null;
 
       if (avatarFile) {
-        const avatarResponse = await userApi.updateAvatar(avatarFile);
-        uploadedAvatar =
-          unwrapApiSuccess(avatarResponse).avatar || uploadedAvatar;
+        try {
+          const avatarResponse = await userApi.updateAvatar(avatarFile);
+          uploadedAvatar =
+            unwrapApiSuccess(avatarResponse).avatar || uploadedAvatar;
+          setAvatarSupport("supported");
+        } catch (avatarError) {
+          if (isUnsupportedUploadError(avatarError)) {
+            setAvatarSupport("unsupported");
+          }
+          throw avatarError;
+        }
       }
 
       if (backgroundFile) {
@@ -203,8 +270,8 @@ export const ProfileSettingsSection: React.FC = () => {
       toast.success(t("profile:settings.saved"));
     } catch (error) {
       const message =
-        (error as { response?: { data?: { message?: string } } })?.response
-          ?.data?.message || t("profile:settings.saveFailed");
+        (error as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || t("profile:settings.saveFailed");
       toast.error(message);
     } finally {
       setIsSaving(false);
@@ -215,6 +282,24 @@ export const ProfileSettingsSection: React.FC = () => {
     resolveUserDisplayName(user, {
       allowLegacyFallback: true,
     }) || t("common:labels.user");
+  const avatarHelpText =
+    avatarSupport === "unsupported"
+      ? t("profile:settings.avatarUnsupported", {
+          defaultValue:
+            "Avatar upload is not available in this environment right now.",
+        })
+      : t("profile:settings.avatarEditableHint", {
+          defaultValue: "JPG, PNG, WEBP or GIF up to 5MB.",
+        });
+  const backgroundHelpText =
+    backgroundSupport === "unsupported"
+      ? t("profile:settings.backgroundUnsupported", {
+          defaultValue:
+            "Background upload is not available in this environment right now.",
+        })
+      : t("profile:settings.backgroundEditableHint", {
+          defaultValue: "Optional background image up to 8MB.",
+        });
 
   return (
     <SettingsSection
@@ -222,129 +307,182 @@ export const ProfileSettingsSection: React.FC = () => {
       title={t("profile:settings.title")}
       description={t("profile:settings.description")}
     >
-      <div className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-text-muted">
-              {t("profile:settings.avatar")}
-            </p>
-            <div className="flex items-center gap-3">
-              <Avatar
-                src={avatarPreview || user?.avatar}
-                alt={displayLabel}
-                size="lg"
-              />
-              <div className="space-x-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => avatarInputRef.current?.click()}
-                  leftIcon={<PhotoIcon className="h-4 w-4" />}
-                >
-                  {t("profile:settings.chooseAvatar")}
-                </Button>
-              </div>
-            </div>
-            <input
-              ref={avatarInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(event) => {
-                const nextFile = event.target.files?.[0];
-                if (nextFile) {
-                  handleAvatarPick(nextFile);
-                }
-              }}
-            />
+      <div className="space-y-5">
+        <div className="rounded-2xl border border-border bg-surface-overlay/40 p-4">
+          <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary">
+            <UserCircleIcon className="h-4 w-4" />
+            {t("profile:settings.personalIdentityTitle", {
+              defaultValue: "Personal display identity",
+            })}
           </div>
 
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-text-muted">
-              {t("profile:settings.background")}
-            </p>
-            <div className="h-24 overflow-hidden rounded-xl border border-border bg-surface-overlay">
-              {backgroundPreview ? (
-                <img
-                  src={backgroundPreview}
-                  alt={t("profile:settings.backgroundPreview")}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-xs text-text-muted">
-                  {t("profile:settings.noBackground")}
-                </div>
-              )}
+          <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+            <div className="space-y-4">
+              <Input
+                label={t("profile:settings.displayName")}
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                placeholder={t("profile:settings.displayNamePlaceholder")}
+                maxLength={80}
+                disabled={isSaving}
+              />
+
+              <Textarea
+                label={t("profile:settings.bio")}
+                value={bio}
+                onChange={(event) => setBio(event.target.value)}
+                rows={3}
+                maxLength={500}
+                disabled={isSaving}
+              />
             </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => backgroundInputRef.current?.click()}
-              leftIcon={<PhotoIcon className="h-4 w-4" />}
-            >
-              {t("profile:settings.chooseBackground")}
-            </Button>
-            <input
-              ref={backgroundInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(event) => {
-                const nextFile = event.target.files?.[0];
-                if (nextFile) {
-                  handleBackgroundPick(nextFile);
-                }
-              }}
-            />
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+              <div className="space-y-2 rounded-xl border border-border bg-surface p-3">
+                <p className="text-xs font-medium text-text-muted">
+                  {t("profile:settings.avatar")}
+                </p>
+                <div className="flex items-center gap-3">
+                  <Avatar
+                    src={avatarPreview || user?.avatar}
+                    alt={displayLabel}
+                    size="lg"
+                  />
+                  <div className="space-y-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={isSaving || avatarSupport === "unsupported"}
+                      onClick={() => avatarInputRef.current?.click()}
+                      leftIcon={<PhotoIcon className="h-4 w-4" />}
+                    >
+                      {t("profile:settings.chooseAvatar")}
+                    </Button>
+                    <p className="text-xs text-text-muted">{avatarHelpText}</p>
+                  </div>
+                </div>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => {
+                    const nextFile = event.target.files?.[0];
+                    if (nextFile) {
+                      handleAvatarPick(nextFile);
+                    }
+                  }}
+                />
+              </div>
+
+              <div className="space-y-2 rounded-xl border border-border bg-surface p-3">
+                <p className="text-xs font-medium text-text-muted">
+                  {t("profile:settings.background")}
+                </p>
+                <div className="h-24 overflow-hidden rounded-xl border border-border bg-surface-overlay">
+                  {backgroundPreview ? (
+                    <img
+                      src={backgroundPreview}
+                      alt={t("profile:settings.backgroundPreview")}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-xs text-text-muted">
+                      {t("profile:settings.noBackground")}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={isSaving || backgroundSupport === "unsupported"}
+                    onClick={() => backgroundInputRef.current?.click()}
+                    leftIcon={<PhotoIcon className="h-4 w-4" />}
+                  >
+                    {t("profile:settings.chooseBackground")}
+                  </Button>
+                  <p className="text-xs text-text-muted">
+                    {backgroundHelpText}
+                  </p>
+                </div>
+                <input
+                  ref={backgroundInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => {
+                    const nextFile = event.target.files?.[0];
+                    if (nextFile) {
+                      handleBackgroundPick(nextFile);
+                    }
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </div>
 
-        <Input
-          label={t("profile:settings.displayName")}
-          value={displayName}
-          onChange={(event) => setDisplayName(event.target.value)}
-          placeholder={t("profile:settings.displayNamePlaceholder")}
-          maxLength={80}
-          disabled={isSaving}
-        />
-
-        <Textarea
-          label={t("profile:settings.bio")}
-          value={bio}
-          onChange={(event) => setBio(event.target.value)}
-          rows={3}
-          maxLength={500}
-          disabled={isSaving}
-        />
-
-        <div className="rounded-xl border border-border bg-surface-overlay/60 p-3">
-          <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
+        <div className="rounded-2xl border border-border bg-surface-overlay/40 p-4">
+          <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary">
             <IdentificationIcon className="h-4 w-4" />
             {t("profile:settings.readOnlyTitle")}
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <Input
               label={t("profile:settings.employeeCode")}
-              value={employeeCode}
+              value={employeeCode || "-"}
               disabled
               readOnly
             />
             <Input
               label={t("profile:settings.hrLegalName")}
-              value={hrLegalName}
+              value={hrLegalName || "-"}
+              disabled
+              readOnly
+            />
+            <Input
+              label={t("profile:settings.departmentName", {
+                defaultValue: "Department",
+              })}
+              value={departmentName || "-"}
+              disabled
+              readOnly
+            />
+            <Input
+              label={t("profile:settings.unitCode", {
+                defaultValue: "Unit code",
+              })}
+              value={unitCode || "-"}
               disabled
               readOnly
             />
             <Input
               label={t("profile:settings.corporateEmail")}
-              value={corporateEmail}
+              value={corporateEmail || "-"}
               disabled
               readOnly
+              containerClassName="sm:col-span-2 lg:col-span-2"
             />
           </div>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-surface-overlay/40 p-4">
+          <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary">
+            <Cog6ToothIcon className="h-4 w-4" />
+            {t("profile:settings.accountSettingsTitle", {
+              defaultValue: "Account settings",
+            })}
+          </div>
+          <p className="text-sm text-text-secondary">
+            {t("profile:settings.accountSettingsHint", {
+              defaultValue:
+                "Changes here affect how your profile appears across the chat surfaces.",
+            })}
+          </p>
         </div>
 
         <div className="flex justify-end">

@@ -30,6 +30,10 @@ type ProfileUser = Partial<UserSummary> & {
   bio?: string;
   phone?: string;
   createdAt?: string;
+  fullNameFromHR?: string;
+  full_name_from_hr?: string;
+  employeeCode?: string;
+  employee_code?: string;
 };
 
 interface UserProfileProps {
@@ -148,11 +152,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   React.useEffect(() => {
     if (isSelf && authUser) {
       setUser({
+        ...(authUser as Partial<ProfileUser>),
         id: authUser.id,
         username: authUser.username,
         firstName: authUser.firstName,
         lastName: authUser.lastName,
-        displayName: authUser.displayName || authUser.username,
+        displayName: authUser.displayName,
         avatar: authUser.avatar,
         bio: authUser.bio,
         phone: authUser.phone,
@@ -181,11 +186,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         if (!isMounted) return;
 
         setUser({
+          ...(payload as Partial<ProfileUser>),
           id: payload.id,
           username: payload.username,
           firstName: payload.firstName,
           lastName: payload.lastName,
-          displayName: payload.displayName || payload.username,
+          displayName: payload.displayName,
           avatar: payload.avatar,
           bio: payload.bio,
           phone: payload.phone,

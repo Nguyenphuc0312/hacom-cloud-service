@@ -13,6 +13,7 @@ import { Avatar } from "../common/Avatar";
 import { useMessageSearch } from "../../hooks/useMessageSearch";
 import { formatRelativeTime } from "../../utils/formatTime";
 import type { Message } from "../../types";
+import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 
 interface SearchPanelProps {
   /** Current conversation ID to scope search (optional) */
@@ -204,37 +205,44 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         )}
 
         {/* Results list */}
-        {results.map((message) => (
-          <button
-            key={message.id}
-            type="button"
-            onClick={() => onSelectMessage(message)}
-            className={clsx(
-              "flex w-full items-start gap-3 px-4 py-3 text-left",
-              "transition-colors hover:bg-surface-overlay",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-inset",
-            )}
-          >
-            <Avatar
-              src={message.senderAvatar}
-              alt={message.senderName ?? ""}
-              size="sm"
-            />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="truncate text-sm font-medium text-text-primary">
-                  {message.senderName ?? ""}
-                </span>
-                <span className="shrink-0 text-xs text-text-muted">
-                  {formatRelativeTime(new Date(message.createdAt))}
-                </span>
+        {results.map((message) => {
+          const senderDisplayName = resolveUserDisplayName({
+            displayName: message.senderName,
+            username: message.senderId,
+          });
+
+          return (
+            <button
+              key={message.id}
+              type="button"
+              onClick={() => onSelectMessage(message)}
+              className={clsx(
+                "flex w-full items-start gap-3 px-4 py-3 text-left",
+                "transition-colors hover:bg-surface-overlay",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-inset",
+              )}
+            >
+              <Avatar
+                src={message.senderAvatar}
+                alt={senderDisplayName}
+                size="sm"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="truncate text-sm font-medium text-text-primary">
+                    {senderDisplayName}
+                  </span>
+                  <span className="shrink-0 text-xs text-text-muted">
+                    {formatRelativeTime(new Date(message.createdAt))}
+                  </span>
+                </div>
+                <p className="mt-0.5 line-clamp-2 text-sm text-text-secondary">
+                  <HighlightedText text={message.content} query={query} />
+                </p>
               </div>
-              <p className="mt-0.5 line-clamp-2 text-sm text-text-secondary">
-                <HighlightedText text={message.content} query={query} />
-              </p>
-            </div>
-          </button>
-        ))}
+            </button>
+          );
+        })}
 
         {/* Loading more indicator */}
         {isLoading && results.length > 0 && (

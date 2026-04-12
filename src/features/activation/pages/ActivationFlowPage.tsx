@@ -10,6 +10,7 @@ import { activationAuthApi } from "../../auth/api/authApi";
 import { resolveAuthFailure } from "../../auth/utils/authErrorMapper";
 import type { AuthStatus } from "../../auth/model/authState";
 import { ActivationRequiredPage } from "../components/ActivationRequiredPage";
+import { LockedOrDisabledState } from "../components/LockedOrDisabledState";
 import { VerifyOtpForm } from "../components/VerifyOtpForm";
 import { SetInitialPasswordForm } from "../components/SetInitialPasswordForm";
 
@@ -21,6 +22,9 @@ const formatCountdown = (seconds: number): string => {
 };
 
 type ActivationStep = "required" | "verify_otp" | "set_password";
+
+const isBlockingStatus = (status: AuthStatus): status is "locked" | "disabled" =>
+  status === "locked" || status === "disabled";
 
 const hasLoginToken = (
   payload: unknown,
@@ -60,11 +64,18 @@ export const ActivationFlowPage: React.FC = () => {
 
   React.useEffect(() => {
     if (!activationContext) {
+      if (authStatus === "authenticated") {
+        return;
+      }
+
       navigate(ROUTE_PATHS.LOGIN, { replace: true });
       return;
     }
 
-    if (activationContext.nextAction === "SET_PASSWORD") {
+    if (
+      activationContext.nextAction === "SET_PASSWORD" &&
+      activationContext.verificationProof
+    ) {
       setStep("set_password");
       return;
     }
@@ -76,7 +87,7 @@ export const ActivationFlowPage: React.FC = () => {
         setResendSeconds(Math.ceil(delta / 1000));
       }
     }
-  }, [activationContext, navigate]);
+  }, [activationContext, authStatus, navigate]);
 
   React.useEffect(() => {
     if (resendSeconds <= 0) {
@@ -205,6 +216,7 @@ export const ActivationFlowPage: React.FC = () => {
 
     startOtpVerification();
     setIsBusy(true);
+    let finalized = false;
 
     try {
       const result = await activationAuthApi.verifyOtp({
@@ -214,6 +226,7 @@ export const ActivationFlowPage: React.FC = () => {
       });
 
       if (finalizeAuthenticated(result)) {
+        finalized = true;
         return;
       }
 
@@ -233,7 +246,9 @@ export const ActivationFlowPage: React.FC = () => {
       const failure = resolveAuthFailure(cause, t);
       setError(failure.message);
     } finally {
-      finishActivationPending();
+      if (!finalized) {
+        finishActivationPending();
+      }
     }
   }, [
     activationContext,
@@ -257,6 +272,7 @@ export const ActivationFlowPage: React.FC = () => {
 
     startOtpVerification();
     setIsBusy(true);
+    let finalized = false;
 
     try {
       const result = await activationAuthApi.setInitialPassword({
@@ -270,12 +286,16 @@ export const ActivationFlowPage: React.FC = () => {
 
       if (!finalizeAuthenticated(result)) {
         setError(t("activation.setPassword.submitFailed"));
+      } else {
+        finalized = true;
       }
     } catch (cause) {
       const failure = resolveAuthFailure(cause, t);
       setError(failure.message);
     } finally {
-      finishActivationPending();
+      if (!finalized) {
+        finishActivationPending();
+      }
     }
   }, [
     activationContext,
@@ -307,7 +327,15 @@ export const ActivationFlowPage: React.FC = () => {
           </p>
         </header>
 
-        {step === "required" && (
+        {isBlockingStatus(authStatus) ? (
+          <LockedOrDisabledState
+            status={authStatus}
+            message={error}
+            onReset={() => navigate(ROUTE_PATHS.LOGIN, { replace: true })}
+          />
+        ) : null}
+
+        {!isBlockingStatus(authStatus) && step === "required" && (
           <ActivationRequiredPage
             maskedEmail={activationContext.maskedEmail}
             isSubmitting={isBusy}
@@ -316,7 +344,7 @@ export const ActivationFlowPage: React.FC = () => {
           />
         )}
 
-        {step === "verify_otp" && (
+        {!isBlockingStatus(authStatus) && step === "verify_otp" && (
           <VerifyOtpForm
             otp={otp}
             password={password}
@@ -333,7 +361,7 @@ export const ActivationFlowPage: React.FC = () => {
           />
         )}
 
-        {step === "set_password" && (
+        {!isBlockingStatus(authStatus) && step === "set_password" && (
           <SetInitialPasswordForm
             password={password}
             confirmPassword={confirmPassword}

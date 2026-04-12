@@ -1,5 +1,6 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
+import { LockClosedIcon } from "@heroicons/react/24/outline";
 import { Button, Input } from "../../../components/ui";
 import { EmailOtpInput } from "../../../components/auth";
 import { calculatePasswordStrength } from "../../../lib/validations";
@@ -41,16 +42,35 @@ export const VerifyOtpForm: React.FC<VerifyOtpFormProps> = ({
       : strength === "medium"
         ? t("activation.setPassword.medium")
         : t("activation.setPassword.weak");
+  const passwordsMatch = password === confirmPassword;
 
   return (
     <section className="space-y-4">
-      <header className="space-y-1">
+      <header className="space-y-2">
         <h2 className="text-xl font-semibold text-text-primary">
           {t("activation.verifyOtp.title")}
         </h2>
         <p className="text-sm text-text-secondary">
           {t("activation.verifyOtp.description")}
         </p>
+        <div className="rounded-xl border border-border bg-surface-overlay px-3 py-3 text-sm text-text-secondary">
+          <div className="flex items-start gap-3">
+            <LockClosedIcon className="mt-0.5 h-4 w-4 shrink-0 text-text-muted" />
+            <div className="space-y-1">
+              <p className="font-medium text-text-primary">
+                {t("activation.verifyOtp.passwordStepTitle", {
+                  defaultValue: "Verify OTP and set your first password",
+                })}
+              </p>
+              <p>
+                {t("activation.verifyOtp.passwordStepDescription", {
+                  defaultValue:
+                    "This environment completes activation in one submission.",
+                })}
+              </p>
+            </div>
+          </div>
+        </div>
       </header>
 
       <EmailOtpInput
@@ -82,6 +102,11 @@ export const VerifyOtpForm: React.FC<VerifyOtpFormProps> = ({
         label={t("activation.setPassword.confirmPassword")}
         placeholder={t("auth:placeholders.password")}
         disabled={isSubmitting}
+        error={
+          confirmPassword.length > 0 && !passwordsMatch
+            ? t("activation.setPassword.mismatch")
+            : undefined
+        }
       />
 
       <div className="flex items-center justify-between gap-3 text-xs text-text-muted">
@@ -114,7 +139,7 @@ export const VerifyOtpForm: React.FC<VerifyOtpFormProps> = ({
           otp.length !== 6 ||
           password.length < 8 ||
           confirmPassword.length < 8 ||
-          password !== confirmPassword
+          !passwordsMatch
         }
         onClick={() => {
           void onSubmit();

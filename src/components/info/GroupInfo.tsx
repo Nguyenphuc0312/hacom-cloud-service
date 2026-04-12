@@ -53,6 +53,10 @@ interface GroupMember {
   id: string;
   username: string;
   displayName?: string;
+  fullNameFromHR?: string;
+  full_name_from_hr?: string;
+  employeeCode?: string;
+  employee_code?: string;
   avatar?: string;
   status?: UserSummary["status"];
   role: GroupMemberRole;
@@ -131,6 +135,26 @@ const normalizeMember = (raw: unknown): GroupMember | null => {
       asString(raw.displayName) ??
       asString(user?.displayName) ??
       asString(raw.nickname),
+    fullNameFromHR:
+      asString(raw.fullNameFromHR) ??
+      asString(raw.full_name_from_hr) ??
+      asString(user?.fullNameFromHR) ??
+      asString(user?.full_name_from_hr),
+    full_name_from_hr:
+      asString(raw.full_name_from_hr) ??
+      asString(user?.full_name_from_hr) ??
+      asString(raw.fullNameFromHR) ??
+      asString(user?.fullNameFromHR),
+    employeeCode:
+      asString(raw.employeeCode) ??
+      asString(raw.employee_code) ??
+      asString(user?.employeeCode) ??
+      asString(user?.employee_code),
+    employee_code:
+      asString(raw.employee_code) ??
+      asString(user?.employee_code) ??
+      asString(raw.employeeCode) ??
+      asString(user?.employeeCode),
     avatar: asString(raw.avatar) ?? asString(user?.avatar),
     status: asStatus(raw.status) ?? asStatus(user?.status),
     role,

@@ -11,6 +11,7 @@ import { loginSchema } from "../lib/validations";
 import type { LoginFormData } from "../lib/validations";
 import { useAuthStore } from "../stores";
 import { ROUTE_PATHS } from "../router/paths";
+import { LockedOrDisabledState } from "../features/activation/components/LockedOrDisabledState";
 
 export const LoginPage: React.FC = () => {
   const { t } = useTranslation("auth");
@@ -25,8 +26,11 @@ export const LoginPage: React.FC = () => {
     isAuthenticated,
     authStatus,
     activationContext,
+    lockedAccount,
     error,
     clearError,
+    setLockedAccount,
+    setAuthStatus,
   } = useAuthStore();
 
   useEffect(() => {
@@ -47,8 +51,10 @@ export const LoginPage: React.FC = () => {
   }, [activationContext, authStatus, isAuthenticated, location, navigate]);
 
   useEffect(() => {
-    clearError();
-  }, [clearError]);
+    if (authStatus !== "locked" && authStatus !== "disabled") {
+      clearError();
+    }
+  }, [authStatus, clearError]);
 
   const {
     register,
@@ -141,15 +147,34 @@ export const LoginPage: React.FC = () => {
         </div>
 
         {authMethod === "password" && (
-          <PasswordLoginForm
-            register={register}
-            errors={errors}
-            isLoading={isLoading}
-            isSubmitting={isSubmitting}
-            authError={error}
-            onSubmit={handleSubmit(onSubmit)}
-            showSocialLogin={false}
-          />
+          <div className="space-y-4">
+            {(authStatus === "locked" || authStatus === "disabled") &&
+            lockedAccount ? (
+              <LockedOrDisabledState
+                status={lockedAccount.status}
+                message={lockedAccount.message || error}
+                onReset={() => {
+                  setLockedAccount(null);
+                  setAuthStatus("anonymous");
+                  clearError();
+                }}
+              />
+            ) : null}
+
+            <PasswordLoginForm
+              register={register}
+              errors={errors}
+              isLoading={isLoading}
+              isSubmitting={isSubmitting}
+              authError={
+                authStatus === "locked" || authStatus === "disabled"
+                  ? null
+                  : error
+              }
+              onSubmit={handleSubmit(onSubmit)}
+              showSocialLogin={false}
+            />
+          </div>
         )}
 
         {authMethod === "qr" && (
