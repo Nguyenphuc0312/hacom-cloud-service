@@ -102,6 +102,9 @@
   "settings": {
     "title": "Hồ sơ cá nhân",
     "description": "Quản lý tên hiển thị, avatar và ảnh nền của bạn.",
+    "summaryBadge": "Tổng quan hồ sơ",
+    "summaryTitle": "Tóm tắt hồ sơ",
+    "mediaTitle": "Nhận diện hình ảnh",
     "avatar": "Ảnh đại diện",
     "background": "Ảnh nền",
     "backgroundPreview": "Xem trước ảnh nền",
@@ -110,17 +113,31 @@
     "chooseBackground": "Chọn ảnh nền",
     "displayName": "Tên hiển thị",
     "displayNamePlaceholder": "Nhập tên hiển thị",
+    "displayNameHint": "Tên này sẽ xuất hiện ở mọi bề mặt trong ứng dụng.",
     "bio": "Giới thiệu",
+    "bioHint": "Ngắn gọn và dễ nhận ra. {{count}} / 500 ký tự.",
+    "phoneHint": "Dùng định dạng quốc tế để thông tin liên hệ luôn nhất quán.",
+    "phoneEmpty": "Chưa lưu số điện thoại",
     "readOnlyTitle": "Thông tin nguồn HR (chỉ xem)",
     "employeeCode": "Mã nhân viên",
     "hrLegalName": "Họ tên HR",
     "corporateEmail": "Email công ty",
+    "jobTitle": "Chức danh",
+    "unsaved": "Có thay đổi chưa lưu",
+    "synced": "Đã đồng bộ",
+    "refreshing": "Đang làm mới dữ liệu hồ sơ…",
+    "saveHint": "Lưu để cập nhật hồ sơ mới nhất ở mọi nơi ngay lập tức.",
     "save": "Lưu hồ sơ",
     "saved": "Đã cập nhật hồ sơ.",
     "saveFailed": "Không thể cập nhật hồ sơ.",
     "upload": {
       "unsupportedType": "Chỉ hỗ trợ ảnh JPG, PNG, WEBP hoặc GIF.",
       "exceedsSize": "Ảnh vượt quá {{maxMb}}MB."
+    },
+    "validation": {
+      "displayNameMax": "Tên hiển thị không được vượt quá 120 ký tự.",
+      "bioMax": "Giới thiệu không được vượt quá {{count}} ký tự.",
+      "phoneInvalid": "Hãy nhập số điện thoại quốc tế hợp lệ."
     }
   },
   "imagePreview": {

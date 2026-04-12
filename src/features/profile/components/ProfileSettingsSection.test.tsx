@@ -46,8 +46,7 @@ vi.mock("../../../lib/axios", async (importOriginal) => {
 });
 
 vi.mock("../../../components/ui", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("../../../components/ui")>();
+  const actual = await importOriginal<typeof import("../../../components/ui")>();
   return {
     ...actual,
     toast: {
@@ -69,6 +68,7 @@ const resetStore = () => {
       username: "user-1",
       displayName: "Current Name",
       bio: "Current bio",
+      phone: "+84912345678",
       employeeCode: "EMP001",
       fullNameFromHR: "Nguyen Van A",
       corporateEmail: "user@company.test",
@@ -90,16 +90,51 @@ describe("ProfileSettingsSection", () => {
     resetStore();
   });
 
-  it("renders editable and read-only profile fields separately", () => {
+  it("renders editable profile fields and read-only HR data", () => {
     render(<ProfileSettingsSection />);
 
     expect(screen.getByLabelText("profile:settings.displayName")).toBeEnabled();
+    expect(screen.getByLabelText("profile:editProfileModal.phone")).toBeEnabled();
     expect(screen.getByLabelText("profile:settings.bio")).toBeEnabled();
     expect(screen.getByDisplayValue("EMP001")).toBeDisabled();
     expect(screen.getByDisplayValue("Nguyen Van A")).toBeDisabled();
     expect(screen.getByDisplayValue("Engineering")).toBeDisabled();
     expect(screen.getByDisplayValue("ENG")).toBeDisabled();
     expect(screen.getByDisplayValue("user@company.test")).toBeDisabled();
+  });
+
+  it("submits the latest profile payload including phone", async () => {
+    patchProfileMock.mockResolvedValue({
+      success: true,
+      data: {
+        displayName: "Updated Name",
+        phone: "+84987654321",
+        bio: "Updated bio",
+      },
+    });
+
+    render(<ProfileSettingsSection />);
+
+    fireEvent.change(screen.getByLabelText("profile:settings.displayName"), {
+      target: { value: "Updated Name" },
+    });
+    fireEvent.change(screen.getByLabelText("profile:editProfileModal.phone"), {
+      target: { value: "+84987654321" },
+    });
+    fireEvent.change(screen.getByLabelText("profile:settings.bio"), {
+      target: { value: "Updated bio" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "profile:settings.save" }));
+
+    await waitFor(() => {
+      expect(patchProfileMock).toHaveBeenCalledWith({
+        displayName: "Updated Name",
+        phone: "+84987654321",
+        bio: "Updated bio",
+      });
+      expect(toastSuccessMock).toHaveBeenCalled();
+    });
   });
 
   it("disables background upload after backend reports unsupported endpoint", async () => {
@@ -122,12 +157,8 @@ describe("ProfileSettingsSection", () => {
     const backgroundInput = fileInputs[1];
     const file = new File(["image"], "background.png", { type: "image/png" });
 
-    fireEvent.change(backgroundInput, {
-      target: { files: [file] },
-    });
-    fireEvent.click(
-      screen.getByRole("button", { name: "profile:settings.save" }),
-    );
+    fireEvent.change(backgroundInput, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: "profile:settings.save" }));
 
     await waitFor(() => {
       expect(toastErrorMock).toHaveBeenCalled();
@@ -139,13 +170,12 @@ describe("ProfileSettingsSection", () => {
       ),
     ).toBeInTheDocument();
 
-    const backgroundButton = screen.getByRole("button", {
-      name: "profile:settings.chooseBackground",
-    });
-    expect(backgroundButton).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "profile:settings.chooseBackground" }),
+    ).toBeDisabled();
   });
 
-  it("prevents duplicate profile save submit while save is pending", async () => {
+  it("prevents duplicate submits while save is pending", async () => {
     let resolvePatch: (value: unknown) => void = () => {
       throw new Error("resolvePatch not initialized");
     };

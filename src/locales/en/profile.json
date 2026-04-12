@@ -102,6 +102,9 @@
   "settings": {
     "title": "Profile settings",
     "description": "Manage your display name, avatar, and background image.",
+    "summaryBadge": "Profile overview",
+    "summaryTitle": "Profile summary",
+    "mediaTitle": "Visual identity",
     "avatar": "Avatar",
     "background": "Background",
     "backgroundPreview": "Background preview",
@@ -110,17 +113,31 @@
     "chooseBackground": "Choose background",
     "displayName": "Display name",
     "displayNamePlaceholder": "Enter display name",
+    "displayNameHint": "This is the name everyone sees across the product.",
     "bio": "Bio",
+    "bioHint": "Keep it short and recognisable. {{count}} / 500 characters.",
+    "phoneHint": "Use an international format so your contact info stays consistent.",
+    "phoneEmpty": "No phone number saved",
     "readOnlyTitle": "HR source fields (read-only)",
     "employeeCode": "Employee code",
     "hrLegalName": "HR legal name",
     "corporateEmail": "Corporate email",
+    "jobTitle": "Title",
+    "unsaved": "Unsaved changes",
+    "synced": "Synced",
+    "refreshing": "Refreshing profile data…",
+    "saveHint": "Save to apply your latest profile details everywhere instantly.",
     "save": "Save profile",
     "saved": "Profile updated.",
     "saveFailed": "Unable to update profile.",
     "upload": {
       "unsupportedType": "Only JPG, PNG, WEBP, or GIF images are supported.",
       "exceedsSize": "Image exceeds {{maxMb}}MB limit."
+    },
+    "validation": {
+      "displayNameMax": "Display name must not exceed 120 characters.",
+      "bioMax": "Bio must not exceed {{count}} characters.",
+      "phoneInvalid": "Use a valid international phone number."
     }
   },
   "imagePreview": {

@@ -62,6 +62,13 @@ export interface User {
   backgroundImageUrl?: string;
   bio?: string;
   phone?: string;
+  departmentName?: string;
+  orgUnit?: string;
+  title?: string;
+  unitCode?: string;
+  loginIdentifier?: string;
+  avatarFileId?: string | null;
+  backgroundFileId?: string | null;
   status?: "online" | "offline" | "away" | "dnd" | string;
   role?: string;
   isVerified?: boolean;
@@ -149,6 +156,7 @@ interface AuthState {
   ) => Promise<RegisterFlowResult>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  refreshProfile: () => Promise<User | null>;
   updateUser: (data: Partial<User>) => void;
   updateStatus: (status: User["status"]) => Promise<void>;
   clearError: () => void;
@@ -181,7 +189,7 @@ const resolveTokens = (
 };
 
 const fetchCurrentUser = async (accessToken: string): Promise<User> => {
-  const response = await authClient.get<ApiResponse<User>>(AUTH_ENDPOINTS.me, {
+  const response = await apiClient.get<ApiResponse<User>>("/users/profile", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   return normalizeAuthResponse({
@@ -481,6 +489,8 @@ export const useAuthStore = create<AuthState>()(
             registrationStatus: "idle",
             error: null,
           });
+
+          void get().refreshProfile().catch(() => null);
         },
 
         setAuthStatus: (status) =>
@@ -774,6 +784,24 @@ export const useAuthStore = create<AuthState>()(
               registrationStatus: "idle",
             });
           }
+        },
+
+        refreshProfile: async () => {
+          const token = getAccessToken();
+          if (!token) {
+            return null;
+          }
+
+          const user = await fetchCurrentUser(token);
+          set((state) => ({
+            user,
+            authStatus:
+              state.authStatus === "authenticated"
+                ? state.authStatus
+                : "authenticated",
+            isAuthenticated: true,
+          }));
+          return user;
         },
 
         updateUser: (data: Partial<User>) => {
