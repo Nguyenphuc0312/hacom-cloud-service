@@ -22,6 +22,7 @@ import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
 import { useAuthStore } from '@/store/authStore';
 import { formatDateTime } from '@/utils/date';
 import { canManageHrEmployees } from '@/utils/role';
+import { useProvisionHrEmployeeAccountMutation } from '../hooks/useHrEmployeeMutations';
 
 const statusOptions: Array<{ label: string; value: 'all' | HrEmployeeStatus }> = [
   { label: 'Tất cả status', value: 'all' },
@@ -46,7 +47,9 @@ export const HREmployeesPage = () => {
   const [editForm] = Form.useForm<FormValues>();
   const queryClient = useQueryClient();
   const currentRole = useAuthStore((state) => state.user?.role);
+  const currentAdmin = useAuthStore((state) => state.user);
   const canWriteHrActions = isAdminWriteActionsEnabled && canManageHrEmployees(currentRole);
+  const provisionMutation = useProvisionHrEmployeeAccountMutation();
 
   const [params, setParams] = useState<HrEmployeeListQuery>({
     page: 1,
@@ -144,6 +147,16 @@ export const HREmployeesPage = () => {
     },
   });
 
+  const buildActorPayload = useCallback(
+    (reason?: string) => ({
+      actorId: currentAdmin?.id,
+      actorEmail: currentAdmin?.email,
+      actorRole: currentAdmin?.role,
+      reason,
+    }),
+    [currentAdmin?.email, currentAdmin?.id, currentAdmin?.role],
+  );
+
   const submitEditor = async () => {
     const values = await editForm.validateFields();
 
@@ -219,6 +232,56 @@ export const HREmployeesPage = () => {
     [currentRole, deleteMutation],
   );
 
+  const getProvisionDisableReason = useCallback((employee: HrEmployee): string | null => {
+    if (!canWriteHrActions) {
+      return 'Provision action is disabled by current role or release flag.';
+    }
+
+    if (!employee.email) {
+      return 'Missing company email.';
+    }
+
+    if (employee.linkedUser?.id) {
+      return 'Employee already linked to an account.';
+    }
+
+    if (employee.provisioningStatus === 'PROVISIONED' || employee.provisioningStatus === 'PENDING') {
+      return `Provisioning status is ${employee.provisioningStatus}.`;
+    }
+
+    return null;
+  }, [canWriteHrActions]);
+
+  const confirmProvision = useCallback(
+    (employee: HrEmployee) => {
+      const disableReason = getProvisionDisableReason(employee);
+      if (disableReason) {
+        message.info(disableReason);
+        return;
+      }
+
+      Modal.confirm({
+        title: 'Provision account',
+        content:
+          'Tao tai khoan cho nhan su nay theo contract backend hien tai. UI se refresh row sau khi thanh cong.',
+        okText: 'Provision',
+        cancelText: 'Cancel',
+        onOk: async () => {
+          const result = await provisionMutation.mutateAsync({
+            employeeId: employee.id,
+            payload: buildActorPayload('phase1_provision_from_list'),
+          });
+          message.success(
+            result.loginIdentifier
+              ? `Provisioned account ${result.loginIdentifier}.`
+              : 'Provisioned account successfully.',
+          );
+        },
+      });
+    },
+    [buildActorPayload, getProvisionDisableReason, provisionMutation],
+  );
+
   const columns = useMemo<ColumnsType<HrEmployee>>(
     () => [
       {
@@ -238,6 +301,29 @@ export const HREmployeesPage = () => {
         title: 'Org unit',
         dataIndex: 'orgUnit',
         render: (value: string | null) => value ?? '-',
+      },
+      {
+        title: 'Provisioning',
+        dataIndex: 'provisioningStatus',
+        render: (value: HrEmployee['provisioningStatus']) => (
+          <Tag color={value === 'PROVISIONED' ? 'green' : value === 'FAILED' ? 'red' : 'default'}>
+            {value ?? '-'}
+          </Tag>
+        ),
+      },
+      {
+        title: 'Activation',
+        dataIndex: 'activationStatus',
+        render: (value: HrEmployee['activationStatus']) => (
+          <Tag color={value === 'ACTIVE' ? 'green' : value === 'DISABLED' ? 'red' : 'default'}>
+            {value ?? '-'}
+          </Tag>
+        ),
+      },
+      {
+        title: 'Linked user',
+        dataIndex: 'linkedUser',
+        render: (value: HrEmployee['linkedUser']) => value?.loginIdentifier || value?.id || '-',
       },
       {
         title: 'Status',
@@ -270,6 +356,18 @@ export const HREmployeesPage = () => {
             </Button>
             <Button
               size="small"
+              disabled={Boolean(getProvisionDisableReason(record)) || provisionMutation.isPending}
+              title={getProvisionDisableReason(record) ?? 'Provision account'}
+              loading={provisionMutation.isPending}
+              onClick={(event) => {
+                event.stopPropagation();
+                confirmProvision(record);
+              }}
+            >
+              Provision
+            </Button>
+            <Button
+              size="small"
               danger
               disabled={!canWriteHrActions}
               onClick={(event) => {
@@ -283,7 +381,7 @@ export const HREmployeesPage = () => {
         ),
       },
     ],
-    [canWriteHrActions, confirmRemove],
+    [canWriteHrActions, confirmProvision, confirmRemove, getProvisionDisableReason, provisionMutation.isPending],
   );
 
   const applyFilters = () => {
