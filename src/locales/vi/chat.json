@@ -38,7 +38,13 @@
       "retry": "Gửi lại",
       "failedRetry": "Gửi thất bại. Bấm để gửi lại",
       "failedInline": "Không gửi được",
-      "pendingInline": "Đang đồng bộ"
+      "pendingInline": "Đang gửi",
+      "networkError": "Mất kết nối mạng. Vui lòng thử lại.",
+      "timeoutError": "Gửi tin nhắn quá thời gian. Vui lòng thử lại.",
+      "backend4xxError": "Tin nhắn bị từ chối. Vui lòng thử lại.",
+      "backend5xxError": "Máy chủ đang bận. Vui lòng thử lại sau.",
+      "slowModeError": "Đang bật chế độ chậm. Vui lòng đợi rồi thử lại.",
+      "unknownError": "Không thể gửi tin nhắn."
     },
     "actions": {
       "react": "Thả cảm xúc",
@@ -72,8 +78,8 @@
     "sentAnnouncement": "Đã gửi tin nhắn",
     "queuedAnnouncement": "Tin nhắn đã được xếp hàng đợi",
     "failedAnnouncement": "Gửi tin nhắn thất bại",
-    "reconnectingHint": "Đang kết nối lại. Tin nhắn mới sẽ được xếp hàng đợi.",
-    "offlineHint": "Bạn đang offline. Tin nhắn sẽ tự gửi khi kết nối trở lại.",
+    "reconnectingHint": "Đang kết nối lại. Bạn vẫn có thể tiếp tục gửi trong lúc hệ thống xác nhận.",
+    "offlineHint": "Bạn đang offline. Tin nhắn có thể thất bại và cần gửi lại.",
     "permissionDenied": "Bạn không còn quyền gửi tin nhắn trong cuộc trò chuyện này.",
     "blockedConversation": "Bạn không thể gửi tin nhắn trong cuộc trò chuyện này.",
     "recordVoice": "Ghi âm",

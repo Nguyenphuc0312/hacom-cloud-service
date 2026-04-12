@@ -57,7 +57,6 @@ interface MessageInputProps {
   sendOnEnter?: boolean;
   disabled?: boolean;
   submitDisabled?: boolean;
-  submitInFlight?: boolean;
   attachmentsDisabled?: boolean;
   className?: string;
   onLayoutHeightChange?: (nextHeight: number) => void;
@@ -179,7 +178,6 @@ export const MessageInput = React.forwardRef<
     sendOnEnter = true,
     disabled = false,
     submitDisabled = false,
-    submitInFlight = false,
     attachmentsDisabled = false,
     className,
     onLayoutHeightChange,
@@ -375,7 +373,7 @@ export const MessageInput = React.forwardRef<
   );
 
   const handleInsertMentionTrigger = React.useCallback(() => {
-    if (disabled || isUploading || isSending || submitInFlight) return;
+    if (disabled || isUploading || isSending) return;
 
     const textarea = textareaRef.current;
     if (!textarea) {
@@ -400,7 +398,6 @@ export const MessageInput = React.forwardRef<
     isSending,
     isUploading,
     onChange,
-    submitInFlight,
     textareaRef,
     updateMentionState,
     value,
@@ -435,10 +432,6 @@ export const MessageInput = React.forwardRef<
   }, [sendAttachmentMessage, t]);
 
   const handlePrimarySend = React.useCallback(async () => {
-    if (submitInFlight) {
-      return;
-    }
-
     // Multi-file queue path: send text (attachments handled by ChatWindow)
     const hasQueueDrafts = (uploadDrafts?.length ?? 0) > 0;
     logMessageDebug("MessageInput", "submit_intent", {
@@ -450,22 +443,20 @@ export const MessageInput = React.forwardRef<
       selectedFileName: selectedFile?.name,
       disabled,
       submitDisabled,
-      submitInFlight,
     });
     if (hasQueueDrafts && hasReadyDrafts) {
       const content = value.trim();
       // Call onSend — ChatWindow.handleSend gathers ready metas
       try {
-        const result = await onSend(content || undefined);
+        const sendPromise = Promise.resolve(onSend(content || undefined));
         onChange("");
         clearMentionState();
         stopTypingNow();
-        setLiveRegionMessage(
-          (result as { disposition?: string } | undefined)?.disposition ===
-            "queued"
-            ? t("chat:composer.queuedAnnouncement")
-            : t("chat:composer.sentAnnouncement"),
-        );
+        setLiveRegionMessage(t("chat:composer.sentAnnouncement"));
+
+        void sendPromise.catch(() => {
+          setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
+        });
       } catch {
         setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
       }
@@ -491,7 +482,6 @@ export const MessageInput = React.forwardRef<
     selectedFile,
     stopTypingNow,
     submitDisabled,
-    submitInFlight,
     t,
     uploadDrafts?.length,
     value,
@@ -548,7 +538,7 @@ export const MessageInput = React.forwardRef<
 
   const hasText = value.trim().length > 0;
   const hasQueueDrafts = (uploadDrafts?.length ?? 0) > 0;
-  const isSubmitBusy = isUploading || isSending || submitInFlight;
+  const isSubmitBusy = isUploading || isSending;
   const canSend = hasQueueDrafts
     ? !submitDisabled &&
       !isSubmitBusy &&
@@ -559,9 +549,7 @@ export const MessageInput = React.forwardRef<
       : !submitDisabled && !isSubmitBusy && hasText;
   const disableToolbar = disabled || isSubmitBusy;
   const disableAttachmentActions = attachmentsDisabled || isSubmitBusy;
-  const sendButtonLabel = isSubmitBusy
-    ? t("chat:composer.sending")
-    : t("chat:composer.sendMessage");
+  const sendButtonLabel = t("chat:composer.sendMessage");
   const openShortcut =
     typeof navigator !== "undefined" &&
     /Mac|iPhone|iPad/.test(navigator.platform)
@@ -569,13 +557,11 @@ export const MessageInput = React.forwardRef<
       : "Ctrl K";
   const composerVisualState = disabled
     ? "disabled"
-    : isSubmitBusy
-      ? "sending"
-      : canSend
-        ? "ready"
-        : isComposerFocused
-          ? "focused"
-          : "idle";
+    : canSend
+      ? "ready"
+      : isComposerFocused
+        ? "focused"
+        : "idle";
 
   const handleKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -925,8 +911,6 @@ export const MessageInput = React.forwardRef<
               "relative flex min-w-0 flex-1 items-end rounded-2xl border px-2 py-1.5 transition-micro",
               composerVisualState === "disabled" &&
                 "border-disabled-border bg-disabled-bg shadow-none",
-              composerVisualState === "sending" &&
-                "border-primary/30 bg-surface shadow-elev2",
               composerVisualState === "ready" &&
                 "border-primary/30 bg-surface shadow-elev2",
               composerVisualState === "focused" &&
@@ -1091,8 +1075,7 @@ export const MessageInput = React.forwardRef<
 
           <SendButton
             disabled={!canSend}
-            isBusy={isSubmitBusy}
-            state={!canSend ? "disabled" : isSubmitBusy ? "sending" : "ready"}
+            state={!canSend ? "disabled" : "ready"}
             onClick={() => {
               logMessageDebug("MessageInput", "submit_triggered", {
                 conversationId,

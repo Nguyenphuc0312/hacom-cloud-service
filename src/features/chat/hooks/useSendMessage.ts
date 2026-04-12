@@ -1,7 +1,6 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { ErrorCode } from "@hacom/chat-shared-types";
-import { toast } from "../../../components/ui";
 import { useChatStore, useGroupStore } from "../../../stores";
 import { extractApiError } from "../../../lib/apiContract";
 import { logMessageDebug } from "../../../utils/messageDebug";
@@ -106,7 +105,6 @@ export const useSendMessage = ({
           setSlowModeCooldown(selectedConversationId, retryAfterSeconds);
         }
 
-        toast.error(apiError.message || t("error:chat.sendFailed"));
         throw error;
       }
     },

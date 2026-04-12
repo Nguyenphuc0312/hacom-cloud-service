@@ -112,7 +112,7 @@ export const useComposerAvailability = ({
         canSubmit: true,
         statusTone: "error",
         statusMessage: t("chat:composer.offlineHint", {
-          defaultValue: "Offline. Messages will be queued until the network returns.",
+          defaultValue: "Offline. Messages may fail and can be retried.",
         }),
       };
     }
@@ -126,7 +126,7 @@ export const useComposerAvailability = ({
         statusTone: "warn",
         statusMessage: t("chat:composer.reconnectingHint", {
           defaultValue:
-            "Realtime is reconnecting. Sending still works.",
+            "Reconnecting. You can keep sending while messages are being confirmed.",
         }),
       };
     }

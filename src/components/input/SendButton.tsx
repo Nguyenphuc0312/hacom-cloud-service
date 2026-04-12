@@ -1,6 +1,6 @@
 import React from "react";
 import clsx from "clsx";
-import { PaperAirplaneIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
+import { PaperAirplaneIcon } from "@heroicons/react/24/outline";
 
 interface SendButtonProps {
   disabled: boolean;
@@ -45,16 +45,13 @@ export const SendButton: React.FC<SendButtonProps> = ({
       )}
       aria-label={ariaLabel}
     >
-      {isBusy ? (
-        <ArrowPathIcon className="h-5 w-5 animate-spin" />
-      ) : (
-        <PaperAirplaneIcon
-          className={clsx(
-            "h-5 w-5 transition-transform duration-150",
-            resolvedState === "ready" && "translate-x-px -translate-y-px",
-          )}
-        />
-      )}
+      <PaperAirplaneIcon
+        className={clsx(
+          "h-5 w-5 transition-transform duration-150",
+          resolvedState === "ready" && "translate-x-px -translate-y-px",
+          isBusy && "opacity-85",
+        )}
+      />
     </button>
   );
 };

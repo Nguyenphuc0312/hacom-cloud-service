@@ -30,7 +30,10 @@ interface UseSendMessageResult {
   sendAttachmentMessage: () => Promise<"sent" | "queued" | "failed">;
   clearSelectedFile: () => void;
   cancelUpload: () => void;
-  openFilePicker: (mode: AttachmentPickerMode, input: HTMLInputElement | null) => void;
+  openFilePicker: (
+    mode: AttachmentPickerMode,
+    input: HTMLInputElement | null,
+  ) => void;
 }
 
 const resolveFileType = (mimeType: string): FileType => {
@@ -144,25 +147,31 @@ export const useSendMessage = ({
   const sendTextMessage = React.useCallback(
     async (content: string) => {
       const text = content.trim();
-      if (!text || disabled || isSending) return "failed";
+      if (!text || disabled) return "failed";
 
-      setIsSending(true);
       try {
-        const result = await Promise.resolve(onSend(text));
-        return resolveDisposition(result);
+        const sendPromise = Promise.resolve(onSend(text));
+        void sendPromise.catch(() => {
+          // Message-level failed state is handled in the timeline.
+        });
+        return "sent";
       } catch (error) {
         const apiError = extractApiError(error);
         toast.error(apiError.message || t("error:chat.sendFailed"));
         return "failed";
-      } finally {
-        setIsSending(false);
       }
     },
-    [disabled, isSending, onSend, t],
+    [disabled, onSend, t],
   );
 
   const sendAttachmentMessage = React.useCallback(async () => {
-    if (!selectedFile || !conversationId || disabled || isUploading || isSending) {
+    if (
+      !selectedFile ||
+      !conversationId ||
+      disabled ||
+      isUploading ||
+      isSending
+    ) {
       return "failed";
     }
 
@@ -187,7 +196,11 @@ export const useSendMessage = ({
 
       setIsSending(true);
       const result = await Promise.resolve(
-        onSend(attachment.fileName || selectedFile.name, attachment, messageType),
+        onSend(
+          attachment.fileName || selectedFile.name,
+          attachment,
+          messageType,
+        ),
       );
       clearSelectedFile();
       return resolveDisposition(result);
@@ -207,7 +220,16 @@ export const useSendMessage = ({
       setIsUploading(false);
       setIsSending(false);
     }
-  }, [clearSelectedFile, conversationId, disabled, isSending, isUploading, onSend, selectedFile, t]);
+  }, [
+    clearSelectedFile,
+    conversationId,
+    disabled,
+    isSending,
+    isUploading,
+    onSend,
+    selectedFile,
+    t,
+  ]);
 
   const cancelUpload = React.useCallback(() => {
     uploadAbortRef.current?.abort();

@@ -7,6 +7,7 @@ interface MessageSurfaceProps {
   isGroupEnd: boolean;
   hasReplyPreview?: boolean;
   hasError?: boolean;
+  isPending?: boolean;
   children: React.ReactNode;
   className?: string;
 }
@@ -35,6 +36,7 @@ export const MessageSurface: React.FC<MessageSurfaceProps> = ({
   isGroupEnd,
   hasReplyPreview = false,
   hasError = false,
+  isPending = false,
   children,
   className,
 }) => {
@@ -51,6 +53,7 @@ export const MessageSurface: React.FC<MessageSurfaceProps> = ({
           (isOwn
             ? "ring-1 ring-danger/35"
             : "bg-danger/6 ring-1 ring-danger/20"),
+        isPending && "opacity-90",
         className,
       )}
     >

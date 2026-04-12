@@ -38,7 +38,13 @@
       "retry": "Retry",
       "failedRetry": "Failed to send. Click to retry",
       "failedInline": "Failed to send",
-      "pendingInline": "Syncing"
+      "pendingInline": "Sending",
+      "networkError": "No network connection. Please retry.",
+      "timeoutError": "Message timed out. Please retry.",
+      "backend4xxError": "Message was rejected. Please retry.",
+      "backend5xxError": "Server is busy. Please try again.",
+      "slowModeError": "Slow mode is active. Please wait and retry.",
+      "unknownError": "Could not send message."
     },
     "actions": {
       "react": "React",
@@ -72,8 +78,8 @@
     "sentAnnouncement": "Message sent",
     "queuedAnnouncement": "Message queued",
     "failedAnnouncement": "Message failed to send",
-    "reconnectingHint": "Reconnecting. New messages will be queued.",
-    "offlineHint": "Offline. Messages will send automatically when connection returns.",
+    "reconnectingHint": "Reconnecting. You can keep sending while messages are being confirmed.",
+    "offlineHint": "Offline. Messages may fail and can be retried.",
     "permissionDenied": "You can no longer send messages in this conversation.",
     "blockedConversation": "You cannot send messages in this conversation.",
     "recordVoice": "Record voice message",

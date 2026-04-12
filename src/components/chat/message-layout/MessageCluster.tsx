@@ -2,12 +2,13 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
-  ArrowPathIcon,
   ChatBubbleLeftIcon,
+  ClockIcon,
   DocumentIcon,
   ExclamationCircleIcon,
   PhotoIcon,
   SpeakerWaveIcon,
+  TrashIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../../common/Avatar";
 import { MessageActions } from "../../message/MessageActions";
@@ -77,7 +78,8 @@ const MessageDeliveryState: React.FC<{
   message: Message;
   isOwn: boolean;
   onRetry: () => void;
-}> = ({ message, isOwn, onRetry }) => {
+  onRemove: () => void;
+}> = ({ message, isOwn, onRetry, onRemove }) => {
   const { t } = useTranslation();
   const failed = isFailedMessage(message);
   const pending = isPendingMessage(message);
@@ -86,50 +88,90 @@ const MessageDeliveryState: React.FC<{
     return null;
   }
 
-  const label =
-    message.status === "uploading"
-      ? t("chat:message.status.uploading")
-      : message.sendState === "queued"
-        ? t("chat:message.status.queued", {
-            defaultValue: "Queued",
+  const label = failed
+    ? t("chat:message.status.failedInline", {
+        defaultValue: "Failed to send",
+      })
+    : t("chat:message.status.pendingInline", {
+        defaultValue: "Sending",
+      });
+
+  const failureHint = failed
+    ? message.errorMessage ||
+      (message.failureReason === "network"
+        ? t("chat:message.status.networkError", {
+            defaultValue: "No network connection. Please retry.",
           })
-        : message.sendState === "retrying"
-          ? t("chat:message.status.retrying", {
-              defaultValue: "Retrying",
+        : message.failureReason === "timeout"
+          ? t("chat:message.status.timeoutError", {
+              defaultValue: "Message timed out. Please retry.",
             })
-      : failed
-        ? t("chat:message.status.failedInline", {
-            defaultValue: "Chua gui duoc",
-          })
-        : t("chat:message.status.sending");
+          : message.failureReason === "permission"
+            ? t("chat:composer.permissionDenied", {
+                defaultValue:
+                  "You can no longer send messages in this conversation.",
+              })
+            : message.failureReason === "slow_mode"
+              ? t("chat:message.status.slowModeError", {
+                  defaultValue: "Slow mode is active. Please wait and retry.",
+                })
+              : message.failureReason === "backend_4xx"
+                ? t("chat:message.status.backend4xxError", {
+                    defaultValue: "Message was rejected. Please retry.",
+                  })
+                : message.failureReason === "backend_5xx"
+                  ? t("chat:message.status.backend5xxError", {
+                      defaultValue: "Server is busy. Please try again.",
+                    })
+                  : t("chat:message.status.unknownError", {
+                      defaultValue: "Could not send message.",
+                    }))
+    : null;
+
+  if (pending && !failed) {
+    return (
+      <div
+        className={clsx(
+          "mt-1.5 inline-flex max-w-full items-center gap-1.5 px-1 text-[11px] font-medium text-text-muted",
+          isOwn ? "self-end" : "self-start",
+        )}
+      >
+        <ClockIcon className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">{label}</span>
+      </div>
+    );
+  }
 
   return (
     <div
       className={clsx(
         "mt-1.5 inline-flex max-w-full items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-medium shadow-xs backdrop-blur-sm",
         isOwn ? "self-end" : "self-start",
-        failed
-          ? "border-danger/20 bg-danger/10 text-danger"
-          : "border-white/8 bg-[hsl(var(--color-chat-pill)/0.9)] text-text-secondary",
+        "border-danger/20 bg-danger/10 text-danger",
       )}
     >
-      {failed ? (
-        <ExclamationCircleIcon className="h-3.5 w-3.5 shrink-0" />
-      ) : message.sendState === "queued" ? (
-        <ChatBubbleLeftIcon className="h-3.5 w-3.5 shrink-0" />
-      ) : (
-        <ArrowPathIcon className="h-3.5 w-3.5 shrink-0 animate-spin" />
-      )}
+      <ExclamationCircleIcon className="h-3.5 w-3.5 shrink-0" />
       <span className="truncate">{label}</span>
-      {failed && (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-danger transition-micro hover:bg-danger/10"
-        >
-          {t("chat:message.status.retry", { defaultValue: "Thu lai" })}
-        </button>
-      )}
+      {failureHint ? (
+        <span className="hidden truncate text-danger/85 md:inline">
+          {failureHint}
+        </span>
+      ) : null}
+      <button
+        type="button"
+        onClick={onRetry}
+        className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-danger transition-micro hover:bg-danger/10"
+      >
+        {t("chat:message.status.retry", { defaultValue: "Retry" })}
+      </button>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold text-danger transition-micro hover:bg-danger/10"
+      >
+        <TrashIcon className="h-3 w-3" />
+        {t("chat:message.actions.delete", { defaultValue: "Delete" })}
+      </button>
     </div>
   );
 };
@@ -155,6 +197,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
 }) => {
   const { t } = useTranslation();
   const resendMessage = useChatStore((s) => s.resendMessage);
+  const removeMessage = useChatStore((s) => s.removeMessage);
   const [isRailVisible, setIsRailVisible] = React.useState(false);
   const [isActionsOpen, setIsActionsOpen] = React.useState(false);
   const longPressTimerRef = React.useRef<number | null>(null);
@@ -167,7 +210,9 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   const coarsePointer = isCoarsePointer();
   const threadCountValue = (() => {
     const candidate = message as unknown as { threadCount?: unknown };
-    return typeof candidate.threadCount === "number" ? candidate.threadCount : 0;
+    return typeof candidate.threadCount === "number"
+      ? candidate.threadCount
+      : 0;
   })();
   const senderDisplayName = resolveUserDisplayName({
     displayName: message.senderName,
@@ -182,11 +227,12 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   const forwardedFromName = message.forwardedFrom
     ? resolveUserDisplayName({
         displayName:
-          (message.forwardedFrom as { displayName?: string | null }).displayName ||
-          message.forwardedFrom.username,
+          (message.forwardedFrom as { displayName?: string | null })
+            .displayName || message.forwardedFrom.username,
         username: message.forwardedFrom.username,
-        employeeCode: (message.forwardedFrom as { employeeCode?: string | null })
-          .employeeCode,
+        employeeCode: (
+          message.forwardedFrom as { employeeCode?: string | null }
+        ).employeeCode,
       })
     : null;
   const replyTargetMessageId = message.replyTo || message.replyToMessage?.id;
@@ -242,6 +288,11 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
     void resendMessage(message.conversationId, message);
   }, [message, resendMessage]);
 
+  const handleRemoveFailed = React.useCallback(() => {
+    if (!message.conversationId) return;
+    removeMessage(message.conversationId, message.id);
+  }, [message.conversationId, message.id, removeMessage]);
+
   const openActions = React.useCallback(() => {
     clearRailTimers();
     setIsActionsOpen(true);
@@ -269,14 +320,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
         canDelete: Boolean(onDelete),
         canRetry: isFailedMessage(message),
       }),
-    [
-      coarsePointer,
-      isOwn,
-      isSelectionMode,
-      message,
-      onDelete,
-      onEdit,
-    ],
+    [coarsePointer, isOwn, isSelectionMode, message, onDelete, onEdit],
   );
 
   const handleAction = React.useCallback(
@@ -487,6 +531,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                 isGroupEnd={isGroupEnd}
                 hasReplyPreview={Boolean(message.replyToMessage)}
                 hasError={isFailedMessage(message)}
+                isPending={isPendingMessage(message)}
               >
                 {message.forwardedFrom && (
                   <div
@@ -529,6 +574,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                 message={message}
                 isOwn={isOwn}
                 onRetry={handleRetry}
+                onRemove={handleRemoveFailed}
               />
             )}
 

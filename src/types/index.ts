@@ -87,6 +87,8 @@ export type MessageFailureReason =
   | "timeout"
   | "permission"
   | "slow_mode"
+  | "backend_4xx"
+  | "backend_5xx"
   | "server"
   | "unknown";
 
@@ -120,6 +122,8 @@ export interface Message extends Omit<
   sendState?: MessageSendState;
   queuedReason?: MessageQueueReason;
   failureReason?: MessageFailureReason;
+  errorCode?: string;
+  errorMessage?: string;
   sendAttempts?: number;
   lastSendAttemptAt?: Date;
   status: import("@hacom/chat-shared-types").MessageStatus | "uploading";

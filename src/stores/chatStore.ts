@@ -13,7 +13,6 @@ import {
   normalizeConversationsPayload,
   normalizeRoomType,
 } from "../lib/conversationAdapter";
-import { toast } from "../utils/toast";
 import {
   buildMessageCorrelationKey,
   generateClientMessageId,
@@ -367,6 +366,7 @@ const normalizeMessage = (
     asStringValue(source.localId);
   const stableId =
     asStringValue(source.stableId) ??
+    clientMessageId ??
     asStringValue(source.localId) ??
     asStringValue(metadata?.localId) ??
     id;
@@ -447,6 +447,8 @@ const normalizeMessage = (
       value === "timeout" ||
       value === "permission" ||
       value === "slow_mode" ||
+      value === "backend_4xx" ||
+      value === "backend_5xx" ||
       value === "server" ||
       value === "unknown"
     ) {
@@ -471,6 +473,10 @@ const normalizeMessage = (
     sendState,
     queuedReason,
     failureReason,
+    errorCode:
+      asStringValue(source.errorCode) ?? asStringValue(source.error_code),
+    errorMessage:
+      asStringValue(source.errorMessage) ?? asStringValue(source.error_message),
     sendAttempts:
       asNumberValue(source.sendAttempts) ?? asNumberValue(source.send_attempts),
     lastSendAttemptAt: source.lastSendAttemptAt
@@ -592,11 +598,77 @@ const resolveConnectionSendMode = (): "online" | "reconnecting" | "offline" => {
   return "offline";
 };
 
-const isQueueableNetworkFailure = (error: unknown): boolean => {
+const isAxiosTimeoutError = (error: unknown): boolean => {
+  if (!axios.isAxiosError(error)) return false;
+  return (
+    error.code === "ECONNABORTED" ||
+    /timeout/i.test(error.message || "") ||
+    /timeout/i.test(String(error.cause || ""))
+  );
+};
+
+const isNetworkError = (error: unknown): boolean => {
   if (getBrowserOnlineState() === false) {
     return true;
   }
   return axios.isAxiosError(error) && !error.response;
+};
+
+const resolveSendFailureDescriptor = (
+  error: unknown,
+  apiError: ReturnType<typeof extractApiError>,
+): {
+  failureReason: NonNullable<Message["failureReason"]>;
+  errorCode: string;
+  errorMessage: string;
+} => {
+  if (isAxiosTimeoutError(error)) {
+    return {
+      failureReason: "timeout",
+      errorCode: "REQUEST_TIMEOUT",
+      errorMessage: i18n.t("chat:message.status.timeoutError", {
+        defaultValue: "Message timed out. Please retry.",
+      }),
+    };
+  }
+
+  if (isNetworkError(error)) {
+    return {
+      failureReason: "network",
+      errorCode: "NETWORK_OFFLINE",
+      errorMessage: i18n.t("chat:message.status.networkError", {
+        defaultValue: "No network connection. Please retry.",
+      }),
+    };
+  }
+
+  if (apiError.statusCode >= 500) {
+    return {
+      failureReason: "backend_5xx",
+      errorCode: "BACKEND_5XX",
+      errorMessage: i18n.t("chat:message.status.backend5xxError", {
+        defaultValue: "Server is busy. Please try again.",
+      }),
+    };
+  }
+
+  if (apiError.statusCode >= 400) {
+    return {
+      failureReason: "backend_4xx",
+      errorCode: "BACKEND_4XX",
+      errorMessage: i18n.t("chat:message.status.backend4xxError", {
+        defaultValue: "Message was rejected. Please retry.",
+      }),
+    };
+  }
+
+  return {
+    failureReason: "unknown",
+    errorCode: "UNKNOWN_ERROR",
+    errorMessage: i18n.t("chat:message.status.unknownError", {
+      defaultValue: "Could not send message.",
+    }),
+  };
 };
 
 const compareMessages = (a: Message, b: Message): number => {
@@ -635,6 +707,8 @@ const isTempMessageId = (id: string | undefined): boolean =>
 
 const matchesMessage = (source: Message, target: Message): boolean =>
   (source.stableId !== undefined && source.stableId === target.stableId) ||
+  (source.clientMessageId !== undefined &&
+    source.clientMessageId === target.clientMessageId) ||
   source.id === target.id ||
   (source.localId !== undefined && source.localId === target.id) ||
   (target.localId !== undefined && target.localId === source.id) ||
@@ -665,22 +739,40 @@ const isSamePendingMessageCandidate = (
     return false;
   }
   if (source.type !== target.type) return false;
-  if ((source.content || "") !== (target.content || "")) return false;
+  if ((source.content || "").trim() !== (target.content || "").trim()) {
+    return false;
+  }
+
+  const sourceReplyTo = getReplyToId(source.replyTo);
+  const targetReplyTo = getReplyToId(target.replyTo);
+  if ((sourceReplyTo || "") !== (targetReplyTo || "")) {
+    return false;
+  }
 
   const sourceTs = toDateValue(source.createdAt);
   const targetTs = toDateValue(target.createdAt);
   if (!sourceTs || !targetTs) return false;
 
-  const withinGraceWindow = Math.abs(sourceTs - targetTs) <= 45_000;
+  const withinGraceWindow = Math.abs(sourceTs - targetTs) <= 15_000;
   if (!withinGraceWindow) return false;
 
   const sourceAttachment = source.attachments?.[0];
   const targetAttachment = target.attachments?.[0];
-  // Do not collapse plain text messages by heuristic. They are deduped by id/localId.
-  // This avoids overwriting legitimate repeated messages from the same sender.
-  if (!sourceAttachment && !targetAttachment) return false;
+  // Fall back to sender/content/time matching when backend does not echo client ids.
+  // For attachments, we additionally require attachment identity to match.
+  if (!sourceAttachment && !targetAttachment) return true;
   if (!sourceAttachment || !targetAttachment) return false;
-  return sourceAttachment.id === targetAttachment.id;
+  if (sourceAttachment.id === targetAttachment.id) return true;
+
+  if (
+    sourceAttachment.objectKey &&
+    targetAttachment.objectKey &&
+    sourceAttachment.objectKey === targetAttachment.objectKey
+  ) {
+    return true;
+  }
+
+  return false;
 };
 
 const findMessageIndex = (messages: Message[], target: Message): number =>
@@ -690,6 +782,13 @@ const toMessageIdentityKeys = (message: Message): string[] => {
   const keys = new Set<string>();
   if (typeof message.stableId === "string" && message.stableId.length > 0) {
     keys.add(`stable:${message.stableId}`);
+  }
+  if (
+    typeof message.clientMessageId === "string" &&
+    message.clientMessageId.length > 0
+  ) {
+    keys.add(`client:${message.clientMessageId}`);
+    keys.add(`stable:${message.clientMessageId}`);
   }
   if (typeof message.id === "string" && message.id.length > 0) {
     keys.add(`id:${message.id}`);
@@ -701,6 +800,34 @@ const toMessageIdentityKeys = (message: Message): string[] => {
     keys.add(`stable:${message.localId}`);
   }
   return Array.from(keys);
+};
+
+const resolvePendingFallbackIndex = (
+  current: Message[],
+  incoming: Message,
+): number => {
+  let bestIndex = -1;
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  current.forEach((candidate, index) => {
+    if (!isSamePendingMessageCandidate(candidate, incoming)) return;
+
+    const createdAtDistance = Math.abs(
+      toDateValue(candidate.createdAt) - toDateValue(incoming.createdAt),
+    );
+    const localOrderDistance = Math.abs(
+      (candidate.localOrder ?? Number.MAX_SAFE_INTEGER) -
+        (incoming.localOrder ?? Number.MAX_SAFE_INTEGER),
+    );
+    const score = createdAtDistance + localOrderDistance;
+
+    if (score < bestScore) {
+      bestScore = score;
+      bestIndex = index;
+    }
+  });
+
+  return bestIndex;
 };
 
 const resolveMessageMatchIndex = (
@@ -715,9 +842,7 @@ const resolveMessageMatchIndex = (
     return identityMatch;
   }
 
-  return current.findIndex((item) =>
-    isSamePendingMessageCandidate(item, incoming),
-  );
+  return resolvePendingFallbackIndex(current, incoming);
 };
 
 const mergeDefinedMessageFields = (
@@ -808,6 +933,8 @@ const mergeMessageRecords = (current: Message, incoming: Message): Message => {
   if (merged.sendState === "sent") {
     merged.queuedReason = undefined;
     merged.failureReason = undefined;
+    merged.errorCode = undefined;
+    merged.errorMessage = undefined;
   }
 
   return merged;
@@ -935,11 +1062,18 @@ const findMessageByIdentityIndex = (
       typeof target.localId === "string" ? target.localId : "";
     const targetStableId =
       typeof target.stableId === "string" ? target.stableId : "";
+    const targetClientMessageId =
+      typeof target.clientMessageId === "string" ? target.clientMessageId : "";
     const itemId = typeof item.id === "string" ? item.id : "";
     const itemLocalId = typeof item.localId === "string" ? item.localId : "";
     const itemStableId = typeof item.stableId === "string" ? item.stableId : "";
+    const itemClientMessageId =
+      typeof item.clientMessageId === "string" ? item.clientMessageId : "";
 
     return (
+      (targetClientMessageId.length > 0 &&
+        (itemClientMessageId === targetClientMessageId ||
+          itemStableId === targetClientMessageId)) ||
       (targetStableId.length > 0 &&
         (itemStableId === targetStableId || itemLocalId === targetStableId)) ||
       (targetId.length > 0 &&
@@ -1149,25 +1283,6 @@ export const useChatStore = create<ChatState>()(
       });
     };
 
-    const enqueueOutboxMessage = (
-      conversationId: string,
-      queueKey: string,
-    ): void => {
-      if (!conversationId || !queueKey) return;
-      set((state) => {
-        const current = state.outboxByConversation[conversationId] || [];
-        if (current.includes(queueKey)) {
-          return state;
-        }
-        return {
-          outboxByConversation: {
-            ...state.outboxByConversation,
-            [conversationId]: [...current, queueKey],
-          },
-        };
-      });
-    };
-
     const dequeueOutboxMessage = (
       conversationId: string,
       queueKey: string,
@@ -1212,26 +1327,15 @@ export const useChatStore = create<ChatState>()(
             return;
           }
 
-          const nextQueuedReason =
-            resolveConnectionSendMode() === "reconnecting"
-              ? "reconnecting"
-              : "offline";
-
-          if (resolveConnectionSendMode() === "online") {
-            get().updateMessage(conversationId, currentMessage.id, {
-              sendState: "failed",
-              status: MessageStatus.FAILED,
-              failureReason: "timeout",
-            });
-            return;
-          }
-
-          enqueueOutboxMessage(conversationId, queueKey);
           get().updateMessage(conversationId, currentMessage.id, {
-            sendState: "queued",
-            status: MessageStatus.SENDING,
-            queuedReason: nextQueuedReason,
-            failureReason: undefined,
+            sendState: "failed",
+            status: MessageStatus.FAILED,
+            queuedReason: undefined,
+            failureReason: "timeout",
+            errorCode: "REQUEST_TIMEOUT",
+            errorMessage: i18n.t("chat:message.status.timeoutError", {
+              defaultValue: "Message timed out. Please retry.",
+            }),
           });
         }, MESSAGE_SEND_TIMEOUT_MS),
       );
@@ -1273,6 +1377,8 @@ export const useChatStore = create<ChatState>()(
         status: MessageStatus.SENDING,
         queuedReason: undefined,
         failureReason: undefined,
+        errorCode: undefined,
+        errorMessage: undefined,
         sendAttempts: nextAttemptCount,
         lastSendAttemptAt: attemptedAt,
       });
@@ -1322,6 +1428,8 @@ export const useChatStore = create<ChatState>()(
           lastSendAttemptAt: attemptedAt,
           queuedReason: undefined,
           failureReason: undefined,
+          errorCode: undefined,
+          errorMessage: undefined,
           status: sentMessage.status || MessageStatus.SENT,
         });
         logMessageDebug("chatStore", "send_request_succeeded", {
@@ -1345,37 +1453,15 @@ export const useChatStore = create<ChatState>()(
         const apiError = extractApiError(error);
         const errorCode = String(apiError.code || "").toUpperCase();
 
-        if (isQueueableNetworkFailure(error)) {
-          const queuedReason =
-            resolveConnectionSendMode() === "reconnecting"
-              ? "reconnecting"
-              : "offline";
-          enqueueOutboxMessage(conversationId, queueKey);
-          get().updateMessage(conversationId, message.id, {
-            sendState: "queued",
-            status: MessageStatus.SENDING,
-            queuedReason,
-            failureReason: undefined,
-          });
-          logMessageDebug("chatStore", "send_request_queued", {
-            conversationId,
-            queueKey,
-            correlationKey: getCorrelationKeyForMessage(message),
-            messageId: message.id,
-            queuedReason,
-            errorMessage: apiError.message || "network_failure",
-          });
-          return {
-            disposition: "queued",
-            messageId: message.id,
-          };
-        }
-
         if (errorCode === "SLOW_MODE_ACTIVE") {
           get().updateMessage(conversationId, message.id, {
             sendState: "failed",
             status: MessageStatus.FAILED,
             failureReason: "slow_mode",
+            errorCode,
+            errorMessage: i18n.t("chat:message.status.slowModeError", {
+              defaultValue: "Slow mode is active. Please wait and retry.",
+            }),
           });
           logMessageDebug("chatStore", "send_request_failed", {
             conversationId,
@@ -1406,6 +1492,11 @@ export const useChatStore = create<ChatState>()(
             sendState: "failed",
             status: MessageStatus.FAILED,
             failureReason: "permission",
+            errorCode,
+            errorMessage: i18n.t("chat:composer.permissionDenied", {
+              defaultValue:
+                "You can no longer send messages in this conversation.",
+            }),
           });
           logMessageDebug("chatStore", "send_request_failed", {
             conversationId,
@@ -1419,13 +1510,15 @@ export const useChatStore = create<ChatState>()(
           throw error;
         }
 
+        const descriptor = resolveSendFailureDescriptor(error, apiError);
+
         get().updateMessage(conversationId, message.id, {
           sendState: "failed",
           status: MessageStatus.FAILED,
-          failureReason:
-            apiError.statusCode >= 500 || errorCode === "INTERNAL_ERROR"
-              ? "server"
-              : "unknown",
+          queuedReason: undefined,
+          failureReason: descriptor.failureReason,
+          errorCode: descriptor.errorCode,
+          errorMessage: descriptor.errorMessage,
         });
         logMessageDebug("chatStore", "send_request_failed", {
           conversationId,
@@ -1433,10 +1526,8 @@ export const useChatStore = create<ChatState>()(
           correlationKey: getCorrelationKeyForMessage(message),
           messageId: message.id,
           errorCode,
-          failureReason:
-            apiError.statusCode >= 500 || errorCode === "INTERNAL_ERROR"
-              ? "server"
-              : "unknown",
+          failureReason: descriptor.failureReason,
+          userErrorCode: descriptor.errorCode,
           errorMessage: apiError.message || "send_failed",
         });
         throw error;
@@ -2244,8 +2335,6 @@ export const useChatStore = create<ChatState>()(
 
         const sender = resolveSenderIdentity();
         const sendMode = resolveConnectionSendMode();
-        const queueKeyReason =
-          sendMode === "reconnecting" ? "reconnecting" : "offline";
         const browserOnline = getBrowserOnlineState();
 
         const localOrder = allocateLocalMessageOrder();
@@ -2258,8 +2347,8 @@ export const useChatStore = create<ChatState>()(
           localId: tempId,
           localOrder,
           transportStatus: "optimistic",
-          sendState: browserOnline === false ? "queued" : "sending",
-          queuedReason: browserOnline === false ? queueKeyReason : undefined,
+          sendState: "sending",
+          queuedReason: undefined,
           sendAttempts: 0,
           conversationId,
           senderId: sender.id || "current-user",
@@ -2289,26 +2378,8 @@ export const useChatStore = create<ChatState>()(
           contentPreview: messageContent.slice(0, 120),
           sendMode,
           browserOnline,
-          queuedReason: tempMessage.queuedReason,
           attachmentCount: fileMetaArr?.length ?? 0,
         });
-
-        if (browserOnline === false) {
-          enqueueOutboxMessage(
-            conversationId,
-            getMessageQueueKey(conversationId, tempMessage),
-          );
-          logMessageDebug("chatStore", "offline_queue_enqueued", {
-            conversationId,
-            tempId,
-            sendMode,
-            browserOnline,
-          });
-          return {
-            disposition: "queued",
-            messageId: tempId,
-          };
-        }
 
         return dispatchExistingMessage(conversationId, tempMessage, "sending");
       },
@@ -2317,46 +2388,17 @@ export const useChatStore = create<ChatState>()(
         const activeRestriction =
           get().sendRestrictionsByConversation[conversationId];
         if (activeRestriction) {
-          toast.error(activeRestriction.reason);
           throw new Error(activeRestriction.reason);
-        }
-
-        const sendMode = resolveConnectionSendMode();
-        const browserOnline = getBrowserOnlineState();
-        if (browserOnline === false) {
-          enqueueOutboxMessage(
-            conversationId,
-            getMessageQueueKey(conversationId, message),
-          );
-          get().updateMessage(conversationId, message.id, {
-            sendState: "queued",
-            status: MessageStatus.SENDING,
-            queuedReason: "offline",
-            failureReason: undefined,
-          });
-          logMessageDebug("chatStore", "offline_queue_enqueued", {
-            conversationId,
-            messageId: message.id,
-            sendMode,
-            browserOnline,
-            trigger: "manual_retry",
-          });
-          return {
-            disposition: "queued",
-            messageId: message.id,
-          };
         }
 
         try {
           const result = await dispatchExistingMessage(
             conversationId,
             message,
-            "retrying",
+            "sending",
           );
-          toast.success(i18n.t("chat:toast.resendSuccess"));
           return result;
         } catch (error) {
-          toast.error(i18n.t("chat:toast.resendFailed"));
           throw error;
         }
       },

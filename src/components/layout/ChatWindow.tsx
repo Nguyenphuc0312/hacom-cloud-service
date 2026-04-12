@@ -156,7 +156,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const sendRestriction = useChatStore(
     (state) => state.sendRestrictionsByConversation[conversation.id],
   );
-  const [isSendingMessage, setIsSendingMessage] = React.useState(false);
 
   const [inputValue, setInputValue] = React.useState("");
   const [inputMode, setInputMode] = React.useState<InputMode>("normal");
@@ -222,13 +221,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const handleSend = React.useCallback(
     async (content?: string, fileMeta?: unknown, type?: string) => {
-      if (isSendingMessage) {
-        logMessageDebug("ChatWindow", "send_ignored_in_flight", {
-          conversationId: conversation.id,
-        });
-        return;
-      }
-
       if (inputMode === "edit" && editingMessage && onEditMessage) {
         const nextContent = (content || "").trim();
         if (
@@ -289,11 +281,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         attachmentCount: allAttachments.length,
         replyToId: replyToMessage?.id,
       });
-
-      setIsSendingMessage(true);
-
       try {
-        const result = await Promise.resolve(
+        const sendPromise = Promise.resolve(
           onSendMessage(
             outgoingContent,
             replyToMessage,
@@ -311,13 +300,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           uploadQueue.clearAll();
         }
 
-        logMessageDebug("ChatWindow", "send_resolved", {
-          conversationId: conversation.id,
-          disposition:
-            (result as { disposition?: string } | undefined)?.disposition ??
-            "unknown",
-        });
-        return result;
+        void sendPromise
+          .then((result) => {
+            logMessageDebug("ChatWindow", "send_resolved", {
+              conversationId: conversation.id,
+              disposition:
+                (result as { disposition?: string } | undefined)?.disposition ??
+                "unknown",
+            });
+          })
+          .catch((error) => {
+            logMessageDebug("ChatWindow", "send_rejected", {
+              conversationId: conversation.id,
+              errorMessage:
+                error instanceof Error ? error.message : "unknown_error",
+            });
+          });
+
+        return { disposition: "sent" as const };
       } catch (error) {
         logMessageDebug("ChatWindow", "send_rejected", {
           conversationId: conversation.id,
@@ -325,14 +325,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             error instanceof Error ? error.message : "unknown_error",
         });
         throw error;
-      } finally {
-        setIsSendingMessage(false);
       }
     },
     [
       conversation.id,
       editingMessage,
-      isSendingMessage,
       inputMode,
       onEditMessage,
       onSendMessage,
@@ -947,7 +944,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             sendOnEnter
             disabled={!composerAvailability.canType}
             submitDisabled={!composerAvailability.canSubmit}
-            submitInFlight={isSendingMessage}
             attachmentsDisabled={!composerAvailability.canAttach}
             disabledReason={composerAvailability.statusMessage}
             disabledReasonTone={composerAvailability.statusTone}
