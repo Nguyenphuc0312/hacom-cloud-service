@@ -1,24 +1,62 @@
 import React from 'react';
-import { BellOutlined, PlusOutlined, UserOutlined } from '@ant-design/icons';
+import { BellOutlined, PlusOutlined } from '@ant-design/icons';
 
-export const TopbarActions: React.FC = () => {
+import type { CurrentAdmin } from '@/api/types';
+import { UserMenu } from '@/components/UserMenu';
+
+interface TopbarActionsProps {
+  user: CurrentAdmin | null;
+  environmentLabel?: string;
+  systemTone: 'healthy' | 'degraded';
+  onOpenNotifications: () => void;
+  onOpenQuickAction: () => void;
+  onOpenProfile: () => void;
+  onOpenSettings: () => void;
+  onLogout: () => void;
+}
+
+export const TopbarActions: React.FC<TopbarActionsProps> = ({
+  user,
+  environmentLabel = 'Production',
+  systemTone,
+  onOpenNotifications,
+  onOpenQuickAction,
+  onOpenProfile,
+  onOpenSettings,
+  onLogout,
+}) => {
   return (
     <div className="ds-topbar-actions">
-      <button type="button" className="ds-btn ds-btn--icon" aria-label="Notifications">
+      <div className="ds-topbar-status" aria-label="Workspace status">
+        <span className="ds-shell-chip">{environmentLabel}</span>
+        <span
+          className={`ds-shell-chip ${systemTone === 'healthy' ? 'ds-shell-chip--success' : 'ds-shell-chip--warning'}`}
+        >
+          {systemTone === 'healthy' ? 'Healthy' : 'Degraded'}
+        </span>
+      </div>
+      <button
+        type="button"
+        className="ds-btn ds-btn--icon"
+        aria-label="Notifications"
+        onClick={onOpenNotifications}
+      >
         <BellOutlined />
       </button>
-      <button type="button" className="ds-btn ds-btn--icon" aria-label="Create quick action">
+      <button
+        type="button"
+        className="ds-btn ds-btn--icon"
+        aria-label="Create quick action"
+        onClick={onOpenQuickAction}
+      >
         <PlusOutlined />
       </button>
-      <button className="ds-topbar-profile" aria-label="Current user profile" type="button">
-        <span className="ds-topbar-profile-avatar" aria-hidden>
-          <UserOutlined />
-        </span>
-        <span className="ds-topbar-profile-copy">
-          <strong>Admin</strong>
-          <small>Super User</small>
-        </span>
-      </button>
+      <UserMenu
+        user={user}
+        onOpenProfile={onOpenProfile}
+        onOpenSettings={onOpenSettings}
+        onLogout={onLogout}
+      />
     </div>
   );
 };

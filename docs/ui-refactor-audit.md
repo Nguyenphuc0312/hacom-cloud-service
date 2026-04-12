@@ -259,3 +259,32 @@ What Phase 1 intentionally does not do:
 - It does not yet migrate tables/forms page by page.
 
 It creates the safer design foundation those later phases need.
+
+## Phase 2 Delivered In This Branch
+
+Files updated for the shell refactor:
+
+- [`src/app/layout/navigationConfig.tsx`](../src/app/layout/navigationConfig.tsx)
+- [`src/app/layout/AdminShell.tsx`](../src/app/layout/AdminShell.tsx)
+- [`src/app/layout/AdminSidebar.tsx`](../src/app/layout/AdminSidebar.tsx)
+- [`src/app/layout/SidebarNavSection.tsx`](../src/app/layout/SidebarNavSection.tsx)
+- [`src/app/layout/SidebarNavItem.tsx`](../src/app/layout/SidebarNavItem.tsx)
+- [`src/app/layout/AdminTopbar.tsx`](../src/app/layout/AdminTopbar.tsx)
+- [`src/app/layout/TopbarSearch.tsx`](../src/app/layout/TopbarSearch.tsx)
+- [`src/app/layout/TopbarActions.tsx`](../src/app/layout/TopbarActions.tsx)
+- [`src/app/providers/AppProviders.tsx`](../src/app/providers/AppProviders.tsx)
+- [`src/styles/foundation.css`](../src/styles/foundation.css)
+
+What Phase 2 changes:
+
+- The shell now uses route metadata instead of a thin page-title lookup.
+- The topbar search is now a real command-palette trigger.
+- The topbar uses the current admin identity and supports logout.
+- The sidebar has stronger grouping, metadata, and item hierarchy.
+- Mobile shell behavior now includes an overlay/backdrop pattern.
+
+What Phase 2 still leaves for later:
+
+- Table and filter migration on each page.
+- Settings/forms composition cleanup.
+- Final removal of duplicated shell styles from `global.css`.

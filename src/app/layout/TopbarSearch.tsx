@@ -1,18 +1,25 @@
 import React from 'react';
 import { SearchOutlined } from '@ant-design/icons';
 
-export const TopbarSearch: React.FC = () => {
+interface TopbarSearchProps {
+  onOpen: () => void;
+}
+
+export const TopbarSearch: React.FC<TopbarSearchProps> = ({ onOpen }) => {
   return (
-    <div className="ds-topbar-search" role="search" aria-label="Site search">
+    <button
+      type="button"
+      className="ds-topbar-search"
+      role="search"
+      aria-label="Open command palette"
+      onClick={onOpen}
+    >
       <SearchOutlined className="ds-topbar-search-icon" aria-hidden />
-      <input
-        id="topbar-search"
-        className="ds-input"
-        placeholder="Tìm kiếm..."
-        aria-label="Tìm kiếm"
-        type="search"
-      />
+      <span className="ds-topbar-search-copy">
+        <span className="ds-topbar-search-label">Search pages, tools, and settings</span>
+        <span className="ds-topbar-search-hint">Jump across the admin workspace</span>
+      </span>
       <kbd className="ds-topbar-search-shortcut">Ctrl K</kbd>
-    </div>
+    </button>
   );
 };

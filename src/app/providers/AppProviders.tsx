@@ -25,15 +25,16 @@ export const AppProviders = ({ children }: PropsWithChildren) => {
           colorBgLayout: '#edf2f8',
           colorBorderSecondary: '#d3dde8',
           colorTextSecondary: '#5d6878',
-          borderRadius: 10,
-          borderRadiusLG: 12,
-          controlHeight: 36,
-          controlHeightLG: 42,
+          borderRadius: 12,
+          borderRadiusLG: 18,
+          controlHeight: 42,
+          controlHeightLG: 48,
           fontSize: 14,
-          fontSizeHeading3: 22,
-          lineHeight: 1.45,
+          fontSizeHeading3: 24,
+          lineHeight: 1.55,
           wireframe: false,
-          fontFamily: 'IBM Plex Sans, Segoe UI, Tahoma, sans-serif',
+          fontFamily:
+            'Aptos, Segoe UI Variable Text, Segoe UI, SF Pro Text, Helvetica Neue, sans-serif',
         },
       }}
     >

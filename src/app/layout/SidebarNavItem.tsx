@@ -15,15 +15,18 @@ export const SidebarNavItem = ({
 }: SidebarNavItemProps) => {
   const location = useLocation();
   const navigate = useNavigate();
-  // Role-based visibility (if roles prop present)
-  // TODO: Replace with actual user roles from context/store if available
+
   if (item.roles && item.roles.length > 0) {
-    // Example: const userRoles: string[] = useCurrentUser()?.roles || [];
     const userRoles: string[] = [];
-    if (!item.roles.some((role: string) => userRoles.includes(role))) return null;
+
+    if (!item.roles.some((role) => userRoles.includes(role))) {
+      return null;
+    }
   }
+
   const active =
     item.route === '/' ? location.pathname === '/' : location.pathname.startsWith(item.route);
+
   return (
     <button
       type="button"
@@ -33,8 +36,14 @@ export const SidebarNavItem = ({
       aria-label={item.label}
       aria-current={active ? 'page' : undefined}
     >
+      <span className="ds-sidebar-item-marker" aria-hidden />
       {item.icon && <span className="ds-sidebar-item-icon">{item.icon}</span>}
-      <span className="ds-sidebar-item-label">{item.label}</span>
+      <span className="ds-sidebar-item-content">
+        <span className="ds-sidebar-item-label">{item.label}</span>
+        {!collapsed && item.description ? (
+          <span className="ds-sidebar-item-description">{item.description}</span>
+        ) : null}
+      </span>
       {item.badge && <span className="ds-sidebar-item-badge">{item.badge}</span>}
     </button>
   );

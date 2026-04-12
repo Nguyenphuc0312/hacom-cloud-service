@@ -12,6 +12,7 @@ import type { ReactNode } from 'react';
 export interface NavItem {
   key: string;
   label: string;
+  description?: string;
   icon: ReactNode;
   section: SidebarSectionKey;
   route: string;
@@ -32,32 +33,53 @@ export type SidebarSectionKey =
 export interface SidebarSection {
   key: SidebarSectionKey;
   label: string;
+  description?: string;
   icon?: ReactNode;
 }
 
 export const SIDEBAR_SECTIONS: SidebarSection[] = [
-  { key: 'overview', label: 'Tổng quan', icon: <DashboardOutlined /> },
-  { key: 'users', label: 'Người dùng & Nhân sự', icon: <TeamOutlined /> },
-  { key: 'chat', label: 'Hệ thống chat', icon: <MailOutlined /> },
-  { key: 'security', label: 'Phân quyền & Bảo mật', icon: <SafetyCertificateOutlined /> },
-  { key: 'settings', label: 'Cấu hình', icon: <FileTextOutlined /> },
-  { key: 'monitoring', label: 'Theo dõi & Logs', icon: <AuditOutlined /> },
-  { key: 'support', label: 'Hỗ trợ / Tài liệu', icon: <SolutionOutlined /> },
+  { key: 'overview', label: 'Tổng quan', description: 'Snapshot', icon: <DashboardOutlined /> },
+  {
+    key: 'users',
+    label: 'Người dùng & Nhân sự',
+    description: 'Identity',
+    icon: <TeamOutlined />,
+  },
+  { key: 'chat', label: 'Hệ thống chat', description: 'Messaging', icon: <MailOutlined /> },
+  {
+    key: 'security',
+    label: 'Phân quyền & Bảo mật',
+    description: 'Security',
+    icon: <SafetyCertificateOutlined />,
+  },
+  {
+    key: 'settings',
+    label: 'Cấu hình',
+    description: 'Configuration',
+    icon: <FileTextOutlined />,
+  },
+  {
+    key: 'monitoring',
+    label: 'Theo dõi & Logs',
+    description: 'Observability',
+    icon: <AuditOutlined />,
+  },
+  { key: 'support', label: 'Hỗ trợ / Tài liệu', description: 'Support', icon: <SolutionOutlined /> },
 ];
 
 export const navItems: NavItem[] = [
-  // Tổng quan
   {
     key: 'dashboard',
     label: 'Dashboard',
+    description: 'Operational overview and service posture',
     icon: <DashboardOutlined />,
     section: 'overview',
     route: '/',
   },
-  // Người dùng & nhân sự
   {
     key: 'users',
     label: 'Người dùng',
+    description: 'Admin accounts, access state, and sessions',
     icon: <TeamOutlined />,
     section: 'users',
     route: '/users',
@@ -65,16 +87,17 @@ export const navItems: NavItem[] = [
       {
         key: 'hr-employees',
         label: 'Nhân sự',
+        description: 'Employee records and account provisioning',
         icon: <SolutionOutlined />,
         section: 'users',
         route: '/hr-employees',
       },
     ],
   },
-  // Hệ thống chat
   {
     key: 'smtp',
     label: 'SMTP',
+    description: 'Mail transport configuration and runtime activation',
     icon: <MailOutlined />,
     section: 'chat',
     route: '/services/smtp',
@@ -82,29 +105,27 @@ export const navItems: NavItem[] = [
   {
     key: 'email-templates',
     label: 'Email Templates',
+    description: 'Draft, preview, publish, and rollback email content',
     icon: <FileTextOutlined />,
     section: 'chat',
     route: '/services/email-templates',
   },
-  // Phân quyền & bảo mật
   {
     key: 'audit',
     label: 'Audit Logs',
+    description: 'Trace admin actions, requests, and security events',
     icon: <AuditOutlined />,
     section: 'security',
     route: '/audit',
   },
-  // Cấu hình
-  // (Có thể thêm các mục cấu hình khác vào đây)
-  // Theo dõi & logs
   {
     key: 'service-health',
     label: 'Service Health',
+    description: 'Dependency health, latency, and runtime status',
     icon: <SafetyCertificateOutlined />,
     section: 'monitoring',
     route: '/services/health',
   },
-  // Hỗ trợ / tài liệu (dự phòng, có thể thêm sau)
 ];
 
 export const breadcrumbNameMap: Record<string, string> = {
@@ -116,6 +137,31 @@ export const breadcrumbNameMap: Record<string, string> = {
   '/services/smtp': 'SMTP',
   '/services/email-templates': 'Email Templates',
   '/services/health': 'Service Health',
+};
+
+const flattenNavItems = (items: NavItem[]): NavItem[] =>
+  items.flatMap((item) => [item, ...(item.children ? flattenNavItems(item.children) : [])]);
+
+export const resolveNavigationContext = (pathname: string) => {
+  const item =
+    flattenNavItems(navItems)
+      .sort((left, right) => right.route.length - left.route.length)
+      .find((entry) =>
+        entry.route === '/'
+          ? pathname === '/'
+          : pathname === entry.route || pathname.startsWith(`${entry.route}/`),
+      ) ?? null;
+
+  const section = item ? SIDEBAR_SECTIONS.find((entry) => entry.key === item.section) ?? null : null;
+
+  return {
+    item,
+    section,
+    title: item?.label ?? 'Dashboard',
+    description: item?.description ?? 'Operational visibility and control surface',
+    sectionLabel: section?.label ?? 'Tổng quan',
+    sectionDescription: section?.description ?? 'Workspace',
+  };
 };
 
 export const pickSelectedMenuKey = (pathname: string): string => {
