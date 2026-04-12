@@ -51,6 +51,8 @@ describe('HrImportWizard', () => {
   });
 
   it('uploads, validates, and commits an HR import through the 3-step wizard', async () => {
+    const onCommitted = vi.fn();
+
     validateMutateAsyncMock.mockResolvedValue({
       batchId: 'batch-1',
       summary: {
@@ -85,7 +87,7 @@ describe('HrImportWizard', () => {
       invalidRowCount: 0,
     });
 
-    render(<HrImportWizard open onClose={vi.fn()} />);
+    render(<HrImportWizard open onClose={vi.fn()} onCommitted={onCommitted} />);
 
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(['demo'], 'employees.xlsx', {
@@ -117,11 +119,72 @@ describe('HrImportWizard', () => {
     });
 
     await waitFor(() => {
+      expect(onCommitted).toHaveBeenCalledWith({
+        batchId: 'batch-1',
+        inserted: 2,
+        updated: 1,
+        skipped: 0,
+        failed: 0,
+      });
+    });
+
+    await waitFor(() => {
       expect(
-        screen.getAllByText((_, element) =>
-          element?.textContent?.includes('Commit result is normalized defensively') ?? false,
+        screen.getAllByText(
+          (_, element) =>
+            element?.textContent?.includes('Commit result is normalized defensively') ?? false,
         ).length,
       ).toBeGreaterThan(0);
+    });
+  });
+
+  it('prevents duplicate validate submit while validation is in flight', async () => {
+    let resolveValidate: ((value: unknown) => void) | null = null;
+    validateMutateAsyncMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveValidate = resolve;
+        }),
+    );
+
+    render(<HrImportWizard open onClose={vi.fn()} />);
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['demo'], 'employees.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+    fireEvent.change(input, {
+      target: { files: [file] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Selected file:/i)).toBeInTheDocument();
+    });
+
+    const validateButton = screen.getByRole('button', { name: /Validate preview/i });
+    fireEvent.click(validateButton);
+    fireEvent.click(validateButton);
+
+    await waitFor(() => {
+      expect(validateMutateAsyncMock).toHaveBeenCalledTimes(1);
+    });
+
+    resolveValidate?.({
+      batchId: 'batch-2',
+      summary: {
+        totalRows: 1,
+        validRows: 1,
+        invalidRows: 0,
+        warningCount: 0,
+      },
+      previewRows: [],
+      errors: [],
+      warnings: [],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Step 2: Validate preview')).toBeInTheDocument();
     });
   });
 });

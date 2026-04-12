@@ -6,7 +6,13 @@ interface StatusBadgeProps {
   title?: string;
 }
 
-const statusMap: Record<string, { color: string; text: string }> = {
+interface StatusBadgeConfig {
+  color: string;
+  text: string;
+  rawStatus?: string;
+}
+
+const statusMap: Record<string, StatusBadgeConfig> = {
   up: { color: 'green', text: 'UP' },
   ready: { color: 'green', text: 'READY' },
   healthy: { color: 'green', text: 'HEALTHY' },
@@ -19,7 +25,8 @@ const statusMap: Record<string, { color: string; text: string }> = {
   warning: { color: 'gold', text: 'WARNING' },
   pending: { color: 'gold', text: 'PENDING' },
   pending_verification: { color: 'gold', text: 'PENDING_VERIFICATION' },
-  ready_for_provision: { color: 'gold', text: 'READY' },
+  ready_for_provision: { color: 'gold', text: 'READY_FOR_PROVISION' },
+  activation_required: { color: 'gold', text: 'ACTIVATION_REQUIRED' },
 
   down: { color: 'red', text: 'DOWN' },
   danger: { color: 'red', text: 'DANGER' },
@@ -55,12 +62,20 @@ const normalizeStatus = (status?: string | boolean | null): string => {
 export const resolveStatusBadgeConfig = (status?: string | boolean | null) => {
   const normalized = normalizeStatus(status);
 
-  return (
-    statusMap[normalized] ?? {
-      color: 'default',
-      text: normalized.toUpperCase(),
-    }
-  );
+  const mappedConfig = statusMap[normalized];
+  if (mappedConfig) {
+    return mappedConfig;
+  }
+
+  if (normalized === 'unknown') {
+    return statusMap.unknown;
+  }
+
+  return {
+    color: 'default',
+    text: 'UNKNOWN',
+    rawStatus: normalized.toUpperCase(),
+  };
 };
 
 export const StatusBadge = ({ status, mode = 'tag', title }: StatusBadgeProps) => {
@@ -72,9 +87,12 @@ export const StatusBadge = ({ status, mode = 'tag', title }: StatusBadgeProps) =
 
   const tagNode = <Tag color={config.color}>{config.text}</Tag>;
 
-  if (!title) {
+  const tooltipTitle =
+    title || (config.rawStatus ? `Unknown backend state: ${config.rawStatus}` : undefined);
+
+  if (!tooltipTitle) {
     return tagNode;
   }
 
-  return <Tooltip title={title}>{tagNode}</Tooltip>;
+  return <Tooltip title={tooltipTitle}>{tagNode}</Tooltip>;
 };

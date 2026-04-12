@@ -18,5 +18,23 @@ describe('resolveStatusBadgeConfig', () => {
       color: 'default',
       text: 'NOT_PROVISIONED',
     });
+
+    expect(resolveStatusBadgeConfig('READY_FOR_PROVISION')).toEqual({
+      color: 'gold',
+      text: 'READY_FOR_PROVISION',
+    });
+  });
+
+  it('falls back safely for unknown or missing states', () => {
+    expect(resolveStatusBadgeConfig(undefined)).toEqual({
+      color: 'default',
+      text: 'UNKNOWN',
+    });
+
+    expect(resolveStatusBadgeConfig('backend_future_state')).toEqual({
+      color: 'default',
+      text: 'UNKNOWN',
+      rawStatus: 'BACKEND_FUTURE_STATE',
+    });
   });
 });

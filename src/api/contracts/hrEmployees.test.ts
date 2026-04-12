@@ -103,4 +103,41 @@ describe('hrEmployees contract normalization', () => {
       loginIdentifier: 'user@company.test',
     });
   });
+
+  it('normalizes partial HR employee payload without throwing', () => {
+    expect(
+      normalizeHrEmployee({
+        id: 'hr-2',
+        employee_code: null,
+        status: null,
+        linked_user: {
+          id: null,
+        },
+      }),
+    ).toEqual({
+      id: 'hr-2',
+      employeeCode: '-',
+      email: '',
+      phone: null,
+      fullName: '-',
+      orgUnit: null,
+      title: null,
+      status: 'ACTIVE',
+      createdAt: null,
+      updatedAt: null,
+      fullNameFromHr: null,
+      emailFromHr: null,
+      departmentName: null,
+      unitCode: null,
+      provisioningStatus: null,
+      activationStatus: null,
+      linkedUser: {
+        id: null,
+        loginIdentifier: null,
+        displayName: null,
+        accountState: null,
+      },
+      importMetadata: null,
+    });
+  });
 });

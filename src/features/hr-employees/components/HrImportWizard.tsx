@@ -1,4 +1,17 @@
-import { Alert, Button, Card, Descriptions, Modal, Space, Statistic, Steps, Table, Typography, Upload, message } from 'antd';
+import {
+  Alert,
+  Button,
+  Card,
+  Descriptions,
+  Modal,
+  Space,
+  Statistic,
+  Steps,
+  Table,
+  Typography,
+  Upload,
+  message,
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { InboxOutlined, UploadOutlined } from '@ant-design/icons';
 import React from 'react';
@@ -15,9 +28,7 @@ import {
 const ACCEPTED_EXTENSIONS = ['.csv', '.xlsx', '.xls'];
 
 const isAcceptedFileName = (fileName: string): boolean =>
-  ACCEPTED_EXTENSIONS.some((extension) =>
-    fileName.toLowerCase().endsWith(extension),
-  );
+  ACCEPTED_EXTENSIONS.some((extension) => fileName.toLowerCase().endsWith(extension));
 
 const fileToBase64 = async (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -67,15 +78,21 @@ const previewColumns: ColumnsType<HrImportPreviewRow> = [
 interface HrImportWizardProps {
   open: boolean;
   onClose: () => void;
+  onCommitted?: (result: {
+    inserted: number;
+    updated: number;
+    skipped: number;
+    failed: number;
+    batchId: string;
+  }) => void | Promise<void>;
 }
 
-export const HrImportWizard = ({ open, onClose }: HrImportWizardProps) => {
+export const HrImportWizard = ({ open, onClose, onCommitted }: HrImportWizardProps) => {
   const currentAdmin = useAuthStore((state) => state.user);
   const validateMutation = useValidateHrImportMutation();
   const commitMutation = useCommitHrImportMutation();
   const [file, setFile] = React.useState<File | null>(null);
-  const [validation, setValidation] =
-    React.useState<HrImportValidationResult | null>(null);
+  const [validation, setValidation] = React.useState<HrImportValidationResult | null>(null);
   const [commitResult, setCommitResult] = React.useState<{
     inserted: number;
     updated: number;
@@ -84,13 +101,40 @@ export const HrImportWizard = ({ open, onClose }: HrImportWizardProps) => {
     batchId: string;
   } | null>(null);
   const [reportDownloading, setReportDownloading] = React.useState(false);
+  const [actionError, setActionError] = React.useState<string | null>(null);
+  const actionLockRef = React.useRef<'validate' | 'commit' | 'download' | null>(null);
 
   const currentStep = commitResult ? 2 : validation ? 1 : 0;
+
+  const tryLockAction = React.useCallback(
+    (action: 'validate' | 'commit' | 'download'): boolean => {
+      if (
+        actionLockRef.current ||
+        validateMutation.isPending ||
+        commitMutation.isPending ||
+        reportDownloading
+      ) {
+        return false;
+      }
+
+      actionLockRef.current = action;
+      return true;
+    },
+    [commitMutation.isPending, reportDownloading, validateMutation.isPending],
+  );
+
+  const releaseActionLock = React.useCallback((action: 'validate' | 'commit' | 'download') => {
+    if (actionLockRef.current === action) {
+      actionLockRef.current = null;
+    }
+  }, []);
 
   const resetState = React.useCallback(() => {
     setFile(null);
     setValidation(null);
     setCommitResult(null);
+    setActionError(null);
+    actionLockRef.current = null;
   }, []);
 
   const handleClose = React.useCallback(() => {
@@ -102,6 +146,7 @@ export const HrImportWizard = ({ open, onClose }: HrImportWizardProps) => {
     setFile(nextFile);
     setValidation(null);
     setCommitResult(null);
+    setActionError(null);
   }, []);
 
   const handleValidate = React.useCallback(async () => {
@@ -115,6 +160,12 @@ export const HrImportWizard = ({ open, onClose }: HrImportWizardProps) => {
       return;
     }
 
+    if (!tryLockAction('validate')) {
+      return;
+    }
+
+    setActionError(null);
+
     try {
       const fileBase64 = await fileToBase64(file);
       const result = await validateMutation.mutateAsync({
@@ -127,13 +178,19 @@ export const HrImportWizard = ({ open, onClose }: HrImportWizardProps) => {
       setValidation(result);
       message.success('Validation completed.');
     } catch (error) {
-      message.error(getErrorMessage(error));
+      const errorMessage = getErrorMessage(error);
+      setActionError(errorMessage);
+      message.error(errorMessage);
+    } finally {
+      releaseActionLock('validate');
     }
   }, [
     currentAdmin?.email,
     currentAdmin?.id,
     currentAdmin?.role,
     file,
+    releaseActionLock,
+    tryLockAction,
     validateMutation,
   ]);
 
@@ -142,6 +199,12 @@ export const HrImportWizard = ({ open, onClose }: HrImportWizardProps) => {
       message.warning('Validate the import before committing.');
       return;
     }
+
+    if (!tryLockAction('commit')) {
+      return;
+    }
+
+    setActionError(null);
 
     try {
       const result = await commitMutation.mutateAsync({
@@ -153,22 +216,31 @@ export const HrImportWizard = ({ open, onClose }: HrImportWizardProps) => {
           reason: 'phase2_import_commit',
         },
       });
-      setCommitResult({
+      const normalizedCommitResult = {
         batchId: result.batchId,
         inserted: result.inserted ?? result.importedRows,
         updated: result.updated ?? 0,
         skipped: result.skipped ?? 0,
         failed: result.failed ?? result.invalidRowCount,
-      });
+      };
+      setCommitResult(normalizedCommitResult);
+      await Promise.resolve(onCommitted?.(normalizedCommitResult));
       message.success('Import committed successfully.');
     } catch (error) {
-      message.error(getErrorMessage(error));
+      const errorMessage = getErrorMessage(error);
+      setActionError(errorMessage);
+      message.error(errorMessage);
+    } finally {
+      releaseActionLock('commit');
     }
   }, [
     commitMutation,
     currentAdmin?.email,
     currentAdmin?.id,
     currentAdmin?.role,
+    onCommitted,
+    releaseActionLock,
+    tryLockAction,
     validation?.batchId,
   ]);
 
@@ -177,7 +249,13 @@ export const HrImportWizard = ({ open, onClose }: HrImportWizardProps) => {
       return;
     }
 
+    if (!tryLockAction('download')) {
+      return;
+    }
+
     setReportDownloading(true);
+    setActionError(null);
+
     try {
       const batchId = commitResult?.batchId || validation?.batchId || '';
       const report = await hrEmployeesClient.downloadHrImportReport(batchId);
@@ -191,11 +269,14 @@ export const HrImportWizard = ({ open, onClose }: HrImportWizardProps) => {
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (error) {
-      message.error(getErrorMessage(error));
+      const errorMessage = getErrorMessage(error);
+      setActionError(errorMessage);
+      message.error(errorMessage);
     } finally {
+      releaseActionLock('download');
       setReportDownloading(false);
     }
-  }, [commitResult?.batchId, validation?.batchId]);
+  }, [commitResult?.batchId, releaseActionLock, tryLockAction, validation?.batchId]);
 
   return (
     <Modal
@@ -209,12 +290,19 @@ export const HrImportWizard = ({ open, onClose }: HrImportWizardProps) => {
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
         <Steps
           current={currentStep}
-          items={[
-            { title: 'Upload' },
-            { title: 'Validate preview' },
-            { title: 'Commit result' },
-          ]}
+          items={[{ title: 'Upload' }, { title: 'Validate preview' }, { title: 'Commit result' }]}
         />
+
+        {actionError ? (
+          <Alert
+            type="error"
+            showIcon
+            message="Action failed"
+            description={actionError}
+            closable
+            onClose={() => setActionError(null)}
+          />
+        ) : null}
 
         <Card title="Step 1: Upload file" size="small">
           <Space direction="vertical" size={12} style={{ width: '100%' }}>
@@ -248,7 +336,7 @@ export const HrImportWizard = ({ open, onClose }: HrImportWizardProps) => {
                 type="primary"
                 icon={<UploadOutlined />}
                 loading={validateMutation.isPending}
-                disabled={!file}
+                disabled={!file || validateMutation.isPending || commitMutation.isPending}
                 onClick={() => void handleValidate()}
               >
                 Validate preview
@@ -294,11 +382,22 @@ export const HrImportWizard = ({ open, onClose }: HrImportWizardProps) => {
                 dataSource={validation.previewRows}
               />
 
+              {validation.previewRows.length === 0 ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  message="No preview rows returned"
+                  description="Validation completed but backend returned an empty preview."
+                />
+              ) : null}
+
               <Space>
                 <Button
                   type="primary"
                   loading={commitMutation.isPending}
-                  disabled={!validation.batchId}
+                  disabled={
+                    !validation.batchId || validateMutation.isPending || commitMutation.isPending
+                  }
                   onClick={() => void handleCommit()}
                 >
                   Commit import
@@ -307,6 +406,7 @@ export const HrImportWizard = ({ open, onClose }: HrImportWizardProps) => {
                 <Button
                   onClick={() => void handleDownloadReport()}
                   loading={reportDownloading}
+                  disabled={validateMutation.isPending || commitMutation.isPending}
                 >
                   Download report
                 </Button>

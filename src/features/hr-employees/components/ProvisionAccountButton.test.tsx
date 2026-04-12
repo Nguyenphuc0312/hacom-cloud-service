@@ -93,4 +93,47 @@ describe('ProvisionAccountButton', () => {
 
     expect(confirmMock).toHaveBeenCalledTimes(1);
   });
+
+  it('prevents duplicate provision submit inside confirm onOk', async () => {
+    let resolveMutation: (() => void) | null = null;
+    mutateAsyncMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveMutation = () => resolve({});
+        }),
+    );
+
+    render(
+      <ProvisionAccountButton
+        employee={{
+          id: 'hr-1',
+          employeeCode: 'EMP001',
+          email: 'employee@company.test',
+          phone: null,
+          fullName: 'Employee 1',
+          orgUnit: null,
+          title: null,
+          status: 'ACTIVE',
+          createdAt: null,
+          updatedAt: null,
+        }}
+        canWrite
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Provision' }));
+
+    const confirmConfig = confirmMock.mock.calls[0]?.[0] as {
+      onOk?: () => Promise<void>;
+    };
+    expect(confirmConfig?.onOk).toBeDefined();
+
+    const onOk = confirmConfig.onOk!;
+    void onOk();
+    void onOk();
+
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+
+    resolveMutation?.();
+  });
 });

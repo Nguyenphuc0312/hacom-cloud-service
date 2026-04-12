@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, Form, Input, Modal, Select, Space, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { hrEmployeesClient } from '@/api/clients';
 import { getErrorMessage } from '@/api/error';
@@ -64,6 +64,18 @@ export const HREmployeesPage = () => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+
+  const refreshHrViews = useCallback(
+    async (employeeId?: string) => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.hrEmployeesRoot });
+      await queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+
+      if (employeeId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.hrEmployeeDetail(employeeId) });
+      }
+    },
+    [queryClient],
+  );
 
   const listQuery = useQuery({
     queryKey: queryKeys.hrEmployeesList(JSON.stringify(params)),
@@ -206,8 +218,7 @@ export const HREmployeesPage = () => {
 
     Modal.confirm({
       title: 'Deactivate/Delete HR employee',
-      content:
-        'Hanh dong nay tuan theo semantics backend hien tai (deactivate hoac soft delete).',
+      content: 'Hanh dong nay tuan theo semantics backend hien tai (deactivate hoac soft delete).',
       okText: 'Confirm',
       cancelText: 'Cancel',
       onOk: async () => {
@@ -277,11 +288,7 @@ export const HREmployeesPage = () => {
             <ProvisionAccountButton
               employee={record}
               canWrite={canWriteHrActions}
-              onSuccess={() =>
-                queryClient.invalidateQueries({
-                  queryKey: queryKeys.hrEmployeesList(JSON.stringify(params)),
-                })
-              }
+              onSuccess={() => refreshHrViews(record.id)}
             />
             <Button
               size="small"
@@ -308,7 +315,7 @@ export const HREmployeesPage = () => {
         ),
       },
     ],
-    [canWriteHrActions, params, queryClient],
+    [canWriteHrActions, refreshHrViews],
   );
 
   const applyFilters = () => {
@@ -421,12 +428,17 @@ export const HREmployeesPage = () => {
         />
       </DataTableShell>
 
-      <HrImportWizard open={importOpen} onClose={() => setImportOpen(false)} />
+      <HrImportWizard
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onCommitted={() => refreshHrViews()}
+      />
 
       <HrEmployeeDetailDrawer
         open={detailOpen}
         employeeId={detailId}
         canWrite={canWriteHrActions}
+        onProvisioned={(employeeId) => refreshHrViews(employeeId)}
         onClose={() => setDetailOpen(false)}
       />
 

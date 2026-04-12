@@ -1,5 +1,5 @@
 import { Button, Modal, Tooltip, message } from 'antd';
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 
 import { getErrorMessage } from '@/api/error';
 import type { HrEmployee } from '@/api/types';
@@ -45,6 +45,7 @@ export const ProvisionAccountButton = ({
   const currentAdmin = useAuthStore((state) => state.user);
   const provisionMutation = useProvisionHrEmployeeAccountMutation();
   const disableReason = getProvisionDisableReason(employee, canWrite);
+  const provisionLockRef = useRef(false);
 
   const handleClick = useCallback(() => {
     if (disableReason) {
@@ -59,6 +60,11 @@ export const ProvisionAccountButton = ({
       okText: 'Provision',
       cancelText: 'Cancel',
       onOk: async () => {
+        if (provisionLockRef.current) {
+          return;
+        }
+
+        provisionLockRef.current = true;
         try {
           const result = await provisionMutation.mutateAsync({
             employeeId: employee.id,
@@ -78,6 +84,8 @@ export const ProvisionAccountButton = ({
         } catch (error) {
           message.error(getErrorMessage(error));
           throw error;
+        } finally {
+          provisionLockRef.current = false;
         }
       },
     });

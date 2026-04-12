@@ -1,5 +1,6 @@
 import { Alert, Button, Card, Descriptions, Drawer, Space, Typography } from 'antd';
 import { useQuery } from '@tanstack/react-query';
+import React from 'react';
 
 import { hrEmployeesClient } from '@/api/clients';
 import { getErrorMessage } from '@/api/error';
@@ -16,12 +17,10 @@ interface HrEmployeeDetailDrawerProps {
   open: boolean;
   canWrite: boolean;
   onClose: () => void;
+  onProvisioned?: (employeeId: string) => void | Promise<void>;
 }
 
-const renderSection = (
-  title: string,
-  items: Array<{ label: string; value: React.ReactNode }>,
-) => (
+const renderSection = (title: string, items: Array<{ label: string; value: React.ReactNode }>) => (
   <Card title={title} size="small">
     <Descriptions column={1} size="small" items={items} />
   </Card>
@@ -66,7 +65,11 @@ export const HrEmployeeDetailDrawer = ({
   open,
   canWrite,
   onClose,
+  onProvisioned,
 }: HrEmployeeDetailDrawerProps) => {
+  const manualRefreshLockRef = React.useRef(false);
+  const [manualRefreshLoading, setManualRefreshLoading] = React.useState(false);
+
   const detailQuery = useQuery({
     queryKey: queryKeys.hrEmployeeDetail(employeeId ?? ''),
     queryFn: () => hrEmployeesClient.getById(employeeId ?? ''),
@@ -74,6 +77,21 @@ export const HrEmployeeDetailDrawer = ({
   });
 
   const employee = detailQuery.data;
+
+  const handleRefresh = React.useCallback(async () => {
+    if (manualRefreshLockRef.current) {
+      return;
+    }
+
+    manualRefreshLockRef.current = true;
+    setManualRefreshLoading(true);
+    try {
+      await detailQuery.refetch();
+    } finally {
+      manualRefreshLockRef.current = false;
+      setManualRefreshLoading(false);
+    }
+  }, [detailQuery]);
 
   return (
     <Drawer
@@ -84,7 +102,10 @@ export const HrEmployeeDetailDrawer = ({
       destroyOnHidden
       extra={
         <Space>
-          <Button onClick={() => detailQuery.refetch()} loading={detailQuery.isFetching}>
+          <Button
+            onClick={() => void handleRefresh()}
+            loading={detailQuery.isFetching || manualRefreshLoading}
+          >
             Refresh
           </Button>
           {employee ? (
@@ -92,8 +113,11 @@ export const HrEmployeeDetailDrawer = ({
               employee={employee}
               canWrite={canWrite}
               buttonText="Provision account"
-              onSuccess={() => {
-                void detailQuery.refetch();
+              onSuccess={async () => {
+                await detailQuery.refetch();
+                if (employeeId) {
+                  await Promise.resolve(onProvisioned?.(employeeId));
+                }
               }}
             />
           ) : null}
@@ -162,8 +186,11 @@ export const HrEmployeeDetailDrawer = ({
               <ProvisionAccountButton
                 employee={employee}
                 canWrite={canWrite}
-                onSuccess={() => {
-                  void detailQuery.refetch();
+                onSuccess={async () => {
+                  await detailQuery.refetch();
+                  if (employeeId) {
+                    await Promise.resolve(onProvisioned?.(employeeId));
+                  }
                 }}
               />
               <Button disabled title="Resend activation is not exposed in the admin backend yet.">
