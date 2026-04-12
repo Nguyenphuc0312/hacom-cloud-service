@@ -31,7 +31,8 @@ vi.mock("../../auth/api/authApi", () => ({
 }));
 
 vi.mock("../../../components/ui", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../components/ui")>();
+  const actual =
+    await importOriginal<typeof import("../../../components/ui")>();
   return {
     ...actual,
     toast: {
@@ -103,7 +104,9 @@ describe("ActivationFlowPage", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "activation.required.sendOtp" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "activation.required.sendOtp" }),
+    );
 
     await waitFor(() => {
       expect(requestOtpMock).toHaveBeenCalledWith({
@@ -127,7 +130,9 @@ describe("ActivationFlowPage", () => {
       },
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "activation.verifyOtp.submit" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "activation.verifyOtp.submit" }),
+    );
 
     await waitFor(() => {
       expect(verifyOtpMock).toHaveBeenCalledWith({
@@ -143,5 +148,84 @@ describe("ActivationFlowPage", () => {
 
     expect(screen.queryByText("login-page")).not.toBeInTheDocument();
     expect(useAuthStore.getState().authStatus).toBe("authenticated");
+  });
+
+  it("prevents duplicate OTP request submit while request is pending", async () => {
+    let resolveRequest: ((value: unknown) => void) | null = null;
+    requestOtpMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve;
+        }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/activation"]}>
+        <Routes>
+          <Route path="/activation" element={<ActivationFlowPage />} />
+          <Route path="/chat" element={<div>chat-page</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const requestButton = screen.getByRole("button", {
+      name: "activation.required.sendOtp",
+    });
+
+    fireEvent.click(requestButton);
+    fireEvent.click(requestButton);
+
+    expect(requestOtpMock).toHaveBeenCalledTimes(1);
+
+    resolveRequest?.({
+      maskedEmail: "u***@company.test",
+      nextAction: "VERIFY_OTP",
+      resendAvailableAt: null,
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("activation.verifyOtp.title"),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("recovers from network failure without leaving activation flow stuck", async () => {
+    requestOtpMock
+      .mockRejectedValueOnce(new Error("Network Error"))
+      .mockResolvedValueOnce({
+        maskedEmail: "u***@company.test",
+        nextAction: "VERIFY_OTP",
+        resendAvailableAt: null,
+      });
+
+    render(
+      <MemoryRouter initialEntries={["/activation"]}>
+        <Routes>
+          <Route path="/activation" element={<ActivationFlowPage />} />
+          <Route path="/chat" element={<div>chat-page</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const requestButton = screen.getByRole("button", {
+      name: "activation.required.sendOtp",
+    });
+
+    fireEvent.click(requestButton);
+
+    await waitFor(() => {
+      expect(requestOtpMock).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(requestButton).toBeEnabled();
+    });
+
+    fireEvent.click(requestButton);
+
+    await waitFor(() => {
+      expect(requestOtpMock).toHaveBeenCalledTimes(2);
+    });
   });
 });

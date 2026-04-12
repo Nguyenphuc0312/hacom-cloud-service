@@ -9,7 +9,7 @@ import apiClient, {
   resetAuthFailureState,
   setAuthFailureHandler,
 } from "../lib/axios";
-import type { ApiResponse } from "@hacom/chat-shared-types";
+import { ErrorCode, type ApiResponse } from "@hacom/chat-shared-types";
 import type { LoginFormData, RegisterFormData } from "../lib/validations";
 import {
   getAccessToken,
@@ -39,7 +39,10 @@ import {
   normalizePersistedAuthStatus,
   resolveLockedAccountStatus,
 } from "../features/auth/model/authState";
-import { loginAuthApi, normalizeAuthResponse } from "../features/auth/api/authApi";
+import {
+  loginAuthApi,
+  normalizeAuthResponse,
+} from "../features/auth/api/authApi";
 import { resolveAuthFailure } from "../features/auth/utils/authErrorMapper";
 
 export interface User {
@@ -63,6 +66,10 @@ export interface User {
   role?: string;
   isVerified?: boolean;
   createdAt?: string;
+  accountState?: string;
+  account_state?: string;
+  activationStatus?: string;
+  activation_status?: string;
 }
 
 interface AuthResponse {
@@ -218,6 +225,63 @@ const normalizeIsoDateValue = (value: unknown): string | null => {
   return new Date(parsed).toISOString();
 };
 
+const normalizeStatusMarker = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toUpperCase();
+  return normalized || null;
+};
+
+const resolveBlockedStatusFromUser = (
+  user: User | null | undefined,
+): LockedAccountContext["status"] | null => {
+  if (!user) {
+    return null;
+  }
+
+  const userRecord = user as unknown as Record<string, unknown>;
+  const candidates = [
+    userRecord.accountState,
+    userRecord.account_state,
+    userRecord.activationStatus,
+    userRecord.activation_status,
+    userRecord.status,
+  ];
+
+  for (const value of candidates) {
+    const normalized = normalizeStatusMarker(value);
+    if (!normalized) {
+      continue;
+    }
+
+    if (normalized === "DISABLED") {
+      return "disabled";
+    }
+
+    if (normalized === "LOCKED") {
+      return "locked";
+    }
+  }
+
+  return null;
+};
+
+const resolveBlockedAuthMessage = (
+  status: LockedAccountContext["status"],
+): string =>
+  status === "disabled"
+    ? i18n.t("auth:activation.locked.accountDisabled")
+    : i18n.t("auth:activation.locked.accountLocked");
+
+const resolveBlockedAuthCode = (
+  status: LockedAccountContext["status"],
+): string =>
+  status === "disabled"
+    ? ErrorCode.ACCOUNT_DISABLED
+    : ErrorCode.AUTH_ACCOUNT_LOCKED;
+
 const normalizeTtlSeconds = (value: unknown): number | null => {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     return null;
@@ -368,10 +432,36 @@ export const useAuthStore = create<AuthState>()(
         applyLoginResponse: (payload, rememberMe = false) => {
           const normalizedPayload = normalizeLoginPayload(payload);
           const { user } = normalizedPayload;
-          const { accessToken, refreshToken } = resolveTokens(normalizedPayload);
+          const { accessToken, refreshToken } =
+            resolveTokens(normalizedPayload);
+          const blockedStatus = resolveBlockedStatusFromUser(user);
 
           if (!accessToken) {
             throw new Error(i18n.t("error:auth.loginTokenMissing"));
+          }
+
+          if (blockedStatus) {
+            const blockedMessage = resolveBlockedAuthMessage(blockedStatus);
+            runClientLogoutCleanup("login_blocked_account_state");
+            set({
+              user: null,
+              authStatus: blockedStatus,
+              activationContext: null,
+              lockedAccount: {
+                status: blockedStatus,
+                code: resolveBlockedAuthCode(blockedStatus),
+                message: blockedMessage,
+              },
+              pendingVerificationEmail: null,
+              pendingVerificationSource: null,
+              emailVerificationChallenge: null,
+              isAuthenticated: false,
+              isLoading: false,
+              isInitialized: true,
+              registrationStatus: "idle",
+              error: blockedMessage,
+            });
+            return;
           }
 
           storeTokens(accessToken, refreshToken ?? undefined, rememberMe);
@@ -628,6 +718,32 @@ export const useAuthStore = create<AuthState>()(
               { headers: { Authorization: `Bearer ${token}` } },
             );
             const user = unwrapApiSuccess(response.data);
+            const blockedStatus = resolveBlockedStatusFromUser(user);
+
+            if (blockedStatus) {
+              const blockedMessage = resolveBlockedAuthMessage(blockedStatus);
+              runClientLogoutCleanup("refresh_user_blocked_state");
+              set({
+                user: null,
+                authStatus: blockedStatus,
+                activationContext: null,
+                lockedAccount: {
+                  status: blockedStatus,
+                  code: resolveBlockedAuthCode(blockedStatus),
+                  message: blockedMessage,
+                },
+                pendingVerificationEmail: null,
+                pendingVerificationSource: null,
+                emailVerificationChallenge: null,
+                isAuthenticated: false,
+                isLoading: false,
+                isInitialized: true,
+                registrationStatus: "idle",
+                error: blockedMessage,
+              });
+              return;
+            }
+
             set({
               user,
               authStatus: "authenticated",
@@ -740,6 +856,33 @@ export const useAuthStore = create<AuthState>()(
             if (accessToken) {
               try {
                 const user = await fetchCurrentUser(accessToken);
+                const blockedStatus = resolveBlockedStatusFromUser(user);
+
+                if (blockedStatus) {
+                  const blockedMessage =
+                    resolveBlockedAuthMessage(blockedStatus);
+                  runClientLogoutCleanup("bootstrap_blocked_account_state");
+                  set({
+                    user: null,
+                    authStatus: blockedStatus,
+                    activationContext: null,
+                    lockedAccount: {
+                      status: blockedStatus,
+                      code: resolveBlockedAuthCode(blockedStatus),
+                      message: blockedMessage,
+                    },
+                    pendingVerificationEmail: null,
+                    pendingVerificationSource: null,
+                    emailVerificationChallenge: null,
+                    isAuthenticated: false,
+                    isLoading: false,
+                    isInitialized: true,
+                    registrationStatus: "idle",
+                    error: blockedMessage,
+                  });
+                  return;
+                }
+
                 set({
                   user,
                   authStatus: "authenticated",
@@ -784,6 +927,35 @@ export const useAuthStore = create<AuthState>()(
                 const newAccessToken =
                   await refreshAccessTokenShared("bootstrap");
                 const user = await fetchCurrentUser(newAccessToken);
+                const blockedStatus = resolveBlockedStatusFromUser(user);
+
+                if (blockedStatus) {
+                  const blockedMessage =
+                    resolveBlockedAuthMessage(blockedStatus);
+                  runClientLogoutCleanup(
+                    "bootstrap_refresh_blocked_account_state",
+                  );
+                  set({
+                    user: null,
+                    authStatus: blockedStatus,
+                    activationContext: null,
+                    lockedAccount: {
+                      status: blockedStatus,
+                      code: resolveBlockedAuthCode(blockedStatus),
+                      message: blockedMessage,
+                    },
+                    pendingVerificationEmail: null,
+                    pendingVerificationSource: null,
+                    emailVerificationChallenge: null,
+                    isAuthenticated: false,
+                    isLoading: false,
+                    isInitialized: true,
+                    registrationStatus: "idle",
+                    error: blockedMessage,
+                  });
+                  return;
+                }
+
                 set({
                   user,
                   authStatus: "authenticated",

@@ -23,7 +23,9 @@ const formatCountdown = (seconds: number): string => {
 
 type ActivationStep = "required" | "verify_otp" | "set_password";
 
-const isBlockingStatus = (status: AuthStatus): status is "locked" | "disabled" =>
+const isBlockingStatus = (
+  status: AuthStatus,
+): status is "locked" | "disabled" =>
   status === "locked" || status === "disabled";
 
 const hasLoginToken = (
@@ -58,6 +60,9 @@ export const ActivationFlowPage: React.FC = () => {
   const [isBusy, setIsBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [resendSeconds, setResendSeconds] = React.useState(0);
+  const activeActionRef = React.useRef<
+    "request_otp" | "resend_otp" | "verify_otp" | "set_password" | null
+  >(null);
 
   const from =
     (location.state as { from?: string } | null)?.from || ROUTE_PATHS.CHAT;
@@ -118,6 +123,8 @@ export const ActivationFlowPage: React.FC = () => {
       try {
         applyLoginResponse(payload as never, true);
         setActivationContext(null);
+        activeActionRef.current = null;
+        setIsBusy(false);
         toast.success(t("activation.success"));
         navigate(from, { replace: true });
         return true;
@@ -136,15 +143,31 @@ export const ActivationFlowPage: React.FC = () => {
   const finishActivationPending = React.useCallback(
     (nextStatus: AuthStatus = "activation_required") => {
       setAuthStatus(nextStatus);
+      activeActionRef.current = null;
       setIsBusy(false);
     },
     [setAuthStatus],
   );
 
+  const beginAction = React.useCallback(
+    (
+      action: "request_otp" | "resend_otp" | "verify_otp" | "set_password",
+    ): boolean => {
+      if (activeActionRef.current || isBusy) {
+        return false;
+      }
+
+      activeActionRef.current = action;
+      setIsBusy(true);
+      return true;
+    },
+    [isBusy],
+  );
+
   const handleRequestOtp = React.useCallback(async () => {
     if (!activationContext) return;
+    if (!beginAction("request_otp")) return;
 
-    setIsBusy(true);
     setError(null);
 
     try {
@@ -153,8 +176,7 @@ export const ActivationFlowPage: React.FC = () => {
       });
       setStep("verify_otp");
       if (result.resendAvailableAt) {
-        const delta =
-          new Date(result.resendAvailableAt).getTime() - Date.now();
+        const delta = new Date(result.resendAvailableAt).getTime() - Date.now();
         setResendSeconds(delta > 0 ? Math.ceil(delta / 1000) : 0);
       } else {
         setResendSeconds(60);
@@ -169,15 +191,27 @@ export const ActivationFlowPage: React.FC = () => {
     } catch (cause) {
       const failure = resolveAuthFailure(cause, t);
       setError(failure.message);
+      if (failure.kind === "locked" || failure.kind === "disabled") {
+        finishActivationPending(failure.kind);
+        return;
+      }
     } finally {
-      finishActivationPending();
+      if (activeActionRef.current === "request_otp") {
+        finishActivationPending();
+      }
     }
-  }, [activationContext, finishActivationPending, setActivationContext, t]);
+  }, [
+    activationContext,
+    beginAction,
+    finishActivationPending,
+    setActivationContext,
+    t,
+  ]);
 
   const handleResendOtp = React.useCallback(async () => {
     if (!activationContext) return;
+    if (!beginAction("resend_otp")) return;
 
-    setIsBusy(true);
     setError(null);
 
     try {
@@ -185,8 +219,7 @@ export const ActivationFlowPage: React.FC = () => {
         activationTicket: activationContext.activationTicket,
       });
       if (result.resendAvailableAt) {
-        const delta =
-          new Date(result.resendAvailableAt).getTime() - Date.now();
+        const delta = new Date(result.resendAvailableAt).getTime() - Date.now();
         setResendSeconds(delta > 0 ? Math.ceil(delta / 1000) : 0);
       } else {
         setResendSeconds(60);
@@ -201,21 +234,35 @@ export const ActivationFlowPage: React.FC = () => {
     } catch (cause) {
       const failure = resolveAuthFailure(cause, t);
       setError(failure.message);
+      if (failure.kind === "locked" || failure.kind === "disabled") {
+        finishActivationPending(failure.kind);
+        return;
+      }
     } finally {
-      finishActivationPending();
+      if (activeActionRef.current === "resend_otp") {
+        finishActivationPending();
+      }
     }
-  }, [activationContext, finishActivationPending, setActivationContext, t]);
+  }, [
+    activationContext,
+    beginAction,
+    finishActivationPending,
+    setActivationContext,
+    t,
+  ]);
 
   const handleVerifyOtp = React.useCallback(async () => {
     if (!activationContext) return;
+    if (!beginAction("verify_otp")) return;
 
     if (password !== confirmPassword) {
       setError(t("activation.setPassword.mismatch"));
+      activeActionRef.current = null;
+      setIsBusy(false);
       return;
     }
 
     startOtpVerification();
-    setIsBusy(true);
     let finalized = false;
 
     try {
@@ -245,18 +292,29 @@ export const ActivationFlowPage: React.FC = () => {
     } catch (cause) {
       const failure = resolveAuthFailure(cause, t);
       setError(failure.message);
+      if (failure.kind === "otp_expired") {
+        setOtp("");
+      }
+      if (failure.kind === "locked" || failure.kind === "disabled") {
+        finishActivationPending(failure.kind);
+        return;
+      }
     } finally {
       if (!finalized) {
-        finishActivationPending();
+        if (activeActionRef.current === "verify_otp") {
+          finishActivationPending();
+        }
       }
     }
   }, [
     activationContext,
+    beginAction,
     confirmPassword,
     finalizeAuthenticated,
     finishActivationPending,
     otp,
     password,
+    setOtp,
     setActivationContext,
     startOtpVerification,
     t,
@@ -264,14 +322,16 @@ export const ActivationFlowPage: React.FC = () => {
 
   const handleSetPassword = React.useCallback(async () => {
     if (!activationContext) return;
+    if (!beginAction("set_password")) return;
 
     if (password !== confirmPassword) {
       setError(t("activation.setPassword.mismatch"));
+      activeActionRef.current = null;
+      setIsBusy(false);
       return;
     }
 
     startOtpVerification();
-    setIsBusy(true);
     let finalized = false;
 
     try {
@@ -292,13 +352,20 @@ export const ActivationFlowPage: React.FC = () => {
     } catch (cause) {
       const failure = resolveAuthFailure(cause, t);
       setError(failure.message);
+      if (failure.kind === "locked" || failure.kind === "disabled") {
+        finishActivationPending(failure.kind);
+        return;
+      }
     } finally {
       if (!finalized) {
-        finishActivationPending();
+        if (activeActionRef.current === "set_password") {
+          finishActivationPending();
+        }
       }
     }
   }, [
     activationContext,
+    beginAction,
     confirmPassword,
     finalizeAuthenticated,
     finishActivationPending,

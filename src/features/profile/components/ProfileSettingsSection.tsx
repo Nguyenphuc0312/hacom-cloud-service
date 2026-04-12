@@ -10,7 +10,7 @@ import {
 import { Avatar } from "../../../components/common/Avatar";
 import { Button, Input, Textarea, toast } from "../../../components/ui";
 import { SettingsSection } from "../../../components/settings";
-import { useAuthStore } from "../../../stores";
+import { useAuthStore, type User } from "../../../stores";
 import { userApi } from "../../../services/api";
 import apiClient from "../../../lib/axios";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
@@ -52,6 +52,11 @@ const isUnsupportedUploadError = (error: unknown): boolean =>
   axios.isAxiosError(error) &&
   [404, 405, 501].includes(error.response?.status ?? 0);
 
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+
 const readUserValue = (
   user: Record<string, unknown> | null | undefined,
   ...keys: string[]
@@ -70,6 +75,45 @@ const readUserValue = (
   return null;
 };
 
+const readUploadUrl = (payload: unknown, ...keys: string[]): string | null => {
+  const root = asRecord(payload);
+  if (!root) {
+    return null;
+  }
+
+  const nestedData = asRecord(root.data);
+  return readUserValue(nestedData, ...keys) || readUserValue(root, ...keys);
+};
+
+const resolveAvatarFromUploadResponse = (
+  payload: unknown,
+  fallbackAvatar: string | undefined,
+): string | undefined => {
+  try {
+    const unwrapped = unwrapApiSuccess(payload as never) as Record<
+      string,
+      unknown
+    >;
+    return (
+      readUserValue(unwrapped, "avatar", "avatarUrl", "url") || fallbackAvatar
+    );
+  } catch {
+    return (
+      readUploadUrl(payload, "avatar", "avatarUrl", "url") || fallbackAvatar
+    );
+  }
+};
+
+const resolvePatchedProfileData = (payload: unknown): Partial<User> => {
+  try {
+    return unwrapApiSuccess(payload as never) as Partial<User>;
+  } catch {
+    const root = asRecord(payload);
+    const nestedData = asRecord(root?.data);
+    return ((nestedData || root || {}) as unknown as Partial<User>) ?? {};
+  }
+};
+
 export const ProfileSettingsSection: React.FC = () => {
   const { t } = useTranslation(["profile", "common"]);
   const { user, updateUser } = useAuthStore();
@@ -80,14 +124,15 @@ export const ProfileSettingsSection: React.FC = () => {
   const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
   const [backgroundFile, setBackgroundFile] = React.useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null);
-  const [backgroundPreview, setBackgroundPreview] = React.useState<string | null>(
-    readUserValue(userRecord, "backgroundImageUrl", "background_image_url"),
-  );
+  const [backgroundPreview, setBackgroundPreview] = React.useState<
+    string | null
+  >(readUserValue(userRecord, "backgroundImageUrl", "background_image_url"));
   const [isSaving, setIsSaving] = React.useState(false);
   const [avatarSupport, setAvatarSupport] =
     React.useState<UploadSupportState>("unknown");
   const [backgroundSupport, setBackgroundSupport] =
     React.useState<UploadSupportState>("unknown");
+  const saveActionRef = React.useRef(false);
 
   const avatarInputRef = React.useRef<HTMLInputElement | null>(null);
   const backgroundInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -173,7 +218,10 @@ export const ProfileSettingsSection: React.FC = () => {
     setBackgroundPreview(fileToPreviewUrl(file));
   };
 
-  const uploadBackground = async (file: File): Promise<string> => {
+  const uploadBackground = async (
+    file: File,
+    fallbackBackground: string | null,
+  ): Promise<string | null> => {
     const formData = new FormData();
     formData.append("background", file);
 
@@ -183,9 +231,8 @@ export const ProfileSettingsSection: React.FC = () => {
       });
       setBackgroundSupport("supported");
       return (
-        response.data?.data?.backgroundImageUrl ||
-        response.data?.data?.background ||
-        ""
+        readUploadUrl(response.data, "backgroundImageUrl", "background") ||
+        fallbackBackground
       );
     } catch (primaryError) {
       if (isUnsupportedUploadError(primaryError)) {
@@ -199,9 +246,11 @@ export const ProfileSettingsSection: React.FC = () => {
           );
           setBackgroundSupport("supported");
           return (
-            fallbackResponse.data?.data?.backgroundImageUrl ||
-            fallbackResponse.data?.data?.background ||
-            ""
+            readUploadUrl(
+              fallbackResponse.data,
+              "backgroundImageUrl",
+              "background",
+            ) || fallbackBackground
           );
         } catch (fallbackError) {
           if (isUnsupportedUploadError(fallbackError)) {
@@ -222,23 +271,29 @@ export const ProfileSettingsSection: React.FC = () => {
     Boolean(backgroundFile);
 
   const handleSave = async (): Promise<void> => {
-    if (!user || !hasChanges) {
+    if (!user || !hasChanges || isSaving || saveActionRef.current) {
       return;
     }
 
+    saveActionRef.current = true;
     setIsSaving(true);
 
     try {
       let uploadedAvatar = user.avatar;
       let uploadedBackground =
-        readUserValue(userRecord, "backgroundImageUrl", "background_image_url") ||
-        null;
+        readUserValue(
+          userRecord,
+          "backgroundImageUrl",
+          "background_image_url",
+        ) || null;
 
       if (avatarFile) {
         try {
           const avatarResponse = await userApi.updateAvatar(avatarFile);
-          uploadedAvatar =
-            unwrapApiSuccess(avatarResponse).avatar || uploadedAvatar;
+          uploadedAvatar = resolveAvatarFromUploadResponse(
+            avatarResponse,
+            uploadedAvatar,
+          );
           setAvatarSupport("supported");
         } catch (avatarError) {
           if (isUnsupportedUploadError(avatarError)) {
@@ -249,7 +304,10 @@ export const ProfileSettingsSection: React.FC = () => {
       }
 
       if (backgroundFile) {
-        uploadedBackground = await uploadBackground(backgroundFile);
+        uploadedBackground = await uploadBackground(
+          backgroundFile,
+          uploadedBackground,
+        );
       }
 
       const profilePayload = {
@@ -258,7 +316,7 @@ export const ProfileSettingsSection: React.FC = () => {
       };
 
       const profileResponse = await userApi.patchProfile(profilePayload);
-      const profileData = unwrapApiSuccess(profileResponse);
+      const profileData = resolvePatchedProfileData(profileResponse);
       updateUser({
         ...profileData,
         avatar: uploadedAvatar,
@@ -269,11 +327,19 @@ export const ProfileSettingsSection: React.FC = () => {
       setBackgroundFile(null);
       toast.success(t("profile:settings.saved"));
     } catch (error) {
+      const uploadUnavailable = isUnsupportedUploadError(error);
       const message =
-        (error as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message || t("profile:settings.saveFailed");
+        (error as { response?: { data?: { message?: string } } })?.response
+          ?.data?.message ||
+        (uploadUnavailable
+          ? t("profile:settings.uploadUnavailable", {
+              defaultValue:
+                "Upload endpoint is unavailable right now. Try again later.",
+            })
+          : t("profile:settings.saveFailed"));
       toast.error(message);
     } finally {
+      saveActionRef.current = false;
       setIsSaving(false);
     }
   };
@@ -366,12 +432,14 @@ export const ProfileSettingsSection: React.FC = () => {
                   ref={avatarInputRef}
                   type="file"
                   accept="image/*"
+                  disabled={isSaving || avatarSupport === "unsupported"}
                   className="hidden"
                   onChange={(event) => {
                     const nextFile = event.target.files?.[0];
                     if (nextFile) {
                       handleAvatarPick(nextFile);
                     }
+                    event.currentTarget.value = "";
                   }}
                 />
               </div>
@@ -412,12 +480,14 @@ export const ProfileSettingsSection: React.FC = () => {
                   ref={backgroundInputRef}
                   type="file"
                   accept="image/*"
+                  disabled={isSaving || backgroundSupport === "unsupported"}
                   className="hidden"
                   onChange={(event) => {
                     const nextFile = event.target.files?.[0];
                     if (nextFile) {
                       handleBackgroundPick(nextFile);
                     }
+                    event.currentTarget.value = "";
                   }}
                 />
               </div>

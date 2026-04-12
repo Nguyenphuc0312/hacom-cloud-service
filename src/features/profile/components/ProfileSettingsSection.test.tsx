@@ -46,7 +46,8 @@ vi.mock("../../../lib/axios", async (importOriginal) => {
 });
 
 vi.mock("../../../components/ui", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../components/ui")>();
+  const actual =
+    await importOriginal<typeof import("../../../components/ui")>();
   return {
     ...actual,
     toast: {
@@ -124,7 +125,9 @@ describe("ProfileSettingsSection", () => {
     fireEvent.change(backgroundInput, {
       target: { files: [file] },
     });
-    fireEvent.click(screen.getByRole("button", { name: "profile:settings.save" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "profile:settings.save" }),
+    );
 
     await waitFor(() => {
       expect(toastErrorMock).toHaveBeenCalled();
@@ -140,5 +143,61 @@ describe("ProfileSettingsSection", () => {
       name: "profile:settings.chooseBackground",
     });
     expect(backgroundButton).toBeDisabled();
+  });
+
+  it("prevents duplicate profile save submit while save is pending", async () => {
+    let resolvePatch: ((value: unknown) => void) | null = null;
+    patchProfileMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvePatch = resolve;
+        }),
+    );
+
+    render(<ProfileSettingsSection />);
+
+    fireEvent.change(screen.getByLabelText("profile:settings.displayName"), {
+      target: { value: "Updated Name" },
+    });
+
+    const saveButton = screen.getByRole("button", {
+      name: "profile:settings.save",
+    });
+
+    fireEvent.click(saveButton);
+    fireEvent.click(saveButton);
+
+    expect(patchProfileMock).toHaveBeenCalledTimes(1);
+
+    resolvePatch?.({
+      success: true,
+      data: {
+        displayName: "Updated Name",
+        bio: "Current bio",
+      },
+    });
+
+    await waitFor(() => {
+      expect(toastSuccessMock).toHaveBeenCalled();
+    });
+  });
+
+  it("rejects unsupported avatar file types before upload", () => {
+    render(<ProfileSettingsSection />);
+
+    const fileInputs = document.querySelectorAll(
+      'input[type="file"]',
+    ) as NodeListOf<HTMLInputElement>;
+    const avatarInput = fileInputs[0];
+
+    fireEvent.change(avatarInput, {
+      target: {
+        files: [new File(["raw"], "avatar.txt", { type: "text/plain" })],
+      },
+    });
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      "profile:settings.upload.unsupportedType",
+    );
   });
 });

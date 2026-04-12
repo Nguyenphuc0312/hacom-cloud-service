@@ -106,11 +106,24 @@ describe("RouteGuards", () => {
   it("blocks locked and disabled users from protected routes", () => {
     useAuthStore.setState({
       authStatus: "disabled",
+      isAuthenticated: true,
       lockedAccount: {
         status: "disabled",
         code: "ACCOUNT_DISABLED",
         message: "Disabled",
       },
+    });
+
+    renderProtectedRouter();
+
+    expect(screen.getByText("login-page")).toBeInTheDocument();
+  });
+
+  it("redirects bootstrap errors from protected route to login", () => {
+    useAuthStore.setState({
+      authStatus: "bootstrap_error",
+      isAuthenticated: false,
+      error: "bootstrap failed",
     });
 
     renderProtectedRouter();

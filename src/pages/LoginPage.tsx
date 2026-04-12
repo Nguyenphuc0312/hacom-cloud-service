@@ -51,7 +51,11 @@ export const LoginPage: React.FC = () => {
   }, [activationContext, authStatus, isAuthenticated, location, navigate]);
 
   useEffect(() => {
-    if (authStatus !== "locked" && authStatus !== "disabled") {
+    if (
+      authStatus === "anonymous" ||
+      authStatus === "idle" ||
+      authStatus === "activation_required"
+    ) {
       clearError();
     }
   }, [authStatus, clearError]);
@@ -74,8 +78,15 @@ export const LoginPage: React.FC = () => {
   }, [authMethod, setFocus]);
 
   const rememberMe = watch("rememberMe");
+  const submitLockRef = React.useRef(false);
 
   const onSubmit = async (data: LoginFormData) => {
+    if (submitLockRef.current || isLoading) {
+      return;
+    }
+
+    submitLockRef.current = true;
+
     try {
       const result = await login(data);
       if (result === "authenticated") {
@@ -97,10 +108,15 @@ export const LoginPage: React.FC = () => {
       }
 
       if (result === "locked" || result === "disabled") {
-        toast.error(error || t("auth:activation.locked.defaultMessage"));
+        const latestError = useAuthStore.getState().error;
+        toast.error(
+          latestError || error || t("auth:activation.locked.defaultMessage"),
+        );
       }
     } catch (err) {
       toast.error((err as Error).message ?? t("auth:toast.loginFailed"));
+    } finally {
+      submitLockRef.current = false;
     }
   };
 

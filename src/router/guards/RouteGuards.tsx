@@ -57,6 +57,16 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to={ROUTE_PATHS.LOGIN} replace />;
   }
 
+  if (authStatus === "bootstrap_error") {
+    return (
+      <Navigate
+        to={ROUTE_PATHS.LOGIN}
+        state={{ from: location.pathname }}
+        replace
+      />
+    );
+  }
+
   if (!isAuthenticated) {
     return (
       <Navigate
@@ -100,6 +110,10 @@ export const GuestRoute: React.FC<GuardProps> = ({ children }) => {
     return <PageSpinner message={t("common:loading.default")} />;
   }
 
+  if (isBlockedAuthStatus(authStatus) || authStatus === "bootstrap_error") {
+    return <>{children}</>;
+  }
+
   if (isAuthenticated || authStatus === "authenticated") {
     return <Navigate to={ROUTE_PATHS.CHAT} replace />;
   }
@@ -140,6 +154,10 @@ export const ActivationRoute: React.FC<GuardProps> = ({ children }) => {
   }
 
   if (isBlockedAuthStatus(authStatus)) {
+    return <Navigate to={ROUTE_PATHS.LOGIN} replace />;
+  }
+
+  if (authStatus === "bootstrap_error") {
     return <Navigate to={ROUTE_PATHS.LOGIN} replace />;
   }
 
