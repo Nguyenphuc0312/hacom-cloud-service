@@ -37,7 +37,7 @@ import type { Attachment, Message, UserSummary } from "../types";
 import { useFilePreview } from "../hooks/useFilePreview";
 import type { PreviewTarget } from "../hooks/useFilePreview";
 import { getPreviewType } from "../utils/formatFileSize";
-import { rankConversations } from "../utils/conversationRanking";
+import { sortConversationsByActivity } from "../utils/conversationRanking";
 import { UserStatus } from "../types";
 import { isDirectConversation } from "../lib/conversationAdapter";
 import { getOtherParticipant } from "../utils/messageHelpers";
@@ -662,14 +662,8 @@ export const ChatPage: React.FC = () => {
   useEffect(() => {
     if (!selectedConversationId || isValidatingRoom) return;
 
-    const orderedConversations = rankConversations(
+    const orderedConversations = sortConversationsByActivity(
       Array.isArray(conversations) ? conversations : [],
-      {
-        currentUserId: currentUserSummary?.id,
-        currentUsername: currentUserSummary?.username,
-        currentDisplayName: currentUserSummary?.displayName,
-        activeConversationId: selectedConversationId,
-      },
     );
     const currentIndex = orderedConversations.findIndex(
       (conversation) => conversation.id === selectedConversationId,

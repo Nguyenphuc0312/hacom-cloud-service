@@ -144,7 +144,9 @@ const hasConversationFailedSend = (conversation: Conversation): boolean => {
   return sendState === "failed" || status === "failed";
 };
 
-const getConversationActivityTimestamp = (conversation: Conversation): number => {
+export const getConversationActivityTimestamp = (
+  conversation: Conversation,
+): number => {
   const record = getConversationExtendedRecord(conversation);
   return Math.max(
     toTimestamp(conversation.updatedAt),
@@ -229,6 +231,23 @@ export const rankConversations = (
 
     const aActivity = getConversationActivityTimestamp(a);
     const bActivity = getConversationActivityTimestamp(b);
+    if (aActivity !== bActivity) {
+      return bActivity - aActivity;
+    }
+
+    return a.id.localeCompare(b.id);
+  });
+};
+
+export const sortConversationsByActivity = (
+  conversations: Conversation[] | null | undefined,
+): Conversation[] => {
+  if (!Array.isArray(conversations)) return [];
+
+  return [...conversations].sort((a, b) => {
+    const aActivity = getConversationActivityTimestamp(a);
+    const bActivity = getConversationActivityTimestamp(b);
+
     if (aActivity !== bActivity) {
       return bActivity - aActivity;
     }
