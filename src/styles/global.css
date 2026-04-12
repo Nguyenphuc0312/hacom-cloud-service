@@ -118,6 +118,217 @@
 }
 .ant-table-thead > tr > th {
   background: var(--bg-elevated);
+
+  /* --- Modern SaaS Form Pattern --- */
+  .ds-form-section {
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xs);
+    margin-bottom: var(--space-7);
+    padding: var(--space-6) var(--space-7);
+  }
+  .ds-form-section-header {
+    margin-bottom: var(--space-5);
+  }
+  .ds-form-section-title {
+    font-size: var(--font-lg);
+    font-weight: var(--font-bold);
+    color: var(--text-primary);
+  }
+  .ds-form-section-desc {
+    color: var(--text-muted);
+    font-size: var(--font-md);
+    margin-top: var(--space-1);
+  }
+  .ds-form-section-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+
+  .ds-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .ds-form-label {
+    font-size: var(--font-md);
+    font-weight: var(--font-medium);
+    color: var(--text-primary);
+    margin-bottom: 0;
+  }
+  .ds-form-label-required {
+    color: var(--brand-danger);
+    margin-left: 2px;
+  }
+  .ds-form-control {
+    display: flex;
+    flex-direction: column;
+  }
+  .ds-form-hint {
+    color: var(--text-muted);
+    font-size: var(--font-sm);
+    margin-top: 2px;
+  }
+  .ds-form-error {
+    color: var(--brand-danger);
+    font-size: var(--font-sm);
+    margin-top: 2px;
+  }
+  .ds-form-actions {
+    display: flex;
+    gap: var(--space-3);
+    justify-content: flex-end;
+    margin-top: var(--space-7);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border-default);
+    background: var(--bg-surface);
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+  }
+
+  /* --- Modal/Dialog/Drawer Pattern --- */
+  .ds-app-modal .ant-modal-content,
+  .ds-confirm-modal .ant-modal-content {
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 0;
+  }
+  .ds-app-modal .ant-modal-header,
+  .ds-confirm-modal .ant-modal-header {
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding: var(--space-6) var(--space-7) var(--space-4) var(--space-7);
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .ds-app-modal .ant-modal-title,
+  .ds-confirm-modal .ant-modal-title {
+    font-size: var(--font-lg);
+    font-weight: var(--font-bold);
+    color: var(--text-primary);
+  }
+  .ds-app-modal .ant-modal-close,
+  .ds-confirm-modal .ant-modal-close {
+    top: var(--space-5);
+    right: var(--space-5);
+    color: var(--text-muted);
+    font-size: 22px;
+    border-radius: var(--radius-full);
+    transition: background var(--transition-fast);
+  }
+  .ds-app-modal .ant-modal-close:hover,
+  .ds-confirm-modal .ant-modal-close:hover {
+    background: var(--bg-elevated);
+  }
+  .ds-app-modal .ant-modal-body,
+  .ds-confirm-modal .ant-modal-body {
+    padding: var(--space-7);
+    background: var(--bg-surface);
+  }
+  .ds-app-modal .ant-modal-footer,
+  .ds-confirm-modal .ant-modal-footer {
+    padding: var(--space-5) var(--space-7);
+    border-top: 1px solid var(--border-default);
+    background: var(--bg-elevated);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    display: flex;
+    gap: var(--space-3);
+    justify-content: flex-end;
+  }
+  .ds-confirm-modal .ds-btn--danger {
+    background: var(--brand-danger);
+    color: #fff;
+    border: none;
+  }
+  .ds-confirm-modal .ds-btn--danger:hover {
+    background: var(--brand-danger-dark);
+  }
+
+  /* Drawer */
+  .ds-app-drawer .ant-drawer-content {
+    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+  }
+  .ds-app-drawer .ant-drawer-header {
+    padding: var(--space-6) var(--space-7) var(--space-4) var(--space-7);
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .ds-app-drawer .ant-drawer-title {
+    font-size: var(--font-lg);
+    font-weight: var(--font-bold);
+    color: var(--text-primary);
+  }
+  .ds-app-drawer .ant-drawer-close {
+    color: var(--text-muted);
+    font-size: 22px;
+    border-radius: var(--radius-full);
+    transition: background var(--transition-fast);
+  }
+  .ds-app-drawer .ant-drawer-close:hover {
+    background: var(--bg-elevated);
+  }
+  .ds-app-drawer .ant-drawer-body {
+    padding: var(--space-7);
+    background: var(--bg-surface);
+  }
+  .ds-app-drawer .ant-drawer-footer {
+    padding: var(--space-5) var(--space-7);
+    border-top: 1px solid var(--border-default);
+    background: var(--bg-elevated);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    display: flex;
+    gap: var(--space-3);
+    justify-content: flex-end;
+  }
+
+  /* Detail Panel */
+  .ds-detail-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100vh;
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-lg);
+    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+    z-index: 1200;
+    display: flex;
+    flex-direction: column;
+    min-width: 320px;
+    max-width: 480px;
+    overflow: hidden;
+  }
+  .ds-detail-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-6) var(--space-7) var(--space-4) var(--space-7);
+    border-bottom: 1px solid var(--border-default);
+    background: var(--bg-surface);
+  }
+  .ds-detail-panel-title {
+    font-size: var(--font-lg);
+    font-weight: var(--font-bold);
+    color: var(--text-primary);
+  }
+  .ds-detail-panel-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 22px;
+    border-radius: var(--radius-full);
+    transition: background var(--transition-fast);
+    padding: 0 8px;
+  }
+  .ds-detail-panel-close:hover {
+    background: var(--bg-elevated);
+  }
+  .ds-detail-panel-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: var(--space-7);
+  }
   color: var(--text-secondary);
   font-weight: var(--font-semibold);
   font-size: var(--font-sm);
