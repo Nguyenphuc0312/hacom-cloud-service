@@ -1,7 +1,6 @@
 import React from 'react';
 import clsx from 'clsx';
 
-
 interface DataTableShellProps {
   title?: React.ReactNode;
   toolbar?: React.ReactNode;
@@ -11,6 +10,7 @@ interface DataTableShellProps {
   className?: string;
 }
 
+export const DataTableShell: React.FC<DataTableShellProps> = ({
   title,
   toolbar,
   meta,
