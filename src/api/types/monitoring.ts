@@ -1,6 +1,7 @@
 import type { TimeRange } from './metrics';
 
 export type MonitoringAvailability = 'available' | 'partial' | 'unavailable';
+export type MonitoringCapacityRiskState = 'comfortable' | 'warning' | 'near-breaking' | 'pending';
 
 export interface MonitoringPoint {
   timestamp: string;
@@ -65,6 +66,21 @@ export interface MonitoringSourceStatus {
   baseUrl?: string | null;
 }
 
+export interface MonitoringCapacityBaselineSummary {
+  status: 'configured' | 'pending';
+  generatedAt: string | null;
+  testedComfortableWs: number | null;
+  testedWarningWs: number | null;
+  testedNearBreakingWs: number | null;
+  testedComfortableMsgRate: number | null;
+  testedWarningMsgRate: number | null;
+  testedNearBreakingMsgRate: number | null;
+  currentWsLoadRatio: number | null;
+  currentMsgLoadRatio: number | null;
+  currentLatencyVsBaseline: number | null;
+  currentRiskState: MonitoringCapacityRiskState;
+}
+
 export interface MonitoringOverviewResponse {
   range: TimeRange;
   generatedAt: string;
@@ -75,6 +91,7 @@ export interface MonitoringOverviewResponse {
     correctness: string | null;
     redis: string | null;
     server: string | null;
+    capacityBaseline: string | null;
     serviceHealth: string;
   };
   sources: {
@@ -148,4 +165,5 @@ export interface MonitoringOverviewResponse {
     };
     services: MonitoringServiceItem[];
   };
+  capacityBaseline: MonitoringCapacityBaselineSummary;
 }

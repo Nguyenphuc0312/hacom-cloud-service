@@ -2560,8 +2560,92 @@ button:focus-visible,
   color: var(--text-primary);
 }
 
+.monitoring-source-grid,
+.monitoring-warning-group-list,
+.monitoring-baseline-grid,
+.monitoring-dashboard-links {
+  display: grid;
+  gap: 10px;
+}
+
+.monitoring-source-grid {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.monitoring-source-pill,
+.monitoring-warning-group-item,
+.monitoring-baseline-grid-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.monitoring-source-pill span,
+.monitoring-warning-group-item span,
+.monitoring-baseline-grid-item span {
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+}
+
+.monitoring-source-pill strong,
+.monitoring-warning-group-item strong,
+.monitoring-baseline-grid-item strong {
+  color: var(--text-primary);
+  font-size: 15px;
+}
+
+.monitoring-dashboard-links {
+  grid-template-columns: repeat(auto-fit, minmax(180px, max-content));
+  margin-bottom: 12px;
+}
+
+.monitoring-baseline-hero {
+  min-height: 100%;
+  display: grid;
+  gap: 16px;
+  border: 1px solid var(--admin-border);
+}
+
+.monitoring-baseline-hero--healthy {
+  background: linear-gradient(155deg, rgba(22, 163, 74, 0.1) 0%, rgba(255, 255, 255, 0.98) 56%);
+}
+
+.monitoring-baseline-hero--warning {
+  background: linear-gradient(155deg, rgba(217, 119, 6, 0.14) 0%, rgba(255, 255, 255, 0.98) 56%);
+}
+
+.monitoring-baseline-hero--down {
+  background: linear-gradient(155deg, rgba(220, 38, 38, 0.15) 0%, rgba(255, 255, 255, 0.98) 56%);
+}
+
+.monitoring-baseline-hero--unknown {
+  background: linear-gradient(155deg, rgba(100, 116, 139, 0.14) 0%, rgba(255, 255, 255, 0.98) 56%);
+}
+
+.monitoring-baseline-hero-body {
+  display: grid;
+  gap: 8px;
+}
+
+.monitoring-baseline-hero-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
 @media (max-width: 992px) {
   .monitoring-service-summary {
     min-width: 0;
+  }
+
+  .monitoring-baseline-hero-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

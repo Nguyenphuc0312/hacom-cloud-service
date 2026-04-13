@@ -1,18 +1,22 @@
-import { Alert, Button, Space, Typography } from 'antd';
+import { Button, Space, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { getApiErrorStatus, getErrorMessage } from '@/api/error';
 import type { TimeRange } from '@/api/types';
 import { PageShell } from '@/components/PageShell';
 import { QueryStateView } from '@/components/QueryStates';
+import { StatusBadge } from '@/components/StatusBadge';
 import { TimeRangePicker } from '@/components/TimeRangePicker';
 import { formatDateTime } from '@/utils/date';
+import { MonitoringBaselineSection } from '../components/MonitoringBaselineSection';
 import { MonitoringCorrectnessSection } from '../components/MonitoringCorrectnessSection';
+import { MonitoringDashboardLinks } from '../components/MonitoringDashboardLinks';
 import { MonitoringInfrastructureSection } from '../components/MonitoringInfrastructureSection';
 import { MonitoringRealtimeSection } from '../components/MonitoringRealtimeSection';
 import { MonitoringSystemOverviewSection } from '../components/MonitoringSystemOverviewSection';
+import { MonitoringWarnings } from '../components/MonitoringWarnings';
 import { useMonitoringOverview } from '../hooks/useMonitoringOverview';
-import { summarizeWarnings } from '../monitoringView';
+import { getFreshnessLabel } from '../monitoringView';
 
 const { Text } = Typography;
 
@@ -76,6 +80,11 @@ export const MonitoringOverviewPage = () => {
       headerExtra={
         <Space size={12} wrap>
           <TimeRangePicker value={range} onChange={setRange} />
+          <StatusBadge status={getFreshnessLabel(overview.freshness)} title={`Overview freshness: ${overview.freshness}`} />
+          <StatusBadge
+            status={overview.capacityBaseline.currentRiskState}
+            title={`Current risk zone: ${overview.capacityBaseline.currentRiskState}`}
+          />
           <Button
             onClick={() => {
               void overviewQuery.refetch();
@@ -89,30 +98,13 @@ export const MonitoringOverviewPage = () => {
         </Space>
       }
     >
-      {overview.freshness !== 'live' || overview.warnings.length > 0 ? (
-        <Alert
-          type={overview.freshness === 'unavailable' ? 'error' : 'warning'}
-          showIcon
-          message={
-            overview.sources.prometheus.status === 'unavailable' &&
-            overview.sources.serviceHealth.status === 'available'
-              ? 'Metrics pipeline is unavailable, but service health is still available'
-              : overview.freshness === 'unavailable'
-                ? 'Monitoring data is currently unavailable'
-                : 'Monitoring overview is partially degraded'
-          }
-          description={
-            overview.sources.prometheus.status === 'unavailable'
-              ? overview.sources.prometheus.message
-              : summarizeWarnings(overview.warnings)
-          }
-        />
-      ) : null}
-
-      <MonitoringSystemOverviewSection overview={overview} />
+      <MonitoringWarnings overview={overview} />
+      <MonitoringSystemOverviewSection overview={overview} isRefreshing={overviewQuery.isFetching} />
+      <MonitoringBaselineSection overview={overview} />
       <MonitoringRealtimeSection overview={overview} />
       <MonitoringCorrectnessSection overview={overview} />
       <MonitoringInfrastructureSection overview={overview} />
+      <MonitoringDashboardLinks overview={overview} />
     </PageShell>
   );
 };

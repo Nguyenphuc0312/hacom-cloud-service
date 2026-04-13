@@ -7,6 +7,7 @@ export const useMonitoringOverview = (range: TimeRange) =>
   useQuery({
     queryKey: queryKeys.monitoringOverview(range),
     queryFn: () => monitoringClient.getOverview(range),
-    refetchInterval: 30_000,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: true,
     placeholderData: keepPreviousData,
   });
