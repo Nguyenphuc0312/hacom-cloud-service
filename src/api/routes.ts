@@ -64,7 +64,22 @@ const resolveAdminApiRoot = (apiBaseUrl: string): string => {
 
 const normalizeResourcePath = (path: string): string => (path.startsWith('/') ? path : `/${path}`);
 
+const toRequestPath = (root: string, apiBase: string, resourcePath: string): string => {
+  const normalizedResourcePath = normalizeResourcePath(resourcePath);
+
+  if (apiBase !== '/' && root.startsWith(`${apiBase}/`)) {
+    const relativeRoot = root.slice(apiBase.length);
+    return `${relativeRoot}${normalizedResourcePath}`;
+  }
+
+  if (apiBase === '/' && root.startsWith('/')) {
+    return `${root}${normalizedResourcePath}`;
+  }
+
+  return `${root}${normalizedResourcePath}`;
+};
+
 export const apiBaseUrl = resolveApiBaseUrl();
 export const adminApiRoot = resolveAdminApiRoot(apiBaseUrl);
 
-export const adminApiPath = (path: string): string => `${adminApiRoot}${normalizeResourcePath(path)}`;
+export const adminApiPath = (path: string): string => toRequestPath(adminApiRoot, apiBaseUrl, path);
