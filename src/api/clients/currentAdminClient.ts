@@ -1,4 +1,5 @@
 import { axiosInstance } from '@/api/axios';
+import { adminApiPath } from '@/api/routes';
 import { unwrapApiEnvelope } from '@/api/envelope';
 import type { CurrentAdmin } from '@/api/types';
 
@@ -8,7 +9,7 @@ interface CurrentAdminPayload {
 
 export const currentAdminClient = {
   async getCurrentAdmin(): Promise<CurrentAdmin> {
-    const response = await axiosInstance.get('/admin/me');
+    const response = await axiosInstance.get(adminApiPath('/me'));
     const data = unwrapApiEnvelope<CurrentAdminPayload>(response);
     return data.admin;
   },

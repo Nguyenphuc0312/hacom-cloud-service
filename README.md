@@ -34,4 +34,7 @@ make docker-logs
 make docker-stop
 ```
 
-The production bundle uses `/api/v1` as its base path and Nginx forwards that traffic to `ADMIN_API_UPSTREAM`.
+Canonical admin API root is `/api/v1/admin`.
+
+- `VITE_ADMIN_API_ROOT` is the preferred source of truth for admin-only routes.
+- `VITE_ADMIN_API_BASE_URL` remains as a compatibility fallback for shared `/api/v1/*` callers such as auth, alerts, and metrics.

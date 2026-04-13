@@ -54,7 +54,7 @@ describe('hrEmployeesClient', () => {
       },
     });
 
-    expect(axiosInstanceMock.post).toHaveBeenCalledWith('/admin/hr-imports/validate', {
+    expect(axiosInstanceMock.post).toHaveBeenCalledWith('/api/v1/admin/hr-imports/validate', {
       fileName: 'employees.xlsx',
       fileBase64: 'ZmFrZS1iYXNlNjQ=',
     });
@@ -87,7 +87,7 @@ describe('hrEmployeesClient', () => {
     });
 
     expect(axiosInstanceMock.post).toHaveBeenCalledWith(
-      '/admin/hr-employees/hr-1/provision-account',
+      '/api/v1/admin/hr-employees/hr-1/provision-account',
       {
         actorEmail: 'admin@company.test',
       },
