@@ -1,5 +1,7 @@
 import type { TimeRange } from './metrics';
 
+export type MonitoringAvailability = 'available' | 'partial' | 'unavailable';
+
 export interface MonitoringPoint {
   timestamp: string;
   value: number | null;
@@ -34,17 +36,56 @@ export interface MonitoringServiceItem {
   env?: string;
 }
 
+export interface MonitoringWarning {
+  code:
+    | 'datasource_unreachable'
+    | 'datasource_http_error'
+    | 'query_error'
+    | 'metric_not_found'
+    | 'parse_error'
+    | 'exporter_down'
+    | 'redis_down'
+    | 'service_health_unavailable';
+  source: 'prometheus' | 'service_health' | 'redis' | 'node_exporter';
+  key: string;
+  message: string;
+  severity: 'warning' | 'error';
+}
+
+export interface MonitoringAvailabilitySummary {
+  status: MonitoringAvailability;
+  available: number;
+  unavailable: number;
+}
+
+export interface MonitoringSourceStatus {
+  status: MonitoringAvailability;
+  checkedAt: string;
+  message: string;
+  baseUrl?: string | null;
+}
+
 export interface MonitoringOverviewResponse {
   range: TimeRange;
   generatedAt: string;
   freshness: 'live' | 'partial' | 'unavailable';
-  warnings: string[];
+  warnings: MonitoringWarning[];
   links: {
     realtime: string | null;
     correctness: string | null;
     redis: string | null;
     server: string | null;
     serviceHealth: string;
+  };
+  sources: {
+    serviceHealth: MonitoringSourceStatus;
+    prometheus: MonitoringSourceStatus;
+  };
+  dataQuality: {
+    systemOverview: MonitoringAvailabilitySummary;
+    realtimeHealth: MonitoringAvailabilitySummary;
+    messageCorrectness: MonitoringAvailabilitySummary;
+    dependencySnapshot: MonitoringAvailabilitySummary;
   };
   systemOverview: {
     services: MonitoringStatusSummary;
@@ -81,7 +122,11 @@ export interface MonitoringOverviewResponse {
   };
   dependencySnapshot: {
     redis: {
-      status: 'healthy' | 'degraded' | 'down';
+      status: 'healthy' | 'degraded' | 'down' | 'unknown';
+      metricsStatus: MonitoringAvailability;
+      exporterStatus: 'up' | 'down' | 'unknown';
+      diagnosticCode?: MonitoringWarning['code'];
+      diagnosticMessage?: string;
       connectedClients: number | null;
       memoryUsedBytes: number | null;
       opsPerSecond: number | null;

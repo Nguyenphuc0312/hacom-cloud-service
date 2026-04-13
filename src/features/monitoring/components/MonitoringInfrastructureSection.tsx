@@ -4,6 +4,7 @@ import type { MonitoringOverviewResponse } from '@/api/types';
 import { StatusBadge } from '@/components/StatusBadge';
 import { WidgetCard } from '@/components/WidgetCard';
 import { formatBytes, formatMs, formatPercent, formatRate } from '@/utils/formatters';
+import { availabilityToStatus, formatMetricValue } from '../monitoringView';
 import { MonitoringSectionHeader } from './MonitoringSectionHeader';
 
 const { Text } = Typography;
@@ -17,6 +18,7 @@ export const MonitoringInfrastructureSection = ({
 }: MonitoringInfrastructureSectionProps) => {
   const navigate = useNavigate();
   const { redis, api, infrastructure, services } = overview.dependencySnapshot;
+  const availability = overview.dataQuality.dependencySnapshot.status;
   const priorityServices = [...services]
     .sort((left, right) => {
       const weight = (status: string) => {
@@ -54,26 +56,35 @@ export const MonitoringInfrastructureSection = ({
           <WidgetCard title="Redis">
             <div className="monitoring-summary-list">
               <div className="monitoring-summary-list-item">
-                <span>Status</span>
+                <span>Redis service</span>
                 <StatusBadge status={redis.status} />
               </div>
               <div className="monitoring-summary-list-item">
+                <span>Metrics pipeline</span>
+                <StatusBadge status={availabilityToStatus(redis.metricsStatus)} />
+              </div>
+              <div className="monitoring-summary-list-item">
+                <span>Exporter status</span>
+                <StatusBadge status={redis.exporterStatus === 'up' ? 'healthy' : redis.exporterStatus === 'down' ? 'down' : 'unknown'} />
+              </div>
+              <div className="monitoring-summary-list-item">
                 <span>Connected clients</span>
-                <strong>{redis.connectedClients ?? '-'}</strong>
+                <strong>{formatMetricValue(`${redis.connectedClients ?? '-'}`, redis.metricsStatus)}</strong>
               </div>
               <div className="monitoring-summary-list-item">
                 <span>Memory used</span>
-                <strong>{formatBytes(redis.memoryUsedBytes)}</strong>
+                <strong>{formatMetricValue(formatBytes(redis.memoryUsedBytes), redis.metricsStatus)}</strong>
               </div>
               <div className="monitoring-summary-list-item">
                 <span>Ops / sec</span>
-                <strong>{formatRate(redis.opsPerSecond, '/s')}</strong>
+                <strong>{formatMetricValue(formatRate(redis.opsPerSecond, '/s'), redis.metricsStatus)}</strong>
               </div>
               <div className="monitoring-summary-list-item">
                 <span>Blocked clients</span>
-                <strong>{redis.blockedClients ?? '-'}</strong>
+                <strong>{formatMetricValue(`${redis.blockedClients ?? '-'}`, redis.metricsStatus)}</strong>
               </div>
             </div>
+            {redis.diagnosticMessage ? <Text type="secondary">{redis.diagnosticMessage}</Text> : null}
           </WidgetCard>
         </Col>
         <Col xs={24} lg={8}>
@@ -89,7 +100,7 @@ export const MonitoringInfrastructureSection = ({
               </div>
               <div className="monitoring-summary-list-item">
                 <span>Message write p95</span>
-                <strong>{formatMs(api.messageWriteP95Ms)}</strong>
+                <strong>{formatMetricValue(formatMs(api.messageWriteP95Ms), availability)}</strong>
               </div>
             </div>
             <Text type="secondary">{api.summary}</Text>
@@ -100,19 +111,19 @@ export const MonitoringInfrastructureSection = ({
             <div className="monitoring-summary-list">
               <div className="monitoring-summary-list-item">
                 <span>Avg CPU</span>
-                <strong>{formatPercent(infrastructure.aggregateCpuPercent, 1)}</strong>
+                <strong>{formatMetricValue(formatPercent(infrastructure.aggregateCpuPercent, 1), availability)}</strong>
               </div>
               <div className="monitoring-summary-list-item">
                 <span>Avg RAM</span>
-                <strong>{formatPercent(infrastructure.aggregateMemoryPercent, 1)}</strong>
+                <strong>{formatMetricValue(formatPercent(infrastructure.aggregateMemoryPercent, 1), availability)}</strong>
               </div>
               <div className="monitoring-summary-list-item">
                 <span>Network RX</span>
-                <strong>{formatBytes(infrastructure.networkReceiveBytesPerSecond, true)}</strong>
+                <strong>{formatMetricValue(formatBytes(infrastructure.networkReceiveBytesPerSecond, true), availability)}</strong>
               </div>
               <div className="monitoring-summary-list-item">
                 <span>Network TX</span>
-                <strong>{formatBytes(infrastructure.networkTransmitBytesPerSecond, true)}</strong>
+                <strong>{formatMetricValue(formatBytes(infrastructure.networkTransmitBytesPerSecond, true), availability)}</strong>
               </div>
               <div className="monitoring-summary-list-item">
                 <span>Top CPU host</span>

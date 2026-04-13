@@ -1,10 +1,11 @@
 import dayjs from 'dayjs';
 import ReactECharts from 'echarts-for-react';
-import type { MonitoringSeries } from '@/api/types';
+import type { MonitoringAvailability, MonitoringSeries } from '@/api/types';
 import { QueryStateView } from '@/components/QueryStates';
 
 interface MonitoringTrendChartProps {
   series: MonitoringSeries[];
+  availability?: MonitoringAvailability;
   height?: number;
   formatter?: (value: number | null) => string;
 }
@@ -13,6 +14,7 @@ const COLORS = ['#2563eb', '#0f766e', '#d97706', '#dc2626'];
 
 export const MonitoringTrendChart = ({
   series,
+  availability = 'available',
   height = 260,
   formatter = (value) => (value === null ? '-' : `${value}`),
 }: MonitoringTrendChartProps) => {
@@ -20,7 +22,16 @@ export const MonitoringTrendChart = ({
   const hasData = series.some((entry) => entry.points.some((point) => point.value !== null));
 
   if (!hasData || timeline.length === 0) {
-    return <QueryStateView kind="empty" description="No metric samples in the selected window." />;
+    return (
+      <QueryStateView
+        kind={availability === 'unavailable' ? 'degraded' : 'empty'}
+        description={
+          availability === 'unavailable'
+            ? 'Metric unavailable for the selected window.'
+            : 'No metric data in the selected window.'
+        }
+      />
+    );
   }
 
   const option = {

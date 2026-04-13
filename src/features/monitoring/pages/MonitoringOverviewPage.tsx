@@ -12,6 +12,7 @@ import { MonitoringInfrastructureSection } from '../components/MonitoringInfrast
 import { MonitoringRealtimeSection } from '../components/MonitoringRealtimeSection';
 import { MonitoringSystemOverviewSection } from '../components/MonitoringSystemOverviewSection';
 import { useMonitoringOverview } from '../hooks/useMonitoringOverview';
+import { summarizeWarnings } from '../monitoringView';
 
 const { Text } = Typography;
 
@@ -93,14 +94,17 @@ export const MonitoringOverviewPage = () => {
           type={overview.freshness === 'unavailable' ? 'error' : 'warning'}
           showIcon
           message={
-            overview.freshness === 'unavailable'
-              ? 'Monitoring data is currently unavailable'
-              : 'Monitoring overview is partially degraded'
+            overview.sources.prometheus.status === 'unavailable' &&
+            overview.sources.serviceHealth.status === 'available'
+              ? 'Metrics pipeline is unavailable, but service health is still available'
+              : overview.freshness === 'unavailable'
+                ? 'Monitoring data is currently unavailable'
+                : 'Monitoring overview is partially degraded'
           }
           description={
-            overview.warnings.length > 0
-              ? overview.warnings.slice(0, 3).join(' | ')
-              : 'Some upstream metrics may be delayed or temporarily missing.'
+            overview.sources.prometheus.status === 'unavailable'
+              ? overview.sources.prometheus.message
+              : summarizeWarnings(overview.warnings)
           }
         />
       ) : null}
