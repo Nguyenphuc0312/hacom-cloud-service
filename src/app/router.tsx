@@ -37,6 +37,11 @@ const ServicesPage = lazy(() =>
     default: module.ServicesPage,
   })),
 );
+const MonitoringOverviewPage = lazy(() =>
+  import('@/features/monitoring/pages/MonitoringOverviewPage').then((module) => ({
+    default: module.MonitoringOverviewPage,
+  })),
+);
 
 const withSuspense = (element: ReactNode) => (
   <Suspense fallback={<QueryStateView kind="loading" title="Đang tải trang..." />}>
@@ -68,6 +73,10 @@ const routes = [
       {
         path: 'services/:section',
         element: withSuspense(<ServicesPage />),
+      },
+      {
+        path: 'monitoring',
+        element: withSuspense(<MonitoringOverviewPage />),
       },
       {
         path: 'users',

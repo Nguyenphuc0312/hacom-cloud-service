@@ -6,6 +6,7 @@ import {
   SafetyCertificateOutlined,
   SolutionOutlined,
   TeamOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import type { ReactNode } from 'react';
 
@@ -38,33 +39,33 @@ export interface SidebarSection {
 }
 
 export const SIDEBAR_SECTIONS: SidebarSection[] = [
-  { key: 'overview', label: 'Tổng quan', description: 'Snapshot', icon: <DashboardOutlined /> },
+  { key: 'overview', label: 'Tong Quan', description: 'Snapshot', icon: <DashboardOutlined /> },
   {
     key: 'users',
-    label: 'Người dùng & Nhân sự',
+    label: 'Nguoi Dung & Nhan Su',
     description: 'Identity',
     icon: <TeamOutlined />,
   },
-  { key: 'chat', label: 'Hệ thống chat', description: 'Messaging', icon: <MailOutlined /> },
+  { key: 'chat', label: 'He Thong Chat', description: 'Messaging', icon: <MailOutlined /> },
   {
     key: 'security',
-    label: 'Phân quyền & Bảo mật',
+    label: 'Phan Quyen & Bao Mat',
     description: 'Security',
     icon: <SafetyCertificateOutlined />,
   },
   {
     key: 'settings',
-    label: 'Cấu hình',
+    label: 'Cau Hinh',
     description: 'Configuration',
     icon: <FileTextOutlined />,
   },
   {
     key: 'monitoring',
-    label: 'Theo dõi & Logs',
+    label: 'Theo Doi & Logs',
     description: 'Observability',
     icon: <AuditOutlined />,
   },
-  { key: 'support', label: 'Hỗ trợ / Tài liệu', description: 'Support', icon: <SolutionOutlined /> },
+  { key: 'support', label: 'Ho Tro / Tai Lieu', description: 'Support', icon: <SolutionOutlined /> },
 ];
 
 export const navItems: NavItem[] = [
@@ -78,7 +79,7 @@ export const navItems: NavItem[] = [
   },
   {
     key: 'users',
-    label: 'Người dùng',
+    label: 'Nguoi Dung',
     description: 'Admin accounts, access state, and sessions',
     icon: <TeamOutlined />,
     section: 'users',
@@ -86,7 +87,7 @@ export const navItems: NavItem[] = [
     children: [
       {
         key: 'hr-employees',
-        label: 'Nhân sự',
+        label: 'Nhan Su',
         description: 'Employee records and account provisioning',
         icon: <SolutionOutlined />,
         section: 'users',
@@ -119,6 +120,14 @@ export const navItems: NavItem[] = [
     route: '/audit',
   },
   {
+    key: 'monitoring-overview',
+    label: 'Monitoring Overview',
+    description: 'Realtime, correctness, and infra snapshot',
+    icon: <ThunderboltOutlined />,
+    section: 'monitoring',
+    route: '/monitoring',
+  },
+  {
     key: 'service-health',
     label: 'Service Health',
     description: 'Dependency health, latency, and runtime status',
@@ -130,10 +139,11 @@ export const navItems: NavItem[] = [
 
 export const breadcrumbNameMap: Record<string, string> = {
   '/': 'Dashboard',
-  '/users': 'Người dùng',
-  '/hr-employees': 'Nhân sự',
+  '/users': 'Nguoi Dung',
+  '/hr-employees': 'Nhan Su',
   '/audit': 'Audit Logs',
-  '/services': 'Dịch vụ',
+  '/monitoring': 'Monitoring Overview',
+  '/services': 'Dich Vu',
   '/services/smtp': 'SMTP',
   '/services/email-templates': 'Email Templates',
   '/services/health': 'Service Health',
@@ -159,13 +169,14 @@ export const resolveNavigationContext = (pathname: string) => {
     section,
     title: item?.label ?? 'Dashboard',
     description: item?.description ?? 'Operational visibility and control surface',
-    sectionLabel: section?.label ?? 'Tổng quan',
+    sectionLabel: section?.label ?? 'Tong Quan',
     sectionDescription: section?.description ?? 'Workspace',
   };
 };
 
 export const pickSelectedMenuKey = (pathname: string): string => {
   if (pathname === '/') return 'dashboard';
+  if (pathname.startsWith('/monitoring')) return 'monitoring-overview';
   if (pathname.startsWith('/users')) return 'users';
   if (pathname.startsWith('/hr-employees')) return 'hr-employees';
   if (pathname.startsWith('/services/email-templates')) return 'email-templates';
@@ -198,6 +209,15 @@ export const commandRouteItems: CommandRouteItem[] = [
     icon: <DashboardOutlined />,
     keywords: ['home', 'overview', 'dashboard'],
     route: '/',
+  },
+  {
+    id: 'go-monitoring-overview',
+    label: 'Monitoring Overview',
+    description: 'Open the operator-friendly monitoring snapshot',
+    category: 'System',
+    icon: <ThunderboltOutlined />,
+    keywords: ['monitoring', 'realtime', 'correctness', 'overview'],
+    route: '/monitoring',
   },
   {
     id: 'go-users',

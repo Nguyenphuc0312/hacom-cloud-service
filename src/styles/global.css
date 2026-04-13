@@ -2480,3 +2480,88 @@ button:focus-visible,
     width: 100%;
   }
 }
+
+.monitoring-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.monitoring-section-title {
+  margin: 0 0 4px !important;
+}
+
+.monitoring-service-summary {
+  min-width: 220px;
+  display: grid;
+  gap: 8px;
+}
+
+.monitoring-service-summary-item,
+.monitoring-summary-list-item,
+.monitoring-service-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.monitoring-service-summary-item span,
+.monitoring-summary-list-item span {
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+}
+
+.monitoring-service-summary-item strong,
+.monitoring-summary-list-item strong {
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.monitoring-summary-list {
+  display: grid;
+  gap: 10px;
+}
+
+.monitoring-service-list {
+  display: grid;
+  gap: 10px;
+}
+
+.monitoring-service-list-item {
+  align-items: flex-start;
+}
+
+.monitoring-service-list-item > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.monitoring-service-list-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.monitoring-failure-item {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.monitoring-failure-label {
+  color: var(--text-primary);
+}
+
+@media (max-width: 992px) {
+  .monitoring-service-summary {
+    min-width: 0;
+  }
+}
