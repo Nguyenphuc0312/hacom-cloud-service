@@ -33,6 +33,7 @@ import {
 } from "../utils/notificationRouter";
 import { logMessageDebug } from "../utils/messageDebug";
 import { buildMessageCorrelationKey } from "../utils/messageIdentity";
+import { normalizeConversation } from "../lib/conversationAdapter";
 import {
   registerChatEvents,
   registerConnectionEvents,
@@ -203,6 +204,9 @@ export const useWebSocket = (
 
   const addMessage = useChatStore((s) => s.addMessage);
   const removeMessage = useChatStore((s) => s.removeMessage);
+  const upsertConversationSummary = useChatStore(
+    (s) => s.upsertConversationSummary,
+  );
   const setTyping = useChatStore((s) => s.setTyping);
   const clearTyping = useChatStore((s) => s.clearTyping);
   const fetchMessages = useChatStore((s) => s.fetchMessages);
@@ -619,7 +623,7 @@ export const useWebSocket = (
 
       const request = getConversationByIdUseCase(conversationId)
         .then((response) => {
-          updateConversation(conversationId, unwrapApiSuccess(response));
+          upsertConversationSummary(unwrapApiSuccess(response));
         })
         .catch(async () => {
           await fetchConversations().catch(() => {
@@ -633,7 +637,7 @@ export const useWebSocket = (
       conversationRefreshInFlightRef.current.set(conversationId, request);
       return request;
     },
-    [fetchConversations, updateConversation],
+    [fetchConversations, upsertConversationSummary],
   );
 
   const reconcileConversationAuthoritative = useCallback(
@@ -899,15 +903,6 @@ export const useWebSocket = (
         asString(messagePayload.senderId) ?? asString(payload.senderId);
 
       if (
-        chatState.selectedConversationId === conversationId &&
-        senderId &&
-        currentUserId &&
-        senderId !== currentUserId
-      ) {
-        void chatState.markAsRead(conversationId).catch(() => {
-          // no-op: best effort read receipt
-        });
-      } else if (
         eventType !== "message:new" ||
         (chatState.selectedConversationId !== conversationId &&
           senderId &&
@@ -1038,6 +1033,61 @@ export const useWebSocket = (
       void refreshConversationSnapshot(conversationId);
     };
 
+    const handleConversationSummaryUpdated = (data: unknown) => {
+      const normalized = normalizeConversation(data);
+      if (!normalized) {
+        return;
+      }
+
+      upsertConversationSummary(normalized);
+      notifySidebarState("conversation:summary:updated", {
+        source: "socket",
+        roomId: normalized.id,
+      });
+    };
+
+    const handleConversationMembershipUpdated = (data: unknown) => {
+      const payload = asRecord(data);
+      if (!payload) return;
+
+      const conversationId = getConversationId(payload);
+      const membershipState = asString(payload.membershipState);
+      const summary = payload.summary;
+
+      if (!conversationId || !membershipState) {
+        return;
+      }
+
+      if (membershipState === "active" && summary) {
+        const normalized = normalizeConversation(summary);
+        if (normalized) {
+          upsertConversationSummary(normalized);
+        }
+        notifySidebarState("conversation:membership:updated", {
+          source: "socket",
+          roomId: conversationId,
+          membershipState,
+        });
+        return;
+      }
+
+      joinedRoomsRef.current.delete(conversationId);
+      subscribedRoomsRef.current.delete(conversationId);
+      pendingRoomSyncRef.current.delete(conversationId);
+      roomJoinRetryAttemptsRef.current.delete(conversationId);
+      clearRoomJoinRetry(conversationId);
+      clearRoomSyncFallback(conversationId);
+      removeConversation(conversationId);
+      if (useChatStore.getState().selectedConversationId === conversationId) {
+        selectConversation(null);
+      }
+      notifySidebarState("conversation:membership:updated", {
+        source: "socket",
+        roomId: conversationId,
+        membershipState,
+      });
+    };
+
     const handleMemberUpdated = (data: unknown) => {
       const payload = asRecord(data);
       if (!payload) return;
@@ -1061,12 +1111,6 @@ export const useWebSocket = (
       const conversationId = getConversationId(payload);
       if (!conversationId) return;
 
-      const currentUserId = useAuthStore.getState().user?.id ?? null;
-      const deletedBy = asString(payload.deletedBy) ?? asString(payload.userId);
-      if (deletedBy && currentUserId && deletedBy !== currentUserId) {
-        return;
-      }
-
       joinedRoomsRef.current.delete(conversationId);
       removeConversation(conversationId);
       if (useChatStore.getState().selectedConversationId === conversationId) {
@@ -1079,6 +1123,8 @@ export const useWebSocket = (
       onConversationJoined: handleRoomJoined,
       onRoomLeft: handleRoomLeft,
       onConversationLeft: handleRoomLeft,
+      onConversationSummaryUpdated: handleConversationSummaryUpdated,
+      onConversationMembershipUpdated: handleConversationMembershipUpdated,
       onMessageRead: handleReadReceipt,
       onMemberUpdated: handleMemberUpdated,
       onConversationDeleted: handleConversationDeleted,
@@ -1555,6 +1601,7 @@ export const useWebSocket = (
     setTyping,
     setSlowModeCooldown,
     upsertJoinRequest,
+    upsertConversationSummary,
     markJoinRequestResolved,
     upsertInviteLink,
     updateConversation,

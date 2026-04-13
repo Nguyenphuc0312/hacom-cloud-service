@@ -10,6 +10,8 @@ interface ConversationEventHandlers {
   onConversationJoined?: RealtimeEventHandler;
   onRoomLeft?: RealtimeEventHandler;
   onConversationLeft?: RealtimeEventHandler;
+  onConversationSummaryUpdated?: RealtimeEventHandler;
+  onConversationMembershipUpdated?: RealtimeEventHandler;
   onMessageRead?: RealtimeEventHandler;
   onMemberUpdated?: RealtimeEventHandler;
   onConversationDeleted?: RealtimeEventHandler;
@@ -42,6 +44,14 @@ export const registerConversationEvents = (
   register(WebSocketEvents.CONVERSATION_JOINED, handlers.onConversationJoined);
   register(WebSocketEvents.ROOM_LEFT, handlers.onRoomLeft);
   register(WebSocketEvents.CONVERSATION_LEFT, handlers.onConversationLeft);
+  register(
+    WebSocketEvents.CONVERSATION_SUMMARY_UPDATED,
+    handlers.onConversationSummaryUpdated,
+  );
+  register(
+    WebSocketEvents.CONVERSATION_MEMBERSHIP_UPDATED,
+    handlers.onConversationMembershipUpdated,
+  );
   register(WebSocketEvents.MESSAGE_READ, handlers.onMessageRead);
   register(WebSocketEvents.MEMBER_UPDATED, handlers.onMemberUpdated);
   register(

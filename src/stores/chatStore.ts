@@ -59,6 +59,7 @@ interface ChatState {
 
   setConversations: (conversations: Conversation[]) => void;
   addConversation: (conversation: Conversation) => void;
+  upsertConversationSummary: (conversation: Conversation) => void;
   updateConversation: (id: string, updates: Partial<Conversation>) => void;
   removeConversation: (id: string) => void;
   selectConversation: (id: string | null) => void;
@@ -1560,6 +1561,36 @@ export const useChatStore = create<ChatState>()(
         }));
       },
 
+      upsertConversationSummary: (conversation) => {
+        const normalized = normalizeConversation(conversation);
+        if (!normalized) return;
+
+        set((state) => {
+          const conversations = Array.isArray(state.conversations)
+            ? state.conversations
+            : [];
+          const existingIndex = conversations.findIndex(
+            (item) => item.id === normalized.id,
+          );
+
+          if (existingIndex < 0) {
+            return {
+              conversations: [normalized, ...conversations],
+            };
+          }
+
+          const next = [...conversations];
+          next[existingIndex] = normalizeConversation({
+            ...next[existingIndex],
+            ...normalized,
+          }) as Conversation;
+
+          return {
+            conversations: next,
+          };
+        });
+      },
+
       updateConversation: (id, updates) => {
         set((state) => ({
           conversations: (Array.isArray(state.conversations)
@@ -1761,16 +1792,11 @@ export const useChatStore = create<ChatState>()(
             sendState: mergedMessage.sendState,
           });
 
-          const isOpenConversation =
-            state.selectedConversationId === conversationId;
-
           const updatedConversations = state.conversations.map(
             (conversation) => {
               if (conversation.id !== conversationId) return conversation;
 
-              const unreadCount = isOpenConversation
-                ? 0
-                : conversation.unreadCount;
+              const unreadCount = conversation.unreadCount;
 
               const lastMessage = messages[messages.length - 1];
               if (!lastMessage) return { ...conversation, unreadCount };

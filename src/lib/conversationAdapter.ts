@@ -305,7 +305,10 @@ export const normalizeConversation = (
   const normalizedType = normalizeRoomType(payload.type, participantCount);
   const lastMessage = normalizeLastMessage(payload);
   const updatedAt = toDate(
-    payload.updatedAt ?? payload.lastMessageAt ?? payload.createdAt,
+    payload.lastActivityAt ??
+      payload.updatedAt ??
+      payload.lastMessageAt ??
+      payload.createdAt,
     new Date(),
   );
   const conversationName = asNullableString(payload.name);
@@ -358,6 +361,9 @@ export const normalizeConversation = (
     ...(payload.lastMessageAt
       ? { lastMessageAt: toDate(payload.lastMessageAt, updatedAt) }
       : {}),
+    ...(payload.lastActivityAt
+      ? { lastActivityAt: toDate(payload.lastActivityAt, updatedAt) }
+      : {}),
     ...(asString(payload.directKey)
       ? { directKey: asString(payload.directKey) }
       : {}),
@@ -369,6 +375,16 @@ export const normalizeConversation = (
       : {}),
     ...(asString(payload.lastReadMessageId)
       ? { lastReadMessageId: asString(payload.lastReadMessageId) }
+      : {}),
+    ...(asString(payload.membershipState)
+      ? {
+          membershipState: asString(payload.membershipState) as NonNullable<
+            Conversation["membershipState"]
+          >,
+        }
+      : {}),
+    ...(asNumber(payload.summaryVersion) !== undefined
+      ? { summaryVersion: asNumber(payload.summaryVersion) }
       : {}),
   };
 

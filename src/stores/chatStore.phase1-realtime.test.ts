@@ -54,6 +54,24 @@ const makeMessage = (
   ...overrides,
 });
 
+const makeConversation = (
+  overrides: Partial<Record<string, unknown>> = {},
+): Record<string, unknown> => ({
+  id: "room-1",
+  conversationId: "room-1",
+  type: "group",
+  name: "Room 1",
+  unreadCount: 0,
+  membershipState: "active",
+  memberCount: 2,
+  summaryVersion: 1,
+  lastMessage: null,
+  lastActivityAt: "2026-04-10T09:00:00.000Z",
+  updatedAt: "2026-04-10T09:00:00.000Z",
+  createdAt: "2026-04-10T09:00:00.000Z",
+  ...overrides,
+});
+
 describe("chatStore phase-1 realtime flows", () => {
   beforeEach(() => {
     useChatStore.getState().reset();
@@ -90,6 +108,81 @@ describe("chatStore phase-1 realtime flows", () => {
     expect(messages).toHaveLength(1);
     expect(messages[0]?.id).toBe("server-1");
     expect(messages[0]?.sendState).toBe("sent");
+  });
+
+  it("applies canonical summary update for unopened conversation without local inference", () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-a",
+        conversationId: "room-a",
+        unreadCount: 0,
+      }),
+      makeConversation({
+        id: "room-b",
+        conversationId: "room-b",
+        unreadCount: 1,
+        lastMessage: {
+          id: "msg-old",
+          senderId: "u2",
+          senderName: "Bob",
+          content: "old",
+          type: "text",
+          isDeleted: false,
+          createdAt: "2026-04-10T09:00:00.000Z",
+        },
+      }),
+    ] as never);
+
+    useChatStore.getState().upsertConversationSummary(
+      makeConversation({
+        id: "room-b",
+        conversationId: "room-b",
+        unreadCount: 2,
+        summaryVersion: 5,
+        lastActivityAt: "2026-04-10T10:00:00.000Z",
+        lastMessage: {
+          id: "msg-new",
+          senderId: "u2",
+          senderName: "Bob",
+          content: "latest",
+          type: "text",
+          isDeleted: false,
+          createdAt: "2026-04-10T10:00:00.000Z",
+        },
+      }) as never,
+    );
+
+    const conversation = useChatStore
+      .getState()
+      .conversations.find((item) => item.id === "room-b");
+    expect(conversation?.unreadCount).toBe(2);
+    expect(conversation?.summaryVersion).toBe(5);
+    expect(conversation?.lastMessage?.id).toBe("msg-new");
+  });
+
+  it("does not zero unread locally when message is appended before canonical summary arrives", () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-2",
+        conversationId: "room-2",
+        unreadCount: 3,
+      }),
+    ] as never);
+
+    useChatStore.getState().addMessage(
+      "room-2",
+      makeMessage({
+        id: "msg-2",
+        conversationId: "room-2",
+        content: "server push",
+      }) as never,
+    );
+
+    const conversation = useChatStore
+      .getState()
+      .conversations.find((item) => item.id === "room-2");
+    expect(conversation?.unreadCount).toBe(3);
+    expect(conversation?.lastMessage?.id).toBe("msg-2");
   });
 
   it("applies reconnect delta with afterId without duplicating existing messages", async () => {
