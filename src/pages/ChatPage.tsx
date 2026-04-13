@@ -226,7 +226,7 @@ export const ChatPage: React.FC = () => {
     useState<ConversationValidationError | null>(null);
   const [validationRetryToken, setValidationRetryToken] = useState(0);
   const directInfoHydratedRef = useRef<Set<string>>(new Set());
-  const lastReadSyncKeyRef = useRef<string | null>(null);
+  const lastVisibleReadAnchorKeyRef = useRef<string | null>(null);
   const renderCountRef = useRef(0);
   const validatingConversationIdRef = useRef<string | null>(null);
 
@@ -561,7 +561,7 @@ export const ChatPage: React.FC = () => {
   ]);
 
   useEffect(() => {
-    lastReadSyncKeyRef.current = null;
+    lastVisibleReadAnchorKeyRef.current = null;
   }, [selectedConversationId]);
 
   // Handle select conversation
@@ -635,24 +635,30 @@ export const ChatPage: React.FC = () => {
   const handleReachedLatestMessage = useCallback(
     (message: Message) => {
       if (!selectedConversationId) return;
+      if (message.id.startsWith("temp-")) {
+        return;
+      }
 
       const conversation = useChatStore
         .getState()
         .conversations.find((item) => item.id === selectedConversationId);
       if (!conversation) return;
-      if ((conversation.unreadCount ?? 0) <= 0) {
+      const alreadyReadUpToLatest =
+        conversation.lastReadMessageId === message.id &&
+        (conversation.unreadCount ?? 0) <= 0;
+      if (alreadyReadUpToLatest) {
         return;
       }
 
       const latestKey = `${selectedConversationId}:${message.id}`;
-      if (lastReadSyncKeyRef.current === latestKey) {
+      if (lastVisibleReadAnchorKeyRef.current === latestKey) {
         return;
       }
 
-      lastReadSyncKeyRef.current = latestKey;
-      void markAsRead(selectedConversationId).catch(() => {
-        if (lastReadSyncKeyRef.current === latestKey) {
-          lastReadSyncKeyRef.current = null;
+      lastVisibleReadAnchorKeyRef.current = latestKey;
+      void markAsRead(selectedConversationId, message.id).catch(() => {
+        if (lastVisibleReadAnchorKeyRef.current === latestKey) {
+          lastVisibleReadAnchorKeyRef.current = null;
         }
       });
     },

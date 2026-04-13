@@ -658,16 +658,19 @@ export const conversationApi = {
     return response.data;
   },
 
-  markAsRead: async (conversationId: string) => {
+  markAsRead: async (
+    conversationId: string,
+    lastVisibleMessageId?: string,
+  ) => {
+    const payload = lastVisibleMessageId
+      ? {
+          lastVisibleMessageId,
+          messageId: lastVisibleMessageId,
+        }
+      : undefined;
     await withLegacyConversationFallback(
-      () =>
-        apiClient.post(
-          `${canonicalConversationMessagesPath(conversationId)}/read`,
-        ),
-      () =>
-        apiClient.post(
-          `${legacyConversationMessagesPath(conversationId)}/read`,
-        ),
+      () => apiClient.post(`${canonicalConversationMessagesPath(conversationId)}/read`, payload),
+      () => apiClient.post(`${legacyConversationMessagesPath(conversationId)}/read`, payload),
     );
   },
 

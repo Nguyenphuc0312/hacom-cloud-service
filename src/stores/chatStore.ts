@@ -63,7 +63,19 @@ interface ChatState {
   updateConversation: (id: string, updates: Partial<Conversation>) => void;
   removeConversation: (id: string) => void;
   selectConversation: (id: string | null) => void;
-  markAsRead: (conversationId: string) => Promise<void>;
+  markAsRead: (
+    conversationId: string,
+    lastVisibleMessageId?: string,
+  ) => Promise<void>;
+  applyUnreadSummary: (summary: {
+    totalUnreadCount: number;
+    conversations: Array<{
+      conversationId: string;
+      unreadCount: number;
+      lastReadMessageId: string | null;
+      lastReadAt: string | null;
+    }>;
+  }) => void;
   fetchConversations: () => Promise<void>;
 
   setMessages: (conversationId: string, messages: Message[]) => void;
@@ -157,7 +169,14 @@ const EMPTY_MESSAGES: Message[] = [];
 const roomMessageFetchInFlight = new Map<string, number>();
 const initialFetchSeqByConversation = new Map<string, number>();
 const messageFetchGenerationByConversation = new Map<string, number>();
-const markAsReadInFlight = new Map<string, Promise<void>>();
+const markAsReadInFlight = new Map<
+  string,
+  {
+    promise: Promise<void>;
+    anchorId?: string;
+    queuedAnchorId?: string;
+  }
+>();
 let conversationsFetchPromise: Promise<void> | null = null;
 const pendingMessageSendTimeouts = new Map<
   string,
@@ -1011,25 +1030,28 @@ const replaceMessages = (
   const preserveMessagesCreatedAfterMs = options?.preserveMessagesCreatedAfter
     ? toDateValue(options.preserveMessagesCreatedAfter)
     : 0;
-  const localOnlyMessages = existing.filter((message) => {
+  const preservedMessages = existing.filter((message) => {
+    const shouldPreserveBecauseCreatedAfterFetchStarted =
+      preserveMessagesCreatedAfterMs > 0 &&
+      toDateValue(message.createdAt) >= preserveMessagesCreatedAfterMs;
     const isLocalOnly =
       isTempMessageId(message.id) ||
       message.sendState === "sending" ||
       message.sendState === "queued" ||
       message.sendState === "retrying" ||
       message.sendState === "failed";
-    const shouldPreserveBecauseCreatedAfterFetchStarted =
-      preserveMessagesCreatedAfterMs > 0 &&
-      toDateValue(message.createdAt) >= preserveMessagesCreatedAfterMs;
 
-    if (!isLocalOnly && !shouldPreserveBecauseCreatedAfterFetchStarted) {
-      return false;
+    if (isLocalOnly || shouldPreserveBecauseCreatedAfterFetchStarted) {
+      return !incoming.some((candidate) => matchesMessage(candidate, message));
     }
 
+    // Preserve websocket deltas that arrived while the initial snapshot was in
+    // flight. Canonical snapshot can overwrite by identity, but it should not
+    // drop a message simply because it landed before fetchStarted.
     return !incoming.some((candidate) => matchesMessage(candidate, message));
   });
 
-  return mergeMessages(incoming, localOnlyMessages);
+  return mergeMessages(incoming, preservedMessages);
 };
 
 const prependMessages = (
@@ -1083,6 +1105,33 @@ const findMessageByIdentityIndex = (
         (itemId === targetLocalId || itemLocalId === targetLocalId))
     );
   });
+
+const compareAnchorIdsInConversation = (
+  messages: Message[],
+  currentAnchorId: string | undefined,
+  nextAnchorId: string | undefined,
+): number => {
+  if (!currentAnchorId && !nextAnchorId) return 0;
+  if (!currentAnchorId) return -1;
+  if (!nextAnchorId) return 1;
+
+  const sorted = sortMessages(Array.isArray(messages) ? messages : []);
+  const currentIndex = sorted.findIndex((message) =>
+    matchesMessageIdentityValue(message, currentAnchorId),
+  );
+  const nextIndex = sorted.findIndex((message) =>
+    matchesMessageIdentityValue(message, nextAnchorId),
+  );
+
+  if (currentIndex >= 0 && nextIndex >= 0) {
+    return currentIndex - nextIndex;
+  }
+
+  if (currentIndex < 0 && nextIndex >= 0) return -1;
+  if (currentIndex >= 0 && nextIndex < 0) return 1;
+
+  return currentAnchorId.localeCompare(nextAnchorId);
+};
 
 const mergeMessagesAfterCursor = (
   current: Message[],
@@ -1663,50 +1712,84 @@ export const useChatStore = create<ChatState>()(
         );
       },
 
-      markAsRead: async (conversationId) => {
-        const inFlightRequest = markAsReadInFlight.get(conversationId);
-        if (inFlightRequest) {
-          return inFlightRequest;
+      markAsRead: async (conversationId, lastVisibleMessageId) => {
+        if (!lastVisibleMessageId || lastVisibleMessageId.startsWith("temp-")) {
+          return Promise.resolve();
         }
 
-        const previousUnreadCount =
-          get().conversations.find(
-            (conversation) => conversation.id === conversationId,
-          )?.unreadCount ?? 0;
+        const currentConversation = get().conversations.find(
+          (conversation) => conversation.id === conversationId,
+        );
+        if (
+          currentConversation?.lastReadMessageId &&
+          compareAnchorIdsInConversation(
+            get().messages[conversationId] || EMPTY_MESSAGES,
+            currentConversation.lastReadMessageId,
+            lastVisibleMessageId,
+          ) >= 0
+        ) {
+          return Promise.resolve();
+        }
+
+        const existingRequest = markAsReadInFlight.get(conversationId);
+        if (existingRequest) {
+          const compareQueuedAnchor = compareAnchorIdsInConversation(
+            get().messages[conversationId] || EMPTY_MESSAGES,
+            existingRequest.queuedAnchorId ?? existingRequest.anchorId,
+            lastVisibleMessageId,
+          );
+          if (compareQueuedAnchor < 0) {
+            existingRequest.queuedAnchorId = lastVisibleMessageId;
+          }
+          return existingRequest.promise;
+        }
+
+        const runMarkAsRead = async (anchorId: string): Promise<void> => {
+          const request = conversationApi.markAsRead(conversationId, anchorId);
+          markAsReadInFlight.set(conversationId, {
+            promise: request,
+            anchorId,
+          });
+
+          try {
+            await request;
+          } finally {
+            const pending = markAsReadInFlight.get(conversationId);
+            const queuedAnchorId = pending?.queuedAnchorId;
+            markAsReadInFlight.delete(conversationId);
+
+            if (queuedAnchorId && queuedAnchorId !== anchorId) {
+              await runMarkAsRead(queuedAnchorId);
+            }
+          }
+        };
+
+        return runMarkAsRead(lastVisibleMessageId);
+      },
+
+      applyUnreadSummary: (summary) => {
+        const summaryByConversationId = new Map(
+          (summary.conversations || []).map((item) => [item.conversationId, item]),
+        );
 
         set((state) => ({
           conversations: (Array.isArray(state.conversations)
             ? state.conversations
             : []
-          ).map((conversation) =>
-            conversation.id === conversationId
-              ? { ...conversation, unreadCount: 0 }
-              : conversation,
-          ),
+          ).map((conversation) => {
+            const unreadSnapshot = summaryByConversationId.get(conversation.id);
+            return normalizeConversation({
+              ...conversation,
+              unreadCount: unreadSnapshot?.unreadCount ?? 0,
+              lastReadMessageId: unreadSnapshot
+                ? unreadSnapshot.lastReadMessageId
+                : conversation.lastReadMessageId,
+              lastReadAt: unreadSnapshot
+                ? unreadSnapshot.lastReadAt
+                : conversation.lastReadAt,
+            }) as Conversation;
+          }),
         }));
-
-        const request = (async () => {
-          try {
-            await conversationApi.markAsRead(conversationId);
-          } catch (error) {
-            set((state) => ({
-              conversations: (Array.isArray(state.conversations)
-                ? state.conversations
-                : []
-              ).map((conversation) =>
-                conversation.id === conversationId
-                  ? { ...conversation, unreadCount: previousUnreadCount }
-                  : conversation,
-              ),
-            }));
-            throw error;
-          } finally {
-            markAsReadInFlight.delete(conversationId);
-          }
-        })();
-
-        markAsReadInFlight.set(conversationId, request);
-        return request;
       },
 
       fetchConversations: async () => {
@@ -2193,10 +2276,7 @@ export const useChatStore = create<ChatState>()(
                   ...conversation,
                   lastMessage: toMessageSummary(latestMessage),
                   updatedAt: latestMessage.createdAt,
-                  unreadCount:
-                    state.selectedConversationId === conversationId
-                      ? 0
-                      : conversation.unreadCount,
+                  unreadCount: conversation.unreadCount,
                 };
               },
             );

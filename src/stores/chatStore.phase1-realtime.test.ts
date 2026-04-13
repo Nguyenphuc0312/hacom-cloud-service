@@ -1,14 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MessageStatus, MessageType } from "../types";
 
-const { getMessagesMock, sendMessageMock } = vi.hoisted(() => ({
+const {
+  getMessagesMock,
+  sendMessageMock,
+  conversationMarkAsReadMock,
+  getConversationsMock,
+  getUnreadSummaryMock,
+} = vi.hoisted(() => ({
   getMessagesMock: vi.fn(),
   sendMessageMock: vi.fn(),
+  conversationMarkAsReadMock: vi.fn(),
+  getConversationsMock: vi.fn(),
+  getUnreadSummaryMock: vi.fn(),
 }));
 
 vi.mock("../services/api", () => ({
   conversationApi: {
-    getConversations: vi.fn(),
+    getConversations: getConversationsMock,
+    markAsRead: conversationMarkAsReadMock,
+    getUnreadSummary: getUnreadSummaryMock,
   },
   messageApi: {
     getMessages: getMessagesMock,
@@ -77,6 +88,9 @@ describe("chatStore phase-1 realtime flows", () => {
     useChatStore.getState().reset();
     getMessagesMock.mockReset();
     sendMessageMock.mockReset();
+    conversationMarkAsReadMock.mockReset();
+    getConversationsMock.mockReset();
+    getUnreadSummaryMock.mockReset();
   });
 
   it("merges optimistic and server message into one canonical message", () => {
@@ -185,6 +199,98 @@ describe("chatStore phase-1 realtime flows", () => {
     expect(conversation?.lastMessage?.id).toBe("msg-2");
   });
 
+  it("does not zero unread just because the selected conversation fetches latest messages", async () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+        unreadCount: 4,
+        lastReadMessageId: "msg-old",
+      }),
+    ] as never);
+    useChatStore.getState().selectConversation("room-1");
+
+    getMessagesMock.mockResolvedValueOnce({
+      success: true,
+      statusCode: 200,
+      message: "ok",
+      data: {
+        messages: [
+          makeMessage({
+            id: "msg-latest",
+            createdAt: "2026-04-10T10:10:00.000Z",
+            updatedAt: "2026-04-10T10:10:00.000Z",
+          }),
+        ],
+        hasNext: false,
+        hasPrev: false,
+      },
+    });
+
+    await useChatStore
+      .getState()
+      .fetchMessages("room-1", undefined, undefined, { force: true });
+
+    const conversation = useChatStore
+      .getState()
+      .conversations.find((item) => item.id === "room-1");
+    expect(conversation?.unreadCount).toBe(4);
+    expect(conversation?.lastMessage?.id).toBe("msg-latest");
+  });
+
+  it("preserves websocket delta that lands while initial snapshot is still in flight", async () => {
+    const deferred = createDeferred<{
+      success: boolean;
+      statusCode: number;
+      message: string;
+      data: {
+        messages: Array<Record<string, unknown>>;
+        hasNext: boolean;
+        hasPrev: boolean;
+      };
+    }>();
+    getMessagesMock.mockReturnValueOnce(deferred.promise);
+
+    const fetchPromise = useChatStore
+      .getState()
+      .fetchMessages("room-1", undefined, undefined, { force: true });
+
+    useChatStore.getState().addMessage(
+      "room-1",
+      makeMessage({
+        id: "msg-live",
+        content: "live delta",
+        createdAt: "2026-04-10T09:01:00.000Z",
+        updatedAt: "2026-04-10T09:01:00.000Z",
+      }) as never,
+    );
+
+    deferred.resolve({
+      success: true,
+      statusCode: 200,
+      message: "ok",
+      data: {
+        messages: [
+          makeMessage({
+            id: "msg-base",
+            content: "snapshot base",
+            createdAt: "2026-04-10T09:00:00.000Z",
+            updatedAt: "2026-04-10T09:00:00.000Z",
+          }),
+        ],
+        hasNext: false,
+        hasPrev: false,
+      },
+    });
+
+    await fetchPromise;
+
+    const messageIds = (useChatStore.getState().messages["room-1"] || []).map(
+      (message) => message.id,
+    );
+    expect(messageIds).toEqual(["msg-base", "msg-live"]);
+  });
+
   it("applies reconnect delta with afterId without duplicating existing messages", async () => {
     useChatStore.getState().setMessages("room-1", [
       makeMessage({
@@ -250,6 +356,102 @@ describe("chatStore phase-1 realtime flows", () => {
     );
 
     expect(messageIds).toEqual(["msg-1", "msg-2"]);
+  });
+
+  it("serializes markAsRead requests and only advances to the newest visible anchor", async () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+        unreadCount: 2,
+      }),
+    ] as never);
+    useChatStore.getState().setMessages("room-1", [
+      makeMessage({
+        id: "msg-1",
+        createdAt: "2026-04-10T10:00:00.000Z",
+        updatedAt: "2026-04-10T10:00:00.000Z",
+      }),
+      makeMessage({
+        id: "msg-2",
+        createdAt: "2026-04-10T10:01:00.000Z",
+        updatedAt: "2026-04-10T10:01:00.000Z",
+      }),
+    ] as never);
+
+    const firstRequest = createDeferred<void>();
+    const secondRequest = createDeferred<void>();
+    conversationMarkAsReadMock
+      .mockReturnValueOnce(firstRequest.promise)
+      .mockReturnValueOnce(secondRequest.promise);
+
+    const firstPromise = useChatStore.getState().markAsRead("room-1", "msg-1");
+    const secondPromise = useChatStore.getState().markAsRead("room-1", "msg-2");
+
+    expect(conversationMarkAsReadMock).toHaveBeenCalledTimes(1);
+    expect(conversationMarkAsReadMock).toHaveBeenNthCalledWith(
+      1,
+      "room-1",
+      "msg-1",
+    );
+
+    firstRequest.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(conversationMarkAsReadMock).toHaveBeenCalledTimes(2);
+    expect(conversationMarkAsReadMock).toHaveBeenNthCalledWith(
+      2,
+      "room-1",
+      "msg-2",
+    );
+
+    secondRequest.resolve();
+    await firstPromise;
+    await secondPromise;
+  });
+
+  it("applies unread summary as authoritative reconnect snapshot", () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+        unreadCount: 5,
+        lastReadMessageId: "msg-old",
+        lastReadAt: "2026-04-10T08:00:00.000Z",
+      }),
+      makeConversation({
+        id: "room-2",
+        conversationId: "room-2",
+        unreadCount: 3,
+        lastReadMessageId: "msg-room-2",
+        lastReadAt: "2026-04-10T08:30:00.000Z",
+      }),
+    ] as never);
+
+    useChatStore.getState().applyUnreadSummary({
+      totalUnreadCount: 1,
+      conversations: [
+        {
+          conversationId: "room-1",
+          unreadCount: 1,
+          lastReadMessageId: null,
+          lastReadAt: null,
+        },
+      ],
+    });
+
+    const room1 = useChatStore
+      .getState()
+      .conversations.find((item) => item.id === "room-1");
+    const room2 = useChatStore
+      .getState()
+      .conversations.find((item) => item.id === "room-2");
+
+    expect(room1?.unreadCount).toBe(1);
+    expect(room1?.lastReadMessageId ?? null).toBeNull();
+    expect(room1?.lastReadAt ?? null).toBeNull();
+    expect(room2?.unreadCount).toBe(0);
   });
 
   it("applies message update and delete patches deterministically", () => {

@@ -1,6 +1,9 @@
 import { useChatStore } from "../../../stores";
 
-export const markConversationReadUseCase = async (conversationId: string) => {
+export const markConversationReadUseCase = async (
+  conversationId: string,
+  lastVisibleMessageId?: string,
+) => {
   const { markAsRead } = useChatStore.getState();
-  return markAsRead(conversationId);
+  return markAsRead(conversationId, lastVisibleMessageId);
 };

@@ -20,6 +20,7 @@ import { unwrapApiSuccess } from "../lib/apiContract";
 import { useAuthStore, useChatStore, useGroupStore } from "../stores";
 import { useFriendshipStore } from "../stores/friendshipStore";
 import { getAccessToken } from "../services/tokenService";
+import { conversationApi } from "../services/api";
 import {
   ensureFreshAccessToken,
   refreshAccessTokenShared,
@@ -207,6 +208,7 @@ export const useWebSocket = (
   const upsertConversationSummary = useChatStore(
     (s) => s.upsertConversationSummary,
   );
+  const applyUnreadSummary = useChatStore((s) => s.applyUnreadSummary);
   const setTyping = useChatStore((s) => s.setTyping);
   const clearTyping = useChatStore((s) => s.clearTyping);
   const fetchMessages = useChatStore((s) => s.fetchMessages);
@@ -640,6 +642,11 @@ export const useWebSocket = (
     [fetchConversations, upsertConversationSummary],
   );
 
+  const refreshUnreadSummarySnapshot = useCallback(async (): Promise<void> => {
+    const response = await conversationApi.getUnreadSummary();
+    applyUnreadSummary(unwrapApiSuccess(response));
+  }, [applyUnreadSummary]);
+
   const reconcileConversationAuthoritative = useCallback(
     (
       roomId: string,
@@ -750,6 +757,9 @@ export const useWebSocket = (
       if (shouldResync) {
         void fetchConversations().catch(() => {
           // no-op: best effort sidebar resync
+        });
+        void refreshUnreadSummarySnapshot().catch(() => {
+          // no-op: best effort unread resync
         });
         useFriendshipStore.getState().triggerResync("socket_reconnect");
       }
@@ -1503,6 +1513,9 @@ export const useWebSocket = (
         void fetchConversations().catch(() => {
           // no-op: best effort sidebar refresh
         });
+        void refreshUnreadSummarySnapshot().catch(() => {
+          // no-op: best effort unread refresh
+        });
       }
 
       if (
@@ -1588,6 +1601,7 @@ export const useWebSocket = (
     removeConversation,
     recoverSocketAuth,
     fetchConversations,
+    refreshUnreadSummarySnapshot,
     removeMessage,
     requestRoomJoin,
     flushQueuedMessages,
