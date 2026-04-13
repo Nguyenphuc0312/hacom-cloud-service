@@ -1,6 +1,7 @@
 import { Skeleton, Table } from 'antd';
 import type { TableProps } from 'antd';
 import type { ReactNode } from 'react';
+import { commonMessages } from '../shared/messages/common';
 
 interface AdminTableProps<T extends object> extends TableProps<T> {
   loadingSkeletonRows?: number;
@@ -45,7 +46,7 @@ export function AdminTable<T extends object>({
         loading={loading}
         dataSource={dataSource}
         locale={{
-          emptyText: emptyNode,
+          emptyText: emptyNode || commonMessages.table.empty,
           ...locale,
         }}
         {...tableProps}

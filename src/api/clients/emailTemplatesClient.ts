@@ -1,4 +1,5 @@
 import { axiosInstance } from '@/api/axios';
+import { adminApiPath } from '@/api/routes';
 import { unwrapApiEnvelope } from '@/api/envelope';
 import type {
   EmailTemplateListPayload,
@@ -11,13 +12,13 @@ import type {
 
 export const emailTemplatesClient = {
   async list(): Promise<EmailTemplateListPayload> {
-    const response = await axiosInstance.get('/admin/settings/email-templates');
+    const response = await axiosInstance.get(adminApiPath('/settings/email-templates'));
     return unwrapApiEnvelope<EmailTemplateListPayload>(response);
   },
 
   async getByCode(code: string): Promise<EmailTemplateRecord> {
     const response = await axiosInstance.get(
-      `/admin/settings/email-templates/${encodeURIComponent(code)}`,
+      adminApiPath(`/settings/email-templates/${encodeURIComponent(code)}`),
     );
     return unwrapApiEnvelope<EmailTemplateRecord>(response);
   },
@@ -27,7 +28,7 @@ export const emailTemplatesClient = {
     payload: UpsertEmailTemplateDraftRequest,
   ): Promise<EmailTemplateRecord> {
     const response = await axiosInstance.put(
-      `/admin/settings/email-templates/${encodeURIComponent(code)}/draft`,
+      adminApiPath(`/settings/email-templates/${encodeURIComponent(code)}/draft`),
       payload,
     );
     return unwrapApiEnvelope<EmailTemplateRecord>(response);
@@ -38,7 +39,7 @@ export const emailTemplatesClient = {
     payload?: PreviewEmailTemplateRequest,
   ): Promise<EmailTemplatePreviewResponse> {
     const response = await axiosInstance.post(
-      `/admin/settings/email-templates/${encodeURIComponent(code)}/preview`,
+      adminApiPath(`/settings/email-templates/${encodeURIComponent(code)}/preview`),
       payload ?? {},
     );
     return unwrapApiEnvelope<EmailTemplatePreviewResponse>(response);
@@ -46,7 +47,7 @@ export const emailTemplatesClient = {
 
   async publish(code: string): Promise<EmailTemplateRecord> {
     const response = await axiosInstance.post(
-      `/admin/settings/email-templates/${encodeURIComponent(code)}/publish`,
+      adminApiPath(`/settings/email-templates/${encodeURIComponent(code)}/publish`),
     );
     return unwrapApiEnvelope<EmailTemplateRecord>(response);
   },
@@ -56,7 +57,7 @@ export const emailTemplatesClient = {
     payload: RollbackEmailTemplateRequest,
   ): Promise<EmailTemplateRecord> {
     const response = await axiosInstance.post(
-      `/admin/settings/email-templates/${encodeURIComponent(code)}/rollback`,
+      adminApiPath(`/settings/email-templates/${encodeURIComponent(code)}/rollback`),
       payload,
     );
     return unwrapApiEnvelope<EmailTemplateRecord>(response);

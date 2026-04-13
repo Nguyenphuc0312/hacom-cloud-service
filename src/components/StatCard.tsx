@@ -1,49 +1,32 @@
-import { Card, Skeleton, Statistic, Typography } from 'antd';
+import React from 'react';
+import clsx from 'clsx';
 
 interface StatCardProps {
   title: string;
-  value?: number;
-  loading?: boolean;
-  error?: boolean;
-  suffix?: string;
-  hint?: string;
-  compact?: boolean;
+  value: React.ReactNode;
+  delta?: React.ReactNode;
+  icon?: React.ReactNode;
+  meta?: React.ReactNode;
+  className?: string;
 }
 
-export const StatCard = ({
+export const StatCard: React.FC<StatCardProps> = ({
   title,
-  value = 0,
-  loading = false,
-  error = false,
-  suffix,
-  hint,
-  compact = false,
-}: StatCardProps) => {
-  return (
-    <Card className={`stat-card${compact ? ' stat-card--compact' : ''}`}>
-      {loading ? (
-        <Skeleton active paragraph={{ rows: 1 }} title={{ width: '70%' }} />
-      ) : error ? (
-        <div>
-          <Typography.Text strong>{title}</Typography.Text>
-          <br />
-          <Typography.Text type="danger">Unavailable</Typography.Text>
-        </div>
-      ) : (
-        <>
-          <Statistic
-            title={title}
-            value={value}
-            suffix={suffix}
-            valueStyle={compact ? { fontSize: 28, lineHeight: 1.15 } : undefined}
-          />
-          {hint ? (
-            <Typography.Text type="secondary" className="stat-card-hint">
-              {hint}
-            </Typography.Text>
-          ) : null}
-        </>
-      )}
-    </Card>
-  );
-};
+  value,
+  delta,
+  icon,
+  meta,
+  className,
+}) => (
+  <div className={clsx('ds-stat-card', className)}>
+    <div className="ds-stat-card-header">
+      <span className="ds-stat-card-title">{title}</span>
+      {icon && <span className="ds-stat-card-icon">{icon}</span>}
+    </div>
+    <div className="ds-stat-card-value-row">
+      <span className="ds-stat-card-value">{value}</span>
+      {delta && <span className="ds-stat-card-delta">{delta}</span>}
+    </div>
+    {meta && <div className="ds-stat-card-meta">{meta}</div>}
+  </div>
+);

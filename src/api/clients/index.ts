@@ -1,5 +1,6 @@
 export * from './authClient';
 export * from './currentAdminClient';
+export * from './monitoringClient';
 export * from './auditClient';
 export * from './emailTemplatesClient';
 export * from './hrEmployeesClient';

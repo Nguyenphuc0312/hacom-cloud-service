@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Button, DatePicker, Form, Input, Space } from 'antd';
+import { Button, DatePicker, Form, Input, Space, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import { useMemo, useState } from 'react';
@@ -9,14 +9,19 @@ import { queryKeys } from '@/api/queryKeys';
 import type { AuditEntry, AuditQuery } from '@/api/types';
 import { AdminTable } from '@/components/AdminTable';
 import { DataTableShell } from '@/components/DataTableShell';
+import { DataTableToolbar } from '@/components/DataTableToolbar';
 import { FilterBar } from '@/components/FilterBar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
 import { PageShell } from '@/components/PageShell';
+import { StatusBadge } from '@/components/StatusBadge';
 import { formatDateTime } from '@/utils/date';
+
+const getActiveFilterCount = (filters: AuditQuery) =>
+  [filters.action, filters.actorEmail, filters.entityType, filters.source, filters.from, filters.to]
+    .filter(Boolean).length;
 
 export const AuditLogPage = () => {
   const [form] = Form.useForm();
-
   const [filters, setFilters] = useState<AuditQuery>({
     page: 1,
     limit: 20,
@@ -42,17 +47,19 @@ export const AuditLogPage = () => {
       {
         title: 'Time',
         dataIndex: 'time',
-        width: 180,
+        width: 188,
         render: (value: string) => formatDateTime(value),
       },
       {
         title: 'Actor',
         dataIndex: 'actorEmail',
-        render: (value: string | null) => value ?? '-',
+        render: (value: string | null) =>
+          value ? <Typography.Text strong>{value}</Typography.Text> : '-',
       },
       {
         title: 'Action',
         dataIndex: 'action',
+        render: (value: string) => <Typography.Text>{value}</Typography.Text>,
       },
       {
         title: 'Entity',
@@ -60,29 +67,50 @@ export const AuditLogPage = () => {
         render: (_, record) => {
           const type = record.entityType ?? '-';
           const id = record.entityId ?? '-';
-          return `${type} / ${id}`;
+
+          return (
+            <Space direction="vertical" size={0}>
+              <Typography.Text strong>{type}</Typography.Text>
+              <Typography.Text type="secondary">{id}</Typography.Text>
+            </Space>
+          );
         },
       },
       {
         title: 'Source',
         dataIndex: 'source',
-        render: (value: string | null) => value ?? '-',
+        render: (value: string | null) => <Typography.Text type="secondary">{value ?? '-'}</Typography.Text>,
       },
       {
         title: 'IP',
         dataIndex: 'ipAddress',
-        render: (value: string | null | undefined) => value ?? '-',
+        render: (value: string | null | undefined) =>
+          value ? <Typography.Text code>{value}</Typography.Text> : '-',
       },
       {
         title: 'Request ID',
         key: 'requestId',
-        render: (_, record) => readMetaValue(record.metadata, 'requestId') ?? '-',
+        render: (_, record) => {
+          const requestId = readMetaValue(record.metadata, 'requestId');
+
+          return requestId ? (
+            <Typography.Text code ellipsis style={{ maxWidth: 180 }}>
+              {requestId}
+            </Typography.Text>
+          ) : (
+            '-'
+          );
+        },
       },
       {
         title: 'Result',
         key: 'actionResult',
-        render: (_, record) =>
-          readMetaValue(record.metadata, 'actionResult') ?? (record.action ? 'success' : '-'),
+        render: (_, record) => (
+          <StatusBadge
+            status={readMetaValue(record.metadata, 'actionResult') ?? (record.action ? 'success' : '-')}
+            mode="tag"
+          />
+        ),
       },
     ],
     [],
@@ -109,6 +137,11 @@ export const AuditLogPage = () => {
     }));
   };
 
+  const resetFilters = () => {
+    form.resetFields();
+    setFilters({ page: 1, limit: 20 });
+  };
+
   if (query.isLoading) {
     return <LoadingState tip="Đang tải audit logs..." />;
   }
@@ -123,42 +156,51 @@ export const AuditLogPage = () => {
   }
 
   const data = query.data;
+  const activeFilterCount = getActiveFilterCount(filters);
 
   return (
     <PageShell
       title="Audit Logs"
-      description="Theo dõi thao tác quản trị, request trace và kết quả action theo thời gian"
+      description="Theo dõi thao tác quản trị, request trace, và kết quả action theo thời gian với mật độ đọc phù hợp cho điều tra nội bộ."
+      headerExtra={
+        <span className="ds-shell-chip ds-shell-chip--ghost">
+          {query.dataUpdatedAt
+            ? `Updated ${formatDateTime(new Date(query.dataUpdatedAt).toISOString())}`
+            : 'Awaiting sync'}
+        </span>
+      }
     >
       <FilterBar>
-        <Form form={form} layout="inline">
-          <Form.Item name="action">
-            <Input allowClear placeholder="Action" style={{ width: 160 }} />
+        <div className="ds-toolbar-lead">
+          <span className="ds-toolbar-eyebrow">Audit Query</span>
+          <strong className="ds-toolbar-title">Search the event stream</strong>
+          <span className="ds-toolbar-description">
+            Filter by actor, action, entity, source, and time range without losing the context of the table below.
+          </span>
+        </div>
+
+        <Form form={form} layout="inline" className="ds-toolbar-form">
+          <Form.Item name="action" className="ds-toolbar-field ds-toolbar-field--sm">
+            <Input allowClear placeholder="Action" />
           </Form.Item>
-          <Form.Item name="actorEmail">
-            <Input allowClear placeholder="Actor email" style={{ width: 220 }} />
+          <Form.Item name="actorEmail" className="ds-toolbar-field ds-toolbar-field--lg">
+            <Input allowClear placeholder="Actor email" />
           </Form.Item>
-          <Form.Item name="entityType">
-            <Input allowClear placeholder="Entity type" style={{ width: 160 }} />
+          <Form.Item name="entityType" className="ds-toolbar-field ds-toolbar-field--sm">
+            <Input allowClear placeholder="Entity type" />
           </Form.Item>
-          <Form.Item name="source">
-            <Input allowClear placeholder="Source" style={{ width: 140 }} />
+          <Form.Item name="source" className="ds-toolbar-field ds-toolbar-field--sm">
+            <Input allowClear placeholder="Source" />
           </Form.Item>
-          <Form.Item name="range">
+          <Form.Item name="range" className="ds-toolbar-field ds-toolbar-field--range">
             <DatePicker.RangePicker showTime />
           </Form.Item>
-          <Form.Item>
+          <Form.Item className="ds-toolbar-field ds-toolbar-actions">
             <Space>
               <Button type="primary" onClick={applyFilters}>
-                Áp dụng
+                Apply filters
               </Button>
-              <Button
-                onClick={() => {
-                  form.resetFields();
-                  setFilters({ page: 1, limit: 20 });
-                }}
-              >
-                Reset
-              </Button>
+              <Button onClick={resetFilters}>Reset</Button>
             </Space>
           </Form.Item>
         </Form>
@@ -166,12 +208,22 @@ export const AuditLogPage = () => {
 
       <DataTableShell
         title="Audit records"
-        meta={`${data?.pagination.total ?? 0} record(s) matched current filters`}
+        meta={`${data?.pagination.total ?? 0} records matched the current query`}
+        toolbar={
+          <DataTableToolbar>
+            <span className="ds-toolbar-summary">
+              <span className="ds-shell-chip ds-shell-chip--ghost">
+                {activeFilterCount} active filter{activeFilterCount === 1 ? '' : 's'}
+              </span>
+            </span>
+            <Button onClick={() => query.refetch()}>Refresh</Button>
+          </DataTableToolbar>
+        }
       >
         <AdminTable
           rowKey="id"
           columns={columns}
-          minHeight={320}
+          minHeight={360}
           dataSource={data?.items ?? []}
           emptyNode={<EmptyState description="Không có audit record phù hợp." />}
           pagination={{

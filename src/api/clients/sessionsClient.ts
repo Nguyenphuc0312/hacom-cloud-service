@@ -1,4 +1,5 @@
 import { axiosInstance } from '@/api/axios';
+import { adminApiPath } from '@/api/routes';
 import { asPaginationMeta, unwrapApiEnvelope } from '@/api/envelope';
 import type {
   UserDevice,
@@ -21,7 +22,7 @@ interface DevicesPayload {
 
 export const sessionsClient = {
   async listByUserId(userId: string, params: UserSessionsQuery): Promise<UserSessionsResponse> {
-    const response = await axiosInstance.get(`/admin/users/${userId}/sessions`, { params });
+    const response = await axiosInstance.get(adminApiPath(`/users/${userId}/sessions`), { params });
     const data = unwrapApiEnvelope<SessionsPayload>(response);
 
     return {
@@ -34,7 +35,7 @@ export const sessionsClient = {
     userId: string,
     params: UserDevicesQuery,
   ): Promise<UserDevicesResponse> {
-    const response = await axiosInstance.get(`/admin/users/${userId}/devices`, { params });
+    const response = await axiosInstance.get(adminApiPath(`/users/${userId}/devices`), { params });
     const data = unwrapApiEnvelope<DevicesPayload>(response);
 
     return {

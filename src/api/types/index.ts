@@ -5,6 +5,7 @@ export * from './common';
 export * from './email-templates';
 export * from './hr-employees';
 export * from './metrics';
+export * from './monitoring';
 export * from './service-health';
 export * from './sessions';
 export * from './smtp';

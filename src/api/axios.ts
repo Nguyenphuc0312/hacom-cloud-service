@@ -1,20 +1,15 @@
 import axios from 'axios';
 
+import { apiBaseUrl } from '@/api/routes';
 import { getAccessToken, useAuthStore } from '@/store/authStore';
 
-const baseURL = import.meta.env.VITE_ADMIN_API_BASE_URL;
 const rawBasePath = import.meta.env.BASE_URL || '/';
 const normalizedBasePath = rawBasePath.endsWith('/') ? rawBasePath : `${rawBasePath}/`;
 const loginPath = `${normalizedBasePath}login`;
 const loginPathname = new URL(loginPath, window.location.origin).pathname;
 
-if (!baseURL) {
-  // Fail fast for missing env setup.
-  throw new Error('Missing VITE_ADMIN_API_BASE_URL in environment variables.');
-}
-
 export const axiosInstance = axios.create({
-  baseURL,
+  baseURL: apiBaseUrl,
   headers: {
     'Content-Type': 'application/json',
   },

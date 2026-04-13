@@ -1,10 +1,7 @@
-import { Card } from 'antd';
-import type { ReactNode } from 'react';
+import React from 'react';
+import clsx from 'clsx';
 
-interface FilterBarProps {
-  children: ReactNode;
-}
-
-export const FilterBar = ({ children }: FilterBarProps) => {
-  return <Card className="filter-bar">{children}</Card>;
-};
+export const FilterBar: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
+  className,
+  ...props
+}) => <div className={clsx('ds-filter-bar', 'ds-filter-toolbar', className)} {...props} />;

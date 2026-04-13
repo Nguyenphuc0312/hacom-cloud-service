@@ -1,4 +1,5 @@
 import { axiosInstance } from '@/api/axios';
+import { adminApiPath } from '@/api/routes';
 import { asPaginationMeta, unwrapApiEnvelope } from '@/api/envelope';
 import type { AuditListResponse, AuditQuery } from '@/api/types';
 
@@ -9,7 +10,7 @@ interface AuditListPayload {
 
 export const auditClient = {
   async list(params?: AuditQuery): Promise<AuditListResponse> {
-    const response = await axiosInstance.get('/admin/audit-logs', { params });
+    const response = await axiosInstance.get(adminApiPath('/audit-logs'), { params });
     const data = unwrapApiEnvelope<AuditListPayload>(response);
 
     return {

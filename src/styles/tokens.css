@@ -1,0 +1,148 @@
+:root {
+  /* Primitive palette */
+  --color-white: #ffffff;
+  --color-black: #0f172a;
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-150: #ecf2f8;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-blue-50: #eff6ff;
+  --color-blue-100: #dbeafe;
+  --color-blue-500: #3b82f6;
+  --color-blue-600: #2563eb;
+  --color-blue-700: #1d4ed8;
+  --color-teal-500: #0f766e;
+  --color-green-500: #16a34a;
+  --color-amber-500: #d97706;
+  --color-red-500: #dc2626;
+  --color-cyan-500: #0891b2;
+
+  /* Typography */
+  --font-family-sans:
+    'Aptos', 'Segoe UI Variable Text', 'Segoe UI', 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  --font-family-display:
+    'Aptos Display', 'Segoe UI Variable Display', 'Segoe UI', 'SF Pro Display',
+    'Helvetica Neue', sans-serif;
+  --font-xs: 12px;
+  --font-sm: 13px;
+  --font-md: 14px;
+  --font-lg: 16px;
+  --font-xl: 20px;
+  --font-2xl: 28px;
+  --font-3xl: 40px;
+  --font-regular: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+  --lh-xs: 1.2;
+  --lh-sm: 1.35;
+  --lh-md: 1.55;
+  --lh-lg: 1.75;
+
+  /* Spacing */
+  --space-0: 0px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 48px;
+  --space-10: 64px;
+
+  /* Radii */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-2xl: 30px;
+  --radius-full: 999px;
+
+  /* Motion */
+  --transition-fast: 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --transition-slow: 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Semantic surfaces */
+  --bg-page: #f4f7fb;
+  --bg-canvas: #eef3f8;
+  --bg-surface: var(--color-white);
+  --bg-surface-alt: #fbfcfe;
+  --bg-elevated: #f8fbfd;
+  --bg-sunken: #eef4f9;
+  --bg-brand-subtle: #edf4ff;
+  --bg-success-subtle: rgba(22, 163, 74, 0.1);
+  --bg-warning-subtle: rgba(217, 119, 6, 0.11);
+  --bg-danger-subtle: rgba(220, 38, 38, 0.1);
+  --bg-info-subtle: rgba(8, 145, 178, 0.1);
+  --surface-overlay: rgba(15, 23, 42, 0.52);
+
+  /* Semantic text */
+  --text-primary: var(--color-slate-900);
+  --text-secondary: var(--color-slate-700);
+  --text-muted: var(--color-slate-500);
+  --text-disabled: var(--color-slate-400);
+  --text-heading: var(--color-slate-900);
+  --text-body: var(--color-slate-700);
+  --text-caption: var(--color-slate-500);
+  --text-inverse: var(--color-white);
+
+  /* Semantic borders */
+  --border-default: #dbe4ef;
+  --border-subtle: #e7eef6;
+  --border-strong: #c7d3e0;
+  --border-interactive: #bfd0e2;
+
+  /* Brand + status */
+  --brand-primary: var(--color-blue-600);
+  --brand-primary-hover: var(--color-blue-700);
+  --brand-primary-dark: #1e40af;
+  --brand-primary-alpha: rgba(37, 99, 235, 0.14);
+  --brand-accent: var(--color-teal-500);
+  --brand-success: var(--color-green-500);
+  --brand-warning: var(--color-amber-500);
+  --brand-danger: var(--color-red-500);
+  --brand-danger-dark: #b91c1c;
+  --brand-info: var(--color-cyan-500);
+  --bg-success-alpha: rgba(22, 163, 74, 0.1);
+  --bg-danger-alpha: rgba(220, 38, 38, 0.1);
+  --bg-info-alpha: rgba(8, 145, 178, 0.1);
+  --bg-warning-alpha: rgba(217, 119, 6, 0.1);
+
+  /* Compatibility aliases */
+  --state-success: var(--brand-success);
+  --state-warning: var(--brand-warning);
+  --state-error: var(--brand-danger);
+  --state-info: var(--brand-info);
+  --admin-header: var(--bg-surface);
+  --admin-panel: var(--bg-surface);
+  --admin-border: var(--border-default);
+  --admin-border-strong: var(--border-strong);
+  --admin-muted: var(--text-muted);
+
+  /* Layout */
+  --sidebar-width: 288px;
+  --sidebar-width-collapsed: 88px;
+  --topbar-height: 68px;
+  --content-max-width: 1480px;
+  --control-height-sm: 36px;
+  --control-height-md: 42px;
+  --control-height-lg: 48px;
+
+  /* Focus + elevation */
+  --focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.16);
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.03);
+  --shadow-sm: 0 10px 24px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 18px 40px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 24px 60px rgba(15, 23, 42, 0.12);
+}

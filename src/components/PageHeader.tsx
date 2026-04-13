@@ -1,24 +1,38 @@
-import { Space, Typography } from 'antd';
-import type { ReactNode } from 'react';
+import React from 'react';
+import clsx from 'clsx';
 
-const { Title, Text } = Typography;
+export const PageHeader = ({
+  className,
+  children,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <header className={clsx('ds-page-header', className)} {...props}>
+    {children}
+  </header>
+);
 
-interface PageHeaderProps {
-  title: string;
-  description?: ReactNode;
-  extra?: ReactNode;
-}
+export const PageHeaderTitle = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={clsx('ds-page-header-title', className)} {...props} />
+);
 
-export const PageHeader = ({ title, description, extra }: PageHeaderProps) => {
-  return (
-    <div className="page-header">
-      <div>
-        <Title level={3} style={{ marginBottom: 4 }}>
-          {title}
-        </Title>
-        {description ? <Text type="secondary">{description}</Text> : null}
-      </div>
-      {extra ? <Space>{extra}</Space> : null}
-    </div>
-  );
-};
+export const PageHeaderDescription = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={clsx('ds-page-header-description', className)} {...props} />
+);
+
+export const PageHeaderMeta = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={clsx('ds-page-header-meta', className)} {...props} />
+);
+
+export const PageHeaderActions = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={clsx('ds-page-header-actions', className)} {...props} />
+);
+
+export const PageToolbar = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={clsx('ds-page-toolbar', className)} {...props} />
+);

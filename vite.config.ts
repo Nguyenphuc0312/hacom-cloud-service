@@ -18,5 +18,10 @@ export default defineConfig(({ mode }) => {
       port: 5174,
       strictPort: true,
     },
+    test: {
+      environment: 'jsdom',
+      globals: true,
+      setupFiles: './src/test/setup.ts',
+    },
   };
 });

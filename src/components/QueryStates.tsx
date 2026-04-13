@@ -1,11 +1,12 @@
 import { Alert, Button, Empty, Result, Skeleton, Space, Spin, Typography } from 'antd';
 import type { ReactNode } from 'react';
+import { commonMessages } from '../shared/messages/common';
 
 interface LoadingStateProps {
   tip?: string;
 }
 
-export const LoadingState = ({ tip = 'Loading...' }: LoadingStateProps) => (
+export const LoadingState = ({ tip = commonMessages.state.loading }: LoadingStateProps) => (
   <div className="center-state">
     <Spin tip={tip} />
   </div>
@@ -18,7 +19,7 @@ interface ErrorStateProps {
 }
 
 export const ErrorState = ({
-  title = 'Không thể tải dữ liệu',
+  title = commonMessages.state.error,
   subTitle,
   extra,
 }: ErrorStateProps) => <Result status="error" title={title} subTitle={subTitle} extra={extra} />;
@@ -27,7 +28,7 @@ interface EmptyStateProps {
   description?: string;
 }
 
-export const EmptyState = ({ description = 'Không có dữ liệu' }: EmptyStateProps) => (
+export const EmptyState = ({ description = commonMessages.state.empty }: EmptyStateProps) => (
   <Empty description={description} image={Empty.PRESENTED_IMAGE_SIMPLE} />
 );
 
