@@ -253,6 +253,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const joinRequests = useGroupStore(
     (state) => state.joinRequestsByRoom[conversation.id] || [],
   );
+  const memberListVersion = useGroupStore(
+    (state) => state.memberListVersionByRoom[conversation.id] || 0,
+  );
   const upsertInviteLink = useGroupStore((state) => state.upsertInviteLink);
   const setInviteLinks = useGroupStore((state) => state.setInviteLinks);
   const markInviteLinkRevoked = useGroupStore(
@@ -393,7 +396,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   React.useEffect(() => {
     void fetchMembers();
-  }, [fetchMembers]);
+  }, [fetchMembers, memberListVersion]);
 
   React.useEffect(() => {
     let cancelled = false;

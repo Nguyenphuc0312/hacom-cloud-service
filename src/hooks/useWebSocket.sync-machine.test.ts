@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   drainPendingRoomSync,
   drainPendingRoomSyncForResyncRequired,
+  shouldSkipGroupRoomRefreshForCurrentUser,
   type PendingRoomSyncStrategy,
 } from "./useWebSocket";
 
@@ -32,5 +33,21 @@ describe("useWebSocket sync machine", () => {
       { roomId: "room-2", strategy: "reconnect" },
     ]);
     expect(pending.size).toBe(0);
+  });
+
+  it("skips room refresh when the current user is the removed member", () => {
+    expect(
+      shouldSkipGroupRoomRefreshForCurrentUser(
+        { roomId: "room-1", userId: "user-a" },
+        "user-a",
+      ),
+    ).toBe(true);
+
+    expect(
+      shouldSkipGroupRoomRefreshForCurrentUser(
+        { roomId: "room-1", userId: "user-b" },
+        "user-a",
+      ),
+    ).toBe(false);
   });
 });

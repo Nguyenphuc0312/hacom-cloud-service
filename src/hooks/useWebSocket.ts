@@ -136,6 +136,19 @@ const getConversationIds = (payload: Record<string, unknown>): string[] => {
   return singleConversationId ? [singleConversationId] : [];
 };
 
+export const shouldSkipGroupRoomRefreshForCurrentUser = (
+  payload: Record<string, unknown> | null,
+  currentUserId: string | null | undefined,
+): boolean => {
+  if (!payload || !currentUserId) {
+    return false;
+  }
+
+  const targetUserId =
+    asString(payload.userId) ?? asString(payload.targetUserId);
+  return targetUserId === currentUserId;
+};
+
 type MessageCursor = {
   at: string;
   id: string;
@@ -226,6 +239,7 @@ export const useWebSocket = (
   const markJoinRequestResolved = useGroupStore(
     (s) => s.markJoinRequestResolved,
   );
+  const bumpMemberListVersion = useGroupStore((s) => s.bumpMemberListVersion);
 
   const [connectionState, setConnectionState] = useState<ConnectionState>(() =>
     initSocket().getConnectionState(),
@@ -1179,10 +1193,24 @@ export const useWebSocket = (
     });
     unsubscribersRef.current.push(unsubscribeFriendshipEvents);
 
-    const refreshGroupRoom = (data: unknown) => {
+    const refreshGroupRoom = (
+      data: unknown,
+      options?: { skipIfCurrentUserIsTarget?: boolean; bumpMembers?: boolean },
+    ) => {
       const payload = asRecord(data);
       const conversationId = payload ? getConversationId(payload) : null;
-      if (conversationId) {
+      const currentUserId = useAuthStore.getState().user?.id ?? null;
+      if (
+        conversationId &&
+        options?.bumpMembers
+      ) {
+        bumpMemberListVersion(conversationId);
+      }
+      if (
+        conversationId &&
+        !(options?.skipIfCurrentUserIsTarget &&
+          shouldSkipGroupRoomRefreshForCurrentUser(payload, currentUserId))
+      ) {
         void scheduleRoomResync(conversationId, { reason: "room-refresh" });
       }
     };
@@ -1378,11 +1406,26 @@ export const useWebSocket = (
       onGroupInviteUser: handleGroupInviteUser,
       onGroupInviteLinkCreated: handleGroupInviteLinkCreated,
       onGroupInviteUpdated: handleGroupInviteUpdated,
-      onGroupMemberJoined: refreshGroupRoom,
-      onGroupMemberLeft: refreshGroupRoom,
-      onGroupMemberUpdated: refreshGroupRoom,
-      onGroupMemberBanned: refreshGroupRoom,
-      onGroupSettingsUpdated: refreshGroupRoom,
+      onGroupMemberJoined: (data) =>
+        refreshGroupRoom(data, { bumpMembers: true }),
+      onGroupMemberLeft: (data) =>
+        refreshGroupRoom(data, {
+          skipIfCurrentUserIsTarget: true,
+          bumpMembers: true,
+        }),
+      onGroupMemberRemoved: (data) =>
+        refreshGroupRoom(data, {
+          skipIfCurrentUserIsTarget: true,
+          bumpMembers: true,
+        }),
+      onGroupMemberUpdated: (data) =>
+        refreshGroupRoom(data, { bumpMembers: true }),
+      onGroupMemberBanned: (data) =>
+        refreshGroupRoom(data, {
+          skipIfCurrentUserIsTarget: true,
+          bumpMembers: true,
+        }),
+      onGroupSettingsUpdated: (data) => refreshGroupRoom(data),
       onGroupJoinRequestNew: handleGroupJoinRequestNew,
       onGroupJoinRequestResolved: handleGroupJoinRequestResolved,
       onGroupPinUpdated: handleGroupPinUpdated,
@@ -1614,6 +1657,7 @@ export const useWebSocket = (
     clearSendRestriction,
     setTyping,
     setSlowModeCooldown,
+    bumpMemberListVersion,
     upsertJoinRequest,
     upsertConversationSummary,
     markJoinRequestResolved,

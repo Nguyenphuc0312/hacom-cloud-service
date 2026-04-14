@@ -29,6 +29,7 @@ interface GroupStoreState {
   slowModeUntilByRoom: Record<string, number>;
   inviteLinksByRoom: Record<string, InviteLinkItem[]>;
   joinRequestsByRoom: Record<string, JoinRequestItem[]>;
+  memberListVersionByRoom: Record<string, number>;
 
   setSlowModeCooldown: (roomId: string, retryAfterSeconds: number) => void;
   clearSlowModeCooldown: (roomId: string) => void;
@@ -46,6 +47,7 @@ interface GroupStoreState {
     status: "approved" | "rejected",
   ) => void;
   removeJoinRequest: (roomId: string, requestId: string) => void;
+  bumpMemberListVersion: (roomId: string) => void;
   reset: () => void;
 }
 
@@ -56,6 +58,7 @@ const initialState: Pick<
   slowModeUntilByRoom: {},
   inviteLinksByRoom: {},
   joinRequestsByRoom: {},
+  memberListVersionByRoom: {},
 };
 
 export const useGroupStore = create<GroupStoreState>()(
@@ -202,6 +205,16 @@ export const useGroupStore = create<GroupStoreState>()(
           },
         };
       });
+    },
+
+    bumpMemberListVersion: (roomId) => {
+      if (!roomId) return;
+      set((state) => ({
+        memberListVersionByRoom: {
+          ...state.memberListVersionByRoom,
+          [roomId]: (state.memberListVersionByRoom[roomId] || 0) + 1,
+        },
+      }));
     },
 
     reset: () => set(initialState),

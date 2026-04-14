@@ -63,4 +63,28 @@ describe("sortConversationsByActivity", () => {
       "older",
     ]);
   });
+
+  it("reorders conversations when a system message becomes the latest activity", () => {
+    const older = makeConversation("older", "2026-04-10T09:00:00.000Z");
+    const groupUpdated = makeConversation(
+      "group-updated",
+      "2026-04-10T08:00:00.000Z",
+      {
+        type: RoomType.GROUP,
+        lastMessage: {
+          id: "sys-1",
+          senderId: "system",
+          senderName: "System",
+          content: "Alice đã thêm Bob vào nhóm",
+          type: "system",
+          isDeleted: false,
+          createdAt: new Date("2026-04-10T11:30:00.000Z"),
+        },
+      },
+    );
+
+    expect(
+      sortConversationsByActivity([older, groupUpdated]).map((item) => item.id),
+    ).toEqual(["group-updated", "older"]);
+  });
 });
