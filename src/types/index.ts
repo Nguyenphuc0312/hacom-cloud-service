@@ -17,9 +17,6 @@ export type {
   RoomSettings,
   RoomSummary,
   RoomMember,
-  Conversation,
-  ConversationDetail,
-  TypingUser,
 } from "@hacom/chat-shared-types";
 
 // Re-export shared enums
@@ -71,7 +68,42 @@ export type {
   MessageReactionEvent,
 } from "@hacom/chat-shared-types";
 
-import type { Conversation, User } from "@hacom/chat-shared-types";
+import type {
+  Conversation as SharedConversation,
+  ConversationDetail as SharedConversationDetail,
+  TypingUser as SharedTypingUser,
+  User,
+} from "@hacom/chat-shared-types";
+
+export interface TypingUser extends SharedTypingUser {}
+
+export type Conversation = Omit<
+  SharedConversation,
+  "lastReadAt" | "lastReadMessageId"
+> & {
+  createdBy?: string;
+  createdAt?: Date | string;
+  lastMessageAt?: Date | string | null;
+  lastActivityAt?: Date | string | null;
+  displayName?: string;
+  displayAvatar?: string | null;
+  otherUser?: import("@hacom/chat-shared-types").UserSummary | null;
+  directKey?: string | null;
+  currentUserId?: string;
+  updatedAt: Date;
+  joinedAt?: Date;
+  lastReadAt?: Date | string | null;
+  lastReadMessageId?: string | null;
+  membershipState?: "active" | "left" | "removed" | "banned" | "deleted";
+  summaryVersion?: number;
+  typingUsers?: TypingUser[];
+};
+
+export type ConversationDetail = Omit<
+  SharedConversationDetail,
+  keyof Conversation
+> &
+  Conversation;
 
 export type MessageSendState =
   | "queued"
@@ -111,6 +143,7 @@ export interface Message extends Omit<
   localId?: string;
   stableId?: string;
   clientMessageId?: string;
+  version?: number;
   serverSeq?: number;
   serverTs?: Date;
   localOrder?: number;
@@ -126,6 +159,7 @@ export interface Message extends Omit<
   errorMessage?: string;
   sendAttempts?: number;
   lastSendAttemptAt?: Date;
+  updatedAt?: Date;
   status: import("@hacom/chat-shared-types").MessageStatus | "uploading";
 }
 

@@ -32,6 +32,14 @@ import {
   notifyRoomInline,
   notifySidebarState,
 } from "../utils/notificationRouter";
+import {
+  broadcastUnreadSnapshot,
+  emitBrowserNotification,
+  isDocumentVisibleAndFocused,
+  subscribeUnreadSnapshotBroadcast,
+  syncAppBadge,
+  syncDocumentTitleBadge,
+} from "../utils/realtimeNotifications";
 import { logMessageDebug } from "../utils/messageDebug";
 import { buildMessageCorrelationKey } from "../utils/messageIdentity";
 import { normalizeConversation } from "../lib/conversationAdapter";
@@ -46,6 +54,8 @@ import {
   toFriendshipRealtimeDetail,
 } from "../features/chat/realtime";
 import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
+import { useSettingsStore } from "../settings/settingsStore";
+import type { Conversation } from "../types";
 
 interface UseWebSocketOptions {
   autoConnect?: boolean;
@@ -215,6 +225,8 @@ export const useWebSocket = (
   const { autoConnect = true, onConnect, onDisconnect, onError } = options;
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const totalUnreadCount = useChatStore((s) => s.totalUnreadCount);
+  const conversations = useChatStore((s) => s.conversations);
 
   const addMessage = useChatStore((s) => s.addMessage);
   const removeMessage = useChatStore((s) => s.removeMessage);
@@ -258,6 +270,10 @@ export const useWebSocket = (
   >(new Map());
   const roomJoinRetryAttemptsRef = useRef<Map<string, number>>(new Map());
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const processedRealtimeEventIdsRef = useRef<Map<string, number>>(new Map());
+  const resyncGapCooldownRef = useRef<Map<string, number>>(new Map());
+  const conversationListRefreshInFlightRef = useRef<Promise<void> | null>(null);
+  const suppressUnreadBroadcastRef = useRef(false);
   const emitQueueRef = useRef<Array<{ event: string; data: unknown }>>([]);
   const hasConnectedOnceRef = useRef(false);
   const shouldResyncOnConnectRef = useRef(false);
@@ -294,6 +310,99 @@ export const useWebSocket = (
       }
     });
   }, []);
+
+  useEffect(() => {
+    syncDocumentTitleBadge(totalUnreadCount);
+    void syncAppBadge(totalUnreadCount);
+  }, [totalUnreadCount]);
+
+  useEffect(() => {
+    if (suppressUnreadBroadcastRef.current) {
+      suppressUnreadBroadcastRef.current = false;
+      return;
+    }
+
+    const syncedAtMs = Date.now();
+    broadcastUnreadSnapshot({
+      totalUnreadCount,
+      conversations: (Array.isArray(conversations) ? conversations : []).map(
+        (conversation) => ({
+          conversationId: conversation.id,
+          unreadCount: conversation.unreadCount ?? 0,
+          lastReadMessageId: conversation.lastReadMessageId ?? null,
+          lastReadAt:
+            typeof conversation.lastReadAt === "string"
+              ? conversation.lastReadAt
+              : conversation.lastReadAt instanceof Date
+                ? conversation.lastReadAt.toISOString()
+                : null,
+        }),
+      ),
+      source: "socket",
+      syncedAtMs,
+    });
+  }, [conversations, totalUnreadCount]);
+
+  useEffect(() => {
+    return subscribeUnreadSnapshotBroadcast((snapshot) => {
+      suppressUnreadBroadcastRef.current = true;
+      logMessageDebug("useWebSocket", "cross_tab_unread_snapshot_received", {
+        totalUnreadCount: snapshot.totalUnreadCount,
+        conversationCount: snapshot.conversations.length,
+        syncedAtMs: snapshot.syncedAtMs,
+        source: snapshot.source,
+      });
+      applyUnreadSummary(
+        {
+          totalUnreadCount: snapshot.totalUnreadCount,
+          conversations: snapshot.conversations,
+        },
+        {
+          requestedAtMs: snapshot.syncedAtMs,
+          appliedAtMs: snapshot.syncedAtMs,
+          source: "cross_tab",
+        },
+      );
+    });
+  }, [applyUnreadSummary]);
+
+  const getNotificationPreferences = useCallback(() => {
+    return useSettingsStore.getState().notifications;
+  }, []);
+
+  const shouldProcessRealtimeEvent = useCallback(
+    (eventKey: string, details?: Record<string, unknown>): boolean => {
+      if (!eventKey) {
+        return true;
+      }
+
+      const now = Date.now();
+      processedRealtimeEventIdsRef.current.forEach((seenAt, key) => {
+        if (now - seenAt > 5 * 60_000) {
+          processedRealtimeEventIdsRef.current.delete(key);
+        }
+      });
+
+      if (processedRealtimeEventIdsRef.current.has(eventKey)) {
+        logMessageDebug("useWebSocket", "duplicate_realtime_event_suppressed", {
+          eventKey,
+          ...details,
+        });
+        return false;
+      }
+
+      processedRealtimeEventIdsRef.current.set(eventKey, now);
+      if (processedRealtimeEventIdsRef.current.size > 1000) {
+        const oldestKey = processedRealtimeEventIdsRef.current.keys().next().value;
+        if (typeof oldestKey === "string") {
+          processedRealtimeEventIdsRef.current.delete(oldestKey);
+        }
+      }
+
+      return true;
+    },
+    [],
+  );
 
   const clearRemoteTypingTimer = useCallback(
     (conversationId: string, userId: string) => {
@@ -656,9 +765,88 @@ export const useWebSocket = (
     [fetchConversations, upsertConversationSummary],
   );
 
+  const refreshChangedConversationSummaries = useCallback(
+    async (options?: {
+      reason?: "initial" | "reconnect" | "retry" | "resync_required";
+      forceFull?: boolean;
+    }): Promise<void> => {
+      if (conversationListRefreshInFlightRef.current) {
+        return conversationListRefreshInFlightRef.current;
+      }
+
+      const currentCursor = useChatStore.getState().lastConversationCursor;
+      const shouldFetchFull = options?.forceFull || !currentCursor;
+      const request = (async () => {
+        if (shouldFetchFull) {
+          await fetchConversations();
+          return;
+        }
+
+        const limit = 100;
+        let page = 1;
+        let loaded = 0;
+
+        while (page <= 10) {
+          const response = await conversationApi.getConversations(page, limit, {
+            updatedAfter: currentCursor,
+          });
+          const batch = (unwrapApiSuccess(response) as unknown[] | undefined) ?? [];
+          const normalizedBatch = batch
+            .map((conversation) => normalizeConversation(conversation))
+            .filter((conversation): conversation is Conversation => conversation !== null);
+
+          normalizedBatch.forEach((conversation) => {
+            const result = upsertConversationSummary(conversation);
+            if (result.gapDetected) {
+              logMessageDebug("useWebSocket", "conversation_summary_gap_detected", {
+                conversationId: conversation.id,
+                previousVersion: result.previousVersion,
+                nextVersion: result.nextVersion,
+                reason: options?.reason,
+              });
+            }
+          });
+
+          loaded += normalizedBatch.length;
+          if (normalizedBatch.length < limit) {
+            break;
+          }
+          page += 1;
+        }
+
+        logMessageDebug("useWebSocket", "conversation_summary_refresh_completed", {
+          reason: options?.reason,
+          updatedAfter: currentCursor,
+          loaded,
+        });
+      })()
+        .catch(async (error) => {
+          logMessageDebug("useWebSocket", "conversation_summary_refresh_failed", {
+            reason: options?.reason,
+            updatedAfter: currentCursor,
+            error:
+              error instanceof Error ? error.message : "unknown_refresh_error",
+          });
+          await fetchConversations();
+        })
+        .finally(() => {
+          conversationListRefreshInFlightRef.current = null;
+        });
+
+      conversationListRefreshInFlightRef.current = request;
+      return request;
+    },
+    [fetchConversations, upsertConversationSummary],
+  );
+
   const refreshUnreadSummarySnapshot = useCallback(async (): Promise<void> => {
+    const requestedAtMs = Date.now();
     const response = await conversationApi.getUnreadSummary();
-    applyUnreadSummary(unwrapApiSuccess(response));
+    applyUnreadSummary(unwrapApiSuccess(response), {
+      requestedAtMs,
+      appliedAtMs: Date.now(),
+      source: "snapshot",
+    });
   }, [applyUnreadSummary]);
 
   const reconcileConversationAuthoritative = useCallback(
@@ -680,6 +868,184 @@ export const useWebSocket = (
       });
     },
     [refreshConversationSnapshot, scheduleRoomResync],
+  );
+
+  const maybeReconcileGap = useCallback(
+    (conversationId: string, reason: string) => {
+      const now = Date.now();
+      const lastAt = resyncGapCooldownRef.current.get(conversationId) ?? 0;
+      if (now - lastAt < 5_000) {
+        return;
+      }
+
+      resyncGapCooldownRef.current.set(conversationId, now);
+      logMessageDebug("useWebSocket", "conversation_gap_reconcile_requested", {
+        conversationId,
+        reason,
+      });
+      void refreshUnreadSummarySnapshot().catch(() => {
+        // no-op: best effort badge reconcile
+      });
+      void reconcileConversationAuthoritative(conversationId, "room-refresh");
+    },
+    [reconcileConversationAuthoritative, refreshUnreadSummarySnapshot],
+  );
+
+  const maybeNotifyIncomingMessage = useCallback(
+    (input: {
+      conversationId: string;
+      messageId: string;
+      senderId: string | null;
+      senderName: string | null;
+      content: string;
+      mentions: string[];
+      eventId?: string | null;
+    }) => {
+      const currentUserId = useAuthStore.getState().user?.id ?? null;
+      if (!currentUserId || !input.senderId || input.senderId === currentUserId) {
+        return;
+      }
+
+      const notificationSettings = getNotificationPreferences();
+      if (!notificationSettings.enabled) {
+        return;
+      }
+
+      const conversation = useChatStore
+        .getState()
+        .conversations.find((item) => item.id === input.conversationId);
+      const hasMention = input.mentions.includes(currentUserId);
+      const isMuted = Boolean(conversation?.isMuted);
+      if (isMuted && !hasMention) {
+        return;
+      }
+
+      const isActiveConversation =
+        useChatStore.getState().selectedConversationId === input.conversationId;
+      const visibleAndFocused = isDocumentVisibleAndFocused();
+      if (isActiveConversation && visibleAndFocused && !hasMention) {
+        return;
+      }
+
+      const conversationLabel =
+        conversation?.displayName ||
+        conversation?.name ||
+        input.senderName ||
+        "Conversation";
+      const preview = notificationSettings.messagePreview
+        ? input.content || "Sent an attachment"
+        : hasMention
+          ? "You were mentioned."
+          : "New message";
+      const notificationId =
+        input.eventId ||
+        `message:${input.conversationId}:${input.messageId}:${hasMention ? "mention" : "new"}`;
+      const toastMessage = hasMention
+        ? `${input.senderName || "Someone"} mentioned you in ${conversationLabel}`
+        : `${input.senderName || conversationLabel}: ${preview}`;
+
+      notifyGlobalToast({
+        level: "info",
+        message: toastMessage,
+        dedupeKey: notificationId,
+        cooldownMs: 20_000,
+      });
+
+      if (!visibleAndFocused) {
+        emitBrowserNotification({
+          id: notificationId,
+          tag: `conversation:${input.conversationId}`,
+          title: hasMention
+            ? `${conversationLabel} · Mention`
+            : conversationLabel,
+          body: preview,
+          silent: !notificationSettings.sound,
+          onClick: () => {
+            window.dispatchEvent(
+              new CustomEvent("chat:notification:clicked", {
+                detail: {
+                  conversationId: input.conversationId,
+                  messageId: input.messageId,
+                },
+              }),
+            );
+          },
+        });
+      }
+    },
+    [getNotificationPreferences],
+  );
+
+  const maybeNotifyMembershipEvent = useCallback(
+    (conversationId: string, membershipState: string, reason: string | null) => {
+      const notificationSettings = getNotificationPreferences();
+      if (!notificationSettings.enabled) {
+        return;
+      }
+
+      const conversation = useChatStore
+        .getState()
+        .conversations.find((item) => item.id === conversationId);
+      const conversationLabel =
+        conversation?.displayName || conversation?.name || "Group";
+      const notificationId = `membership:${conversationId}:${membershipState}:${reason ?? "unknown"}`;
+      const message =
+        membershipState === "active" && reason === "added"
+          ? `You were added to ${conversationLabel}.`
+          : membershipState === "active" && reason === "restored"
+            ? `You can access ${conversationLabel} again.`
+            : `Membership changed for ${conversationLabel}.`;
+
+      notifyGlobalToast({
+        level: "info",
+        message,
+        dedupeKey: notificationId,
+        cooldownMs: 20_000,
+      });
+
+      if (!isDocumentVisibleAndFocused()) {
+        emitBrowserNotification({
+          id: notificationId,
+          title: conversationLabel,
+          body: message,
+          silent: !notificationSettings.sound,
+        });
+      }
+    },
+    [getNotificationPreferences],
+  );
+
+  const maybeNotifyGroupUpdate = useCallback(
+    (conversationId: string, body: string, notificationSuffix: string) => {
+      const notificationSettings = getNotificationPreferences();
+      if (!notificationSettings.enabled) {
+        return;
+      }
+
+      const conversation = useChatStore
+        .getState()
+        .conversations.find((item) => item.id === conversationId);
+      const conversationLabel =
+        conversation?.displayName || conversation?.name || "Group";
+      const notificationId = `group:${conversationId}:${notificationSuffix}`;
+
+      notifyGlobalToast({
+        level: "info",
+        message: `${conversationLabel}: ${body}`,
+        dedupeKey: notificationId,
+        cooldownMs: 15_000,
+      });
+
+      if (!isDocumentVisibleAndFocused()) {
+        emitBrowserNotification({
+          id: notificationId,
+          title: conversationLabel,
+          body,
+          silent: !notificationSettings.sound,
+        });
+      }
+    },
+    [getNotificationPreferences],
   );
 
   const requestRoomJoin = useCallback(
@@ -769,7 +1135,7 @@ export const useWebSocket = (
       shouldResyncOnConnectRef.current = false;
 
       if (shouldResync) {
-        void fetchConversations().catch(() => {
+        void refreshChangedConversationSummaries({ reason: "reconnect" }).catch(() => {
           // no-op: best effort sidebar resync
         });
         void refreshUnreadSummarySnapshot().catch(() => {
@@ -898,15 +1264,34 @@ export const useWebSocket = (
         undefined;
       const stableId =
         asString(messagePayload.stableId) ?? localId ?? messageId;
+      const senderId =
+        asString(messagePayload.senderId) ?? asString(payload.senderId);
       const correlationKey = buildMessageCorrelationKey({
         conversationId,
         clientMessageId,
         tempId: tempId ?? undefined,
         localId,
       });
+      const eventId =
+        asString(payload.eventId) ??
+        asString(messagePayload.eventId) ??
+        `${eventType}:${conversationId}:${messageId}:${
+          asString(messagePayload.updatedAt) ??
+          asString(messagePayload.createdAt) ??
+          "unknown"
+        }`;
+      if (
+        !shouldProcessRealtimeEvent(eventId, {
+          eventType,
+          conversationId,
+          messageId,
+        })
+      ) {
+        return;
+      }
       logMessageDebug("useWebSocket", `socket_${eventType}_received`, {
         conversationId,
-        eventId: asString(payload.eventId) ?? asString(messagePayload.eventId),
+        eventId,
         correlationKey,
         messageId,
         tempId,
@@ -921,10 +1306,26 @@ export const useWebSocket = (
         ...(localId ? { localId } : {}),
       });
 
+      if (eventType === "message:new") {
+        maybeNotifyIncomingMessage({
+          conversationId,
+          messageId,
+          senderId,
+          senderName:
+            asString(messagePayload.senderName) ?? asString(payload.senderName),
+          content:
+            typeof messagePayload.content === "string" ? messagePayload.content : "",
+          mentions: Array.isArray(messagePayload.mentions)
+            ? messagePayload.mentions.filter(
+                (item): item is string => typeof item === "string",
+              )
+            : [],
+          eventId,
+        });
+      }
+
       const chatState = useChatStore.getState();
       const currentUserId = useAuthStore.getState().user?.id;
-      const senderId =
-        asString(messagePayload.senderId) ?? asString(payload.senderId);
 
       if (
         eventType !== "message:new" ||
@@ -1063,7 +1464,24 @@ export const useWebSocket = (
         return;
       }
 
-      upsertConversationSummary(normalized);
+      const summaryResult = upsertConversationSummary(normalized);
+      if (!summaryResult.applied) {
+        logMessageDebug("useWebSocket", "conversation_summary_ignored", {
+          conversationId: normalized.id,
+          reason: summaryResult.reason,
+          previousVersion: summaryResult.previousVersion,
+          nextVersion: summaryResult.nextVersion,
+        });
+        return;
+      }
+      if (summaryResult.gapDetected) {
+        logMessageDebug("useWebSocket", "conversation_summary_gap_detected", {
+          conversationId: normalized.id,
+          previousVersion: summaryResult.previousVersion,
+          nextVersion: summaryResult.nextVersion,
+        });
+        maybeReconcileGap(normalized.id, "summary_version_gap");
+      }
       notifySidebarState("conversation:summary:updated", {
         source: "socket",
         roomId: normalized.id,
@@ -1077,6 +1495,7 @@ export const useWebSocket = (
       const conversationId = getConversationId(payload);
       const membershipState = asString(payload.membershipState);
       const summary = payload.summary;
+      const reason = asString(payload.reason);
 
       if (!conversationId || !membershipState) {
         return;
@@ -1085,7 +1504,13 @@ export const useWebSocket = (
       if (membershipState === "active" && summary) {
         const normalized = normalizeConversation(summary);
         if (normalized) {
-          upsertConversationSummary(normalized);
+          const summaryResult = upsertConversationSummary(normalized);
+          if (summaryResult.gapDetected) {
+            maybeReconcileGap(conversationId, "membership_summary_gap");
+          }
+        }
+        if (reason === "added" || reason === "restored") {
+          maybeNotifyMembershipEvent(conversationId, membershipState, reason);
         }
         notifySidebarState("conversation:membership:updated", {
           source: "socket",
@@ -1342,6 +1767,19 @@ export const useWebSocket = (
       }
     };
 
+    const handleGroupSettingsUpdated = (data: unknown) => {
+      const payload = asRecord(data);
+      const roomId = payload ? getConversationId(payload) : null;
+      if (roomId) {
+        maybeNotifyGroupUpdate(
+          roomId,
+          "Group settings changed.",
+          `settings:${asString(payload?.eventId) ?? Date.now()}`,
+        );
+      }
+      refreshGroupRoom(data);
+    };
+
     const handlePermissionChanged = (data: unknown) => {
       const payload = asRecord(data);
       const allowed =
@@ -1425,7 +1863,7 @@ export const useWebSocket = (
           skipIfCurrentUserIsTarget: true,
           bumpMembers: true,
         }),
-      onGroupSettingsUpdated: (data) => refreshGroupRoom(data),
+      onGroupSettingsUpdated: handleGroupSettingsUpdated,
       onGroupJoinRequestNew: handleGroupJoinRequestNew,
       onGroupJoinRequestResolved: handleGroupJoinRequestResolved,
       onGroupPinUpdated: handleGroupPinUpdated,
@@ -1553,7 +1991,9 @@ export const useWebSocket = (
           ].includes(scope),
         )
       ) {
-        void fetchConversations().catch(() => {
+        void refreshChangedConversationSummaries({
+          reason: "resync_required",
+        }).catch(() => {
           // no-op: best effort sidebar refresh
         });
         void refreshUnreadSummarySnapshot().catch(() => {
@@ -1643,13 +2083,17 @@ export const useWebSocket = (
     onError,
     removeConversation,
     recoverSocketAuth,
-    fetchConversations,
+    refreshChangedConversationSummaries,
     refreshUnreadSummarySnapshot,
     removeMessage,
     requestRoomJoin,
     flushQueuedMessages,
     refreshConversationSnapshot,
     reconcileConversationAuthoritative,
+    maybeNotifyGroupUpdate,
+    maybeNotifyIncomingMessage,
+    maybeNotifyMembershipEvent,
+    maybeReconcileGap,
     scheduleRemoteTypingDecay,
     scheduleRoomResync,
     selectConversation,
@@ -1661,6 +2105,7 @@ export const useWebSocket = (
     upsertJoinRequest,
     upsertConversationSummary,
     markJoinRequestResolved,
+    shouldProcessRealtimeEvent,
     upsertInviteLink,
     updateConversation,
   ]);

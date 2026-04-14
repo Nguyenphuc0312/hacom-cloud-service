@@ -53,7 +53,10 @@ interface GroupStoreState {
 
 const initialState: Pick<
   GroupStoreState,
-  "slowModeUntilByRoom" | "inviteLinksByRoom" | "joinRequestsByRoom"
+  | "slowModeUntilByRoom"
+  | "inviteLinksByRoom"
+  | "joinRequestsByRoom"
+  | "memberListVersionByRoom"
 > = {
   slowModeUntilByRoom: {},
   inviteLinksByRoom: {},

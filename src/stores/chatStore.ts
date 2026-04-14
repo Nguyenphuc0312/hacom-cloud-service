@@ -39,6 +39,9 @@ import type { Attachment } from "../types";
 
 interface ChatState {
   conversations: Conversation[];
+  totalUnreadCount: number;
+  lastUnreadSummaryAppliedAt: number | null;
+  lastConversationCursor: string | null;
   messages: Record<string, Message[]>;
   messagesHydratedByConversation: Record<string, boolean>;
   selectedConversationId: string | null;
@@ -59,7 +62,15 @@ interface ChatState {
 
   setConversations: (conversations: Conversation[]) => void;
   addConversation: (conversation: Conversation) => void;
-  upsertConversationSummary: (conversation: Conversation) => void;
+  upsertConversationSummary: (
+    conversation: Conversation,
+  ) => {
+    applied: boolean;
+    gapDetected: boolean;
+    previousVersion: number;
+    nextVersion: number;
+    reason?: "inserted" | "updated" | "stale_version" | "stale_timestamp";
+  };
   updateConversation: (id: string, updates: Partial<Conversation>) => void;
   removeConversation: (id: string) => void;
   selectConversation: (id: string | null) => void;
@@ -67,15 +78,22 @@ interface ChatState {
     conversationId: string,
     lastVisibleMessageId?: string,
   ) => Promise<void>;
-  applyUnreadSummary: (summary: {
-    totalUnreadCount: number;
-    conversations: Array<{
-      conversationId: string;
-      unreadCount: number;
-      lastReadMessageId: string | null;
-      lastReadAt: string | null;
-    }>;
-  }) => void;
+  applyUnreadSummary: (
+    summary: {
+      totalUnreadCount: number;
+      conversations: Array<{
+        conversationId: string;
+        unreadCount: number;
+        lastReadMessageId: string | null;
+        lastReadAt: string | null;
+      }>;
+    },
+    options?: {
+      requestedAtMs?: number;
+      appliedAtMs?: number;
+      source?: "snapshot" | "cross_tab";
+    },
+  ) => void;
   fetchConversations: () => Promise<void>;
 
   setMessages: (conversationId: string, messages: Message[]) => void;
@@ -145,6 +163,9 @@ interface FetchMessagesOptions {
 
 const initialState = {
   conversations: [],
+  totalUnreadCount: 0,
+  lastUnreadSummaryAppliedAt: null,
+  lastConversationCursor: null,
   messages: {},
   messagesHydratedByConversation: {},
   selectedConversationId: null,
@@ -402,6 +423,11 @@ const normalizeMessage = (
     asNumberValue(source.seq) ??
     asNumberValue(source.sequence) ??
     undefined;
+  const version =
+    asNumberValue(source.version) ??
+    asNumberValue(source.messageVersion) ??
+    asNumberValue(metadata?.version) ??
+    undefined;
   const transportStatus = (() => {
     const explicit =
       asStringValue(source.transportStatus) ??
@@ -481,6 +507,7 @@ const normalizeMessage = (
     id,
     stableId,
     clientMessageId,
+    version,
     localId:
       asStringValue(source.localId) ??
       asStringValue(metadata?.localId) ??
@@ -557,6 +584,126 @@ const toDateValue = (value: unknown): number => {
 
 const toFiniteNumber = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
+
+const toConversationVersion = (conversation: Conversation | null | undefined) =>
+  typeof conversation?.summaryVersion === "number" &&
+  Number.isFinite(conversation.summaryVersion)
+    ? conversation.summaryVersion
+    : 0;
+
+const getConversationCursorTimestamp = (
+  conversation: Conversation | null | undefined,
+): number => {
+  if (!conversation) return 0;
+
+  return Math.max(
+    toDateValue(conversation.updatedAt),
+    toDateValue(conversation.lastActivityAt),
+    toDateValue(conversation.lastMessageAt),
+    toDateValue(conversation.lastMessage?.createdAt),
+  );
+};
+
+const computeConversationCursor = (conversations: Conversation[]): string | null => {
+  let latestTimestamp = 0;
+
+  (Array.isArray(conversations) ? conversations : []).forEach((conversation) => {
+    latestTimestamp = Math.max(
+      latestTimestamp,
+      getConversationCursorTimestamp(conversation),
+    );
+  });
+
+  return latestTimestamp > 0 ? new Date(latestTimestamp).toISOString() : null;
+};
+
+const computeCanonicalTotalUnreadCount = (conversations: Conversation[]): number =>
+  (Array.isArray(conversations) ? conversations : []).reduce(
+    (sum, conversation) => sum + Math.max(0, conversation.unreadCount || 0),
+    0,
+  );
+
+const shouldApplyConversationSummary = (
+  current: Conversation | null | undefined,
+  incoming: Conversation,
+): {
+  apply: boolean;
+  gapDetected: boolean;
+  previousVersion: number;
+  nextVersion: number;
+  reason?: "inserted" | "updated" | "stale_version" | "stale_timestamp";
+} => {
+  const previousVersion = toConversationVersion(current);
+  const nextVersion = toConversationVersion(incoming);
+
+  if (!current) {
+    return {
+      apply: true,
+      gapDetected: false,
+      previousVersion: 0,
+      nextVersion,
+      reason: "inserted",
+    };
+  }
+
+  if (
+    previousVersion > 0 &&
+    nextVersion > 0 &&
+    nextVersion < previousVersion
+  ) {
+    return {
+      apply: false,
+      gapDetected: false,
+      previousVersion,
+      nextVersion,
+      reason: "stale_version",
+    };
+  }
+
+  const currentTs = getConversationCursorTimestamp(current);
+  const incomingTs = getConversationCursorTimestamp(incoming);
+  if (nextVersion === previousVersion && incomingTs > 0 && incomingTs < currentTs) {
+    return {
+      apply: false,
+      gapDetected: false,
+      previousVersion,
+      nextVersion,
+      reason: "stale_timestamp",
+    };
+  }
+
+  return {
+    apply: true,
+    gapDetected:
+      previousVersion > 0 && nextVersion > 0 && nextVersion > previousVersion + 1,
+    previousVersion,
+    nextVersion,
+    reason: "updated",
+  };
+};
+
+const mergeConversationSummary = (
+  current: Conversation | null | undefined,
+  incoming: Conversation,
+): Conversation => {
+  if (!current) {
+    return incoming;
+  }
+
+  return (normalizeConversation({
+    ...current,
+    ...incoming,
+    unreadCount: incoming.unreadCount,
+    lastReadMessageId:
+      incoming.lastReadMessageId ?? current.lastReadMessageId ?? undefined,
+    lastReadAt: incoming.lastReadAt ?? current.lastReadAt ?? undefined,
+    summaryVersion:
+      toConversationVersion(incoming) || toConversationVersion(current) || undefined,
+  }) ?? {
+    ...current,
+    ...incoming,
+  }) as Conversation;
+};
 
 const getStableMessageId = (message: Message): string =>
   getMessageIdentityKey(message);
@@ -912,7 +1059,32 @@ const resolveMergedSendState = (
 };
 
 const mergeMessageRecords = (current: Message, incoming: Message): Message => {
-  const merged = mergeDefinedMessageFields(current, incoming);
+  const currentVersion = toFiniteNumber(current.version);
+  const incomingVersion = toFiniteNumber(incoming.version);
+  const currentUpdatedAt = Math.max(
+    toDateValue(current.updatedAt),
+    toDateValue(current.editedAt),
+    toDateValue(current.readAt),
+    toDateValue(current.deliveredAt),
+  );
+  const incomingUpdatedAt = Math.max(
+    toDateValue(incoming.updatedAt),
+    toDateValue(incoming.editedAt),
+    toDateValue(incoming.readAt),
+    toDateValue(incoming.deliveredAt),
+  );
+  const preferCurrent =
+    currentVersion !== null &&
+    incomingVersion !== null &&
+    incomingVersion < currentVersion
+      ? true
+      : currentVersion === incomingVersion &&
+          incomingUpdatedAt > 0 &&
+          incomingUpdatedAt < currentUpdatedAt;
+
+  const merged = preferCurrent
+    ? mergeDefinedMessageFields(incoming, current)
+    : mergeDefinedMessageFields(current, incoming);
 
   if (isTempMessageId(current.id) && !isTempMessageId(incoming.id)) {
     merged.id = incoming.id;
@@ -930,6 +1102,11 @@ const mergeMessageRecords = (current: Message, incoming: Message): Message => {
         : undefined);
   merged.clientMessageId =
     incoming.clientMessageId || current.clientMessageId || merged.localId;
+  merged.version =
+    Math.max(
+      toFiniteNumber(current.version) ?? 0,
+      toFiniteNumber(incoming.version) ?? 0,
+    ) || undefined;
   merged.stableId =
     current.stableId ||
     incoming.stableId ||
@@ -1588,10 +1765,13 @@ export const useChatStore = create<ChatState>()(
       ...initialState,
 
       setConversations: (conversations) => {
+        const normalized = normalizeConversationsPayload(
+          Array.isArray(conversations) ? conversations : [],
+        );
         set({
-          conversations: normalizeConversationsPayload(
-            Array.isArray(conversations) ? conversations : [],
-          ),
+          conversations: normalized,
+          totalUnreadCount: computeCanonicalTotalUnreadCount(normalized),
+          lastConversationCursor: computeConversationCursor(normalized),
         });
       },
 
@@ -1599,20 +1779,46 @@ export const useChatStore = create<ChatState>()(
         const normalized = normalizeConversation(conversation);
         if (!normalized) return;
 
-        set((state) => ({
-          conversations: [
+        set((state) => {
+          const conversations = [
             normalized,
             ...(Array.isArray(state.conversations) ? state.conversations : []),
           ].filter(
             (item, index, list) =>
               list.findIndex((candidate) => candidate.id === item.id) === index,
-          ),
-        }));
+          );
+
+          return {
+            conversations,
+            totalUnreadCount: computeCanonicalTotalUnreadCount(conversations),
+            lastConversationCursor: computeConversationCursor(conversations),
+          };
+        });
       },
 
       upsertConversationSummary: (conversation) => {
         const normalized = normalizeConversation(conversation);
-        if (!normalized) return;
+        if (!normalized) {
+          return {
+            applied: false,
+            gapDetected: false,
+            previousVersion: 0,
+            nextVersion: 0,
+          };
+        }
+
+        let result: {
+          applied: boolean;
+          gapDetected: boolean;
+          previousVersion: number;
+          nextVersion: number;
+          reason?: "inserted" | "updated" | "stale_version" | "stale_timestamp";
+        } = {
+          applied: false,
+          gapDetected: false,
+          previousVersion: 0,
+          nextVersion: toConversationVersion(normalized),
+        };
 
         set((state) => {
           const conversations = Array.isArray(state.conversations)
@@ -1623,26 +1829,54 @@ export const useChatStore = create<ChatState>()(
           );
 
           if (existingIndex < 0) {
+            const nextConversations = [normalized, ...conversations];
+            result = {
+              applied: true,
+              gapDetected: false,
+              previousVersion: 0,
+              nextVersion: toConversationVersion(normalized),
+              reason: "inserted",
+            };
             return {
-              conversations: [normalized, ...conversations],
+              conversations: nextConversations,
+              totalUnreadCount: computeCanonicalTotalUnreadCount(
+                nextConversations,
+              ),
+              lastConversationCursor: computeConversationCursor(
+                nextConversations,
+              ),
             };
           }
 
+          const current = conversations[existingIndex];
+          const decision = shouldApplyConversationSummary(current, normalized);
+          result = {
+            applied: decision.apply,
+            gapDetected: decision.gapDetected,
+            previousVersion: decision.previousVersion,
+            nextVersion: decision.nextVersion,
+            reason: decision.reason,
+          };
+          if (!decision.apply) {
+            return state;
+          }
+
           const next = [...conversations];
-          next[existingIndex] = normalizeConversation({
-            ...next[existingIndex],
-            ...normalized,
-          }) as Conversation;
+          next[existingIndex] = mergeConversationSummary(current, normalized);
 
           return {
             conversations: next,
+            totalUnreadCount: computeCanonicalTotalUnreadCount(next),
+            lastConversationCursor: computeConversationCursor(next),
           };
         });
+
+        return result;
       },
 
       updateConversation: (id, updates) => {
-        set((state) => ({
-          conversations: (Array.isArray(state.conversations)
+        set((state) => {
+          const conversations = (Array.isArray(state.conversations)
             ? state.conversations
             : []
           ).map((conversation) =>
@@ -1652,8 +1886,14 @@ export const useChatStore = create<ChatState>()(
                   ...updates,
                 })
               : conversation,
-          ),
-        }));
+          );
+
+          return {
+            conversations,
+            totalUnreadCount: computeCanonicalTotalUnreadCount(conversations),
+            lastConversationCursor: computeConversationCursor(conversations),
+          };
+        });
       },
 
       removeConversation: (id) => {
@@ -1701,6 +1941,16 @@ export const useChatStore = create<ChatState>()(
             state.selectedConversationId === id
               ? null
               : state.selectedConversationId,
+          totalUnreadCount: computeCanonicalTotalUnreadCount(
+            (Array.isArray(state.conversations) ? state.conversations : []).filter(
+              (conversation) => conversation.id !== id,
+            ),
+          ),
+          lastConversationCursor: computeConversationCursor(
+            (Array.isArray(state.conversations) ? state.conversations : []).filter(
+              (conversation) => conversation.id !== id,
+            ),
+          ),
         }));
       },
 
@@ -1767,29 +2017,56 @@ export const useChatStore = create<ChatState>()(
         return runMarkAsRead(lastVisibleMessageId);
       },
 
-      applyUnreadSummary: (summary) => {
+      applyUnreadSummary: (summary, options) => {
         const summaryByConversationId = new Map(
           (summary.conversations || []).map((item) => [item.conversationId, item]),
         );
+        const requestedAtMs =
+          typeof options?.requestedAtMs === "number" &&
+          Number.isFinite(options.requestedAtMs)
+            ? options.requestedAtMs
+            : 0;
+        const appliedAtMs =
+          typeof options?.appliedAtMs === "number" &&
+          Number.isFinite(options.appliedAtMs)
+            ? options.appliedAtMs
+            : Date.now();
 
-        set((state) => ({
-          conversations: (Array.isArray(state.conversations)
+        set((state) => {
+          const conversations = (Array.isArray(state.conversations)
             ? state.conversations
             : []
           ).map((conversation) => {
             const unreadSnapshot = summaryByConversationId.get(conversation.id);
+            const summaryWasUpdatedAfterRequest =
+              requestedAtMs > 0 &&
+              getConversationCursorTimestamp(conversation) > requestedAtMs;
+            if (summaryWasUpdatedAfterRequest) {
+              return conversation;
+            }
+
+            if (!unreadSnapshot) {
+              return normalizeConversation({
+                ...conversation,
+                unreadCount: 0,
+              }) as Conversation;
+            }
+
             return normalizeConversation({
               ...conversation,
-              unreadCount: unreadSnapshot?.unreadCount ?? 0,
-              lastReadMessageId: unreadSnapshot
-                ? unreadSnapshot.lastReadMessageId
-                : conversation.lastReadMessageId,
-              lastReadAt: unreadSnapshot
-                ? unreadSnapshot.lastReadAt
-                : conversation.lastReadAt,
+              unreadCount: unreadSnapshot.unreadCount,
+              lastReadMessageId: unreadSnapshot.lastReadMessageId,
+              lastReadAt: unreadSnapshot.lastReadAt,
             }) as Conversation;
-          }),
-        }));
+          });
+
+          return {
+            conversations,
+            totalUnreadCount: computeCanonicalTotalUnreadCount(conversations),
+            lastUnreadSummaryAppliedAt: appliedAtMs,
+            lastConversationCursor: computeConversationCursor(conversations),
+          };
+        });
       },
 
       fetchConversations: async () => {
@@ -1807,6 +2084,8 @@ export const useChatStore = create<ChatState>()(
             );
             set({
               conversations,
+              totalUnreadCount: computeCanonicalTotalUnreadCount(conversations),
+              lastConversationCursor: computeConversationCursor(conversations),
               isLoadingConversations: false,
               hasFetchedConversationsOnce: true,
             });
@@ -2731,12 +3010,7 @@ export const useFilteredConversations = () => {
 };
 
 export const useTotalUnreadCount = () => {
-  return useChatStore((state) =>
-    (Array.isArray(state.conversations) ? state.conversations : []).reduce(
-      (sum, conversation) => sum + (conversation.unreadCount || 0),
-      0,
-    ),
-  );
+  return useChatStore((state) => state.totalUnreadCount);
 };
 
 export const useCurrentMessages = () =>

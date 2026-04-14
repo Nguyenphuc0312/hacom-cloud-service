@@ -452,6 +452,131 @@ describe("chatStore phase-1 realtime flows", () => {
     expect(room1?.lastReadMessageId ?? null).toBeNull();
     expect(room1?.lastReadAt ?? null).toBeNull();
     expect(room2?.unreadCount).toBe(0);
+    expect(useChatStore.getState().totalUnreadCount).toBe(1);
+  });
+
+  it("ignores stale conversation summary versions and preserves canonical unread total", () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-stale",
+        conversationId: "room-stale",
+        unreadCount: 4,
+        summaryVersion: 8,
+        lastActivityAt: "2026-04-10T10:00:00.000Z",
+        updatedAt: "2026-04-10T10:00:00.000Z",
+      }),
+    ] as never);
+
+    const result = useChatStore.getState().upsertConversationSummary(
+      makeConversation({
+        id: "room-stale",
+        conversationId: "room-stale",
+        unreadCount: 1,
+        summaryVersion: 7,
+        lastActivityAt: "2026-04-10T09:59:00.000Z",
+        updatedAt: "2026-04-10T09:59:00.000Z",
+      }) as never,
+    );
+
+    const conversation = useChatStore
+      .getState()
+      .conversations.find((item) => item.id === "room-stale");
+
+    expect(result.applied).toBe(false);
+    expect(result.reason).toBe("stale_version");
+    expect(conversation?.unreadCount).toBe(4);
+    expect(conversation?.summaryVersion).toBe(8);
+    expect(useChatStore.getState().totalUnreadCount).toBe(4);
+  });
+
+  it("does not regress unread snapshot when a newer summary landed after reconnect request started", () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-fresh",
+        conversationId: "room-fresh",
+        unreadCount: 1,
+        summaryVersion: 4,
+        lastActivityAt: "2026-04-10T10:00:00.000Z",
+        updatedAt: "2026-04-10T10:00:00.000Z",
+      }),
+    ] as never);
+
+    useChatStore.getState().upsertConversationSummary(
+      makeConversation({
+        id: "room-fresh",
+        conversationId: "room-fresh",
+        unreadCount: 3,
+        summaryVersion: 5,
+        lastActivityAt: "2026-04-10T10:01:00.000Z",
+        updatedAt: "2026-04-10T10:01:00.000Z",
+      }) as never,
+    );
+
+    useChatStore.getState().applyUnreadSummary(
+      {
+        totalUnreadCount: 1,
+        conversations: [
+          {
+            conversationId: "room-fresh",
+            unreadCount: 1,
+            lastReadMessageId: "msg-old",
+            lastReadAt: "2026-04-10T09:59:00.000Z",
+          },
+        ],
+      },
+      {
+        requestedAtMs: Date.parse("2026-04-10T10:00:30.000Z"),
+        appliedAtMs: Date.parse("2026-04-10T10:00:45.000Z"),
+      },
+    );
+
+    const conversation = useChatStore
+      .getState()
+      .conversations.find((item) => item.id === "room-fresh");
+    expect(conversation?.unreadCount).toBe(3);
+    expect(conversation?.summaryVersion).toBe(5);
+    expect(useChatStore.getState().totalUnreadCount).toBe(3);
+  });
+
+  it("keeps the newer message version when update events arrive out of order", () => {
+    useChatStore.getState().setMessages("room-1", [
+      makeMessage({
+        id: "msg-versioned",
+        content: "latest",
+        version: 3,
+        updatedAt: "2026-04-10T10:02:00.000Z",
+      }) as never,
+    ] as never);
+
+    useChatStore.getState().addMessage(
+      "room-1",
+      makeMessage({
+        id: "msg-versioned",
+        content: "stale",
+        version: 2,
+        updatedAt: "2026-04-10T10:01:00.000Z",
+      }) as never,
+    );
+
+    const messages = useChatStore.getState().messages["room-1"] || [];
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.content).toBe("latest");
+    expect(messages[0]?.version).toBe(3);
+  });
+
+  it("suppresses duplicate server message events by identity", () => {
+    const duplicate = makeMessage({
+      id: "msg-dup",
+      clientMessageId: "client-dup",
+      version: 1,
+    });
+
+    useChatStore.getState().addMessage("room-1", duplicate as never);
+    useChatStore.getState().addMessage("room-1", duplicate as never);
+
+    const messages = useChatStore.getState().messages["room-1"] || [];
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.id).toBe("msg-dup");
   });
 
   it("applies message update and delete patches deterministically", () => {

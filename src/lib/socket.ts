@@ -362,7 +362,23 @@ class WebSocketManager {
     if (!type) return;
 
     const payload = Object.prototype.hasOwnProperty.call(message, "data")
-      ? message.data
+      ? (() => {
+          const rawData = message.data;
+          if (rawData && typeof rawData === "object") {
+            return {
+              ...(rawData as Record<string, unknown>),
+              ...(typeof message.eventId === "string" &&
+              !Object.prototype.hasOwnProperty.call(rawData, "eventId")
+                ? { eventId: message.eventId }
+                : {}),
+              ...(typeof message.correlationId === "string" &&
+              !Object.prototype.hasOwnProperty.call(rawData, "correlationId")
+                ? { correlationId: message.correlationId }
+                : {}),
+            };
+          }
+          return rawData;
+        })()
       : Object.fromEntries(
           Object.entries(message).filter(
             ([key]) => key !== "type" && key !== "event",
@@ -716,7 +732,7 @@ export const WebSocketEvents = {
   GROUP_INVITE_UPDATED: WsEventNames.GROUP_INVITE_UPDATED,
   GROUP_MEMBER_JOINED: WsEventNames.GROUP_MEMBER_JOINED,
   GROUP_MEMBER_LEFT: WsEventNames.GROUP_MEMBER_LEFT,
-  GROUP_MEMBER_REMOVED: WsEventNames.GROUP_MEMBER_REMOVED,
+  GROUP_MEMBER_REMOVED: "group:member:removed",
   GROUP_MEMBER_UPDATED: WsEventNames.GROUP_MEMBER_UPDATED,
   GROUP_MEMBER_BANNED: WsEventNames.GROUP_MEMBER_BANNED,
   GROUP_SETTINGS_UPDATED: WsEventNames.GROUP_SETTINGS_UPDATED,
@@ -733,8 +749,8 @@ export const WebSocketEvents = {
   CONVERSATION_JOINED: WsEventNames.CONVERSATION_JOINED,
   CONVERSATION_LEFT: WsEventNames.CONVERSATION_LEFT,
   CONVERSATION_RESYNCED: WsEventNames.CONVERSATION_RESYNCED,
-  CONVERSATION_SUMMARY_UPDATED: WsEventNames.CONVERSATION_SUMMARY_UPDATED,
-  CONVERSATION_MEMBERSHIP_UPDATED: WsEventNames.CONVERSATION_MEMBERSHIP_UPDATED,
+  CONVERSATION_SUMMARY_UPDATED: "conversation:summary:updated",
+  CONVERSATION_MEMBERSHIP_UPDATED: "conversation:membership:updated",
   RESYNC_REQUIRED: WsEventNames.RESYNC_REQUIRED,
   ROOM_JOINED: "room:joined",
   ROOM_LEFT: "room:left",

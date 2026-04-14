@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RoomType, UserStatus, type Conversation } from "../types";
+import { MessageType, RoomType, UserStatus, type Conversation } from "../types";
 import {
   getConversationRankBreakdown,
   sortConversationsByActivity,
@@ -76,7 +76,7 @@ describe("sortConversationsByActivity", () => {
           senderId: "system",
           senderName: "System",
           content: "Alice đã thêm Bob vào nhóm",
-          type: "system",
+          type: MessageType.SYSTEM,
           isDeleted: false,
           createdAt: new Date("2026-04-10T11:30:00.000Z"),
         },
