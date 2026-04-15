@@ -928,6 +928,11 @@ export const useWebSocket = (
       const isActiveConversation =
         useChatStore.getState().selectedConversationId === input.conversationId;
       const visibleAndFocused = isDocumentVisibleAndFocused();
+      const conversationLabel =
+        conversation?.displayName ||
+        conversation?.name ||
+        input.senderName ||
+        "Conversation";
       const notificationKind =
         input.kind === "system"
           ? "system"
@@ -956,12 +961,6 @@ export const useWebSocket = (
       if (isActiveConversation && visibleAndFocused && !hasMention) {
         return;
       }
-
-      const conversationLabel =
-        conversation?.displayName ||
-        conversation?.name ||
-        input.senderName ||
-        "Conversation";
       const preview = notificationSettings.messagePreview
         ? input.content || "Sent an attachment"
         : hasMention
