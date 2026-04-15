@@ -45,7 +45,6 @@ import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDis
 import { logMessageDebug } from "../utils/messageDebug";
 import { ErrorCode } from "@hacom/chat-shared-types";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
-import { conversationApi } from "../services/api";
 import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
 import { createPrivateConversationUseCase } from "../features/chat/usecases/createPrivateConversation";
 import { createGroupConversationUseCase } from "../features/chat/usecases/createGroupConversation";
@@ -59,6 +58,7 @@ import {
   CHAT_OPEN_NEW_CHAT_EVENT,
   consumeOpenNewChatIntent,
 } from "../lib/commandPalette";
+import { chatApi } from "../features/chat/api";
 
 type IdleCallbackDeadline = {
   didTimeout: boolean;
@@ -225,6 +225,10 @@ export const ChatPage: React.FC = () => {
   const [conversationValidationError, setConversationValidationError] =
     useState<ConversationValidationError | null>(null);
   const [validationRetryToken, setValidationRetryToken] = useState(0);
+  const [externalJumpTargetMessageId, setExternalJumpTargetMessageId] =
+    useState<string | null>(null);
+  const [externalJumpRequestVersion, setExternalJumpRequestVersion] =
+    useState(0);
   const directInfoHydratedRef = useRef<Set<string>>(new Set());
   const lastVisibleReadAnchorKeyRef = useRef<string | null>(null);
   const renderCountRef = useRef(0);
@@ -486,7 +490,7 @@ export const ChatPage: React.FC = () => {
     setIsLoadingMoreConversations(true);
     try {
       const nextPage = conversationsPageRef.current + 1;
-      const response = await conversationApi.getConversations(
+      const response = await chatApi.conversation.getConversations(
         nextPage,
         CONVERSATIONS_PAGE_SIZE,
       );
@@ -510,9 +514,16 @@ export const ChatPage: React.FC = () => {
     }
   }, [hasMoreConversations, isLoadingMoreConversations, t]);
 
+  const hasConversationCachedForRoute = Boolean(
+    routeConversationId &&
+      conversations.some((conversation) => conversation.id === routeConversationId),
+  );
+  const canBootstrapConversationFromCache =
+    hasConversationCachedForRoute && routeConversationId === selectedConversationId;
+
   // Load messages when conversation changes & join/leave rooms
   useEffect(() => {
-    if (!selectedConversationId || isValidatingRoom) {
+    if (!selectedConversationId || (isValidatingRoom && !canBootstrapConversationFromCache)) {
       return;
     }
 
@@ -552,6 +563,7 @@ export const ChatPage: React.FC = () => {
       leaveRoom(selectedConversationId);
     };
   }, [
+    canBootstrapConversationFromCache,
     selectedConversationId,
     isValidatingRoom,
     fetchMessages,
@@ -577,22 +589,20 @@ export const ChatPage: React.FC = () => {
   );
 
   const isCurrentRouteValidated = conversationId
-    ? lastValidatedConversationId === conversationId
+    ? lastValidatedConversationId === conversationId ||
+      hasConversationCachedForRoute
     : true;
   const isConversationHistoryReady = isSelectedConversationHydrated;
   const isConversationReady = Boolean(
     selectedConversationId &&
     selectedConversation &&
-    isCurrentRouteValidated &&
-    !isValidatingRoom,
+    isCurrentRouteValidated,
   );
   const websocketReady = connectionState === "connected";
 
   const handleSendMessage = useSendMessage({
     selectedConversationId,
-    hasSelectedConversation: Boolean(selectedConversation),
-    isCurrentRouteValidated,
-    isValidatingRoom,
+    isConversationReady,
     source: "ChatPage",
   });
 
@@ -666,7 +676,9 @@ export const ChatPage: React.FC = () => {
   );
 
   useEffect(() => {
-    if (!selectedConversationId || isValidatingRoom) return;
+    if (!selectedConversationId || (isValidatingRoom && !canBootstrapConversationFromCache)) {
+      return;
+    }
 
     const orderedConversations = sortConversationsByActivity(
       Array.isArray(conversations) ? conversations : [],
@@ -702,6 +714,7 @@ export const ChatPage: React.FC = () => {
       cancelScheduledTask();
     };
   }, [
+    canBootstrapConversationFromCache,
     conversations,
     currentUserSummary?.displayName,
     currentUserSummary?.id,
@@ -1160,6 +1173,43 @@ export const ChatPage: React.FC = () => {
     };
   }, [handleStartChat, openUserProfile]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handler = (
+      event: Event,
+    ) => {
+      const customEvent = event as CustomEvent<{
+        conversationId?: string;
+        messageId?: string;
+      }>;
+      const nextConversationId = customEvent.detail?.conversationId;
+      const nextMessageId = customEvent.detail?.messageId;
+      if (!nextConversationId) return;
+
+      setIsMobileMenuOpen(false);
+      if (nextMessageId) {
+        setExternalJumpTargetMessageId(nextMessageId);
+        setExternalJumpRequestVersion((current) => current + 1);
+      }
+
+      if (routeConversationId !== nextConversationId) {
+        navigate(`/chat/${nextConversationId}`);
+      }
+    };
+
+    window.addEventListener(
+      "chat:notification:clicked",
+      handler as EventListener,
+    );
+    return () => {
+      window.removeEventListener(
+        "chat:notification:clicked",
+        handler as EventListener,
+      );
+    };
+  }, [navigate, routeConversationId]);
+
   const handleRetryBootstrap = useCallback(() => {
     void refreshUser().then(() => {
       if (useAuthStore.getState().user) {
@@ -1307,6 +1357,13 @@ export const ChatPage: React.FC = () => {
             onReachedLatestMessage={handleReachedLatestMessage}
             connectionState={connectionState}
             isConversationReady={isConversationReady}
+            externalJumpToMessageId={externalJumpTargetMessageId}
+            externalJumpRequestVersion={externalJumpRequestVersion}
+            onExternalJumpHandled={(messageId) => {
+              setExternalJumpTargetMessageId((current) =>
+                current === messageId ? null : current,
+              );
+            }}
           />
         ) : routeConversationId &&
           conversationValidationError?.conversationId ===

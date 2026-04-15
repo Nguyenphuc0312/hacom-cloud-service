@@ -27,6 +27,7 @@ export type ClusterBreakReason =
 export interface UnreadTimelineMarker {
   lastReadMessageId?: string;
   lastReadAt?: Date | string;
+  firstUnreadMessageId?: string;
   active?: boolean;
 }
 
@@ -204,6 +205,16 @@ const shouldInsertUnreadDivider = (
   unreadMarker?: UnreadTimelineMarker | null,
 ): boolean => {
   if (!unreadMarker?.active) return false;
+
+  if (unreadMarker.firstUnreadMessageId) {
+    const firstUnreadMessageId = unreadMarker.firstUnreadMessageId;
+    return (
+      message.id === firstUnreadMessageId ||
+      message.localId === firstUnreadMessageId ||
+      message.stableId === firstUnreadMessageId ||
+      message.clientMessageId === firstUnreadMessageId
+    );
+  }
 
   if (unreadMarker.lastReadMessageId) {
     return previousMessage?.id === unreadMarker.lastReadMessageId;

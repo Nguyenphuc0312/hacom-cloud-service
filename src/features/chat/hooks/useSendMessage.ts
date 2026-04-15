@@ -9,17 +9,13 @@ import { MessageType } from "../../../types";
 
 interface UseSendMessageOptions {
   selectedConversationId: string | null;
-  hasSelectedConversation: boolean;
-  isCurrentRouteValidated: boolean;
-  isValidatingRoom: boolean;
+  isConversationReady: boolean;
   source?: string;
 }
 
 export const useSendMessage = ({
   selectedConversationId,
-  hasSelectedConversation,
-  isCurrentRouteValidated,
-  isValidatingRoom,
+  isConversationReady,
   source = "ChatPage",
 }: UseSendMessageOptions) => {
   const { t } = useTranslation();
@@ -48,14 +44,7 @@ export const useSendMessage = ({
         throw error;
       }
 
-      const canSendImmediately = Boolean(
-        selectedConversationId &&
-        hasSelectedConversation &&
-        isCurrentRouteValidated &&
-        !isValidatingRoom,
-      );
-
-      if (!canSendImmediately) {
+      if (!isConversationReady) {
         const error = new Error(
           t("common:loading.default", {
             defaultValue: "Loading conversation...",
@@ -63,13 +52,11 @@ export const useSendMessage = ({
         );
         logMessageDebug(source, "send_blocked_conversation_not_ready", {
           conversationId: selectedConversationId,
-          isCurrentRouteValidated,
-          hasSelectedConversation,
           isHistoryHydrated:
             useChatStore.getState().messagesHydratedByConversation[
               selectedConversationId
             ] === true,
-          isValidatingRoom,
+          isConversationReady,
           contentLength: content.trim().length,
           type,
         });
@@ -109,9 +96,7 @@ export const useSendMessage = ({
       }
     },
     [
-      hasSelectedConversation,
-      isCurrentRouteValidated,
-      isValidatingRoom,
+      isConversationReady,
       selectedConversationId,
       setSlowModeCooldown,
       source,

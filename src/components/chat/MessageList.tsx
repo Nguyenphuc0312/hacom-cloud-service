@@ -411,6 +411,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const [highlightedMessageId, setHighlightedMessageId] = React.useState<
     string | null
   >(null);
+  const [liveUnreadMarker, setLiveUnreadMarker] =
+    React.useState<UnreadTimelineMarker | null>(unreadMarker ?? null);
   const getTimelineItemKey = React.useCallback(
     (item: TimelineItem, index: number) => item.key || `${item.kind}-${index}`,
     [],
@@ -419,7 +421,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     messages,
     currentUserId,
     conversationType,
-    unreadMarker,
+    unreadMarker: liveUnreadMarker,
   });
   timelineItemCountRef.current = timelineItems.length;
 
@@ -545,6 +547,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const {
     pendingNewMessages,
     isPinnedToBottom,
+    firstDetachedUnreadMessageId,
     handleScroll,
     jumpToLatest,
     detachAutoFollow,
@@ -571,6 +574,23 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     outerRef,
     requestScrollToBottom,
   });
+
+  React.useEffect(() => {
+    if (unreadMarker?.active) {
+      setLiveUnreadMarker(unreadMarker);
+      return;
+    }
+
+    if (firstDetachedUnreadMessageId) {
+      setLiveUnreadMarker({
+        firstUnreadMessageId: firstDetachedUnreadMessageId,
+        active: true,
+      });
+      return;
+    }
+
+    setLiveUnreadMarker(unreadMarker ?? null);
+  }, [firstDetachedUnreadMessageId, unreadMarker]);
 
   const showNewMessagesPill = pendingNewMessages > 0;
   const showJumpToBottom = !isPinnedToBottom && pendingNewMessages === 0;

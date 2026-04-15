@@ -94,6 +94,9 @@ interface ChatWindowProps {
   onReachedLatestMessage?: (message: Message) => void;
   connectionState?: ConnectionState;
   isConversationReady?: boolean;
+  externalJumpToMessageId?: string | null;
+  externalJumpRequestVersion?: number;
+  onExternalJumpHandled?: (messageId: string) => void;
   className?: string;
 }
 
@@ -138,6 +141,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onReachedLatestMessage,
   connectionState = "connected",
   isConversationReady = true,
+  externalJumpToMessageId = null,
+  externalJumpRequestVersion = 0,
+  onExternalJumpHandled,
   className,
 }) => {
   const { t } = useTranslation();
@@ -583,6 +589,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     [conversation.id, ensureMessageLoaded, queueJumpToMessage, t],
   );
 
+  React.useEffect(() => {
+    if (!externalJumpToMessageId) return;
+
+    void handleNavigateToMessage(externalJumpToMessageId).finally(() => {
+      onExternalJumpHandled?.(externalJumpToMessageId);
+    });
+  }, [
+    externalJumpRequestVersion,
+    externalJumpToMessageId,
+    handleNavigateToMessage,
+    onExternalJumpHandled,
+  ]);
+
   const conversationReadSnapshot = conversation as Conversation & {
     lastReadMessageId?: string;
     lastReadAt?: Date | string;
@@ -815,6 +834,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       handleDelete,
       hasMoreMessages,
       isLoadingMessages,
+      isConversationReady,
       messageError,
       messages,
       onImageClick,

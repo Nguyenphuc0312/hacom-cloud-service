@@ -15,7 +15,7 @@ import type {
   UserSummary,
 } from "../../../types";
 import { isDirectConversation } from "../../../lib/conversationAdapter";
-import { sortConversationsByActivity } from "../../../utils/conversationRanking";
+import { rankConversations } from "../../../utils/conversationRanking";
 import {
   getConversationDisplayName,
   getUserDisplayName,
@@ -286,10 +286,19 @@ export const RoomList: React.FC<RoomListProps> = ({
 
   const sortedRooms = useMemo(
     () =>
-      sortConversationsByActivity(
-        Array.isArray(conversations) ? conversations : [],
-      ),
-    [conversations],
+      rankConversations(Array.isArray(conversations) ? conversations : [], {
+        currentUserId: currentUser.id,
+        currentUsername: currentUser.username,
+        currentDisplayName: currentUser.displayName,
+        activeConversationId: selectedId,
+      }),
+    [
+      conversations,
+      currentUser.displayName,
+      currentUser.id,
+      currentUser.username,
+      selectedId,
+    ],
   );
 
   const queriedRooms = useMemo(() => {

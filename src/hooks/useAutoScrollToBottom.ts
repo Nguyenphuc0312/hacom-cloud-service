@@ -22,6 +22,7 @@ interface UseAutoScrollToBottomParams {
 interface UseAutoScrollToBottomResult {
   pendingNewMessages: number;
   isPinnedToBottom: boolean;
+  firstDetachedUnreadMessageId: string | null;
   handleScroll: (scrollOffset: number) => void;
   jumpToLatest: () => void;
   detachAutoFollow: (reason?: string) => void;
@@ -73,6 +74,8 @@ export const useAutoScrollToBottom = ({
 }: UseAutoScrollToBottomParams): UseAutoScrollToBottomResult => {
   const [pendingNewMessages, setPendingNewMessages] = React.useState(0);
   const [isPinnedToBottom, setIsPinnedToBottom] = React.useState(true);
+  const [firstDetachedUnreadMessageId, setFirstDetachedUnreadMessageId] =
+    React.useState<string | null>(null);
   const [pendingRestoreScrollTop, setPendingRestoreScrollTop] =
     React.useState<number | null>(null);
   const [pendingRestoreVersion, setPendingRestoreVersion] = React.useState(0);
@@ -113,6 +116,9 @@ export const useAutoScrollToBottom = ({
         setPendingNewMessages(nextPendingNewMessages);
       } else if (nextPinnedToBottom) {
         setPendingNewMessages(0);
+      }
+      if (nextPinnedToBottom) {
+        setFirstDetachedUnreadMessageId(null);
       }
 
       persistSession(nextPinnedToBottom, nextScrollTop);
@@ -166,6 +172,7 @@ export const useAutoScrollToBottom = ({
     prevFirstMessageIdRef.current = messages[0]?.id;
     loadingOlderRef.current = false;
     setPendingNewMessages(0);
+    setFirstDetachedUnreadMessageId(null);
 
     const savedSession = conversationScrollSessions.get(conversationId);
     if (savedSession && !savedSession.isPinnedToBottom) {
@@ -228,7 +235,11 @@ export const useAutoScrollToBottom = ({
           forcedByOwnMessage: shouldForceFollowOwnMessage,
         });
       } else {
+        const firstBufferedMessage = appendedMessages[0];
         setPendingNewMessages((previous) => previous + appendedMessages.length);
+        setFirstDetachedUnreadMessageId((current) =>
+          current || getMessageStableKey(firstBufferedMessage),
+        );
         logScrollTrace("incoming_buffered_for_reader", {
           conversationId,
           appendedCount: appendedMessages.length,
@@ -260,6 +271,7 @@ export const useAutoScrollToBottom = ({
     isPinnedRef.current = true;
     setPendingNewMessages(0);
     setIsPinnedToBottom(true);
+    setFirstDetachedUnreadMessageId(null);
   }, [messages.length]);
 
   const handleScroll = React.useCallback(
@@ -317,6 +329,7 @@ export const useAutoScrollToBottom = ({
   return {
     pendingNewMessages,
     isPinnedToBottom,
+    firstDetachedUnreadMessageId,
     handleScroll,
     jumpToLatest,
     detachAutoFollow,
