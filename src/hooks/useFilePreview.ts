@@ -10,6 +10,7 @@ import type { Attachment } from "../types";
 import type { PreviewType } from "../utils/formatFileSize";
 import { fileApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
+import { resolvePublicResourceUrl } from "../config";
 
 // ── Signed-URL cache (shared across hook instances) ──────────────────
 
@@ -114,13 +115,18 @@ export function useFilePreview(): UseFilePreviewReturn {
             ? Date.parse(target.attachment.expiresAt)
             : 0;
           if (expiresAtMs - Date.now() > CACHE_MARGIN_MS) {
-            URL_CACHE.set(key, {
-              url: target.attachment.downloadUrl,
-              expiresAtMs,
-            });
-            setSecureUrl(target.attachment.downloadUrl);
-            setUrlError(null);
-            return;
+            const resolvedDownloadUrl = resolvePublicResourceUrl(
+              target.attachment.downloadUrl,
+            );
+            if (resolvedDownloadUrl) {
+              URL_CACHE.set(key, {
+                url: resolvedDownloadUrl,
+                expiresAtMs,
+              });
+              setSecureUrl(resolvedDownloadUrl);
+              setUrlError(null);
+              return;
+            }
           }
         }
       }
@@ -129,7 +135,7 @@ export function useFilePreview(): UseFilePreviewReturn {
       const hasIdentity = target.attachment.objectKey || target.attachment.id;
       if (!hasIdentity) {
         // Fallback: use raw url if available
-        setSecureUrl(target.attachment.url ?? null);
+        setSecureUrl(resolvePublicResourceUrl(target.attachment.url) ?? null);
         return;
       }
 
@@ -150,15 +156,21 @@ export function useFilePreview(): UseFilePreviewReturn {
           ? Date.parse(payload.expiresAt)
           : Date.now() + 5 * 60 * 1000;
 
-        URL_CACHE.set(key, { url: payload.url, expiresAtMs });
-        setSecureUrl(payload.url);
+        const signedUrl = resolvePublicResourceUrl(payload.url);
+        if (!signedUrl) {
+          setSecureUrl(resolvePublicResourceUrl(target.attachment.url) ?? null);
+          return;
+        }
+
+        URL_CACHE.set(key, { url: signedUrl, expiresAtMs });
+        setSecureUrl(signedUrl);
       } catch (err) {
         if (controller.signal.aborted) return;
         setUrlError(
           err instanceof Error ? err.message : "Failed to load preview URL",
         );
         // Fallback to raw URL
-        setSecureUrl(target.attachment.url ?? null);
+        setSecureUrl(resolvePublicResourceUrl(target.attachment.url) ?? null);
       } finally {
         if (!controller.signal.aborted) {
           setIsLoadingUrl(false);

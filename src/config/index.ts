@@ -29,6 +29,19 @@ const resolveHttpBaseUrl = (
   return fallbackPath;
 };
 
+const toAbsoluteOrigin = (value: string | undefined): string | null => {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    return new URL(trimmed).origin;
+  } catch {
+    return null;
+  }
+};
+
 const isLocalHostUrl = (value: string): boolean => {
   try {
     const parsedUrl = new URL(value, "http://placeholder.local");
@@ -49,6 +62,92 @@ const resolvePathname = (value: string): string => {
   } catch {
     return "/";
   }
+};
+
+const WS_SCHEME_REGEX = /^wss?:\/\//i;
+const HTTP_SCHEME_REGEX = /^https?:\/\//i;
+const RELATIVE_PATH_REGEX = /^\//;
+const HOST_WITH_OPTIONAL_PORT_REGEX = /^[a-z0-9.-]+(?::\d{1,5})?(?:\/.*)?$/i;
+
+const ensureWebSocketScheme = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "/ws";
+  }
+
+  const deDuplicatedScheme = trimmed.replace(
+    /^(wss?:\/\/)(https?:\/\/)/i,
+    "$2",
+  );
+
+  if (WS_SCHEME_REGEX.test(deDuplicatedScheme)) {
+    return deDuplicatedScheme;
+  }
+
+  if (HTTP_SCHEME_REGEX.test(deDuplicatedScheme)) {
+    return deDuplicatedScheme.replace(/^http/i, "ws");
+  }
+
+  if (RELATIVE_PATH_REGEX.test(deDuplicatedScheme)) {
+    return deDuplicatedScheme;
+  }
+
+  if (HOST_WITH_OPTIONAL_PORT_REGEX.test(deDuplicatedScheme)) {
+    const scheme =
+      typeof window !== "undefined" && window.location.protocol === "https:"
+        ? "wss://"
+        : "ws://";
+    return `${scheme}${deDuplicatedScheme}`;
+  }
+
+  return "/ws";
+};
+
+const resolveFileBaseUrl = (): string => {
+  const explicit = import.meta.env.VITE_FILE_BASE_URL?.trim();
+  if (explicit) {
+    return normalizeBaseUrl(explicit);
+  }
+
+  const apiOrigin = toAbsoluteOrigin(API_BASE_URL);
+  return apiOrigin ?? "";
+};
+
+const resolveWithAbsoluteBase = (
+  value: string,
+  absoluteBase: string,
+): string => {
+  try {
+    return new URL(value, absoluteBase).toString();
+  } catch {
+    return value;
+  }
+};
+
+export const resolvePublicResourceUrl = (
+  value: string | undefined,
+): string | undefined => {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (/^(?:https?:|wss?:|blob:|data:)/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith("//")) {
+    if (typeof window !== "undefined") {
+      return `${window.location.protocol}${trimmed}`;
+    }
+    return `https:${trimmed}`;
+  }
+
+  if (FILE_BASE_URL && HTTP_SCHEME_REGEX.test(FILE_BASE_URL)) {
+    return resolveWithAbsoluteBase(trimmed, FILE_BASE_URL);
+  }
+
+  return trimmed;
 };
 
 export const APP_BASE_PATH = normalizeAppBasePath(
@@ -86,6 +185,8 @@ export const USE_AUTH_SERVICE =
 const normalizedApiBaseUrl = normalizeBaseUrl(API_BASE_URL);
 const normalizedAuthBaseUrl = normalizeBaseUrl(AUTH_BASE_URL);
 
+export const FILE_BASE_URL = resolveFileBaseUrl();
+
 if (import.meta.env.DEV) {
   console.info("[auth-config]", {
     VITE_APP_BASE_PATH: APP_BASE_PATH,
@@ -93,6 +194,7 @@ if (import.meta.env.DEV) {
     USE_AUTH_SERVICE,
     API_BASE_URL: normalizedApiBaseUrl,
     AUTH_BASE_URL: normalizedAuthBaseUrl,
+    FILE_BASE_URL: FILE_BASE_URL || "(unset)",
   });
 }
 
@@ -117,23 +219,28 @@ if (import.meta.env.DEV && !USE_AUTH_SERVICE) {
   );
 }
 
-const rawWebSocketUrl =
-  import.meta.env.VITE_WS_URL || import.meta.env.VITE_WEBSOCKET_URL || "/ws";
+const rawWebSocketBaseUrl =
+  import.meta.env.VITE_WS_BASE_URL ||
+  import.meta.env.VITE_WS_URL ||
+  import.meta.env.VITE_WEBSOCKET_URL ||
+  "/ws";
 
 const resolveWebSocketUrl = (value: string): string => {
-  if (!value.startsWith("/")) {
-    return value;
+  const normalizedValue = ensureWebSocketScheme(value);
+
+  if (!normalizedValue.startsWith("/")) {
+    return normalizedValue;
   }
 
   if (typeof window === "undefined") {
-    return `ws://localhost:8001${value}`;
+    return `ws://localhost:8001${normalizedValue}`;
   }
 
   const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${scheme}//${window.location.host}${value}`;
+  return `${scheme}//${window.location.host}${normalizedValue}`;
 };
 
-export const WEBSOCKET_URL = resolveWebSocketUrl(rawWebSocketUrl);
+export const WEBSOCKET_URL = resolveWebSocketUrl(rawWebSocketBaseUrl);
 
 if (import.meta.env.PROD) {
   const localhostTargets = [API_BASE_URL, AUTH_BASE_URL, WEBSOCKET_URL].filter(
