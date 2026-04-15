@@ -60,6 +60,7 @@ interface RowData {
 
 const EXPANDED_ROOM_HEIGHT = 72;
 const COLLAPSED_ROOM_HEIGHT = 60;
+const VIRTUALIZATION_THRESHOLD = 10;
 
 const measureViewportHeight = (node: HTMLDivElement): number => {
   if (node.clientHeight > 0) return node.clientHeight;
@@ -309,6 +310,9 @@ export const RoomList: React.FC<RoomListProps> = ({
     selectedId,
   ]);
 
+  const shouldUseVirtualList =
+    viewportHeight > 0 && flatItems.length > VIRTUALIZATION_THRESHOLD;
+
   useEffect(() => {
     listRef.current?.resetAfterIndex(0, true);
   }, [collapsed, flatItems.length]);
@@ -459,10 +463,10 @@ export const RoomList: React.FC<RoomListProps> = ({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col pb-2">
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col pb-2">
       <div
         ref={containerRef}
-        className="min-h-0 flex-1"
+        className="min-h-0 flex-1 overflow-y-auto"
         tabIndex={0}
         role="listbox"
         aria-label={t("sidebar:room.listAria")}
@@ -473,7 +477,7 @@ export const RoomList: React.FC<RoomListProps> = ({
           }
         }}
       >
-        {viewportHeight > 0 && (
+        {shouldUseVirtualList ? (
           <VariableSizeList<RowData>
             ref={listRef}
             className="sidebar-scrollbar"
@@ -487,6 +491,23 @@ export const RoomList: React.FC<RoomListProps> = ({
           >
             {Row}
           </VariableSizeList>
+        ) : (
+          <div className="sidebar-scrollbar h-full space-y-0.5 overflow-y-auto py-0.5">
+            {flatItems.map((item, index) => (
+              <RoomItem
+                key={item.key}
+                conversation={item.room}
+                currentUser={currentUser}
+                collapsed={collapsed}
+                isActive={isRoomActive(item.room.id, selectedId)}
+                isKeyboardActive={
+                  isKeyboardMode &&
+                  roomIndexes[currentCursor] === index
+                }
+                onSelect={handleSelect}
+              />
+            ))}
+          </div>
         )}
       </div>
 
