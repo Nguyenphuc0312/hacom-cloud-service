@@ -151,7 +151,7 @@ export const AuditLogPage = () => {
     return (
       <PageShell
         title="Audit Logs"
-        description="Trace admin actions, request correlation, and outcome signals without losing the surrounding table context."
+        description="Trace admin actions, request correlation, and outcome signals."
       >
         <QueryStateView kind="loading" title="Loading audit logs..." />
       </PageShell>
@@ -162,7 +162,7 @@ export const AuditLogPage = () => {
     return (
       <PageShell
         title="Audit Logs"
-        description="Trace admin actions, request correlation, and outcome signals without losing the surrounding table context."
+        description="Trace admin actions, request correlation, and outcome signals."
       >
         <QueryStateView
           kind="error"
@@ -180,44 +180,22 @@ export const AuditLogPage = () => {
   return (
     <PageShell
       title="Audit Logs"
-      description="Search the event stream by actor, action, entity, source, and time range without turning the page into a dense filter wall."
+      description="Search the event stream by actor, action, entity, source, and time range."
       headerExtra={
-        <div className="ds-page-toolbar-stack">
-          <div className="ds-page-toolbar-group">
-            <span className="ds-shell-chip">
-              {data?.pagination.total ?? 0} matched event{(data?.pagination.total ?? 0) === 1 ? '' : 's'}
-            </span>
-            <span className="ds-shell-chip ds-shell-chip--ghost">
-              {activeFilterCount} active filter{activeFilterCount === 1 ? '' : 's'}
-            </span>
-          </div>
-          <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
-            <Button
-              icon={<ReloadOutlined />}
-              loading={query.isFetching}
-              onClick={() => {
-                void query.refetch();
-              }}
-            >
-              Refresh
-            </Button>
-            <span className="ds-page-toolbar-meta">
-              Last sync:{' '}
-              {query.dataUpdatedAt ? formatDateTime(new Date(query.dataUpdatedAt).toISOString()) : '-'}
-            </span>
-          </div>
+        <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
+          <Button
+            icon={<ReloadOutlined />}
+            loading={query.isFetching}
+            onClick={() => {
+              void query.refetch();
+            }}
+          >
+            Refresh
+          </Button>
         </div>
       }
     >
       <FilterBar>
-        <div className="ds-toolbar-lead">
-          <span className="ds-toolbar-eyebrow">Audit query</span>
-          <strong className="ds-toolbar-title">Search the event stream</strong>
-          <span className="ds-toolbar-description">
-            Keep the filters explicit but compact so the table remains the primary surface for investigation.
-          </span>
-        </div>
-
         <Form form={form} layout="inline" className="ds-toolbar-form">
           <Form.Item name="action" className="ds-toolbar-field ds-toolbar-field--sm">
             <Input allowClear placeholder="Action" />
@@ -243,18 +221,28 @@ export const AuditLogPage = () => {
             </Space>
           </Form.Item>
         </Form>
+        <div className="ds-filter-toolbar-meta">
+          <span>
+            {data?.pagination.total ?? 0} matched event{(data?.pagination.total ?? 0) === 1 ? '' : 's'}
+          </span>
+          <span>
+            {activeFilterCount > 0
+              ? `${activeFilterCount} active filter${activeFilterCount === 1 ? '' : 's'}`
+              : 'No active filters'}
+          </span>
+          <span>
+            Last sync:{' '}
+            {query.dataUpdatedAt ? formatDateTime(new Date(query.dataUpdatedAt).toISOString()) : '-'}
+          </span>
+        </div>
       </FilterBar>
 
       <DataTableShell
         title="Audit records"
-        meta={`${data?.pagination.total ?? 0} record(s) matched the current query`}
+        meta="Primary surface for investigation and correlation."
         toolbar={
           <DataTableToolbar>
-            <span className="ds-toolbar-summary">
-              <span className="ds-shell-chip ds-shell-chip--ghost">
-                Page {data?.pagination.page ?? 1}
-              </span>
-            </span>
+            <span className="ds-toolbar-summary">Page {data?.pagination.page ?? 1}</span>
           </DataTableToolbar>
         }
       >

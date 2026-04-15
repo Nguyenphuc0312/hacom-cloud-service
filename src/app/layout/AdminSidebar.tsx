@@ -3,8 +3,8 @@ import React from 'react';
 import { appConfig } from '@/config/appConfig';
 import { useAuthStore } from '@/store/authStore';
 import { toDisplayRole } from '@/utils/role';
-import { SidebarNavSection } from './SidebarNavSection';
-import { SIDEBAR_SECTIONS, navItems } from './navigationConfig';
+import { SidebarNavItem } from './SidebarNavItem';
+import { navItems } from './navigationConfig';
 
 interface AdminSidebarProps {
   collapsed?: boolean;
@@ -14,6 +14,7 @@ interface AdminSidebarProps {
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({ collapsed = false, id }) => {
   const user = useAuthStore((state) => state.user);
   const roleLabel = toDisplayRole(user?.role).replace('_', ' ');
+  const primaryItems = navItems;
 
   return (
     <aside
@@ -32,25 +33,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ collapsed = false, i
       </div>
 
       <nav className="ds-admin-sidebar-nav" role="navigation" aria-label="Main navigation">
-        {SIDEBAR_SECTIONS.map((section) => {
-          const items = navItems.filter((item) => item.section === section.key);
-
-          if (!items.length) {
-            return null;
-          }
-
-          return (
-            <SidebarNavSection
-              key={section.key}
-              label={section.label}
-              description={section.description}
-              itemCount={items.length}
-              items={items}
-              icon={section.icon}
-              collapsed={collapsed}
-            />
-          );
-        })}
+        <div className="ds-sidebar-nav-list">
+          {primaryItems.map((item) => (
+            <SidebarNavItem key={item.key} item={item} collapsed={collapsed} />
+          ))}
+        </div>
       </nav>
 
       <div className="ds-admin-sidebar-footer">
@@ -58,11 +45,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ collapsed = false, i
           <div className="ds-sidebar-footer-meta">
             <strong>{user?.username?.trim() || user?.email || 'Admin workspace'}</strong>
             <span>{roleLabel}</span>
-            <div className="ds-sidebar-footer-chips" aria-hidden>
-              <span className="ds-shell-chip">{appConfig.environmentLabel}</span>
-              <span className="ds-shell-chip ds-shell-chip--ghost">{appConfig.liveUpdatesLabel}</span>
-              <span className="ds-shell-chip ds-shell-chip--ghost">Ctrl K</span>
-            </div>
+            <span className="ds-sidebar-footer-environment">{appConfig.environmentLabel}</span>
           </div>
         )}
       </div>

@@ -132,7 +132,7 @@ export const ServicesPage = () => {
     return (
       <PageShell
         title="Services"
-        description="Dependency health and service configuration for the admin runtime."
+        description="Dependency health and service configuration."
       >
         <QueryStateView kind="loading" title="Loading service health..." />
       </PageShell>
@@ -143,7 +143,7 @@ export const ServicesPage = () => {
     return (
       <PageShell
         title="Services"
-        description="Dependency health and service configuration for the admin runtime."
+        description="Dependency health and service configuration."
       >
         <QueryStateView
           kind="error"
@@ -161,40 +161,20 @@ export const ServicesPage = () => {
   return (
     <PageShell
       title="Services"
-      description="Keep dependency health, SMTP runtime, and outbound template controls inside one disciplined settings workspace."
+      description="Manage service health, SMTP runtime, and outbound template controls from one lean workspace."
       headerExtra={
-        <div className="ds-page-toolbar-stack">
-          <div className="ds-page-toolbar-group">
-            {activeSection === 'health' ? (
-              <span className="ds-shell-chip">
-                {data?.summary.total ?? 0} tracked service{(data?.summary.total ?? 0) === 1 ? '' : 's'}
-              </span>
-            ) : null}
-            <span className="ds-shell-chip ds-shell-chip--ghost">
-              {activeSection === 'health' ? 'Health workspace' : activeSection === 'smtp' ? 'SMTP workspace' : 'Email template workspace'}
-            </span>
-          </div>
-          <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
-            {activeSection === 'health' ? (
-              <>
-                <Button
-                  icon={<ReloadOutlined />}
-                  loading={healthQuery.isFetching}
-                  onClick={() => {
-                    void healthQuery.refetch();
-                  }}
-                >
-                  Refresh
-                </Button>
-                <span className="ds-page-toolbar-meta">
-                  Last sync:{' '}
-                  {healthQuery.dataUpdatedAt
-                    ? formatDateTime(new Date(healthQuery.dataUpdatedAt).toISOString())
-                    : '-'}
-                </span>
-              </>
-            ) : null}
-          </div>
+        <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
+          {activeSection === 'health' ? (
+            <Button
+              icon={<ReloadOutlined />}
+              loading={healthQuery.isFetching}
+              onClick={() => {
+                void healthQuery.refetch();
+              }}
+            >
+              Refresh
+            </Button>
+          ) : null}
         </div>
       }
     >
@@ -252,12 +232,18 @@ export const ServicesPage = () => {
 
                 <DataTableShell
                   title="Dependency health"
-                  meta="Keep latency, status, and release metadata readable without mixing them with SMTP or template controls."
+                  meta="Primary surface for dependency status, latency, and release metadata."
                   toolbar={
                     <DataTableToolbar>
-                      {focusedService ? (
-                        <span className="ds-shell-chip ds-shell-chip--ghost">Filter: {focusedService}</span>
-                      ) : null}
+                      <span className="ds-toolbar-summary">
+                        {focusedService
+                          ? `Focused service: ${focusedService}`
+                          : `${data?.summary.total ?? 0} tracked service${(data?.summary.total ?? 0) === 1 ? '' : 's'} · Last sync ${
+                              healthQuery.dataUpdatedAt
+                                ? formatDateTime(new Date(healthQuery.dataUpdatedAt).toISOString())
+                                : '-'
+                            }`}
+                      </span>
                     </DataTableToolbar>
                   }
                 >

@@ -2,8 +2,6 @@ import {
   AuditOutlined,
   DashboardOutlined,
   FileTextOutlined,
-  MailOutlined,
-  SafetyCertificateOutlined,
   SolutionOutlined,
   TeamOutlined,
   ThunderboltOutlined,
@@ -54,7 +52,7 @@ export const SIDEBAR_SECTIONS: SidebarSection[] = [
     key: 'conversations',
     label: 'Conversations',
     description: 'Messaging workflows',
-    icon: <MailOutlined />,
+    icon: <FileTextOutlined />,
   },
   {
     key: 'system',
@@ -74,7 +72,7 @@ export const navItems: NavItem[] = [
   {
     key: 'dashboard',
     label: 'Dashboard',
-    description: 'Operational cockpit and service posture',
+    description: 'Production snapshot for system posture and next actions.',
     icon: <DashboardOutlined />,
     section: 'analytics',
     route: '/',
@@ -82,7 +80,7 @@ export const navItems: NavItem[] = [
   {
     key: 'monitoring-overview',
     label: 'Monitoring',
-    description: 'Realtime, correctness, and dependency posture',
+    description: 'Realtime health, failures, and dependency posture.',
     icon: <ThunderboltOutlined />,
     section: 'analytics',
     route: '/monitoring',
@@ -90,52 +88,34 @@ export const navItems: NavItem[] = [
   {
     key: 'users',
     label: 'Users',
-    description: 'Admin accounts, access state, and sessions',
+    description: 'Admin accounts, presence, and access state.',
     icon: <TeamOutlined />,
     section: 'users',
     route: '/users',
-    children: [
-      {
-        key: 'hr-employees',
-        label: 'HR Directory',
-        description: 'Employee records and account provisioning',
-        icon: <SolutionOutlined />,
-        section: 'users',
-        route: '/hr-employees',
-      },
-    ],
+  },
+  {
+    key: 'hr-employees',
+    label: 'HR Directory',
+    description: 'Employee records, imports, and provisioning.',
+    icon: <SolutionOutlined />,
+    section: 'users',
+    route: '/hr-employees',
   },
   {
     key: 'email-templates',
-    label: 'Email Templates',
-    description: 'Draft, preview, publish, and rollback email content',
+    label: 'Services',
+    description: 'Service health, SMTP, and email template controls.',
     icon: <FileTextOutlined />,
-    section: 'conversations',
-    route: '/services/email-templates',
+    section: 'settings',
+    route: '/services/health',
   },
   {
     key: 'audit',
     label: 'Audit Logs',
-    description: 'Trace admin actions, requests, and security events',
+    description: 'Admin actions, requests, and security events.',
     icon: <AuditOutlined />,
     section: 'system',
     route: '/audit',
-  },
-  {
-    key: 'service-health',
-    label: 'Service Health',
-    description: 'Dependency health, latency, and runtime status',
-    icon: <SafetyCertificateOutlined />,
-    section: 'system',
-    route: '/services/health',
-  },
-  {
-    key: 'smtp',
-    label: 'SMTP',
-    description: 'Mail transport configuration and runtime activation',
-    icon: <MailOutlined />,
-    section: 'settings',
-    route: '/services/smtp',
   },
 ];
 
@@ -190,10 +170,7 @@ export const pickSelectedMenuKey = (pathname: string): string => {
   if (pathname.startsWith('/monitoring')) return 'monitoring-overview';
   if (pathname.startsWith('/users')) return 'users';
   if (pathname.startsWith('/hr-employees')) return 'hr-employees';
-  if (pathname.startsWith('/services/email-templates')) return 'email-templates';
-  if (pathname.startsWith('/services/smtp')) return 'smtp';
-  if (pathname.startsWith('/services/health') || pathname.startsWith('/services'))
-    return 'service-health';
+  if (pathname.startsWith('/services')) return 'email-templates';
   if (pathname.startsWith('/audit')) return 'audit';
   return 'dashboard';
 };
@@ -253,7 +230,7 @@ export const commandRouteItems: CommandRouteItem[] = [
     label: 'SMTP Settings',
     description: 'Configure email transport and credentials',
     category: 'Settings',
-    icon: <MailOutlined />,
+    icon: <FileTextOutlined />,
     keywords: ['smtp', 'mail', 'settings'],
     route: '/services/smtp',
   },
@@ -271,7 +248,7 @@ export const commandRouteItems: CommandRouteItem[] = [
     label: 'Service Health / Monitoring',
     description: 'Check integrations and API health status',
     category: 'System',
-    icon: <SafetyCertificateOutlined />,
+    icon: <ThunderboltOutlined />,
     keywords: ['health', 'monitoring', 'status', 'services'],
     route: '/services/health',
   },

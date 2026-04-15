@@ -1,44 +1,33 @@
 import { ReloadOutlined } from '@ant-design/icons';
-import { Button, Space } from 'antd';
+import { Button } from 'antd';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { getApiErrorStatus, getErrorMessage } from '@/api/error';
 import type { TimeRange } from '@/api/types';
-import { appConfig } from '@/config/appConfig';
 import { PageShell } from '@/components/PageShell';
 import { StatusBadge } from '@/components/StatusBadge';
 import { TimeRangePicker } from '@/components/TimeRangePicker';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { IncidentBanner } from '@/components/ui/IncidentBanner';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { SurfaceCard } from '@/components/ui/SurfaceCard';
-import { ChartWrapper } from '@/features/analytics/components/ChartWrapper';
-import { useTheme } from '@/theme/theme-context';
 import { formatDateTime } from '@/utils/date';
 import { formatMs, formatNumber, formatPercent, formatRate } from '@/utils/formatters';
-import {
-  availabilityToStatus,
-  getFreshnessLabel,
-  getRiskStateLabel,
-  riskStateToStatus,
-} from '@/features/monitoring/monitoringView';
-import { DashboardActivityTimeline } from '../components/DashboardActivityTimeline';
+import { getFreshnessLabel, riskStateToStatus } from '@/features/monitoring/monitoringView';
 import { DashboardHero } from '../components/DashboardHero';
 import { DashboardInsightPanel } from '../components/DashboardInsightPanel';
 import { DashboardLoadingState } from '../components/DashboardLoadingState';
 import { DashboardQuickActions } from '../components/DashboardQuickActions';
 import { useDashboardOverview } from '../hooks/useDashboardOverview';
 import {
-  buildActivityTimeline,
   buildInsights,
   buildSparkline,
   formatDeltaLabel,
-  pickPrimarySeries,
   summarizeTrend,
 } from '../utils/dashboardView';
 
-type TrendMode = 'traffic' | 'latency' | 'reliability';
 type DashboardMetricView = {
   id: string;
   label: string;
@@ -51,32 +40,9 @@ type DashboardMetricView = {
   sparkline?: Array<number | null>;
 };
 
-const TREND_COPY: Record<
-  TrendMode,
-  {
-    label: string;
-    description: string;
-  }
-> = {
-  traffic: {
-    label: 'Traffic',
-    description: 'Keep only the primary load lines so the trend stays readable.',
-  },
-  latency: {
-    label: 'Latency',
-    description: 'Watch sender-visible latency and cut noise from auxiliary metrics.',
-  },
-  reliability: {
-    label: 'Reliability',
-    description: 'Focus on failure and recovery pressure instead of every downstream event.',
-  },
-};
-
 export const DashboardPage = () => {
   const navigate = useNavigate();
-  const { tokens } = useTheme();
   const [range, setRange] = useState<TimeRange>('1h');
-  const [trendMode, setTrendMode] = useState<TrendMode>('traffic');
   const {
     totalUsersQuery,
     activeUsersQuery,
@@ -107,7 +73,7 @@ export const DashboardPage = () => {
     return (
       <PageShell
         title="Dashboard"
-        description="Production cockpit for admin operations, service posture, and realtime health."
+        description="Fast production snapshot for system posture and next actions."
       >
         <DashboardLoadingState />
       </PageShell>
@@ -127,7 +93,7 @@ export const DashboardPage = () => {
     return (
       <PageShell
         title="Dashboard"
-        description="Production cockpit for admin operations, service posture, and realtime health."
+        description="Fast production snapshot for system posture and next actions."
       >
         <ErrorState
           title={
@@ -153,7 +119,6 @@ export const DashboardPage = () => {
   const servicesTotal = servicesSummary?.total ?? 0;
   const healthyServiceRate = servicesTotal > 0 ? (servicesSummary?.up ?? 0) / servicesTotal : null;
   const adminActivationRate = totalUsers > 0 ? activeUsers / totalUsers : 0;
-  const pendingRate = totalUsers > 0 ? pendingUsers / totalUsers : 0;
   const heroTone =
     (servicesSummary?.down ?? 0) > 0 ||
     incidents.length > 0 ||
@@ -167,11 +132,6 @@ export const DashboardPage = () => {
         : 'healthy';
 
   const trafficTrend = summarizeTrend(overview?.realtimeHealth.connectionsTrend ?? [], ['connection']);
-  const latencyTrend = summarizeTrend(
-    overview?.realtimeHealth.latencyTrend ?? [],
-    ['ack', 'latency'],
-    true,
-  );
   const reliabilityTrend = summarizeTrend(
     overview?.realtimeHealth.reliabilityTrend ?? [],
     ['failure', 'resync', 'delivery'],
@@ -183,59 +143,24 @@ export const DashboardPage = () => {
     serviceHealth,
     incidents,
   });
+  const criticalInsights = insights.filter((item) => item.tone !== 'good');
 
-  const activityItems = buildActivityTimeline({
-    overview,
-    serviceHealth,
-    incidents,
-  });
+  const refetchDashboard = () => {
+    void monitoringQuery.refetch();
+    void serviceHealthQuery.refetch();
+    void incidentsQuery.refetch();
+    void totalUsersQuery.refetch();
+    void activeUsersQuery.refetch();
+    void pendingUsersQuery.refetch();
+  };
 
-  const trendSource =
-    trendMode === 'traffic'
-      ? overview?.realtimeHealth.connectionsTrend ?? []
-      : trendMode === 'latency'
-        ? overview?.realtimeHealth.latencyTrend ?? []
-        : overview?.realtimeHealth.reliabilityTrend ?? [];
-
-  const trendSeries = pickPrimarySeries(trendSource, 3);
-  const trendCategories = trendSeries[0]?.points.map((point) => point.timestamp) ?? [];
-  const trafficSparkline = buildSparkline(overview?.realtimeHealth.connectionsTrend ?? [], ['connection']);
-  const latencySparkline = buildSparkline(
-    overview?.realtimeHealth.latencyTrend ?? [],
-    ['ack', 'latency'],
-  );
-  const reliabilitySparkline = buildSparkline(
-    overview?.realtimeHealth.reliabilityTrend ?? [],
-    ['failure', 'resync', 'delivery'],
-  );
-
-  const chartState =
-    monitoringQuery.isLoading && !overview
-      ? 'loading'
-      : monitoringQuery.isError && !overview
-        ? getApiErrorStatus(monitoringQuery.error) === 403
-          ? 'permission'
-          : 'error'
-        : trendSeries.length === 0
-          ? 'empty'
-          : 'ready';
-
-  const failureCategories =
-    overview?.messageCorrectness.topFailureReasons.map((item) => item.reason) ?? [];
-  const failureSeries =
-    failureCategories.length > 0
-      ? [
-          {
-            name: 'Failures / min',
-            type: 'bar' as const,
-            color: tokens.chartPalette[2],
-            data:
-              overview?.messageCorrectness.topFailureReasons.map(
-                (item) => item.ratePerMinute,
-              ) ?? [],
-          },
-        ]
-      : [];
+  const hasOverviewData =
+    Boolean(overview) ||
+    Boolean(serviceHealth) ||
+    incidents.length > 0 ||
+    totalUsers > 0 ||
+    activeUsers > 0 ||
+    pendingUsers > 0;
 
   const metricCards: DashboardMetricView[] = [
     {
@@ -246,17 +171,7 @@ export const DashboardPage = () => {
       trendCaption: 'of all admin accounts',
       tone: pendingUsers > 0 ? 'warning' : 'default',
       onClick: () => navigate('/users'),
-      sparkline: [Math.max(activeUsers - 4, 0), Math.max(activeUsers - 2, 0), activeUsers],
-    },
-    {
-      id: 'pending',
-      label: 'Pending verification',
-      value: formatNumber(pendingUsers),
-      changeLabel: formatPercent(pendingRate * 100, 0),
-      trendCaption: 'still waiting on activation',
-      tone: pendingUsers > 0 ? 'warning' : 'success',
-      onClick: () => navigate('/users'),
-      sparkline: [Math.max(pendingUsers + 2, 0), Math.max(pendingUsers + 1, 0), pendingUsers],
+      sparkline: [Math.max(activeUsers - 3, 0), Math.max(activeUsers - 1, 0), activeUsers],
     },
     {
       id: 'online',
@@ -267,23 +182,7 @@ export const DashboardPage = () => {
       trendCaption: 'vs start of window',
       tone: 'default',
       onClick: () => navigate('/monitoring'),
-      sparkline: trafficSparkline,
-    },
-    {
-      id: 'ack',
-      label: 'Sender ACK p95',
-      value: formatMs(overview?.systemOverview.senderAckP95Ms),
-      changeLabel: formatDeltaLabel(latencyTrend.delta),
-      trendDirection: latencyTrend.direction,
-      trendCaption: 'vs start of window',
-      tone:
-        (overview?.systemOverview.senderAckP95Ms ?? 0) > 900
-          ? 'danger'
-          : (overview?.systemOverview.senderAckP95Ms ?? 0) > 450
-            ? 'warning'
-            : 'success',
-      onClick: () => navigate('/monitoring'),
-      sparkline: latencySparkline,
+      sparkline: buildSparkline(overview?.realtimeHealth.connectionsTrend ?? [], ['connection']),
     },
     {
       id: 'services',
@@ -291,7 +190,7 @@ export const DashboardPage = () => {
       value: `${servicesSummary?.up ?? 0}/${servicesTotal}`,
       changeLabel:
         healthyServiceRate === null ? 'No data' : formatPercent(healthyServiceRate * 100, 0),
-      trendCaption: 'healthy service coverage',
+      trendCaption: 'service coverage',
       tone:
         (servicesSummary?.down ?? 0) > 0
           ? 'danger'
@@ -311,46 +210,25 @@ export const DashboardPage = () => {
       value: formatRate(overview?.realtimeHealth.deliveryFailuresPerMinute, '/min'),
       changeLabel: formatDeltaLabel(reliabilityTrend.delta),
       trendDirection: reliabilityTrend.direction,
-      trendCaption: 'vs start of window',
+      trendCaption: 'failure pressure',
       tone:
         (overview?.realtimeHealth.deliveryFailuresPerMinute ?? 0) > 0 ? 'danger' : 'success',
       onClick: () => navigate('/monitoring'),
-      sparkline: reliabilitySparkline,
+      sparkline: buildSparkline(
+        overview?.realtimeHealth.reliabilityTrend ?? [],
+        ['failure', 'resync', 'delivery'],
+      ),
     },
   ];
-
-  const refetchDashboard = () => {
-    void monitoringQuery.refetch();
-    void serviceHealthQuery.refetch();
-    void incidentsQuery.refetch();
-    void totalUsersQuery.refetch();
-    void activeUsersQuery.refetch();
-    void pendingUsersQuery.refetch();
-  };
-
-  const hasOverviewData =
-    Boolean(overview) ||
-    Boolean(serviceHealth) ||
-    incidents.length > 0 ||
-    totalUsers > 0 ||
-    activeUsers > 0 ||
-    pendingUsers > 0;
 
   return (
     <PageShell
       title="Dashboard"
-      description="Operator-first control center for chat, realtime health, users, and system configuration."
+      description="Fast production snapshot for system posture, active issues, and next actions."
       headerExtra={
         <div className="ds-page-toolbar-stack">
           <div className="ds-page-toolbar-group">
             <TimeRangePicker value={range} onChange={setRange} />
-            <StatusBadge status={appConfig.liveUpdatesMode === 'live' ? 'live' : 'warning'} />
-            {overview ? (
-              <StatusBadge
-                status={getFreshnessLabel(overview.freshness)}
-                title={`Freshness: ${overview.freshness}`}
-              />
-            ) : null}
           </div>
           <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
             <Button
@@ -386,23 +264,23 @@ export const DashboardPage = () => {
           />
         </SurfaceCard>
       ) : (
-        <div className="ds-dashboard-layout">
+        <div className="ds-dashboard-layout ds-dashboard-layout--snapshot">
           <div className="ds-dashboard-span-8">
             <DashboardHero
-              eyebrow="Operations cockpit"
+              eyebrow="System status"
               title={
                 heroTone === 'healthy'
                   ? 'System posture is stable'
                   : heroTone === 'degraded'
-                    ? 'Some signals need operator attention'
+                    ? 'Some signals need attention'
                     : 'Immediate action is required'
               }
               description={
                 heroTone === 'healthy'
-                  ? 'The dashboard stays compact so operators can read health, trend movement, and the next action in a single pass.'
+                  ? 'The system is serving normally. Use monitoring only when you need deeper diagnostics.'
                   : heroTone === 'degraded'
-                    ? 'The system is still serving traffic, but at least one dependency, signal, or freshness window is outside the expected range.'
-                    : 'An outage, active incident, or near-breaking capacity signal is now affecting the operator experience.'
+                    ? 'At least one dependency, feed, or freshness window is outside the expected range.'
+                    : 'A service outage, active incident, or near-breaking capacity signal is affecting operations.'
               }
               tone={heroTone}
               status={
@@ -420,21 +298,18 @@ export const DashboardPage = () => {
                 overview ? (
                   <StatusBadge
                     status={riskStateToStatus(overview.capacityBaseline.currentRiskState)}
-                    title={getRiskStateLabel(overview.capacityBaseline.currentRiskState)}
                   />
-                ) : (
-                  <StatusBadge status={serviceHealthQuery.isError ? 'warning' : 'unknown'} />
-                )
+                ) : null
               }
               stats={[
                 { label: 'Active incidents', value: formatNumber(incidents.length) },
                 {
-                  label: 'Realtime freshness',
-                  value: overview ? overview.freshness.toUpperCase() : 'UNKNOWN',
+                  label: 'Telemetry freshness',
+                  value: overview ? getFreshnessLabel(overview.freshness).toUpperCase() : 'UNKNOWN',
                 },
                 {
-                  label: 'Live connections',
-                  value: formatNumber(overview?.systemOverview.activeConnections),
+                  label: 'Sender ACK p95',
+                  value: formatMs(overview?.systemOverview.senderAckP95Ms),
                 },
               ]}
               primaryActionLabel="Open monitoring"
@@ -446,8 +321,6 @@ export const DashboardPage = () => {
 
           <div className="ds-dashboard-span-4">
             <DashboardQuickActions
-              environmentLabel={appConfig.environmentLabel}
-              liveUpdatesLabel={appConfig.liveUpdatesLabel}
               onCreateUser={() => navigate('/users')}
               onSendBroadcast={() => navigate('/services/email-templates')}
               onCreateGroup={() => navigate('/users')}
@@ -455,7 +328,7 @@ export const DashboardPage = () => {
           </div>
 
           {metricCards.map((metric) => (
-            <div key={metric.id} className="ds-dashboard-span-2">
+            <div key={metric.id} className="ds-dashboard-span-3">
               <MetricCard
                 label={metric.label}
                 value={metric.value}
@@ -469,128 +342,46 @@ export const DashboardPage = () => {
             </div>
           ))}
 
-          <div className="ds-dashboard-span-8">
-            <ChartWrapper
-              eyebrow="Trend"
-              title={`${TREND_COPY[trendMode].label} overview`}
-              description={TREND_COPY[trendMode].description}
-              status={
-                overview ? (
-                  <Space size={8} wrap>
+          <div className="ds-dashboard-span-12">
+            {criticalInsights.length > 0 ? (
+              <IncidentBanner
+                title={criticalInsights[0].title}
+                description={criticalInsights[0].description}
+                tone={criticalInsights[0].tone === 'critical' ? 'danger' : 'warning'}
+                status={
+                  <div className="ds-page-toolbar-group">
+                    <StatusBadge status={overview ? getFreshnessLabel(overview.freshness) : 'unknown'} />
                     <StatusBadge
-                      status={availabilityToStatus(overview.dataQuality.realtimeHealth.status)}
+                      status={
+                        (servicesSummary?.down ?? 0) > 0
+                          ? 'down'
+                          : (servicesSummary?.degraded ?? 0) > 0
+                            ? 'degraded'
+                            : 'healthy'
+                      }
                     />
-                    <span className="ds-chart-status-copy">
-                      {monitoringQuery.isFetching ? 'New data arriving...' : 'Realtime snapshot'}
-                    </span>
-                  </Space>
-                ) : null
-              }
-              actions={
-                <div className="ds-dashboard-segmented">
-                  {(Object.keys(TREND_COPY) as TrendMode[]).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      className={trendMode === mode ? 'is-active' : undefined}
-                      onClick={() => setTrendMode(mode)}
-                    >
-                      {TREND_COPY[mode].label}
-                    </button>
-                  ))}
-                </div>
-              }
-              state={chartState}
-              stateTitle={
-                chartState === 'permission'
-                  ? 'Monitoring data is restricted'
-                  : chartState === 'error'
-                    ? 'Monitoring trend is unavailable'
-                    : undefined
-              }
-              stateDescription={
-                chartState === 'error'
-                  ? getErrorMessage(monitoringQuery.error, 'Unable to load trend data.')
-                  : chartState === 'empty'
-                    ? 'No trend data was returned for the selected range.'
-                    : undefined
-              }
-              onRetry={() => {
-                void monitoringQuery.refetch();
-              }}
-              categories={trendCategories}
-              series={trendSeries.map((entry, index) => ({
-                name: entry.label,
-                color: tokens.chartPalette[index],
-                data: entry.points.map((point) => point.value),
-              }))}
-              tooltipValueFormatter={(value) =>
-                trendMode === 'latency'
-                  ? formatMs(value)
-                  : trendMode === 'reliability'
-                    ? formatRate(value, '/min')
-                    : value === null
-                      ? '-'
-                      : formatNumber(value)
-              }
-              yAxisFormatter={(value) =>
-                trendMode === 'latency'
-                  ? formatMs(value)
-                  : trendMode === 'reliability'
-                    ? formatRate(value, '/min')
-                    : formatNumber(value)
-              }
-            />
-          </div>
-
-          <div className="ds-dashboard-span-4">
-            <DashboardInsightPanel insights={insights} />
-          </div>
-
-          <div className="ds-dashboard-span-7">
-            <ChartWrapper
-              eyebrow="Failure breakdown"
-              title="Top failure reasons"
-              description="Bar view surfaces which correctness issues are driving operational cost in the current window."
-              state={
-                monitoringQuery.isLoading && !overview
-                  ? 'loading'
-                  : monitoringQuery.isError && !overview
-                    ? 'error'
-                    : failureSeries.length === 0
-                      ? 'empty'
-                      : 'ready'
-              }
-              stateDescription={
-                monitoringQuery.isError
-                  ? getErrorMessage(monitoringQuery.error, 'Unable to load failure reasons.')
-                  : 'No failure reasons captured in the selected time range.'
-              }
-              onRetry={() => {
-                void monitoringQuery.refetch();
-              }}
-              categories={failureCategories}
-              series={failureSeries}
-              tooltipValueFormatter={(value) => formatRate(value, '/min')}
-              yAxisFormatter={(value) => formatRate(value, '/min')}
-            />
-          </div>
-
-          <div className="ds-dashboard-span-5">
-            <DashboardActivityTimeline
-              items={activityItems}
-              loading={
-                incidentsQuery.isLoading && !incidentsQuery.data && !serviceHealth && !overview
-              }
-              error={Boolean(
-                incidentsQuery.isError && !incidentsQuery.data && activityItems.length === 0,
-              )}
-              onRetry={() => {
-                void incidentsQuery.refetch();
-                void serviceHealthQuery.refetch();
-                void monitoringQuery.refetch();
-              }}
-            />
+                  </div>
+                }
+                actions={
+                  <Button type="primary" onClick={() => navigate(criticalInsights[0].ctaTo)}>
+                    {criticalInsights[0].ctaLabel}
+                  </Button>
+                }
+              >
+                {criticalInsights.length > 1 ? (
+                  <div className="monitoring-warning-group-list">
+                    {criticalInsights.slice(1).map((item) => (
+                      <div key={item.id} className="monitoring-warning-group-item">
+                        <span>{item.title}</span>
+                        <strong>{item.tone === 'critical' ? 'Escalate' : 'Review'}</strong>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </IncidentBanner>
+            ) : (
+              <DashboardInsightPanel insights={insights} />
+            )}
           </div>
         </div>
       )}

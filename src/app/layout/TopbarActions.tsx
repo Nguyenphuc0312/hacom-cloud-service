@@ -1,25 +1,14 @@
 import React from 'react';
-import { BellOutlined, PlusOutlined } from '@ant-design/icons';
-import { Dropdown } from 'antd';
-import type { MenuProps } from 'antd';
+import { BellOutlined } from '@ant-design/icons';
 
 import type { CurrentAdmin } from '@/api/types';
 import { UserMenu } from '@/components/UserMenu';
 import { ThemeToggleButton } from '@/components/ui/ThemeToggleButton';
 
-export interface QuickActionItem {
-  key: string;
-  label: string;
-  onSelect: () => void;
-}
-
 interface TopbarActionsProps {
   user: CurrentAdmin | null;
   environmentLabel?: string;
   systemTone: 'healthy' | 'degraded';
-  liveUpdatesLabel: string;
-  liveUpdatesMode: 'live' | 'polling';
-  quickActions: QuickActionItem[];
   onOpenNotifications: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
@@ -30,20 +19,11 @@ export const TopbarActions: React.FC<TopbarActionsProps> = ({
   user,
   environmentLabel = 'Production',
   systemTone,
-  liveUpdatesLabel,
-  liveUpdatesMode,
-  quickActions,
   onOpenNotifications,
   onOpenProfile,
   onOpenSettings,
   onLogout,
 }) => {
-  const quickActionItems: MenuProps['items'] = quickActions.map((action) => ({
-    key: action.key,
-    label: action.label,
-    onClick: action.onSelect,
-  }));
-
   return (
     <div className="ds-topbar-actions">
       <div className="ds-topbar-status" aria-label="Workspace status">
@@ -53,13 +33,8 @@ export const TopbarActions: React.FC<TopbarActionsProps> = ({
         >
           {systemTone === 'healthy' ? 'Healthy' : 'Degraded'}
         </span>
-        <span
-          className={`ds-shell-chip ${liveUpdatesMode === 'live' ? 'ds-shell-chip--success' : 'ds-shell-chip--ghost'}`}
-        >
-          {liveUpdatesLabel}
-        </span>
       </div>
-      <ThemeToggleButton />
+      <ThemeToggleButton compact />
       <button
         type="button"
         className="ds-btn ds-btn--icon"
@@ -68,20 +43,6 @@ export const TopbarActions: React.FC<TopbarActionsProps> = ({
       >
         <BellOutlined />
       </button>
-      <Dropdown
-        trigger={['click']}
-        placement="bottomRight"
-        overlayClassName="user-menu-dropdown"
-        menu={{ items: quickActionItems }}
-      >
-        <button
-          type="button"
-          className="ds-btn ds-btn--icon"
-          aria-label="Open quick actions"
-        >
-          <PlusOutlined />
-        </button>
-      </Dropdown>
       <UserMenu
         user={user}
         onOpenProfile={onOpenProfile}

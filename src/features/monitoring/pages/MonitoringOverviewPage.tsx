@@ -6,20 +6,15 @@ import { getApiErrorStatus, getErrorMessage } from '@/api/error';
 import type { TimeRange } from '@/api/types';
 import { PageShell } from '@/components/PageShell';
 import { QueryStateView } from '@/components/QueryStates';
-import { StatusBadge } from '@/components/StatusBadge';
 import { TimeRangePicker } from '@/components/TimeRangePicker';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { formatDateTime } from '@/utils/date';
 import { formatMs, formatNumber, formatPercent, formatRate } from '@/utils/formatters';
-import { MonitoringBaselineSection } from '../components/MonitoringBaselineSection';
 import { MonitoringCorrectnessSection } from '../components/MonitoringCorrectnessSection';
-import { MonitoringDashboardLinks } from '../components/MonitoringDashboardLinks';
 import { MonitoringInfrastructureSection } from '../components/MonitoringInfrastructureSection';
 import { MonitoringRealtimeSection } from '../components/MonitoringRealtimeSection';
-import { MonitoringSystemOverviewSection } from '../components/MonitoringSystemOverviewSection';
 import { MonitoringWarnings } from '../components/MonitoringWarnings';
 import { useMonitoringOverview } from '../hooks/useMonitoringOverview';
-import { getFreshnessLabel, riskStateToStatus } from '../monitoringView';
 
 export const MonitoringOverviewPage = () => {
   const [range, setRange] = useState<TimeRange>('1h');
@@ -81,19 +76,11 @@ export const MonitoringOverviewPage = () => {
   return (
     <PageShell
       title="Monitoring Overview"
-      description="Start with the critical runtime signals, then move into baseline, correctness, and infrastructure detail without leaving the admin panel."
+      description="Watch runtime health, delivery failures, and dependency posture from one operator cockpit."
       headerExtra={
         <div className="ds-page-toolbar-stack">
           <div className="ds-page-toolbar-group">
             <TimeRangePicker value={range} onChange={setRange} />
-            <StatusBadge
-              status={getFreshnessLabel(overview.freshness)}
-              title={`Overview freshness: ${overview.freshness}`}
-            />
-            <StatusBadge
-              status={riskStateToStatus(overview.capacityBaseline.currentRiskState)}
-              title={`Current risk: ${overview.capacityBaseline.currentRiskState}`}
-            />
           </div>
           <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
             <Button
@@ -117,15 +104,15 @@ export const MonitoringOverviewPage = () => {
           <MetricCard
             label="Online users"
             value={formatNumber(overview.systemOverview.onlineUsers)}
-            changeLabel={overview.freshness.toUpperCase()}
-            trendCaption="current audience"
+            changeLabel={formatNumber(overview.systemOverview.activeConnections)}
+            trendCaption="active websocket connections"
             tone="default"
           />
           <MetricCard
             label="Sender ACK p95"
             value={formatMs(overview.systemOverview.senderAckP95Ms)}
             changeLabel={formatRate(overview.systemOverview.messagesPerSecond, '/s')}
-            trendCaption="paired with live throughput"
+            trendCaption="paired with current throughput"
             tone={
               (overview.systemOverview.senderAckP95Ms ?? 0) > 900
                 ? 'danger'
@@ -138,7 +125,7 @@ export const MonitoringOverviewPage = () => {
             label="Delivery failures"
             value={formatRate(overview.realtimeHealth.deliveryFailuresPerMinute, '/min')}
             changeLabel={formatRate(overview.realtimeHealth.resyncsPerMinute, '/min')}
-            trendCaption="recovery pressure"
+            trendCaption="resync pressure"
             tone={
               (overview.realtimeHealth.deliveryFailuresPerMinute ?? 0) > 0 ? 'danger' : 'success'
             }
@@ -155,12 +142,9 @@ export const MonitoringOverviewPage = () => {
         </div>
 
         <MonitoringWarnings overview={overview} />
-        <MonitoringSystemOverviewSection overview={overview} isRefreshing={overviewQuery.isFetching} />
-        <MonitoringBaselineSection overview={overview} />
         <MonitoringRealtimeSection overview={overview} />
         <MonitoringCorrectnessSection overview={overview} />
         <MonitoringInfrastructureSection overview={overview} />
-        <MonitoringDashboardLinks overview={overview} />
       </div>
     </PageShell>
   );

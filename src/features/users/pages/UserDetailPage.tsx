@@ -179,7 +179,7 @@ export const UserDetailPage = () => {
     return (
       <PageShell
         title="User Detail"
-        description="Review identity, verification, sessions, and devices from a single operator-focused profile."
+        description="Review identity, verification, sessions, and devices."
       >
         <QueryStateView kind="loading" title="Loading user detail..." />
       </PageShell>
@@ -190,7 +190,7 @@ export const UserDetailPage = () => {
     return (
       <PageShell
         title="User Detail"
-        description="Review identity, verification, sessions, and devices from a single operator-focused profile."
+        description="Review identity, verification, sessions, and devices."
       >
         <QueryStateView
           kind="error"
@@ -208,7 +208,7 @@ export const UserDetailPage = () => {
   return (
     <PageShell
       title="User Detail"
-      description="Keep the top of the page focused on state, footprint, and identity. Move deeper session and device inspection below the fold."
+      description="Keep identity and security posture at the top, then move into sessions and devices."
       headerExtra={
         <div className="ds-page-toolbar-stack">
           <div className="ds-page-toolbar-group">
@@ -283,9 +283,9 @@ export const UserDetailPage = () => {
 
       <div className="ds-detail-grid">
         <SurfaceCard
-          eyebrow="Identity"
+          eyebrow="Identity and organisation"
           title={user.username ?? 'No username'}
-          description="Core account identifiers and contact information."
+          description="Core identifiers, ownership fields, and latest activity."
           className="ds-detail-panel"
         >
           <div className="ds-detail-list">
@@ -301,16 +301,10 @@ export const UserDetailPage = () => {
               <span>Phone</span>
               <strong>{user.phone ?? '-'}</strong>
             </div>
-          </div>
-        </SurfaceCard>
-
-        <SurfaceCard
-          eyebrow="Organisation"
-          title={user.orgUnit ?? 'No org unit'}
-          description="Work context and ownership fields."
-          className="ds-detail-panel"
-        >
-          <div className="ds-detail-list">
+            <div className="ds-detail-list-item">
+              <span>Organisation</span>
+              <strong>{user.orgUnit ?? '-'}</strong>
+            </div>
             <div className="ds-detail-list-item">
               <span>Title</span>
               <strong>{user.title ?? '-'}</strong>
@@ -327,12 +321,20 @@ export const UserDetailPage = () => {
         </SurfaceCard>
 
         <SurfaceCard
-          eyebrow="Verification"
-          title="Security posture"
-          description="Verification timestamps and account footprint."
+          eyebrow="Security and verification"
+          title="Verification posture"
+          description="Verification timestamps, account footprint, and runtime identifiers."
           className="ds-detail-panel"
         >
           <div className="ds-detail-list">
+            <div className="ds-detail-list-item">
+              <span>Account state</span>
+              <strong>{user.accountStatus}</strong>
+            </div>
+            <div className="ds-detail-list-item">
+              <span>Presence</span>
+              <strong>{user.status ?? 'offline'}</strong>
+            </div>
             <div className="ds-detail-list-item">
               <span>Email verified</span>
               <strong>{formatOptionalDate(user.emailVerifiedAt)}</strong>

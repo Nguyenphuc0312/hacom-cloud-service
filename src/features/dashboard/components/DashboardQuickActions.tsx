@@ -15,16 +15,12 @@ interface DashboardQuickActionsProps {
   onCreateUser: () => void;
   onSendBroadcast: () => void;
   onCreateGroup: () => void;
-  environmentLabel: string;
-  liveUpdatesLabel: string;
 }
 
 export const DashboardQuickActions = ({
   onCreateUser,
   onSendBroadcast,
   onCreateGroup,
-  environmentLabel,
-  liveUpdatesLabel,
 }: DashboardQuickActionsProps) => {
   const actions: DashboardQuickAction[] = [
     {
@@ -53,15 +49,9 @@ export const DashboardQuickActions = ({
   return (
     <SurfaceCard
       eyebrow="Quick actions"
-      title="Operator shortcuts"
-      description="Common tasks should stay one click away from the dashboard."
+      title="Next actions"
+      description="Use the dashboard as a routing hub, not as a second monitoring screen."
       className="ds-dashboard-quick-actions"
-      status={
-        <div className="ds-dashboard-context-badges">
-          <span className="ds-shell-chip">{environmentLabel}</span>
-          <span className="ds-shell-chip ds-shell-chip--ghost">{liveUpdatesLabel}</span>
-        </div>
-      }
     >
       <div className="ds-dashboard-quick-actions-list">
         {actions.map((action) => (

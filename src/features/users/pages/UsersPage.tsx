@@ -300,7 +300,7 @@ export const UsersPage = () => {
     return (
       <PageShell
         title="Users"
-        description="Review account state, presence, and operator actions without overloading the table."
+        description="Review admin accounts, presence, and access state."
       >
         <QueryStateView kind="loading" title="Loading accounts..." />
       </PageShell>
@@ -311,7 +311,7 @@ export const UsersPage = () => {
     return (
       <PageShell
         title="Users"
-        description="Review account state, presence, and operator actions without overloading the table."
+        description="Review admin accounts, presence, and access state."
       >
         <QueryStateView
           kind="error"
@@ -329,34 +329,18 @@ export const UsersPage = () => {
   return (
     <PageShell
       title="Users"
-      description="Focus the table on account state and identity. Push destructive actions into a controlled menu instead of exposing four competing buttons in every row."
+      description="Find the right operator fast, then open detail only when a write action is needed."
       headerExtra={
-        <div className="ds-page-toolbar-stack">
-          <div className="ds-page-toolbar-group">
-            <span className="ds-shell-chip">
-              {data?.pagination.total ?? 0} matched account{(data?.pagination.total ?? 0) === 1 ? '' : 's'}
-            </span>
-            <span className="ds-shell-chip ds-shell-chip--ghost">
-              {activeFilterCount} active filter{activeFilterCount === 1 ? '' : 's'}
-            </span>
-          </div>
-          <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
-            <Button
-              icon={<ReloadOutlined />}
-              loading={usersQuery.isFetching}
-              onClick={() => {
-                void usersQuery.refetch();
-              }}
-            >
-              Refresh
-            </Button>
-            <span className="ds-page-toolbar-meta">
-              Last sync:{' '}
-              {usersQuery.dataUpdatedAt
-                ? formatDateTime(new Date(usersQuery.dataUpdatedAt).toISOString())
-                : '-'}
-            </span>
-          </div>
+        <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
+          <Button
+            icon={<ReloadOutlined />}
+            loading={usersQuery.isFetching}
+            onClick={() => {
+              void usersQuery.refetch();
+            }}
+          >
+            Refresh
+          </Button>
         </div>
       }
     >
@@ -371,14 +355,6 @@ export const UsersPage = () => {
       )}
 
       <FilterBar>
-        <div className="ds-toolbar-lead">
-          <span className="ds-toolbar-eyebrow">Account query</span>
-          <strong className="ds-toolbar-title">Find the right operator fast</strong>
-          <span className="ds-toolbar-description">
-            Keep filters compact, prioritize the current slice, and reduce noise before operators jump into detail.
-          </span>
-        </div>
-
         <Form
           form={form}
           layout="inline"
@@ -406,17 +382,32 @@ export const UsersPage = () => {
             </Space>
           </Form.Item>
         </Form>
+        <div className="ds-filter-toolbar-meta">
+          <span>
+            {data?.pagination.total ?? 0} matched account
+            {(data?.pagination.total ?? 0) === 1 ? '' : 's'}
+          </span>
+          <span>
+            {activeFilterCount > 0
+              ? `${activeFilterCount} active filter${activeFilterCount === 1 ? '' : 's'}`
+              : 'No active filters'}
+          </span>
+          <span>
+            Last sync:{' '}
+            {usersQuery.dataUpdatedAt
+              ? formatDateTime(new Date(usersQuery.dataUpdatedAt).toISOString())
+              : '-'}
+          </span>
+        </div>
       </FilterBar>
 
       <DataTableShell
         title="Accounts"
-        meta={`${data?.pagination.total ?? 0} record(s) matched the current filters`}
+        meta="Primary workspace for account state, presence, and row-level actions."
         toolbar={
           <DataTableToolbar>
             <span className="ds-toolbar-summary">
-              <span className="ds-shell-chip ds-shell-chip--ghost">
-                Sort: {params.sortBy ?? 'created_at'} / {params.sortOrder ?? 'desc'}
-              </span>
+              Sort: {params.sortBy ?? 'created_at'} / {params.sortOrder ?? 'desc'}
             </span>
           </DataTableToolbar>
         }

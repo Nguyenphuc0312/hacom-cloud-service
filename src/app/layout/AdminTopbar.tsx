@@ -29,31 +29,10 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
   const { isOpen, openPalette, closePalette } = useCommandPalette();
 
   const currentPage = resolveNavigationContext(location.pathname);
-  const breadcrumbTrail = currentPage.breadcrumbs.map((entry) => entry.label).join(' / ');
-
-  const quickActions = useMemo(
-    () => [
-      {
-        key: 'create-user',
-        label: 'Create user',
-        onSelect: () => navigate('/users'),
-      },
-      {
-        key: 'send-broadcast',
-        label: 'Send broadcast',
-        onSelect: () => navigate('/services/email-templates'),
-      },
-      {
-        key: 'create-group',
-        label: 'Create group',
-        onSelect: () => {
-          message.info('Group creation workflow is not wired yet. Opening users workspace.');
-          navigate('/users');
-        },
-      },
-    ],
-    [message, navigate],
-  );
+  const breadcrumbTrail = currentPage.breadcrumbs
+    .map((entry) => entry.label)
+    .filter((label) => label !== currentPage.title)
+    .join(' / ');
 
   const paletteItems = useMemo(
     () => [
@@ -119,9 +98,8 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
             {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
           </button>
           <div className="ds-topbar-title-block">
-            <span className="ds-topbar-eyebrow">{breadcrumbTrail || currentPage.sectionLabel}</span>
+            <span className="ds-topbar-eyebrow">{breadcrumbTrail || 'Workspace'}</span>
             <strong className="ds-topbar-page-title">{currentPage.title}</strong>
-            <span className="ds-topbar-page-description">{currentPage.description}</span>
           </div>
         </div>
 
@@ -134,9 +112,6 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
             user={user}
             environmentLabel={appConfig.environmentLabel}
             systemTone={isAuthServiceUnavailable ? 'degraded' : 'healthy'}
-            liveUpdatesLabel={appConfig.liveUpdatesLabel}
-            liveUpdatesMode={appConfig.liveUpdatesMode}
-            quickActions={quickActions}
             onOpenNotifications={() => message.info('Notifications center is not wired yet.')}
             onOpenProfile={() => message.info('Profile panel is not available yet.')}
             onOpenSettings={() => navigate('/services/smtp')}

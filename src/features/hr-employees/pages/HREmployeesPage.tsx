@@ -353,7 +353,7 @@ export const HREmployeesPage = () => {
     return (
       <PageShell
         title="HR Directory"
-        description="Manage employee records, import batches, and account provisioning from one consistent operator workspace."
+        description="Manage employee records, imports, and account provisioning."
       >
         <QueryStateView kind="loading" title="Loading HR directory..." />
       </PageShell>
@@ -364,7 +364,7 @@ export const HREmployeesPage = () => {
     return (
       <PageShell
         title="HR Directory"
-        description="Manage employee records, import batches, and account provisioning from one consistent operator workspace."
+        description="Manage employee records, imports, and account provisioning."
       >
         <QueryStateView
           kind="error"
@@ -382,34 +382,24 @@ export const HREmployeesPage = () => {
   return (
     <PageShell
       title="HR Directory"
-      description="Keep import, provisioning, and record maintenance in one place, while pushing destructive actions into controlled flows instead of cluttering every row."
+      description="Search the roster, open detail only when needed, and keep provisioning inside controlled flows."
       headerExtra={
-        <div className="ds-page-toolbar-stack">
-          <div className="ds-page-toolbar-group">
-            <span className="ds-shell-chip">
-              {data?.pagination.total ?? 0} matched employee{(data?.pagination.total ?? 0) === 1 ? '' : 's'}
-            </span>
-            <span className="ds-shell-chip ds-shell-chip--ghost">
-              {activeFilterCount} active filter{activeFilterCount === 1 ? '' : 's'}
-            </span>
-          </div>
-          <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
-            <Button
-              icon={<ReloadOutlined />}
-              loading={listQuery.isFetching}
-              onClick={() => {
-                void listQuery.refetch();
-              }}
-            >
-              Refresh
-            </Button>
-            <Button disabled={!canWriteHrActions} onClick={() => setImportOpen(true)}>
-              Import HR file
-            </Button>
-            <Button type="primary" disabled={!canWriteHrActions} onClick={openCreate}>
-              New employee
-            </Button>
-          </div>
+        <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
+          <Button
+            icon={<ReloadOutlined />}
+            loading={listQuery.isFetching}
+            onClick={() => {
+              void listQuery.refetch();
+            }}
+          >
+            Refresh
+          </Button>
+          <Button disabled={!canWriteHrActions} onClick={() => setImportOpen(true)}>
+            Import HR file
+          </Button>
+          <Button type="primary" disabled={!canWriteHrActions} onClick={openCreate}>
+            New employee
+          </Button>
         </div>
       }
     >
@@ -424,14 +414,6 @@ export const HREmployeesPage = () => {
       )}
 
       <FilterBar>
-        <div className="ds-toolbar-lead">
-          <span className="ds-toolbar-eyebrow">Directory query</span>
-          <strong className="ds-toolbar-title">Keep the roster easy to scan</strong>
-          <span className="ds-toolbar-description">
-            Filter by keyword and lifecycle state first. Open the drawer only when an operator actually needs detail or provisioning work.
-          </span>
-        </div>
-
         <Form form={filterForm} layout="inline" className="ds-toolbar-form" initialValues={{ status: 'all' }}>
           <Form.Item name="keyword" className="ds-toolbar-field ds-toolbar-field--lg">
             <Input allowClear placeholder="Search employee code, name, or email" />
@@ -448,21 +430,33 @@ export const HREmployeesPage = () => {
             </Space>
           </Form.Item>
         </Form>
+        <div className="ds-filter-toolbar-meta">
+          <span>
+            {data?.pagination.total ?? 0} matched employee
+            {(data?.pagination.total ?? 0) === 1 ? '' : 's'}
+          </span>
+          <span>
+            {activeFilterCount > 0
+              ? `${activeFilterCount} active filter${activeFilterCount === 1 ? '' : 's'}`
+              : 'No active filters'}
+          </span>
+          <span>
+            Page {data?.pagination.page ?? 1} of{' '}
+            {Math.max(
+              1,
+              Math.ceil((data?.pagination.total ?? 0) / Math.max(data?.pagination.limit ?? 1, 1)),
+            )}
+          </span>
+        </div>
       </FilterBar>
 
       <DataTableShell
         title="Employee records"
-        meta={`${data?.pagination.total ?? 0} record(s) matched the current filters`}
+        meta="Primary roster workspace for review, provisioning, and row-level actions."
         toolbar={
           <DataTableToolbar>
             <span className="ds-toolbar-summary">
-              <span className="ds-shell-chip ds-shell-chip--ghost">
-                Page {data?.pagination.page ?? 1} of{' '}
-                {Math.max(
-                  1,
-                  Math.ceil((data?.pagination.total ?? 0) / Math.max(data?.pagination.limit ?? 1, 1)),
-                )}
-              </span>
+              Showing {data?.items.length ?? 0} row{(data?.items.length ?? 0) === 1 ? '' : 's'}
             </span>
           </DataTableToolbar>
         }

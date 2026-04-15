@@ -1,12 +1,18 @@
+import clsx from 'clsx';
+
 import { useTheme } from '@/theme/theme-context';
 
-export const ThemeToggleButton = () => {
+interface ThemeToggleButtonProps {
+  compact?: boolean;
+}
+
+export const ThemeToggleButton = ({ compact = false }: ThemeToggleButtonProps) => {
   const { isDark, toggleTheme } = useTheme();
 
   return (
     <button
       type="button"
-      className="ds-theme-toggle"
+      className={clsx('ds-theme-toggle', compact && 'is-compact')}
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
       aria-pressed={isDark}
       onClick={toggleTheme}
@@ -16,7 +22,7 @@ export const ThemeToggleButton = () => {
         <span className="ds-theme-toggle-icon ds-theme-toggle-icon-dark">🌙</span>
         <span className="ds-theme-toggle-thumb" />
       </span>
-      <span className="ds-theme-toggle-label">{isDark ? 'Dark' : 'Light'}</span>
+      {!compact ? <span className="ds-theme-toggle-label">{isDark ? 'Dark' : 'Light'}</span> : null}
     </button>
   );
 };

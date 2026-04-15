@@ -40,11 +40,7 @@ export const SidebarNavItem = ({
       {item.icon && <span className="ds-sidebar-item-icon">{item.icon}</span>}
       <span className="ds-sidebar-item-content">
         <span className="ds-sidebar-item-label">{item.label}</span>
-        {!collapsed && item.description ? (
-          <span className="ds-sidebar-item-description">{item.description}</span>
-        ) : null}
       </span>
-      {item.badge && <span className="ds-sidebar-item-badge">{item.badge}</span>}
     </button>
   );
 };
