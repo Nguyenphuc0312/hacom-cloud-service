@@ -56,6 +56,7 @@ import {
 import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
 import { useSettingsStore } from "../settings/settingsStore";
 import type { Conversation } from "../types";
+import { useNotificationStore } from "../features/notification/state/notificationStore";
 
 interface UseWebSocketOptions {
   autoConnect?: boolean;
@@ -236,6 +237,9 @@ export const useWebSocket = (
   const applyUnreadSummary = useChatStore((s) => s.applyUnreadSummary);
   const setTyping = useChatStore((s) => s.setTyping);
   const clearTyping = useChatStore((s) => s.clearTyping);
+  const applyIncomingConversationMessage = useChatStore(
+    (s) => s.applyIncomingConversationMessage,
+  );
   const fetchMessages = useChatStore((s) => s.fetchMessages);
   const markMessagesReadUpTo = useChatStore((s) => s.markMessagesReadUpTo);
   const updateConversation = useChatStore((s) => s.updateConversation);
@@ -899,6 +903,7 @@ export const useWebSocket = (
       senderName: string | null;
       content: string;
       mentions: string[];
+      kind?: "message" | "mention" | "group_activity" | "system";
       eventId?: string | null;
     }) => {
       const currentUserId = useAuthStore.getState().user?.id ?? null;
@@ -923,6 +928,31 @@ export const useWebSocket = (
       const isActiveConversation =
         useChatStore.getState().selectedConversationId === input.conversationId;
       const visibleAndFocused = isDocumentVisibleAndFocused();
+      const notificationKind =
+        input.kind === "system"
+          ? "system"
+          : hasMention
+            ? "mention"
+            : input.kind || "message";
+
+      useNotificationStore.getState().upsertNotification({
+        id:
+          input.eventId ||
+          `message:${input.conversationId}:${input.messageId}:${notificationKind}`,
+        kind: notificationKind,
+        title: conversationLabel,
+        body:
+          input.content ||
+          (notificationKind === "system"
+            ? "System activity"
+            : "Sent an attachment"),
+        createdAt: new Date().toISOString(),
+        conversationId: input.conversationId,
+        messageId: input.messageId,
+        actorId: input.senderId,
+        isRead: false,
+      });
+
       if (isActiveConversation && visibleAndFocused && !hasMention) {
         return;
       }
@@ -978,11 +1008,6 @@ export const useWebSocket = (
 
   const maybeNotifyMembershipEvent = useCallback(
     (conversationId: string, membershipState: string, reason: string | null) => {
-      const notificationSettings = getNotificationPreferences();
-      if (!notificationSettings.enabled) {
-        return;
-      }
-
       const conversation = useChatStore
         .getState()
         .conversations.find((item) => item.id === conversationId);
@@ -995,6 +1020,21 @@ export const useWebSocket = (
           : membershipState === "active" && reason === "restored"
             ? `You can access ${conversationLabel} again.`
             : `Membership changed for ${conversationLabel}.`;
+
+      const notificationSettings = getNotificationPreferences();
+      useNotificationStore.getState().upsertNotification({
+        id: notificationId,
+        kind: "group_activity",
+        title: conversationLabel,
+        body: message,
+        createdAt: new Date().toISOString(),
+        conversationId,
+        isRead: false,
+      });
+
+      if (!notificationSettings.enabled) {
+        return;
+      }
 
       notifyGlobalToast({
         level: "info",
@@ -1017,17 +1057,27 @@ export const useWebSocket = (
 
   const maybeNotifyGroupUpdate = useCallback(
     (conversationId: string, body: string, notificationSuffix: string) => {
-      const notificationSettings = getNotificationPreferences();
-      if (!notificationSettings.enabled) {
-        return;
-      }
-
       const conversation = useChatStore
         .getState()
         .conversations.find((item) => item.id === conversationId);
       const conversationLabel =
         conversation?.displayName || conversation?.name || "Group";
       const notificationId = `group:${conversationId}:${notificationSuffix}`;
+
+      useNotificationStore.getState().upsertNotification({
+        id: notificationId,
+        kind: "group_activity",
+        title: conversationLabel,
+        body,
+        createdAt: new Date().toISOString(),
+        conversationId,
+        isRead: false,
+      });
+
+      const notificationSettings = getNotificationPreferences();
+      if (!notificationSettings.enabled) {
+        return;
+      }
 
       notifyGlobalToast({
         level: "info",
@@ -1306,6 +1356,29 @@ export const useWebSocket = (
         ...(localId ? { localId } : {}),
       });
 
+      const chatState = useChatStore.getState();
+      const currentUserId = useAuthStore.getState().user?.id;
+      const isActiveConversation =
+        chatState.selectedConversationId === conversationId;
+      const visibleAndFocused = isDocumentVisibleAndFocused();
+      const shouldIncrementUnread = Boolean(
+        eventType === "message:new" &&
+          senderId &&
+          currentUserId &&
+          senderId !== currentUserId &&
+          (!isActiveConversation || !visibleAndFocused),
+      );
+      const latestMessage =
+        useChatStore.getState().messages[conversationId]?.[
+          (useChatStore.getState().messages[conversationId]?.length ?? 1) - 1
+        ];
+
+      if (eventType === "message:new" && latestMessage) {
+        applyIncomingConversationMessage(conversationId, latestMessage, {
+          incrementUnread: shouldIncrementUnread,
+        });
+      }
+
       if (eventType === "message:new") {
         maybeNotifyIncomingMessage({
           conversationId,
@@ -1320,12 +1393,11 @@ export const useWebSocket = (
                 (item): item is string => typeof item === "string",
               )
             : [],
+          kind:
+            asString(messagePayload.type) === "system" ? "system" : "message",
           eventId,
         });
       }
-
-      const chatState = useChatStore.getState();
-      const currentUserId = useAuthStore.getState().user?.id;
 
       if (
         eventType !== "message:new" ||
@@ -2070,6 +2142,7 @@ export const useWebSocket = (
     return socket;
   }, [
     addMessage,
+    applyIncomingConversationMessage,
     clearAllRoomJoinRetries,
     clearAllRoomSyncFallbacks,
     clearRoomJoinRetry,

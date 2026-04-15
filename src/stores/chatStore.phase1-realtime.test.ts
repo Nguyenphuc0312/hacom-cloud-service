@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MessageStatus, MessageType } from "../types";
+import { useNotificationStore } from "../features/notification/state/notificationStore";
 
 const {
   getMessagesMock,
@@ -86,6 +87,7 @@ const makeConversation = (
 describe("chatStore phase-1 realtime flows", () => {
   beforeEach(() => {
     useChatStore.getState().reset();
+    useNotificationStore.getState().reset();
     getMessagesMock.mockReset();
     sendMessageMock.mockReset();
     conversationMarkAsReadMock.mockReset();
@@ -197,6 +199,45 @@ describe("chatStore phase-1 realtime flows", () => {
       .conversations.find((item) => item.id === "room-2");
     expect(conversation?.unreadCount).toBe(3);
     expect(conversation?.lastMessage?.id).toBe("msg-2");
+  });
+
+  it("updates conversation summary and unread count immediately for incoming realtime messages", () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+        unreadCount: 2,
+        lastMessage: {
+          id: "msg-old",
+          senderId: "u-old",
+          senderName: "Bob",
+          content: "old",
+          type: "text",
+          isDeleted: false,
+          createdAt: "2026-04-10T09:59:00.000Z",
+        },
+      }),
+    ] as never);
+
+    useChatStore.getState().applyIncomingConversationMessage(
+      "room-1",
+      makeMessage({
+        id: "msg-live",
+        content: "live now",
+        createdAt: "2026-04-10T10:05:00.000Z",
+        updatedAt: "2026-04-10T10:05:00.000Z",
+      }) as never,
+      { incrementUnread: true },
+    );
+
+    const conversation = useChatStore
+      .getState()
+      .conversations.find((item) => item.id === "room-1");
+
+    expect(conversation?.unreadCount).toBe(3);
+    expect(conversation?.lastMessage?.id).toBe("msg-live");
+    expect(conversation?.lastMessage?.content).toBe("live now");
+    expect(useChatStore.getState().totalUnreadCount).toBe(3);
   });
 
   it("does not zero unread just because the selected conversation fetches latest messages", async () => {
@@ -409,6 +450,57 @@ describe("chatStore phase-1 realtime flows", () => {
     secondRequest.resolve();
     await firstPromise;
     await secondPromise;
+  });
+
+  it("marks conversation and notifications as read optimistically before the request resolves", async () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+        unreadCount: 2,
+        lastReadMessageId: "msg-0",
+      }),
+    ] as never);
+    useChatStore.getState().setMessages("room-1", [
+      makeMessage({
+        id: "msg-1",
+        createdAt: "2026-04-10T10:00:00.000Z",
+        updatedAt: "2026-04-10T10:00:00.000Z",
+      }),
+      makeMessage({
+        id: "msg-2",
+        createdAt: "2026-04-10T10:01:00.000Z",
+        updatedAt: "2026-04-10T10:01:00.000Z",
+      }),
+    ] as never);
+    useNotificationStore.getState().upsertNotification({
+      id: "notif-room-1",
+      kind: "message",
+      title: "Room 1",
+      body: "Unread ping",
+      createdAt: "2026-04-10T10:01:30.000Z",
+      conversationId: "room-1",
+    });
+
+    const deferred = createDeferred<void>();
+    conversationMarkAsReadMock.mockReturnValueOnce(deferred.promise);
+
+    const markPromise = useChatStore.getState().markAsRead("room-1", "msg-2");
+
+    const conversation = useChatStore
+      .getState()
+      .conversations.find((item) => item.id === "room-1");
+    const notification = useNotificationStore
+      .getState()
+      .items.find((item) => item.id === "notif-room-1");
+
+    expect(conversation?.unreadCount).toBe(0);
+    expect(conversation?.lastReadMessageId).toBe("msg-2");
+    expect(useChatStore.getState().totalUnreadCount).toBe(0);
+    expect(notification?.isRead).toBe(true);
+
+    deferred.resolve();
+    await markPromise;
   });
 
   it("applies unread summary as authoritative reconnect snapshot", () => {

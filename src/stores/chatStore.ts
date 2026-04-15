@@ -23,6 +23,7 @@ import { logMessageDebug } from "../utils/messageDebug";
 import { createReplySnapshot } from "../utils/messageTimeline";
 import { rankConversations } from "../utils/conversationRanking";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
+import { useNotificationStore } from "../features/notification/state/notificationStore";
 import i18n from "../i18n";
 import { useAuthStore } from "./authStore";
 import { conversationApi, messageApi } from "../services/api";
@@ -92,6 +93,20 @@ interface ChatState {
       requestedAtMs?: number;
       appliedAtMs?: number;
       source?: "snapshot" | "cross_tab";
+    },
+  ) => void;
+  applyIncomingConversationMessage: (
+    conversationId: string,
+    message: Message,
+    options?: {
+      incrementUnread?: boolean;
+    },
+  ) => void;
+  applyOptimisticConversationRead: (
+    conversationId: string,
+    lastReadMessageId: string,
+    options?: {
+      readAt?: Date | string | null;
     },
   ) => void;
   fetchConversations: () => Promise<void>;
@@ -704,6 +719,42 @@ const mergeConversationSummary = (
     ...incoming,
   }) as Conversation;
 };
+
+const updateConversationActivitySummary = (
+  conversation: Conversation,
+  message: Message,
+  unreadCount: number,
+): Conversation =>
+  (normalizeConversation({
+    ...conversation,
+    unreadCount,
+    lastMessage: toMessageSummary(message),
+    updatedAt: message.createdAt,
+    lastMessageAt: message.createdAt,
+    lastActivityAt: message.createdAt,
+  }) ?? {
+    ...conversation,
+    unreadCount,
+    lastMessage: toMessageSummary(message),
+    updatedAt: new Date(message.createdAt),
+  }) as Conversation;
+
+const updateConversationReadProgress = (
+  conversation: Conversation,
+  lastReadMessageId: string,
+  readAt?: Date | string | null,
+): Conversation =>
+  (normalizeConversation({
+    ...conversation,
+    unreadCount: 0,
+    lastReadMessageId,
+    lastReadAt: readAt ?? new Date().toISOString(),
+  }) ?? {
+    ...conversation,
+    unreadCount: 0,
+    lastReadMessageId,
+    lastReadAt: readAt ?? new Date().toISOString(),
+  }) as Conversation;
 
 const getStableMessageId = (message: Message): string =>
   getMessageIdentityKey(message);
@@ -1995,6 +2046,7 @@ export const useChatStore = create<ChatState>()(
         }
 
         const runMarkAsRead = async (anchorId: string): Promise<void> => {
+          get().applyOptimisticConversationRead(conversationId, anchorId);
           const request = conversationApi.markAsRead(conversationId, anchorId);
           markAsReadInFlight.set(conversationId, {
             promise: request,
@@ -2067,6 +2119,93 @@ export const useChatStore = create<ChatState>()(
             lastConversationCursor: computeConversationCursor(conversations),
           };
         });
+
+        const conversations = get().conversations;
+        conversations.forEach((conversation) => {
+          if ((conversation.unreadCount ?? 0) <= 0) {
+            useNotificationStore
+              .getState()
+              .markConversationAsRead(conversation.id);
+          }
+        });
+      },
+
+      applyIncomingConversationMessage: (conversationId, message, options) => {
+        if (!conversationId) return;
+
+        set((state) => {
+          const conversations = (Array.isArray(state.conversations)
+            ? state.conversations
+            : []
+          ).map((conversation) => {
+            if (conversation.id !== conversationId) {
+              return conversation;
+            }
+
+            const nextUnreadCount = options?.incrementUnread
+              ? Math.max(0, conversation.unreadCount || 0) + 1
+              : Math.max(0, conversation.unreadCount || 0);
+
+            return updateConversationActivitySummary(
+              conversation,
+              message,
+              nextUnreadCount,
+            );
+          });
+
+          return {
+            conversations,
+            totalUnreadCount: computeCanonicalTotalUnreadCount(conversations),
+            lastConversationCursor: computeConversationCursor(conversations),
+          };
+        });
+      },
+
+      applyOptimisticConversationRead: (
+        conversationId,
+        lastReadMessageId,
+        options,
+      ) => {
+        if (!conversationId || !lastReadMessageId) return;
+
+        set((state) => {
+          const currentMessages = state.messages[conversationId] || EMPTY_MESSAGES;
+          const conversations = (Array.isArray(state.conversations)
+            ? state.conversations
+            : []
+          ).map((conversation) => {
+            if (conversation.id !== conversationId) {
+              return conversation;
+            }
+
+            if (
+              conversation.lastReadMessageId &&
+              compareAnchorIdsInConversation(
+                currentMessages,
+                conversation.lastReadMessageId,
+                lastReadMessageId,
+              ) >= 0
+            ) {
+              return conversation;
+            }
+
+            return updateConversationReadProgress(
+              conversation,
+              lastReadMessageId,
+              options?.readAt,
+            );
+          });
+
+          return {
+            conversations,
+            totalUnreadCount: computeCanonicalTotalUnreadCount(conversations),
+            lastConversationCursor: computeConversationCursor(conversations),
+          };
+        });
+
+        useNotificationStore
+          .getState()
+          .markConversationAsRead(conversationId);
       },
 
       fetchConversations: async () => {
@@ -2776,16 +2915,7 @@ export const useChatStore = create<ChatState>()(
           throw new Error(activeRestriction.reason);
         }
 
-        try {
-          const result = await dispatchExistingMessage(
-            conversationId,
-            message,
-            "sending",
-          );
-          return result;
-        } catch (error) {
-          throw error;
-        }
+        return dispatchExistingMessage(conversationId, message, "sending");
       },
 
       flushQueuedMessages: async (conversationId?: string) => {

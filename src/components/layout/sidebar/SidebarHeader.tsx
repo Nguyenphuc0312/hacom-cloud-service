@@ -2,11 +2,13 @@
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
+  BellIcon,
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
   PencilSquareIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../../common/Avatar";
+import { Badge } from "../../common/Badge";
 import { IconButtonSurface } from "../../ui";
 import type { UserSummary } from "../../../types";
 import { getUserDisplayName } from "../../../utils/messageHelpers";
@@ -17,6 +19,8 @@ interface SidebarHeaderProps {
   onToggleCollapsed: () => void;
   onNewChat?: () => void;
   onCurrentUserClick?: () => void;
+  onToggleNotifications?: () => void;
+  notificationUnreadCount?: number;
 }
 
 const resolveDisplayName = (user: UserSummary, fallback: string): string => {
@@ -49,6 +53,8 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   onToggleCollapsed,
   onNewChat,
   onCurrentUserClick,
+  onToggleNotifications,
+  notificationUnreadCount = 0,
 }) => {
   const { t } = useTranslation();
 
@@ -95,6 +101,25 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
         </button>
 
         <div className="flex shrink-0 items-center gap-1">
+          <div className="relative">
+            <IconButtonSurface
+              onClick={onToggleNotifications}
+              aria-label={t("notifications.panelTitle", {
+                defaultValue: "Notifications",
+              })}
+            >
+              <BellIcon className="h-5 w-5" />
+            </IconButtonSurface>
+            {notificationUnreadCount > 0 && (
+              <Badge
+                count={notificationUnreadCount}
+                size="sm"
+                variant="danger"
+                className="absolute -right-1 -top-1"
+              />
+            )}
+          </div>
+
           {!collapsed && (
             <IconButtonSurface
               onClick={onNewChat}

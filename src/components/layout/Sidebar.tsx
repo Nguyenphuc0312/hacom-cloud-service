@@ -28,6 +28,11 @@ import { SidebarHeader } from "./sidebar/SidebarHeader";
 import { SidebarSearch } from "./sidebar/SidebarSearch";
 import { RoomList } from "./sidebar/RoomList";
 import { ROUTE_PATHS } from "../../router/paths";
+import { NotificationPanel } from "../notification/NotificationPanel";
+import {
+  useNotificationStore,
+  useNotificationUnreadCount,
+} from "../../features/notification/state/notificationStore";
 
 interface SidebarProps {
   conversations: Conversation[];
@@ -85,6 +90,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const { logout, isLoggingOut } = useLogout();
   const currentConversationId = selectedId;
+  const isNotificationPanelOpen = useNotificationStore(
+    (state) => state.isPanelOpen,
+  );
+  const setNotificationPanelOpen = useNotificationStore(
+    (state) => state.setPanelOpen,
+  );
+  const toggleNotificationPanel = useNotificationStore(
+    (state) => state.togglePanel,
+  );
+  const notificationUnreadCount = useNotificationUnreadCount();
 
   const handleSelectRoom = useCallback(
     (conversationId: string) => {
@@ -130,9 +145,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // ─── Helper: active state cho bottom nav ─────────────────────────────────
   const isNavActive = (path: string) => location.pathname.startsWith(path);
 
+  useEffect(() => {
+    setNotificationPanelOpen(false);
+  }, [location.pathname, setNotificationPanelOpen]);
+
   return (
     <>
-      <SidebarContainer collapsed={isCollapsed} className={className}>
+      <SidebarContainer
+        collapsed={isCollapsed}
+        className={clsx("relative", className)}
+      >
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <SidebarHeader
           currentUser={currentUser}
@@ -140,6 +162,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onToggleCollapsed={() => setIsCollapsed((current) => !current)}
           onNewChat={onNewChat}
           onCurrentUserClick={onCurrentUserClick}
+          onToggleNotifications={toggleNotificationPanel}
+          notificationUnreadCount={notificationUnreadCount}
+        />
+
+        <NotificationPanel
+          isOpen={isNotificationPanelOpen}
+          onClose={() => setNotificationPanelOpen(false)}
+          className={clsx(
+            isCollapsed
+              ? "left-3 right-3 top-[4.75rem] w-auto"
+              : "right-3 top-[4.75rem]",
+          )}
         />
 
         {/* ── Search ─────────────────────────────────────────────────────── */}
