@@ -1,26 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Alert,
-  Button,
-  Card,
-  Col,
-  Form,
-  Input,
-  Modal,
-  Row,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from 'antd';
-import { useMemo, useState } from 'react';
+import { Button, Col, Form, Input, Modal, Row, Select, Space, message } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+import { useEffect, useMemo, useState } from 'react';
 
 import { emailTemplatesClient } from '@/api/clients';
 import { queryKeys } from '@/api/queryKeys';
 import type { EmailTemplateRecord, UpsertEmailTemplateDraftRequest } from '@/api/types';
-import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
+import { AdminTable } from '@/components/AdminTable';
+import { DataTableShell } from '@/components/DataTableShell';
+import { DataTableToolbar } from '@/components/DataTableToolbar';
+import { FormSection } from '@/components/FormSection';
+import { EmptyState, QueryStateView } from '@/components/QueryStates';
+import { StatusBadge } from '@/components/StatusBadge';
+import { SurfaceCard } from '@/components/ui/SurfaceCard';
 
 const TEMPLATE_CODE_OPTIONS = [
   { label: 'EMAIL_OTP', value: 'EMAIL_OTP' },
@@ -85,18 +77,18 @@ export const EmailTemplatesCard = () => {
       return emailTemplatesClient.upsertDraft(payload.code, body);
     },
     onSuccess: async (_, variables) => {
-      message.success(`Đã lưu draft template ${variables.code}.`);
+      message.success(`Draft saved for ${variables.code}.`);
       await refresh();
     },
     onError: (error) => {
-      message.error(error instanceof Error ? error.message : 'Lưu draft thất bại.');
+      message.error(error instanceof Error ? error.message : 'Unable to save the draft.');
     },
   });
 
   const publishMutation = useMutation({
     mutationFn: (code: string) => emailTemplatesClient.publish(code),
     onSuccess: async () => {
-      message.success('Đã publish template.');
+      message.success('Template published.');
       await refresh();
     },
   });
@@ -105,7 +97,7 @@ export const EmailTemplatesCard = () => {
     mutationFn: ({ code, version }: { code: string; version: number }) =>
       emailTemplatesClient.rollback(code, { version }),
     onSuccess: async () => {
-      message.success('Đã rollback template.');
+      message.success('Template rolled back.');
       await refresh();
     },
   });
@@ -116,52 +108,11 @@ export const EmailTemplatesCard = () => {
         sampleData: toJsonOrUndefined(payload.sampleData),
       }),
     onError: (error) => {
-      message.error(error instanceof Error ? error.message : 'Preview thất bại.');
+      message.error(error instanceof Error ? error.message : 'Preview failed.');
     },
   });
 
   const selectedTemplate = detailQuery.data;
-
-  const columns = useMemo(
-    () => [
-      {
-        title: 'Code',
-        dataIndex: 'code',
-      },
-      {
-        title: 'Draft',
-        render: (_: unknown, record: EmailTemplateRecord) =>
-          record.draft ? <Tag color="gold">v{record.draft.version}</Tag> : <Tag>-</Tag>,
-      },
-      {
-        title: 'Published',
-        render: (_: unknown, record: EmailTemplateRecord) =>
-          record.published ? <Tag color="green">v{record.published.version}</Tag> : <Tag>-</Tag>,
-      },
-      {
-        title: 'Action',
-        render: (_: unknown, record: EmailTemplateRecord) => (
-          <Button size="small" onClick={() => setActiveCode(record.code)}>
-            Edit
-          </Button>
-        ),
-      },
-    ],
-    [],
-  );
-
-  if (listQuery.isLoading) {
-    return <LoadingState tip="Đang tải email templates..." />;
-  }
-
-  if (listQuery.isError) {
-    return (
-      <ErrorState
-        subTitle="Không thể tải danh sách email template."
-        extra={<Button onClick={() => listQuery.refetch()}>Thử lại</Button>}
-      />
-    );
-  }
 
   const onLoadTemplate = (record?: EmailTemplateRecord) => {
     const target = record ?? selectedTemplate;
@@ -184,6 +135,81 @@ export const EmailTemplatesCard = () => {
     });
   };
 
+  useEffect(() => {
+    if (!detailQuery.data) {
+      return;
+    }
+
+    const source = detailQuery.data.draft ?? detailQuery.data.published;
+    form.setFieldsValue({
+      code: detailQuery.data.code,
+      name: detailQuery.data.name,
+      description: detailQuery.data.description ?? '',
+      subjectTemplate: source?.subjectTemplate ?? '',
+      htmlTemplate: source?.htmlTemplate ?? '',
+      textTemplate: source?.textTemplate ?? '',
+      variablesSchema: source?.variablesSchema
+        ? JSON.stringify(source.variablesSchema, null, 2)
+        : '',
+      sampleData: source?.sampleData ? JSON.stringify(source.sampleData, null, 2) : '',
+    });
+  }, [detailQuery.data, form]);
+
+  const columns = useMemo<ColumnsType<EmailTemplateRecord>>(
+    () => [
+      {
+        title: 'Code',
+        dataIndex: 'code',
+      },
+      {
+        title: 'Draft',
+        render: (_, record) =>
+          record.draft ? (
+            <Space size={8}>
+              <StatusBadge status="pending" />
+              <span>v{record.draft.version}</span>
+            </Space>
+          ) : (
+            <StatusBadge status="inactive" />
+          ),
+      },
+      {
+        title: 'Published',
+        render: (_, record) =>
+          record.published ? (
+            <Space size={8}>
+              <StatusBadge status="active" />
+              <span>v{record.published.version}</span>
+            </Space>
+          ) : (
+            <StatusBadge status="unknown" />
+          ),
+      },
+      {
+        title: 'Selection',
+        render: (_, record) =>
+          record.code === activeCode ? <span className="ds-shell-chip">Editing</span> : '-',
+      },
+    ],
+    [activeCode],
+  );
+
+  if (listQuery.isLoading) {
+    return <QueryStateView kind="loading" title="Loading email templates..." />;
+  }
+
+  if (listQuery.isError) {
+    return (
+      <QueryStateView
+        kind="error"
+        description="Unable to load email templates."
+        onRetry={() => {
+          void listQuery.refetch();
+        }}
+      />
+    );
+  }
+
   const handleSaveDraft = async () => {
     const payload = await form.validateFields();
     await upsertMutation.mutateAsync(payload);
@@ -192,7 +218,7 @@ export const EmailTemplatesCard = () => {
   const handlePreview = async () => {
     const payload = await form.validateFields();
     const preview = await previewMutation.mutateAsync(payload);
-    message.success('Preview thành công.');
+    message.success('Preview generated.');
 
     const content = [preview.subject, preview.text ?? '', preview.html ?? '']
       .filter(Boolean)
@@ -212,7 +238,7 @@ export const EmailTemplatesCard = () => {
   const handleRollback = async () => {
     const version = selectedTemplate?.published?.version;
     if (!version) {
-      message.warning('Không có published version để rollback.');
+      message.warning('There is no published version to roll back to.');
       return;
     }
 
@@ -220,98 +246,139 @@ export const EmailTemplatesCard = () => {
   };
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <Card>
-        <Space direction="vertical" size={8} style={{ width: '100%' }}>
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            Email templates
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            Quản lý draft/publish/rollback template email cho OTP và các flow auth.
-          </Typography.Text>
+    <div className="ds-settings-stack">
+      <DataTableShell
+        title="Template registry"
+        meta="Keep draft and published versions visible before the operator opens the editor."
+        toolbar={
+          <DataTableToolbar>
+            <Button
+              onClick={() => {
+                void refresh();
+              }}
+            >
+              Refresh registry
+            </Button>
+          </DataTableToolbar>
+        }
+      >
+        <AdminTable
+          rowKey="id"
+          columns={columns}
+          minHeight={220}
+          dataSource={listQuery.data?.items ?? []}
+          emptyNode={<EmptyState description="No email templates are registered yet." />}
+          pagination={false}
+          onRow={(record) => ({
+            onClick: () => {
+              setActiveCode(record.code);
+              onLoadTemplate(record);
+            },
+            style: { cursor: 'pointer' },
+          })}
+        />
+      </DataTableShell>
 
-          <Table
-            rowKey="id"
-            size="small"
-            columns={columns}
-            dataSource={listQuery.data?.items ?? []}
-            pagination={false}
-            locale={{ emptyText: <EmptyState description="Chưa có email template." /> }}
-          />
-        </Space>
-      </Card>
+      <SurfaceCard
+        eyebrow="Template editor"
+        title={activeCode}
+        description="Runtime uses only published templates. Drafts, preview, publish, and rollback stay in one editor flow so operators do not switch context."
+        status={
+          selectedTemplate ? (
+            <div className="ds-page-toolbar-group">
+              {selectedTemplate.draft ? <StatusBadge status="pending" /> : null}
+              {selectedTemplate.published ? <StatusBadge status="active" /> : null}
+            </div>
+          ) : null
+        }
+      >
+        <Form form={form} layout="vertical">
+          <div className="ds-settings-form-grid">
+            <FormSection
+              title="Template identity"
+              description="Choose the template code first, then load the current draft or published source into the editor."
+            >
+              <Row gutter={16}>
+                <Col xs={24} md={8}>
+                  <Form.Item name="code" label="Template code" rules={[{ required: true }]}>
+                    <Select
+                      options={TEMPLATE_CODE_OPTIONS}
+                      onChange={(value) => setActiveCode(value)}
+                      placeholder="Select template code"
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Form.Item name="name" label="Template name" rules={[{ required: true }]}>
+                    <Input placeholder="Email OTP" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Form.Item name="description" label="Description">
+                    <Input placeholder="Template used for email OTP verification" />
+                  </Form.Item>
+                </Col>
+              </Row>
 
-      <Card>
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
-          <Alert
-            type="info"
-            showIcon
-            message="Nguyên tắc"
-            description="Runtime chỉ dùng template đã publish. Draft có thể preview trước khi publish. Rollback sẽ tạo version mới dựa trên version đã publish trước đó."
-          />
+              <Form.Item
+                name="subjectTemplate"
+                label="Subject template"
+                rules={[{ required: true }]}
+              >
+                <Input placeholder="Your OTP code is {{otp}}" />
+              </Form.Item>
+            </FormSection>
 
-          <Form form={form} layout="vertical">
-            <Row gutter={16}>
-              <Col xs={24} md={8}>
-                <Form.Item name="code" label="Template code" rules={[{ required: true }]}>
-                  <Select
-                    options={TEMPLATE_CODE_OPTIONS}
-                    onChange={(value) => setActiveCode(value)}
-                    placeholder="Chọn code"
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={24} md={8}>
-                <Form.Item name="name" label="Template name" rules={[{ required: true }]}>
-                  <Input placeholder="Email OTP" />
-                </Form.Item>
-              </Col>
-              <Col xs={24} md={8}>
-                <Form.Item name="description" label="Description">
-                  <Input placeholder="Template dùng cho OTP xác thực email" />
-                </Form.Item>
-              </Col>
-            </Row>
+            <FormSection
+              title="Message body"
+              description="Keep HTML and text variants side by side so operators can review both before preview and publish."
+            >
+              <Row gutter={16}>
+                <Col xs={24} lg={12}>
+                  <Form.Item name="htmlTemplate" label="HTML template">
+                    <Input.TextArea
+                      rows={8}
+                      placeholder="<p>Hello {{displayName}}, OTP: <b>{{otp}}</b></p>"
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} lg={12}>
+                  <Form.Item name="textTemplate" label="Text template">
+                    <Input.TextArea
+                      rows={8}
+                      placeholder="Hello {{displayName}}, your OTP is {{otp}}"
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </FormSection>
 
-            <Form.Item name="subjectTemplate" label="Subject template" rules={[{ required: true }]}>
-              <Input placeholder="Mã OTP của bạn là {{otp}}" />
-            </Form.Item>
+            <FormSection
+              title="Schema and sample data"
+              description="Sample data powers preview. Schema documents the variables that the runtime expects."
+            >
+              <Row gutter={16}>
+                <Col xs={24} lg={12}>
+                  <Form.Item name="variablesSchema" label="Variables schema (JSON)">
+                    <Input.TextArea
+                      rows={6}
+                      placeholder='{"otp":{"required":true},"displayName":{"required":false}}'
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} lg={12}>
+                  <Form.Item name="sampleData" label="Sample data (JSON)">
+                    <Input.TextArea rows={6} placeholder='{"otp":"123456","displayName":"Nguyen"}' />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </FormSection>
+          </div>
 
-            <Row gutter={16}>
-              <Col xs={24} lg={12}>
-                <Form.Item name="htmlTemplate" label="HTML template">
-                  <Input.TextArea
-                    rows={8}
-                    placeholder="<p>Xin chào {{displayName}}, OTP: <b>{{otp}}</b></p>"
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={24} lg={12}>
-                <Form.Item name="textTemplate" label="Text template">
-                  <Input.TextArea
-                    rows={8}
-                    placeholder="Xin chào {{displayName}}, OTP của bạn là {{otp}}"
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-
-            <Row gutter={16}>
-              <Col xs={24} lg={12}>
-                <Form.Item name="variablesSchema" label="Variables schema (JSON)">
-                  <Input.TextArea
-                    rows={6}
-                    placeholder='{"otp":{"required":true},"displayName":{"required":false}}'
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={24} lg={12}>
-                <Form.Item name="sampleData" label="Sample data (JSON)">
-                  <Input.TextArea rows={6} placeholder='{"otp":"123456","displayName":"Nguyen"}' />
-                </Form.Item>
-              </Col>
-            </Row>
-
+          <div className="ds-settings-action-bar">
+            <div className="ds-settings-action-copy">
+              Drafts are safe to edit and preview. Publish only when the content is ready for runtime. Rollback creates a new version from the last published source of truth.
+            </div>
             <Space wrap>
               <Button onClick={() => onLoadTemplate()} disabled={!selectedTemplate}>
                 Load current
@@ -329,10 +396,10 @@ export const EmailTemplatesCard = () => {
                 Rollback
               </Button>
             </Space>
-          </Form>
-        </Space>
-      </Card>
-    </Space>
+          </div>
+        </Form>
+      </SurfaceCard>
+    </div>
   );
 };
 

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { axiosInstanceMock } = vi.hoisted(() => ({
-  axiosInstanceMock: {
+const { adminAxiosInstanceMock } = vi.hoisted(() => ({
+  adminAxiosInstanceMock: {
     get: vi.fn(),
     post: vi.fn(),
     patch: vi.fn(),
@@ -10,21 +10,21 @@ const { axiosInstanceMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/api/axios', () => ({
-  axiosInstance: axiosInstanceMock,
+  adminAxiosInstance: adminAxiosInstanceMock,
 }));
 
 import { hrEmployeesClient } from './hrEmployeesClient';
 
 describe('hrEmployeesClient', () => {
   beforeEach(() => {
-    axiosInstanceMock.get.mockReset();
-    axiosInstanceMock.post.mockReset();
-    axiosInstanceMock.patch.mockReset();
-    axiosInstanceMock.delete.mockReset();
+    adminAxiosInstanceMock.get.mockReset();
+    adminAxiosInstanceMock.post.mockReset();
+    adminAxiosInstanceMock.patch.mockReset();
+    adminAxiosInstanceMock.delete.mockReset();
   });
 
   it('calls validate import endpoint and returns normalized result', async () => {
-    axiosInstanceMock.post.mockResolvedValueOnce({
+    adminAxiosInstanceMock.post.mockResolvedValueOnce({
       data: {
         success: true,
         data: {
@@ -54,14 +54,14 @@ describe('hrEmployeesClient', () => {
       },
     });
 
-    expect(axiosInstanceMock.post).toHaveBeenCalledWith('/api/v1/admin/hr-imports/validate', {
+    expect(adminAxiosInstanceMock.post).toHaveBeenCalledWith('/hr-imports/validate', {
       fileName: 'employees.xlsx',
       fileBase64: 'ZmFrZS1iYXNlNjQ=',
     });
   });
 
   it('calls provision endpoint and returns normalized result', async () => {
-    axiosInstanceMock.post.mockResolvedValueOnce({
+    adminAxiosInstanceMock.post.mockResolvedValueOnce({
       data: {
         success: true,
         data: {
@@ -86,8 +86,8 @@ describe('hrEmployeesClient', () => {
       loginIdentifier: 'user@company.test',
     });
 
-    expect(axiosInstanceMock.post).toHaveBeenCalledWith(
-      '/api/v1/admin/hr-employees/hr-1/provision-account',
+    expect(adminAxiosInstanceMock.post).toHaveBeenCalledWith(
+      '/hr-employees/hr-1/provision-account',
       {
         actorEmail: 'admin@company.test',
       },

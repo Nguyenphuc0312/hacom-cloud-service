@@ -33,6 +33,7 @@ Runtime envs for hybrid dev:
 
 - `VITE_API_BASE_URL`: shared API base (`/api/v1` or absolute URL)
 - `VITE_ADMIN_API_BASE_URL`: admin API root (`/api/v1/admin` or absolute URL)
+- `VITE_ADMIN_API_ROOT`: canonical admin API root (`/api/v1/admin` or absolute URL)
 - `VITE_AUTH_BASE_URL`: canonical auth root (`/api/v1/auth` or absolute URL)
 
 Run local admin panel with server-test backends:
@@ -61,4 +62,8 @@ make docker-stop
 Canonical admin API root is `/api/v1/admin`.
 
 - `VITE_ADMIN_API_ROOT` is the preferred source of truth for admin-only routes.
-- `VITE_ADMIN_API_BASE_URL` remains as a compatibility fallback for shared `/api/v1/*` callers such as auth, alerts, and metrics.
+- `VITE_ADMIN_API_BASE_URL` remains as a compatibility fallback and must resolve to the same admin root as `VITE_ADMIN_API_ROOT`.
+- API client convention:
+  - shared client base URL owns `/api/v1`
+  - admin client base URL owns `/api/v1/admin`
+  - service endpoints stay relative, for example `/monitoring/overview` or `/users`

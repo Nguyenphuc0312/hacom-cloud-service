@@ -1,26 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Alert,
-  Button,
-  Card,
-  Col,
-  Divider,
-  Form,
-  Input,
-  InputNumber,
-  Row,
-  Space,
-  Switch,
-  Tag,
-  Typography,
-  message,
-} from 'antd';
+import { Button, Col, Form, Input, InputNumber, Row, Space, Switch, message } from 'antd';
 import { useEffect } from 'react';
 
 import { smtpClient } from '@/api/clients';
 import { queryKeys } from '@/api/queryKeys';
 import type { UpdateSmtpSettingsRequest } from '@/api/types';
-import { ErrorState, LoadingState, EmptyState } from '@/components/QueryStates';
+import { FormSection } from '@/components/FormSection';
+import { EmptyState, QueryStateView } from '@/components/QueryStates';
+import { StatusBadge } from '@/components/StatusBadge';
+import { SurfaceCard } from '@/components/ui/SurfaceCard';
 import { formatDateTime } from '@/utils/date';
 
 const emptyFormValues: UpdateSmtpSettingsRequest = {
@@ -69,7 +57,7 @@ export const SmtpSettingsCard = () => {
   const saveDraftMutation = useMutation({
     mutationFn: smtpClient.updateSettings,
     onSuccess: async () => {
-      message.success('Đã lưu draft SMTP.');
+      message.success('SMTP draft saved.');
       await refreshSettings();
     },
   });
@@ -77,7 +65,7 @@ export const SmtpSettingsCard = () => {
   const activateMutation = useMutation({
     mutationFn: smtpClient.activateDraft,
     onSuccess: async () => {
-      message.success('Đã kích hoạt SMTP draft.');
+      message.success('SMTP draft activated.');
       await refreshSettings();
     },
   });
@@ -85,7 +73,7 @@ export const SmtpSettingsCard = () => {
   const deactivateMutation = useMutation({
     mutationFn: smtpClient.deactivateActive,
     onSuccess: async () => {
-      message.success('Đã vô hiệu hóa SMTP active.');
+      message.success('Active SMTP configuration disabled.');
       await refreshSettings();
     },
   });
@@ -93,7 +81,7 @@ export const SmtpSettingsCard = () => {
   const testConnectionMutation = useMutation({
     mutationFn: smtpClient.testConnection,
     onSuccess: () => {
-      message.success('Kết nối SMTP hợp lệ.');
+      message.success('SMTP connection succeeded.');
     },
   });
 
@@ -108,14 +96,17 @@ export const SmtpSettingsCard = () => {
   };
 
   if (settingsQuery.isLoading) {
-    return <LoadingState tip="Đang tải cấu hình SMTP..." />;
+    return <QueryStateView kind="loading" title="Loading SMTP settings..." />;
   }
 
   if (settingsQuery.isError) {
     return (
-      <ErrorState
-        subTitle="Không thể tải cấu hình SMTP."
-        extra={<Button onClick={() => settingsQuery.refetch()}>Thử lại</Button>}
+      <QueryStateView
+        kind="error"
+        description="Unable to load SMTP settings."
+        onRetry={() => {
+          void settingsQuery.refetch();
+        }}
       />
     );
   }
@@ -124,181 +115,192 @@ export const SmtpSettingsCard = () => {
   const draft = settingsQuery.data?.draft ?? null;
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <Card>
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            SMTP settings
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            Quản lý cấu hình SMTP từ admin panel. Draft có thể test trước khi kích hoạt.
-          </Typography.Text>
+    <div className="ds-settings-stack">
+      <SurfaceCard
+        eyebrow="Runtime state"
+        title="SMTP deployment"
+        description="Keep active and draft configurations visible side by side so operators do not guess which version is actually serving outbound email."
+        status={<StatusBadge status={active ? 'active' : draft ? 'pending' : 'unknown'} />}
+      >
+        <div className="ds-settings-summary-grid">
+          <div className="ds-settings-summary-card">
+            <div className="ds-settings-summary-head">
+              <span className="ds-settings-summary-title">Active</span>
+              {active ? <StatusBadge status="active" /> : <StatusBadge status="inactive" />}
+            </div>
+            {active ? (
+              <div className="ds-settings-summary-meta">
+                <strong>{active.fromEmail}</strong>
+                <span>
+                  {active.host}:{active.port} {active.secure ? '(secure)' : '(plain)'}
+                </span>
+                <span>Updated {formatDateTime(active.updatedAt)}</span>
+                <span>Password: {active.passMasked || '-'}</span>
+              </div>
+            ) : (
+              <EmptyState description="No active SMTP configuration yet." />
+            )}
+          </div>
 
-          <Row gutter={[16, 16]}>
-            <Col xs={24} lg={12}>
-              <Card size="small" title="Active">
-                {active ? (
-                  <Space direction="vertical" size={4}>
-                    <Space>
-                      <Tag color="green">ACTIVE</Tag>
-                      <Typography.Text strong>{active.fromEmail}</Typography.Text>
-                    </Space>
-                    <Typography.Text type="secondary">
-                      {active.host}:{active.port} {active.secure ? '(secure)' : '(plain)'}
-                    </Typography.Text>
-                    <Typography.Text type="secondary">
-                      Updated {formatDateTime(active.updatedAt)}
-                    </Typography.Text>
-                    <Typography.Text type="secondary">
-                      Password: {active.passMasked || '-'}
-                    </Typography.Text>
-                  </Space>
-                ) : (
-                  <EmptyState description="Chưa có cấu hình active." />
-                )}
-              </Card>
-            </Col>
-            <Col xs={24} lg={12}>
-              <Card size="small" title="Draft">
-                {draft ? (
-                  <Space direction="vertical" size={4}>
-                    <Space>
-                      <Tag color={draft.status === 'ACTIVE' ? 'green' : 'gold'}>{draft.status}</Tag>
-                      <Typography.Text strong>{draft.fromEmail}</Typography.Text>
-                    </Space>
-                    <Typography.Text type="secondary">
-                      {draft.host}:{draft.port} {draft.secure ? '(secure)' : '(plain)'}
-                    </Typography.Text>
-                    <Typography.Text type="secondary">
-                      Updated {formatDateTime(draft.updatedAt)}
-                    </Typography.Text>
-                    <Typography.Text type="secondary">
-                      Password: {draft.passMasked || '-'}
-                    </Typography.Text>
-                  </Space>
-                ) : (
-                  <EmptyState description="Chưa có draft SMTP." />
-                )}
-              </Card>
-            </Col>
-          </Row>
-        </Space>
-      </Card>
+          <div className="ds-settings-summary-card">
+            <div className="ds-settings-summary-head">
+              <span className="ds-settings-summary-title">Draft</span>
+              {draft ? <StatusBadge status={draft.status} /> : <StatusBadge status="unknown" />}
+            </div>
+            {draft ? (
+              <div className="ds-settings-summary-meta">
+                <strong>{draft.fromEmail}</strong>
+                <span>
+                  {draft.host}:{draft.port} {draft.secure ? '(secure)' : '(plain)'}
+                </span>
+                <span>Updated {formatDateTime(draft.updatedAt)}</span>
+                <span>Password: {draft.passMasked || '-'}</span>
+              </div>
+            ) : (
+              <EmptyState description="No SMTP draft has been prepared." />
+            )}
+          </div>
 
-      <Card>
+          <div className="ds-settings-summary-card">
+            <div className="ds-settings-summary-head">
+              <span className="ds-settings-summary-title">Release flow</span>
+              <StatusBadge status="info" />
+            </div>
+            <div className="ds-settings-summary-meta">
+              <span>1. Save a draft.</span>
+              <span>2. Test the draft against the target server.</span>
+              <span>3. Activate only after the connection succeeds.</span>
+            </div>
+          </div>
+        </div>
+      </SurfaceCard>
+
+      <SurfaceCard
+        eyebrow="Configuration"
+        title="Connection profile"
+        description="Separate transport details from sender identity so edits stay easy to review before activation."
+      >
         <Form
           form={form}
           layout="vertical"
           initialValues={emptyFormValues}
           onFinish={handleSaveDraft}
         >
-          <Row gutter={16}>
-            <Col xs={24} md={12}>
-              <Form.Item
-                label="Host"
-                name="host"
-                rules={[{ required: true, message: 'Vui lòng nhập SMTP host.' }]}
-              >
-                <Input placeholder="smtp.example.com" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={6}>
-              <Form.Item
-                label="Port"
-                name="port"
-                rules={[{ required: true, message: 'Vui lòng nhập SMTP port.' }]}
-              >
-                <InputNumber min={1} max={65535} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={6}>
-              <Form.Item label="Secure" name="secure" valuePropName="checked">
-                <Switch />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col xs={24} md={12}>
-              <Form.Item
-                label="SMTP user"
-                name="user"
-                rules={[{ required: true, message: 'Vui lòng nhập SMTP user.' }]}
-              >
-                <Input placeholder="mailer@example.com" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item
-                label="SMTP password"
-                name="password"
-                extra="Để trống nếu không muốn thay đổi mật khẩu trong draft hiện tại."
-              >
-                <Input.Password placeholder="••••••••" autoComplete="new-password" />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col xs={24} md={12}>
-              <Form.Item
-                label="From name"
-                name="fromName"
-                rules={[{ required: true, message: 'Vui lòng nhập tên hiển thị.' }]}
-              >
-                <Input placeholder="Hacom Chat" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item
-                label="From email"
-                name="fromEmail"
-                rules={[{ required: true, type: 'email', message: 'From email không hợp lệ.' }]}
-              >
-                <Input placeholder="noreply@example.com" />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item
-            label="Reply-to"
-            name="replyTo"
-            rules={[{ type: 'email', message: 'Reply-to không hợp lệ.' }]}
-          >
-            <Input placeholder="support@example.com" />
-          </Form.Item>
-
-          <Alert
-            type="info"
-            showIcon
-            message="Quy trình"
-            description="Lưu draft trước, test connection trên draft, sau đó kích hoạt nếu hợp lệ. Chỉ 1 cấu hình active tại một thời điểm."
-          />
-
-          <Divider />
-
-          <Space wrap>
-            <Button type="primary" htmlType="submit" loading={saveDraftMutation.isPending}>
-              Lưu draft
-            </Button>
-            <Button onClick={handleTestConnection} loading={testConnectionMutation.isPending}>
-              Test connection
-            </Button>
-            <Button onClick={() => activateMutation.mutate()} loading={activateMutation.isPending}>
-              Activate draft
-            </Button>
-            <Button
-              danger
-              onClick={() => deactivateMutation.mutate()}
-              loading={deactivateMutation.isPending}
-              disabled={!active}
+          <div className="ds-settings-form-grid">
+            <FormSection
+              title="Transport"
+              description="Host, port, and authentication values used to reach the mail server."
             >
-              Deactivate active
-            </Button>
-          </Space>
+              <Row gutter={16}>
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    label="Host"
+                    name="host"
+                    rules={[{ required: true, message: 'SMTP host is required.' }]}
+                  >
+                    <Input placeholder="smtp.example.com" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Form.Item
+                    label="Port"
+                    name="port"
+                    rules={[{ required: true, message: 'SMTP port is required.' }]}
+                  >
+                    <InputNumber min={1} max={65535} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Form.Item label="Secure" name="secure" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              <Row gutter={16}>
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    label="SMTP user"
+                    name="user"
+                    rules={[{ required: true, message: 'SMTP user is required.' }]}
+                  >
+                    <Input placeholder="mailer@example.com" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    label="SMTP password"
+                    name="password"
+                    extra="Leave blank if the current draft password should stay unchanged."
+                  >
+                    <Input.Password placeholder="••••••••" autoComplete="new-password" />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </FormSection>
+
+            <FormSection
+              title="Sender identity"
+              description="These values shape the outbound email identity visible to recipients."
+            >
+              <Row gutter={16}>
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    label="From name"
+                    name="fromName"
+                    rules={[{ required: true, message: 'Display name is required.' }]}
+                  >
+                    <Input placeholder="Hacom Chat" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    label="From email"
+                    name="fromEmail"
+                    rules={[{ required: true, type: 'email', message: 'Enter a valid sender email.' }]}
+                  >
+                    <Input placeholder="noreply@example.com" />
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              <Form.Item
+                label="Reply-to"
+                name="replyTo"
+                rules={[{ type: 'email', message: 'Enter a valid reply-to email.' }]}
+              >
+                <Input placeholder="support@example.com" />
+              </Form.Item>
+            </FormSection>
+          </div>
+
+          <div className="ds-settings-action-bar">
+            <div className="ds-settings-action-copy">
+              Save the draft first, test it with the exact transport values above, and only then activate it. Deactivation is destructive and should be used sparingly.
+            </div>
+            <Space wrap>
+              <Button type="primary" htmlType="submit" loading={saveDraftMutation.isPending}>
+                Save draft
+              </Button>
+              <Button onClick={handleTestConnection} loading={testConnectionMutation.isPending}>
+                Test connection
+              </Button>
+              <Button onClick={() => activateMutation.mutate()} loading={activateMutation.isPending}>
+                Activate draft
+              </Button>
+              <Button
+                danger
+                onClick={() => deactivateMutation.mutate()}
+                loading={deactivateMutation.isPending}
+                disabled={!active}
+              >
+                Deactivate active
+              </Button>
+            </Space>
+          </div>
         </Form>
-      </Card>
-    </Space>
+      </SurfaceCard>
+    </div>
   );
 };
 

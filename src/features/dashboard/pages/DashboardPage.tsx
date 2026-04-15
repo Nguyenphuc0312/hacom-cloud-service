@@ -1,5 +1,5 @@
 import { ReloadOutlined } from '@ant-design/icons';
-import { Button, Space, Typography } from 'antd';
+import { Button, Space } from 'antd';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -37,8 +37,6 @@ import {
   pickPrimarySeries,
   summarizeTrend,
 } from '../utils/dashboardView';
-
-const { Text } = Typography;
 
 type TrendMode = 'traffic' | 'latency' | 'reliability';
 type DashboardMetricView = {
@@ -343,30 +341,36 @@ export const DashboardPage = () => {
       title="Dashboard"
       description="Operator-first control center for chat, realtime health, users, and system configuration."
       headerExtra={
-        <Space size={12} wrap>
-          <TimeRangePicker value={range} onChange={setRange} />
-          <StatusBadge status={appConfig.liveUpdatesMode === 'live' ? 'live' : 'warning'} />
-          {overview ? (
-            <StatusBadge
-              status={getFreshnessLabel(overview.freshness)}
-              title={`Freshness: ${overview.freshness}`}
-            />
-          ) : null}
-          <Button
-            icon={<ReloadOutlined />}
-            loading={
-              monitoringQuery.isFetching ||
-              serviceHealthQuery.isFetching ||
-              incidentsQuery.isFetching
-            }
-            onClick={refetchDashboard}
-          >
-            Refresh
-          </Button>
-          {overview?.generatedAt ? (
-            <Text type="secondary">Last sync: {formatDateTime(overview.generatedAt)}</Text>
-          ) : null}
-        </Space>
+        <div className="ds-page-toolbar-stack">
+          <div className="ds-page-toolbar-group">
+            <TimeRangePicker value={range} onChange={setRange} />
+            <StatusBadge status={appConfig.liveUpdatesMode === 'live' ? 'live' : 'warning'} />
+            {overview ? (
+              <StatusBadge
+                status={getFreshnessLabel(overview.freshness)}
+                title={`Freshness: ${overview.freshness}`}
+              />
+            ) : null}
+          </div>
+          <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
+            <Button
+              icon={<ReloadOutlined />}
+              loading={
+                monitoringQuery.isFetching ||
+                serviceHealthQuery.isFetching ||
+                incidentsQuery.isFetching
+              }
+              onClick={refetchDashboard}
+            >
+              Refresh
+            </Button>
+            {overview?.generatedAt ? (
+              <span className="ds-page-toolbar-meta">
+                Last sync: {formatDateTime(overview.generatedAt)}
+              </span>
+            ) : null}
+          </div>
+        </div>
       }
     >
       {!hasOverviewData ? (

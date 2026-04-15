@@ -14,6 +14,8 @@ const statusMap: Record<string, StatusBadgeConfig> = {
   comfortable: { color: 'green', text: 'COMFORTABLE' },
   configured: { color: 'green', text: 'CONFIGURED' },
   live: { color: 'green', text: 'LIVE' },
+  online: { color: 'green', text: 'ONLINE' },
+  success: { color: 'green', text: 'SUCCESS' },
 
   degraded: { color: 'gold', text: 'DEGRADED' },
   warn: { color: 'gold', text: 'WARN' },
@@ -23,6 +25,8 @@ const statusMap: Record<string, StatusBadgeConfig> = {
   pending_verification: { color: 'gold', text: 'PENDING_VERIFICATION' },
   ready_for_provision: { color: 'gold', text: 'READY_FOR_PROVISION' },
   activation_required: { color: 'gold', text: 'ACTIVATION_REQUIRED' },
+  away: { color: 'gold', text: 'AWAY' },
+  info: { color: 'blue', text: 'INFO' },
   near_breaking: { color: 'red', text: 'NEAR_BREAKING' },
   'near-breaking': { color: 'red', text: 'NEAR_BREAKING' },
 
@@ -34,11 +38,13 @@ const statusMap: Record<string, StatusBadgeConfig> = {
   locked: { color: 'red', text: 'LOCKED' },
   suspended: { color: 'red', text: 'SUSPENDED' },
   failed: { color: 'red', text: 'FAILED' },
+  dnd: { color: 'red', text: 'DO_NOT_DISTURB' },
 
   inactive: { color: 'default', text: 'INACTIVE' },
   resolved: { color: 'default', text: 'RESOLVED' },
   unknown: { color: 'default', text: 'UNKNOWN' },
   unavailable: { color: 'default', text: 'UNAVAILABLE' },
+  offline: { color: 'default', text: 'OFFLINE' },
   ok: { color: 'green', text: 'OK' },
   alert: { color: 'red', text: 'ALERT' },
   not_provisioned: { color: 'default', text: 'NOT_PROVISIONED' },

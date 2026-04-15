@@ -1,3 +1,4 @@
+import { ReloadOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { Button, DatePicker, Form, Input, Space, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -11,7 +12,7 @@ import { AdminTable } from '@/components/AdminTable';
 import { DataTableShell } from '@/components/DataTableShell';
 import { DataTableToolbar } from '@/components/DataTableToolbar';
 import { FilterBar } from '@/components/FilterBar';
-import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
+import { EmptyState, QueryStateView } from '@/components/QueryStates';
 import { PageShell } from '@/components/PageShell';
 import { StatusBadge } from '@/components/StatusBadge';
 import { formatDateTime } from '@/utils/date';
@@ -79,7 +80,9 @@ export const AuditLogPage = () => {
       {
         title: 'Source',
         dataIndex: 'source',
-        render: (value: string | null) => <Typography.Text type="secondary">{value ?? '-'}</Typography.Text>,
+        render: (value: string | null) => (
+          <Typography.Text type="secondary">{value ?? '-'}</Typography.Text>
+        ),
       },
       {
         title: 'IP',
@@ -142,40 +145,76 @@ export const AuditLogPage = () => {
     setFilters({ page: 1, limit: 20 });
   };
 
+  const activeFilterCount = getActiveFilterCount(filters);
+
   if (query.isLoading) {
-    return <LoadingState tip="Đang tải audit logs..." />;
+    return (
+      <PageShell
+        title="Audit Logs"
+        description="Trace admin actions, request correlation, and outcome signals without losing the surrounding table context."
+      >
+        <QueryStateView kind="loading" title="Loading audit logs..." />
+      </PageShell>
+    );
   }
 
   if (query.isError) {
     return (
-      <ErrorState
-        subTitle="Không thể tải audit logs."
-        extra={<Button onClick={() => query.refetch()}>Thử lại</Button>}
-      />
+      <PageShell
+        title="Audit Logs"
+        description="Trace admin actions, request correlation, and outcome signals without losing the surrounding table context."
+      >
+        <QueryStateView
+          kind="error"
+          description="Unable to load audit logs."
+          onRetry={() => {
+            void query.refetch();
+          }}
+        />
+      </PageShell>
     );
   }
 
   const data = query.data;
-  const activeFilterCount = getActiveFilterCount(filters);
 
   return (
     <PageShell
       title="Audit Logs"
-      description="Theo dõi thao tác quản trị, request trace, và kết quả action theo thời gian với mật độ đọc phù hợp cho điều tra nội bộ."
+      description="Search the event stream by actor, action, entity, source, and time range without turning the page into a dense filter wall."
       headerExtra={
-        <span className="ds-shell-chip ds-shell-chip--ghost">
-          {query.dataUpdatedAt
-            ? `Updated ${formatDateTime(new Date(query.dataUpdatedAt).toISOString())}`
-            : 'Awaiting sync'}
-        </span>
+        <div className="ds-page-toolbar-stack">
+          <div className="ds-page-toolbar-group">
+            <span className="ds-shell-chip">
+              {data?.pagination.total ?? 0} matched event{(data?.pagination.total ?? 0) === 1 ? '' : 's'}
+            </span>
+            <span className="ds-shell-chip ds-shell-chip--ghost">
+              {activeFilterCount} active filter{activeFilterCount === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
+            <Button
+              icon={<ReloadOutlined />}
+              loading={query.isFetching}
+              onClick={() => {
+                void query.refetch();
+              }}
+            >
+              Refresh
+            </Button>
+            <span className="ds-page-toolbar-meta">
+              Last sync:{' '}
+              {query.dataUpdatedAt ? formatDateTime(new Date(query.dataUpdatedAt).toISOString()) : '-'}
+            </span>
+          </div>
+        </div>
       }
     >
       <FilterBar>
         <div className="ds-toolbar-lead">
-          <span className="ds-toolbar-eyebrow">Audit Query</span>
+          <span className="ds-toolbar-eyebrow">Audit query</span>
           <strong className="ds-toolbar-title">Search the event stream</strong>
           <span className="ds-toolbar-description">
-            Filter by actor, action, entity, source, and time range without losing the context of the table below.
+            Keep the filters explicit but compact so the table remains the primary surface for investigation.
           </span>
         </div>
 
@@ -208,15 +247,14 @@ export const AuditLogPage = () => {
 
       <DataTableShell
         title="Audit records"
-        meta={`${data?.pagination.total ?? 0} records matched the current query`}
+        meta={`${data?.pagination.total ?? 0} record(s) matched the current query`}
         toolbar={
           <DataTableToolbar>
             <span className="ds-toolbar-summary">
               <span className="ds-shell-chip ds-shell-chip--ghost">
-                {activeFilterCount} active filter{activeFilterCount === 1 ? '' : 's'}
+                Page {data?.pagination.page ?? 1}
               </span>
             </span>
-            <Button onClick={() => query.refetch()}>Refresh</Button>
           </DataTableToolbar>
         }
       >
@@ -225,7 +263,7 @@ export const AuditLogPage = () => {
           columns={columns}
           minHeight={360}
           dataSource={data?.items ?? []}
-          emptyNode={<EmptyState description="Không có audit record phù hợp." />}
+          emptyNode={<EmptyState description="No audit records matched the current query." />}
           pagination={{
             current: data?.pagination.page,
             pageSize: data?.pagination.limit,

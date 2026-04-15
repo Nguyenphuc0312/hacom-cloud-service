@@ -1,5 +1,6 @@
+import { ReloadOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Form, Input, Modal, Select, Space, Typography, message } from 'antd';
+import { Button, Form, Input, Modal, Select, Space, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -15,9 +16,12 @@ import type {
 } from '@/api/types';
 import { AdminTable } from '@/components/AdminTable';
 import { DataTableShell } from '@/components/DataTableShell';
+import { DataTableToolbar } from '@/components/DataTableToolbar';
+import { FeatureDisabledNotice } from '@/components/FeatureDisabledNotice';
 import { FilterBar } from '@/components/FilterBar';
-import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
 import { PageShell } from '@/components/PageShell';
+import { EmptyState, QueryStateView } from '@/components/QueryStates';
+import { RowActionsDropdown } from '@/components/RowActionsDropdown';
 import { StatusBadge } from '@/components/StatusBadge';
 import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
 import { useAuthStore } from '@/store/authStore';
@@ -28,7 +32,7 @@ import { HrImportWizard } from '../components/HrImportWizard';
 import { ProvisionAccountButton } from '../components/ProvisionAccountButton';
 
 const statusOptions: Array<{ label: string; value: 'all' | HrEmployeeStatus }> = [
-  { label: 'Tat ca status', value: 'all' },
+  { label: 'Any status', value: 'all' },
   { label: 'ACTIVE', value: 'ACTIVE' },
   { label: 'INACTIVE', value: 'INACTIVE' },
   { label: 'LEFT', value: 'LEFT' },
@@ -64,6 +68,8 @@ export const HREmployeesPage = () => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+
+  const activeFilterCount = [params.keyword, params.status].filter(Boolean).length;
 
   const refreshHrViews = useCallback(
     async (employeeId?: string) => {
@@ -118,7 +124,7 @@ export const HREmployeesPage = () => {
   const createMutation = useMutation({
     mutationFn: (payload: CreateHrEmployeePayload) => hrEmployeesClient.create(payload),
     onSuccess: () => {
-      message.success('Da tao HR employee.');
+      message.success('HR employee created.');
       setEditorOpen(false);
       setCreating(false);
       void queryClient.invalidateQueries({
@@ -134,7 +140,7 @@ export const HREmployeesPage = () => {
     mutationFn: (payload: UpdateHrEmployeePayload) =>
       hrEmployeesClient.update(editingId ?? '', payload),
     onSuccess: () => {
-      message.success('Da cap nhat HR employee.');
+      message.success('HR employee updated.');
       setEditorOpen(false);
       void queryClient.invalidateQueries({
         queryKey: queryKeys.hrEmployeesList(JSON.stringify(params)),
@@ -151,7 +157,7 @@ export const HREmployeesPage = () => {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => hrEmployeesClient.remove(id),
     onSuccess: () => {
-      message.success('Da xu ly deactivate/delete HR employee.');
+      message.success('HR employee deactivated.');
       void queryClient.invalidateQueries({
         queryKey: queryKeys.hrEmployeesList(JSON.stringify(params)),
       });
@@ -218,9 +224,9 @@ export const HREmployeesPage = () => {
       }
 
       Modal.confirm({
-        title: 'Deactivate/Delete HR employee',
+        title: 'Deactivate HR employee',
         content:
-          'Hanh dong nay tuan theo semantics backend hien tai (deactivate hoac soft delete).',
+          'This follows the current backend semantics for deactivation or soft delete. Continue only when the record should leave the active roster.',
         okText: 'Confirm',
         cancelText: 'Cancel',
         onOk: async () => {
@@ -256,12 +262,12 @@ export const HREmployeesPage = () => {
         render: (value: string | null | undefined) => displayValue(value),
       },
       {
-        title: 'Provisioning status',
+        title: 'Provisioning',
         dataIndex: 'provisioningStatus',
         render: (value: HrEmployee['provisioningStatus']) => <StatusBadge status={value} />,
       },
       {
-        title: 'Activation status',
+        title: 'Activation',
         dataIndex: 'activationStatus',
         render: (value: HrEmployee['activationStatus']) => <StatusBadge status={value} />,
       },
@@ -276,46 +282,44 @@ export const HREmployeesPage = () => {
         render: (value: string | null) => (value ? formatDateTime(value) : '-'),
       },
       {
-        title: 'Actions',
-        key: 'actions',
+        title: 'Provision',
+        key: 'provision',
+        width: 160,
         render: (_, record) => (
-          <Space>
-            <Button
-              size="small"
-              onClick={(event) => {
-                event.stopPropagation();
-                openDetail(record);
-              }}
-            >
-              Detail
-            </Button>
-            <ProvisionAccountButton
-              employee={record}
-              canWrite={canWriteHrActions}
-              onSuccess={() => refreshHrViews(record.id)}
-            />
-            <Button
-              size="small"
-              disabled={!canWriteHrActions}
-              onClick={(event) => {
-                event.stopPropagation();
-                openEdit(record);
-              }}
-            >
-              Edit
-            </Button>
-            <Button
-              size="small"
-              danger
-              disabled={!canWriteHrActions}
-              onClick={(event) => {
-                event.stopPropagation();
-                confirmRemove(record);
-              }}
-            >
-              Deactivate
-            </Button>
-          </Space>
+          <ProvisionAccountButton
+            employee={record}
+            canWrite={canWriteHrActions}
+            onSuccess={() => refreshHrViews(record.id)}
+          />
+        ),
+      },
+      {
+        title: '',
+        key: 'actions',
+        width: 72,
+        render: (_, record) => (
+          <RowActionsDropdown
+            actions={[
+              {
+                key: 'detail',
+                label: 'Open detail',
+                onClick: () => openDetail(record),
+              },
+              {
+                key: 'edit',
+                label: 'Edit record',
+                disabled: !canWriteHrActions,
+                onClick: () => openEdit(record),
+              },
+              {
+                key: 'deactivate',
+                label: 'Deactivate',
+                danger: true,
+                disabled: !canWriteHrActions,
+                onClick: () => confirmRemove(record),
+              },
+            ]}
+          />
         ),
       },
     ],
@@ -335,16 +339,41 @@ export const HREmployeesPage = () => {
     }));
   };
 
+  const resetFilters = () => {
+    filterForm.resetFields();
+    setParams((prev) => ({
+      ...prev,
+      page: 1,
+      keyword: undefined,
+      status: undefined,
+    }));
+  };
+
   if (listQuery.isLoading) {
-    return <LoadingState tip="Dang tai HR employees..." />;
+    return (
+      <PageShell
+        title="HR Directory"
+        description="Manage employee records, import batches, and account provisioning from one consistent operator workspace."
+      >
+        <QueryStateView kind="loading" title="Loading HR directory..." />
+      </PageShell>
+    );
   }
 
   if (listQuery.isError) {
     return (
-      <ErrorState
-        subTitle="Khong the tai danh sach HR employees."
-        extra={<Button onClick={() => listQuery.refetch()}>Thu lai</Button>}
-      />
+      <PageShell
+        title="HR Directory"
+        description="Manage employee records, import batches, and account provisioning from one consistent operator workspace."
+      >
+        <QueryStateView
+          kind="error"
+          description="Unable to load the HR directory."
+          onRetry={() => {
+            void listQuery.refetch();
+          }}
+        />
+      </PageShell>
     );
   }
 
@@ -352,70 +381,98 @@ export const HREmployeesPage = () => {
 
   return (
     <PageShell
-      title="HR Employees"
-      description="Quan ly nhan su, import tu HR va cap tai khoan theo release-safe flow."
+      title="HR Directory"
+      description="Keep import, provisioning, and record maintenance in one place, while pushing destructive actions into controlled flows instead of cluttering every row."
       headerExtra={
-        <Space>
-          <Button disabled={!canWriteHrActions} onClick={() => setImportOpen(true)}>
-            Import HR file
-          </Button>
-          <Button type="primary" disabled={!canWriteHrActions} onClick={openCreate}>
-            Tao HR employee
-          </Button>
-        </Space>
+        <div className="ds-page-toolbar-stack">
+          <div className="ds-page-toolbar-group">
+            <span className="ds-shell-chip">
+              {data?.pagination.total ?? 0} matched employee{(data?.pagination.total ?? 0) === 1 ? '' : 's'}
+            </span>
+            <span className="ds-shell-chip ds-shell-chip--ghost">
+              {activeFilterCount} active filter{activeFilterCount === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
+            <Button
+              icon={<ReloadOutlined />}
+              loading={listQuery.isFetching}
+              onClick={() => {
+                void listQuery.refetch();
+              }}
+            >
+              Refresh
+            </Button>
+            <Button disabled={!canWriteHrActions} onClick={() => setImportOpen(true)}>
+              Import HR file
+            </Button>
+            <Button type="primary" disabled={!canWriteHrActions} onClick={openCreate}>
+              New employee
+            </Button>
+          </div>
+        </div>
       }
     >
       {(!isAdminWriteActionsEnabled || !canManageHrEmployees(currentRole)) && (
-        <Card>
-          <Typography.Text type="secondary">
-            {!isAdminWriteActionsEnabled
+        <FeatureDisabledNotice
+          description={
+            !isAdminWriteActionsEnabled
               ? 'HR write actions are disabled by release configuration.'
-              : 'Role hien tai khong co quyen create/update/deactivate HR employee.'}
-          </Typography.Text>
-        </Card>
+              : 'Your current role can review the directory but cannot create, edit, or deactivate records.'
+          }
+        />
       )}
 
       <FilterBar>
-        <Form form={filterForm} layout="inline" initialValues={{ status: 'all' }}>
-          <Form.Item name="keyword">
-            <Input allowClear placeholder="Tim ma nhan su, ten, email" style={{ width: 280 }} />
+        <div className="ds-toolbar-lead">
+          <span className="ds-toolbar-eyebrow">Directory query</span>
+          <strong className="ds-toolbar-title">Keep the roster easy to scan</strong>
+          <span className="ds-toolbar-description">
+            Filter by keyword and lifecycle state first. Open the drawer only when an operator actually needs detail or provisioning work.
+          </span>
+        </div>
+
+        <Form form={filterForm} layout="inline" className="ds-toolbar-form" initialValues={{ status: 'all' }}>
+          <Form.Item name="keyword" className="ds-toolbar-field ds-toolbar-field--lg">
+            <Input allowClear placeholder="Search employee code, name, or email" />
           </Form.Item>
-          <Form.Item name="status">
-            <Select style={{ width: 180 }} options={statusOptions} />
+          <Form.Item name="status" className="ds-toolbar-field ds-toolbar-field--md">
+            <Select options={statusOptions} />
           </Form.Item>
-          <Form.Item>
+          <Form.Item className="ds-toolbar-field ds-toolbar-actions">
             <Space>
               <Button type="primary" onClick={applyFilters}>
-                Ap dung
+                Apply filters
               </Button>
-              <Button
-                onClick={() => {
-                  filterForm.resetFields();
-                  setParams((prev) => ({
-                    ...prev,
-                    page: 1,
-                    keyword: undefined,
-                    status: undefined,
-                  }));
-                }}
-              >
-                Reset
-              </Button>
+              <Button onClick={resetFilters}>Reset</Button>
             </Space>
           </Form.Item>
         </Form>
       </FilterBar>
 
       <DataTableShell
-        title="HR employees"
-        meta={`${data?.pagination.total ?? 0} record(s) matched current filters`}
+        title="Employee records"
+        meta={`${data?.pagination.total ?? 0} record(s) matched the current filters`}
+        toolbar={
+          <DataTableToolbar>
+            <span className="ds-toolbar-summary">
+              <span className="ds-shell-chip ds-shell-chip--ghost">
+                Page {data?.pagination.page ?? 1} of{' '}
+                {Math.max(
+                  1,
+                  Math.ceil((data?.pagination.total ?? 0) / Math.max(data?.pagination.limit ?? 1, 1)),
+                )}
+              </span>
+            </span>
+          </DataTableToolbar>
+        }
       >
         <AdminTable
           rowKey="id"
           columns={columns}
           minHeight={320}
           dataSource={data?.items ?? []}
-          emptyNode={<EmptyState description="Khong co HR employee phu hop." />}
+          emptyNode={<EmptyState description="No HR employees matched the current filters." />}
           onRow={(record) => ({
             onClick: () => openDetail(record),
             style: { cursor: 'pointer' },
@@ -448,9 +505,9 @@ export const HREmployeesPage = () => {
 
       <Modal
         open={editorOpen}
-        title={creating ? 'Tao HR employee' : 'Edit HR employee'}
-        okText={creating ? 'Tao' : 'Luu'}
-        cancelText="Huy"
+        title={creating ? 'Create HR employee' : 'Edit HR employee'}
+        okText={creating ? 'Create' : 'Save'}
+        cancelText="Cancel"
         confirmLoading={createMutation.isPending || updateMutation.isPending}
         onCancel={() => {
           setEditorOpen(false);
@@ -463,29 +520,29 @@ export const HREmployeesPage = () => {
         }}
       >
         {!creating && detailQuery.isLoading ? (
-          <LoadingState tip="Dang tai chi tiet HR employee..." />
+          <QueryStateView kind="loading" compact title="Loading employee detail..." />
         ) : !creating && detailQuery.isError ? (
-          <ErrorState subTitle="Khong tai duoc chi tiet HR employee." />
+          <QueryStateView kind="error" compact description="Unable to load employee detail." />
         ) : (
           <Form<FormValues> form={editForm} layout="vertical" requiredMark={false}>
             <Form.Item
               name="employeeCode"
               label="Employee code"
-              rules={[{ required: true, message: 'Bat buoc' }]}
+              rules={[{ required: true, message: 'Employee code is required.' }]}
             >
               <Input />
             </Form.Item>
             <Form.Item
               name="fullName"
               label="Full name"
-              rules={[{ required: true, message: 'Bat buoc' }]}
+              rules={[{ required: true, message: 'Full name is required.' }]}
             >
               <Input />
             </Form.Item>
             <Form.Item
               name="email"
               label="Email"
-              rules={[{ required: true, type: 'email', message: 'Email khong hop le' }]}
+              rules={[{ required: true, type: 'email', message: 'Enter a valid email address.' }]}
             >
               <Input />
             </Form.Item>
@@ -501,7 +558,7 @@ export const HREmployeesPage = () => {
             <Form.Item
               name="status"
               label="Status"
-              rules={[{ required: true, message: 'Bat buoc' }]}
+              rules={[{ required: true, message: 'Status is required.' }]}
             >
               <Select
                 options={statusOptions

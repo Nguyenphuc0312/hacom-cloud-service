@@ -29,11 +29,12 @@ const isTestMode = import.meta.env.MODE === 'test';
 
 const rawApiBaseUrl =
   import.meta.env.VITE_API_BASE_URL?.trim() ??
+  import.meta.env.VITE_ADMIN_API_ROOT?.trim() ??
   import.meta.env.VITE_ADMIN_API_BASE_URL?.trim() ??
   '';
 const rawAdminApiBaseUrl =
-  import.meta.env.VITE_ADMIN_API_BASE_URL?.trim() ??
   import.meta.env.VITE_ADMIN_API_ROOT?.trim() ??
+  import.meta.env.VITE_ADMIN_API_BASE_URL?.trim() ??
   '';
 const rawAuthApiBaseUrl = import.meta.env.VITE_AUTH_BASE_URL?.trim() ?? '';
 
@@ -86,20 +87,6 @@ const resolveAuthApiBaseUrl = (apiBaseUrl: string): string => {
   return `${apiBaseUrl === '/' ? '' : apiBaseUrl}/auth`;
 };
 
-const normalizeResourcePath = (path: string): string => (path.startsWith('/') ? path : `/${path}`);
-
-const joinRequestPath = (root: string, resourcePath: string): string => {
-  const normalizedResourcePath = normalizeResourcePath(resourcePath);
-  if (root === '/') {
-    return normalizedResourcePath;
-  }
-
-  return `${root}${normalizedResourcePath}`;
-};
-
 export const apiBaseUrl = resolveApiBaseUrl();
 export const adminApiBaseUrl = resolveAdminApiBaseUrl(apiBaseUrl);
 export const authApiBaseUrl = resolveAuthApiBaseUrl(apiBaseUrl);
-
-export const adminApiPath = (path: string): string => joinRequestPath(adminApiBaseUrl, path);
-export const authApiPath = (path: string): string => joinRequestPath(authApiBaseUrl, path);
