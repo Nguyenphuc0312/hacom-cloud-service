@@ -80,19 +80,13 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
   const { t } = useTranslation();
   const panelRef = React.useRef<HTMLDivElement | null>(null);
   const items = useFilteredNotifications();
-  const {
-    activeFilter,
-    setFilter,
-    markAsRead,
-    markAllAsRead,
-    clearNotifications,
-  } = useNotificationStore((state) => ({
-    activeFilter: state.activeFilter,
-    setFilter: state.setFilter,
-    markAsRead: state.markAsRead,
-    markAllAsRead: state.markAllAsRead,
-    clearNotifications: state.clearNotifications,
-  }));
+  const activeFilter = useNotificationStore((state) => state.activeFilter);
+  const setFilter = useNotificationStore((state) => state.setFilter);
+  const markAsRead = useNotificationStore((state) => state.markAsRead);
+  const markAllAsRead = useNotificationStore((state) => state.markAllAsRead);
+  const clearNotifications = useNotificationStore(
+    (state) => state.clearNotifications,
+  );
 
   React.useEffect(() => {
     if (!isOpen) return;

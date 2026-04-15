@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 
 export type NotificationKind =
   | "message"
@@ -191,7 +192,9 @@ export const useNotificationStore = create<NotificationState>()((set) => ({
   },
 
   setPanelOpen: (open) => {
-    set({ isPanelOpen: open });
+    set((state) =>
+      state.isPanelOpen === open ? state : { isPanelOpen: open },
+    );
   },
 
   togglePanel: () => {
@@ -199,7 +202,9 @@ export const useNotificationStore = create<NotificationState>()((set) => ({
   },
 
   setFilter: (filter) => {
-    set({ activeFilter: filter });
+    set((state) =>
+      state.activeFilter === filter ? state : { activeFilter: filter },
+    );
   },
 
   reset: () => {
@@ -209,13 +214,12 @@ export const useNotificationStore = create<NotificationState>()((set) => ({
 
 export const useNotificationUnreadCount = () =>
   useNotificationStore(
-    (state) => state.items.filter((item) => !item.isRead).length,
+    (state) => state.items.reduce((count, item) => count + (item.isRead ? 0 : 1), 0),
   );
 
 export const useFilteredNotifications = () =>
-  useNotificationStore((state) => {
-    return state.items.filter((item) =>
-      matchesFilter(item, state.activeFilter),
-    );
-  });
-
+  useNotificationStore(
+    useShallow((state) =>
+      state.items.filter((item) => matchesFilter(item, state.activeFilter)),
+    ),
+  );
