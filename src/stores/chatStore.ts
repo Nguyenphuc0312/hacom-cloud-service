@@ -21,7 +21,7 @@ import {
 } from "../utils/messageIdentity";
 import { logMessageDebug } from "../utils/messageDebug";
 import { createReplySnapshot } from "../utils/messageTimeline";
-import { rankConversations } from "../utils/conversationRanking";
+import { sortConversationsByActivity } from "../utils/conversationRanking";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import { useNotificationStore } from "../features/notification/state/notificationStore";
 import i18n from "../i18n";
@@ -635,12 +635,18 @@ const getConversationCursorTimestamp = (
 ): number => {
   if (!conversation) return 0;
 
-  return Math.max(
-    toDateValue(conversation.updatedAt),
+  const canonicalTimestamp = Math.max(
+    toDateValue(conversation.lastMessageSortAt),
     toDateValue(conversation.lastActivityAt),
     toDateValue(conversation.lastMessageAt),
     toDateValue(conversation.lastMessage?.createdAt),
   );
+
+  if (canonicalTimestamp > 0) {
+    return canonicalTimestamp;
+  }
+
+  return toDateValue(conversation.updatedAt);
 };
 
 const computeConversationCursor = (conversations: Conversation[]): string | null => {
@@ -755,6 +761,12 @@ const updateConversationActivitySummary = (
     lastMessage: toMessageSummary(message),
     updatedAt: message.createdAt,
     lastMessageAt: message.createdAt,
+    lastMessageSortAt: message.createdAt,
+    lastMessageId: message.id,
+    lastMessageStatus:
+      message.sendState === "failed" || message.status === MessageStatus.FAILED
+        ? "failed"
+        : "sent",
     lastActivityAt: message.createdAt,
   }) ?? {
     ...conversation,
@@ -1433,6 +1445,57 @@ const toMessageSummary = (message: Message): Conversation["lastMessage"] =>
     ...(message.status ? { status: message.status } : {}),
   }) as Conversation["lastMessage"];
 
+const toConversationLastMessageStatus = (
+  message: Message | null | undefined,
+): Conversation["lastMessageStatus"] => {
+  if (!message) return null;
+
+  if (message.sendState === "failed" || message.status === MessageStatus.FAILED) {
+    return "failed";
+  }
+
+  if (
+    message.sendState === "queued" ||
+    message.sendState === "sending" ||
+    message.sendState === "retrying" ||
+    message.status === MessageStatus.SENDING ||
+    message.status === "uploading"
+  ) {
+    return "pending";
+  }
+
+  return "sent";
+};
+
+const isCanonicalConversationMessage = (
+  message: Message | null | undefined,
+): boolean => {
+  if (!message) return false;
+
+  if (
+    message.sendState === "queued" ||
+    message.sendState === "sending" ||
+    message.sendState === "retrying" ||
+    message.sendState === "failed" ||
+    message.status === MessageStatus.SENDING ||
+    message.status === MessageStatus.FAILED ||
+    message.status === "uploading"
+  ) {
+    return false;
+  }
+
+  if (
+    message.sendState === "sent" ||
+    message.status === MessageStatus.SENT ||
+    message.status === MessageStatus.DELIVERED ||
+    message.status === MessageStatus.READ
+  ) {
+    return true;
+  }
+
+  return !isTempMessageId(message.id);
+};
+
 const buildConversationMessageState = (
   state: Pick<
     ChatState,
@@ -1450,23 +1513,65 @@ const buildConversationMessageState = (
   },
 ) => {
   const lastMessage = nextMessages[nextMessages.length - 1];
+  const latestCanonicalMessage = [...nextMessages]
+    .reverse()
+    .find((message) => isCanonicalConversationMessage(message));
   const nextAliasIndex = rebuildConversationMessageAliasIndex(nextMessages);
 
   return {
     conversations: state.conversations.map((conversation) => {
       if (conversation.id !== conversationId) return conversation;
       if (!lastMessage) {
-        return {
-          ...conversation,
-          lastMessage: undefined,
-        };
+        return (
+          normalizeConversation({
+            ...conversation,
+            lastMessage: undefined,
+            lastMessageStatus: null,
+          }) ?? {
+            ...conversation,
+            lastMessage: undefined,
+            lastMessageStatus: null,
+          }
+        );
       }
 
-      return {
-        ...conversation,
-        lastMessage: toMessageSummary(lastMessage),
-        updatedAt: lastMessage.createdAt,
-      };
+      const canonicalMessage = latestCanonicalMessage ?? null;
+      const updatedAt =
+        canonicalMessage?.createdAt ?? conversation.updatedAt ?? lastMessage.createdAt;
+
+      return (
+        normalizeConversation({
+          ...conversation,
+          lastMessage: toMessageSummary(lastMessage),
+          updatedAt,
+          lastMessageAt: canonicalMessage?.createdAt ?? conversation.lastMessageAt,
+          lastMessageSortAt:
+            canonicalMessage?.createdAt ??
+            conversation.lastMessageSortAt ??
+            conversation.lastMessageAt ??
+            updatedAt,
+          lastMessageId:
+            canonicalMessage?.id ??
+            conversation.lastMessageId ??
+            lastMessage.id,
+          lastMessageStatus: toConversationLastMessageStatus(lastMessage),
+        }) ?? {
+          ...conversation,
+          lastMessage: toMessageSummary(lastMessage),
+          updatedAt,
+          lastMessageAt: canonicalMessage?.createdAt ?? conversation.lastMessageAt,
+          lastMessageSortAt:
+            canonicalMessage?.createdAt ??
+            conversation.lastMessageSortAt ??
+            conversation.lastMessageAt ??
+            updatedAt,
+          lastMessageId:
+            canonicalMessage?.id ??
+            conversation.lastMessageId ??
+            lastMessage.id,
+          lastMessageStatus: toConversationLastMessageStatus(lastMessage),
+        }
+      );
     }),
     messages: {
       ...state.messages,
@@ -3228,18 +3333,7 @@ export const useFilteredConversations = () => {
       );
     }
 
-    const currentUser = useAuthStore.getState().user;
-    const currentDisplayName = currentUser
-      ? resolveUserDisplayName(currentUser, {
-          allowLegacyFallback: true,
-        })
-      : undefined;
-    return rankConversations(filtered, {
-      currentUserId: currentUser?.id,
-      currentUsername: currentUser?.username,
-      currentDisplayName,
-      activeConversationId: state.selectedConversationId,
-    });
+    return sortConversationsByActivity(filtered);
   });
 };
 

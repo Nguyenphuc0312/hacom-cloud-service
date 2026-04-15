@@ -32,7 +32,7 @@ export const SegmentedControl: React.FC<SegmentedControlProps> = ({
       role="tablist"
       aria-label={ariaLabel}
       className={clsx(
-        "segmented-control inline-flex w-full items-center gap-1 rounded-[1.25rem] border border-border/70 bg-surface/82 p-1 shadow-xs backdrop-blur-sm",
+        "segmented-control inline-flex w-full items-center gap-1 rounded-[1.2rem] border border-border/60 bg-surface p-1",
         className,
       )}
     >
@@ -46,10 +46,10 @@ export const SegmentedControl: React.FC<SegmentedControlProps> = ({
             aria-selected={active}
             onClick={() => onChange(option.id)}
             className={clsx(
-              "segmented-control__option inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-[1rem] font-medium transition-micro",
-              isCompact ? "min-h-9 px-3 py-2 text-caption" : "min-h-10 px-3.5 py-2.5 text-body-sm",
+              "segmented-control__option inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-[0.95rem] font-medium transition-micro",
+              isCompact ? "min-h-8 px-3 py-2 text-caption" : "min-h-10 px-3.5 py-2.5 text-body-sm",
               active
-                ? "bg-[hsl(var(--surface-shell))] text-text-primary shadow-xs"
+                ? "bg-surface-hover text-text-primary"
                 : "text-text-secondary hover:bg-surface-hover/80 hover:text-text-primary",
             )}
           >

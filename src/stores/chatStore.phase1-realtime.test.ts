@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MessageStatus, MessageType } from "../types";
 import { useNotificationStore } from "../features/notification/state/notificationStore";
+import { sortConversationsByActivity } from "../utils/conversationRanking";
 
 const {
   getMessagesMock,
@@ -724,6 +725,148 @@ describe("chatStore phase-1 realtime flows", () => {
     expect(reconciled[0]?.id).toBe("server-optimistic-1");
     expect(reconciled[0]?.sendState).toBe("sent");
     expect(reconciled[0]?.status).toBe(MessageStatus.SENT);
+  });
+
+  it("does not reorder sidebar order when only a pending optimistic message exists", () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-older",
+        conversationId: "room-older",
+        lastMessageAt: "2026-04-10T09:00:00.000Z",
+        lastMessageSortAt: "2026-04-10T09:00:00.000Z",
+        updatedAt: "2026-04-10T09:00:00.000Z",
+      }),
+      makeConversation({
+        id: "room-newer",
+        conversationId: "room-newer",
+        lastMessageAt: "2026-04-10T10:00:00.000Z",
+        lastMessageSortAt: "2026-04-10T10:00:00.000Z",
+        updatedAt: "2026-04-10T10:00:00.000Z",
+      }),
+    ] as never);
+
+    useChatStore.getState().addMessage(
+      "room-older",
+      makeMessage({
+        id: "temp-room-older-1",
+        conversationId: "room-older",
+        content: "pending optimistic",
+        localId: "temp-room-older-1",
+        clientMessageId: "client-room-older-1",
+        status: MessageStatus.SENDING,
+        sendState: "sending",
+        createdAt: "2026-04-10T10:05:00.000Z",
+        updatedAt: "2026-04-10T10:05:00.000Z",
+      }) as never,
+    );
+
+    expect(
+      sortConversationsByActivity(useChatStore.getState().conversations).map(
+        (conversation) => conversation.id,
+      ),
+    ).toEqual(["room-newer", "room-older"]);
+  });
+
+  it("reorders sidebar order only after the optimistic message is acknowledged as sent", () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-older",
+        conversationId: "room-older",
+        lastMessageAt: "2026-04-10T09:00:00.000Z",
+        lastMessageSortAt: "2026-04-10T09:00:00.000Z",
+        updatedAt: "2026-04-10T09:00:00.000Z",
+      }),
+      makeConversation({
+        id: "room-newer",
+        conversationId: "room-newer",
+        lastMessageAt: "2026-04-10T10:00:00.000Z",
+        lastMessageSortAt: "2026-04-10T10:00:00.000Z",
+        updatedAt: "2026-04-10T10:00:00.000Z",
+      }),
+    ] as never);
+
+    useChatStore.getState().addMessage(
+      "room-older",
+      makeMessage({
+        id: "temp-room-older-2",
+        conversationId: "room-older",
+        content: "pending optimistic",
+        localId: "temp-room-older-2",
+        clientMessageId: "client-room-older-2",
+        status: MessageStatus.SENDING,
+        sendState: "sending",
+        createdAt: "2026-04-10T10:05:00.000Z",
+        updatedAt: "2026-04-10T10:05:00.000Z",
+      }) as never,
+    );
+
+    useChatStore.getState().ackOutgoingMessage(
+      "room-older",
+      "client-room-older-2",
+      makeMessage({
+        id: "server-room-older-2",
+        conversationId: "room-older",
+        content: "acknowledged",
+        localId: "temp-room-older-2",
+        clientMessageId: "client-room-older-2",
+        stableId: "client-room-older-2",
+        status: MessageStatus.SENT,
+        sendState: "sent",
+        createdAt: "2026-04-10T10:05:00.000Z",
+        updatedAt: "2026-04-10T10:05:00.000Z",
+      }) as never,
+    );
+
+    expect(
+      sortConversationsByActivity(useChatStore.getState().conversations).map(
+        (conversation) => conversation.id,
+      ),
+    ).toEqual(["room-older", "room-newer"]);
+  });
+
+  it("does not reorder sidebar order when unread and read progress change without a new latest message", () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-older",
+        conversationId: "room-older",
+        unreadCount: 6,
+        lastMessageAt: "2026-04-10T09:00:00.000Z",
+        lastMessageSortAt: "2026-04-10T09:00:00.000Z",
+        updatedAt: "2026-04-10T09:00:00.000Z",
+      }),
+      makeConversation({
+        id: "room-newer",
+        conversationId: "room-newer",
+        unreadCount: 0,
+        lastMessageAt: "2026-04-10T10:00:00.000Z",
+        lastMessageSortAt: "2026-04-10T10:00:00.000Z",
+        updatedAt: "2026-04-10T10:00:00.000Z",
+      }),
+    ] as never);
+
+    useChatStore.getState().applyUnreadSummary({
+      totalUnreadCount: 0,
+      conversations: [
+        {
+          conversationId: "room-older",
+          unreadCount: 0,
+          lastReadMessageId: "msg-read",
+          lastReadAt: "2026-04-10T10:06:00.000Z",
+        },
+        {
+          conversationId: "room-newer",
+          unreadCount: 0,
+          lastReadMessageId: "msg-newer",
+          lastReadAt: "2026-04-10T10:06:00.000Z",
+        },
+      ],
+    });
+
+    expect(
+      sortConversationsByActivity(useChatStore.getState().conversations).map(
+        (conversation) => conversation.id,
+      ),
+    ).toEqual(["room-newer", "room-older"]);
   });
 
   it("keeps optimistic message visible while request is pending", async () => {

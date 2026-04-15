@@ -1,7 +1,6 @@
 import React, { useMemo } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { BookmarkIcon, SpeakerXMarkIcon } from "@heroicons/react/24/solid";
 import { Avatar } from "../../common/Avatar";
 import type { Conversation, UserSummary } from "../../../types";
 import { isDirectConversation } from "../../../lib/conversationAdapter";
@@ -53,6 +52,10 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
     const messagePreview = getMessagePreview(lastMessage, currentUser.id, 44);
     if (!messagePreview) return "";
 
+    if (lastMessage.type === "system" || isDirectConversation(conversation)) {
+      return messagePreview;
+    }
+
     const senderParticipant = (conversation.participants || []).find(
       (participant) => participant.id === lastMessage.senderId,
     );
@@ -78,16 +81,22 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
     [conversation.lastMessage, currentUser.id],
   );
   const timeLabel = useMemo(() => {
-    if (!conversation.lastMessage?.createdAt) return "";
-    return formatRelativeTime(new Date(conversation.lastMessage.createdAt));
-  }, [conversation.lastMessage]);
+    const referenceTime =
+      conversation.lastMessageSortAt ||
+      conversation.lastMessageAt ||
+      conversation.lastMessage?.createdAt;
+    if (!referenceTime) return "";
+    return formatRelativeTime(new Date(referenceTime));
+  }, [
+    conversation.lastMessage?.createdAt,
+    conversation.lastMessageAt,
+    conversation.lastMessageSortAt,
+  ]);
 
   const unreadCount = conversation.unreadCount || 0;
   const unreadMention = hasConversationMention(conversation, currentUser);
   const isDirect = isDirectConversation(conversation);
   const unreadLabel = unreadCount > 99 ? "99+" : unreadCount;
-  const isOnline = directPartner?.status === "online";
-
   const avatarSrc = getConversationAvatar(conversation, currentUser.id);
   const avatarStatus = isDirect ? directPartner?.status : undefined;
 
@@ -99,23 +108,22 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         role="option"
         aria-selected={isActive}
         className={clsx(
-          "group relative mx-2 my-0.5 flex h-[3.75rem] w-[calc(100%-var(--space-4))] items-center justify-center rounded-2xl transition-micro hover:bg-surface-hover",
+          "group relative mx-2 my-1 flex h-[3.5rem] w-[calc(100%-var(--space-4))] items-center justify-center rounded-[1.15rem] transition-micro hover:bg-surface-hover/90",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-          isActive &&
-            "bg-primary/10 text-primary shadow-xs ring-1 ring-primary/18",
+          isActive && "bg-primary/10 text-primary",
           !isActive &&
             isKeyboardActive &&
-            "bg-surface-overlay ring-1 ring-border/70",
+            "bg-surface-overlay",
         )}
         aria-label={displayName}
         title={displayName}
       >
-        <span
-          className={clsx(
-            "absolute left-1 top-1/2 h-7 w-1 -translate-y-1/2 rounded-full bg-primary transition-opacity",
-            isActive ? "opacity-100" : "opacity-0",
-          )}
-          aria-hidden="true"
+      <span
+        className={clsx(
+          "absolute left-1 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-primary transition-opacity",
+          isActive ? "opacity-100" : "opacity-0",
+        )}
+        aria-hidden="true"
         />
         <Avatar
           src={avatarSrc}
@@ -150,19 +158,19 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
       role="option"
       aria-selected={isActive}
       className={clsx(
-        "group relative mx-2 my-0.5 flex h-[4.55rem] w-[calc(100%-var(--space-4))] items-center rounded-2xl px-3",
-        "transition-micro hover:bg-surface-hover/92",
+        "group relative mx-2 my-1 flex h-[4.25rem] w-[calc(100%-var(--space-4))] items-center rounded-[1.25rem] px-3",
+        "transition-micro hover:bg-surface-hover/88",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-        isActive && "bg-primary/10 shadow-xs ring-1 ring-primary/14",
+        isActive && "bg-primary/10",
         !isActive &&
           isKeyboardActive &&
-          "bg-surface-overlay ring-1 ring-border/70",
+          "bg-surface-overlay",
       )}
       aria-label={displayName}
     >
       <span
         className={clsx(
-          "absolute bottom-2 left-1.5 top-2 w-1 rounded-full transition-fast",
+          "absolute bottom-2 left-1.5 top-2 w-0.5 rounded-full transition-fast",
           isActive ? "bg-primary opacity-100" : "opacity-0",
         )}
         aria-hidden="true"
@@ -177,7 +185,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         />
 
         <div className="min-w-0">
-          <div className="mb-1 flex items-center gap-1.5">
+          <div className="mb-0.5 flex items-center gap-1.5">
             <p
               className={clsx(
                 "truncate text-body-sm leading-5 text-text-primary",
@@ -186,24 +194,11 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
             >
               {displayName}
             </p>
-
-            {!unreadMention && conversation.isPinned && (
-              <BookmarkIcon
-                className="h-3.5 w-3.5 shrink-0 text-text-muted"
-                aria-hidden="true"
-              />
-            )}
-            {!unreadMention && !conversation.isPinned && conversation.isMuted && (
-              <SpeakerXMarkIcon
-                className="h-3.5 w-3.5 shrink-0 text-text-muted"
-                aria-hidden="true"
-              />
-            )}
           </div>
 
           <p
             className={clsx(
-              "truncate text-caption leading-5 text-start pr-2",
+              "truncate pr-2 text-caption leading-5 text-start",
               previewState === "failed"
                 ? "font-medium text-danger"
                 : previewState
@@ -217,21 +212,9 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
           >
             {previewText || t("sidebar:room.noMessagesYet")}
           </p>
-          {isActive && isDirect && (
-            <p
-              className={clsx(
-                "mt-0.5 truncate text-[11px] font-medium",
-                isOnline ? "text-success" : "text-text-muted",
-              )}
-            >
-              {isOnline
-                ? t("common:status.online")
-                : t("common:status.offline")}
-            </p>
-          )}
         </div>
 
-        <div className="flex h-full min-w-room-meta flex-col items-end justify-between py-1.5">
+        <div className="flex h-full min-w-room-meta flex-col items-end justify-start gap-2 py-1">
           <span
             className={clsx(
               "text-caption tabular-nums",
@@ -253,18 +236,10 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
                     ? "bg-text-muted"
                     : "bg-primary",
               )}
-            >
-              {unreadLabel}
-            </span>
-          ) : (
-            <span
-              className={clsx(
-                "inline-flex h-2.5 w-2.5 rounded-full transition-opacity",
-                isActive ? "bg-primary/70 opacity-100" : "opacity-0",
-              )}
-              aria-hidden="true"
-            />
-          )}
+              >
+                {unreadLabel}
+              </span>
+          ) : null}
         </div>
       </div>
     </button>

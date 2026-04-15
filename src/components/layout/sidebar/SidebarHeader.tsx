@@ -112,7 +112,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
             "flex min-w-0 items-center text-left transition-micro hover:bg-surface-hover/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             collapsed
               ? "h-11 w-11 justify-center rounded-2xl"
-              : "flex-1 gap-3 rounded-2xl px-3 py-2.5",
+              : "flex-1 gap-3 rounded-[1.15rem] px-3 py-2.5",
           )}
           title={collapsed ? currentUserName : undefined}
           aria-label={currentUserName}
@@ -144,7 +144,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
 
         <div
           className={clsx(
-            "relative flex shrink-0 items-center gap-1",
+            "relative flex shrink-0 items-center gap-1.5",
             collapsed && "flex-col",
           )}
           ref={menuRef}
@@ -155,7 +155,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
               aria-label={t("notifications.panelTitle", {
                 defaultValue: "Notifications",
               })}
-              className="h-10 w-10 rounded-xl"
+              className="h-9 w-9 rounded-[0.95rem]"
             >
               <BellIcon className="h-5 w-5" />
             </IconButtonSurface>
@@ -171,39 +171,21 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
 
           <IconButtonSurface
             onClick={onNewChat}
-            className="h-10 w-10 rounded-xl bg-primary text-text-inverse shadow-xs hover:bg-primary-hover hover:text-text-inverse"
+            className="h-10 w-10 rounded-[1rem] bg-primary text-text-inverse shadow-xs hover:bg-primary-hover hover:text-text-inverse"
             aria-label={t("sidebar:header.startNewChat")}
           >
             <PencilSquareIcon className="h-5 w-5" />
           </IconButtonSurface>
 
           <IconButtonSurface
-            onClick={onToggleCollapsed}
-            className="hidden h-10 w-10 rounded-xl lg:inline-flex"
-            aria-label={
-              collapsed
-                ? t("sidebar:header.expandSidebar")
-                : t("sidebar:header.collapseSidebar")
-            }
+            onClick={() => setIsMenuOpen((current) => !current)}
+            className="h-9 w-9 rounded-[0.95rem]"
+            aria-label={t("common:actions.more", {
+              defaultValue: "More actions",
+            })}
           >
-            {collapsed ? (
-              <ChevronDoubleRightIcon className="h-5 w-5" />
-            ) : (
-              <ChevronDoubleLeftIcon className="h-5 w-5" />
-            )}
+            <EllipsisHorizontalIcon className="h-5 w-5" />
           </IconButtonSurface>
-
-          {!collapsed && (
-            <IconButtonSurface
-              onClick={() => setIsMenuOpen((current) => !current)}
-              className="h-10 w-10 rounded-xl"
-              aria-label={t("common:actions.more", {
-                defaultValue: "More actions",
-              })}
-            >
-              <EllipsisHorizontalIcon className="h-5 w-5" />
-            </IconButtonSurface>
-          )}
 
           {isMenuOpen && (
             <div
@@ -239,6 +221,26 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
                 <Cog6ToothIcon className="h-5 w-5" />
                 <span>
                   {t("settings:pageTitle", { defaultValue: "Settings" })}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="hidden w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-medium text-text-secondary transition-micro hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30 lg:flex"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  onToggleCollapsed();
+                }}
+                role="menuitem"
+              >
+                {collapsed ? (
+                  <ChevronDoubleRightIcon className="h-5 w-5" />
+                ) : (
+                  <ChevronDoubleLeftIcon className="h-5 w-5" />
+                )}
+                <span>
+                  {collapsed
+                    ? t("sidebar:header.expandSidebar")
+                    : t("sidebar:header.collapseSidebar")}
                 </span>
               </button>
               <button

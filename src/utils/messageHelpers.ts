@@ -10,7 +10,7 @@ import {
   normalizeRoomType,
 } from "../lib/conversationAdapter";
 import { isSameDay } from "./formatTime";
-import { rankConversations } from "./conversationRanking";
+import { sortConversationsByActivity } from "./conversationRanking";
 import i18n from "../i18n";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 
@@ -369,7 +369,8 @@ export function sortConversations(
     activeConversationId?: string | null;
   },
 ): Conversation[] {
-  return rankConversations(conversations, options);
+  void options;
+  return sortConversationsByActivity(conversations);
 }
 
 /**

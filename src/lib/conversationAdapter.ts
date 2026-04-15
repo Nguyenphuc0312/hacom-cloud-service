@@ -22,6 +22,28 @@ const asBoolean = (value: unknown, fallback = false): boolean =>
 const asNumber = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) ? value : undefined;
 
+const asNullableDateValue = (
+  value: unknown,
+  fallback?: Date,
+): Date | undefined => {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value;
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+
+  return fallback;
+};
+
 const toDate = (value: unknown, fallback: Date): Date => {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return value;
@@ -175,6 +197,45 @@ const normalizeLastMessage = (
   } as MessageSummary;
 };
 
+const normalizeLastMessageStatus = (
+  source: UnknownRecord,
+  lastMessage?: MessageSummary,
+): "pending" | "sent" | "failed" | null => {
+  const explicitStatus = asString(source.lastMessageStatus)?.toLowerCase();
+  if (
+    explicitStatus === "pending" ||
+    explicitStatus === "sent" ||
+    explicitStatus === "failed"
+  ) {
+    return explicitStatus;
+  }
+
+  const messageRecord = lastMessage && isRecord(lastMessage)
+    ? (lastMessage as unknown as UnknownRecord)
+    : null;
+  const sendState = asString(messageRecord?.sendState)?.toLowerCase();
+  const status = asString(messageRecord?.status)?.toLowerCase();
+
+  if (
+    sendState === "sending" ||
+    sendState === "queued" ||
+    sendState === "retrying" ||
+    status === MessageStatus.SENDING
+  ) {
+    return "pending";
+  }
+
+  if (sendState === "failed" || status === MessageStatus.FAILED) {
+    return "failed";
+  }
+
+  if (lastMessage) {
+    return "sent";
+  }
+
+  return null;
+};
+
 const toParticipantsCount = (
   participants: UserSummary[],
   source: UnknownRecord,
@@ -304,6 +365,11 @@ export const normalizeConversation = (
   const participantCount = toParticipantsCount(participants, payload);
   const normalizedType = normalizeRoomType(payload.type, participantCount);
   const lastMessage = normalizeLastMessage(payload);
+  const lastMessageId =
+    asString(payload.lastMessageId) ??
+    asString(payload.last_message_id) ??
+    lastMessage?.id ??
+    null;
   const updatedAt = toDate(
     payload.lastActivityAt ??
       payload.updatedAt ??
@@ -311,6 +377,16 @@ export const normalizeConversation = (
       payload.createdAt,
     new Date(),
   );
+  const lastMessageSortAt =
+    asNullableDateValue(
+      payload.lastMessageSortAt ??
+        payload.last_message_sort_at ??
+        payload.lastMessageAt ??
+        lastMessage?.createdAt ??
+        payload.lastActivityAt ??
+        payload.updatedAt,
+      updatedAt,
+    ) ?? updatedAt;
   const conversationName = asNullableString(payload.name);
   const displayName =
     asString(payload.displayName) ??
@@ -360,6 +436,11 @@ export const normalizeConversation = (
       : {}),
     ...(payload.lastMessageAt
       ? { lastMessageAt: toDate(payload.lastMessageAt, updatedAt) }
+      : {}),
+    ...(lastMessageSortAt ? { lastMessageSortAt } : {}),
+    ...(lastMessageId ? { lastMessageId } : { lastMessageId: null }),
+    ...(normalizeLastMessageStatus(payload, lastMessage) !== null
+      ? { lastMessageStatus: normalizeLastMessageStatus(payload, lastMessage) }
       : {}),
     ...(payload.lastActivityAt
       ? { lastActivityAt: toDate(payload.lastActivityAt, updatedAt) }

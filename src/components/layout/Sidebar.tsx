@@ -188,7 +188,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           />
 
           {!isCollapsed && (
-            <div className="pt-2">
+            <div className="pt-2.5">
               <SegmentedControl
                 value={activeFilter}
                 onChange={(next) => setActiveFilter(next as ConversationFilter)}
@@ -211,7 +211,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* ── Room List ───────────────────────────────────────────────────── */}
-        <div className="flex min-h-0 flex-1 px-2 pb-3 pt-2">
+        <div className="flex min-h-0 flex-1 px-2 pb-3 pt-2.5">
           <RoomList
             conversations={conversations}
             currentUser={currentUser}

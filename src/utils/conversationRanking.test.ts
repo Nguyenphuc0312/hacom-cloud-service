@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MessageType, RoomType, UserStatus, type Conversation } from "../types";
 import {
   getConversationRankBreakdown,
+  rankConversations,
   sortConversationsByActivity,
 } from "./conversationRanking";
 
@@ -86,5 +87,36 @@ describe("sortConversationsByActivity", () => {
     expect(
       sortConversationsByActivity([older, groupUpdated]).map((item) => item.id),
     ).toEqual(["group-updated", "older"]);
+  });
+
+  it("ignores updatedAt-only changes when canonical lastMessageSortAt is older", () => {
+    const canonicalNewer = makeConversation("canonical-newer", "2026-04-10T11:00:00.000Z", {
+      lastMessageSortAt: "2026-04-10T11:00:00.000Z",
+    });
+    const metadataTouched = makeConversation("metadata-touched", "2026-04-10T12:00:00.000Z", {
+      lastMessageSortAt: "2026-04-10T09:00:00.000Z",
+    });
+
+    expect(
+      sortConversationsByActivity([metadataTouched, canonicalNewer]).map((item) => item.id),
+    ).toEqual(["canonical-newer", "metadata-touched"]);
+  });
+
+  it("does not let active or unread signals change sidebar ordering", () => {
+    const older = makeConversation("older", "2026-04-10T09:00:00.000Z", {
+      unreadCount: 12,
+      lastMessageSortAt: "2026-04-10T09:00:00.000Z",
+    });
+    const newer = makeConversation("newer", "2026-04-10T10:00:00.000Z", {
+      unreadCount: 0,
+      lastMessageSortAt: "2026-04-10T10:00:00.000Z",
+    });
+
+    expect(
+      rankConversations([older, newer], {
+        activeConversationId: "older",
+        currentUserId: "user-1",
+      }).map((item) => item.id),
+    ).toEqual(["newer", "older"]);
   });
 });

@@ -94,6 +94,9 @@ export type Conversation = Omit<
   joinedAt?: Date;
   lastReadAt?: Date | string | null;
   lastReadMessageId?: string | null;
+  lastMessageSortAt?: Date | string | null;
+  lastMessageId?: string | null;
+  lastMessageStatus?: "pending" | "sent" | "failed" | null;
   membershipState?: "active" | "left" | "removed" | "banned" | "deleted";
   summaryVersion?: number;
   typingUsers?: TypingUser[];

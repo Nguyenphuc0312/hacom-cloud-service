@@ -146,5 +146,10 @@ describe("normalizeConversation", () => {
     expect(conversation?.summaryVersion).toBe(12);
     expect(conversation?.lastReadMessageId).toBe("msg-9");
     expect(conversation?.lastMessage?.id).toBe("msg-10");
+    expect(conversation?.lastMessageId).toBe("msg-10");
+    expect(conversation?.lastMessageSortAt).toEqual(
+      new Date("2026-04-13T08:30:00.000Z"),
+    );
+    expect(conversation?.lastMessageStatus).toBe("sent");
   });
 });
