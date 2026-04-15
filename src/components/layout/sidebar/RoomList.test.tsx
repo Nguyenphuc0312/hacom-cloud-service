@@ -125,4 +125,84 @@ describe("RoomList", () => {
     expect(roomOptions[0]).toHaveAccessibleName("Newer group");
     expect(roomOptions[1]).toHaveAccessibleName("Older direct");
   });
+
+  it("renders a clearer unnamed group fallback with mosaic identity and sender-prefixed preview", () => {
+    const unnamedGroup = makeConversation(
+      "group-fallback",
+      "2026-04-10T10:00:00.000Z",
+      {
+        type: RoomType.GROUP,
+        name: "",
+        displayName: "",
+        avatar: null,
+        displayAvatar: null,
+        participantCount: 6,
+        participants: [
+          currentUser,
+          {
+            id: "user-2",
+            username: "user-2",
+            displayName: "Alice",
+            avatar: "https://example.com/alice.png",
+            status: UserStatus.ONLINE,
+          },
+          {
+            id: "user-3",
+            username: "user-3",
+            displayName: "Bob",
+            status: UserStatus.ONLINE,
+          },
+          {
+            id: "user-4",
+            username: "user-4",
+            displayName: "Carol",
+            status: UserStatus.ONLINE,
+          },
+          {
+            id: "user-5",
+            username: "user-5",
+            displayName: "Dave",
+            status: UserStatus.OFFLINE,
+          },
+          {
+            id: "user-6",
+            username: "user-6",
+            displayName: "Eve",
+            status: UserStatus.ONLINE,
+          },
+        ],
+        lastMessageSortAt: "2026-04-10T10:00:00.000Z",
+        lastMessageAt: "2026-04-10T10:00:00.000Z",
+        lastMessage: {
+          id: "msg-group-long",
+          senderId: "user-3",
+          senderName: "Bob",
+          content:
+            "This is a very long preview message that should still keep the sender prefix visible in the sidebar item",
+          type: MessageType.TEXT,
+          createdAt: new Date("2026-04-10T10:00:00.000Z"),
+          isDeleted: false,
+        },
+      },
+    );
+
+    render(
+      <RoomList
+        conversations={[unnamedGroup]}
+        currentUser={currentUser}
+        selectedId={null}
+        searchQuery=""
+        collapsed={false}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    const roomOption = screen.getByRole("option", {
+      name: "Alice, Bob +3",
+    });
+    expect(
+      roomOption.querySelector('[data-group-avatar-variant="mosaic"]'),
+    ).not.toBeNull();
+    expect(screen.getByText(/^Bob: This is a very long preview/)).toBeInTheDocument();
+  });
 });

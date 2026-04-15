@@ -32,6 +32,8 @@ interface DisplayNameOptions {
   allowTechnicalFallback?: boolean;
 }
 
+const GROUP_NAME_FALLBACK_MEMBER_COUNT = 2;
+
 export type MessagePreviewState =
   | "queued"
   | "sending"
@@ -262,6 +264,88 @@ export function getUserDisplayName(
   );
 }
 
+const collectRepresentativeGroupParticipants = (
+  conversation: Conversation,
+  currentUserId: string,
+): UserSummary[] => {
+  const participants = Array.isArray(conversation.participants)
+    ? conversation.participants
+    : [];
+  const seen = new Set<string>();
+  const ranked = participants
+    .filter((participant): participant is UserSummary => {
+      if (!participant?.id || seen.has(participant.id)) {
+        return false;
+      }
+      seen.add(participant.id);
+      return true;
+    })
+    .map((participant, index) => {
+      const displayName = getUserDisplayName(participant, {
+        allowTechnicalFallback: false,
+      });
+      const isCurrentUser = participant.id === currentUserId;
+      const hasAvatar =
+        typeof participant.avatar === "string" && participant.avatar.trim().length > 0;
+
+      return {
+        participant,
+        index,
+        score:
+          (isCurrentUser ? 0 : 8) +
+          (hasAvatar ? 4 : 0) +
+          (displayName ? 2 : 0) +
+          (participant.username ? 1 : 0),
+      };
+    })
+    .sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+      return left.index - right.index;
+    })
+    .map((entry) => entry.participant);
+
+  const nonCurrent = ranked.filter((participant) => participant.id !== currentUserId);
+  return nonCurrent.length > 0 ? nonCurrent : ranked;
+};
+
+export function getRepresentativeGroupParticipants(
+  conversation: Conversation,
+  currentUserId: string,
+  maxParticipants: number = 4,
+): UserSummary[] {
+  const representatives = collectRepresentativeGroupParticipants(
+    conversation,
+    currentUserId,
+  );
+
+  if (!Number.isFinite(maxParticipants) || maxParticipants <= 0) {
+    return representatives;
+  }
+
+  return representatives.slice(0, Math.floor(maxParticipants));
+}
+
+export function truncateTextWithEllipsis(
+  text: string,
+  maxLength: number,
+): string {
+  if (!Number.isFinite(maxLength) || maxLength <= 0) {
+    return "";
+  }
+
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  if (maxLength <= 3) {
+    return text.slice(0, maxLength);
+  }
+
+  return `${text.slice(0, maxLength - 3)}...`;
+}
+
 /**
  * Get conversation display name.
  */
@@ -278,17 +362,40 @@ export function getConversationDisplayName(
       return conversationTitle;
     }
 
-    const participantFallback = (conversation.participants || [])
+    const representativeParticipants = collectRepresentativeGroupParticipants(
+      conversation,
+      currentUserId,
+    );
+    const visibleNames = representativeParticipants
       .map((participant) =>
         getUserDisplayName(participant, {
           allowTechnicalFallback: false,
         }),
       )
-      .filter(Boolean)
-      .slice(0, 2)
-      .join(", ");
+      .filter(Boolean);
+    const shownNames = visibleNames.slice(0, GROUP_NAME_FALLBACK_MEMBER_COUNT);
+    const includesCurrentUser = (conversation.participants || []).some(
+      (participant) => participant.id === currentUserId,
+    );
+    const expectedOtherCount =
+      typeof conversation.participantCount === "number"
+        ? Math.max(0, conversation.participantCount - (includesCurrentUser ? 1 : 0))
+        : 0;
+    const totalFallbackMembers = Math.max(
+      visibleNames.length,
+      expectedOtherCount,
+    );
+    const remainingMembers = Math.max(0, totalFallbackMembers - shownNames.length);
 
-    return participantFallback || i18n.t("common:labels.group");
+    if (shownNames.length === 0) {
+      return i18n.t("common:labels.group");
+    }
+
+    if (remainingMembers > 0) {
+      return `${shownNames.join(", ")} +${remainingMembers}`;
+    }
+
+    return shownNames.join(", ");
   }
 
   const otherParticipant = getOtherParticipant(conversation, currentUserId);

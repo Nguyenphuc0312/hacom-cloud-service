@@ -12,6 +12,7 @@ import {
   VideoCameraIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../common/Avatar";
+import { GroupAvatar } from "../common/GroupAvatar";
 import { TypingIndicator } from "../common/TypingIndicator";
 import { DensityToggle } from "./DensityToggle";
 import { ConversationLane } from "../layout/ConversationLane";
@@ -231,13 +232,22 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             )}
             aria-label={t("chat:header.viewInfo")}
           >
-            <Avatar
-              src={avatarSrc}
-              alt={displayName}
-              size="md"
-              status={liveStatus}
-              showStatus={isDirect}
-            />
+            {isDirect ? (
+              <Avatar
+                src={avatarSrc}
+                alt={displayName}
+                size="md"
+                status={liveStatus}
+                showStatus={isDirect}
+              />
+            ) : (
+              <GroupAvatar
+                conversation={conversation}
+                currentUserId={currentUserId}
+                size="md"
+                alt={displayName}
+              />
+            )}
           </button>
 
           <button

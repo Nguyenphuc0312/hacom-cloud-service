@@ -1051,7 +1051,7 @@ describe("chatStore phase-1 realtime flows", () => {
     expect(messages[0]?.sendState).toBe("sent");
   });
 
-  it("deduplicates optimistic message with refetch fallback when client id is unavailable", async () => {
+  it("keeps optimistic and server messages separate when correlation aliases are unavailable", async () => {
     useChatStore.getState().setMessages("room-1", [
       makeMessage({
         id: "temp-fallback-1",
@@ -1090,9 +1090,89 @@ describe("chatStore phase-1 realtime flows", () => {
       .fetchMessages("room-1", undefined, undefined, { force: true });
 
     const messages = getRoomMessages();
-    expect(messages).toHaveLength(1);
-    expect(messages[0]?.id).toBe("server-fallback-1");
-    expect(messages[0]?.sendState).toBe("sent");
+    expect(messages).toHaveLength(2);
+    expect(messages.map((message) => message.id)).toEqual([
+      "temp-fallback-1",
+      "server-fallback-1",
+    ]);
+  });
+
+  it("does not collapse a same-content server message into a pending optimistic one without identity aliases", () => {
+    useChatStore.getState().addMessage(
+      "room-1",
+      makeMessage({
+        id: "temp-same-content-1",
+        localId: "temp-same-content-1",
+        stableId: "temp-same-content-1",
+        clientMessageId: undefined,
+        senderId: "user-a",
+        content: "ok",
+        status: MessageStatus.SENDING,
+        sendState: "sending",
+        createdAt: "2026-04-10T10:00:00.000Z",
+      }) as never,
+    );
+
+    useChatStore.getState().addMessage(
+      "room-1",
+      makeMessage({
+        id: "server-same-content-1",
+        localId: undefined,
+        stableId: undefined,
+        clientMessageId: undefined,
+        senderId: "user-a",
+        content: "ok",
+        status: MessageStatus.SENT,
+        sendState: "sent",
+        createdAt: "2026-04-10T10:00:01.000Z",
+      }) as never,
+    );
+
+    const messages = getRoomMessages();
+    expect(messages).toHaveLength(2);
+    expect(messages.map((message) => message.id)).toEqual([
+      "temp-same-content-1",
+      "server-same-content-1",
+    ]);
+  });
+
+  it("keeps same-content messages from different senders as separate entries", () => {
+    useChatStore.getState().addMessage(
+      "room-1",
+      makeMessage({
+        id: "server-same-content-user-a",
+        clientMessageId: undefined,
+        localId: undefined,
+        stableId: undefined,
+        senderId: "user-a",
+        content: "ok",
+        status: MessageStatus.SENT,
+        sendState: "sent",
+        createdAt: "2026-04-10T10:00:00.000Z",
+      }) as never,
+    );
+
+    useChatStore.getState().addMessage(
+      "room-1",
+      makeMessage({
+        id: "server-same-content-user-b",
+        clientMessageId: undefined,
+        localId: undefined,
+        stableId: undefined,
+        senderId: "user-b",
+        content: "ok",
+        status: MessageStatus.SENT,
+        sendState: "sent",
+        createdAt: "2026-04-10T10:00:00.200Z",
+      }) as never,
+    );
+
+    const messages = getRoomMessages();
+    expect(messages).toHaveLength(2);
+    expect(messages.map((message) => message.id)).toEqual([
+      "server-same-content-user-a",
+      "server-same-content-user-b",
+    ]);
   });
 
   it("allows multiple consecutive sends without waiting for previous request", async () => {
@@ -1150,6 +1230,59 @@ describe("chatStore phase-1 realtime flows", () => {
     expect(
       reconciled.filter((message) => message.content === "second"),
     ).toHaveLength(1);
+  });
+
+  it("keeps two consecutive same-content sends visible and reconciles them independently", async () => {
+    const firstDeferred =
+      createDeferred<ReturnType<typeof makeSuccessEnvelope>>();
+    const secondDeferred =
+      createDeferred<ReturnType<typeof makeSuccessEnvelope>>();
+    sendMessageMock
+      .mockReturnValueOnce(firstDeferred.promise)
+      .mockReturnValueOnce(secondDeferred.promise);
+
+    const firstPromise = useChatStore
+      .getState()
+      .sendMessage("room-1", "ok", MessageType.TEXT);
+    const secondPromise = useChatStore
+      .getState()
+      .sendMessage("room-1", "ok", MessageType.TEXT);
+
+    const optimisticMessages = getRoomMessages();
+    expect(optimisticMessages.filter((message) => message.content === "ok")).toHaveLength(2);
+
+    const [firstOptimistic, secondOptimistic] = optimisticMessages;
+    firstDeferred.resolve(
+      makeSuccessEnvelope(
+        makeMessage({
+          id: "server-same-1",
+          clientMessageId: firstOptimistic?.clientMessageId,
+          localId: firstOptimistic?.localId,
+          content: "ok",
+          status: MessageStatus.SENT,
+        }),
+      ),
+    );
+    secondDeferred.resolve(
+      makeSuccessEnvelope(
+        makeMessage({
+          id: "server-same-2",
+          clientMessageId: secondOptimistic?.clientMessageId,
+          localId: secondOptimistic?.localId,
+          content: "ok",
+          status: MessageStatus.SENT,
+        }),
+      ),
+    );
+
+    await Promise.all([firstPromise, secondPromise]);
+
+    const reconciled = getRoomMessages();
+    expect(reconciled.filter((message) => message.content === "ok")).toHaveLength(2);
+    expect(reconciled.map((message) => message.id)).toEqual([
+      "server-same-1",
+      "server-same-2",
+    ]);
   });
 
   it("marks message as timeout-failed when server does not confirm within timeout window", async () => {

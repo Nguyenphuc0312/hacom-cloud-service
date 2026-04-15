@@ -1015,66 +1015,7 @@ const matchesMessage = (source: Message, target: Message): boolean =>
   (target.localId !== undefined && target.localId === source.id) ||
   (source.localId !== undefined &&
     target.localId !== undefined &&
-    source.localId === target.localId) ||
-  isSamePendingMessageCandidate(source, target);
-
-const isSamePendingMessageCandidate = (
-  source: Message,
-  target: Message,
-): boolean => {
-  const sourceIsPending =
-    isTempMessageId(source.id) ||
-    source.status === MessageStatus.SENDING ||
-    source.status === MessageStatus.FAILED;
-  const targetIsPending =
-    isTempMessageId(target.id) ||
-    target.status === MessageStatus.SENDING ||
-    target.status === MessageStatus.FAILED;
-
-  if (sourceIsPending === targetIsPending) return false;
-  if (!source.senderId || source.senderId !== target.senderId) return false;
-  if (
-    !source.conversationId ||
-    source.conversationId !== target.conversationId
-  ) {
-    return false;
-  }
-  if (source.type !== target.type) return false;
-  if ((source.content || "").trim() !== (target.content || "").trim()) {
-    return false;
-  }
-
-  const sourceReplyTo = getReplyToId(source.replyTo);
-  const targetReplyTo = getReplyToId(target.replyTo);
-  if ((sourceReplyTo || "") !== (targetReplyTo || "")) {
-    return false;
-  }
-
-  const sourceTs = toDateValue(source.createdAt);
-  const targetTs = toDateValue(target.createdAt);
-  if (!sourceTs || !targetTs) return false;
-
-  const withinGraceWindow = Math.abs(sourceTs - targetTs) <= 15_000;
-  if (!withinGraceWindow) return false;
-
-  const sourceAttachment = source.attachments?.[0];
-  const targetAttachment = target.attachments?.[0];
-  // Fall back to sender/content/time matching when backend does not echo client ids.
-  // For attachments, we additionally require attachment identity to match.
-  if (!sourceAttachment && !targetAttachment) return true;
-  if (!sourceAttachment || !targetAttachment) return false;
-  if (sourceAttachment.id === targetAttachment.id) return true;
-
-  if (
-    sourceAttachment.objectKey &&
-    targetAttachment.objectKey &&
-    sourceAttachment.objectKey === targetAttachment.objectKey
-  ) {
-    return true;
-  }
-
-  return false;
-};
+    source.localId === target.localId);
 
 const toMessageIdentityKeys = (message: Message): string[] => {
   const keys = new Set<string>();
@@ -1100,36 +1041,8 @@ const toMessageIdentityKeys = (message: Message): string[] => {
   return Array.from(keys);
 };
 
-const resolvePendingFallbackIndex = (
-  current: Message[],
-  incoming: Message,
-): number => {
-  let bestIndex = -1;
-  let bestScore = Number.POSITIVE_INFINITY;
-
-  current.forEach((candidate, index) => {
-    if (!isSamePendingMessageCandidate(candidate, incoming)) return;
-
-    const createdAtDistance = Math.abs(
-      toDateValue(candidate.createdAt) - toDateValue(incoming.createdAt),
-    );
-    const localOrderDistance = Math.abs(
-      (candidate.localOrder ?? Number.MAX_SAFE_INTEGER) -
-        (incoming.localOrder ?? Number.MAX_SAFE_INTEGER),
-    );
-    const score = createdAtDistance + localOrderDistance;
-
-    if (score < bestScore) {
-      bestScore = score;
-      bestIndex = index;
-    }
-  });
-
-  return bestIndex;
-};
-
 const resolveMessageMatchIndex = (
-  current: Message[],
+  _current: Message[],
   keyToIndex: Map<string, number>,
   incoming: Message,
 ): number => {
@@ -1140,7 +1053,7 @@ const resolveMessageMatchIndex = (
     return identityMatch;
   }
 
-  return resolvePendingFallbackIndex(current, incoming);
+  return -1;
 };
 
 const mergeDefinedMessageFields = (

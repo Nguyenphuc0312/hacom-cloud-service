@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { SpeakerXMarkIcon, CheckCircleIcon } from "@heroicons/react/24/solid";
 import { Avatar } from "../common/Avatar";
 import { Badge } from "../common/Badge";
+import { GroupAvatar } from "../common/GroupAvatar";
 import type { Conversation } from "../../types";
 import { UserStatus } from "../../types";
 import { isDirectConversation } from "../../lib/conversationAdapter";
@@ -15,6 +16,8 @@ import {
   getMessagePreview,
   getMessagePreviewState,
   getOtherParticipant,
+  getUserDisplayName,
+  truncateTextWithEllipsis,
 } from "../../utils/messageHelpers";
 
 interface ConversationItemProps {
@@ -49,12 +52,36 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
       : UserStatus.OFFLINE
     : otherParticipant?.status;
   const lastMessage = conversation.lastMessage;
-  const preview = getMessagePreview(lastMessage, currentUserId);
+  const preview = React.useMemo(() => {
+    if (!lastMessage) return "";
+
+    const previewText = getMessagePreview(lastMessage, currentUserId, 220);
+    if (!previewText) return "";
+
+    if (lastMessage.type === "system" || isDirect) {
+      return truncateTextWithEllipsis(previewText, 56);
+    }
+
+    const senderParticipant = (conversation.participants || []).find(
+      (participant) => participant.id === lastMessage.senderId,
+    );
+    const senderLabel =
+      lastMessage.senderId === currentUserId
+        ? t("chat:message.you")
+        : getUserDisplayName(senderParticipant, {
+            allowTechnicalFallback: true,
+          }) ||
+          lastMessage.senderName?.trim() ||
+          t("common:labels.conversation");
+
+    return truncateTextWithEllipsis(`${senderLabel}: ${previewText}`, 56);
+  }, [conversation.participants, currentUserId, isDirect, lastMessage, t]);
   const previewState = getMessagePreviewState(lastMessage, currentUserId);
   const timeStr = lastMessage
     ? formatRelativeTime(new Date(lastMessage.createdAt))
     : "";
   const isOwnLastMessage = lastMessage?.senderId === currentUserId;
+  const showOwnPrefix = Boolean(isDirect && isOwnLastMessage && lastMessage);
 
   const fallbackConversationLabel = t("common:labels.conversation");
   const displayName =
@@ -79,13 +106,21 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
       role="option"
       aria-selected={isActive}
     >
-      <Avatar
-        src={avatarSrc}
-        alt={displayName}
-        size="lg"
-        status={status}
-        showStatus={isDirect}
-      />
+      {isDirect ? (
+        <Avatar
+          src={avatarSrc}
+          alt={displayName}
+          size="lg"
+          status={status}
+          showStatus={isDirect}
+        />
+      ) : (
+        <GroupAvatar
+          conversation={conversation}
+          currentUserId={currentUserId}
+          size="lg"
+        />
+      )}
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
@@ -130,7 +165,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
 
         <div className="flex items-center justify-between gap-2 mt-1">
           <div className="flex items-center gap-1 min-w-0 flex-1">
-            {isOwnLastMessage && lastMessage && (
+            {showOwnPrefix && (
               <span className="text-sm text-text-muted">
                 {t("chat:message.senderYou")}
               </span>

@@ -1360,6 +1360,13 @@ export const useWebSocket = (
       const isActiveConversation =
         chatState.selectedConversationId === conversationId;
       const visibleAndFocused = isDocumentVisibleAndFocused();
+      const isSelfAuthoredMessage =
+        Boolean(senderId && currentUserId && senderId === currentUserId);
+      const isAmbiguousSelfReconcile =
+        eventType === "message:new" &&
+        isSelfAuthoredMessage &&
+        !clientMessageId &&
+        !localId;
       const shouldIncrementUnread = Boolean(
         eventType === "message:new" &&
           senderId &&
@@ -1395,6 +1402,20 @@ export const useWebSocket = (
           kind:
             asString(messagePayload.type) === "system" ? "system" : "message",
           eventId,
+        });
+      }
+
+      if (isAmbiguousSelfReconcile) {
+        logMessageDebug("useWebSocket", "socket_message_missing_reconcile_alias", {
+          conversationId,
+          eventId,
+          messageId,
+          senderId,
+          stableId,
+        });
+        void fetchMessages(conversationId, undefined, undefined, {
+          force: true,
+          syncReason: "room-refresh",
         });
       }
 
@@ -2148,6 +2169,7 @@ export const useWebSocket = (
     clearRoomSyncFallback,
     clearRemoteTypingTimer,
     clearTyping,
+    fetchMessages,
     flushEmitQueue,
     markMessagesReadUpTo,
     onConnect,

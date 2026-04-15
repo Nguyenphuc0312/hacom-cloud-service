@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "../../common/Avatar";
+import { GroupAvatar } from "../../common/GroupAvatar";
 import type { Conversation, UserSummary } from "../../../types";
 import { isDirectConversation } from "../../../lib/conversationAdapter";
 import { formatRelativeTime } from "../../../utils/formatTime";
@@ -13,6 +14,7 @@ import {
   getMessagePreviewState,
   getOtherParticipant,
   getUserDisplayName,
+  truncateTextWithEllipsis,
 } from "../../../utils/messageHelpers";
 
 interface RoomItemProps {
@@ -49,11 +51,11 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
     const lastMessage = conversation.lastMessage;
     if (!lastMessage) return "";
 
-    const messagePreview = getMessagePreview(lastMessage, currentUser.id, 44);
+    const messagePreview = getMessagePreview(lastMessage, currentUser.id, 240);
     if (!messagePreview) return "";
 
     if (lastMessage.type === "system" || isDirectConversation(conversation)) {
-      return messagePreview;
+      return truncateTextWithEllipsis(messagePreview, 52);
     }
 
     const senderParticipant = (conversation.participants || []).find(
@@ -68,7 +70,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
           lastMessage.senderName?.trim() ||
           t("common:labels.conversation");
 
-    return `${senderLabel}: ${messagePreview}`;
+    return truncateTextWithEllipsis(`${senderLabel}: ${messagePreview}`, 52);
   }, [
     conversation,
     conversation.lastMessage,
@@ -138,13 +140,21 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
           )}
           aria-hidden="true"
         />
-        <Avatar
-          src={avatarSrc}
-          alt={displayName}
-          size="md"
-          status={avatarStatus}
-          showStatus={isDirect}
-        />
+        {isDirect ? (
+          <Avatar
+            src={avatarSrc}
+            alt={displayName}
+            size="md"
+            status={avatarStatus}
+            showStatus={isDirect}
+          />
+        ) : (
+          <GroupAvatar
+            conversation={conversation}
+            currentUserId={currentUser.id}
+            size="md"
+          />
+        )}
 
         {unreadCount > 0 && (
           <span
@@ -188,13 +198,21 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         aria-hidden="true"
       />
       <div className="grid w-full grid-cols-[auto,1fr,auto] items-center gap-3">
-        <Avatar
-          src={avatarSrc}
-          alt={displayName}
-          size="md"
-          status={avatarStatus}
-          showStatus={isDirect}
-        />
+        {isDirect ? (
+          <Avatar
+            src={avatarSrc}
+            alt={displayName}
+            size="md"
+            status={avatarStatus}
+            showStatus={isDirect}
+          />
+        ) : (
+          <GroupAvatar
+            conversation={conversation}
+            currentUserId={currentUser.id}
+            size="md"
+          />
+        )}
 
         <div className="min-w-0">
           <p
@@ -208,7 +226,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
 
           <p
             className={clsx(
-              "truncate pr-2 text-caption leading-5 text-start",
+              "truncate pr-1 text-caption leading-5 text-start",
               previewState === "failed" ? "font-medium" : "font-normal",
               previewToneClass,
             )}
