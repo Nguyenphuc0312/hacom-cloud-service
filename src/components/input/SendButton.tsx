@@ -31,13 +31,13 @@ export const SendButton: React.FC<SendButtonProps> = ({
       onClick={onClick}
       disabled={disabled}
       className={clsx(
-        "inline-flex h-12 w-12 items-center justify-center rounded-full border transition-micro",
+        "inline-flex h-12 w-12 items-center justify-center rounded-[1.1rem] border transition-micro",
         resolvedState === "disabled" &&
           "cursor-not-allowed border-transparent bg-[hsl(var(--color-chat-pill))] text-text-disabled shadow-none",
         resolvedState === "idle" &&
-          "border-transparent bg-[hsl(var(--color-chat-pill))] text-text-muted shadow-elev1",
+          "border-border/70 bg-[hsl(var(--color-chat-pill))] text-text-muted shadow-xs",
         resolvedState === "ready" &&
-          "border-transparent bg-primary text-text-inverse shadow-elev2 hover:-translate-y-0.5 hover:bg-primary-hover hover:shadow-elev3",
+          "border-primary/15 bg-primary text-text-inverse shadow-elev2 hover:-translate-y-0.5 hover:bg-primary-hover hover:shadow-elev3",
         resolvedState === "sending" &&
           "border-primary/15 bg-primary/12 text-primary shadow-elev1",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",

@@ -25,7 +25,7 @@ import type { AttachmentDraft } from "../../types/attachmentDraft";
 import { UPLOAD_CONFIG } from "../../config";
 import { emitCommandPaletteOpen } from "../../lib/commandPalette";
 import { logMessageDebug } from "../../utils/messageDebug";
-import { toast } from "../ui";
+import { InlineNotice, toast } from "../ui";
 
 export interface MentionCandidate {
   id: string;
@@ -789,19 +789,17 @@ export const MessageInput = React.forwardRef<
         </p>
 
         {disabledReason && (
-          <div
-            className={clsx(
-              "mb-2 rounded-full px-4 py-1.5 text-xs",
-              disabledReasonTone === "error" &&
-                "border border-danger/25 bg-danger/10 text-danger",
-              disabledReasonTone === "info" &&
-                "border border-primary/20 bg-primary/10 text-primary",
-              disabledReasonTone === "warn" &&
-                "border border-warning/25 bg-warning/10 text-warning",
-            )}
-          >
-            {disabledReason}
-          </div>
+          <InlineNotice
+            tone={
+              disabledReasonTone === "error"
+                ? "error"
+                : disabledReasonTone === "info"
+                  ? "info"
+                  : "warning"
+            }
+            message={disabledReason}
+            className="mb-2"
+          />
         )}
 
         <input
@@ -908,15 +906,15 @@ export const MessageInput = React.forwardRef<
           <div
             data-composer-state={composerVisualState}
             className={clsx(
-              "relative flex min-w-0 flex-1 items-end rounded-2xl border px-2 py-1.5 transition-micro",
+              "relative flex min-w-0 flex-1 items-end rounded-[1.5rem] border px-2 py-1.5 transition-micro",
               composerVisualState === "disabled" &&
                 "border-disabled-border bg-disabled-bg shadow-none",
               composerVisualState === "ready" &&
-                "border-primary/30 bg-surface shadow-elev2",
+                "border-primary/22 bg-[hsl(var(--color-chat-composer))] shadow-elev2",
               composerVisualState === "focused" &&
-                "border-border-focus bg-surface shadow-elev2",
+                "border-border-focus bg-[hsl(var(--color-chat-composer))] shadow-elev2",
               composerVisualState === "idle" &&
-                "border-border bg-surface shadow-elev1",
+                "border-border bg-[hsl(var(--color-chat-composer))] shadow-elev1",
             )}
           >
             <EmojiButton
@@ -1024,6 +1022,23 @@ export const MessageInput = React.forwardRef<
             <div className="flex shrink-0 items-end gap-1">
               <button
                 type="button"
+                onClick={emitCommandPaletteOpen}
+                className={clsx(
+                  "hidden h-10 items-center justify-center rounded-full border border-transparent px-2.5 text-caption font-medium text-text-muted transition-fast xl:inline-flex",
+                  "hover:bg-surface-hover hover:text-text-primary",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+                  disableToolbar && "cursor-not-allowed opacity-50",
+                )}
+                aria-label={t("common:actions.search", {
+                  defaultValue: "Open command palette",
+                })}
+                disabled={disableToolbar}
+              >
+                {openShortcut}
+              </button>
+
+              <button
+                type="button"
                 onClick={handleInsertMentionTrigger}
                 className={clsx(
                   "hidden h-10 w-10 items-center justify-center rounded-full transition-colors md:inline-flex",
@@ -1076,6 +1091,7 @@ export const MessageInput = React.forwardRef<
           <SendButton
             disabled={!canSend}
             state={!canSend ? "disabled" : "ready"}
+            isBusy={isSubmitBusy}
             onClick={() => {
               logMessageDebug("MessageInput", "submit_triggered", {
                 conversationId,
@@ -1086,22 +1102,6 @@ export const MessageInput = React.forwardRef<
             ariaLabel={sendButtonLabel}
             className="mb-0.5 shrink-0"
           />
-        </div>
-
-        <div className="mt-1 flex items-center justify-between px-1 text-caption text-text-muted">
-          <span>
-            {sendOnEnter
-              ? t("chat:composer.shortcutHint")
-              : t("chat:composer.shortcutHintManual")}
-          </span>
-
-          <button
-            type="button"
-            onClick={emitCommandPaletteOpen}
-            className="rounded-md border border-border bg-surface px-2 py-0.5 text-caption transition-micro hover:bg-surface-hover hover:text-text-secondary"
-          >
-            {openShortcut}
-          </button>
         </div>
 
         {onShareContact && currentUserId && (

@@ -68,13 +68,13 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   );
 
   return (
-    <div className="px-3 pb-2 pt-3">
-      <div className="flex items-center justify-between gap-2 rounded-[1.75rem] border border-border/70 bg-surface/85 px-2.5 py-2 shadow-xs backdrop-blur-sm">
+    <div className="px-3 pb-3 pt-3">
+      <div className="app-shell-section flex items-center justify-between gap-2 px-2.5 py-2.5">
         <button
           type="button"
           onClick={onCurrentUserClick}
           className={clsx(
-            "flex min-w-0 flex-1 items-center rounded-[1.25rem] text-left transition-micro hover:bg-surface-hover",
+            "flex min-w-0 flex-1 items-center rounded-[1.25rem] text-left transition-micro hover:bg-surface-hover/80",
             collapsed ? "justify-center px-0 py-2" : "gap-3 px-2.5 py-2.5",
           )}
           title={collapsed ? currentUserName : undefined}
@@ -89,7 +89,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           />
 
           {!collapsed && (
-            <div className="min-w-0">
+            <div className="sidebar-shell-label min-w-0" data-collapsed={collapsed}>
               <p className="truncate text-body-sm font-semibold text-text-primary">
                 {currentUserName}
               </p>
@@ -101,12 +101,13 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
         </button>
 
         <div className="flex shrink-0 items-center gap-1">
-          <div className="relative">
+          <div className="relative shrink-0">
             <IconButtonSurface
               onClick={onToggleNotifications}
               aria-label={t("notifications.panelTitle", {
                 defaultValue: "Notifications",
               })}
+              className="h-10 w-10 rounded-xl"
             >
               <BellIcon className="h-5 w-5" />
             </IconButtonSurface>
@@ -115,7 +116,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
                 count={notificationUnreadCount}
                 size="sm"
                 variant="danger"
-                className="absolute -right-1 -top-1"
+                className="sidebar-shell-badge absolute -right-1 -top-1 shadow-xs"
               />
             )}
           </div>
@@ -123,7 +124,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           {!collapsed && (
             <IconButtonSurface
               onClick={onNewChat}
-              className="bg-primary text-text-inverse shadow-xs hover:bg-primary-hover hover:text-text-inverse"
+              className="h-10 w-10 rounded-xl bg-primary text-text-inverse shadow-xs hover:bg-primary-hover hover:text-text-inverse"
               aria-label={t("sidebar:header.startNewChat")}
             >
               <PencilSquareIcon className="h-5 w-5" />
@@ -132,7 +133,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
 
           <IconButtonSurface
             onClick={onToggleCollapsed}
-            className="hidden lg:inline-flex"
+            className="hidden h-10 w-10 rounded-xl lg:inline-flex"
             aria-label={
               collapsed
                 ? t("sidebar:header.expandSidebar")

@@ -27,9 +27,16 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
   if (collapsed) {
     return (
       <div className="px-3 pb-3">
-        <div className="flex h-11 items-center justify-center rounded-2xl border border-border/70 bg-surface/80 text-text-muted shadow-xs backdrop-blur-sm">
+        <button
+          type="button"
+          onClick={emitCommandPaletteOpen}
+          className="app-shell-section flex h-12 w-full items-center justify-center text-text-muted transition-micro hover:text-text-primary"
+          aria-label={t("common:actions.search", {
+            defaultValue: "Open command palette",
+          })}
+        >
           <MagnifyingGlassIcon className="h-5 w-5" aria-hidden="true" />
-        </div>
+        </button>
       </div>
     );
   }
@@ -54,7 +61,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
           }}
           placeholder={t("sidebar:search.placeholder")}
           className={clsx(
-            "h-12 w-full rounded-2xl border border-border/70 bg-surface/85 pl-11 text-body-sm shadow-xs backdrop-blur-sm",
+            "h-12 w-full rounded-[1.35rem] border border-border/70 bg-surface/84 pl-11 text-body-sm shadow-xs backdrop-blur-sm",
             value.trim().length > 0 ? "pr-10" : "pr-[88px]",
             "text-text-primary placeholder:text-text-muted",
             "transition-micro focus:border-border-focus focus:bg-surface focus:outline-none focus:ring-2 focus:ring-focus/20",
@@ -86,13 +93,13 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
       </label>
 
       {onSearchUsers && value.trim().length >= 2 && (
-        <button
-          type="button"
-          onClick={() => onSearchUsers(value.trim())}
-          className="mt-2 w-full rounded-2xl border border-border/70 bg-surface px-3 py-2.5 text-left text-caption font-medium text-text-secondary shadow-xs transition-micro hover:bg-surface-hover hover:text-text-primary"
-        >
-          {t("friends:tabs.search", { defaultValue: "Search users" })}:{" "}
-          <span className="font-semibold">{value.trim()}</span>
+          <button
+            type="button"
+            onClick={() => onSearchUsers(value.trim())}
+            className="mt-2 w-full rounded-[1.1rem] border border-border/70 bg-surface px-3 py-2.5 text-left text-caption font-medium text-text-secondary shadow-xs transition-micro hover:bg-surface-hover hover:text-text-primary"
+          >
+            {t("friends:tabs.search", { defaultValue: "Search users" })}:{" "}
+            <span className="font-semibold">{value.trim()}</span>
         </button>
       )}
     </div>

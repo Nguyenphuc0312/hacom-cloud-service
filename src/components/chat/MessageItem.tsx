@@ -7,6 +7,10 @@ import { SystemMessage } from "../message/SystemMessage";
 import type { Message, Attachment } from "../../types";
 import type { TimelineItem } from "../../hooks/useMessageGrouping";
 import type { ChatDensity } from "../../stores/uiStore";
+import {
+  getMessageStableKey,
+  isPendingMessage,
+} from "../../utils/messageTimeline";
 
 interface MessageItemProps {
   item: TimelineItem;
@@ -22,6 +26,7 @@ interface MessageItemProps {
   onToggleSelect?: (messageId: string) => void;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
+  insertedMessageKeys?: Set<string>;
 }
 
 const getAttachmentLayoutSignature = (
@@ -106,6 +111,7 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   onToggleSelect,
   onNavigateToMessage,
   currentUsername,
+  insertedMessageKeys,
 }) => {
   const isCompact = density === "compact";
   const isExpanded = density === "expanded";
@@ -190,6 +196,15 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
             density={density}
             onNavigateToMessage={onNavigateToMessage}
             currentUsername={currentUsername}
+            shouldAnimateInsert={
+              item.kind === "message"
+                ? Boolean(
+                    item.isOwn &&
+                      isPendingMessage(item.message) &&
+                      insertedMessageKeys?.has(getMessageStableKey(item.message)),
+                  )
+                : false
+            }
           />
         </div>
       </div>
@@ -214,6 +229,7 @@ const areEqualMessageItem = (
       prev.isSelectionMode === next.isSelectionMode &&
       prev.isSelected === next.isSelected &&
       prev.currentUsername === next.currentUsername &&
+      prev.insertedMessageKeys === next.insertedMessageKeys &&
       prev.onReply === next.onReply &&
       prev.onReact === next.onReact &&
       prev.onEdit === next.onEdit &&
@@ -232,6 +248,7 @@ const areEqualMessageItem = (
   if (prev.isSelectionMode !== next.isSelectionMode) return false;
   if (prev.isSelected !== next.isSelected) return false;
   if (prev.currentUsername !== next.currentUsername) return false;
+  if (prev.insertedMessageKeys !== next.insertedMessageKeys) return false;
   if (prev.onNavigateToMessage !== next.onNavigateToMessage) return false;
 
   if (prev.item.kind === "date" && next.item.kind === "date") {

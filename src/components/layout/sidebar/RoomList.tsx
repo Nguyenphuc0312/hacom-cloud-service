@@ -20,7 +20,8 @@ import {
   getConversationDisplayName,
   getUserDisplayName,
 } from "../../../utils/messageHelpers";
-import { ConversationListSkeleton, ErrorState } from "../../ui";
+import { ConversationListSkeleton, ErrorState, StateBlock } from "../../ui";
+import { ChatBubbleLeftRightIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { RoomItem } from "./RoomItem";
 
 interface RoomListProps {
@@ -538,12 +539,28 @@ export const RoomList: React.FC<RoomListProps> = ({
 
   if (flatItems.length === 0) {
     return (
-      <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-center">
-        <p className="text-sm text-text-muted">
-          {normalizedQuery
-            ? t("sidebar:room.emptyBySearch")
-            : t("sidebar:room.empty")}
-        </p>
+      <div className="flex min-h-0 flex-1 items-center justify-center px-3 py-3">
+        <StateBlock
+          variant={normalizedQuery ? "search-empty" : "empty"}
+          icon={
+            normalizedQuery ? (
+              <MagnifyingGlassIcon className="h-6 w-6" />
+            ) : (
+              <ChatBubbleLeftRightIcon className="h-6 w-6" />
+            )
+          }
+          title={
+            normalizedQuery
+              ? t("sidebar:room.emptyBySearch")
+              : t("sidebar:room.empty")
+          }
+          description={
+            normalizedQuery
+              ? t("sidebar:search.placeholder")
+              : t("chat:empty.noChatDescription")
+          }
+          className="w-full border-dashed shadow-none"
+        />
       </div>
     );
   }

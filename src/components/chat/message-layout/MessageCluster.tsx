@@ -50,6 +50,7 @@ interface MessageClusterProps {
   isSelectionMode?: boolean;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
+  shouldAnimateInsert?: boolean;
   className?: string;
 }
 
@@ -193,6 +194,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   isSelectionMode = false,
   onNavigateToMessage,
   currentUsername,
+  shouldAnimateInsert = false,
   className,
 }) => {
   const { t } = useTranslation();
@@ -473,6 +475,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
               "min-w-0",
               isOwn ? "items-end" : "items-start",
               "flex max-w-[var(--chat-bubble-max)] flex-col",
+              shouldAnimateInsert && "motion-message-insert",
             )}
           >
             {isGroupConversation && !isOwn && showSenderName && (

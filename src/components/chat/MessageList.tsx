@@ -20,7 +20,11 @@ import { useVirtualizedMessages } from "../../hooks/useVirtualizedMessages";
 import type { Conversation, Message, Attachment } from "../../types";
 import type { ChatDensity } from "../../stores/uiStore";
 import { formatDateDivider } from "../../utils/formatTime";
-import { isFailedMessage, isPendingMessage } from "../../utils/messageTimeline";
+import {
+  getMessageStableKey,
+  isFailedMessage,
+  isPendingMessage,
+} from "../../utils/messageTimeline";
 import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 import { logScrollTrace } from "../../utils/scrollTrace";
 
@@ -79,6 +83,7 @@ interface TimelineRowData {
   onToggleSelect?: (messageId: string) => void;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
+  insertedMessageKeys: Set<string>;
   highlightedMessageId: string | null;
   onItemSizeChange: (payload: {
     index: number;
@@ -143,6 +148,8 @@ const areEqualTimelineRowProps = (
     previousProps.data.density === nextProps.data.density &&
     previousProps.data.isSelectionMode === nextProps.data.isSelectionMode &&
     previousProps.data.currentUsername === nextProps.data.currentUsername &&
+    previousProps.data.insertedMessageKeys ===
+      nextProps.data.insertedMessageKeys &&
     previousProps.data.onReply === nextProps.data.onReply &&
     previousProps.data.onReact === nextProps.data.onReact &&
     previousProps.data.onEdit === nextProps.data.onEdit &&
@@ -331,6 +338,7 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
                 onToggleSelect={data.onToggleSelect}
                 onNavigateToMessage={data.onNavigateToMessage}
                 currentUsername={data.currentUsername}
+                insertedMessageKeys={data.insertedMessageKeys}
               />
             </div>
           </div>
@@ -411,6 +419,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const [highlightedMessageId, setHighlightedMessageId] = React.useState<
     string | null
   >(null);
+  const previousMessageStableKeysRef = React.useRef<Set<string>>(new Set());
   const [liveUnreadMarker, setLiveUnreadMarker] =
     React.useState<UnreadTimelineMarker | null>(unreadMarker ?? null);
   const getTimelineItemKey = React.useCallback(
@@ -423,7 +432,26 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     conversationType,
     unreadMarker: liveUnreadMarker,
   });
+  const insertedMessageKeys = React.useMemo(() => {
+    const previousKeys = previousMessageStableKeysRef.current;
+    const nextKeys = new Set(messages.map((message) => getMessageStableKey(message)));
+    const insertedKeys = new Set<string>();
+
+    nextKeys.forEach((key) => {
+      if (!previousKeys.has(key)) {
+        insertedKeys.add(key);
+      }
+    });
+
+    return insertedKeys;
+  }, [messages]);
   timelineItemCountRef.current = timelineItems.length;
+
+  React.useEffect(() => {
+    previousMessageStableKeysRef.current = new Set(
+      messages.map((message) => getMessageStableKey(message)),
+    );
+  }, [conversationId, messages]);
 
   const estimateItemSize = React.useCallback(
     (item: TimelineItem) => estimateTimelineItemHeight(item, density),
@@ -709,6 +737,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       onToggleSelect,
       onNavigateToMessage,
       currentUsername,
+      insertedMessageKeys,
       highlightedMessageId,
       onItemSizeChange: handleTimelineItemSizeChange,
     }),
@@ -717,6 +746,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       density,
       handleTimelineItemSizeChange,
       highlightedMessageId,
+      insertedMessageKeys,
       isSelectionMode,
       onDelete,
       onEdit,

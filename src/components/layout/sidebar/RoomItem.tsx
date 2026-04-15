@@ -102,11 +102,11 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         role="option"
         aria-selected={isActive}
         className={clsx(
-          "group relative mx-2 my-1 flex h-[3.75rem] w-[calc(100%-var(--space-4))] items-center justify-center rounded-2xl",
+          "group relative mx-2 my-1 flex h-[3.9rem] w-[calc(100%-var(--space-4))] items-center justify-center rounded-[1.35rem]",
           "transition-micro",
           "hover:bg-surface-hover",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-          isActive && "bg-primary/12 text-primary shadow-xs ring-1 ring-primary/25",
+          isActive && "bg-primary/12 text-primary shadow-xs ring-1 ring-primary/18",
           !isActive &&
             isKeyboardActive &&
             "bg-surface-overlay ring-1 ring-border/70",
@@ -142,22 +142,29 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
 
   return (
     <button
-      type="button"
-      onClick={() => onSelect(conversation.id)}
-      role="option"
-      aria-selected={isActive}
-      className={clsx(
-        "group relative mx-2 my-0.5 flex h-[4.5rem] w-[calc(100%-var(--space-4))] items-center rounded-[1.35rem] px-3",
+        type="button"
+        onClick={() => onSelect(conversation.id)}
+        role="option"
+        aria-selected={isActive}
+        className={clsx(
+        "group relative mx-2 my-0.5 flex h-[4.7rem] w-[calc(100%-var(--space-4))] items-center rounded-[1.35rem] px-3",
         "transition-micro",
-        "hover:bg-surface-hover",
+        "hover:bg-surface-hover/92",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-        isActive && "bg-primary/10 shadow-xs ring-1 ring-primary/20",
+        isActive && "bg-primary/10 shadow-xs ring-1 ring-primary/14",
         !isActive &&
           isKeyboardActive &&
           "bg-surface-overlay ring-1 ring-border/70",
       )}
       aria-label={displayName}
     >
+      <span
+        className={clsx(
+          "absolute bottom-2 left-1.5 top-2 w-1 rounded-full transition-fast",
+          isActive ? "bg-primary opacity-100" : "opacity-0",
+        )}
+        aria-hidden="true"
+      />
       <div className="grid w-full grid-cols-[auto,1fr,auto] items-center gap-3">
         <Avatar
           src={avatarSrc}
@@ -178,29 +185,29 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
               {displayName}
             </p>
 
-            {conversation.isMuted && (
-              <SpeakerXMarkIcon
-                className="h-3.5 w-3.5 shrink-0 text-text-muted"
-                aria-hidden="true"
-              />
-            )}
-            {conversation.isPinned && (
-              <BookmarkIcon
-                className="h-3.5 w-3.5 shrink-0 text-text-muted"
-                aria-hidden="true"
-              />
-            )}
             {unreadMention && (
               <AtSymbolIcon
                 className="h-3.5 w-3.5 shrink-0 text-danger"
                 aria-label={t("sidebar:room.mentioned")}
               />
             )}
+            {!unreadMention && conversation.isPinned && (
+              <BookmarkIcon
+                className="h-3.5 w-3.5 shrink-0 text-text-muted"
+                aria-hidden="true"
+              />
+            )}
+            {!unreadMention && !conversation.isPinned && conversation.isMuted && (
+              <SpeakerXMarkIcon
+                className="h-3.5 w-3.5 shrink-0 text-text-muted"
+                aria-hidden="true"
+              />
+            )}
           </div>
 
           <p
             className={clsx(
-              "truncate text-caption leading-5 text-start",
+              "truncate text-caption leading-5 text-start pr-2",
               previewState === "failed"
                 ? "font-medium text-danger"
                 : previewState
@@ -229,7 +236,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
           {unreadCount > 0 ? (
             <span
               className={clsx(
-                "inline-flex min-h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold leading-none text-text-inverse shadow-xs",
+                "sidebar-shell-badge inline-flex min-h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold leading-none text-text-inverse shadow-xs",
                 unreadMention
                   ? "bg-danger"
                   : conversation.isMuted

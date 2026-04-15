@@ -237,6 +237,8 @@ export default {
         "content-fade": "contentFade 200ms ease-out both",
         "slide-up-fade": "slideUpFade 200ms cubic-bezier(0.16, 1, 0.3, 1) both",
         "bounce-subtle": "bounceSubtle 1.5s ease-in-out infinite",
+        "message-insert":
+          "messageInsert var(--motion-duration-message-insert, 140ms) var(--motion-ease-enter, cubic-bezier(0.2, 0.8, 0.2, 1)) both",
       },
       keyframes: {
         typing: {
@@ -312,6 +314,16 @@ export default {
           "0%, 100%": { transform: "translateY(0)" },
           "50%": { transform: "translateY(-4px)" },
         },
+        messageInsert: {
+          from: {
+            opacity: "0.72",
+            transform: "translateY(8px) scale(0.985)",
+          },
+          to: {
+            opacity: "1",
+            transform: "translateY(0) scale(1)",
+          },
+        },
       },
       maxWidth: {
         message: "70%",
@@ -334,14 +346,26 @@ export default {
         ".transition-micro": {
           transitionProperty:
             "background-color, color, box-shadow, border-color, opacity, transform",
-          transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
-          transitionDuration: "180ms",
+          transitionTimingFunction: "var(--motion-ease-enter, cubic-bezier(0.2, 0.8, 0.2, 1))",
+          transitionDuration: "var(--motion-duration-hover, 150ms)",
         },
         ".transition-fast": {
           transitionProperty:
             "background-color, color, box-shadow, border-color, opacity, transform",
-          transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
-          transitionDuration: "150ms",
+          transitionTimingFunction: "var(--motion-ease-enter, cubic-bezier(0.2, 0.8, 0.2, 1))",
+          transitionDuration: "var(--motion-duration-hover-fast, 120ms)",
+        },
+        ".transition-shell": {
+          transitionProperty:
+            "width, background-color, color, box-shadow, border-color, opacity, transform",
+          transitionTimingFunction: "var(--motion-ease-enter, cubic-bezier(0.2, 0.8, 0.2, 1))",
+          transitionDuration: "var(--motion-duration-sidebar, 220ms)",
+        },
+        ".transition-badge": {
+          transitionProperty:
+            "background-color, color, box-shadow, border-color, opacity, transform",
+          transitionTimingFunction: "var(--motion-ease-enter, cubic-bezier(0.2, 0.8, 0.2, 1))",
+          transitionDuration: "var(--motion-duration-badge, 140ms)",
         },
       });
     },

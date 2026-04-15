@@ -24,30 +24,30 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
   return (
     <section
       className={clsx(
-        "rounded-2xl border border-border bg-surface p-4 sm:p-5",
+        "rounded-[1.75rem] border border-border/70 bg-surface/90 p-5 shadow-xs backdrop-blur-sm sm:p-6",
         className,
       )}
     >
       {/* Header */}
-      <div className="mb-3 flex items-center gap-3">
+      <div className="mb-4 flex items-center gap-3">
         {icon && (
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[1rem] bg-primary/10 text-primary">
             {icon}
           </div>
         )}
         <div>
-          <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
+          <h3 className="text-title-sm text-text-primary">{title}</h3>
           {description && (
-            <p className="mt-0.5 text-xs text-text-muted">{description}</p>
+            <p className="mt-1 text-body-sm text-text-secondary">{description}</p>
           )}
         </div>
       </div>
 
       {/* Divider */}
-      <div className="mb-2 border-t border-border" />
+      <div className="mb-2 border-t border-border/60" />
 
       {/* Body */}
-      <div className="space-y-1">{children}</div>
+      <div className="space-y-2">{children}</div>
     </section>
   );
 };

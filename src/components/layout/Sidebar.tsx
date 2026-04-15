@@ -14,7 +14,7 @@ import {
   Cog6ToothIcon,
   UserGroupIcon,
 } from "@heroicons/react/24/outline";
-import { ConfirmDialog, Spinner } from "../ui";
+import { ConfirmDialog, SegmentedControl, Spinner } from "../ui";
 import { useLogout, usePresence } from "../../hooks";
 import type {
   Conversation,
@@ -151,10 +151,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      <SidebarContainer
-        collapsed={isCollapsed}
-        className={clsx("relative", className)}
-      >
+      <SidebarContainer collapsed={isCollapsed} className={clsx("relative", className)}>
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <SidebarHeader
           currentUser={currentUser}
@@ -177,82 +174,71 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
 
         {/* ── Search ─────────────────────────────────────────────────────── */}
-        <SidebarSearch
-          value={searchQuery}
-          collapsed={isCollapsed}
-          onChange={setSearchQuery}
-          onSearchUsers={(query) =>
-            navigate(`${ROUTE_PATHS.FRIENDS}?q=${encodeURIComponent(query)}`)
-          }
-        />
+        <div className="px-3">
+          <div className="app-shell-section overflow-hidden px-0 py-0">
+            <SidebarSearch
+              value={searchQuery}
+              collapsed={isCollapsed}
+              onChange={setSearchQuery}
+              onSearchUsers={(query) =>
+                navigate(`${ROUTE_PATHS.FRIENDS}?q=${encodeURIComponent(query)}`)
+              }
+            />
 
-        {/* ── Filter Tabs ─────────────────────────────────────────────────── */}
-        {!isCollapsed && (
-          <div className="px-3 pb-3 pt-1">
-            <div
-              className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-border/70 bg-surface-overlay/80 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              role="tablist"
-              aria-label={t("sidebar:tabs.label")}
-            >
-              {tabs.map((tab) => {
-                const isActive = activeFilter === tab.id;
+            {!isCollapsed && (
+              <div className="border-t border-border/60 px-3 pb-3 pt-0.5">
+                <SegmentedControl
+                  value={activeFilter}
+                  onChange={(next) => setActiveFilter(next as ConversationFilter)}
+                  ariaLabel={t("sidebar:tabs.label")}
+                  size="sm"
+                  options={tabs.map((tab) => ({
+                    id: tab.id,
+                    label: tab.label,
+                  }))}
+                />
 
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={isActive}
-                    onClick={() => setActiveFilter(tab.id)}
-                    className={clsx(
-                      "inline-flex h-9 min-w-fit items-center justify-center rounded-xl px-4 text-body-sm font-medium transition-micro",
-                      isActive
-                        ? "bg-surface text-text-primary shadow-xs"
-                        : "text-text-muted hover:bg-surface hover:text-text-secondary",
-                    )}
-                  >
-                    <span className="whitespace-nowrap">{tab.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Loading indicator khi đang fetch thêm conversations */}
-            {isLoadingConversations && conversations.length > 0 && (
-              <div className="mt-2 inline-flex items-center gap-2 px-1 text-caption text-text-muted">
-                <Spinner size="sm" />
-                <span>{t("common:loading.default")}</span>
+                {isLoadingConversations && conversations.length > 0 && (
+                  <div className="mt-2 inline-flex items-center gap-2 px-1 text-caption text-text-muted">
+                    <Spinner size="sm" />
+                    <span>{t("common:loading.default")}</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
+        </div>
 
         {/* ── Room List ───────────────────────────────────────────────────── */}
-        <RoomList
-          conversations={conversations}
-          currentUser={currentUser}
-          selectedId={currentConversationId}
-          searchQuery={deferredSearchQuery}
-          activeFilter={activeFilter}
-          collapsed={isCollapsed}
-          showLoadingSkeleton={showConversationSkeleton}
-          error={conversationsError}
-          onRetry={onRetryConversations}
-          hasMore={hasMoreConversations}
-          isLoadingMore={isLoadingMoreConversations}
-          onLoadMore={onLoadMoreConversations}
-          onSelect={handleSelectRoom}
-        />
+        <div className="min-h-0 flex-1 px-3 pb-3 pt-3">
+          <div className="app-shell-section flex h-full min-h-0 flex-col overflow-hidden">
+            <RoomList
+              conversations={conversations}
+              currentUser={currentUser}
+              selectedId={currentConversationId}
+              searchQuery={deferredSearchQuery}
+              activeFilter={activeFilter}
+              collapsed={isCollapsed}
+              showLoadingSkeleton={showConversationSkeleton}
+              error={conversationsError}
+              onRetry={onRetryConversations}
+              hasMore={hasMoreConversations}
+              isLoadingMore={isLoadingMoreConversations}
+              onLoadMore={onLoadMoreConversations}
+              onSelect={handleSelectRoom}
+            />
+          </div>
+        </div>
 
         {/* ── Bottom Nav ──────────────────────────────────────────────────── */}
         <div className="border-t border-border/60 px-3 pb-3 pt-3">
-          <div className="space-y-1 rounded-[1.75rem] border border-border/70 bg-surface/80 p-2 shadow-xs backdrop-blur-sm">
+          <div className="space-y-1">
           {/* Friends */}
           <button
             type="button"
             onClick={() => navigate(ROUTE_PATHS.FRIENDS)}
             className={clsx(
-              "inline-flex w-full items-center rounded-xl px-3 py-2.5 text-body-sm font-medium transition-micro",
+              "inline-flex w-full items-center rounded-[1.1rem] px-3 py-2.5 text-body-sm font-medium transition-micro",
               isNavActive(ROUTE_PATHS.FRIENDS)
                 ? "bg-primary/12 text-primary"
                 : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
@@ -271,7 +257,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             type="button"
             onClick={() => navigate(ROUTE_PATHS.SETTINGS)}
             className={clsx(
-              "inline-flex w-full items-center rounded-xl px-3 py-2.5 text-body-sm font-medium transition-micro",
+              "inline-flex w-full items-center rounded-[1.1rem] px-3 py-2.5 text-body-sm font-medium transition-micro",
               isNavActive(ROUTE_PATHS.SETTINGS)
                 ? "bg-primary/12 text-primary"
                 : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
@@ -292,7 +278,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             disabled={isLoggingOut}
             onClick={() => setIsLogoutConfirmOpen(true)}
             className={clsx(
-              "inline-flex w-full items-center rounded-xl px-3 py-2.5 text-body-sm font-medium transition-micro",
+              "inline-flex w-full items-center rounded-[1.1rem] px-3 py-2.5 text-body-sm font-medium transition-micro",
               "text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50",
               isCollapsed && "justify-center px-0",
             )}

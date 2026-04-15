@@ -82,6 +82,17 @@
 
   --theme-transition-duration: 180ms;
   --theme-transition-easing: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-duration-hover-fast: 120ms;
+  --motion-duration-hover: 150ms;
+  --motion-duration-press: 100ms;
+  --motion-duration-sidebar: 220ms;
+  --motion-duration-panel: 240ms;
+  --motion-duration-message-insert: 140ms;
+  --motion-duration-badge: 140ms;
+  --motion-duration-skeleton: 1400ms;
+  --motion-ease-enter: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --motion-ease-press: ease-out;
 
   --core-gray-0: 0 0% 100%;
   --core-gray-50: 210 33% 98%;
@@ -148,11 +159,21 @@
   /* Surface contract aliases */
   --surface-background: var(--color-background);
   --surface-elevated: var(--color-surface-raised);
+  --surface-shell: var(--color-surface);
+  --surface-subtle: var(--color-surface-overlay);
   --surface-hover: var(--color-surface-hover);
   --surface-active: var(--color-surface-active);
   --surface-border: var(--color-border);
   --surface-text-muted: var(--color-text-muted);
   --surface-text-primary: var(--color-text-primary);
+  --state-info-bg: var(--core-brand-500);
+  --state-info-border: var(--core-brand-400);
+  --state-success-bg: 152 80% 97%;
+  --state-success-border: 152 48% 80%;
+  --state-warning-bg: 46 100% 96%;
+  --state-warning-border: 43 80% 76%;
+  --state-danger-bg: 0 100% 97%;
+  --state-danger-border: 0 76% 82%;
 
   --color-online: 142 71% 45%;
   --color-offline: var(--core-gray-500);
@@ -217,6 +238,16 @@
   --chat-bubble-sent-text: 210 20% 97%;
   --chat-bubble-received: 220 18% 18%;
   --chat-bubble-received-text: 210 20% 96%;
+  --surface-shell: 222 20% 15%;
+  --surface-subtle: 220 22% 18%;
+  --state-info-bg: 203 100% 16%;
+  --state-info-border: 203 42% 34%;
+  --state-success-bg: 152 38% 17%;
+  --state-success-border: 152 28% 28%;
+  --state-warning-bg: 41 42% 16%;
+  --state-warning-border: 41 32% 28%;
+  --state-danger-bg: 0 42% 17%;
+  --state-danger-border: 0 32% 29%;
 
   --shadow-xs: 0 1px 2px hsl(220 40% 2% / 0.4);
   --shadow-sm: 0 4px 12px hsl(220 40% 2% / 0.44);
@@ -503,6 +534,18 @@ a:focus-visible {
   }
 }
 
+@keyframes messageInsert {
+  from {
+    opacity: 0.72;
+    transform: translateY(8px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @layer components {
   .text-caption {
     font-size: var(--font-size-caption);
@@ -534,15 +577,60 @@ a:focus-visible {
   .surface-card {
     border: 1px solid hsl(var(--surface-border) / 0.75);
     border-radius: var(--radius-xl);
-    background: hsl(var(--surface-elevated));
+    background: hsl(var(--surface-shell));
     box-shadow: var(--elevation-1);
   }
 
   .panel-section {
     border: 1px solid hsl(var(--surface-border) / 0.75);
     border-radius: var(--radius-lg);
-    background: hsl(var(--color-surface));
+    background: hsl(var(--surface-subtle) / 0.4);
     padding: var(--space-4);
+  }
+
+  .motion-enter-soft {
+    animation: slideUpFade var(--motion-duration-hover, 150ms)
+      var(--motion-ease-enter) both;
+  }
+
+  .motion-message-insert {
+    animation: messageInsert var(--motion-duration-message-insert)
+      var(--motion-ease-enter) both;
+    will-change: transform, opacity;
+  }
+
+  .sidebar-shell-label {
+    transition:
+      opacity 140ms var(--motion-ease-enter) 36ms,
+      transform 140ms var(--motion-ease-enter) 36ms;
+  }
+
+  .sidebar-shell-label[data-collapsed="true"] {
+    opacity: 0;
+    transform: translateX(-8px);
+    pointer-events: none;
+  }
+
+  .sidebar-shell-badge {
+    transition:
+      opacity var(--motion-duration-badge) var(--motion-ease-enter),
+      transform var(--motion-duration-badge) var(--motion-ease-enter),
+      background-color var(--motion-duration-badge) var(--motion-ease-enter);
+  }
+
+  .app-shell-section {
+    border: 1px solid hsl(var(--surface-border) / 0.72);
+    border-radius: calc(var(--radius-2xl) - 2px);
+    background: hsl(var(--surface-shell) / 0.8);
+    box-shadow: var(--shadow-xs);
+    backdrop-filter: blur(10px);
+  }
+
+  .state-block {
+    border-radius: calc(var(--radius-2xl) - 2px);
+    border: 1px solid hsl(var(--surface-border) / 0.72);
+    background: hsl(var(--surface-shell) / 0.86);
+    box-shadow: var(--shadow-xs);
   }
 
   .auth-shell {

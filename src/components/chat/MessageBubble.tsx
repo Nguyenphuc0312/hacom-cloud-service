@@ -21,6 +21,7 @@ interface MessageBubbleProps {
   density?: ChatDensity;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
+  shouldAnimateInsert?: boolean;
   className?: string;
 }
 
