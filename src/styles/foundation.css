@@ -1919,3 +1919,572 @@ textarea.ant-input {
     display: none;
   }
 }
+
+/* Theme and SaaS dashboard overrides */
+html {
+  background: var(--gradient-page);
+}
+
+body,
+.ds-admin-shell,
+.ds-admin-sidebar,
+.ds-admin-topbar,
+.ds-card,
+.ds-surface-card,
+.ant-card,
+.ant-modal .ant-modal-content,
+.ant-drawer .ant-drawer-content,
+.ds-metric-card,
+.ds-dashboard-quick-action,
+.ds-dashboard-insight,
+.ds-dashboard-activity-item,
+.ds-dashboard-activity-detail,
+.ds-theme-toggle,
+.command-palette-modal .ant-modal-content {
+  transition:
+    background-color var(--transition-base),
+    background var(--transition-base),
+    border-color var(--transition-base),
+    box-shadow var(--transition-base),
+    color var(--transition-base),
+    opacity var(--transition-fast);
+}
+
+body {
+  background: var(--gradient-page);
+}
+
+.ds-admin-shell {
+  background: var(--gradient-page);
+}
+
+.ds-admin-sidebar {
+  background: var(--gradient-sidebar);
+  border-right-color: var(--border-subtle);
+  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--color-border-subtle) 78%, transparent);
+}
+
+.ds-admin-sidebar-logo,
+.ds-sidebar-footer-meta,
+.ds-shell-chip,
+.ds-dashboard-hero-stat,
+.ds-dashboard-quick-action,
+.ds-dashboard-insight,
+.ds-dashboard-activity-item,
+.ds-dashboard-activity-detail {
+  background: var(--gradient-surface-muted);
+  border-color: var(--border-subtle);
+}
+
+.ds-admin-topbar {
+  background: var(--gradient-topbar);
+  border-color: var(--border-subtle);
+  box-shadow: var(--shadow-sm);
+}
+
+.ds-topbar-search,
+.user-menu-trigger,
+.ds-topbar-toggle.ds-btn--icon {
+  background: var(--gradient-surface-muted);
+  border-color: var(--border-subtle);
+}
+
+.ds-topbar-search:hover,
+.user-menu-trigger:hover,
+.user-menu-trigger:focus-visible {
+  border-color: var(--border-strong) !important;
+}
+
+.ds-surface-card,
+.ds-section-card,
+.ds-card,
+.ds-form-section,
+.ds-table-shell,
+.ds-widget-card,
+.ds-stat-card,
+.ds-summary-card,
+.ds-chart-card,
+.ds-activity-card,
+.ds-quick-action-card,
+.ant-card,
+.ant-modal .ant-modal-content,
+.ant-drawer .ant-drawer-content {
+  background: var(--gradient-card);
+  border-color: var(--border-subtle);
+}
+
+.ds-shell-chip {
+  background: var(--gradient-surface-muted);
+}
+
+.ds-shell-chip--ghost {
+  background: var(--color-card-muted);
+}
+
+.ds-shell-chip--success {
+  background: var(--color-success-soft);
+  border-color: color-mix(in srgb, var(--brand-success) 24%, transparent);
+  color: var(--brand-success);
+}
+
+.ds-shell-chip--warning {
+  background: var(--color-warning-soft);
+  border-color: color-mix(in srgb, var(--brand-warning) 24%, transparent);
+  color: var(--brand-warning);
+}
+
+.ds-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--gradient-surface-muted);
+  color: var(--text-secondary);
+}
+
+.ds-theme-toggle:hover {
+  border-color: var(--border-strong);
+}
+
+.ds-theme-toggle-track {
+  position: relative;
+  width: 72px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-card-muted) 92%, transparent);
+  border: 1px solid var(--border-subtle);
+}
+
+.ds-theme-toggle-icon {
+  position: relative;
+  z-index: 1;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.ds-theme-toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--color-card);
+  box-shadow: var(--shadow-xs);
+  transition:
+    transform var(--transition-base),
+    background-color var(--transition-base);
+}
+
+:root[data-theme='dark'] .ds-theme-toggle-thumb {
+  transform: translateX(38px);
+}
+
+.ds-theme-toggle-label {
+  font-size: var(--font-sm);
+  font-weight: var(--font-semibold);
+}
+
+.command-palette-modal .ant-modal-content {
+  border: 1px solid var(--border-subtle);
+  background: var(--gradient-card);
+  box-shadow: var(--shadow-lg);
+}
+
+.command-palette-input-wrap {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.command-palette-group-title,
+.command-palette-footer,
+.command-palette-item-description,
+.command-palette-empty {
+  color: var(--text-muted);
+}
+
+.command-palette-item {
+  border-color: transparent;
+}
+
+.command-palette-item:hover {
+  background: var(--color-card-muted);
+  border-color: var(--border-subtle);
+}
+
+.command-palette-item.is-active {
+  background: var(--color-accent-soft);
+  border-color: color-mix(in srgb, var(--brand-primary) 24%, transparent);
+}
+
+.command-palette-item-icon {
+  color: var(--text-secondary);
+}
+
+.command-palette-item-label {
+  color: var(--text-primary);
+}
+
+.command-palette-footer {
+  border-top-color: var(--border-subtle);
+  background: transparent;
+}
+
+.ds-dashboard-layout {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.ds-dashboard-layout > * {
+  min-width: 0;
+}
+
+.ds-dashboard-span-2 {
+  grid-column: span 2;
+}
+
+.ds-dashboard-span-4 {
+  grid-column: span 4;
+}
+
+.ds-dashboard-span-5 {
+  grid-column: span 5;
+}
+
+.ds-dashboard-span-7 {
+  grid-column: span 7;
+}
+
+.ds-dashboard-span-8 {
+  grid-column: span 8;
+}
+
+.ds-dashboard-span-12 {
+  grid-column: span 12;
+}
+
+.ds-dashboard-hero,
+.ds-dashboard-quick-actions,
+.ds-dashboard-insight-panel,
+.ds-dashboard-activity-card,
+.ds-chart-wrapper {
+  min-height: 100%;
+}
+
+.ds-dashboard-hero {
+  background: var(--gradient-card);
+}
+
+.ds-dashboard-hero.tone-healthy {
+  background: var(--gradient-card-success);
+}
+
+.ds-dashboard-hero.tone-degraded {
+  background: var(--gradient-card-warning);
+}
+
+.ds-dashboard-hero.tone-critical {
+  background: var(--gradient-card-danger);
+}
+
+.ds-dashboard-hero::before {
+  background:
+    radial-gradient(circle, color-mix(in srgb, var(--brand-primary) 18%, transparent) 0%, transparent 72%);
+}
+
+.ds-dashboard-hero-stat {
+  border: 1px solid var(--border-subtle);
+}
+
+.ds-metric-card {
+  min-height: 186px;
+  border-color: var(--border-subtle);
+  background: var(--gradient-card);
+}
+
+.ds-metric-card.is-clickable:hover {
+  border-color: color-mix(in srgb, var(--brand-primary) 24%, transparent);
+  box-shadow: var(--shadow-md);
+}
+
+.ds-metric-card.tone-success {
+  background: var(--gradient-card-success);
+}
+
+.ds-metric-card.tone-warning {
+  background: var(--gradient-card-warning);
+}
+
+.ds-metric-card.tone-danger {
+  background: var(--gradient-card-danger);
+}
+
+.ds-metric-card-footer {
+  align-items: flex-end;
+}
+
+.ds-metric-card-change {
+  background: var(--color-accent-soft);
+  color: var(--brand-primary-dark);
+}
+
+.ds-metric-card-change.trend-up {
+  background: var(--color-success-soft);
+  color: var(--brand-success);
+}
+
+.ds-metric-card-change.trend-down {
+  background: var(--color-danger-soft);
+  color: var(--brand-danger);
+}
+
+.ds-metric-card-sparkline {
+  width: 76px;
+  height: 28px;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.ds-metric-card-sparkline svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.ds-metric-card-sparkline path {
+  fill: none;
+  stroke: var(--brand-primary);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 7;
+  vector-effect: non-scaling-stroke;
+}
+
+.ds-metric-card.tone-success .ds-metric-card-sparkline path {
+  stroke: var(--brand-success);
+}
+
+.ds-metric-card.tone-warning .ds-metric-card-sparkline path {
+  stroke: var(--brand-warning);
+}
+
+.ds-metric-card.tone-danger .ds-metric-card-sparkline path {
+  stroke: var(--brand-danger);
+}
+
+.ds-chart-status-copy {
+  color: var(--text-muted);
+}
+
+.ds-dashboard-segmented {
+  background: var(--color-card-muted);
+  border-color: var(--border-subtle);
+}
+
+.ds-dashboard-segmented button.is-active {
+  background: var(--color-card);
+}
+
+.ds-dashboard-insight {
+  gap: var(--space-3);
+}
+
+.ds-dashboard-insight.tone-good {
+  border-color: color-mix(in srgb, var(--brand-success) 28%, transparent);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-success-soft) 88%, var(--color-card) 12%) 0%,
+      var(--color-card) 100%
+    );
+}
+
+.ds-dashboard-insight.tone-warning {
+  border-color: color-mix(in srgb, var(--brand-warning) 28%, transparent);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-warning-soft) 88%, var(--color-card) 12%) 0%,
+      var(--color-card) 100%
+    );
+}
+
+.ds-dashboard-insight.tone-critical {
+  border-color: color-mix(in srgb, var(--brand-danger) 28%, transparent);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-danger-soft) 88%, var(--color-card) 12%) 0%,
+      var(--color-card) 100%
+    );
+}
+
+.ds-dashboard-activity-item:hover,
+.ds-dashboard-activity-item.is-active {
+  border-color: color-mix(in srgb, var(--brand-primary) 24%, transparent);
+  background: var(--gradient-card);
+}
+
+.ds-dashboard-activity-item.is-highlight {
+  background: color-mix(in srgb, var(--color-danger-soft) 52%, var(--gradient-card));
+}
+
+.ds-dashboard-activity-dot {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-primary) 14%, transparent);
+}
+
+.ds-dashboard-activity-item.is-highlight .ds-dashboard-activity-dot {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-danger) 16%, transparent);
+}
+
+.ds-dashboard-activity-type.type-incident {
+  background: var(--color-danger-soft);
+}
+
+.ds-dashboard-activity-type.type-service {
+  background: var(--color-warning-soft);
+  color: var(--brand-warning);
+}
+
+.ds-dashboard-activity-type.type-warning {
+  background: var(--color-info-soft);
+}
+
+.ds-dashboard-loading-panel,
+.ds-dashboard-loading-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--gradient-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.ds-dashboard-loading-panel-lg {
+  min-height: 272px;
+}
+
+.ds-dashboard-loading-chart {
+  min-height: 360px;
+}
+
+.ds-dashboard-loading-line {
+  min-height: 14px;
+}
+
+.ds-dashboard-loading-line-sm {
+  width: 26%;
+}
+
+.ds-dashboard-loading-line-md {
+  width: 58%;
+}
+
+.ds-dashboard-loading-line-lg {
+  width: 46%;
+  min-height: 34px;
+}
+
+.ds-dashboard-loading-line-xl {
+  width: 72%;
+  min-height: 52px;
+}
+
+.ds-dashboard-loading-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.ds-dashboard-loading-tile {
+  min-height: 98px;
+}
+
+.ds-dashboard-loading-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.ds-dashboard-loading-row {
+  min-height: 58px;
+}
+
+.ds-dashboard-loading-sparkline {
+  min-height: 32px;
+  margin-top: auto;
+}
+
+.login-page {
+  background: var(--gradient-page);
+}
+
+.login-card,
+.json-panel {
+  background: var(--gradient-card);
+  border-color: var(--border-subtle);
+}
+
+@media (max-width: 1280px) {
+  .ds-dashboard-span-2 {
+    grid-column: span 4;
+  }
+
+  .ds-dashboard-span-4,
+  .ds-dashboard-span-5,
+  .ds-dashboard-span-7,
+  .ds-dashboard-span-8 {
+    grid-column: span 6;
+  }
+
+  .ds-dashboard-loading-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 992px) {
+  .ds-theme-toggle-label {
+    display: none;
+  }
+
+  .ds-dashboard-layout {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .ds-dashboard-span-2,
+  .ds-dashboard-span-4,
+  .ds-dashboard-span-5,
+  .ds-dashboard-span-7,
+  .ds-dashboard-span-8,
+  .ds-dashboard-span-12 {
+    grid-column: span 6;
+  }
+}
+
+@media (max-width: 640px) {
+  .ds-dashboard-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ds-dashboard-span-2,
+  .ds-dashboard-span-4,
+  .ds-dashboard-span-5,
+  .ds-dashboard-span-7,
+  .ds-dashboard-span-8,
+  .ds-dashboard-span-12 {
+    grid-column: span 1;
+  }
+
+  .ds-dashboard-loading-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

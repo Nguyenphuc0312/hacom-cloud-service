@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button, Skeleton, Tooltip } from 'antd';
 import { useNavigate } from 'react-router-dom';
 
@@ -39,6 +39,14 @@ export const DashboardActivityTimeline = ({
     [filter, items],
   );
 
+  useEffect(() => {
+    setActiveId((currentId) =>
+      filteredItems.some((item) => item.id === currentId)
+        ? currentId
+        : filteredItems[0]?.id ?? null,
+    );
+  }, [filteredItems]);
+
   const activeItem =
     filteredItems.find((item) => item.id === activeId) ?? filteredItems[0] ?? null;
 
@@ -76,7 +84,7 @@ export const DashboardActivityTimeline = ({
               <Tooltip
                 key={item.id}
                 placement="left"
-                title={`${item.description} • ${formatDateTime(item.timestamp)}`}
+                title={`${item.description} - ${formatDateTime(item.timestamp)}`}
               >
                 <button
                   type="button"

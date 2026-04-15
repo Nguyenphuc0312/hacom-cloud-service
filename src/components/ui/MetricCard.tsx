@@ -16,7 +16,35 @@ interface MetricCardProps {
   tone?: MetricTone;
   loading?: boolean;
   onClick?: () => void;
+  sparkline?: Array<number | null>;
 }
+
+const buildSparklinePath = (values: Array<number | null>) => {
+  const numericValues = values.filter((value): value is number => value !== null);
+
+  if (numericValues.length < 2) {
+    return null;
+  }
+
+  const minValue = Math.min(...numericValues);
+  const maxValue = Math.max(...numericValues);
+  const range = maxValue - minValue || 1;
+
+  const points = values
+    .map((value, index) => {
+      if (value === null) {
+        return null;
+      }
+
+      const x = (index / Math.max(values.length - 1, 1)) * 100;
+      const y = 100 - ((value - minValue) / range) * 100;
+
+      return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
+    })
+    .filter((entry): entry is string => entry !== null);
+
+  return points.length >= 2 ? points.join(' ') : null;
+};
 
 const trendIconByDirection: Record<MetricTrendDirection, ReactNode> = {
   up: <ArrowUpOutlined />,
@@ -34,7 +62,9 @@ export const MetricCard = ({
   tone = 'default',
   loading = false,
   onClick,
+  sparkline,
 }: MetricCardProps) => {
+  const sparklinePath = sparkline ? buildSparklinePath(sparkline) : null;
   const content = loading ? (
     <Skeleton active paragraph={{ rows: 2 }} title={{ width: '42%' }} />
   ) : (
@@ -57,6 +87,13 @@ export const MetricCard = ({
           {changeLabel}
         </span>
         {trendCaption ? <span className="ds-metric-card-caption">{trendCaption}</span> : null}
+        {sparklinePath ? (
+          <span className="ds-metric-card-sparkline" aria-hidden="true">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+              <path d={sparklinePath} />
+            </svg>
+          </span>
+        ) : null}
         {onClick ? <ArrowRightOutlined className="ds-metric-card-arrow" /> : null}
       </div>
     </>

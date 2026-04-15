@@ -1,6 +1,8 @@
 import dayjs from 'dayjs';
 import ReactECharts from 'echarts-for-react';
 
+import { useTheme } from '@/theme/theme-context';
+
 export interface AnalyticsChartSeries {
   name: string;
   data: Array<number | null>;
@@ -34,6 +36,7 @@ export const AnalyticsChart = ({
   yAxisFormatter,
   tooltipValueFormatter = (value) => (value === null ? '-' : `${value}`),
 }: AnalyticsChartProps) => {
+  const { tokens } = useTheme();
   const option = {
     animationDuration: 280,
     color: series.map((entry) => entry.color).filter(Boolean),
@@ -51,16 +54,16 @@ export const AnalyticsChart = ({
           icon: 'roundRect',
           itemHeight: 8,
           textStyle: {
-            color: 'var(--text-muted)',
+            color: tokens.semantic.textTertiary,
           },
         }
       : undefined,
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(15, 23, 42, 0.92)',
+      backgroundColor: tokens.chart.tooltipBackground,
       borderWidth: 0,
       textStyle: {
-        color: '#f8fafc',
+        color: tokens.chart.tooltipText,
       },
       valueFormatter: (value: number | string | null) =>
         typeof value === 'number' || value === null ? tooltipValueFormatter(value) : `${value}`,
@@ -70,9 +73,9 @@ export const AnalyticsChart = ({
       data: categories,
       boundaryGap: series.some((entry) => entry.type === 'bar'),
       axisTick: { show: false },
-      axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.24)' } },
+      axisLine: { lineStyle: { color: tokens.chart.grid } },
       axisLabel: {
-        color: 'var(--text-muted)',
+        color: tokens.semantic.textTertiary,
         formatter: (value: string) => xAxisFormatter(value),
       },
     },
@@ -81,12 +84,12 @@ export const AnalyticsChart = ({
       axisLine: { show: false },
       axisTick: { show: false },
       axisLabel: {
-        color: 'var(--text-muted)',
+        color: tokens.semantic.textTertiary,
         formatter: (value: number) => (yAxisFormatter ? yAxisFormatter(value) : `${value}`),
       },
       splitLine: {
         lineStyle: {
-          color: 'rgba(148, 163, 184, 0.14)',
+          color: tokens.chart.grid,
         },
       },
     },

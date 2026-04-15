@@ -138,7 +138,7 @@ export const CommandPalette = ({ open, onClose, items }: CommandPaletteProps) =>
       className="command-palette-modal"
       styles={{
         mask: {
-          backgroundColor: 'rgba(15, 23, 42, 0.42)',
+          backgroundColor: 'var(--color-overlay)',
           backdropFilter: 'blur(2px)',
         },
       }}

@@ -5,6 +5,7 @@ import type { MenuProps } from 'antd';
 
 import type { CurrentAdmin } from '@/api/types';
 import { UserMenu } from '@/components/UserMenu';
+import { ThemeToggleButton } from '@/components/ui/ThemeToggleButton';
 
 export interface QuickActionItem {
   key: string;
@@ -58,6 +59,7 @@ export const TopbarActions: React.FC<TopbarActionsProps> = ({
           {liveUpdatesLabel}
         </span>
       </div>
+      <ThemeToggleButton />
       <button
         type="button"
         className="ds-btn ds-btn--icon"

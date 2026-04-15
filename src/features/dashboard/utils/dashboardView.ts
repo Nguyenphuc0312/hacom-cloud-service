@@ -99,6 +99,20 @@ export const summarizeTrend = (
 export const pickPrimarySeries = (series: MonitoringSeries[], limit = 3): MonitoringSeries[] =>
   series.filter((entry) => entry.points.some((point) => point.value !== null)).slice(0, limit);
 
+export const buildSparkline = (
+  series: MonitoringSeries[],
+  keywords: string[],
+  limit = 10,
+): Array<number | null> => {
+  const matchedSeries = matchSeries(series, keywords);
+
+  if (!matchedSeries) {
+    return [];
+  }
+
+  return matchedSeries.points.slice(-limit).map((point) => point.value);
+};
+
 export const buildInsights = ({
   overview,
   serviceHealth,
@@ -111,6 +125,25 @@ export const buildInsights = ({
   const insights: DashboardInsight[] = [];
 
   if (overview) {
+    insights.push({
+      id: 'realtime',
+      title:
+        overview.freshness === 'live'
+          ? 'Realtime telemetry is current'
+          : overview.freshness === 'partial'
+            ? 'Realtime feeds are partially delayed'
+            : 'Realtime telemetry is stale',
+      description: `Snapshot generated at ${formatDateTime(overview.generatedAt)} with ${overview.warnings.length} active warning signals.`,
+      tone:
+        overview.freshness === 'live'
+          ? 'good'
+          : overview.freshness === 'partial'
+            ? 'warning'
+            : 'critical',
+      ctaLabel: 'Open monitoring',
+      ctaTo: '/monitoring',
+    });
+
     const riskState = overview.capacityBaseline.currentRiskState;
     insights.push({
       id: 'capacity',
@@ -171,7 +204,7 @@ export const buildInsights = ({
     ctaTo: incidents.length > 0 ? '/services/health' : '/audit',
   });
 
-  return insights.slice(0, 3);
+  return insights.slice(0, 4);
 };
 
 const toServiceActivity = (service: ServiceHealthItem): DashboardActivityItem | null => {

@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
 import { App } from 'antd';
+import React, { useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useCurrentUser } from '@/app/useCurrentUser';
@@ -115,7 +116,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
             aria-controls="app-sidebar"
             onClick={onToggleSidebar}
           >
-            <span className="ds-icon">{collapsed ? '☰' : '≡'}</span>
+            {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
           </button>
           <div className="ds-topbar-title-block">
             <span className="ds-topbar-eyebrow">{breadcrumbTrail || currentPage.sectionLabel}</span>
