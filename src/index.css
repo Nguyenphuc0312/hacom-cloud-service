@@ -618,6 +618,33 @@ a:focus-visible {
       background-color var(--motion-duration-badge) var(--motion-ease-enter);
   }
 
+  .sidebar-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--color-border-strong) / 0.2) transparent;
+  }
+
+  .sidebar-scrollbar:hover {
+    scrollbar-color: hsl(var(--color-border-strong) / 0.55) transparent;
+  }
+
+  .sidebar-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  .sidebar-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .sidebar-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--color-border-strong) / 0.24);
+    border-radius: 999px;
+  }
+
+  .sidebar-scrollbar:hover::-webkit-scrollbar-thumb {
+    background: hsl(var(--color-border-strong) / 0.56);
+  }
+
   .app-shell-section {
     border: 1px solid hsl(var(--surface-border) / 0.72);
     border-radius: calc(var(--radius-2xl) - 2px);

@@ -1,4 +1,4 @@
-﻿import React, {
+import React, {
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -21,7 +21,10 @@ import {
   getUserDisplayName,
 } from "../../../utils/messageHelpers";
 import { ConversationListSkeleton, ErrorState, StateBlock } from "../../ui";
-import { ChatBubbleLeftRightIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import {
+  ChatBubbleLeftRightIcon,
+  MagnifyingGlassIcon,
+} from "@heroicons/react/24/outline";
 import { RoomItem } from "./RoomItem";
 
 interface RoomListProps {
@@ -40,25 +43,11 @@ interface RoomListProps {
   onSelect: (conversationId: string) => void;
 }
 
-type SectionId = "groups" | "direct";
-
-interface RoomSection {
-  id: SectionId;
-  rooms: Conversation[];
-}
-
-type FlatListItem =
-  | {
-      kind: "section";
-      key: string;
-      title: string;
-      count: number;
-    }
-  | {
-      kind: "room";
-      key: string;
-      room: Conversation;
-    };
+type FlatListItem = {
+  kind: "room";
+  key: string;
+  room: Conversation;
+};
 
 interface RowData {
   items: FlatListItem[];
@@ -69,8 +58,7 @@ interface RowData {
   onSelect: (conversationId: string) => void;
 }
 
-const SECTION_HEIGHT = 28;
-const EXPANDED_ROOM_HEIGHT = 76;
+const EXPANDED_ROOM_HEIGHT = 72;
 const COLLAPSED_ROOM_HEIGHT = 60;
 
 const measureViewportHeight = (node: HTMLDivElement): number => {
@@ -98,9 +86,7 @@ const includesQuery = (
     return true;
   }
 
-  if (
-    (conversation.displayName || "").toLowerCase().includes(normalizedQuery)
-  ) {
+  if ((conversation.displayName || "").toLowerCase().includes(normalizedQuery)) {
     return true;
   }
 
@@ -144,58 +130,23 @@ const isRoomActive = (
   currentConversationId: string | null,
 ): boolean => currentConversationId === roomId;
 
-type RoomBucket = SectionId;
-
-const resolveRoomBucket = (room: Conversation): RoomBucket => {
-  if (isDirectConversation(room)) {
-    return "direct";
-  }
-  return "groups";
-};
-
-const toSections = (
+const resolveVisibleRooms = (
   source: Conversation[],
   activeFilter: ConversationFilter,
-): RoomSection[] => {
-  const buckets: Record<RoomBucket, Conversation[]> = {
-    groups: [],
-    direct: [],
-  };
-
-  source.forEach((room) => {
-    const bucket = resolveRoomBucket(room);
-    buckets[bucket].push(room);
-  });
-
-  const unreadBuckets: Record<RoomBucket, Conversation[]> = {
-    groups: buckets.groups.filter((room) => (room.unreadCount || 0) > 0),
-    direct: buckets.direct.filter((room) => (room.unreadCount || 0) > 0),
-  };
-
-  const buildSections = (
-    entries: ReadonlyArray<[SectionId, Conversation[]]>,
-  ): RoomSection[] =>
-    entries
-      .filter(([, rooms]) => rooms.length > 0)
-      .map(([id, rooms]) => ({ id, rooms }));
+): Conversation[] => {
+  const directRooms = source.filter((room) => isDirectConversation(room));
+  const groupRooms = source.filter((room) => !isDirectConversation(room));
 
   switch (activeFilter) {
     case "unread":
-      return buildSections([
-        ["direct", unreadBuckets.direct],
-        ["groups", unreadBuckets.groups],
-      ]);
+      return source.filter((room) => (room.unreadCount || 0) > 0);
     case "direct":
-      return buildSections([["direct", buckets.direct]]);
+      return directRooms;
     case "channels":
-      return buildSections([["groups", buckets.groups]]);
     case "groups":
-      return buildSections([["groups", buckets.groups]]);
+      return groupRooms;
     default:
-      return buildSections([
-        ["direct", buckets.direct],
-        ["groups", buckets.groups],
-      ]);
+      return [...directRooms, ...groupRooms];
   }
 };
 
@@ -203,28 +154,6 @@ const Row = ({ index, style, data }: ListChildComponentProps<RowData>) => {
   const item = data.items[index];
   if (!item) {
     return <div style={style} />;
-  }
-
-  if (item.kind === "section") {
-    return (
-      <div style={style} className="px-4">
-        <div
-          className={clsx(
-            "flex h-full items-center text-[11px] font-semibold tracking-[0.02em] text-text-muted",
-            data.collapsed && "justify-center",
-          )}
-        >
-          {data.collapsed ? (
-            item.title.charAt(0)
-          ) : (
-            <>
-              <span>{item.title}</span>
-              <span className="ml-2 text-text-muted/70">{item.count}</span>
-            </>
-          )}
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -271,16 +200,6 @@ export const RoomList: React.FC<RoomListProps> = ({
     [onSelect],
   );
 
-  const sectionTitles = useMemo<Record<SectionId, string>>(
-    () => ({
-      unread: t("sidebar:room.section.unread"),
-      channels: t("sidebar:room.section.channels"),
-      groups: t("sidebar:room.section.groups"),
-      direct: t("sidebar:room.section.direct"),
-    }),
-    [t],
-  );
-
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const hasAnyConversations =
     Array.isArray(conversations) && conversations.length > 0;
@@ -302,60 +221,35 @@ export const RoomList: React.FC<RoomListProps> = ({
     ],
   );
 
-  const queriedRooms = useMemo(() => {
-    return sortedRooms.filter((conversation) =>
-      includesQuery(conversation, normalizedQuery, currentUser.id),
-    );
-  }, [sortedRooms, normalizedQuery, currentUser.id]);
-
-  const sections = useMemo(
-    () => toSections(queriedRooms, activeFilter),
-    [queriedRooms, activeFilter],
+  const queriedRooms = useMemo(
+    () =>
+      sortedRooms.filter((conversation) =>
+        includesQuery(conversation, normalizedQuery, currentUser.id),
+      ),
+    [currentUser.id, normalizedQuery, sortedRooms],
   );
 
-  const flatItems = useMemo<FlatListItem[]>(() => {
-    const result: FlatListItem[] = [];
+  const flatItems = useMemo<FlatListItem[]>(
+    () =>
+      resolveVisibleRooms(queriedRooms, activeFilter).map((room) => ({
+        kind: "room",
+        key: `room-${room.id}`,
+        room,
+      })),
+    [activeFilter, queriedRooms],
+  );
 
-    sections.forEach((section) => {
-      result.push({
-        kind: "section",
-        key: `section-${section.id}`,
-        title: sectionTitles[section.id],
-        count: section.rooms.length,
-      });
-
-      section.rooms.forEach((room) => {
-        result.push({
-          kind: "room",
-          key: `room-${room.id}`,
-          room,
-        });
-      });
-    });
-
-    return result;
-  }, [sections, sectionTitles]);
-
-  const roomIndexes = useMemo(() => {
-    const indexes: number[] = [];
-    flatItems.forEach((item, index) => {
-      if (item.kind === "room") {
-        indexes.push(index);
-      }
-    });
-    return indexes;
-  }, [flatItems]);
+  const roomIndexes = useMemo(
+    () => flatItems.map((_, index) => index),
+    [flatItems],
+  );
 
   const rowHeights = useMemo(
     () =>
-      flatItems.map((item) =>
-        item.kind === "section"
-          ? SECTION_HEIGHT
-          : collapsed
-            ? COLLAPSED_ROOM_HEIGHT
-            : EXPANDED_ROOM_HEIGHT,
+      flatItems.map(() =>
+        collapsed ? COLLAPSED_ROOM_HEIGHT : EXPANDED_ROOM_HEIGHT,
       ),
-    [flatItems, collapsed],
+    [collapsed, flatItems],
   );
 
   const getItemSize = useCallback(
@@ -367,7 +261,7 @@ export const RoomList: React.FC<RoomListProps> = ({
     if (!selectedId) return -1;
     return roomIndexes.findIndex((listIndex) => {
       const item = flatItems[listIndex];
-      return item?.kind === "room" && isRoomActive(item.room.id, selectedId);
+      return item && isRoomActive(item.room.id, selectedId);
     });
   }, [flatItems, roomIndexes, selectedId]);
 
@@ -383,18 +277,17 @@ export const RoomList: React.FC<RoomListProps> = ({
       ? selectedRoomPosition
       : clampedKeyboardCursor;
   }, [
-    roomIndexes.length,
-    isKeyboardMode,
     clampedKeyboardCursor,
+    isKeyboardMode,
+    roomIndexes.length,
     selectedRoomPosition,
   ]);
 
   const rowData = useMemo<RowData>(() => {
     const keyboardListIndex = roomIndexes[currentCursor];
     const keyboardActiveRoomId =
-      typeof keyboardListIndex === "number" &&
-      flatItems[keyboardListIndex]?.kind === "room"
-        ? flatItems[keyboardListIndex].room.id
+      typeof keyboardListIndex === "number"
+        ? flatItems[keyboardListIndex]?.room.id ?? null
         : null;
 
     return {
@@ -406,14 +299,14 @@ export const RoomList: React.FC<RoomListProps> = ({
       onSelect: handleSelect,
     };
   }, [
+    collapsed,
+    currentCursor,
     currentUser,
     flatItems,
-    selectedId,
-    collapsed,
+    handleSelect,
     isKeyboardMode,
     roomIndexes,
-    currentCursor,
-    handleSelect,
+    selectedId,
   ]);
 
   useEffect(() => {
@@ -483,7 +376,7 @@ export const RoomList: React.FC<RoomListProps> = ({
   const selectByCursor = useCallback(() => {
     const listIndex = roomIndexes[currentCursor];
     const item = flatItems[listIndex];
-    if (item && item.kind === "room") {
+    if (item) {
       handleSelect(item.room.id);
     }
   }, [currentCursor, flatItems, handleSelect, roomIndexes]);
@@ -583,6 +476,7 @@ export const RoomList: React.FC<RoomListProps> = ({
         {viewportHeight > 0 && (
           <VariableSizeList<RowData>
             ref={listRef}
+            className="sidebar-scrollbar"
             height={viewportHeight}
             width="100%"
             itemCount={flatItems.length}
@@ -603,7 +497,7 @@ export const RoomList: React.FC<RoomListProps> = ({
             onClick={() => onLoadMore?.()}
             disabled={isLoadingMore}
             className={clsx(
-              "w-full rounded-2xl border border-border/70 bg-surface px-3 py-2.5 text-xs font-medium shadow-xs transition-colors",
+              "w-full rounded-2xl border border-border/70 bg-surface px-3 py-2.5 text-xs font-medium shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
               isLoadingMore
                 ? "cursor-not-allowed text-text-muted opacity-70"
                 : "text-text-secondary hover:bg-surface-hover",

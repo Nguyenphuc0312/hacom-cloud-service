@@ -1,11 +1,7 @@
-﻿import React, { useMemo } from "react";
+import React, { useMemo } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import {
-  AtSymbolIcon,
-  BookmarkIcon,
-  SpeakerXMarkIcon,
-} from "@heroicons/react/24/solid";
+import { BookmarkIcon, SpeakerXMarkIcon } from "@heroicons/react/24/solid";
 import { Avatar } from "../../common/Avatar";
 import type { Conversation, UserSummary } from "../../../types";
 import { isDirectConversation } from "../../../lib/conversationAdapter";
@@ -90,6 +86,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
   const unreadMention = hasConversationMention(conversation, currentUser);
   const isDirect = isDirectConversation(conversation);
   const unreadLabel = unreadCount > 99 ? "99+" : unreadCount;
+  const isOnline = directPartner?.status === "online";
 
   const avatarSrc = getConversationAvatar(conversation, currentUser.id);
   const avatarStatus = isDirect ? directPartner?.status : undefined;
@@ -102,11 +99,10 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         role="option"
         aria-selected={isActive}
         className={clsx(
-          "group relative mx-2 my-1 flex h-[3.9rem] w-[calc(100%-var(--space-4))] items-center justify-center rounded-[1.35rem]",
-          "transition-micro",
-          "hover:bg-surface-hover",
+          "group relative mx-2 my-0.5 flex h-[3.75rem] w-[calc(100%-var(--space-4))] items-center justify-center rounded-2xl transition-micro hover:bg-surface-hover",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-          isActive && "bg-primary/12 text-primary shadow-xs ring-1 ring-primary/18",
+          isActive &&
+            "bg-primary/10 text-primary shadow-xs ring-1 ring-primary/18",
           !isActive &&
             isKeyboardActive &&
             "bg-surface-overlay ring-1 ring-border/70",
@@ -114,6 +110,13 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         aria-label={displayName}
         title={displayName}
       >
+        <span
+          className={clsx(
+            "absolute left-1 top-1/2 h-7 w-1 -translate-y-1/2 rounded-full bg-primary transition-opacity",
+            isActive ? "opacity-100" : "opacity-0",
+          )}
+          aria-hidden="true"
+        />
         <Avatar
           src={avatarSrc}
           alt={displayName}
@@ -142,14 +145,13 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
 
   return (
     <button
-        type="button"
-        onClick={() => onSelect(conversation.id)}
-        role="option"
-        aria-selected={isActive}
-        className={clsx(
-        "group relative mx-2 my-0.5 flex h-[4.7rem] w-[calc(100%-var(--space-4))] items-center rounded-[1.35rem] px-3",
-        "transition-micro",
-        "hover:bg-surface-hover/92",
+      type="button"
+      onClick={() => onSelect(conversation.id)}
+      role="option"
+      aria-selected={isActive}
+      className={clsx(
+        "group relative mx-2 my-0.5 flex h-[4.55rem] w-[calc(100%-var(--space-4))] items-center rounded-2xl px-3",
+        "transition-micro hover:bg-surface-hover/92",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
         isActive && "bg-primary/10 shadow-xs ring-1 ring-primary/14",
         !isActive &&
@@ -185,12 +187,6 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
               {displayName}
             </p>
 
-            {unreadMention && (
-              <AtSymbolIcon
-                className="h-3.5 w-3.5 shrink-0 text-danger"
-                aria-label={t("sidebar:room.mentioned")}
-              />
-            )}
             {!unreadMention && conversation.isPinned && (
               <BookmarkIcon
                 className="h-3.5 w-3.5 shrink-0 text-text-muted"
@@ -212,13 +208,27 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
                 ? "font-medium text-danger"
                 : previewState
                   ? "font-medium text-warning"
-                  : unreadCount > 0
-                    ? "font-medium text-text-secondary"
-                    : "text-text-muted",
+                  : unreadMention
+                    ? "font-medium text-danger"
+                    : unreadCount > 0
+                      ? "font-medium text-text-secondary"
+                      : "text-text-muted",
             )}
           >
             {previewText || t("sidebar:room.noMessagesYet")}
           </p>
+          {isActive && isDirect && (
+            <p
+              className={clsx(
+                "mt-0.5 truncate text-[11px] font-medium",
+                isOnline ? "text-success" : "text-text-muted",
+              )}
+            >
+              {isOnline
+                ? t("common:status.online")
+                : t("common:status.offline")}
+            </p>
+          )}
         </div>
 
         <div className="flex h-full min-w-room-meta flex-col items-end justify-between py-1.5">

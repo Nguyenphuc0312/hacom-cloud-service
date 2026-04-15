@@ -10,8 +10,6 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 import {
-  ArrowLeftOnRectangleIcon,
-  Cog6ToothIcon,
   UserGroupIcon,
 } from "@heroicons/react/24/outline";
 import { ConfirmDialog, SegmentedControl, Spinner } from "../ui";
@@ -151,7 +149,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      <SidebarContainer collapsed={isCollapsed} className={clsx("relative", className)}>
+      <SidebarContainer
+        collapsed={isCollapsed}
+        className={clsx("relative", className)}
+      >
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <SidebarHeader
           currentUser={currentUser}
@@ -159,6 +160,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onToggleCollapsed={() => setIsCollapsed((current) => !current)}
           onNewChat={onNewChat}
           onCurrentUserClick={onCurrentUserClick}
+          onOpenSettings={() => navigate(ROUTE_PATHS.SETTINGS)}
+          onRequestLogout={() => setIsLogoutConfirmOpen(true)}
           onToggleNotifications={toggleNotificationPanel}
           notificationUnreadCount={notificationUnreadCount}
         />
@@ -168,133 +171,82 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onClose={() => setNotificationPanelOpen(false)}
           className={clsx(
             isCollapsed
-              ? "left-3 right-3 top-[4.75rem] w-auto"
-              : "right-3 top-[4.75rem]",
+              ? "left-4 right-4 top-[4.75rem] w-auto"
+              : "right-4 top-[4.75rem]",
           )}
         />
 
         {/* ── Search ─────────────────────────────────────────────────────── */}
-        <div className="px-3">
-          <div className="app-shell-section overflow-hidden px-0 py-0">
-            <SidebarSearch
-              value={searchQuery}
-              collapsed={isCollapsed}
-              onChange={setSearchQuery}
-              onSearchUsers={(query) =>
-                navigate(`${ROUTE_PATHS.FRIENDS}?q=${encodeURIComponent(query)}`)
-              }
-            />
+        <div className="px-4">
+          <SidebarSearch
+            value={searchQuery}
+            collapsed={isCollapsed}
+            onChange={setSearchQuery}
+            onSearchUsers={(query) =>
+              navigate(`${ROUTE_PATHS.FRIENDS}?q=${encodeURIComponent(query)}`)
+            }
+          />
 
-            {!isCollapsed && (
-              <div className="border-t border-border/60 px-3 pb-3 pt-0.5">
-                <SegmentedControl
-                  value={activeFilter}
-                  onChange={(next) => setActiveFilter(next as ConversationFilter)}
-                  ariaLabel={t("sidebar:tabs.label")}
-                  size="sm"
-                  options={tabs.map((tab) => ({
-                    id: tab.id,
-                    label: tab.label,
-                  }))}
-                />
+          {!isCollapsed && (
+            <div className="pt-2">
+              <SegmentedControl
+                value={activeFilter}
+                onChange={(next) => setActiveFilter(next as ConversationFilter)}
+                ariaLabel={t("sidebar:tabs.label")}
+                size="sm"
+                options={tabs.map((tab) => ({
+                  id: tab.id,
+                  label: tab.label,
+                }))}
+              />
 
-                {isLoadingConversations && conversations.length > 0 && (
-                  <div className="mt-2 inline-flex items-center gap-2 px-1 text-caption text-text-muted">
-                    <Spinner size="sm" />
-                    <span>{t("common:loading.default")}</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+              {isLoadingConversations && conversations.length > 0 && (
+                <div className="mt-2 inline-flex items-center gap-2 px-1 text-caption text-text-muted">
+                  <Spinner size="sm" />
+                  <span>{t("common:loading.default")}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Room List ───────────────────────────────────────────────────── */}
-        <div className="min-h-0 flex-1 px-3 pb-3 pt-3">
-          <div className="app-shell-section flex h-full min-h-0 flex-col overflow-hidden">
-            <RoomList
-              conversations={conversations}
-              currentUser={currentUser}
-              selectedId={currentConversationId}
-              searchQuery={deferredSearchQuery}
-              activeFilter={activeFilter}
-              collapsed={isCollapsed}
-              showLoadingSkeleton={showConversationSkeleton}
-              error={conversationsError}
-              onRetry={onRetryConversations}
-              hasMore={hasMoreConversations}
-              isLoadingMore={isLoadingMoreConversations}
-              onLoadMore={onLoadMoreConversations}
-              onSelect={handleSelectRoom}
-            />
-          </div>
+        <div className="min-h-0 flex-1 px-2 pb-3 pt-2">
+          <RoomList
+            conversations={conversations}
+            currentUser={currentUser}
+            selectedId={currentConversationId}
+            searchQuery={deferredSearchQuery}
+            activeFilter={activeFilter}
+            collapsed={isCollapsed}
+            showLoadingSkeleton={showConversationSkeleton}
+            error={conversationsError}
+            onRetry={onRetryConversations}
+            hasMore={hasMoreConversations}
+            isLoadingMore={isLoadingMoreConversations}
+            onLoadMore={onLoadMoreConversations}
+            onSelect={handleSelectRoom}
+          />
         </div>
 
         {/* ── Bottom Nav ──────────────────────────────────────────────────── */}
-        <div className="border-t border-border/60 px-3 pb-3 pt-3">
-          <div className="space-y-1">
-          {/* Friends */}
+        <div className="border-t border-border/60 px-4 pb-4 pt-3">
           <button
             type="button"
             onClick={() => navigate(ROUTE_PATHS.FRIENDS)}
             className={clsx(
-              "inline-flex w-full items-center rounded-[1.1rem] px-3 py-2.5 text-body-sm font-medium transition-micro",
+              "inline-flex min-h-11 w-full items-center rounded-2xl px-3 py-2.5 text-body-sm font-medium transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
               isNavActive(ROUTE_PATHS.FRIENDS)
-                ? "bg-primary/12 text-primary"
+                ? "bg-primary/10 text-primary ring-1 ring-primary/15"
                 : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
-              isCollapsed && "justify-center px-0",
+              isCollapsed && "justify-center px-0 py-0",
             )}
             aria-label={t("friends:title")}
-            // ─── UX: tooltip khi collapsed ────────────────────────────────
             title={isCollapsed ? t("friends:title") : undefined}
           >
             <UserGroupIcon className="h-5 w-5 shrink-0" />
             {!isCollapsed && <span className="ml-2">{t("friends:title")}</span>}
           </button>
-
-          {/* Settings */}
-          <button
-            type="button"
-            onClick={() => navigate(ROUTE_PATHS.SETTINGS)}
-            className={clsx(
-              "inline-flex w-full items-center rounded-[1.1rem] px-3 py-2.5 text-body-sm font-medium transition-micro",
-              isNavActive(ROUTE_PATHS.SETTINGS)
-                ? "bg-primary/12 text-primary"
-                : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
-              isCollapsed && "justify-center px-0",
-            )}
-            aria-label={t("settings:pageTitle")}
-            title={isCollapsed ? t("settings:pageTitle") : undefined}
-          >
-            <Cog6ToothIcon className="h-5 w-5 shrink-0" />
-            {!isCollapsed && (
-              <span className="ml-2">{t("settings:pageTitle")}</span>
-            )}
-          </button>
-
-          {/* Logout */}
-          <button
-            type="button"
-            disabled={isLoggingOut}
-            onClick={() => setIsLogoutConfirmOpen(true)}
-            className={clsx(
-              "inline-flex w-full items-center rounded-[1.1rem] px-3 py-2.5 text-body-sm font-medium transition-micro",
-              "text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50",
-              isCollapsed && "justify-center px-0",
-            )}
-            aria-label={t("sidebar:logout.button")}
-            title={isCollapsed ? t("sidebar:logout.button") : undefined}
-          >
-            <ArrowLeftOnRectangleIcon className="h-5 w-5 shrink-0" />
-            {!isCollapsed && (
-              <span className="ml-2">
-                {isLoggingOut
-                  ? t("sidebar:logout.loading")
-                  : t("sidebar:logout.button")}
-              </span>
-            )}
-          </button>
-          </div>
         </div>
       </SidebarContainer>
 

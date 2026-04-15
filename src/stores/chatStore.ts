@@ -44,6 +44,7 @@ interface ChatState {
   lastUnreadSummaryAppliedAt: number | null;
   lastConversationCursor: string | null;
   messages: Record<string, Message[]>;
+  messageAliasIndexByConversation: Record<string, Record<string, string>>;
   messagesHydratedByConversation: Record<string, boolean>;
   selectedConversationId: string | null;
   typingStatuses: TypingStatus[];
@@ -111,8 +112,30 @@ interface ChatState {
   ) => void;
   fetchConversations: () => Promise<void>;
 
+  ingestMessages: (
+    conversationId: string,
+    messages: Message | Message[],
+    options?: {
+      mode?: "replace" | "prepend" | "append" | "upsert";
+      preserveMessagesCreatedAfter?: Date;
+      hydrated?: boolean;
+      hasNewer?: boolean;
+      source?: string;
+    },
+  ) => void;
   setMessages: (conversationId: string, messages: Message[]) => void;
   addMessage: (conversationId: string, message: Message) => void;
+  ackOutgoingMessage: (
+    conversationId: string,
+    clientMessageId: string,
+    serverMessage: Message,
+  ) => void;
+  failOutgoingMessage: (
+    conversationId: string,
+    clientMessageId: string,
+    updates: Partial<Message>,
+  ) => void;
+  removeMessageAlias: (conversationId: string, identity: string) => void;
   updateMessage: (
     conversationId: string,
     messageId: string,
@@ -182,6 +205,7 @@ const initialState = {
   lastUnreadSummaryAppliedAt: null,
   lastConversationCursor: null,
   messages: {},
+  messageAliasIndexByConversation: {},
   messagesHydratedByConversation: {},
   selectedConversationId: null,
   typingStatuses: [],
@@ -759,6 +783,53 @@ const updateConversationReadProgress = (
 const getStableMessageId = (message: Message): string =>
   getMessageIdentityKey(message);
 
+const getMessageAliasCandidates = (
+  message: Pick<Message, "id" | "localId" | "clientMessageId" | "stableId">,
+): string[] =>
+  Array.from(
+    new Set(
+      [
+        message.id,
+        message.localId,
+        message.clientMessageId,
+        message.stableId,
+      ].filter((value): value is string => typeof value === "string" && value.length > 0),
+    ),
+  );
+
+const rebuildConversationMessageAliasIndex = (
+  messages: Message[],
+): Record<string, string> => {
+  const aliasIndex: Record<string, string> = {};
+
+  messages.forEach((message) => {
+    const canonicalId = getStableMessageId(message);
+    getMessageAliasCandidates(message).forEach((alias) => {
+      aliasIndex[alias] = canonicalId;
+    });
+  });
+
+  return aliasIndex;
+};
+
+const resolveCanonicalMessageIdentity = (
+  conversationMessages: Message[],
+  aliasIndex: Record<string, string> | undefined,
+  identity: string,
+): string => {
+  if (!identity) return identity;
+
+  const aliasedIdentity = aliasIndex?.[identity];
+  if (aliasedIdentity) {
+    return aliasedIdentity;
+  }
+
+  const matchedMessage = conversationMessages.find((message) =>
+    matchesMessageIdentityValue(message, identity),
+  );
+  return matchedMessage ? getStableMessageId(matchedMessage) : identity;
+};
+
 const matchesMessageIdentityValue = (
   message: Pick<Message, "id" | "localId" | "clientMessageId" | "stableId">,
   identity: string,
@@ -993,9 +1064,6 @@ const isSamePendingMessageCandidate = (
   return false;
 };
 
-const findMessageIndex = (messages: Message[], target: Message): number =>
-  messages.findIndex((item) => matchesMessage(item, target));
-
 const toMessageIdentityKeys = (message: Message): string[] => {
   const keys = new Set<string>();
   if (typeof message.stableId === "string" && message.stableId.length > 0) {
@@ -1218,31 +1286,6 @@ const dedupeAndSortMessages = (messages: Message[]): Message[] => {
   return sortMessages(deduped);
 };
 
-const upsertMessage = (
-  messages: Message[],
-  incoming: Message,
-): { messages: Message[]; inserted: boolean; mergedMessage: Message } => {
-  const current = Array.isArray(messages) ? messages : [];
-  const index = findMessageIndex(current, incoming);
-
-  if (index >= 0) {
-    const mergedMessage = mergeMessageRecords(current[index], incoming);
-    const next = [...current];
-    next[index] = mergedMessage;
-    return {
-      messages: dedupeAndSortMessages(next),
-      inserted: false,
-      mergedMessage,
-    };
-  }
-
-  return {
-    messages: dedupeAndSortMessages([...current, incoming]),
-    inserted: true,
-    mergedMessage: incoming,
-  };
-};
-
 const mergeMessages = (current: Message[], incoming: Message[]): Message[] =>
   dedupeAndSortMessages([
     ...(Array.isArray(current) ? current : []),
@@ -1389,6 +1432,66 @@ const toMessageSummary = (message: Message): Conversation["lastMessage"] =>
     ...(message.sendState ? { sendState: message.sendState } : {}),
     ...(message.status ? { status: message.status } : {}),
   }) as Conversation["lastMessage"];
+
+const buildConversationMessageState = (
+  state: Pick<
+    ChatState,
+    | "conversations"
+    | "messages"
+    | "messageAliasIndexByConversation"
+    | "messagesHydratedByConversation"
+    | "hasNewerMessagesByConversation"
+  >,
+  conversationId: string,
+  nextMessages: Message[],
+  options?: {
+    hydrated?: boolean;
+    hasNewer?: boolean;
+  },
+) => {
+  const lastMessage = nextMessages[nextMessages.length - 1];
+  const nextAliasIndex = rebuildConversationMessageAliasIndex(nextMessages);
+
+  return {
+    conversations: state.conversations.map((conversation) => {
+      if (conversation.id !== conversationId) return conversation;
+      if (!lastMessage) {
+        return {
+          ...conversation,
+          lastMessage: undefined,
+        };
+      }
+
+      return {
+        ...conversation,
+        lastMessage: toMessageSummary(lastMessage),
+        updatedAt: lastMessage.createdAt,
+      };
+    }),
+    messages: {
+      ...state.messages,
+      [conversationId]: nextMessages,
+    },
+    messageAliasIndexByConversation: {
+      ...state.messageAliasIndexByConversation,
+      [conversationId]: nextAliasIndex,
+    },
+    messagesHydratedByConversation: {
+      ...state.messagesHydratedByConversation,
+      [conversationId]:
+        options?.hydrated ??
+        state.messagesHydratedByConversation[conversationId] ??
+        false,
+    },
+    hasNewerMessagesByConversation:
+      options?.hasNewer === undefined
+        ? state.hasNewerMessagesByConversation
+        : {
+            ...state.hasNewerMessagesByConversation,
+            [conversationId]: options.hasNewer,
+          },
+  };
+};
 
 const normalizeMessagesResponse = (
   rawData: unknown,
@@ -1605,7 +1708,13 @@ export const useChatStore = create<ChatState>()(
             return;
           }
 
-          get().updateMessage(conversationId, currentMessage.id, {
+          get().failOutgoingMessage(
+            conversationId,
+            currentMessage.clientMessageId ||
+              currentMessage.stableId ||
+              currentMessage.localId ||
+              currentMessage.id,
+            {
             sendState: "failed",
             status: MessageStatus.FAILED,
             queuedReason: undefined,
@@ -1614,7 +1723,8 @@ export const useChatStore = create<ChatState>()(
             errorMessage: i18n.t("chat:message.status.timeoutError", {
               defaultValue: "Message timed out. Please retry.",
             }),
-          });
+            },
+          );
         }, MESSAGE_SEND_TIMEOUT_MS),
       );
     };
@@ -1686,7 +1796,7 @@ export const useChatStore = create<ChatState>()(
         }
 
         clearSendRestrictionInternal(conversationId);
-        get().addMessage(conversationId, {
+        get().ackOutgoingMessage(conversationId, message.clientMessageId || "", {
           ...sentMessage,
           stableId:
             message.stableId ||
@@ -1732,7 +1842,10 @@ export const useChatStore = create<ChatState>()(
         const errorCode = String(apiError.code || "").toUpperCase();
 
         if (errorCode === "SLOW_MODE_ACTIVE") {
-          get().updateMessage(conversationId, message.id, {
+          get().failOutgoingMessage(
+            conversationId,
+            message.clientMessageId || message.stableId || message.localId || message.id,
+            {
             sendState: "failed",
             status: MessageStatus.FAILED,
             failureReason: "slow_mode",
@@ -1740,7 +1853,8 @@ export const useChatStore = create<ChatState>()(
             errorMessage: i18n.t("chat:message.status.slowModeError", {
               defaultValue: "Slow mode is active. Please wait and retry.",
             }),
-          });
+            },
+          );
           logMessageDebug("chatStore", "send_request_failed", {
             conversationId,
             queueKey,
@@ -1766,7 +1880,10 @@ export const useChatStore = create<ChatState>()(
               apiError.message || i18n.t("chat:composer.permissionDenied"),
             kind: "permission",
           });
-          get().updateMessage(conversationId, message.id, {
+          get().failOutgoingMessage(
+            conversationId,
+            message.clientMessageId || message.stableId || message.localId || message.id,
+            {
             sendState: "failed",
             status: MessageStatus.FAILED,
             failureReason: "permission",
@@ -1775,7 +1892,8 @@ export const useChatStore = create<ChatState>()(
               defaultValue:
                 "You can no longer send messages in this conversation.",
             }),
-          });
+            },
+          );
           logMessageDebug("chatStore", "send_request_failed", {
             conversationId,
             queueKey,
@@ -1790,14 +1908,18 @@ export const useChatStore = create<ChatState>()(
 
         const descriptor = resolveSendFailureDescriptor(error, apiError);
 
-        get().updateMessage(conversationId, message.id, {
+        get().failOutgoingMessage(
+          conversationId,
+          message.clientMessageId || message.stableId || message.localId || message.id,
+          {
           sendState: "failed",
           status: MessageStatus.FAILED,
           queuedReason: undefined,
           failureReason: descriptor.failureReason,
           errorCode: descriptor.errorCode,
           errorMessage: descriptor.errorMessage,
-        });
+          },
+        );
         logMessageDebug("chatStore", "send_request_failed", {
           conversationId,
           queueKey,
@@ -2246,80 +2368,116 @@ export const useChatStore = create<ChatState>()(
         return conversationsFetchPromise;
       },
 
-      setMessages: (conversationId, messages) => {
-        const normalized = replaceMessages(
-          [],
-          (Array.isArray(messages) ? messages : [])
-            .map((item) => normalizeMessage(item, conversationId))
-            .filter((item): item is Message => item !== null),
-        );
-        set((state) => ({
-          messages: {
-            ...state.messages,
-            [conversationId]: normalized,
-          },
-          messagesHydratedByConversation: {
-            ...state.messagesHydratedByConversation,
-            [conversationId]: true,
-          },
-          hasNewerMessagesByConversation: {
-            ...state.hasNewerMessagesByConversation,
-            [conversationId]: false,
-          },
-        }));
-      },
-
-      addMessage: (conversationId, message) => {
-        const incoming = normalizeMessage(message, conversationId);
-        if (!incoming) return;
+      ingestMessages: (conversationId, messages, options) => {
+        const incomingList = (Array.isArray(messages) ? messages : [messages])
+          .map((item) => normalizeMessage(item, conversationId))
+          .filter((item): item is Message => item !== null);
+        if (incomingList.length === 0 && options?.mode !== "replace") return;
 
         set((state) => {
           const currentMessages = state.messages[conversationId] || [];
-          const { messages, inserted, mergedMessage } = upsertMessage(
-            currentMessages,
-            incoming,
-          );
+          const nextMessages =
+            options?.mode === "replace"
+              ? replaceMessages(currentMessages, incomingList, {
+                  preserveMessagesCreatedAfter:
+                    options?.preserveMessagesCreatedAfter,
+                })
+              : options?.mode === "prepend"
+                ? prependMessages(currentMessages, incomingList)
+                : options?.mode === "append"
+                  ? appendMessages(currentMessages, incomingList)
+                  : mergeMessages(currentMessages, incomingList);
+          const mergedIncoming = incomingList[incomingList.length - 1];
+          const resolvedMergedMessage = mergedIncoming
+            ? nextMessages.find((message) =>
+                getMessageAliasCandidates(mergedIncoming).some((alias) =>
+                  matchesMessageIdentityValue(message, alias),
+                ),
+              ) || mergedIncoming
+            : nextMessages[nextMessages.length - 1];
 
-          logMessageDebug("chatStore", "message_merged", {
-            conversationId,
-            correlationKey: getCorrelationKeyForMessage(mergedMessage),
-            incomingId: incoming.id,
-            incomingLocalId: incoming.localId,
-            incomingClientMessageId: incoming.clientMessageId,
-            inserted,
-            mergedId: mergedMessage.id,
-            mergedLocalId: mergedMessage.localId,
-            mergedClientMessageId: mergedMessage.clientMessageId,
-            sendState: mergedMessage.sendState,
+          if (resolvedMergedMessage) {
+            logMessageDebug("chatStore", "message_ingested", {
+              conversationId,
+              source: options?.source ?? "unknown",
+              mode: options?.mode ?? "upsert",
+              correlationKey:
+                getCorrelationKeyForMessage(resolvedMergedMessage),
+              mergedId: resolvedMergedMessage.id,
+              mergedLocalId: resolvedMergedMessage.localId,
+              mergedClientMessageId: resolvedMergedMessage.clientMessageId,
+              sendState: resolvedMergedMessage.sendState,
+              nextCount: nextMessages.length,
+            });
+          }
+
+          return buildConversationMessageState(state, conversationId, nextMessages, {
+            hydrated: options?.hydrated ?? true,
+            hasNewer: options?.hasNewer,
           });
+        });
+      },
 
-          const updatedConversations = state.conversations.map(
-            (conversation) => {
-              if (conversation.id !== conversationId) return conversation;
+      setMessages: (conversationId, messages) => {
+        get().ingestMessages(conversationId, messages, {
+          mode: "replace",
+          hydrated: true,
+          hasNewer: false,
+          source: "setMessages",
+        });
+      },
 
-              const unreadCount = conversation.unreadCount;
+      addMessage: (conversationId, message) => {
+        get().ingestMessages(conversationId, message, {
+          mode: "upsert",
+          hydrated: true,
+          source: "addMessage",
+        });
+      },
 
-              const lastMessage = messages[messages.length - 1];
-              if (!lastMessage) return { ...conversation, unreadCount };
+      ackOutgoingMessage: (conversationId, clientMessageId, serverMessage) => {
+        const normalized = normalizeMessage(serverMessage, conversationId);
+        if (!normalized) return;
 
-              return {
-                ...conversation,
-                unreadCount,
-                lastMessage: toMessageSummary(lastMessage),
-                updatedAt: lastMessage.createdAt,
-              };
-            },
-          );
+        get().ingestMessages(
+          conversationId,
+          {
+            ...normalized,
+            stableId:
+              clientMessageId ||
+              normalized.stableId ||
+              normalized.clientMessageId ||
+              normalized.localId ||
+              normalized.id,
+            clientMessageId:
+              clientMessageId ||
+              normalized.clientMessageId ||
+              normalized.localId ||
+              normalized.id,
+          },
+          {
+            mode: "upsert",
+            hydrated: true,
+            source: "ackOutgoingMessage",
+          },
+        );
+      },
 
+      failOutgoingMessage: (conversationId, clientMessageId, updates) => {
+        get().updateMessage(conversationId, clientMessageId, updates);
+      },
+
+      removeMessageAlias: (conversationId, identity) => {
+        if (!identity) return;
+        set((state) => {
+          const nextConversationAliasIndex = {
+            ...(state.messageAliasIndexByConversation[conversationId] || {}),
+          };
+          delete nextConversationAliasIndex[identity];
           return {
-            conversations: updatedConversations,
-            messages: {
-              ...state.messages,
-              [conversationId]: messages,
-            },
-            messagesHydratedByConversation: {
-              ...state.messagesHydratedByConversation,
-              [conversationId]: true,
+            messageAliasIndexByConversation: {
+              ...state.messageAliasIndexByConversation,
+              [conversationId]: nextConversationAliasIndex,
             },
           };
         });
@@ -2328,12 +2486,18 @@ export const useChatStore = create<ChatState>()(
       updateMessage: (conversationId, messageId, updates) => {
         set((state) => {
           const currentMessages = state.messages[conversationId] || [];
+          const aliasIndex = state.messageAliasIndexByConversation[conversationId];
+          const resolvedMessageId = resolveCanonicalMessageIdentity(
+            currentMessages,
+            aliasIndex,
+            messageId,
+          );
           const matchedMessage = currentMessages.find((message) =>
-            matchesMessageIdentityValue(message, messageId),
+            matchesMessageIdentityValue(message, resolvedMessageId),
           );
           const updatedMessages = dedupeAndSortMessages(
             currentMessages.map((message) =>
-              matchesMessageIdentityValue(message, messageId)
+              matchesMessageIdentityValue(message, resolvedMessageId)
                 ? ({ ...message, ...updates } as Message)
                 : message,
             ),
@@ -2341,53 +2505,15 @@ export const useChatStore = create<ChatState>()(
           logMessageDebug("chatStore", "message_updated", {
             conversationId,
             messageId,
+            resolvedMessageId,
             matchedId: matchedMessage?.id,
             matchedLocalId: matchedMessage?.localId,
             updates,
           });
-          const lastMessage = updatedMessages[updatedMessages.length - 1];
 
-          const updatedConversations = state.conversations.map(
-            (conversation) => {
-              if (conversation.id !== conversationId) return conversation;
-              if (!lastMessage) return conversation;
-
-              const shouldRefreshPreview =
-                matchesMessageIdentityValue(
-                  {
-                    id: conversation.lastMessage?.id || "",
-                    localId: undefined,
-                    clientMessageId: undefined,
-                    stableId: undefined,
-                  },
-                  messageId,
-                ) ||
-                matchesMessageIdentityValue(
-                  lastMessage,
-                  conversation.lastMessage?.id || "",
-                );
-
-              return shouldRefreshPreview
-                ? {
-                    ...conversation,
-                    lastMessage: toMessageSummary(lastMessage),
-                    updatedAt: lastMessage.createdAt,
-                  }
-                : conversation;
-            },
-          );
-
-          return {
-            conversations: updatedConversations,
-            messages: {
-              ...state.messages,
-              [conversationId]: updatedMessages,
-            },
-            messagesHydratedByConversation: {
-              ...state.messagesHydratedByConversation,
-              [conversationId]: true,
-            },
-          };
+          return buildConversationMessageState(state, conversationId, updatedMessages, {
+            hydrated: true,
+          });
         });
       },
 
@@ -2433,12 +2559,19 @@ export const useChatStore = create<ChatState>()(
       },
 
       removeMessage: (conversationId, messageId) => {
-        const currentMessage = (
-          get().messages[conversationId] || EMPTY_MESSAGES
-        ).find((message) => matchesMessageIdentityValue(message, messageId));
+        const currentMessages = get().messages[conversationId] || EMPTY_MESSAGES;
+        const resolvedMessageId = resolveCanonicalMessageIdentity(
+          currentMessages,
+          get().messageAliasIndexByConversation[conversationId],
+          messageId,
+        );
+        const currentMessage = currentMessages.find((message) =>
+          matchesMessageIdentityValue(message, resolvedMessageId),
+        );
         logMessageDebug("chatStore", "message_removed", {
           conversationId,
           messageId,
+          resolvedMessageId,
           matchedId: currentMessage?.id,
           matchedLocalId: currentMessage?.localId,
         });
@@ -2453,35 +2586,26 @@ export const useChatStore = create<ChatState>()(
         }
         set((state) => {
           const updatedMessages = (state.messages[conversationId] || []).filter(
-            (message) => !matchesMessageIdentityValue(message, messageId),
+            (message) => !matchesMessageIdentityValue(message, resolvedMessageId),
           );
-          const lastMessage = updatedMessages[updatedMessages.length - 1];
-
-          const updatedConversations = state.conversations.map(
-            (conversation) => {
-              if (conversation.id !== conversationId) return conversation;
-
-              return {
-                ...conversation,
-                lastMessage: lastMessage
-                  ? toMessageSummary(lastMessage)
-                  : undefined,
-                updatedAt: lastMessage?.createdAt || conversation.updatedAt,
-              };
-            },
+          const nextState = buildConversationMessageState(
+            state,
+            conversationId,
+            updatedMessages,
+            { hydrated: true },
           );
+          if (currentMessage) {
+            const nextAliasIndex = {
+              ...(nextState.messageAliasIndexByConversation[conversationId] || {}),
+            };
+            getMessageAliasCandidates(currentMessage).forEach((alias) => {
+              delete nextAliasIndex[alias];
+            });
+            nextState.messageAliasIndexByConversation[conversationId] =
+              nextAliasIndex;
+          }
 
-          return {
-            conversations: updatedConversations,
-            messages: {
-              ...state.messages,
-              [conversationId]: updatedMessages,
-            },
-            messagesHydratedByConversation: {
-              ...state.messagesHydratedByConversation,
-              [conversationId]: true,
-            },
-          };
+          return nextState;
         });
       },
 
@@ -2682,47 +2806,27 @@ export const useChatStore = create<ChatState>()(
                   ? prependMessages(existingMessages, normalized.messages)
                   : appendMessages(existingMessages, normalized.messages);
             const mergedMessages = nextMessages;
-            const latestMessage = mergedMessages[mergedMessages.length - 1];
-
-            const updatedConversations = state.conversations.map(
-              (conversation) => {
-                if (conversation.id !== conversationId || !latestMessage) {
-                  return conversation;
-                }
-
-                return {
-                  ...conversation,
-                  lastMessage: toMessageSummary(latestMessage),
-                  updatedAt: latestMessage.createdAt,
-                  unreadCount: conversation.unreadCount,
-                };
+            const messageState = buildConversationMessageState(
+              state,
+              conversationId,
+              mergedMessages,
+              {
+                hydrated: true,
+                hasNewer:
+                  fetchMode === "initial" || fetchMode === "newer"
+                    ? normalized.hasNext
+                    : undefined,
               },
             );
 
             return {
-              conversations: updatedConversations,
-              messages: {
-                ...state.messages,
-                [conversationId]: mergedMessages,
-              },
-              messagesHydratedByConversation: {
-                ...state.messagesHydratedByConversation,
-                [conversationId]: true,
-              },
+              ...messageState,
               hasMoreMessages: {
                 ...state.hasMoreMessages,
                 [conversationId]:
                   before || (!before && !after)
                     ? normalized.hasPrev
                     : (state.hasMoreMessages[conversationId] ?? false),
-              },
-              hasNewerMessagesByConversation: {
-                ...state.hasNewerMessagesByConversation,
-                [conversationId]:
-                  fetchMode === "initial" || fetchMode === "newer"
-                    ? normalized.hasNext
-                    : (state.hasNewerMessagesByConversation[conversationId] ??
-                      false),
               },
             };
           });

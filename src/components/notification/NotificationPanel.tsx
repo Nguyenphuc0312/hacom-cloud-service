@@ -137,7 +137,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
     <div
       ref={panelRef}
       className={clsx(
-        "absolute right-3 top-[calc(100%+0.5rem)] z-[65] flex w-[min(26rem,calc(100vw-1.5rem))] max-w-full flex-col overflow-hidden rounded-[1.75rem] border border-border/80 bg-surface shadow-elev3 backdrop-blur",
+        "absolute right-4 top-[calc(100%+0.5rem)] z-[65] flex w-[min(25rem,calc(100vw-2rem))] max-w-full flex-col overflow-hidden rounded-[1.25rem] border border-border/80 bg-surface shadow-elev3",
         className,
       )}
       role="dialog"
@@ -206,7 +206,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
         </div>
       </div>
 
-      <div className="max-h-[28rem] overflow-y-auto p-2">
+      <div className="sidebar-scrollbar max-h-[28rem] overflow-y-auto p-2">
         {items.length === 0 ? (
           <EmptyState
             title={t("notifications.empty.title", {
@@ -226,7 +226,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                 type="button"
                 onClick={() => handleSelectItem(item)}
                 className={clsx(
-                  "flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition-micro",
+                  "flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                   item.isRead
                     ? "border-transparent bg-transparent hover:bg-surface-hover"
                     : "border-primary/10 bg-primary/6 hover:bg-primary/10",
