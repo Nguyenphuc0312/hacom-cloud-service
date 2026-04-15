@@ -63,8 +63,8 @@
   --chat-lane-padding: clamp(16px, 2vw, 28px);
   --chat-content-lane: 48rem;
   --chat-rich-lane: 48rem;
-  --chat-bubble-max: min(38rem, 72vw);
-  --chat-bubble-max-compact: min(34rem, 70vw);
+  --chat-bubble-max: min(42rem, 68%);
+  --chat-bubble-max-compact: min(36rem, 64%);
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -87,7 +87,7 @@
   --motion-duration-press: 100ms;
   --motion-duration-sidebar: 220ms;
   --motion-duration-panel: 240ms;
-  --motion-duration-message-insert: 140ms;
+  --motion-duration-message-insert: 110ms;
   --motion-duration-badge: 140ms;
   --motion-duration-skeleton: 1400ms;
   --motion-ease-enter: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -181,8 +181,8 @@
   --color-focus-ring: var(--color-primary);
 
   --chat-pattern-color: 210 12% 60%;
-  --chat-bubble-sent: 228 46% 50%;
-  --chat-bubble-sent-text: var(--core-gray-0);
+  --chat-bubble-sent: 205 84% 91%;
+  --chat-bubble-sent-text: var(--core-gray-900);
   --chat-bubble-received: 220 22% 100%;
   --chat-bubble-received-text: var(--core-gray-900);
 
@@ -234,7 +234,7 @@
   --color-chat-pill-border: 220 13% 28%;
 
   --chat-pattern-color: 214 14% 52%;
-  --chat-bubble-sent: 229 43% 34%;
+  --chat-bubble-sent: 208 34% 28%;
   --chat-bubble-sent-text: 210 20% 97%;
   --chat-bubble-received: 220 18% 18%;
   --chat-bubble-received-text: 210 20% 96%;
@@ -366,8 +366,8 @@ body {
     --chat-lane-padding: 14px;
     --chat-content-lane: min(100%, 44rem);
     --chat-rich-lane: min(100%, 48rem);
-    --chat-bubble-max: min(30rem, calc(100vw - 92px));
-    --chat-bubble-max-compact: min(28rem, calc(100vw - 84px));
+    --chat-bubble-max: min(30rem, 78vw);
+    --chat-bubble-max-compact: min(28rem, 74vw);
   }
 }
 
@@ -467,20 +467,12 @@ a:focus-visible {
 /* Chat background pattern */
 .chat-background {
   background-color: hsl(var(--color-chat-canvas));
-  background-image:
-    linear-gradient(
-      180deg,
-      hsl(var(--color-chat-canvas) / 0.98),
-      hsl(var(--color-chat-canvas))
-    ),
-    radial-gradient(
-      circle at 1px 1px,
-      hsl(var(--chat-pattern-color) / 0.08) 1px,
-      transparent 0
-    );
-  background-size:
-    100% 100%,
-    24px 24px;
+  background-image: linear-gradient(
+    180deg,
+    hsl(var(--color-chat-canvas) / 0.98),
+    hsl(var(--color-chat-canvas))
+  );
+  background-size: 100% 100%;
 }
 
 :root[data-theme="dark"] .chat-background {
@@ -490,15 +482,9 @@ a:focus-visible {
       hsl(var(--color-chat-canvas) / 0.92),
       hsl(215 28% 10% / 0.94)
     ),
-    radial-gradient(
-      circle at 1px 1px,
-      hsl(var(--chat-pattern-color) / 0.12) 1px,
-      transparent 0
-    ),
     radial-gradient(circle at top left, hsl(228 42% 22% / 0.2), transparent 42%);
   background-size:
     100% 100%,
-    18px 18px,
     100% 100%;
 }
 

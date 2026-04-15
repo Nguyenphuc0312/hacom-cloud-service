@@ -43,7 +43,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
     () =>
       getConversationDisplayName(conversation, currentUser.id) ||
       fallbackConversationName,
-    [conversation, currentUser, fallbackConversationName],
+    [conversation, currentUser.id, fallbackConversationName],
   );
   const previewText = useMemo(() => {
     const lastMessage = conversation.lastMessage;
@@ -70,6 +70,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
 
     return `${senderLabel}: ${messagePreview}`;
   }, [
+    conversation,
     conversation.lastMessage,
     conversation.participants,
     currentUser.id,
@@ -100,6 +101,18 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
   const avatarSrc = getConversationAvatar(conversation, currentUser.id);
   const avatarStatus = isDirect ? directPartner?.status : undefined;
 
+  const previewToneClass = (() => {
+    if (previewState === "failed") {
+      return "text-danger";
+    }
+
+    if (previewState || unreadMention || unreadCount > 0) {
+      return "text-text-secondary";
+    }
+
+    return "text-text-muted";
+  })();
+
   if (collapsed) {
     return (
       <button
@@ -108,22 +121,22 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         role="option"
         aria-selected={isActive}
         className={clsx(
-          "group relative mx-2 my-1 flex h-[3.5rem] w-[calc(100%-var(--space-4))] items-center justify-center rounded-[1.15rem] transition-micro hover:bg-surface-hover/90",
+          "group relative mx-2 my-1 flex h-[3.5rem] w-[calc(100%-var(--space-4))] items-center justify-center rounded-[1.05rem] transition-micro",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-          isActive && "bg-primary/10 text-primary",
-          !isActive &&
-            isKeyboardActive &&
-            "bg-surface-overlay",
+          isActive
+            ? "bg-primary/8"
+            : "hover:bg-surface-hover/80",
+          !isActive && isKeyboardActive && "bg-surface-overlay",
         )}
         aria-label={displayName}
         title={displayName}
       >
-      <span
-        className={clsx(
-          "absolute left-1 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-primary transition-opacity",
-          isActive ? "opacity-100" : "opacity-0",
-        )}
-        aria-hidden="true"
+        <span
+          className={clsx(
+            "absolute left-1 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-primary transition-opacity",
+            isActive ? "opacity-100" : "opacity-0",
+          )}
+          aria-hidden="true"
         />
         <Avatar
           src={avatarSrc}
@@ -136,7 +149,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         {unreadCount > 0 && (
           <span
             className={clsx(
-              "absolute right-2.5 top-2.5 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none text-text-inverse shadow-xs",
+              "absolute right-2.5 top-2.5 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none text-text-inverse",
               unreadMention
                 ? "bg-danger"
                 : conversation.isMuted
@@ -158,13 +171,12 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
       role="option"
       aria-selected={isActive}
       className={clsx(
-        "group relative mx-2 my-1 flex h-[4.25rem] w-[calc(100%-var(--space-4))] items-center rounded-[1.25rem] px-3",
-        "transition-micro hover:bg-surface-hover/88",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-        isActive && "bg-primary/10",
-        !isActive &&
-          isKeyboardActive &&
-          "bg-surface-overlay",
+        "group relative mx-2 my-1 flex h-[4.25rem] w-[calc(100%-var(--space-4))] items-center rounded-[1.1rem] px-3",
+        "transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+        isActive
+          ? "bg-primary/8"
+          : "hover:bg-surface-hover/80",
+        !isActive && isKeyboardActive && "bg-surface-overlay",
       )}
       aria-label={displayName}
     >
@@ -185,29 +197,20 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         />
 
         <div className="min-w-0">
-          <div className="mb-0.5 flex items-center gap-1.5">
-            <p
-              className={clsx(
-                "truncate text-body-sm leading-5 text-text-primary",
-                unreadCount > 0 && "font-semibold",
-              )}
-            >
-              {displayName}
-            </p>
-          </div>
+          <p
+            className={clsx(
+              "truncate text-body-sm leading-5 text-text-primary",
+              unreadCount > 0 && "font-semibold",
+            )}
+          >
+            {displayName}
+          </p>
 
           <p
             className={clsx(
               "truncate pr-2 text-caption leading-5 text-start",
-              previewState === "failed"
-                ? "font-medium text-danger"
-                : previewState
-                  ? "font-medium text-warning"
-                  : unreadMention
-                    ? "font-medium text-danger"
-                    : unreadCount > 0
-                      ? "font-medium text-text-secondary"
-                      : "text-text-muted",
+              previewState === "failed" ? "font-medium" : "font-normal",
+              previewToneClass,
             )}
           >
             {previewText || t("sidebar:room.noMessagesYet")}
@@ -215,30 +218,23 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
         </div>
 
         <div className="flex h-full min-w-room-meta flex-col items-end justify-start gap-2 py-1">
-          <span
-            className={clsx(
-              "text-caption tabular-nums",
-              unreadCount > 0
-                ? "font-semibold text-primary"
-                : "text-text-muted",
-            )}
-          >
+          <span className="text-caption tabular-nums text-text-muted">
             {timeLabel}
           </span>
 
           {unreadCount > 0 ? (
             <span
               className={clsx(
-                "sidebar-shell-badge inline-flex min-h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold leading-none text-text-inverse shadow-xs",
+                "sidebar-shell-badge inline-flex min-h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold leading-none text-text-inverse",
                 unreadMention
                   ? "bg-danger"
                   : conversation.isMuted
                     ? "bg-text-muted"
                     : "bg-primary",
               )}
-              >
-                {unreadLabel}
-              </span>
+            >
+              {unreadLabel}
+            </span>
           ) : null}
         </div>
       </div>

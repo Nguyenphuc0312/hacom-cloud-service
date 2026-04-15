@@ -9,12 +9,7 @@ import React, {
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { VariableSizeList, type ListChildComponentProps } from "react-window";
-import type {
-  Conversation,
-  ConversationFilter,
-  UserSummary,
-} from "../../../types";
-import { isDirectConversation } from "../../../lib/conversationAdapter";
+import type { Conversation, UserSummary } from "../../../types";
 import { sortConversationsByActivity } from "../../../utils/conversationRanking";
 import {
   getConversationDisplayName,
@@ -32,7 +27,6 @@ interface RoomListProps {
   currentUser: UserSummary;
   selectedId: string | null;
   searchQuery: string;
-  activeFilter: ConversationFilter;
   collapsed: boolean;
   showLoadingSkeleton?: boolean;
   error?: string | null;
@@ -131,26 +125,6 @@ const isRoomActive = (
   currentConversationId: string | null,
 ): boolean => currentConversationId === roomId;
 
-const resolveVisibleRooms = (
-  source: Conversation[],
-  activeFilter: ConversationFilter,
-): Conversation[] => {
-  const directRooms = source.filter((room) => isDirectConversation(room));
-  const groupRooms = source.filter((room) => !isDirectConversation(room));
-
-  switch (activeFilter) {
-    case "unread":
-      return source.filter((room) => (room.unreadCount || 0) > 0);
-    case "direct":
-      return directRooms;
-    case "channels":
-    case "groups":
-      return groupRooms;
-    default:
-      return [...directRooms, ...groupRooms];
-  }
-};
-
 const Row = ({ index, style, data }: ListChildComponentProps<RowData>) => {
   const item = data.items[index];
   if (!item) {
@@ -176,7 +150,6 @@ export const RoomList: React.FC<RoomListProps> = ({
   currentUser,
   selectedId,
   searchQuery,
-  activeFilter,
   collapsed,
   showLoadingSkeleton = false,
   error = null,
@@ -205,27 +178,20 @@ export const RoomList: React.FC<RoomListProps> = ({
   const hasAnyConversations =
     Array.isArray(conversations) && conversations.length > 0;
 
-  const sortedRooms = useMemo(
-    () => sortConversationsByActivity(Array.isArray(conversations) ? conversations : []),
-    [conversations],
-  );
-
-  const queriedRooms = useMemo(
-    () =>
-      sortedRooms.filter((conversation) =>
-        includesQuery(conversation, normalizedQuery, currentUser.id),
-      ),
-    [currentUser.id, normalizedQuery, sortedRooms],
-  );
-
   const flatItems = useMemo<FlatListItem[]>(
     () =>
-      resolveVisibleRooms(queriedRooms, activeFilter).map((room) => ({
-        kind: "room",
-        key: `room-${room.id}`,
-        room,
-      })),
-    [activeFilter, queriedRooms],
+      sortConversationsByActivity(
+        Array.isArray(conversations) ? conversations : [],
+      )
+        .filter((conversation) =>
+          includesQuery(conversation, normalizedQuery, currentUser.id),
+        )
+        .map((room) => ({
+          kind: "room",
+          key: `room-${room.id}`,
+          room,
+        })),
+    [conversations, currentUser.id, normalizedQuery],
   );
 
   const roomIndexes = useMemo(

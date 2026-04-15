@@ -2,11 +2,9 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
-  AtSymbolIcon,
   EllipsisHorizontalCircleIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { EmojiButton } from "./EmojiButton";
 import { AttachmentMenu } from "./AttachmentMenu";
 import { AttachmentPreview } from "./AttachmentPreview";
 import { AttachmentTray } from "./AttachmentTray";
@@ -23,7 +21,6 @@ import type { AttachmentPickerMode } from "../../hooks/useSendMessage";
 import type { InputMode, Message } from "../../types";
 import type { AttachmentDraft } from "../../types/attachmentDraft";
 import { UPLOAD_CONFIG } from "../../config";
-import { emitCommandPaletteOpen } from "../../lib/commandPalette";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { InlineNotice, toast } from "../ui";
 
@@ -207,7 +204,7 @@ export const MessageInput = React.forwardRef<
   const { textareaRef } = useAutoResizeTextarea({
     value,
     minRows: 1,
-    maxRows: isDesktopLayout ? 6 : 4,
+    maxRows: isDesktopLayout ? 5 : 4,
   });
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -372,37 +369,6 @@ export const MessageInput = React.forwardRef<
     ],
   );
 
-  const handleInsertMentionTrigger = React.useCallback(() => {
-    if (disabled || isUploading || isSending) return;
-
-    const textarea = textareaRef.current;
-    if (!textarea) {
-      onChange(`${value}@`);
-      return;
-    }
-
-    const start = textarea.selectionStart ?? value.length;
-    const end = textarea.selectionEnd ?? value.length;
-    const nextValue = `${value.slice(0, start)}@${value.slice(end)}`;
-    const nextCaret = start + 1;
-
-    onChange(nextValue);
-
-    requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(nextCaret, nextCaret);
-      updateMentionState(nextValue, nextCaret);
-    });
-  }, [
-    disabled,
-    isSending,
-    isUploading,
-    onChange,
-    textareaRef,
-    updateMentionState,
-    value,
-  ]);
-
   const handleSendText = React.useCallback(async () => {
     const result = await sendTextMessage(value);
     if (result === "failed") {
@@ -547,14 +513,8 @@ export const MessageInput = React.forwardRef<
     : selectedFile
       ? !submitDisabled && !isSubmitBusy && composerMode === "online"
       : !submitDisabled && !isSubmitBusy && hasText;
-  const disableToolbar = disabled || isSubmitBusy;
   const disableAttachmentActions = attachmentsDisabled || isSubmitBusy;
   const sendButtonLabel = t("chat:composer.sendMessage");
-  const openShortcut =
-    typeof navigator !== "undefined" &&
-    /Mac|iPhone|iPad/.test(navigator.platform)
-      ? "Cmd K"
-      : "Ctrl K";
   const composerVisualState = disabled
     ? "disabled"
     : canSend
@@ -813,7 +773,7 @@ export const MessageInput = React.forwardRef<
         />
 
         {mode === "reply" && replyToMessage && (
-          <div className="mb-2 flex items-center justify-between rounded-xl border border-border bg-surface px-3 py-2 shadow-xs animate-slide-up-fade">
+          <div className="mb-2 flex items-center justify-between rounded-[1rem] border border-border/80 bg-surface px-3 py-2 animate-slide-up-fade">
             <div className="flex min-w-0 items-center gap-2">
               <div className="h-8 w-1 rounded-full bg-primary" />
               <div className="min-w-0">
@@ -842,7 +802,7 @@ export const MessageInput = React.forwardRef<
         )}
 
         {mode === "edit" && editingMessage && (
-          <div className="mb-2 flex items-center justify-between rounded-xl border border-warning/35 bg-warning/15 px-3 py-2 shadow-xs animate-slide-up-fade">
+          <div className="mb-2 flex items-center justify-between rounded-[1rem] border border-warning/30 bg-warning/10 px-3 py-2 animate-slide-up-fade">
             <div className="flex min-w-0 items-center gap-2">
               <div className="h-8 w-1 rounded-full bg-warning" />
               <div className="min-w-0">
@@ -906,25 +866,17 @@ export const MessageInput = React.forwardRef<
           <div
             data-composer-state={composerVisualState}
             className={clsx(
-              "relative flex min-w-0 flex-1 items-end rounded-[1.5rem] border px-2 py-1.5 transition-micro",
+              "relative flex min-w-0 flex-1 items-end rounded-[1.35rem] border px-2 py-1 transition-micro",
               composerVisualState === "disabled" &&
                 "border-disabled-border bg-disabled-bg shadow-none",
               composerVisualState === "ready" &&
-                "border-primary/22 bg-[hsl(var(--color-chat-composer))] shadow-elev2",
+                "border-primary/18 bg-[hsl(var(--color-chat-composer))] shadow-elev1",
               composerVisualState === "focused" &&
-                "border-border-focus bg-[hsl(var(--color-chat-composer))] shadow-elev2",
+                "border-border-focus bg-[hsl(var(--color-chat-composer))] shadow-elev1",
               composerVisualState === "idle" &&
-                "border-border bg-[hsl(var(--color-chat-composer))] shadow-elev1",
+                "border-border/80 bg-[hsl(var(--color-chat-composer))] shadow-none",
             )}
           >
-            <EmojiButton
-              value={value}
-              onChange={onChange}
-              textareaRef={textareaRef}
-              disabled={disableToolbar}
-              className="shrink-0 [&>button]:h-10 [&>button]:w-10"
-            />
-
             {showMentionPanel && (
               <div
                 id={mentionListId}
@@ -1012,7 +964,7 @@ export const MessageInput = React.forwardRef<
                   : undefined
               }
               className={clsx(
-                "w-full min-h-10 flex-1 resize-none bg-transparent px-2 py-2",
+                "w-full min-h-[44px] flex-1 resize-none bg-transparent px-2 py-[11px]",
                 "text-sm text-text-primary placeholder:text-text-muted",
                 "transition-colors focus:outline-none",
                 disabled && "cursor-not-allowed opacity-70",
@@ -1020,38 +972,6 @@ export const MessageInput = React.forwardRef<
             />
 
             <div className="flex shrink-0 items-end gap-1">
-              <button
-                type="button"
-                onClick={emitCommandPaletteOpen}
-                className={clsx(
-                  "hidden h-10 items-center justify-center rounded-full border border-transparent px-2.5 text-caption font-medium text-text-muted transition-fast xl:inline-flex",
-                  "hover:bg-surface-hover hover:text-text-primary",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-                  disableToolbar && "cursor-not-allowed opacity-50",
-                )}
-                aria-label={t("common:actions.search", {
-                  defaultValue: "Open command palette",
-                })}
-                disabled={disableToolbar}
-              >
-                {openShortcut}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleInsertMentionTrigger}
-                className={clsx(
-                  "hidden h-10 w-10 items-center justify-center rounded-full transition-colors md:inline-flex",
-                  "text-text-muted hover:bg-surface-hover hover:text-text-primary",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-                  disableToolbar && "cursor-not-allowed opacity-50",
-                )}
-                aria-label={t("chat:composer.mentionTrigger")}
-                disabled={disableToolbar}
-              >
-                <AtSymbolIcon className="h-5 w-5" />
-              </button>
-
               <div className="relative">
                 <button
                   type="button"

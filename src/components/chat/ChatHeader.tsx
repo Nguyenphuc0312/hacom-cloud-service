@@ -50,7 +50,7 @@ interface HeaderAction {
 }
 
 const iconButtonClass = clsx(
-  "inline-flex h-9 w-9 items-center justify-center rounded-xl border border-transparent",
+  "inline-flex h-9 w-9 items-center justify-center rounded-[0.95rem] border border-transparent",
   "text-text-muted transition-micro",
   "hover:bg-surface-hover hover:text-text-primary",
   "active:scale-[0.98] active:bg-surface-active",
@@ -151,32 +151,17 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const displayName =
     getConversationDisplayName(conversation, currentUserId) ||
     t("common:labels.conversation");
-  const conversationTypeLabel =
-    normalizedType === "group"
-      ? t("sidebar:room.type.group")
-      : normalizedType === "channel"
-        ? t("sidebar:tabs.channels")
-        : t("sidebar:room.type.direct");
   const avatarSrc = getConversationAvatar(conversation, currentUserId);
 
   const menuActions = React.useMemo<HeaderAction[]>(() => {
     const nextActions: HeaderAction[] = [];
 
-    if (onCallClick) {
+    if (onSearchClick) {
       nextActions.push({
-        id: "voice-call",
-        label: t("chat:header.voiceCall"),
-        icon: PhoneIcon,
-        onClick: onCallClick,
-      });
-    }
-
-    if (onVideoCallClick) {
-      nextActions.push({
-        id: "video-call",
-        label: t("chat:header.videoCall"),
-        icon: VideoCameraIcon,
-        onClick: onVideoCallClick,
+        id: "search",
+        label: t("chat:header.searchInChat"),
+        icon: MagnifyingGlassIcon,
+        onClick: onSearchClick,
       });
     }
 
@@ -198,16 +183,31 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       });
     }
 
+    if (onCallClick) {
+      nextActions.push({
+        id: "voice-call",
+        label: t("chat:header.voiceCall"),
+        icon: PhoneIcon,
+        onClick: onCallClick,
+      });
+    }
+
+    if (onVideoCallClick) {
+      nextActions.push({
+        id: "video-call",
+        label: t("chat:header.videoCall"),
+        icon: VideoCameraIcon,
+        onClick: onVideoCallClick,
+      });
+    }
+
     return nextActions;
-  }, [onCallClick, onPinnedClick, onSelectionMode, onVideoCallClick, t]);
+  }, [onCallClick, onPinnedClick, onSearchClick, onSelectionMode, onVideoCallClick, t]);
 
   return (
     <header
-      className={clsx(
-        "sticky top-0 z-sticky border-b border-border/70 py-2 backdrop-blur",
-        className,
-      )}
-      style={{ backgroundColor: "hsl(var(--color-chat-canvas) / 0.92)" }}
+      className={clsx("sticky top-0 z-sticky border-b border-border/60 py-2", className)}
+      style={{ backgroundColor: "hsl(var(--color-chat-canvas) / 0.96)" }}
     >
       <ConversationLane>
         <div className="flex min-h-10 items-center gap-2">
@@ -244,18 +244,13 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             type="button"
             onClick={onInfoClick}
             className={clsx(
-              "min-w-0 flex-1 rounded-2xl px-1 py-1 text-left transition-fast hover:bg-surface-hover/55",
+              "min-w-0 flex-1 rounded-2xl px-1 py-1 text-left transition-fast hover:bg-surface-hover/45",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             )}
           >
-            <div className="flex min-w-0 items-center gap-2">
-              <h2 className="truncate text-body-sm font-semibold text-text-primary sm:text-body">
-                {displayName}
-              </h2>
-              <span className="hidden shrink-0 rounded-full border border-border bg-surface-overlay px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-text-muted sm:inline-flex">
-                {conversationTypeLabel}
-              </span>
-            </div>
+            <h2 className="truncate text-body-sm font-semibold text-text-primary sm:text-body">
+              {displayName}
+            </h2>
 
             {isTyping ? (
               <TypingIndicator
@@ -276,17 +271,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           </button>
 
           <div className="relative ml-1 flex items-center gap-1">
-            {onSearchClick && (
-              <button
-                type="button"
-                onClick={onSearchClick}
-                className={iconButtonClass}
-                aria-label={t("chat:header.searchInChat")}
-              >
-                <MagnifyingGlassIcon className="h-5 w-5" />
-              </button>
-            )}
-
             <button
               type="button"
               onClick={onInfoClick}
@@ -312,7 +296,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               <div
                 ref={menuRef}
                 className={clsx(
-                  "absolute right-0 top-full z-dropdown mt-2 min-w-52 overflow-hidden rounded-[1.15rem] border border-border bg-surface-raised p-1.5 shadow-elev2",
+                  "absolute right-0 top-full z-dropdown mt-2 min-w-52 overflow-hidden rounded-[1.1rem] border border-border/80 bg-surface-raised p-1.5 shadow-elev2",
                   "animate-slide-up-fade",
                 )}
                 role="menu"

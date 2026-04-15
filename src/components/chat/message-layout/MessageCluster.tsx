@@ -3,12 +3,9 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
   ChatBubbleLeftIcon,
-  ClockIcon,
   DocumentIcon,
-  ExclamationCircleIcon,
   PhotoIcon,
   SpeakerWaveIcon,
-  TrashIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../../common/Avatar";
 import { MessageActions } from "../../message/MessageActions";
@@ -75,108 +72,6 @@ const isCoarsePointer = (): boolean =>
   typeof window.matchMedia === "function" &&
   window.matchMedia("(pointer: coarse)").matches;
 
-const MessageDeliveryState: React.FC<{
-  message: Message;
-  isOwn: boolean;
-  onRetry: () => void;
-  onRemove: () => void;
-}> = ({ message, isOwn, onRetry, onRemove }) => {
-  const { t } = useTranslation();
-  const failed = isFailedMessage(message);
-  const pending = isPendingMessage(message);
-
-  if (!isOwn || (!failed && !pending)) {
-    return null;
-  }
-
-  const label = failed
-    ? t("chat:message.status.failedInline", {
-        defaultValue: "Failed to send",
-      })
-    : t("chat:message.status.pendingInline", {
-        defaultValue: "Sending",
-      });
-
-  const failureHint = failed
-    ? message.errorMessage ||
-      (message.failureReason === "network"
-        ? t("chat:message.status.networkError", {
-            defaultValue: "No network connection. Please retry.",
-          })
-        : message.failureReason === "timeout"
-          ? t("chat:message.status.timeoutError", {
-              defaultValue: "Message timed out. Please retry.",
-            })
-          : message.failureReason === "permission"
-            ? t("chat:composer.permissionDenied", {
-                defaultValue:
-                  "You can no longer send messages in this conversation.",
-              })
-            : message.failureReason === "slow_mode"
-              ? t("chat:message.status.slowModeError", {
-                  defaultValue: "Slow mode is active. Please wait and retry.",
-                })
-              : message.failureReason === "backend_4xx"
-                ? t("chat:message.status.backend4xxError", {
-                    defaultValue: "Message was rejected. Please retry.",
-                  })
-                : message.failureReason === "backend_5xx"
-                  ? t("chat:message.status.backend5xxError", {
-                      defaultValue: "Server is busy. Please try again.",
-                    })
-                  : t("chat:message.status.unknownError", {
-                      defaultValue: "Could not send message.",
-                    }))
-    : null;
-
-  if (pending && !failed) {
-    return (
-      <div
-        className={clsx(
-          "mt-1.5 inline-flex max-w-full items-center gap-1.5 px-1 text-[11px] font-medium text-text-muted",
-          isOwn ? "self-end" : "self-start",
-        )}
-      >
-        <ClockIcon className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate">{label}</span>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={clsx(
-        "mt-1.5 inline-flex max-w-full items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-medium shadow-xs backdrop-blur-sm",
-        isOwn ? "self-end" : "self-start",
-        "border-danger/20 bg-danger/10 text-danger",
-      )}
-    >
-      <ExclamationCircleIcon className="h-3.5 w-3.5 shrink-0" />
-      <span className="truncate">{label}</span>
-      {failureHint ? (
-        <span className="hidden truncate text-danger/85 md:inline">
-          {failureHint}
-        </span>
-      ) : null}
-      <button
-        type="button"
-        onClick={onRetry}
-        className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-danger transition-micro hover:bg-danger/10"
-      >
-        {t("chat:message.status.retry", { defaultValue: "Retry" })}
-      </button>
-      <button
-        type="button"
-        onClick={onRemove}
-        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold text-danger transition-micro hover:bg-danger/10"
-      >
-        <TrashIcon className="h-3 w-3" />
-        {t("chat:message.actions.delete", { defaultValue: "Delete" })}
-      </button>
-    </div>
-  );
-};
-
 export const MessageCluster: React.FC<MessageClusterProps> = ({
   message,
   isOwn,
@@ -199,7 +94,6 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
 }) => {
   const { t } = useTranslation();
   const resendMessage = useChatStore((s) => s.resendMessage);
-  const removeMessage = useChatStore((s) => s.removeMessage);
   const [isRailVisible, setIsRailVisible] = React.useState(false);
   const [isActionsOpen, setIsActionsOpen] = React.useState(false);
   const longPressTimerRef = React.useRef<number | null>(null);
@@ -290,11 +184,6 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
     void resendMessage(message.conversationId, message);
   }, [message, resendMessage]);
 
-  const handleRemoveFailed = React.useCallback(() => {
-    if (!message.conversationId) return;
-    removeMessage(message.conversationId, message.id);
-  }, [message.conversationId, message.id, removeMessage]);
-
   const openActions = React.useCallback(() => {
     clearRailTimers();
     setIsActionsOpen(true);
@@ -329,7 +218,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
     (actionId: MessageActionId) => {
       switch (actionId) {
         case "react":
-          onReact(message.id, "👍");
+          onReact(message.id, "\u{1F44D}");
           if (isActionsOpen) closeActions();
           break;
         case "reply":
@@ -479,7 +368,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
             )}
           >
             {isGroupConversation && !isOwn && showSenderName && (
-              <span className="mb-1 px-1 text-[11px] font-semibold text-primary/90">
+              <span className="mb-1 px-1 text-[11px] font-semibold text-primary/85">
                 {senderDisplayName}
               </span>
             )}
@@ -490,20 +379,20 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                 onClick={handleReplyPreviewClick}
                 disabled={!replyTargetMessageId || isSelectionMode}
                 className={clsx(
-                  "mb-1 flex w-full items-center gap-2 rounded-2xl border-l-2 px-3 py-2 text-left text-xs transition-colors",
+                  "mb-1 flex w-full items-center gap-2 rounded-[1.05rem] border-l-2 px-3 py-1.5 text-left text-[11px] transition-colors",
                   replyTargetMessageId && !isSelectionMode
                     ? "cursor-pointer hover:bg-black/5"
                     : "cursor-default",
                   isOwn
-                    ? "border-text-inverse/40 bg-text-inverse/10 text-text-inverse/78"
-                    : "border-primary/55 bg-white/5 text-text-secondary",
+                    ? "border-text-inverse/35 bg-text-inverse/8 text-text-inverse/75"
+                    : "border-primary/45 bg-surface-hover/55 text-text-secondary",
                 )}
               >
                 <ReplyTypeIcon
                   type={message.replyToMessage.type}
                   className={clsx(
                     "h-3.5 w-3.5 shrink-0",
-                    isOwn ? "text-text-inverse/65" : "text-text-muted",
+                    isOwn ? "text-text-inverse/60" : "text-text-muted",
                   )}
                 />
                 <div className="min-w-0">
@@ -539,8 +428,8 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                 {message.forwardedFrom && (
                   <div
                     className={clsx(
-                      "mb-2 flex items-center gap-1 text-xs",
-                      isOwn ? "text-text-inverse/90" : "text-text-secondary",
+                      "mb-2 flex items-center gap-1 text-[11px]",
+                      isOwn ? "text-text-inverse/82" : "text-text-secondary",
                     )}
                   >
                     <svg
@@ -571,15 +460,6 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
               isOwn={isOwn}
               showStatus={isOwn && isGroupEnd}
             />
-
-            {isOwn && isGroupEnd && (
-              <MessageDeliveryState
-                message={message}
-                isOwn={isOwn}
-                onRetry={handleRetry}
-                onRemove={handleRemoveFailed}
-              />
-            )}
 
             {(message.reactions?.length ?? 0) > 0 && (
               <div className={clsx("mt-1", isOwn ? "self-end" : "self-start")}>

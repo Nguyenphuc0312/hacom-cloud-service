@@ -1,7 +1,14 @@
 import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { CheckIcon, PencilIcon } from "@heroicons/react/24/solid";
+import {
+  CheckIcon,
+  PencilIcon,
+} from "@heroicons/react/24/solid";
+import {
+  ClockIcon,
+  ExclamationCircleIcon,
+} from "@heroicons/react/24/outline";
 import type { Message } from "../../../types";
 import { MessageStatus } from "../../../types";
 import {
@@ -16,60 +23,82 @@ interface MessageMetaProps {
   className?: string;
 }
 
-const MessageStatusLabel: React.FC<{
-  message: Message;
-}> = ({ message }) => {
+const MessageStatusGlyph: React.FC<{ message: Message }> = ({ message }) => {
   const { t } = useTranslation();
   const { status, sendState } = message;
 
   if (status === "uploading") {
-    return null;
+    return (
+      <ClockIcon
+        className="h-3 w-3"
+        title={t("chat:message.status.uploading", {
+          defaultValue: "Uploading",
+        })}
+      />
+    );
   }
 
   if (
     sendState === "queued" ||
     sendState === "sending" ||
     sendState === "retrying" ||
-    sendState === "failed"
+    status === MessageStatus.SENDING
   ) {
-    return null;
+    return (
+      <ClockIcon
+        className="h-3 w-3"
+        title={t("chat:message.status.sending")}
+      />
+    );
   }
 
-  switch (status) {
-    case MessageStatus.SENDING:
-      return null;
-    case MessageStatus.SENT:
-      return (
-        <span className="inline-flex items-center gap-1">
-          <CheckIcon className="h-3 w-3" />
-          {t("chat:message.status.sent")}
-        </span>
-      );
-    case MessageStatus.DELIVERED:
-      return (
-        <span className="inline-flex items-center gap-1">
-          <span className="flex -space-x-1">
-            <CheckIcon className="h-3 w-3" />
-            <CheckIcon className="h-3 w-3" />
-          </span>
-          {t("chat:message.status.delivered", { defaultValue: "Delivered" })}
-        </span>
-      );
-    case MessageStatus.READ:
-      return (
-        <span className="inline-flex items-center gap-1 text-secondary">
-          <span className="flex -space-x-1">
-            <CheckIcon className="h-3 w-3" />
-            <CheckIcon className="h-3 w-3" />
-          </span>
-          {t("chat:message.status.read", { defaultValue: "Read" })}
-        </span>
-      );
-    case MessageStatus.FAILED:
-      return null;
-    default:
-      return null;
+  if (sendState === "failed" || status === MessageStatus.FAILED) {
+    return (
+      <ExclamationCircleIcon
+        className="h-3 w-3 text-danger"
+        title={t("chat:message.status.failedInline", {
+          defaultValue: "Failed to send",
+        })}
+      />
+    );
   }
+
+  if (status === MessageStatus.READ) {
+    return (
+      <span
+        className="flex -space-x-1 text-secondary"
+        title={t("chat:message.status.read", { defaultValue: "Read" })}
+      >
+        <CheckIcon className="h-3 w-3" />
+        <CheckIcon className="h-3 w-3" />
+      </span>
+    );
+  }
+
+  if (status === MessageStatus.DELIVERED) {
+    return (
+      <span
+        className="flex -space-x-1"
+        title={t("chat:message.status.delivered", {
+          defaultValue: "Delivered",
+        })}
+      >
+        <CheckIcon className="h-3 w-3" />
+        <CheckIcon className="h-3 w-3" />
+      </span>
+    );
+  }
+
+  if (status === MessageStatus.SENT || sendState === "sent") {
+    return (
+      <CheckIcon
+        className="h-3 w-3"
+        title={t("chat:message.status.sent")}
+      />
+    );
+  }
+
+  return null;
 };
 
 export const MessageMeta: React.FC<MessageMetaProps> = ({
@@ -90,8 +119,8 @@ export const MessageMeta: React.FC<MessageMetaProps> = ({
       )}
     >
       {message.isEdited && (
-        <span
-          className="inline-flex items-center gap-1"
+        <PencilIcon
+          className="h-3 w-3"
           title={
             message.editedAt
               ? t("chat:message.editedAt", {
@@ -100,15 +129,10 @@ export const MessageMeta: React.FC<MessageMetaProps> = ({
                 })
               : t("chat:message.edited")
           }
-        >
-          <PencilIcon className="h-3 w-3" />
-          {t("chat:message.edited")}
-        </span>
+        />
       )}
       <span>{timeStr}</span>
-      {isOwn && showStatus && (
-        <MessageStatusLabel message={message} />
-      )}
+      {isOwn && showStatus && <MessageStatusGlyph message={message} />}
     </div>
   );
 };

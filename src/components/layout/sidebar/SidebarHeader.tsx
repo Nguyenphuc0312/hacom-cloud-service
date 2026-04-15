@@ -3,16 +3,15 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
   ArrowLeftOnRectangleIcon,
-  BellIcon,
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
   Cog6ToothIcon,
   EllipsisHorizontalIcon,
   PencilSquareIcon,
   UserCircleIcon,
+  UserGroupIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../../common/Avatar";
-import { Badge } from "../../common/Badge";
 import { IconButtonSurface } from "../../ui";
 import type { UserSummary } from "../../../types";
 import { getUserDisplayName } from "../../../utils/messageHelpers";
@@ -23,10 +22,9 @@ interface SidebarHeaderProps {
   onToggleCollapsed: () => void;
   onNewChat?: () => void;
   onCurrentUserClick?: () => void;
+  onOpenFriends?: () => void;
   onOpenSettings?: () => void;
   onRequestLogout?: () => void;
-  onToggleNotifications?: () => void;
-  notificationUnreadCount?: number;
 }
 
 const resolveDisplayName = (user: UserSummary, fallback: string): string =>
@@ -57,10 +55,9 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   onToggleCollapsed,
   onNewChat,
   onCurrentUserClick,
+  onOpenFriends,
   onOpenSettings,
   onRequestLogout,
-  onToggleNotifications,
-  notificationUnreadCount = 0,
 }) => {
   const { t } = useTranslation();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
@@ -149,26 +146,6 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           )}
           ref={menuRef}
         >
-          <div className="relative shrink-0">
-            <IconButtonSurface
-              onClick={onToggleNotifications}
-              aria-label={t("notifications.panelTitle", {
-                defaultValue: "Notifications",
-              })}
-              className="h-9 w-9 rounded-[0.95rem]"
-            >
-              <BellIcon className="h-5 w-5" />
-            </IconButtonSurface>
-            {notificationUnreadCount > 0 && (
-              <Badge
-                count={notificationUnreadCount}
-                size="sm"
-                variant="danger"
-                className="sidebar-shell-badge absolute -right-1 -top-1 shadow-xs"
-              />
-            )}
-          </div>
-
           <IconButtonSurface
             onClick={onNewChat}
             className="h-10 w-10 rounded-[1rem] bg-primary text-text-inverse shadow-xs hover:bg-primary-hover hover:text-text-inverse"
@@ -208,6 +185,18 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
               >
                 <UserCircleIcon className="h-5 w-5" />
                 <span>{t("profile:title", { defaultValue: "Profile" })}</span>
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-medium text-text-secondary transition-micro hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  onOpenFriends?.();
+                }}
+                role="menuitem"
+              >
+                <UserGroupIcon className="h-5 w-5" />
+                <span>{t("friends:title", { defaultValue: "Friends" })}</span>
               </button>
               <button
                 type="button"
