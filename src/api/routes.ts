@@ -1,10 +1,15 @@
 const TEST_FALLBACK_API_BASE_URL = '/api/v1';
-const TEST_FALLBACK_ADMIN_API_ROOT = '/api/v1/admin';
+const TEST_FALLBACK_ADMIN_API_BASE_URL = '/api/v1/admin';
+const TEST_FALLBACK_AUTH_API_BASE_URL = '/api/v1/auth';
 
-const normalizeBasePath = (value: string): string => {
+const normalizeBaseUrl = (value: string): string => {
   const trimmed = value.trim();
   if (!trimmed) {
     return '';
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed.replace(/\/+$/, '');
   }
 
   const withLeadingSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
@@ -22,16 +27,23 @@ const stripAdminSuffix = (value: string): string => {
 
 const isTestMode = import.meta.env.MODE === 'test';
 
-const rawApiBaseUrl = import.meta.env.VITE_ADMIN_API_BASE_URL?.trim() ?? '';
-const rawAdminApiRoot = import.meta.env.VITE_ADMIN_API_ROOT?.trim() ?? '';
+const rawApiBaseUrl =
+  import.meta.env.VITE_API_BASE_URL?.trim() ??
+  import.meta.env.VITE_ADMIN_API_BASE_URL?.trim() ??
+  '';
+const rawAdminApiBaseUrl =
+  import.meta.env.VITE_ADMIN_API_BASE_URL?.trim() ??
+  import.meta.env.VITE_ADMIN_API_ROOT?.trim() ??
+  '';
+const rawAuthApiBaseUrl = import.meta.env.VITE_AUTH_BASE_URL?.trim() ?? '';
 
 const resolveApiBaseUrl = (): string => {
   if (rawApiBaseUrl) {
-    return stripAdminSuffix(normalizeBasePath(rawApiBaseUrl));
+    return stripAdminSuffix(normalizeBaseUrl(rawApiBaseUrl));
   }
 
-  if (rawAdminApiRoot) {
-    return stripAdminSuffix(normalizeBasePath(rawAdminApiRoot));
+  if (rawAdminApiBaseUrl) {
+    return stripAdminSuffix(normalizeBaseUrl(rawAdminApiBaseUrl));
   }
 
   if (isTestMode) {
@@ -39,47 +51,55 @@ const resolveApiBaseUrl = (): string => {
   }
 
   throw new Error(
-    'Missing VITE_ADMIN_API_ROOT or VITE_ADMIN_API_BASE_URL in environment variables.',
+    'Missing VITE_API_BASE_URL, VITE_ADMIN_API_BASE_URL, or VITE_ADMIN_API_ROOT in environment variables.',
   );
 };
 
-const resolveAdminApiRoot = (apiBaseUrl: string): string => {
-  if (rawAdminApiRoot) {
-    return normalizeBasePath(rawAdminApiRoot);
+const resolveAdminApiBaseUrl = (apiBaseUrl: string): string => {
+  if (rawAdminApiBaseUrl) {
+    return normalizeBaseUrl(rawAdminApiBaseUrl);
   }
 
   if (rawApiBaseUrl) {
-    const normalizedLegacyBase = normalizeBasePath(rawApiBaseUrl);
+    const normalizedLegacyBase = normalizeBaseUrl(rawApiBaseUrl);
     return normalizedLegacyBase.endsWith('/admin')
       ? normalizedLegacyBase
       : `${apiBaseUrl === '/' ? '' : apiBaseUrl}/admin`;
   }
 
   if (isTestMode) {
-    return TEST_FALLBACK_ADMIN_API_ROOT;
+    return TEST_FALLBACK_ADMIN_API_BASE_URL;
   }
 
   return `${apiBaseUrl === '/' ? '' : apiBaseUrl}/admin`;
 };
 
-const normalizeResourcePath = (path: string): string => (path.startsWith('/') ? path : `/${path}`);
-
-const toRequestPath = (root: string, apiBase: string, resourcePath: string): string => {
-  const normalizedResourcePath = normalizeResourcePath(resourcePath);
-
-  if (apiBase !== '/' && root.startsWith(`${apiBase}/`)) {
-    const relativeRoot = root.slice(apiBase.length);
-    return `${relativeRoot}${normalizedResourcePath}`;
+const resolveAuthApiBaseUrl = (apiBaseUrl: string): string => {
+  if (rawAuthApiBaseUrl) {
+    return normalizeBaseUrl(rawAuthApiBaseUrl);
   }
 
-  if (apiBase === '/' && root.startsWith('/')) {
-    return `${root}${normalizedResourcePath}`;
+  if (isTestMode) {
+    return TEST_FALLBACK_AUTH_API_BASE_URL;
+  }
+
+  return `${apiBaseUrl === '/' ? '' : apiBaseUrl}/auth`;
+};
+
+const normalizeResourcePath = (path: string): string => (path.startsWith('/') ? path : `/${path}`);
+
+const joinRequestPath = (root: string, resourcePath: string): string => {
+  const normalizedResourcePath = normalizeResourcePath(resourcePath);
+  if (root === '/') {
+    return normalizedResourcePath;
   }
 
   return `${root}${normalizedResourcePath}`;
 };
 
 export const apiBaseUrl = resolveApiBaseUrl();
-export const adminApiRoot = resolveAdminApiRoot(apiBaseUrl);
+export const adminApiBaseUrl = resolveAdminApiBaseUrl(apiBaseUrl);
+export const authApiBaseUrl = resolveAuthApiBaseUrl(apiBaseUrl);
 
-export const adminApiPath = (path: string): string => toRequestPath(adminApiRoot, apiBaseUrl, path);
+export const adminApiPath = (path: string): string => joinRequestPath(adminApiBaseUrl, path);
+export const authApiPath = (path: string): string => joinRequestPath(authApiBaseUrl, path);

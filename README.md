@@ -2,7 +2,7 @@
 
 Vite + React admin UI for the chat platform.
 
-Canonical container orchestration lives in [`chat-infrastructure/compose/local/compose.yml`](/d:/Workspace/hacom_holding_dx/projects/chat-infrastructure/compose/local/compose.yml).
+Canonical infrastructure orchestration lives in chat-infrastructure/compose/infra/server-test.yml.
 
 ## Runtime
 
@@ -15,6 +15,30 @@ Canonical container orchestration lives in [`chat-infrastructure/compose/local/c
 ```bash
 cp .env.example .env
 make install
+make dev
+```
+
+Vite dev server proxies API/auth calls to local services by default:
+
+- `/api/v1/admin` -> `http://localhost:3201`
+- `/api/v1/auth` -> `http://localhost:3101`
+- `/api/v1` -> `http://localhost:3201`
+
+Override with these env vars when needed:
+
+- `VITE_DEV_ADMIN_PROXY_TARGET`
+- `VITE_DEV_AUTH_PROXY_TARGET`
+
+Runtime envs for hybrid dev:
+
+- `VITE_API_BASE_URL`: shared API base (`/api/v1` or absolute URL)
+- `VITE_ADMIN_API_BASE_URL`: admin API root (`/api/v1/admin` or absolute URL)
+- `VITE_AUTH_BASE_URL`: canonical auth root (`/api/v1/auth` or absolute URL)
+
+Run local admin panel with server-test backends:
+
+```bash
+cp .env.dev.frontend-with-server-test.example .env
 make dev
 ```
 
