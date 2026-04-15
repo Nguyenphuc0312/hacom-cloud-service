@@ -17,12 +17,12 @@ export const AppProviders = ({ children }: PropsWithChildren) => {
     <ConfigProvider
       theme={{
         token: {
-          colorPrimary: '#1d4ed8',
-          colorInfo: '#2563eb',
+          colorPrimary: '#3154ff',
+          colorInfo: '#3154ff',
           colorSuccess: '#15803d',
           colorWarning: '#b45309',
           colorError: '#b91c1c',
-          colorBgLayout: '#edf2f8',
+          colorBgLayout: '#eef4fb',
           colorBorderSecondary: '#d3dde8',
           colorTextSecondary: '#5d6878',
           borderRadius: 12,

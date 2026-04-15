@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { appConfig } from '@/config/appConfig';
 import { useAuthStore } from '@/store/authStore';
 import { toDisplayRole } from '@/utils/role';
 import { SidebarNavSection } from './SidebarNavSection';
@@ -58,7 +59,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ collapsed = false, i
             <strong>{user?.username?.trim() || user?.email || 'Admin workspace'}</strong>
             <span>{roleLabel}</span>
             <div className="ds-sidebar-footer-chips" aria-hidden>
-              <span className="ds-shell-chip">Production</span>
+              <span className="ds-shell-chip">{appConfig.environmentLabel}</span>
+              <span className="ds-shell-chip ds-shell-chip--ghost">{appConfig.liveUpdatesLabel}</span>
               <span className="ds-shell-chip ds-shell-chip--ghost">Ctrl K</span>
             </div>
           </div>

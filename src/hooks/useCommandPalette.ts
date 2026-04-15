@@ -25,6 +25,13 @@ export const useCommandPalette = () => {
     onTrigger: openPalette,
   });
 
+  useKeyboardShortcut({
+    key: '/',
+    preventDefault: true,
+    disallowModifiers: true,
+    onTrigger: openPalette,
+  });
+
   return {
     isOpen,
     openPalette,

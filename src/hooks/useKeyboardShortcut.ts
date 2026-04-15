@@ -9,7 +9,22 @@ interface UseKeyboardShortcutOptions {
   shift?: boolean;
   alt?: boolean;
   allowRepeat?: boolean;
+  ignoreWhenTyping?: boolean;
+  disallowModifiers?: boolean;
 }
+
+const isTypingTarget = (target: EventTarget | null): boolean => {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.isContentEditable) {
+    return true;
+  }
+
+  const tagName = target.tagName.toLowerCase();
+  return tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+};
 
 export const useKeyboardShortcut = ({
   key,
@@ -20,6 +35,8 @@ export const useKeyboardShortcut = ({
   shift,
   alt,
   allowRepeat = false,
+  ignoreWhenTyping = true,
+  disallowModifiers = false,
 }: UseKeyboardShortcutOptions) => {
   const triggerRef = useRef(onTrigger);
 
@@ -38,7 +55,15 @@ export const useKeyboardShortcut = ({
         return;
       }
 
+      if (ignoreWhenTyping && isTypingTarget(event.target)) {
+        return;
+      }
+
       if (event.key.toLowerCase() !== lowerKey) {
+        return;
+      }
+
+      if (disallowModifiers && (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)) {
         return;
       }
 
@@ -63,5 +88,15 @@ export const useKeyboardShortcut = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [allowRepeat, alt, ctrlOrMeta, enabled, key, preventDefault, shift]);
+  }, [
+    allowRepeat,
+    alt,
+    ctrlOrMeta,
+    disallowModifiers,
+    enabled,
+    ignoreWhenTyping,
+    key,
+    preventDefault,
+    shift,
+  ]);
 };

@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 
 import type { CommandCategory } from '@/app/layout/navigationConfig';
 
-const CATEGORY_ORDER: CommandCategory[] = ['Navigation', 'System', 'Settings'];
+const CATEGORY_ORDER: CommandCategory[] = ['Navigation', 'Quick Actions', 'System', 'Settings'];
 
 export interface CommandPaletteItem {
   id: string;

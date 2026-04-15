@@ -16,10 +16,13 @@ export const TopbarSearch: React.FC<TopbarSearchProps> = ({ onOpen }) => {
     >
       <SearchOutlined className="ds-topbar-search-icon" aria-hidden />
       <span className="ds-topbar-search-copy">
-        <span className="ds-topbar-search-label">Search pages, tools, and settings</span>
-        <span className="ds-topbar-search-hint">Jump across the admin workspace</span>
+        <span className="ds-topbar-search-label">Search pages, actions, and settings</span>
+        <span className="ds-topbar-search-hint">Global command palette with shortcuts and quick actions</span>
       </span>
-      <kbd className="ds-topbar-search-shortcut">Ctrl K</kbd>
+      <span className="ds-topbar-search-shortcuts" aria-hidden>
+        <kbd className="ds-topbar-search-shortcut">Ctrl K</kbd>
+        <kbd className="ds-topbar-search-shortcut">/</kbd>
+      </span>
     </button>
   );
 };

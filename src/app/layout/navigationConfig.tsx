@@ -23,12 +23,11 @@ export interface NavItem {
 }
 
 export type SidebarSectionKey =
-  | 'overview'
+  | 'analytics'
   | 'users'
-  | 'chat'
-  | 'security'
+  | 'conversations'
+  | 'system'
   | 'settings'
-  | 'monitoring'
   | 'support';
 
 export interface SidebarSection {
@@ -39,47 +38,58 @@ export interface SidebarSection {
 }
 
 export const SIDEBAR_SECTIONS: SidebarSection[] = [
-  { key: 'overview', label: 'Tong Quan', description: 'Snapshot', icon: <DashboardOutlined /> },
+  {
+    key: 'analytics',
+    label: 'Analytics',
+    description: 'Overview and monitoring',
+    icon: <DashboardOutlined />,
+  },
   {
     key: 'users',
-    label: 'Nguoi Dung & Nhan Su',
-    description: 'Identity',
+    label: 'Users',
+    description: 'Identity and access',
     icon: <TeamOutlined />,
   },
-  { key: 'chat', label: 'He Thong Chat', description: 'Messaging', icon: <MailOutlined /> },
   {
-    key: 'security',
-    label: 'Phan Quyen & Bao Mat',
-    description: 'Security',
-    icon: <SafetyCertificateOutlined />,
+    key: 'conversations',
+    label: 'Conversations',
+    description: 'Messaging workflows',
+    icon: <MailOutlined />,
+  },
+  {
+    key: 'system',
+    label: 'System',
+    description: 'Health and audit',
+    icon: <ThunderboltOutlined />,
   },
   {
     key: 'settings',
-    label: 'Cau Hinh',
-    description: 'Configuration',
+    label: 'Settings',
+    description: 'Infrastructure config',
     icon: <FileTextOutlined />,
   },
-  {
-    key: 'monitoring',
-    label: 'Theo Doi & Logs',
-    description: 'Observability',
-    icon: <AuditOutlined />,
-  },
-  { key: 'support', label: 'Ho Tro / Tai Lieu', description: 'Support', icon: <SolutionOutlined /> },
 ];
 
 export const navItems: NavItem[] = [
   {
     key: 'dashboard',
     label: 'Dashboard',
-    description: 'Operational overview and service posture',
+    description: 'Operational cockpit and service posture',
     icon: <DashboardOutlined />,
-    section: 'overview',
+    section: 'analytics',
     route: '/',
   },
   {
+    key: 'monitoring-overview',
+    label: 'Monitoring',
+    description: 'Realtime, correctness, and dependency posture',
+    icon: <ThunderboltOutlined />,
+    section: 'analytics',
+    route: '/monitoring',
+  },
+  {
     key: 'users',
-    label: 'Nguoi Dung',
+    label: 'Users',
     description: 'Admin accounts, access state, and sessions',
     icon: <TeamOutlined />,
     section: 'users',
@@ -87,7 +97,7 @@ export const navItems: NavItem[] = [
     children: [
       {
         key: 'hr-employees',
-        label: 'Nhan Su',
+        label: 'HR Directory',
         description: 'Employee records and account provisioning',
         icon: <SolutionOutlined />,
         section: 'users',
@@ -96,19 +106,11 @@ export const navItems: NavItem[] = [
     ],
   },
   {
-    key: 'smtp',
-    label: 'SMTP',
-    description: 'Mail transport configuration and runtime activation',
-    icon: <MailOutlined />,
-    section: 'chat',
-    route: '/services/smtp',
-  },
-  {
     key: 'email-templates',
     label: 'Email Templates',
     description: 'Draft, preview, publish, and rollback email content',
     icon: <FileTextOutlined />,
-    section: 'chat',
+    section: 'conversations',
     route: '/services/email-templates',
   },
   {
@@ -116,34 +118,34 @@ export const navItems: NavItem[] = [
     label: 'Audit Logs',
     description: 'Trace admin actions, requests, and security events',
     icon: <AuditOutlined />,
-    section: 'security',
+    section: 'system',
     route: '/audit',
-  },
-  {
-    key: 'monitoring-overview',
-    label: 'Monitoring Overview',
-    description: 'Realtime, correctness, and infra snapshot',
-    icon: <ThunderboltOutlined />,
-    section: 'monitoring',
-    route: '/monitoring',
   },
   {
     key: 'service-health',
     label: 'Service Health',
     description: 'Dependency health, latency, and runtime status',
     icon: <SafetyCertificateOutlined />,
-    section: 'monitoring',
+    section: 'system',
     route: '/services/health',
+  },
+  {
+    key: 'smtp',
+    label: 'SMTP',
+    description: 'Mail transport configuration and runtime activation',
+    icon: <MailOutlined />,
+    section: 'settings',
+    route: '/services/smtp',
   },
 ];
 
 export const breadcrumbNameMap: Record<string, string> = {
   '/': 'Dashboard',
-  '/users': 'Nguoi Dung',
-  '/hr-employees': 'Nhan Su',
+  '/users': 'Users',
+  '/hr-employees': 'HR Directory',
   '/audit': 'Audit Logs',
-  '/monitoring': 'Monitoring Overview',
-  '/services': 'Dich Vu',
+  '/monitoring': 'Monitoring',
+  '/services': 'Services',
   '/services/smtp': 'SMTP',
   '/services/email-templates': 'Email Templates',
   '/services/health': 'Service Health',
@@ -163,14 +165,23 @@ export const resolveNavigationContext = (pathname: string) => {
       ) ?? null;
 
   const section = item ? SIDEBAR_SECTIONS.find((entry) => entry.key === item.section) ?? null : null;
+  const breadcrumbs = ['/', ...pathname.split('/').filter(Boolean).map((_segment, index, parts) => `/${parts.slice(0, index + 1).join('/')}`)]
+    .map((route) => ({
+      route,
+      label:
+        breadcrumbNameMap[route] ??
+        (route.startsWith('/users/') ? 'User Detail' : route.startsWith('/services/') ? 'Service Detail' : null),
+    }))
+    .filter((entry): entry is { route: string; label: string } => Boolean(entry.label));
 
   return {
     item,
     section,
     title: item?.label ?? 'Dashboard',
     description: item?.description ?? 'Operational visibility and control surface',
-    sectionLabel: section?.label ?? 'Tong Quan',
+    sectionLabel: section?.label ?? 'Analytics',
     sectionDescription: section?.description ?? 'Workspace',
+    breadcrumbs,
   };
 };
 
@@ -187,7 +198,7 @@ export const pickSelectedMenuKey = (pathname: string): string => {
   return 'dashboard';
 };
 
-export type CommandCategory = 'Navigation' | 'System' | 'Settings';
+export type CommandCategory = 'Navigation' | 'Quick Actions' | 'System' | 'Settings';
 
 export interface CommandRouteItem {
   id: string;
