@@ -15,12 +15,17 @@ interface SidebarConversationSummariesResult {
 
 export const useSidebarConversationSummaries =
   (): SidebarConversationSummariesResult => {
-    const conversations = useChatStore((state) => state.conversations);
+    const orderedConversationIds = useChatStore(
+      (state) => state.orderedConversationIds,
+    );
+    const conversationById = useChatStore((state) => state.conversationById);
 
     return useMemo(() => {
-      const orderedConversations = Array.isArray(conversations)
-        ? conversations
-        : [];
+      const orderedConversations = orderedConversationIds
+        .map((conversationId) => conversationById[conversationId])
+        .filter((conversation): conversation is Conversation =>
+          Boolean(conversation),
+        );
 
       const counts = orderedConversations.reduce(
         (accumulator, conversation) => {
@@ -43,7 +48,7 @@ export const useSidebarConversationSummaries =
         ),
         counts,
       };
-    }, [conversations]);
+    }, [conversationById, orderedConversationIds]);
   };
 
 export default useSidebarConversationSummaries;

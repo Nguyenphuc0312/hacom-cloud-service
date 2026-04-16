@@ -90,6 +90,21 @@ interface TimelineRowData {
   }) => void;
 }
 
+const shouldAnimateInsertedMessage = (
+  item: TimelineItem | undefined,
+  insertedMessageKeys: Set<string>,
+): boolean => {
+  if (!item || item.kind !== "message") {
+    return false;
+  }
+
+  return Boolean(
+    item.isOwn &&
+      isPendingMessage(item.message) &&
+      insertedMessageKeys.has(getMessageStableKey(item.message)),
+  );
+};
+
 const areEqualTimelineRowProps = (
   previousProps: ListChildComponentProps<TimelineRowData>,
   nextProps: ListChildComponentProps<TimelineRowData>,
@@ -131,6 +146,18 @@ const areEqualTimelineRowProps = (
     return false;
   }
 
+  const previousShouldAnimateInsert = shouldAnimateInsertedMessage(
+    previousItem,
+    previousProps.data.insertedMessageKeys,
+  );
+  const nextShouldAnimateInsert = shouldAnimateInsertedMessage(
+    nextItem,
+    nextProps.data.insertedMessageKeys,
+  );
+  if (previousShouldAnimateInsert !== nextShouldAnimateInsert) {
+    return false;
+  }
+
   const previousHighlighted =
     previousItem?.kind === "message" &&
     isTargetMessage(
@@ -146,8 +173,6 @@ const areEqualTimelineRowProps = (
     previousProps.data.density === nextProps.data.density &&
     previousProps.data.isSelectionMode === nextProps.data.isSelectionMode &&
     previousProps.data.currentUsername === nextProps.data.currentUsername &&
-    previousProps.data.insertedMessageKeys ===
-      nextProps.data.insertedMessageKeys &&
     previousProps.data.onReply === nextProps.data.onReply &&
     previousProps.data.onReact === nextProps.data.onReact &&
     previousProps.data.onEdit === nextProps.data.onEdit &&
@@ -303,6 +328,10 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
     const isHighlighted =
       item.kind === "message" &&
       isTargetMessage(item.message, data.highlightedMessageId);
+    const shouldAnimateInsert = shouldAnimateInsertedMessage(
+      item,
+      data.insertedMessageKeys,
+    );
 
     return (
       <div style={style}>
@@ -335,7 +364,7 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
                 onToggleSelect={data.onToggleSelect}
                 onNavigateToMessage={data.onNavigateToMessage}
                 currentUsername={data.currentUsername}
-                insertedMessageKeys={data.insertedMessageKeys}
+                shouldAnimateInsert={shouldAnimateInsert}
               />
             </div>
           </div>

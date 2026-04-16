@@ -44,6 +44,7 @@ import {
   normalizeAuthResponse,
 } from "../features/auth/api/authApi";
 import { resolveAuthFailure } from "../features/auth/utils/authErrorMapper";
+import { authApi } from "../services/api";
 
 export interface User {
   id: string;
@@ -607,7 +608,6 @@ export const useAuthStore = create<AuthState>()(
           });
 
           try {
-            const { authApi } = await import("../services/api");
             const response = await authApi.register(data);
             const registerPayload = unwrapApiSuccess(response);
             const payloadRecord = registerPayload as unknown as Record<

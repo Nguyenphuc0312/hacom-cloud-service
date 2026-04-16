@@ -51,6 +51,8 @@ interface ChatState {
   lastConversationCursor: string | null;
   lastConversationUpdatedAfterCursor: string | null;
   messages: Record<string, Message[]>;
+  messageById: Record<string, Message>;
+  messageIdsByConversation: Record<string, string[]>;
   messageAliasIndexByConversation: Record<string, Record<string, string>>;
   messagesHydratedByConversation: Record<string, boolean>;
   selectedConversationId: string | null;
@@ -229,6 +231,8 @@ const initialState = {
   lastConversationCursor: null,
   lastConversationUpdatedAfterCursor: null,
   messages: {},
+  messageById: {},
+  messageIdsByConversation: {},
   messageAliasIndexByConversation: {},
   messagesHydratedByConversation: {},
   selectedConversationId: null,
@@ -739,6 +743,35 @@ const buildConversationCollectionState = (conversations: Conversation[]) => ({
   lastConversationUpdatedAfterCursor:
     computeConversationUpdatedAfterCursor(conversations),
 });
+
+const buildConversationMessageIndexState = (
+  state: Pick<ChatState, "messageById" | "messageIdsByConversation">,
+  conversationId: string,
+  nextMessages: Message[],
+) => {
+  const previousIds = state.messageIdsByConversation[conversationId] ?? [];
+  const nextIds = nextMessages.map((message) => getStableMessageId(message));
+  const nextIdSet = new Set(nextIds);
+  const nextMessageById = { ...state.messageById };
+
+  previousIds.forEach((messageId) => {
+    if (!nextIdSet.has(messageId)) {
+      delete nextMessageById[messageId];
+    }
+  });
+
+  nextMessages.forEach((message) => {
+    nextMessageById[getStableMessageId(message)] = message;
+  });
+
+  return {
+    messageById: nextMessageById,
+    messageIdsByConversation: {
+      ...state.messageIdsByConversation,
+      [conversationId]: nextIds,
+    },
+  };
+};
 
 const replaceConversationInActivityOrder = (
   conversations: Conversation[],
@@ -1534,6 +1567,8 @@ const buildConversationMessageState = (
     ChatState,
     | "conversations"
     | "messages"
+    | "messageById"
+    | "messageIdsByConversation"
     | "messageAliasIndexByConversation"
     | "messagesHydratedByConversation"
     | "hasNewerMessagesByConversation"
@@ -1618,12 +1653,19 @@ const buildConversationMessageState = (
       })()
     : state.conversations;
 
+  const messageIndexState = buildConversationMessageIndexState(
+    state,
+    conversationId,
+    nextMessages,
+  );
+
   return {
     conversations,
     messages: {
       ...state.messages,
       [conversationId]: nextMessages,
     },
+    ...messageIndexState,
     messageAliasIndexByConversation: {
       ...state.messageAliasIndexByConversation,
       [conversationId]: nextAliasIndex,
@@ -1679,6 +1721,8 @@ const ingestConversationMessagesWithMetadata = (
     ChatState,
     | "conversations"
     | "messages"
+    | "messageById"
+    | "messageIdsByConversation"
     | "messageAliasIndexByConversation"
     | "messagesHydratedByConversation"
     | "hasNewerMessagesByConversation"
@@ -3449,9 +3493,11 @@ export const useCurrentTypingStatus = () => {
 
 export const useFilteredConversations = () => {
   return useChatStore((state) => {
-    let filtered = Array.isArray(state.conversations)
-      ? state.conversations
-      : [];
+    let filtered = state.orderedConversationIds
+      .map((conversationId) => state.conversationById[conversationId])
+      .filter((conversation): conversation is Conversation =>
+        Boolean(conversation),
+      );
 
     switch (state.activeFilter) {
       case "unread":
@@ -3498,7 +3544,7 @@ export const useFilteredConversations = () => {
       );
     }
 
-    return sortConversationsByActivity(filtered);
+    return filtered;
   });
 };
 
@@ -3506,18 +3552,39 @@ export const useTotalUnreadCount = () => {
   return useChatStore((state) => state.totalUnreadCount);
 };
 
+export const selectConversationMessagesFromState = (
+  state: Pick<
+    ChatState,
+    "messageById" | "messageIdsByConversation" | "messages"
+  >,
+  conversationId: string | null,
+): Message[] => {
+  if (!conversationId) return EMPTY_MESSAGES;
+
+  const messageIds = state.messageIdsByConversation[conversationId];
+  if (Array.isArray(messageIds) && messageIds.length > 0) {
+    return messageIds
+      .map((messageId) => state.messageById[messageId])
+      .filter((message): message is Message => Boolean(message));
+  }
+
+  return state.messages[conversationId] || EMPTY_MESSAGES;
+};
+
 export const useCurrentMessages = () =>
-  useChatStore((state) => {
+  useChatStore(
+    useShallow((state) => {
     const id = state.selectedConversationId;
-    if (!id) return EMPTY_MESSAGES;
-    return state.messages[id] || EMPTY_MESSAGES;
-  });
+      return selectConversationMessagesFromState(state, id);
+    }),
+  );
 
 export const useMessagesByConversation = (conversationId: string | null) =>
-  useChatStore((state) => {
-    if (!conversationId) return EMPTY_MESSAGES;
-    return state.messages[conversationId] || EMPTY_MESSAGES;
-  });
+  useChatStore(
+    useShallow((state) =>
+      selectConversationMessagesFromState(state, conversationId),
+    ),
+  );
 
 export const useConversationCount = () =>
   useChatStore((state) => state.orderedConversationIds.length);
