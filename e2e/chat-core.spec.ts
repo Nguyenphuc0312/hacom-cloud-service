@@ -33,6 +33,19 @@ type MockMessage = {
   replyToMessage?: Record<string, unknown>;
 };
 
+type MockSearchUser = {
+  id: string;
+  username: string;
+  displayName: string;
+  status: string;
+  avatarUrl?: string | null;
+  email?: string | null;
+  employeeCode?: string | null;
+  isFriend?: boolean;
+  canAddFriend?: boolean;
+  friendshipStatus?: "none" | "pending" | "accepted" | "declined" | "canceled";
+};
+
 type MockState = {
   currentUser: {
     id: string;
@@ -43,6 +56,7 @@ type MockState = {
   };
   conversations: MockConversation[];
   messagesByConversation: Record<string, MockMessage[]>;
+  searchUsers?: MockSearchUser[];
   sentPayloads: Array<Record<string, unknown>>;
   unreadFeedHits: number;
 };
@@ -265,6 +279,24 @@ const installApiMocks = async (page: Page, state: MockState) => {
 
     if (pathname === "/api/v1/users/profile" && method === "GET") {
       await fulfillJson(success(state.currentUser));
+      return;
+    }
+
+    if (pathname === "/api/v1/users/search" && method === "GET") {
+      const keyword = (url.searchParams.get("q") ?? "").trim().toLowerCase();
+      const results = (state.searchUsers ?? []).filter((user) => {
+        const haystacks = [
+          user.displayName,
+          user.username,
+          user.email ?? "",
+          user.employeeCode ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        return haystacks.includes(keyword);
+      });
+
+      await fulfillJson(success(results));
       return;
     }
 
@@ -562,4 +594,81 @@ test("conversation with unread bootstraps from server unread feed and lands on f
 
   await expect(page.getByText("First unread from server")).toBeVisible();
   expect(state.unreadFeedHits).toBeGreaterThan(0);
+});
+
+test("new conversation search supports multiple identifiers and group mode enforces friends-only selection", async ({ page }) => {
+  const state: MockState = {
+    currentUser: {
+      id: "user-a",
+      username: "alice",
+      displayName: "Alice",
+      status: "online",
+    },
+    conversations: [makeConversation("room-1", "Room 1")],
+    messagesByConversation: {
+      "room-1": [makeMessage({ id: "seed-1", conversationId: "room-1", content: "Seed room 1" })],
+    },
+    searchUsers: [
+      {
+        id: "user-b",
+        username: "bob",
+        displayName: "Bob Builder",
+        status: "online",
+        employeeCode: "EMP002",
+        email: "bob@example.com",
+        isFriend: true,
+        canAddFriend: false,
+        friendshipStatus: "accepted",
+      },
+      {
+        id: "user-c",
+        username: "carol",
+        displayName: "Carol Outside",
+        status: "offline",
+        employeeCode: "EMP003",
+        email: "carol@example.com",
+        isFriend: false,
+        canAddFriend: true,
+        friendshipStatus: "none",
+      },
+    ],
+    sentPayloads: [],
+    unreadFeedHits: 0,
+  };
+
+  await bootChatPage(page, state);
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("chat:open-new-chat-modal"));
+  });
+
+  const searchInput = page.getByPlaceholder("Search by name or username...");
+  await expect(page.getByText("New conversation")).toBeVisible();
+
+  await searchInput.fill("Builder");
+  await expect(page.getByText("Bob Builder")).toBeVisible();
+
+  await searchInput.fill("carol");
+  await expect(page.getByText("Carol Outside")).toBeVisible();
+
+  await searchInput.fill("carol@example.com");
+  await expect(page.getByText("Carol Outside")).toBeVisible();
+
+  await searchInput.fill("EMP002");
+  await expect(page.getByText("Bob Builder")).toBeVisible();
+
+  await page.getByRole("button", { name: "Create group" }).click();
+
+  await searchInput.fill("carol");
+  await expect(
+    page.getByText(/Friends only|\[newChatModal\.friendsOnly\]/),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: /Carol Outside/ })).toBeDisabled();
+
+  await searchInput.fill("bob");
+  await page.getByRole("button", { name: /Bob Builder/ }).click();
+  await page.getByPlaceholder("Enter group name...").fill("Ops Squad");
+  await expect(
+    page.getByRole("button", { name: "Create group (1 users)" }),
+  ).toBeVisible();
 });

@@ -7,7 +7,6 @@ import {
   BellIcon,
   PhotoIcon,
   UserPlusIcon,
-  ExclamationTriangleIcon,
   ArrowRightOnRectangleIcon,
   MagnifyingGlassIcon,
   TrashIcon,
@@ -18,21 +17,27 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "../common/Avatar";
+import { UserSearchResultItem } from "../common/UserSearchResultItem";
 import { Input, Spinner, TabTrigger, toast } from "../ui";
 import type { Conversation, UserSummary } from "../../types";
 import { RoomMemberRole, UserStatus } from "../../types";
-import { useDebounce } from "../../hooks";
 import { useChatStore, useGroupStore } from "../../stores";
 import type { InviteLinkItem, JoinRequestItem } from "../../stores/groupStore";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
-import { getConversationMembersUseCase } from "../../features/chat/usecases/getConversationMembers";
 import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
-import { searchUsersUseCase } from "../../features/chat/usecases/searchUsers";
-import { addConversationMembersUseCase } from "../../features/chat/usecases/addConversationMembers";
-import { updateConversationUseCase } from "../../features/chat/usecases/updateConversation";
-import { updateConversationMemberRoleUseCase } from "../../features/chat/usecases/updateConversationMemberRole";
-import { removeConversationMemberUseCase } from "../../features/chat/usecases/removeConversationMember";
-import { leaveConversationUseCase } from "../../features/chat/usecases/leaveConversation";
+import {
+  buildUserSearchSecondaryText,
+  isGroupMemberEligible,
+  useChatUserSearch,
+} from "../../features/chat/hooks/useChatUserSearch";
+import {
+  canAddGroupMembers,
+  canDeleteConversationForSelf,
+  canLeaveGroup,
+  canRemoveGroupMember,
+  canRenameGroup,
+  canToggleAdminRole,
+} from "../../features/chat/permissions/groupPermissions";
 import { createGroupInviteLinkUseCase } from "../../features/chat/usecases/createGroupInviteLink";
 import { revokeGroupInviteLinkUseCase } from "../../features/chat/usecases/revokeGroupInviteLink";
 import { resolveGroupJoinRequestUseCase } from "../../features/chat/usecases/resolveGroupJoinRequest";
@@ -212,6 +217,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const { t } = useTranslation(["profile", "common"]);
   const unavailableActionClass = "cursor-not-allowed opacity-60";
   const unavailableActionTitle = t("profile:groupInfo.unavailableAction");
+  const blockedOwnerLeaveTitle = t("profile:groupInfo.leaveBlockedOwner", {
+    defaultValue: "Transfer ownership before leaving this group.",
+  });
 
   const participants = React.useMemo(
     () =>
@@ -225,8 +233,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   >("members");
   const [showAddMember, setShowAddMember] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<UserSummary[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [membersByUserId, setMembersByUserId] = useState<
@@ -245,7 +251,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     null,
   );
 
-  const debouncedQuery = useDebounce(searchQuery, 300);
   const updateConversation = useChatStore((state) => state.updateConversation);
   const removeConversation = useChatStore((state) => state.removeConversation);
   const loadMembersFailedMessage = t("profile:toast.loadMembersFailed");
@@ -312,25 +317,47 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     });
   }, [createdBy, membersByUserId, participants]);
 
+  const activeOwnerCount = React.useMemo(
+    () =>
+      members.filter((member) => member.role === RoomMemberRole.OWNER).length ||
+      (createdBy ? 1 : 0),
+    [createdBy, members],
+  );
+  const {
+    results: searchResults,
+    isLoading: isSearching,
+    errorMessage: searchErrorMessage,
+    debouncedQuery,
+  } = useChatUserSearch(searchQuery, {
+    enabled: showAddMember,
+    limit: 10,
+    excludeUserIds: [
+      currentUserId,
+      ...members.map((member) => member.id),
+      ...participants.map((participant) => participant.id),
+    ],
+  });
+
   const currentUserRole =
     membersByUserId[currentUserId]?.role ||
     (currentUserId === createdBy
       ? RoomMemberRole.OWNER
       : RoomMemberRole.MEMBER);
-  const isAdmin =
-    currentUserRole === RoomMemberRole.OWNER ||
-    currentUserRole === RoomMemberRole.ADMIN;
-  const canManageRoles = currentUserRole === RoomMemberRole.OWNER;
+  const isAdmin = canRenameGroup(currentUserRole);
+  const canAddMembers = canAddGroupMembers(currentUserRole);
+  const canDeleteConversation = canDeleteConversationForSelf();
+  const canLeaveCurrentGroup = canLeaveGroup(currentUserRole, activeOwnerCount);
 
   const canRemoveMember = useCallback(
     (member: GroupMember) => {
-      if (!isAdmin) return false;
-      if (member.id === currentUserId) return false;
-      if (member.role === RoomMemberRole.OWNER) return false;
-      if (currentUserRole === RoomMemberRole.OWNER) return true;
-      return member.role !== RoomMemberRole.ADMIN;
+      return canRemoveGroupMember({
+        actorRole: currentUserRole,
+        actorUserId: currentUserId,
+        targetRole: member.role,
+        targetUserId: member.id,
+      });
     },
-    [currentUserId, currentUserRole, isAdmin],
+    [currentUserId, currentUserRole],
   );
 
   const roleLabel = useCallback(
@@ -359,11 +386,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const fetchMembers = useCallback(async () => {
     setIsLoadingMembers(true);
     try {
-      const response = await getConversationMembersUseCase(
-        conversation.id,
-        1,
-        200,
-      );
+      const response = await groupApi.getMembers(conversation.id, 1, 200);
       const payload = unwrapApiSuccess(response);
       const rows = extractMemberRows(payload);
       const nextMembers = rows
@@ -390,6 +413,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     const refreshedConversation = unwrapApiSuccess(response);
     updateConversation(conversation.id, refreshedConversation);
   }, [conversation.id, updateConversation]);
+
+  const refreshGroupState = useCallback(async () => {
+    await Promise.all([refreshConversation(), fetchMembers()]);
+  }, [fetchMembers, refreshConversation]);
 
   React.useEffect(() => {
     setGroupNameDraft(conversation.name || "");
@@ -514,46 +541,13 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     setJoinRequests,
   ]);
 
-  const searchUsers = useCallback(
-    async (query: string) => {
-      if (!query.trim() || query.length < 2) {
-        setSearchResults((previous) => (previous.length === 0 ? previous : []));
-        return;
-      }
-
-      setIsSearching(true);
-      try {
-        const response = await searchUsersUseCase(query, 1, 10);
-        const memberIds = new Set(members.map((member) => member.id));
-        const users = unwrapApiSuccess(response).filter(
-          (user) => !memberIds.has(user.id) && user.id !== currentUserId,
-        );
-        setSearchResults(users as unknown as UserSummary[]);
-      } catch {
-        setSearchResults((previous) => (previous.length === 0 ? previous : []));
-      } finally {
-        setIsSearching(false);
-      }
-    },
-    [members, currentUserId],
-  );
-
-  React.useEffect(() => {
-    void searchUsers(debouncedQuery);
-  }, [debouncedQuery, searchUsers]);
-
   const handleAddMember = useCallback(
     async (userId: string) => {
       setIsSubmitting(true);
       try {
-        const response = await addConversationMembersUseCase(conversation.id, [
-          userId,
-        ]);
-        const updatedConversation = unwrapApiSuccess(response);
-        updateConversation(conversation.id, updatedConversation);
-        void fetchMembers();
+        await groupApi.addMember(conversation.id, userId);
+        await refreshGroupState();
         setSearchQuery("");
-        setSearchResults([]);
         setShowAddMember(false);
         toast.success(t("profile:toast.memberAdded"));
       } catch (error) {
@@ -563,7 +557,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         setIsSubmitting(false);
       }
     },
-    [conversation.id, fetchMembers, t, updateConversation],
+    [conversation.id, refreshGroupState, t],
   );
 
   const handleRenameGroup = useCallback(async () => {
@@ -581,8 +575,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
     setIsSubmitting(true);
     try {
-      await updateConversationUseCase(conversation.id, { name: nextName });
-      await refreshConversation();
+      await groupApi.updateSettings(conversation.id, { title: nextName });
+      await refreshGroupState();
       setIsRenamingGroup(false);
       toast.success(t("profile:toast.groupRenamed"));
     } catch (error) {
@@ -595,15 +589,22 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     conversation.id,
     conversation.name,
     groupNameDraft,
-    refreshConversation,
+    refreshGroupState,
     t,
   ]);
 
   const handleToggleMemberRole = useCallback(
     async (member: GroupMember) => {
-      if (!canManageRoles) return;
-      if (member.id === currentUserId) return;
-      if (member.role === RoomMemberRole.OWNER) return;
+      if (
+        !canToggleAdminRole({
+          actorRole: currentUserRole,
+          actorUserId: currentUserId,
+          targetRole: member.role,
+          targetUserId: member.id,
+        })
+      ) {
+        return;
+      }
 
       const nextRole =
         member.role === RoomMemberRole.ADMIN
@@ -612,12 +613,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
       setActingMemberId(member.id);
       try {
-        await updateConversationMemberRoleUseCase(
-          conversation.id,
-          member.id,
-          nextRole,
-        );
-        await fetchMembers();
+        await groupApi.updateMemberRole(conversation.id, member.id, nextRole);
+        await refreshGroupState();
         toast.success(
           nextRole === RoomMemberRole.ADMIN
             ? t("profile:toast.memberPromoted")
@@ -630,7 +627,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         setActingMemberId(null);
       }
     },
-    [canManageRoles, conversation.id, currentUserId, fetchMembers, t],
+    [conversation.id, currentUserId, currentUserRole, refreshGroupState, t],
   );
 
   const handleRemoveMember = useCallback(
@@ -648,8 +645,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
       setActingMemberId(member.id);
       try {
-        await removeConversationMemberUseCase(conversation.id, member.id);
-        await Promise.all([refreshConversation(), fetchMembers()]);
+        await groupApi.removeMember(conversation.id, member.id);
+        await refreshGroupState();
         toast.success(t("profile:toast.memberRemoved"));
       } catch (error) {
         const apiError = extractApiError(error);
@@ -658,26 +655,42 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         setActingMemberId(null);
       }
     },
-    [canRemoveMember, conversation.id, fetchMembers, refreshConversation, t],
+    [canRemoveMember, conversation.id, refreshGroupState, t],
   );
 
   const handleLeaveGroup = useCallback(async () => {
+    if (!canLeaveCurrentGroup) {
+      toast.error(
+        t("profile:groupInfo.leaveBlockedOwner", {
+          defaultValue: "Transfer ownership before leaving this group.",
+        }),
+      );
+      return;
+    }
+
     if (!window.confirm(t("profile:groupInfo.leaveConfirm"))) return;
 
     setIsSubmitting(true);
     try {
-      await leaveConversationUseCase(conversation.id);
+      await groupApi.leaveGroup(conversation.id);
       removeConversation(conversation.id);
       toast.success(t("profile:toast.leftGroup"));
       onClose();
       navigate("/chat");
     } catch (error) {
-      toast.error(t("profile:toast.leaveGroupFailed"));
-      console.log(error);
+      const apiError = extractApiError(error);
+      toast.error(apiError.message || t("profile:toast.leaveGroupFailed"));
     } finally {
       setIsSubmitting(false);
     }
-  }, [conversation.id, navigate, onClose, removeConversation, t]);
+  }, [
+    canLeaveCurrentGroup,
+    conversation.id,
+    navigate,
+    onClose,
+    removeConversation,
+    t,
+  ]);
 
   const tabs = [
     { id: "members", label: t("profile:groupInfo.tabs.members") },
@@ -997,7 +1010,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         <div className="py-2">
           {activeTab === "members" && (
             <>
-              {isAdmin && (
+              {canAddMembers && (
                 <button
                   type="button"
                   disabled={isSubmitting}
@@ -1026,35 +1039,49 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                       <div className="py-4 flex justify-center">
                         <Spinner size="md" />
                       </div>
-                    ) : searchResults.length === 0 ? (
+                    ) : searchErrorMessage ? (
+                      <p className="px-3 py-3 text-sm text-danger">
+                        {searchErrorMessage}
+                      </p>
+                    ) : debouncedQuery.trim().length >= 2 &&
+                      searchResults.length === 0 ? (
                       <p className="px-3 py-3 text-sm text-text-muted">
                         {t("profile:groupInfo.noSearchResult")}
                       </p>
+                    ) : searchResults.length === 0 ? (
+                      <p className="px-3 py-3 text-sm text-text-muted">
+                        {t("profile:groupInfo.searchHint", {
+                          defaultValue:
+                            "Search by name, username, email, or employee code.",
+                        })}
+                      </p>
                     ) : (
                       searchResults.map((user) => (
-                        <button
+                        <UserSearchResultItem
                           key={user.id}
-                          type="button"
-                          onClick={() => void handleAddMember(user.id)}
-                          disabled={isSubmitting}
-                          className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-surface-hover"
-                        >
-                          <Avatar
-                            src={user.avatar}
-                            alt={resolveMemberName(user) || user.id}
-                            size="sm"
-                            status={user.status}
-                            showStatus
-                          />
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-text-primary truncate">
-                              {resolveMemberName(user) || user.id}
-                            </p>
-                            <p className="text-xs text-text-muted truncate">
-                              @{user.username}
-                            </p>
-                          </div>
-                        </button>
+                          avatarUrl={user.avatarUrl}
+                          avatarAlt={user.displayName || user.id}
+                          status={user.status ?? null}
+                          primaryText={user.displayName || user.id}
+                          secondaryText={buildUserSearchSecondaryText(user)}
+                          disabled={
+                            isSubmitting || !isGroupMemberEligible(user)
+                          }
+                          onSelect={() => void handleAddMember(user.id)}
+                          trailing={
+                            isGroupMemberEligible(user) ? (
+                              <span className="rounded-lg bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                                {t("common:actions.add")}
+                              </span>
+                            ) : (
+                              <span className="rounded-lg bg-surface-overlay px-2 py-1 text-xs text-text-muted">
+                                {t("profile:newChatModal.friendsOnly", {
+                                  defaultValue: "Friends only",
+                                })}
+                              </span>
+                            )
+                          }
+                        />
                       ))
                     )}
                   </div>
@@ -1073,10 +1100,12 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 members.map((member) => {
                   const isMemberActionRunning =
                     isSubmitting || actingMemberId === member.id;
-                  const canToggleRole =
-                    canManageRoles &&
-                    member.id !== currentUserId &&
-                    member.role !== RoomMemberRole.OWNER;
+                  const canToggleRole = canToggleAdminRole({
+                    actorRole: currentUserRole,
+                    actorUserId: currentUserId,
+                    targetRole: member.role,
+                    targetUserId: member.id,
+                  });
 
                   return (
                     <div
@@ -1423,40 +1452,35 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         <div className="h-px bg-border mx-4" />
 
         <div className="py-2">
-          <button
-            type="button"
-            disabled={isSubmitting}
-            onClick={() => {
-              void onDeleteConversation?.();
-            }}
-            className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-danger"
-          >
-            <TrashIcon className="w-5 h-5" />
-            <span className="text-sm">
-              {t("profile:userProfile.deleteConversation")}
-            </span>
-          </button>
+          {canDeleteConversation ? (
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => {
+                void onDeleteConversation?.();
+              }}
+              className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-danger"
+            >
+              <TrashIcon className="w-5 h-5" />
+              <span className="text-sm">
+                {t("profile:userProfile.deleteConversation")}
+              </span>
+            </button>
+          ) : null}
 
           <button
             type="button"
-            disabled
-            title={unavailableActionTitle}
-            className={clsx(
-              "w-full flex items-center gap-4 px-4 py-3 text-danger",
-              unavailableActionClass,
-            )}
-          >
-            <ExclamationTriangleIcon className="w-5 h-5" />
-            <span className="text-sm">
-              {t("profile:groupInfo.reportGroup")}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !canLeaveCurrentGroup}
+            title={
+              canLeaveCurrentGroup ? undefined : blockedOwnerLeaveTitle
+            }
             onClick={() => void handleLeaveGroup()}
-            className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-danger"
+            className={clsx(
+              "w-full flex items-center gap-4 px-4 py-3 text-danger transition-colors",
+              canLeaveCurrentGroup
+                ? "hover:bg-danger/10"
+                : unavailableActionClass,
+            )}
           >
             <ArrowRightOnRectangleIcon className="w-5 h-5" />
             <span className="text-sm">{t("profile:groupInfo.leaveGroup")}</span>

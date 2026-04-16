@@ -6,13 +6,6 @@ import { GroupInfo } from "./GroupInfo";
 import { useGroupStore } from "../../stores";
 import { RoomType, UserStatus, type Conversation } from "../../types";
 
-vi.mock("../../features/chat/usecases/getConversationMembers", () => ({
-  getConversationMembersUseCase: vi.fn().mockResolvedValue({
-    success: true,
-    data: [],
-  }),
-}));
-
 vi.mock("../../features/chat/usecases/getConversationById", () => ({
   getConversationByIdUseCase: vi.fn().mockResolvedValue({
     success: true,
@@ -25,26 +18,6 @@ vi.mock("../../features/chat/usecases/searchUsers", () => ({
     success: true,
     data: [],
   }),
-}));
-
-vi.mock("../../features/chat/usecases/addConversationMembers", () => ({
-  addConversationMembersUseCase: vi.fn(),
-}));
-
-vi.mock("../../features/chat/usecases/updateConversation", () => ({
-  updateConversationUseCase: vi.fn(),
-}));
-
-vi.mock("../../features/chat/usecases/updateConversationMemberRole", () => ({
-  updateConversationMemberRoleUseCase: vi.fn(),
-}));
-
-vi.mock("../../features/chat/usecases/removeConversationMember", () => ({
-  removeConversationMemberUseCase: vi.fn(),
-}));
-
-vi.mock("../../features/chat/usecases/leaveConversation", () => ({
-  leaveConversationUseCase: vi.fn(),
 }));
 
 vi.mock("../../features/chat/usecases/createGroupInviteLink", () => ({
@@ -65,6 +38,37 @@ vi.mock("../../services/api", async (importOriginal) => {
     ...actual,
     groupApi: {
       ...actual.groupApi,
+      getMembers: vi.fn().mockResolvedValue({
+        success: true,
+        data: {
+          members: [
+            {
+              roomId: "room-1",
+              userId: "user-1",
+              role: "owner",
+              joinedAt: new Date("2026-04-16T00:00:00.000Z"),
+              user: {
+                id: "user-1",
+                username: "owner",
+                displayName: "Owner",
+                status: "online",
+              },
+            },
+            {
+              roomId: "room-1",
+              userId: "user-2",
+              role: "member",
+              joinedAt: new Date("2026-04-16T00:00:00.000Z"),
+              user: {
+                id: "user-2",
+                username: "member",
+                displayName: "Member",
+                status: "online",
+              },
+            },
+          ],
+        },
+      }),
       getInviteLinks: vi.fn().mockResolvedValue({ success: true, data: [] }),
       getJoinRequests: vi.fn().mockResolvedValue({ success: true, data: [] }),
     },
@@ -121,5 +125,6 @@ describe("GroupInfo", () => {
 
     expect(await screen.findByText("Group information")).toBeInTheDocument();
     expect(screen.getByText("Engineering")).toBeInTheDocument();
+    expect(screen.queryByText(/report group/i)).not.toBeInTheDocument();
   });
 });
