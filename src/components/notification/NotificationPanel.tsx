@@ -11,12 +11,14 @@ import {
 import { Badge } from "../common/Badge";
 import { Button, EmptyState } from "../ui";
 import {
-  useFilteredNotifications,
+  matchesFilter,
   useNotificationStore,
   type NotificationFilter,
   type NotificationItem,
 } from "../../features/notification/state/notificationStore";
 import { formatRelativeTime } from "../../utils/formatTime";
+import { useChatStore } from "../../stores/chatStore";
+import { sortConversationsByActivity } from "../../utils/conversationRanking";
 
 interface NotificationPanelProps {
   isOpen: boolean;
@@ -79,7 +81,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
 }) => {
   const { t } = useTranslation();
   const panelRef = React.useRef<HTMLDivElement | null>(null);
-  const items = useFilteredNotifications();
+  const notificationItems = useNotificationStore((state) => state.items);
   const activeFilter = useNotificationStore((state) => state.activeFilter);
   const setFilter = useNotificationStore((state) => state.setFilter);
   const markAsRead = useNotificationStore((state) => state.markAsRead);
@@ -87,6 +89,59 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
   const clearNotifications = useNotificationStore(
     (state) => state.clearNotifications,
   );
+  const conversations = useChatStore((state) => state.conversations);
+
+  const items = React.useMemo(() => {
+    const conversationItems =
+      activeFilter === "all" || activeFilter === "unread" || activeFilter === "message"
+        ? sortConversationsByActivity(
+            conversations.filter((conversation) => (conversation.unreadCount ?? 0) > 0),
+          ).map((conversation) => {
+            const activityAt =
+              conversation.lastMessageSortAt ??
+              conversation.lastActivityAt ??
+              conversation.lastMessage?.createdAt ??
+              conversation.updatedAt;
+            const title =
+              conversation.displayName ||
+              conversation.name ||
+              t("chat:conversation.untitled", {
+                defaultValue: "Conversation",
+              });
+            const body =
+              conversation.lastMessage?.content ||
+              t("notifications.conversationFallback", {
+                defaultValue: "{{count}} unread message(s)",
+                count: conversation.unreadCount ?? 0,
+              });
+
+            return {
+              id: `conversation-unread:${conversation.id}`,
+              kind: "message" as const,
+              title,
+              body,
+              createdAt: new Date(activityAt ?? Date.now()).toISOString(),
+              isRead: false,
+              readAt: null,
+              conversationId: conversation.id,
+              messageId: conversation.lastMessage?.id,
+              actorId: conversation.lastMessage?.senderId ?? null,
+              source: "conversation" as const,
+            };
+          })
+        : [];
+
+    const transientItems = notificationItems
+      .filter((item) => matchesFilter(item, activeFilter))
+      .map((item) => ({
+        ...item,
+        source: "transient" as const,
+      }));
+
+    return [...conversationItems, ...transientItems].sort(
+      (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
+    );
+  }, [activeFilter, conversations, notificationItems, t]);
 
   React.useEffect(() => {
     if (!isOpen) return;
@@ -112,8 +167,10 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
   }, [isOpen, onClose]);
 
   const handleSelectItem = React.useCallback(
-    (item: NotificationItem) => {
-      markAsRead(item.id);
+    (item: NotificationItem & { source?: "conversation" | "transient" }) => {
+      if (item.source !== "conversation") {
+        markAsRead(item.id);
+      }
 
       if (typeof window !== "undefined" && item.conversationId) {
         window.dispatchEvent(
@@ -132,6 +189,8 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
   );
 
   if (!isOpen) return null;
+
+  const hasTransientItems = items.some((item) => item.source !== "conversation");
 
   return (
     <div
@@ -165,6 +224,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
               type="button"
               size="xs"
               variant="ghost"
+              disabled={!hasTransientItems}
               onClick={() => markAllAsRead(activeFilter)}
             >
               {t("notifications.actions.markAllRead", {
@@ -175,6 +235,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
               type="button"
               size="xs"
               variant="ghost"
+              disabled={!hasTransientItems}
               onClick={() => clearNotifications(activeFilter)}
             >
               {t("notifications.actions.clear", {

@@ -601,6 +601,43 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     [getItemOffset, getTimelineItemKey, requestScrollCommand, timelineItems],
   );
 
+  const resolveUnreadAnchorIndex = React.useCallback((): number => {
+    const unreadDividerIndex = timelineItems.findIndex((item) => item.kind === "unread");
+    if (unreadDividerIndex >= 0) {
+      return unreadDividerIndex;
+    }
+
+    if (unreadMarker?.firstUnreadMessageId) {
+      return timelineItems.findIndex(
+        (item) =>
+          item.kind === "message" &&
+          isTargetMessage(item.message, unreadMarker.firstUnreadMessageId!),
+      );
+    }
+
+    if (unreadMarker?.lastReadMessageId) {
+      const lastReadIndex = timelineItems.findIndex(
+        (item) =>
+          item.kind === "message" &&
+          isTargetMessage(item.message, unreadMarker.lastReadMessageId!),
+      );
+      if (lastReadIndex >= 0) {
+        return Math.min(lastReadIndex + 1, Math.max(0, timelineItems.length - 1));
+      }
+    }
+
+    if (!unreadMarker?.lastReadAt) {
+      return -1;
+    }
+
+    const lastReadAtMs = new Date(unreadMarker.lastReadAt).getTime();
+    return timelineItems.findIndex(
+      (item) =>
+        item.kind === "message" &&
+        new Date(item.message.createdAt).getTime() > lastReadAtMs,
+    );
+  }, [timelineItems, unreadMarker]);
+
   const {
     pendingNewMessages,
     isPinnedToBottom,
@@ -610,12 +647,14 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     jumpToLatest,
     detachAutoFollow,
     syncScrollStateFromDom,
+    pendingRestoreAnchor,
     pendingRestoreScrollTop,
     pendingRestoreVersion,
   } = useMessageScrollMachine({
     conversationId,
     messages,
     currentUserId,
+    preferUnreadAnchor: Boolean(unreadMarker?.active),
     hasMore,
     isLoadingMore,
     onLoadMore,
@@ -631,6 +670,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     },
     outerRef,
     requestScrollToBottom,
+    captureScrollAnchor: captureVisibleAnchor,
   });
 
   React.useEffect(() => {
@@ -929,6 +969,46 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   );
 
   React.useEffect(() => {
+    if (!pendingRestoreAnchor || viewportHeight <= 0) {
+      return;
+    }
+
+    const anchorIndex = pendingRestoreAnchor.itemKey
+      ? timelineItems.findIndex(
+          (item, index) =>
+            getTimelineItemKey(item, index) === pendingRestoreAnchor.itemKey,
+        )
+      : -1;
+    if (anchorIndex < 0) {
+      return;
+    }
+
+    requestScrollCommand({
+      kind: "offset",
+      offset:
+        getItemOffset(anchorIndex) + pendingRestoreAnchor.offsetWithinItem,
+      reason: "conversation-restore-anchor",
+    });
+
+    const rafId = requestAnimationFrame(() => {
+      syncScrollStateFromDom("conversation-restore-anchor-synced");
+    });
+
+    return () => {
+      cancelAnimationFrame(rafId);
+    };
+  }, [
+    getItemOffset,
+    getTimelineItemKey,
+    pendingRestoreAnchor,
+    pendingRestoreVersion,
+    requestScrollCommand,
+    syncScrollStateFromDom,
+    timelineItems,
+    viewportHeight,
+  ]);
+
+  React.useEffect(() => {
     if (pendingRestoreScrollTop === null || viewportHeight <= 0) {
       return;
     }
@@ -951,6 +1031,43 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     pendingRestoreVersion,
     requestScrollCommand,
     syncScrollStateFromDom,
+    viewportHeight,
+  ]);
+
+  React.useEffect(() => {
+    if (!unreadMarker?.active || viewportHeight <= 0) {
+      return;
+    }
+    if (pendingRestoreAnchor || pendingRestoreScrollTop !== null) {
+      return;
+    }
+
+    const targetIndex = resolveUnreadAnchorIndex();
+    if (targetIndex < 0) {
+      return;
+    }
+
+    requestScrollCommand({
+      kind: "offset",
+      offset: Math.max(0, getItemOffset(targetIndex)),
+      reason: "conversation-restore-unread",
+    });
+
+    const rafId = requestAnimationFrame(() => {
+      syncScrollStateFromDom("conversation-restore-unread-synced");
+    });
+
+    return () => {
+      cancelAnimationFrame(rafId);
+    };
+  }, [
+    getItemOffset,
+    pendingRestoreAnchor,
+    pendingRestoreScrollTop,
+    requestScrollCommand,
+    resolveUnreadAnchorIndex,
+    syncScrollStateFromDom,
+    unreadMarker,
     viewportHeight,
   ]);
 

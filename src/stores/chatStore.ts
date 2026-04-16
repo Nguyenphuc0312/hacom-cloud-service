@@ -27,7 +27,6 @@ import {
   sortConversationsByActivity,
 } from "../utils/conversationRanking";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
-import { useNotificationStore } from "../features/notification/state/notificationStore";
 import i18n from "../i18n";
 import { useAuthStore } from "./authStore";
 import { registerStoreResetter } from "./storeResetRegistry";
@@ -1563,6 +1562,39 @@ const isCanonicalConversationMessage = (
   return !isTempMessageId(message.id);
 };
 
+const attachReplySnapshots = (messages: Message[]): Message[] => {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return [];
+  }
+
+  const messageByIdentity = new Map<string, Message>();
+  messages.forEach((message) => {
+    toMessageIdentityKeys(message).forEach((key) => {
+      messageByIdentity.set(key, message);
+    });
+  });
+
+  return messages.map((message) => {
+    if (message.replyToMessage || !message.replyTo) {
+      return message;
+    }
+
+    const replyTarget =
+      messageByIdentity.get(`id:${message.replyTo}`) ??
+      messageByIdentity.get(`local:${message.replyTo}`) ??
+      messageByIdentity.get(`stable:${message.replyTo}`) ??
+      messageByIdentity.get(`client:${message.replyTo}`);
+    if (!replyTarget) {
+      return message;
+    }
+
+    return {
+      ...message,
+      replyToMessage: createReplySnapshot(replyTarget),
+    };
+  });
+};
+
 const buildConversationMessageState = (
   state: Pick<
     ChatState,
@@ -1581,11 +1613,12 @@ const buildConversationMessageState = (
     hasNewer?: boolean;
   },
 ) => {
-  const lastMessage = nextMessages[nextMessages.length - 1];
-  const latestCanonicalMessage = [...nextMessages]
+  const resolvedMessages = attachReplySnapshots(nextMessages);
+  const lastMessage = resolvedMessages[resolvedMessages.length - 1];
+  const latestCanonicalMessage = [...resolvedMessages]
     .reverse()
     .find((message) => isCanonicalConversationMessage(message));
-  const nextAliasIndex = rebuildConversationMessageAliasIndex(nextMessages);
+  const nextAliasIndex = rebuildConversationMessageAliasIndex(resolvedMessages);
   const existingConversation =
     state.conversations.find((conversation) => conversation.id === conversationId) ??
     null;
@@ -1657,14 +1690,14 @@ const buildConversationMessageState = (
   const messageIndexState = buildConversationMessageIndexState(
     state,
     conversationId,
-    nextMessages,
+    resolvedMessages,
   );
 
   return {
     conversations,
     messages: {
       ...state.messages,
-      [conversationId]: nextMessages,
+      [conversationId]: resolvedMessages,
     },
     ...messageIndexState,
     messageAliasIndexByConversation: {
@@ -2553,14 +2586,6 @@ export const useChatStore = create<ChatState>()(
           };
         });
 
-        const conversations = get().conversations;
-        conversations.forEach((conversation) => {
-          if ((conversation.unreadCount ?? 0) <= 0) {
-            useNotificationStore
-              .getState()
-              .markConversationAsRead(conversation.id);
-          }
-        });
       },
 
       applyIncomingConversationMessage: (conversationId, message, options) => {
@@ -2633,10 +2658,6 @@ export const useChatStore = create<ChatState>()(
             ...buildConversationCollectionState(conversations),
           };
         });
-
-        useNotificationStore
-          .getState()
-          .markConversationAsRead(conversationId);
       },
 
       fetchConversations: async () => {

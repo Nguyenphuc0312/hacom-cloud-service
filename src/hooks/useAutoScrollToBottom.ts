@@ -13,6 +13,7 @@ interface UseAutoScrollToBottomParams {
   conversationId: string;
   messages: Message[];
   currentUserId: string;
+  preferUnreadAnchor?: boolean;
   hasMore: boolean;
   isLoadingMore: boolean;
   onLoadMore?: () => void | Promise<void>;
@@ -20,6 +21,10 @@ interface UseAutoScrollToBottomParams {
   onAfterPrepend?: () => void;
   outerRef: React.RefObject<HTMLDivElement | null>;
   requestScrollToBottom: (reason: string) => void;
+  captureScrollAnchor?: () => {
+    itemKey: string | null;
+    offsetWithinItem: number;
+  } | null;
 }
 
 export interface UseAutoScrollToBottomResult {
@@ -31,6 +36,12 @@ export interface UseAutoScrollToBottomResult {
   jumpToLatest: () => void;
   detachAutoFollow: (reason?: string) => void;
   syncScrollStateFromDom: (reason?: string) => void;
+  pendingRestoreAnchor:
+    | {
+        itemKey: string | null;
+        offsetWithinItem: number;
+      }
+    | null;
   pendingRestoreScrollTop: number | null;
   pendingRestoreVersion: number;
 }
@@ -38,6 +49,8 @@ export interface UseAutoScrollToBottomResult {
 interface ConversationScrollSession {
   isPinnedToBottom: boolean;
   scrollTop: number;
+  anchorItemKey: string | null;
+  anchorOffsetWithinItem: number;
 }
 
 const conversationScrollSessions = new Map<string, ConversationScrollSession>();
@@ -68,6 +81,7 @@ export const useAutoScrollToBottom = ({
   conversationId,
   messages,
   currentUserId,
+  preferUnreadAnchor = false,
   hasMore,
   isLoadingMore,
   onLoadMore,
@@ -75,12 +89,17 @@ export const useAutoScrollToBottom = ({
   onAfterPrepend,
   outerRef,
   requestScrollToBottom,
+  captureScrollAnchor,
 }: UseAutoScrollToBottomParams): UseAutoScrollToBottomResult => {
   const [pendingNewMessages, setPendingNewMessages] = React.useState(0);
   const [isPinnedToBottom, setIsPinnedToBottom] = React.useState(true);
   const [scrollMode, setScrollMode] = React.useState<ScrollMode>("at_bottom");
   const [firstDetachedUnreadMessageId, setFirstDetachedUnreadMessageId] =
     React.useState<string | null>(null);
+  const [pendingRestoreAnchor, setPendingRestoreAnchor] = React.useState<{
+    itemKey: string | null;
+    offsetWithinItem: number;
+  } | null>(null);
   const [pendingRestoreScrollTop, setPendingRestoreScrollTop] =
     React.useState<number | null>(null);
   const [pendingRestoreVersion, setPendingRestoreVersion] = React.useState(0);
@@ -97,12 +116,15 @@ export const useAutoScrollToBottom = ({
       nextScrollTop?: number,
     ) => {
       const outer = outerRef.current;
+      const anchor = captureScrollAnchor?.();
       conversationScrollSessions.set(conversationId, {
         isPinnedToBottom: nextPinnedToBottom,
         scrollTop: Math.max(0, nextScrollTop ?? outer?.scrollTop ?? 0),
+        anchorItemKey: anchor?.itemKey ?? null,
+        anchorOffsetWithinItem: anchor?.offsetWithinItem ?? 0,
       });
     },
-    [conversationId, outerRef],
+    [captureScrollAnchor, conversationId, outerRef],
   );
 
   const updatePinnedState = React.useCallback(
@@ -199,17 +221,41 @@ export const useAutoScrollToBottom = ({
     loadingOlderRef.current = false;
     setPendingNewMessages(0);
     setFirstDetachedUnreadMessageId(null);
+    setPendingRestoreAnchor(null);
+    setPendingRestoreScrollTop(null);
+
+    if (preferUnreadAnchor) {
+      isPinnedRef.current = false;
+      setIsPinnedToBottom(false);
+      setScrollMode("reading_history");
+      logScrollTrace("conversation_restore_requested", {
+        conversationId,
+        reason: "unread-anchor",
+      });
+      return;
+    }
 
     const savedSession = conversationScrollSessions.get(conversationId);
     if (savedSession && !savedSession.isPinnedToBottom) {
       isPinnedRef.current = false;
       setIsPinnedToBottom(false);
       setScrollMode("reading_history");
-      setPendingRestoreScrollTop(savedSession.scrollTop);
+      setPendingRestoreAnchor(
+        savedSession.anchorItemKey
+          ? {
+              itemKey: savedSession.anchorItemKey,
+              offsetWithinItem: savedSession.anchorOffsetWithinItem,
+            }
+          : null,
+      );
+      if (!savedSession.anchorItemKey) {
+        setPendingRestoreScrollTop(savedSession.scrollTop);
+      }
       setPendingRestoreVersion((value) => value + 1);
       logScrollTrace("conversation_restore_requested", {
         conversationId,
         scrollTop: savedSession.scrollTop,
+        anchorItemKey: savedSession.anchorItemKey,
       });
       return;
     }
@@ -217,9 +263,8 @@ export const useAutoScrollToBottom = ({
     isPinnedRef.current = true;
     setIsPinnedToBottom(true);
     setScrollMode("at_bottom");
-    setPendingRestoreScrollTop(null);
     requestScrollToBottom("conversation-change");
-  }, [conversationId, messages, requestScrollToBottom]);
+  }, [conversationId, messages, preferUnreadAnchor, requestScrollToBottom]);
 
   React.useEffect(() => {
     const previousMessages = prevMessagesRef.current;
@@ -375,6 +420,7 @@ export const useAutoScrollToBottom = ({
     jumpToLatest,
     detachAutoFollow,
     syncScrollStateFromDom,
+    pendingRestoreAnchor,
     pendingRestoreScrollTop,
     pendingRestoreVersion,
   };

@@ -453,7 +453,7 @@ describe("chatStore phase-1 realtime flows", () => {
     await secondPromise;
   });
 
-  it("marks conversation and notifications as read optimistically before the request resolves", async () => {
+  it("marks conversation read optimistically without mutating transient notification state", async () => {
     useChatStore.getState().setConversations([
       makeConversation({
         id: "room-1",
@@ -498,10 +498,36 @@ describe("chatStore phase-1 realtime flows", () => {
     expect(conversation?.unreadCount).toBe(0);
     expect(conversation?.lastReadMessageId).toBe("msg-2");
     expect(useChatStore.getState().totalUnreadCount).toBe(0);
-    expect(notification?.isRead).toBe(true);
+    expect(notification?.isRead).toBe(false);
 
     deferred.resolve();
     await markPromise;
+  });
+
+  it("hydrates reply preview from loaded history when canonical reply summary is missing", () => {
+    useChatStore.getState().setMessages("room-1", [
+      makeMessage({
+        id: "msg-parent",
+        content: "parent message",
+        createdAt: "2026-04-10T10:00:00.000Z",
+        updatedAt: "2026-04-10T10:00:00.000Z",
+      }) as never,
+      makeMessage({
+        id: "msg-reply",
+        content: "reply body",
+        replyTo: "msg-parent",
+        createdAt: "2026-04-10T10:01:00.000Z",
+        updatedAt: "2026-04-10T10:01:00.000Z",
+      }) as never,
+    ] as never);
+
+    const replyMessage = useChatStore
+      .getState()
+      .messages["room-1"]?.find((message) => message.id === "msg-reply");
+
+    expect(replyMessage?.replyTo).toBe("msg-parent");
+    expect(replyMessage?.replyToMessage?.id).toBe("msg-parent");
+    expect(replyMessage?.replyToMessage?.content).toBe("parent message");
   });
 
   it("applies unread summary as authoritative reconnect snapshot", () => {

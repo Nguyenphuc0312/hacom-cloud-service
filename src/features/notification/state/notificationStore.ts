@@ -48,7 +48,7 @@ const MAX_NOTIFICATION_ITEMS = 200;
 const byCreatedAtDesc = (a: NotificationItem, b: NotificationItem): number =>
   Date.parse(b.createdAt) - Date.parse(a.createdAt);
 
-const matchesFilter = (
+export const matchesFilter = (
   item: NotificationItem,
   filter: NotificationFilter,
 ): boolean => {
