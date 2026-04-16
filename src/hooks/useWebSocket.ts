@@ -2173,9 +2173,7 @@ export const useWebSocket = (
       }
 
       if (scopes.length === 0 || scopes.includes("user_settings")) {
-        void import("../settings/settingsStore").then(({ useSettingsStore }) =>
-          useSettingsStore.getState().syncFromServer(),
-        );
+        void useSettingsStore.getState().syncFromServer();
       }
     };
 
@@ -2190,14 +2188,11 @@ export const useWebSocket = (
       const settings = asRecord(payload.settings);
       if (version === null || !settings) return;
 
-      // Import dynamically to avoid circular deps at module init time
-      import("../settings/settingsStore").then(({ useSettingsStore }) => {
-        useSettingsStore
-          .getState()
-          .applyRemoteUpdate(
-            payload as unknown as import("@hacom/chat-shared-types").UserSettingsUpdatedPayload,
-          );
-      });
+      useSettingsStore
+        .getState()
+        .applyRemoteUpdate(
+          payload as unknown as import("@hacom/chat-shared-types").UserSettingsUpdatedPayload,
+        );
     };
 
     const unsubscribeSyncEvents = registerSyncEvents(socket, {

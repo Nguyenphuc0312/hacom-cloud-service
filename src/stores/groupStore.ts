@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
+import { registerStoreResetter } from "./storeResetRegistry";
 
 export interface InviteLinkItem {
   id: string;
@@ -223,5 +224,9 @@ export const useGroupStore = create<GroupStoreState>()(
     reset: () => set(initialState),
   })),
 );
+
+registerStoreResetter("group", () => {
+  useGroupStore.getState().reset();
+});
 
 export default useGroupStore;

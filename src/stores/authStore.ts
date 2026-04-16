@@ -45,6 +45,7 @@ import {
 } from "../features/auth/api/authApi";
 import { resolveAuthFailure } from "../features/auth/utils/authErrorMapper";
 import { authApi } from "../services/api";
+import { runRegisteredStoreResets } from "./storeResetRegistry";
 
 export interface User {
   id: string;
@@ -203,12 +204,7 @@ const normalizeLoginPayload = (payload: unknown): AuthResponse =>
   normalizeAuthResponse(payload) as unknown as AuthResponse;
 
 const resetChatState = async (): Promise<void> => {
-  const { useChatStore } = await import("./chatStore");
-  useChatStore.getState().reset();
-  const { usePresenceStore } = await import("./presenceStore");
-  usePresenceStore.getState().clearAll();
-  const { useGroupStore } = await import("./groupStore");
-  useGroupStore.getState().reset();
+  await runRegisteredStoreResets();
 };
 
 const normalizeStringValue = (value: unknown): string | null => {

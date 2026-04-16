@@ -90,6 +90,8 @@ interface TimelineRowData {
   }) => void;
 }
 
+const EMPTY_SELECTED_MESSAGE_IDS = new Set<string>();
+
 const shouldAnimateInsertedMessage = (
   item: TimelineItem | undefined,
   insertedMessageKeys: Set<string>,
@@ -410,7 +412,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   onRetry,
   density = "comfortable",
   isSelectionMode = false,
-  selectedMessageIds = new Set<string>(),
+  selectedMessageIds = EMPTY_SELECTED_MESSAGE_IDS,
   onToggleSelect,
   onNavigateToMessage,
   currentUsername,
@@ -458,26 +460,27 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     conversationType,
     unreadMarker: liveUnreadMarker,
   });
+  const latestMessageStableKeys = React.useMemo(
+    () => new Set(messages.map((message) => getMessageStableKey(message))),
+    [messages],
+  );
   const insertedMessageKeys = React.useMemo(() => {
     const previousKeys = previousMessageStableKeysRef.current;
-    const nextKeys = new Set(messages.map((message) => getMessageStableKey(message)));
     const insertedKeys = new Set<string>();
 
-    nextKeys.forEach((key) => {
+    latestMessageStableKeys.forEach((key) => {
       if (!previousKeys.has(key)) {
         insertedKeys.add(key);
       }
     });
 
     return insertedKeys;
-  }, [messages]);
+  }, [latestMessageStableKeys]);
   timelineItemCountRef.current = timelineItems.length;
 
   React.useEffect(() => {
-    previousMessageStableKeysRef.current = new Set(
-      messages.map((message) => getMessageStableKey(message)),
-    );
-  }, [conversationId, messages]);
+    previousMessageStableKeysRef.current = latestMessageStableKeys;
+  }, [conversationId, latestMessageStableKeys]);
 
   const estimateItemSize = React.useCallback(
     (item: TimelineItem) => estimateTimelineItemHeight(item, density),

@@ -18,6 +18,7 @@ import type { UserSettingsUpdatedPayload } from "@hacom/chat-shared-types";
 import { defaultSettings } from "./defaults";
 import { loadSettings, saveSettings } from "./persistence";
 import { syncSettingsToServer, fetchSettingsFromServer } from "./sync";
+import { registerSettingsConflictHandler } from "./settingsSyncBridge";
 
 // ============================================
 // STORE INTERFACE
@@ -271,3 +272,5 @@ export const useSettingsSection = <S extends SettingsSection>(
 /** Convenience: get the updater */
 export const useUpdateSettings = () =>
   useSettingsStore((state) => state.updateSettings);
+
+registerSettingsConflictHandler(() => useSettingsStore.getState().syncFromServer());

@@ -30,6 +30,7 @@ import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDis
 import { useNotificationStore } from "../features/notification/state/notificationStore";
 import i18n from "../i18n";
 import { useAuthStore } from "./authStore";
+import { registerStoreResetter } from "./storeResetRegistry";
 import { conversationApi, messageApi } from "../services/api";
 import type {
   Conversation,
@@ -3613,3 +3614,7 @@ export const useAdjacentConversationIds = (conversationId: string | null) =>
       ] as [string | null, string | null];
     }),
   );
+
+registerStoreResetter("chat", () => {
+  useChatStore.getState().reset();
+});

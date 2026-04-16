@@ -4,8 +4,8 @@ import {
   selectConversationMessagesFromState,
 } from "../../../stores/chatStore";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
+import type { ConnectionState } from "../../../lib/socket";
 import type {
-  ConnectionState,
   Conversation,
   Message,
   UserSummary,

@@ -25,7 +25,6 @@ import {
   useCurrentMessages,
   useCurrentTypingStatus,
   useConversationCount,
-  useHasConversation,
   useAdjacentConversationIds,
 } from "../stores";
 import { useWebSocket } from "../hooks";
@@ -49,6 +48,7 @@ import { removeReactionUseCase } from "../features/chat/usecases/removeReaction"
 import { editMessageUseCase } from "../features/chat/usecases/editMessage";
 import { deleteMessageUseCase } from "../features/chat/usecases/deleteMessage";
 import { useSendMessage } from "../features/chat/hooks/useSendMessage";
+import { useConversationSession } from "../features/chat/hooks/useConversationSession";
 import { useConversationValidation } from "../features/chat/hooks/useConversationValidation";
 import {
   CHAT_OPEN_NEW_CHAT_EVENT,
@@ -192,35 +192,12 @@ export const ChatPage: React.FC = () => {
   // Per-conversation derived selectors — only re-render when THIS
   // conversation's values change, not when other conversations load.
 
-  const currentHasMore = useChatStore((state) =>
-    selectedConversationId
-      ? (state.hasMoreMessages[selectedConversationId] ?? true)
-      : false,
-  );
-  const currentIsLoading = useChatStore((state) =>
-    selectedConversationId
-      ? Boolean(state.isLoadingMessagesByConversation[selectedConversationId])
-      : false,
-  );
-  const currentMessageError = useChatStore((state) =>
-    selectedConversationId
-      ? (state.messageErrors[selectedConversationId] ?? null)
-      : null,
-  );
 
   // Selectors
   const selectedConversation = useSelectedConversation();
   const conversationMessages = useCurrentMessages();
   const typingStatus = useCurrentTypingStatus();
-  const isSelectedConversationHydrated = useChatStore((state) =>
-    selectedConversationId
-      ? Boolean(state.messagesHydratedByConversation[selectedConversationId])
-      : false,
-  );
   const conversationCount = useConversationCount();
-  const hasConversationCachedForRoute = useHasConversation(routeConversationId);
-  const [previousConversationId, nextConversationId] =
-    useAdjacentConversationIds(selectedConversationId);
   // WebSocket
   const { connectionState, sendTyping, stopTyping, joinRoom, leaveRoom } =
     useWebSocket();
@@ -339,6 +316,47 @@ export const ChatPage: React.FC = () => {
       ? getOtherParticipant(selectedConversation, currentUserSummary.id)
       : null;
 
+  const {
+    currentHasMore: sessionCurrentHasMore,
+    currentIsLoading: sessionCurrentIsLoading,
+    currentMessageError: sessionCurrentMessageError,
+    canBootstrapConversationFromCache: sessionCanBootstrapConversationFromCache,
+    isCurrentRouteValidated: sessionIsCurrentRouteValidated,
+    isConversationHistoryReady: sessionIsConversationHistoryReady,
+    isConversationReady: sessionIsConversationReady,
+    websocketReady: sessionWebsocketReady,
+    handleLoadOlderMessages: sessionHandleLoadOlderMessages,
+    handleRetryMessages: sessionHandleRetryMessages,
+    handleReachedLatestMessage: sessionHandleReachedLatestMessage,
+    handleTyping: sessionHandleTyping,
+  } = useConversationSession({
+    routeConversationId,
+    selectedConversationId,
+    selectedConversation,
+    isSelectedDirectConversation,
+    otherUser: otherUser ?? null,
+    connectionState,
+    isValidatingRoom,
+    lastValidatedConversationId,
+    messageCount: conversationMessages.length,
+    fetchMessages,
+    markAsRead,
+    joinRoom,
+    leaveRoom,
+    stopTyping,
+    sendTyping,
+    updateConversation,
+  });
+  const sessionManaged = true;
+  const canBootstrapConversationFromCache =
+    sessionCanBootstrapConversationFromCache;
+  const isCurrentRouteValidated = sessionIsCurrentRouteValidated;
+  const isConversationHistoryReady = sessionIsConversationHistoryReady;
+  const isConversationReady = sessionIsConversationReady;
+  const websocketReady = sessionWebsocketReady;
+  const [previousConversationId, nextConversationId] =
+    useAdjacentConversationIds(selectedConversationId);
+
   // Load conversations on mount
   useEffect(() => {
     void (async () => {
@@ -391,81 +409,9 @@ export const ChatPage: React.FC = () => {
     [navigate, routeConversationId],
   );
 
-  const canBootstrapConversationFromCache =
-    hasConversationCachedForRoute &&
-    routeConversationId === selectedConversationId;
-  const isCurrentRouteValidated = conversationId
-    ? lastValidatedConversationId === conversationId ||
-      hasConversationCachedForRoute
-    : true;
-  const isConversationHistoryReady = isSelectedConversationHydrated;
-  const isConversationReady = Boolean(
-    selectedConversationId &&
-      selectedConversation &&
-      isCurrentRouteValidated,
-  );
-  const websocketReady = connectionState === "connected";
-
-  useEffect(() => {
-    if (
-      !selectedConversationId ||
-      (isValidatingRoom && !canBootstrapConversationFromCache)
-    ) {
-      return;
-    }
-
-    void (async () => {
-      const chatState = useChatStore.getState();
-      const isConversationHydrated =
-        chatState.messagesHydratedByConversation[selectedConversationId] ===
-        true;
-      const hasNewerMessages =
-        chatState.hasNewerMessagesByConversation[selectedConversationId] ??
-        false;
-
-      logMessageDebug("ChatPage", "conversation_open_started", {
-        conversationId: selectedConversationId,
-        isHydrated: isConversationHydrated,
-        isValidatingRoom,
-        hasNewer: hasNewerMessages,
-      });
-      logMessageDebug("ChatPage", "room_join_requested", {
-        conversationId: selectedConversationId,
-        skipInitialDeltaSync: false,
-        reason: "conversation_open",
-      });
-      joinRoom(selectedConversationId, { skipInitialDeltaSync: false });
-
-      if (!isConversationHydrated) {
-        const initialFetchResult = await fetchMessages(selectedConversationId);
-        logMessageDebug("ChatPage", "initial_fetch_completed", {
-          conversationId: selectedConversationId,
-          result: initialFetchResult,
-        });
-      }
-    })();
-
-    return () => {
-      stopTyping(selectedConversationId);
-      leaveRoom(selectedConversationId);
-    };
-  }, [
-    canBootstrapConversationFromCache,
-    fetchMessages,
-    isValidatingRoom,
-    joinRoom,
-    leaveRoom,
-    selectedConversationId,
-    stopTyping,
-  ]);
-
-  useEffect(() => {
-    lastVisibleReadAnchorKeyRef.current = null;
-  }, [selectedConversationId]);
-
   const handleSendMessage = useSendMessage({
     selectedConversationId,
-    isConversationReady,
+    isConversationReady: sessionIsConversationReady,
     source: "ChatPage",
   });
 
@@ -540,8 +486,14 @@ export const ChatPage: React.FC = () => {
     },
     [markAsRead, selectedConversationId],
   );
+  void handleLoadOlderMessages;
+  void handleRetryMessages;
+  void handleReachedLatestMessage;
 
   useEffect(() => {
+    if (sessionManaged) {
+      return;
+    }
     if (!selectedConversationId || (isValidatingRoom && !canBootstrapConversationFromCache)) {
       return;
     }
@@ -706,6 +658,7 @@ export const ChatPage: React.FC = () => {
     },
     [selectedConversationId, sendTyping, stopTyping],
   );
+  void handleTyping;
 
   const closeInfoPanel = useCallback(() => {
     setIsInfoPanelOpen(false);
@@ -978,6 +931,9 @@ export const ChatPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (sessionManaged) {
+      return;
+    }
     if (!selectedConversationId) return;
 
     logMessageDebug("ChatPage", "conversation_readiness_changed", {
@@ -1005,6 +961,9 @@ export const ChatPage: React.FC = () => {
   ]);
 
   useEffect(() => {
+    if (sessionManaged) {
+      return;
+    }
     if (!selectedConversationId || !isSelectedDirectConversation || otherUser) {
       return;
     }
@@ -1203,17 +1162,19 @@ export const ChatPage: React.FC = () => {
             onDeleteMessage={handleDeleteMessage}
             onToggleInfoPanel={handleToggleInfoPanel}
             onBack={handleBack}
-            onTyping={handleTyping}
-            hasMoreMessages={currentHasMore}
-            isLoadingMessages={currentIsLoading || !isConversationHistoryReady}
-            onLoadOlderMessages={handleLoadOlderMessages}
+            onTyping={sessionHandleTyping}
+            hasMoreMessages={sessionCurrentHasMore}
+            isLoadingMessages={
+              sessionCurrentIsLoading || !sessionIsConversationHistoryReady
+            }
+            onLoadOlderMessages={sessionHandleLoadOlderMessages}
             onImageClick={setImagePreview}
             onFilePreview={handleOpenFilePreview}
-            messageError={currentMessageError}
-            onRetryMessages={handleRetryMessages}
-            onReachedLatestMessage={handleReachedLatestMessage}
+            messageError={sessionCurrentMessageError}
+            onRetryMessages={sessionHandleRetryMessages}
+            onReachedLatestMessage={sessionHandleReachedLatestMessage}
             connectionState={connectionState}
-            isConversationReady={isConversationReady}
+            isConversationReady={sessionIsConversationReady}
             externalJumpToMessageId={externalJumpTargetMessageId}
             externalJumpRequestVersion={externalJumpRequestVersion}
             onExternalJumpHandled={handleExternalJumpHandled}

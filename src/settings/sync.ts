@@ -20,6 +20,7 @@ import type {
 } from "@hacom/chat-shared-types";
 import type { SettingsSchema } from "./types";
 import { getAccessToken } from "../services/tokenService";
+import { triggerSettingsConflictSync } from "./settingsSyncBridge";
 
 // ============================================
 // FETCH FROM SERVER
@@ -91,9 +92,7 @@ export const syncSettingsToServer = async (
       console.warn(
         "[sync] Settings version conflict (409). Refetching from server…",
       );
-      // Dynamically import to avoid circular dependency
-      const { useSettingsStore } = await import("./settingsStore");
-      void useSettingsStore.getState().syncFromServer();
+      void triggerSettingsConflictSync();
       return;
     }
 
