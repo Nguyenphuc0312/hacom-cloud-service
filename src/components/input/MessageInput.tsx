@@ -197,6 +197,9 @@ export const MessageInput = React.forwardRef<
   ref,
 ) {
   const { t } = useTranslation();
+  const optimisticAnnouncement = t("chat:composer.optimisticAnnouncement", {
+    defaultValue: "Tin nhắn đang được gửi",
+  });
   const rootRef = React.useRef<HTMLDivElement>(null);
   const [isDesktopLayout, setIsDesktopLayout] = React.useState(() =>
     isDesktopViewport(),
@@ -382,9 +385,19 @@ export const MessageInput = React.forwardRef<
     setLiveRegionMessage(
       result === "queued"
         ? t("chat:composer.queuedAnnouncement")
-        : t("chat:composer.sentAnnouncement"),
+        : result === "optimistic"
+          ? optimisticAnnouncement
+          : t("chat:composer.sentAnnouncement"),
     );
-  }, [clearMentionState, onChange, sendTextMessage, stopTypingNow, t, value]);
+  }, [
+    clearMentionState,
+    onChange,
+    optimisticAnnouncement,
+    sendTextMessage,
+    stopTypingNow,
+    t,
+    value,
+  ]);
 
   const handleSendAttachment = React.useCallback(async () => {
     const result = await sendAttachmentMessage();
@@ -418,7 +431,7 @@ export const MessageInput = React.forwardRef<
         onChange("");
         clearMentionState();
         stopTypingNow();
-        setLiveRegionMessage(t("chat:composer.sentAnnouncement"));
+        setLiveRegionMessage(optimisticAnnouncement);
 
         void sendPromise.catch(() => {
           setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
@@ -443,6 +456,7 @@ export const MessageInput = React.forwardRef<
     handleSendAttachment,
     handleSendText,
     hasReadyDrafts,
+    optimisticAnnouncement,
     onChange,
     onSend,
     selectedFile,

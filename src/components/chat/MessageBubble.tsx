@@ -2,12 +2,16 @@ import React from "react";
 import type { Conversation, Message, Attachment } from "../../types";
 import type { ChatDensity } from "../../stores/uiStore";
 import { MessageCluster } from "./message-layout/MessageCluster";
+import type { TimelineMergeLevel } from "../../hooks/useMessageGrouping";
 
 interface MessageBubbleProps {
   message: Message;
   isOwn: boolean;
+  mergeLevel?: TimelineMergeLevel;
   showAvatar: boolean;
   showSenderName?: boolean;
+  showMeta?: boolean;
+  showStatus?: boolean;
   isGroupStart?: boolean;
   isGroupEnd?: boolean;
   conversationType: Conversation["type"];

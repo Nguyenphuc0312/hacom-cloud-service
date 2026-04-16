@@ -323,7 +323,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             });
           });
 
-        return { disposition: "sent" as const };
+        return { disposition: "optimistic" as const };
       } catch (error) {
         logMessageDebug("ChatWindow", "send_rejected", {
           conversationId: conversation.id,

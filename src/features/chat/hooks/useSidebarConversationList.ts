@@ -1,9 +1,8 @@
 import { useMemo } from "react";
-import { useChatStore } from "../../../stores";
 import type { Conversation, UserSummary } from "../../../types";
 import { isDirectConversation } from "../../../lib/conversationAdapter";
 import { formatRelativeTime } from "../../../utils/formatTime";
-import { hasConversationMention, sortConversationsByActivity } from "../../../utils/conversationRanking";
+import { hasConversationMention } from "../../../utils/conversationRanking";
 import {
   getConversationAvatar,
   getConversationDisplayName,
@@ -16,6 +15,7 @@ import {
 import type { MessagePreviewState } from "../../../utils/messageHelpers";
 import type { SidebarConversationFilter } from "../state/chatSidebarStore";
 import i18n from "../../../i18n";
+import { useSidebarConversationSummaries } from "./useSidebarConversationSummaries";
 
 export interface SidebarConversationItemViewModel {
   id: string;
@@ -147,29 +147,11 @@ export const useSidebarConversationList = (
     query: string;
   },
 ): SidebarConversationListResult => {
-  const conversations = useChatStore((state) => state.conversations);
+  const { orderedConversations, counts } = useSidebarConversationSummaries();
 
   return useMemo(() => {
     const normalizedQuery = options.query.trim().toLowerCase();
-    const ordered = sortConversationsByActivity(
-      Array.isArray(conversations) ? conversations : [],
-    );
-
-    const counts = ordered.reduce(
-      (accumulator, conversation) => {
-        accumulator.all += 1;
-        if ((conversation.unreadCount ?? 0) > 0) {
-          accumulator.unread += 1;
-        }
-        if (!isDirectConversation(conversation)) {
-          accumulator.groups += 1;
-        }
-        return accumulator;
-      },
-      { all: 0, unread: 0, groups: 0 },
-    );
-
-    const items = ordered
+    const items = orderedConversations
       .filter((conversation) => matchesFilter(conversation, options.filter))
       .filter((conversation) =>
         includesQuery(conversation, normalizedQuery, currentUser.id),
@@ -208,7 +190,7 @@ export const useSidebarConversationList = (
       });
 
     return { items, counts };
-  }, [conversations, currentUser, options.filter, options.query]);
+  }, [counts, currentUser, options.filter, options.query, orderedConversations]);
 };
 
 export default useSidebarConversationList;

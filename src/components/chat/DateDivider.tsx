@@ -12,12 +12,12 @@ export const DateDivider: React.FC<DateDividerProps> = ({
   className,
 }) => {
   return (
-    <div className={clsx("my-6 flex items-center justify-center", className)}>
+    <div className={clsx("my-5 flex items-center justify-center", className)}>
       <span
-        className="rounded-full border px-3.5 py-1 text-[11px] font-medium tracking-[0.01em] text-text-secondary backdrop-blur"
+        className="rounded-full border px-3 py-1 text-[11px] font-medium tracking-[0.01em] text-text-secondary/90 backdrop-blur"
         style={{
-          backgroundColor: "hsl(var(--color-chat-pill) / 0.94)",
-          borderColor: "hsl(var(--color-chat-pill-border) / 0.7)",
+          backgroundColor: "hsl(var(--color-chat-pill) / 0.88)",
+          borderColor: "hsl(var(--color-chat-pill-border) / 0.45)",
         }}
       >
         {formatDateDivider(date)}

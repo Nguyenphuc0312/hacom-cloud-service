@@ -37,7 +37,6 @@ import type { Attachment, Message, UserSummary } from "../types";
 import { useFilePreview } from "../hooks/useFilePreview";
 import type { PreviewTarget } from "../hooks/useFilePreview";
 import { getPreviewType } from "../utils/formatFileSize";
-import { sortConversationsByActivity } from "../utils/conversationRanking";
 import { UserStatus } from "../types";
 import { isDirectConversation } from "../lib/conversationAdapter";
 import { getOtherParticipant } from "../utils/messageHelpers";
@@ -678,9 +677,9 @@ export const ChatPage: React.FC = () => {
       return;
     }
 
-    const orderedConversations = sortConversationsByActivity(
-      Array.isArray(conversations) ? conversations : [],
-    );
+    const orderedConversations = Array.isArray(conversations)
+      ? conversations
+      : [];
     const currentIndex = orderedConversations.findIndex(
       (conversation) => conversation.id === selectedConversationId,
     );

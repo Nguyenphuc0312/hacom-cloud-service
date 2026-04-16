@@ -3,11 +3,11 @@ import { isSameDay } from "./formatTime";
 import {
   getMessageSemanticFamily,
   getMessageStableKey,
-  hasMessageLayoutDecorator,
   isFailedMessage,
   isPendingMessage,
   type MessageSemanticFamily,
 } from "./messageTimeline";
+import { CHAT_TIMELINE_V2_ENABLED } from "../features/chat/config/experienceFlags";
 
 const DEFAULT_MAJOR_PAUSE_MS = 8 * 60 * 1000;
 
@@ -24,6 +24,13 @@ export type ClusterBreakReason =
   | "visual_pause"
   | "timeline_decorator";
 
+export type TimelineMergeLevel =
+  | "fully-merged"
+  | "semantically-merged"
+  | "not-merged";
+
+export type TimelineSpacingToken = "tight" | "related" | "cluster";
+
 export interface UnreadTimelineMarker {
   lastReadMessageId?: string;
   lastReadAt?: Date | string;
@@ -36,8 +43,12 @@ export type MessageTimelineItem = {
   key: string;
   message: Message;
   isOwn: boolean;
+  mergeLevel: TimelineMergeLevel;
   showAvatar: boolean;
   showSenderName: boolean;
+  showMeta: boolean;
+  showStatus: boolean;
+  spacingToken: TimelineSpacingToken;
   isGroupStart: boolean;
   isGroupEnd: boolean;
   conversationType: Conversation["type"];
@@ -64,6 +75,7 @@ interface ClusterBreakAssessment {
   shouldBreak: boolean;
   primaryReason: ClusterBreakReason | null;
   score: number;
+  mergeLevel: TimelineMergeLevel;
 }
 
 const getTimelineMessageKey = (message: Message): string =>
@@ -89,10 +101,7 @@ const getContentWeight = (message: Message): number => {
   return contentLength + attachmentCount * 48;
 };
 
-const getPauseScore = (
-  diffMs: number,
-  groupingThresholdMs: number,
-): number => {
+const getPauseScore = (diffMs: number, groupingThresholdMs: number): number => {
   if (diffMs <= groupingThresholdMs) return 0;
   if (diffMs >= DEFAULT_MAJOR_PAUSE_MS) return 100;
   if (diffMs >= groupingThresholdMs * 6) return 40;
@@ -115,7 +124,38 @@ const hardBreak = (
   shouldBreak: true,
   primaryReason,
   score: 100,
+  mergeLevel: "not-merged",
 });
+
+const softMerge = (
+  primaryReason: ClusterBreakReason | null,
+  score: number,
+): ClusterBreakAssessment => ({
+  shouldBreak: false,
+  primaryReason,
+  score,
+  mergeLevel: "semantically-merged",
+});
+
+const fullMerge = (): ClusterBreakAssessment => ({
+  shouldBreak: false,
+  primaryReason: null,
+  score: 0,
+  mergeLevel: "fully-merged",
+});
+
+const getSpacingToken = (
+  mergeLevel: TimelineMergeLevel,
+): TimelineSpacingToken => {
+  switch (mergeLevel) {
+    case "fully-merged":
+      return "tight";
+    case "semantically-merged":
+      return "related";
+    default:
+      return "cluster";
+  }
+};
 
 export const resolveClusterBreak = (
   previousMessage: Message | undefined,
@@ -143,60 +183,93 @@ export const resolveClusterBreak = (
     return hardBreak("time_gap");
   }
 
-  let score = 0;
-  let primaryReason: ClusterBreakReason | null = null;
+  if (!CHAT_TIMELINE_V2_ENABLED) {
+    let score = 0;
+    let primaryReason: ClusterBreakReason | null = null;
+
+    const previousFamily = getMessageSemanticFamily(previousMessage);
+    const nextFamily = getMessageSemanticFamily(nextMessage);
+    if (previousFamily !== nextFamily) {
+      score += 32;
+      primaryReason = "semantic_family";
+    }
+
+    const previousTransport = getTransportBucket(previousMessage);
+    const nextTransport = getTransportBucket(nextMessage);
+    if (previousTransport !== nextTransport) {
+      score += 30;
+      if (!primaryReason) primaryReason = "status";
+    }
+
+    if (
+      getReplyContextKey(previousMessage) !== getReplyContextKey(nextMessage)
+    ) {
+      score += 24;
+      if (!primaryReason) primaryReason = "reply_context";
+    }
+
+    if (previousMessage.isEdited || nextMessage.isEdited) {
+      score += 14;
+      if (!primaryReason) primaryReason = "edited";
+    }
+
+    const pauseScore = getPauseScore(diffMs, groupingThresholdMs);
+    if (pauseScore > 0) {
+      score += pauseScore;
+      if (!primaryReason) primaryReason = "time_gap";
+    }
+
+    const rhythmScore = getVisualRhythmScore(previousMessage, nextMessage);
+    if (rhythmScore > 0) {
+      score += rhythmScore;
+      if (!primaryReason) primaryReason = "visual_pause";
+    }
+
+    if (score >= 50) {
+      return {
+        shouldBreak: true,
+        primaryReason,
+        score,
+        mergeLevel: "not-merged",
+      };
+    }
+
+    return score > 0 ? softMerge(primaryReason, score) : fullMerge();
+  }
 
   const previousFamily = getMessageSemanticFamily(previousMessage);
   const nextFamily = getMessageSemanticFamily(nextMessage);
-  if (previousFamily !== nextFamily) {
-    score += 32;
-    primaryReason = "semantic_family";
-  }
-
   const previousTransport = getTransportBucket(previousMessage);
   const nextTransport = getTransportBucket(nextMessage);
-  if (previousTransport !== nextTransport) {
-    score += 30;
-    if (!primaryReason) primaryReason = "status";
-  }
-
-  if (
-    getReplyContextKey(previousMessage) !== getReplyContextKey(nextMessage)
-  ) {
-    score += 24;
-    if (!primaryReason) primaryReason = "reply_context";
-  }
-
-  if (
-    hasMessageLayoutDecorator(previousMessage) ||
-    hasMessageLayoutDecorator(nextMessage)
-  ) {
-    score += 16;
-    if (!primaryReason) primaryReason = "decorator";
-  }
-
-  if (previousMessage.isEdited || nextMessage.isEdited) {
-    score += 14;
-    if (!primaryReason) primaryReason = "edited";
-  }
-
   const pauseScore = getPauseScore(diffMs, groupingThresholdMs);
-  if (pauseScore > 0) {
-    score += pauseScore;
-    if (!primaryReason) primaryReason = "time_gap";
-  }
-
   const rhythmScore = getVisualRhythmScore(previousMessage, nextMessage);
-  if (rhythmScore > 0) {
-    score += rhythmScore;
-    if (!primaryReason) primaryReason = "visual_pause";
-  }
 
-  return {
-    shouldBreak: score >= 50,
-    primaryReason,
-    score,
-  };
+  const semanticReason =
+    previousFamily !== nextFamily
+      ? "semantic_family"
+      : previousTransport !== nextTransport
+        ? "status"
+        : getReplyContextKey(previousMessage) !== getReplyContextKey(nextMessage)
+          ? "reply_context"
+          : previousMessage.isEdited || nextMessage.isEdited
+            ? "edited"
+            : pauseScore > 0
+              ? "time_gap"
+              : rhythmScore > 0
+                ? "visual_pause"
+                : null;
+
+  const semanticScore =
+    (previousFamily !== nextFamily ? 1 : 0) +
+    (previousTransport !== nextTransport ? 1 : 0) +
+    (getReplyContextKey(previousMessage) !== getReplyContextKey(nextMessage)
+      ? 1
+      : 0) +
+    (previousMessage.isEdited || nextMessage.isEdited ? 1 : 0) +
+    (pauseScore > 0 ? 1 : 0) +
+    (rhythmScore > 0 ? 1 : 0);
+
+  return semanticScore > 0 ? softMerge(semanticReason, semanticScore) : fullMerge();
 };
 
 const shouldInsertUnreadDivider = (
@@ -313,14 +386,25 @@ export const buildTimelineItems = ({
     const isOwn = message.senderId === currentUserId;
     const isGroupStart = beforeBreak.shouldBreak;
     const isGroupEnd = afterBreak.shouldBreak;
+    const mergeLevel =
+      beforeBreak.mergeLevel === "semantically-merged" ||
+      afterBreak.mergeLevel === "semantically-merged"
+        ? "semantically-merged"
+        : beforeBreak.shouldBreak && afterBreak.shouldBreak
+          ? "not-merged"
+          : "fully-merged";
 
     items.push({
       kind: "message",
       key: `message-${getTimelineMessageKey(message)}`,
       message,
       isOwn,
+      mergeLevel,
       showAvatar: isGroupChat && !isOwn && isGroupEnd,
       showSenderName: isGroupChat && !isOwn && isGroupStart,
+      showMeta: isGroupEnd,
+      showStatus: isOwn && isGroupEnd,
+      spacingToken: getSpacingToken(afterBreak.mergeLevel),
       isGroupStart,
       isGroupEnd,
       conversationType,
@@ -353,8 +437,12 @@ export const areTimelineItemsEqual = (a: TimelineItem, b: TimelineItem): boolean
     return (
       a.message === b.message &&
       a.isOwn === b.isOwn &&
+      a.mergeLevel === b.mergeLevel &&
       a.showAvatar === b.showAvatar &&
       a.showSenderName === b.showSenderName &&
+      a.showMeta === b.showMeta &&
+      a.showStatus === b.showStatus &&
+      a.spacingToken === b.spacingToken &&
       a.isGroupStart === b.isGroupStart &&
       a.isGroupEnd === b.isGroupEnd &&
       a.conversationType === b.conversationType &&

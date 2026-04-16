@@ -10,6 +10,8 @@ import type { Conversation, Message } from "../types";
 export type {
   ClusterBreakReason,
   MessageTimelineItem,
+  TimelineMergeLevel,
+  TimelineSpacingToken,
   TimelineItem,
   UnreadTimelineMarker,
 } from "../utils/timelinePlanner";

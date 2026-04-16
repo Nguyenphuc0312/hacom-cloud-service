@@ -144,20 +144,29 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
     }
   };
 
+  const messageSpacingClass =
+    item.spacingToken === "tight"
+      ? isCompact
+        ? "mb-px"
+        : isExpanded
+          ? "mb-1"
+          : "mb-[3px]"
+      : item.spacingToken === "related"
+        ? isCompact
+          ? "mb-2"
+          : isExpanded
+            ? "mb-3"
+            : "mb-2.5"
+        : isCompact
+          ? "mb-2.5"
+          : isExpanded
+            ? "mb-5"
+            : "mb-3.5";
+
   return (
     <div
       className={clsx(
-        item.isGroupEnd
-          ? isCompact
-            ? "mb-2.5"
-            : isExpanded
-              ? "mb-5"
-            : "mb-3.5"
-          : isCompact
-            ? "mb-px"
-            : isExpanded
-              ? "mb-1"
-            : "mb-[3px]",
+        messageSpacingClass,
         "msg-row-hover -mx-1 px-1",
         isSelectionMode && "cursor-pointer",
         isSelected && "bg-primary/6 rounded-md",
@@ -181,8 +190,11 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
           <MessageBubble
             message={item.message}
             isOwn={item.isOwn}
+            mergeLevel={item.mergeLevel}
             showAvatar={item.showAvatar}
             showSenderName={item.showSenderName}
+            showMeta={item.showMeta}
+            showStatus={item.showStatus}
             isGroupStart={item.isGroupStart}
             isGroupEnd={item.isGroupEnd}
             conversationType={item.conversationType}
@@ -264,8 +276,12 @@ const areEqualMessageItem = (
 
   if (prev.item.kind === "message" && next.item.kind === "message") {
     if (prev.item.isOwn !== next.item.isOwn) return false;
+    if (prev.item.mergeLevel !== next.item.mergeLevel) return false;
     if (prev.item.showAvatar !== next.item.showAvatar) return false;
     if (prev.item.showSenderName !== next.item.showSenderName) return false;
+    if (prev.item.showMeta !== next.item.showMeta) return false;
+    if (prev.item.showStatus !== next.item.showStatus) return false;
+    if (prev.item.spacingToken !== next.item.spacingToken) return false;
     if (prev.item.isGroupStart !== next.item.isGroupStart) return false;
     if (prev.item.isGroupEnd !== next.item.isGroupEnd) return false;
 

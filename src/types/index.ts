@@ -134,7 +134,7 @@ export interface SendRestriction {
 }
 
 export interface SendMessageResult {
-  disposition: "queued" | "sent";
+  disposition: "optimistic" | "queued" | "sent";
   messageId: string;
 }
 

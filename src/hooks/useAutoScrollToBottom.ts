@@ -1,7 +1,10 @@
 import React from "react";
 import type { Message } from "../types";
 import { getMessageStableKey } from "../utils/messageTimeline";
-import { resolvePinnedToBottom } from "../utils/scrollController";
+import {
+  resolvePinnedToBottom,
+  type ScrollMode,
+} from "../utils/scrollController";
 import { logScrollTrace } from "../utils/scrollTrace";
 
 const LOAD_MORE_TRIGGER_PX = 120;
@@ -19,9 +22,10 @@ interface UseAutoScrollToBottomParams {
   requestScrollToBottom: (reason: string) => void;
 }
 
-interface UseAutoScrollToBottomResult {
+export interface UseAutoScrollToBottomResult {
   pendingNewMessages: number;
   isPinnedToBottom: boolean;
+  scrollMode: ScrollMode;
   firstDetachedUnreadMessageId: string | null;
   handleScroll: (scrollOffset: number) => void;
   jumpToLatest: () => void;
@@ -74,6 +78,7 @@ export const useAutoScrollToBottom = ({
 }: UseAutoScrollToBottomParams): UseAutoScrollToBottomResult => {
   const [pendingNewMessages, setPendingNewMessages] = React.useState(0);
   const [isPinnedToBottom, setIsPinnedToBottom] = React.useState(true);
+  const [scrollMode, setScrollMode] = React.useState<ScrollMode>("at_bottom");
   const [firstDetachedUnreadMessageId, setFirstDetachedUnreadMessageId] =
     React.useState<string | null>(null);
   const [pendingRestoreScrollTop, setPendingRestoreScrollTop] =
@@ -106,11 +111,18 @@ export const useAutoScrollToBottom = ({
       reason: string,
       nextScrollTop?: number,
       nextPendingNewMessages?: number,
+      nextScrollMode?: ScrollMode,
     ) => {
       isPinnedRef.current = nextPinnedToBottom;
       setIsPinnedToBottom((previous) =>
         previous === nextPinnedToBottom ? previous : nextPinnedToBottom,
       );
+      setScrollMode((previous) => {
+        const nextMode =
+          nextScrollMode ??
+          (nextPinnedToBottom ? "at_bottom" : "reading_history");
+        return previous === nextMode ? previous : nextMode;
+      });
 
       if (typeof nextPendingNewMessages === "number") {
         setPendingNewMessages(nextPendingNewMessages);
@@ -138,8 +150,19 @@ export const useAutoScrollToBottom = ({
       if (!outer) return;
 
       const nextScrollTop = outer.scrollTop;
-      const nextPinnedToBottom = resolvePinnedToBottom(outer).isPinnedToBottom;
-      updatePinnedState(nextPinnedToBottom, reason, nextScrollTop);
+      const nextPinnedState = resolvePinnedToBottom(outer, undefined, {
+        previouslyPinnedToBottom: isPinnedRef.current,
+      });
+      setScrollMode((previous) =>
+        previous === nextPinnedState.mode ? previous : nextPinnedState.mode,
+      );
+      updatePinnedState(
+        nextPinnedState.isPinnedToBottom,
+        reason,
+        nextScrollTop,
+        undefined,
+        nextPinnedState.mode,
+      );
     },
     [outerRef, updatePinnedState],
   );
@@ -147,11 +170,14 @@ export const useAutoScrollToBottom = ({
   const detachAutoFollow = React.useCallback(
     (reason: string = "detach") => {
       const outer = outerRef.current;
+      const nextMode: ScrollMode =
+        reason === "jump-to-message" ? "jump_to_message" : "reading_history";
       updatePinnedState(
         false,
         reason,
         outer?.scrollTop ?? 0,
         pendingNewMessages,
+        nextMode,
       );
     },
     [outerRef, pendingNewMessages, updatePinnedState],
@@ -178,6 +204,7 @@ export const useAutoScrollToBottom = ({
     if (savedSession && !savedSession.isPinnedToBottom) {
       isPinnedRef.current = false;
       setIsPinnedToBottom(false);
+      setScrollMode("reading_history");
       setPendingRestoreScrollTop(savedSession.scrollTop);
       setPendingRestoreVersion((value) => value + 1);
       logScrollTrace("conversation_restore_requested", {
@@ -189,6 +216,7 @@ export const useAutoScrollToBottom = ({
 
     isPinnedRef.current = true;
     setIsPinnedToBottom(true);
+    setScrollMode("at_bottom");
     setPendingRestoreScrollTop(null);
     requestScrollToBottom("conversation-change");
   }, [conversationId, messages, requestScrollToBottom]);
@@ -204,6 +232,7 @@ export const useAutoScrollToBottom = ({
       firstMessageId !== prevFirstMessageIdRef.current
     ) {
       loadingOlderRef.current = false;
+      setScrollMode(isPinnedRef.current ? "at_bottom" : "reading_history");
       onAfterPrepend?.();
       prevMessagesRef.current = messages;
       prevFirstMessageIdRef.current = firstMessageId;
@@ -217,13 +246,11 @@ export const useAutoScrollToBottom = ({
         appendedMessages.some((message) => message.senderId === currentUserId);
 
       if (isPinnedRef.current || shouldForceFollowOwnMessage) {
+        setScrollMode(
+          shouldForceFollowOwnMessage ? "sending_own_message" : "receiving_new_message",
+        );
         if (shouldForceFollowOwnMessage && !isPinnedRef.current) {
-          updatePinnedState(
-            true,
-            "self-message",
-            outerRef.current?.scrollTop ?? 0,
-            0,
-          );
+          updatePinnedState(true, "self-message", outerRef.current?.scrollTop ?? 0, 0, "sending_own_message");
         }
         setPendingNewMessages(0);
         requestScrollToBottom(
@@ -235,6 +262,7 @@ export const useAutoScrollToBottom = ({
           forcedByOwnMessage: shouldForceFollowOwnMessage,
         });
       } else {
+        setScrollMode("reading_history");
         const firstBufferedMessage = appendedMessages[0];
         setPendingNewMessages((previous) => previous + appendedMessages.length);
         setFirstDetachedUnreadMessageId((current) =>
@@ -271,6 +299,7 @@ export const useAutoScrollToBottom = ({
     isPinnedRef.current = true;
     setPendingNewMessages(0);
     setIsPinnedToBottom(true);
+    setScrollMode("at_bottom");
     setFirstDetachedUnreadMessageId(null);
   }, [messages.length]);
 
@@ -279,13 +308,23 @@ export const useAutoScrollToBottom = ({
       const outer = outerRef.current;
       if (!outer) return;
 
-      const { isPinnedToBottom: nextPinnedToBottom } =
-        resolvePinnedToBottom(outer);
+      const nextPinnedState = resolvePinnedToBottom(outer, undefined, {
+        previouslyPinnedToBottom: isPinnedRef.current,
+      });
+      setScrollMode((previous) =>
+        previous === nextPinnedState.mode ? previous : nextPinnedState.mode,
+      );
 
-      if (nextPinnedToBottom !== isPinnedRef.current) {
-        updatePinnedState(nextPinnedToBottom, "user-scroll", scrollOffset);
+      if (nextPinnedState.isPinnedToBottom !== isPinnedRef.current) {
+        updatePinnedState(
+          nextPinnedState.isPinnedToBottom,
+          "user-scroll",
+          scrollOffset,
+          undefined,
+          nextPinnedState.mode,
+        );
       } else {
-        persistSession(nextPinnedToBottom, scrollOffset);
+        persistSession(nextPinnedState.isPinnedToBottom, scrollOffset);
       }
 
       if (
@@ -297,6 +336,7 @@ export const useAutoScrollToBottom = ({
       ) {
         onBeforeLoadMore?.();
         loadingOlderRef.current = true;
+        setScrollMode("prepending_history");
         logScrollTrace("load_more_requested", {
           conversationId,
           scrollOffset,
@@ -329,6 +369,7 @@ export const useAutoScrollToBottom = ({
   return {
     pendingNewMessages,
     isPinnedToBottom,
+    scrollMode,
     firstDetachedUnreadMessageId,
     handleScroll,
     jumpToLatest,

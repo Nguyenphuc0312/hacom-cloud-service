@@ -1546,7 +1546,6 @@ export const useWebSocket = (
         lastMessageId,
         asString(payload.senderId) ?? asString(payload.userId) ?? undefined,
       );
-      void refreshConversationSnapshot(conversationId);
     };
 
     const handleConversationSummaryUpdated = (data: unknown) => {

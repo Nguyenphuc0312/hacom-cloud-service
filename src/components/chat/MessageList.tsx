@@ -10,9 +10,7 @@ import {
 import { MessageItem } from "./MessageItem";
 import { EmptyMessages, ErrorState, MessageListSkeleton } from "../ui";
 import { ConversationLane } from "../layout/ConversationLane";
-import { useAutoScrollToBottom } from "../../hooks/useAutoScrollToBottom";
 import {
-  useMessageGrouping,
   type TimelineItem,
   type UnreadTimelineMarker,
 } from "../../hooks/useMessageGrouping";
@@ -27,6 +25,8 @@ import {
 } from "../../utils/messageTimeline";
 import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 import { logScrollTrace } from "../../utils/scrollTrace";
+import { useMessageTimelineViewModel } from "../../features/chat/hooks/useMessageTimelineViewModel";
+import { useMessageScrollMachine } from "../../features/chat/hooks/useMessageScrollMachine";
 
 interface MessageListProps {
   messages: Message[];
@@ -186,8 +186,6 @@ const shouldObserveTimelineItemResize = (item: TimelineItem): boolean => {
     message.forwardedFrom ||
     (message.reactions?.length ?? 0) > 0 ||
     (message.attachments?.length ?? 0) > 0 ||
-    isFailedMessage(message) ||
-    isPendingMessage(message) ||
     hasInlineUrl(message.content),
   );
 };
@@ -203,7 +201,8 @@ const estimateTimelineItemHeight = (
   const message = item.message;
   const densityOffset =
     density === "compact" ? -8 : density === "expanded" ? 14 : 0;
-  let baseHeight = item.isGroupEnd ? 76 + densityOffset : 62 + densityOffset;
+  let baseHeight =
+    (item.showMeta ? 76 : 56) + densityOffset;
 
   if (message.replyToMessage) baseHeight += 52;
   if (message.forwardedFrom) baseHeight += 22;
@@ -426,7 +425,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     (item: TimelineItem, index: number) => item.key || `${item.kind}-${index}`,
     [],
   );
-  const timelineItems = useMessageGrouping({
+  const { timelineItems } = useMessageTimelineViewModel({
     messages,
     currentUserId,
     conversationType,
@@ -575,6 +574,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const {
     pendingNewMessages,
     isPinnedToBottom,
+    scrollMode,
     firstDetachedUnreadMessageId,
     handleScroll,
     jumpToLatest,
@@ -582,7 +582,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     syncScrollStateFromDom,
     pendingRestoreScrollTop,
     pendingRestoreVersion,
-  } = useAutoScrollToBottom({
+  } = useMessageScrollMachine({
     conversationId,
     messages,
     currentUserId,
@@ -621,7 +621,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   }, [firstDetachedUnreadMessageId, unreadMarker]);
 
   const showNewMessagesPill = pendingNewMessages > 0;
-  const showJumpToBottom = !isPinnedToBottom && pendingNewMessages === 0;
+  const showJumpToBottom =
+    scrollMode === "reading_history" && pendingNewMessages === 0;
 
   const topOverlayPlacements = React.useMemo(
     () =>

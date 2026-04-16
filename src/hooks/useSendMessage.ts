@@ -26,7 +26,9 @@ interface UseSendMessageResult {
   isUploading: boolean;
   isSending: boolean;
   selectFile: (file: File) => boolean;
-  sendTextMessage: (content: string) => Promise<"sent" | "queued" | "failed">;
+  sendTextMessage: (
+    content: string,
+  ) => Promise<"optimistic" | "queued" | "failed">;
   sendAttachmentMessage: () => Promise<"sent" | "queued" | "failed">;
   clearSelectedFile: () => void;
   cancelUpload: () => void;
@@ -71,8 +73,11 @@ const isCanceledUploadError = (error: unknown): boolean => {
   );
 };
 
-const resolveDisposition = (result: unknown): "sent" | "queued" => {
+const resolveDisposition = (
+  result: unknown,
+): "optimistic" | "sent" | "queued" => {
   const candidate = result as SendMessageResult | undefined;
+  if (candidate?.disposition === "optimistic") return "optimistic";
   return candidate?.disposition === "queued" ? "queued" : "sent";
 };
 
@@ -150,11 +155,22 @@ export const useSendMessage = ({
       if (!text || disabled) return "failed";
 
       try {
-        const sendPromise = Promise.resolve(onSend(text));
-        void sendPromise.catch(() => {
-          // Message-level failed state is handled in the timeline.
-        });
-        return "sent";
+        const sendResult = onSend(text);
+        if (
+          sendResult &&
+          typeof sendResult === "object" &&
+          "then" in sendResult &&
+          typeof sendResult.then === "function"
+        ) {
+          void Promise.resolve(sendResult).catch(() => {
+            // Message-level failed state is handled in the timeline.
+          });
+          return "optimistic";
+        }
+
+        return resolveDisposition(sendResult) === "queued"
+          ? "queued"
+          : "optimistic";
       } catch (error) {
         const apiError = extractApiError(error);
         toast.error(apiError.message || t("error:chat.sendFailed"));
@@ -203,7 +219,7 @@ export const useSendMessage = ({
         ),
       );
       clearSelectedFile();
-      return resolveDisposition(result);
+      return resolveDisposition(result) === "queued" ? "queued" : "sent";
     } catch (error) {
       if (isCanceledUploadError(error)) {
         setUploadError(t("error:upload.uploadCanceled"));

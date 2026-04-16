@@ -29,12 +29,16 @@ import { MessageBodyRenderer } from "./MessageBodyRenderer";
 import { MessageMeta } from "./MessageMeta";
 import { MessageRow } from "./MessageRow";
 import { MessageSurface } from "./MessageSurface";
+import type { TimelineMergeLevel } from "../../../hooks/useMessageGrouping";
 
 interface MessageClusterProps {
   message: Message;
   isOwn: boolean;
+  mergeLevel?: TimelineMergeLevel;
   showAvatar: boolean;
   showSenderName?: boolean;
+  showMeta?: boolean;
+  showStatus?: boolean;
   isGroupStart?: boolean;
   isGroupEnd?: boolean;
   conversationType: Conversation["type"];
@@ -75,8 +79,11 @@ const isCoarsePointer = (): boolean =>
 export const MessageCluster: React.FC<MessageClusterProps> = ({
   message,
   isOwn,
+  mergeLevel = "not-merged",
   showAvatar,
   showSenderName = false,
+  showMeta = true,
+  showStatus = false,
   isGroupStart = true,
   isGroupEnd = true,
   conversationType,
@@ -421,7 +428,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                 isOwn={isOwn}
                 isGroupStart={isGroupStart}
                 isGroupEnd={isGroupEnd}
-                hasReplyPreview={Boolean(message.replyToMessage)}
+                mergeLevel={mergeLevel}
                 hasError={isFailedMessage(message)}
                 isPending={isPendingMessage(message)}
               >
@@ -455,11 +462,13 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
               </MessageSurface>
             </div>
 
-            <MessageMeta
-              message={message}
-              isOwn={isOwn}
-              showStatus={isOwn && isGroupEnd}
-            />
+            {showMeta && (
+              <MessageMeta
+                message={message}
+                isOwn={isOwn}
+                showStatus={showStatus}
+              />
+            )}
 
             {(message.reactions?.length ?? 0) > 0 && (
               <div className={clsx("mt-1", isOwn ? "self-end" : "self-start")}>
