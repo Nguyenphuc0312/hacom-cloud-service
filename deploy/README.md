@@ -14,7 +14,13 @@ This folder contains release-bundle artifacts used by CI/CD for server-test and 
 
 ## Runtime routing
 
-chat-admin-panel is exposed through edge route /admin/ and calls APIs via /api/v1/\* on the same host.
+chat-admin-panel is exposed through a dedicated admin origin such as `https://admin.example.com/`.
+The panel bundle is rooted at `/` on that host and calls only:
+
+- `/api/v1/auth/*`
+- `/api/v1/admin/*`
+
+The admin container serves static assets only. Public routing is owned by the edge proxy, not by the panel container.
 
 ## Phase 4 write rollout notes (server-test)
 
@@ -32,4 +38,4 @@ chat-admin-panel is exposed through edge route /admin/ and calls APIs via /api/v
   - HR write actions require `super_admin`, `operator`, or `hr_admin`
 - Auth state is persisted in `sessionStorage` instead of `localStorage` to reduce token persistence risk.
 - Nginx runtime template applies security headers (`X-Frame-Options`, `X-Content-Type-Options`, `CSP`, `Referrer-Policy`, `Permissions-Policy`).
-- `/api/` proxy forwards `X-Request-Id` for end-to-end trace correlation.
+- Admin browser traffic should stay isolated to the admin host so cookies, CSP, browser history, and access logs do not overlap with the end-user app.

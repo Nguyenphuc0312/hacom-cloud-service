@@ -5,7 +5,6 @@ IMAGE_NAME ?= hacom/$(APP_NAME)
 IMAGE_TAG ?= local
 CONTAINER_NAME ?= $(APP_NAME)-local
 HOST_PORT ?= 5174
-ADMIN_API_UPSTREAM ?= http://host.docker.internal:3201
 
 .PHONY: help install dev build start lint typecheck clean docker-build docker-run docker-stop docker-logs docker-shell
 
@@ -53,9 +52,7 @@ docker-build:
 docker-run:
 	docker run --rm -d \
 		--name $(CONTAINER_NAME) \
-		--add-host=host.docker.internal:host-gateway \
 		-p $(HOST_PORT):80 \
-		-e ADMIN_API_UPSTREAM=$(ADMIN_API_UPSTREAM) \
 		$(IMAGE_NAME):$(IMAGE_TAG)
 
 docker-stop:

@@ -207,6 +207,60 @@ export const buildInsights = ({
   return insights.slice(0, 4);
 };
 
+const toServiceIncident = (service: ServiceHealthItem): Incident | null => {
+  if (service.status !== 'down') {
+    return null;
+  }
+
+  return {
+    fingerprint: `service:${service.name}`,
+    status: 'firing',
+    severity: 'critical',
+    title: `${service.name} is down`,
+    summary: service.summary,
+    startsAt: service.checkedAt,
+  };
+};
+
+const toWarningIncident = (
+  warning: MonitoringWarning,
+  timestamp: string,
+): Incident | null => {
+  if (warning.severity !== 'error') {
+    return null;
+  }
+
+  return {
+    fingerprint: `warning:${warning.key}`,
+    status: 'firing',
+    severity: 'critical',
+    title: warning.message,
+    summary: `${warning.source} reported ${warning.code}.`,
+    startsAt: timestamp,
+  };
+};
+
+export const deriveDashboardIncidents = ({
+  overview,
+  serviceHealth,
+}: {
+  overview: MonitoringOverviewResponse | undefined;
+  serviceHealth: ServiceHealthResponse | undefined;
+}): Incident[] => {
+  const incidents = [
+    ...(serviceHealth?.items
+      .map(toServiceIncident)
+      .filter((item): item is Incident => item !== null) ?? []),
+    ...(overview?.warnings
+      .map((warning) => toWarningIncident(warning, overview.generatedAt))
+      .filter((item): item is Incident => item !== null) ?? []),
+  ];
+
+  return incidents.sort(
+    (left, right) => new Date(right.startsAt).getTime() - new Date(left.startsAt).getTime(),
+  );
+};
+
 const toServiceActivity = (service: ServiceHealthItem): DashboardActivityItem | null => {
   if (service.status === 'up' || service.status === 'unknown') {
     return null;

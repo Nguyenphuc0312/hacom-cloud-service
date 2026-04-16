@@ -49,7 +49,7 @@ export const DashboardPage = () => {
     pendingUsersQuery,
     monitoringQuery,
     serviceHealthQuery,
-    incidentsQuery,
+    incidents,
   } = useDashboardOverview(range);
 
   const totalUsers = totalUsersQuery.data?.pagination.total ?? 0;
@@ -57,7 +57,6 @@ export const DashboardPage = () => {
   const pendingUsers = pendingUsersQuery.data?.pagination.total ?? 0;
   const overview = monitoringQuery.data;
   const serviceHealth = serviceHealthQuery.data;
-  const incidents = incidentsQuery.data?.items ?? [];
 
   const isInitialLoading =
     !overview &&
@@ -108,7 +107,6 @@ export const DashboardPage = () => {
           onRetry={() => {
             void monitoringQuery.refetch();
             void serviceHealthQuery.refetch();
-            void incidentsQuery.refetch();
           }}
         />
       </PageShell>
@@ -148,7 +146,6 @@ export const DashboardPage = () => {
   const refetchDashboard = () => {
     void monitoringQuery.refetch();
     void serviceHealthQuery.refetch();
-    void incidentsQuery.refetch();
     void totalUsersQuery.refetch();
     void activeUsersQuery.refetch();
     void pendingUsersQuery.refetch();
@@ -235,8 +232,7 @@ export const DashboardPage = () => {
               icon={<ReloadOutlined />}
               loading={
                 monitoringQuery.isFetching ||
-                serviceHealthQuery.isFetching ||
-                incidentsQuery.isFetching
+                serviceHealthQuery.isFetching
               }
               onClick={refetchDashboard}
             >

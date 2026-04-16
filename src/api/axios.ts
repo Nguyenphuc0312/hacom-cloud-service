@@ -1,7 +1,7 @@
 import axios from 'axios';
 import type { AxiosInstance } from 'axios';
 
-import { adminApiBaseUrl, apiBaseUrl, authApiBaseUrl } from '@/api/routes';
+import { adminApiBaseUrl, authApiBaseUrl } from '@/api/routes';
 import { getAccessToken, useAuthStore } from '@/store/authStore';
 
 const rawBasePath = import.meta.env.BASE_URL || '/';
@@ -18,7 +18,6 @@ const createJsonClient = (baseURL: string): AxiosInstance =>
     timeout: 15000,
   });
 
-export const axiosInstance = createJsonClient(apiBaseUrl);
 export const adminAxiosInstance = createJsonClient(adminApiBaseUrl);
 export const authAxiosInstance = createJsonClient(authApiBaseUrl);
 
@@ -70,7 +69,7 @@ const attachUnauthorizedRedirect = (client: AxiosInstance) => {
   );
 };
 
-[axiosInstance, adminAxiosInstance].forEach((client) => {
+[adminAxiosInstance].forEach((client) => {
   attachRequestId(client);
   attachAuthHeader(client);
   attachUnauthorizedRedirect(client);

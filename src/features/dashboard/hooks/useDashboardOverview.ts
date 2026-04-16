@@ -1,10 +1,11 @@
-import { keepPreviousData, useQueries, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQueries } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 import { monitoringClient, serviceHealthClient, usersClient } from '@/api/clients';
-import { alertsClient } from '@/api/clients/alertsClient';
 import { queryKeys } from '@/api/queryKeys';
 import type { TimeRange } from '@/api/types';
 import { appConfig } from '@/config/appConfig';
+import { deriveDashboardIncidents } from '../utils/dashboardView';
 
 export const useDashboardOverview = (range: TimeRange) => {
   const [
@@ -45,14 +46,14 @@ export const useDashboardOverview = (range: TimeRange) => {
     ],
   });
 
-  const incidentsQuery = useQuery({
-    queryKey: ['alerts-incidents-firing'],
-    queryFn: () => alertsClient.getIncidents({ status: 'firing' }),
-    retry: 0,
-    placeholderData: keepPreviousData,
-    refetchInterval: appConfig.dashboardRefetchIntervalMs,
-    refetchIntervalInBackground: true,
-  });
+  const incidents = useMemo(
+    () =>
+      deriveDashboardIncidents({
+        overview: monitoringQuery.data,
+        serviceHealth: serviceHealthQuery.data,
+      }),
+    [monitoringQuery.data, serviceHealthQuery.data],
+  );
 
   return {
     totalUsersQuery,
@@ -60,6 +61,6 @@ export const useDashboardOverview = (range: TimeRange) => {
     pendingUsersQuery,
     monitoringQuery,
     serviceHealthQuery,
-    incidentsQuery,
+    incidents,
   };
 };

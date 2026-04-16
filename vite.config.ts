@@ -24,7 +24,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
-    base: env.VITE_APP_BASE_PATH || '/admin/',
+    base: env.VITE_APP_BASE_PATH || '/',
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
@@ -41,16 +41,6 @@ export default defineConfig(({ mode }) => {
           secure: false,
         },
         '/api/v1/auth': {
-          target: authProxyTarget,
-          changeOrigin: true,
-          secure: false,
-        },
-        '/api/v1': {
-          target: adminProxyTarget,
-          changeOrigin: true,
-          secure: false,
-        },
-        '/auth': {
           target: authProxyTarget,
           changeOrigin: true,
           secure: false,
