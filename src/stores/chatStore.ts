@@ -44,6 +44,8 @@ import type { Attachment } from "../types";
 
 interface ChatState {
   conversations: Conversation[];
+  conversationById: Record<string, Conversation>;
+  orderedConversationIds: string[];
   totalUnreadCount: number;
   lastUnreadSummaryAppliedAt: number | null;
   lastConversationCursor: string | null;
@@ -220,6 +222,8 @@ interface FetchMessagesOptions {
 
 const initialState = {
   conversations: [],
+  conversationById: {},
+  orderedConversationIds: [],
   totalUnreadCount: 0,
   lastUnreadSummaryAppliedAt: null,
   lastConversationCursor: null,
@@ -714,7 +718,22 @@ const computeCanonicalTotalUnreadCount = (conversations: Conversation[]): number
     0,
   );
 
+const buildConversationIndexState = (conversations: Conversation[]) => {
+  const ordered = Array.isArray(conversations) ? conversations : [];
+  return {
+    conversationById: ordered.reduce<Record<string, Conversation>>(
+      (accumulator, conversation) => {
+        accumulator[conversation.id] = conversation;
+        return accumulator;
+      },
+      {},
+    ),
+    orderedConversationIds: ordered.map((conversation) => conversation.id),
+  };
+};
+
 const buildConversationCollectionState = (conversations: Conversation[]) => ({
+  ...buildConversationIndexState(conversations),
   totalUnreadCount: computeCanonicalTotalUnreadCount(conversations),
   lastConversationCursor: computeConversationCursor(conversations),
   lastConversationUpdatedAfterCursor:
@@ -3399,10 +3418,7 @@ export const useChatStore = create<ChatState>()(
 export const useSelectedConversation = () => {
   return useChatStore((state) => {
     if (!state.selectedConversationId) return null;
-    const conversations = Array.isArray(state.conversations)
-      ? state.conversations
-      : [];
-    return conversations.find((c) => c.id === state.selectedConversationId);
+    return state.conversationById[state.selectedConversationId] ?? null;
   });
 };
 
@@ -3504,39 +3520,29 @@ export const useMessagesByConversation = (conversationId: string | null) =>
   });
 
 export const useConversationCount = () =>
-  useChatStore((state) =>
-    Array.isArray(state.conversations) ? state.conversations.length : 0,
-  );
+  useChatStore((state) => state.orderedConversationIds.length);
 
 export const useHasConversation = (conversationId: string | null) =>
   useChatStore((state) =>
-    conversationId
-      ? (Array.isArray(state.conversations) ? state.conversations : []).some(
-          (conversation) => conversation.id === conversationId,
-        )
-      : false,
+    conversationId ? Boolean(state.conversationById[conversationId]) : false,
   );
 
 export const useAdjacentConversationIds = (conversationId: string | null) =>
   useChatStore(
     useShallow((state) => {
-      const ordered = Array.isArray(state.conversations)
-        ? state.conversations
-        : [];
+      const ordered = state.orderedConversationIds;
       if (!conversationId) {
         return [null, null] as [string | null, string | null];
       }
 
-      const currentIndex = ordered.findIndex(
-        (conversation) => conversation.id === conversationId,
-      );
+      const currentIndex = ordered.findIndex((id) => id === conversationId);
       if (currentIndex < 0) {
         return [null, null] as [string | null, string | null];
       }
 
       return [
-        ordered[currentIndex - 1]?.id ?? null,
-        ordered[currentIndex + 1]?.id ?? null,
+        ordered[currentIndex - 1] ?? null,
+        ordered[currentIndex + 1] ?? null,
       ] as [string | null, string | null];
     }),
   );

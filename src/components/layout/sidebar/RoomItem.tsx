@@ -237,8 +237,7 @@ export const RoomItemContainer = React.memo(
   }: RoomItemContainerProps) => {
     const conversation = useChatStore(
       useMemo(
-        () => (state) =>
-          state.conversations.find((item) => item.id === conversationId) ?? null,
+        () => (state) => state.conversationById[conversationId] ?? null,
         [conversationId],
       ),
     );

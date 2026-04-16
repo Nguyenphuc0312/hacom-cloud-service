@@ -77,9 +77,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const dmUserIds = useMemo(() => {
     const ids = new Set<string>();
-    const conversations = useChatStore.getState().conversations;
+    const conversationById = useChatStore.getState().conversationById;
     for (const conversationId of conversationIds) {
-      const conversation = conversations.find((item) => item.id === conversationId);
+      const conversation = conversationById[conversationId];
       if (!conversation) continue;
       if (!isDirectConversation(conversation)) continue;
       const other = getOtherParticipant(conversation, currentUser.id);
