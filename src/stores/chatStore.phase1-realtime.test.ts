@@ -1175,6 +1175,139 @@ describe("chatStore phase-1 realtime flows", () => {
     ]);
   });
 
+  it("deduplicates duplicate realtime deliveries without double unread or reorder drift", () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+        unreadCount: 0,
+        summaryVersion: 1,
+        lastActivityAt: "2026-04-10T09:00:00.000Z",
+        updatedAt: "2026-04-10T09:00:00.000Z",
+      }),
+      makeConversation({
+        id: "room-2",
+        conversationId: "room-2",
+        unreadCount: 0,
+        summaryVersion: 1,
+        lastActivityAt: "2026-04-10T08:00:00.000Z",
+        updatedAt: "2026-04-10T08:00:00.000Z",
+      }),
+    ] as never);
+
+    const incomingMessage = makeMessage({
+      id: "server-realtime-1",
+      conversationId: "room-1",
+      senderId: "user-b",
+      senderName: "Bob",
+      content: "hello again",
+      createdAt: "2026-04-10T10:00:00.000Z",
+      updatedAt: "2026-04-10T10:00:00.000Z",
+      status: MessageStatus.SENT,
+      sendState: "sent",
+    }) as never;
+
+    const first = useChatStore
+      .getState()
+      .ingestConversationMessageEvent("room-1", incomingMessage, {
+        incrementUnread: true,
+        hydrated: true,
+        source: "message:new",
+      });
+    const duplicate = useChatStore
+      .getState()
+      .ingestConversationMessageEvent("room-1", incomingMessage, {
+        incrementUnread: true,
+        hydrated: true,
+        source: "message:new",
+      });
+
+    const roomMessages = useChatStore.getState().messages["room-1"] || [];
+    const orderedRooms = sortConversationsByActivity(
+      useChatStore.getState().conversations,
+    ).map((conversation) => conversation.id);
+    const roomOne = useChatStore
+      .getState()
+      .conversations.find((conversation) => conversation.id === "room-1");
+
+    expect(first.status).toBe("new");
+    expect(first.unreadDelta).toBe(1);
+    expect(duplicate.status).toBe("merged");
+    expect(duplicate.unreadDelta).toBe(0);
+    expect(roomMessages).toHaveLength(1);
+    expect(roomOne?.unreadCount).toBe(1);
+    expect(useChatStore.getState().totalUnreadCount).toBe(1);
+    expect(orderedRooms).toEqual(["room-1", "room-2"]);
+  });
+
+  it("merges paginated conversation overlap by id and keeps the newer summary", () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-overlap",
+        conversationId: "room-overlap",
+        unreadCount: 1,
+        summaryVersion: 2,
+        lastActivityAt: "2026-04-10T09:00:00.000Z",
+        updatedAt: "2026-04-10T09:00:00.000Z",
+        lastMessage: {
+          id: "msg-old",
+          senderId: "user-a",
+          senderName: "Alice",
+          content: "old summary",
+          type: "text",
+          isDeleted: false,
+          createdAt: "2026-04-10T09:00:00.000Z",
+        },
+      }),
+    ] as never);
+
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-overlap",
+        conversationId: "room-overlap",
+        unreadCount: 4,
+        summaryVersion: 5,
+        lastActivityAt: "2026-04-10T11:00:00.000Z",
+        updatedAt: "2026-04-10T11:00:00.000Z",
+        lastMessage: {
+          id: "msg-new",
+          senderId: "user-b",
+          senderName: "Bob",
+          content: "new summary",
+          type: "text",
+          isDeleted: false,
+          createdAt: "2026-04-10T11:00:00.000Z",
+        },
+      }),
+      makeConversation({
+        id: "room-other",
+        conversationId: "room-other",
+        unreadCount: 0,
+        summaryVersion: 1,
+        lastActivityAt: "2026-04-10T08:00:00.000Z",
+        updatedAt: "2026-04-10T08:00:00.000Z",
+      }),
+    ] as never);
+
+    const conversations = sortConversationsByActivity(
+      useChatStore.getState().conversations,
+    );
+    const overlap = conversations.find(
+      (conversation) => conversation.id === "room-overlap",
+    );
+
+    expect(conversations.map((conversation) => conversation.id)).toEqual([
+      "room-overlap",
+      "room-other",
+    ]);
+    expect(
+      conversations.filter((conversation) => conversation.id === "room-overlap"),
+    ).toHaveLength(1);
+    expect(overlap?.summaryVersion).toBe(5);
+    expect(overlap?.unreadCount).toBe(4);
+    expect(overlap?.lastMessage?.id).toBe("msg-new");
+  });
+
   it("allows multiple consecutive sends without waiting for previous request", async () => {
     const firstDeferred =
       createDeferred<ReturnType<typeof makeSuccessEnvelope>>();

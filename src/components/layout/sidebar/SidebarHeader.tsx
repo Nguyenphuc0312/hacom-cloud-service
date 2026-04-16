@@ -3,10 +3,9 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
   ArrowLeftOnRectangleIcon,
-  ChevronDoubleLeftIcon,
-  ChevronDoubleRightIcon,
   Cog6ToothIcon,
   EllipsisHorizontalIcon,
+  MagnifyingGlassIcon,
   PencilSquareIcon,
   UserCircleIcon,
   UserGroupIcon,
@@ -18,13 +17,12 @@ import { getUserDisplayName } from "../../../utils/messageHelpers";
 
 interface SidebarHeaderProps {
   currentUser: UserSummary;
-  collapsed: boolean;
-  onToggleCollapsed: () => void;
   onNewChat?: () => void;
   onCurrentUserClick?: () => void;
   onOpenFriends?: () => void;
   onOpenSettings?: () => void;
   onRequestLogout?: () => void;
+  onFocusSearch?: () => void;
 }
 
 const resolveDisplayName = (user: UserSummary, fallback: string): string =>
@@ -51,13 +49,12 @@ const resolveStatusLabel = (
 
 export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   currentUser,
-  collapsed,
-  onToggleCollapsed,
   onNewChat,
   onCurrentUserClick,
   onOpenFriends,
   onOpenSettings,
   onRequestLogout,
+  onFocusSearch,
 }) => {
   const { t } = useTranslation();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
@@ -95,68 +92,52 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   }, [isMenuOpen]);
 
   return (
-    <div className="px-4 pb-3 pt-4">
-      <div
-        className={clsx(
-          "flex gap-2",
-          collapsed ? "flex-col items-center" : "items-center justify-between",
-        )}
-      >
+    <div className="border-b border-border/60 px-4 pb-4 pt-4">
+      <div className="flex items-start gap-3">
         <button
           type="button"
-          onClick={() => setIsMenuOpen((current) => !current)}
-          className={clsx(
-            "flex min-w-0 items-center text-left transition-micro hover:bg-surface-hover/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-            collapsed
-              ? "h-11 w-11 justify-center rounded-2xl"
-              : "flex-1 gap-3 rounded-[1.15rem] px-3 py-2.5",
-          )}
-          title={collapsed ? currentUserName : undefined}
+          onClick={onCurrentUserClick}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-[1.2rem] px-2 py-1.5 text-left transition-micro hover:bg-surface-hover/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
           aria-label={currentUserName}
-          aria-haspopup="menu"
-          aria-expanded={isMenuOpen}
         >
           <Avatar
             src={currentUser.avatar}
             alt={currentUserName}
-            size="md"
+            size="lg"
             status={currentUser.status}
             showStatus
           />
 
-          {!collapsed && (
-            <div
-              className="sidebar-shell-label min-w-0"
-              data-collapsed={collapsed}
-            >
-              <p className="truncate text-body-sm font-semibold text-text-primary">
-                {currentUserName}
-              </p>
-              <p className="truncate text-caption text-text-muted">
-                {currentStatusLabel}
-              </p>
-            </div>
-          )}
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-text-primary">
+              {currentUserName}
+            </p>
+            <p className="truncate text-caption text-text-muted">
+              {currentStatusLabel}
+            </p>
+          </div>
         </button>
 
-        <div
-          className={clsx(
-            "relative flex shrink-0 items-center gap-1.5",
-            collapsed && "flex-col",
-          )}
-          ref={menuRef}
-        >
+        <div className="relative flex shrink-0 items-center gap-1.5" ref={menuRef}>
           <IconButtonSurface
             onClick={onNewChat}
-            className="h-10 w-10 rounded-[1rem] bg-primary text-text-inverse shadow-xs hover:bg-primary-hover hover:text-text-inverse"
+            className="h-11 w-11 rounded-[1rem] bg-primary text-text-inverse shadow-xs hover:bg-primary-hover hover:text-text-inverse"
             aria-label={t("sidebar:header.startNewChat")}
           >
             <PencilSquareIcon className="h-5 w-5" />
           </IconButtonSurface>
 
           <IconButtonSurface
+            onClick={onFocusSearch}
+            className="h-10 w-10 rounded-[1rem]"
+            aria-label={t("sidebar:search.aria")}
+          >
+            <MagnifyingGlassIcon className="h-5 w-5" />
+          </IconButtonSurface>
+
+          <IconButtonSurface
             onClick={() => setIsMenuOpen((current) => !current)}
-            className="h-9 w-9 rounded-[0.95rem]"
+            className="h-10 w-10 rounded-[1rem]"
             aria-label={t("common:actions.more", {
               defaultValue: "More actions",
             })}
@@ -167,10 +148,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           {isMenuOpen && (
             <div
               className={clsx(
-                "absolute z-[70] min-w-[13rem] overflow-hidden rounded-[1.25rem] border border-border/80 bg-surface p-1.5 shadow-elev3",
-                collapsed
-                  ? "left-[calc(100%+0.5rem)] top-0"
-                  : "right-0 top-[calc(100%+0.5rem)]",
+                "absolute right-0 top-[calc(100%+0.5rem)] z-[70] min-w-[13rem] overflow-hidden rounded-[1.25rem] border border-border/80 bg-surface p-1.5 shadow-elev3",
               )}
               role="menu"
             >
@@ -210,26 +188,6 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
                 <Cog6ToothIcon className="h-5 w-5" />
                 <span>
                   {t("settings:pageTitle", { defaultValue: "Settings" })}
-                </span>
-              </button>
-              <button
-                type="button"
-                className="hidden w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-medium text-text-secondary transition-micro hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30 lg:flex"
-                onClick={() => {
-                  setIsMenuOpen(false);
-                  onToggleCollapsed();
-                }}
-                role="menuitem"
-              >
-                {collapsed ? (
-                  <ChevronDoubleRightIcon className="h-5 w-5" />
-                ) : (
-                  <ChevronDoubleLeftIcon className="h-5 w-5" />
-                )}
-                <span>
-                  {collapsed
-                    ? t("sidebar:header.expandSidebar")
-                    : t("sidebar:header.collapseSidebar")}
                 </span>
               </button>
               <button

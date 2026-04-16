@@ -8,26 +8,24 @@ import React, {
 } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { VariableSizeList, type ListChildComponentProps } from "react-window";
-import type { Conversation, UserSummary } from "../../../types";
-import { sortConversationsByActivity } from "../../../utils/conversationRanking";
 import {
-  getConversationDisplayName,
-  getUserDisplayName,
-} from "../../../utils/messageHelpers";
+  VariableSizeList,
+  type ListChildComponentProps,
+  type ListOnScrollProps,
+} from "react-window";
 import { ConversationListSkeleton, ErrorState, StateBlock } from "../../ui";
 import {
   ChatBubbleLeftRightIcon,
   MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
 import { RoomItem } from "./RoomItem";
+import type { SidebarConversationItemViewModel } from "../../../features/chat/hooks/useSidebarConversationList";
 
 interface RoomListProps {
-  conversations: Conversation[];
-  currentUser: UserSummary;
+  items: SidebarConversationItemViewModel[];
+  currentUserId: string;
   selectedId: string | null;
   searchQuery: string;
-  collapsed: boolean;
   showLoadingSkeleton?: boolean;
   error?: string | null;
   onRetry?: () => void;
@@ -40,21 +38,20 @@ interface RoomListProps {
 type FlatListItem = {
   kind: "room";
   key: string;
-  room: Conversation;
+  room: SidebarConversationItemViewModel;
 };
 
 interface RowData {
   items: FlatListItem[];
-  currentUser: UserSummary;
+  currentUserId: string;
   currentConversationId: string | null;
-  collapsed: boolean;
   keyboardActiveRoomId: string | null;
   onSelect: (conversationId: string) => void;
 }
 
-const EXPANDED_ROOM_HEIGHT = 72;
-const COLLAPSED_ROOM_HEIGHT = 60;
+const ROOM_HEIGHT = 72;
 const VIRTUALIZATION_THRESHOLD = 10;
+const LOAD_MORE_THRESHOLD_PX = 280;
 
 const measureViewportHeight = (node: HTMLDivElement): number => {
   if (node.clientHeight > 0) return node.clientHeight;
@@ -64,60 +61,6 @@ const measureViewportHeight = (node: HTMLDivElement): number => {
 
   if (node.scrollHeight > 0) return node.scrollHeight;
   return 0;
-};
-
-const includesQuery = (
-  conversation: Conversation,
-  normalizedQuery: string,
-  currentUserId: string,
-): boolean => {
-  if (!normalizedQuery) return true;
-
-  const resolvedConversationName = getConversationDisplayName(
-    conversation,
-    currentUserId,
-  ).toLowerCase();
-  if (resolvedConversationName.includes(normalizedQuery)) {
-    return true;
-  }
-
-  if ((conversation.displayName || "").toLowerCase().includes(normalizedQuery)) {
-    return true;
-  }
-
-  if ((conversation.name || "").toLowerCase().includes(normalizedQuery)) {
-    return true;
-  }
-
-  if (
-    (conversation.otherUser?.displayName || "")
-      .toLowerCase()
-      .includes(normalizedQuery) ||
-    (conversation.otherUser?.username || "")
-      .toLowerCase()
-      .includes(normalizedQuery)
-  ) {
-    return true;
-  }
-
-  const participantMatch = (conversation.participants || []).some(
-    (participant) => {
-      const displayName = getUserDisplayName(participant, {
-        allowTechnicalFallback: true,
-      }).toLowerCase();
-      const username = (participant.username || "").toLowerCase();
-      return (
-        displayName.includes(normalizedQuery) ||
-        username.includes(normalizedQuery)
-      );
-    },
-  );
-
-  if (participantMatch) return true;
-
-  return (conversation.lastMessage?.content || "")
-    .toLowerCase()
-    .includes(normalizedQuery);
 };
 
 const isRoomActive = (
@@ -134,9 +77,8 @@ const Row = ({ index, style, data }: ListChildComponentProps<RowData>) => {
   return (
     <div style={style}>
       <RoomItem
-        conversation={item.room}
-        currentUser={data.currentUser}
-        collapsed={data.collapsed}
+        item={item.room}
+        currentUserId={data.currentUserId}
         isActive={isRoomActive(item.room.id, data.currentConversationId)}
         isKeyboardActive={data.keyboardActiveRoomId === item.room.id}
         onSelect={data.onSelect}
@@ -146,11 +88,10 @@ const Row = ({ index, style, data }: ListChildComponentProps<RowData>) => {
 };
 
 export const RoomList: React.FC<RoomListProps> = ({
-  conversations,
-  currentUser,
+  items,
+  currentUserId,
   selectedId,
   searchQuery,
-  collapsed,
   showLoadingSkeleton = false,
   error = null,
   onRetry,
@@ -174,42 +115,22 @@ export const RoomList: React.FC<RoomListProps> = ({
     [onSelect],
   );
 
-  const normalizedQuery = searchQuery.trim().toLowerCase();
-  const hasAnyConversations =
-    Array.isArray(conversations) && conversations.length > 0;
+  const normalizedQuery = searchQuery.trim();
+  const hasAnyConversations = Array.isArray(items) && items.length > 0;
 
   const flatItems = useMemo<FlatListItem[]>(
     () =>
-      sortConversationsByActivity(
-        Array.isArray(conversations) ? conversations : [],
-      )
-        .filter((conversation) =>
-          includesQuery(conversation, normalizedQuery, currentUser.id),
-        )
-        .map((room) => ({
-          kind: "room",
-          key: `room-${room.id}`,
-          room,
-        })),
-    [conversations, currentUser.id, normalizedQuery],
+      (Array.isArray(items) ? items : []).map((room) => ({
+        kind: "room",
+        key: `room-${room.id}`,
+        room,
+      })),
+    [items],
   );
 
   const roomIndexes = useMemo(
     () => flatItems.map((_, index) => index),
     [flatItems],
-  );
-
-  const rowHeights = useMemo(
-    () =>
-      flatItems.map(() =>
-        collapsed ? COLLAPSED_ROOM_HEIGHT : EXPANDED_ROOM_HEIGHT,
-      ),
-    [collapsed, flatItems],
-  );
-
-  const getItemSize = useCallback(
-    (index: number) => rowHeights[index] ?? EXPANDED_ROOM_HEIGHT,
-    [rowHeights],
   );
 
   const selectedRoomPosition = useMemo(() => {
@@ -247,16 +168,14 @@ export const RoomList: React.FC<RoomListProps> = ({
 
     return {
       items: flatItems,
-      currentUser,
+      currentUserId,
       currentConversationId: selectedId,
-      collapsed,
       keyboardActiveRoomId: isKeyboardMode ? keyboardActiveRoomId : null,
       onSelect: handleSelect,
     };
   }, [
-    collapsed,
     currentCursor,
-    currentUser,
+    currentUserId,
     flatItems,
     handleSelect,
     isKeyboardMode,
@@ -266,10 +185,6 @@ export const RoomList: React.FC<RoomListProps> = ({
 
   const shouldUseVirtualList =
     viewportHeight > 0 && flatItems.length > VIRTUALIZATION_THRESHOLD;
-
-  useEffect(() => {
-    listRef.current?.resetAfterIndex(0, true);
-  }, [collapsed, flatItems.length]);
 
   const syncViewportHeight = useCallback(() => {
     const node = containerRef.current;
@@ -314,7 +229,37 @@ export const RoomList: React.FC<RoomListProps> = ({
 
   useEffect(() => {
     syncViewportHeight();
-  }, [flatItems.length, collapsed, syncViewportHeight]);
+  }, [flatItems.length, syncViewportHeight]);
+
+  const requestLoadMore = useCallback(() => {
+    if (!hasMore || isLoadingMore) {
+      return;
+    }
+
+    onLoadMore?.();
+  }, [hasMore, isLoadingMore, onLoadMore]);
+
+  const handleVirtualListScroll = useCallback(
+    ({ scrollOffset, scrollUpdateWasRequested }: ListOnScrollProps) => {
+      if (scrollUpdateWasRequested || !hasMore || isLoadingMore) {
+        return;
+      }
+
+      const estimatedVisibleStopIndex = Math.floor(
+        (scrollOffset + viewportHeight) / ROOM_HEIGHT,
+      );
+      if (estimatedVisibleStopIndex >= flatItems.length - 4) {
+        requestLoadMore();
+      }
+    },
+    [
+      flatItems.length,
+      hasMore,
+      isLoadingMore,
+      requestLoadMore,
+      viewportHeight,
+    ],
+  );
 
   const moveCursor = useCallback(
     (delta: -1 | 1) => {
@@ -368,10 +313,25 @@ export const RoomList: React.FC<RoomListProps> = ({
     }
   };
 
+  const handleContainerScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      if (!hasMore || isLoadingMore) {
+        return;
+      }
+
+      const node = event.currentTarget;
+      const remaining = node.scrollHeight - node.scrollTop - node.clientHeight;
+      if (remaining <= LOAD_MORE_THRESHOLD_PX) {
+        requestLoadMore();
+      }
+    },
+    [hasMore, isLoadingMore, requestLoadMore],
+  );
+
   if (showLoadingSkeleton) {
     return (
       <div className="min-h-0 flex-1 overflow-y-auto pb-2">
-        <ConversationListSkeleton count={collapsed ? 5 : 7} />
+        <ConversationListSkeleton count={7} />
       </div>
     );
   }
@@ -425,6 +385,7 @@ export const RoomList: React.FC<RoomListProps> = ({
         role="listbox"
         aria-label={t("sidebar:room.listAria")}
         onKeyDown={handleKeyDown}
+        onScroll={shouldUseVirtualList ? undefined : handleContainerScroll}
         onMouseMove={() => {
           if (isKeyboardMode) {
             setIsKeyboardMode(false);
@@ -439,8 +400,9 @@ export const RoomList: React.FC<RoomListProps> = ({
             width="100%"
             itemCount={flatItems.length}
             itemData={rowData}
-            itemSize={getItemSize}
+            itemSize={() => ROOM_HEIGHT}
             itemKey={getItemKey}
+            onScroll={handleVirtualListScroll}
             overscanCount={12}
           >
             {Row}
@@ -450,9 +412,8 @@ export const RoomList: React.FC<RoomListProps> = ({
             {flatItems.map((item, index) => (
               <RoomItem
                 key={item.key}
-                conversation={item.room}
-                currentUser={currentUser}
-                collapsed={collapsed}
+                item={item.room}
+                currentUserId={currentUserId}
                 isActive={isRoomActive(item.room.id, selectedId)}
                 isKeyboardActive={
                   isKeyboardMode &&
@@ -465,23 +426,20 @@ export const RoomList: React.FC<RoomListProps> = ({
         )}
       </div>
 
-      {hasMore && (
-        <div className="px-3 pt-1">
-          <button
-            type="button"
-            onClick={() => onLoadMore?.()}
-            disabled={isLoadingMore}
+      {(hasMore || isLoadingMore) && (
+        <div className="px-4 pb-2 pt-2">
+          <div
             className={clsx(
-              "w-full rounded-2xl border border-border/70 bg-surface px-3 py-2.5 text-xs font-medium shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-              isLoadingMore
-                ? "cursor-not-allowed text-text-muted opacity-70"
-                : "text-text-secondary hover:bg-surface-hover",
+              "flex h-9 items-center justify-center rounded-full border border-dashed border-border/60 text-xs text-text-muted",
+              isLoadingMore && "bg-surface/80",
             )}
           >
             {isLoadingMore
               ? t("common:status.loading", { defaultValue: "Loading..." })
-              : t("sidebar:actions.loadMore", { defaultValue: "Load more" })}
-          </button>
+              : t("sidebar:actions.loadMore", {
+                  defaultValue: "Loading more...",
+                })}
+          </div>
         </div>
       )}
     </div>

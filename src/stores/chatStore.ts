@@ -43,6 +43,7 @@ interface ChatState {
   totalUnreadCount: number;
   lastUnreadSummaryAppliedAt: number | null;
   lastConversationCursor: string | null;
+  lastConversationUpdatedAfterCursor: string | null;
   messages: Record<string, Message[]>;
   messageAliasIndexByConversation: Record<string, Record<string, string>>;
   messagesHydratedByConversation: Record<string, boolean>;
@@ -103,6 +104,20 @@ interface ChatState {
       incrementUnread?: boolean;
     },
   ) => void;
+  ingestConversationMessageEvent: (
+    conversationId: string,
+    message: Message | Message[],
+    options?: {
+      incrementUnread?: boolean;
+      hydrated?: boolean;
+      source?: string;
+    },
+  ) => {
+    status: "new" | "merged" | "ignored";
+    canonicalMessage: Message | null;
+    mergedMessage: Message | null;
+    unreadDelta: number;
+  };
   applyOptimisticConversationRead: (
     conversationId: string,
     lastReadMessageId: string,
@@ -204,6 +219,7 @@ const initialState = {
   totalUnreadCount: 0,
   lastUnreadSummaryAppliedAt: null,
   lastConversationCursor: null,
+  lastConversationUpdatedAfterCursor: null,
   messages: {},
   messageAliasIndexByConversation: {},
   messagesHydratedByConversation: {},
@@ -649,7 +665,34 @@ const getConversationCursorTimestamp = (
   return toDateValue(conversation.updatedAt);
 };
 
+const getConversationCursorIdentity = (
+  conversation: Conversation | null | undefined,
+): string => {
+  if (!conversation) return "unknown";
+
+  return [
+    String(getConversationCursorTimestamp(conversation)),
+    String(toConversationVersion(conversation)),
+    conversation.id,
+    conversation.lastMessageId ?? conversation.lastMessage?.id ?? "no-message",
+  ].join(":");
+};
+
 const computeConversationCursor = (conversations: Conversation[]): string | null => {
+  const ordered = sortConversationsByActivity(
+    Array.isArray(conversations) ? conversations : [],
+  );
+  const leadingConversation = ordered[0];
+  if (!leadingConversation) {
+    return null;
+  }
+
+  return getConversationCursorIdentity(leadingConversation);
+};
+
+const computeConversationUpdatedAfterCursor = (
+  conversations: Conversation[],
+): string | null => {
   let latestTimestamp = 0;
 
   (Array.isArray(conversations) ? conversations : []).forEach((conversation) => {
@@ -667,6 +710,13 @@ const computeCanonicalTotalUnreadCount = (conversations: Conversation[]): number
     (sum, conversation) => sum + Math.max(0, conversation.unreadCount || 0),
     0,
   );
+
+const buildConversationCollectionState = (conversations: Conversation[]) => ({
+  totalUnreadCount: computeCanonicalTotalUnreadCount(conversations),
+  lastConversationCursor: computeConversationCursor(conversations),
+  lastConversationUpdatedAfterCursor:
+    computeConversationUpdatedAfterCursor(conversations),
+});
 
 const shouldApplyConversationSummary = (
   current: Conversation | null | undefined,
@@ -748,6 +798,34 @@ const mergeConversationSummary = (
     ...current,
     ...incoming,
   }) as Conversation;
+};
+
+const mergeConversationCollections = (
+  conversations: Conversation[] | null | undefined,
+): Conversation[] => {
+  const mergedById = new Map<string, Conversation>();
+
+  (Array.isArray(conversations) ? conversations : []).forEach((conversation) => {
+    const normalized = normalizeConversation(conversation);
+    if (!normalized) {
+      return;
+    }
+
+    const existing = mergedById.get(normalized.id);
+    if (!existing) {
+      mergedById.set(normalized.id, normalized);
+      return;
+    }
+
+    const decision = shouldApplyConversationSummary(existing, normalized);
+    if (!decision.apply) {
+      return;
+    }
+
+    mergedById.set(normalized.id, mergeConversationSummary(existing, normalized));
+  });
+
+  return sortConversationsByActivity(Array.from(mergedById.values()));
 };
 
 const updateConversationActivitySummary = (
@@ -1430,62 +1508,63 @@ const buildConversationMessageState = (
     .reverse()
     .find((message) => isCanonicalConversationMessage(message));
   const nextAliasIndex = rebuildConversationMessageAliasIndex(nextMessages);
-
-  return {
-    conversations: state.conversations.map((conversation) => {
-      if (conversation.id !== conversationId) return conversation;
-      if (!lastMessage) {
-        return (
-          normalizeConversation({
-            ...conversation,
-            lastMessage: undefined,
-            lastMessageStatus: null,
-          }) ?? {
-            ...conversation,
-            lastMessage: undefined,
-            lastMessageStatus: null,
-          }
-        );
-      }
-
-      const canonicalMessage = latestCanonicalMessage ?? null;
-      const updatedAt =
-        canonicalMessage?.createdAt ?? conversation.updatedAt ?? lastMessage.createdAt;
-
+  const conversations = state.conversations.map((conversation) => {
+    if (conversation.id !== conversationId) return conversation;
+    if (!lastMessage) {
       return (
         normalizeConversation({
           ...conversation,
-          lastMessage: toMessageSummary(lastMessage),
-          updatedAt,
-          lastMessageAt: canonicalMessage?.createdAt ?? conversation.lastMessageAt,
-          lastMessageSortAt:
-            canonicalMessage?.createdAt ??
-            conversation.lastMessageSortAt ??
-            conversation.lastMessageAt ??
-            updatedAt,
-          lastMessageId:
-            canonicalMessage?.id ??
-            conversation.lastMessageId ??
-            lastMessage.id,
-          lastMessageStatus: toConversationLastMessageStatus(lastMessage),
+          lastMessage: undefined,
+          lastMessageStatus: null,
         }) ?? {
           ...conversation,
-          lastMessage: toMessageSummary(lastMessage),
-          updatedAt,
-          lastMessageAt: canonicalMessage?.createdAt ?? conversation.lastMessageAt,
-          lastMessageSortAt:
-            canonicalMessage?.createdAt ??
-            conversation.lastMessageSortAt ??
-            conversation.lastMessageAt ??
-            updatedAt,
-          lastMessageId:
-            canonicalMessage?.id ??
-            conversation.lastMessageId ??
-            lastMessage.id,
-          lastMessageStatus: toConversationLastMessageStatus(lastMessage),
+          lastMessage: undefined,
+          lastMessageStatus: null,
         }
       );
-    }),
+    }
+
+    const canonicalMessage = latestCanonicalMessage ?? null;
+    const updatedAt =
+      canonicalMessage?.createdAt ?? conversation.updatedAt ?? lastMessage.createdAt;
+
+    return (
+      normalizeConversation({
+        ...conversation,
+        lastMessage: toMessageSummary(lastMessage),
+        updatedAt,
+        lastMessageAt: canonicalMessage?.createdAt ?? conversation.lastMessageAt,
+        lastMessageSortAt:
+          canonicalMessage?.createdAt ??
+          conversation.lastMessageSortAt ??
+          conversation.lastMessageAt ??
+          updatedAt,
+        lastMessageId:
+          canonicalMessage?.id ??
+          conversation.lastMessageId ??
+          lastMessage.id,
+        lastMessageStatus: toConversationLastMessageStatus(lastMessage),
+      }) ?? {
+        ...conversation,
+        lastMessage: toMessageSummary(lastMessage),
+        updatedAt,
+        lastMessageAt: canonicalMessage?.createdAt ?? conversation.lastMessageAt,
+        lastMessageSortAt:
+          canonicalMessage?.createdAt ??
+          conversation.lastMessageSortAt ??
+          conversation.lastMessageAt ??
+          updatedAt,
+        lastMessageId:
+          canonicalMessage?.id ??
+          conversation.lastMessageId ??
+          lastMessage.id,
+        lastMessageStatus: toConversationLastMessageStatus(lastMessage),
+      }
+    );
+  });
+
+  return {
+    conversations,
     messages: {
       ...state.messages,
       [conversationId]: nextMessages,
@@ -1508,6 +1587,133 @@ const buildConversationMessageState = (
             ...state.hasNewerMessagesByConversation,
             [conversationId]: options.hasNewer,
           },
+    ...buildConversationCollectionState(conversations),
+  };
+};
+
+const getResolvedMergedMessage = (
+  nextMessages: Message[],
+  incomingList: Message[],
+): Message | null => {
+  const mergedIncoming = incomingList[incomingList.length - 1];
+  if (!mergedIncoming) {
+    return nextMessages[nextMessages.length - 1] ?? null;
+  }
+
+  return (
+    nextMessages.find((message) =>
+      getMessageAliasCandidates(mergedIncoming).some((alias) =>
+        matchesMessageIdentityValue(message, alias),
+      ),
+    ) ?? mergedIncoming
+  );
+};
+
+const hasMessageIdentityMatch = (
+  messages: Message[],
+  incoming: Message,
+): boolean =>
+  messages.some((message) =>
+    getMessageAliasCandidates(incoming).some((alias) =>
+      matchesMessageIdentityValue(message, alias),
+    ),
+  );
+
+const ingestConversationMessagesWithMetadata = (
+  state: Pick<
+    ChatState,
+    | "conversations"
+    | "messages"
+    | "messageAliasIndexByConversation"
+    | "messagesHydratedByConversation"
+    | "hasNewerMessagesByConversation"
+  >,
+  conversationId: string,
+  messages: Message | Message[],
+  options?: {
+    mode?: "replace" | "prepend" | "append" | "upsert";
+    preserveMessagesCreatedAfter?: Date;
+    hydrated?: boolean;
+    hasNewer?: boolean;
+    source?: string;
+    incrementUnread?: boolean;
+  },
+) => {
+  const incomingList = (Array.isArray(messages) ? messages : [messages])
+    .map((item) => normalizeMessage(item, conversationId))
+    .filter((item): item is Message => item !== null);
+  if (incomingList.length === 0 && options?.mode !== "replace") {
+    return {
+      nextState: {
+        ...state,
+        ...buildConversationCollectionState(state.conversations),
+      },
+      metadata: {
+        status: "ignored" as const,
+        canonicalMessage: null,
+        mergedMessage: null,
+        unreadDelta: 0,
+      },
+    };
+  }
+
+  const currentMessages = state.messages[conversationId] || [];
+  const hadExistingIdentity = incomingList.some((incoming) =>
+    hasMessageIdentityMatch(currentMessages, incoming),
+  );
+  const nextMessages =
+    options?.mode === "replace"
+      ? replaceMessages(currentMessages, incomingList, {
+          preserveMessagesCreatedAfter: options?.preserveMessagesCreatedAfter,
+        })
+      : options?.mode === "prepend"
+        ? prependMessages(currentMessages, incomingList)
+        : options?.mode === "append"
+          ? appendMessages(currentMessages, incomingList)
+          : mergeMessages(currentMessages, incomingList);
+  const messageState = buildConversationMessageState(state, conversationId, nextMessages, {
+    hydrated: options?.hydrated ?? true,
+    hasNewer: options?.hasNewer,
+  });
+  const mergedMessage = getResolvedMergedMessage(nextMessages, incomingList);
+  const unreadDelta =
+    options?.incrementUnread && !hadExistingIdentity && mergedMessage ? 1 : 0;
+  const conversations =
+    unreadDelta > 0
+      ? messageState.conversations.map((conversation) => {
+          if (conversation.id !== conversationId || !mergedMessage) {
+            return conversation;
+          }
+
+          return updateConversationActivitySummary(
+            conversation,
+            mergedMessage,
+            Math.max(0, conversation.unreadCount || 0) + unreadDelta,
+          );
+        })
+      : messageState.conversations;
+  const nextState = {
+    ...messageState,
+    conversations,
+    ...buildConversationCollectionState(conversations),
+  };
+
+  return {
+    nextState,
+    metadata: {
+      status:
+        incomingList.length === 0
+          ? ("ignored" as const)
+          : hadExistingIdentity
+            ? ("merged" as const)
+            : ("new" as const),
+      canonicalMessage:
+        mergedMessage && isCanonicalConversationMessage(mergedMessage)
+          ? mergedMessage
+          : null,
+      mergedMessage,
+      unreadDelta,
+    },
   };
 };
 
@@ -1956,13 +2162,14 @@ export const useChatStore = create<ChatState>()(
       ...initialState,
 
       setConversations: (conversations) => {
-        const normalized = normalizeConversationsPayload(
-          Array.isArray(conversations) ? conversations : [],
+        const normalized = mergeConversationCollections(
+          normalizeConversationsPayload(
+            Array.isArray(conversations) ? conversations : [],
+          ),
         );
         set({
           conversations: normalized,
-          totalUnreadCount: computeCanonicalTotalUnreadCount(normalized),
-          lastConversationCursor: computeConversationCursor(normalized),
+          ...buildConversationCollectionState(normalized),
         });
       },
 
@@ -1971,18 +2178,14 @@ export const useChatStore = create<ChatState>()(
         if (!normalized) return;
 
         set((state) => {
-          const conversations = [
+          const conversations = mergeConversationCollections([
             normalized,
             ...(Array.isArray(state.conversations) ? state.conversations : []),
-          ].filter(
-            (item, index, list) =>
-              list.findIndex((candidate) => candidate.id === item.id) === index,
-          );
+          ]);
 
           return {
             conversations,
-            totalUnreadCount: computeCanonicalTotalUnreadCount(conversations),
-            lastConversationCursor: computeConversationCursor(conversations),
+            ...buildConversationCollectionState(conversations),
           };
         });
       },
@@ -2020,7 +2223,10 @@ export const useChatStore = create<ChatState>()(
           );
 
           if (existingIndex < 0) {
-            const nextConversations = [normalized, ...conversations];
+            const nextConversations = mergeConversationCollections([
+              normalized,
+              ...conversations,
+            ]);
             result = {
               applied: true,
               gapDetected: false,
@@ -2030,12 +2236,7 @@ export const useChatStore = create<ChatState>()(
             };
             return {
               conversations: nextConversations,
-              totalUnreadCount: computeCanonicalTotalUnreadCount(
-                nextConversations,
-              ),
-              lastConversationCursor: computeConversationCursor(
-                nextConversations,
-              ),
+              ...buildConversationCollectionState(nextConversations),
             };
           }
 
@@ -2054,11 +2255,11 @@ export const useChatStore = create<ChatState>()(
 
           const next = [...conversations];
           next[existingIndex] = mergeConversationSummary(current, normalized);
+          const mergedConversations = mergeConversationCollections(next);
 
           return {
-            conversations: next,
-            totalUnreadCount: computeCanonicalTotalUnreadCount(next),
-            lastConversationCursor: computeConversationCursor(next),
+            conversations: mergedConversations,
+            ...buildConversationCollectionState(mergedConversations),
           };
         });
 
@@ -2067,7 +2268,7 @@ export const useChatStore = create<ChatState>()(
 
       updateConversation: (id, updates) => {
         set((state) => {
-          const conversations = (Array.isArray(state.conversations)
+          const conversations = mergeConversationCollections((Array.isArray(state.conversations)
             ? state.conversations
             : []
           ).map((conversation) =>
@@ -2077,12 +2278,11 @@ export const useChatStore = create<ChatState>()(
                   ...updates,
                 })
               : conversation,
-          );
+          ));
 
           return {
             conversations,
-            totalUnreadCount: computeCanonicalTotalUnreadCount(conversations),
-            lastConversationCursor: computeConversationCursor(conversations),
+            ...buildConversationCollectionState(conversations),
           };
         });
       },
@@ -2094,55 +2294,49 @@ export const useChatStore = create<ChatState>()(
         Array.from(pendingMessageSendTimeouts.keys())
           .filter((key) => key.startsWith(`${id}:`))
           .forEach(clearMessageSendTimeout);
-        set((state) => ({
-          conversations: (Array.isArray(state.conversations)
+        set((state) => {
+          const conversations = (Array.isArray(state.conversations)
             ? state.conversations
             : []
-          ).filter((conversation) => conversation.id !== id),
-          messages: Object.fromEntries(
-            Object.entries(state.messages).filter(([key]) => key !== id),
-          ),
-          messagesHydratedByConversation: Object.fromEntries(
-            Object.entries(state.messagesHydratedByConversation).filter(
-              ([key]) => key !== id,
+          ).filter((conversation) => conversation.id !== id);
+          return {
+            conversations,
+            messages: Object.fromEntries(
+              Object.entries(state.messages).filter(([key]) => key !== id),
             ),
-          ),
-          hasMoreMessages: Object.fromEntries(
-            Object.entries(state.hasMoreMessages).filter(([key]) => key !== id),
-          ),
-          hasNewerMessagesByConversation: Object.fromEntries(
-            Object.entries(state.hasNewerMessagesByConversation).filter(
-              ([key]) => key !== id,
+            messagesHydratedByConversation: Object.fromEntries(
+              Object.entries(state.messagesHydratedByConversation).filter(
+                ([key]) => key !== id,
+              ),
             ),
-          ),
-          outboxByConversation: Object.fromEntries(
-            Object.entries(state.outboxByConversation).filter(
-              ([key]) => key !== id,
+            hasMoreMessages: Object.fromEntries(
+              Object.entries(state.hasMoreMessages).filter(([key]) => key !== id),
             ),
-          ),
-          sendRestrictionsByConversation: Object.fromEntries(
-            Object.entries(state.sendRestrictionsByConversation).filter(
-              ([key]) => key !== id,
+            hasNewerMessagesByConversation: Object.fromEntries(
+              Object.entries(state.hasNewerMessagesByConversation).filter(
+                ([key]) => key !== id,
+              ),
             ),
-          ),
-          messageErrors: Object.fromEntries(
-            Object.entries(state.messageErrors).filter(([key]) => key !== id),
-          ),
-          selectedConversationId:
-            state.selectedConversationId === id
-              ? null
-              : state.selectedConversationId,
-          totalUnreadCount: computeCanonicalTotalUnreadCount(
-            (Array.isArray(state.conversations) ? state.conversations : []).filter(
-              (conversation) => conversation.id !== id,
+            outboxByConversation: Object.fromEntries(
+              Object.entries(state.outboxByConversation).filter(
+                ([key]) => key !== id,
+              ),
             ),
-          ),
-          lastConversationCursor: computeConversationCursor(
-            (Array.isArray(state.conversations) ? state.conversations : []).filter(
-              (conversation) => conversation.id !== id,
+            sendRestrictionsByConversation: Object.fromEntries(
+              Object.entries(state.sendRestrictionsByConversation).filter(
+                ([key]) => key !== id,
+              ),
             ),
-          ),
-        }));
+            messageErrors: Object.fromEntries(
+              Object.entries(state.messageErrors).filter(([key]) => key !== id),
+            ),
+            selectedConversationId:
+              state.selectedConversationId === id
+                ? null
+                : state.selectedConversationId,
+            ...buildConversationCollectionState(conversations),
+          };
+        });
       },
 
       selectConversation: (id) => {
@@ -2254,9 +2448,8 @@ export const useChatStore = create<ChatState>()(
 
           return {
             conversations,
-            totalUnreadCount: computeCanonicalTotalUnreadCount(conversations),
             lastUnreadSummaryAppliedAt: appliedAtMs,
-            lastConversationCursor: computeConversationCursor(conversations),
+            ...buildConversationCollectionState(conversations),
           };
         });
 
@@ -2295,8 +2488,7 @@ export const useChatStore = create<ChatState>()(
 
           return {
             conversations,
-            totalUnreadCount: computeCanonicalTotalUnreadCount(conversations),
-            lastConversationCursor: computeConversationCursor(conversations),
+            ...buildConversationCollectionState(conversations),
           };
         });
       },
@@ -2338,8 +2530,7 @@ export const useChatStore = create<ChatState>()(
 
           return {
             conversations,
-            totalUnreadCount: computeCanonicalTotalUnreadCount(conversations),
-            lastConversationCursor: computeConversationCursor(conversations),
+            ...buildConversationCollectionState(conversations),
           };
         });
 
@@ -2361,10 +2552,10 @@ export const useChatStore = create<ChatState>()(
             const conversations = normalizeConversationsPayload(
               unwrapApiSuccess(response),
             );
+            const mergedConversations = mergeConversationCollections(conversations);
             set({
-              conversations,
-              totalUnreadCount: computeCanonicalTotalUnreadCount(conversations),
-              lastConversationCursor: computeConversationCursor(conversations),
+              conversations: mergedConversations,
+              ...buildConversationCollectionState(mergedConversations),
               isLoadingConversations: false,
               hasFetchedConversationsOnce: true,
             });
@@ -2387,52 +2578,29 @@ export const useChatStore = create<ChatState>()(
       },
 
       ingestMessages: (conversationId, messages, options) => {
-        const incomingList = (Array.isArray(messages) ? messages : [messages])
-          .map((item) => normalizeMessage(item, conversationId))
-          .filter((item): item is Message => item !== null);
-        if (incomingList.length === 0 && options?.mode !== "replace") return;
-
         set((state) => {
-          const currentMessages = state.messages[conversationId] || [];
-          const nextMessages =
-            options?.mode === "replace"
-              ? replaceMessages(currentMessages, incomingList, {
-                  preserveMessagesCreatedAfter:
-                    options?.preserveMessagesCreatedAfter,
-                })
-              : options?.mode === "prepend"
-                ? prependMessages(currentMessages, incomingList)
-                : options?.mode === "append"
-                  ? appendMessages(currentMessages, incomingList)
-                  : mergeMessages(currentMessages, incomingList);
-          const mergedIncoming = incomingList[incomingList.length - 1];
-          const resolvedMergedMessage = mergedIncoming
-            ? nextMessages.find((message) =>
-                getMessageAliasCandidates(mergedIncoming).some((alias) =>
-                  matchesMessageIdentityValue(message, alias),
-                ),
-              ) || mergedIncoming
-            : nextMessages[nextMessages.length - 1];
+          const { nextState, metadata } = ingestConversationMessagesWithMetadata(
+            state,
+            conversationId,
+            messages,
+            options,
+          );
 
-          if (resolvedMergedMessage) {
+          if (metadata.mergedMessage) {
             logMessageDebug("chatStore", "message_ingested", {
               conversationId,
               source: options?.source ?? "unknown",
               mode: options?.mode ?? "upsert",
-              correlationKey:
-                getCorrelationKeyForMessage(resolvedMergedMessage),
-              mergedId: resolvedMergedMessage.id,
-              mergedLocalId: resolvedMergedMessage.localId,
-              mergedClientMessageId: resolvedMergedMessage.clientMessageId,
-              sendState: resolvedMergedMessage.sendState,
-              nextCount: nextMessages.length,
+              correlationKey: getCorrelationKeyForMessage(metadata.mergedMessage),
+              mergedId: metadata.mergedMessage.id,
+              mergedLocalId: metadata.mergedMessage.localId,
+              mergedClientMessageId: metadata.mergedMessage.clientMessageId,
+              sendState: metadata.mergedMessage.sendState,
+              nextCount: nextState.messages[conversationId]?.length ?? 0,
             });
           }
 
-          return buildConversationMessageState(state, conversationId, nextMessages, {
-            hydrated: options?.hydrated ?? true,
-            hasNewer: options?.hasNewer,
-          });
+          return nextState;
         });
       },
 
@@ -2479,6 +2647,38 @@ export const useChatStore = create<ChatState>()(
             source: "ackOutgoingMessage",
           },
         );
+      },
+
+      ingestConversationMessageEvent: (conversationId, message, options) => {
+        let metadata: {
+          status: "new" | "merged" | "ignored";
+          canonicalMessage: Message | null;
+          mergedMessage: Message | null;
+          unreadDelta: number;
+        } = {
+          status: "ignored",
+          canonicalMessage: null,
+          mergedMessage: null,
+          unreadDelta: 0,
+        };
+
+        set((state) => {
+          const result = ingestConversationMessagesWithMetadata(
+            state,
+            conversationId,
+            message,
+            {
+              mode: "upsert",
+              hydrated: options?.hydrated ?? true,
+              source: options?.source ?? "realtime",
+              incrementUnread: options?.incrementUnread,
+            },
+          );
+          metadata = result.metadata;
+          return result.nextState;
+        });
+
+        return metadata;
       },
 
       failOutgoingMessage: (conversationId, clientMessageId, updates) => {

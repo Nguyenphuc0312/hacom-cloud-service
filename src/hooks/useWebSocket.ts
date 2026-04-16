@@ -229,7 +229,9 @@ export const useWebSocket = (
   const totalUnreadCount = useChatStore((s) => s.totalUnreadCount);
   const conversations = useChatStore((s) => s.conversations);
 
-  const addMessage = useChatStore((s) => s.addMessage);
+  const ingestConversationMessageEvent = useChatStore(
+    (s) => s.ingestConversationMessageEvent,
+  );
   const removeMessage = useChatStore((s) => s.removeMessage);
   const upsertConversationSummary = useChatStore(
     (s) => s.upsertConversationSummary,
@@ -237,9 +239,6 @@ export const useWebSocket = (
   const applyUnreadSummary = useChatStore((s) => s.applyUnreadSummary);
   const setTyping = useChatStore((s) => s.setTyping);
   const clearTyping = useChatStore((s) => s.clearTyping);
-  const applyIncomingConversationMessage = useChatStore(
-    (s) => s.applyIncomingConversationMessage,
-  );
   const fetchMessages = useChatStore((s) => s.fetchMessages);
   const markMessagesReadUpTo = useChatStore((s) => s.markMessagesReadUpTo);
   const updateConversation = useChatStore((s) => s.updateConversation);
@@ -778,7 +777,7 @@ export const useWebSocket = (
         return conversationListRefreshInFlightRef.current;
       }
 
-      const currentCursor = useChatStore.getState().lastConversationCursor;
+      const currentCursor = useChatStore.getState().lastConversationUpdatedAfterCursor;
       const shouldFetchFull = options?.forceFull || !currentCursor;
       const request = (async () => {
         if (shouldFetchFull) {
@@ -1184,7 +1183,10 @@ export const useWebSocket = (
       shouldResyncOnConnectRef.current = false;
 
       if (shouldResync) {
-        void refreshChangedConversationSummaries({ reason: "reconnect" }).catch(() => {
+        void refreshChangedConversationSummaries({
+          reason: "reconnect",
+          forceFull: true,
+        }).catch(() => {
           // no-op: best effort sidebar resync
         });
         void refreshUnreadSummarySnapshot().catch(() => {
@@ -1348,13 +1350,6 @@ export const useWebSocket = (
         clientMessageId,
         stableId,
       });
-      addMessage(conversationId, {
-        ...(messagePayload as unknown as Parameters<typeof addMessage>[1]),
-        ...(stableId ? { stableId } : {}),
-        ...(clientMessageId ? { clientMessageId } : {}),
-        ...(localId ? { localId } : {}),
-      });
-
       const chatState = useChatStore.getState();
       const currentUserId = useAuthStore.getState().user?.id;
       const isActiveConversation =
@@ -1374,18 +1369,20 @@ export const useWebSocket = (
           senderId !== currentUserId &&
           (!isActiveConversation || !visibleAndFocused),
       );
-      const latestMessage =
-        useChatStore.getState().messages[conversationId]?.[
-          (useChatStore.getState().messages[conversationId]?.length ?? 1) - 1
-        ];
+      const ingestResult = ingestConversationMessageEvent(conversationId, {
+        ...(messagePayload as unknown as Parameters<
+          typeof ingestConversationMessageEvent
+        >[1]),
+        ...(stableId ? { stableId } : {}),
+        ...(clientMessageId ? { clientMessageId } : {}),
+        ...(localId ? { localId } : {}),
+      }, {
+        incrementUnread: shouldIncrementUnread,
+        hydrated: true,
+        source: eventType,
+      });
 
-      if (eventType === "message:new" && latestMessage) {
-        applyIncomingConversationMessage(conversationId, latestMessage, {
-          incrementUnread: shouldIncrementUnread,
-        });
-      }
-
-      if (eventType === "message:new") {
+      if (eventType === "message:new" && ingestResult.status === "new") {
         maybeNotifyIncomingMessage({
           conversationId,
           messageId,
@@ -1421,6 +1418,8 @@ export const useWebSocket = (
 
       if (
         eventType !== "message:new" ||
+        ingestResult.status === "ignored" ||
+        ingestResult.status === "merged" ||
         (chatState.selectedConversationId !== conversationId &&
           senderId &&
           currentUserId &&
@@ -2085,6 +2084,7 @@ export const useWebSocket = (
       ) {
         void refreshChangedConversationSummaries({
           reason: "resync_required",
+          forceFull: true,
         }).catch(() => {
           // no-op: best effort sidebar refresh
         });
@@ -2161,8 +2161,6 @@ export const useWebSocket = (
 
     return socket;
   }, [
-    addMessage,
-    applyIncomingConversationMessage,
     clearAllRoomJoinRetries,
     clearAllRoomSyncFallbacks,
     clearRoomJoinRetry,
@@ -2188,6 +2186,7 @@ export const useWebSocket = (
     maybeNotifyIncomingMessage,
     maybeNotifyMembershipEvent,
     maybeReconcileGap,
+    ingestConversationMessageEvent,
     scheduleRemoteTypingDecay,
     scheduleRoomResync,
     selectConversation,

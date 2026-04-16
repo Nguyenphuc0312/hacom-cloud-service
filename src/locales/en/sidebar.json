@@ -6,7 +6,7 @@
     "collapseSidebar": "Collapse sidebar"
   },
   "search": {
-    "placeholder": "Search channels or people",
+    "placeholder": "Search conversations",
     "aria": "Search conversations",
     "clearAria": "Clear search"
   },

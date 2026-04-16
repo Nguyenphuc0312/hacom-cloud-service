@@ -1,16 +1,15 @@
 import React, {
   useCallback,
   useDeferredValue,
-  useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
-import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { ConfirmDialog, Spinner } from "../ui";
+import { ConfirmDialog, SegmentedControl, Spinner } from "../ui";
 import { useLogout, usePresence } from "../../hooks";
-import type { Conversation, UserSummary } from "../../types";
+import type { UserSummary } from "../../types";
 import { isDirectConversation } from "../../lib/conversationAdapter";
 import { getOtherParticipant } from "../../utils/messageHelpers";
 import { SidebarContainer } from "./sidebar/SidebarContainer";
@@ -18,9 +17,10 @@ import { SidebarHeader } from "./sidebar/SidebarHeader";
 import { SidebarSearch } from "./sidebar/SidebarSearch";
 import { RoomList } from "./sidebar/RoomList";
 import { ROUTE_PATHS } from "../../router/paths";
+import { useChatSidebarStore } from "../../features/chat/state/chatSidebarStore";
+import { useSidebarConversationList } from "../../features/chat/hooks/useSidebarConversationList";
 
 interface SidebarProps {
-  conversations: Conversation[];
   currentUser: UserSummary;
   selectedId: string | null;
   isLoadingConversations?: boolean;
@@ -36,10 +36,7 @@ interface SidebarProps {
   className?: string;
 }
 
-const COLLAPSED_STORAGE_KEY = "chat.sidebar.collapsed";
-
 export const Sidebar: React.FC<SidebarProps> = ({
-  conversations,
   currentUser,
   selectedId,
   isLoadingConversations = false,
@@ -56,12 +53,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const searchQuery = useChatSidebarStore((state) => state.searchQuery);
+  const setSearchQuery = useChatSidebarStore((state) => state.setSearchQuery);
+  const activeFilter = useChatSidebarStore((state) => state.filter);
+  const setActiveFilter = useChatSidebarStore((state) => state.setFilter);
   const deferredSearchQuery = useDeferredValue(searchQuery);
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const { logout, isLoggingOut } = useLogout();
-  const currentConversationId = selectedId;
 
   const handleSelectRoom = useCallback(
     (conversationId: string) => {
@@ -70,28 +69,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
     [onSelectConversation],
   );
 
+  const { items, counts } = useSidebarConversationList(currentUser, {
+    filter: activeFilter,
+    query: deferredSearchQuery,
+  });
+
   const dmUserIds = useMemo(() => {
     const ids = new Set<string>();
-    for (const conversation of conversations ?? []) {
+    for (const conversation of items.map((item) => item.conversation)) {
       if (!isDirectConversation(conversation)) continue;
       const other = getOtherParticipant(conversation, currentUser.id);
       if (other?.id) ids.add(other.id);
     }
     return Array.from(ids);
-  }, [conversations, currentUser.id]);
+  }, [currentUser.id, items]);
 
   usePresence({ userIds: dmUserIds, enabled: dmUserIds.length > 0 });
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const storedValue = window.localStorage.getItem(COLLAPSED_STORAGE_KEY);
-    setIsCollapsed(storedValue === "1");
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(COLLAPSED_STORAGE_KEY, isCollapsed ? "1" : "0");
-  }, [isCollapsed]);
 
   const handleLogoutConfirm = async () => {
     try {
@@ -103,32 +96,51 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      <SidebarContainer
-        collapsed={isCollapsed}
-        className={clsx("relative", className)}
-      >
+      <SidebarContainer className={className}>
         <SidebarHeader
           currentUser={currentUser}
-          collapsed={isCollapsed}
-          onToggleCollapsed={() => setIsCollapsed((current) => !current)}
           onNewChat={onNewChat}
           onCurrentUserClick={onCurrentUserClick}
           onOpenFriends={() => navigate(ROUTE_PATHS.FRIENDS)}
           onOpenSettings={() => navigate(ROUTE_PATHS.SETTINGS)}
           onRequestLogout={() => setIsLogoutConfirmOpen(true)}
+          onFocusSearch={() => searchInputRef.current?.focus()}
         />
 
-        <div className="px-4">
-          <SidebarSearch
-            value={searchQuery}
-            collapsed={isCollapsed}
-            onChange={setSearchQuery}
-            onSearchUsers={(query) =>
-              navigate(`${ROUTE_PATHS.FRIENDS}?q=${encodeURIComponent(query)}`)
+        <SidebarSearch
+          value={searchQuery}
+          onChange={setSearchQuery}
+          inputRef={searchInputRef}
+        />
+
+        <div className="px-4 pb-3">
+          <SegmentedControl
+            value={activeFilter}
+            onChange={(value) =>
+              setActiveFilter(value as "all" | "unread" | "groups")
             }
+            size="sm"
+            ariaLabel={t("sidebar:room.listAria")}
+            options={[
+              {
+                id: "all",
+                label: t("sidebar:tabs.all"),
+                count: counts.all,
+              },
+              {
+                id: "unread",
+                label: t("sidebar:tabs.unread"),
+                count: counts.unread,
+              },
+              {
+                id: "groups",
+                label: t("sidebar:tabs.groups"),
+                count: counts.groups,
+              },
+            ]}
           />
 
-          {isLoadingConversations && conversations.length > 0 && (
+          {isLoadingConversations && items.length > 0 && (
             <div className="mt-2 inline-flex items-center gap-2 px-1 text-caption text-text-muted">
               <Spinner size="sm" />
               <span>{t("common:loading.default")}</span>
@@ -136,13 +148,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        <div className="flex min-h-0 flex-1 px-2 pb-3 pt-2.5">
+        <div className="flex min-h-0 flex-1 px-2 pb-3">
           <RoomList
-            conversations={conversations}
-            currentUser={currentUser}
-            selectedId={currentConversationId}
+            items={items}
+            currentUserId={currentUser.id}
+            selectedId={selectedId}
             searchQuery={deferredSearchQuery}
-            collapsed={isCollapsed}
             showLoadingSkeleton={showConversationSkeleton}
             error={conversationsError}
             onRetry={onRetryConversations}

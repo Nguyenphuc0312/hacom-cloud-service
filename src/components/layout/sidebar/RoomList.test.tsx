@@ -1,8 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { MessageType, RoomType, UserStatus, type Conversation } from "../../../types";
-import type { UserSummary } from "../../../types";
+import {
+  MessageType,
+  RoomType,
+  UserStatus,
+  type Conversation,
+} from "../../../types";
 import { RoomList } from "./RoomList";
+import type { SidebarConversationItemViewModel } from "../../../features/chat/hooks/useSidebarConversationList";
 
 vi.mock("react-i18next", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-i18next")>();
@@ -15,13 +20,6 @@ vi.mock("react-i18next", async (importOriginal) => {
   };
 });
 
-const currentUser: UserSummary = {
-  id: "user-1",
-  username: "user-1",
-  displayName: "User One",
-  status: UserStatus.ONLINE,
-};
-
 const makeConversation = (
   id: string,
   updatedAt: string,
@@ -32,7 +30,12 @@ const makeConversation = (
     type: RoomType.DIRECT,
     participantCount: 2,
     participants: [
-      currentUser,
+      {
+        id: "user-1",
+        username: "user-1",
+        displayName: "User One",
+        status: UserStatus.ONLINE,
+      },
       {
         id: `${id}-peer`,
         username: `${id}-peer`,
@@ -45,8 +48,27 @@ const makeConversation = (
     ...overrides,
   }) as Conversation;
 
+const makeItem = (
+  conversation: Conversation,
+  overrides: Partial<SidebarConversationItemViewModel> = {},
+): SidebarConversationItemViewModel => ({
+  id: conversation.id,
+  conversation,
+  displayName: conversation.displayName || conversation.name || conversation.id,
+  previewText: conversation.lastMessage?.content || "",
+  previewState: null,
+  timeLabel: "10:00",
+  unreadCount: conversation.unreadCount ?? 0,
+  unreadLabel: String(conversation.unreadCount ?? 0),
+  hasUnreadMention: false,
+  avatarSrc: undefined,
+  directPartnerId: conversation.otherUser?.id ?? null,
+  isDirect: conversation.type === RoomType.DIRECT,
+  ...overrides,
+});
+
 describe("RoomList", () => {
-  it("keeps one global activity order across direct and group conversations", () => {
+  it("renders room items in the supplied selector order", () => {
     const directConversation = makeConversation(
       "direct-older",
       "2026-04-10T09:00:00.000Z",
@@ -59,17 +81,6 @@ describe("RoomList", () => {
           displayName: "Older direct",
           status: UserStatus.ONLINE,
         },
-        lastMessageSortAt: "2026-04-10T09:00:00.000Z",
-        lastMessageAt: "2026-04-10T09:00:00.000Z",
-        lastMessage: {
-          id: "msg-direct",
-          senderId: "user-2",
-          senderName: "Older direct",
-          content: "older",
-          type: MessageType.TEXT,
-          createdAt: new Date("2026-04-10T09:00:00.000Z"),
-          isDeleted: false,
-        },
       },
     );
 
@@ -80,42 +91,26 @@ describe("RoomList", () => {
         type: RoomType.GROUP,
         name: "Newer group",
         participantCount: 3,
-        participants: [
-          currentUser,
-          {
-            id: "user-3",
-            username: "user-3",
-            displayName: "Bob",
-            status: UserStatus.ONLINE,
-          },
-          {
-            id: "user-4",
-            username: "user-4",
-            displayName: "Carol",
-            status: UserStatus.ONLINE,
-          },
-        ],
-        lastMessageSortAt: "2026-04-10T10:00:00.000Z",
-        lastMessageAt: "2026-04-10T10:00:00.000Z",
-        lastMessage: {
-          id: "msg-group",
-          senderId: "user-3",
-          senderName: "Bob",
-          content: "newer",
-          type: MessageType.TEXT,
-          createdAt: new Date("2026-04-10T10:00:00.000Z"),
-          isDeleted: false,
-        },
       },
     );
 
     render(
       <RoomList
-        conversations={[directConversation, groupConversation]}
-        currentUser={currentUser}
+        items={[
+          makeItem(groupConversation, {
+            displayName: "Newer group",
+            previewText: "newer",
+            isDirect: false,
+          }),
+          makeItem(directConversation, {
+            displayName: "Older direct",
+            previewText: "older",
+            directPartnerId: "user-2",
+          }),
+        ]}
+        currentUserId="user-1"
         selectedId={null}
         searchQuery=""
-        collapsed={false}
         onSelect={vi.fn()}
       />,
     );
@@ -138,7 +133,12 @@ describe("RoomList", () => {
         displayAvatar: null,
         participantCount: 6,
         participants: [
-          currentUser,
+          {
+            id: "user-1",
+            username: "user-1",
+            displayName: "User One",
+            status: UserStatus.ONLINE,
+          },
           {
             id: "user-2",
             username: "user-2",
@@ -171,8 +171,6 @@ describe("RoomList", () => {
             status: UserStatus.ONLINE,
           },
         ],
-        lastMessageSortAt: "2026-04-10T10:00:00.000Z",
-        lastMessageAt: "2026-04-10T10:00:00.000Z",
         lastMessage: {
           id: "msg-group-long",
           senderId: "user-3",
@@ -188,11 +186,17 @@ describe("RoomList", () => {
 
     render(
       <RoomList
-        conversations={[unnamedGroup]}
-        currentUser={currentUser}
+        items={[
+          makeItem(unnamedGroup, {
+            displayName: "Alice, Bob +3",
+            previewText:
+              "Bob: This is a very long preview message that should still keep the sender prefix visible in the sidebar item",
+            isDirect: false,
+          }),
+        ]}
+        currentUserId="user-1"
         selectedId={null}
         searchQuery=""
-        collapsed={false}
         onSelect={vi.fn()}
       />,
     );

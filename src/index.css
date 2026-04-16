@@ -51,10 +51,11 @@
   --space-10: 40px;
   --space-12: 48px;
 
-  --size-room-item: 64px;
-  --size-room-meta: 36px;
+  --size-room-item: 72px;
+  --size-room-meta: 52px;
+  --size-sidebar-width: 368px;
   --size-sidebar-collapsed: 84px;
-  --size-sidebar-expanded: 304px;
+  --size-sidebar-expanded: 368px;
   --size-voice-message-min: 200px;
 
   /* Chat bubble density (overridden by SettingsApplier) */
@@ -585,19 +586,7 @@ a:focus-visible {
     will-change: transform, opacity;
   }
 
-  .sidebar-shell-label {
-    transition:
-      opacity 140ms var(--motion-ease-enter) 36ms,
-      transform 140ms var(--motion-ease-enter) 36ms;
-  }
-
-  .sidebar-shell-label[data-collapsed="true"] {
-    opacity: 0;
-    transform: translateX(-8px);
-    pointer-events: none;
-  }
-
-  .sidebar-shell-badge {
+  .sidebar-unread-badge {
     transition:
       opacity var(--motion-duration-badge) var(--motion-ease-enter),
       transform var(--motion-duration-badge) var(--motion-ease-enter),

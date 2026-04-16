@@ -501,9 +501,7 @@ export const ChatPage: React.FC = () => {
         return;
       }
 
-      const existing = useChatStore.getState().conversations;
-      const merged = [...existing, ...fetched];
-      useChatStore.getState().setConversations(merged);
+      useChatStore.getState().setConversations(fetched);
       conversationsPageRef.current = nextPage;
       setHasMoreConversations(fetched.length >= CONVERSATIONS_PAGE_SIZE);
     } catch (error) {
@@ -1272,7 +1270,7 @@ export const ChatPage: React.FC = () => {
       {/* Sidebar */}
       <div
         className={clsx(
-          "absolute inset-y-0 left-0 z-30 w-full max-w-full transition-transform duration-300 sm:max-w-[min(24rem,92vw)] lg:relative lg:z-0 lg:w-auto lg:max-w-none lg:flex-shrink-0",
+          "absolute inset-y-0 left-0 z-30 w-full max-w-full transition-transform duration-300 sm:max-w-[min(23rem,94vw)] lg:relative lg:z-0 lg:w-auto lg:max-w-none lg:flex-shrink-0",
           showSidebarOnMobile
             ? "translate-x-0"
             : "-translate-x-full lg:translate-x-0",
@@ -1280,7 +1278,6 @@ export const ChatPage: React.FC = () => {
         aria-hidden={!showSidebarOnMobile}
       >
         <Sidebar
-          conversations={conversations}
           currentUser={currentUserSummary}
           selectedId={routeConversationId}
           isLoadingConversations={isLoadingConversations}
