@@ -6,11 +6,9 @@ import { MessageList } from "../chat/MessageList";
 import { SelectionToolbar } from "../chat/SelectionToolbar";
 import { DropOverlay } from "../input/DropOverlay";
 import { MessageInput } from "../input/MessageInput";
-import { SearchPanel } from "../chat/SearchPanel";
-import { PinnedMessagesPanel } from "../chat/PinnedMessagesPanel";
 import { ConversationLane } from "./ConversationLane";
 import type { MentionCandidate } from "../input/MessageInput";
-import { toast } from "../ui";
+import { Spinner, toast } from "../ui";
 import { useChatStore, useGroupStore, useUIStore } from "../../stores";
 import {
   useComposerAvailability,
@@ -37,6 +35,11 @@ import { logScrollTrace } from "../../utils/scrollTrace";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { getMessageByIdUseCase } from "../../features/chat/usecases/getMessageById";
 import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
+
+const SearchPanel = React.lazy(() => import("../chat/SearchPanel"));
+const PinnedMessagesPanel = React.lazy(
+  () => import("../chat/PinnedMessagesPanel"),
+);
 
 // ── Convert upload queue metadata to Attachment ─────────────────────
 
@@ -221,6 +224,12 @@ const ChatTimelinePane = React.memo(
   ),
 );
 ChatTimelinePane.displayName = "ChatTimelinePane";
+
+const OverlayPanelFallback: React.FC = () => (
+  <div className="flex h-full items-center justify-center px-6">
+    <Spinner size="md" />
+  </div>
+);
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
   conversation,
@@ -922,21 +931,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             aria-label={t("common:actions.close")}
           />
           <div className="pointer-events-auto absolute inset-y-0 right-0 w-full max-w-[min(24rem,100%)] border-l border-border bg-surface shadow-elev3 animate-slide-up-fade">
-            {overlayMode === "search" ? (
-              <SearchPanel
-                conversationId={conversation.id}
-                onSelectMessage={handleJumpToMessage}
-                onClose={() => setOverlayMode(null)}
-                className="h-full"
-              />
-            ) : (
-              <PinnedMessagesPanel
-                conversationId={conversation.id}
-                onClose={() => setOverlayMode(null)}
-                onJumpToMessage={handleJumpToMessage}
-                className="h-full"
-              />
-            )}
+            <React.Suspense fallback={<OverlayPanelFallback />}>
+              {overlayMode === "search" ? (
+                <SearchPanel
+                  conversationId={conversation.id}
+                  onSelectMessage={handleJumpToMessage}
+                  onClose={() => setOverlayMode(null)}
+                  className="h-full"
+                />
+              ) : (
+                <PinnedMessagesPanel
+                  conversationId={conversation.id}
+                  onClose={() => setOverlayMode(null)}
+                  onJumpToMessage={handleJumpToMessage}
+                  className="h-full"
+                />
+              )}
+            </React.Suspense>
           </div>
         </div>
       )}

@@ -16,14 +16,7 @@ import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Sidebar } from "../components/layout/Sidebar";
 import { ChatWindow } from "../components/layout/ChatWindow";
-import { UserProfile } from "../components/info/UserProfile";
-import { GroupInfo } from "../components/info/GroupInfo";
 import { ErrorState, NoChatSelected, Spinner } from "../components/ui";
-import {
-  NewChatModal,
-  ImagePreviewModal,
-  FilePreviewModal,
-} from "../components/modals";
 import { toast } from "../components/ui";
 import {
   useAuthStore,
@@ -61,6 +54,18 @@ import {
   consumeOpenNewChatIntent,
 } from "../lib/commandPalette";
 import { chatApi } from "../features/chat/api";
+
+const UserProfile = React.lazy(() => import("../components/info/UserProfile"));
+const GroupInfo = React.lazy(() => import("../components/info/GroupInfo"));
+const NewChatModal = React.lazy(
+  () => import("../components/modals/NewChatModal"),
+);
+const ImagePreviewModal = React.lazy(
+  () => import("../components/modals/ImagePreviewModal"),
+);
+const FilePreviewModal = React.lazy(
+  () => import("../components/modals/FilePreviewModal"),
+);
 
 type IdleCallbackDeadline = {
   didTimeout: boolean;
@@ -121,6 +126,20 @@ const scheduleIdleTask = (task: () => void): (() => void) => {
 };
 
 const CONVERSATIONS_PAGE_SIZE = 100;
+
+const DeferredPanelFallback: React.FC = () => (
+  <div className="flex h-full items-center justify-center px-6">
+    <Spinner size="md" />
+  </div>
+);
+
+const DeferredModalFallback: React.FC = () => (
+  <div className="fixed inset-0 z-[70] flex items-center justify-center bg-text-primary/40 backdrop-blur-sm">
+    <div className="rounded-2xl border border-border/80 bg-surface/95 p-4 shadow-elev3">
+      <Spinner size="md" />
+    </div>
+  </div>
+);
 
 export const ChatPage: React.FC = () => {
   const { t } = useTranslation();
@@ -1391,53 +1410,55 @@ export const ChatPage: React.FC = () => {
           style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}
         >
           {shouldRenderInfoContent ? (
-            profilePanelTarget ? (
-              <UserProfile
-                userId={profilePanelTarget.userId}
-                currentUserId={currentUserSummary.id}
-                initialUser={profilePanelTarget.initialUser ?? null}
-                onClose={closeInfoPanel}
-                onDeleteConversation={
-                  selectedConversation &&
-                  isSelectedDirectConversation &&
-                  otherUser?.id === profilePanelTarget.userId
-                    ? handleDeleteConversation
-                    : undefined
-                }
-                onStartConversation={handleStartChat}
-              />
-            ) : isSelectedDirectConversation ? (
-              otherUser ? (
+            <React.Suspense fallback={<DeferredPanelFallback />}>
+              {profilePanelTarget ? (
                 <UserProfile
-                  userId={otherUser.id}
+                  userId={profilePanelTarget.userId}
                   currentUserId={currentUserSummary.id}
-                  initialUser={{
-                    id: otherUser.id,
-                    username: otherUser.username,
-                    displayName: otherUser.displayName,
-                    avatar: otherUser.avatar,
-                    status: otherUser.status,
-                  }}
+                  initialUser={profilePanelTarget.initialUser ?? null}
                   onClose={closeInfoPanel}
-                  onDeleteConversation={handleDeleteConversation}
+                  onDeleteConversation={
+                    selectedConversation &&
+                    isSelectedDirectConversation &&
+                    otherUser?.id === profilePanelTarget.userId
+                      ? handleDeleteConversation
+                      : undefined
+                  }
                   onStartConversation={handleStartChat}
                 />
-              ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-                  <Spinner size="md" />
-                  <p className="text-sm text-text-muted">
-                    {t("common:loading.default")}
-                  </p>
-                </div>
-              )
-            ) : selectedConversation ? (
-              <GroupInfo
-                conversation={selectedConversation}
-                currentUserId={currentUserSummary.id}
-                onClose={closeInfoPanel}
-                onDeleteConversation={handleDeleteConversation}
-              />
-            ) : null
+              ) : isSelectedDirectConversation ? (
+                otherUser ? (
+                  <UserProfile
+                    userId={otherUser.id}
+                    currentUserId={currentUserSummary.id}
+                    initialUser={{
+                      id: otherUser.id,
+                      username: otherUser.username,
+                      displayName: otherUser.displayName,
+                      avatar: otherUser.avatar,
+                      status: otherUser.status,
+                    }}
+                    onClose={closeInfoPanel}
+                    onDeleteConversation={handleDeleteConversation}
+                    onStartConversation={handleStartChat}
+                  />
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+                    <Spinner size="md" />
+                    <p className="text-sm text-text-muted">
+                      {t("common:loading.default")}
+                    </p>
+                  </div>
+                )
+              ) : selectedConversation ? (
+                <GroupInfo
+                  conversation={selectedConversation}
+                  currentUserId={currentUserSummary.id}
+                  onClose={closeInfoPanel}
+                  onDeleteConversation={handleDeleteConversation}
+                />
+              ) : null}
+            </React.Suspense>
           ) : null}
         </div>
       )}
@@ -1456,39 +1477,49 @@ export const ChatPage: React.FC = () => {
       )}
 
       {/* New Chat Modal */}
-      <NewChatModal
-        isOpen={isNewChatModalOpen}
-        onClose={() => setIsNewChatModalOpen(false)}
-        onStartChat={handleStartChat}
-        onCreateGroup={handleCreateGroup}
-        isSubmitting={isCreatingRoom}
-      />
+      {isNewChatModalOpen && (
+        <React.Suspense fallback={<DeferredModalFallback />}>
+          <NewChatModal
+            isOpen={isNewChatModalOpen}
+            onClose={() => setIsNewChatModalOpen(false)}
+            onStartChat={handleStartChat}
+            onCreateGroup={handleCreateGroup}
+            isSubmitting={isCreatingRoom}
+          />
+        </React.Suspense>
+      )}
 
       {/* Image Preview Modal */}
       {imagePreview && (
-        <ImagePreviewModal
-          isOpen={!!imagePreview}
-          onClose={() => setImagePreview(null)}
-          imageUrl={imagePreview}
-        />
+        <React.Suspense fallback={<DeferredModalFallback />}>
+          <ImagePreviewModal
+            isOpen={!!imagePreview}
+            onClose={() => setImagePreview(null)}
+            imageUrl={imagePreview}
+          />
+        </React.Suspense>
       )}
 
       {/* File Preview Modal */}
-      <FilePreviewModal
-        isOpen={filePreview.isOpen}
-        onClose={filePreview.close}
-        current={filePreview.current}
-        currentIndex={filePreview.currentIndex}
-        totalItems={filePreview.totalItems}
-        secureUrl={filePreview.secureUrl}
-        isLoadingUrl={filePreview.isLoadingUrl}
-        urlError={filePreview.urlError}
-        hasPrev={filePreview.hasPrev}
-        hasNext={filePreview.hasNext}
-        onPrev={filePreview.prev}
-        onNext={filePreview.next}
-        onRefreshUrl={filePreview.refreshUrl}
-      />
+      {(filePreview.isOpen || filePreview.current) && (
+        <React.Suspense fallback={<DeferredModalFallback />}>
+          <FilePreviewModal
+            isOpen={filePreview.isOpen}
+            onClose={filePreview.close}
+            current={filePreview.current}
+            currentIndex={filePreview.currentIndex}
+            totalItems={filePreview.totalItems}
+            secureUrl={filePreview.secureUrl}
+            isLoadingUrl={filePreview.isLoadingUrl}
+            urlError={filePreview.urlError}
+            hasPrev={filePreview.hasPrev}
+            hasNext={filePreview.hasNext}
+            onPrev={filePreview.prev}
+            onNext={filePreview.next}
+            onRefreshUrl={filePreview.refreshUrl}
+          />
+        </React.Suspense>
+      )}
     </div>
   );
 };

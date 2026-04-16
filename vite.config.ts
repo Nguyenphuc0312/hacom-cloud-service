@@ -63,6 +63,48 @@ export default defineConfig(({ mode }) => {
   return {
     base: normalizeBasePath(env.VITE_APP_BASE_PATH),
     plugins: [react()],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            const normalizedId = id.replace(/\\/g, "/");
+
+            if (normalizedId.includes("node_modules")) {
+              if (
+                normalizedId.includes("/react/") ||
+                normalizedId.includes("/react-dom/") ||
+                normalizedId.includes("/react-router/") ||
+                normalizedId.includes("/react-router-dom/") ||
+                normalizedId.includes("/i18next/") ||
+                normalizedId.includes("/react-i18next/") ||
+                normalizedId.includes("/scheduler/")
+              ) {
+                return "react-vendor";
+              }
+            }
+
+            if (
+              normalizedId.includes("/src/components/info/UserProfile") ||
+              normalizedId.includes("/src/components/info/GroupInfo") ||
+              normalizedId.includes("/src/components/chat/SearchPanel") ||
+              normalizedId.includes("/src/components/chat/PinnedMessagesPanel")
+            ) {
+              return "chat-side-panels";
+            }
+
+            if (
+              normalizedId.includes("/src/components/modals/NewChatModal") ||
+              normalizedId.includes("/src/components/modals/ImagePreviewModal") ||
+              normalizedId.includes("/src/components/modals/FilePreviewModal")
+            ) {
+              return "chat-overlays";
+            }
+
+            return undefined;
+          },
+        },
+      },
+    },
     test: {
       environment: "jsdom",
       setupFiles: ["./src/test/setup.ts"],
