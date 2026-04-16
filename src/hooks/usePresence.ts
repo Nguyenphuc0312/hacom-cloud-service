@@ -77,6 +77,21 @@ export function usePresence(
 ): UsePresenceReturn {
   const { userIds, enabled = true } = options;
   const conversationId = options.conversationId ?? options.roomId;
+  const normalizedUserIds = useRef<string[]>([]);
+  const userIdsKey = Array.isArray(userIds)
+    ? Array.from(
+        new Set(
+          userIds.filter(
+            (userId): userId is string =>
+              typeof userId === "string" && userId.trim().length > 0,
+          ),
+        ),
+      )
+        .sort()
+        .join(",")
+    : "";
+
+  normalizedUserIds.current = userIdsKey ? userIdsKey.split(",") : [];
 
   const setPresence = usePresenceStore((s) => s.setPresence);
   const setPresenceBatch = usePresenceStore((s) => s.setPresenceBatch);
@@ -92,7 +107,9 @@ export function usePresence(
     if (!socket.isConnected()) return;
 
     const payload: Record<string, unknown> = {};
-    if (userIds && userIds.length > 0) payload.userIds = userIds;
+    if (normalizedUserIds.current.length > 0) {
+      payload.userIds = normalizedUserIds.current;
+    }
     if (conversationId) {
       payload.conversationId = conversationId;
       payload.roomId = conversationId;
@@ -101,7 +118,7 @@ export function usePresence(
 
     socket.send("presence:subscribe", payload);
     subscribedRef.current = true;
-  }, [conversationId, userIds]);
+  }, [conversationId, userIdsKey]);
 
   const unsubscribe = useCallback(() => {
     if (!subscribedRef.current) return;
@@ -110,7 +127,9 @@ export function usePresence(
     if (!socket.isConnected()) return;
 
     const payload: Record<string, unknown> = {};
-    if (userIds && userIds.length > 0) payload.userIds = userIds;
+    if (normalizedUserIds.current.length > 0) {
+      payload.userIds = normalizedUserIds.current;
+    }
     if (conversationId) {
       payload.conversationId = conversationId;
       payload.roomId = conversationId;
@@ -118,7 +137,7 @@ export function usePresence(
 
     socket.send("presence:unsubscribe", payload);
     subscribedRef.current = false;
-  }, [conversationId, userIds]);
+  }, [conversationId, userIdsKey]);
 
   // Listen for presence events
   useEffect(() => {

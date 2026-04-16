@@ -143,15 +143,11 @@ describe("useSidebarConversationList", () => {
       unread: 2,
       groups: 1,
     });
-    expect(result.current.items.map((item) => item.id)).toEqual([
+    expect(result.current.conversationIds).toEqual([
       "group-newer",
       "direct-older",
       "direct-quiet",
     ]);
-    expect(result.current.items[0]?.displayName).toBe("Product squad");
-    expect(result.current.items[0]?.previewText).toContain("Bob:");
-    expect(result.current.items[1]?.previewText).toBe("Older preview");
-    expect(result.current.items[1]?.directPartnerId).toBe("direct-older-peer");
   });
 
   it("applies unread and group filters after query matching without re-sorting in the view layer", () => {
@@ -223,13 +219,10 @@ describe("useSidebarConversationList", () => {
       }),
     );
 
-    expect(groupsByName.result.current.items.map((item) => item.id)).toEqual([
+    expect(groupsByName.result.current.conversationIds).toEqual(["beta-group"]);
+    expect(unreadByPreview.result.current.conversationIds).toEqual([
       "beta-group",
     ]);
-    expect(groupsByName.result.current.items[0]?.unreadCount).toBe(5);
-    expect(unreadByPreview.result.current.items.map((item) => item.id)).toEqual([
-      "beta-group",
-    ]);
-    expect(groupsNoMatch.result.current.items).toEqual([]);
+    expect(groupsNoMatch.result.current.conversationIds).toEqual([]);
   });
 });

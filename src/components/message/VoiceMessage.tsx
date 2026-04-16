@@ -30,22 +30,36 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
   const [currentTime, setCurrentTime] = useState(0);
   const refreshedSourceRef = useRef<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const { url: resolvedUrl, resolveUrl } = useAttachmentDownloadUrl(
+  const { url: resolvedUrl, resolveUrl, isLoading } = useAttachmentDownloadUrl(
     conversationId,
     attachment,
-    { autoResolve: true },
+    { autoResolve: false },
   );
 
   const duration = attachment.duration || 0;
 
-  const togglePlay = () => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play();
+  const togglePlay = async () => {
+    const nextAudio = audioRef.current;
+    if (!nextAudio) return;
+
+    if (!resolvedUrl) {
+      const nextUrl = await resolveUrl();
+      if (!nextUrl || !audioRef.current) {
+        return;
       }
-      setIsPlaying(!isPlaying);
+    }
+
+    if (isPlaying) {
+      nextAudio.pause();
+      setIsPlaying(false);
+      return;
+    }
+
+    try {
+      await nextAudio.play();
+      setIsPlaying(true);
+    } catch {
+      setIsPlaying(false);
     }
   };
 
@@ -112,7 +126,7 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
 
       <button
         onClick={togglePlay}
-        disabled={!resolvedUrl}
+        disabled={isLoading}
         className={clsx(
           "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60",
           isOwn

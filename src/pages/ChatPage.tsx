@@ -1093,23 +1093,6 @@ export const ChatPage: React.FC = () => {
     (!hasFetchedConversationsOnce && conversationCount === 0) ||
     (isLoadingConversations && conversationCount === 0);
 
-  const previewGallery = useMemo<PreviewTarget[]>(() => {
-    if (!selectedConversation) {
-      return [];
-    }
-
-    return conversationMessages
-      .flatMap((msg) =>
-        (msg.attachments ?? []).map((att) => ({
-          attachment: att,
-          conversationId: selectedConversation.id,
-          messageId: msg.id,
-          previewType: getPreviewType(att.mimeType),
-        })),
-      )
-      .filter((target) => target.previewType !== "unsupported");
-  }, [conversationMessages, selectedConversation]);
-
   const handleOpenFilePreview = useCallback(
     (attachment: Attachment) => {
       if (!selectedConversation) {
@@ -1121,9 +1104,19 @@ export const ChatPage: React.FC = () => {
         conversationId: selectedConversation.id,
         previewType: getPreviewType(attachment.mimeType),
       };
-      filePreview.open(target, previewGallery.length > 0 ? previewGallery : undefined);
+      const gallery = conversationMessages
+        .flatMap((message) =>
+          (message.attachments ?? []).map((candidate) => ({
+            attachment: candidate,
+            conversationId: selectedConversation.id,
+            messageId: message.id,
+            previewType: getPreviewType(candidate.mimeType),
+          })),
+        )
+        .filter((candidate) => candidate.previewType !== "unsupported");
+      filePreview.open(target, gallery.length > 0 ? gallery : undefined);
     },
-    [filePreview, previewGallery, selectedConversation],
+    [conversationMessages, filePreview, selectedConversation],
   );
 
   const handleExternalJumpHandled = useCallback((messageId: string) => {

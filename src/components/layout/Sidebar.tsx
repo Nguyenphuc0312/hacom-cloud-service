@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ConfirmDialog, SegmentedControl, Spinner } from "../ui";
 import { useLogout, usePresence } from "../../hooks";
+import { useChatStore } from "../../stores";
 import type { UserSummary } from "../../types";
 import { isDirectConversation } from "../../lib/conversationAdapter";
 import { getOtherParticipant } from "../../utils/messageHelpers";
@@ -69,20 +70,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
     [onSelectConversation],
   );
 
-  const { items, counts } = useSidebarConversationList(currentUser, {
+  const { conversationIds, counts } = useSidebarConversationList(currentUser, {
     filter: activeFilter,
     query: deferredSearchQuery,
   });
 
   const dmUserIds = useMemo(() => {
     const ids = new Set<string>();
-    for (const conversation of items.map((item) => item.conversation)) {
+    const conversations = useChatStore.getState().conversations;
+    for (const conversationId of conversationIds) {
+      const conversation = conversations.find((item) => item.id === conversationId);
+      if (!conversation) continue;
       if (!isDirectConversation(conversation)) continue;
       const other = getOtherParticipant(conversation, currentUser.id);
       if (other?.id) ids.add(other.id);
     }
     return Array.from(ids);
-  }, [currentUser.id, items]);
+  }, [conversationIds, currentUser.id]);
 
   usePresence({ userIds: dmUserIds, enabled: dmUserIds.length > 0 });
 
@@ -140,7 +144,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ]}
           />
 
-          {isLoadingConversations && items.length > 0 && (
+          {isLoadingConversations && conversationIds.length > 0 && (
             <div className="mt-2 inline-flex items-center gap-2 px-1 text-caption text-text-muted">
               <Spinner size="sm" />
               <span>{t("common:loading.default")}</span>
@@ -150,8 +154,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <div className="flex min-h-0 flex-1 px-2 pb-3">
           <RoomList
-            items={items}
-            currentUserId={currentUser.id}
+            conversationIds={conversationIds}
+            currentUser={currentUser}
             selectedId={selectedId}
             searchQuery={deferredSearchQuery}
             showLoadingSkeleton={showConversationSkeleton}

@@ -1049,6 +1049,7 @@ export const messageApi = {
     type?: string;
     page?: number;
     limit?: number;
+    signal?: AbortSignal;
   }) => {
     const query = new URLSearchParams();
     query.set("q", params.q);
@@ -1064,7 +1065,9 @@ export const messageApi = {
         page: number;
         limit: number;
       }>
-    >(`/messages/search?${query.toString()}`);
+    >(`/messages/search?${query.toString()}`, {
+      signal: params.signal,
+    });
     return response.data;
   },
 
@@ -1129,10 +1132,18 @@ export const fileApi = {
     conversationId: string;
     objectKey?: string;
     attachmentId?: string;
+    signal?: AbortSignal;
   }) => {
     const response = await apiClient.get<ApiResponse<GetDownloadUrlResponse>>(
       "/files/download-url",
-      { params },
+      {
+        params: {
+          conversationId: params.conversationId,
+          ...(params.objectKey ? { objectKey: params.objectKey } : {}),
+          ...(params.attachmentId ? { attachmentId: params.attachmentId } : {}),
+        },
+        signal: params.signal,
+      },
     );
     return response.data;
   },

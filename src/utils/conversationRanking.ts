@@ -225,20 +225,25 @@ export const sortConversationsByActivity = (
 ): Conversation[] => {
   if (!Array.isArray(conversations)) return [];
 
-  return [...conversations].sort((a, b) => {
-    const aActivity = getConversationActivityTimestamp(a);
-    const bActivity = getConversationActivityTimestamp(b);
+  return [...conversations].sort(compareConversationsByActivity);
+};
 
-    if (aActivity !== bActivity) {
-      return bActivity - aActivity;
-    }
+export const compareConversationsByActivity = (
+  a: Conversation,
+  b: Conversation,
+): number => {
+  const aActivity = getConversationActivityTimestamp(a);
+  const bActivity = getConversationActivityTimestamp(b);
 
-    const aLastMessageId = getConversationSortIdentity(a);
-    const bLastMessageId = getConversationSortIdentity(b);
-    if (aLastMessageId !== bLastMessageId) {
-      return bLastMessageId.localeCompare(aLastMessageId);
-    }
+  if (aActivity !== bActivity) {
+    return bActivity - aActivity;
+  }
 
-    return a.id.localeCompare(b.id);
-  });
+  const aLastMessageId = getConversationSortIdentity(a);
+  const bLastMessageId = getConversationSortIdentity(b);
+  if (aLastMessageId !== bLastMessageId) {
+    return bLastMessageId.localeCompare(aLastMessageId);
+  }
+
+  return a.id.localeCompare(b.id);
 };

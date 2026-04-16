@@ -216,6 +216,7 @@ const REMOTE_TYPING_VISIBLE_THRESHOLD = 0.12;
 const ROOM_JOIN_ACK_TIMEOUT_MS = 2_000;
 const ROOM_JOIN_RETRY_DELAY_MAX_MS = 8_000;
 const ROOM_SYNC_FALLBACK_TIMEOUT_MS = 2_500;
+const CONVERSATION_SNAPSHOT_REFRESH_DEBOUNCE_MS = 250;
 
 const computeTypingConfidence = (lastEventAt: number, now: number): number =>
   Math.exp(-(now - lastEventAt) / REMOTE_TYPING_HALF_LIFE_MS);
@@ -284,6 +285,9 @@ export const useWebSocket = (
   const conversationRefreshInFlightRef = useRef<Map<string, Promise<void>>>(
     new Map(),
   );
+  const conversationRefreshTimerRef = useRef<
+    Map<string, ReturnType<typeof setTimeout>>
+  >(new Map());
   const remoteTypingTimersRef = useRef<
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
@@ -449,6 +453,19 @@ export const useWebSocket = (
   const clearAllRoomSyncFallbacks = useCallback(() => {
     roomSyncFallbackTimersRef.current.forEach((timer) => clearTimeout(timer));
     roomSyncFallbackTimersRef.current.clear();
+  }, []);
+
+  const clearConversationSnapshotRefresh = useCallback((conversationId: string) => {
+    const timer = conversationRefreshTimerRef.current.get(conversationId);
+    if (timer) {
+      clearTimeout(timer);
+      conversationRefreshTimerRef.current.delete(conversationId);
+    }
+  }, []);
+
+  const clearAllConversationSnapshotRefreshes = useCallback(() => {
+    conversationRefreshTimerRef.current.forEach((timer) => clearTimeout(timer));
+    conversationRefreshTimerRef.current.clear();
   }, []);
 
   const scheduleRemoteTypingDecay = useCallback(
@@ -768,6 +785,33 @@ export const useWebSocket = (
     [fetchConversations, upsertConversationSummary],
   );
 
+  const scheduleConversationSnapshotRefresh = useCallback(
+    (
+      conversationId: string,
+      options?: {
+        delayMs?: number;
+        reason?: string;
+      },
+    ): Promise<void> =>
+      new Promise((resolve) => {
+        const delayMs =
+          options?.delayMs ?? CONVERSATION_SNAPSHOT_REFRESH_DEBOUNCE_MS;
+        clearConversationSnapshotRefresh(conversationId);
+
+        const timer = setTimeout(() => {
+          conversationRefreshTimerRef.current.delete(conversationId);
+          logMessageDebug("useWebSocket", "conversation_snapshot_refresh_scheduled", {
+            conversationId,
+            reason: options?.reason,
+          });
+          void refreshConversationSnapshot(conversationId).finally(resolve);
+        }, Math.max(0, delayMs));
+
+        conversationRefreshTimerRef.current.set(conversationId, timer);
+      }),
+    [clearConversationSnapshotRefresh, refreshConversationSnapshot],
+  );
+
   const refreshChangedConversationSummaries = useCallback(
     async (options?: {
       reason?: "initial" | "reconnect" | "retry" | "resync_required";
@@ -858,19 +902,25 @@ export const useWebSocket = (
       reason: "skip" | "initial-sync" | "reconnect" | "room-refresh",
     ): Promise<void> => {
       if (reason === "skip") {
-        return refreshConversationSnapshot(roomId).catch(() => {
+        return scheduleConversationSnapshotRefresh(roomId, {
+          delayMs: 0,
+          reason,
+        }).catch(() => {
           // no-op: best effort authoritative refresh
         });
       }
 
       return Promise.allSettled([
         scheduleRoomResync(roomId, { reason }),
-        refreshConversationSnapshot(roomId),
+        scheduleConversationSnapshotRefresh(roomId, {
+          delayMs: 0,
+          reason,
+        }),
       ]).then(() => {
         // no-op: best effort authoritative reconcile
       });
     },
-    [refreshConversationSnapshot, scheduleRoomResync],
+    [scheduleConversationSnapshotRefresh, scheduleRoomResync],
   );
 
   const maybeReconcileGap = useCallback(
@@ -1425,7 +1475,9 @@ export const useWebSocket = (
           currentUserId &&
           senderId !== currentUserId)
       ) {
-        void refreshConversationSnapshot(conversationId);
+        void scheduleConversationSnapshotRefresh(conversationId, {
+          reason: `socket:${eventType}`,
+        });
       }
     };
 
@@ -1460,7 +1512,9 @@ export const useWebSocket = (
         });
 
         removeMessage(conversationId, messageId);
-        void refreshConversationSnapshot(conversationId);
+        void scheduleConversationSnapshotRefresh(conversationId, {
+          reason: "socket:message:deleted",
+        });
       },
     });
     unsubscribersRef.current.push(unsubscribeChatEvents);
@@ -2379,9 +2433,16 @@ export const useWebSocket = (
     return () => {
       unsubscribersRef.current.forEach((unsub) => unsub());
       unsubscribersRef.current = [];
+      clearAllConversationSnapshotRefreshes();
       disconnect();
     };
-  }, [autoConnect, connect, disconnect, isAuthenticated]);
+  }, [
+    autoConnect,
+    clearAllConversationSnapshotRefreshes,
+    connect,
+    disconnect,
+    isAuthenticated,
+  ]);
 
   return {
     isConnected: connectionState === "connected",

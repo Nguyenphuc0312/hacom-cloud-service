@@ -18,12 +18,12 @@ import {
   ChatBubbleLeftRightIcon,
   MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
-import { RoomItem } from "./RoomItem";
-import type { SidebarConversationItemViewModel } from "../../../features/chat/hooks/useSidebarConversationList";
+import { RoomItemContainer } from "./RoomItem";
+import type { UserSummary } from "../../../types";
 
 interface RoomListProps {
-  items: SidebarConversationItemViewModel[];
-  currentUserId: string;
+  conversationIds: string[];
+  currentUser: UserSummary;
   selectedId: string | null;
   searchQuery: string;
   showLoadingSkeleton?: boolean;
@@ -38,12 +38,12 @@ interface RoomListProps {
 type FlatListItem = {
   kind: "room";
   key: string;
-  room: SidebarConversationItemViewModel;
+  conversationId: string;
 };
 
 interface RowData {
   items: FlatListItem[];
-  currentUserId: string;
+  currentUser: UserSummary;
   currentConversationId: string | null;
   keyboardActiveRoomId: string | null;
   onSelect: (conversationId: string) => void;
@@ -76,11 +76,11 @@ const Row = ({ index, style, data }: ListChildComponentProps<RowData>) => {
 
   return (
     <div style={style}>
-      <RoomItem
-        item={item.room}
-        currentUserId={data.currentUserId}
-        isActive={isRoomActive(item.room.id, data.currentConversationId)}
-        isKeyboardActive={data.keyboardActiveRoomId === item.room.id}
+      <RoomItemContainer
+        conversationId={item.conversationId}
+        currentUser={data.currentUser}
+        isActive={isRoomActive(item.conversationId, data.currentConversationId)}
+        isKeyboardActive={data.keyboardActiveRoomId === item.conversationId}
         onSelect={data.onSelect}
       />
     </div>
@@ -88,8 +88,8 @@ const Row = ({ index, style, data }: ListChildComponentProps<RowData>) => {
 };
 
 export const RoomList: React.FC<RoomListProps> = ({
-  items,
-  currentUserId,
+  conversationIds,
+  currentUser,
   selectedId,
   searchQuery,
   showLoadingSkeleton = false,
@@ -116,16 +116,19 @@ export const RoomList: React.FC<RoomListProps> = ({
   );
 
   const normalizedQuery = searchQuery.trim();
-  const hasAnyConversations = Array.isArray(items) && items.length > 0;
+  const hasAnyConversations =
+    Array.isArray(conversationIds) && conversationIds.length > 0;
 
   const flatItems = useMemo<FlatListItem[]>(
     () =>
-      (Array.isArray(items) ? items : []).map((room) => ({
-        kind: "room",
-        key: `room-${room.id}`,
-        room,
-      })),
-    [items],
+      (Array.isArray(conversationIds) ? conversationIds : []).map(
+        (conversationId) => ({
+          kind: "room",
+          key: `room-${conversationId}`,
+          conversationId,
+        }),
+      ),
+    [conversationIds],
   );
 
   const roomIndexes = useMemo(
@@ -137,7 +140,7 @@ export const RoomList: React.FC<RoomListProps> = ({
     if (!selectedId) return -1;
     return roomIndexes.findIndex((listIndex) => {
       const item = flatItems[listIndex];
-      return item && isRoomActive(item.room.id, selectedId);
+      return item && isRoomActive(item.conversationId, selectedId);
     });
   }, [flatItems, roomIndexes, selectedId]);
 
@@ -163,19 +166,19 @@ export const RoomList: React.FC<RoomListProps> = ({
     const keyboardListIndex = roomIndexes[currentCursor];
     const keyboardActiveRoomId =
       typeof keyboardListIndex === "number"
-        ? flatItems[keyboardListIndex]?.room.id ?? null
+        ? flatItems[keyboardListIndex]?.conversationId ?? null
         : null;
 
     return {
       items: flatItems,
-      currentUserId,
+      currentUser,
       currentConversationId: selectedId,
       keyboardActiveRoomId: isKeyboardMode ? keyboardActiveRoomId : null,
       onSelect: handleSelect,
     };
   }, [
     currentCursor,
-    currentUserId,
+    currentUser,
     flatItems,
     handleSelect,
     isKeyboardMode,
@@ -280,7 +283,7 @@ export const RoomList: React.FC<RoomListProps> = ({
     const listIndex = roomIndexes[currentCursor];
     const item = flatItems[listIndex];
     if (item) {
-      handleSelect(item.room.id);
+      handleSelect(item.conversationId);
     }
   }, [currentCursor, flatItems, handleSelect, roomIndexes]);
 
@@ -410,11 +413,11 @@ export const RoomList: React.FC<RoomListProps> = ({
         ) : (
           <div className="sidebar-scrollbar h-full space-y-0.5 overflow-y-auto py-0.5">
             {flatItems.map((item, index) => (
-              <RoomItem
+              <RoomItemContainer
                 key={item.key}
-                item={item.room}
-                currentUserId={currentUserId}
-                isActive={isRoomActive(item.room.id, selectedId)}
+                conversationId={item.conversationId}
+                currentUser={currentUser}
+                isActive={isRoomActive(item.conversationId, selectedId)}
                 isKeyboardActive={
                   isKeyboardMode &&
                   roomIndexes[currentCursor] === index

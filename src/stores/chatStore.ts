@@ -22,7 +22,10 @@ import {
 } from "../utils/messageIdentity";
 import { logMessageDebug } from "../utils/messageDebug";
 import { createReplySnapshot } from "../utils/messageTimeline";
-import { sortConversationsByActivity } from "../utils/conversationRanking";
+import {
+  compareConversationsByActivity,
+  sortConversationsByActivity,
+} from "../utils/conversationRanking";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import { useNotificationStore } from "../features/notification/state/notificationStore";
 import i18n from "../i18n";
@@ -680,10 +683,9 @@ const getConversationCursorIdentity = (
 };
 
 const computeConversationCursor = (conversations: Conversation[]): string | null => {
-  const ordered = sortConversationsByActivity(
-    Array.isArray(conversations) ? conversations : [],
-  );
-  const leadingConversation = ordered[0];
+  const leadingConversation = Array.isArray(conversations)
+    ? conversations[0]
+    : null;
   if (!leadingConversation) {
     return null;
   }
@@ -718,6 +720,26 @@ const buildConversationCollectionState = (conversations: Conversation[]) => ({
   lastConversationUpdatedAfterCursor:
     computeConversationUpdatedAfterCursor(conversations),
 });
+
+const replaceConversationInActivityOrder = (
+  conversations: Conversation[],
+  nextConversation: Conversation,
+): Conversation[] => {
+  const next = (Array.isArray(conversations) ? conversations : []).filter(
+    (conversation) => conversation.id !== nextConversation.id,
+  );
+  const insertIndex = next.findIndex(
+    (conversation) =>
+      compareConversationsByActivity(nextConversation, conversation) < 0,
+  );
+  if (insertIndex < 0) {
+    next.push(nextConversation);
+    return next;
+  }
+
+  next.splice(insertIndex, 0, nextConversation);
+  return next;
+};
 
 const shouldApplyConversationSummary = (
   current: Conversation | null | undefined,
@@ -1509,60 +1531,73 @@ const buildConversationMessageState = (
     .reverse()
     .find((message) => isCanonicalConversationMessage(message));
   const nextAliasIndex = rebuildConversationMessageAliasIndex(nextMessages);
-  const conversations = state.conversations.map((conversation) => {
-    if (conversation.id !== conversationId) return conversation;
-    if (!lastMessage) {
-      return (
-        normalizeConversation({
-          ...conversation,
-          lastMessage: undefined,
-          lastMessageStatus: null,
-        }) ?? {
-          ...conversation,
-          lastMessage: undefined,
-          lastMessageStatus: null,
-        }
-      );
-    }
+  const existingConversation =
+    state.conversations.find((conversation) => conversation.id === conversationId) ??
+    null;
+  const conversations = existingConversation
+    ? (() => {
+        const nextConversation = !lastMessage
+          ? (normalizeConversation({
+              ...existingConversation,
+              lastMessage: undefined,
+              lastMessageStatus: null,
+            }) ?? {
+              ...existingConversation,
+              lastMessage: undefined,
+              lastMessageStatus: null,
+            })
+          : (() => {
+              const canonicalMessage = latestCanonicalMessage ?? null;
+              const updatedAt =
+                canonicalMessage?.createdAt ??
+                existingConversation.updatedAt ??
+                lastMessage.createdAt;
 
-    const canonicalMessage = latestCanonicalMessage ?? null;
-    const updatedAt =
-      canonicalMessage?.createdAt ?? conversation.updatedAt ?? lastMessage.createdAt;
+              return (
+                normalizeConversation({
+                  ...existingConversation,
+                  lastMessage: toMessageSummary(lastMessage),
+                  updatedAt,
+                  lastMessageAt:
+                    canonicalMessage?.createdAt ??
+                    existingConversation.lastMessageAt,
+                  lastMessageSortAt:
+                    canonicalMessage?.createdAt ??
+                    existingConversation.lastMessageSortAt ??
+                    existingConversation.lastMessageAt ??
+                    updatedAt,
+                  lastMessageId:
+                    canonicalMessage?.id ??
+                    existingConversation.lastMessageId ??
+                    lastMessage.id,
+                  lastMessageStatus: toConversationLastMessageStatus(lastMessage),
+                }) ?? {
+                  ...existingConversation,
+                  lastMessage: toMessageSummary(lastMessage),
+                  updatedAt,
+                  lastMessageAt:
+                    canonicalMessage?.createdAt ??
+                    existingConversation.lastMessageAt,
+                  lastMessageSortAt:
+                    canonicalMessage?.createdAt ??
+                    existingConversation.lastMessageSortAt ??
+                    existingConversation.lastMessageAt ??
+                    updatedAt,
+                  lastMessageId:
+                    canonicalMessage?.id ??
+                    existingConversation.lastMessageId ??
+                    lastMessage.id,
+                  lastMessageStatus: toConversationLastMessageStatus(lastMessage),
+                }
+              );
+            })();
 
-    return (
-      normalizeConversation({
-        ...conversation,
-        lastMessage: toMessageSummary(lastMessage),
-        updatedAt,
-        lastMessageAt: canonicalMessage?.createdAt ?? conversation.lastMessageAt,
-        lastMessageSortAt:
-          canonicalMessage?.createdAt ??
-          conversation.lastMessageSortAt ??
-          conversation.lastMessageAt ??
-          updatedAt,
-        lastMessageId:
-          canonicalMessage?.id ??
-          conversation.lastMessageId ??
-          lastMessage.id,
-        lastMessageStatus: toConversationLastMessageStatus(lastMessage),
-      }) ?? {
-        ...conversation,
-        lastMessage: toMessageSummary(lastMessage),
-        updatedAt,
-        lastMessageAt: canonicalMessage?.createdAt ?? conversation.lastMessageAt,
-        lastMessageSortAt:
-          canonicalMessage?.createdAt ??
-          conversation.lastMessageSortAt ??
-          conversation.lastMessageAt ??
-          updatedAt,
-        lastMessageId:
-          canonicalMessage?.id ??
-          conversation.lastMessageId ??
-          lastMessage.id,
-        lastMessageStatus: toConversationLastMessageStatus(lastMessage),
-      }
-    );
-  });
+        return replaceConversationInActivityOrder(
+          state.conversations,
+          nextConversation,
+        );
+      })()
+    : state.conversations;
 
   return {
     conversations,

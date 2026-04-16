@@ -1,8 +1,9 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import type { Attachment } from "../../types";
 import { useAttachmentDownloadUrl } from "../../hooks";
+import { useInViewport } from "../../hooks/useInViewport";
 
 interface ImageMessageProps {
   conversationId: string;
@@ -26,12 +27,14 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   const [failedSource, setFailedSource] = useState<string | null>(null);
   const [showFullScreen, setShowFullScreen] = useState(false);
   const refreshedSourceRef = useRef<string | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const isVisible = useInViewport(containerRef, { rootMargin: "320px 0px" });
   const {
     url: resolvedUrl,
     isLoading,
     resolveUrl,
   } = useAttachmentDownloadUrl(conversationId, attachment, {
-    autoResolve: true,
+    autoResolve: false,
   });
   const mediaWidth = attachment.width ? Math.min(attachment.width, 300) : 240;
   const aspectRatio =
@@ -44,6 +47,14 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
   const hasCaption = Boolean(caption);
   const isLoaded = Boolean(activeSource && loadedSource === activeSource);
   const isError = Boolean(activeSource && failedSource === activeSource);
+
+  useEffect(() => {
+    if (!isVisible || activeSource || isError) {
+      return;
+    }
+
+    void resolveUrl();
+  }, [activeSource, isError, isVisible, resolveUrl]);
 
   const handleImageClick = async () => {
     const imageUrl = resolvedUrl || (await resolveUrl());
@@ -78,6 +89,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
     <>
       <div className={clsx("relative", className)}>
         <div
+          ref={containerRef}
           className="relative overflow-hidden rounded-lg bg-surface-overlay"
           style={{ width: mediaWidth, maxWidth: "100%", aspectRatio }}
         >

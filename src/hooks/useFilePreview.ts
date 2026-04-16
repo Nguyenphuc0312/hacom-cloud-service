@@ -11,15 +11,17 @@ import type { PreviewType } from "../utils/formatFileSize";
 import { fileApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import { resolvePublicResourceUrl } from "../config";
+import { ExpiringLruCache } from "../utils/expiringLruCache";
 
 // ── Signed-URL cache (shared across hook instances) ──────────────────
 
 interface CacheEntry {
   url: string;
-  expiresAtMs: number;
 }
 
-const URL_CACHE = new Map<string, CacheEntry>();
+const URL_CACHE = new ExpiringLruCache<CacheEntry>({
+  maxEntries: 120,
+});
 const CACHE_MARGIN_MS = 30_000;
 
 const cacheKey = (conversationId: string, att: Attachment): string => {
@@ -28,12 +30,8 @@ const cacheKey = (conversationId: string, att: Attachment): string => {
 };
 
 const getCached = (key: string): string | null => {
-  const entry = URL_CACHE.get(key);
+  const entry = URL_CACHE.get(key, CACHE_MARGIN_MS);
   if (!entry) return null;
-  if (entry.expiresAtMs - Date.now() < CACHE_MARGIN_MS) {
-    URL_CACHE.delete(key);
-    return null;
-  }
   return entry.url;
 };
 
@@ -119,10 +117,7 @@ export function useFilePreview(): UseFilePreviewReturn {
               target.attachment.downloadUrl,
             );
             if (resolvedDownloadUrl) {
-              URL_CACHE.set(key, {
-                url: resolvedDownloadUrl,
-                expiresAtMs,
-              });
+              URL_CACHE.set(key, { url: resolvedDownloadUrl }, expiresAtMs);
               setSecureUrl(resolvedDownloadUrl);
               setUrlError(null);
               return;
@@ -147,6 +142,7 @@ export function useFilePreview(): UseFilePreviewReturn {
           conversationId: target.conversationId,
           objectKey: target.attachment.objectKey || undefined,
           attachmentId: target.attachment.id || undefined,
+          signal: controller.signal,
         });
 
         if (controller.signal.aborted) return;
@@ -162,7 +158,7 @@ export function useFilePreview(): UseFilePreviewReturn {
           return;
         }
 
-        URL_CACHE.set(key, { url: signedUrl, expiresAtMs });
+        URL_CACHE.set(key, { url: signedUrl }, expiresAtMs);
         setSecureUrl(signedUrl);
       } catch (err) {
         if (controller.signal.aborted) return;

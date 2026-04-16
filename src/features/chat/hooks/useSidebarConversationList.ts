@@ -1,39 +1,15 @@
 import { useMemo } from "react";
 import type { Conversation, UserSummary } from "../../../types";
 import { isDirectConversation } from "../../../lib/conversationAdapter";
-import { formatRelativeTime } from "../../../utils/formatTime";
-import { hasConversationMention } from "../../../utils/conversationRanking";
 import {
-  getConversationAvatar,
   getConversationDisplayName,
-  getMessagePreview,
-  getMessagePreviewState,
-  getOtherParticipant,
   getUserDisplayName,
-  truncateTextWithEllipsis,
 } from "../../../utils/messageHelpers";
-import type { MessagePreviewState } from "../../../utils/messageHelpers";
 import type { SidebarConversationFilter } from "../state/chatSidebarStore";
-import i18n from "../../../i18n";
 import { useSidebarConversationSummaries } from "./useSidebarConversationSummaries";
 
-export interface SidebarConversationItemViewModel {
-  id: string;
-  conversation: Conversation;
-  displayName: string;
-  previewText: string;
-  previewState: MessagePreviewState;
-  timeLabel: string;
-  unreadCount: number;
-  unreadLabel: string;
-  hasUnreadMention: boolean;
-  avatarSrc?: string;
-  directPartnerId: string | null;
-  isDirect: boolean;
-}
-
 interface SidebarConversationListResult {
-  items: SidebarConversationItemViewModel[];
+  conversationIds: string[];
   counts: {
     all: number;
     unread: number;
@@ -110,36 +86,6 @@ const matchesFilter = (
   return true;
 };
 
-const buildPreviewText = (
-  conversation: Conversation,
-  currentUser: UserSummary,
-): string => {
-  const lastMessage = conversation.lastMessage;
-  if (!lastMessage) return "";
-
-  const messagePreview = getMessagePreview(lastMessage, currentUser.id, 240);
-  if (!messagePreview) return "";
-
-  if (lastMessage.type === "system" || isDirectConversation(conversation)) {
-    return truncateTextWithEllipsis(messagePreview, 52);
-  }
-
-  const directPartner = getOtherParticipant(conversation, currentUser.id);
-  const senderParticipant = (conversation.participants || []).find(
-    (participant) => participant.id === lastMessage.senderId,
-  );
-
-  const senderLabel =
-    lastMessage.senderId === currentUser.id
-      ? i18n.t("chat:message.you")
-      : getUserDisplayName(senderParticipant) ||
-        getUserDisplayName(directPartner) ||
-        lastMessage.senderName?.trim() ||
-        i18n.t("common:labels.conversation");
-
-  return truncateTextWithEllipsis(`${senderLabel}: ${messagePreview}`, 52);
-};
-
 export const useSidebarConversationList = (
   currentUser: UserSummary,
   options: {
@@ -151,45 +97,14 @@ export const useSidebarConversationList = (
 
   return useMemo(() => {
     const normalizedQuery = options.query.trim().toLowerCase();
-    const items = orderedConversations
+    const conversationIds = orderedConversations
       .filter((conversation) => matchesFilter(conversation, options.filter))
       .filter((conversation) =>
         includesQuery(conversation, normalizedQuery, currentUser.id),
       )
-      .map((conversation) => {
-        const displayName =
-          getConversationDisplayName(conversation, currentUser.id) ||
-          i18n.t("common:labels.conversation");
-        const previewState = getMessagePreviewState(
-          conversation.lastMessage,
-          currentUser.id,
-        );
-        const referenceTime =
-          conversation.lastMessageSortAt ||
-          conversation.lastMessageAt ||
-          conversation.lastMessage?.createdAt;
-        const directPartner = getOtherParticipant(conversation, currentUser.id);
-        const unreadCount = Math.max(0, conversation.unreadCount || 0);
+      .map((conversation) => conversation.id);
 
-        return {
-          id: conversation.id,
-          conversation,
-          displayName,
-          previewText: buildPreviewText(conversation, currentUser),
-          previewState,
-          timeLabel: referenceTime
-            ? formatRelativeTime(new Date(referenceTime))
-            : "",
-          unreadCount,
-          unreadLabel: unreadCount > 99 ? "99+" : String(unreadCount),
-          hasUnreadMention: hasConversationMention(conversation, currentUser),
-          avatarSrc: getConversationAvatar(conversation, currentUser.id),
-          directPartnerId: directPartner?.id ?? null,
-          isDirect: isDirectConversation(conversation),
-        } satisfies SidebarConversationItemViewModel;
-      });
-
-    return { items, counts };
+    return { conversationIds, counts };
   }, [counts, currentUser, options.filter, options.query, orderedConversations]);
 };
 

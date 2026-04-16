@@ -1,13 +1,14 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MessageType,
   RoomType,
+  type UserSummary,
   UserStatus,
   type Conversation,
 } from "../../../types";
 import { RoomList } from "./RoomList";
-import type { SidebarConversationItemViewModel } from "../../../features/chat/hooks/useSidebarConversationList";
+import { useChatStore } from "../../../stores";
 
 vi.mock("react-i18next", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-i18next")>();
@@ -48,26 +49,18 @@ const makeConversation = (
     ...overrides,
   }) as Conversation;
 
-const makeItem = (
-  conversation: Conversation,
-  overrides: Partial<SidebarConversationItemViewModel> = {},
-): SidebarConversationItemViewModel => ({
-  id: conversation.id,
-  conversation,
-  displayName: conversation.displayName || conversation.name || conversation.id,
-  previewText: conversation.lastMessage?.content || "",
-  previewState: null,
-  timeLabel: "10:00",
-  unreadCount: conversation.unreadCount ?? 0,
-  unreadLabel: String(conversation.unreadCount ?? 0),
-  hasUnreadMention: false,
-  avatarSrc: undefined,
-  directPartnerId: conversation.otherUser?.id ?? null,
-  isDirect: conversation.type === RoomType.DIRECT,
-  ...overrides,
-});
+const currentUser: UserSummary = {
+  id: "user-1",
+  username: "user-1",
+  displayName: "User One",
+  status: UserStatus.ONLINE,
+};
 
 describe("RoomList", () => {
+  beforeEach(() => {
+    useChatStore.getState().reset();
+  });
+
   it("renders room items in the supplied selector order", () => {
     const directConversation = makeConversation(
       "direct-older",
@@ -94,21 +87,15 @@ describe("RoomList", () => {
       },
     );
 
+    useChatStore.getState().setConversations([
+      directConversation,
+      groupConversation,
+    ]);
+
     render(
       <RoomList
-        items={[
-          makeItem(groupConversation, {
-            displayName: "Newer group",
-            previewText: "newer",
-            isDirect: false,
-          }),
-          makeItem(directConversation, {
-            displayName: "Older direct",
-            previewText: "older",
-            directPartnerId: "user-2",
-          }),
-        ]}
-        currentUserId="user-1"
+        conversationIds={[groupConversation.id, directConversation.id]}
+        currentUser={currentUser}
         selectedId={null}
         searchQuery=""
         onSelect={vi.fn()}
@@ -184,17 +171,12 @@ describe("RoomList", () => {
       },
     );
 
+    useChatStore.getState().setConversations([unnamedGroup]);
+
     render(
       <RoomList
-        items={[
-          makeItem(unnamedGroup, {
-            displayName: "Alice, Bob +3",
-            previewText:
-              "Bob: This is a very long preview message that should still keep the sender prefix visible in the sidebar item",
-            isDirect: false,
-          }),
-        ]}
-        currentUserId="user-1"
+        conversationIds={[unnamedGroup.id]}
+        currentUser={currentUser}
         selectedId={null}
         searchQuery=""
         onSelect={vi.fn()}

@@ -8,6 +8,7 @@ import { messageApi } from "../services/api";
 import { extractApiError } from "../lib/apiContract";
 import { useDebounce } from "./useDebounce";
 import type { Message } from "../types";
+import { ExpiringLruCache } from "../utils/expiringLruCache";
 
 interface MessageSearchResult {
   messages: Message[];
@@ -42,6 +43,24 @@ interface UseMessageSearchReturn {
   reset: () => void;
 }
 
+const SEARCH_RESULT_CACHE = new ExpiringLruCache<MessageSearchResult>({
+  maxEntries: 80,
+});
+const SEARCH_RESULT_TTL_MS = 30_000;
+
+const buildSearchCacheKey = (params: {
+  conversationId?: string;
+  query: string;
+  page: number;
+  limit: number;
+}): string =>
+  [
+    params.conversationId ?? "all",
+    params.query.trim().toLowerCase(),
+    params.page,
+    params.limit,
+  ].join(":");
+
 export const useMessageSearch = (
   options: UseMessageSearchOptions = {},
 ): UseMessageSearchReturn => {
@@ -72,16 +91,36 @@ export const useMessageSearch = (
       const currentId = ++searchIdRef.current;
       abortRef.current?.abort();
       abortRef.current = new AbortController();
+      const normalizedQuery = searchQuery.trim();
+      const cacheKey = buildSearchCacheKey({
+        conversationId,
+        query: normalizedQuery,
+        page: searchPage,
+        limit,
+      });
+
+      if (!append) {
+        const cached = SEARCH_RESULT_CACHE.get(cacheKey);
+        if (cached) {
+          setResults(cached.messages);
+          setTotal(cached.total);
+          setPage(searchPage);
+          setError(null);
+          setIsLoading(false);
+          return;
+        }
+      }
 
       setIsLoading(true);
       setError(null);
 
       try {
         const response = await messageApi.searchMessages({
-          q: searchQuery.trim(),
+          q: normalizedQuery,
           conversationId,
           page: searchPage,
           limit,
+          signal: abortRef.current.signal,
         });
 
         // Guard against stale responses
@@ -89,6 +128,11 @@ export const useMessageSearch = (
 
         if (response.success) {
           const data = response.data as MessageSearchResult;
+          SEARCH_RESULT_CACHE.set(
+            cacheKey,
+            data,
+            Date.now() + SEARCH_RESULT_TTL_MS,
+          );
           setResults((prev) =>
             append ? [...prev, ...data.messages] : data.messages,
           );
@@ -97,6 +141,12 @@ export const useMessageSearch = (
         }
       } catch (err) {
         if (currentId !== searchIdRef.current) return;
+        if (
+          err instanceof Error &&
+          (err.name === "AbortError" || err.message === "canceled")
+        ) {
+          return;
+        }
         const apiErr = extractApiError(err);
         setError(apiErr.message);
       } finally {
@@ -135,6 +185,12 @@ export const useMessageSearch = (
     setPage(1);
     setIsLoading(false);
     setError(null);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
   }, []);
 
   return {
