@@ -28,11 +28,13 @@ const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "i
 const AVATAR_MAX_SIZE = 5 * 1024 * 1024;
 const BACKGROUND_MAX_SIZE = 8 * 1024 * 1024;
 const PHONE_PATTERN = /^\+?[0-9]{10,15}$/;
+
 type UploadSupportState = "unknown" | "supported" | "unsupported";
 type FormState = { displayName: string; phone: string; bio: string };
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+
 const readValue = (user: Record<string, unknown> | null | undefined, ...keys: string[]) => {
   if (!user) return null;
   for (const key of keys) {
@@ -41,13 +43,16 @@ const readValue = (user: Record<string, unknown> | null | undefined, ...keys: st
   }
   return null;
 };
+
 const normalizeForm = (user: User | null): FormState => ({
   displayName: user?.displayName || "",
   phone: user?.phone || "",
   bio: user?.bio || "",
 });
+
 const isUnsupportedUploadError = (error: unknown) =>
   axios.isAxiosError(error) && [404, 405, 501].includes(error.response?.status ?? 0);
+
 const resolvePatchedProfileData = (payload: unknown): Partial<User> => {
   try {
     return unwrapApiSuccess(payload as never) as Partial<User>;
@@ -56,6 +61,7 @@ const resolvePatchedProfileData = (payload: unknown): Partial<User> => {
     return ((asRecord(root?.data) || root || {}) as unknown as Partial<User>) ?? {};
   }
 };
+
 const resolveAvatarFromUploadResponse = (payload: unknown, fallback?: string) => {
   try {
     const data = unwrapApiSuccess(payload as never) as Record<string, unknown>;
@@ -64,6 +70,10 @@ const resolveAvatarFromUploadResponse = (payload: unknown, fallback?: string) =>
     const root = asRecord(payload);
     return readValue(asRecord(root?.data), "avatar", "avatarUrl", "url") || readValue(root, "avatar", "avatarUrl", "url") || fallback;
   }
+};
+
+const revokeBlobUrl = (value: string | null) => {
+  if (value?.startsWith("blob:")) URL.revokeObjectURL(value);
 };
 
 export const ProfileSettingsSection: React.FC = () => {
@@ -107,6 +117,7 @@ export const ProfileSettingsSection: React.FC = () => {
   const hasChanges = form.displayName !== baseForm.displayName || form.phone !== baseForm.phone || form.bio !== baseForm.bio || Boolean(avatarFile) || Boolean(backgroundFile);
   const hasErrors = Boolean(errors.displayName || errors.phone || errors.bio);
   const effectiveBackground = backgroundPreview || readValue(userRecord, "backgroundImageUrl", "background_image_url");
+  const identityLine = corporateEmail || (user?.username ? `@${user.username}` : null) || user?.phone || employeeCode || t("profile:settings.identityFallback", { defaultValue: "Add your personal details so teammates can recognize you." });
 
   React.useEffect(() => {
     setForm(normalizeForm(user));
@@ -125,11 +136,9 @@ export const ProfileSettingsSection: React.FC = () => {
     };
   }, [isAuthenticated, refreshProfile]);
 
-  React.useEffect(() => {
-    return () => {
-      if (avatarPreview?.startsWith("blob:")) URL.revokeObjectURL(avatarPreview);
-      if (backgroundPreview?.startsWith("blob:")) URL.revokeObjectURL(backgroundPreview);
-    };
+  React.useEffect(() => () => {
+    revokeBlobUrl(avatarPreview);
+    revokeBlobUrl(backgroundPreview);
   }, [avatarPreview, backgroundPreview]);
 
   const resetDrafts = () => {
@@ -137,7 +146,7 @@ export const ProfileSettingsSection: React.FC = () => {
     setAvatarFile(null);
     setBackgroundFile(null);
     setAvatarPreview((current) => {
-      if (current?.startsWith("blob:")) URL.revokeObjectURL(current);
+      revokeBlobUrl(current);
       return null;
     });
     setBackgroundPreview(readValue((user as Record<string, unknown> | null) ?? null, "backgroundImageUrl", "background_image_url"));
@@ -186,18 +195,13 @@ export const ProfileSettingsSection: React.FC = () => {
       setAvatarFile(null);
       setBackgroundFile(null);
       setAvatarPreview((current) => {
-        if (current?.startsWith("blob:")) URL.revokeObjectURL(current);
+        revokeBlobUrl(current);
         return null;
       });
       setBackgroundPreview(background);
       toast.success(t("profile:settings.saved"));
     } catch (error) {
-      toast.error(
-        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-          (isUnsupportedUploadError(error)
-            ? t("profile:settings.uploadUnavailable", { defaultValue: "Upload endpoint is unavailable right now. Try again later." })
-            : t("profile:settings.saveFailed")),
-      );
+      toast.error((error as { response?: { data?: { message?: string } } })?.response?.data?.message || (isUnsupportedUploadError(error) ? t("profile:settings.uploadUnavailable", { defaultValue: "Upload endpoint is unavailable right now. Try again later." }) : t("profile:settings.saveFailed")));
     } finally {
       saveActionRef.current = false;
       setIsSaving(false);
@@ -205,30 +209,143 @@ export const ProfileSettingsSection: React.FC = () => {
   };
 
   return (
-    <SettingsSection icon={<UserCircleIcon className="h-5 w-5" />} title={t("profile:settings.title")} description={t("profile:settings.description")} className="overflow-hidden">
+    <SettingsSection
+      icon={<UserCircleIcon className="h-5 w-5" />}
+      title={t("profile:settings.title")}
+      description={t("profile:settings.description")}
+      className="overflow-hidden"
+    >
       <div className="space-y-5">
         <div className="overflow-hidden rounded-[28px] border border-border/70 bg-surface shadow-xs">
-          <div className="relative min-h-[220px] overflow-hidden p-5 sm:p-6" style={effectiveBackground ? { backgroundImage: `linear-gradient(135deg, rgba(15,23,42,0.74), rgba(15,23,42,0.4)), url(${effectiveBackground})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
-            {!effectiveBackground && <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.18),transparent_42%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.18),transparent_38%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(30,41,59,0.88))]" />}
-            <div className="relative z-10 flex h-full flex-col justify-between gap-8 text-white">
+          <div
+            className="relative overflow-hidden px-5 py-5 sm:px-6 sm:py-6"
+            style={
+              effectiveBackground
+                ? {
+                    backgroundImage: `linear-gradient(135deg, rgba(15,23,42,0.72), rgba(15,23,42,0.38)), url(${effectiveBackground})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }
+                : undefined
+            }
+          >
+            {!effectiveBackground && (
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.18),transparent_42%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.18),transparent_36%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(30,41,59,0.88))]" />
+            )}
+
+            <div className="relative z-10 space-y-5 text-left text-white">
               <div className="flex flex-wrap gap-2 text-xs">
-                <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 font-semibold uppercase tracking-[0.18em] backdrop-blur-sm"><SparklesIcon className="h-3.5 w-3.5" />{t("profile:settings.summaryBadge", { defaultValue: "Profile overview" })}</span>
-                <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 backdrop-blur-sm">{hasChanges ? <ArrowPathIcon className="h-3.5 w-3.5" /> : <CheckCircleIcon className="h-3.5 w-3.5" />}{hasChanges ? t("profile:settings.unsaved", { defaultValue: "Unsaved changes" }) : t("profile:settings.synced", { defaultValue: "Synced" })}</span>
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 font-semibold uppercase tracking-[0.18em] backdrop-blur-sm">
+                  <SparklesIcon className="h-3.5 w-3.5" />
+                  {t("profile:settings.summaryBadge", {
+                    defaultValue: "Profile overview",
+                  })}
+                </span>
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 backdrop-blur-sm">
+                  {hasChanges ? (
+                    <ArrowPathIcon className="h-3.5 w-3.5" />
+                  ) : (
+                    <CheckCircleIcon className="h-3.5 w-3.5" />
+                  )}
+                  {hasChanges
+                    ? t("profile:settings.unsaved", {
+                        defaultValue: "Unsaved changes",
+                      })
+                    : t("profile:settings.synced", {
+                        defaultValue: "Synced",
+                      })}
+                </span>
               </div>
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                <div className="flex min-w-0 items-center gap-4">
-                  <div className="rounded-[1.7rem] border border-white/15 bg-white/10 p-1.5 backdrop-blur-sm"><Avatar src={avatarPreview || user?.avatar} alt={displayLabel} size="xl" className="h-24 w-24" /></div>
-                  <div className="min-w-0">
-                    <h3 className="truncate text-2xl font-semibold sm:text-3xl">{displayLabel}</h3>
-                    <div className="mt-2 flex flex-wrap gap-2 text-sm text-white/78">
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/8 px-3 py-1"><AtSymbolIcon className="h-4 w-4" />{user?.username}</span>
-                      {corporateEmail && <span className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/8 px-3 py-1"><EnvelopeIcon className="h-4 w-4" />{corporateEmail}</span>}
+
+              <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr),minmax(18rem,0.8fr)]">
+                <div className="flex min-w-0 items-start gap-4">
+                  <div className="rounded-[1.7rem] border border-white/15 bg-white/10 p-1.5 backdrop-blur-sm">
+                    <Avatar
+                      src={avatarPreview || user?.avatar}
+                      alt={displayLabel}
+                      size="xl"
+                      className="h-24 w-24"
+                    />
+                  </div>
+
+                  <div className="min-w-0 space-y-2 text-left">
+                    <div>
+                      <h3 className="truncate text-2xl font-semibold sm:text-3xl">
+                        {displayLabel}
+                      </h3>
+                      <p className="mt-1 truncate text-sm text-white/78">
+                        {identityLine}
+                      </p>
                     </div>
+
+                    <div className="flex flex-wrap gap-2 text-sm text-white/78">
+                      {user?.username ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/8 px-3 py-1">
+                          <AtSymbolIcon className="h-4 w-4" />
+                          {user.username}
+                        </span>
+                      ) : null}
+                      {corporateEmail ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/8 px-3 py-1">
+                          <EnvelopeIcon className="h-4 w-4" />
+                          {corporateEmail}
+                        </span>
+                      ) : null}
+                      {employeeCode ? (
+                        <span className="inline-flex rounded-full border border-white/12 bg-white/8 px-3 py-1">
+                          {employeeCode}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <p className="max-w-2xl text-sm leading-6 text-white/82">
+                      {form.bio.trim() ||
+                        user?.bio?.trim() ||
+                        t("profile:userProfile.emptyBioSelf", {
+                          defaultValue:
+                            "Add a short introduction so people know who you are.",
+                        })}
+                    </p>
                   </div>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm"><p className="text-[11px] uppercase tracking-[0.18em] text-white/60">{t("profile:settings.departmentName", { defaultValue: "Department" })}</p><p className="mt-2 text-sm font-medium">{departmentName || t("common:status.unknown")}</p></div>
-                  <div className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm"><p className="text-[11px] uppercase tracking-[0.18em] text-white/60">{t("profile:settings.jobTitle", { defaultValue: "Title" })}</p><p className="mt-2 text-sm font-medium">{jobTitle || t("common:status.unknown")}</p></div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-white/60">
+                      {t("profile:settings.departmentName", {
+                        defaultValue: "Department",
+                      })}
+                    </p>
+                    <p className="mt-2 text-sm font-medium">
+                      {departmentName || t("common:status.unknown")}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-white/60">
+                      {t("profile:settings.jobTitle", { defaultValue: "Title" })}
+                    </p>
+                    <p className="mt-2 text-sm font-medium">
+                      {jobTitle || t("common:status.unknown")}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-white/60">
+                      {t("profile:settings.employeeCode")}
+                    </p>
+                    <p className="mt-2 text-sm font-medium">
+                      {employeeCode || t("common:status.unknown")}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-white/60">
+                      {t("profile:settings.unitCode", {
+                        defaultValue: "Unit code",
+                      })}
+                    </p>
+                    <p className="mt-2 text-sm font-medium">
+                      {unitCode || t("common:status.unknown")}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -238,25 +355,208 @@ export const ProfileSettingsSection: React.FC = () => {
         <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-5">
             <div className="grid gap-3 sm:grid-cols-2">
-              {[{ icon: EnvelopeIcon, label: t("profile:settings.corporateEmail"), value: corporateEmail || t("common:status.unknown") }, { icon: PhoneIcon, label: t("profile:editProfileModal.phone"), value: user?.phone || t("profile:settings.phoneEmpty", { defaultValue: "No phone number saved" }) }, { icon: BuildingOffice2Icon, label: t("profile:settings.departmentName", { defaultValue: "Department" }), value: departmentName || t("common:status.unknown") }, { icon: BriefcaseIcon, label: t("profile:settings.jobTitle", { defaultValue: "Title" }), value: jobTitle || t("common:status.unknown") }].map(({ icon: Icon, label, value }) => (
-                <div key={label} className="rounded-2xl border border-border/70 bg-background/70 p-4">
-                  <div className="flex items-start gap-3"><Icon className="mt-0.5 h-5 w-5 text-text-muted" /><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">{label}</p><p className="mt-2 truncate text-sm font-medium text-text-primary">{value}</p></div></div>
+              {[
+                {
+                  icon: EnvelopeIcon,
+                  label: t("profile:settings.corporateEmail"),
+                  value: corporateEmail || t("common:status.unknown"),
+                },
+                {
+                  icon: PhoneIcon,
+                  label: t("profile:editProfileModal.phone"),
+                  value:
+                    user?.phone ||
+                    t("profile:settings.phoneEmpty", {
+                      defaultValue: "No phone number saved",
+                    }),
+                },
+                {
+                  icon: BuildingOffice2Icon,
+                  label: t("profile:settings.departmentName", {
+                    defaultValue: "Department",
+                  }),
+                  value: departmentName || t("common:status.unknown"),
+                },
+                {
+                  icon: BriefcaseIcon,
+                  label: t("profile:settings.jobTitle", {
+                    defaultValue: "Title",
+                  }),
+                  value: jobTitle || t("common:status.unknown"),
+                },
+              ].map(({ icon: Icon, label, value }) => (
+                <div
+                  key={label}
+                  className="rounded-2xl border border-border/70 bg-background/70 p-4"
+                >
+                  <div className="flex items-start gap-3">
+                    <Icon className="mt-0.5 h-5 w-5 text-text-muted" />
+                    <div className="min-w-0 text-left">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">
+                        {label}
+                      </p>
+                      <p className="mt-2 truncate text-sm font-medium text-text-primary">
+                        {value}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
 
             <div className="rounded-[24px] border border-border/70 bg-background/70 p-5">
-              <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary"><PhotoIcon className="h-4 w-4" />{t("profile:settings.mediaTitle", { defaultValue: "Visual identity" })}</div>
+              <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary">
+                <PhotoIcon className="h-4 w-4" />
+                {t("profile:settings.mediaTitle", {
+                  defaultValue: "Visual identity",
+                })}
+              </div>
+
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="rounded-2xl border border-border/70 bg-surface p-4">
-                  <div className="flex items-center gap-3"><Avatar src={avatarPreview || user?.avatar} alt={displayLabel} size="lg" /><div><p className="text-sm font-semibold text-text-primary">{t("profile:settings.avatar")}</p><p className="mt-1 text-xs text-text-muted">{avatarSupport === "unsupported" ? t("profile:settings.avatarUnsupported", { defaultValue: "Avatar upload is not available in this environment right now." }) : t("profile:settings.avatarEditableHint", { defaultValue: "JPG, PNG, WEBP or GIF up to 5MB." })}</p></div></div>
-                  <div className="mt-4 flex gap-2"><Button type="button" size="sm" variant="outline" disabled={isSaving || avatarSupport === "unsupported"} onClick={() => avatarInputRef.current?.click()} leftIcon={<PhotoIcon className="h-4 w-4" />}>{t("profile:settings.chooseAvatar")}</Button>{avatarFile && <Button type="button" size="sm" variant="ghost" disabled={isSaving} onClick={() => { setAvatarFile(null); setAvatarPreview(null); }}>{t("common:actions.cancel")}</Button>}</div>
-                  <input ref={avatarInputRef} type="file" accept="image/*" disabled={isSaving || avatarSupport === "unsupported"} className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) pickImage(file, AVATAR_MAX_SIZE, () => { setAvatarFile(file); setAvatarSupport("supported"); setAvatarPreview(URL.createObjectURL(file)); }); event.currentTarget.value = ""; }} />
+                  <div className="flex items-center gap-3">
+                    <Avatar
+                      src={avatarPreview || user?.avatar}
+                      alt={displayLabel}
+                      size="lg"
+                    />
+                    <div className="text-left">
+                      <p className="text-sm font-semibold text-text-primary">
+                        {t("profile:settings.avatar")}
+                      </p>
+                      <p className="mt-1 text-xs text-text-muted">
+                        {avatarSupport === "unsupported"
+                          ? t("profile:settings.avatarUnsupported", {
+                              defaultValue:
+                                "Avatar upload is not available in this environment right now.",
+                            })
+                          : t("profile:settings.avatarEditableHint", {
+                              defaultValue:
+                                "JPG, PNG, WEBP or GIF up to 5MB.",
+                            })}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={isSaving || avatarSupport === "unsupported"}
+                      onClick={() => avatarInputRef.current?.click()}
+                      leftIcon={<PhotoIcon className="h-4 w-4" />}
+                    >
+                      {t("profile:settings.chooseAvatar")}
+                    </Button>
+                    {avatarFile ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={isSaving}
+                        onClick={() => {
+                          setAvatarFile(null);
+                          setAvatarPreview((current) => {
+                            revokeBlobUrl(current);
+                            return null;
+                          });
+                        }}
+                      >
+                        {t("common:actions.cancel")}
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    disabled={isSaving || avatarSupport === "unsupported"}
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        pickImage(file, AVATAR_MAX_SIZE, () => {
+                          setAvatarFile(file);
+                          setAvatarSupport("supported");
+                          setAvatarPreview((current) => {
+                            revokeBlobUrl(current);
+                            return URL.createObjectURL(file);
+                          });
+                        });
+                      }
+                      event.currentTarget.value = "";
+                    }}
+                  />
                 </div>
+
                 <div className="rounded-2xl border border-border/70 bg-surface p-4">
-                  <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-text-primary">{t("profile:settings.background")}</p><p className="mt-1 text-xs text-text-muted">{backgroundSupport === "unsupported" ? t("profile:settings.backgroundUnsupported", { defaultValue: "Background upload is not available in this environment right now." }) : t("profile:settings.backgroundEditableHint", { defaultValue: "Optional background image up to 8MB." })}</p></div><Button type="button" size="sm" variant="outline" disabled={isSaving || backgroundSupport === "unsupported"} onClick={() => backgroundInputRef.current?.click()} leftIcon={<PhotoIcon className="h-4 w-4" />}>{t("profile:settings.chooseBackground")}</Button></div>
-                  <div className="mt-4 h-32 overflow-hidden rounded-2xl border border-border/70 bg-surface-overlay">{effectiveBackground ? <img src={effectiveBackground} alt={t("profile:settings.backgroundPreview")} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.16),transparent_36%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.16),transparent_36%),linear-gradient(135deg,rgba(226,232,240,0.8),rgba(248,250,252,0.96))] px-4 text-center text-xs text-text-muted">{t("profile:settings.noBackground")}</div>}</div>
-                  <input ref={backgroundInputRef} type="file" accept="image/*" disabled={isSaving || backgroundSupport === "unsupported"} className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) pickImage(file, BACKGROUND_MAX_SIZE, () => { setBackgroundFile(file); setBackgroundSupport("supported"); setBackgroundPreview(URL.createObjectURL(file)); }); event.currentTarget.value = ""; }} />
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-left">
+                      <p className="text-sm font-semibold text-text-primary">
+                        {t("profile:settings.background")}
+                      </p>
+                      <p className="mt-1 text-xs text-text-muted">
+                        {backgroundSupport === "unsupported"
+                          ? t("profile:settings.backgroundUnsupported", {
+                              defaultValue:
+                                "Background upload is not available in this environment right now.",
+                            })
+                          : t("profile:settings.backgroundEditableHint", {
+                              defaultValue:
+                                "Optional background image up to 8MB.",
+                            })}
+                      </p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={isSaving || backgroundSupport === "unsupported"}
+                      onClick={() => backgroundInputRef.current?.click()}
+                      leftIcon={<PhotoIcon className="h-4 w-4" />}
+                    >
+                      {t("profile:settings.chooseBackground")}
+                    </Button>
+                  </div>
+
+                  <div className="mt-4 h-32 overflow-hidden rounded-2xl border border-border/70 bg-surface-overlay">
+                    {effectiveBackground ? (
+                      <img
+                        src={effectiveBackground}
+                        alt={t("profile:settings.backgroundPreview")}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.16),transparent_36%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.16),transparent_36%),linear-gradient(135deg,rgba(226,232,240,0.8),rgba(248,250,252,0.96))] px-4 text-center text-xs text-text-muted">
+                        {t("profile:settings.noBackground")}
+                      </div>
+                    )}
+                  </div>
+
+                  <input
+                    ref={backgroundInputRef}
+                    type="file"
+                    accept="image/*"
+                    disabled={isSaving || backgroundSupport === "unsupported"}
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        pickImage(file, BACKGROUND_MAX_SIZE, () => {
+                          setBackgroundFile(file);
+                          setBackgroundSupport("supported");
+                          setBackgroundPreview((current) => {
+                            revokeBlobUrl(current);
+                            return URL.createObjectURL(file);
+                          });
+                        });
+                      }
+                      event.currentTarget.value = "";
+                    }}
+                  />
                 </div>
               </div>
             </div>
@@ -264,16 +564,78 @@ export const ProfileSettingsSection: React.FC = () => {
 
           <div className="space-y-5">
             <div className="rounded-[24px] border border-border/70 bg-background/70 p-5">
-              <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary"><UserCircleIcon className="h-4 w-4" />{t("profile:settings.personalIdentityTitle", { defaultValue: "Profile details" })}</div>
+              <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary">
+                <UserCircleIcon className="h-4 w-4" />
+                {t("profile:settings.personalIdentityTitle", {
+                  defaultValue: "Profile details",
+                })}
+              </div>
+
               <div className="space-y-4">
-                <Input label={t("profile:settings.displayName")} value={form.displayName} onChange={(event) => setForm((current) => ({ ...current, displayName: event.target.value }))} placeholder={t("profile:settings.displayNamePlaceholder")} maxLength={120} disabled={isSaving} error={errors.displayName} hint={t("profile:settings.displayNameHint", { defaultValue: "This is the name everyone sees across the product." })} />
-                <Input label={t("profile:editProfileModal.phone")} value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder={t("profile:editProfileModal.phonePlaceholder")} maxLength={16} disabled={isSaving} error={errors.phone} leftIcon={<PhoneIcon className="h-4 w-4" />} hint={t("profile:settings.phoneHint", { defaultValue: "Use an international format so your contact info stays consistent." })} />
-                <Textarea label={t("profile:settings.bio")} value={form.bio} onChange={(event) => setForm((current) => ({ ...current, bio: event.target.value }))} rows={4} maxLength={500} disabled={isSaving} error={errors.bio} hint={t("profile:settings.bioHint", { count: form.bio.trim().length, defaultValue: "Keep it short and recognisable. {{count}} / 500 characters." })} />
+                <Input
+                  label={t("profile:settings.displayName")}
+                  value={form.displayName}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      displayName: event.target.value,
+                    }))
+                  }
+                  placeholder={t("profile:settings.displayNamePlaceholder")}
+                  maxLength={120}
+                  disabled={isSaving}
+                  error={errors.displayName}
+                  hint={t("profile:settings.displayNameHint", {
+                    defaultValue:
+                      "This is the name everyone sees across the product.",
+                  })}
+                />
+                <Input
+                  label={t("profile:editProfileModal.phone")}
+                  value={form.phone}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      phone: event.target.value,
+                    }))
+                  }
+                  placeholder={t("profile:editProfileModal.phonePlaceholder")}
+                  maxLength={16}
+                  disabled={isSaving}
+                  error={errors.phone}
+                  leftIcon={<PhoneIcon className="h-4 w-4" />}
+                  hint={t("profile:settings.phoneHint", {
+                    defaultValue:
+                      "Use an international format so your contact info stays consistent.",
+                  })}
+                />
+                <Textarea
+                  label={t("profile:settings.bio")}
+                  value={form.bio}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      bio: event.target.value,
+                    }))
+                  }
+                  rows={4}
+                  maxLength={500}
+                  disabled={isSaving}
+                  error={errors.bio}
+                  hint={t("profile:settings.bioHint", {
+                    count: form.bio.trim().length,
+                    defaultValue:
+                      "Keep it short and recognisable. {{count}} / 500 characters.",
+                  })}
+                />
               </div>
             </div>
 
             <div className="rounded-[24px] border border-border/70 bg-background/70 p-5">
-              <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary"><IdentificationIcon className="h-4 w-4" />{t("profile:settings.readOnlyTitle")}</div>
+              <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary">
+                <IdentificationIcon className="h-4 w-4" />
+                {t("profile:settings.readOnlyTitle")}
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Input label={t("profile:settings.employeeCode")} value={employeeCode || "-"} disabled readOnly />
                 <Input label={t("profile:settings.hrLegalName")} value={hrLegalName || "-"} disabled readOnly />
@@ -286,13 +648,48 @@ export const ProfileSettingsSection: React.FC = () => {
 
             <div className="rounded-[24px] border border-border/70 bg-surface p-5 shadow-xs">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-text-primary">{hasChanges ? t("profile:settings.unsaved", { defaultValue: "Unsaved changes" }) : t("profile:settings.synced", { defaultValue: "Everything is up to date" })}</p>
-                  <p className="mt-1 text-sm text-text-muted">{isRefreshing ? t("profile:settings.refreshing", { defaultValue: "Refreshing profile data…" }) : t("profile:settings.saveHint", { defaultValue: "Save to apply your latest profile details everywhere instantly." })}</p>
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-text-primary">
+                    {hasChanges
+                      ? t("profile:settings.unsaved", {
+                          defaultValue: "Unsaved changes",
+                        })
+                      : t("profile:settings.synced", {
+                          defaultValue: "Everything is up to date",
+                        })}
+                  </p>
+                  <p className="mt-1 text-sm text-text-muted">
+                    {isRefreshing
+                      ? t("profile:settings.refreshing", {
+                          defaultValue: "Refreshing profile data...",
+                        })
+                      : t("profile:settings.saveHint", {
+                          defaultValue:
+                            "Save to apply your latest profile details everywhere instantly.",
+                        })}
+                  </p>
                 </div>
+
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button type="button" variant="ghost" disabled={!hasChanges || isSaving} onClick={resetDrafts}>{t("common:actions.cancel")}</Button>
-                  <Button type="button" disabled={!hasChanges || isSaving || hasErrors} isLoading={isSaving} onClick={() => { void handleSave(); }} className={clsx(hasChanges && !hasErrors && "shadow-sm")}>{t("profile:settings.save")}</Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={!hasChanges || isSaving}
+                    onClick={resetDrafts}
+                  >
+                    {t("common:actions.cancel")}
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={!hasChanges || isSaving || hasErrors}
+                    isLoading={isSaving}
+                    onClick={() => {
+                      void handleSave();
+                    }}
+                    className={clsx(hasChanges && !hasErrors && "shadow-sm")}
+                  >
+                    {t("profile:settings.save")}
+                  </Button>
                 </div>
               </div>
             </div>

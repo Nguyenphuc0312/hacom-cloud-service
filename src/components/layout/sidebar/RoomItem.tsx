@@ -76,7 +76,7 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
       role="option"
       aria-selected={isActive}
       className={clsx(
-        "group relative mx-2 my-1 flex h-[var(--size-room-item)] w-[calc(100%-var(--space-4))] items-center rounded-[1.15rem] px-3.5",
+        "group relative mx-2 my-1 flex h-[var(--size-room-item)] w-[calc(100%-var(--space-4))] items-center rounded-[1.15rem] px-3.5 text-left",
         "transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
         isActive
           ? "bg-primary/8 shadow-[inset_0_0_0_1px_hsl(var(--color-primary)/0.08)]"
@@ -109,14 +109,14 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
           />
         )}
 
-        <div className="min-w-0">
-          <p className="truncate text-[15px] font-semibold leading-5 text-text-primary">
+        <div className="min-w-0 text-left">
+          <p className="truncate text-left text-[15px] font-semibold leading-5 text-text-primary">
             {item.displayName}
           </p>
 
           <p
             className={clsx(
-              "truncate pr-1 text-[13px] leading-5 text-start",
+              "truncate pr-1 text-left text-[13px] leading-5",
               item.previewState === "failed" ? "font-medium" : "font-normal",
               previewToneClass,
             )}
