@@ -69,18 +69,7 @@ const FilePreviewModal = React.lazy(
   () => import("../components/modals/FilePreviewModal"),
 );
 
-interface ProfilePanelTarget {
-  userId: string;
-  initialUser?: {
-    id: string;
-    username?: string;
-    displayName?: string;
-    firstName?: string;
-    lastName?: string;
-    avatar?: string;
-    status?: UserStatus;
-  } | null;
-}
+type InfoPanelMode = "conversation" | "self-profile";
 
 type IdleCallbackDeadline = {
   didTimeout: boolean;
@@ -204,8 +193,9 @@ export const ChatPage: React.FC = () => {
 
   // Local state
   const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false);
-  const [profilePanelTarget, setProfilePanelTarget] =
-    useState<ProfilePanelTarget | null>(null);
+  const [infoPanelMode, setInfoPanelMode] = useState<InfoPanelMode | null>(
+    null,
+  );
   const [isMobileMenuOpen, setIsMobileMenuOpen] =
     useState(!routeConversationId);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
@@ -662,43 +652,46 @@ export const ChatPage: React.FC = () => {
 
   const closeInfoPanel = useCallback(() => {
     setIsInfoPanelOpen(false);
-    setProfilePanelTarget(null);
+    setInfoPanelMode(null);
   }, []);
 
-  const openUserProfile = useCallback((target: ProfilePanelTarget) => {
-    setProfilePanelTarget(target);
+  const openSelfProfile = useCallback(() => {
+    setInfoPanelMode("self-profile");
+    setIsInfoPanelOpen(true);
+  }, []);
+
+  const openConversationInfoPanel = useCallback(() => {
+    setInfoPanelMode("conversation");
     setIsInfoPanelOpen(true);
   }, []);
 
   // Handle toggle info panel
   const handleToggleInfoPanel = useCallback(() => {
-    if (isInfoPanelOpen) {
+    if (isInfoPanelOpen && infoPanelMode === "conversation") {
       closeInfoPanel();
       return;
     }
 
-    if (isSelectedDirectConversation && otherUser) {
-      openUserProfile({
-        userId: otherUser.id,
-        initialUser: {
-          id: otherUser.id,
-          username: otherUser.username,
-          displayName: otherUser.displayName,
-          avatar: otherUser.avatar,
-          status: otherUser.status,
-        },
-      });
+    openConversationInfoPanel();
+  }, [
+    closeInfoPanel,
+    infoPanelMode,
+    isInfoPanelOpen,
+    openConversationInfoPanel,
+  ]);
+
+  useEffect(() => {
+    if (infoPanelMode !== "conversation") {
       return;
     }
 
-    setProfilePanelTarget(null);
-    setIsInfoPanelOpen(true);
+    if (!routeConversationId) {
+      closeInfoPanel();
+    }
   }, [
     closeInfoPanel,
-    isInfoPanelOpen,
-    isSelectedDirectConversation,
-    openUserProfile,
-    otherUser,
+    infoPanelMode,
+    routeConversationId,
   ]);
 
   const handleDeleteConversation = useCallback(async () => {
@@ -803,17 +796,8 @@ export const ChatPage: React.FC = () => {
 
   const handleOpenCurrentUserProfile = useCallback(() => {
     if (!currentUserSummary) return;
-    openUserProfile({
-      userId: currentUserSummary.id,
-      initialUser: {
-        id: currentUserSummary.id,
-        username: currentUserSummary.username,
-        displayName: currentUserSummary.displayName,
-        avatar: currentUserSummary.avatar,
-        status: currentUserSummary.status,
-      },
-    });
-  }, [currentUserSummary, openUserProfile]);
+    openSelfProfile();
+  }, [currentUserSummary, openSelfProfile]);
 
   const handleCreateGroup = useCallback(
     async (payload: { name: string; memberIds: string[] }) => {
@@ -845,17 +829,6 @@ export const ChatPage: React.FC = () => {
         });
         selectConversation(conversationId);
         navigate(`/chat/${conversationId}`);
-        const conversationPayloadRecord = conversationPayload as unknown as {
-          invitedMemberIds?: unknown[];
-        };
-        const invited = Array.isArray(
-          conversationPayloadRecord.invitedMemberIds,
-        )
-          ? conversationPayloadRecord.invitedMemberIds.length
-          : 0;
-        if (invited > 0) {
-          toast.info(`${invited} member invite(s) are pending acceptance`);
-        }
       } catch (error) {
         const apiError = extractApiError(error);
         console.error("Create group conversation failed:", apiError);
@@ -893,7 +866,9 @@ export const ChatPage: React.FC = () => {
 
   const showSidebarOnMobile = !routeConversationId || isMobileMenuOpen;
   const shouldRenderInfoContent =
-    isInfoPanelOpen || Boolean(profilePanelTarget);
+    isInfoPanelOpen &&
+    (infoPanelMode === "self-profile" ||
+      (infoPanelMode === "conversation" && Boolean(routeConversationId)));
   const showConversationSkeleton =
     (!hasFetchedConversationsOnce && conversationCount === 0) ||
     (isLoadingConversations && conversationCount === 0);
@@ -1003,10 +978,7 @@ export const ChatPage: React.FC = () => {
       if (!userId) return;
 
       void handleStartChat(userId).then(() => {
-        openUserProfile({
-          userId,
-          initialUser: { id: userId },
-        });
+        openConversationInfoPanel();
       });
     };
 
@@ -1020,7 +992,7 @@ export const ChatPage: React.FC = () => {
         handler as EventListener,
       );
     };
-  }, [handleStartChat, openUserProfile]);
+  }, [handleStartChat, openConversationInfoPanel]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1197,36 +1169,41 @@ export const ChatPage: React.FC = () => {
       </div>
 
       {/* Info panel */}
-      {(selectedConversation || profilePanelTarget) && (
+      {(infoPanelMode === "self-profile" ||
+        (infoPanelMode === "conversation" && Boolean(routeConversationId)) ||
+        Boolean(selectedConversation)) && (
         <div
           className={clsx(
             "fixed inset-y-0 right-0 z-40 w-full max-w-full border-l border-border bg-surface transition-transform duration-300 sm:max-w-[min(26rem,94vw)] lg:relative lg:z-0 lg:w-[clamp(20rem,28vw,24rem)] lg:max-w-none",
             isInfoPanelOpen ? "translate-x-0" : "translate-x-full lg:hidden",
           )}
-          style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}
-        >
-          {shouldRenderInfoContent ? (
-            <React.Suspense fallback={<DeferredPanelFallback />}>
-              {profilePanelTarget ? (
-                <UserProfile
-                  userId={profilePanelTarget.userId}
-                  currentUserId={currentUserSummary.id}
-                  initialUser={profilePanelTarget.initialUser ?? null}
-                  onClose={closeInfoPanel}
-                  onDeleteConversation={
-                    selectedConversation &&
-                    isSelectedDirectConversation &&
-                    otherUser?.id === profilePanelTarget.userId
-                      ? handleDeleteConversation
-                      : undefined
-                  }
-                  onStartConversation={handleStartChat}
-                />
-              ) : isSelectedDirectConversation ? (
-                otherUser ? (
+            style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}
+          >
+            {shouldRenderInfoContent ? (
+              <React.Suspense fallback={<DeferredPanelFallback />}>
+                {infoPanelMode === "self-profile" ? (
                   <UserProfile
-                    userId={otherUser.id}
+                    key={`self-profile:${currentUserSummary.id}`}
+                    userId={currentUserSummary.id}
                     currentUserId={currentUserSummary.id}
+                    initialUser={{
+                      id: currentUserSummary.id,
+                      username: currentUserSummary.username,
+                      displayName: currentUserSummary.displayName,
+                      avatar: currentUserSummary.avatar,
+                      status: currentUserSummary.status,
+                    }}
+                    onClose={closeInfoPanel}
+                    onStartConversation={handleStartChat}
+                  />
+                ) : infoPanelMode === "conversation" && !selectedConversation ? (
+                  <DeferredPanelFallback />
+                ) : isSelectedDirectConversation ? (
+                  otherUser ? (
+                    <UserProfile
+                      key={`conversation-profile:${selectedConversation?.id ?? "unknown"}:${otherUser.id}`}
+                      userId={otherUser.id}
+                      currentUserId={currentUserSummary.id}
                     initialUser={{
                       id: otherUser.id,
                       username: otherUser.username,

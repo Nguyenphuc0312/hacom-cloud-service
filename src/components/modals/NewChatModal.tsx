@@ -267,13 +267,21 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
         />
 
         {isGroupMode ? (
-          <Input
-            type="text"
-            placeholder={t("profile:newChatModal.groupNamePlaceholder")}
-            value={groupName}
-            onChange={(event) => setGroupName(event.target.value)}
-            disabled={isBusy}
-          />
+          <div className="space-y-2">
+            <Input
+              type="text"
+              placeholder={t("profile:newChatModal.groupNamePlaceholder")}
+              value={groupName}
+              onChange={(event) => setGroupName(event.target.value)}
+              disabled={isBusy}
+            />
+            <p className="text-xs leading-5 text-text-muted">
+              {t("profile:newChatModal.groupEligibilityHint", {
+                defaultValue:
+                  "Directly adding members requires accepted friendship. Use invite links for broader access when group settings allow.",
+              })}
+            </p>
+          </div>
         ) : null}
 
         {isGroupMode && selectedUsers.length > 0 ? (

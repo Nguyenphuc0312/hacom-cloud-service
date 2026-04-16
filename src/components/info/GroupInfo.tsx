@@ -1034,6 +1034,12 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     leftIcon={<MagnifyingGlassIcon className="w-5 h-5" />}
                     disabled={isSubmitting}
                   />
+                  <p className="text-xs leading-5 text-text-muted">
+                    {t("profile:groupInfo.addMemberEligibilityHint", {
+                      defaultValue:
+                        "Only accepted friends can be added directly. Use invite links for broader access when group settings allow.",
+                    })}
+                  </p>
                   <div className="max-h-44 overflow-y-auto rounded-lg border border-border">
                     {isSearching ? (
                       <div className="py-4 flex justify-center">

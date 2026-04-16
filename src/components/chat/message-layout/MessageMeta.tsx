@@ -109,6 +109,15 @@ export const MessageMeta: React.FC<MessageMetaProps> = ({
 }) => {
   const { t } = useTranslation();
   const timeStr = formatMessageTime(new Date(message.createdAt));
+  const editedLabel = t("chat:message.edited");
+  const editedTitle = message.editedAt
+    ? t("chat:message.editedAtNoHistory", {
+        time: formatRelativeDate(new Date(message.editedAt)),
+        defaultValue: `Edited ${formatRelativeDate(new Date(message.editedAt))}. Previous versions are not available.`,
+      })
+    : t("chat:message.editedNoHistory", {
+        defaultValue: "Message was edited. Previous versions are not available.",
+      });
 
   return (
     <div
@@ -119,17 +128,14 @@ export const MessageMeta: React.FC<MessageMetaProps> = ({
       )}
     >
       {message.isEdited && (
-        <PencilIcon
-          className="h-3 w-3"
-          title={
-            message.editedAt
-              ? t("chat:message.editedAt", {
-                  time: formatRelativeDate(new Date(message.editedAt)),
-                  defaultValue: `Edited ${formatRelativeDate(new Date(message.editedAt))}`,
-                })
-              : t("chat:message.edited")
-          }
-        />
+        <span
+          className="inline-flex items-center gap-1 text-[10px] font-medium"
+          title={editedTitle}
+          aria-label={editedTitle}
+        >
+          <PencilIcon className="h-3 w-3" />
+          <span>{editedLabel}</span>
+        </span>
       )}
       <span>{timeStr}</span>
       {isOwn && showStatus && <MessageStatusGlyph message={message} />}

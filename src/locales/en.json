@@ -60,6 +60,8 @@
     "message": {
       "you": "You",
       "edited": "edited",
+      "editedNoHistory": "Message was edited. Previous versions are not available.",
+      "editedAtNoHistory": "Edited {{time}}. Previous versions are not available.",
       "forwardedFrom": "Forwarded from {{name}}",
       "bubbleAria": "{{name}} at {{time}}",
       "status": {
@@ -291,6 +293,7 @@
       },
       "addMember": "Add member",
       "searchMemberPlaceholder": "Search members...",
+      "addMemberEligibilityHint": "Only accepted friends can be added directly. Use invite links for broader access when group settings allow.",
       "noSearchResult": "No matching result",
       "youSuffix": "(You)",
       "viewAllMedia": "View all media",
@@ -307,6 +310,7 @@
       "createGroup": "Create group",
       "searchPlaceholder": "Search by name or username...",
       "groupNamePlaceholder": "Enter group name...",
+      "groupEligibilityHint": "Directly adding members requires accepted friendship. Use invite links for broader access when group settings allow.",
       "searchMinChars": "Type at least {{count}} characters to search",
       "createGroupButton": "Create group ({{count}} users)"
     },

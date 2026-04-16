@@ -5,9 +5,18 @@ type MockConversation = {
   conversationId: string;
   type: "group" | "direct";
   name: string;
+  displayName?: string;
   unreadCount: number;
   membershipState: "active";
   memberCount: number;
+  participantCount?: number;
+  participants?: Array<{
+    id: string;
+    username: string;
+    displayName: string;
+    status: string;
+    avatar?: string | null;
+  }>;
   summaryVersion: number;
   updatedAt: string;
   createdAt: string;
@@ -297,6 +306,16 @@ const installApiMocks = async (page: Page, state: MockState) => {
       });
 
       await fulfillJson(success(results));
+      return;
+    }
+
+    const userMatch = pathname.match(/\/api\/v1\/users\/([^/]+)$/);
+    if (userMatch && method === "GET") {
+      const [, userId] = userMatch;
+      const user =
+        state.searchUsers?.find((item) => item.id === userId) ??
+        (state.currentUser.id === userId ? state.currentUser : null);
+      await fulfillJson(success(user));
       return;
     }
 
@@ -594,6 +613,132 @@ test("conversation with unread bootstraps from server unread feed and lands on f
 
   await expect(page.getByText("First unread from server")).toBeVisible();
   expect(state.unreadFeedHits).toBeGreaterThan(0);
+});
+
+test("profile panel follows the active direct conversation instead of keeping stale user context", async ({ page }) => {
+  const state: MockState = {
+    currentUser: {
+      id: "user-a",
+      username: "alice",
+      displayName: "Alice",
+      status: "online",
+    },
+    conversations: [
+      makeConversation("direct-1", "Bob Thread", {
+        type: "direct",
+        displayName: "Bob Builder",
+        participantCount: 2,
+        participants: [
+          {
+            id: "user-a",
+            username: "alice",
+            displayName: "Alice",
+            status: "online",
+          },
+          {
+            id: "user-b",
+            username: "bob",
+            displayName: "Bob Builder",
+            status: "online",
+          },
+        ],
+        lastMessage: toMessageSummary(
+          makeMessage({
+            id: "seed-bob",
+            conversationId: "direct-1",
+            senderId: "user-b",
+            senderName: "Bob Builder",
+            content: "Hi from Bob",
+          }),
+        ),
+      }),
+      makeConversation("direct-2", "Carol Thread", {
+        type: "direct",
+        displayName: "Carol Outside",
+        participantCount: 2,
+        participants: [
+          {
+            id: "user-a",
+            username: "alice",
+            displayName: "Alice",
+            status: "online",
+          },
+          {
+            id: "user-c",
+            username: "carol",
+            displayName: "Carol Outside",
+            status: "offline",
+          },
+        ],
+        lastMessage: toMessageSummary(
+          makeMessage({
+            id: "seed-carol",
+            conversationId: "direct-2",
+            senderId: "user-c",
+            senderName: "Carol Outside",
+            content: "Hi from Carol",
+          }),
+        ),
+      }),
+    ],
+    messagesByConversation: {
+      "direct-1": [
+        makeMessage({
+          id: "seed-bob",
+          conversationId: "direct-1",
+          senderId: "user-b",
+          senderName: "Bob Builder",
+          content: "Hi from Bob",
+        }),
+      ],
+      "direct-2": [
+        makeMessage({
+          id: "seed-carol",
+          conversationId: "direct-2",
+          senderId: "user-c",
+          senderName: "Carol Outside",
+          content: "Hi from Carol",
+        }),
+      ],
+    },
+    searchUsers: [
+      {
+        id: "user-b",
+        username: "bob",
+        displayName: "Bob Builder",
+        status: "online",
+        email: "bob@example.com",
+        employeeCode: "EMP002",
+        isFriend: true,
+        canAddFriend: false,
+        friendshipStatus: "accepted",
+      },
+      {
+        id: "user-c",
+        username: "carol",
+        displayName: "Carol Outside",
+        status: "offline",
+        email: "carol@example.com",
+        employeeCode: "EMP003",
+        isFriend: true,
+        canAddFriend: false,
+        friendshipStatus: "accepted",
+      },
+    ],
+    sentPayloads: [],
+    unreadFeedHits: 0,
+  };
+
+  await bootChatPage(page, state, "/chat/direct-1");
+
+  await page.getByRole("button", { name: "View conversation info" }).click();
+  await expect(page.getByRole("heading", { name: "Bob Builder" })).toBeVisible();
+
+  await page.goto("/chat/direct-2");
+  await expect(page.getByTestId("chat-composer-input")).toBeVisible();
+
+  await expect(page.getByRole("heading", { name: "Carol Outside" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Bob Builder" })).toHaveCount(0);
 });
 
 test("new conversation search supports multiple identifiers and group mode enforces friends-only selection", async ({ page }) => {

@@ -60,6 +60,8 @@
     "message": {
       "you": "Bạn",
       "edited": "đã chỉnh sửa",
+      "editedNoHistory": "Tin nhắn đã được chỉnh sửa. Phiên bản trước hiện chưa khả dụng.",
+      "editedAtNoHistory": "Đã chỉnh sửa {{time}}. Phiên bản trước hiện chưa khả dụng.",
       "forwardedFrom": "Chuyển tiếp từ {{name}}",
       "bubbleAria": "{{name}} lúc {{time}}",
       "status": {
@@ -291,6 +293,7 @@
       },
       "addMember": "Thêm thành viên",
       "searchMemberPlaceholder": "Tìm kiếm thành viên...",
+      "addMemberEligibilityHint": "Chỉ bạn bè đã chấp nhận mới có thể được thêm trực tiếp. Hãy dùng liên kết mời nếu cài đặt nhóm cho phép.",
       "noSearchResult": "Không có kết quả phù hợp",
       "youSuffix": "(Bạn)",
       "viewAllMedia": "Xem tất cả phương tiện",
@@ -307,6 +310,7 @@
       "createGroup": "Tạo nhóm",
       "searchPlaceholder": "Tìm kiếm theo tên hoặc username...",
       "groupNamePlaceholder": "Nhập tên nhóm...",
+      "groupEligibilityHint": "Việc thêm trực tiếp thành viên yêu cầu quan hệ bạn bè đã chấp nhận. Hãy dùng liên kết mời nếu cài đặt nhóm cho phép.",
       "searchMinChars": "Nhập ít nhất {{count}} ký tự để tìm kiếm",
       "createGroupButton": "Tạo nhóm ({{count}} người)"
     },

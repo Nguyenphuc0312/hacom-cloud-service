@@ -119,8 +119,15 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 }) => {
   const { t } = useTranslation(["profile", "common", "friends"]);
   const authUser = useAuthStore((state) => state.user);
+  const resolvedInitialUser = React.useMemo(
+    () =>
+      initialUser && initialUser.id === userId
+        ? initialUser
+        : null,
+    [initialUser, userId],
+  );
   const [user, setUser] = React.useState<ProfileUser | null>(
-    initialUser && initialUser.id ? initialUser : null,
+    resolvedInitialUser,
   );
   const [isLoading, setIsLoading] = React.useState(false);
   const [isEditOpen, setIsEditOpen] = React.useState(false);
@@ -167,18 +174,15 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       return;
     }
 
-    setUser((current) =>
-      current?.id === initialUser?.id && initialUser
-        ? { ...current, ...initialUser }
-        : (initialUser ?? current),
-    );
-  }, [authUser, initialUser, isSelf]);
+    setUser(resolvedInitialUser);
+  }, [authUser, isSelf, resolvedInitialUser]);
 
   React.useEffect(() => {
     let isMounted = true;
 
     const loadUser = async () => {
       if (!userId || isSelf) return;
+      setUser(resolvedInitialUser);
       setIsLoading(true);
       try {
         const response = await getUserByIdUseCase(userId);
@@ -213,7 +217,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [initialUser, isSelf, userId]);
+  }, [isSelf, resolvedInitialUser, userId]);
 
   React.useEffect(() => {
     void refreshDirectory();
