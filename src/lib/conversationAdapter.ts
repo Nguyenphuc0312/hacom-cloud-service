@@ -457,6 +457,12 @@ export const normalizeConversation = (
     ...(asString(payload.lastReadMessageId)
       ? { lastReadMessageId: asString(payload.lastReadMessageId) }
       : {}),
+    ...(asString(payload.firstUnreadMessageId)
+      ? { firstUnreadMessageId: asString(payload.firstUnreadMessageId) }
+      : {}),
+    ...(payload.firstUnreadMessageAt
+      ? { firstUnreadMessageAt: toDate(payload.firstUnreadMessageAt, updatedAt) }
+      : {}),
     ...(asString(payload.membershipState)
       ? {
           membershipState: asString(payload.membershipState) as NonNullable<

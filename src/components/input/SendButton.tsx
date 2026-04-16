@@ -8,6 +8,7 @@ interface SendButtonProps {
   state?: "idle" | "ready" | "sending" | "disabled";
   onClick: () => void;
   ariaLabel: string;
+  "data-testid"?: string;
   className?: string;
 }
 
@@ -17,6 +18,7 @@ export const SendButton: React.FC<SendButtonProps> = ({
   state,
   onClick,
   ariaLabel,
+  "data-testid": dataTestId,
   className,
 }) => {
   const resolvedState = disabled
@@ -44,6 +46,7 @@ export const SendButton: React.FC<SendButtonProps> = ({
         className,
       )}
       aria-label={ariaLabel}
+      data-testid={dataTestId}
     >
       <PaperAirplaneIcon
         className={clsx(

@@ -129,6 +129,7 @@ interface ChatTimelinePaneProps {
   unreadMarker?: {
     lastReadMessageId?: string;
     lastReadAt?: Date | string;
+    firstUnreadMessageId?: string;
     active?: boolean;
   } | null;
   onReachedLatest?: (message: Message) => void;
@@ -467,6 +468,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [unreadMarker, setUnreadMarker] = React.useState<{
     lastReadMessageId?: string;
     lastReadAt?: Date | string;
+    firstUnreadMessageId?: string;
     active?: boolean;
   } | null>(null);
   const [clockTick, setClockTick] = React.useState(() => Date.now());
@@ -717,20 +719,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const conversationReadSnapshot = conversation as Conversation & {
     lastReadMessageId?: string;
     lastReadAt?: Date | string;
+    firstUnreadMessageId?: string;
   };
   const lastReadMessageId = conversationReadSnapshot.lastReadMessageId;
   const lastReadAt = conversationReadSnapshot.lastReadAt;
+  const firstUnreadMessageId = conversationReadSnapshot.firstUnreadMessageId;
 
   // Close panels when switching conversations
   React.useEffect(() => {
     setOverlayMode(null);
     if (
       (conversation.unreadCount ?? 0) > 0 &&
-      (lastReadMessageId || lastReadAt)
+      (firstUnreadMessageId || lastReadMessageId || lastReadAt)
     ) {
       setUnreadMarker({
         lastReadMessageId,
         lastReadAt,
+        firstUnreadMessageId,
         active: true,
       });
     } else {
@@ -739,6 +744,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [
     conversation.id,
     conversation.unreadCount,
+    firstUnreadMessageId,
     lastReadAt,
     lastReadMessageId,
   ]);

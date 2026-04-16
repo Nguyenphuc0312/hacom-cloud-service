@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "test": "vitest run",
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed",
     "lint": "eslint .",
     "preview": "vite preview",
     "i18n:check": "node scripts/i18n-check.mjs",
@@ -40,6 +42,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.59.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

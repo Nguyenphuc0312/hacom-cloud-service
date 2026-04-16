@@ -950,6 +950,7 @@ export const MessageInput = React.forwardRef<
 
             <textarea
               ref={textareaRef}
+              data-testid="chat-composer-input"
               value={value}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
@@ -1026,6 +1027,7 @@ export const MessageInput = React.forwardRef<
             disabled={!canSend}
             state={!canSend ? "disabled" : "ready"}
             isBusy={isSubmitBusy}
+            data-testid="chat-send-button"
             onClick={() => {
               logMessageDebug("MessageInput", "submit_triggered", {
                 conversationId,

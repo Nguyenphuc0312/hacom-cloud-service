@@ -94,6 +94,8 @@ export type Conversation = Omit<
   joinedAt?: Date;
   lastReadAt?: Date | string | null;
   lastReadMessageId?: string | null;
+  firstUnreadMessageId?: string | null;
+  firstUnreadMessageAt?: Date | string | null;
   lastMessageSortAt?: Date | string | null;
   lastMessageId?: string | null;
   lastMessageStatus?: "pending" | "sent" | "failed" | null;

@@ -10,6 +10,7 @@ import type {
   Message,
   UserSummary,
 } from "../../../types";
+import { conversationApi } from "../../../services/api";
 import { getConversationByIdUseCase } from "../usecases/getConversationById";
 import { logMessageDebug } from "../../../utils/messageDebug";
 
@@ -210,6 +211,56 @@ export const useConversationSession = ({
       });
       joinRoom(selectedConversationId, { skipInitialDeltaSync: false });
 
+      const unreadCount = Math.max(0, selectedConversation?.unreadCount ?? 0);
+      const shouldBootstrapUnreadFeed =
+        unreadCount > 0 &&
+        (!isConversationHydrated || !selectedConversation?.firstUnreadMessageId);
+
+      if (shouldBootstrapUnreadFeed) {
+        try {
+          const unreadFeedResponse = await conversationApi.getUnreadFeed(
+            selectedConversationId,
+            isConversationHydrated ? 1 : Math.min(Math.max(unreadCount, 20), 100),
+          );
+          const unreadFeed = unwrapApiSuccess(unreadFeedResponse);
+          updateConversation(selectedConversationId, unreadFeed.readState);
+
+          if (!isConversationHydrated && Array.isArray(unreadFeed.messages) && unreadFeed.messages.length > 0) {
+            const chatState = useChatStore.getState();
+            chatState.ingestMessages(selectedConversationId, unreadFeed.messages, {
+              mode: "replace",
+              hydrated: true,
+              hasNewer: unreadFeed.hasMore,
+              source: "unread-feed",
+            });
+            useChatStore.setState((state) => ({
+              hasMoreMessages: {
+                ...state.hasMoreMessages,
+                [selectedConversationId]:
+                  Boolean(unreadFeed.readState.lastReadMessageId) ||
+                  (state.hasMoreMessages[selectedConversationId] ?? false),
+              },
+              hasNewerMessagesByConversation: {
+                ...state.hasNewerMessagesByConversation,
+                [selectedConversationId]: unreadFeed.hasMore,
+              },
+            }));
+            logMessageDebug("ChatPage", "unread_feed_bootstrap_completed", {
+              conversationId: selectedConversationId,
+              loaded: unreadFeed.messages.length,
+              hasMoreUnread: unreadFeed.hasMore,
+              firstUnreadMessageId: unreadFeed.readState.firstUnreadMessageId,
+            });
+            return;
+          }
+        } catch (error) {
+          logMessageDebug("ChatPage", "unread_feed_bootstrap_failed", {
+            conversationId: selectedConversationId,
+            errorMessage: error instanceof Error ? error.message : "unknown_error",
+          });
+        }
+      }
+
       if (!isConversationHydrated) {
         const initialFetchResult = await fetchMessages(selectedConversationId);
         logMessageDebug("ChatPage", "initial_fetch_completed", {
@@ -229,8 +280,10 @@ export const useConversationSession = ({
     isValidatingRoom,
     joinRoom,
     leaveRoom,
+    selectedConversation,
     selectedConversationId,
     stopTyping,
+    updateConversation,
   ]);
 
   useEffect(() => {

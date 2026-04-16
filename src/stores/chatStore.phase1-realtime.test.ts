@@ -9,12 +9,14 @@ const {
   conversationMarkAsReadMock,
   getConversationsMock,
   getUnreadSummaryMock,
+  getUnreadFeedMock,
 } = vi.hoisted(() => ({
   getMessagesMock: vi.fn(),
   sendMessageMock: vi.fn(),
   conversationMarkAsReadMock: vi.fn(),
   getConversationsMock: vi.fn(),
   getUnreadSummaryMock: vi.fn(),
+  getUnreadFeedMock: vi.fn(),
 }));
 
 vi.mock("../services/api", () => ({
@@ -22,6 +24,7 @@ vi.mock("../services/api", () => ({
     getConversations: getConversationsMock,
     markAsRead: conversationMarkAsReadMock,
     getUnreadSummary: getUnreadSummaryMock,
+    getUnreadFeed: getUnreadFeedMock,
   },
   messageApi: {
     getMessages: getMessagesMock,
@@ -94,6 +97,7 @@ describe("chatStore phase-1 realtime flows", () => {
     conversationMarkAsReadMock.mockReset();
     getConversationsMock.mockReset();
     getUnreadSummaryMock.mockReset();
+    getUnreadFeedMock.mockReset();
   });
 
   it("merges optimistic and server message into one canonical message", () => {
@@ -278,6 +282,57 @@ describe("chatStore phase-1 realtime flows", () => {
       .conversations.find((item) => item.id === "room-1");
     expect(conversation?.unreadCount).toBe(4);
     expect(conversation?.lastMessage?.id).toBe("msg-latest");
+  });
+
+  it("applies server-owned read state from history meta, including first unread anchor", async () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+        unreadCount: 4,
+        lastReadMessageId: "msg-old",
+      }),
+    ] as never);
+
+    getMessagesMock.mockResolvedValueOnce({
+      success: true,
+      statusCode: 200,
+      message: "ok",
+      data: {
+        messages: [
+          makeMessage({
+            id: "msg-first-unread",
+            createdAt: "2026-04-10T10:01:00.000Z",
+            updatedAt: "2026-04-10T10:01:00.000Z",
+          }),
+          makeMessage({
+            id: "msg-latest",
+            createdAt: "2026-04-10T10:10:00.000Z",
+            updatedAt: "2026-04-10T10:10:00.000Z",
+          }),
+        ],
+      },
+      meta: {
+        hasNext: false,
+        hasPrev: true,
+        readState: {
+          unreadCount: 4,
+          lastReadMessageId: "msg-old",
+          lastReadAt: "2026-04-10T09:59:00.000Z",
+          firstUnreadMessageId: "msg-first-unread",
+          firstUnreadMessageAt: "2026-04-10T10:01:00.000Z",
+        },
+      },
+    });
+
+    await useChatStore
+      .getState()
+      .fetchMessages("room-1", undefined, undefined, { force: true });
+
+    const conversation = useChatStore.getState().conversationById["room-1"];
+    expect(conversation?.unreadCount).toBe(4);
+    expect(conversation?.lastReadMessageId).toBe("msg-old");
+    expect(conversation?.firstUnreadMessageId).toBe("msg-first-unread");
   });
 
   it("preserves websocket delta that lands while initial snapshot is still in flight", async () => {

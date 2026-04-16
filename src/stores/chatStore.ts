@@ -867,6 +867,10 @@ const mergeConversationSummary = (
     lastReadMessageId:
       incoming.lastReadMessageId ?? current.lastReadMessageId ?? undefined,
     lastReadAt: incoming.lastReadAt ?? current.lastReadAt ?? undefined,
+    firstUnreadMessageId:
+      incoming.firstUnreadMessageId ?? current.firstUnreadMessageId ?? undefined,
+    firstUnreadMessageAt:
+      incoming.firstUnreadMessageAt ?? current.firstUnreadMessageAt ?? undefined,
     summaryVersion:
       toConversationVersion(incoming) || toConversationVersion(current) || undefined,
   }) ?? {
@@ -938,11 +942,55 @@ const updateConversationReadProgress = (
     unreadCount: 0,
     lastReadMessageId,
     lastReadAt: readAt ?? new Date().toISOString(),
+    firstUnreadMessageId: null,
+    firstUnreadMessageAt: null,
   }) ?? {
     ...conversation,
     unreadCount: 0,
     lastReadMessageId,
     lastReadAt: readAt ?? new Date().toISOString(),
+    firstUnreadMessageId: null,
+    firstUnreadMessageAt: null,
+  }) as Conversation;
+
+const applyConversationReadState = (
+  conversation: Conversation,
+  readState: {
+    unreadCount: number;
+    lastReadMessageId: string | null;
+    lastReadAt: string | null;
+    firstUnreadMessageId?: string | null;
+    firstUnreadMessageAt?: string | null;
+  },
+): Conversation =>
+  (normalizeConversation({
+    ...conversation,
+    unreadCount: Math.max(0, readState.unreadCount ?? conversation.unreadCount ?? 0),
+    lastReadMessageId:
+      readState.lastReadMessageId ?? conversation.lastReadMessageId ?? undefined,
+    lastReadAt: readState.lastReadAt ?? conversation.lastReadAt ?? undefined,
+    firstUnreadMessageId:
+      readState.firstUnreadMessageId ?? (readState.unreadCount > 0
+        ? conversation.firstUnreadMessageId ?? undefined
+        : null),
+    firstUnreadMessageAt:
+      readState.firstUnreadMessageAt ?? (readState.unreadCount > 0
+        ? conversation.firstUnreadMessageAt ?? undefined
+        : null),
+  }) ?? {
+    ...conversation,
+    unreadCount: Math.max(0, readState.unreadCount ?? conversation.unreadCount ?? 0),
+    lastReadMessageId:
+      readState.lastReadMessageId ?? conversation.lastReadMessageId ?? null,
+    lastReadAt: readState.lastReadAt ?? conversation.lastReadAt ?? null,
+    firstUnreadMessageId:
+      readState.firstUnreadMessageId ?? (readState.unreadCount > 0
+        ? conversation.firstUnreadMessageId ?? null
+        : null),
+    firstUnreadMessageAt:
+      readState.firstUnreadMessageAt ?? (readState.unreadCount > 0
+        ? conversation.firstUnreadMessageAt ?? null
+        : null),
   }) as Conversation;
 
 const getStableMessageId = (message: Message): string =>
@@ -1928,6 +1976,29 @@ const normalizeMessagesResponse = (
   };
 };
 
+const normalizeConversationReadStateFromMeta = (
+  responseMeta?: Record<string, unknown> | null,
+): {
+  unreadCount: number;
+  lastReadMessageId: string | null;
+  lastReadAt: string | null;
+  firstUnreadMessageId: string | null;
+  firstUnreadMessageAt: string | null;
+} | null => {
+  const payload = asRecord(responseMeta?.readState);
+  if (!payload) {
+    return null;
+  }
+
+  return {
+    unreadCount: Math.max(0, asNumberValue(payload.unreadCount) ?? 0),
+    lastReadMessageId: asStringValue(payload.lastReadMessageId) ?? null,
+    lastReadAt: asStringValue(payload.lastReadAt) ?? null,
+    firstUnreadMessageId: asStringValue(payload.firstUnreadMessageId) ?? null,
+    firstUnreadMessageAt: asStringValue(payload.firstUnreadMessageAt) ?? null,
+  };
+};
+
 const toAttachmentPayload = (attachments?: Attachment[]) =>
   attachments?.map((attachment) => ({
     id: attachment.id,
@@ -2568,6 +2639,8 @@ export const useChatStore = create<ChatState>()(
               return normalizeConversation({
                 ...conversation,
                 unreadCount: 0,
+                firstUnreadMessageId: null,
+                firstUnreadMessageAt: null,
               }) as Conversation;
             }
 
@@ -2576,6 +2649,12 @@ export const useChatStore = create<ChatState>()(
               unreadCount: unreadSnapshot.unreadCount,
               lastReadMessageId: unreadSnapshot.lastReadMessageId,
               lastReadAt: unreadSnapshot.lastReadAt,
+              ...(unreadSnapshot.unreadCount > 0
+                ? {}
+                : {
+                    firstUnreadMessageId: null,
+                    firstUnreadMessageAt: null,
+                  }),
             }) as Conversation;
           });
 
@@ -2603,12 +2682,24 @@ export const useChatStore = create<ChatState>()(
             const nextUnreadCount = options?.incrementUnread
               ? Math.max(0, conversation.unreadCount || 0) + 1
               : Math.max(0, conversation.unreadCount || 0);
-
-            return updateConversationActivitySummary(
+            const nextConversation = updateConversationActivitySummary(
               conversation,
               message,
               nextUnreadCount,
             );
+            if (
+              options?.incrementUnread &&
+              (conversation.unreadCount ?? 0) <= 0 &&
+              !conversation.firstUnreadMessageId
+            ) {
+              return normalizeConversation({
+                ...nextConversation,
+                firstUnreadMessageId: message.id,
+                firstUnreadMessageAt: message.createdAt,
+              }) as Conversation;
+            }
+
+            return nextConversation;
           });
 
           return {
@@ -3067,6 +3158,7 @@ export const useChatStore = create<ChatState>()(
           const responseMeta = asRecord(responseEnvelope?.meta);
           const payload = unwrapApiSuccess(response);
           let normalized = normalizeMessagesResponse(payload, responseMeta);
+          let readState = normalizeConversationReadStateFromMeta(responseMeta);
 
           if (
             after &&
@@ -3090,11 +3182,14 @@ export const useChatStore = create<ChatState>()(
                   retryPayload,
                   retryMeta,
                 );
+                const retryReadState =
+                  normalizeConversationReadStateFromMeta(retryMeta);
                 if (
                   Array.isArray(retryNormalized.messages) &&
                   retryNormalized.messages.length > 0
                 ) {
                   normalized = retryNormalized;
+                  readState = retryReadState ?? readState;
                 }
               }
             } catch {
@@ -3157,9 +3252,27 @@ export const useChatStore = create<ChatState>()(
                     : undefined,
               },
             );
+            const currentConversation = messageState.conversationById[conversationId];
+            const readStateConversation =
+              readState && currentConversation
+                ? applyConversationReadState(currentConversation, readState)
+                : null;
 
             return {
               ...messageState,
+              ...(readStateConversation
+                ? {
+                    conversations: messageState.conversations.map((conversation) =>
+                      conversation.id === conversationId
+                        ? readStateConversation
+                        : conversation,
+                    ),
+                    conversationById: {
+                      ...messageState.conversationById,
+                      [conversationId]: readStateConversation,
+                    },
+                  }
+                : {}),
               hasMoreMessages: {
                 ...state.hasMoreMessages,
                 [conversationId]:

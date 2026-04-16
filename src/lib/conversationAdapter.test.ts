@@ -129,6 +129,8 @@ describe("normalizeConversation", () => {
       lastActivityAt: "2026-04-13T08:30:00.000Z",
       lastReadAt: "2026-04-13T08:00:00.000Z",
       lastReadMessageId: "msg-9",
+      firstUnreadMessageId: "msg-10",
+      firstUnreadMessageAt: "2026-04-13T08:30:00.000Z",
       lastMessage: {
         id: "msg-10",
         conversationId: "conv-1",
@@ -145,6 +147,7 @@ describe("normalizeConversation", () => {
     expect(conversation?.membershipState).toBe("active");
     expect(conversation?.summaryVersion).toBe(12);
     expect(conversation?.lastReadMessageId).toBe("msg-9");
+    expect(conversation?.firstUnreadMessageId).toBe("msg-10");
     expect(conversation?.lastMessage?.id).toBe("msg-10");
     expect(conversation?.lastMessageId).toBe("msg-10");
     expect(conversation?.lastMessageSortAt).toEqual(

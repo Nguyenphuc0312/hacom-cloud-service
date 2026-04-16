@@ -18,7 +18,9 @@ import type {
   LoginResponse,
   RefreshTokenResponse,
   RegisterResponseDto,
+  ConversationReadStateDto,
   RoomMessagesResponse,
+  UnreadFeedResponseDto,
   UploadSignedUrlResponse,
 } from "@hacom/chat-shared-types";
 import type { User } from "../stores/authStore";
@@ -132,6 +134,24 @@ const normalizeUnreadCountPayload = (
   }
 
   return { unreadCount: 0 };
+};
+
+const normalizeConversationReadState = (
+  payload: unknown,
+): ConversationReadStateDto => {
+  const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+  const asFiniteNumber = (value: unknown): number | null =>
+    typeof value === "number" && Number.isFinite(value) ? value : null;
+  const asStringValue = (value: unknown): string | null =>
+    typeof value === "string" && value.trim().length > 0 ? value : null;
+
+  return {
+    unreadCount: asFiniteNumber(record.unreadCount) ?? 0,
+    lastReadMessageId: asStringValue(record.lastReadMessageId),
+    lastReadAt: asStringValue(record.lastReadAt),
+    firstUnreadMessageId: asStringValue(record.firstUnreadMessageId),
+    firstUnreadMessageAt: asStringValue(record.firstUnreadMessageAt),
+  };
 };
 
 const normalizePinnedMessagesPayload = (
@@ -675,10 +695,10 @@ export const conversationApi = {
   },
 
   getUnreadCount: async (conversationId: string) => {
-    const response = await withLegacyConversationFallback(
-      () =>
-        apiClient.get<ApiResponse<unknown>>(
-          `${canonicalConversationMessagesPath(conversationId)}/unread`,
+      const response = await withLegacyConversationFallback(
+        () =>
+          apiClient.get<ApiResponse<unknown>>(
+            `${canonicalConversationMessagesPath(conversationId)}/unread`,
         ),
       () =>
         apiClient.get<ApiResponse<unknown>>(
@@ -687,12 +707,40 @@ export const conversationApi = {
     );
     const payload = unwrapApiSuccess(response.data);
 
-    return {
-      ...response.data,
-      data: normalizeUnreadCountPayload(payload),
-    };
-  },
-};
+      return {
+        ...response.data,
+        data: normalizeUnreadCountPayload(payload),
+      };
+    },
+
+    getUnreadFeed: async (conversationId: string, limit = 20) => {
+      const response = await withLegacyConversationFallback(
+        () =>
+          apiClient.get<ApiResponse<UnreadFeedResponseDto>>(
+            `${canonicalConversationMessagesPath(conversationId)}/unread-feed?limit=${limit}`,
+          ),
+        () =>
+          apiClient.get<ApiResponse<UnreadFeedResponseDto>>(
+            `${legacyConversationMessagesPath(conversationId)}/unread-feed?limit=${limit}`,
+          ),
+      );
+      const payload = unwrapApiSuccess(response.data) as unknown as Record<string, unknown>;
+      const rawMessages = Array.isArray(payload.messages) ? payload.messages : [];
+
+      return {
+        ...response.data,
+        data: {
+          messages: rawMessages as unknown as Message[],
+          readState: normalizeConversationReadState(payload.readState),
+          limit:
+            typeof payload.limit === "number" && Number.isFinite(payload.limit)
+              ? payload.limit
+              : limit,
+          hasMore: payload.hasMore === true,
+        },
+      };
+    },
+  };
 
 // ============================================
 // GROUP API (Telegram-like)

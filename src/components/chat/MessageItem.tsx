@@ -161,6 +161,8 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
 
   return (
     <div
+      data-testid={`message-item-${item.message.id}`}
+      data-message-id={item.message.id}
       className={clsx(
         messageSpacingClass,
         "msg-row-hover -mx-1 px-1",
