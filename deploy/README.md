@@ -22,6 +22,15 @@ The panel bundle is rooted at `/` on that host and calls only:
 
 The admin container serves static assets only. Public routing is owned by the edge proxy, not by the panel container.
 
+If the edge must publish the panel under `/admin`, keep the bundle rooted at `/` and rewrite at the proxy layer instead of rebuilding with a `/admin` asset base. Example:
+
+```nginx
+location /admin/ {
+    rewrite ^/admin/(.*)$ /$1 break;
+    proxy_pass http://chat-admin-panel;
+}
+```
+
 ## Phase 4 write rollout notes (server-test)
 
 - Build-time flag `VITE_ADMIN_WRITE_ACTIONS_ENABLED` must be explicitly set to `true` only when backend write paths are verified.

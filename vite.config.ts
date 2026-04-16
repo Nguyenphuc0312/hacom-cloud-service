@@ -24,7 +24,8 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
-    base: env.VITE_APP_BASE_PATH || '/',
+    // Keep the production bundle rooted at the host root so one build can be deployed everywhere.
+    base: '/',
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

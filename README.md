@@ -33,7 +33,6 @@ Runtime envs for hybrid dev and server-test:
 - `VITE_ADMIN_API_ROOT`: canonical admin API root (`/api/v1/admin` or absolute URL)
 - `VITE_ADMIN_API_BASE_URL`: compatibility alias for the same admin root
 - `VITE_AUTH_BASE_URL`: canonical auth root (`/api/v1/auth` or absolute URL)
-- `VITE_APP_BASE_PATH`: keep `/` when the panel is served from its own host root
 
 Run local admin panel with server-test backends:
 
@@ -63,4 +62,5 @@ Canonical admin API root is `/api/v1/admin`.
 - `VITE_ADMIN_API_ROOT` is the preferred source of truth for admin-only routes.
 - `VITE_ADMIN_API_BASE_URL` remains as a compatibility fallback and must resolve to the same admin root as `VITE_ADMIN_API_ROOT`.
 - Auth routes are resolved independently through `VITE_AUTH_BASE_URL`; the panel no longer assumes a shared `/api/v1` browser surface.
-- The production bundle is intended to sit behind a dedicated admin origin such as `https://admin.example.com/`, not under `https://example.com/admin/`.
+- The production bundle is always built for the host root, so assets resolve as `/assets/...`.
+- If an edge proxy still exposes the panel under `/admin`, rewrite `/admin/*` to `/` at the proxy instead of rebuilding the bundle with a `/admin` base path.
