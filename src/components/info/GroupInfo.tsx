@@ -48,6 +48,8 @@ interface GroupInfoProps {
 }
 
 type GroupMemberRole = RoomMemberRole;
+const EMPTY_INVITE_LINKS: InviteLinkItem[] = [];
+const EMPTY_JOIN_REQUESTS: JoinRequestItem[] = [];
 
 interface GroupMember {
   id: string;
@@ -248,10 +250,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const removeConversation = useChatStore((state) => state.removeConversation);
   const loadMembersFailedMessage = t("profile:toast.loadMembersFailed");
   const inviteLinks = useGroupStore(
-    (state) => state.inviteLinksByRoom[conversation.id] || [],
+    (state) => state.inviteLinksByRoom[conversation.id] ?? EMPTY_INVITE_LINKS,
   );
   const joinRequests = useGroupStore(
-    (state) => state.joinRequestsByRoom[conversation.id] || [],
+    (state) =>
+      state.joinRequestsByRoom[conversation.id] ?? EMPTY_JOIN_REQUESTS,
   );
   const memberListVersion = useGroupStore(
     (state) => state.memberListVersionByRoom[conversation.id] || 0,
