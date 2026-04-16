@@ -5,6 +5,7 @@
 import axios from "axios";
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
+import { useShallow } from "zustand/react/shallow";
 
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import { getSocket } from "../lib/socket";
@@ -3466,3 +3467,41 @@ export const useMessagesByConversation = (conversationId: string | null) =>
     if (!conversationId) return EMPTY_MESSAGES;
     return state.messages[conversationId] || EMPTY_MESSAGES;
   });
+
+export const useConversationCount = () =>
+  useChatStore((state) =>
+    Array.isArray(state.conversations) ? state.conversations.length : 0,
+  );
+
+export const useHasConversation = (conversationId: string | null) =>
+  useChatStore((state) =>
+    conversationId
+      ? (Array.isArray(state.conversations) ? state.conversations : []).some(
+          (conversation) => conversation.id === conversationId,
+        )
+      : false,
+  );
+
+export const useAdjacentConversationIds = (conversationId: string | null) =>
+  useChatStore(
+    useShallow((state) => {
+      const ordered = Array.isArray(state.conversations)
+        ? state.conversations
+        : [];
+      if (!conversationId) {
+        return [null, null] as [string | null, string | null];
+      }
+
+      const currentIndex = ordered.findIndex(
+        (conversation) => conversation.id === conversationId,
+      );
+      if (currentIndex < 0) {
+        return [null, null] as [string | null, string | null];
+      }
+
+      return [
+        ordered[currentIndex - 1]?.id ?? null,
+        ordered[currentIndex + 1]?.id ?? null,
+      ] as [string | null, string | null];
+    }),
+  );

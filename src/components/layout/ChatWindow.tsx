@@ -100,6 +100,41 @@ interface ChatWindowProps {
   className?: string;
 }
 
+interface ChatTimelinePaneProps {
+  messages: Message[];
+  conversationId: string;
+  conversationType: Conversation["type"];
+  currentUserId: string;
+  onReply: (message: Message) => void;
+  onReact: (messageId: string, emoji: string) => void;
+  onEdit?: (message: Message) => void | Promise<void>;
+  onDelete?: (messageId: string) => void | Promise<void>;
+  hasMoreMessages?: boolean;
+  isLoadingMessages?: boolean;
+  isConversationReady?: boolean;
+  onLoadOlderMessages?: () => void | Promise<void>;
+  onImageClick?: (imageUrl: string) => void;
+  onFilePreview?: (attachment: Attachment) => void;
+  messageError?: string | null;
+  onRetryMessages?: () => void | Promise<void>;
+  density: ReturnType<typeof resolveChatDensity>;
+  isSelectionMode: boolean;
+  selectedMessageIds: Set<string>;
+  onToggleSelect: (messageId: string) => void;
+  onNavigateToMessage?: (messageId: string) => void;
+  currentUsername?: string;
+  unreadMarker?: {
+    lastReadMessageId?: string;
+    lastReadAt?: Date | string;
+    active?: boolean;
+  } | null;
+  onReachedLatest?: (message: Message) => void;
+  jumpToMessageId?: string | null;
+  jumpRequestVersion?: number;
+  onJumpHandled?: (messageId: string) => void;
+  composerHeight?: number;
+}
+
 type EphemeralNotice = {
   kind: "info" | "warn" | "error" | "success";
   message: string;
@@ -118,6 +153,74 @@ const getEphemeralNoticeClassName = (kind: EphemeralNotice["kind"]): string => {
       return "border-primary/18 bg-surface/94 text-text-secondary";
   }
 };
+
+const ChatTimelinePane = React.memo(
+  ({
+    messages,
+    conversationId,
+    conversationType,
+    currentUserId,
+    onReply,
+    onReact,
+    onEdit,
+    onDelete,
+    hasMoreMessages,
+    isLoadingMessages,
+    isConversationReady,
+    onLoadOlderMessages,
+    onImageClick,
+    onFilePreview,
+    messageError,
+    onRetryMessages,
+    density,
+    isSelectionMode,
+    selectedMessageIds,
+    onToggleSelect,
+    onNavigateToMessage,
+    currentUsername,
+    unreadMarker,
+    onReachedLatest,
+    jumpToMessageId,
+    jumpRequestVersion,
+    onJumpHandled,
+    composerHeight,
+  }: ChatTimelinePaneProps) => (
+    <MessageList
+      messages={messages}
+      conversationId={conversationId}
+      conversationType={conversationType}
+      currentUserId={currentUserId}
+      onReply={onReply}
+      onReact={onReact}
+      onEdit={onEdit}
+      onDelete={onDelete}
+      hasMore={hasMoreMessages}
+      isLoadingMore={Boolean(isLoadingMessages && messages.length > 0)}
+      isInitialLoading={Boolean(
+        (isLoadingMessages || !isConversationReady) && messages.length === 0,
+      )}
+      onLoadMore={onLoadOlderMessages}
+      onImageClick={onImageClick}
+      onFilePreview={onFilePreview}
+      error={messageError}
+      onRetry={onRetryMessages}
+      density={density}
+      isSelectionMode={isSelectionMode}
+      selectedMessageIds={selectedMessageIds}
+      onToggleSelect={onToggleSelect}
+      onNavigateToMessage={onNavigateToMessage}
+      currentUsername={currentUsername}
+      unreadMarker={unreadMarker}
+      onReachedLatest={onReachedLatest}
+      jumpToMessageId={jumpToMessageId}
+      jumpRequestVersion={jumpRequestVersion}
+      onJumpHandled={onJumpHandled}
+      composerHeight={composerHeight}
+      className="flex-1 min-h-0"
+    />
+  ),
+);
+ChatTimelinePane.displayName = "ChatTimelinePane";
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
   conversation,
@@ -788,74 +891,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const currentUsername = currentUser.username;
 
-  const messageListNode = React.useMemo(
-    () => (
-      <MessageList
-        messages={messages}
-        conversationId={conversation.id}
-        conversationType={conversation.type}
-        currentUserId={currentUser.id}
-        onReply={handleReply}
-        onReact={handleReact}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        hasMore={hasMoreMessages}
-        isLoadingMore={Boolean(isLoadingMessages && messages.length > 0)}
-        isInitialLoading={Boolean(
-          (isLoadingMessages || !isConversationReady) && messages.length === 0,
-        )}
-        onLoadMore={onLoadOlderMessages}
-        onImageClick={onImageClick}
-        onFilePreview={onFilePreview}
-        error={messageError}
-        onRetry={onRetryMessages}
-        density={resolvedDensity}
-        isSelectionMode={isMessageSelectionMode}
-        selectedMessageIds={selectedMessageIds}
-        onToggleSelect={toggleMessageSelection}
-        onNavigateToMessage={handleNavigateToMessage}
-        currentUsername={currentUsername}
-        unreadMarker={unreadMarker}
-        onReachedLatest={handleReachedLatest}
-        jumpToMessageId={jumpTargetMessageId}
-        jumpRequestVersion={jumpRequestVersion}
-        onJumpHandled={handleJumpHandled}
-        composerHeight={composerHeight}
-        className="flex-1 min-h-0"
-      />
-    ),
-    [
-      conversation.id,
-      conversation.type,
-      currentUser.id,
-      handleReact,
-      handleReply,
-      handleEdit,
-      handleDelete,
-      hasMoreMessages,
-      isLoadingMessages,
-      isConversationReady,
-      messageError,
-      messages,
-      onImageClick,
-      onFilePreview,
-      onLoadOlderMessages,
-      onRetryMessages,
-      resolvedDensity,
-      handleJumpHandled,
-      handleNavigateToMessage,
-      handleReachedLatest,
-      composerHeight,
-      isMessageSelectionMode,
-      jumpRequestVersion,
-      jumpTargetMessageId,
-      selectedMessageIds,
-      toggleMessageSelection,
-      currentUsername,
-      unreadMarker,
-    ],
-  );
-
   return (
     <section
       key={conversation.id}
@@ -906,7 +941,36 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       )}
 
-      {messageListNode}
+      <ChatTimelinePane
+        messages={messages}
+        conversationId={conversation.id}
+        conversationType={conversation.type}
+        currentUserId={currentUser.id}
+        onReply={handleReply}
+        onReact={handleReact}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        hasMoreMessages={hasMoreMessages}
+        isLoadingMessages={isLoadingMessages}
+        isConversationReady={isConversationReady}
+        onLoadOlderMessages={onLoadOlderMessages}
+        onImageClick={onImageClick}
+        onFilePreview={onFilePreview}
+        messageError={messageError}
+        onRetryMessages={onRetryMessages}
+        density={resolvedDensity}
+        isSelectionMode={isMessageSelectionMode}
+        selectedMessageIds={selectedMessageIds}
+        onToggleSelect={toggleMessageSelection}
+        onNavigateToMessage={handleNavigateToMessage}
+        currentUsername={currentUsername}
+        unreadMarker={unreadMarker}
+        onReachedLatest={handleReachedLatest}
+        jumpToMessageId={jumpTargetMessageId}
+        jumpRequestVersion={jumpRequestVersion}
+        onJumpHandled={handleJumpHandled}
+        composerHeight={composerHeight}
+      />
 
       {ephemeralNotice &&
         bottomOverlayPlacements["ephemeral-notice"]?.visible && (

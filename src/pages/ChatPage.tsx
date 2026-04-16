@@ -31,6 +31,9 @@ import {
   useSelectedConversation,
   useCurrentMessages,
   useCurrentTypingStatus,
+  useConversationCount,
+  useHasConversation,
+  useAdjacentConversationIds,
 } from "../stores";
 import { useWebSocket } from "../hooks";
 import type { Attachment, Message, UserSummary } from "../types";
@@ -146,7 +149,6 @@ export const ChatPage: React.FC = () => {
     removeConversation,
     updateStoreMessage,
     removeStoreMessage,
-    conversations,
     isLoadingConversations,
     hasFetchedConversationsOnce,
     conversationsError,
@@ -162,7 +164,6 @@ export const ChatPage: React.FC = () => {
       removeConversation: state.removeConversation,
       updateStoreMessage: state.updateMessage,
       removeStoreMessage: state.removeMessage,
-      conversations: state.conversations,
       isLoadingConversations: state.isLoadingConversations,
       hasFetchedConversationsOnce: state.hasFetchedConversationsOnce,
       conversationsError: state.conversationsError,
@@ -199,6 +200,10 @@ export const ChatPage: React.FC = () => {
       ? Boolean(state.messagesHydratedByConversation[selectedConversationId])
       : false,
   );
+  const conversationCount = useConversationCount();
+  const hasConversationCachedForRoute = useHasConversation(routeConversationId);
+  const [previousConversationId, nextConversationId] =
+    useAdjacentConversationIds(selectedConversationId);
   // WebSocket
   const { connectionState, sendTyping, stopTyping, joinRoom, leaveRoom } =
     useWebSocket();
@@ -511,10 +516,6 @@ export const ChatPage: React.FC = () => {
     }
   }, [hasMoreConversations, isLoadingMoreConversations, t]);
 
-  const hasConversationCachedForRoute = Boolean(
-    routeConversationId &&
-      conversations.some((conversation) => conversation.id === routeConversationId),
-  );
   const canBootstrapConversationFromCache =
     hasConversationCachedForRoute && routeConversationId === selectedConversationId;
 
@@ -677,18 +678,9 @@ export const ChatPage: React.FC = () => {
       return;
     }
 
-    const orderedConversations = Array.isArray(conversations)
-      ? conversations
-      : [];
-    const currentIndex = orderedConversations.findIndex(
-      (conversation) => conversation.id === selectedConversationId,
+    const candidateRoomIds = [previousConversationId, nextConversationId].filter(
+      (id): id is string => typeof id === "string" && id.length > 0,
     );
-    if (currentIndex < 0) return;
-
-    const candidateRoomIds = [
-      orderedConversations[currentIndex - 1]?.id,
-      orderedConversations[currentIndex + 1]?.id,
-    ].filter((id): id is string => typeof id === "string" && id.length > 0);
     if (candidateRoomIds.length === 0) return;
 
     let isCancelled = false;
@@ -712,11 +704,9 @@ export const ChatPage: React.FC = () => {
     };
   }, [
     canBootstrapConversationFromCache,
-    conversations,
-    currentUserSummary?.displayName,
-    currentUserSummary?.id,
-    currentUserSummary?.username,
     isValidatingRoom,
+    nextConversationId,
+    previousConversationId,
     selectedConversationId,
   ]);
 
@@ -1081,8 +1071,47 @@ export const ChatPage: React.FC = () => {
   const shouldRenderInfoContent =
     isInfoPanelOpen || Boolean(profilePanelTarget);
   const showConversationSkeleton =
-    (!hasFetchedConversationsOnce && conversations.length === 0) ||
-    (isLoadingConversations && conversations.length === 0);
+    (!hasFetchedConversationsOnce && conversationCount === 0) ||
+    (isLoadingConversations && conversationCount === 0);
+
+  const previewGallery = useMemo<PreviewTarget[]>(() => {
+    if (!selectedConversation) {
+      return [];
+    }
+
+    return conversationMessages
+      .flatMap((msg) =>
+        (msg.attachments ?? []).map((att) => ({
+          attachment: att,
+          conversationId: selectedConversation.id,
+          messageId: msg.id,
+          previewType: getPreviewType(att.mimeType),
+        })),
+      )
+      .filter((target) => target.previewType !== "unsupported");
+  }, [conversationMessages, selectedConversation]);
+
+  const handleOpenFilePreview = useCallback(
+    (attachment: Attachment) => {
+      if (!selectedConversation) {
+        return;
+      }
+
+      const target: PreviewTarget = {
+        attachment,
+        conversationId: selectedConversation.id,
+        previewType: getPreviewType(attachment.mimeType),
+      };
+      filePreview.open(target, previewGallery.length > 0 ? previewGallery : undefined);
+    },
+    [filePreview, previewGallery, selectedConversation],
+  );
+
+  const handleExternalJumpHandled = useCallback((messageId: string) => {
+    setExternalJumpTargetMessageId((current) =>
+      current === messageId ? null : current,
+    );
+  }, []);
 
   useEffect(() => {
     if (!selectedConversationId) return;
@@ -1325,29 +1354,7 @@ export const ChatPage: React.FC = () => {
             isLoadingMessages={currentIsLoading || !isConversationHistoryReady}
             onLoadOlderMessages={handleLoadOlderMessages}
             onImageClick={setImagePreview}
-            onFilePreview={(attachment: Attachment) => {
-              const previewType = getPreviewType(attachment.mimeType);
-              const target: PreviewTarget = {
-                attachment,
-                conversationId: selectedConversation.id,
-                previewType,
-              };
-              // Build gallery from all previewable attachments in current messages
-              const gallery: PreviewTarget[] = conversationMessages
-                .flatMap((msg) =>
-                  (msg.attachments ?? []).map((att) => ({
-                    attachment: att,
-                    conversationId: selectedConversation.id,
-                    messageId: msg.id,
-                    previewType: getPreviewType(att.mimeType),
-                  })),
-                )
-                .filter((t) => t.previewType !== "unsupported");
-              filePreview.open(
-                target,
-                gallery.length > 0 ? gallery : undefined,
-              );
-            }}
+            onFilePreview={handleOpenFilePreview}
             messageError={currentMessageError}
             onRetryMessages={handleRetryMessages}
             onReachedLatestMessage={handleReachedLatestMessage}
@@ -1355,11 +1362,7 @@ export const ChatPage: React.FC = () => {
             isConversationReady={isConversationReady}
             externalJumpToMessageId={externalJumpTargetMessageId}
             externalJumpRequestVersion={externalJumpRequestVersion}
-            onExternalJumpHandled={(messageId) => {
-              setExternalJumpTargetMessageId((current) =>
-                current === messageId ? null : current,
-              );
-            }}
+            onExternalJumpHandled={handleExternalJumpHandled}
           />
         ) : routeConversationId &&
           conversationValidationError?.conversationId ===
