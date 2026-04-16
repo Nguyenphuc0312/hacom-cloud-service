@@ -11,6 +11,11 @@ const CODE_MESSAGE_MAP: Record<string, string> = {
     'Dich vu xac thuc admin dang tam thoi gian doan. Vui long thu lai.',
   AUTH_UPSTREAM_ENDPOINT_NOT_FOUND:
     'Dich vu xac thuc admin chua san sang endpoint noi bo can thiet.',
+  ACCESS_IP_PENDING: 'IP hien tai dang cho phe duyet.',
+  ACCESS_IP_REJECTED: 'IP hien tai da bi tu choi.',
+  ACCESS_IP_REVOKED: 'Quyen truy cap cua IP hien tai da bi thu hoi.',
+  ACCESS_IP_EXPIRED: 'Phe duyet cho IP hien tai da het han.',
+  CLIENT_IP_UNRESOLVED: 'Khong the xac dinh IP client thuc te.',
   USER_NOT_FOUND: 'Khong tim thay nguoi dung.',
   DUPLICATE_EMPLOYEE_CODE: 'Ma nhan vien da ton tai.',
   ACCOUNT_ALREADY_PROVISIONED: 'Nhan su nay da duoc cap tai khoan.',

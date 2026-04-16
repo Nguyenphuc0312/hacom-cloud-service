@@ -2,6 +2,7 @@ import {
   AuditOutlined,
   DashboardOutlined,
   FileTextOutlined,
+  SafetyCertificateOutlined,
   SolutionOutlined,
   TeamOutlined,
   ThunderboltOutlined,
@@ -110,6 +111,14 @@ export const navItems: NavItem[] = [
     route: '/services/health',
   },
   {
+    key: 'access-requests',
+    label: 'IP Access',
+    description: 'Review pending, approved, and rejected IP requests.',
+    icon: <SafetyCertificateOutlined />,
+    section: 'system',
+    route: '/access-requests',
+  },
+  {
     key: 'audit',
     label: 'Audit Logs',
     description: 'Admin actions, requests, and security events.',
@@ -123,6 +132,7 @@ export const breadcrumbNameMap: Record<string, string> = {
   '/': 'Dashboard',
   '/users': 'Users',
   '/hr-employees': 'HR Directory',
+  '/access-requests': 'IP Access',
   '/audit': 'Audit Logs',
   '/monitoring': 'Monitoring',
   '/services': 'Services',
@@ -171,6 +181,7 @@ export const pickSelectedMenuKey = (pathname: string): string => {
   if (pathname.startsWith('/users')) return 'users';
   if (pathname.startsWith('/hr-employees')) return 'hr-employees';
   if (pathname.startsWith('/services')) return 'email-templates';
+  if (pathname.startsWith('/access-requests')) return 'access-requests';
   if (pathname.startsWith('/audit')) return 'audit';
   return 'dashboard';
 };
@@ -260,5 +271,14 @@ export const commandRouteItems: CommandRouteItem[] = [
     icon: <AuditOutlined />,
     keywords: ['logs', 'audit', 'events'],
     route: '/audit',
+  },
+  {
+    id: 'go-access-requests',
+    label: 'IP Access Requests',
+    description: 'Review pending, approved, and rejected IP access requests',
+    category: 'System',
+    icon: <SafetyCertificateOutlined />,
+    keywords: ['ip', 'access', 'requests', 'approval', 'review'],
+    route: '/access-requests',
   },
 ];

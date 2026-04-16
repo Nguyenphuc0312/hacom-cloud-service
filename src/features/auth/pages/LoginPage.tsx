@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 
-import { authClient } from '@/api/clients';
+import { accessClient, authClient } from '@/api/clients';
 import { getErrorMessage } from '@/api/error';
 import { useAuthStore } from '@/store/authStore';
 
@@ -23,6 +23,7 @@ export const LoginPage = () => {
   const accessToken = useAuthStore((state) => state.accessToken);
   const setAuth = useAuthStore((state) => state.setAuth);
   const setUser = useAuthStore((state) => state.setUser);
+  const setAccess = useAuthStore((state) => state.setAccess);
   const clearAuth = useAuthStore((state) => state.clearAuth);
   const [qrCode, setQrCode] = useState('');
 
@@ -34,10 +35,17 @@ export const LoginPage = () => {
   const loginMutation = useMutation({
     mutationFn: authClient.login,
     onSuccess: async (data) => {
-      // Persist token first so subsequent /admin/me call carries Bearer auth.
       setAuth({ accessToken: data.accessToken, user: data.user ?? null });
 
       try {
+        const access = await accessClient.getCurrentStatus();
+        setAccess(access);
+
+        if (access.status !== 'approved') {
+          navigate('/access', { replace: true });
+          return;
+        }
+
         if (!data.user) {
           const me = await authClient.me();
           setUser(me);

@@ -1,4 +1,5 @@
 export * from './authClient';
+export * from './accessClient';
 export * from './currentAdminClient';
 export * from './monitoringClient';
 export * from './auditClient';
