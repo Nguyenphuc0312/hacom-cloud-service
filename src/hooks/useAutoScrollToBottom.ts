@@ -269,13 +269,19 @@ export const useAutoScrollToBottom = ({
   React.useEffect(() => {
     const previousMessages = prevMessagesRef.current;
     const firstMessageId = messages[0]?.id;
-
-    if (
+    const prependedMessageCount = messages.length - previousMessages.length;
+    const prependedOlderMessages =
       loadingOlderRef.current &&
+      prependedMessageCount > 0 &&
+      previousMessages.length > 0 &&
       firstMessageId &&
       prevFirstMessageIdRef.current &&
-      firstMessageId !== prevFirstMessageIdRef.current
-    ) {
+      firstMessageId !== prevFirstMessageIdRef.current &&
+      previousMessages.every(
+        (message, index) => messages[index + prependedMessageCount] === message,
+      );
+
+    if (prependedOlderMessages) {
       loadingOlderRef.current = false;
       setScrollMode(isPinnedRef.current ? "at_bottom" : "reading_history");
       onAfterPrepend?.();
@@ -331,12 +337,6 @@ export const useAutoScrollToBottom = ({
     requestScrollToBottom,
     updatePinnedState,
   ]);
-
-  React.useEffect(() => {
-    if (!isLoadingMore) {
-      loadingOlderRef.current = false;
-    }
-  }, [isLoadingMore]);
 
   React.useEffect(() => {
     if (messages.length !== 0) return;

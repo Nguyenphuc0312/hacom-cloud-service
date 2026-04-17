@@ -357,7 +357,7 @@ export const useVirtualizedMessages = <Item, ListData>({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [debugLabel, items.length, observeViewport, viewportRef]);
+  }, [debugLabel, observeViewport, viewportRef]);
 
   return {
     listRef,

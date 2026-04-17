@@ -3687,24 +3687,51 @@ export const useTotalUnreadCount = () => {
   return useChatStore((state) => state.totalUnreadCount);
 };
 
-export const selectConversationMessagesFromState = (
-  state: Pick<
-    ChatState,
-    "messageById" | "messageIdsByConversation" | "messages"
-  >,
-  conversationId: string | null,
-): Message[] => {
-  if (!conversationId) return EMPTY_MESSAGES;
+export const selectConversationMessagesFromState = (() => {
+  let lastConversationId: string | null = null;
+  let lastMessageIdsRef: string[] | undefined;
+  let lastMessageByIdRef: ChatState["messageById"] | null = null;
+  let lastResult: Message[] = EMPTY_MESSAGES;
 
-  const messageIds = state.messageIdsByConversation[conversationId];
-  if (Array.isArray(messageIds) && messageIds.length > 0) {
-    return messageIds
-      .map((messageId) => state.messageById[messageId])
-      .filter((message): message is Message => Boolean(message));
-  }
+  return (
+    state: Pick<
+      ChatState,
+      "messageById" | "messageIdsByConversation" | "messages"
+    >,
+    conversationId: string | null,
+  ): Message[] => {
+    if (!conversationId) {
+      lastConversationId = null;
+      lastMessageIdsRef = undefined;
+      lastMessageByIdRef = null;
+      lastResult = EMPTY_MESSAGES;
+      return EMPTY_MESSAGES;
+    }
 
-  return state.messages[conversationId] || EMPTY_MESSAGES;
-};
+    const messageIds = state.messageIdsByConversation[conversationId];
+    if (
+      conversationId === lastConversationId &&
+      messageIds === lastMessageIdsRef &&
+      state.messageById === lastMessageByIdRef
+    ) {
+      return lastResult;
+    }
+
+    const nextResult =
+      Array.isArray(messageIds) && messageIds.length > 0
+        ? messageIds
+            .map((messageId) => state.messageById[messageId])
+            .filter((message): message is Message => Boolean(message))
+        : (state.messages[conversationId] ?? EMPTY_MESSAGES);
+
+    lastConversationId = conversationId;
+    lastMessageIdsRef = messageIds;
+    lastMessageByIdRef = state.messageById;
+    lastResult = nextResult;
+
+    return nextResult;
+  };
+})();
 
 export const useCurrentMessages = () =>
   useChatStore(
