@@ -120,6 +120,16 @@ interface ChatWindowProps {
   onTyping?: (isTyping: boolean) => void;
   hasMoreMessages?: boolean;
   isLoadingMessages?: boolean;
+  historyLoadingState?: {
+    stage:
+      | "empty"
+      | "partial_unread_bootstrap"
+      | "partial_prefetch"
+      | "authoritative_initial_window"
+      | "paginating_older"
+      | "live_realtime";
+    isPartial: boolean;
+  } | null;
   onLoadOlderMessages?: () => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
@@ -146,6 +156,7 @@ interface ChatTimelinePaneProps {
   onDelete?: (messageId: string) => void | Promise<void>;
   hasMoreMessages?: boolean;
   isLoadingMessages?: boolean;
+  historyLoadingState?: ChatWindowProps["historyLoadingState"];
   isConversationReady?: boolean;
   onLoadOlderMessages?: () => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
@@ -205,6 +216,7 @@ const ChatTimelinePane = React.memo(
     onDelete,
     hasMoreMessages,
     isLoadingMessages,
+    historyLoadingState,
     isConversationReady,
     onLoadOlderMessages,
     onImageClick,
@@ -240,6 +252,7 @@ const ChatTimelinePane = React.memo(
       isInitialLoading={Boolean(
         (isLoadingMessages || !isConversationReady) && messages.length === 0,
       )}
+      historyLoadingState={historyLoadingState}
       onLoadMore={onLoadOlderMessages}
       onImageClick={onImageClick}
       onFilePreview={onFilePreview}
@@ -287,6 +300,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onTyping,
   hasMoreMessages,
   isLoadingMessages,
+  historyLoadingState,
   onLoadOlderMessages,
   onImageClick,
   onFilePreview,
@@ -1063,8 +1077,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         jumpToMessageId={jumpTargetMessageId}
         jumpRequestVersion={jumpRequestVersion}
         onJumpHandled={handleJumpHandled}
-        composerHeight={composerHeight}
-      />
+          composerHeight={composerHeight}
+          historyLoadingState={historyLoadingState}
+        />
 
       {ephemeralNotice &&
         bottomOverlayPlacements["ephemeral-notice"]?.visible && (

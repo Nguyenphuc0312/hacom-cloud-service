@@ -343,6 +343,8 @@ export const ChatPage: React.FC = () => {
     currentHasMore: sessionCurrentHasMore,
     currentIsLoading: sessionCurrentIsLoading,
     currentMessageError: sessionCurrentMessageError,
+    currentHistoryStage: sessionCurrentHistoryStage,
+    isHistoryPartial: sessionIsHistoryPartial,
     canBootstrapConversationFromCache: sessionCanBootstrapConversationFromCache,
     isCurrentRouteValidated: sessionIsCurrentRouteValidated,
     isConversationHistoryReady: sessionIsConversationHistoryReady,
@@ -1210,6 +1212,14 @@ export const ChatPage: React.FC = () => {
             hasMoreMessages={sessionCurrentHasMore}
             isLoadingMessages={
               sessionCurrentIsLoading || !sessionIsConversationHistoryReady
+            }
+            historyLoadingState={
+              sessionIsHistoryPartial
+                ? {
+                    stage: sessionCurrentHistoryStage,
+                    isPartial: sessionIsHistoryPartial,
+                  }
+                : null
             }
             onLoadOlderMessages={sessionHandleLoadOlderMessages}
             onImageClick={setImagePreview}

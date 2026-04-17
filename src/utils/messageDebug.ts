@@ -2,6 +2,7 @@ type MessageDebugEvent = {
   ts: string;
   scope: string;
   event: string;
+  level?: "debug" | "info" | "warn";
   details?: Record<string, unknown>;
 };
 
@@ -20,8 +21,13 @@ export const logMessageDebug = (
   scope: string,
   event: string,
   details?: Record<string, unknown>,
+  options?: {
+    alwaysOn?: boolean;
+    level?: "debug" | "info" | "warn";
+  },
 ): void => {
-  if (!isMessageDebugEnabled()) {
+  const shouldLog = options?.alwaysOn === true || isMessageDebugEnabled();
+  if (!shouldLog) {
     return;
   }
 
@@ -29,6 +35,7 @@ export const logMessageDebug = (
     ts: new Date().toISOString(),
     scope,
     event,
+    level: options?.level ?? "debug",
     details,
   };
 
@@ -37,6 +44,16 @@ export const logMessageDebug = (
     const existing = debugWindow.__chatMessageDebugEvents ?? [];
     const nextEvents = [...existing, entry];
     debugWindow.__chatMessageDebugEvents = nextEvents.slice(-300);
+  }
+
+  if (entry.level === "warn") {
+    console.warn("[chat-debug]", entry);
+    return;
+  }
+
+  if (entry.level === "info") {
+    console.info("[chat-debug]", entry);
+    return;
   }
 
   console.debug("[chat-debug]", entry);

@@ -40,6 +40,16 @@ interface MessageListProps {
   hasMore?: boolean;
   isLoadingMore?: boolean;
   isInitialLoading?: boolean;
+  historyLoadingState?: {
+    stage:
+      | "empty"
+      | "partial_unread_bootstrap"
+      | "partial_prefetch"
+      | "authoritative_initial_window"
+      | "paginating_older"
+      | "live_realtime";
+    isPartial: boolean;
+  } | null;
   onLoadMore?: () => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
@@ -625,6 +635,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   hasMore = false,
   isLoadingMore = false,
   isInitialLoading = false,
+  historyLoadingState,
   onLoadMore,
   onImageClick,
   onFilePreview,
@@ -1611,8 +1622,12 @@ const MessageListComponent: React.FC<MessageListProps> = ({
               message={error}
               onRetry={onRetry ? handleRetry : undefined}
             />
-          ) : messages.length === 0 ? (
+          ) : messages.length === 0 && !historyLoadingState?.isPartial ? (
             <EmptyMessages />
+          ) : messages.length === 0 ? (
+            <div className="flex h-full items-center justify-center px-6 text-sm text-text-secondary">
+              Dang tai lich su hoi thoai...
+            </div>
           ) : (
             <div
               ref={viewportRef}
@@ -1650,6 +1665,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
       <MessageListOverlays
         hasMessages={messages.length > 0}
+        historyLoadingState={historyLoadingState}
         stickyDate={stickyDate}
         showStickyDate={Boolean(topOverlayPlacements["sticky-date"]?.visible)}
         showError={Boolean(topOverlayPlacements.error?.visible)}
@@ -1691,6 +1707,7 @@ const areEqualMessageListProps = (
   previousProps.hasMore === nextProps.hasMore &&
   previousProps.isLoadingMore === nextProps.isLoadingMore &&
   previousProps.isInitialLoading === nextProps.isInitialLoading &&
+  previousProps.historyLoadingState === nextProps.historyLoadingState &&
   previousProps.onLoadMore === nextProps.onLoadMore &&
   previousProps.onImageClick === nextProps.onImageClick &&
   previousProps.onFilePreview === nextProps.onFilePreview &&

@@ -3,6 +3,7 @@ import { useAdjacentConversationIds, useChatStore } from "../../../stores";
 import {
   selectConversationMessagesFromState,
 } from "../../../stores/chatStore";
+import type { HistoryQueryType } from "../../../stores/chatStore";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
 import type { ConnectionState } from "../../../lib/socket";
 import type {
@@ -74,6 +75,10 @@ interface UseConversationSessionOptions {
       beforeId?: string;
       afterId?: string;
       syncReason?: "initial-sync" | "reconnect" | "room-refresh";
+      source?: string;
+      queryType?: HistoryQueryType;
+      requestId?: string;
+      selectedConversationIdAtDispatch?: string | null;
     },
   ) => Promise<unknown>;
   markAsRead: (
@@ -95,6 +100,14 @@ interface UseConversationSessionResult {
   currentIsLoading: boolean;
   currentMessageError: string | null;
   isSelectedConversationHydrated: boolean;
+  currentHistoryStage:
+    | "empty"
+    | "partial_unread_bootstrap"
+    | "partial_prefetch"
+    | "authoritative_initial_window"
+    | "paginating_older"
+    | "live_realtime";
+  isHistoryPartial: boolean;
   canBootstrapConversationFromCache: boolean;
   isCurrentRouteValidated: boolean;
   isConversationHistoryReady: boolean;
@@ -144,6 +157,18 @@ export const useConversationSession = ({
       ? Boolean(state.messagesHydratedByConversation[selectedConversationId])
       : false,
   );
+  const currentHistoryStage = useChatStore((state) =>
+    selectedConversationId
+      ? (state.historyStageByConversation[selectedConversationId] ?? "empty")
+      : "empty",
+  );
+  const hasAuthoritativeHistory = useChatStore((state) =>
+    selectedConversationId
+      ? Boolean(
+          state.hasAuthoritativeHistoryByConversation[selectedConversationId],
+        )
+      : false,
+  );
   const [previousConversationId, nextConversationId] =
     useAdjacentConversationIds(selectedConversationId);
   const lastVisibleReadAnchorKeyRef = useRef<string | null>(null);
@@ -173,7 +198,10 @@ export const useConversationSession = ({
       routeConversationId,
     ],
   );
-  const isConversationHistoryReady = isSelectedConversationHydrated;
+  const isHistoryPartial =
+    currentHistoryStage === "partial_unread_bootstrap" ||
+    currentHistoryStage === "partial_prefetch";
+  const isConversationHistoryReady = hasAuthoritativeHistory;
   const isConversationReady = Boolean(
     selectedConversationId &&
       selectedConversation &&
@@ -194,8 +222,9 @@ export const useConversationSession = ({
       const conversation =
         chatState.conversationById[selectedConversationId] ?? null;
       const isConversationHydrated =
-        chatState.messagesHydratedByConversation[selectedConversationId] ===
-        true;
+        chatState.hasAuthoritativeHistoryByConversation[
+          selectedConversationId
+        ] === true;
       const hasNewerMessages =
         chatState.hasNewerMessagesByConversation[selectedConversationId] ??
         false;
@@ -220,6 +249,7 @@ export const useConversationSession = ({
 
       if (shouldBootstrapUnreadFeed) {
         try {
+          const bootstrapRequestId = `unread:${selectedConversationId}:${Date.now()}`;
           const unreadFeedResponse = await conversationApi.getUnreadFeed(
             selectedConversationId,
             isConversationHydrated ? 1 : Math.min(Math.max(unreadCount, 20), 100),
@@ -231,9 +261,19 @@ export const useConversationSession = ({
             const chatState = useChatStore.getState();
             chatState.ingestMessages(selectedConversationId, unreadFeed.messages, {
               mode: "replace",
-              hydrated: true,
+              hydrated: false,
               hasNewer: unreadFeed.hasMore,
-              source: "unread-feed",
+              source: "unread_feed",
+              stage: "partial_unread_bootstrap",
+              hasAuthoritativeHistory: false,
+              prefetchedWindow: false,
+              requestContext: {
+                requestId: bootstrapRequestId,
+                queryType: "unread_feed",
+                source: "unread_feed",
+                selectedConversationIdAtDispatch: selectedConversationId,
+                historyScopeKey: null,
+              },
             });
             useChatStore.setState((state) => ({
               hasMoreMessages: {
@@ -249,25 +289,53 @@ export const useConversationSession = ({
             }));
             logMessageDebug("ChatPage", "unread_feed_bootstrap_completed", {
               conversationId: selectedConversationId,
+              requestId: bootstrapRequestId,
               loaded: unreadFeed.messages.length,
               hasMoreUnread: unreadFeed.hasMore,
               firstUnreadMessageId: unreadFeed.readState.firstUnreadMessageId,
+            }, {
+              alwaysOn: true,
+              level: "info",
             });
-            return;
           }
         } catch (error) {
           logMessageDebug("ChatPage", "unread_feed_bootstrap_failed", {
             conversationId: selectedConversationId,
             errorMessage: error instanceof Error ? error.message : "unknown_error",
+          }, {
+            alwaysOn: true,
+            level: "warn",
           });
         }
       }
 
-      if (!isConversationHydrated) {
-        const initialFetchResult = await fetchMessages(selectedConversationId);
+      const latestState = useChatStore.getState();
+      const latestStage =
+        latestState.historyStageByConversation[selectedConversationId] ?? "empty";
+      const latestHasAuthoritativeHistory =
+        latestState.hasAuthoritativeHistoryByConversation[selectedConversationId] ===
+        true;
+      if (
+        !latestHasAuthoritativeHistory ||
+        latestStage === "partial_unread_bootstrap" ||
+        latestStage === "partial_prefetch"
+      ) {
+        const initialFetchResult = await fetchMessages(
+          selectedConversationId,
+          undefined,
+          undefined,
+          {
+            source: "initial_fetch",
+            queryType: "authoritative_open",
+            selectedConversationIdAtDispatch: selectedConversationId,
+          },
+        );
         logMessageDebug("ChatPage", "initial_fetch_completed", {
           conversationId: selectedConversationId,
           result: initialFetchResult,
+        }, {
+          alwaysOn: true,
+          level: "info",
         });
       }
     })();
@@ -379,10 +447,16 @@ export const useConversationSession = ({
         for (const candidateRoomId of candidateRoomIds) {
           if (isCancelled) return;
           const state = useChatStore.getState();
-          if (state.messagesHydratedByConversation[candidateRoomId]) continue;
+          if (state.hasAuthoritativeHistoryByConversation[candidateRoomId]) {
+            continue;
+          }
           if (state.isLoadingMessagesByConversation[candidateRoomId]) continue;
           await state.fetchMessages(candidateRoomId, undefined, undefined, {
             limit: 20,
+            source: "prefetch_adjacent",
+            queryType: "prefetch",
+            selectedConversationIdAtDispatch:
+              state.selectedConversationId ?? null,
           });
         }
       })();
@@ -474,6 +548,8 @@ export const useConversationSession = ({
     currentIsLoading,
     currentMessageError,
     isSelectedConversationHydrated,
+    currentHistoryStage,
+    isHistoryPartial,
     canBootstrapConversationFromCache,
     isCurrentRouteValidated,
     isConversationHistoryReady,

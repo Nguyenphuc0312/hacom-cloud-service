@@ -6,6 +6,16 @@ import { formatDateDivider } from "../../utils/formatTime";
 
 interface MessageListOverlaysProps {
   hasMessages: boolean;
+  historyLoadingState?: {
+    stage:
+      | "empty"
+      | "partial_unread_bootstrap"
+      | "partial_prefetch"
+      | "authoritative_initial_window"
+      | "paginating_older"
+      | "live_realtime";
+    isPartial: boolean;
+  } | null;
   stickyDate: Date | null;
   showStickyDate: boolean;
   showError: boolean;
@@ -28,6 +38,7 @@ interface MessageListOverlaysProps {
 export const MessageListOverlays = React.memo(
   ({
     hasMessages,
+    historyLoadingState,
     stickyDate,
     showStickyDate,
     showError,
@@ -84,6 +95,14 @@ export const MessageListOverlays = React.memo(
         {showLoadingMore && (
           <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full border border-border bg-surface/90 px-4 py-1.5 text-xs text-text-secondary shadow-xs animate-slide-up-fade">
             {loadMoreLabel}
+          </div>
+        )}
+
+        {hasMessages && historyLoadingState?.isPartial && (
+          <div className="pointer-events-none absolute inset-x-[var(--chat-lane-padding)] top-11 z-[4] flex justify-center">
+            <div className="rounded-full border border-primary/20 bg-surface/95 px-3 py-1 text-xs text-text-secondary shadow-xs backdrop-blur">
+              Dang tai them lich su
+            </div>
           </div>
         )}
 

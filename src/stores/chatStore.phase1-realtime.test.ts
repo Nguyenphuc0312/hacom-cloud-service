@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MessageStatus, MessageType } from "../types";
 import { useNotificationStore } from "../features/notification/state/notificationStore";
 import { sortConversationsByActivity } from "../utils/conversationRanking";
+import { useAuthStore } from "./authStore";
 
 const {
   getMessagesMock,
@@ -92,6 +93,17 @@ describe("chatStore phase-1 realtime flows", () => {
   beforeEach(() => {
     useChatStore.getState().reset();
     useNotificationStore.getState().reset();
+    useAuthStore.setState({
+      user: {
+        id: "user-a",
+        username: "alice",
+        status: "online",
+      },
+      isAuthenticated: true,
+      isInitialized: true,
+      isLoading: false,
+      error: null,
+    });
     getMessagesMock.mockReset();
     sendMessageMock.mockReset();
     conversationMarkAsReadMock.mockReset();
@@ -333,6 +345,174 @@ describe("chatStore phase-1 realtime flows", () => {
     expect(conversation?.unreadCount).toBe(4);
     expect(conversation?.lastReadMessageId).toBe("msg-old");
     expect(conversation?.firstUnreadMessageId).toBe("msg-first-unread");
+  });
+
+  it("does not promote adjacent prefetch to authoritative history", async () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+      }),
+    ] as never);
+
+    getMessagesMock.mockResolvedValueOnce({
+      success: true,
+      statusCode: 200,
+      message: "ok",
+      data: {
+        messages: [
+          makeMessage({
+            id: "msg-prefetch",
+            createdAt: "2026-04-10T10:10:00.000Z",
+            updatedAt: "2026-04-10T10:10:00.000Z",
+          }),
+        ],
+        hasNext: false,
+        hasPrev: true,
+      },
+    });
+
+    await useChatStore.getState().fetchMessages("room-1", undefined, undefined, {
+      limit: 20,
+      queryType: "prefetch",
+      source: "prefetch_adjacent",
+      selectedConversationIdAtDispatch: "room-2",
+    });
+
+    const state = useChatStore.getState();
+    expect(state.historyStageByConversation["room-1"]).toBe("partial_prefetch");
+    expect(state.hasAuthoritativeHistoryByConversation["room-1"]).toBe(false);
+    expect(state.messagesHydratedByConversation["room-1"]).toBe(false);
+    expect(state.prefetchedWindowByConversation["room-1"]).toBe(true);
+  });
+
+  it("promotes partial history to authoritative on authoritative open fetch", async () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+      }),
+    ] as never);
+    useChatStore.getState().selectConversation("room-1");
+    useChatStore.getState().ingestMessages(
+      "room-1",
+      [
+        makeMessage({
+          id: "msg-unread-1",
+          createdAt: "2026-04-10T10:05:00.000Z",
+          updatedAt: "2026-04-10T10:05:00.000Z",
+        }),
+      ] as never,
+      {
+        mode: "replace",
+        hydrated: false,
+        source: "unread_feed",
+        stage: "partial_unread_bootstrap",
+        hasAuthoritativeHistory: false,
+      },
+    );
+
+    getMessagesMock.mockResolvedValueOnce({
+      success: true,
+      statusCode: 200,
+      message: "ok",
+      data: {
+        messages: [
+          makeMessage({
+            id: "msg-read-1",
+            createdAt: "2026-04-10T10:00:00.000Z",
+            updatedAt: "2026-04-10T10:00:00.000Z",
+          }),
+          makeMessage({
+            id: "msg-unread-1",
+            createdAt: "2026-04-10T10:05:00.000Z",
+            updatedAt: "2026-04-10T10:05:00.000Z",
+          }),
+        ],
+        hasNext: false,
+        hasPrev: false,
+      },
+    });
+
+    await useChatStore.getState().fetchMessages("room-1", undefined, undefined, {
+      force: true,
+      queryType: "authoritative_open",
+      source: "initial_fetch",
+      selectedConversationIdAtDispatch: "room-1",
+    });
+
+    const state = useChatStore.getState();
+    expect(state.historyStageByConversation["room-1"]).toBe(
+      "authoritative_initial_window",
+    );
+    expect(state.hasAuthoritativeHistoryByConversation["room-1"]).toBe(true);
+    expect(state.messagesHydratedByConversation["room-1"]).toBe(true);
+    expect((state.messages["room-1"] || []).map((message) => message.id)).toEqual([
+      "msg-read-1",
+      "msg-unread-1",
+    ]);
+  });
+
+  it("ignores authoritative open response when room selection changed before commit", async () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+      }),
+      makeConversation({
+        id: "room-2",
+        conversationId: "room-2",
+      }),
+    ] as never);
+    useChatStore.getState().selectConversation("room-1");
+
+    const deferred = createDeferred<{
+      success: boolean;
+      statusCode: number;
+      message: string;
+      data: {
+        messages: Array<Record<string, unknown>>;
+        hasNext: boolean;
+        hasPrev: boolean;
+      };
+    }>();
+    getMessagesMock.mockReturnValueOnce(deferred.promise);
+
+    const request = useChatStore.getState().fetchMessages(
+      "room-1",
+      undefined,
+      undefined,
+      {
+        force: true,
+        queryType: "authoritative_open",
+        source: "initial_fetch",
+        selectedConversationIdAtDispatch: "room-1",
+      },
+    );
+
+    useChatStore.getState().selectConversation("room-2");
+    deferred.resolve({
+      success: true,
+      statusCode: 200,
+      message: "ok",
+      data: {
+        messages: [
+          makeMessage({
+            id: "msg-room-1",
+            createdAt: "2026-04-10T10:00:00.000Z",
+            updatedAt: "2026-04-10T10:00:00.000Z",
+          }),
+        ],
+        hasNext: false,
+        hasPrev: false,
+      },
+    });
+    await request;
+
+    const state = useChatStore.getState();
+    expect(state.messages["room-1"] ?? []).toHaveLength(0);
+    expect(state.hasAuthoritativeHistoryByConversation["room-1"]).toBeFalsy();
+    expect(state.messagesHydratedByConversation["room-1"]).toBeFalsy();
   });
 
   it("preserves websocket delta that lands while initial snapshot is still in flight", async () => {

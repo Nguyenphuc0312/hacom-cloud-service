@@ -55,6 +55,14 @@ interface ChatState {
   messageIdsByConversation: Record<string, string[]>;
   messageAliasIndexByConversation: Record<string, Record<string, string>>;
   messagesHydratedByConversation: Record<string, boolean>;
+  historyStageByConversation: Record<string, HistoryStage>;
+  hasAuthoritativeHistoryByConversation: Record<string, boolean>;
+  prefetchedWindowByConversation: Record<string, boolean>;
+  historyScopeKeyByConversation: Record<string, string | null>;
+  latestHistoryRequestByConversation: Record<
+    string,
+    ConversationHistoryRequest | undefined
+  >;
   selectedConversationId: string | null;
   typingStatuses: TypingStatus[];
   searchQuery: string;
@@ -144,6 +152,12 @@ interface ChatState {
       hydrated?: boolean;
       hasNewer?: boolean;
       source?: string;
+      incrementUnread?: boolean;
+      stage?: HistoryStage;
+      hasAuthoritativeHistory?: boolean;
+      prefetchedWindow?: boolean;
+      historyScopeKey?: string | null;
+      requestContext?: ConversationHistoryRequest;
     },
   ) => void;
   setMessages: (conversationId: string, messages: Message[]) => void;
@@ -214,12 +228,42 @@ interface FetchMessagesResult {
   applied: boolean;
 }
 
+export type HistoryStage =
+  | "empty"
+  | "partial_unread_bootstrap"
+  | "partial_prefetch"
+  | "authoritative_initial_window"
+  | "paginating_older"
+  | "live_realtime";
+
+export type HistoryQueryType =
+  | "authoritative_open"
+  | "prefetch"
+  | "pagination_older"
+  | "pagination_newer"
+  | "room_refresh"
+  | "unread_feed"
+  | "optimistic"
+  | "websocket";
+
+interface ConversationHistoryRequest {
+  requestId: string;
+  queryType: HistoryQueryType;
+  source: string;
+  selectedConversationIdAtDispatch: string | null;
+  historyScopeKey: string | null;
+}
+
 interface FetchMessagesOptions {
   force?: boolean;
   limit?: number;
   beforeId?: string;
   afterId?: string;
   syncReason?: "initial-sync" | "reconnect" | "room-refresh";
+  source?: string;
+  queryType?: HistoryQueryType;
+  requestId?: string;
+  selectedConversationIdAtDispatch?: string | null;
 }
 
 const initialState = {
@@ -235,6 +279,11 @@ const initialState = {
   messageIdsByConversation: {},
   messageAliasIndexByConversation: {},
   messagesHydratedByConversation: {},
+  historyStageByConversation: {},
+  hasAuthoritativeHistoryByConversation: {},
+  prefetchedWindowByConversation: {},
+  historyScopeKeyByConversation: {},
+  latestHistoryRequestByConversation: {},
   selectedConversationId: null,
   typingStatuses: [],
   searchQuery: "",
@@ -306,6 +355,49 @@ const asStringValue = (value: unknown): string | undefined =>
 
 const asNumberValue = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) ? value : undefined;
+
+const buildHistoryRequestId = (
+  conversationId: string,
+  queryType: HistoryQueryType,
+): string =>
+  `${queryType}:${conversationId}:${Date.now()}:${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
+
+const buildHistoryScopeKey = (conversationId: string): string | null => {
+  const currentUserId = useAuthStore.getState().user?.id;
+  if (!currentUserId) {
+    return null;
+  }
+
+  return ["global", "global", "global", currentUserId, conversationId].join(
+    "|",
+  );
+};
+
+const isAuthoritativeHistoryStage = (stage: HistoryStage | undefined): boolean =>
+  stage === "authoritative_initial_window" || stage === "live_realtime";
+
+const isPartialHistoryStage = (stage: HistoryStage | undefined): boolean =>
+  stage === "partial_unread_bootstrap" || stage === "partial_prefetch";
+
+const resolveHistoryStage = (
+  currentStage: HistoryStage | undefined,
+  options?: {
+    stage?: HistoryStage;
+    hasAuthoritativeHistory?: boolean;
+  },
+): HistoryStage => {
+  if (options?.hasAuthoritativeHistory) {
+    return options.stage ?? "authoritative_initial_window";
+  }
+
+  if (options?.stage) {
+    return options.stage;
+  }
+
+  return currentStage ?? "empty";
+};
 
 const getCorrelationKeyForMessage = (
   message: Pick<
@@ -1653,12 +1745,22 @@ const buildConversationMessageState = (
     | "messageAliasIndexByConversation"
     | "messagesHydratedByConversation"
     | "hasNewerMessagesByConversation"
+    | "historyStageByConversation"
+    | "hasAuthoritativeHistoryByConversation"
+    | "prefetchedWindowByConversation"
+    | "historyScopeKeyByConversation"
+    | "latestHistoryRequestByConversation"
   >,
   conversationId: string,
   nextMessages: Message[],
   options?: {
     hydrated?: boolean;
     hasNewer?: boolean;
+    stage?: HistoryStage;
+    hasAuthoritativeHistory?: boolean;
+    prefetchedWindow?: boolean;
+    historyScopeKey?: string | null;
+    requestContext?: ConversationHistoryRequest;
   },
 ) => {
   const resolvedMessages = attachReplySnapshots(nextMessages);
@@ -1741,6 +1843,30 @@ const buildConversationMessageState = (
     resolvedMessages,
   );
 
+  const nextHistoryScopeKey =
+    options?.historyScopeKey ??
+    state.historyScopeKeyByConversation[conversationId] ??
+    buildHistoryScopeKey(conversationId);
+  const nextHasAuthoritativeHistory =
+    options?.hasAuthoritativeHistory ??
+    state.hasAuthoritativeHistoryByConversation[conversationId] ??
+    false;
+  const nextHistoryStage = resolveHistoryStage(
+    state.historyStageByConversation[conversationId],
+    {
+      stage: options?.stage,
+      hasAuthoritativeHistory: nextHasAuthoritativeHistory,
+    },
+  );
+  const nextPrefetchedWindow =
+    options?.prefetchedWindow ??
+    (nextHasAuthoritativeHistory
+      ? false
+      : state.prefetchedWindowByConversation[conversationId] ?? false);
+  const nextHydrated =
+    options?.hydrated ??
+    (nextHasAuthoritativeHistory && Boolean(nextHistoryScopeKey));
+
   return {
     conversations,
     messages: {
@@ -1754,10 +1880,7 @@ const buildConversationMessageState = (
     },
     messagesHydratedByConversation: {
       ...state.messagesHydratedByConversation,
-      [conversationId]:
-        options?.hydrated ??
-        state.messagesHydratedByConversation[conversationId] ??
-        false,
+      [conversationId]: nextHydrated,
     },
     hasNewerMessagesByConversation:
       options?.hasNewer === undefined
@@ -1766,6 +1889,28 @@ const buildConversationMessageState = (
             ...state.hasNewerMessagesByConversation,
             [conversationId]: options.hasNewer,
           },
+    historyStageByConversation: {
+      ...state.historyStageByConversation,
+      [conversationId]: nextHistoryStage,
+    },
+    hasAuthoritativeHistoryByConversation: {
+      ...state.hasAuthoritativeHistoryByConversation,
+      [conversationId]: nextHasAuthoritativeHistory,
+    },
+    prefetchedWindowByConversation: {
+      ...state.prefetchedWindowByConversation,
+      [conversationId]: nextPrefetchedWindow,
+    },
+    historyScopeKeyByConversation: {
+      ...state.historyScopeKeyByConversation,
+      [conversationId]: nextHistoryScopeKey,
+    },
+    latestHistoryRequestByConversation: {
+      ...state.latestHistoryRequestByConversation,
+      ...(options?.requestContext
+        ? { [conversationId]: options.requestContext }
+        : {}),
+    },
     ...buildConversationCollectionState(conversations),
   };
 };
@@ -1808,6 +1953,11 @@ const ingestConversationMessagesWithMetadata = (
     | "messageAliasIndexByConversation"
     | "messagesHydratedByConversation"
     | "hasNewerMessagesByConversation"
+    | "historyStageByConversation"
+    | "hasAuthoritativeHistoryByConversation"
+    | "prefetchedWindowByConversation"
+    | "historyScopeKeyByConversation"
+    | "latestHistoryRequestByConversation"
   >,
   conversationId: string,
   messages: Message | Message[],
@@ -1818,6 +1968,11 @@ const ingestConversationMessagesWithMetadata = (
     hasNewer?: boolean;
     source?: string;
     incrementUnread?: boolean;
+    stage?: HistoryStage;
+    hasAuthoritativeHistory?: boolean;
+    prefetchedWindow?: boolean;
+    historyScopeKey?: string | null;
+    requestContext?: ConversationHistoryRequest;
   },
 ) => {
   const incomingList = (Array.isArray(messages) ? messages : [messages])
@@ -1853,8 +2008,13 @@ const ingestConversationMessagesWithMetadata = (
           ? appendMessages(currentMessages, incomingList)
           : mergeMessages(currentMessages, incomingList);
   const messageState = buildConversationMessageState(state, conversationId, nextMessages, {
-    hydrated: options?.hydrated ?? true,
+    hydrated: options?.hydrated,
     hasNewer: options?.hasNewer,
+    stage: options?.stage,
+    hasAuthoritativeHistory: options?.hasAuthoritativeHistory,
+    prefetchedWindow: options?.prefetchedWindow,
+    historyScopeKey: options?.historyScopeKey,
+    requestContext: options?.requestContext,
   });
   const mergedMessage = getResolvedMergedMessage(nextMessages, incomingList);
   const unreadDelta =
@@ -2513,6 +2673,31 @@ export const useChatStore = create<ChatState>()(
                 ([key]) => key !== id,
               ),
             ),
+            historyStageByConversation: Object.fromEntries(
+              Object.entries(state.historyStageByConversation).filter(
+                ([key]) => key !== id,
+              ),
+            ),
+            hasAuthoritativeHistoryByConversation: Object.fromEntries(
+              Object.entries(state.hasAuthoritativeHistoryByConversation).filter(
+                ([key]) => key !== id,
+              ),
+            ),
+            prefetchedWindowByConversation: Object.fromEntries(
+              Object.entries(state.prefetchedWindowByConversation).filter(
+                ([key]) => key !== id,
+              ),
+            ),
+            historyScopeKeyByConversation: Object.fromEntries(
+              Object.entries(state.historyScopeKeyByConversation).filter(
+                ([key]) => key !== id,
+              ),
+            ),
+            latestHistoryRequestByConversation: Object.fromEntries(
+              Object.entries(state.latestHistoryRequestByConversation).filter(
+                ([key]) => key !== id,
+              ),
+            ),
             hasMoreMessages: Object.fromEntries(
               Object.entries(state.hasMoreMessages).filter(([key]) => key !== id),
             ),
@@ -2819,16 +3004,22 @@ export const useChatStore = create<ChatState>()(
       setMessages: (conversationId, messages) => {
         get().ingestMessages(conversationId, messages, {
           mode: "replace",
-          hydrated: true,
+          hasAuthoritativeHistory: true,
+          stage: "authoritative_initial_window",
           hasNewer: false,
           source: "setMessages",
+          historyScopeKey: buildHistoryScopeKey(conversationId),
         });
       },
 
       addMessage: (conversationId, message) => {
         get().ingestMessages(conversationId, message, {
           mode: "upsert",
-          hydrated: true,
+          stage: isAuthoritativeHistoryStage(
+            get().historyStageByConversation[conversationId],
+          )
+            ? "live_realtime"
+            : get().historyStageByConversation[conversationId] ?? "empty",
           source: "addMessage",
         });
       },
@@ -2855,7 +3046,11 @@ export const useChatStore = create<ChatState>()(
           },
           {
             mode: "upsert",
-            hydrated: true,
+            stage: isAuthoritativeHistoryStage(
+              get().historyStageByConversation[conversationId],
+            )
+              ? "live_realtime"
+              : get().historyStageByConversation[conversationId] ?? "empty",
             source: "ackOutgoingMessage",
           },
         );
@@ -2881,7 +3076,19 @@ export const useChatStore = create<ChatState>()(
             message,
             {
               mode: "upsert",
-              hydrated: options?.hydrated ?? true,
+              stage:
+                options?.source === "message:new" ||
+                options?.source === "message:updated" ||
+                options?.source === "realtime"
+                  ? isAuthoritativeHistoryStage(
+                      state.historyStageByConversation[conversationId],
+                    )
+                    ? "live_realtime"
+                    : state.historyStageByConversation[conversationId] ?? "empty"
+                  : state.historyStageByConversation[conversationId] ?? "empty",
+              hasAuthoritativeHistory:
+                state.hasAuthoritativeHistoryByConversation[conversationId] ??
+                false,
               source: options?.source ?? "realtime",
               incrementUnread: options?.incrementUnread,
             },
@@ -2942,7 +3149,14 @@ export const useChatStore = create<ChatState>()(
           });
 
           return buildConversationMessageState(state, conversationId, updatedMessages, {
-            hydrated: true,
+            stage:
+              state.historyStageByConversation[conversationId] ??
+              (state.hasAuthoritativeHistoryByConversation[conversationId]
+                ? "authoritative_initial_window"
+                : "empty"),
+            hasAuthoritativeHistory:
+              state.hasAuthoritativeHistoryByConversation[conversationId] ??
+              false,
           });
         });
       },
@@ -2982,7 +3196,9 @@ export const useChatStore = create<ChatState>()(
             },
             messagesHydratedByConversation: {
               ...state.messagesHydratedByConversation,
-              [conversationId]: true,
+              [conversationId]:
+                state.hasAuthoritativeHistoryByConversation[conversationId] ??
+                false,
             },
           };
         });
@@ -3022,7 +3238,16 @@ export const useChatStore = create<ChatState>()(
             state,
             conversationId,
             updatedMessages,
-            { hydrated: true },
+            {
+              stage:
+                state.historyStageByConversation[conversationId] ??
+                (state.hasAuthoritativeHistoryByConversation[conversationId]
+                  ? "authoritative_initial_window"
+                  : "empty"),
+              hasAuthoritativeHistory:
+                state.hasAuthoritativeHistoryByConversation[conversationId] ??
+                false,
+            },
           );
           if (currentMessage) {
             const nextAliasIndex = {
@@ -3049,15 +3274,39 @@ export const useChatStore = create<ChatState>()(
         const fetchRequestedAt = new Date();
         const syncReason = options?.syncReason;
         const forceRefresh = options?.force === true;
+        const selectedConversationIdAtDispatch =
+          options?.selectedConversationIdAtDispatch ??
+          get().selectedConversationId;
+        const queryType: HistoryQueryType =
+          options?.queryType ??
+          (fetchMode === "older"
+            ? "pagination_older"
+            : fetchMode === "newer"
+              ? "pagination_newer"
+              : "authoritative_open");
+        const requestId =
+          options?.requestId ?? buildHistoryRequestId(conversationId, queryType);
+        const historyScopeKey = buildHistoryScopeKey(conversationId);
+        const requestContext: ConversationHistoryRequest = {
+          requestId,
+          queryType,
+          source: options?.source ?? queryType,
+          selectedConversationIdAtDispatch,
+          historyScopeKey,
+        };
+        const hasAuthoritativeHistory =
+          get().hasAuthoritativeHistoryByConversation[conversationId] === true;
         if (
           fetchMode === "newer" &&
           syncReason === "initial-sync" &&
-          get().messagesHydratedByConversation[conversationId] &&
+          hasAuthoritativeHistory &&
           get().hasNewerMessagesByConversation[conversationId] === false
         ) {
           logMessageDebug("chatStore", "fetch_blocked_known_latest", {
             conversationId,
             fetchMode,
+            queryType,
+            requestId,
             syncReason,
             before,
             after,
@@ -3076,7 +3325,8 @@ export const useChatStore = create<ChatState>()(
         if (
           isInitialFetch &&
           !forceRefresh &&
-          get().messagesHydratedByConversation[conversationId]
+          queryType === "authoritative_open" &&
+          hasAuthoritativeHistory
         ) {
           return {
             loaded: 0,
@@ -3114,7 +3364,11 @@ export const useChatStore = create<ChatState>()(
           error: null,
           messageErrors: {
             ...state.messageErrors,
-            [conversationId]: null,
+              [conversationId]: null,
+          },
+          latestHistoryRequestByConversation: {
+            ...state.latestHistoryRequestByConversation,
+            [conversationId]: requestContext,
           },
         }));
 
@@ -3135,6 +3389,9 @@ export const useChatStore = create<ChatState>()(
           logMessageDebug("chatStore", "fetch_requested", {
             conversationId,
             fetchMode,
+            queryType,
+            requestId,
+            source: requestContext.source,
             syncReason,
             forceRefresh,
             fetchRequestedAt: fetchRequestedAt.toISOString(),
@@ -3145,6 +3402,11 @@ export const useChatStore = create<ChatState>()(
             limit,
             initialFetchSeq,
             fetchGeneration,
+            selectedConversationIdAtDispatch,
+            historyScopeKey,
+          }, {
+            alwaysOn: queryType === "authoritative_open",
+            level: "info",
           });
 
           const response = await messageApi.getMessages(conversationId, {
@@ -3201,6 +3463,8 @@ export const useChatStore = create<ChatState>()(
             : normalized.hasPrev;
 
           set((state) => {
+            const selectedConversationIdAtCommit =
+              state.selectedConversationId ?? null;
             if (
               initialFetchSeq !== null &&
               initialFetchSeqByConversation.get(conversationId) !==
@@ -3212,6 +3476,8 @@ export const useChatStore = create<ChatState>()(
                 initialFetchSeq,
                 activeInitialFetchSeq:
                   initialFetchSeqByConversation.get(conversationId) ?? null,
+                queryType,
+                requestId,
               });
               return state;
             }
@@ -3226,30 +3492,118 @@ export const useChatStore = create<ChatState>()(
                 activeGeneration:
                   messageFetchGenerationByConversation.get(conversationId) ??
                   null,
+                queryType,
+                requestId,
+              });
+              return state;
+            }
+            if (
+              queryType === "authoritative_open" &&
+              selectedConversationIdAtDispatch === conversationId &&
+              selectedConversationIdAtCommit !== conversationId
+            ) {
+              logMessageDebug("chatStore", "fetch_stale_room_switch_ignored", {
+                conversationId,
+                fetchMode,
+                queryType,
+                requestId,
+                selectedConversationIdAtDispatch,
+                selectedConversationIdAtCommit,
+              }, {
+                alwaysOn: true,
+                level: "warn",
               });
               return state;
             }
 
             const existingMessages = state.messages[conversationId] || [];
+            const currentlyAuthoritative =
+              state.hasAuthoritativeHistoryByConversation[conversationId] ===
+              true;
+            const currentStage =
+              state.historyStageByConversation[conversationId] ?? "empty";
+            const shouldPromoteToAuthoritative =
+              queryType === "authoritative_open" &&
+              Boolean(historyScopeKey) &&
+              selectedConversationIdAtCommit === conversationId;
+            const isAuthoritativeWindowResolved =
+              normalized.messages.length > 0 ||
+              (queryType === "authoritative_open" &&
+                normalized.hasPrev === false &&
+                normalized.hasNext === false);
+            const shouldIgnorePartialCommit =
+              queryType === "prefetch" && currentlyAuthoritative;
+            if (shouldIgnorePartialCommit) {
+              logMessageDebug("chatStore", "fetch_partial_ignored", {
+                conversationId,
+                fetchMode,
+                queryType,
+                requestId,
+                reason: "authoritative_history_already_present",
+                responseCount: normalized.messages.length,
+              }, {
+                alwaysOn: true,
+                level: "info",
+              });
+              return {
+                ...state,
+                latestHistoryRequestByConversation: {
+                  ...state.latestHistoryRequestByConversation,
+                  [conversationId]: requestContext,
+                },
+              };
+            }
+
             const nextMessages =
-              fetchMode === "initial"
+              queryType === "authoritative_open"
                 ? replaceMessages(existingMessages, normalized.messages, {
                     preserveMessagesCreatedAfter: fetchRequestedAt,
                   })
                 : fetchMode === "older"
                   ? prependMessages(existingMessages, normalized.messages)
-                  : appendMessages(existingMessages, normalized.messages);
+                  : fetchMode === "newer"
+                    ? appendMessages(existingMessages, normalized.messages)
+                    : mergeMessages(existingMessages, normalized.messages);
             const mergedMessages = nextMessages;
+            const nextStage: HistoryStage =
+              shouldPromoteToAuthoritative
+                ? "authoritative_initial_window"
+                : queryType === "prefetch"
+                  ? "partial_prefetch"
+                  : queryType === "pagination_older"
+                    ? "paginating_older"
+                    : queryType === "pagination_newer" ||
+                        queryType === "room_refresh"
+                      ? currentlyAuthoritative
+                        ? "live_realtime"
+                        : currentStage
+                      : currentStage;
             const messageState = buildConversationMessageState(
               state,
               conversationId,
               mergedMessages,
               {
-                hydrated: true,
+                hydrated:
+                  shouldPromoteToAuthoritative &&
+                  isAuthoritativeWindowResolved,
                 hasNewer:
                   fetchMode === "initial" || fetchMode === "newer"
                     ? normalized.hasNext
                     : undefined,
+                stage: nextStage,
+                hasAuthoritativeHistory:
+                  shouldPromoteToAuthoritative
+                    ? isAuthoritativeWindowResolved
+                    : currentlyAuthoritative,
+                prefetchedWindow:
+                  queryType === "prefetch"
+                    ? true
+                    : shouldPromoteToAuthoritative
+                      ? false
+                      : state.prefetchedWindowByConversation[conversationId] ??
+                        false,
+                historyScopeKey,
+                requestContext,
               },
             );
             const currentConversation = messageState.conversationById[conversationId];
@@ -3285,12 +3639,26 @@ export const useChatStore = create<ChatState>()(
           logMessageDebug("chatStore", "fetch_applied", {
             conversationId,
             fetchMode,
+            queryType,
+            requestId,
+            source: requestContext.source,
             syncReason,
             loaded: normalized.messages.length,
             hasNext: normalized.hasNext,
             hasPrev: normalized.hasPrev,
             fetchGeneration,
             initialFetchSeq,
+            selectedConversationIdAtDispatch,
+            selectedConversationIdAtCommit:
+              get().selectedConversationId ?? null,
+            historyStageAfter:
+              get().historyStageByConversation[conversationId] ?? "empty",
+            hasAuthoritativeHistoryAfter:
+              get().hasAuthoritativeHistoryByConversation[conversationId] ??
+              false,
+          }, {
+            alwaysOn: queryType === "authoritative_open",
+            level: "info",
           });
 
           return {
@@ -3313,12 +3681,18 @@ export const useChatStore = create<ChatState>()(
           logMessageDebug("chatStore", "fetch_failed", {
             conversationId,
             fetchMode,
+            queryType,
+            requestId,
             syncReason,
             before,
             after,
             beforeId: options?.beforeId,
             afterId: options?.afterId,
             errorMessage,
+            selectedConversationIdAtDispatch,
+          }, {
+            alwaysOn: queryType === "authoritative_open",
+            level: "warn",
           });
           set((state) => ({
             error: errorMessage,

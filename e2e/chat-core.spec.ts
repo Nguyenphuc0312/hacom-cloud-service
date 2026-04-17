@@ -612,6 +612,7 @@ test("conversation with unread bootstraps from server unread feed and lands on f
   await bootChatPage(page, state);
 
   await expect(page.getByText("First unread from server")).toBeVisible();
+  await expect(page.getByText("Read before anchor")).toBeVisible();
   expect(state.unreadFeedHits).toBeGreaterThan(0);
 });
 

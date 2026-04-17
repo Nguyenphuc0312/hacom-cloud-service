@@ -649,13 +649,15 @@ export const useWebSocket = (
       const chatState = useChatStore.getState();
       if (
         options?.reason === "initial-sync" &&
-        chatState.messagesHydratedByConversation[roomId] &&
+        chatState.hasAuthoritativeHistoryByConversation[roomId] &&
         chatState.hasNewerMessagesByConversation[roomId] === false
       ) {
         logMessageDebug("useWebSocket", "delta_sync_blocked_known_latest", {
           roomId,
           reason: options?.reason,
           hydrated: chatState.messagesHydratedByConversation[roomId],
+          hasAuthoritativeHistory:
+            chatState.hasAuthoritativeHistoryByConversation[roomId],
           hasNext: chatState.hasNewerMessagesByConversation[roomId],
         });
         return;
@@ -695,6 +697,10 @@ export const useWebSocket = (
         const result = await fetchMessages(roomId, undefined, afterCursor.at, {
           afterId: afterCursor.id,
           syncReason: options?.reason,
+          source: "delta_sync",
+          queryType: "pagination_newer",
+          selectedConversationIdAtDispatch:
+            useChatStore.getState().selectedConversationId ?? null,
         });
         logMessageDebug("useWebSocket", "delta_sync_page_completed", {
           roomId,
@@ -730,7 +736,7 @@ export const useWebSocket = (
       const chatState = useChatStore.getState();
       const willBlockAsKnownLatest =
         options?.reason === "initial-sync" &&
-        chatState.messagesHydratedByConversation[roomId] &&
+        chatState.hasAuthoritativeHistoryByConversation[roomId] &&
         chatState.hasNewerMessagesByConversation[roomId] === false;
       if (willBlockAsKnownLatest) {
         logMessageDebug("useWebSocket", "delta_sync_schedule_skipped", {
@@ -1428,7 +1434,6 @@ export const useWebSocket = (
         ...(localId ? { localId } : {}),
       }, {
         incrementUnread: shouldIncrementUnread,
-        hydrated: true,
         source: eventType,
       });
 
@@ -1463,6 +1468,10 @@ export const useWebSocket = (
         void fetchMessages(conversationId, undefined, undefined, {
           force: true,
           syncReason: "room-refresh",
+          source: "socket_room_refresh",
+          queryType: "room_refresh",
+          selectedConversationIdAtDispatch:
+            useChatStore.getState().selectedConversationId ?? null,
         });
       }
 
