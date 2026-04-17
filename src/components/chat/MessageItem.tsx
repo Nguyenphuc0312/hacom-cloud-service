@@ -7,6 +7,7 @@ import { SystemMessage } from "../message/SystemMessage";
 import type { Message, Attachment } from "../../types";
 import type { TimelineItem } from "../../hooks/useMessageGrouping";
 import type { ChatDensity } from "../../stores/uiStore";
+import { getTimelineItemSpacingClass } from "./timelineDensity";
 
 interface MessageItemProps {
   item: TimelineItem;
@@ -109,27 +110,30 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   currentUsername,
   shouldAnimateInsert = false,
 }) => {
-  const isCompact = density === "compact";
-  const isExpanded = density === "expanded";
-
   if (item.kind === "date") {
     return (
       <DateDivider
         date={item.date}
-        className={isExpanded ? "my-7" : undefined}
+        density={density}
       />
     );
   }
 
   if (item.kind === "unread") {
-    return <UnreadDivider className={isExpanded ? "my-6" : undefined} />;
+    return <UnreadDivider density={density} />;
   }
 
   if (item.kind === "system") {
     return (
       <SystemMessage
         message={item.message}
-        className={isCompact ? "my-1" : isExpanded ? "my-3" : "my-2"}
+        className={
+          density === "compact"
+            ? "my-1"
+            : density === "expanded"
+              ? "my-3"
+              : "my-2"
+        }
       />
     );
   }
@@ -141,23 +145,7 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   };
 
   const messageSpacingClass =
-    item.spacingToken === "tight"
-      ? isCompact
-        ? "mb-px"
-        : isExpanded
-          ? "mb-1"
-          : "mb-[3px]"
-      : item.spacingToken === "related"
-        ? isCompact
-          ? "mb-2"
-          : isExpanded
-            ? "mb-3"
-            : "mb-2.5"
-        : isCompact
-          ? "mb-2.5"
-          : isExpanded
-            ? "mb-5"
-            : "mb-3.5";
+    getTimelineItemSpacingClass(item.spacingToken, density);
 
   return (
     <div

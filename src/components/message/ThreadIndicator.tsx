@@ -29,8 +29,8 @@ const ThreadIndicatorComponent: React.FC<ThreadIndicatorProps> = ({
       type="button"
       onClick={onClick}
       className={clsx(
-        "mt-0.5 flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition-colors",
-        "text-primary hover:bg-primary/8 active:bg-primary/14",
+        "mt-0.5 flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium transition-colors",
+        "text-primary/88 hover:bg-primary/8 active:bg-primary/14",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
         isOwn ? "ml-auto" : "mr-auto",
         className,

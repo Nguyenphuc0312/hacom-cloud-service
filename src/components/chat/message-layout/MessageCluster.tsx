@@ -30,6 +30,8 @@ import { MessageMeta } from "./MessageMeta";
 import { MessageRow } from "./MessageRow";
 import { MessageSurface } from "./MessageSurface";
 import type { TimelineMergeLevel } from "../../../hooks/useMessageGrouping";
+import type { ChatDensity } from "../../../stores/uiStore";
+import { getTimelineDensityContract } from "../timelineDensity";
 
 interface MessageClusterProps {
   message: Message;
@@ -49,6 +51,7 @@ interface MessageClusterProps {
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
   isSelectionMode?: boolean;
+  density?: ChatDensity;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
   shouldAnimateInsert?: boolean;
@@ -94,12 +97,14 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   onImageClick,
   onFilePreview,
   isSelectionMode = false,
+  density,
   onNavigateToMessage,
   currentUsername,
   shouldAnimateInsert = false,
   className,
 }) => {
   const { t } = useTranslation();
+  const contract = getTimelineDensityContract(density);
   const resendMessage = useChatStore((s) => s.resendMessage);
   const [isRailVisible, setIsRailVisible] = React.useState(false);
   const [isActionsOpen, setIsActionsOpen] = React.useState(false);
@@ -350,7 +355,8 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
       >
         <div
           className={clsx(
-            "chat-message-cluster-row flex w-full min-w-0 items-end gap-1.5",
+            "chat-message-cluster-row flex w-full min-w-0 items-end",
+            contract.cluster.rowGap,
             isOwn ? "justify-end" : "justify-start",
           )}
         >
@@ -375,7 +381,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
             )}
           >
             {isGroupConversation && !isOwn && showSenderName && (
-              <span className="mb-1 px-1 text-[11px] font-semibold text-primary/85">
+              <span className={contract.cluster.senderLabel}>
                 {senderDisplayName}
               </span>
             )}
@@ -386,7 +392,8 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                 onClick={handleReplyPreviewClick}
                 disabled={!replyTargetMessageId || isSelectionMode}
                 className={clsx(
-                  "mb-1 flex w-full items-center gap-2 rounded-[1.05rem] border-l-2 px-3 py-1.5 text-left text-[11px] transition-colors",
+                  "flex w-full items-center border-l-2 text-left transition-colors",
+                  contract.cluster.replyPreview,
                   replyTargetMessageId && !isSelectionMode
                     ? "cursor-pointer hover:bg-black/5"
                     : "cursor-default",
@@ -435,7 +442,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                 {message.forwardedFrom && (
                   <div
                     className={clsx(
-                      "mb-2 flex items-center gap-1 text-[11px]",
+                      contract.cluster.forwardedBadge,
                       isOwn ? "text-text-inverse/82" : "text-text-secondary",
                     )}
                   >
@@ -467,11 +474,17 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                 message={message}
                 isOwn={isOwn}
                 showStatus={showStatus}
+                density={density}
               />
             )}
 
             {(message.reactions?.length ?? 0) > 0 && (
-              <div className={clsx("mt-1", isOwn ? "self-end" : "self-start")}>
+              <div
+                className={clsx(
+                  contract.cluster.reactionOffset,
+                  isOwn ? "self-end" : "self-start",
+                )}
+              >
                 <ReactionBar
                   reactions={message.reactions}
                   onReact={(emoji) => onReact(message.id, emoji)}
@@ -480,7 +493,11 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
             )}
 
             {threadCountValue > 0 && (
-              <ThreadIndicator threadCount={threadCountValue} isOwn={isOwn} />
+              <ThreadIndicator
+                threadCount={threadCountValue}
+                isOwn={isOwn}
+                className={contract.cluster.threadOffset}
+              />
             )}
           </div>
         </div>

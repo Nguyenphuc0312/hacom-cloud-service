@@ -15,11 +15,14 @@ import {
   formatMessageTime,
   formatRelativeDate,
 } from "../../../utils/formatTime";
+import type { ChatDensity } from "../../../stores/uiStore";
+import { getTimelineDensityContract } from "../timelineDensity";
 
 interface MessageMetaProps {
   message: Message;
   isOwn: boolean;
   showStatus?: boolean;
+  density?: ChatDensity;
   className?: string;
 }
 
@@ -105,9 +108,11 @@ export const MessageMeta: React.FC<MessageMetaProps> = ({
   message,
   isOwn,
   showStatus = false,
+  density,
   className,
 }) => {
   const { t } = useTranslation();
+  const contract = getTimelineDensityContract(density);
   const timeStr = formatMessageTime(new Date(message.createdAt));
   const editedLabel = t("chat:message.edited");
   const editedTitle = message.editedAt
@@ -122,8 +127,9 @@ export const MessageMeta: React.FC<MessageMetaProps> = ({
   return (
     <div
       className={clsx(
-        "mt-0.5 flex min-h-4 flex-wrap items-center gap-x-1.5 gap-y-1 px-1 text-[10px] leading-tight",
-        isOwn ? "justify-end text-text-muted" : "text-text-muted/90",
+        "flex min-h-4 flex-wrap items-center",
+        contract.cluster.meta,
+        isOwn ? "justify-end text-text-muted/88" : "text-text-muted/80",
         className,
       )}
     >
@@ -138,7 +144,11 @@ export const MessageMeta: React.FC<MessageMetaProps> = ({
         </span>
       )}
       <span>{timeStr}</span>
-      {isOwn && showStatus && <MessageStatusGlyph message={message} />}
+      {isOwn && showStatus && (
+        <span className="text-text-muted/82">
+          <MessageStatusGlyph message={message} />
+        </span>
+      )}
     </div>
   );
 };
