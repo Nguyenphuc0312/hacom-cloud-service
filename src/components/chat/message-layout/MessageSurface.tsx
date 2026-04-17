@@ -71,7 +71,7 @@ export const MessageSurface: React.FC<MessageSurfaceProps> = ({
   return (
     <div
       className={clsx(
-        "relative min-w-0 px-3 py-2.5 transition-colors text-[15px] leading-[1.48]",
+        "chat-message-surface relative min-w-0 px-3 py-2.5 text-[15px] leading-[1.48] transition-colors",
         getBubbleRadiusClass(isOwn, isGroupStart, isGroupEnd, mergeLevel),
         isOwn
           ? "bg-[hsl(var(--chat-bubble-sent))] text-[hsl(var(--chat-bubble-sent-text))]"

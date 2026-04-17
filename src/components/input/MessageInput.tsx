@@ -2,13 +2,13 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
-  EllipsisHorizontalCircleIcon,
+  PaperClipIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { AttachmentMenu } from "./AttachmentMenu";
 import { AttachmentPreview } from "./AttachmentPreview";
 import { AttachmentTray } from "./AttachmentTray";
-import { SendButton } from "./SendButton";
+import { SendButton, type SendButtonState } from "./SendButton";
 import { ShareContactModal } from "../modals/ShareContactModal";
 import { ConversationLane } from "../layout/ConversationLane";
 import {
@@ -80,6 +80,72 @@ interface MentionMatch {
   end: number;
   query: string;
 }
+
+type ComposerVisualState =
+  | "idle"
+  | "focus"
+  | "ready-to-send"
+  | "uploading"
+  | "disabled"
+  | "slow-mode"
+  | "offline";
+
+interface ComposerVisualStyles {
+  shell: string;
+  attachmentButton: string;
+  attachmentDivider: string;
+}
+
+const COMPOSER_VISUAL_STATE_MAP: Record<
+  ComposerVisualState,
+  ComposerVisualStyles
+> = {
+  idle: {
+    shell:
+      "border-border/80 bg-[hsl(var(--color-chat-composer))] shadow-none",
+    attachmentButton:
+      "text-text-muted hover:bg-surface-hover hover:text-text-primary",
+    attachmentDivider: "border-border/65",
+  },
+  focus: {
+    shell:
+      "border-primary/35 bg-[hsl(var(--color-chat-composer))] shadow-elev1 ring-1 ring-primary/12",
+    attachmentButton:
+      "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
+    attachmentDivider: "border-primary/18",
+  },
+  "ready-to-send": {
+    shell:
+      "border-primary/28 bg-[hsl(var(--color-chat-composer))] shadow-elev1",
+    attachmentButton:
+      "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
+    attachmentDivider: "border-primary/16",
+  },
+  uploading: {
+    shell:
+      "border-primary/20 bg-[hsl(var(--color-chat-composer))] shadow-elev1 ring-1 ring-primary/10",
+    attachmentButton:
+      "text-primary hover:bg-primary/8 hover:text-primary-hover",
+    attachmentDivider: "border-primary/16",
+  },
+  disabled: {
+    shell: "border-disabled-border bg-disabled-bg shadow-none",
+    attachmentButton: "text-text-disabled",
+    attachmentDivider: "border-disabled-border",
+  },
+  "slow-mode": {
+    shell:
+      "border-warning/35 bg-[hsl(var(--color-chat-composer))] shadow-none ring-1 ring-warning/10",
+    attachmentButton: "text-warning hover:bg-warning/10 hover:text-warning",
+    attachmentDivider: "border-warning/18",
+  },
+  offline: {
+    shell:
+      "border-danger/28 bg-[hsl(var(--color-chat-composer))] shadow-none ring-1 ring-danger/10",
+    attachmentButton: "text-danger hover:bg-danger/10 hover:text-danger",
+    attachmentDivider: "border-danger/18",
+  },
+};
 
 const isDesktopViewport = (): boolean => {
   if (
@@ -529,13 +595,33 @@ export const MessageInput = React.forwardRef<
       : !submitDisabled && !isSubmitBusy && hasText;
   const disableAttachmentActions = attachmentsDisabled || isSubmitBusy;
   const sendButtonLabel = t("chat:composer.sendMessage");
-  const composerVisualState = disabled
+  const composerVisualState: ComposerVisualState = disabled
     ? "disabled"
-    : canSend
-      ? "ready"
-      : isComposerFocused
-        ? "focused"
-        : "idle";
+    : isSubmitBusy || hasUploadingDrafts
+      ? "uploading"
+      : composerMode === "offline"
+        ? "offline"
+        : composerMode === "slow_mode"
+          ? "slow-mode"
+          : canSend
+            ? "ready-to-send"
+            : isComposerFocused
+              ? "focus"
+              : "idle";
+  const composerVisualStyles = COMPOSER_VISUAL_STATE_MAP[composerVisualState];
+  const sendButtonState: SendButtonState = !canSend
+    ? composerMode === "offline" && !disabled
+      ? "offline"
+      : composerMode === "slow_mode" && !disabled
+        ? "slow-mode"
+        : "disabled"
+    : isSubmitBusy || hasUploadingDrafts
+      ? "uploading"
+      : composerMode === "offline"
+        ? "offline"
+        : composerMode === "slow_mode"
+          ? "slow-mode"
+          : "ready-to-send";
 
   const handleKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -748,7 +834,7 @@ export const MessageInput = React.forwardRef<
     <div
       ref={rootRef}
       className={clsx(
-        "bg-transparent pb-[max(env(safe-area-inset-bottom),10px)] pt-1",
+        "chat-composer-root bg-transparent pb-[max(env(safe-area-inset-bottom),10px)] pt-1",
         className,
       )}
     >
@@ -880,15 +966,8 @@ export const MessageInput = React.forwardRef<
           <div
             data-composer-state={composerVisualState}
             className={clsx(
-              "relative flex min-w-0 flex-1 items-end rounded-[1.35rem] border px-2 py-1 transition-micro",
-              composerVisualState === "disabled" &&
-                "border-disabled-border bg-disabled-bg shadow-none",
-              composerVisualState === "ready" &&
-                "border-primary/18 bg-[hsl(var(--color-chat-composer))] shadow-elev1",
-              composerVisualState === "focused" &&
-                "border-border-focus bg-[hsl(var(--color-chat-composer))] shadow-elev1",
-              composerVisualState === "idle" &&
-                "border-border/80 bg-[hsl(var(--color-chat-composer))] shadow-none",
+              "chat-composer-shell relative flex min-w-0 flex-1 items-end rounded-[1.35rem] border px-2 py-1 transition-micro",
+              composerVisualStyles.shell,
             )}
           >
             {showMentionPanel && (
@@ -979,23 +1058,28 @@ export const MessageInput = React.forwardRef<
                   : undefined
               }
               className={clsx(
-                "w-full min-h-[44px] flex-1 resize-none bg-transparent px-2 py-[11px]",
+                "chat-composer-textarea w-full min-h-[44px] flex-1 resize-none bg-transparent px-2 py-[11px]",
                 "text-sm text-text-primary placeholder:text-text-muted",
                 "transition-colors focus:outline-none",
                 disabled && "cursor-not-allowed opacity-70",
               )}
             />
 
-            <div className="flex shrink-0 items-end gap-1">
+            <div
+              className={clsx(
+                "chat-composer-action-group ml-1 flex shrink-0 items-end gap-1 border-l pl-2",
+                composerVisualStyles.attachmentDivider,
+              )}
+            >
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setShowAttachmentMenu((previous) => !previous)}
                   className={clsx(
-                    "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
+                    "chat-composer-attachment inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
                     showAttachmentMenu
                       ? "bg-surface-active text-text-primary"
-                      : "text-text-muted hover:bg-surface-hover hover:text-text-primary",
+                      : composerVisualStyles.attachmentButton,
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                     disableAttachmentActions && "cursor-not-allowed opacity-50",
                   )}
@@ -1004,7 +1088,7 @@ export const MessageInput = React.forwardRef<
                   aria-expanded={showAttachmentMenu}
                   disabled={disableAttachmentActions}
                 >
-                  <EllipsisHorizontalCircleIcon className="h-5 w-5" />
+                  <PaperClipIcon className="h-5 w-5" />
                 </button>
 
                 {showAttachmentMenu && (
@@ -1025,7 +1109,7 @@ export const MessageInput = React.forwardRef<
 
           <SendButton
             disabled={!canSend}
-            state={!canSend ? "disabled" : "ready"}
+            state={sendButtonState}
             isBusy={isSubmitBusy}
             data-testid="chat-send-button"
             onClick={() => {

@@ -45,6 +45,114 @@ interface RoomItemViewProps {
   onSelect: (conversationId: string) => void;
 }
 
+type RoomItemVisualState =
+  | "default"
+  | "hover"
+  | "active"
+  | "unread"
+  | "muted"
+  | "mention";
+
+interface RoomItemStateStyles {
+  container: string;
+  title: string;
+  preview: string;
+  time: string;
+  timeBadge: string;
+  unreadBadge: string;
+}
+
+const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
+  default: {
+    container: "bg-transparent",
+    title: "text-text-primary",
+    preview: "text-text-muted",
+    time: "text-text-muted",
+    timeBadge: "bg-transparent text-text-muted",
+    unreadBadge:
+      "bg-[hsl(var(--chat-badge-bg))] text-text-inverse",
+  },
+  hover: {
+    container:
+      "hover:bg-surface-hover/90 data-[keyboard-active=true]:bg-surface-hover/90",
+    title:
+      "group-hover:text-text-primary group-data-[keyboard-active=true]:text-text-primary",
+    preview:
+      "group-hover:text-text-secondary group-data-[keyboard-active=true]:text-text-secondary",
+    time:
+      "group-hover:text-text-secondary group-data-[keyboard-active=true]:text-text-secondary",
+    timeBadge:
+      "group-hover:bg-surface-overlay/95 group-hover:text-text-secondary group-data-[keyboard-active=true]:bg-surface-overlay/95 group-data-[keyboard-active=true]:text-text-secondary",
+    unreadBadge: "",
+  },
+  active: {
+    container: "bg-[hsl(var(--chat-active-bg)/0.16)]",
+    title: "text-text-primary",
+    preview: "text-text-secondary",
+    time: "text-primary",
+    timeBadge:
+      "bg-[hsl(var(--chat-active-bg)/0.16)] text-primary",
+    unreadBadge:
+      "bg-[hsl(var(--chat-badge-bg))] text-text-inverse",
+  },
+  unread: {
+    container: "bg-[hsl(var(--chat-active-bg)/0.08)]",
+    title: "text-text-primary",
+    preview: "text-text-secondary",
+    time: "text-primary",
+    timeBadge:
+      "bg-[hsl(var(--chat-badge-bg)/0.16)] text-primary",
+    unreadBadge:
+      "bg-[hsl(var(--chat-badge-bg))] text-text-inverse",
+  },
+  muted: {
+    container: "bg-transparent",
+    title: "text-text-primary",
+    preview: "text-text-muted/90",
+    time: "text-text-muted",
+    timeBadge: "bg-surface-overlay/70 text-text-muted",
+    unreadBadge: "bg-text-muted text-text-inverse",
+  },
+  mention: {
+    container: "bg-danger/10",
+    title: "text-text-primary",
+    preview: "text-text-secondary",
+    time: "text-danger",
+    timeBadge: "bg-danger/12 text-danger",
+    unreadBadge: "bg-danger text-text-inverse",
+  },
+};
+
+const resolveRoomItemVisualState = ({
+  isActive,
+  hasUnreadMention,
+  unreadCount,
+  isMuted,
+}: {
+  isActive: boolean;
+  hasUnreadMention: boolean;
+  unreadCount: number;
+  isMuted: boolean;
+}): RoomItemVisualState => {
+  if (isActive) {
+    return "active";
+  }
+
+  if (hasUnreadMention) {
+    return "mention";
+  }
+
+  if (unreadCount > 0) {
+    return "unread";
+  }
+
+  if (isMuted) {
+    return "muted";
+  }
+
+  return "default";
+};
+
 const resolvePresenceStatus = (
   presenceState: string | undefined,
   fallbackStatus: string | undefined,
@@ -113,18 +221,24 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
   onSelect,
 }) => {
   const { t } = useTranslation();
-
-  const previewToneClass = (() => {
-    if (previewState === "failed") {
-      return "text-danger";
-    }
-
-    if (previewState || hasUnreadMention || unreadCount > 0) {
-      return "text-text-secondary";
-    }
-
-    return "text-text-muted";
-  })();
+  const visualState = resolveRoomItemVisualState({
+    isActive,
+    hasUnreadMention,
+    unreadCount,
+    isMuted: Boolean(conversation.isMuted),
+  });
+  const visualStyles = ROOM_ITEM_STATE_MAP[visualState];
+  const hoverStyles = !isActive ? ROOM_ITEM_STATE_MAP.hover : null;
+  const shouldEmphasizeUnreadPreview =
+    visualState === "unread" || visualState === "mention";
+  const previewToneClass =
+    previewState === "failed" ? "text-danger" : visualStyles.preview;
+  const timeBadgeClasses =
+    timeLabel.length > 0 && (visualState === "active" || shouldEmphasizeUnreadPreview)
+      ? visualStyles.timeBadge
+      : visualState === "muted"
+        ? visualStyles.timeBadge
+        : "bg-transparent";
 
   return (
     <button
@@ -132,29 +246,22 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
       onClick={() => onSelect(conversation.id)}
       role="option"
       aria-selected={isActive}
+      data-room-state={visualState}
+      data-keyboard-active={isKeyboardActive}
       className={clsx(
-        "group relative mx-2 my-1 flex h-[var(--size-room-item)] w-[calc(100%-var(--space-4))] items-center rounded-[1.15rem] px-3.5 text-left",
+        "group relative mx-2 my-0.5 flex h-[var(--size-room-item)] w-[calc(100%-var(--space-4))] items-center rounded-[1rem] px-3 text-left",
         "transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-        isActive
-          ? "bg-primary/8 shadow-[inset_0_0_0_1px_hsl(var(--color-primary)/0.08)]"
-          : "hover:bg-surface-hover/80",
-        !isActive && isKeyboardActive && "bg-surface-overlay",
+        visualStyles.container,
+        hoverStyles?.container,
       )}
       aria-label={displayName}
     >
-      <span
-        className={clsx(
-          "absolute bottom-2 left-1.5 top-2 w-0.5 rounded-full transition-fast",
-          isActive ? "bg-primary opacity-100" : "opacity-0",
-        )}
-        aria-hidden="true"
-      />
-      <div className="grid w-full grid-cols-[auto,1fr,auto] items-center gap-3">
+      <div className="grid w-full grid-cols-[auto,1fr,auto] items-center gap-2.5">
         {isDirect ? (
           <Avatar
             src={avatarSrc}
             alt={displayName}
-            size="lg"
+            size="md"
             status={avatarStatus}
             showStatus
           />
@@ -162,40 +269,56 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
           <GroupAvatar
             conversation={conversation}
             currentUserId={currentUserId}
-            size="lg"
+            size="md"
           />
         )}
 
         <div className="min-w-0 text-left">
-          <p className="truncate text-left text-[15px] font-semibold leading-5 text-text-primary">
+          <p
+            className={clsx(
+              "truncate text-left text-[14px] font-semibold leading-5",
+              visualStyles.title,
+              hoverStyles?.title,
+            )}
+          >
             {displayName}
           </p>
 
           <p
             className={clsx(
               "truncate pr-1 text-left text-[13px] leading-5",
-              previewState === "failed" ? "font-medium" : "font-normal",
+              hoverStyles?.preview,
               previewToneClass,
             )}
+            style={{
+              fontWeight:
+                previewState === "failed" || shouldEmphasizeUnreadPreview
+                  ? "var(--chat-unread-preview-weight)"
+                  : "400",
+            }}
           >
             {previewText || t("sidebar:room.noMessagesYet")}
           </p>
         </div>
 
-        <div className="flex h-full min-w-room-meta flex-col items-end justify-start gap-2 py-1">
-          <span className="text-[12px] tabular-nums text-text-muted">
+        <div className="flex h-full min-w-room-meta flex-col items-end justify-center gap-1">
+          <span
+            className={clsx(
+              "inline-flex min-h-5 items-center rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums",
+              visualStyles.time,
+              timeBadgeClasses,
+              hoverStyles?.time,
+              hoverStyles?.timeBadge,
+            )}
+          >
             {timeLabel}
           </span>
 
           {unreadCount > 0 ? (
             <span
               className={clsx(
-                "sidebar-unread-badge inline-flex min-h-[22px] min-w-[22px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold leading-none text-text-inverse",
-                hasUnreadMention
-                  ? "bg-danger"
-                  : conversation.isMuted
-                    ? "bg-text-muted"
-                    : "bg-primary",
+                "sidebar-unread-badge inline-flex min-h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold leading-none",
+                visualStyles.unreadBadge,
               )}
             >
               {unreadLabel}

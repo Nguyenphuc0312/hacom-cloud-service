@@ -67,7 +67,7 @@ export const TextMessage: React.FC<TextMessageProps> = ({
   return (
     <p
       className={clsx(
-        "max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere]",
+        "chat-message-text max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere]",
         onlyEmoji ? "leading-tight text-3xl" : "text-[15px] leading-[1.4rem]",
         className,
       )}

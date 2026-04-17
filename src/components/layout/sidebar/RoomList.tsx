@@ -49,7 +49,7 @@ interface RowData {
   onSelect: (conversationId: string) => void;
 }
 
-const ROOM_HEIGHT = 72;
+const ROOM_HEIGHT = 62;
 const VIRTUALIZATION_THRESHOLD = 10;
 const LOAD_MORE_THRESHOLD_PX = 280;
 

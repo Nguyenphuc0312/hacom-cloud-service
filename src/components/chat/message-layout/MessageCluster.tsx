@@ -350,12 +350,12 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
       >
         <div
           className={clsx(
-            "flex w-full min-w-0 items-end gap-1.5",
+            "chat-message-cluster-row flex w-full min-w-0 items-end gap-1.5",
             isOwn ? "justify-end" : "justify-start",
           )}
         >
           {isGroupConversation && !isOwn && (
-            <div className="w-9 shrink-0 self-end">
+            <div className="chat-message-avatar-slot w-9 shrink-0 self-end">
               {showAvatar ? (
                 <Avatar
                   src={message.senderAvatar}

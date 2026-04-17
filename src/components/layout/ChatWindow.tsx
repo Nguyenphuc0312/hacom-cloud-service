@@ -28,7 +28,10 @@ import { MessageType } from "../../types";
 import type { UploadedFileMeta } from "../../types/attachmentDraft";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import type { ConnectionState } from "../../hooks/useWebSocket";
-import { resolveChatDensity } from "../../utils/densityPolicy";
+import {
+  resolveChatDensity,
+  resolveChatLayoutProfile,
+} from "../../utils/densityPolicy";
 import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { logScrollTrace } from "../../utils/scrollTrace";
@@ -500,6 +503,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       viewportMetrics.width,
     ],
   );
+  const layoutProfile = React.useMemo(
+    () => resolveChatLayoutProfile(viewportMetrics.width),
+    [viewportMetrics.width],
+  );
 
   const bottomOverlayPlacements = React.useMemo(
     () =>
@@ -910,9 +917,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     <section
       key={conversation.id}
       className={clsx(
-        "chat-background relative flex h-full min-h-0 flex-col overflow-hidden animate-content-fade",
+        "chat-background chat-shell relative flex h-full min-h-0 flex-col overflow-hidden animate-content-fade",
         className,
       )}
+      data-chat-layout-profile={layoutProfile}
       {...dropZoneProps}
     >
       {/* Drag-and-drop overlay */}

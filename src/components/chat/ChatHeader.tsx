@@ -51,7 +51,7 @@ interface HeaderAction {
 }
 
 const iconButtonClass = clsx(
-  "inline-flex h-9 w-9 items-center justify-center rounded-[0.95rem] border border-transparent",
+  "chat-header-action inline-flex h-11 w-11 items-center justify-center rounded-[0.95rem] border border-transparent",
   "text-text-muted transition-micro",
   "hover:bg-surface-hover hover:text-text-primary",
   "active:scale-[0.98] active:bg-surface-active",
@@ -207,11 +207,14 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
   return (
     <header
-      className={clsx("sticky top-0 z-sticky border-b border-border/60 py-2", className)}
+      className={clsx(
+        "chat-header sticky top-0 z-sticky border-b border-border/60 py-2",
+        className,
+      )}
       style={{ backgroundColor: "hsl(var(--color-chat-canvas) / 0.96)" }}
     >
       <ConversationLane>
-        <div className="flex min-h-10 items-center gap-2">
+        <div className="chat-header-row flex min-h-10 items-center gap-2">
           {onBack && (
             <button
               type="button"
@@ -227,7 +230,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             type="button"
             onClick={onInfoClick}
             className={clsx(
-              "shrink-0 rounded-full",
+              "chat-header-avatar-button inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             )}
             aria-label={t("chat:header.viewInfo")}
@@ -239,6 +242,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 size="md"
                 status={liveStatus}
                 showStatus={isDirect}
+                className="chat-header-avatar"
               />
             ) : (
               <GroupAvatar
@@ -246,6 +250,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 currentUserId={currentUserId}
                 size="md"
                 alt={displayName}
+                className="chat-header-avatar"
               />
             )}
           </button>
@@ -258,7 +263,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             )}
           >
-            <h2 className="truncate text-body-sm font-semibold text-text-primary sm:text-body">
+            <h2 className="chat-header-title truncate text-body-sm font-semibold text-text-primary sm:text-body">
               {displayName}
             </h2>
 
@@ -271,7 +276,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             ) : (
               <p
                 className={clsx(
-                  "truncate text-caption",
+                  "chat-header-subtitle truncate text-caption",
                   isOnline ? "text-text-secondary" : "text-text-muted",
                 )}
               >

@@ -2,6 +2,10 @@ import type { Conversation, Message } from "../types";
 import type { ChatDensity } from "../stores/uiStore";
 
 export type ResolvedChatDensity = Exclude<ChatDensity, "auto">;
+export type ChatLayoutProfile =
+  | "desktop-wide"
+  | "laptop"
+  | "mobile-compact";
 
 export interface DensityPolicyInput {
   preference: ChatDensity;
@@ -10,6 +14,20 @@ export interface DensityPolicyInput {
   messages: Message[];
   conversationType: Conversation["type"];
 }
+
+export const resolveChatLayoutProfile = (
+  viewportWidth: number,
+): ChatLayoutProfile => {
+  if (viewportWidth <= 480) {
+    return "mobile-compact";
+  }
+
+  if (viewportWidth <= 1280) {
+    return "laptop";
+  }
+
+  return "desktop-wide";
+};
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
