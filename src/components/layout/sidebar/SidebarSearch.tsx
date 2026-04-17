@@ -26,7 +26,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
         <MagnifyingGlassIcon
           className={clsx(
             "pointer-events-none absolute top-1/2 -translate-y-1/2 text-text-muted",
-            isDense ? "left-3.5 h-4.5 w-4.5" : "left-4 h-5 w-5",
+            isDense ? "left-3.5 h-[18px] w-[18px]" : "left-4 h-5 w-5",
           )}
           aria-hidden="true"
         />

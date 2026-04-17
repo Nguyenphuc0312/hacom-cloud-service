@@ -163,7 +163,9 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
             className={clsx("rounded-[1rem]", isDense ? "h-9 w-9" : "h-10 w-10")}
             aria-label={t("sidebar:search.aria")}
           >
-            <MagnifyingGlassIcon className={isDense ? "h-4.5 w-4.5" : "h-5 w-5"} />
+            <MagnifyingGlassIcon
+              className={isDense ? "h-[18px] w-[18px]" : "h-5 w-5"}
+            />
           </IconButtonSurface>
 
           <IconButtonSurface
@@ -173,7 +175,9 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
               defaultValue: "More actions",
             })}
           >
-            <EllipsisHorizontalIcon className={isDense ? "h-4.5 w-4.5" : "h-5 w-5"} />
+            <EllipsisHorizontalIcon
+              className={isDense ? "h-[18px] w-[18px]" : "h-5 w-5"}
+            />
           </IconButtonSurface>
 
           {isMenuOpen && (

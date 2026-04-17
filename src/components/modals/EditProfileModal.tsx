@@ -199,7 +199,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                         className="absolute bottom-1 right-1 flex h-10 w-10 items-center justify-center rounded-full border border-white/25 bg-white text-slate-900 shadow-lg transition-colors hover:bg-slate-100"
                         aria-label={t("profile:settings.chooseAvatar")}
                       >
-                        <CameraIcon className="h-4.5 w-4.5" />
+                        <CameraIcon className="h-[18px] w-[18px]" />
                       </button>
 
                       {avatarPreview ? (
