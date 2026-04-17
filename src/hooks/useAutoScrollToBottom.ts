@@ -22,8 +22,8 @@ interface UseAutoScrollToBottomParams {
   outerRef: React.RefObject<HTMLDivElement | null>;
   requestScrollToBottom: (reason: string) => void;
   captureScrollAnchor?: () => {
-    itemKey: string | null;
-    offsetWithinItem: number;
+    messageId: string | null;
+    offsetFromTop: number;
   } | null;
 }
 
@@ -38,8 +38,8 @@ export interface UseAutoScrollToBottomResult {
   syncScrollStateFromDom: (reason?: string) => void;
   pendingRestoreAnchor:
     | {
-        itemKey: string | null;
-        offsetWithinItem: number;
+        messageId: string | null;
+        offsetFromTop: number;
       }
     | null;
   pendingRestoreScrollTop: number | null;
@@ -49,8 +49,8 @@ export interface UseAutoScrollToBottomResult {
 interface ConversationScrollSession {
   isPinnedToBottom: boolean;
   scrollTop: number;
-  anchorItemKey: string | null;
-  anchorOffsetWithinItem: number;
+  anchorMessageId: string | null;
+  anchorOffsetFromTop: number;
 }
 
 const conversationScrollSessions = new Map<string, ConversationScrollSession>();
@@ -97,8 +97,8 @@ export const useAutoScrollToBottom = ({
   const [firstDetachedUnreadMessageId, setFirstDetachedUnreadMessageId] =
     React.useState<string | null>(null);
   const [pendingRestoreAnchor, setPendingRestoreAnchor] = React.useState<{
-    itemKey: string | null;
-    offsetWithinItem: number;
+    messageId: string | null;
+    offsetFromTop: number;
   } | null>(null);
   const [pendingRestoreScrollTop, setPendingRestoreScrollTop] =
     React.useState<number | null>(null);
@@ -120,8 +120,8 @@ export const useAutoScrollToBottom = ({
       conversationScrollSessions.set(conversationId, {
         isPinnedToBottom: nextPinnedToBottom,
         scrollTop: Math.max(0, nextScrollTop ?? outer?.scrollTop ?? 0),
-        anchorItemKey: anchor?.itemKey ?? null,
-        anchorOffsetWithinItem: anchor?.offsetWithinItem ?? 0,
+        anchorMessageId: anchor?.messageId ?? null,
+        anchorOffsetFromTop: anchor?.offsetFromTop ?? 0,
       });
     },
     [captureScrollAnchor, conversationId, outerRef],
@@ -241,21 +241,21 @@ export const useAutoScrollToBottom = ({
       setIsPinnedToBottom(false);
       setScrollMode("reading_history");
       setPendingRestoreAnchor(
-        savedSession.anchorItemKey
+        savedSession.anchorMessageId
           ? {
-              itemKey: savedSession.anchorItemKey,
-              offsetWithinItem: savedSession.anchorOffsetWithinItem,
+              messageId: savedSession.anchorMessageId,
+              offsetFromTop: savedSession.anchorOffsetFromTop,
             }
           : null,
       );
-      if (!savedSession.anchorItemKey) {
+      if (!savedSession.anchorMessageId) {
         setPendingRestoreScrollTop(savedSession.scrollTop);
       }
       setPendingRestoreVersion((value) => value + 1);
       logScrollTrace("conversation_restore_requested", {
         conversationId,
         scrollTop: savedSession.scrollTop,
-        anchorItemKey: savedSession.anchorItemKey,
+        anchorMessageId: savedSession.anchorMessageId,
       });
       return;
     }

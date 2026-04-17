@@ -543,8 +543,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const scrollCommandRafRef = React.useRef<number | null>(null);
   const pendingScrollCommandRef = React.useRef<ScrollCommand | null>(null);
   const prependAnchorRef = React.useRef<{
-    itemKey: string | null;
-    offsetWithinItem: number;
+    messageId: string | null;
+    offsetFromTop: number;
   } | null>(null);
   const preserveScrollDeltaRafRef = React.useRef<number | null>(null);
   const pendingPreserveScrollDeltaRef = React.useRef(0);
@@ -576,6 +576,10 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   });
   const latestMessageStableKeys = React.useMemo(
     () => new Set(messages.map((message) => getMessageStableKey(message))),
+    [messages],
+  );
+  const messageIds = React.useMemo(
+    () => messages.map((message) => message.id),
     [messages],
   );
   const insertedMessageKeys = React.useMemo(() => {
@@ -680,6 +684,24 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     [requestScrollCommand],
   );
 
+  const resolveAnchorTimelineIndex = React.useCallback(
+    (messageId: string | null): number => {
+      const messageIndex = messageId ? messageIds.indexOf(messageId) : -1;
+      const resolvedMessageId =
+        messageIndex >= 0 ? messageIds[messageIndex] : (messageIds[0] ?? null);
+      if (!resolvedMessageId) {
+        return -1;
+      }
+
+      return timelineItems.findIndex(
+        (item) =>
+          (item.kind === "message" || item.kind === "system") &&
+          item.message.id === resolvedMessageId,
+      );
+    },
+    [messageIds, timelineItems],
+  );
+
   const captureVisibleAnchor = React.useCallback(() => {
     const outer = outerRef.current;
     if (!outer || timelineItems.length === 0) return null;
@@ -687,12 +709,25 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     const visibleItem = findItemAtOffset(outer.scrollTop);
     if (!visibleItem) return null;
 
-    const item = timelineItems[visibleItem.index];
+    const anchorIndex = timelineItems.findIndex(
+      (item, index) =>
+        index >= visibleItem.index &&
+        (item.kind === "message" || item.kind === "system"),
+    );
+    if (anchorIndex < 0) {
+      return null;
+    }
+
+    const item = timelineItems[anchorIndex];
+    if (!item || (item.kind !== "message" && item.kind !== "system")) {
+      return null;
+    }
+
     return {
-      itemKey: item ? getTimelineItemKey(item, visibleItem.index) : null,
-      offsetWithinItem: visibleItem.offsetWithinItem,
+      messageId: item.message.id,
+      offsetFromTop: outer.scrollTop - getItemOffset(anchorIndex),
     };
-  }, [findItemAtOffset, getTimelineItemKey, timelineItems]);
+  }, [findItemAtOffset, getItemOffset, outerRef, timelineItems]);
 
   const restoreCapturedAnchor = React.useCallback(
     (reason: string) => {
@@ -700,20 +735,16 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       prependAnchorRef.current = null;
       if (!anchor) return;
 
-      const anchorIndex = anchor.itemKey
-        ? timelineItems.findIndex(
-            (item, index) => getTimelineItemKey(item, index) === anchor.itemKey,
-          )
-        : -1;
+      const anchorIndex = resolveAnchorTimelineIndex(anchor.messageId);
       if (anchorIndex < 0) return;
 
       requestScrollCommand({
         kind: "offset",
-        offset: getItemOffset(anchorIndex) + anchor.offsetWithinItem,
+        offset: getItemOffset(anchorIndex) + anchor.offsetFromTop,
         reason,
       });
     },
-    [getItemOffset, getTimelineItemKey, requestScrollCommand, timelineItems],
+    [getItemOffset, requestScrollCommand, resolveAnchorTimelineIndex],
   );
 
   const resolveUnreadAnchorIndex = React.useCallback((): number => {
@@ -1123,12 +1154,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       return;
     }
 
-    const anchorIndex = pendingRestoreAnchor.itemKey
-      ? timelineItems.findIndex(
-          (item, index) =>
-            getTimelineItemKey(item, index) === pendingRestoreAnchor.itemKey,
-        )
-      : -1;
+    const anchorIndex = resolveAnchorTimelineIndex(pendingRestoreAnchor.messageId);
     if (anchorIndex < 0) {
       return;
     }
@@ -1136,7 +1162,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     requestScrollCommand({
       kind: "offset",
       offset:
-        getItemOffset(anchorIndex) + pendingRestoreAnchor.offsetWithinItem,
+        getItemOffset(anchorIndex) + pendingRestoreAnchor.offsetFromTop,
       reason: "conversation-restore-anchor",
     });
 
@@ -1149,12 +1175,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     };
   }, [
     getItemOffset,
-    getTimelineItemKey,
     pendingRestoreAnchor,
     pendingRestoreVersion,
     requestScrollCommand,
+    resolveAnchorTimelineIndex,
     syncScrollStateFromDom,
-    timelineItems,
     viewportHeight,
   ]);
 

@@ -32,8 +32,8 @@ describe("useAutoScrollToBottom", () => {
     } as React.RefObject<HTMLDivElement | null>;
     const requestScrollToBottom = vi.fn();
     const captureScrollAnchor = vi.fn(() => ({
-      itemKey: "message-msg-2",
-      offsetWithinItem: 24,
+      messageId: "msg-2",
+      offsetFromTop: 24,
     }));
 
     const { result, rerender } = renderHook(
@@ -74,8 +74,8 @@ describe("useAutoScrollToBottom", () => {
     rerender({ conversationId: "room-1", preferUnreadAnchor: false });
 
     expect(result.current.pendingRestoreAnchor).toEqual({
-      itemKey: "message-msg-2",
-      offsetWithinItem: 24,
+      messageId: "msg-2",
+      offsetFromTop: 24,
     });
     expect(result.current.pendingRestoreScrollTop).toBeNull();
   });
@@ -90,8 +90,8 @@ describe("useAutoScrollToBottom", () => {
     } as React.RefObject<HTMLDivElement | null>;
     const requestScrollToBottom = vi.fn();
     const captureScrollAnchor = vi.fn(() => ({
-      itemKey: "message-msg-2",
-      offsetWithinItem: 12,
+      messageId: "msg-2",
+      offsetFromTop: 12,
     }));
 
     const { result, rerender } = renderHook(
