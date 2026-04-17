@@ -74,6 +74,32 @@ const matchesMessageIdentity = (message: Message, targetId: string): boolean =>
   message.stableId === targetId ||
   message.clientMessageId === targetId;
 
+const buildUnreadRestoreSignature = ({
+  conversationId,
+  firstUnreadMessageId,
+  lastReadMessageId,
+  lastReadAt,
+}: {
+  conversationId: string;
+  firstUnreadMessageId?: string | null;
+  lastReadMessageId?: string | null;
+  lastReadAt?: string | Date | null;
+}): string => {
+  const lastReadAtIso =
+    typeof lastReadAt === "string"
+      ? lastReadAt
+      : lastReadAt instanceof Date
+        ? lastReadAt.toISOString()
+        : "";
+
+  return [
+    conversationId,
+    firstUnreadMessageId ?? "",
+    lastReadMessageId ?? "",
+    lastReadAtIso,
+  ].join("|");
+};
+
 interface ChatWindowProps {
   layoutState: ChatLayoutState;
   conversation: Conversation;
@@ -138,6 +164,8 @@ interface ChatTimelinePaneProps {
     firstUnreadMessageId?: string;
     active?: boolean;
   } | null;
+  unreadRestoreSignature?: string | null;
+  onUnreadRestoreConsumed?: (signature: string) => void;
   onReachedLatest?: (message: Message) => void;
   jumpToMessageId?: string | null;
   jumpRequestVersion?: number;
@@ -190,6 +218,8 @@ const ChatTimelinePane = React.memo(
     onNavigateToMessage,
     currentUsername,
     unreadMarker,
+    unreadRestoreSignature,
+    onUnreadRestoreConsumed,
     onReachedLatest,
     jumpToMessageId,
     jumpRequestVersion,
@@ -223,6 +253,8 @@ const ChatTimelinePane = React.memo(
       onNavigateToMessage={onNavigateToMessage}
       currentUsername={currentUsername}
       unreadMarker={unreadMarker}
+      unreadRestoreSignature={unreadRestoreSignature}
+      onUnreadRestoreConsumed={onUnreadRestoreConsumed}
       onReachedLatest={onReachedLatest}
       jumpToMessageId={jumpToMessageId}
       jumpRequestVersion={jumpRequestVersion}
@@ -480,6 +512,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     firstUnreadMessageId?: string;
     active?: boolean;
   } | null>(null);
+  const [pendingUnreadRestoreSignature, setPendingUnreadRestoreSignature] =
+    React.useState<string | null>(null);
   const [clockTick, setClockTick] = React.useState(() => Date.now());
   const [ephemeralNotice, setEphemeralNotice] =
     React.useState<EphemeralNotice | null>(null);
@@ -635,11 +669,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const handleReachedLatest = React.useCallback(
     (message: Message) => {
-      setUnreadMarker((current) => (current?.active ? null : current));
+      setUnreadMarker((current) => (current ? null : current));
+      setPendingUnreadRestoreSignature(null);
       onReachedLatestMessage?.(message);
     },
     [onReachedLatestMessage],
   );
+
+  const handleUnreadRestoreConsumed = React.useCallback((signature: string) => {
+    setPendingUnreadRestoreSignature((current) =>
+      current === signature ? null : current,
+    );
+  }, []);
 
   const queueJumpToMessage = React.useCallback(
     (messageId: string) => {
@@ -743,19 +784,35 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   // Close panels when switching conversations
   React.useEffect(() => {
     setOverlayMode(null);
-    if (
+    const hasUnreadContext =
       (conversation.unreadCount ?? 0) > 0 &&
-      (firstUnreadMessageId || lastReadMessageId || lastReadAt)
-    ) {
-      setUnreadMarker({
-        lastReadMessageId,
-        lastReadAt,
-        firstUnreadMessageId,
-        active: true,
-      });
-    } else {
+      (firstUnreadMessageId || lastReadMessageId || lastReadAt);
+
+    if (!hasUnreadContext) {
       setUnreadMarker(null);
+      setPendingUnreadRestoreSignature(null);
+      return;
     }
+
+    const nextUnreadMarker = {
+      lastReadMessageId,
+      lastReadAt,
+      firstUnreadMessageId,
+      active: true,
+    };
+    const nextUnreadRestoreSignature = buildUnreadRestoreSignature({
+      conversationId: conversation.id,
+      firstUnreadMessageId,
+      lastReadMessageId,
+      lastReadAt,
+    });
+
+    setUnreadMarker(nextUnreadMarker);
+    setPendingUnreadRestoreSignature((current) =>
+      current === nextUnreadRestoreSignature
+        ? current
+        : nextUnreadRestoreSignature,
+    );
   }, [
     conversation.id,
     conversation.unreadCount,
@@ -1000,6 +1057,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onNavigateToMessage={handleNavigateToMessage}
         currentUsername={currentUsername}
         unreadMarker={unreadMarker}
+        unreadRestoreSignature={pendingUnreadRestoreSignature}
+        onUnreadRestoreConsumed={handleUnreadRestoreConsumed}
         onReachedLatest={handleReachedLatest}
         jumpToMessageId={jumpTargetMessageId}
         jumpRequestVersion={jumpRequestVersion}

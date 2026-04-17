@@ -5,10 +5,14 @@ import { describe, expect, it, vi } from "vitest";
 import { useAutoScrollToBottom } from "./useAutoScrollToBottom";
 import { MessageStatus, MessageType } from "../types";
 
-const makeMessage = (id: string, createdAt: string) => ({
+const makeMessage = (
+  id: string,
+  createdAt: string,
+  senderId: string = "user-a",
+) => ({
   id,
   conversationId: "room-1",
-  senderId: "user-a",
+  senderId,
   senderName: "Alice",
   content: id,
   type: MessageType.TEXT,
@@ -135,5 +139,103 @@ describe("useAutoScrollToBottom", () => {
     expect(result.current.pendingRestoreScrollTop).toBeNull();
     expect(result.current.isPinnedToBottom).toBe(false);
     expect(result.current.scrollMode).toBe("reading_history");
+  });
+
+  it("buffers remote incoming messages without changing follow mode while reading history", () => {
+    const outerRef = {
+      current: {
+        scrollTop: 220,
+        scrollHeight: 1200,
+        clientHeight: 400,
+      },
+    } as React.RefObject<HTMLDivElement | null>;
+    const requestScrollToBottom = vi.fn();
+
+    const { result, rerender } = renderHook(
+      ({ messages }: { messages: ReturnType<typeof makeMessage>[] }) =>
+        useAutoScrollToBottom({
+          conversationId: "room-1",
+          messages,
+          currentUserId: "user-a",
+          hasMore: false,
+          isLoadingMore: false,
+          outerRef,
+          requestScrollToBottom,
+        }),
+      {
+        initialProps: {
+          messages: [
+            makeMessage("msg-1", "2026-04-10T10:00:00.000Z"),
+            makeMessage("msg-2", "2026-04-10T10:01:00.000Z"),
+          ],
+        },
+      },
+    );
+
+    act(() => {
+      result.current.detachAutoFollow("reading-history");
+    });
+
+    rerender({
+      messages: [
+        makeMessage("msg-1", "2026-04-10T10:00:00.000Z"),
+        makeMessage("msg-2", "2026-04-10T10:01:00.000Z"),
+        makeMessage("msg-3", "2026-04-10T10:02:00.000Z", "user-b"),
+      ],
+    });
+
+    expect(result.current.scrollMode).toBe("reading_history");
+    expect(result.current.pendingNewMessages).toBe(1);
+    expect(result.current.isPinnedToBottom).toBe(false);
+    expect(requestScrollToBottom).not.toHaveBeenCalled();
+  });
+
+  it("reattaches and follows when the detached user sends their own message", () => {
+    const outerRef = {
+      current: {
+        scrollTop: 240,
+        scrollHeight: 1200,
+        clientHeight: 400,
+      },
+    } as React.RefObject<HTMLDivElement | null>;
+    const requestScrollToBottom = vi.fn();
+
+    const { result, rerender } = renderHook(
+      ({ messages }: { messages: ReturnType<typeof makeMessage>[] }) =>
+        useAutoScrollToBottom({
+          conversationId: "room-1",
+          messages,
+          currentUserId: "user-a",
+          hasMore: false,
+          isLoadingMore: false,
+          outerRef,
+          requestScrollToBottom,
+        }),
+      {
+        initialProps: {
+          messages: [
+            makeMessage("msg-1", "2026-04-10T10:00:00.000Z", "user-b"),
+            makeMessage("msg-2", "2026-04-10T10:01:00.000Z", "user-b"),
+          ],
+        },
+      },
+    );
+
+    act(() => {
+      result.current.detachAutoFollow("reading-history");
+    });
+
+    rerender({
+      messages: [
+        makeMessage("msg-1", "2026-04-10T10:00:00.000Z", "user-b"),
+        makeMessage("msg-2", "2026-04-10T10:01:00.000Z", "user-b"),
+        makeMessage("msg-3", "2026-04-10T10:02:00.000Z", "user-a"),
+      ],
+    });
+
+    expect(result.current.scrollMode).toBe("sending_own_message");
+    expect(result.current.pendingNewMessages).toBe(0);
+    expect(result.current.isPinnedToBottom).toBe(true);
+    expect(requestScrollToBottom).toHaveBeenCalledWith("self-message");
   });
 });

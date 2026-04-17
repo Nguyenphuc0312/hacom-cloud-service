@@ -224,6 +224,8 @@ export const useAutoScrollToBottom = ({
     setPendingRestoreAnchor(null);
     setPendingRestoreScrollTop(null);
 
+    // `preferUnreadAnchor` represents a pending one-shot unread restore request.
+    // It must not follow the lifetime of the unread divider itself.
     if (preferUnreadAnchor) {
       isPinnedRef.current = false;
       setIsPinnedToBottom(false);
@@ -284,6 +286,8 @@ export const useAutoScrollToBottom = ({
     if (prependedOlderMessages) {
       loadingOlderRef.current = false;
       setScrollMode(isPinnedRef.current ? "at_bottom" : "reading_history");
+      // Prepending history preserves the current viewport via an anchor restore.
+      // It must not be conflated with append-follow behavior.
       onAfterPrepend?.();
       prevMessagesRef.current = messages;
       prevFirstMessageIdRef.current = firstMessageId;
@@ -296,6 +300,10 @@ export const useAutoScrollToBottom = ({
         previousMessages.length > 0 &&
         appendedMessages.some((message) => message.senderId === currentUserId);
 
+      // Append cases are intentionally asymmetric:
+      // - pinned bottom: follow the tail
+      // - own message while detached: reattach and follow
+      // - reading history + remote append: preserve viewport and buffer unread
       if (isPinnedRef.current || shouldForceFollowOwnMessage) {
         setScrollMode(
           shouldForceFollowOwnMessage ? "sending_own_message" : "receiving_new_message",

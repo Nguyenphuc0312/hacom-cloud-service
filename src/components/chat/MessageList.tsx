@@ -26,6 +26,7 @@ import { logScrollTrace } from "../../utils/scrollTrace";
 import { useMessageTimelineViewModel } from "../../features/chat/hooks/useMessageTimelineViewModel";
 import { useMessageScrollMachine } from "../../features/chat/hooks/useMessageScrollMachine";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
+import { getDistanceFromBottom } from "../../utils/scrollController";
 
 interface MessageListProps {
   messages: Message[];
@@ -52,6 +53,8 @@ interface MessageListProps {
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
   unreadMarker?: UnreadTimelineMarker | null;
+  unreadRestoreSignature?: string | null;
+  onUnreadRestoreConsumed?: (signature: string) => void;
   onReachedLatest?: (latestMessage: Message) => void;
   jumpToMessageId?: string | null;
   jumpRequestVersion?: number;
@@ -502,6 +505,114 @@ type ScrollCommand =
       reason: string;
     };
 
+type PendingScrollCommand = ScrollCommand & {
+  priority: number;
+  requestedAt: number;
+};
+
+const HIGH_VALUE_SCROLL_REASONS = new Set([
+  "jump-to-latest",
+  "jump-to-message",
+  "incoming-message",
+  "self-message",
+  "prepend-history-preserve",
+]);
+
+export const resolveScrollCommandPriority = (reason: string): number => {
+  switch (reason) {
+    case "jump-to-latest":
+      return 100;
+    case "jump-to-message":
+      return 95;
+    case "incoming-message":
+      return 90;
+    case "self-message":
+      return 85;
+    case "prepend-history-preserve":
+      return 80;
+    case "conversation-restore-anchor":
+      return 70;
+    case "conversation-restore":
+      return 65;
+    case "conversation-restore-unread":
+      return 60;
+    case "item-resize-preserve":
+      return 50;
+    case "item-resize-while-pinned":
+      return 48;
+    case "layout-change":
+      return 40;
+    case "keyboard-home":
+    case "keyboard-page-down":
+    case "keyboard-page-up":
+      return 30;
+    case "conversation-change":
+      return 25;
+    default:
+      return 20;
+  }
+};
+
+export const shouldAcceptScrollCommand = ({
+  nextCommand,
+  pendingCommand,
+  isPinnedToBottom,
+}: {
+  nextCommand: ScrollCommand;
+  pendingCommand: PendingScrollCommand | null;
+  isPinnedToBottom: boolean;
+}): {
+  accepted: boolean;
+  reason: string;
+} => {
+  if (
+    nextCommand.reason === "conversation-restore-unread" &&
+    isPinnedToBottom
+  ) {
+    return {
+      accepted: false,
+      reason: "restore_unread_blocked_while_pinned",
+    };
+  }
+
+  if (!pendingCommand) {
+    return { accepted: true, reason: "accepted_no_pending" };
+  }
+
+  const nextPriority = resolveScrollCommandPriority(nextCommand.reason);
+  if (pendingCommand.priority > nextPriority) {
+    return {
+      accepted: false,
+      reason: "lower_priority_than_pending",
+    };
+  }
+
+  if (pendingCommand.priority === nextPriority) {
+    const sameFamily = pendingCommand.reason === nextCommand.reason;
+    if (!sameFamily) {
+      return {
+        accepted: false,
+        reason: "equal_priority_keep_existing",
+      };
+    }
+  }
+
+  if (
+    nextCommand.reason === "conversation-restore-unread" &&
+    HIGH_VALUE_SCROLL_REASONS.has(pendingCommand.reason)
+  ) {
+    return {
+      accepted: false,
+      reason: "restore_unread_cannot_override_high_value_scroll",
+    };
+  }
+
+  return {
+    accepted: true,
+    reason: pendingCommand ? "accepted_replaced_pending" : "accepted_no_pending",
+  };
+};
+
 const MessageListComponent: React.FC<MessageListProps> = ({
   messages,
   conversationId,
@@ -527,6 +638,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   onNavigateToMessage,
   currentUsername,
   unreadMarker,
+  unreadRestoreSignature,
+  onUnreadRestoreConsumed,
   onReachedLatest,
   jumpToMessageId,
   jumpRequestVersion = 0,
@@ -541,7 +654,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const stickyDateRafRef = React.useRef<number | null>(null);
   const highlightTimerRef = React.useRef<number | null>(null);
   const scrollCommandRafRef = React.useRef<number | null>(null);
-  const pendingScrollCommandRef = React.useRef<ScrollCommand | null>(null);
+  const pendingScrollCommandRef = React.useRef<PendingScrollCommand | null>(
+    null,
+  );
+  const appliedUnreadRestoreSignatureRef = React.useRef<string | null>(null);
+  const lastSeenUnreadRestoreSignatureRef = React.useRef<string | null>(null);
   const prependAnchorRef = React.useRef<{
     messageId: string | null;
     offsetFromTop: number;
@@ -552,6 +669,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const pendingTimelineSizeChangesRef = React.useRef<
     Map<string, { index: number; delta: number }>
   >(new Map());
+  const isPinnedToBottomRef = React.useRef(true);
   const lastLayoutRef = React.useRef({
     viewportHeight: 0,
     composerHeight,
@@ -647,6 +765,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       conversationId,
       ...command,
       currentScrollTop: outerRef.current?.scrollTop ?? 0,
+      clientHeight: outerRef.current?.clientHeight ?? 0,
+      scrollHeight: outerRef.current?.scrollHeight ?? 0,
+      distanceFromBottom: outerRef.current
+        ? getDistanceFromBottom(outerRef.current)
+        : null,
     });
 
     switch (command.kind) {
@@ -660,26 +783,65 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   }, [conversationId]);
 
   const requestScrollCommand = React.useCallback(
-    (command: ScrollCommand) => {
-      pendingScrollCommandRef.current = command;
+    (command: ScrollCommand): boolean => {
+      const pendingCommand = pendingScrollCommandRef.current;
+      const nextCommand: PendingScrollCommand = {
+        ...command,
+        priority: resolveScrollCommandPriority(command.reason),
+        requestedAt: Date.now(),
+      };
       logScrollTrace("scroll_command_requested", {
         conversationId,
-        ...command,
+        ...nextCommand,
+        pendingReason: pendingCommand?.reason ?? null,
+        pendingPriority: pendingCommand?.priority ?? null,
         currentScrollTop: outerRef.current?.scrollTop ?? 0,
+        clientHeight: outerRef.current?.clientHeight ?? 0,
+        scrollHeight: outerRef.current?.scrollHeight ?? 0,
+        distanceFromBottom: outerRef.current
+          ? getDistanceFromBottom(outerRef.current)
+          : null,
+      });
+
+      const decision = shouldAcceptScrollCommand({
+        nextCommand: command,
+        pendingCommand,
+        isPinnedToBottom: isPinnedToBottomRef.current,
+      });
+      if (!decision.accepted) {
+        logScrollTrace("scroll_command_rejected", {
+          conversationId,
+          ...nextCommand,
+          pendingReason: pendingCommand?.reason ?? null,
+          pendingPriority: pendingCommand?.priority ?? null,
+          rejectionReason: decision.reason,
+          isPinnedToBottom: isPinnedToBottomRef.current,
+        });
+        return false;
+      }
+
+      pendingScrollCommandRef.current = nextCommand;
+      logScrollTrace("scroll_command_accepted", {
+        conversationId,
+        ...nextCommand,
+        previousPendingReason: pendingCommand?.reason ?? null,
+        previousPendingPriority: pendingCommand?.priority ?? null,
+        acceptanceReason: decision.reason,
       });
 
       if (scrollCommandRafRef.current !== null) {
-        return;
+        return true;
       }
 
       scrollCommandRafRef.current = requestAnimationFrame(flushScrollCommand);
+      return true;
     },
     [conversationId, flushScrollCommand],
   );
 
   const requestScrollToBottom = React.useCallback(
     (reason: string) => {
-      requestScrollCommand({ kind: "bottom", reason });
+      return requestScrollCommand({ kind: "bottom", reason });
     },
     [requestScrollCommand],
   );
@@ -783,6 +945,10 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         new Date(item.message.createdAt).getTime() > lastReadAtMs,
     );
   }, [timelineItems, unreadMarker]);
+  const unreadAnchorIndex = React.useMemo(
+    () => resolveUnreadAnchorIndex(),
+    [resolveUnreadAnchorIndex],
+  );
 
   const {
     pendingNewMessages,
@@ -800,7 +966,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     conversationId,
     messages,
     currentUserId,
-    preferUnreadAnchor: Boolean(unreadMarker?.active),
+    preferUnreadAnchor: Boolean(unreadRestoreSignature),
     hasMore,
     isLoadingMore,
     onLoadMore,
@@ -812,12 +978,16 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       });
     },
     onAfterPrepend: () => {
-      restoreCapturedAnchor("prepend-restore");
+      restoreCapturedAnchor("prepend-history-preserve");
     },
     outerRef,
     requestScrollToBottom,
     captureScrollAnchor: captureVisibleAnchor,
   });
+
+  React.useEffect(() => {
+    isPinnedToBottomRef.current = isPinnedToBottom;
+  }, [isPinnedToBottom]);
 
   React.useEffect(() => {
     if (unreadMarker?.active) {
@@ -834,7 +1004,43 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     }
 
     setLiveUnreadMarker(unreadMarker ?? null);
-  }, [firstDetachedUnreadMessageId, unreadMarker]);
+  }, [conversationId, firstDetachedUnreadMessageId, unreadMarker, unreadRestoreSignature]);
+
+  React.useEffect(() => {
+    if (lastSeenUnreadRestoreSignatureRef.current !== unreadRestoreSignature) {
+      if (lastSeenUnreadRestoreSignatureRef.current) {
+        logScrollTrace("unread_restore_signature_cleared", {
+          conversationId,
+          signature: lastSeenUnreadRestoreSignatureRef.current,
+          nextSignature: unreadRestoreSignature ?? null,
+        });
+      }
+      lastSeenUnreadRestoreSignatureRef.current = unreadRestoreSignature ?? null;
+    }
+
+    if (!unreadRestoreSignature) {
+      if (appliedUnreadRestoreSignatureRef.current !== null) {
+        logScrollTrace("unread_restore_signature_cleared", {
+          conversationId,
+          signature: appliedUnreadRestoreSignatureRef.current,
+        });
+      }
+      appliedUnreadRestoreSignatureRef.current = null;
+      return;
+    }
+
+    if (appliedUnreadRestoreSignatureRef.current === unreadRestoreSignature) {
+      logScrollTrace("unread_restore_signature_skipped_already_applied", {
+        conversationId,
+        signature: unreadRestoreSignature,
+      });
+    } else {
+      logScrollTrace("unread_restore_signature_seen", {
+        conversationId,
+        signature: unreadRestoreSignature,
+      });
+    }
+  }, [conversationId, unreadRestoreSignature]);
 
   const showNewMessagesPill = pendingNewMessages > 0;
   const showJumpToBottom =
@@ -1210,23 +1416,36 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   ]);
 
   React.useEffect(() => {
-    if (!unreadMarker?.active || viewportHeight <= 0) {
+    if (!unreadRestoreSignature || viewportHeight <= 0) {
+      return;
+    }
+    if (appliedUnreadRestoreSignatureRef.current === unreadRestoreSignature) {
       return;
     }
     if (pendingRestoreAnchor || pendingRestoreScrollTop !== null) {
       return;
     }
 
-    const targetIndex = resolveUnreadAnchorIndex();
-    if (targetIndex < 0) {
+    if (unreadAnchorIndex < 0) {
       return;
     }
 
-    requestScrollCommand({
+    const accepted = requestScrollCommand({
       kind: "offset",
-      offset: Math.max(0, getItemOffset(targetIndex)),
+      offset: Math.max(0, getItemOffset(unreadAnchorIndex)),
       reason: "conversation-restore-unread",
     });
+    if (!accepted) {
+      return;
+    }
+
+    appliedUnreadRestoreSignatureRef.current = unreadRestoreSignature;
+    logScrollTrace("unread_restore_signature_applied", {
+      conversationId,
+      signature: unreadRestoreSignature,
+      targetIndex: unreadAnchorIndex,
+    });
+    onUnreadRestoreConsumed?.(unreadRestoreSignature);
 
     const rafId = requestAnimationFrame(() => {
       syncScrollStateFromDom("conversation-restore-unread-synced");
@@ -1240,10 +1459,12 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     pendingRestoreAnchor,
     pendingRestoreScrollTop,
     requestScrollCommand,
-    resolveUnreadAnchorIndex,
     syncScrollStateFromDom,
-    unreadMarker,
+    unreadAnchorIndex,
+    unreadRestoreSignature,
+    onUnreadRestoreConsumed,
     viewportHeight,
+    conversationId,
   ]);
 
   React.useLayoutEffect(() => {
@@ -1482,6 +1703,8 @@ const areEqualMessageListProps = (
   previousProps.onNavigateToMessage === nextProps.onNavigateToMessage &&
   previousProps.currentUsername === nextProps.currentUsername &&
   previousProps.unreadMarker === nextProps.unreadMarker &&
+  previousProps.unreadRestoreSignature === nextProps.unreadRestoreSignature &&
+  previousProps.onUnreadRestoreConsumed === nextProps.onUnreadRestoreConsumed &&
   previousProps.onReachedLatest === nextProps.onReachedLatest &&
   previousProps.jumpToMessageId === nextProps.jumpToMessageId &&
   previousProps.jumpRequestVersion === nextProps.jumpRequestVersion &&
