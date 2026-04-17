@@ -39,14 +39,6 @@ import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDis
 import { logMessageDebug } from "../utils/messageDebug";
 import { ErrorCode } from "@hacom/chat-shared-types";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
-import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
-import { createPrivateConversationUseCase } from "../features/chat/usecases/createPrivateConversation";
-import { createGroupConversationUseCase } from "../features/chat/usecases/createGroupConversation";
-import { deleteConversationUseCase } from "../features/chat/usecases/deleteConversation";
-import { addReactionUseCase } from "../features/chat/usecases/addReaction";
-import { removeReactionUseCase } from "../features/chat/usecases/removeReaction";
-import { editMessageUseCase } from "../features/chat/usecases/editMessage";
-import { deleteMessageUseCase } from "../features/chat/usecases/deleteMessage";
 import { useSendMessage } from "../features/chat/hooks/useSendMessage";
 import { useConversationSession } from "../features/chat/hooks/useConversationSession";
 import { useConversationValidation } from "../features/chat/hooks/useConversationValidation";
@@ -126,6 +118,43 @@ const DeferredModalFallback: React.FC = () => (
     </div>
   </div>
 );
+
+const loadReactionUseCases = () =>
+  import("../features/chat/usecases/addReaction").then(
+    async ({ addReactionUseCase }) => {
+      const { removeReactionUseCase } = await import(
+        "../features/chat/usecases/removeReaction"
+      );
+      return { addReactionUseCase, removeReactionUseCase };
+    },
+  );
+
+const loadMessageMutationUseCases = () =>
+  import("../features/chat/usecases/editMessage").then(
+    async ({ editMessageUseCase }) => {
+      const { deleteMessageUseCase } = await import(
+        "../features/chat/usecases/deleteMessage"
+      );
+      return { editMessageUseCase, deleteMessageUseCase };
+    },
+  );
+
+const loadConversationMutationUseCases = () =>
+  import("../features/chat/usecases/createPrivateConversation").then(
+    async ({ createPrivateConversationUseCase }) => {
+      const [{ createGroupConversationUseCase }, { deleteConversationUseCase }] =
+        await Promise.all([
+          import("../features/chat/usecases/createGroupConversation"),
+          import("../features/chat/usecases/deleteConversation"),
+        ]);
+
+      return {
+        createPrivateConversationUseCase,
+        createGroupConversationUseCase,
+        deleteConversationUseCase,
+      };
+    },
+  );
 
 export const ChatPage: React.FC = () => {
   const { t } = useTranslation();
@@ -575,6 +604,8 @@ export const ChatPage: React.FC = () => {
       });
 
       try {
+        const { addReactionUseCase, removeReactionUseCase } =
+          await loadReactionUseCases();
         const response = hasReacted
           ? await removeReactionUseCase({ messageId, emoji })
           : await addReactionUseCase({ messageId, emoji });
@@ -602,6 +633,7 @@ export const ChatPage: React.FC = () => {
       if (!selectedConversationId) return;
 
       try {
+        const { editMessageUseCase } = await loadMessageMutationUseCases();
         const response = await editMessageUseCase({ messageId, content });
         const updatedMessage = unwrapApiSuccess(response);
 
@@ -624,6 +656,7 @@ export const ChatPage: React.FC = () => {
       if (!selectedConversationId) return;
 
       try {
+        const { deleteMessageUseCase } = await loadMessageMutationUseCases();
         await deleteMessageUseCase(messageId);
         removeStoreMessage(selectedConversationId, messageId);
         toast.success(t("chat:toast.messageDeleted"));
@@ -699,6 +732,8 @@ export const ChatPage: React.FC = () => {
     if (!window.confirm(t("profile:userProfile.deleteConversation"))) return;
 
     try {
+      const { deleteConversationUseCase } =
+        await loadConversationMutationUseCases();
       await deleteConversationUseCase(selectedConversation.id);
       removeConversation(selectedConversation.id);
       closeInfoPanel();
@@ -737,6 +772,8 @@ export const ChatPage: React.FC = () => {
       roomCreationLockRef.current = true;
       setIsCreatingRoom(true);
       try {
+        const { createPrivateConversationUseCase } =
+          await loadConversationMutationUseCases();
         const response = await createPrivateConversationUseCase(userId);
         const payload = unwrapApiSuccess(response);
         const conversationId = payload.id;
@@ -811,6 +848,8 @@ export const ChatPage: React.FC = () => {
       roomCreationLockRef.current = true;
       setIsCreatingRoom(true);
       try {
+        const { createGroupConversationUseCase } =
+          await loadConversationMutationUseCases();
         const response = await createGroupConversationUseCase({
           name: payload.name,
           memberIds: payload.memberIds,
@@ -949,7 +988,10 @@ export const ChatPage: React.FC = () => {
     directInfoHydratedRef.current.add(selectedConversationId);
 
     let isCancelled = false;
-    void getConversationByIdUseCase(selectedConversationId)
+    void import("../features/chat/usecases/getConversationById")
+      .then(({ getConversationByIdUseCase }) =>
+        getConversationByIdUseCase(selectedConversationId),
+      )
       .then((response) => {
         if (isCancelled) return;
         const conversation = unwrapApiSuccess(response);

@@ -7,8 +7,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "test": "vitest run",
-    "e2e": "playwright test",
-    "e2e:headed": "playwright test --headed",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "analyze:bundle": "vite build --mode analyze",
+    "e2e": "npm run test:e2e",
+    "e2e:headed": "npm run test:e2e:headed",
     "lint": "eslint .",
     "preview": "vite preview",
     "i18n:check": "node scripts/i18n-check.mjs",
@@ -62,6 +65,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "rollup-plugin-visualizer": "^5.12.0"
   }
 }

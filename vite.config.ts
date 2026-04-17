@@ -1,6 +1,7 @@
 import { loadEnv } from "vite";
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
+import { visualizer } from "rollup-plugin-visualizer";
 
 const normalizeBasePath = (value?: string): string => {
   const rawValue = value?.trim();
@@ -59,10 +60,20 @@ export default defineConfig(({ mode }) => {
     env.VITE_DEV_WS_PROXY_TARGET,
     "ws://localhost:8001",
   );
+  const shouldAnalyzeBundle = mode === "analyze";
 
   return {
     base: normalizeBasePath(env.VITE_APP_BASE_PATH),
-    plugins: [react()],
+    plugins: [
+      react(),
+      shouldAnalyzeBundle &&
+        visualizer({
+          filename: "dist/bundle-analysis.html",
+          gzipSize: true,
+          brotliSize: true,
+          template: "treemap",
+        }),
+    ].filter(Boolean),
     build: {
       rollupOptions: {
         output: {
@@ -83,21 +94,38 @@ export default defineConfig(({ mode }) => {
               }
             }
 
-            if (
-              normalizedId.includes("/src/components/info/UserProfile") ||
-              normalizedId.includes("/src/components/info/GroupInfo") ||
-              normalizedId.includes("/src/components/chat/SearchPanel") ||
-              normalizedId.includes("/src/components/chat/PinnedMessagesPanel")
-            ) {
-              return "chat-side-panels";
+            if (normalizedId.includes("/src/components/info/UserProfile")) {
+              return "chat-panel-user-profile";
+            }
+
+            if (normalizedId.includes("/src/components/info/GroupInfo")) {
+              return "chat-panel-group-info";
+            }
+
+            if (normalizedId.includes("/src/components/chat/SearchPanel")) {
+              return "chat-panel-search";
             }
 
             if (
-              normalizedId.includes("/src/components/modals/NewChatModal") ||
-              normalizedId.includes("/src/components/modals/ImagePreviewModal") ||
+              normalizedId.includes("/src/components/chat/PinnedMessagesPanel")
+            ) {
+              return "chat-panel-pinned";
+            }
+
+            if (normalizedId.includes("/src/components/modals/NewChatModal")) {
+              return "chat-modal-new-chat";
+            }
+
+            if (
+              normalizedId.includes("/src/components/modals/ImagePreviewModal")
+            ) {
+              return "chat-modal-image-preview";
+            }
+
+            if (
               normalizedId.includes("/src/components/modals/FilePreviewModal")
             ) {
-              return "chat-overlays";
+              return "chat-modal-file-preview";
             }
 
             return undefined;
@@ -109,6 +137,14 @@ export default defineConfig(({ mode }) => {
       environment: "jsdom",
       setupFiles: ["./src/test/setup.ts"],
       css: true,
+      include: ["src/**/*.{test,spec}.{ts,tsx}"],
+      exclude: [
+        "e2e/**",
+        "**/e2e/**",
+        "dist/**",
+        "node_modules/**",
+        "playwright.config.*",
+      ],
     },
     server: {
       host: "0.0.0.0",
