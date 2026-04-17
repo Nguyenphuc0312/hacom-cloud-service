@@ -664,6 +664,15 @@ export const useWebSocket = (
       }
 
       const resolveLatestCursor = (): MessageCursor | undefined => {
+        const loadedWindow =
+          useChatStore.getState().messageWindowByConversation[roomId];
+        if (loadedWindow?.newestLoadedMessageId && loadedWindow.newestLoadedAt) {
+          return {
+            at: loadedWindow.newestLoadedAt,
+            id: loadedWindow.newestLoadedMessageId,
+          };
+        }
+
         const roomMessages = useChatStore.getState().messages[roomId] || [];
         for (let index = roomMessages.length - 1; index >= 0; index -= 1) {
           const candidate = roomMessages[index];
