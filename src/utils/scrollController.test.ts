@@ -12,6 +12,15 @@ const makeElement = (
   }) as HTMLElement;
 
 describe("scrollController", () => {
+  it("pins a detached reader again only once they are within the enter threshold", () => {
+    const result = resolvePinnedToBottom(makeElement(24), undefined, {
+      previouslyPinnedToBottom: false,
+    });
+
+    expect(result.isPinnedToBottom).toBe(true);
+    expect(result.mode).toBe("at_bottom");
+  });
+
   it("keeps a near-bottom reader pinned while within the leave threshold", () => {
     const result = resolvePinnedToBottom(makeElement(72), undefined, {
       previouslyPinnedToBottom: true,
@@ -28,5 +37,14 @@ describe("scrollController", () => {
 
     expect(result.isPinnedToBottom).toBe(false);
     expect(result.mode).toBe("near_bottom");
+  });
+
+  it("detaches once the reader moves beyond the leave threshold", () => {
+    const result = resolvePinnedToBottom(makeElement(81), undefined, {
+      previouslyPinnedToBottom: true,
+    });
+
+    expect(result.isPinnedToBottom).toBe(false);
+    expect(result.mode).toBe("reading_history");
   });
 });

@@ -9,8 +9,8 @@ export type ScrollMode =
   | "sending_own_message"
   | "jump_to_message";
 
-export const PINNED_TO_BOTTOM_ENTER_THRESHOLD_PX = 48;
-export const PINNED_TO_BOTTOM_LEAVE_THRESHOLD_PX = 96;
+export const PINNED_TO_BOTTOM_ENTER_THRESHOLD_PX = 24;
+export const PINNED_TO_BOTTOM_LEAVE_THRESHOLD_PX = 80;
 export const PINNED_TO_BOTTOM_THRESHOLD_PX = 24;
 
 export const getDistanceFromBottom = (element: HTMLElement): number =>

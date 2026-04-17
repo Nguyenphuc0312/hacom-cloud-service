@@ -17,3 +17,7 @@ export const CHAT_SCROLL_MACHINE_V2_ENABLED = resolveBooleanFlag(
   CHAT_TIMELINE_V2_ENABLED,
 );
 
+export const CHAT_VIRTUALIZER_V2_ENABLED = resolveBooleanFlag(
+  import.meta.env.VITE_CHAT_VIRTUALIZER_V2,
+  false,
+);

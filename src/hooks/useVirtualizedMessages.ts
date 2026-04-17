@@ -1,5 +1,10 @@
 import React from "react";
 import type { VariableSizeList as VirtualList } from "react-window";
+import type {
+  ConversationVirtualizerAlign,
+  ConversationVirtualizerMeasurementResult,
+  ConversationVirtualizerOffsetMatch,
+} from "./virtualizerContract";
 import { logMessageDebug } from "../utils/messageDebug";
 
 const ITEM_SIZE_CHANGE_THRESHOLD = 2;
@@ -9,8 +14,10 @@ interface UseVirtualizedMessagesParams<Item, ListData> {
   viewportRef: React.RefObject<HTMLDivElement | null>;
   observeViewport?: boolean;
   debugLabel?: string;
+  enabled?: boolean;
   estimateItemSize: (item: Item) => number;
   getItemKey: (item: Item, index: number) => string;
+  getMeasurementKey?: (item: Item, index: number) => string;
   shouldResetAfterSizeChange?: (item: Item, index: number) => boolean;
   listRef?: React.MutableRefObject<VirtualList<ListData> | null>;
   outerRef?: React.MutableRefObject<HTMLDivElement | null>;
@@ -22,20 +29,21 @@ interface UseVirtualizedMessagesResult<ListData> {
   viewportHeight: number;
   getItemSize: (index: number) => number;
   getItemOffset: (index: number) => number;
-  findItemAtOffset: (scrollOffset: number) => {
-    index: number;
-    offsetWithinItem: number;
-  } | null;
+  findItemAtOffset: (
+    scrollOffset: number,
+  ) => ConversationVirtualizerOffsetMatch | null;
   setItemSize: (
     index: number,
     size: number,
-  ) => {
-    changed: boolean;
-    previousSize: number;
-    nextSize: number;
-    delta: number;
-  };
+  ) => ConversationVirtualizerMeasurementResult;
   clearMeasuredSizes: () => void;
+  resetMeasurements: () => void;
+  scrollToOffset: (offset: number) => void;
+  scrollToIndex: (
+    index: number,
+    align?: ConversationVirtualizerAlign,
+  ) => void;
+  measureIndex: (index: number) => void;
   measureVersion: number;
 }
 
@@ -44,8 +52,10 @@ export const useVirtualizedMessages = <Item, ListData>({
   viewportRef,
   observeViewport = true,
   debugLabel,
+  enabled = true,
   estimateItemSize,
   getItemKey,
+  getMeasurementKey,
   shouldResetAfterSizeChange,
   listRef: providedListRef,
   outerRef: providedOuterRef,
@@ -77,9 +87,17 @@ export const useVirtualizedMessages = <Item, ListData>({
   >(new Map());
   const flushPendingSizeUpdatesRafRef = React.useRef<number | null>(null);
   const [viewportHeight, setViewportHeight] = React.useState(0);
+  const resolveMeasurementKey = React.useCallback(
+    (item: Item, index: number) =>
+      getMeasurementKey?.(item, index) ?? getItemKey(item, index),
+    [getItemKey, getMeasurementKey],
+  );
 
   const scheduleResetAfterIndex = React.useCallback(
     (index: number, shouldForceUpdate = false) => {
+      if (!enabled) {
+        return;
+      }
       pendingResetIndexRef.current =
         pendingResetIndexRef.current === null
           ? index
@@ -103,7 +121,7 @@ export const useVirtualizedMessages = <Item, ListData>({
         listRef.current?.resetAfterIndex(nextIndex, shouldForce);
       });
     },
-    [listRef],
+    [enabled, listRef],
   );
 
   const flushPendingSizeUpdates = React.useCallback(() => {
@@ -159,7 +177,7 @@ export const useVirtualizedMessages = <Item, ListData>({
         };
       }
 
-      const key = getItemKey(item, index);
+      const key = resolveMeasurementKey(item, index);
       const pendingUpdate = pendingSizeUpdatesRef.current.get(key);
       const previousSize =
         pendingUpdate?.size ??
@@ -193,7 +211,7 @@ export const useVirtualizedMessages = <Item, ListData>({
         delta,
       };
     },
-    [estimateItemSize, getItemKey, items, schedulePendingSizeFlush],
+    [estimateItemSize, items, resolveMeasurementKey, schedulePendingSizeFlush],
   );
 
   const getItemSize = React.useCallback(
@@ -201,10 +219,10 @@ export const useVirtualizedMessages = <Item, ListData>({
       const item = items[index];
       if (!item) return 0;
 
-      const key = getItemKey(item, index);
+      const key = resolveMeasurementKey(item, index);
       return sizeMapRef.current.get(key) ?? estimateItemSize(item);
     },
-    [estimateItemSize, getItemKey, items],
+    [estimateItemSize, items, resolveMeasurementKey],
   );
 
   // Lazily builds (or partially rebuilds) the prefix-sum array.
@@ -228,7 +246,7 @@ export const useVirtualizedMessages = <Item, ListData>({
         arr[i] = arr[i - 1];
         continue;
       }
-      const key = getItemKey(item, i - 1);
+      const key = resolveMeasurementKey(item, i - 1);
       const measured = sizeMapRef.current.get(key);
       const size = measured !== undefined ? measured : estimateItemSize(item);
       arr[i] = arr[i - 1] + Math.max(1, Math.ceil(size));
@@ -236,7 +254,7 @@ export const useVirtualizedMessages = <Item, ListData>({
 
     prefixSumDirtyFromRef.current = n + 1; // clean
     return arr;
-  }, [estimateItemSize, getItemKey, items]);
+  }, [estimateItemSize, items, resolveMeasurementKey]);
 
   // O(1): direct prefix-sum lookup after lazy rebuild.
   const getItemOffset = React.useCallback(
@@ -293,7 +311,7 @@ export const useVirtualizedMessages = <Item, ListData>({
   }, [listRef]);
 
   React.useEffect(() => {
-    const nextKeys = new Set(items.map(getItemKey));
+    const nextKeys = new Set(items.map(resolveMeasurementKey));
     let removedAny = false;
     sizeMapRef.current.forEach((_, key) => {
       if (nextKeys.has(key)) return;
@@ -304,7 +322,7 @@ export const useVirtualizedMessages = <Item, ListData>({
       prefixSumDirtyFromRef.current = 0;
       scheduleResetAfterIndex(0, false);
     }
-  }, [getItemKey, items, scheduleResetAfterIndex]);
+  }, [items, resolveMeasurementKey, scheduleResetAfterIndex]);
 
   React.useEffect(() => {
     return () => {
@@ -318,7 +336,7 @@ export const useVirtualizedMessages = <Item, ListData>({
   }, []);
 
   React.useLayoutEffect(() => {
-    if (!observeViewport) {
+    if (!enabled || !observeViewport) {
       setViewportHeight((previous) => (previous === 0 ? previous : 0));
       return;
     }
@@ -366,7 +384,37 @@ export const useVirtualizedMessages = <Item, ListData>({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [debugLabel, observeViewport, viewportRef]);
+  }, [debugLabel, enabled, observeViewport, viewportRef]);
+
+  const scrollToOffset = React.useCallback(
+    (offset: number) => {
+      if (!enabled) {
+        return;
+      }
+      listRef.current?.scrollTo(Math.max(0, offset));
+    },
+    [enabled, listRef],
+  );
+
+  const scrollToIndex = React.useCallback(
+    (index: number, align: ConversationVirtualizerAlign = "auto") => {
+      if (!enabled) {
+        return;
+      }
+      listRef.current?.scrollToItem(index, align);
+    },
+    [enabled, listRef],
+  );
+
+  const measureIndex = React.useCallback(
+    (index: number) => {
+      if (!enabled) {
+        return;
+      }
+      listRef.current?.resetAfterIndex(index, false);
+    },
+    [enabled, listRef],
+  );
 
   return {
     listRef,
@@ -377,6 +425,10 @@ export const useVirtualizedMessages = <Item, ListData>({
     findItemAtOffset,
     setItemSize,
     clearMeasuredSizes,
+    resetMeasurements: clearMeasuredSizes,
+    scrollToOffset,
+    scrollToIndex,
+    measureIndex,
     measureVersion: viewportHeight,
   };
 };

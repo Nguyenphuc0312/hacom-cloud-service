@@ -4,17 +4,20 @@ import { useTranslation } from "react-i18next";
 import {
   VariableSizeList as VirtualList,
   type ListChildComponentProps,
-  type ListOnScrollProps,
 } from "react-window";
 import { MessageItem } from "./MessageItem";
 import { MessageRowContainer } from "./MessageRowContainer";
 import { MessageListOverlays } from "./MessageListOverlays";
 import { EmptyMessages, ErrorState, MessageListSkeleton } from "../ui";
 import {
+  CHAT_VIRTUALIZER_V2_ENABLED,
+} from "../../features/chat/config/experienceFlags";
+import {
   type TimelineItem,
   type UnreadTimelineMarker,
 } from "../../hooks/useMessageGrouping";
 import { useVirtualizedMessages } from "../../hooks/useVirtualizedMessages";
+import { useTanStackVirtualizedMessages } from "../../hooks/useTanStackVirtualizedMessages";
 import type { Conversation, Message, Attachment } from "../../types";
 import type { ChatDensity } from "../../stores/uiStore";
 import { useMessagesByConversation } from "../../stores";
@@ -188,7 +191,8 @@ const areEqualTimelineRowProps = (
     previousProps.style.top !== nextProps.style.top ||
     previousProps.style.height !== nextProps.style.height ||
     previousProps.style.width !== nextProps.style.width ||
-    previousProps.style.left !== nextProps.style.left
+    previousProps.style.left !== nextProps.style.left ||
+    previousProps.style.transform !== nextProps.style.transform
   ) {
     return false;
   }
@@ -794,7 +798,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const messages = useMessagesByConversation(conversationId);
   const { t } = useTranslation();
   const viewportRef = React.useRef<HTMLDivElement | null>(null);
-  const listRef = React.useRef<VirtualList<TimelineRowData> | null>(null);
+  const legacyListRef = React.useRef<VirtualList<TimelineRowData> | null>(null);
   const outerRef = React.useRef<HTMLDivElement | null>(null);
   const stickyDateRafRef = React.useRef<number | null>(null);
   const highlightTimerRef = React.useRef<number | null>(null);
@@ -826,6 +830,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const [highlightedMessageId, setHighlightedMessageId] = React.useState<
     string | null
   >(null);
+  const [contentWidthBucket, setContentWidthBucket] = React.useState(0);
   const [expandedLongMessageIds, setExpandedLongMessageIds] = React.useState<
     Set<string>
   >(() => new Set());
@@ -895,31 +900,121 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       ),
     [density, expandedLongMessageIds, layoutState],
   );
+  const getTimelineMeasurementKey = React.useCallback(
+    (item: ConversationTimelineItem, index: number) => {
+      const renderState = resolveTimelineMessageRenderState(
+        item,
+        expandedLongMessageIds,
+      );
+      return [
+        getTimelineItemKey(item, index),
+        density ?? "comfortable",
+        contentWidthBucket,
+        renderState.measurementMode,
+      ].join(":");
+    },
+    [contentWidthBucket, density, expandedLongMessageIds, getTimelineItemKey],
+  );
+  const listOverscan = isLoadingMore && !isInitialLoading ? 20 : 10;
 
+  const legacyVirtualizer = useVirtualizedMessages<
+    ConversationTimelineItem,
+    TimelineRowData
+  >({
+    items: timelineItems,
+    viewportRef,
+    observeViewport: !isInitialLoading && messages.length > 0,
+    enabled: !CHAT_VIRTUALIZER_V2_ENABLED,
+    debugLabel: conversationId,
+    estimateItemSize,
+    getItemKey: getTimelineItemKey,
+    getMeasurementKey: getTimelineMeasurementKey,
+    shouldResetAfterSizeChange: (item) =>
+      resolveTimelineMessageRenderState(item, expandedLongMessageIds)
+        .measurementMode === "dynamic",
+    listRef: legacyListRef,
+    outerRef,
+  });
+  const tanStackVirtualizer = useTanStackVirtualizedMessages({
+    items: timelineItems,
+    viewportRef,
+    outerRef,
+    observeViewport: !isInitialLoading && messages.length > 0,
+    enabled: CHAT_VIRTUALIZER_V2_ENABLED,
+    debugLabel: conversationId,
+    overscan: listOverscan,
+    estimateItemSize,
+    getItemKey: getTimelineItemKey,
+    getMeasurementKey: getTimelineMeasurementKey,
+    shouldResetAfterSizeChange: (item) =>
+      resolveTimelineMessageRenderState(item, expandedLongMessageIds)
+        .measurementMode === "dynamic",
+  });
+
+  const activeVirtualizer = CHAT_VIRTUALIZER_V2_ENABLED
+    ? tanStackVirtualizer
+    : legacyVirtualizer;
   const {
     viewportHeight,
     getItemSize,
     getItemOffset,
     findItemAtOffset,
     setItemSize,
-    clearMeasuredSizes,
-  } = useVirtualizedMessages<ConversationTimelineItem, TimelineRowData>({
-    items: timelineItems,
-    viewportRef,
-    observeViewport: !isInitialLoading && messages.length > 0,
-    debugLabel: conversationId,
-    estimateItemSize,
-    getItemKey: getTimelineItemKey,
-    shouldResetAfterSizeChange: (item) =>
-      resolveTimelineMessageRenderState(item, expandedLongMessageIds)
-        .measurementMode === "dynamic",
-    listRef,
-    outerRef,
-  });
+    resetMeasurements,
+    scrollToOffset,
+    scrollToIndex,
+  } = activeVirtualizer;
+  const tanStackVirtualItems = CHAT_VIRTUALIZER_V2_ENABLED
+    ? tanStackVirtualizer.virtualItems
+    : [];
+  const tanStackTotalSize = CHAT_VIRTUALIZER_V2_ENABLED
+    ? tanStackVirtualizer.totalSize
+    : 0;
+
+  React.useLayoutEffect(() => {
+    const viewportElement = viewportRef.current;
+    if (!viewportElement) {
+      return;
+    }
+
+    const measureWidthBucket = () => {
+      const width = Math.max(
+        0,
+        viewportElement.clientWidth ||
+          Math.round(viewportElement.getBoundingClientRect().width),
+      );
+      const nextBucket = Math.max(1, Math.round(width / 32));
+      setContentWidthBucket((previous) =>
+        previous === nextBucket ? previous : nextBucket,
+      );
+    };
+
+    measureWidthBucket();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measureWidthBucket);
+      return () => {
+        window.removeEventListener("resize", measureWidthBucket);
+      };
+    }
+
+    const resizeObserver = new ResizeObserver(measureWidthBucket);
+    resizeObserver.observe(viewportElement);
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [conversationId, viewportRef]);
 
   React.useEffect(() => {
-    clearMeasuredSizes();
-  }, [clearMeasuredSizes, conversationId, expandedLongMessageIds, layoutState]);
+    resetMeasurements();
+  }, [
+    conversationId,
+    contentWidthBucket,
+    density,
+    expandedLongMessageIds,
+    layoutState,
+    resetMeasurements,
+  ]);
 
   const flushScrollCommand = React.useCallback(() => {
     scrollCommandRafRef.current = null;
@@ -949,13 +1044,13 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
     switch (command.kind) {
       case "bottom":
-        listRef.current?.scrollToItem(itemCount - 1, "end");
+        scrollToIndex(itemCount - 1, "end");
         break;
       case "offset":
-        listRef.current?.scrollTo(Math.max(0, command.offset));
+        scrollToOffset(command.offset);
         break;
     }
-  }, [conversationId]);
+  }, [conversationId, scrollToIndex, scrollToOffset]);
 
   const requestScrollCommand = React.useCallback(
     (command: ScrollCommand): boolean => {
@@ -1374,8 +1469,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     ],
   );
 
-  const handleListScroll = React.useCallback(
-    ({ scrollOffset, scrollUpdateWasRequested }: ListOnScrollProps) => {
+  const handleScrollUpdate = React.useCallback(
+    (scrollOffset: number, scrollUpdateWasRequested: boolean) => {
       if (scrollUpdateWasRequested) return;
       handleScroll(scrollOffset);
 
@@ -1408,6 +1503,30 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       });
     },
     [findItemAtOffset, handleScroll, timelineItems],
+  );
+
+  const handleLegacyListScroll = React.useCallback(
+    ({
+      scrollOffset,
+      scrollUpdateWasRequested,
+    }: {
+      scrollOffset: number;
+      scrollUpdateWasRequested: boolean;
+    }) => {
+      handleScrollUpdate(scrollOffset, scrollUpdateWasRequested);
+    },
+    [handleScrollUpdate],
+  );
+
+  const handleTanStackScroll = React.useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      const scrollOffset = event.currentTarget.scrollTop;
+      handleScrollUpdate(
+        scrollOffset,
+        tanStackVirtualizer.consumeProgrammaticScroll(scrollOffset),
+      );
+    },
+    [handleScrollUpdate, tanStackVirtualizer],
   );
 
   const handleRetry = React.useCallback(() => {
@@ -1778,26 +1897,60 @@ const MessageListComponent: React.FC<MessageListProps> = ({
                 "focus-visible:ring-2 focus-visible:ring-focus/30",
               )}
             >
-              {viewportHeight > 0 && (
-                <VirtualList
-                  ref={listRef}
-                  outerRef={outerRef}
-                  height={viewportHeight}
-                  width="100%"
-                  itemCount={timelineItems.length}
-                  itemSize={getItemSize}
-                  itemData={rowData}
-                  itemKey={(index, data) =>
-                    data.items[index]
-                      ? getTimelineItemKey(data.items[index], index)
-                      : index
-                  }
-                  onScroll={handleListScroll}
-                  overscanCount={isLoadingMore && !isInitialLoading ? 20 : 8}
-                >
-                  {TimelineRow}
-                </VirtualList>
-              )}
+              {viewportHeight > 0 &&
+                (CHAT_VIRTUALIZER_V2_ENABLED ? (
+                  <div
+                    ref={outerRef}
+                    onScroll={handleTanStackScroll}
+                    className="h-full min-h-0 overflow-auto overscroll-contain"
+                  >
+                    <div
+                      style={{
+                        height: tanStackTotalSize,
+                        position: "relative",
+                        width: "100%",
+                      }}
+                    >
+                      {tanStackVirtualItems.map((virtualItem) => (
+                        <TimelineRow
+                          key={String(virtualItem.key)}
+                          {...({
+                            index: virtualItem.index,
+                            style: {
+                              position: "absolute",
+                              top: 0,
+                              left: 0,
+                              width: "100%",
+                              height: virtualItem.size,
+                              transform: `translateY(${Math.round(virtualItem.start)}px)`,
+                            },
+                            data: rowData,
+                            isScrolling: false,
+                          } as ListChildComponentProps<TimelineRowData>)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <VirtualList
+                    ref={legacyListRef}
+                    outerRef={outerRef}
+                    height={viewportHeight}
+                    width="100%"
+                    itemCount={timelineItems.length}
+                    itemSize={getItemSize}
+                    itemData={rowData}
+                    itemKey={(index, data) =>
+                      data.items[index]
+                        ? getTimelineItemKey(data.items[index], index)
+                        : index
+                    }
+                    onScroll={handleLegacyListScroll}
+                    overscanCount={listOverscan}
+                  >
+                    {TimelineRow}
+                  </VirtualList>
+                ))}
             </div>
           )}
         </div>
