@@ -25,6 +25,7 @@ import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 import { logScrollTrace } from "../../utils/scrollTrace";
 import { useMessageTimelineViewModel } from "../../features/chat/hooks/useMessageTimelineViewModel";
 import { useMessageScrollMachine } from "../../features/chat/hooks/useMessageScrollMachine";
+import type { ChatLayoutState } from "../../utils/densityPolicy";
 
 interface MessageListProps {
   messages: Message[];
@@ -44,6 +45,7 @@ interface MessageListProps {
   error?: string | null;
   onRetry?: () => void | Promise<void>;
   density?: ChatDensity;
+  layoutState: ChatLayoutState;
   isSelectionMode?: boolean;
   selectedMessageIds?: Set<string>;
   onToggleSelect?: (messageId: string) => void;
@@ -218,6 +220,7 @@ const shouldObserveTimelineItemResize = (item: TimelineItem): boolean => {
 const estimateTimelineItemHeight = (
   item: TimelineItem,
   density: ChatDensity,
+  layoutState: ChatLayoutState,
 ): number => {
   if (item.kind === "date") return 64;
   if (item.kind === "system") return 68;
@@ -226,8 +229,10 @@ const estimateTimelineItemHeight = (
   const message = item.message;
   const densityOffset =
     density === "compact" ? -8 : density === "expanded" ? 14 : 0;
+  const layoutOffset =
+    layoutState === "with-panel" ? -6 : layoutState === "mobile" ? -4 : 0;
   let baseHeight =
-    (item.showMeta ? 76 : 56) + densityOffset;
+    (item.showMeta ? 76 : 56) + densityOffset + layoutOffset;
 
   if (message.replyToMessage) baseHeight += 52;
   if (message.forwardedFrom) baseHeight += 22;
@@ -249,7 +254,9 @@ const estimateTimelineItemHeight = (
     default: {
       const textLength = message.content?.length ?? 0;
       const approximateLines = Math.max(1, Math.ceil(textLength / 34));
-      baseHeight += approximateLines * 18;
+      baseHeight +=
+        approximateLines *
+        (layoutState === "normal" ? 18 : 17);
       if (hasInlineUrl(message.content)) {
         baseHeight += 58;
       }
@@ -411,6 +418,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   error,
   onRetry,
   density = "comfortable",
+  layoutState,
   isSelectionMode = false,
   selectedMessageIds = EMPTY_SELECTED_MESSAGE_IDS,
   onToggleSelect,
@@ -483,8 +491,9 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   }, [conversationId, latestMessageStableKeys]);
 
   const estimateItemSize = React.useCallback(
-    (item: TimelineItem) => estimateTimelineItemHeight(item, density),
-    [density],
+    (item: TimelineItem) =>
+      estimateTimelineItemHeight(item, density, layoutState),
+    [density, layoutState],
   );
 
   const {
@@ -507,7 +516,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
   React.useEffect(() => {
     clearMeasuredSizes();
-  }, [clearMeasuredSizes, conversationId]);
+  }, [clearMeasuredSizes, conversationId, layoutState]);
 
   const flushScrollCommand = React.useCallback(() => {
     scrollCommandRafRef.current = null;

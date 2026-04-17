@@ -14,8 +14,10 @@ import { Avatar } from "../../common/Avatar";
 import { IconButtonSurface } from "../../ui";
 import type { UserSummary } from "../../../types";
 import { getUserDisplayName } from "../../../utils/messageHelpers";
+import type { ChatLayoutState } from "../../../utils/densityPolicy";
 
 interface SidebarHeaderProps {
+  layoutState: ChatLayoutState;
   currentUser: UserSummary;
   onNewChat?: () => void;
   onCurrentUserClick?: () => void;
@@ -48,6 +50,7 @@ const resolveStatusLabel = (
 };
 
 export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
+  layoutState,
   currentUser,
   onNewChat,
   onCurrentUserClick,
@@ -59,6 +62,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   const { t } = useTranslation();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement | null>(null);
+  const isDense = layoutState !== "normal";
 
   const currentUserName = useMemo(
     () => resolveDisplayName(currentUser, t("common:labels.user")),
@@ -92,36 +96,63 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   }, [isMenuOpen]);
 
   return (
-    <div className="border-b border-border/60 px-4 pb-4 pt-4">
-      <div className="flex items-start gap-3">
+    <div
+      className={clsx(
+        "border-b border-border/60",
+        isDense ? "px-3 pb-3 pt-3" : "px-4 pb-4 pt-4",
+      )}
+    >
+      <div className={clsx("flex items-start", isDense ? "gap-2.5" : "gap-3")}>
         <button
           type="button"
           onClick={onCurrentUserClick}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-[1.2rem] px-2 py-1.5 text-left transition-micro hover:bg-surface-hover/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
+          className={clsx(
+            "flex min-w-0 flex-1 items-center rounded-[1.2rem] text-left transition-micro hover:bg-surface-hover/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+            isDense ? "gap-2.5 px-1.5 py-1" : "gap-3 px-2 py-1.5",
+          )}
           aria-label={currentUserName}
         >
           <Avatar
             src={currentUser.avatar}
             alt={currentUserName}
-            size="lg"
+            size={isDense ? "md" : "lg"}
             status={currentUser.status}
             showStatus
           />
 
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-text-primary">
+            <p
+              className={clsx(
+                "truncate font-semibold text-text-primary",
+                isDense ? "text-[13px] leading-[1.1rem]" : "text-sm",
+              )}
+            >
               {currentUserName}
             </p>
-            <p className="truncate text-caption text-text-muted">
+            <p
+              className={clsx(
+                "truncate text-text-muted",
+                isDense ? "text-[11px] leading-4" : "text-caption",
+              )}
+            >
               {currentStatusLabel}
             </p>
           </div>
         </button>
 
-        <div className="relative flex shrink-0 items-center gap-1.5" ref={menuRef}>
+        <div
+          className={clsx(
+            "relative flex shrink-0 items-center",
+            isDense ? "gap-1" : "gap-1.5",
+          )}
+          ref={menuRef}
+        >
           <IconButtonSurface
             onClick={onNewChat}
-            className="h-11 w-11 rounded-[1rem] bg-primary text-text-inverse shadow-xs hover:bg-primary-hover hover:text-text-inverse"
+            className={clsx(
+              "rounded-[1rem] bg-primary text-text-inverse shadow-xs hover:bg-primary-hover hover:text-text-inverse",
+              isDense ? "h-10 w-10" : "h-11 w-11",
+            )}
             aria-label={t("sidebar:header.startNewChat")}
           >
             <PencilSquareIcon className="h-5 w-5" />
@@ -129,20 +160,20 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
 
           <IconButtonSurface
             onClick={onFocusSearch}
-            className="h-10 w-10 rounded-[1rem]"
+            className={clsx("rounded-[1rem]", isDense ? "h-9 w-9" : "h-10 w-10")}
             aria-label={t("sidebar:search.aria")}
           >
-            <MagnifyingGlassIcon className="h-5 w-5" />
+            <MagnifyingGlassIcon className={isDense ? "h-4.5 w-4.5" : "h-5 w-5"} />
           </IconButtonSurface>
 
           <IconButtonSurface
             onClick={() => setIsMenuOpen((current) => !current)}
-            className="h-10 w-10 rounded-[1rem]"
+            className={clsx("rounded-[1rem]", isDense ? "h-9 w-9" : "h-10 w-10")}
             aria-label={t("common:actions.more", {
               defaultValue: "More actions",
             })}
           >
-            <EllipsisHorizontalIcon className="h-5 w-5" />
+            <EllipsisHorizontalIcon className={isDense ? "h-4.5 w-4.5" : "h-5 w-5"} />
           </IconButtonSurface>
 
           {isMenuOpen && (

@@ -48,6 +48,7 @@ import {
 } from "../lib/commandPalette";
 import { chatApi } from "../features/chat/api";
 import { selectConversationMessagesFromState } from "../stores/chatStore";
+import type { ChatLayoutState } from "../utils/densityPolicy";
 
 const UserProfile = React.lazy(() => import("../components/info/UserProfile"));
 const GroupInfo = React.lazy(() => import("../components/info/GroupInfo"));
@@ -227,6 +228,9 @@ export const ChatPage: React.FC = () => {
   );
   const [isMobileMenuOpen, setIsMobileMenuOpen] =
     useState(!routeConversationId);
+  const [viewportWidth, setViewportWidth] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth : 1440,
+  );
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const filePreview = useFilePreview();
@@ -759,6 +763,20 @@ export const ChatPage: React.FC = () => {
     navigate("/chat");
   }, [navigate]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
   // Handle new chat
   const handleStartChat = useCallback(
     async (userId: string) => {
@@ -908,6 +926,13 @@ export const ChatPage: React.FC = () => {
     isInfoPanelOpen &&
     (infoPanelMode === "self-profile" ||
       (infoPanelMode === "conversation" && Boolean(routeConversationId)));
+  const chatLayoutState = useMemo<ChatLayoutState>(() => {
+    if (viewportWidth < 1024) {
+      return "mobile";
+    }
+
+    return shouldRenderInfoContent ? "with-panel" : "normal";
+  }, [shouldRenderInfoContent, viewportWidth]);
   const showConversationSkeleton =
     (!hasFetchedConversationsOnce && conversationCount === 0) ||
     (isLoadingConversations && conversationCount === 0);
@@ -1121,7 +1146,10 @@ export const ChatPage: React.FC = () => {
   }
 
   return (
-    <div className="relative flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-[hsl(var(--color-chat-canvas))]">
+    <div
+      className="chat-page-shell relative flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-[hsl(var(--color-chat-canvas))]"
+      data-chat-layout-state={chatLayoutState}
+    >
       {/* Sidebar */}
       <div
         className={clsx(
@@ -1133,6 +1161,7 @@ export const ChatPage: React.FC = () => {
         aria-hidden={!showSidebarOnMobile}
       >
         <Sidebar
+          layoutState={chatLayoutState}
           currentUser={currentUserSummary}
           selectedId={routeConversationId}
           isLoadingConversations={isLoadingConversations}
@@ -1166,6 +1195,7 @@ export const ChatPage: React.FC = () => {
       >
         {selectedConversation ? (
           <ChatWindow
+            layoutState={chatLayoutState}
             conversation={selectedConversation}
             messages={conversationMessages}
             currentUser={currentUserSummary}
@@ -1216,7 +1246,7 @@ export const ChatPage: React.FC = () => {
         Boolean(selectedConversation)) && (
         <div
           className={clsx(
-            "fixed inset-y-0 right-0 z-40 w-full max-w-full border-l border-border bg-surface transition-transform duration-300 sm:max-w-[min(26rem,94vw)] lg:relative lg:z-0 lg:w-[clamp(20rem,28vw,24rem)] lg:max-w-none",
+            "fixed inset-y-0 right-0 z-40 w-full max-w-full border-l border-border bg-surface transition-transform duration-300 sm:max-w-[min(26rem,94vw)] lg:relative lg:z-0 lg:w-[clamp(19.5rem,24vw,22rem)] lg:max-w-none",
             isInfoPanelOpen ? "translate-x-0" : "translate-x-full lg:hidden",
           )}
             style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}

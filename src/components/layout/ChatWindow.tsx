@@ -38,6 +38,7 @@ import { logScrollTrace } from "../../utils/scrollTrace";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { getMessageByIdUseCase } from "../../features/chat/usecases/getMessageById";
 import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
+import type { ChatLayoutState } from "../../utils/densityPolicy";
 
 const SearchPanel = React.lazy(() => import("../chat/SearchPanel"));
 const PinnedMessagesPanel = React.lazy(
@@ -74,6 +75,7 @@ const matchesMessageIdentity = (message: Message, targetId: string): boolean =>
   message.clientMessageId === targetId;
 
 interface ChatWindowProps {
+  layoutState: ChatLayoutState;
   conversation: Conversation;
   messages: Message[];
   currentUser: UserSummary;
@@ -107,6 +109,7 @@ interface ChatWindowProps {
 }
 
 interface ChatTimelinePaneProps {
+  layoutState: ChatLayoutState;
   messages: Message[];
   conversationId: string;
   conversationType: Conversation["type"];
@@ -163,6 +166,7 @@ const getEphemeralNoticeClassName = (kind: EphemeralNotice["kind"]): string => {
 
 const ChatTimelinePane = React.memo(
   ({
+    layoutState,
     messages,
     conversationId,
     conversationType,
@@ -212,6 +216,7 @@ const ChatTimelinePane = React.memo(
       error={messageError}
       onRetry={onRetryMessages}
       density={density}
+      layoutState={layoutState}
       isSelectionMode={isSelectionMode}
       selectedMessageIds={selectedMessageIds}
       onToggleSelect={onToggleSelect}
@@ -236,6 +241,7 @@ const OverlayPanelFallback: React.FC = () => (
 );
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
+  layoutState,
   conversation,
   messages,
   currentUser,
@@ -492,20 +498,22 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         preference: chatDensity,
         viewportWidth: viewportMetrics.width,
         viewportHeight: viewportMetrics.height,
+        layoutState,
         messages,
         conversationType: conversation.type,
       }),
     [
       chatDensity,
       conversation.type,
+      layoutState,
       messages,
       viewportMetrics.height,
       viewportMetrics.width,
     ],
   );
   const layoutProfile = React.useMemo(
-    () => resolveChatLayoutProfile(viewportMetrics.width),
-    [viewportMetrics.width],
+    () => resolveChatLayoutProfile(viewportMetrics.width, layoutState),
+    [layoutState, viewportMetrics.width],
   );
 
   const bottomOverlayPlacements = React.useMemo(
@@ -921,6 +929,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         className,
       )}
       data-chat-layout-profile={layoutProfile}
+      data-chat-layout-state={layoutState}
       {...dropZoneProps}
     >
       {/* Drag-and-drop overlay */}
@@ -967,6 +976,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       )}
 
       <ChatTimelinePane
+        layoutState={layoutState}
         messages={messages}
         conversationId={conversation.id}
         conversationType={conversation.type}

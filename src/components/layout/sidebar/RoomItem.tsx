@@ -18,9 +18,11 @@ import { hasConversationMention } from "../../../utils/conversationRanking";
 import { formatRelativeTime } from "../../../utils/formatTime";
 import { isDirectConversation } from "../../../lib/conversationAdapter";
 import i18n from "../../../i18n";
+import type { ChatLayoutState } from "../../../utils/densityPolicy";
 
 interface RoomItemContainerProps {
   conversationId: string;
+  layoutState: ChatLayoutState;
   currentUser: UserSummary;
   isActive: boolean;
   isKeyboardActive: boolean;
@@ -29,6 +31,7 @@ interface RoomItemContainerProps {
 
 interface RoomItemViewProps {
   conversation: Conversation;
+  layoutState: ChatLayoutState;
   currentUserId: string;
   displayName: string;
   previewText: string;
@@ -205,6 +208,7 @@ const buildPreviewText = (
 
 const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
   conversation,
+  layoutState,
   currentUserId,
   displayName,
   previewText,
@@ -221,6 +225,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
   onSelect,
 }) => {
   const { t } = useTranslation();
+  const isDense = layoutState !== "normal";
   const visualState = resolveRoomItemVisualState({
     isActive,
     hasUnreadMention,
@@ -249,19 +254,25 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
       data-room-state={visualState}
       data-keyboard-active={isKeyboardActive}
       className={clsx(
-        "group relative mx-2 my-0.5 flex h-[var(--size-room-item)] w-[calc(100%-var(--space-4))] items-center rounded-[1rem] px-3 text-left",
+        "group relative mx-1.5 flex h-[var(--size-room-item)] w-[calc(100%-0.75rem)] items-center text-left",
         "transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+        isDense ? "rounded-[0.95rem] px-2.5" : "rounded-[1rem] px-3",
         visualStyles.container,
         hoverStyles?.container,
       )}
       aria-label={displayName}
     >
-      <div className="grid w-full grid-cols-[auto,1fr,auto] items-center gap-2.5">
+      <div
+        className={clsx(
+          "grid w-full grid-cols-[auto,1fr,auto] items-center",
+          isDense ? "gap-2" : "gap-2.5",
+        )}
+      >
         {isDirect ? (
           <Avatar
             src={avatarSrc}
             alt={displayName}
-            size="md"
+            size={isDense ? "sm" : "md"}
             status={avatarStatus}
             showStatus
           />
@@ -269,14 +280,17 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
           <GroupAvatar
             conversation={conversation}
             currentUserId={currentUserId}
-            size="md"
+            size={isDense ? "sm" : "md"}
           />
         )}
 
         <div className="min-w-0 text-left">
           <p
             className={clsx(
-              "truncate text-left text-[14px] font-semibold leading-5",
+              "truncate text-left font-semibold",
+              isDense
+                ? "text-[13px] leading-[1.1rem]"
+                : "text-[14px] leading-5",
               visualStyles.title,
               hoverStyles?.title,
             )}
@@ -286,7 +300,10 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
 
           <p
             className={clsx(
-              "truncate pr-1 text-left text-[13px] leading-5",
+              "truncate pr-1 text-left",
+              isDense
+                ? "text-[12px] leading-[1rem]"
+                : "text-[13px] leading-5",
               hoverStyles?.preview,
               previewToneClass,
             )}
@@ -301,10 +318,18 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
           </p>
         </div>
 
-        <div className="flex h-full min-w-room-meta flex-col items-end justify-center gap-1">
+        <div
+          className={clsx(
+            "flex h-full min-w-room-meta flex-col items-end justify-center",
+            isDense ? "gap-0.5" : "gap-1",
+          )}
+        >
           <span
             className={clsx(
-              "inline-flex min-h-5 items-center rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums",
+              "inline-flex items-center rounded-full font-medium tabular-nums",
+              isDense
+                ? "min-h-4 px-1.5 py-0 text-[10px]"
+                : "min-h-5 px-2 py-0.5 text-[11px]",
               visualStyles.time,
               timeBadgeClasses,
               hoverStyles?.time,
@@ -317,7 +342,10 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
           {unreadCount > 0 ? (
             <span
               className={clsx(
-                "sidebar-unread-badge inline-flex min-h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold leading-none",
+                "sidebar-unread-badge inline-flex items-center justify-center rounded-full font-semibold leading-none",
+                isDense
+                  ? "min-h-4 min-w-4 px-1 text-[10px]"
+                  : "min-h-5 min-w-5 px-1.5 text-[11px]",
                 visualStyles.unreadBadge,
               )}
             >
@@ -334,6 +362,7 @@ const RoomItemView = React.memo(
   RoomItemViewComponent,
   (prev, next) =>
     prev.conversation === next.conversation &&
+    prev.layoutState === next.layoutState &&
     prev.currentUserId === next.currentUserId &&
     prev.displayName === next.displayName &&
     prev.previewText === next.previewText &&
@@ -353,6 +382,7 @@ const RoomItemView = React.memo(
 export const RoomItemContainer = React.memo(
   ({
     conversationId,
+    layoutState,
     currentUser,
     isActive,
     isKeyboardActive,
@@ -422,6 +452,7 @@ export const RoomItemContainer = React.memo(
     return (
       <RoomItemView
         conversation={viewModel.conversation}
+        layoutState={layoutState}
         currentUserId={currentUser.id}
         displayName={viewModel.displayName}
         previewText={viewModel.previewText}
@@ -441,6 +472,7 @@ export const RoomItemContainer = React.memo(
   },
   (prev, next) =>
     prev.conversationId === next.conversationId &&
+    prev.layoutState === next.layoutState &&
     prev.currentUser === next.currentUser &&
     prev.isActive === next.isActive &&
     prev.isKeyboardActive === next.isKeyboardActive &&

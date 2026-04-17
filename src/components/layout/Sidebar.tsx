@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ConfirmDialog, SegmentedControl, Spinner } from "../ui";
@@ -20,8 +21,10 @@ import { RoomList } from "./sidebar/RoomList";
 import { ROUTE_PATHS } from "../../router/paths";
 import { useChatSidebarStore } from "../../features/chat/state/chatSidebarStore";
 import { useSidebarConversationList } from "../../features/chat/hooks/useSidebarConversationList";
+import type { ChatLayoutState } from "../../utils/densityPolicy";
 
 interface SidebarProps {
+  layoutState: ChatLayoutState;
   currentUser: UserSummary;
   selectedId: string | null;
   isLoadingConversations?: boolean;
@@ -38,6 +41,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
+  layoutState,
   currentUser,
   selectedId,
   isLoadingConversations = false,
@@ -102,6 +106,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <>
       <SidebarContainer className={className}>
         <SidebarHeader
+          layoutState={layoutState}
           currentUser={currentUser}
           onNewChat={onNewChat}
           onCurrentUserClick={onCurrentUserClick}
@@ -112,12 +117,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
 
         <SidebarSearch
+          layoutState={layoutState}
           value={searchQuery}
           onChange={setSearchQuery}
           inputRef={searchInputRef}
         />
 
-        <div className="px-4 pb-3">
+        <div
+          className={
+            layoutState === "normal" ? "px-4 pb-3" : "px-3 pb-2.5"
+          }
+        >
           <SegmentedControl
             value={activeFilter}
             onChange={(value) =>
@@ -152,8 +162,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        <div className="flex min-h-0 flex-1 px-2 pb-3">
+        <div
+          className={clsx(
+            "flex min-h-0 flex-1",
+            layoutState === "normal" ? "px-2 pb-3" : "px-1.5 pb-2.5",
+          )}
+        >
           <RoomList
+            layoutState={layoutState}
             conversationIds={conversationIds}
             currentUser={currentUser}
             selectedId={selectedId}

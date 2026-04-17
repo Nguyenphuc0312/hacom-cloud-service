@@ -20,8 +20,10 @@ import {
 } from "@heroicons/react/24/outline";
 import { RoomItemContainer } from "./RoomItem";
 import type { UserSummary } from "../../../types";
+import type { ChatLayoutState } from "../../../utils/densityPolicy";
 
 interface RoomListProps {
+  layoutState: ChatLayoutState;
   conversationIds: string[];
   currentUser: UserSummary;
   selectedId: string | null;
@@ -43,15 +45,20 @@ type FlatListItem = {
 
 interface RowData {
   items: FlatListItem[];
+  layoutState: ChatLayoutState;
   currentUser: UserSummary;
   currentConversationId: string | null;
   keyboardActiveRoomId: string | null;
   onSelect: (conversationId: string) => void;
 }
 
-const ROOM_HEIGHT = 62;
 const VIRTUALIZATION_THRESHOLD = 10;
 const LOAD_MORE_THRESHOLD_PX = 280;
+const ROOM_HEIGHT_BY_LAYOUT: Record<ChatLayoutState, number> = {
+  normal: 60,
+  "with-panel": 56,
+  mobile: 58,
+};
 
 const measureViewportHeight = (node: HTMLDivElement): number => {
   if (node.clientHeight > 0) return node.clientHeight;
@@ -78,6 +85,7 @@ const Row = ({ index, style, data }: ListChildComponentProps<RowData>) => {
     <div style={style}>
       <RoomItemContainer
         conversationId={item.conversationId}
+        layoutState={data.layoutState}
         currentUser={data.currentUser}
         isActive={isRoomActive(item.conversationId, data.currentConversationId)}
         isKeyboardActive={data.keyboardActiveRoomId === item.conversationId}
@@ -88,6 +96,7 @@ const Row = ({ index, style, data }: ListChildComponentProps<RowData>) => {
 };
 
 export const RoomList: React.FC<RoomListProps> = ({
+  layoutState,
   conversationIds,
   currentUser,
   selectedId,
@@ -106,6 +115,7 @@ export const RoomList: React.FC<RoomListProps> = ({
   const [viewportHeight, setViewportHeight] = useState(0);
   const [keyboardCursor, setKeyboardCursor] = useState(0);
   const [isKeyboardMode, setIsKeyboardMode] = useState(false);
+  const roomHeight = ROOM_HEIGHT_BY_LAYOUT[layoutState];
 
   const handleSelect = useCallback(
     (conversationId: string) => {
@@ -171,6 +181,7 @@ export const RoomList: React.FC<RoomListProps> = ({
 
     return {
       items: flatItems,
+      layoutState,
       currentUser,
       currentConversationId: selectedId,
       keyboardActiveRoomId: isKeyboardMode ? keyboardActiveRoomId : null,
@@ -182,6 +193,7 @@ export const RoomList: React.FC<RoomListProps> = ({
     flatItems,
     handleSelect,
     isKeyboardMode,
+    layoutState,
     roomIndexes,
     selectedId,
   ]);
@@ -249,7 +261,7 @@ export const RoomList: React.FC<RoomListProps> = ({
       }
 
       const estimatedVisibleStopIndex = Math.floor(
-        (scrollOffset + viewportHeight) / ROOM_HEIGHT,
+        (scrollOffset + viewportHeight) / roomHeight,
       );
       if (estimatedVisibleStopIndex >= flatItems.length - 4) {
         requestLoadMore();
@@ -260,6 +272,7 @@ export const RoomList: React.FC<RoomListProps> = ({
       hasMore,
       isLoadingMore,
       requestLoadMore,
+      roomHeight,
       viewportHeight,
     ],
   );
@@ -403,7 +416,7 @@ export const RoomList: React.FC<RoomListProps> = ({
             width="100%"
             itemCount={flatItems.length}
             itemData={rowData}
-            itemSize={() => ROOM_HEIGHT}
+            itemSize={() => roomHeight}
             itemKey={getItemKey}
             onScroll={handleVirtualListScroll}
             overscanCount={12}
@@ -416,6 +429,7 @@ export const RoomList: React.FC<RoomListProps> = ({
               <RoomItemContainer
                 key={item.key}
                 conversationId={item.conversationId}
+                layoutState={layoutState}
                 currentUser={currentUser}
                 isActive={isRoomActive(item.conversationId, selectedId)}
                 isKeyboardActive={

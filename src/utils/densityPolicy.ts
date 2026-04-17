@@ -2,6 +2,7 @@ import type { Conversation, Message } from "../types";
 import type { ChatDensity } from "../stores/uiStore";
 
 export type ResolvedChatDensity = Exclude<ChatDensity, "auto">;
+export type ChatLayoutState = "normal" | "with-panel" | "mobile";
 export type ChatLayoutProfile =
   | "desktop-wide"
   | "laptop"
@@ -11,18 +12,20 @@ export interface DensityPolicyInput {
   preference: ChatDensity;
   viewportWidth: number;
   viewportHeight: number;
+  layoutState: ChatLayoutState;
   messages: Message[];
   conversationType: Conversation["type"];
 }
 
 export const resolveChatLayoutProfile = (
   viewportWidth: number,
+  layoutState: ChatLayoutState,
 ): ChatLayoutProfile => {
-  if (viewportWidth <= 480) {
+  if (layoutState === "mobile") {
     return "mobile-compact";
   }
 
-  if (viewportWidth <= 1280) {
+  if (viewportWidth < 1440) {
     return "laptop";
   }
 
@@ -58,6 +61,7 @@ export const resolveChatDensity = ({
   preference,
   viewportWidth,
   viewportHeight,
+  layoutState,
   messages,
 }: DensityPolicyInput): ResolvedChatDensity => {
   if (preference === "compact" || preference === "comfortable" || preference === "expanded") {
@@ -68,12 +72,15 @@ export const resolveChatDensity = ({
   const avgLength = getAverageTextLength(recentMessages);
   const richRatio = getRichMessageRatio(recentMessages);
   const compactScore =
-    (viewportWidth < 768 ? 26 : 0) +
+    (layoutState === "mobile" ? 28 : 0) +
+    (layoutState === "with-panel" ? 24 : 0) +
+    (viewportWidth < 768 ? 20 : 0) +
     (viewportHeight < 760 ? 12 : 0) +
     (avgLength > 0 && avgLength < 42 ? 18 : 0) +
     (recentMessages.length >= 18 ? 12 : 0);
   const expandedScore =
-    (viewportWidth > 1280 ? 24 : 0) +
+    (layoutState === "normal" && viewportWidth >= 1440 ? 18 : 0) +
+    (layoutState === "with-panel" ? -18 : 0) +
     (avgLength > 180 ? 26 : 0) +
     (richRatio > 0.35 ? 18 : 0);
 

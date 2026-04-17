@@ -94,6 +94,7 @@ describe("RoomList", () => {
 
     render(
       <RoomList
+        layoutState="normal"
         conversationIds={[groupConversation.id, directConversation.id]}
         currentUser={currentUser}
         selectedId={null}
@@ -175,6 +176,7 @@ describe("RoomList", () => {
 
     render(
       <RoomList
+        layoutState="normal"
         conversationIds={[unnamedGroup.id]}
         currentUser={currentUser}
         selectedId={null}
