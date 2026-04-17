@@ -93,6 +93,36 @@ interface TimelineRowData {
 }
 
 const EMPTY_SELECTED_MESSAGE_IDS = new Set<string>();
+const ITEM_SIZE_CHANGE_THRESHOLD = 2;
+
+const isImageTimelineItem = (
+  item: TimelineItem | undefined,
+): item is Extract<TimelineItem, { kind: "message" }> =>
+  Boolean(item && item.kind === "message" && item.message.type === "image");
+
+const getImageTimelinePlaceholderMinHeight = (
+  item: TimelineItem | undefined,
+): number | null => {
+  if (!isImageTimelineItem(item)) {
+    return null;
+  }
+
+  const attachments = Array.isArray(item.message.attachments)
+    ? item.message.attachments
+    : [];
+  const mediaHeight = attachments.reduce((total, attachment, index) => {
+    const mediaWidth = attachment.width ? Math.min(attachment.width, 300) : 240;
+    const mediaRatio =
+      attachment.width && attachment.height
+        ? attachment.height / attachment.width
+        : 3 / 4;
+    const nextHeight = Math.max(160, Math.round(mediaWidth * mediaRatio));
+    return total + nextHeight + (index > 0 ? 8 : 0);
+  }, 0);
+
+  const captionHeight = item.message.content?.trim() ? 28 : 0;
+  return Math.max(180, mediaHeight + captionHeight + 12);
+};
 
 const shouldAnimateInsertedMessage = (
   item: TimelineItem | undefined,
@@ -298,36 +328,108 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
         hasCommittedInitialMeasurementRef.current = false;
       }
 
-      const measure = () => {
-        const nextSize = Math.ceil(node.getBoundingClientRect().height);
-        const measurement = setItemSize(index, nextSize);
-        if (!hasCommittedInitialMeasurementRef.current) {
-          hasCommittedInitialMeasurementRef.current = true;
+      let measureRafId: number | null = null;
+      const scheduleMeasure = () => {
+        if (measureRafId !== null) {
           return;
         }
 
-        if (measurement.changed && Math.abs(measurement.delta) > 1) {
-          onItemSizeChange({
-            index,
-            key: currentItemKey,
-            delta: measurement.delta,
-          });
-        }
+        measureRafId = requestAnimationFrame(() => {
+          measureRafId = null;
+          const currentNode = rowRef.current;
+          if (!currentNode) return;
+
+          const nextSize = Math.ceil(currentNode.getBoundingClientRect().height);
+          const measurement = setItemSize(index, nextSize);
+          if (!hasCommittedInitialMeasurementRef.current) {
+            hasCommittedInitialMeasurementRef.current = true;
+            return;
+          }
+
+          if (
+            measurement.changed &&
+            Math.abs(measurement.delta) > ITEM_SIZE_CHANGE_THRESHOLD
+          ) {
+            onItemSizeChange({
+              index,
+              key: currentItemKey,
+              delta: measurement.delta,
+            });
+          }
+        });
       };
 
-      measure();
+      const cancelScheduledMeasure = () => {
+        if (measureRafId === null) {
+          return;
+        }
+
+        cancelAnimationFrame(measureRafId);
+        measureRafId = null;
+      };
+
+      scheduleMeasure();
+
+      if (isImageTimelineItem(item)) {
+        const pendingImages = Array.from(
+          node.querySelectorAll<HTMLImageElement>("img"),
+        ).filter((image) => !image.complete);
+        const placeholderMinHeight =
+          getImageTimelinePlaceholderMinHeight(item);
+
+        if (pendingImages.length > 0 && placeholderMinHeight !== null) {
+          node.style.minHeight = `${placeholderMinHeight}px`;
+        } else {
+          node.style.minHeight = "";
+        }
+
+        const handleImageSettled = () => {
+          if (
+            Array.from(node.querySelectorAll<HTMLImageElement>("img")).every(
+              (image) => image.complete,
+            )
+          ) {
+            node.style.minHeight = "";
+          }
+          scheduleMeasure();
+        };
+
+        pendingImages.forEach((image) => {
+          image.addEventListener("load", handleImageSettled);
+          image.addEventListener("error", handleImageSettled);
+        });
+
+        return () => {
+          cancelScheduledMeasure();
+          node.style.minHeight = "";
+          pendingImages.forEach((image) => {
+            image.removeEventListener("load", handleImageSettled);
+            image.removeEventListener("error", handleImageSettled);
+          });
+        };
+      }
+
+      const measure = () => {
+        scheduleMeasure();
+      };
 
       if (
         typeof ResizeObserver === "undefined" ||
         !shouldObserveTimelineItemResize(item)
       ) {
         const rafId = requestAnimationFrame(measure);
-        return () => cancelAnimationFrame(rafId);
+        return () => {
+          cancelAnimationFrame(rafId);
+          cancelScheduledMeasure();
+        };
       }
 
       const resizeObserver = new ResizeObserver(measure);
       resizeObserver.observe(node);
-      return () => resizeObserver.disconnect();
+      return () => {
+        resizeObserver.disconnect();
+        cancelScheduledMeasure();
+      };
     }, [index, item, onItemSizeChange, setItemSize]);
 
     if (!item) return null;
@@ -446,6 +548,10 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   } | null>(null);
   const preserveScrollDeltaRafRef = React.useRef<number | null>(null);
   const pendingPreserveScrollDeltaRef = React.useRef(0);
+  const timelineSizeChangeRafRef = React.useRef<number | null>(null);
+  const pendingTimelineSizeChangesRef = React.useRef<
+    Map<string, { index: number; delta: number }>
+  >(new Map());
   const lastLayoutRef = React.useRef({
     viewportHeight: 0,
     composerHeight,
@@ -751,54 +857,89 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     [composerHeight],
   );
 
-  const handleTimelineItemSizeChange = React.useCallback(
-    ({ index, delta }: { index: number; key: string; delta: number }) => {
-      if (Math.abs(delta) <= 1) return;
+  const flushTimelineItemSizeChanges = React.useCallback(() => {
+    timelineSizeChangeRafRef.current = null;
+    if (pendingTimelineSizeChangesRef.current.size === 0) {
+      return;
+    }
 
-      if (isPinnedToBottom) {
-        requestScrollToBottom("item-resize-while-pinned");
-        return;
+    const changes = Array.from(pendingTimelineSizeChangesRef.current.values());
+    pendingTimelineSizeChangesRef.current.clear();
+
+    if (isPinnedToBottom) {
+      requestScrollToBottom("item-resize-while-pinned");
+      return;
+    }
+
+    const outer = outerRef.current;
+    if (!outer) return;
+
+    const visibleItem = findItemAtOffset(outer.scrollTop);
+    const anchorIndex = visibleItem?.index ?? 0;
+    const totalDelta = changes.reduce((sum, change) => {
+      if (change.index > anchorIndex) {
+        return sum;
       }
 
-      const outer = outerRef.current;
-      if (!outer) return;
+      return sum + change.delta;
+    }, 0);
 
-      const visibleItem = findItemAtOffset(outer.scrollTop);
-      const anchorIndex = visibleItem?.index ?? 0;
-      if (index > anchorIndex) return;
+    if (Math.abs(totalDelta) <= ITEM_SIZE_CHANGE_THRESHOLD) {
+      return;
+    }
 
-      pendingPreserveScrollDeltaRef.current += delta;
-      logScrollTrace("scroll_preserve_delta_queued", {
-        conversationId,
-        index,
-        delta,
-        accumulatedDelta: pendingPreserveScrollDeltaRef.current,
-      });
-
-      if (preserveScrollDeltaRafRef.current !== null) {
-        return;
-      }
-
-      preserveScrollDeltaRafRef.current = requestAnimationFrame(() => {
-        preserveScrollDeltaRafRef.current = null;
-        const nextDelta = pendingPreserveScrollDeltaRef.current;
-        pendingPreserveScrollDeltaRef.current = 0;
-        if (nextDelta === 0) return;
-
-        requestScrollCommand({
-          kind: "offset",
-          offset: (outerRef.current?.scrollTop ?? 0) + nextDelta,
-          reason: "item-resize-preserve",
-        });
-      });
-    },
-    [
+    pendingPreserveScrollDeltaRef.current += totalDelta;
+    logScrollTrace("scroll_preserve_delta_queued", {
       conversationId,
-      findItemAtOffset,
-      isPinnedToBottom,
-      requestScrollCommand,
-      requestScrollToBottom,
-    ],
+      indices: changes.map((change) => change.index),
+      delta: totalDelta,
+      accumulatedDelta: pendingPreserveScrollDeltaRef.current,
+    });
+
+    if (preserveScrollDeltaRafRef.current !== null) {
+      return;
+    }
+
+    preserveScrollDeltaRafRef.current = requestAnimationFrame(() => {
+      preserveScrollDeltaRafRef.current = null;
+      const nextDelta = pendingPreserveScrollDeltaRef.current;
+      pendingPreserveScrollDeltaRef.current = 0;
+      if (nextDelta === 0) return;
+
+      requestScrollCommand({
+        kind: "offset",
+        offset: (outerRef.current?.scrollTop ?? 0) + nextDelta,
+        reason: "item-resize-preserve",
+      });
+    });
+  }, [
+    conversationId,
+    findItemAtOffset,
+    isPinnedToBottom,
+    requestScrollCommand,
+    requestScrollToBottom,
+  ]);
+
+  const handleTimelineItemSizeChange = React.useCallback(
+    ({ index, key, delta }: { index: number; key: string; delta: number }) => {
+      if (Math.abs(delta) <= ITEM_SIZE_CHANGE_THRESHOLD) {
+        return;
+      }
+
+      pendingTimelineSizeChangesRef.current.set(key, {
+        index,
+        delta:
+          (pendingTimelineSizeChangesRef.current.get(key)?.delta ?? 0) + delta,
+      });
+      if (timelineSizeChangeRafRef.current !== null) {
+        return;
+      }
+
+      timelineSizeChangeRafRef.current = requestAnimationFrame(
+        flushTimelineItemSizeChanges,
+      );
+    },
+    [flushTimelineItemSizeChanges],
   );
 
   const rowData = React.useMemo<TimelineRowData>(
@@ -1190,6 +1331,10 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       if (preserveScrollDeltaRafRef.current !== null) {
         cancelAnimationFrame(preserveScrollDeltaRafRef.current);
       }
+      if (timelineSizeChangeRafRef.current !== null) {
+        cancelAnimationFrame(timelineSizeChangeRafRef.current);
+      }
+      pendingTimelineSizeChangesRef.current.clear();
       if (highlightTimerRef.current !== null) {
         window.clearTimeout(highlightTimerRef.current);
       }

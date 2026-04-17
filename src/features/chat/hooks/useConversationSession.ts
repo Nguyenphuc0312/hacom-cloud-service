@@ -191,6 +191,8 @@ export const useConversationSession = ({
 
     void (async () => {
       const chatState = useChatStore.getState();
+      const conversation =
+        chatState.conversationById[selectedConversationId] ?? null;
       const isConversationHydrated =
         chatState.messagesHydratedByConversation[selectedConversationId] ===
         true;
@@ -211,10 +213,10 @@ export const useConversationSession = ({
       });
       joinRoom(selectedConversationId, { skipInitialDeltaSync: false });
 
-      const unreadCount = Math.max(0, selectedConversation?.unreadCount ?? 0);
+      const unreadCount = Math.max(0, conversation?.unreadCount ?? 0);
       const shouldBootstrapUnreadFeed =
         unreadCount > 0 &&
-        (!isConversationHydrated || !selectedConversation?.firstUnreadMessageId);
+        (!isConversationHydrated || !conversation?.firstUnreadMessageId);
 
       if (shouldBootstrapUnreadFeed) {
         try {
@@ -280,7 +282,6 @@ export const useConversationSession = ({
     isValidatingRoom,
     joinRoom,
     leaveRoom,
-    selectedConversation,
     selectedConversationId,
     stopTyping,
     updateConversation,

@@ -2,6 +2,8 @@ import React from "react";
 import type { VariableSizeList as VirtualList } from "react-window";
 import { logMessageDebug } from "../utils/messageDebug";
 
+const ITEM_SIZE_CHANGE_THRESHOLD = 2;
+
 interface UseVirtualizedMessagesParams<Item, ListData> {
   items: Item[];
   viewportRef: React.RefObject<HTMLDivElement | null>;
@@ -61,6 +63,17 @@ export const useVirtualizedMessages = <Item, ListData>({
   const prefixSumDirtyFromRef = React.useRef<number>(0);
   const pendingResetForceRef = React.useRef(false);
   const resetAfterIndexRafRef = React.useRef<number | null>(null);
+  const pendingSizeUpdatesRef = React.useRef<
+    Map<
+      string,
+      {
+        index: number;
+        key: string;
+        size: number;
+      }
+    >
+  >(new Map());
+  const flushPendingSizeUpdatesRafRef = React.useRef<number | null>(null);
   const [viewportHeight, setViewportHeight] = React.useState(0);
 
   const scheduleResetAfterIndex = React.useCallback(
@@ -91,6 +104,40 @@ export const useVirtualizedMessages = <Item, ListData>({
     [listRef],
   );
 
+  const flushPendingSizeUpdates = React.useCallback(() => {
+    flushPendingSizeUpdatesRafRef.current = null;
+
+    if (pendingSizeUpdatesRef.current.size === 0) {
+      return;
+    }
+
+    let minChangedIndex: number | null = null;
+    pendingSizeUpdatesRef.current.forEach(({ index, key, size }) => {
+      sizeMapRef.current.set(key, size);
+      prefixSumDirtyFromRef.current = Math.min(
+        prefixSumDirtyFromRef.current,
+        index + 1,
+      );
+      minChangedIndex =
+        minChangedIndex === null ? index : Math.min(minChangedIndex, index);
+    });
+    pendingSizeUpdatesRef.current.clear();
+
+    if (minChangedIndex !== null) {
+      listRef.current?.resetAfterIndex(minChangedIndex, false);
+    }
+  }, [listRef]);
+
+  const schedulePendingSizeFlush = React.useCallback(() => {
+    if (flushPendingSizeUpdatesRafRef.current !== null) {
+      return;
+    }
+
+    flushPendingSizeUpdatesRafRef.current = window.requestAnimationFrame(
+      flushPendingSizeUpdates,
+    );
+  }, [flushPendingSizeUpdates]);
+
   const setItemSize = React.useCallback(
     (index: number, size: number) => {
       const item = items[index];
@@ -104,30 +151,40 @@ export const useVirtualizedMessages = <Item, ListData>({
       }
 
       const key = getItemKey(item, index);
-      const current = sizeMapRef.current.get(key);
-      if (current === size || Math.abs((current || 0) - size) <= 1) {
+      const pendingUpdate = pendingSizeUpdatesRef.current.get(key);
+      const previousSize =
+        pendingUpdate?.size ??
+        sizeMapRef.current.get(key) ??
+        estimateItemSize(item);
+      const delta = size - previousSize;
+
+      if (
+        previousSize === size ||
+        Math.abs(delta) <= ITEM_SIZE_CHANGE_THRESHOLD
+      ) {
         return {
           changed: false,
-          previousSize: current ?? size,
+          previousSize,
           nextSize: size,
           delta: 0,
         };
       }
 
-      sizeMapRef.current.set(key, size);
-      scheduleResetAfterIndex(index);
-      prefixSumDirtyFromRef.current = Math.min(
-        prefixSumDirtyFromRef.current,
-        index + 1,
-      );
+      pendingSizeUpdatesRef.current.set(key, {
+        index,
+        key,
+        size,
+      });
+      schedulePendingSizeFlush();
+
       return {
         changed: true,
-        previousSize: current ?? estimateItemSize(item),
+        previousSize,
         nextSize: size,
-        delta: size - (current ?? estimateItemSize(item)),
+        delta,
       };
     },
-    [estimateItemSize, getItemKey, items, scheduleResetAfterIndex],
+    [estimateItemSize, getItemKey, items, schedulePendingSizeFlush],
   );
 
   const getItemSize = React.useCallback(
@@ -210,11 +267,16 @@ export const useVirtualizedMessages = <Item, ListData>({
   );
   const clearMeasuredSizes = React.useCallback(() => {
     sizeMapRef.current = new Map();
+    pendingSizeUpdatesRef.current.clear();
     prefixSumRef.current = [];
     prefixSumDirtyFromRef.current = 0;
     if (resetAfterIndexRafRef.current !== null) {
       window.cancelAnimationFrame(resetAfterIndexRafRef.current);
       resetAfterIndexRafRef.current = null;
+    }
+    if (flushPendingSizeUpdatesRafRef.current !== null) {
+      window.cancelAnimationFrame(flushPendingSizeUpdatesRafRef.current);
+      flushPendingSizeUpdatesRafRef.current = null;
     }
     pendingResetIndexRef.current = null;
     pendingResetForceRef.current = false;
@@ -239,6 +301,9 @@ export const useVirtualizedMessages = <Item, ListData>({
     return () => {
       if (resetAfterIndexRafRef.current !== null) {
         window.cancelAnimationFrame(resetAfterIndexRafRef.current);
+      }
+      if (flushPendingSizeUpdatesRafRef.current !== null) {
+        window.cancelAnimationFrame(flushPendingSizeUpdatesRafRef.current);
       }
     };
   }, []);
