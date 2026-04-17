@@ -161,7 +161,7 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   };
 
   const messageSpacingClass = getTimelineItemSpacingClass(
-    item.spacingToken,
+    item,
     density,
   );
 

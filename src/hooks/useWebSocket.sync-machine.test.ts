@@ -3,6 +3,7 @@ import {
   drainPendingRoomSync,
   drainPendingRoomSyncForResyncRequired,
   shouldSkipGroupRoomRefreshForCurrentUser,
+  shouldUseDeltaRoomRefresh,
   type PendingRoomSyncStrategy,
 } from "./useWebSocket";
 
@@ -48,6 +49,34 @@ describe("useWebSocket sync machine", () => {
         { roomId: "room-1", userId: "user-b" },
         "user-a",
       ),
+    ).toBe(false);
+  });
+
+  it("uses delta room refresh only for active or joined conversations", () => {
+    const joinedRooms = new Set<string>(["room-2"]);
+
+    expect(
+      shouldUseDeltaRoomRefresh({
+        conversationId: "room-1",
+        selectedConversationId: "room-1",
+        joinedRooms,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldUseDeltaRoomRefresh({
+        conversationId: "room-2",
+        selectedConversationId: "room-9",
+        joinedRooms,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldUseDeltaRoomRefresh({
+        conversationId: "room-3",
+        selectedConversationId: "room-9",
+        joinedRooms,
+      }),
     ).toBe(false);
   });
 });

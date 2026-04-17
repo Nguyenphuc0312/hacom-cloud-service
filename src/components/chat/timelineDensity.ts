@@ -1,10 +1,17 @@
 import type { ChatDensity } from "../../stores/uiStore";
-import type { TimelineSpacingToken } from "../../hooks/useMessageGrouping";
+import type {
+  ClusterBreakReason,
+  MessageTimelineItem,
+  TimelineSpacingToken,
+} from "../../hooks/useMessageGrouping";
 
 export type TimelineDensity = Exclude<ChatDensity, "auto">;
 
 type TimelineDensityContract = {
-  itemSpacing: Record<TimelineSpacingToken, string>;
+  itemSpacing: Record<
+    TimelineSpacingToken | "semanticPause" | "mediaCluster" | "timePause",
+    string
+  >;
   dateDivider: {
     outer: string;
     pill: string;
@@ -31,9 +38,12 @@ const TIMELINE_DENSITY_CONTRACT: Record<
 > = {
   compact: {
     itemSpacing: {
-      tight: "mb-px",
+      tight: "mb-0.5",
       related: "mb-1.5",
       cluster: "mb-3",
+      semanticPause: "mb-2",
+      mediaCluster: "mb-3.5",
+      timePause: "mb-4",
     },
     dateDivider: {
       outer: "my-3",
@@ -61,9 +71,12 @@ const TIMELINE_DENSITY_CONTRACT: Record<
   },
   comfortable: {
     itemSpacing: {
-      tight: "mb-0.5",
+      tight: "mb-1",
       related: "mb-2",
       cluster: "mb-3.5",
+      semanticPause: "mb-2.5",
+      mediaCluster: "mb-4.5",
+      timePause: "mb-5",
     },
     dateDivider: {
       outer: "my-3.5",
@@ -91,9 +104,12 @@ const TIMELINE_DENSITY_CONTRACT: Record<
   },
   expanded: {
     itemSpacing: {
-      tight: "mb-1",
+      tight: "mb-1.5",
       related: "mb-2.5",
       cluster: "mb-4.5",
+      semanticPause: "mb-3.5",
+      mediaCluster: "mb-5",
+      timePause: "mb-6",
     },
     dateDivider: {
       outer: "my-4",
@@ -134,7 +150,50 @@ export const getTimelineDensityContract = (
 ): TimelineDensityContract =>
   TIMELINE_DENSITY_CONTRACT[resolveTimelineDensity(density)];
 
+const hasBreathingMediaFamily = (
+  semanticFamily: MessageTimelineItem["semanticFamily"],
+): boolean =>
+  semanticFamily === "media" ||
+  semanticFamily === "file" ||
+  semanticFamily === "voice";
+
+const isSemanticPauseReason = (
+  clusterBreakAfter?: ClusterBreakReason,
+): boolean =>
+  clusterBreakAfter === "semantic_family" ||
+  clusterBreakAfter === "reply_context" ||
+  clusterBreakAfter === "status" ||
+  clusterBreakAfter === "edited";
+
+const isTimePauseReason = (
+  clusterBreakAfter?: ClusterBreakReason,
+): boolean =>
+  clusterBreakAfter === "time_gap" || clusterBreakAfter === "visual_pause";
+
 export const getTimelineItemSpacingClass = (
-  spacingToken: TimelineSpacingToken,
+  item:
+    | TimelineSpacingToken
+    | Pick<MessageTimelineItem, "spacingToken" | "semanticFamily" | "clusterBreakAfter">,
   density?: ChatDensity,
-): string => getTimelineDensityContract(density).itemSpacing[spacingToken];
+): string => {
+  const contract = getTimelineDensityContract(density);
+  if (typeof item === "string") {
+    return contract.itemSpacing[item];
+  }
+
+  if (isTimePauseReason(item.clusterBreakAfter)) {
+    return contract.itemSpacing.timePause;
+  }
+
+  if (hasBreathingMediaFamily(item.semanticFamily)) {
+    return item.spacingToken === "tight"
+      ? contract.itemSpacing.related
+      : contract.itemSpacing.mediaCluster;
+  }
+
+  if (isSemanticPauseReason(item.clusterBreakAfter)) {
+    return contract.itemSpacing.semanticPause;
+  }
+
+  return contract.itemSpacing[item.spacingToken];
+};

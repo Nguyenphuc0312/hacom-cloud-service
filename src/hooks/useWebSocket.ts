@@ -160,6 +160,20 @@ export const shouldSkipGroupRoomRefreshForCurrentUser = (
   return targetUserId === currentUserId;
 };
 
+export const shouldUseDeltaRoomRefresh = ({
+  conversationId,
+  selectedConversationId,
+  joinedRooms,
+}: {
+  conversationId: string | null | undefined;
+  selectedConversationId: string | null | undefined;
+  joinedRooms: ReadonlySet<string>;
+}): boolean =>
+  Boolean(
+    conversationId &&
+      (selectedConversationId === conversationId || joinedRooms.has(conversationId)),
+  );
+
 type MessageCursor = {
   at: string;
   id: string;
@@ -1474,14 +1488,19 @@ export const useWebSocket = (
           senderId,
           stableId,
         });
-        void fetchMessages(conversationId, undefined, undefined, {
-          force: true,
-          syncReason: "room-refresh",
-          source: "socket_room_refresh",
-          queryType: "room_refresh",
-          selectedConversationIdAtDispatch:
-            useChatStore.getState().selectedConversationId ?? null,
+        const shouldUseDeltaRefresh = shouldUseDeltaRoomRefresh({
+          conversationId,
+          selectedConversationId: chatState.selectedConversationId,
+          joinedRooms: joinedRoomsRef.current,
         });
+        if (shouldUseDeltaRefresh) {
+          void reconcileConversationAuthoritative(conversationId, "room-refresh");
+        } else {
+          void scheduleConversationSnapshotRefresh(conversationId, {
+            delayMs: 0,
+            reason: "socket:self-reconcile",
+          });
+        }
       }
 
       if (
@@ -1798,7 +1817,20 @@ export const useWebSocket = (
         !(options?.skipIfCurrentUserIsTarget &&
           shouldSkipGroupRoomRefreshForCurrentUser(payload, currentUserId))
       ) {
-        void scheduleRoomResync(conversationId, { reason: "room-refresh" });
+        const shouldUseDeltaRefresh = shouldUseDeltaRoomRefresh({
+          conversationId,
+          selectedConversationId: useChatStore.getState().selectedConversationId,
+          joinedRooms: joinedRoomsRef.current,
+        });
+
+        if (shouldUseDeltaRefresh) {
+          void reconcileConversationAuthoritative(conversationId, "room-refresh");
+        } else {
+          void scheduleConversationSnapshotRefresh(conversationId, {
+            delayMs: 0,
+            reason: "group:room-refresh",
+          });
+        }
       }
     };
 
