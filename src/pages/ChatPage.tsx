@@ -25,7 +25,6 @@ import {
   useCurrentMessages,
   useCurrentTypingStatus,
   useConversationCount,
-  useAdjacentConversationIds,
 } from "../stores";
 import { useWebSocket } from "../hooks";
 import type { Attachment, Message, UserSummary } from "../types";
@@ -63,46 +62,6 @@ const FilePreviewModal = React.lazy(
 );
 
 type InfoPanelMode = "conversation" | "self-profile";
-
-type IdleCallbackDeadline = {
-  didTimeout: boolean;
-  timeRemaining: () => number;
-};
-
-type WindowWithIdleCallback = Window & {
-  requestIdleCallback?: (
-    callback: (deadline: IdleCallbackDeadline) => void,
-    options?: { timeout?: number },
-  ) => number;
-  cancelIdleCallback?: (handle: number) => void;
-};
-
-const scheduleIdleTask = (task: () => void): (() => void) => {
-  if (typeof window === "undefined") return () => {};
-
-  const idleWindow = window as WindowWithIdleCallback;
-  if (typeof idleWindow.requestIdleCallback === "function") {
-    const handle = idleWindow.requestIdleCallback(
-      (deadline) => {
-        if (deadline.didTimeout || deadline.timeRemaining() > 4) {
-          task();
-          return;
-        }
-        window.setTimeout(task, 0);
-      },
-      { timeout: 1200 },
-    );
-
-    return () => {
-      idleWindow.cancelIdleCallback?.(handle);
-    };
-  }
-
-  const timeoutId = window.setTimeout(task, 240);
-  return () => {
-    window.clearTimeout(timeoutId);
-  };
-};
 
 const CONVERSATIONS_PAGE_SIZE = 100;
 
