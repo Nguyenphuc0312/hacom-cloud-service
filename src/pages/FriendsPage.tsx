@@ -198,7 +198,7 @@ const ContactRow: React.FC<ContactRowProps> = ({
       className={clsx(
         "flex w-full items-center gap-3 rounded-[1.35rem] px-3 py-3 text-left transition-micro",
         selected
-          ? "bg-primary/10 ring-1 ring-primary/15 shadow-xs"
+          ? "bg-[hsl(var(--chat-active-surface)/0.14)] ring-1 ring-[hsl(var(--chat-active-surface)/0.2)]"
           : "hover:bg-surface-overlay/80",
       )}
     >
@@ -759,9 +759,9 @@ export const FriendsPage: React.FC = () => {
   );
 
   return (
-    <div className="flex h-full min-h-0 bg-background">
-      <section className="flex min-w-0 flex-1 flex-col border-r border-border/70 bg-background">
-        <header className="sticky top-0 z-10 border-b border-border/70 bg-surface/95 px-4 py-3 backdrop-blur">
+    <div className="app-page-shell flex h-full min-h-0">
+      <section className="flex min-w-0 flex-1 flex-col">
+        <header className="app-page-header sticky top-0 z-10 px-4 py-3">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -812,7 +812,7 @@ export const FriendsPage: React.FC = () => {
         </main>
       </section>
 
-      <aside className="hidden w-[clamp(22rem,34vw,26rem)] flex-col bg-surface lg:flex">
+      <aside className="hidden w-[clamp(22rem,34vw,26rem)] flex-col bg-[hsl(var(--chat-panel-bg))] lg:flex">
         {previewTarget ? (
           <UserProfile
             userId={previewTarget.userId}
@@ -827,15 +827,15 @@ export const FriendsPage: React.FC = () => {
               icon={<UserGroupIcon className="h-6 w-6" />}
               title={t("friends:previewTitle")}
               description={t("friends:previewBody")}
-              className="w-full max-w-sm border-dashed bg-transparent shadow-none"
-            />
-          </div>
-        )}
+            className="w-full max-w-sm border-dashed bg-[hsl(var(--surface-subtle))/0.48] shadow-none"
+          />
+        </div>
+      )}
       </aside>
 
       {previewTarget ? (
         <>
-          <div className="fixed inset-y-0 right-0 z-40 w-full max-w-full border-l border-border bg-surface sm:max-w-[min(26rem,94vw)] lg:hidden">
+          <div className="fixed inset-y-0 right-0 z-40 w-full max-w-full bg-[hsl(var(--chat-panel-bg))] sm:max-w-[min(26rem,94vw)] lg:hidden">
             <UserProfile
               userId={previewTarget.userId}
               currentUserId={currentUserId ?? ""}

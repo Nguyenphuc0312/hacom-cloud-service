@@ -26,7 +26,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses = {
   primary:
-    "border border-primary bg-primary text-text-inverse shadow-xs hover:bg-primary-hover active:bg-primary-active focus:ring-focus/25",
+    "border border-primary bg-primary text-text-inverse hover:bg-primary-hover active:bg-primary-active focus:ring-focus/25",
   secondary:
     "border border-border bg-surface-overlay text-text-primary hover:bg-surface-hover active:bg-surface-active focus:ring-focus/20",
   outline:
@@ -34,9 +34,9 @@ const variantClasses = {
   ghost:
     "border border-transparent bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary active:bg-surface-active focus:ring-focus/20",
   danger:
-    "border border-danger bg-danger text-text-inverse shadow-xs hover:bg-danger-hover active:bg-danger-hover focus:ring-danger/30",
+    "border border-danger bg-danger text-text-inverse hover:bg-danger-hover active:bg-danger-hover focus:ring-danger/30",
   destructive:
-    "border border-danger bg-danger text-text-inverse shadow-xs hover:bg-danger-hover active:bg-danger-hover focus:ring-danger/30",
+    "border border-danger bg-danger text-text-inverse hover:bg-danger-hover active:bg-danger-hover focus:ring-danger/30",
   link: "h-auto p-0 text-primary hover:text-primary/80 hover:underline",
 };
 
@@ -78,12 +78,6 @@ export const Button: React.FC<ButtonProps> = ({
         "transition-micro",
         "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface",
         "disabled:cursor-not-allowed disabled:border-disabled-border disabled:bg-disabled-bg disabled:text-text-disabled disabled:opacity-65",
-        !isDisabled &&
-          resolvedVariant === "primary" &&
-          "hover:shadow-sm hover:-translate-y-px",
-        !isDisabled &&
-          resolvedVariant === "destructive" &&
-          "hover:shadow-sm hover:-translate-y-px",
         resolvedVariant !== "link" && variantClasses[resolvedVariant],
         resolvedVariant !== "link" && sizeClasses[size],
         variant === "link" && variantClasses.link,

@@ -102,46 +102,46 @@ const COMPOSER_VISUAL_STATE_MAP: Record<
 > = {
   idle: {
     shell:
-      "border-border/80 bg-[hsl(var(--color-chat-composer))] shadow-none",
+      "border-transparent bg-[hsl(var(--chat-panel-bg))] shadow-none",
     attachmentButton:
       "text-text-muted hover:bg-surface-hover hover:text-text-primary",
-    attachmentDivider: "border-border/65",
+    attachmentDivider: "border-transparent",
   },
   focus: {
     shell:
-      "border-primary/35 bg-[hsl(var(--color-chat-composer))] shadow-elev1 ring-1 ring-primary/12",
+      "border-primary/40 bg-[hsl(var(--chat-active-surface)/0.12)] shadow-none ring-1 ring-primary/18",
     attachmentButton:
       "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
-    attachmentDivider: "border-primary/18",
+    attachmentDivider: "border-primary/20",
   },
   "ready-to-send": {
     shell:
-      "border-primary/28 bg-[hsl(var(--color-chat-composer))] shadow-elev1",
+      "border-primary/34 bg-[hsl(var(--chat-active-surface)/0.1)] shadow-none ring-1 ring-primary/14",
     attachmentButton:
       "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
-    attachmentDivider: "border-primary/16",
+    attachmentDivider: "border-transparent",
   },
   uploading: {
     shell:
-      "border-primary/20 bg-[hsl(var(--color-chat-composer))] shadow-elev1 ring-1 ring-primary/10",
+      "border-primary/24 bg-[hsl(var(--chat-active-surface)/0.1)] shadow-none ring-1 ring-primary/14",
     attachmentButton:
       "text-primary hover:bg-primary/8 hover:text-primary-hover",
-    attachmentDivider: "border-primary/16",
+    attachmentDivider: "border-primary/18",
   },
   disabled: {
-    shell: "border-disabled-border bg-disabled-bg shadow-none",
+    shell: "border-transparent bg-disabled-bg shadow-none",
     attachmentButton: "text-text-disabled",
-    attachmentDivider: "border-disabled-border",
+    attachmentDivider: "border-transparent",
   },
   "slow-mode": {
     shell:
-      "border-warning/35 bg-[hsl(var(--color-chat-composer))] shadow-none ring-1 ring-warning/10",
+      "border-warning/35 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-warning/10",
     attachmentButton: "text-warning hover:bg-warning/10 hover:text-warning",
     attachmentDivider: "border-warning/18",
   },
   offline: {
     shell:
-      "border-danger/28 bg-[hsl(var(--color-chat-composer))] shadow-none ring-1 ring-danger/10",
+      "border-danger/28 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-danger/10",
     attachmentButton: "text-danger hover:bg-danger/10 hover:text-danger",
     attachmentDivider: "border-danger/18",
   },

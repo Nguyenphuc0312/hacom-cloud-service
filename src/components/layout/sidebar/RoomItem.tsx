@@ -86,17 +86,17 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
     unreadBadge: "",
   },
   active: {
-    container: "bg-[hsl(var(--chat-active-bg)/0.16)]",
+    container: "bg-[hsl(var(--chat-active-surface)/0.18)]",
     title: "text-text-primary",
     preview: "text-text-secondary",
     time: "text-primary",
     timeBadge:
-      "bg-[hsl(var(--chat-active-bg)/0.16)] text-primary",
+      "bg-[hsl(var(--chat-active-surface)/0.18)] text-primary",
     unreadBadge:
       "bg-[hsl(var(--chat-badge-bg))] text-text-inverse",
   },
   unread: {
-    container: "bg-[hsl(var(--chat-active-bg)/0.08)]",
+    container: "bg-[hsl(var(--chat-active-surface)/0.1)]",
     title: "text-text-primary",
     preview: "text-text-secondary",
     time: "text-primary",

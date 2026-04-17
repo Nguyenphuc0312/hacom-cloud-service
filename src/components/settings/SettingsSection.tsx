@@ -24,7 +24,7 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
   return (
     <section
       className={clsx(
-        "rounded-[1.75rem] border border-border/70 bg-surface/90 p-5 shadow-xs backdrop-blur-sm sm:p-6",
+        "app-page-panel p-5 sm:p-6",
         className,
       )}
     >
@@ -43,11 +43,8 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
         </div>
       </div>
 
-      {/* Divider */}
-      <div className="mb-2 border-t border-border/60" />
-
       {/* Body */}
-      <div className="space-y-2">{children}</div>
+      <div className="mt-4 space-y-2">{children}</div>
     </section>
   );
 };

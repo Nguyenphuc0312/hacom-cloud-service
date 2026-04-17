@@ -17,7 +17,7 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({
     <aside
       className={clsx(
         "flex h-full min-h-0 w-full flex-col overflow-hidden",
-        "border-r border-border/70 bg-[hsl(var(--color-sidebar-surface))]",
+        "bg-[hsl(var(--chat-panel-bg))]",
         "lg:w-sidebar",
         className,
       )}

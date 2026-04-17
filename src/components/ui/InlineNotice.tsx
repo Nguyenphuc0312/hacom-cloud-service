@@ -47,7 +47,7 @@ export const InlineNotice: React.FC<InlineNoticeProps> = ({
   return (
     <div
       className={clsx(
-        "inline-notice flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-sm shadow-xs backdrop-blur-sm motion-enter-soft",
+        "inline-notice flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-sm backdrop-blur-sm motion-enter-soft",
         toneClasses[tone],
         className,
       )}

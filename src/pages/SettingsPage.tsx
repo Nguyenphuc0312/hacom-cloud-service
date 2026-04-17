@@ -106,11 +106,11 @@ const SettingsPage: React.FC = () => {
   ];
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div className="app-page-shell flex h-full flex-col">
       <header
         className={clsx(
-          "sticky top-0 z-10 border-b border-border/70 bg-surface/95 backdrop-blur-sm",
-          "supports-[backdrop-filter]:bg-surface/80",
+          "app-page-header sticky top-0 z-10",
+          "supports-[backdrop-filter]:bg-[hsl(var(--chat-panel-bg))/0.88]",
         )}
       >
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
@@ -143,7 +143,7 @@ const SettingsPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="hidden min-h-9 items-center gap-1.5 rounded-full border border-border/70 bg-background/80 px-3 text-xs text-text-muted sm:inline-flex">
+          <div className="app-page-subtle hidden min-h-9 items-center gap-1.5 rounded-full px-3 text-xs text-text-muted sm:inline-flex">
             {isSyncing ? (
               <ArrowPathIcon className="h-4 w-4 animate-spin" />
             ) : (
@@ -158,7 +158,7 @@ const SettingsPage: React.FC = () => {
             type="button"
             onClick={resetSettings}
             className={clsx(
-              "rounded-xl border border-border/70 px-3 py-2 text-xs font-medium",
+              "app-page-subtle rounded-xl px-3 py-2 text-xs font-medium",
               "text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
             )}
@@ -196,7 +196,7 @@ const SettingsPage: React.FC = () => {
 
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6">
-          <section className="rounded-[1.75rem] border border-border/70 bg-surface/95 p-4 shadow-xs sm:p-5">
+          <section className="app-page-panel p-4 sm:p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
@@ -219,7 +219,7 @@ const SettingsPage: React.FC = () => {
               </div>
 
               <div className="grid gap-2 sm:grid-cols-3">
-                <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3">
+                <div className="app-page-subtle px-4 py-3">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
                     {t("common:status.lastSynced", { time: "" }).trim()}
                   </p>
@@ -227,7 +227,7 @@ const SettingsPage: React.FC = () => {
                     {formatTimestamp(lastSyncedAt)}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3">
+                <div className="app-page-subtle px-4 py-3">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
                     {t("common:status.lastUpdated", { time: "" }).trim()}
                   </p>
@@ -235,7 +235,7 @@ const SettingsPage: React.FC = () => {
                     {formatTimestamp(updatedAt || null)}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3">
+                <div className="app-page-subtle px-4 py-3">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
                     {t("common:labels.sections", { defaultValue: "Sections" })}
                   </p>
@@ -251,7 +251,7 @@ const SettingsPage: React.FC = () => {
                 <a
                   key={item.id}
                   href={`#${item.id}`}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-full border border-border/70 bg-background/80 px-3 py-2 text-xs font-medium text-text-secondary transition-micro hover:border-primary/30 hover:text-text-primary"
+                  className="app-page-subtle inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-xs font-medium text-text-secondary transition-micro hover:text-text-primary"
                 >
                   {item.icon}
                   <span>{item.label}</span>
@@ -262,8 +262,8 @@ const SettingsPage: React.FC = () => {
 
           <div className="mt-6 grid gap-6 xl:grid-cols-[17rem,minmax(0,1fr)]">
             <aside className="hidden xl:block">
-              <div className="sticky top-24 rounded-[1.5rem] border border-border/70 bg-surface/95 p-3 shadow-xs">
-                <div className="border-b border-border/60 px-3 pb-3">
+              <div className="app-page-panel sticky top-24 p-3">
+                <div className="px-3 pb-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
                     {t("pageTitle")}
                   </p>
@@ -377,7 +377,7 @@ const SettingsPage: React.FC = () => {
                 })} - ${t("common:status.lastUpdated", {
                   time: formatTimestamp(updatedAt || null),
                 })}`}
-                className="border-dashed bg-transparent shadow-none"
+                className="border-dashed bg-[hsl(var(--surface-subtle))/0.48] shadow-none"
               />
             </div>
           </div>

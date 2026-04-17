@@ -152,11 +152,16 @@
   --color-sidebar-surface: var(--core-gray-0);
   --color-sidebar-hover: var(--core-gray-100);
   --color-sidebar-active: var(--core-gray-200);
-  --color-chat-canvas: var(--core-gray-100);
-  --color-chat-composer: var(--core-gray-0);
-  --color-chat-pill: var(--core-gray-0);
-  --color-chat-pill-border: var(--core-gray-200);
-  --chat-active-bg: var(--core-brand-500);
+  --chat-shell-bg: 212 32% 96%;
+  --chat-bubble-self: 205 88% 88%;
+  --chat-bubble-other: 0 0% 100%;
+  --chat-active-surface: var(--core-brand-500);
+  --chat-panel-bg: 0 0% 100%;
+  --color-chat-canvas: var(--chat-shell-bg);
+  --color-chat-composer: var(--chat-panel-bg);
+  --color-chat-pill: var(--chat-panel-bg);
+  --color-chat-pill-border: 214 18% 82%;
+  --chat-active-bg: var(--chat-active-surface);
   --chat-unread-preview-weight: 500;
   --chat-badge-bg: var(--core-brand-500);
 
@@ -185,9 +190,9 @@
   --color-focus-ring: var(--color-primary);
 
   --chat-pattern-color: 210 12% 60%;
-  --chat-bubble-sent: 205 84% 91%;
+  --chat-bubble-sent: var(--chat-bubble-self);
   --chat-bubble-sent-text: var(--core-gray-900);
-  --chat-bubble-received: 220 22% 100%;
+  --chat-bubble-received: var(--chat-bubble-other);
   --chat-bubble-received-text: var(--core-gray-900);
 
   color-scheme: light;
@@ -232,15 +237,20 @@
   --color-sidebar-surface: 218 28% 14%;
   --color-sidebar-hover: 219 23% 18%;
   --color-sidebar-active: 221 20% 22%;
-  --color-chat-canvas: 215 28% 11%;
-  --color-chat-composer: 217 23% 16%;
-  --color-chat-pill: 220 19% 20%;
+  --chat-shell-bg: 216 27% 12%;
+  --chat-bubble-self: 206 40% 30%;
+  --chat-bubble-other: 220 18% 18%;
+  --chat-active-surface: var(--core-brand-500);
+  --chat-panel-bg: 218 24% 16%;
+  --color-chat-canvas: var(--chat-shell-bg);
+  --color-chat-composer: var(--chat-panel-bg);
+  --color-chat-pill: var(--chat-panel-bg);
   --color-chat-pill-border: 220 13% 28%;
 
   --chat-pattern-color: 214 14% 52%;
-  --chat-bubble-sent: 208 34% 28%;
+  --chat-bubble-sent: var(--chat-bubble-self);
   --chat-bubble-sent-text: 210 20% 97%;
-  --chat-bubble-received: 220 18% 18%;
+  --chat-bubble-received: var(--chat-bubble-other);
   --chat-bubble-received-text: 210 20% 96%;
   --surface-shell: 222 20% 15%;
   --surface-subtle: 220 22% 18%;
@@ -573,26 +583,7 @@ a:focus-visible {
 
 /* Chat background pattern */
 .chat-background {
-  background-color: hsl(var(--color-chat-canvas));
-  background-image: linear-gradient(
-    180deg,
-    hsl(var(--color-chat-canvas) / 0.98),
-    hsl(var(--color-chat-canvas))
-  );
-  background-size: 100% 100%;
-}
-
-:root[data-theme="dark"] .chat-background {
-  background-image:
-    linear-gradient(
-      180deg,
-      hsl(var(--color-chat-canvas) / 0.92),
-      hsl(215 28% 10% / 0.94)
-    ),
-    radial-gradient(circle at top left, hsl(228 42% 22% / 0.2), transparent 42%);
-  background-size:
-    100% 100%,
-    100% 100%;
+  background-color: hsl(var(--chat-shell-bg));
 }
 
 /* Small shake animation for failed resend affordance */
@@ -670,14 +661,13 @@ a:focus-visible {
   .surface-card {
     border: 1px solid hsl(var(--surface-border) / 0.75);
     border-radius: var(--radius-xl);
-    background: hsl(var(--surface-shell));
-    box-shadow: var(--elevation-1);
+    background: hsl(var(--chat-panel-bg));
   }
 
   .panel-section {
     border: 1px solid hsl(var(--surface-border) / 0.75);
     border-radius: var(--radius-lg);
-    background: hsl(var(--surface-subtle) / 0.4);
+    background: hsl(var(--chat-panel-bg));
     padding: var(--space-4);
   }
 
@@ -729,16 +719,13 @@ a:focus-visible {
   .app-shell-section {
     border: 1px solid hsl(var(--surface-border) / 0.72);
     border-radius: calc(var(--radius-2xl) - 2px);
-    background: hsl(var(--surface-shell) / 0.8);
-    box-shadow: var(--shadow-xs);
-    backdrop-filter: blur(10px);
+    background: hsl(var(--chat-panel-bg) / 0.94);
   }
 
   .state-block {
     border-radius: calc(var(--radius-2xl) - 2px);
     border: 1px solid hsl(var(--surface-border) / 0.72);
-    background: hsl(var(--surface-shell) / 0.86);
-    box-shadow: var(--shadow-xs);
+    background: hsl(var(--chat-panel-bg) / 0.94);
   }
 
   .auth-shell {
@@ -884,5 +871,26 @@ a:focus-visible {
   .toast-neutral {
     background: hsl(var(--color-text-secondary));
     color: hsl(var(--color-text-inverse));
+  }
+
+  .app-page-shell {
+    background: hsl(var(--chat-shell-bg));
+  }
+
+  .app-page-header {
+    border-bottom: 1px solid hsl(var(--surface-border) / 0.62);
+    background: hsl(var(--chat-panel-bg) / 0.94);
+    backdrop-filter: blur(10px);
+  }
+
+  .app-page-panel {
+    border: 1px solid hsl(var(--surface-border) / 0.68);
+    border-radius: calc(var(--radius-2xl) - 2px);
+    background: hsl(var(--chat-panel-bg) / 0.96);
+  }
+
+  .app-page-subtle {
+    border-radius: calc(var(--radius-xl) - 2px);
+    background: hsl(var(--surface-subtle) / 0.78);
   }
 }

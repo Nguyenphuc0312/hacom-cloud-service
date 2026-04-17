@@ -40,7 +40,7 @@ export const StateBlock: React.FC<StateBlockProps> = ({
   return (
     <section
       className={clsx(
-        "flex flex-col items-center justify-center rounded-[1.75rem] border px-6 py-8 text-center shadow-xs",
+        "flex flex-col items-center justify-center rounded-[1.75rem] border px-6 py-8 text-center",
         variantClassMap[variant],
         className,
       )}

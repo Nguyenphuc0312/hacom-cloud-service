@@ -167,7 +167,8 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
         messageSpacingClass,
         "msg-row-hover -mx-1 px-1",
         isSelectionMode && "cursor-pointer",
-        isSelected && "bg-primary/6 rounded-md",
+        isSelected &&
+          "rounded-[14px] bg-[hsl(var(--chat-active-surface)/0.16)] ring-1 ring-[hsl(var(--chat-active-surface)/0.24)]",
       )}
       onClick={isSelectionMode ? handleClick : undefined}
     >

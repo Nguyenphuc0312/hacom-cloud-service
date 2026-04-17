@@ -106,7 +106,7 @@ const badgeToneByRelationship: Record<string, string> = {
 };
 
 const statCardClass =
-  "rounded-lg border border-border/80 bg-surface px-3 py-2.5 transition-colors";
+  "app-page-subtle rounded-lg px-3 py-2.5 transition-colors";
 
 export const UserProfile: React.FC<UserProfileProps> = ({
   userId,
@@ -482,8 +482,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
   return (
     <>
-      <div className={clsx("flex h-full flex-col bg-surface", className)}>
-        <div className="flex items-center justify-between border-b border-border/80 px-4 py-2.5">
+      <div className={clsx("flex h-full flex-col bg-[hsl(var(--chat-panel-bg))]", className)}>
+        <div className="app-page-header flex items-center justify-between px-4 py-2.5">
           <div>
             <h3 className="text-title-sm text-text-primary">
               {isSelf
@@ -512,7 +512,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             </div>
           ) : (
             <div className="space-y-4 px-4 py-4">
-              <PanelSection className="rounded-2xl bg-surface px-4 py-4 shadow-xs">
+              <PanelSection className="rounded-2xl border-transparent bg-[hsl(var(--chat-panel-bg))] px-4 py-4 shadow-none">
                 <div className="flex flex-col items-start gap-3 sm:items-center sm:text-center">
                   <Avatar
                     src={user?.avatar}
@@ -605,7 +605,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               {!isSelf &&
               onStartConversation &&
               relationship.kind === "friend" ? (
-                <PanelSection className="rounded-lg bg-surface px-4 py-3">
+                <PanelSection className="rounded-lg border-transparent bg-[hsl(var(--surface-subtle))/0.72] px-4 py-3 shadow-none">
                   <div className="flex items-start gap-3">
                     <ChatBubbleLeftRightIcon className="mt-0.5 h-5 w-5 text-text-muted" />
                     <div className="min-w-0 flex-1">

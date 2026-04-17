@@ -33,7 +33,7 @@ export const TabTrigger: React.FC<TabTriggerProps> = ({
     className={clsx(
       "inline-flex min-h-9 items-center justify-center rounded-md px-3 py-2 text-body-sm font-medium transition-micro",
       active
-        ? "bg-surface text-text-primary shadow-xs"
+        ? "bg-surface text-text-primary"
         : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
       className,
     )}

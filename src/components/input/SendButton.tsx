@@ -47,7 +47,7 @@ export const SendButton: React.FC<SendButtonProps> = ({
         resolvedState === "idle" &&
           "border-border/70 bg-[hsl(var(--color-chat-pill))] text-text-muted shadow-none",
         resolvedState === "ready-to-send" &&
-          "border-primary/20 bg-primary text-text-inverse shadow-elev1 hover:-translate-y-0.5 hover:bg-primary-hover hover:shadow-elev2",
+          "border-primary/24 bg-[hsl(var(--chat-active-surface))] text-text-inverse shadow-none hover:bg-primary-hover",
         resolvedState === "uploading" &&
           "border-primary/18 bg-primary/12 text-primary shadow-none",
         resolvedState === "slow-mode" &&
