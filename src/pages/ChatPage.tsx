@@ -27,7 +27,7 @@ import {
   useConversationCount,
 } from "../stores";
 import { useWebSocket } from "../hooks";
-import type { Attachment, Message, UserSummary } from "../types";
+import type { Attachment, UserSummary } from "../types";
 import { useFilePreview } from "../hooks/useFilePreview";
 import type { PreviewTarget } from "../hooks/useFilePreview";
 import { getPreviewType } from "../utils/formatFileSize";
@@ -203,8 +203,6 @@ export const ChatPage: React.FC = () => {
     useState<string | null>(null);
   const [externalJumpRequestVersion, setExternalJumpRequestVersion] =
     useState(0);
-  const directInfoHydratedRef = useRef<Set<string>>(new Set());
-  const lastVisibleReadAnchorKeyRef = useRef<string | null>(null);
   const renderCountRef = useRef(0);
 
   const conversationAccessDeniedMessage = t(
@@ -304,11 +302,8 @@ export const ChatPage: React.FC = () => {
     currentMessageError: sessionCurrentMessageError,
     currentHistoryStage: sessionCurrentHistoryStage,
     isHistoryPartial: sessionIsHistoryPartial,
-    canBootstrapConversationFromCache: sessionCanBootstrapConversationFromCache,
-    isCurrentRouteValidated: sessionIsCurrentRouteValidated,
     isConversationHistoryReady: sessionIsConversationHistoryReady,
     isConversationReady: sessionIsConversationReady,
-    websocketReady: sessionWebsocketReady,
     handleLoadOlderMessages: sessionHandleLoadOlderMessages,
     handleRetryMessages: sessionHandleRetryMessages,
     handleReachedLatestMessage: sessionHandleReachedLatestMessage,
@@ -331,16 +326,6 @@ export const ChatPage: React.FC = () => {
     sendTyping,
     updateConversation,
   });
-  const sessionManaged = true;
-  const canBootstrapConversationFromCache =
-    sessionCanBootstrapConversationFromCache;
-  const isCurrentRouteValidated = sessionIsCurrentRouteValidated;
-  const isConversationHistoryReady = sessionIsConversationHistoryReady;
-  const isConversationReady = sessionIsConversationReady;
-  const websocketReady = sessionWebsocketReady;
-  const [previousConversationId, nextConversationId] =
-    useAdjacentConversationIds(selectedConversationId);
-
   // Load conversations on mount
   useEffect(() => {
     void (async () => {
@@ -370,7 +355,7 @@ export const ChatPage: React.FC = () => {
         return;
       }
 
-      useChatStore.getState().setConversations(fetched);
+      useChatStore.getState().mergeConversationPage(fetched);
       conversationsPageRef.current = nextPage;
       setHasMoreConversations(fetched.length >= CONVERSATIONS_PAGE_SIZE);
     } catch (error) {
@@ -398,121 +383,6 @@ export const ChatPage: React.FC = () => {
     isConversationReady: sessionIsConversationReady,
     source: "ChatPage",
   });
-
-  const handleLoadOlderMessages = useCallback(async () => {
-    if (!selectedConversationId) return;
-
-    // Read from store directly to avoid depending on conversationMessages,
-    // hasMoreMessages, and isLoadingMessagesByConversation — prevents
-    // callback recreation on every incoming message.
-    const storeState = useChatStore.getState();
-    if (storeState.isLoadingMessagesByConversation[selectedConversationId]) {
-      return;
-    }
-    if (!storeState.hasMoreMessages[selectedConversationId]) return;
-
-    const storeMessages = selectConversationMessagesFromState(
-      storeState,
-      selectedConversationId,
-    );
-    const oldestMessage = storeMessages.find(
-      (message) => !message.id.startsWith("temp-"),
-    );
-    if (!oldestMessage) return;
-
-    await fetchMessages(
-      selectedConversationId,
-      new Date(oldestMessage.createdAt).toISOString(),
-      undefined,
-      { beforeId: oldestMessage.id },
-    );
-  }, [selectedConversationId, fetchMessages]);
-
-  const handleRetryMessages = useCallback(async () => {
-    if (!selectedConversationId) return;
-    const storeState = useChatStore.getState();
-    if (storeState.isLoadingMessagesByConversation[selectedConversationId])
-      return;
-    await fetchMessages(selectedConversationId, undefined, undefined, {
-      force: true,
-    });
-  }, [fetchMessages, selectedConversationId]);
-
-  const handleReachedLatestMessage = useCallback(
-    (message: Message) => {
-      if (!selectedConversationId) return;
-      if (message.id.startsWith("temp-")) {
-        return;
-      }
-
-      const conversation = useChatStore
-        .getState()
-        .conversations.find((item) => item.id === selectedConversationId);
-      if (!conversation) return;
-      const alreadyReadUpToLatest =
-        conversation.lastReadMessageId === message.id &&
-        (conversation.unreadCount ?? 0) <= 0;
-      if (alreadyReadUpToLatest) {
-        return;
-      }
-
-      const latestKey = `${selectedConversationId}:${message.id}`;
-      if (lastVisibleReadAnchorKeyRef.current === latestKey) {
-        return;
-      }
-
-      lastVisibleReadAnchorKeyRef.current = latestKey;
-      void markAsRead(selectedConversationId, message.id).catch(() => {
-        if (lastVisibleReadAnchorKeyRef.current === latestKey) {
-          lastVisibleReadAnchorKeyRef.current = null;
-        }
-      });
-    },
-    [markAsRead, selectedConversationId],
-  );
-  void handleLoadOlderMessages;
-  void handleRetryMessages;
-  void handleReachedLatestMessage;
-
-  useEffect(() => {
-    if (sessionManaged) {
-      return;
-    }
-    if (!selectedConversationId || (isValidatingRoom && !canBootstrapConversationFromCache)) {
-      return;
-    }
-
-    const candidateRoomIds = [previousConversationId, nextConversationId].filter(
-      (id): id is string => typeof id === "string" && id.length > 0,
-    );
-    if (candidateRoomIds.length === 0) return;
-
-    let isCancelled = false;
-    const cancelScheduledTask = scheduleIdleTask(() => {
-      void (async () => {
-        for (const candidateRoomId of candidateRoomIds) {
-          if (isCancelled) return;
-          const state = useChatStore.getState();
-          if (state.messagesHydratedByConversation[candidateRoomId]) continue;
-          if (state.isLoadingMessagesByConversation[candidateRoomId]) continue;
-          await state.fetchMessages(candidateRoomId, undefined, undefined, {
-            limit: 20,
-          });
-        }
-      })();
-    });
-
-    return () => {
-      isCancelled = true;
-      cancelScheduledTask();
-    };
-  }, [
-    canBootstrapConversationFromCache,
-    isValidatingRoom,
-    nextConversationId,
-    previousConversationId,
-    selectedConversationId,
-  ]);
 
   const handleReactMessage = useCallback(
     async (messageId: string, emoji: string) => {
@@ -632,21 +502,6 @@ export const ChatPage: React.FC = () => {
     },
     [removeStoreMessage, selectedConversationId, t],
   );
-
-  // Handle typing
-  const handleTyping = useCallback(
-    (isTyping: boolean) => {
-      if (selectedConversationId) {
-        if (isTyping) {
-          sendTyping(selectedConversationId);
-        } else {
-          stopTyping(selectedConversationId);
-        }
-      }
-    },
-    [selectedConversationId, sendTyping, stopTyping],
-  );
-  void handleTyping;
 
   const closeInfoPanel = useCallback(() => {
     setIsInfoPanelOpen(false);
@@ -929,73 +784,6 @@ export const ChatPage: React.FC = () => {
       current === messageId ? null : current,
     );
   }, []);
-
-  useEffect(() => {
-    if (sessionManaged) {
-      return;
-    }
-    if (!selectedConversationId) return;
-
-    logMessageDebug("ChatPage", "conversation_readiness_changed", {
-      conversationId: selectedConversationId,
-      isValidatingRoom,
-      isHydrated: isConversationHistoryReady,
-      isHistoryReady: isConversationHistoryReady,
-      isCurrentRouteValidated,
-      isReady: isConversationReady,
-      isSendReady: isConversationReady,
-      websocketReady,
-      messageCount: conversationMessages.length,
-      connectionState,
-    });
-  }, [
-    connectionState,
-    conversationMessages.length,
-    isCurrentRouteValidated,
-    isConversationReady,
-    isConversationHistoryReady,
-    isValidatingRoom,
-    lastValidatedConversationId,
-    selectedConversationId,
-    websocketReady,
-  ]);
-
-  useEffect(() => {
-    if (sessionManaged) {
-      return;
-    }
-    if (!selectedConversationId || !isSelectedDirectConversation || otherUser) {
-      return;
-    }
-
-    if (directInfoHydratedRef.current.has(selectedConversationId)) {
-      return;
-    }
-    directInfoHydratedRef.current.add(selectedConversationId);
-
-    let isCancelled = false;
-    void import("../features/chat/usecases/getConversationById")
-      .then(({ getConversationByIdUseCase }) =>
-        getConversationByIdUseCase(selectedConversationId),
-      )
-      .then((response) => {
-        if (isCancelled) return;
-        const conversation = unwrapApiSuccess(response);
-        updateConversation(selectedConversationId, conversation);
-      })
-      .catch(() => {
-        // no-op: fallback UI keeps skeleton and retries on next navigation
-      });
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [
-    isSelectedDirectConversation,
-    otherUser,
-    selectedConversationId,
-    updateConversation,
-  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

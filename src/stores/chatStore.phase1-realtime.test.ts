@@ -1569,6 +1569,130 @@ describe("chatStore phase-1 realtime flows", () => {
     expect(overlap?.lastMessage?.id).toBe("msg-new");
   });
 
+  it("merges newly loaded conversation pages without dropping previously loaded rooms", () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-page-1",
+        conversationId: "room-page-1",
+        summaryVersion: 2,
+        lastActivityAt: "2026-04-10T11:00:00.000Z",
+        updatedAt: "2026-04-10T11:00:00.000Z",
+      }),
+    ] as never);
+
+    useChatStore.getState().mergeConversationPage([
+      makeConversation({
+        id: "room-page-2",
+        conversationId: "room-page-2",
+        summaryVersion: 1,
+        lastActivityAt: "2026-04-10T10:00:00.000Z",
+        updatedAt: "2026-04-10T10:00:00.000Z",
+      }),
+    ] as never);
+
+    expect(
+      useChatStore.getState().orderedConversationIds,
+    ).toEqual(["room-page-1", "room-page-2"]);
+  });
+
+  it("preserves rooms from later pages when conversation list refresh reloads page 1", async () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-page-1",
+        conversationId: "room-page-1",
+        unreadCount: 1,
+        summaryVersion: 2,
+        lastActivityAt: "2026-04-10T11:00:00.000Z",
+        updatedAt: "2026-04-10T11:00:00.000Z",
+      }),
+      makeConversation({
+        id: "room-page-2",
+        conversationId: "room-page-2",
+        unreadCount: 0,
+        summaryVersion: 1,
+        lastActivityAt: "2026-04-10T10:00:00.000Z",
+        updatedAt: "2026-04-10T10:00:00.000Z",
+      }),
+    ] as never);
+
+    getConversationsMock.mockResolvedValueOnce(
+      makeSuccessEnvelope([
+        makeConversation({
+          id: "room-page-1",
+          conversationId: "room-page-1",
+          unreadCount: 4,
+          summaryVersion: 5,
+          lastActivityAt: "2026-04-10T12:00:00.000Z",
+          updatedAt: "2026-04-10T12:00:00.000Z",
+          lastMessage: {
+            id: "msg-page-refresh",
+            senderId: "user-b",
+            senderName: "Bob",
+            content: "refreshed",
+            type: "text",
+            isDeleted: false,
+            createdAt: "2026-04-10T12:00:00.000Z",
+          },
+        }),
+      ]),
+    );
+
+    await useChatStore.getState().fetchConversations();
+
+    const conversations = useChatStore.getState().conversations;
+    const refreshed = conversations.find(
+      (conversation) => conversation.id === "room-page-1",
+    );
+
+    expect(getConversationsMock).toHaveBeenCalledWith(1, 100);
+    expect(conversations.map((conversation) => conversation.id)).toEqual([
+      "room-page-1",
+      "room-page-2",
+    ]);
+    expect(refreshed?.summaryVersion).toBe(5);
+    expect(refreshed?.unreadCount).toBe(4);
+    expect(refreshed?.lastMessage?.id).toBe("msg-page-refresh");
+  });
+
+  it("tracks canonical message boundaries separately from optimistic rows", () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+      }),
+    ] as never);
+
+    useChatStore.getState().setMessages("room-1", [
+      makeMessage({
+        id: "temp-room-1",
+        localId: "temp-room-1",
+        clientMessageId: "client-room-1",
+        stableId: "client-room-1",
+        sendState: "sending",
+        status: MessageStatus.SENDING,
+        createdAt: "2026-04-10T09:00:00.000Z",
+        updatedAt: "2026-04-10T09:00:00.000Z",
+      }),
+      makeMessage({
+        id: "msg-older",
+        createdAt: "2026-04-10T09:05:00.000Z",
+        updatedAt: "2026-04-10T09:05:00.000Z",
+      }),
+      makeMessage({
+        id: "msg-newer",
+        createdAt: "2026-04-10T09:10:00.000Z",
+        updatedAt: "2026-04-10T09:10:00.000Z",
+      }),
+    ] as never);
+
+    expect(useChatStore.getState().messageWindowByConversation["room-1"]).toEqual({
+      oldestLoadedMessageId: "msg-older",
+      oldestLoadedAt: "2026-04-10T09:05:00.000Z",
+      newestLoadedMessageId: "msg-newer",
+      newestLoadedAt: "2026-04-10T09:10:00.000Z",
+    });
+  });
+
   it("allows multiple consecutive sends without waiting for previous request", async () => {
     const firstDeferred =
       createDeferred<ReturnType<typeof makeSuccessEnvelope>>();

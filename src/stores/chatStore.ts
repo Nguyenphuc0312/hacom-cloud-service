@@ -36,7 +36,6 @@ import type {
   Conversation,
   Message,
   TypingStatus,
-  ConversationFilter,
   SendMessageResult,
   SendRestriction,
 } from "../types";
@@ -1001,7 +1000,7 @@ const mergeConversationCollections = (
 };
 
 const replaceConversationsInState = (
-  state: Pick<ChatState, "conversations">,
+  _state: Pick<ChatState, "conversations">,
   conversations: Conversation[] | null | undefined,
 ) => {
   const normalized = mergeConversationCollections(
@@ -1751,9 +1750,13 @@ const buildConversationMessageWindow = (
 
   return {
     oldestLoadedMessageId: oldestLoadedMessage?.id ?? null,
-    oldestLoadedAt: oldestLoadedMessage?.createdAt ?? null,
+    oldestLoadedAt: oldestLoadedMessage?.createdAt
+      ? new Date(oldestLoadedMessage.createdAt).toISOString()
+      : null,
     newestLoadedMessageId: newestLoadedMessage?.id ?? null,
-    newestLoadedAt: newestLoadedMessage?.createdAt ?? null,
+    newestLoadedAt: newestLoadedMessage?.createdAt
+      ? new Date(newestLoadedMessage.createdAt).toISOString()
+      : null,
   };
 };
 
@@ -2012,6 +2015,7 @@ const ingestConversationMessagesWithMetadata = (
     | "messageById"
     | "messageIdsByConversation"
     | "messageAliasIndexByConversation"
+    | "messageWindowByConversation"
     | "messagesHydratedByConversation"
     | "hasNewerMessagesByConversation"
     | "historyStageByConversation"
@@ -4074,24 +4078,6 @@ export const useFilteredConversations = () => {
               conversation.type,
               conversation.participants?.length,
             ) === "group",
-        );
-        break;
-      case "direct":
-        filtered = filtered.filter((conversation) => {
-          const type = normalizeRoomType(
-            conversation.type,
-            conversation.participants?.length,
-          );
-          return type === "direct" || type === "private";
-        });
-        break;
-      case "channels":
-        filtered = filtered.filter(
-          (conversation) =>
-            normalizeRoomType(
-              conversation.type,
-              conversation.participants?.length,
-            ) === "channel",
         );
         break;
     }
