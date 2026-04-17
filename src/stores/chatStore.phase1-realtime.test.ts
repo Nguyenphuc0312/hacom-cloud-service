@@ -257,6 +257,41 @@ describe("chatStore phase-1 realtime flows", () => {
     expect(useChatStore.getState().totalUnreadCount).toBe(3);
   });
 
+  it("patches lightweight message status updates without rebuilding message indexes", () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+        unreadCount: 0,
+      }),
+    ] as never);
+    useChatStore.getState().setMessages("room-1", [
+      makeMessage({
+        id: "msg-1",
+        status: MessageStatus.SENDING,
+        sendState: "sending",
+      }),
+    ] as never);
+
+    const before = useChatStore.getState();
+    const previousMessageIdsByConversation = before.messageIdsByConversation;
+    const previousAliasIndex = before.messageAliasIndexByConversation;
+    const previousWindow = before.messageWindowByConversation;
+
+    useChatStore.getState().updateMessage("room-1", "msg-1", {
+      status: MessageStatus.SENT,
+      sendState: "sent",
+      updatedAt: new Date("2026-04-10T09:00:01.000Z"),
+    });
+
+    const after = useChatStore.getState();
+    expect(after.messageIdsByConversation).toBe(previousMessageIdsByConversation);
+    expect(after.messageAliasIndexByConversation).toBe(previousAliasIndex);
+    expect(after.messageWindowByConversation).toBe(previousWindow);
+    expect(after.messages["room-1"]?.[0]?.sendState).toBe("sent");
+    expect(after.conversationById["room-1"]?.lastMessageStatus).toBe("sent");
+  });
+
   it("does not zero unread just because the selected conversation fetches latest messages", async () => {
     useChatStore.getState().setConversations([
       makeConversation({

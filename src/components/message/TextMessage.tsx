@@ -1,19 +1,22 @@
-﻿import React from "react";
+import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { isOnlyEmoji } from "../../utils/messageHelpers";
+import {
+  getCollapsedTextPreview,
+  type LongMessageRenderMode,
+} from "../../utils/longMessagePolicy";
 
 interface TextMessageProps {
   content: string;
   isOwn: boolean;
-  /** The current user's username, used to highlight when they are mentioned */
   currentUsername?: string;
+  renderMode?: LongMessageRenderMode;
+  isCollapsible?: boolean;
+  onToggleExpand?: () => void;
   className?: string;
 }
 
-/**
- * Split a text fragment into mention-highlighted and plain segments.
- * Matches @username tokens (word-boundary safe).
- */
 const renderWithMentions = (
   text: string,
   isOwn: boolean,
@@ -21,7 +24,6 @@ const renderWithMentions = (
 ): React.ReactNode[] => {
   if (!currentUsername) return [text];
 
-  // Match @<word> patterns
   const mentionRegex = /(@\w+)/g;
   const segments = text.split(mentionRegex);
 
@@ -56,49 +58,73 @@ export const TextMessage: React.FC<TextMessageProps> = ({
   content,
   isOwn,
   currentUsername,
+  renderMode = "expanded",
+  isCollapsible = false,
+  onToggleExpand,
   className,
 }) => {
-  const onlyEmoji = isOnlyEmoji(content);
-
-  // Split by URLs first, then by mentions within non-URL segments
+  const { t } = useTranslation();
+  const displayContent =
+    isCollapsible && renderMode === "collapsed"
+      ? getCollapsedTextPreview(content)
+      : content;
+  const onlyEmoji = isOnlyEmoji(displayContent);
   const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const parts = content.split(urlRegex);
+  const parts = displayContent.split(urlRegex);
 
   return (
-    <p
-      className={clsx(
-        "chat-message-text max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere]",
-        onlyEmoji ? "leading-tight text-3xl" : "text-[15px] leading-[1.4rem]",
-        className,
-      )}
-    >
-      {parts.map((part, index) => {
-        const isLink = /^https?:\/\/[^\s]+$/i.test(part);
-        if (isLink) {
+    <div className="space-y-2">
+      <p
+        className={clsx(
+          "chat-message-text max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere]",
+          onlyEmoji ? "leading-tight text-3xl" : "text-[15px] leading-[1.4rem]",
+          className,
+        )}
+      >
+        {parts.map((part, index) => {
+          const isLink = /^https?:\/\/[^\s]+$/i.test(part);
+          if (isLink) {
+            return (
+              <a
+                key={index}
+                href={part}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={clsx(
+                  "underline transition-colors",
+                  isOwn
+                    ? "text-text-inverse/90 hover:text-text-inverse"
+                    : "text-primary hover:text-secondary",
+                )}
+              >
+                {part}
+              </a>
+            );
+          }
+
           return (
-            <a
-              key={index}
-              href={part}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={clsx(
-                "underline transition-colors",
-                isOwn
-                  ? "text-text-inverse/90 hover:text-text-inverse"
-                  : "text-primary hover:text-secondary",
-              )}
-            >
-              {part}
-            </a>
+            <React.Fragment key={index}>
+              {renderWithMentions(part, isOwn, currentUsername)}
+            </React.Fragment>
           );
-        }
-        return (
-          <React.Fragment key={index}>
-            {renderWithMentions(part, isOwn, currentUsername)}
-          </React.Fragment>
-        );
-      })}
-    </p>
+        })}
+      </p>
+
+      {isCollapsible && onToggleExpand ? (
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          className={clsx(
+            "text-xs font-semibold underline-offset-2 hover:underline",
+            isOwn ? "text-text-inverse/90" : "text-primary",
+          )}
+        >
+          {renderMode === "collapsed"
+            ? t("chat:message.expandLong", { defaultValue: "Xem them" })
+            : t("chat:message.collapseLong", { defaultValue: "Thu gon" })}
+        </button>
+      ) : null}
+    </div>
   );
 };
 

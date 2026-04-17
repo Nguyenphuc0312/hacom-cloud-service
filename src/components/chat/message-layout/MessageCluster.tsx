@@ -32,6 +32,7 @@ import { MessageSurface } from "./MessageSurface";
 import type { TimelineMergeLevel } from "../../../hooks/useMessageGrouping";
 import type { ChatDensity } from "../../../stores/uiStore";
 import { getTimelineDensityContract } from "../timelineDensity";
+import type { LongMessageRenderMode } from "../../../utils/longMessagePolicy";
 
 interface MessageClusterProps {
   message: Message;
@@ -54,6 +55,9 @@ interface MessageClusterProps {
   density?: ChatDensity;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
+  textRenderMode?: LongMessageRenderMode;
+  isCollapsibleText?: boolean;
+  onToggleTextExpand?: () => void;
   shouldAnimateInsert?: boolean;
   className?: string;
 }
@@ -100,6 +104,9 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   density,
   onNavigateToMessage,
   currentUsername,
+  textRenderMode = "expanded",
+  isCollapsibleText = false,
+  onToggleTextExpand,
   shouldAnimateInsert = false,
   className,
 }) => {
@@ -463,6 +470,9 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                   message={message}
                   isOwn={isOwn}
                   currentUsername={currentUsername}
+                  textRenderMode={textRenderMode}
+                  isCollapsibleText={isCollapsibleText}
+                  onToggleTextExpand={onToggleTextExpand}
                   onImageClick={onImageClick}
                   onFilePreview={onFilePreview}
                 />

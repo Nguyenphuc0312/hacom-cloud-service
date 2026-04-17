@@ -11,6 +11,7 @@ interface UseVirtualizedMessagesParams<Item, ListData> {
   debugLabel?: string;
   estimateItemSize: (item: Item) => number;
   getItemKey: (item: Item, index: number) => string;
+  shouldResetAfterSizeChange?: (item: Item, index: number) => boolean;
   listRef?: React.MutableRefObject<VirtualList<ListData> | null>;
   outerRef?: React.MutableRefObject<HTMLDivElement | null>;
 }
@@ -45,6 +46,7 @@ export const useVirtualizedMessages = <Item, ListData>({
   debugLabel,
   estimateItemSize,
   getItemKey,
+  shouldResetAfterSizeChange,
   listRef: providedListRef,
   outerRef: providedOuterRef,
 }: UseVirtualizedMessagesParams<
@@ -118,15 +120,22 @@ export const useVirtualizedMessages = <Item, ListData>({
         prefixSumDirtyFromRef.current,
         index + 1,
       );
-      minChangedIndex =
-        minChangedIndex === null ? index : Math.min(minChangedIndex, index);
+      const item = items[index];
+      if (
+        item &&
+        (typeof shouldResetAfterSizeChange !== "function" ||
+          shouldResetAfterSizeChange(item, index))
+      ) {
+        minChangedIndex =
+          minChangedIndex === null ? index : Math.min(minChangedIndex, index);
+      }
     });
     pendingSizeUpdatesRef.current.clear();
 
     if (minChangedIndex !== null) {
       listRef.current?.resetAfterIndex(minChangedIndex, false);
     }
-  }, [listRef]);
+  }, [items, listRef, shouldResetAfterSizeChange]);
 
   const schedulePendingSizeFlush = React.useCallback(() => {
     if (flushPendingSizeUpdatesRafRef.current !== null) {

@@ -1793,6 +1793,429 @@ const attachReplySnapshots = (messages: Message[]): Message[] => {
   });
 };
 
+const EMPTY_MESSAGE_WINDOW: ConversationMessageWindow = {
+  oldestLoadedMessageId: null,
+  oldestLoadedAt: null,
+  newestLoadedMessageId: null,
+  newestLoadedAt: null,
+};
+
+const updateConversationForLatestMessage = (
+  conversation: Conversation,
+  lastMessage: Message | null | undefined,
+  latestCanonicalMessage: Message | null | undefined,
+): Conversation =>
+  !lastMessage
+    ? ((normalizeConversation({
+        ...conversation,
+        lastMessage: undefined,
+        lastMessageStatus: null,
+      }) ?? {
+        ...conversation,
+        lastMessage: undefined,
+        lastMessageStatus: null,
+      }) as Conversation)
+    : ((() => {
+        const updatedAt =
+          latestCanonicalMessage?.createdAt ??
+          conversation.updatedAt ??
+          lastMessage.createdAt;
+
+        return (
+          normalizeConversation({
+            ...conversation,
+            lastMessage: toMessageSummary(lastMessage),
+            updatedAt,
+            lastMessageAt:
+              latestCanonicalMessage?.createdAt ?? conversation.lastMessageAt,
+            lastMessageSortAt:
+              latestCanonicalMessage?.createdAt ??
+              conversation.lastMessageSortAt ??
+              conversation.lastMessageAt ??
+              updatedAt,
+            lastMessageId:
+              latestCanonicalMessage?.id ??
+              conversation.lastMessageId ??
+              lastMessage.id,
+            lastMessageStatus: toConversationLastMessageStatus(lastMessage),
+          }) ?? {
+            ...conversation,
+            lastMessage: toMessageSummary(lastMessage),
+            updatedAt,
+            lastMessageAt:
+              latestCanonicalMessage?.createdAt ?? conversation.lastMessageAt,
+            lastMessageSortAt:
+              latestCanonicalMessage?.createdAt ??
+              conversation.lastMessageSortAt ??
+              conversation.lastMessageAt ??
+              updatedAt,
+            lastMessageId:
+              latestCanonicalMessage?.id ??
+              conversation.lastMessageId ??
+              lastMessage.id,
+            lastMessageStatus: toConversationLastMessageStatus(lastMessage),
+          }
+        );
+      })() as Conversation);
+
+const appendMessageAliasIndex = (
+  aliasIndex: Record<string, string> | undefined,
+  message: Message,
+): Record<string, string> => {
+  const canonicalId = getStableMessageId(message);
+  const nextAliasIndex = {
+    ...(aliasIndex || {}),
+  };
+
+  getMessageAliasCandidates(message).forEach((alias) => {
+    nextAliasIndex[alias] = canonicalId;
+  });
+
+  return nextAliasIndex;
+};
+
+const appendMessageWindow = (
+  currentWindow: ConversationMessageWindow | undefined,
+  message: Message,
+): ConversationMessageWindow => {
+  if (!isCanonicalConversationMessage(message)) {
+    return currentWindow ?? EMPTY_MESSAGE_WINDOW;
+  }
+
+  const nextTimestamp = message.createdAt
+    ? new Date(message.createdAt).toISOString()
+    : null;
+
+  return {
+    oldestLoadedMessageId:
+      currentWindow?.oldestLoadedMessageId ?? message.id,
+    oldestLoadedAt: currentWindow?.oldestLoadedAt ?? nextTimestamp,
+    newestLoadedMessageId: message.id,
+    newestLoadedAt: nextTimestamp,
+  };
+};
+
+const resolveNewestCanonicalConversationMessage = (
+  state: Pick<
+    ChatState,
+    | "messages"
+    | "messageById"
+    | "messageWindowByConversation"
+  >,
+  conversationId: string,
+  currentMessages?: Message[],
+): Message | null => {
+  const newestCanonicalId =
+    state.messageWindowByConversation[conversationId]?.newestLoadedMessageId;
+  if (newestCanonicalId) {
+    return state.messageById[newestCanonicalId] ?? null;
+  }
+
+  const sourceMessages = currentMessages ?? state.messages[conversationId] ?? [];
+  for (let index = sourceMessages.length - 1; index >= 0; index -= 1) {
+    const candidate = sourceMessages[index];
+    if (candidate && isCanonicalConversationMessage(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+};
+
+const canAppendMessageAtTail = (
+  currentMessages: Message[],
+  incoming: Message,
+): boolean => {
+  const lastMessage = currentMessages[currentMessages.length - 1];
+  if (!lastMessage) {
+    return true;
+  }
+
+  return compareMessages(lastMessage, incoming) <= 0;
+};
+
+const canUseAppendOnlyMessageFastPath = (
+  currentMessages: Message[],
+  incomingList: Message[],
+  hadExistingIdentity: boolean,
+  options?: {
+    mode?: "replace" | "prepend" | "append" | "upsert";
+  },
+): boolean => {
+  if (hadExistingIdentity || incomingList.length !== 1) {
+    return false;
+  }
+
+  if (options?.mode === "replace" || options?.mode === "prepend") {
+    return false;
+  }
+
+  const incoming = incomingList[0];
+  if (incoming.replyTo && !incoming.replyToMessage) {
+    return false;
+  }
+
+  return canAppendMessageAtTail(currentMessages, incoming);
+};
+
+const buildAppendOnlyConversationMessageState = (
+  state: Pick<
+    ChatState,
+    | "conversations"
+    | "messages"
+    | "messageById"
+    | "messageIdsByConversation"
+    | "messageAliasIndexByConversation"
+    | "messageWindowByConversation"
+    | "messagesHydratedByConversation"
+    | "hasNewerMessagesByConversation"
+    | "historyStageByConversation"
+    | "hasAuthoritativeHistoryByConversation"
+    | "prefetchedWindowByConversation"
+    | "historyScopeKeyByConversation"
+    | "latestHistoryRequestByConversation"
+  >,
+  conversationId: string,
+  incomingMessage: Message,
+  options?: {
+    hydrated?: boolean;
+    hasNewer?: boolean;
+    stage?: HistoryStage;
+    hasAuthoritativeHistory?: boolean;
+    prefetchedWindow?: boolean;
+    historyScopeKey?: string | null;
+    requestContext?: ConversationHistoryRequest;
+  },
+) => {
+  const currentMessages = state.messages[conversationId] || [];
+  const nextMessages = [...currentMessages, incomingMessage];
+  const stableMessageId = getStableMessageId(incomingMessage);
+  const existingConversation =
+    state.conversations.find((conversation) => conversation.id === conversationId) ??
+    null;
+  const previousCanonicalMessage = resolveNewestCanonicalConversationMessage(
+    state,
+    conversationId,
+    currentMessages,
+  );
+  const latestCanonicalMessage = isCanonicalConversationMessage(incomingMessage)
+    ? incomingMessage
+    : previousCanonicalMessage;
+  const conversations =
+    existingConversation === null
+      ? state.conversations
+      : replaceConversationInActivityOrder(
+          state.conversations,
+          updateConversationForLatestMessage(
+            existingConversation,
+            incomingMessage,
+            latestCanonicalMessage,
+          ),
+        );
+
+  const nextHistoryScopeKey =
+    options?.historyScopeKey ??
+    state.historyScopeKeyByConversation[conversationId] ??
+    buildHistoryScopeKey(conversationId);
+  const nextHasAuthoritativeHistory =
+    options?.hasAuthoritativeHistory ??
+    state.hasAuthoritativeHistoryByConversation[conversationId] ??
+    false;
+  const nextHistoryStage = resolveHistoryStage(
+    state.historyStageByConversation[conversationId],
+    {
+      stage: options?.stage,
+      hasAuthoritativeHistory: nextHasAuthoritativeHistory,
+    },
+  );
+  const nextPrefetchedWindow =
+    options?.prefetchedWindow ??
+    (nextHasAuthoritativeHistory
+      ? false
+      : state.prefetchedWindowByConversation[conversationId] ?? false);
+  const nextHydrated =
+    options?.hydrated ??
+    (nextHasAuthoritativeHistory && Boolean(nextHistoryScopeKey));
+
+  return {
+    conversations,
+    messages: {
+      ...state.messages,
+      [conversationId]: nextMessages,
+    },
+    messageById: {
+      ...state.messageById,
+      [stableMessageId]: incomingMessage,
+    },
+    messageIdsByConversation: {
+      ...state.messageIdsByConversation,
+      [conversationId]: [
+        ...(state.messageIdsByConversation[conversationId] ?? []),
+        stableMessageId,
+      ],
+    },
+    messageAliasIndexByConversation: {
+      ...state.messageAliasIndexByConversation,
+      [conversationId]: appendMessageAliasIndex(
+        state.messageAliasIndexByConversation[conversationId],
+        incomingMessage,
+      ),
+    },
+    messageWindowByConversation: {
+      ...state.messageWindowByConversation,
+      [conversationId]: appendMessageWindow(
+        state.messageWindowByConversation[conversationId],
+        incomingMessage,
+      ),
+    },
+    messagesHydratedByConversation: {
+      ...state.messagesHydratedByConversation,
+      [conversationId]: nextHydrated,
+    },
+    hasNewerMessagesByConversation:
+      options?.hasNewer === undefined
+        ? state.hasNewerMessagesByConversation
+        : {
+            ...state.hasNewerMessagesByConversation,
+            [conversationId]: options.hasNewer,
+          },
+    historyStageByConversation: {
+      ...state.historyStageByConversation,
+      [conversationId]: nextHistoryStage,
+    },
+    hasAuthoritativeHistoryByConversation: {
+      ...state.hasAuthoritativeHistoryByConversation,
+      [conversationId]: nextHasAuthoritativeHistory,
+    },
+    prefetchedWindowByConversation: {
+      ...state.prefetchedWindowByConversation,
+      [conversationId]: nextPrefetchedWindow,
+    },
+    historyScopeKeyByConversation: {
+      ...state.historyScopeKeyByConversation,
+      [conversationId]: nextHistoryScopeKey,
+    },
+    latestHistoryRequestByConversation: {
+      ...state.latestHistoryRequestByConversation,
+      ...(options?.requestContext
+        ? { [conversationId]: options.requestContext }
+        : {}),
+    },
+    ...buildConversationCollectionState(conversations),
+  };
+};
+
+const FAST_MESSAGE_PATCH_FIELDS = new Set<string>([
+  "deliveredAt",
+  "errorCode",
+  "errorMessage",
+  "failureReason",
+  "lastSendAttemptAt",
+  "queuedReason",
+  "readAt",
+  "readBy",
+  "sendAttempts",
+  "sendState",
+  "serverSeq",
+  "serverTs",
+  "status",
+  "transportStatus",
+  "updatedAt",
+  "version",
+]);
+
+const canUseFastMessagePatch = (updates: Partial<Message>): boolean => {
+  const keys = Object.keys(updates);
+  return (
+    keys.length > 0 &&
+    keys.every((key) => FAST_MESSAGE_PATCH_FIELDS.has(key))
+  );
+};
+
+const buildPatchedConversationMessageState = (
+  state: Pick<
+    ChatState,
+    | "conversations"
+    | "messages"
+    | "messageById"
+    | "messageIdsByConversation"
+    | "messageAliasIndexByConversation"
+    | "messageWindowByConversation"
+    | "messagesHydratedByConversation"
+    | "hasNewerMessagesByConversation"
+    | "historyStageByConversation"
+    | "hasAuthoritativeHistoryByConversation"
+    | "prefetchedWindowByConversation"
+    | "historyScopeKeyByConversation"
+    | "latestHistoryRequestByConversation"
+  >,
+  conversationId: string,
+  resolvedMessageId: string,
+  updates: Partial<Message>,
+) => {
+  if (!canUseFastMessagePatch(updates)) {
+    return null;
+  }
+
+  const currentMessages = state.messages[conversationId] || [];
+  const targetIndex = currentMessages.findIndex((message) =>
+    matchesMessageIdentityValue(message, resolvedMessageId),
+  );
+  if (targetIndex < 0) {
+    return null;
+  }
+
+  const currentMessage = currentMessages[targetIndex];
+  const nextMessage = { ...currentMessage, ...updates } as Message;
+  const nextMessages = [...currentMessages];
+  nextMessages[targetIndex] = nextMessage;
+
+  const currentConversation =
+    state.conversations.find((conversation) => conversation.id === conversationId) ??
+    null;
+  const shouldPatchConversationSummary =
+    currentConversation?.lastMessage?.id === currentMessage.id;
+  const conversations =
+    currentConversation && shouldPatchConversationSummary
+      ? replaceConversationInActivityOrder(
+          state.conversations,
+          (normalizeConversation({
+            ...currentConversation,
+            lastMessage: toMessageSummary(nextMessage),
+            lastMessageStatus: toConversationLastMessageStatus(nextMessage),
+          }) ?? {
+            ...currentConversation,
+            lastMessage: toMessageSummary(nextMessage),
+            lastMessageStatus: toConversationLastMessageStatus(nextMessage),
+          }),
+        )
+      : state.conversations;
+
+  return {
+    conversations,
+    messages: {
+      ...state.messages,
+      [conversationId]: nextMessages,
+    },
+    messageById: {
+      ...state.messageById,
+      [getStableMessageId(currentMessage)]: nextMessage,
+    },
+    messageIdsByConversation: state.messageIdsByConversation,
+    messageAliasIndexByConversation: state.messageAliasIndexByConversation,
+    messageWindowByConversation: state.messageWindowByConversation,
+    messagesHydratedByConversation: state.messagesHydratedByConversation,
+    hasNewerMessagesByConversation: state.hasNewerMessagesByConversation,
+    historyStageByConversation: state.historyStageByConversation,
+    hasAuthoritativeHistoryByConversation:
+      state.hasAuthoritativeHistoryByConversation,
+    prefetchedWindowByConversation: state.prefetchedWindowByConversation,
+    historyScopeKeyByConversation: state.historyScopeKeyByConversation,
+    latestHistoryRequestByConversation: state.latestHistoryRequestByConversation,
+    ...buildConversationCollectionState(conversations),
+  };
+};
+
 const buildConversationMessageState = (
   state: Pick<
     ChatState,
@@ -1833,68 +2256,14 @@ const buildConversationMessageState = (
     state.conversations.find((conversation) => conversation.id === conversationId) ??
     null;
   const conversations = existingConversation
-    ? (() => {
-        const nextConversation = !lastMessage
-          ? (normalizeConversation({
-              ...existingConversation,
-              lastMessage: undefined,
-              lastMessageStatus: null,
-            }) ?? {
-              ...existingConversation,
-              lastMessage: undefined,
-              lastMessageStatus: null,
-            })
-          : (() => {
-              const canonicalMessage = latestCanonicalMessage ?? null;
-              const updatedAt =
-                canonicalMessage?.createdAt ??
-                existingConversation.updatedAt ??
-                lastMessage.createdAt;
-
-              return (
-                normalizeConversation({
-                  ...existingConversation,
-                  lastMessage: toMessageSummary(lastMessage),
-                  updatedAt,
-                  lastMessageAt:
-                    canonicalMessage?.createdAt ??
-                    existingConversation.lastMessageAt,
-                  lastMessageSortAt:
-                    canonicalMessage?.createdAt ??
-                    existingConversation.lastMessageSortAt ??
-                    existingConversation.lastMessageAt ??
-                    updatedAt,
-                  lastMessageId:
-                    canonicalMessage?.id ??
-                    existingConversation.lastMessageId ??
-                    lastMessage.id,
-                  lastMessageStatus: toConversationLastMessageStatus(lastMessage),
-                }) ?? {
-                  ...existingConversation,
-                  lastMessage: toMessageSummary(lastMessage),
-                  updatedAt,
-                  lastMessageAt:
-                    canonicalMessage?.createdAt ??
-                    existingConversation.lastMessageAt,
-                  lastMessageSortAt:
-                    canonicalMessage?.createdAt ??
-                    existingConversation.lastMessageSortAt ??
-                    existingConversation.lastMessageAt ??
-                    updatedAt,
-                  lastMessageId:
-                    canonicalMessage?.id ??
-                    existingConversation.lastMessageId ??
-                    lastMessage.id,
-                  lastMessageStatus: toConversationLastMessageStatus(lastMessage),
-                }
-              );
-            })();
-
-        return replaceConversationInActivityOrder(
-          state.conversations,
-          nextConversation,
-        );
-      })()
+    ? replaceConversationInActivityOrder(
+        state.conversations,
+        updateConversationForLatestMessage(
+          existingConversation,
+          lastMessage,
+          latestCanonicalMessage,
+        ),
+      )
     : state.conversations;
 
   const messageIndexState = buildConversationMessageIndexState(
@@ -2062,6 +2431,64 @@ const ingestConversationMessagesWithMetadata = (
   const hadExistingIdentity = incomingList.some((incoming) =>
     hasMessageIdentityMatch(currentMessages, incoming),
   );
+  if (
+    canUseAppendOnlyMessageFastPath(
+      currentMessages,
+      incomingList,
+      hadExistingIdentity,
+      options,
+    )
+  ) {
+    const mergedMessage = incomingList[0];
+    const messageState = buildAppendOnlyConversationMessageState(
+      state,
+      conversationId,
+      mergedMessage,
+      {
+        hydrated: options?.hydrated,
+        hasNewer: options?.hasNewer,
+        stage: options?.stage,
+        hasAuthoritativeHistory: options?.hasAuthoritativeHistory,
+        prefetchedWindow: options?.prefetchedWindow,
+        historyScopeKey: options?.historyScopeKey,
+        requestContext: options?.requestContext,
+      },
+    );
+    const unreadDelta =
+      options?.incrementUnread && mergedMessage ? 1 : 0;
+    const conversations =
+      unreadDelta > 0
+        ? messageState.conversations.map((conversation) => {
+            if (conversation.id !== conversationId) {
+              return conversation;
+            }
+
+            return updateConversationActivitySummary(
+              conversation,
+              mergedMessage,
+              Math.max(0, conversation.unreadCount || 0) + unreadDelta,
+            );
+          })
+        : messageState.conversations;
+    const nextState = {
+      ...messageState,
+      conversations,
+      ...buildConversationCollectionState(conversations),
+    };
+
+    return {
+      nextState,
+      metadata: {
+        status: "new" as const,
+        canonicalMessage: isCanonicalConversationMessage(mergedMessage)
+          ? mergedMessage
+          : null,
+        mergedMessage,
+        unreadDelta,
+      },
+    };
+  }
+
   const nextMessages =
     options?.mode === "replace"
       ? replaceMessages(currentMessages, incomingList, {
@@ -3209,6 +3636,16 @@ export const useChatStore = create<ChatState>()(
             matchedLocalId: matchedMessage?.localId,
             updates,
           });
+
+          const fastPatchedState = buildPatchedConversationMessageState(
+            state,
+            conversationId,
+            resolvedMessageId,
+            updates,
+          );
+          if (fastPatchedState) {
+            return fastPatchedState;
+          }
 
           return buildConversationMessageState(state, conversationId, updatedMessages, {
             stage:

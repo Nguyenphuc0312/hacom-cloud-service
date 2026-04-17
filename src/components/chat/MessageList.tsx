@@ -27,6 +27,16 @@ import { useMessageTimelineViewModel } from "../../features/chat/hooks/useMessag
 import { useMessageScrollMachine } from "../../features/chat/hooks/useMessageScrollMachine";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
 import { getDistanceFromBottom } from "../../utils/scrollController";
+import {
+  DEFAULT_TEXT_CHARS_PER_LINE,
+  estimateTextLineCount,
+  hasInlineUrl,
+  isCollapsiblePlainTextMessage,
+  isPlainStaticTextMessage,
+  type LongMessageRenderMode,
+  type TimelineMeasurementMode,
+  LONG_MESSAGE_COLLAPSE_ESTIMATED_LINE_THRESHOLD,
+} from "../../utils/longMessagePolicy";
 
 interface MessageListProps {
   messages: Message[];
@@ -96,6 +106,8 @@ interface TimelineRowData {
   onToggleSelect?: (messageId: string) => void;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
+  expandedLongMessageIds: Set<string>;
+  onToggleLongMessageExpand: (messageId: string) => void;
   insertedMessageKeys: Set<string>;
   highlightedMessageId: string | null;
   onItemSizeChange: (payload: {
@@ -107,6 +119,12 @@ interface TimelineRowData {
 
 const EMPTY_SELECTED_MESSAGE_IDS = new Set<string>();
 const ITEM_SIZE_CHANGE_THRESHOLD = 2;
+
+interface TimelineMessageRenderState {
+  renderMode: LongMessageRenderMode;
+  measurementMode: TimelineMeasurementMode;
+  isCollapsible: boolean;
+}
 
 const isImageTimelineItem = (
   item: TimelineItem | undefined,
@@ -214,9 +232,24 @@ const areEqualTimelineRowProps = (
   const nextHighlighted =
     nextItem?.kind === "message" &&
     isTargetMessage(nextItem.message, nextProps.data.highlightedMessageId);
+  const previousRenderState = previousItem
+    ? resolveTimelineMessageRenderState(
+        previousItem,
+        previousProps.data.expandedLongMessageIds,
+      )
+    : null;
+  const nextRenderState = nextItem
+    ? resolveTimelineMessageRenderState(
+        nextItem,
+        nextProps.data.expandedLongMessageIds,
+      )
+    : null;
 
   return (
     previousHighlighted === nextHighlighted &&
+    previousRenderState?.renderMode === nextRenderState?.renderMode &&
+    previousRenderState?.measurementMode === nextRenderState?.measurementMode &&
+    previousRenderState?.isCollapsible === nextRenderState?.isCollapsible &&
     previousProps.data.density === nextProps.data.density &&
     previousProps.data.isSelectionMode === nextProps.data.isSelectionMode &&
     previousProps.data.currentUsername === nextProps.data.currentUsername &&
@@ -229,16 +262,46 @@ const areEqualTimelineRowProps = (
     previousProps.data.onToggleSelect === nextProps.data.onToggleSelect &&
     previousProps.data.onNavigateToMessage ===
       nextProps.data.onNavigateToMessage &&
+    previousProps.data.onToggleLongMessageExpand ===
+      nextProps.data.onToggleLongMessageExpand &&
     previousProps.data.setItemSize === nextProps.data.setItemSize &&
     previousProps.data.onItemSizeChange === nextProps.data.onItemSizeChange
   );
 };
 
-const hasInlineUrl = (content?: string): boolean =>
-  typeof content === "string" && /https?:\/\/[^\s]+/i.test(content);
-
-const shouldObserveTimelineItemResize = (item: TimelineItem): boolean => {
+export const resolveTimelineMessageRenderState = (
+  item: TimelineItem,
+  expandedLongMessageIds: Set<string>,
+): TimelineMessageRenderState => {
   if (item.kind !== "message") {
+    return {
+      renderMode: "expanded",
+      measurementMode: "static",
+      isCollapsible: false,
+    };
+  }
+
+  const message = item.message;
+  const isCollapsible = isCollapsiblePlainTextMessage(message);
+  const isExpanded = isCollapsible && expandedLongMessageIds.has(message.id);
+  const isStaticPlainText = isPlainStaticTextMessage(message);
+
+  return {
+    renderMode: isExpanded ? "expanded" : isCollapsible ? "collapsed" : "expanded",
+    measurementMode: isStaticPlainText ? "static" : "dynamic",
+    isCollapsible,
+  };
+};
+
+const shouldObserveTimelineItemResize = (
+  item: TimelineItem,
+  renderState: TimelineMessageRenderState,
+): boolean => {
+  if (item.kind !== "message") {
+    return false;
+  }
+
+  if (renderState.measurementMode !== "dynamic") {
     return false;
   }
 
@@ -264,6 +327,7 @@ const estimateTimelineItemHeight = (
   item: TimelineItem,
   density: ChatDensity,
   layoutState: ChatLayoutState,
+  renderState: TimelineMessageRenderState,
 ): number => {
   if (item.kind === "date") return 64;
   if (item.kind === "system") return 68;
@@ -295,11 +359,26 @@ const estimateTimelineItemHeight = (
       baseHeight += 82;
       break;
     default: {
-      const textLength = message.content?.length ?? 0;
-      const approximateLines = Math.max(1, Math.ceil(textLength / 34));
+      const approximateLines = Math.max(
+        1,
+        estimateTextLineCount(message.content, DEFAULT_TEXT_CHARS_PER_LINE),
+      );
+      const visibleLines =
+        renderState.renderMode === "collapsed"
+          ? Math.min(
+              approximateLines,
+              LONG_MESSAGE_COLLAPSE_ESTIMATED_LINE_THRESHOLD,
+            )
+          : approximateLines;
       baseHeight +=
-        approximateLines *
+        visibleLines *
         (layoutState === "normal" ? 18 : 17);
+      if (
+        renderState.renderMode === "collapsed" &&
+        renderState.isCollapsible
+      ) {
+        baseHeight += 34;
+      }
       if (hasInlineUrl(message.content)) {
         baseHeight += 58;
       }
@@ -330,15 +409,22 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
     const { onItemSizeChange, setItemSize } = data;
     const hasCommittedInitialMeasurementRef = React.useRef(false);
     const measuredItemKeyRef = React.useRef<string | null>(null);
+    const renderState = item
+      ? resolveTimelineMessageRenderState(item, data.expandedLongMessageIds)
+      : null;
 
     React.useLayoutEffect(() => {
       const node = rowRef.current;
-      if (!node || !item) return;
+      if (!node || !item || !renderState) return;
       const currentItemKey = item.key || `${item.kind}-${index}`;
 
       if (measuredItemKeyRef.current !== currentItemKey) {
         measuredItemKeyRef.current = currentItemKey;
         hasCommittedInitialMeasurementRef.current = false;
+      }
+
+      if (renderState.measurementMode === "static") {
+        return;
       }
 
       let measureRafId: number | null = null;
@@ -428,11 +514,9 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
 
       if (
         typeof ResizeObserver === "undefined" ||
-        !shouldObserveTimelineItemResize(item)
+        !shouldObserveTimelineItemResize(item, renderState)
       ) {
-        const rafId = requestAnimationFrame(measure);
         return () => {
-          cancelAnimationFrame(rafId);
           cancelScheduledMeasure();
         };
       }
@@ -443,7 +527,7 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
         resizeObserver.disconnect();
         cancelScheduledMeasure();
       };
-    }, [index, item, onItemSizeChange, setItemSize]);
+    }, [index, item, onItemSizeChange, renderState, setItemSize]);
 
     if (!item) return null;
 
@@ -456,6 +540,14 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
       item,
       data.insertedMessageKeys,
     );
+    const textRenderMode = renderState?.renderMode ?? "expanded";
+    const isCollapsibleText = renderState?.isCollapsible ?? false;
+    const handleToggleLongMessageExpand = () => {
+      if (!messageId) {
+        return;
+      }
+      data.onToggleLongMessageExpand(messageId);
+    };
 
     return (
       <div style={style}>
@@ -488,6 +580,11 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
                 onToggleSelect={data.onToggleSelect}
                 onNavigateToMessage={data.onNavigateToMessage}
                 currentUsername={data.currentUsername}
+                textRenderMode={textRenderMode}
+                isCollapsibleText={isCollapsibleText}
+                onToggleTextExpand={
+                  isCollapsibleText ? handleToggleLongMessageExpand : undefined
+                }
                 shouldAnimateInsert={shouldAnimateInsert}
               />
             </div>
@@ -674,8 +771,10 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     messageId: string | null;
     offsetFromTop: number;
   } | null>(null);
-  const preserveScrollDeltaRafRef = React.useRef<number | null>(null);
-  const pendingPreserveScrollDeltaRef = React.useRef(0);
+  const pendingResizeAnchorRef = React.useRef<{
+    messageId: string | null;
+    offsetFromTop: number;
+  } | null>(null);
   const timelineSizeChangeRafRef = React.useRef<number | null>(null);
   const pendingTimelineSizeChangesRef = React.useRef<
     Map<string, { index: number; delta: number }>
@@ -690,6 +789,9 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const [highlightedMessageId, setHighlightedMessageId] = React.useState<
     string | null
   >(null);
+  const [expandedLongMessageIds, setExpandedLongMessageIds] = React.useState<
+    Set<string>
+  >(() => new Set());
   const previousMessageStableKeysRef = React.useRef<Set<string>>(new Set());
   const [liveUnreadMarker, setLiveUnreadMarker] =
     React.useState<UnreadTimelineMarker | null>(unreadMarker ?? null);
@@ -729,10 +831,31 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     previousMessageStableKeysRef.current = latestMessageStableKeys;
   }, [conversationId, latestMessageStableKeys]);
 
+  React.useEffect(() => {
+    setExpandedLongMessageIds(new Set());
+  }, [conversationId]);
+
+  const toggleLongMessageExpand = React.useCallback((messageId: string) => {
+    setExpandedLongMessageIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(messageId)) {
+        next.delete(messageId);
+      } else {
+        next.add(messageId);
+      }
+      return next;
+    });
+  }, []);
+
   const estimateItemSize = React.useCallback(
     (item: TimelineItem) =>
-      estimateTimelineItemHeight(item, density, layoutState),
-    [density, layoutState],
+      estimateTimelineItemHeight(
+        item,
+        density,
+        layoutState,
+        resolveTimelineMessageRenderState(item, expandedLongMessageIds),
+      ),
+    [density, expandedLongMessageIds, layoutState],
   );
 
   const {
@@ -749,13 +872,16 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     debugLabel: conversationId,
     estimateItemSize,
     getItemKey: getTimelineItemKey,
+    shouldResetAfterSizeChange: (item) =>
+      resolveTimelineMessageRenderState(item, expandedLongMessageIds)
+        .measurementMode === "dynamic",
     listRef,
     outerRef,
   });
 
   React.useEffect(() => {
     clearMeasuredSizes();
-  }, [clearMeasuredSizes, conversationId, layoutState]);
+  }, [clearMeasuredSizes, conversationId, expandedLongMessageIds, layoutState]);
 
   const flushScrollCommand = React.useCallback(() => {
     scrollCommandRafRef.current = null;
@@ -902,10 +1028,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     };
   }, [findItemAtOffset, getItemOffset, outerRef, timelineItems]);
 
-  const restoreCapturedAnchor = React.useCallback(
-    (reason: string) => {
-      const anchor = prependAnchorRef.current;
-      prependAnchorRef.current = null;
+  const restoreAnchor = React.useCallback(
+    (
+      anchor: { messageId: string | null; offsetFromTop: number } | null,
+      reason: string,
+    ) => {
       if (!anchor) return;
 
       const anchorIndex = resolveAnchorTimelineIndex(anchor.messageId);
@@ -918,6 +1045,15 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       });
     },
     [getItemOffset, requestScrollCommand, resolveAnchorTimelineIndex],
+  );
+
+  const restoreCapturedAnchor = React.useCallback(
+    (reason: string) => {
+      const anchor = prependAnchorRef.current;
+      prependAnchorRef.current = null;
+      restoreAnchor(anchor, reason);
+    },
+    [restoreAnchor],
   );
 
   const resolveUnreadAnchorIndex = React.useCallback((): number => {
@@ -1111,62 +1247,24 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       return;
     }
 
-    const changes = Array.from(pendingTimelineSizeChangesRef.current.values());
     pendingTimelineSizeChangesRef.current.clear();
 
     if (isPinnedToBottom) {
+      pendingResizeAnchorRef.current = null;
       requestScrollToBottom("item-resize-while-pinned");
       return;
     }
 
-    const outer = outerRef.current;
-    if (!outer) return;
-
-    const visibleItem = findItemAtOffset(outer.scrollTop);
-    const anchorIndex = visibleItem?.index ?? 0;
-    const totalDelta = changes.reduce((sum, change) => {
-      if (change.index > anchorIndex) {
-        return sum;
-      }
-
-      return sum + change.delta;
-    }, 0);
-
-    if (Math.abs(totalDelta) <= ITEM_SIZE_CHANGE_THRESHOLD) {
+    const anchor = pendingResizeAnchorRef.current;
+    pendingResizeAnchorRef.current = null;
+    if (!anchor) {
       return;
     }
 
-    pendingPreserveScrollDeltaRef.current += totalDelta;
-    logScrollTrace("scroll_preserve_delta_queued", {
-      conversationId,
-      indices: changes.map((change) => change.index),
-      delta: totalDelta,
-      accumulatedDelta: pendingPreserveScrollDeltaRef.current,
+    requestAnimationFrame(() => {
+      restoreAnchor(anchor, "item-resize-preserve");
     });
-
-    if (preserveScrollDeltaRafRef.current !== null) {
-      return;
-    }
-
-    preserveScrollDeltaRafRef.current = requestAnimationFrame(() => {
-      preserveScrollDeltaRafRef.current = null;
-      const nextDelta = pendingPreserveScrollDeltaRef.current;
-      pendingPreserveScrollDeltaRef.current = 0;
-      if (nextDelta === 0) return;
-
-      requestScrollCommand({
-        kind: "offset",
-        offset: (outerRef.current?.scrollTop ?? 0) + nextDelta,
-        reason: "item-resize-preserve",
-      });
-    });
-  }, [
-    conversationId,
-    findItemAtOffset,
-    isPinnedToBottom,
-    requestScrollCommand,
-    requestScrollToBottom,
-  ]);
+  }, [isPinnedToBottom, requestScrollToBottom, restoreAnchor]);
 
   const handleTimelineItemSizeChange = React.useCallback(
     ({ index, key, delta }: { index: number; key: string; delta: number }) => {
@@ -1174,6 +1272,9 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         return;
       }
 
+      if (!isPinnedToBottomRef.current && !pendingResizeAnchorRef.current) {
+        pendingResizeAnchorRef.current = captureVisibleAnchor();
+      }
       pendingTimelineSizeChangesRef.current.set(key, {
         index,
         delta:
@@ -1187,7 +1288,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         flushTimelineItemSizeChanges,
       );
     },
-    [flushTimelineItemSizeChanges],
+    [captureVisibleAnchor, flushTimelineItemSizeChanges],
   );
 
   const rowData = React.useMemo<TimelineRowData>(
@@ -1206,6 +1307,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       onToggleSelect,
       onNavigateToMessage,
       currentUsername,
+      expandedLongMessageIds,
+      onToggleLongMessageExpand: toggleLongMessageExpand,
       insertedMessageKeys,
       highlightedMessageId,
       onItemSizeChange: handleTimelineItemSizeChange,
@@ -1213,6 +1316,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     [
       currentUsername,
       density,
+      expandedLongMessageIds,
       handleTimelineItemSizeChange,
       highlightedMessageId,
       insertedMessageKeys,
@@ -1224,6 +1328,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       onNavigateToMessage,
       onReact,
       onReply,
+      toggleLongMessageExpand,
       onToggleSelect,
       selectedMessageIds,
       setItemSize,
@@ -1584,9 +1689,6 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       }
       if (scrollCommandRafRef.current !== null) {
         cancelAnimationFrame(scrollCommandRafRef.current);
-      }
-      if (preserveScrollDeltaRafRef.current !== null) {
-        cancelAnimationFrame(preserveScrollDeltaRafRef.current);
       }
       if (timelineSizeChangeRafRef.current !== null) {
         cancelAnimationFrame(timelineSizeChangeRafRef.current);

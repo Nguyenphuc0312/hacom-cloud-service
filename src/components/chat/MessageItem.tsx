@@ -8,6 +8,7 @@ import type { Message, Attachment } from "../../types";
 import type { TimelineItem } from "../../hooks/useMessageGrouping";
 import type { ChatDensity } from "../../stores/uiStore";
 import { getTimelineItemSpacingClass } from "./timelineDensity";
+import type { LongMessageRenderMode } from "../../utils/longMessagePolicy";
 
 interface MessageItemProps {
   item: TimelineItem;
@@ -23,6 +24,9 @@ interface MessageItemProps {
   onToggleSelect?: (messageId: string) => void;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
+  textRenderMode?: LongMessageRenderMode;
+  isCollapsibleText?: boolean;
+  onToggleTextExpand?: () => void;
   shouldAnimateInsert?: boolean;
 }
 
@@ -108,6 +112,9 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   onToggleSelect,
   onNavigateToMessage,
   currentUsername,
+  textRenderMode = "expanded",
+  isCollapsibleText = false,
+  onToggleTextExpand,
   shouldAnimateInsert = false,
 }) => {
   if (item.kind === "date") {
@@ -195,6 +202,9 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
             density={density}
             onNavigateToMessage={onNavigateToMessage}
             currentUsername={currentUsername}
+            textRenderMode={textRenderMode}
+            isCollapsibleText={isCollapsibleText}
+            onToggleTextExpand={onToggleTextExpand}
             shouldAnimateInsert={shouldAnimateInsert}
           />
         </div>
@@ -220,6 +230,8 @@ const areEqualMessageItem = (
       prev.isSelectionMode === next.isSelectionMode &&
       prev.isSelected === next.isSelected &&
       prev.currentUsername === next.currentUsername &&
+      prev.textRenderMode === next.textRenderMode &&
+      prev.isCollapsibleText === next.isCollapsibleText &&
       prev.shouldAnimateInsert === next.shouldAnimateInsert &&
       prev.onReply === next.onReply &&
       prev.onReact === next.onReact &&
@@ -239,6 +251,8 @@ const areEqualMessageItem = (
   if (prev.isSelectionMode !== next.isSelectionMode) return false;
   if (prev.isSelected !== next.isSelected) return false;
   if (prev.currentUsername !== next.currentUsername) return false;
+  if (prev.textRenderMode !== next.textRenderMode) return false;
+  if (prev.isCollapsibleText !== next.isCollapsibleText) return false;
   if (prev.shouldAnimateInsert !== next.shouldAnimateInsert) return false;
   if (prev.onNavigateToMessage !== next.onNavigateToMessage) return false;
 

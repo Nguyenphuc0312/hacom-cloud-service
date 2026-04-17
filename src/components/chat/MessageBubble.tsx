@@ -3,6 +3,7 @@ import type { Conversation, Message, Attachment } from "../../types";
 import type { ChatDensity } from "../../stores/uiStore";
 import { MessageCluster } from "./message-layout/MessageCluster";
 import type { TimelineMergeLevel } from "../../hooks/useMessageGrouping";
+import type { LongMessageRenderMode } from "../../utils/longMessagePolicy";
 
 interface MessageBubbleProps {
   message: Message;
@@ -25,6 +26,9 @@ interface MessageBubbleProps {
   density?: ChatDensity;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
+  textRenderMode?: LongMessageRenderMode;
+  isCollapsibleText?: boolean;
+  onToggleTextExpand?: () => void;
   shouldAnimateInsert?: boolean;
   className?: string;
 }
