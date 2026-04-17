@@ -3688,18 +3688,19 @@ export const useChatStore = create<ChatState>()(
               : message;
           });
 
-          return {
-            messages: {
-              ...state.messages,
-              [conversationId]: updatedMessages,
-            },
-            messagesHydratedByConversation: {
-              ...state.messagesHydratedByConversation,
-              [conversationId]:
-                state.hasAuthoritativeHistoryByConversation[conversationId] ??
-                false,
-            },
-          };
+          return buildConversationMessageState(state, conversationId, updatedMessages, {
+            hydrated:
+              state.hasAuthoritativeHistoryByConversation[conversationId] ??
+              false,
+            hasAuthoritativeHistory:
+              state.hasAuthoritativeHistoryByConversation[conversationId] ??
+              false,
+            stage:
+              state.historyStageByConversation[conversationId] ??
+              (state.hasAuthoritativeHistoryByConversation[conversationId]
+                ? "live_realtime"
+                : "empty"),
+          });
         });
       },
 
@@ -4583,10 +4584,32 @@ export const selectConversationMessagesFromState = (() => {
   };
 })();
 
+export const selectConversationMessageIdsFromState = (
+  state: Pick<ChatState, "messageIdsByConversation">,
+  conversationId: string | null,
+): string[] => {
+  if (!conversationId) {
+    return [];
+  }
+
+  return state.messageIdsByConversation[conversationId] ?? [];
+};
+
+export const selectMessageEntityFromState = (
+  state: Pick<ChatState, "messageById">,
+  messageId: string | null,
+): Message | undefined => {
+  if (!messageId) {
+    return undefined;
+  }
+
+  return state.messageById[messageId];
+};
+
 export const useCurrentMessages = () =>
   useChatStore(
     useShallow((state) => {
-    const id = state.selectedConversationId;
+      const id = state.selectedConversationId;
       return selectConversationMessagesFromState(state, id);
     }),
   );
@@ -4597,6 +4620,21 @@ export const useMessagesByConversation = (conversationId: string | null) =>
       selectConversationMessagesFromState(state, conversationId),
     ),
   );
+
+export const useConversationMessageIds = (conversationId: string | null) =>
+  useChatStore((state) =>
+    selectConversationMessageIdsFromState(state, conversationId),
+  );
+
+export const useConversationMessageCount = (conversationId: string | null) =>
+  useChatStore((state) =>
+    conversationId
+      ? (state.messageIdsByConversation[conversationId]?.length ?? 0)
+      : 0,
+  );
+
+export const useMessageEntity = (messageId: string | null) =>
+  useChatStore((state) => selectMessageEntityFromState(state, messageId));
 
 export const useConversationCount = () =>
   useChatStore((state) => state.orderedConversationIds.length);

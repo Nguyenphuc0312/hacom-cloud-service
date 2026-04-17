@@ -34,7 +34,11 @@ vi.mock("../services/api", () => ({
   },
 }));
 
-import { useChatStore } from "./chatStore";
+import {
+  selectConversationMessagesFromState,
+  selectMessageEntityFromState,
+  useChatStore,
+} from "./chatStore";
 
 const createDeferred = <T>() => {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -290,6 +294,45 @@ describe("chatStore phase-1 realtime flows", () => {
     expect(after.messageWindowByConversation).toBe(previousWindow);
     expect(after.messages["room-1"]?.[0]?.sendState).toBe("sent");
     expect(after.conversationById["room-1"]?.lastMessageStatus).toBe("sent");
+  });
+
+  it("marks normalized message entities as read when applying read receipts up to a boundary", () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+        unreadCount: 0,
+      }),
+    ] as never);
+    useChatStore.getState().setMessages("room-1", [
+      makeMessage({
+        id: "msg-1",
+        senderId: "user-a",
+        createdAt: "2026-04-10T09:00:00.000Z",
+        updatedAt: "2026-04-10T09:00:00.000Z",
+      }),
+      makeMessage({
+        id: "msg-2",
+        senderId: "user-a",
+        createdAt: "2026-04-10T09:01:00.000Z",
+        updatedAt: "2026-04-10T09:01:00.000Z",
+      }),
+    ] as never);
+
+    useChatStore.getState().markMessagesReadUpTo("room-1", "msg-2", "user-b");
+
+    const state = useChatStore.getState();
+    const selectedMessages = selectConversationMessagesFromState(state, "room-1");
+    expect(selectedMessages.map((message) => message.status)).toEqual([
+      MessageStatus.READ,
+      MessageStatus.READ,
+    ]);
+    expect(selectMessageEntityFromState(state, "msg-1")?.status).toBe(
+      MessageStatus.READ,
+    );
+    expect(selectMessageEntityFromState(state, "msg-2")?.status).toBe(
+      MessageStatus.READ,
+    );
   });
 
   it("does not zero unread just because the selected conversation fetches latest messages", async () => {

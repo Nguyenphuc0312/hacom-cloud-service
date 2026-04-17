@@ -7,6 +7,7 @@ import {
   type ListOnScrollProps,
 } from "react-window";
 import { MessageItem } from "./MessageItem";
+import { MessageRowContainer } from "./MessageRowContainer";
 import { MessageListOverlays } from "./MessageListOverlays";
 import { EmptyMessages, ErrorState, MessageListSkeleton } from "../ui";
 import {
@@ -16,6 +17,7 @@ import {
 import { useVirtualizedMessages } from "../../hooks/useVirtualizedMessages";
 import type { Conversation, Message, Attachment } from "../../types";
 import type { ChatDensity } from "../../stores/uiStore";
+import { useMessagesByConversation } from "../../stores";
 import {
   getMessageStableKey,
   isFailedMessage,
@@ -23,8 +25,11 @@ import {
 } from "../../utils/messageTimeline";
 import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 import { logScrollTrace } from "../../utils/scrollTrace";
-import { useMessageTimelineViewModel } from "../../features/chat/hooks/useMessageTimelineViewModel";
 import { useMessageScrollMachine } from "../../features/chat/hooks/useMessageScrollMachine";
+import {
+  type ConversationTimelineItem,
+  useConversationTimelineRows,
+} from "../../features/chat/hooks/useConversationTimelineRows";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
 import { getDistanceFromBottom } from "../../utils/scrollController";
 import {
@@ -39,7 +44,6 @@ import {
 } from "../../utils/longMessagePolicy";
 
 interface MessageListProps {
-  messages: Message[];
   conversationId: string;
   conversationType: Conversation["type"];
   currentUserId: string;
@@ -84,7 +88,7 @@ interface MessageListProps {
 }
 
 interface TimelineRowData {
-  items: TimelineItem[];
+  items: ConversationTimelineItem[];
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
   onEdit?: (message: Message) => void | Promise<void>;
@@ -126,13 +130,15 @@ interface TimelineMessageRenderState {
   isCollapsible: boolean;
 }
 
+type RenderableTimelineItem = ConversationTimelineItem | TimelineItem;
+
 const isImageTimelineItem = (
-  item: TimelineItem | undefined,
-): item is Extract<TimelineItem, { kind: "message" }> =>
+  item: RenderableTimelineItem | undefined,
+): item is Extract<RenderableTimelineItem, { kind: "message" }> =>
   Boolean(item && item.kind === "message" && item.message.type === "image");
 
 const getImageTimelinePlaceholderMinHeight = (
-  item: TimelineItem | undefined,
+  item: RenderableTimelineItem | undefined,
 ): number | null => {
   if (!isImageTimelineItem(item)) {
     return null;
@@ -156,7 +162,7 @@ const getImageTimelinePlaceholderMinHeight = (
 };
 
 const shouldAnimateInsertedMessage = (
-  item: TimelineItem | undefined,
+  item: RenderableTimelineItem | undefined,
   insertedMessageKeys: Set<string>,
 ): boolean => {
   if (!item || item.kind !== "message") {
@@ -194,9 +200,13 @@ const areEqualTimelineRowProps = (
   }
 
   const previousMessageId =
-    previousItem?.kind === "message" ? previousItem.message.id : null;
+    previousItem?.kind === "message" || previousItem?.kind === "system"
+      ? previousItem.messageId
+      : null;
   const nextMessageId =
-    nextItem?.kind === "message" ? nextItem.message.id : null;
+    nextItem?.kind === "message" || nextItem?.kind === "system"
+      ? nextItem.messageId
+      : null;
   if (previousMessageId !== nextMessageId) {
     return false;
   }
@@ -270,7 +280,7 @@ const areEqualTimelineRowProps = (
 };
 
 export const resolveTimelineMessageRenderState = (
-  item: TimelineItem,
+  item: RenderableTimelineItem,
   expandedLongMessageIds: Set<string>,
 ): TimelineMessageRenderState => {
   if (item.kind !== "message") {
@@ -294,7 +304,7 @@ export const resolveTimelineMessageRenderState = (
 };
 
 const shouldObserveTimelineItemResize = (
-  item: TimelineItem,
+  item: RenderableTimelineItem,
   renderState: TimelineMessageRenderState,
 ): boolean => {
   if (item.kind !== "message") {
@@ -324,7 +334,7 @@ const shouldObserveTimelineItemResize = (
 };
 
 const estimateTimelineItemHeight = (
-  item: TimelineItem,
+  item: RenderableTimelineItem,
   density: ChatDensity,
   layoutState: ChatLayoutState,
   renderState: TimelineMessageRenderState,
@@ -531,10 +541,13 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
 
     if (!item) return null;
 
-    const messageId = item.kind === "message" ? item.message.id : undefined;
+    const messageId =
+      item.kind === "message" || item.kind === "system"
+        ? item.messageId
+        : undefined;
     const timelineKey = item.key || `${item.kind}-${index}`;
     const isHighlighted =
-      item.kind === "message" &&
+      (item.kind === "message" || item.kind === "system") &&
       isTargetMessage(item.message, data.highlightedMessageId);
     const shouldAnimateInsert = shouldAnimateInsertedMessage(
       item,
@@ -564,29 +577,53 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
                   "rounded-2xl bg-warning/14 ring-2 ring-warning/35 transition-colors duration-300",
               )}
             >
-              <MessageItem
-                item={item}
-                onReply={data.onReply}
-                onReact={data.onReact}
-                onEdit={data.onEdit}
-                onDelete={data.onDelete}
-                onImageClick={data.onImageClick}
-                onFilePreview={data.onFilePreview}
-                density={data.density}
-                isSelectionMode={data.isSelectionMode}
-                isSelected={
-                  messageId ? data.selectedMessageIds.has(messageId) : false
-                }
-                onToggleSelect={data.onToggleSelect}
-                onNavigateToMessage={data.onNavigateToMessage}
-                currentUsername={data.currentUsername}
-                textRenderMode={textRenderMode}
-                isCollapsibleText={isCollapsibleText}
-                onToggleTextExpand={
-                  isCollapsibleText ? handleToggleLongMessageExpand : undefined
-                }
-                shouldAnimateInsert={shouldAnimateInsert}
-              />
+              {item.kind === "message" || item.kind === "system" ? (
+                <MessageRowContainer
+                  item={item}
+                  onReply={data.onReply}
+                  onReact={data.onReact}
+                  onEdit={data.onEdit}
+                  onDelete={data.onDelete}
+                  onImageClick={data.onImageClick}
+                  onFilePreview={data.onFilePreview}
+                  density={data.density}
+                  isSelectionMode={data.isSelectionMode}
+                  isSelected={
+                    messageId ? data.selectedMessageIds.has(messageId) : false
+                  }
+                  onToggleSelect={data.onToggleSelect}
+                  onNavigateToMessage={data.onNavigateToMessage}
+                  currentUsername={data.currentUsername}
+                  textRenderMode={textRenderMode}
+                  isCollapsibleText={isCollapsibleText}
+                  onToggleTextExpand={
+                    isCollapsibleText ? handleToggleLongMessageExpand : undefined
+                  }
+                  shouldAnimateInsert={shouldAnimateInsert}
+                />
+              ) : (
+                <MessageItem
+                  item={item}
+                  onReply={data.onReply}
+                  onReact={data.onReact}
+                  onEdit={data.onEdit}
+                  onDelete={data.onDelete}
+                  onImageClick={data.onImageClick}
+                  onFilePreview={data.onFilePreview}
+                  density={data.density}
+                  isSelectionMode={data.isSelectionMode}
+                  isSelected={false}
+                  onToggleSelect={data.onToggleSelect}
+                  onNavigateToMessage={data.onNavigateToMessage}
+                  currentUsername={data.currentUsername}
+                  textRenderMode={textRenderMode}
+                  isCollapsibleText={isCollapsibleText}
+                  onToggleTextExpand={
+                    isCollapsibleText ? handleToggleLongMessageExpand : undefined
+                  }
+                  shouldAnimateInsert={shouldAnimateInsert}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -721,7 +758,6 @@ export const shouldAcceptScrollCommand = ({
 };
 
 const MessageListComponent: React.FC<MessageListProps> = ({
-  messages,
   conversationId,
   conversationType,
   currentUserId,
@@ -755,6 +791,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   composerHeight = 0,
   className,
 }) => {
+  const messages = useMessagesByConversation(conversationId);
   const { t } = useTranslation();
   const viewportRef = React.useRef<HTMLDivElement | null>(null);
   const listRef = React.useRef<VirtualList<TimelineRowData> | null>(null);
@@ -796,10 +833,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const [liveUnreadMarker, setLiveUnreadMarker] =
     React.useState<UnreadTimelineMarker | null>(unreadMarker ?? null);
   const getTimelineItemKey = React.useCallback(
-    (item: TimelineItem, index: number) => item.key || `${item.kind}-${index}`,
+    (item: ConversationTimelineItem, index: number) =>
+      item.key || `${item.kind}-${index}`,
     [],
   );
-  const { timelineItems } = useMessageTimelineViewModel({
+  const timelineItems = useConversationTimelineRows({
     messages,
     currentUserId,
     conversationType,
@@ -848,7 +886,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   }, []);
 
   const estimateItemSize = React.useCallback(
-    (item: TimelineItem) =>
+    (item: ConversationTimelineItem) =>
       estimateTimelineItemHeight(
         item,
         density,
@@ -865,7 +903,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     findItemAtOffset,
     setItemSize,
     clearMeasuredSizes,
-  } = useVirtualizedMessages<TimelineItem, TimelineRowData>({
+  } = useVirtualizedMessages<ConversationTimelineItem, TimelineRowData>({
     items: timelineItems,
     viewportRef,
     observeViewport: !isInitialLoading && messages.length > 0,
@@ -995,7 +1033,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       return timelineItems.findIndex(
         (item) =>
           (item.kind === "message" || item.kind === "system") &&
-          item.message.id === resolvedMessageId,
+          item.messageId === resolvedMessageId,
       );
     },
     [messageIds, timelineItems],
@@ -1023,7 +1061,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     }
 
     return {
-      messageId: item.message.id,
+      messageId: item.messageId,
       offsetFromTop: outer.scrollTop - getItemOffset(anchorIndex),
     };
   }, [findItemAtOffset, getItemOffset, outerRef, timelineItems]);
@@ -1798,7 +1836,6 @@ const areEqualMessageListProps = (
   previousProps: MessageListProps,
   nextProps: MessageListProps,
 ): boolean =>
-  previousProps.messages === nextProps.messages &&
   previousProps.conversationId === nextProps.conversationId &&
   previousProps.conversationType === nextProps.conversationType &&
   previousProps.currentUserId === nextProps.currentUserId &&

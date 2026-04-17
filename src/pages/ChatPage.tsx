@@ -22,7 +22,7 @@ import {
   useAuthStore,
   useChatStore,
   useSelectedConversation,
-  useCurrentMessages,
+  useConversationMessageCount,
   useCurrentTypingStatus,
   useConversationCount,
 } from "../stores";
@@ -173,7 +173,9 @@ export const ChatPage: React.FC = () => {
 
   // Selectors
   const selectedConversation = useSelectedConversation();
-  const conversationMessages = useCurrentMessages();
+  const conversationMessageCount = useConversationMessageCount(
+    selectedConversationId,
+  );
   const typingStatus = useCurrentTypingStatus();
   const conversationCount = useConversationCount();
   // WebSocket
@@ -317,7 +319,7 @@ export const ChatPage: React.FC = () => {
     connectionState,
     isValidatingRoom,
     lastValidatedConversationId,
-    messageCount: conversationMessages.length,
+    messageCount: conversationMessageCount,
     fetchMessages,
     markAsRead,
     joinRoom,
@@ -764,7 +766,10 @@ export const ChatPage: React.FC = () => {
         conversationId: selectedConversation.id,
         previewType: getPreviewType(attachment.mimeType),
       };
-      const gallery = conversationMessages
+      const gallery = selectConversationMessagesFromState(
+        useChatStore.getState(),
+        selectedConversation.id,
+      )
         .flatMap((message) =>
           (message.attachments ?? []).map((candidate) => ({
             attachment: candidate,
@@ -776,7 +781,7 @@ export const ChatPage: React.FC = () => {
         .filter((candidate) => candidate.previewType !== "unsupported");
       filePreview.open(target, gallery.length > 0 ? gallery : undefined);
     },
-    [conversationMessages, filePreview, selectedConversation],
+    [filePreview, selectedConversation],
   );
 
   const handleExternalJumpHandled = useCallback((messageId: string) => {
@@ -946,7 +951,6 @@ export const ChatPage: React.FC = () => {
           <ChatWindow
             layoutState={chatLayoutState}
             conversation={selectedConversation}
-            messages={conversationMessages}
             currentUser={currentUserSummary}
             typingStatus={typingStatus || undefined}
             onSendMessage={handleSendMessage}

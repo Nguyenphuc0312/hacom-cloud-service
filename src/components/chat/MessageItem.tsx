@@ -5,13 +5,14 @@ import { UnreadDivider } from "./UnreadDivider";
 import { MessageBubble } from "./MessageBubble";
 import { SystemMessage } from "../message/SystemMessage";
 import type { Message, Attachment } from "../../types";
-import type { TimelineItem } from "../../hooks/useMessageGrouping";
+import type { ConversationTimelineItem } from "../../features/chat/hooks/useConversationTimelineRows";
 import type { ChatDensity } from "../../stores/uiStore";
 import { getTimelineItemSpacingClass } from "./timelineDensity";
 import type { LongMessageRenderMode } from "../../utils/longMessagePolicy";
 
 interface MessageItemProps {
-  item: TimelineItem;
+  item: ConversationTimelineItem;
+  message?: Message;
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
   onEdit?: (message: Message) => void | Promise<void>;
@@ -98,8 +99,16 @@ const getLayoutSensitiveSignature = (message: Message): string =>
     (message as { threadCount?: number }).threadCount ?? 0,
   ].join("::");
 
+const resolveLiveMessage = (
+  item: ConversationTimelineItem,
+  message?: Message,
+): Message | null =>
+  message ??
+  (item.kind === "message" || item.kind === "system" ? item.message : null);
+
 const MessageItemComponent: React.FC<MessageItemProps> = ({
   item,
+  message,
   onReply,
   onReact,
   onEdit,
@@ -118,22 +127,22 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   shouldAnimateInsert = false,
 }) => {
   if (item.kind === "date") {
-    return (
-      <DateDivider
-        date={item.date}
-        density={density}
-      />
-    );
+    return <DateDivider date={item.date} density={density} />;
   }
 
   if (item.kind === "unread") {
     return <UnreadDivider density={density} />;
   }
 
+  const resolvedMessage = resolveLiveMessage(item, message);
+  if (!resolvedMessage) {
+    return null;
+  }
+
   if (item.kind === "system") {
     return (
       <SystemMessage
-        message={item.message}
+        message={resolvedMessage}
         className={
           density === "compact"
             ? "my-1"
@@ -147,17 +156,19 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
 
   const handleClick = () => {
     if (isSelectionMode && onToggleSelect) {
-      onToggleSelect(item.message.id);
+      onToggleSelect(resolvedMessage.id);
     }
   };
 
-  const messageSpacingClass =
-    getTimelineItemSpacingClass(item.spacingToken, density);
+  const messageSpacingClass = getTimelineItemSpacingClass(
+    item.spacingToken,
+    density,
+  );
 
   return (
     <div
-      data-testid={`message-item-${item.message.id}`}
-      data-message-id={item.message.id}
+      data-testid={`message-item-${resolvedMessage.id}`}
+      data-message-id={resolvedMessage.id}
       className={clsx(
         messageSpacingClass,
         "msg-row-hover -mx-1 px-1",
@@ -173,16 +184,16 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
             <input
               type="checkbox"
               checked={isSelected}
-              onChange={() => onToggleSelect?.(item.message.id)}
+              onChange={() => onToggleSelect?.(resolvedMessage.id)}
               className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 cursor-pointer"
               aria-label={`Select message`}
-              onClick={(e) => e.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
             />
           </div>
         )}
         <div className="min-w-0 flex-1">
           <MessageBubble
-            message={item.message}
+            message={resolvedMessage}
             isOwn={item.isOwn}
             mergeLevel={item.mergeLevel}
             showAvatar={item.showAvatar}
@@ -213,19 +224,16 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   );
 };
 
-/**
- * Custom equality comparator for MessageItem.
- * Compares item content (not identity) to prevent unnecessary re-renders
- * when useMessageGrouping rebuilds TimelineItem objects with identical content.
- * Critical for 10k+ message lists where only 1-2 items typically change.
- */
 const areEqualMessageItem = (
   prev: MessageItemProps,
   next: MessageItemProps,
 ): boolean => {
-  // Fast path: exact same item reference (structural sharing hit)
+  const previousMessage = resolveLiveMessage(prev.item, prev.message);
+  const nextMessage = resolveLiveMessage(next.item, next.message);
+
   if (prev.item === next.item) {
     return (
+      previousMessage === nextMessage &&
       prev.density === next.density &&
       prev.isSelectionMode === next.isSelectionMode &&
       prev.isSelected === next.isSelected &&
@@ -244,7 +252,6 @@ const areEqualMessageItem = (
     );
   }
 
-  // Different item reference — compare structurally
   if (prev.item.kind !== next.item.kind) return false;
   if (prev.item.key !== next.item.key) return false;
   if (prev.density !== next.density) return false;
@@ -260,11 +267,20 @@ const areEqualMessageItem = (
     return prev.item.date.getTime() === next.item.date.getTime();
   }
 
-  if (prev.item.kind === "unread" || prev.item.kind === "system") {
-    if (prev.item.kind === "system" && next.item.kind === "system") {
-      return prev.item.message === next.item.message;
-    }
+  if (prev.item.kind === "unread" && next.item.kind === "unread") {
     return true;
+  }
+
+  if (!previousMessage || !nextMessage) {
+    return false;
+  }
+
+  if (prev.item.kind === "system" && next.item.kind === "system") {
+    return (
+      previousMessage.id === nextMessage.id &&
+      getLayoutSensitiveSignature(previousMessage) ===
+        getLayoutSensitiveSignature(nextMessage)
+    );
   }
 
   if (prev.item.kind === "message" && next.item.kind === "message") {
@@ -277,24 +293,17 @@ const areEqualMessageItem = (
     if (prev.item.spacingToken !== next.item.spacingToken) return false;
     if (prev.item.isGroupStart !== next.item.isGroupStart) return false;
     if (prev.item.isGroupEnd !== next.item.isGroupEnd) return false;
-
-    const prevMsg = prev.item.message;
-    const nextMsg = next.item.message;
-    if (prevMsg === nextMsg) return true; // same reference
-    if (prevMsg.id !== nextMsg.id) return false;
+    if (previousMessage.id !== nextMessage.id) return false;
 
     return (
-      getLayoutSensitiveSignature(prevMsg) ===
-      getLayoutSensitiveSignature(nextMsg)
+      getLayoutSensitiveSignature(previousMessage) ===
+      getLayoutSensitiveSignature(nextMessage)
     );
   }
 
   return false;
 };
 
-export const MessageItem = React.memo(
-  MessageItemComponent,
-  areEqualMessageItem,
-);
+export const MessageItem = React.memo(MessageItemComponent, areEqualMessageItem);
 
 export default MessageItem;

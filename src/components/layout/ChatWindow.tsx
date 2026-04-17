@@ -2,7 +2,7 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { ChatHeader } from "../chat/ChatHeader";
-import { MessageList } from "../chat/MessageList";
+import { ConversationViewport } from "../chat/ConversationViewport";
 import { SelectionToolbar } from "../chat/SelectionToolbar";
 import { DropOverlay } from "../input/DropOverlay";
 import { MessageInput } from "../input/MessageInput";
@@ -38,6 +38,7 @@ import { logScrollTrace } from "../../utils/scrollTrace";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { getMessageByIdUseCase } from "../../features/chat/usecases/getMessageById";
 import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
+import { selectConversationMessagesFromState } from "../../stores/chatStore";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
 
 const SearchPanel = React.lazy(() => import("../chat/SearchPanel"));
@@ -74,36 +75,9 @@ const matchesMessageIdentity = (message: Message, targetId: string): boolean =>
   message.stableId === targetId ||
   message.clientMessageId === targetId;
 
-const buildUnreadRestoreSignature = ({
-  conversationId,
-  firstUnreadMessageId,
-  lastReadMessageId,
-  lastReadAt,
-}: {
-  conversationId: string;
-  firstUnreadMessageId?: string | null;
-  lastReadMessageId?: string | null;
-  lastReadAt?: string | Date | null;
-}): string => {
-  const lastReadAtIso =
-    typeof lastReadAt === "string"
-      ? lastReadAt
-      : lastReadAt instanceof Date
-        ? lastReadAt.toISOString()
-        : "";
-
-  return [
-    conversationId,
-    firstUnreadMessageId ?? "",
-    lastReadMessageId ?? "",
-    lastReadAtIso,
-  ].join("|");
-};
-
 interface ChatWindowProps {
   layoutState: ChatLayoutState;
   conversation: Conversation;
-  messages: Message[];
   currentUser: UserSummary;
   typingStatus?: TypingStatus;
   onSendMessage: (
@@ -144,46 +118,6 @@ interface ChatWindowProps {
   className?: string;
 }
 
-interface ChatTimelinePaneProps {
-  layoutState: ChatLayoutState;
-  messages: Message[];
-  conversationId: string;
-  conversationType: Conversation["type"];
-  currentUserId: string;
-  onReply: (message: Message) => void;
-  onReact: (messageId: string, emoji: string) => void;
-  onEdit?: (message: Message) => void | Promise<void>;
-  onDelete?: (messageId: string) => void | Promise<void>;
-  hasMoreMessages?: boolean;
-  isLoadingMessages?: boolean;
-  historyLoadingState?: ChatWindowProps["historyLoadingState"];
-  isConversationReady?: boolean;
-  onLoadOlderMessages?: () => void | Promise<void>;
-  onImageClick?: (imageUrl: string) => void;
-  onFilePreview?: (attachment: Attachment) => void;
-  messageError?: string | null;
-  onRetryMessages?: () => void | Promise<void>;
-  density: ReturnType<typeof resolveChatDensity>;
-  isSelectionMode: boolean;
-  selectedMessageIds: Set<string>;
-  onToggleSelect: (messageId: string) => void;
-  onNavigateToMessage?: (messageId: string) => void;
-  currentUsername?: string;
-  unreadMarker?: {
-    lastReadMessageId?: string;
-    lastReadAt?: Date | string;
-    firstUnreadMessageId?: string;
-    active?: boolean;
-  } | null;
-  unreadRestoreSignature?: string | null;
-  onUnreadRestoreConsumed?: (signature: string) => void;
-  onReachedLatest?: (message: Message) => void;
-  jumpToMessageId?: string | null;
-  jumpRequestVersion?: number;
-  onJumpHandled?: (messageId: string) => void;
-  composerHeight?: number;
-}
-
 type EphemeralNotice = {
   kind: "info" | "warn" | "error" | "success";
   message: string;
@@ -203,82 +137,6 @@ const getEphemeralNoticeClassName = (kind: EphemeralNotice["kind"]): string => {
   }
 };
 
-const ChatTimelinePane = React.memo(
-  ({
-    layoutState,
-    messages,
-    conversationId,
-    conversationType,
-    currentUserId,
-    onReply,
-    onReact,
-    onEdit,
-    onDelete,
-    hasMoreMessages,
-    isLoadingMessages,
-    historyLoadingState,
-    isConversationReady,
-    onLoadOlderMessages,
-    onImageClick,
-    onFilePreview,
-    messageError,
-    onRetryMessages,
-    density,
-    isSelectionMode,
-    selectedMessageIds,
-    onToggleSelect,
-    onNavigateToMessage,
-    currentUsername,
-    unreadMarker,
-    unreadRestoreSignature,
-    onUnreadRestoreConsumed,
-    onReachedLatest,
-    jumpToMessageId,
-    jumpRequestVersion,
-    onJumpHandled,
-    composerHeight,
-  }: ChatTimelinePaneProps) => (
-    <MessageList
-      messages={messages}
-      conversationId={conversationId}
-      conversationType={conversationType}
-      currentUserId={currentUserId}
-      onReply={onReply}
-      onReact={onReact}
-      onEdit={onEdit}
-      onDelete={onDelete}
-      hasMore={hasMoreMessages}
-      isLoadingMore={Boolean(isLoadingMessages && messages.length > 0)}
-      isInitialLoading={Boolean(
-        (isLoadingMessages || !isConversationReady) && messages.length === 0,
-      )}
-      historyLoadingState={historyLoadingState}
-      onLoadMore={onLoadOlderMessages}
-      onImageClick={onImageClick}
-      onFilePreview={onFilePreview}
-      error={messageError}
-      onRetry={onRetryMessages}
-      density={density}
-      layoutState={layoutState}
-      isSelectionMode={isSelectionMode}
-      selectedMessageIds={selectedMessageIds}
-      onToggleSelect={onToggleSelect}
-      onNavigateToMessage={onNavigateToMessage}
-      currentUsername={currentUsername}
-      unreadMarker={unreadMarker}
-      unreadRestoreSignature={unreadRestoreSignature}
-      onUnreadRestoreConsumed={onUnreadRestoreConsumed}
-      onReachedLatest={onReachedLatest}
-      jumpToMessageId={jumpToMessageId}
-      jumpRequestVersion={jumpRequestVersion}
-      onJumpHandled={onJumpHandled}
-      composerHeight={composerHeight}
-      className="flex-1 min-h-0"
-    />
-  ),
-);
-ChatTimelinePane.displayName = "ChatTimelinePane";
-
 const OverlayPanelFallback: React.FC = () => (
   <div className="flex h-full items-center justify-center px-6">
     <Spinner size="md" />
@@ -288,7 +146,6 @@ const OverlayPanelFallback: React.FC = () => (
 export const ChatWindow: React.FC<ChatWindowProps> = ({
   layoutState,
   conversation,
-  messages,
   currentUser,
   typingStatus,
   onSendMessage,
@@ -520,14 +377,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     string | null
   >(null);
   const [jumpRequestVersion, setJumpRequestVersion] = React.useState(0);
-  const [unreadMarker, setUnreadMarker] = React.useState<{
-    lastReadMessageId?: string;
-    lastReadAt?: Date | string;
-    firstUnreadMessageId?: string;
-    active?: boolean;
-  } | null>(null);
-  const [pendingUnreadRestoreSignature, setPendingUnreadRestoreSignature] =
-    React.useState<string | null>(null);
   const [clockTick, setClockTick] = React.useState(() => Date.now());
   const [ephemeralNotice, setEphemeralNotice] =
     React.useState<EphemeralNotice | null>(null);
@@ -681,18 +530,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const handleReachedLatest = React.useCallback(
     (message: Message) => {
-      setUnreadMarker((current) => (current ? null : current));
-      setPendingUnreadRestoreSignature(null);
       onReachedLatestMessage?.(message);
     },
     [onReachedLatestMessage],
   );
-
-  const handleUnreadRestoreConsumed = React.useCallback((signature: string) => {
-    setPendingUnreadRestoreSignature((current) =>
-      current === signature ? null : current,
-    );
-  }, []);
 
   const queueJumpToMessage = React.useCallback(
     (messageId: string) => {
@@ -709,9 +550,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const ensureMessageLoaded = React.useCallback(
     async (messageId: string, fallbackMessage?: Message) => {
-      const existingMessage = messages.find((message) =>
-        matchesMessageIdentity(message, messageId),
-      );
+      const existingMessage = selectConversationMessagesFromState(
+        useChatStore.getState(),
+        conversation.id,
+      ).find((message) => matchesMessageIdentity(message, messageId));
       if (existingMessage) {
         return existingMessage;
       }
@@ -737,7 +579,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       return targetMessage;
     },
-    [addMessage, conversation.id, fetchMessages, messages],
+    [addMessage, conversation.id, fetchMessages],
   );
 
   const handleJumpToMessage = React.useCallback(
@@ -784,54 +626,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     onExternalJumpHandled,
   ]);
 
-  const conversationReadSnapshot = conversation as Conversation & {
-    lastReadMessageId?: string;
-    lastReadAt?: Date | string;
-    firstUnreadMessageId?: string;
-  };
-  const lastReadMessageId = conversationReadSnapshot.lastReadMessageId;
-  const lastReadAt = conversationReadSnapshot.lastReadAt;
-  const firstUnreadMessageId = conversationReadSnapshot.firstUnreadMessageId;
-
   // Close panels when switching conversations
   React.useEffect(() => {
     setOverlayMode(null);
-    const hasUnreadContext =
-      (conversation.unreadCount ?? 0) > 0 &&
-      (firstUnreadMessageId || lastReadMessageId || lastReadAt);
-
-    if (!hasUnreadContext) {
-      setUnreadMarker(null);
-      setPendingUnreadRestoreSignature(null);
-      return;
-    }
-
-    const nextUnreadMarker = {
-      lastReadMessageId,
-      lastReadAt,
-      firstUnreadMessageId,
-      active: true,
-    };
-    const nextUnreadRestoreSignature = buildUnreadRestoreSignature({
-      conversationId: conversation.id,
-      firstUnreadMessageId,
-      lastReadMessageId,
-      lastReadAt,
-    });
-
-    setUnreadMarker(nextUnreadMarker);
-    setPendingUnreadRestoreSignature((current) =>
-      current === nextUnreadRestoreSignature
-        ? current
-        : nextUnreadRestoreSignature,
-    );
-  }, [
-    conversation.id,
-    conversation.unreadCount,
-    firstUnreadMessageId,
-    lastReadAt,
-    lastReadMessageId,
-  ]);
+  }, [conversation.id]);
 
   React.useEffect(() => {
     const previousState = previousConnectionStateRef.current;
@@ -979,14 +777,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [onDeleteMessage, selectedMessageIds, exitSelectionMode]);
 
   const handleSelectionCopy = React.useCallback(() => {
-    const selectedMsgs = messages
-      .filter((m) => selectedMessageIds.has(m.id))
+    const selectedMsgs = selectConversationMessagesFromState(
+      useChatStore.getState(),
+      conversation.id,
+    )
+      .filter((message) => selectedMessageIds.has(message.id))
       .map((m) => m.content)
       .join("\n");
     void navigator.clipboard.writeText(selectedMsgs);
     toast.success(t("chat:message.actions.copy", { defaultValue: "Copied" }));
     exitSelectionMode();
-  }, [messages, selectedMessageIds, exitSelectionMode, t]);
+  }, [conversation.id, selectedMessageIds, exitSelectionMode, t]);
 
   const currentUsername = currentUser.username;
 
@@ -1044,11 +845,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       )}
 
-      <ChatTimelinePane
+      <ConversationViewport
         layoutState={layoutState}
-        messages={messages}
-        conversationId={conversation.id}
-        conversationType={conversation.type}
+        conversation={conversation}
         currentUserId={currentUser.id}
         onReply={handleReply}
         onReact={handleReact}
@@ -1068,16 +867,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onToggleSelect={toggleMessageSelection}
         onNavigateToMessage={handleNavigateToMessage}
         currentUsername={currentUsername}
-        unreadMarker={unreadMarker}
-        unreadRestoreSignature={pendingUnreadRestoreSignature}
-        onUnreadRestoreConsumed={handleUnreadRestoreConsumed}
         onReachedLatest={handleReachedLatest}
         jumpToMessageId={jumpTargetMessageId}
         jumpRequestVersion={jumpRequestVersion}
         onJumpHandled={handleJumpHandled}
-          composerHeight={composerHeight}
-          historyLoadingState={historyLoadingState}
-        />
+        composerHeight={composerHeight}
+        historyLoadingState={historyLoadingState}
+        className="flex-1 min-h-0"
+      />
 
       {ephemeralNotice &&
         bottomOverlayPlacements["ephemeral-notice"]?.visible && (
