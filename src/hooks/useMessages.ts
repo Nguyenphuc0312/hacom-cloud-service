@@ -70,6 +70,11 @@ export const useMessages = ({
       ? (state.hasNewerMessagesByConversation[conversationId] ?? false)
       : false,
   );
+  const messageWindow = useChatStore((state) =>
+    conversationId
+      ? state.messageWindowByConversation[conversationId]
+      : undefined,
+  );
   const isLoadingByConversation = useChatStore(
     (state) => state.isLoadingMessagesByConversation,
   );
@@ -145,15 +150,12 @@ export const useMessages = ({
       hasMore &&
       !isLoadingByConversation[conversationId]
     ) {
-      const oldestMessage = messages.find(
-        (message) => !message.id.startsWith("temp-"),
-      );
-      if (oldestMessage) {
+      if (messageWindow?.oldestLoadedMessageId && messageWindow.oldestLoadedAt) {
         await fetchMessages(
           conversationId,
-          new Date(oldestMessage.createdAt).toISOString(),
+          new Date(messageWindow.oldestLoadedAt).toISOString(),
           undefined,
-          { beforeId: oldestMessage.id },
+          { beforeId: messageWindow.oldestLoadedMessageId },
         );
       }
     }
@@ -161,7 +163,7 @@ export const useMessages = ({
     conversationId,
     hasMore,
     isLoadingByConversation,
-    messages,
+    messageWindow,
     fetchMessages,
   ]);
 

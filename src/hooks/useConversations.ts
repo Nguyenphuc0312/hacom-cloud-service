@@ -9,6 +9,7 @@ import {
   useFilteredConversations,
   useTotalUnreadCount,
 } from "../stores";
+import { useChatSidebarStore } from "../features/chat/state/chatSidebarStore";
 import type { Conversation, ConversationFilter } from "../types";
 
 interface UseConversationsReturn {
@@ -36,14 +37,14 @@ export const useConversations = (): UseConversationsReturn => {
     selectedConversationId,
     isLoadingConversations,
     conversationsError,
-    searchQuery,
-    activeFilter,
     selectConversation,
-    setSearchQuery,
-    setActiveFilter,
     fetchConversations,
     markAsRead,
   } = useChatStore();
+  const searchQuery = useChatSidebarStore((state) => state.searchQuery);
+  const activeFilter = useChatSidebarStore((state) => state.filter);
+  const setSearchQuery = useChatSidebarStore((state) => state.setSearchQuery);
+  const setActiveFilter = useChatSidebarStore((state) => state.setFilter);
 
   const filteredConversations = useFilteredConversations();
   const totalUnread = useTotalUnreadCount();
@@ -74,10 +75,10 @@ export const useConversations = (): UseConversationsReturn => {
     isLoading: isLoadingConversations,
     error: conversationsError,
     searchQuery,
-    activeFilter,
+    activeFilter: activeFilter as ConversationFilter,
     selectConversation,
     setSearchQuery,
-    setActiveFilter,
+    setActiveFilter: setActiveFilter as (filter: ConversationFilter) => void,
     refreshConversations,
     markAsRead,
   };

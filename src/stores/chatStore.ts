@@ -31,6 +31,7 @@ import i18n from "../i18n";
 import { useAuthStore } from "./authStore";
 import { registerStoreResetter } from "./storeResetRegistry";
 import { conversationApi, messageApi } from "../services/api";
+import { useChatSidebarStore } from "../features/chat/state/chatSidebarStore";
 import type {
   Conversation,
   Message,
@@ -54,6 +55,7 @@ interface ChatState {
   messageById: Record<string, Message>;
   messageIdsByConversation: Record<string, string[]>;
   messageAliasIndexByConversation: Record<string, Record<string, string>>;
+  messageWindowByConversation: Record<string, ConversationMessageWindow>;
   messagesHydratedByConversation: Record<string, boolean>;
   historyStageByConversation: Record<string, HistoryStage>;
   hasAuthoritativeHistoryByConversation: Record<string, boolean>;
@@ -65,8 +67,6 @@ interface ChatState {
   >;
   selectedConversationId: string | null;
   typingStatuses: TypingStatus[];
-  searchQuery: string;
-  activeFilter: ConversationFilter;
   isLoadingConversations: boolean;
   hasFetchedConversationsOnce: boolean;
   conversationsError: string | null;
@@ -80,6 +80,7 @@ interface ChatState {
   error: string | null;
 
   setConversations: (conversations: Conversation[]) => void;
+  mergeConversationPage: (conversations: Conversation[]) => void;
   addConversation: (conversation: Conversation) => void;
   upsertConversationSummary: (
     conversation: Conversation,
@@ -212,9 +213,6 @@ interface ChatState {
   setTyping: (status: TypingStatus) => void;
   clearTyping: (conversationId: string, userId: string) => void;
 
-  setSearchQuery: (query: string) => void;
-  setActiveFilter: (filter: ConversationFilter) => void;
-
   clearError: () => void;
   reset: () => void;
 }
@@ -254,6 +252,13 @@ interface ConversationHistoryRequest {
   historyScopeKey: string | null;
 }
 
+interface ConversationMessageWindow {
+  oldestLoadedMessageId: string | null;
+  oldestLoadedAt: string | null;
+  newestLoadedMessageId: string | null;
+  newestLoadedAt: string | null;
+}
+
 interface FetchMessagesOptions {
   force?: boolean;
   limit?: number;
@@ -278,6 +283,7 @@ const initialState = {
   messageById: {},
   messageIdsByConversation: {},
   messageAliasIndexByConversation: {},
+  messageWindowByConversation: {},
   messagesHydratedByConversation: {},
   historyStageByConversation: {},
   hasAuthoritativeHistoryByConversation: {},
@@ -286,8 +292,6 @@ const initialState = {
   latestHistoryRequestByConversation: {},
   selectedConversationId: null,
   typingStatuses: [],
-  searchQuery: "",
-  activeFilter: "all" as ConversationFilter,
   isLoadingConversations: false,
   hasFetchedConversationsOnce: false,
   conversationsError: null,
@@ -377,9 +381,6 @@ const buildHistoryScopeKey = (conversationId: string): string | null => {
 
 const isAuthoritativeHistoryStage = (stage: HistoryStage | undefined): boolean =>
   stage === "authoritative_initial_window" || stage === "live_realtime";
-
-const isPartialHistoryStage = (stage: HistoryStage | undefined): boolean =>
-  stage === "partial_unread_bootstrap" || stage === "partial_prefetch";
 
 const resolveHistoryStage = (
   currentStage: HistoryStage | undefined,
@@ -997,6 +998,42 @@ const mergeConversationCollections = (
   });
 
   return sortConversationsByActivity(Array.from(mergedById.values()));
+};
+
+const replaceConversationsInState = (
+  state: Pick<ChatState, "conversations">,
+  conversations: Conversation[] | null | undefined,
+) => {
+  const normalized = mergeConversationCollections(
+    normalizeConversationsPayload(
+      Array.isArray(conversations) ? conversations : [],
+    ),
+  );
+
+  return {
+    conversations: normalized,
+    ...buildConversationCollectionState(normalized),
+  };
+};
+
+const mergeConversationPageIntoState = (
+  state: Pick<ChatState, "conversations">,
+  conversations: Conversation[] | null | undefined,
+) => {
+  const normalizedIncoming = mergeConversationCollections(
+    normalizeConversationsPayload(
+      Array.isArray(conversations) ? conversations : [],
+    ),
+  );
+  const nextConversations = mergeConversationCollections([
+    ...(Array.isArray(state.conversations) ? state.conversations : []),
+    ...normalizedIncoming,
+  ]);
+
+  return {
+    conversations: nextConversations,
+    ...buildConversationCollectionState(nextConversations),
+  };
 };
 
 const updateConversationActivitySummary = (
@@ -1702,6 +1739,24 @@ const isCanonicalConversationMessage = (
   return !isTempMessageId(message.id);
 };
 
+const buildConversationMessageWindow = (
+  messages: Message[],
+): ConversationMessageWindow => {
+  const canonicalMessages = messages.filter((message) =>
+    isCanonicalConversationMessage(message),
+  );
+  const oldestLoadedMessage = canonicalMessages[0] ?? null;
+  const newestLoadedMessage =
+    canonicalMessages[canonicalMessages.length - 1] ?? null;
+
+  return {
+    oldestLoadedMessageId: oldestLoadedMessage?.id ?? null,
+    oldestLoadedAt: oldestLoadedMessage?.createdAt ?? null,
+    newestLoadedMessageId: newestLoadedMessage?.id ?? null,
+    newestLoadedAt: newestLoadedMessage?.createdAt ?? null,
+  };
+};
+
 const attachReplySnapshots = (messages: Message[]): Message[] => {
   if (!Array.isArray(messages) || messages.length === 0) {
     return [];
@@ -1743,6 +1798,7 @@ const buildConversationMessageState = (
     | "messageById"
     | "messageIdsByConversation"
     | "messageAliasIndexByConversation"
+    | "messageWindowByConversation"
     | "messagesHydratedByConversation"
     | "hasNewerMessagesByConversation"
     | "historyStageByConversation"
@@ -1769,6 +1825,7 @@ const buildConversationMessageState = (
     .reverse()
     .find((message) => isCanonicalConversationMessage(message));
   const nextAliasIndex = rebuildConversationMessageAliasIndex(resolvedMessages);
+  const nextMessageWindow = buildConversationMessageWindow(resolvedMessages);
   const existingConversation =
     state.conversations.find((conversation) => conversation.id === conversationId) ??
     null;
@@ -1877,6 +1934,10 @@ const buildConversationMessageState = (
     messageAliasIndexByConversation: {
       ...state.messageAliasIndexByConversation,
       [conversationId]: nextAliasIndex,
+    },
+    messageWindowByConversation: {
+      ...state.messageWindowByConversation,
+      [conversationId]: nextMessageWindow,
     },
     messagesHydratedByConversation: {
       ...state.messagesHydratedByConversation,
@@ -2525,17 +2586,11 @@ export const useChatStore = create<ChatState>()(
     return {
       ...initialState,
 
-      setConversations: (conversations) => {
-        const normalized = mergeConversationCollections(
-          normalizeConversationsPayload(
-            Array.isArray(conversations) ? conversations : [],
-          ),
-        );
-        set({
-          conversations: normalized,
-          ...buildConversationCollectionState(normalized),
-        });
-      },
+      setConversations: (conversations) =>
+        set((state) => replaceConversationsInState(state, conversations)),
+
+      mergeConversationPage: (conversations) =>
+        set((state) => mergeConversationPageIntoState(state, conversations)),
 
       addConversation: (conversation) => {
         const normalized = normalizeConversation(conversation);
@@ -2667,6 +2722,11 @@ export const useChatStore = create<ChatState>()(
             conversations,
             messages: Object.fromEntries(
               Object.entries(state.messages).filter(([key]) => key !== id),
+            ),
+            messageWindowByConversation: Object.fromEntries(
+              Object.entries(state.messageWindowByConversation).filter(
+                ([key]) => key !== id,
+              ),
             ),
             messagesHydratedByConversation: Object.fromEntries(
               Object.entries(state.messagesHydratedByConversation).filter(
@@ -2949,13 +3009,11 @@ export const useChatStore = create<ChatState>()(
             const conversations = normalizeConversationsPayload(
               unwrapApiSuccess(response),
             );
-            const mergedConversations = mergeConversationCollections(conversations);
-            set({
-              conversations: mergedConversations,
-              ...buildConversationCollectionState(mergedConversations),
+            set((state) => ({
+              ...mergeConversationPageIntoState(state, conversations),
               isLoadingConversations: false,
               hasFetchedConversationsOnce: true,
-            });
+            }));
           } catch (error: unknown) {
             const apiError = extractApiError(error);
             const errorMessage =
@@ -3940,17 +3998,9 @@ export const useChatStore = create<ChatState>()(
               !(
                 typing.conversationId === conversationId &&
                 typing.userId === userId
-              ),
+            ),
           ),
         }));
-      },
-
-      setSearchQuery: (query) => {
-        set({ searchQuery: query });
-      },
-
-      setActiveFilter: (filter) => {
-        set({ activeFilter: filter });
       },
 
       clearError: () => set({ error: null, conversationsError: null }),
@@ -4001,6 +4051,9 @@ export const useCurrentTypingStatus = () => {
 };
 
 export const useFilteredConversations = () => {
+  const activeFilter = useChatSidebarStore((state) => state.filter);
+  const searchQuery = useChatSidebarStore((state) => state.searchQuery);
+
   return useChatStore((state) => {
     let filtered = state.orderedConversationIds
       .map((conversationId) => state.conversationById[conversationId])
@@ -4008,7 +4061,7 @@ export const useFilteredConversations = () => {
         Boolean(conversation),
       );
 
-    switch (state.activeFilter) {
+    switch (activeFilter) {
       case "unread":
         filtered = filtered.filter(
           (conversation) => conversation.unreadCount > 0,
@@ -4043,8 +4096,8 @@ export const useFilteredConversations = () => {
         break;
     }
 
-    if (state.searchQuery.trim()) {
-      const query = state.searchQuery.toLowerCase();
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
         (conversation) =>
           conversation.name?.toLowerCase().includes(query) ||

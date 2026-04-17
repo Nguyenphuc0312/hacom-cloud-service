@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useAdjacentConversationIds, useChatStore } from "../../../stores";
-import {
-  selectConversationMessagesFromState,
-} from "../../../stores/chatStore";
 import type { HistoryQueryType } from "../../../stores/chatStore";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
 import type { ConnectionState } from "../../../lib/socket";
@@ -367,21 +364,17 @@ export const useConversationSession = ({
       return;
     }
     if (!storeState.hasMoreMessages[selectedConversationId]) return;
-
-    const storeMessages = selectConversationMessagesFromState(
-      storeState,
-      selectedConversationId,
-    );
-    const oldestMessage = storeMessages.find(
-      (message) => !message.id.startsWith("temp-"),
-    );
-    if (!oldestMessage) return;
+    const loadedWindow =
+      storeState.messageWindowByConversation[selectedConversationId];
+    if (!loadedWindow?.oldestLoadedMessageId || !loadedWindow.oldestLoadedAt) {
+      return;
+    }
 
     await fetchMessages(
       selectedConversationId,
-      new Date(oldestMessage.createdAt).toISOString(),
+      new Date(loadedWindow.oldestLoadedAt).toISOString(),
       undefined,
-      { beforeId: oldestMessage.id },
+      { beforeId: loadedWindow.oldestLoadedMessageId },
     );
   }, [fetchMessages, selectedConversationId]);
 

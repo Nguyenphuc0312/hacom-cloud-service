@@ -26,7 +26,6 @@ const makeConversation = (
 ): Conversation =>
   ({
     id: "room-2",
-    conversationId: "room-2",
     type: "group",
     name: "Room 2",
     unreadCount: 0,
@@ -66,7 +65,6 @@ describe("useConversationSession", () => {
     useChatStore.getState().setConversations([
       makeConversation({
         id: "room-1",
-        conversationId: "room-1",
         unreadCount: 3,
       }),
     ]);
@@ -114,7 +112,6 @@ describe("useConversationSession", () => {
         selectedConversationId: "room-1",
         selectedConversation: makeConversation({
           id: "room-1",
-          conversationId: "room-1",
           unreadCount: 3,
         }),
         isSelectedDirectConversation: false,
@@ -163,15 +160,12 @@ describe("useConversationSession", () => {
     store.setConversations([
       makeConversation({
         id: "room-1",
-        conversationId: "room-1",
       }),
       makeConversation({
         id: "room-2",
-        conversationId: "room-2",
       }),
       makeConversation({
         id: "room-3",
-        conversationId: "room-3",
       }),
     ]);
     store.selectConversation("room-2");
@@ -194,7 +188,6 @@ describe("useConversationSession", () => {
         selectedConversationId: "room-2",
         selectedConversation: makeConversation({
           id: "room-2",
-          conversationId: "room-2",
         }),
         isSelectedDirectConversation: false,
         otherUser: null,
