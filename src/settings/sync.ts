@@ -59,6 +59,8 @@ export const fetchSettingsFromServer =
 
 /**
  * Push local settings to backend using SettingsPatchDto format.
+ * Deprecated compatibility-only privacy fields are stripped here so the
+ * frontend does not recreate local-truth semantics for auth-owned policy.
  * Includes current `version` for optimistic locking.
  *
  * On 409 Conflict → refetch and let the store re-merge.
@@ -70,12 +72,21 @@ export const syncSettingsToServer = async (
   if (!token) return; // not logged in
 
   try {
+    const privacyPatch = {
+      ...(settings.privacy.showOnlineStatus !== undefined
+        ? { showOnlineStatus: settings.privacy.showOnlineStatus }
+        : {}),
+      ...(settings.privacy.readReceipts !== undefined
+        ? { readReceipts: settings.privacy.readReceipts }
+        : {}),
+    };
+
     const patchBody: SettingsPatchDto = {
       version: settings.version,
       language: settings.language,
       appearance: settings.appearance,
       notifications: settings.notifications,
-      privacy: settings.privacy,
+      ...(Object.keys(privacyPatch).length > 0 ? { privacy: privacyPatch } : {}),
       chat: settings.chat,
     };
 

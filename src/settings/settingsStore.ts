@@ -96,6 +96,19 @@ const cancelPendingSync = () => {
   }
 };
 
+const normalizePrivacyPatch = (patch?: SettingsPatch["privacy"]) => {
+  if (!patch) return undefined;
+
+  return {
+    ...(patch.showOnlineStatus !== undefined
+      ? { showOnlineStatus: patch.showOnlineStatus }
+      : {}),
+    ...(patch.readReceipts !== undefined
+      ? { readReceipts: patch.readReceipts }
+      : {}),
+  };
+};
+
 // ============================================
 // STORE
 // ============================================
@@ -110,6 +123,18 @@ export const useSettingsStore = create<SettingsState>()(
 
     updateSettings: (patch) => {
       const current = get();
+      const normalizedPrivacyPatch = normalizePrivacyPatch(patch.privacy);
+      const hasEffectivePatch =
+        patch.language !== undefined ||
+        Object.keys(patch.appearance ?? {}).length > 0 ||
+        Object.keys(patch.notifications ?? {}).length > 0 ||
+        Object.keys(normalizedPrivacyPatch ?? {}).length > 0 ||
+        Object.keys(patch.chat ?? {}).length > 0;
+
+      if (!hasEffectivePatch) {
+        return;
+      }
+
       const now = new Date().toISOString();
 
       const next: SettingsSchema = {
@@ -120,7 +145,7 @@ export const useSettingsStore = create<SettingsState>()(
           ...current.notifications,
           ...(patch.notifications ?? {}),
         },
-        privacy: { ...current.privacy, ...(patch.privacy ?? {}) },
+        privacy: { ...current.privacy, ...(normalizedPrivacyPatch ?? {}) },
         chat: { ...current.chat, ...(patch.chat ?? {}) },
         updatedAt: now,
       };

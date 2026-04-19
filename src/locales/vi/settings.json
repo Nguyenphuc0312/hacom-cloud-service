@@ -21,7 +21,7 @@
       "teal": "Xanh ngọc"
     },
     "fontSizeLabel": "Cỡ chữ",
-    "fontSizeDesc": "Áp dụng cho bong chat tin nhắn",
+    "fontSizeDesc": "Áp dụng cho bong bóng tin nhắn",
     "fontSmall": "Nhỏ",
     "fontSmallDesc": "Văn bản nhỏ gọn",
     "fontMedium": "Vừa",
@@ -30,7 +30,7 @@
     "fontLargeDesc": "Dễ đọc hơn",
     "densityLabel": "Mật độ hiển thị",
     "densityCompact": "Chặt",
-    "densityCompactDesc": "Khoảng cách bong chat hẹp hơn",
+    "densityCompactDesc": "Khoảng cách bong bóng hẹp hơn",
     "densityComfortable": "Thoải mái",
     "densityComfortableDesc": "Rộng rãi hơn",
     "preview": "Xem trước"
@@ -50,10 +50,12 @@
     "description": "Quản lý tùy chọn quyền riêng tư",
     "showOnlineStatus": "Hiện trạng thái trực tuyến",
     "showOnlineStatusDesc": "Cho phép người khác thấy khi bạn trực tuyến",
+    "showOnlineStatusProjectedDesc": "Được quản lý bởi chính sách riêng tư dùng chung. Tắt để ẩn trạng thái trực tuyến của bạn.",
     "readReceipts": "Xác nhận đã đọc",
     "readReceiptsDesc": "Cho người khác biết khi bạn đã đọc tin nhắn",
     "allowStrangers": "Cho phép người lạ nhắn tin",
-    "allowStrangersDesc": "Người không có trong danh bạ có thể gửi tin nhắn cho bạn"
+    "allowStrangersDesc": "Người không có trong danh bạ có thể gửi tin nhắn cho bạn",
+    "allowStrangersDeprecatedDesc": "Trường tương thích cũ. Tin nhắn trực tiếp hiện yêu cầu hai bên là bạn bè."
   },
   "chat": {
     "title": "Chat",
@@ -114,8 +116,8 @@
   },
   "preview": {
     "contact": "Nguyễn Văn A",
-    "received": "Chào bạn! Khỏe không? 👋",
-    "sent": "Mình khỏe, cảm ơn bạn! 🎉",
-    "receivedTwo": "Tốt quá! Hẹn gặp nhé 😊"
+    "received": "Chào bạn! Khỏe không?",
+    "sent": "Mình khỏe, cảm ơn bạn!",
+    "receivedTwo": "Tốt quá! Hẹn gặp nhé"
   }
 }

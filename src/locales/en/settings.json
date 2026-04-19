@@ -50,10 +50,12 @@
     "description": "Manage your privacy preferences",
     "showOnlineStatus": "Show online status",
     "showOnlineStatusDesc": "Let others see when you are online",
+    "showOnlineStatusProjectedDesc": "Managed by your shared chat privacy policy. Turn off to hide when you are online.",
     "readReceipts": "Read receipts",
     "readReceiptsDesc": "Show others when you have read their messages",
     "allowStrangers": "Allow messages from strangers",
-    "allowStrangersDesc": "People not in your contacts can send you messages"
+    "allowStrangersDesc": "People not in your contacts can send you messages",
+    "allowStrangersDeprecatedDesc": "Deprecated compatibility field. Direct messages now require friendship."
   },
   "chat": {
     "title": "Chat",

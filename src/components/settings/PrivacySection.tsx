@@ -22,7 +22,10 @@ export const PrivacySection: React.FC = () => {
     >
       <ToggleSwitch
         label={t("privacy.showOnlineStatus")}
-        description={t("privacy.showOnlineStatusDesc")}
+        description={t("privacy.showOnlineStatusProjectedDesc", {
+          defaultValue:
+            "Managed by your shared chat privacy policy. Turn off to hide when you are online.",
+        })}
         checked={privacy.showOnlineStatus}
         onChange={(v) => update({ privacy: { showOnlineStatus: v } })}
       />
@@ -36,9 +39,13 @@ export const PrivacySection: React.FC = () => {
 
       <ToggleSwitch
         label={t("privacy.allowStrangers")}
-        description={t("privacy.allowStrangersDesc")}
+        description={t("privacy.allowStrangersDeprecatedDesc", {
+          defaultValue:
+            "Deprecated compatibility field. Direct messages now require friendship.",
+        })}
         checked={privacy.allowStrangersMessage}
-        onChange={(v) => update({ privacy: { allowStrangersMessage: v } })}
+        onChange={() => {}}
+        disabled
       />
     </SettingsSection>
   );
