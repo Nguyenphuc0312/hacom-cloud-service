@@ -19,6 +19,7 @@ import { resetAuthFailureState } from "../lib/axios";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import {
   resolveConversationId,
+  resolveConversationIds,
 } from "../lib/conversationIdentity";
 import { useAuthStore, useChatStore, useGroupStore } from "../stores";
 import { useFriendshipStore } from "../stores/friendshipStore";
@@ -134,14 +135,11 @@ const toCursorValue = (value: unknown): string | undefined => {
 };
 
 const getConversationIds = (payload: Record<string, unknown>): string[] => {
-  const candidates = [payload.conversationIds, payload.roomIds, payload.rooms];
-
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate)) {
-      return candidate
-        .map((item) => asString(item))
-        .filter((item): item is string => typeof item === "string");
-    }
+  const normalizedConversationIds = resolveConversationIds(payload, {
+    source: "useWebSocket.payloadCollection",
+  });
+  if (normalizedConversationIds.length > 0) {
+    return normalizedConversationIds;
   }
 
   const singleConversationId = getConversationId(payload);

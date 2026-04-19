@@ -27,6 +27,7 @@ import {
   sortConversationsByActivity,
 } from "../utils/conversationRanking";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
+import { resolveConversationId } from "../lib/conversationIdentity";
 import i18n from "../i18n";
 import { useAuthStore } from "./authStore";
 import { registerStoreResetter } from "./storeResetRegistry";
@@ -519,11 +520,10 @@ const normalizeMessage = (
     asStringValue(source.id) ??
     asStringValue(source._id) ??
     asStringValue(source.messageId);
-  const conversationId =
-    asStringValue(source.conversationId) ??
-    asStringValue(source.roomId) ??
-    asStringValue(source.room_id) ??
-    fallbackConversationId;
+  const conversationId = resolveConversationId(source, {
+    source: "chatStore.normalizeMessage",
+    fallbackConversationId: fallbackConversationId ?? null,
+  });
 
   if (!id || !conversationId) return null;
 

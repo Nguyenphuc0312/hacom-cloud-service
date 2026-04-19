@@ -125,6 +125,43 @@ export const resolveConversationId = (
   return roomId;
 };
 
+export const resolveConversationIds = (
+  payload: unknown,
+  options?: {
+    source?: string;
+  },
+): string[] => {
+  const record = isRecord(payload) ? payload : null;
+  if (!record) {
+    return [];
+  }
+
+  const canonicalConversationIds = Array.isArray(record.conversationIds)
+    ? record.conversationIds
+        .map((item) => asString(item))
+        .filter((item): item is string => typeof item === "string")
+    : [];
+  if (canonicalConversationIds.length > 0) {
+    return canonicalConversationIds;
+  }
+
+  const legacyConversationIds = [record.roomIds, record.rooms]
+    .find((candidate) => Array.isArray(candidate));
+  if (!Array.isArray(legacyConversationIds)) {
+    return [];
+  }
+
+  const normalizedLegacyConversationIds = legacyConversationIds
+    .map((item) => asString(item))
+    .filter((item): item is string => typeof item === "string");
+
+  if (normalizedLegacyConversationIds.length > 0 && options?.source) {
+    warnLegacyRoomAlias(options.source, payload);
+  }
+
+  return normalizedLegacyConversationIds;
+};
+
 export const resetConversationIdentityWarningsForTest = (): void => {
   warnedMessages.clear();
 };

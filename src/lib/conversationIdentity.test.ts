@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   resetConversationIdentityWarningsForTest,
   resolveConversationId,
+  resolveConversationIds,
 } from "./conversationIdentity";
 
 describe("conversationIdentity", () => {
@@ -62,6 +63,27 @@ describe("conversationIdentity", () => {
         { source: "test.nested", nestedKeys: ["message"] },
       ),
     ).toBe("nested-conv-1");
+  });
+
+  it("normalizes legacy roomIds collections at the boundary and warns once in dev", () => {
+    expect(
+      resolveConversationIds(
+        {
+          roomIds: ["conv-legacy-1", "conv-legacy-2"],
+        },
+        { source: "test.legacy-collection" },
+      ),
+    ).toEqual(["conv-legacy-1", "conv-legacy-2"]);
+    expect(
+      resolveConversationIds(
+        {
+          roomIds: ["conv-legacy-1", "conv-legacy-2"],
+        },
+        { source: "test.legacy-collection" },
+      ),
+    ).toEqual(["conv-legacy-1", "conv-legacy-2"]);
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
   });
 
   it("does not treat a generic entity id as a conversation id unless explicitly allowed", () => {

@@ -17,11 +17,12 @@ const ALLOWED_FILES = new Set([
   "lib/conversationAdapter.ts",
   "lib/conversationIdentity.ts",
   "lib/socket.ts",
-  "stores/chatStore.ts",
   "features/chat/realtime/registerConversationEvents.ts",
 ]);
 const DISALLOWED_PATTERNS = [
   { label: "roomId", regex: /\broomId\b/ },
+  { label: "roomIds", regex: /\broomIds\b/ },
+  { label: "room_id", regex: /\broom_id\b/ },
   { label: "/rooms/", regex: /\/rooms\// },
   { label: "joinRoom", regex: /\bjoinRoom\b/ },
   { label: "leaveRoom", regex: /\bleaveRoom\b/ },
