@@ -148,7 +148,7 @@ const getConversationIds = (payload: Record<string, unknown>): string[] => {
   return singleConversationId ? [singleConversationId] : [];
 };
 
-export const shouldSkipGroupRoomRefreshForCurrentUser = (
+export const shouldSkipGroupConversationRefreshForCurrentUser = (
   payload: Record<string, unknown> | null,
   currentUserId: string | null | undefined,
 ): boolean => {
@@ -161,7 +161,7 @@ export const shouldSkipGroupRoomRefreshForCurrentUser = (
   return targetUserId === currentUserId;
 };
 
-export const shouldUseDeltaRoomRefresh = ({
+export const shouldUseDeltaConversationRefresh = ({
   conversationId,
   selectedConversationId,
   joinedRooms,
@@ -180,15 +180,18 @@ type MessageCursor = {
   id: string;
 };
 
-export type PendingRoomSyncStrategy = "skip" | "initial-sync" | "reconnect";
+export type PendingConversationSyncStrategy =
+  | "skip"
+  | "initial-sync"
+  | "reconnect";
 
 type DrainedPendingConversationSync = {
   conversationId: string;
-  strategy: PendingRoomSyncStrategy;
+  strategy: PendingConversationSyncStrategy;
 };
 
-export const drainPendingRoomSync = (
-  pendingMap: Map<string, PendingRoomSyncStrategy>,
+export const drainPendingConversationSync = (
+  pendingMap: Map<string, PendingConversationSyncStrategy>,
   joinedRooms: Set<string>,
   targetRoomIds: string[],
 ): DrainedPendingConversationSync[] => {
@@ -209,8 +212,8 @@ export const drainPendingRoomSync = (
   return drained;
 };
 
-export const drainPendingRoomSyncForResyncRequired = (
-  pendingMap: Map<string, PendingRoomSyncStrategy>,
+export const drainPendingConversationSyncForResyncRequired = (
+  pendingMap: Map<string, PendingConversationSyncStrategy>,
   joinedRooms: Set<string>,
 ): DrainedPendingConversationSync[] => {
   return Array.from(joinedRooms).map((conversationId) => {
@@ -230,9 +233,9 @@ export const drainPendingRoomSyncForResyncRequired = (
 const REMOTE_TYPING_DECAY_INTERVAL_MS = 320;
 const REMOTE_TYPING_HALF_LIFE_MS = 1400;
 const REMOTE_TYPING_VISIBLE_THRESHOLD = 0.12;
-const ROOM_JOIN_ACK_TIMEOUT_MS = 2_000;
-const ROOM_JOIN_RETRY_DELAY_MAX_MS = 8_000;
-const ROOM_SYNC_FALLBACK_TIMEOUT_MS = 2_500;
+const CONVERSATION_JOIN_ACK_TIMEOUT_MS = 2_000;
+const CONVERSATION_JOIN_RETRY_DELAY_MAX_MS = 8_000;
+const CONVERSATION_SYNC_FALLBACK_TIMEOUT_MS = 2_500;
 const CONVERSATION_SNAPSHOT_REFRESH_DEBOUNCE_MS = 250;
 
 const computeTypingConfidence = (lastEventAt: number, now: number): number =>
@@ -280,7 +283,9 @@ export const useWebSocket = (
 
   const joinedRoomsRef = useRef<Set<string>>(new Set());
   const subscribedRoomsRef = useRef<Set<string>>(new Set());
-  const pendingRoomSyncRef = useRef<Map<string, PendingRoomSyncStrategy>>(
+  const pendingConversationSyncRef = useRef<
+    Map<string, PendingConversationSyncStrategy>
+  >(
     new Map(),
   );
   const roomJoinRetryTimersRef = useRef<
@@ -445,29 +450,29 @@ export const useWebSocket = (
     remoteTypingTimersRef.current.clear();
   }, []);
 
-  const clearRoomJoinRetry = useCallback((roomId: string) => {
-    const timer = roomJoinRetryTimersRef.current.get(roomId);
+  const clearConversationJoinRetry = useCallback((conversationId: string) => {
+    const timer = roomJoinRetryTimersRef.current.get(conversationId);
     if (timer) {
       clearTimeout(timer);
-      roomJoinRetryTimersRef.current.delete(roomId);
+      roomJoinRetryTimersRef.current.delete(conversationId);
     }
   }, []);
 
-  const clearAllRoomJoinRetries = useCallback(() => {
+  const clearAllConversationJoinRetries = useCallback(() => {
     roomJoinRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
     roomJoinRetryTimersRef.current.clear();
     roomJoinRetryAttemptsRef.current.clear();
   }, []);
 
-  const clearRoomSyncFallback = useCallback((roomId: string) => {
-    const timer = roomSyncFallbackTimersRef.current.get(roomId);
+  const clearConversationSyncFallback = useCallback((conversationId: string) => {
+    const timer = roomSyncFallbackTimersRef.current.get(conversationId);
     if (timer) {
       clearTimeout(timer);
-      roomSyncFallbackTimersRef.current.delete(roomId);
+      roomSyncFallbackTimersRef.current.delete(conversationId);
     }
   }, []);
 
-  const clearAllRoomSyncFallbacks = useCallback(() => {
+  const clearAllConversationSyncFallbacks = useCallback(() => {
     roomSyncFallbackTimersRef.current.forEach((timer) => clearTimeout(timer));
     roomSyncFallbackTimersRef.current.clear();
   }, []);
@@ -644,7 +649,7 @@ export const useWebSocket = (
     socket.send(event, data);
   }, []);
 
-  const emitJoinRoom = useCallback(
+  const emitJoinConversation = useCallback(
     (conversationId: string) => {
       logMessageDebug("useWebSocket", "conversation_join_requested", {
         conversationId,
@@ -657,31 +662,31 @@ export const useWebSocket = (
     [emit],
   );
 
-  const resyncRoom = useCallback(
+  const resyncConversation = useCallback(
     async (
-      roomId: string,
+      conversationId: string,
       options?: { reason?: "initial-sync" | "reconnect" | "room-refresh" },
     ) => {
       const chatState = useChatStore.getState();
       if (
         options?.reason === "initial-sync" &&
-        chatState.hasAuthoritativeHistoryByConversation[roomId] &&
-        chatState.hasNewerMessagesByConversation[roomId] === false
+        chatState.hasAuthoritativeHistoryByConversation[conversationId] &&
+        chatState.hasNewerMessagesByConversation[conversationId] === false
       ) {
         logMessageDebug("useWebSocket", "delta_sync_blocked_known_latest", {
-          roomId,
+          conversationId,
           reason: options?.reason,
-          hydrated: chatState.messagesHydratedByConversation[roomId],
+          hydrated: chatState.messagesHydratedByConversation[conversationId],
           hasAuthoritativeHistory:
-            chatState.hasAuthoritativeHistoryByConversation[roomId],
-          hasNext: chatState.hasNewerMessagesByConversation[roomId],
+            chatState.hasAuthoritativeHistoryByConversation[conversationId],
+          hasNext: chatState.hasNewerMessagesByConversation[conversationId],
         });
         return;
       }
 
       const resolveLatestCursor = (): MessageCursor | undefined => {
         const loadedWindow =
-          useChatStore.getState().messageWindowByConversation[roomId];
+          useChatStore.getState().messageWindowByConversation[conversationId];
         if (loadedWindow?.newestLoadedMessageId && loadedWindow.newestLoadedAt) {
           return {
             at: loadedWindow.newestLoadedAt,
@@ -689,9 +694,14 @@ export const useWebSocket = (
           };
         }
 
-        const roomMessages = useChatStore.getState().messages[roomId] || [];
-        for (let index = roomMessages.length - 1; index >= 0; index -= 1) {
-          const candidate = roomMessages[index];
+        const conversationMessages =
+          useChatStore.getState().messages[conversationId] || [];
+        for (
+          let index = conversationMessages.length - 1;
+          index >= 0;
+          index -= 1
+        ) {
+          const candidate = conversationMessages[index];
           const candidateId = candidate?.id;
           const candidateAt = toCursorValue(candidate?.createdAt);
           if (
@@ -712,23 +722,28 @@ export const useWebSocket = (
 
       if (!afterCursor) return;
       logMessageDebug("useWebSocket", "delta_sync_started", {
-        roomId,
+        conversationId,
         reason: options?.reason,
         afterCursor,
       });
 
       // Fetch missed messages in pages to avoid dropping backlog on long disconnects.
       for (let attempts = 0; attempts < 10; attempts += 1) {
-        const result = await fetchMessages(roomId, undefined, afterCursor.at, {
+        const result = await fetchMessages(
+          conversationId,
+          undefined,
+          afterCursor.at,
+          {
           afterId: afterCursor.id,
           syncReason: options?.reason,
           source: "delta_sync",
           queryType: "pagination_newer",
           selectedConversationIdAtDispatch:
             useChatStore.getState().selectedConversationId ?? null,
-        });
+          },
+        );
         logMessageDebug("useWebSocket", "delta_sync_page_completed", {
-          roomId,
+          conversationId,
           reason: options?.reason,
           attempt: attempts,
           afterCursor,
@@ -753,40 +768,40 @@ export const useWebSocket = (
     [fetchMessages],
   );
 
-  const scheduleRoomResync = useCallback(
+  const scheduleConversationResync = useCallback(
     (
-      roomId: string,
+      conversationId: string,
       options?: { reason?: "initial-sync" | "reconnect" | "room-refresh" },
     ) => {
       const chatState = useChatStore.getState();
       const willBlockAsKnownLatest =
         options?.reason === "initial-sync" &&
-        chatState.hasAuthoritativeHistoryByConversation[roomId] &&
-        chatState.hasNewerMessagesByConversation[roomId] === false;
+        chatState.hasAuthoritativeHistoryByConversation[conversationId] &&
+        chatState.hasNewerMessagesByConversation[conversationId] === false;
       if (willBlockAsKnownLatest) {
         logMessageDebug("useWebSocket", "delta_sync_schedule_skipped", {
-          roomId,
+          conversationId,
           reason: options?.reason,
         });
         return Promise.resolve();
       }
 
-      const inFlight = roomResyncInFlightRef.current.get(roomId);
+      const inFlight = roomResyncInFlightRef.current.get(conversationId);
       if (inFlight) {
         return inFlight;
       }
 
-      const request = resyncRoom(roomId, options).finally(() => {
-        roomResyncInFlightRef.current.delete(roomId);
+      const request = resyncConversation(conversationId, options).finally(() => {
+        roomResyncInFlightRef.current.delete(conversationId);
       });
-      roomResyncInFlightRef.current.set(roomId, request);
+      roomResyncInFlightRef.current.set(conversationId, request);
       logMessageDebug("useWebSocket", "delta_sync_scheduled", {
-        roomId,
+        conversationId,
         reason: options?.reason,
       });
       return request;
     },
-    [resyncRoom],
+    [resyncConversation],
   );
 
   const refreshConversationSnapshot = useCallback(
@@ -929,11 +944,11 @@ export const useWebSocket = (
 
   const reconcileConversationAuthoritative = useCallback(
     (
-      roomId: string,
+      conversationId: string,
       reason: "skip" | "initial-sync" | "reconnect" | "room-refresh",
     ): Promise<void> => {
       if (reason === "skip") {
-        return scheduleConversationSnapshotRefresh(roomId, {
+        return scheduleConversationSnapshotRefresh(conversationId, {
           delayMs: 0,
           reason,
         }).catch(() => {
@@ -942,8 +957,8 @@ export const useWebSocket = (
       }
 
       return Promise.allSettled([
-        scheduleRoomResync(roomId, { reason }),
-        scheduleConversationSnapshotRefresh(roomId, {
+        scheduleConversationResync(conversationId, { reason }),
+        scheduleConversationSnapshotRefresh(conversationId, {
           delayMs: 0,
           reason,
         }),
@@ -951,7 +966,7 @@ export const useWebSocket = (
         // no-op: best effort authoritative reconcile
       });
     },
-    [scheduleConversationSnapshotRefresh, scheduleRoomResync],
+    [scheduleConversationSnapshotRefresh, scheduleConversationResync],
   );
 
   const maybeReconcileGap = useCallback(
@@ -1177,32 +1192,36 @@ export const useWebSocket = (
     [getNotificationPreferences],
   );
 
-  const requestRoomJoin = useCallback(
+  const requestConversationJoin = useCallback(
     (
-      roomId: string,
+      conversationId: string,
       options?: {
         reason?: "initial" | "reconnect" | "retry";
       },
     ) => {
-      if (!roomId || !joinedRoomsRef.current.has(roomId)) {
+      if (
+        !conversationId ||
+        !joinedRoomsRef.current.has(conversationId)
+      ) {
         return;
       }
 
-      emitJoinRoom(roomId);
-      clearRoomJoinRetry(roomId);
+      emitJoinConversation(conversationId);
+      clearConversationJoinRetry(conversationId);
 
-      const attempt = roomJoinRetryAttemptsRef.current.get(roomId) ?? 0;
+      const attempt =
+        roomJoinRetryAttemptsRef.current.get(conversationId) ?? 0;
       const retryDelay = Math.min(
-        ROOM_JOIN_ACK_TIMEOUT_MS * Math.max(attempt + 1, 1),
-        ROOM_JOIN_RETRY_DELAY_MAX_MS,
+        CONVERSATION_JOIN_ACK_TIMEOUT_MS * Math.max(attempt + 1, 1),
+        CONVERSATION_JOIN_RETRY_DELAY_MAX_MS,
       );
 
       const retryTimer = setTimeout(() => {
-        roomJoinRetryTimersRef.current.delete(roomId);
+        roomJoinRetryTimersRef.current.delete(conversationId);
 
         if (
-          !joinedRoomsRef.current.has(roomId) ||
-          subscribedRoomsRef.current.has(roomId)
+          !joinedRoomsRef.current.has(conversationId) ||
+          subscribedRoomsRef.current.has(conversationId)
         ) {
           return;
         }
@@ -1211,9 +1230,9 @@ export const useWebSocket = (
         if (connectionState !== "connected") {
           logMessageDebug(
             "useWebSocket",
-            "room_join_retry_waiting_connection",
+            "conversation_join_retry_waiting_connection",
             {
-              roomId,
+              conversationId,
               reason: options?.reason,
               connectionState,
             },
@@ -1222,25 +1241,33 @@ export const useWebSocket = (
         }
 
         const nextAttempt = attempt + 1;
-        roomJoinRetryAttemptsRef.current.set(roomId, nextAttempt);
+        roomJoinRetryAttemptsRef.current.set(conversationId, nextAttempt);
 
-        logMessageDebug("useWebSocket", "room_join_ack_timeout", {
-          roomId,
+        logMessageDebug("useWebSocket", "conversation_join_ack_timeout", {
+          conversationId,
           reason: options?.reason,
           attempt: nextAttempt,
           retryDelay,
         });
 
-        if (useChatStore.getState().selectedConversationId === roomId) {
-          void scheduleRoomResync(roomId, { reason: "room-refresh" });
+        if (
+          useChatStore.getState().selectedConversationId === conversationId
+        ) {
+          void scheduleConversationResync(conversationId, {
+            reason: "room-refresh",
+          });
         }
 
-        requestRoomJoin(roomId, { reason: "retry" });
+        requestConversationJoin(conversationId, { reason: "retry" });
       }, retryDelay);
 
-      roomJoinRetryTimersRef.current.set(roomId, retryTimer);
+      roomJoinRetryTimersRef.current.set(conversationId, retryTimer);
     },
-    [clearRoomJoinRetry, emitJoinRoom, scheduleRoomResync],
+    [
+      clearConversationJoinRetry,
+      emitJoinConversation,
+      scheduleConversationResync,
+    ],
   );
 
   const setupSocket = useCallback(() => {
@@ -1276,15 +1303,15 @@ export const useWebSocket = (
         useFriendshipStore.getState().triggerResync("socket_reconnect");
       }
 
-      joinedRoomsRef.current.forEach((roomId) => {
-        clearRoomSyncFallback(roomId);
-        subscribedRoomsRef.current.delete(roomId);
-        roomJoinRetryAttemptsRef.current.set(roomId, 0);
-        pendingRoomSyncRef.current.set(
-          roomId,
+      joinedRoomsRef.current.forEach((conversationId) => {
+        clearConversationSyncFallback(conversationId);
+        subscribedRoomsRef.current.delete(conversationId);
+        roomJoinRetryAttemptsRef.current.set(conversationId, 0);
+        pendingConversationSyncRef.current.set(
+          conversationId,
           shouldResync ? "reconnect" : "skip",
         );
-        requestRoomJoin(roomId, {
+        requestConversationJoin(conversationId, {
           reason: shouldResync ? "reconnect" : "initial",
         });
       });
@@ -1312,8 +1339,8 @@ export const useWebSocket = (
         shouldResyncOnConnectRef.current = true;
       }
       subscribedRoomsRef.current.clear();
-      clearAllRoomSyncFallbacks();
-      clearAllRoomJoinRetries();
+      clearAllConversationSyncFallbacks();
+      clearAllConversationJoinRetries();
       if (code === 4401) {
         void recoverSocketAuth("ws_close_4401", "close_4401");
       }
@@ -1490,7 +1517,7 @@ export const useWebSocket = (
           senderId,
           stableId,
         });
-        const shouldUseDeltaRefresh = shouldUseDeltaRoomRefresh({
+        const shouldUseDeltaRefresh = shouldUseDeltaConversationRefresh({
           conversationId,
           selectedConversationId: chatState.selectedConversationId,
           joinedRooms: joinedRoomsRef.current,
@@ -1558,7 +1585,7 @@ export const useWebSocket = (
     });
     unsubscribersRef.current.push(unsubscribeChatEvents);
 
-    const handleRoomJoined = (data: unknown) => {
+    const handleConversationJoined = (data: unknown) => {
       const payload = asRecord(data);
       if (!payload) return;
       const conversationId = getConversationId(payload);
@@ -1566,31 +1593,33 @@ export const useWebSocket = (
 
       subscribedRoomsRef.current.add(conversationId);
       roomJoinRetryAttemptsRef.current.delete(conversationId);
-      clearRoomJoinRetry(conversationId);
+      clearConversationJoinRetry(conversationId);
 
       logMessageDebug("useWebSocket", "conversation_joined", {
         conversationId,
         connectionState: getSocket()?.getConnectionState() ?? "unknown",
         pendingSyncStrategy:
-          pendingRoomSyncRef.current.get(conversationId) ?? null,
+          pendingConversationSyncRef.current.get(conversationId) ?? null,
       });
 
-      const syncStrategy = pendingRoomSyncRef.current.get(conversationId);
+      const syncStrategy =
+        pendingConversationSyncRef.current.get(conversationId);
       if (!syncStrategy) {
         return;
       }
 
-      clearRoomSyncFallback(conversationId);
+      clearConversationSyncFallback(conversationId);
       const fallbackTimer = setTimeout(() => {
         roomSyncFallbackTimersRef.current.delete(conversationId);
 
-        const stillPending = pendingRoomSyncRef.current.get(conversationId);
+        const stillPending =
+          pendingConversationSyncRef.current.get(conversationId);
         if (!stillPending) {
           return;
         }
 
-        pendingRoomSyncRef.current.delete(conversationId);
-        logMessageDebug("useWebSocket", "room_sync_fallback_applied", {
+        pendingConversationSyncRef.current.delete(conversationId);
+        logMessageDebug("useWebSocket", "conversation_sync_fallback_applied", {
           conversationId,
           strategy: stillPending,
         });
@@ -1598,12 +1627,12 @@ export const useWebSocket = (
         const fallbackReason =
           stillPending === "skip" ? "room-refresh" : stillPending;
         void reconcileConversationAuthoritative(conversationId, fallbackReason);
-      }, ROOM_SYNC_FALLBACK_TIMEOUT_MS);
+      }, CONVERSATION_SYNC_FALLBACK_TIMEOUT_MS);
 
       roomSyncFallbackTimersRef.current.set(conversationId, fallbackTimer);
     };
 
-    const handleRoomLeft = (data: unknown) => {
+    const handleConversationLeft = (data: unknown) => {
       const payload = asRecord(data);
       if (!payload) return;
       const conversationId = getConversationId(payload);
@@ -1611,8 +1640,8 @@ export const useWebSocket = (
 
       subscribedRoomsRef.current.delete(conversationId);
       roomJoinRetryAttemptsRef.current.delete(conversationId);
-      clearRoomJoinRetry(conversationId);
-      clearRoomSyncFallback(conversationId);
+      clearConversationJoinRetry(conversationId);
+      clearConversationSyncFallback(conversationId);
 
       logMessageDebug("useWebSocket", "conversation_left_acknowledged", {
         conversationId,
@@ -1706,10 +1735,10 @@ export const useWebSocket = (
 
       joinedRoomsRef.current.delete(conversationId);
       subscribedRoomsRef.current.delete(conversationId);
-      pendingRoomSyncRef.current.delete(conversationId);
+      pendingConversationSyncRef.current.delete(conversationId);
       roomJoinRetryAttemptsRef.current.delete(conversationId);
-      clearRoomJoinRetry(conversationId);
-      clearRoomSyncFallback(conversationId);
+      clearConversationJoinRetry(conversationId);
+      clearConversationSyncFallback(conversationId);
       removeConversation(conversationId);
       if (useChatStore.getState().selectedConversationId === conversationId) {
         selectConversation(null);
@@ -1752,10 +1781,8 @@ export const useWebSocket = (
     };
 
     const unsubscribeConversationEvents = registerConversationEvents(socket, {
-      onRoomJoined: handleRoomJoined,
-      onConversationJoined: handleRoomJoined,
-      onRoomLeft: handleRoomLeft,
-      onConversationLeft: handleRoomLeft,
+      onConversationJoined: handleConversationJoined,
+      onConversationLeft: handleConversationLeft,
       onConversationSummaryUpdated: handleConversationSummaryUpdated,
       onConversationMembershipUpdated: handleConversationMembershipUpdated,
       onMessageRead: handleReadReceipt,
@@ -1818,9 +1845,12 @@ export const useWebSocket = (
       if (
         conversationId &&
         !(options?.skipIfCurrentUserIsTarget &&
-          shouldSkipGroupRoomRefreshForCurrentUser(payload, currentUserId))
+          shouldSkipGroupConversationRefreshForCurrentUser(
+            payload,
+            currentUserId,
+          ))
       ) {
-        const shouldUseDeltaRefresh = shouldUseDeltaRoomRefresh({
+        const shouldUseDeltaRefresh = shouldUseDeltaConversationRefresh({
           conversationId,
           selectedConversationId: useChatStore.getState().selectedConversationId,
           joinedRooms: joinedRoomsRef.current,
@@ -2144,14 +2174,14 @@ export const useWebSocket = (
       logMessageDebug("useWebSocket", "conversation_resynced_received", {
         targetRoomIds,
       });
-      const drainedRooms = drainPendingRoomSync(
-        pendingRoomSyncRef.current,
+      const drainedRooms = drainPendingConversationSync(
+        pendingConversationSyncRef.current,
         joinedRoomsRef.current,
         targetRoomIds,
       );
 
       drainedRooms.forEach(({ conversationId, strategy }) => {
-        clearRoomSyncFallback(conversationId);
+        clearConversationSyncFallback(conversationId);
         logMessageDebug("useWebSocket", "conversation_resynced_applied", {
           conversationId,
           strategy,
@@ -2205,13 +2235,13 @@ export const useWebSocket = (
           ["rooms", "conversations", "groups"].includes(scope),
         )
       ) {
-        const drainedRooms = drainPendingRoomSyncForResyncRequired(
-          pendingRoomSyncRef.current,
+        const drainedRooms = drainPendingConversationSyncForResyncRequired(
+          pendingConversationSyncRef.current,
           joinedRoomsRef.current,
         );
 
         drainedRooms.forEach(({ conversationId, strategy }) => {
-          clearRoomSyncFallback(conversationId);
+          clearConversationSyncFallback(conversationId);
           void reconcileConversationAuthoritative(conversationId, strategy);
         });
       }
@@ -2262,10 +2292,10 @@ export const useWebSocket = (
 
     return socket;
   }, [
-    clearAllRoomJoinRetries,
-    clearAllRoomSyncFallbacks,
-    clearRoomJoinRetry,
-    clearRoomSyncFallback,
+    clearAllConversationJoinRetries,
+    clearAllConversationSyncFallbacks,
+    clearConversationJoinRetry,
+    clearConversationSyncFallback,
     clearRemoteTypingTimer,
     clearTyping,
     fetchMessages,
@@ -2279,7 +2309,7 @@ export const useWebSocket = (
     refreshChangedConversationSummaries,
     refreshUnreadSummarySnapshot,
     removeMessage,
-    requestRoomJoin,
+    requestConversationJoin,
     flushQueuedMessages,
     refreshConversationSnapshot,
     reconcileConversationAuthoritative,
@@ -2289,7 +2319,7 @@ export const useWebSocket = (
     maybeReconcileGap,
     ingestConversationMessageEvent,
     scheduleRemoteTypingDecay,
-    scheduleRoomResync,
+    scheduleConversationResync,
     selectConversation,
     setSendRestriction,
     clearSendRestriction,
@@ -2333,18 +2363,18 @@ export const useWebSocket = (
     }
 
     clearAllRemoteTypingTimers();
-    clearAllRoomJoinRetries();
-    clearAllRoomSyncFallbacks();
+    clearAllConversationJoinRetries();
+    clearAllConversationSyncFallbacks();
     joinedRoomsRef.current.clear();
     subscribedRoomsRef.current.clear();
-    pendingRoomSyncRef.current.clear();
+    pendingConversationSyncRef.current.clear();
     roomResyncInFlightRef.current.clear();
     emitQueueRef.current = [];
     disconnectSocket();
   }, [
     clearAllRemoteTypingTimers,
-    clearAllRoomJoinRetries,
-    clearAllRoomSyncFallbacks,
+    clearAllConversationJoinRetries,
+    clearAllConversationSyncFallbacks,
   ]);
 
   const joinConversation = useCallback(
@@ -2353,7 +2383,7 @@ export const useWebSocket = (
       joinedRoomsRef.current.add(conversationId);
       subscribedRoomsRef.current.delete(conversationId);
       roomJoinRetryAttemptsRef.current.set(conversationId, 0);
-      pendingRoomSyncRef.current.set(
+      pendingConversationSyncRef.current.set(
         conversationId,
         options?.skipInitialDeltaSync ? "skip" : "initial-sync",
       );
@@ -2361,9 +2391,9 @@ export const useWebSocket = (
         conversationId,
         strategy: options?.skipInitialDeltaSync ? "skip" : "initial-sync",
       });
-      requestRoomJoin(conversationId, { reason: "initial" });
+      requestConversationJoin(conversationId, { reason: "initial" });
     },
-    [requestRoomJoin],
+    [requestConversationJoin],
   );
 
   const leaveConversation = useCallback(
@@ -2375,10 +2405,10 @@ export const useWebSocket = (
       });
       joinedRoomsRef.current.delete(conversationId);
       subscribedRoomsRef.current.delete(conversationId);
-      pendingRoomSyncRef.current.delete(conversationId);
+      pendingConversationSyncRef.current.delete(conversationId);
       roomJoinRetryAttemptsRef.current.delete(conversationId);
-      clearRoomJoinRetry(conversationId);
-      clearRoomSyncFallback(conversationId);
+      clearConversationJoinRetry(conversationId);
+      clearConversationSyncFallback(conversationId);
 
       const typingStatuses = useChatStore
         .getState()
@@ -2392,8 +2422,8 @@ export const useWebSocket = (
     },
     [
       clearRemoteTypingTimer,
-      clearRoomJoinRetry,
-      clearRoomSyncFallback,
+      clearConversationJoinRetry,
+      clearConversationSyncFallback,
       clearTyping,
       emit,
     ],

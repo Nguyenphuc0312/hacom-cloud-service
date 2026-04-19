@@ -24,6 +24,7 @@ import { RoomMemberRole, UserStatus } from "../../types";
 import { useChatStore, useGroupStore } from "../../stores";
 import type { InviteLinkItem, JoinRequestItem } from "../../stores/groupStore";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
+import { resolveConversationId } from "../../lib/conversationIdentity";
 import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
 import {
   buildUserSearchSecondaryText,
@@ -463,9 +464,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               items.push({
                 id: item.id,
                 conversationId:
-                  asString(item.conversationId) ??
-                  asString(item.roomId) ??
-                  conversation.id,
+                  resolveConversationId(item, {
+                    source: "GroupInfo.inviteLinks",
+                  }) ?? conversation.id,
                 name: asString(item.name),
                 inviteUrl: asString(item.inviteUrl),
                 token: asString(item.token),
@@ -506,9 +507,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               items.push({
                 id: item.id,
                 conversationId:
-                  asString(item.conversationId) ??
-                  asString(item.roomId) ??
-                  conversation.id,
+                  resolveConversationId(item, {
+                    source: "GroupInfo.joinRequests",
+                  }) ?? conversation.id,
                 userId: asString(item.userId) ?? "",
                 status,
                 note: asString(item.note),

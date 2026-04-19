@@ -1,20 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
-  drainPendingRoomSync,
-  drainPendingRoomSyncForResyncRequired,
-  shouldSkipGroupRoomRefreshForCurrentUser,
-  shouldUseDeltaRoomRefresh,
-  type PendingRoomSyncStrategy,
+  drainPendingConversationSync,
+  drainPendingConversationSyncForResyncRequired,
+  shouldSkipGroupConversationRefreshForCurrentUser,
+  shouldUseDeltaConversationRefresh,
+  type PendingConversationSyncStrategy,
 } from "./useWebSocket";
 
 describe("useWebSocket sync machine", () => {
-  it("join room + conversation:resynced drains pending room sync deterministically", () => {
-    const pending = new Map<string, PendingRoomSyncStrategy>([
+  it("join conversation + conversation:resynced drains pending sync deterministically", () => {
+    const pending = new Map<string, PendingConversationSyncStrategy>([
       ["room-1", "initial-sync"],
     ]);
     const joined = new Set<string>(["room-1"]);
 
-    const drained = drainPendingRoomSync(pending, joined, ["room-1"]);
+    const drained = drainPendingConversationSync(pending, joined, ["room-1"]);
 
     expect(drained).toEqual([
       { conversationId: "room-1", strategy: "initial-sync" },
@@ -23,13 +23,16 @@ describe("useWebSocket sync machine", () => {
   });
 
   it("resync:required drains pending map and normalizes strategy to reconnect when needed", () => {
-    const pending = new Map<string, PendingRoomSyncStrategy>([
+    const pending = new Map<string, PendingConversationSyncStrategy>([
       ["room-1", "skip"],
       ["room-2", "reconnect"],
     ]);
     const joined = new Set<string>(["room-1", "room-2"]);
 
-    const drained = drainPendingRoomSyncForResyncRequired(pending, joined);
+    const drained = drainPendingConversationSyncForResyncRequired(
+      pending,
+      joined,
+    );
 
     expect(drained).toEqual([
       { conversationId: "room-1", strategy: "reconnect" },
@@ -40,14 +43,14 @@ describe("useWebSocket sync machine", () => {
 
   it("skips room refresh when the current user is the removed member", () => {
     expect(
-      shouldSkipGroupRoomRefreshForCurrentUser(
+      shouldSkipGroupConversationRefreshForCurrentUser(
         { roomId: "room-1", userId: "user-a" },
         "user-a",
       ),
     ).toBe(true);
 
     expect(
-      shouldSkipGroupRoomRefreshForCurrentUser(
+      shouldSkipGroupConversationRefreshForCurrentUser(
         { roomId: "room-1", userId: "user-b" },
         "user-a",
       ),
@@ -58,7 +61,7 @@ describe("useWebSocket sync machine", () => {
     const joinedRooms = new Set<string>(["room-2"]);
 
     expect(
-      shouldUseDeltaRoomRefresh({
+      shouldUseDeltaConversationRefresh({
         conversationId: "room-1",
         selectedConversationId: "room-1",
         joinedRooms,
@@ -66,7 +69,7 @@ describe("useWebSocket sync machine", () => {
     ).toBe(true);
 
     expect(
-      shouldUseDeltaRoomRefresh({
+      shouldUseDeltaConversationRefresh({
         conversationId: "room-2",
         selectedConversationId: "room-9",
         joinedRooms,
@@ -74,7 +77,7 @@ describe("useWebSocket sync machine", () => {
     ).toBe(true);
 
     expect(
-      shouldUseDeltaRoomRefresh({
+      shouldUseDeltaConversationRefresh({
         conversationId: "room-3",
         selectedConversationId: "room-9",
         joinedRooms,
