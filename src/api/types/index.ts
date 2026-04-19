@@ -1,6 +1,7 @@
 export * from './alerts';
 export * from './access';
 export * from './audit';
+export * from './authority';
 export * from './auth';
 export * from './common';
 export * from './email-templates';

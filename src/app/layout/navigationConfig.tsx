@@ -2,6 +2,7 @@ import {
   AuditOutlined,
   DashboardOutlined,
   FileTextOutlined,
+  KeyOutlined,
   SafetyCertificateOutlined,
   SolutionOutlined,
   TeamOutlined,
@@ -87,6 +88,15 @@ export const navItems: NavItem[] = [
     route: '/monitoring',
   },
   {
+    key: 'authority',
+    label: 'Admin Authority',
+    description: 'Canonical admin roles and permission overrides.',
+    icon: <KeyOutlined />,
+    section: 'users',
+    route: '/authority',
+    roles: ['super_admin'],
+  },
+  {
     key: 'users',
     label: 'Users',
     description: 'Admin accounts, presence, and access state.',
@@ -130,6 +140,7 @@ export const navItems: NavItem[] = [
 
 export const breadcrumbNameMap: Record<string, string> = {
   '/': 'Dashboard',
+  '/authority': 'Admin Authority',
   '/users': 'Users',
   '/hr-employees': 'HR Directory',
   '/access-requests': 'IP Access',
@@ -178,6 +189,7 @@ export const resolveNavigationContext = (pathname: string) => {
 export const pickSelectedMenuKey = (pathname: string): string => {
   if (pathname === '/') return 'dashboard';
   if (pathname.startsWith('/monitoring')) return 'monitoring-overview';
+  if (pathname.startsWith('/authority')) return 'authority';
   if (pathname.startsWith('/users')) return 'users';
   if (pathname.startsWith('/hr-employees')) return 'hr-employees';
   if (pathname.startsWith('/services')) return 'email-templates';
@@ -217,6 +229,15 @@ export const commandRouteItems: CommandRouteItem[] = [
     icon: <ThunderboltOutlined />,
     keywords: ['monitoring', 'realtime', 'correctness', 'overview'],
     route: '/monitoring',
+  },
+  {
+    id: 'go-authority',
+    label: 'Admin Authority',
+    description: 'Manage canonical admin roles and permission overrides',
+    category: 'Navigation',
+    icon: <KeyOutlined />,
+    keywords: ['authority', 'admin', 'permissions', 'roles'],
+    route: '/authority',
   },
   {
     id: 'go-users',

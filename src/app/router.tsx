@@ -4,6 +4,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 import { RequireAuth } from '@/app/guards/RequireAuth';
 import { RequireApprovedAccess } from '@/app/guards/RequireApprovedAccess';
+import { RequireRole } from '@/app/guards/RequireRole';
 import { AppLayout } from '@/app/layout/AppLayout';
 import { QueryStateView } from '@/components/QueryStates';
 
@@ -51,6 +52,11 @@ const AccessPendingPage = lazy(() =>
 const AccessRequestsPage = lazy(() =>
   import('@/features/access/pages/AccessRequestsPage').then((module) => ({
     default: module.AccessRequestsPage,
+  })),
+);
+const AuthorityPage = lazy(() =>
+  import('@/features/authority/pages/AuthorityPage').then((module) => ({
+    default: module.AuthorityPage,
   })),
 );
 
@@ -102,6 +108,14 @@ const routes = [
       {
         path: 'users',
         element: withSuspense(<UsersPage />),
+      },
+      {
+        path: 'authority',
+        element: (
+          <RequireRole roles={['super_admin']}>
+            {withSuspense(<AuthorityPage />)}
+          </RequireRole>
+        ),
       },
       {
         path: 'users/:id',

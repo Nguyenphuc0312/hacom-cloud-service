@@ -3,6 +3,7 @@ export * from './accessClient';
 export * from './currentAdminClient';
 export * from './monitoringClient';
 export * from './auditClient';
+export * from './authorityClient';
 export * from './emailTemplatesClient';
 export * from './hrEmployeesClient';
 export * from './smtpClient';
