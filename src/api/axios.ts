@@ -56,8 +56,10 @@ const attachUnauthorizedRedirect = (client: AxiosInstance) => {
     (error) => {
       const status = error?.response?.status;
       const requestUrl = `${error?.config?.url ?? ''}`;
+      const isLoginRequest =
+        requestUrl.endsWith('/login') || requestUrl.includes('/auth/login');
 
-      if (status === 401 && !requestUrl.includes('/auth/login')) {
+      if (status === 401 && !isLoginRequest) {
         useAuthStore.getState().clearAuth();
         if (window.location.pathname !== loginPathname) {
           window.location.replace(loginPath);
@@ -69,10 +71,8 @@ const attachUnauthorizedRedirect = (client: AxiosInstance) => {
   );
 };
 
-[adminAxiosInstance].forEach((client) => {
+[adminAxiosInstance, authAxiosInstance].forEach((client) => {
   attachRequestId(client);
   attachAuthHeader(client);
   attachUnauthorizedRedirect(client);
 });
-
-attachRequestId(authAxiosInstance);
