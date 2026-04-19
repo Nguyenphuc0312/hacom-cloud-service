@@ -887,6 +887,39 @@ describe("chatStore phase-1 realtime flows", () => {
     expect(useChatStore.getState().totalUnreadCount).toBe(1);
   });
 
+  it("refreshes unread summary snapshots through the store action owner", async () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+        unreadCount: 4,
+      }),
+    ] as never);
+    getUnreadSummaryMock.mockResolvedValueOnce(
+      makeSuccessEnvelope({
+        totalUnreadCount: 0,
+        conversations: [
+          {
+            conversationId: "room-1",
+            unreadCount: 0,
+            lastReadMessageId: "msg-read",
+            lastReadAt: "2026-04-10T10:10:00.000Z",
+          },
+        ],
+      }),
+    );
+
+    await useChatStore.getState().refreshUnreadSummarySnapshot();
+
+    const conversation = useChatStore
+      .getState()
+      .conversations.find((item) => item.id === "room-1");
+    expect(getUnreadSummaryMock).toHaveBeenCalledTimes(1);
+    expect(conversation?.unreadCount).toBe(0);
+    expect(useChatStore.getState().totalUnreadCount).toBe(0);
+    expect(useChatStore.getState().lastUnreadSummaryAppliedAt).not.toBeNull();
+  });
+
   it("ignores stale conversation summary versions and preserves canonical unread total", () => {
     useChatStore.getState().setConversations([
       makeConversation({

@@ -259,6 +259,9 @@ export const useWebSocket = (
     (s) => s.upsertConversationSummary,
   );
   const applyUnreadSummary = useChatStore((s) => s.applyUnreadSummary);
+  const refreshUnreadSummarySnapshotAction = useChatStore(
+    (s) => s.refreshUnreadSummarySnapshot,
+  );
   const setTyping = useChatStore((s) => s.setTyping);
   const clearTyping = useChatStore((s) => s.clearTyping);
   const fetchMessages = useChatStore((s) => s.fetchMessages);
@@ -948,14 +951,8 @@ export const useWebSocket = (
   );
 
   const refreshUnreadSummarySnapshot = useCallback(async (): Promise<void> => {
-    const requestedAtMs = Date.now();
-    const response = await conversationApi.getUnreadSummary();
-    applyUnreadSummary(unwrapApiSuccess(response), {
-      requestedAtMs,
-      appliedAtMs: Date.now(),
-      source: "snapshot",
-    });
-  }, [applyUnreadSummary]);
+    await refreshUnreadSummarySnapshotAction();
+  }, [refreshUnreadSummarySnapshotAction]);
 
   const reconcileConversationAuthoritative = useCallback(
     (

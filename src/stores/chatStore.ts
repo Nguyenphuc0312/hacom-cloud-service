@@ -113,6 +113,7 @@ interface ChatState {
       source?: "snapshot" | "cross_tab";
     },
   ) => void;
+  refreshUnreadSummarySnapshot: () => Promise<void>;
   applyIncomingConversationMessage: (
     conversationId: string,
     message: Message,
@@ -3341,6 +3342,16 @@ export const useChatStore = create<ChatState>()(
           };
         });
 
+      },
+
+      refreshUnreadSummarySnapshot: async () => {
+        const requestedAtMs = Date.now();
+        const response = await conversationApi.getUnreadSummary();
+        get().applyUnreadSummary(unwrapApiSuccess(response), {
+          requestedAtMs,
+          appliedAtMs: Date.now(),
+          source: "snapshot",
+        });
       },
 
       applyIncomingConversationMessage: (conversationId, message, options) => {
