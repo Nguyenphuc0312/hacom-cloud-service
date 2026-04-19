@@ -164,15 +164,16 @@ export const shouldSkipGroupConversationRefreshForCurrentUser = (
 export const shouldUseDeltaConversationRefresh = ({
   conversationId,
   selectedConversationId,
-  joinedRooms,
+  joinedConversationIds,
 }: {
   conversationId: string | null | undefined;
   selectedConversationId: string | null | undefined;
-  joinedRooms: ReadonlySet<string>;
+  joinedConversationIds: ReadonlySet<string>;
 }): boolean =>
   Boolean(
     conversationId &&
-      (selectedConversationId === conversationId || joinedRooms.has(conversationId)),
+      (selectedConversationId === conversationId ||
+        joinedConversationIds.has(conversationId)),
   );
 
 type MessageCursor = {
@@ -192,13 +193,13 @@ type DrainedPendingConversationSync = {
 
 export const drainPendingConversationSync = (
   pendingMap: Map<string, PendingConversationSyncStrategy>,
-  joinedRooms: Set<string>,
+  joinedConversationIds: Set<string>,
   targetRoomIds: string[],
 ): DrainedPendingConversationSync[] => {
   const conversationIdsToDrain =
     targetRoomIds.length > 0
       ? targetRoomIds.filter((conversationId) =>
-          joinedRooms.has(conversationId),
+          joinedConversationIds.has(conversationId),
         )
       : Array.from(pendingMap.keys());
 
@@ -214,9 +215,9 @@ export const drainPendingConversationSync = (
 
 export const drainPendingConversationSyncForResyncRequired = (
   pendingMap: Map<string, PendingConversationSyncStrategy>,
-  joinedRooms: Set<string>,
+  joinedConversationIds: Set<string>,
 ): DrainedPendingConversationSync[] => {
-  return Array.from(joinedRooms).map((conversationId) => {
+  return Array.from(joinedConversationIds).map((conversationId) => {
     const pending = pendingMap.get(conversationId);
     pendingMap.delete(conversationId);
 
@@ -281,20 +282,22 @@ export const useWebSocket = (
     initSocket().getConnectionState(),
   );
 
-  const joinedRoomsRef = useRef<Set<string>>(new Set());
-  const subscribedRoomsRef = useRef<Set<string>>(new Set());
+  const joinedConversationsRef = useRef<Set<string>>(new Set());
+  const subscribedConversationsRef = useRef<Set<string>>(new Set());
   const pendingConversationSyncRef = useRef<
     Map<string, PendingConversationSyncStrategy>
   >(
     new Map(),
   );
-  const roomJoinRetryTimersRef = useRef<
+  const conversationJoinRetryTimersRef = useRef<
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
-  const roomSyncFallbackTimersRef = useRef<
+  const conversationSyncFallbackTimersRef = useRef<
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
-  const roomJoinRetryAttemptsRef = useRef<Map<string, number>>(new Map());
+  const conversationJoinRetryAttemptsRef = useRef<Map<string, number>>(
+    new Map(),
+  );
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const processedRealtimeEventIdsRef = useRef<Map<string, number>>(new Map());
   const resyncGapCooldownRef = useRef<Map<string, number>>(new Map());
@@ -303,7 +306,9 @@ export const useWebSocket = (
   const emitQueueRef = useRef<Array<{ event: string; data: unknown }>>([]);
   const hasConnectedOnceRef = useRef(false);
   const shouldResyncOnConnectRef = useRef(false);
-  const roomResyncInFlightRef = useRef<Map<string, Promise<void>>>(new Map());
+  const conversationResyncInFlightRef = useRef<Map<string, Promise<void>>>(
+    new Map(),
+  );
   const conversationRefreshInFlightRef = useRef<Map<string, Promise<void>>>(
     new Map(),
   );
@@ -322,7 +327,7 @@ export const useWebSocket = (
     const unsub = socket.onStateChange((state) => {
       logMessageDebug("useWebSocket", "connection_state_changed", {
         state,
-        joinedRooms: Array.from(joinedRoomsRef.current),
+        joinedConversationIds: Array.from(joinedConversationsRef.current),
       });
       setConnectionState(state);
     });
@@ -451,30 +456,35 @@ export const useWebSocket = (
   }, []);
 
   const clearConversationJoinRetry = useCallback((conversationId: string) => {
-    const timer = roomJoinRetryTimersRef.current.get(conversationId);
+    const timer = conversationJoinRetryTimersRef.current.get(conversationId);
     if (timer) {
       clearTimeout(timer);
-      roomJoinRetryTimersRef.current.delete(conversationId);
+      conversationJoinRetryTimersRef.current.delete(conversationId);
     }
   }, []);
 
   const clearAllConversationJoinRetries = useCallback(() => {
-    roomJoinRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
-    roomJoinRetryTimersRef.current.clear();
-    roomJoinRetryAttemptsRef.current.clear();
+    conversationJoinRetryTimersRef.current.forEach((timer) =>
+      clearTimeout(timer),
+    );
+    conversationJoinRetryTimersRef.current.clear();
+    conversationJoinRetryAttemptsRef.current.clear();
   }, []);
 
   const clearConversationSyncFallback = useCallback((conversationId: string) => {
-    const timer = roomSyncFallbackTimersRef.current.get(conversationId);
+    const timer =
+      conversationSyncFallbackTimersRef.current.get(conversationId);
     if (timer) {
       clearTimeout(timer);
-      roomSyncFallbackTimersRef.current.delete(conversationId);
+      conversationSyncFallbackTimersRef.current.delete(conversationId);
     }
   }, []);
 
   const clearAllConversationSyncFallbacks = useCallback(() => {
-    roomSyncFallbackTimersRef.current.forEach((timer) => clearTimeout(timer));
-    roomSyncFallbackTimersRef.current.clear();
+    conversationSyncFallbackTimersRef.current.forEach((timer) =>
+      clearTimeout(timer),
+    );
+    conversationSyncFallbackTimersRef.current.clear();
   }, []);
 
   const clearConversationSnapshotRefresh = useCallback((conversationId: string) => {
@@ -665,7 +675,9 @@ export const useWebSocket = (
   const resyncConversation = useCallback(
     async (
       conversationId: string,
-      options?: { reason?: "initial-sync" | "reconnect" | "room-refresh" },
+      options?: {
+        reason?: "initial-sync" | "reconnect" | "conversation-refresh";
+      },
     ) => {
       const chatState = useChatStore.getState();
       if (
@@ -771,7 +783,9 @@ export const useWebSocket = (
   const scheduleConversationResync = useCallback(
     (
       conversationId: string,
-      options?: { reason?: "initial-sync" | "reconnect" | "room-refresh" },
+      options?: {
+        reason?: "initial-sync" | "reconnect" | "conversation-refresh";
+      },
     ) => {
       const chatState = useChatStore.getState();
       const willBlockAsKnownLatest =
@@ -786,15 +800,16 @@ export const useWebSocket = (
         return Promise.resolve();
       }
 
-      const inFlight = roomResyncInFlightRef.current.get(conversationId);
+      const inFlight =
+        conversationResyncInFlightRef.current.get(conversationId);
       if (inFlight) {
         return inFlight;
       }
 
       const request = resyncConversation(conversationId, options).finally(() => {
-        roomResyncInFlightRef.current.delete(conversationId);
+        conversationResyncInFlightRef.current.delete(conversationId);
       });
-      roomResyncInFlightRef.current.set(conversationId, request);
+      conversationResyncInFlightRef.current.set(conversationId, request);
       logMessageDebug("useWebSocket", "delta_sync_scheduled", {
         conversationId,
         reason: options?.reason,
@@ -945,7 +960,7 @@ export const useWebSocket = (
   const reconcileConversationAuthoritative = useCallback(
     (
       conversationId: string,
-      reason: "skip" | "initial-sync" | "reconnect" | "room-refresh",
+      reason: "skip" | "initial-sync" | "reconnect" | "conversation-refresh",
     ): Promise<void> => {
       if (reason === "skip") {
         return scheduleConversationSnapshotRefresh(conversationId, {
@@ -985,7 +1000,10 @@ export const useWebSocket = (
       void refreshUnreadSummarySnapshot().catch(() => {
         // no-op: best effort badge reconcile
       });
-      void reconcileConversationAuthoritative(conversationId, "room-refresh");
+      void reconcileConversationAuthoritative(
+        conversationId,
+        "conversation-refresh",
+      );
     },
     [reconcileConversationAuthoritative, refreshUnreadSummarySnapshot],
   );
@@ -1201,7 +1219,7 @@ export const useWebSocket = (
     ) => {
       if (
         !conversationId ||
-        !joinedRoomsRef.current.has(conversationId)
+        !joinedConversationsRef.current.has(conversationId)
       ) {
         return;
       }
@@ -1210,18 +1228,18 @@ export const useWebSocket = (
       clearConversationJoinRetry(conversationId);
 
       const attempt =
-        roomJoinRetryAttemptsRef.current.get(conversationId) ?? 0;
+        conversationJoinRetryAttemptsRef.current.get(conversationId) ?? 0;
       const retryDelay = Math.min(
         CONVERSATION_JOIN_ACK_TIMEOUT_MS * Math.max(attempt + 1, 1),
         CONVERSATION_JOIN_RETRY_DELAY_MAX_MS,
       );
 
       const retryTimer = setTimeout(() => {
-        roomJoinRetryTimersRef.current.delete(conversationId);
+        conversationJoinRetryTimersRef.current.delete(conversationId);
 
         if (
-          !joinedRoomsRef.current.has(conversationId) ||
-          subscribedRoomsRef.current.has(conversationId)
+          !joinedConversationsRef.current.has(conversationId) ||
+          subscribedConversationsRef.current.has(conversationId)
         ) {
           return;
         }
@@ -1241,7 +1259,10 @@ export const useWebSocket = (
         }
 
         const nextAttempt = attempt + 1;
-        roomJoinRetryAttemptsRef.current.set(conversationId, nextAttempt);
+        conversationJoinRetryAttemptsRef.current.set(
+          conversationId,
+          nextAttempt,
+        );
 
         logMessageDebug("useWebSocket", "conversation_join_ack_timeout", {
           conversationId,
@@ -1254,14 +1275,14 @@ export const useWebSocket = (
           useChatStore.getState().selectedConversationId === conversationId
         ) {
           void scheduleConversationResync(conversationId, {
-            reason: "room-refresh",
+            reason: "conversation-refresh",
           });
         }
 
         requestConversationJoin(conversationId, { reason: "retry" });
       }, retryDelay);
 
-      roomJoinRetryTimersRef.current.set(conversationId, retryTimer);
+      conversationJoinRetryTimersRef.current.set(conversationId, retryTimer);
     },
     [
       clearConversationJoinRetry,
@@ -1283,7 +1304,7 @@ export const useWebSocket = (
     const handleConnect = () => {
       logMessageDebug("useWebSocket", "socket_connected", {
         shouldResync: shouldResyncOnConnectRef.current,
-        joinedRooms: Array.from(joinedRoomsRef.current),
+        joinedConversationIds: Array.from(joinedConversationsRef.current),
       });
       onConnect?.();
 
@@ -1303,10 +1324,10 @@ export const useWebSocket = (
         useFriendshipStore.getState().triggerResync("socket_reconnect");
       }
 
-      joinedRoomsRef.current.forEach((conversationId) => {
+      joinedConversationsRef.current.forEach((conversationId) => {
         clearConversationSyncFallback(conversationId);
-        subscribedRoomsRef.current.delete(conversationId);
-        roomJoinRetryAttemptsRef.current.set(conversationId, 0);
+        subscribedConversationsRef.current.delete(conversationId);
+        conversationJoinRetryAttemptsRef.current.set(conversationId, 0);
         pendingConversationSyncRef.current.set(
           conversationId,
           shouldResync ? "reconnect" : "skip",
@@ -1321,7 +1342,7 @@ export const useWebSocket = (
       flushEmitQueue();
       logMessageDebug("useWebSocket", "offline_queue_flush_requested", {
         reason: "socket_connected",
-        joinedRooms: Array.from(joinedRoomsRef.current),
+        joinedConversationIds: Array.from(joinedConversationsRef.current),
       });
       void flushQueuedMessages();
     };
@@ -1338,7 +1359,7 @@ export const useWebSocket = (
       if (hasConnectedOnceRef.current) {
         shouldResyncOnConnectRef.current = true;
       }
-      subscribedRoomsRef.current.clear();
+      subscribedConversationsRef.current.clear();
       clearAllConversationSyncFallbacks();
       clearAllConversationJoinRetries();
       if (code === 4401) {
@@ -1520,10 +1541,13 @@ export const useWebSocket = (
         const shouldUseDeltaRefresh = shouldUseDeltaConversationRefresh({
           conversationId,
           selectedConversationId: chatState.selectedConversationId,
-          joinedRooms: joinedRoomsRef.current,
+          joinedConversationIds: joinedConversationsRef.current,
         });
         if (shouldUseDeltaRefresh) {
-          void reconcileConversationAuthoritative(conversationId, "room-refresh");
+          void reconcileConversationAuthoritative(
+            conversationId,
+            "conversation-refresh",
+          );
         } else {
           void scheduleConversationSnapshotRefresh(conversationId, {
             delayMs: 0,
@@ -1591,8 +1615,8 @@ export const useWebSocket = (
       const conversationId = getConversationId(payload);
       if (!conversationId) return;
 
-      subscribedRoomsRef.current.add(conversationId);
-      roomJoinRetryAttemptsRef.current.delete(conversationId);
+      subscribedConversationsRef.current.add(conversationId);
+      conversationJoinRetryAttemptsRef.current.delete(conversationId);
       clearConversationJoinRetry(conversationId);
 
       logMessageDebug("useWebSocket", "conversation_joined", {
@@ -1610,7 +1634,7 @@ export const useWebSocket = (
 
       clearConversationSyncFallback(conversationId);
       const fallbackTimer = setTimeout(() => {
-        roomSyncFallbackTimersRef.current.delete(conversationId);
+        conversationSyncFallbackTimersRef.current.delete(conversationId);
 
         const stillPending =
           pendingConversationSyncRef.current.get(conversationId);
@@ -1625,11 +1649,14 @@ export const useWebSocket = (
         });
 
         const fallbackReason =
-          stillPending === "skip" ? "room-refresh" : stillPending;
+          stillPending === "skip" ? "conversation-refresh" : stillPending;
         void reconcileConversationAuthoritative(conversationId, fallbackReason);
       }, CONVERSATION_SYNC_FALLBACK_TIMEOUT_MS);
 
-      roomSyncFallbackTimersRef.current.set(conversationId, fallbackTimer);
+      conversationSyncFallbackTimersRef.current.set(
+        conversationId,
+        fallbackTimer,
+      );
     };
 
     const handleConversationLeft = (data: unknown) => {
@@ -1638,8 +1665,8 @@ export const useWebSocket = (
       const conversationId = getConversationId(payload);
       if (!conversationId) return;
 
-      subscribedRoomsRef.current.delete(conversationId);
-      roomJoinRetryAttemptsRef.current.delete(conversationId);
+      subscribedConversationsRef.current.delete(conversationId);
+      conversationJoinRetryAttemptsRef.current.delete(conversationId);
       clearConversationJoinRetry(conversationId);
       clearConversationSyncFallback(conversationId);
 
@@ -1733,10 +1760,10 @@ export const useWebSocket = (
         return;
       }
 
-      joinedRoomsRef.current.delete(conversationId);
-      subscribedRoomsRef.current.delete(conversationId);
+      joinedConversationsRef.current.delete(conversationId);
+      subscribedConversationsRef.current.delete(conversationId);
       pendingConversationSyncRef.current.delete(conversationId);
-      roomJoinRetryAttemptsRef.current.delete(conversationId);
+      conversationJoinRetryAttemptsRef.current.delete(conversationId);
       clearConversationJoinRetry(conversationId);
       clearConversationSyncFallback(conversationId);
       removeConversation(conversationId);
@@ -1773,7 +1800,7 @@ export const useWebSocket = (
       const conversationId = getConversationId(payload);
       if (!conversationId) return;
 
-      joinedRoomsRef.current.delete(conversationId);
+      joinedConversationsRef.current.delete(conversationId);
       removeConversation(conversationId);
       if (useChatStore.getState().selectedConversationId === conversationId) {
         selectConversation(null);
@@ -1853,15 +1880,18 @@ export const useWebSocket = (
         const shouldUseDeltaRefresh = shouldUseDeltaConversationRefresh({
           conversationId,
           selectedConversationId: useChatStore.getState().selectedConversationId,
-          joinedRooms: joinedRoomsRef.current,
+          joinedConversationIds: joinedConversationsRef.current,
         });
 
         if (shouldUseDeltaRefresh) {
-          void reconcileConversationAuthoritative(conversationId, "room-refresh");
+          void reconcileConversationAuthoritative(
+            conversationId,
+            "conversation-refresh",
+          );
         } else {
           void scheduleConversationSnapshotRefresh(conversationId, {
             delayMs: 0,
-            reason: "group:room-refresh",
+            reason: "group:conversation-refresh",
           });
         }
       }
@@ -2176,7 +2206,7 @@ export const useWebSocket = (
       });
       const drainedRooms = drainPendingConversationSync(
         pendingConversationSyncRef.current,
-        joinedRoomsRef.current,
+        joinedConversationsRef.current,
         targetRoomIds,
       );
 
@@ -2237,7 +2267,7 @@ export const useWebSocket = (
       ) {
         const drainedRooms = drainPendingConversationSyncForResyncRequired(
           pendingConversationSyncRef.current,
-          joinedRoomsRef.current,
+          joinedConversationsRef.current,
         );
 
         drainedRooms.forEach(({ conversationId, strategy }) => {
@@ -2354,7 +2384,7 @@ export const useWebSocket = (
 
   const disconnect = useCallback(() => {
     logMessageDebug("useWebSocket", "disconnect_requested", {
-      joinedRooms: Array.from(joinedRoomsRef.current),
+      joinedConversationIds: Array.from(joinedConversationsRef.current),
       queuedEmitCount: emitQueueRef.current.length,
     });
     if (typingTimeoutRef.current) {
@@ -2365,10 +2395,10 @@ export const useWebSocket = (
     clearAllRemoteTypingTimers();
     clearAllConversationJoinRetries();
     clearAllConversationSyncFallbacks();
-    joinedRoomsRef.current.clear();
-    subscribedRoomsRef.current.clear();
+    joinedConversationsRef.current.clear();
+    subscribedConversationsRef.current.clear();
     pendingConversationSyncRef.current.clear();
-    roomResyncInFlightRef.current.clear();
+    conversationResyncInFlightRef.current.clear();
     emitQueueRef.current = [];
     disconnectSocket();
   }, [
@@ -2380,9 +2410,9 @@ export const useWebSocket = (
   const joinConversation = useCallback(
     (conversationId: string, options?: { skipInitialDeltaSync?: boolean }) => {
       if (!conversationId) return;
-      joinedRoomsRef.current.add(conversationId);
-      subscribedRoomsRef.current.delete(conversationId);
-      roomJoinRetryAttemptsRef.current.set(conversationId, 0);
+      joinedConversationsRef.current.add(conversationId);
+      subscribedConversationsRef.current.delete(conversationId);
+      conversationJoinRetryAttemptsRef.current.set(conversationId, 0);
       pendingConversationSyncRef.current.set(
         conversationId,
         options?.skipInitialDeltaSync ? "skip" : "initial-sync",
@@ -2403,10 +2433,10 @@ export const useWebSocket = (
       emit(WebSocketEvents.CONVERSATION_LEAVE, {
         conversationId,
       });
-      joinedRoomsRef.current.delete(conversationId);
-      subscribedRoomsRef.current.delete(conversationId);
+      joinedConversationsRef.current.delete(conversationId);
+      subscribedConversationsRef.current.delete(conversationId);
       pendingConversationSyncRef.current.delete(conversationId);
-      roomJoinRetryAttemptsRef.current.delete(conversationId);
+      conversationJoinRetryAttemptsRef.current.delete(conversationId);
       clearConversationJoinRetry(conversationId);
       clearConversationSyncFallback(conversationId);
 

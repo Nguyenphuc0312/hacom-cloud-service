@@ -57,14 +57,14 @@ describe("useWebSocket sync machine", () => {
     ).toBe(false);
   });
 
-  it("uses delta room refresh only for active or joined conversations", () => {
-    const joinedRooms = new Set<string>(["room-2"]);
+  it("uses delta conversation refresh only for active or joined conversations", () => {
+    const joinedConversationIds = new Set<string>(["room-2"]);
 
     expect(
       shouldUseDeltaConversationRefresh({
         conversationId: "room-1",
         selectedConversationId: "room-1",
-        joinedRooms,
+        joinedConversationIds,
       }),
     ).toBe(true);
 
@@ -72,7 +72,7 @@ describe("useWebSocket sync machine", () => {
       shouldUseDeltaConversationRefresh({
         conversationId: "room-2",
         selectedConversationId: "room-9",
-        joinedRooms,
+        joinedConversationIds,
       }),
     ).toBe(true);
 
@@ -80,7 +80,7 @@ describe("useWebSocket sync machine", () => {
       shouldUseDeltaConversationRefresh({
         conversationId: "room-3",
         selectedConversationId: "room-9",
-        joinedRooms,
+        joinedConversationIds,
       }),
     ).toBe(false);
   });

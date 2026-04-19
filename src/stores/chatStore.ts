@@ -263,7 +263,7 @@ interface FetchMessagesOptions {
   limit?: number;
   beforeId?: string;
   afterId?: string;
-  syncReason?: "initial-sync" | "reconnect" | "room-refresh";
+  syncReason?: "initial-sync" | "reconnect" | "conversation-refresh";
   source?: string;
   queryType?: HistoryQueryType;
   requestId?: string;

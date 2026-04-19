@@ -706,6 +706,7 @@ export const WebSocketEvents = {
   MESSAGE_SEND: "message:send",
   CONVERSATION_JOIN: WsEventNames.CONVERSATION_JOIN,
   CONVERSATION_LEAVE: WsEventNames.CONVERSATION_LEAVE,
+  // Deprecated transport aliases kept for inbound/outbound compat only.
   ROOM_JOIN: "room:join",
   ROOM_LEAVE: "room:leave",
   TYPING_START: WsEventNames.TYPING_START,
@@ -752,6 +753,7 @@ export const WebSocketEvents = {
   CONVERSATION_SUMMARY_UPDATED: "conversation:summary:updated",
   CONVERSATION_MEMBERSHIP_UPDATED: "conversation:membership:updated",
   RESYNC_REQUIRED: WsEventNames.RESYNC_REQUIRED,
+  // Deprecated transport aliases kept for inbound compat only.
   ROOM_JOINED: "room:joined",
   ROOM_LEFT: "room:left",
   ERROR: "error",

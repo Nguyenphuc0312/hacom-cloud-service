@@ -26,6 +26,11 @@ const DISALLOWED_PATTERNS = [
   { label: "joinRoom", regex: /\bjoinRoom\b/ },
   { label: "leaveRoom", regex: /\bleaveRoom\b/ },
   { label: "roomIdMissing", regex: /\broomIdMissing\b/ },
+  { label: "room-refresh", regex: /\broom-refresh\b/ },
+  {
+    label: "ROOM transport aliases",
+    regex: /\bROOM_(JOIN|LEAVE|JOINED|LEFT)\b/,
+  },
 ];
 
 const collectSourceFiles = (directory: string): string[] => {
