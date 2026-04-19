@@ -30,7 +30,7 @@ export const RowActionsDropdown: React.FC<RowActionsDropdownProps> = ({ actions 
 
   return (
     <Dropdown menu={{ items, onClick: onMenuClick }} trigger={['click']} placement="bottomRight">
-      <button className="ds-table-row-action-btn" aria-label="Hành động">
+      <button type="button" className="ds-table-row-action-btn" aria-label="Row actions">
         <MoreOutlined />
       </button>
     </Dropdown>

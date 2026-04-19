@@ -1,25 +1,25 @@
+import { ReloadOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Button,
-  Card,
-  Descriptions,
-  Drawer,
-  Input,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from 'antd';
+import { Button, Form, Input, Select, Space, message } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useMemo, useState } from 'react';
 
 import { authorityClient } from '@/api/clients';
+import { getErrorMessage } from '@/api/error';
 import { queryKeys } from '@/api/queryKeys';
 import type { AuthorityListItem, AuthorityOverrideEffect, Role } from '@/api/types';
+import { AppDrawer } from '@/components/AppDrawer';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { DataTableShell } from '@/components/DataTableShell';
+import { DataTableToolbar } from '@/components/DataTableToolbar';
+import { FilterBar } from '@/components/FilterBar';
+import { PageShell } from '@/components/PageShell';
 import { QueryStateView } from '@/components/QueryStates';
-
-const { Title, Text } = Typography;
+import { RowActionsDropdown } from '@/components/RowActionsDropdown';
+import { DataTable } from '@/components/ui/DataTable';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SurfaceCard } from '@/components/ui/SurfaceCard';
+import { formatDateTime } from '@/utils/date';
 
 const ROLE_OPTIONS: Array<{ label: string; value: Exclude<Role, 'superadmin' | 'admin'> }> = [
   { label: 'Super Admin', value: 'super_admin' },
@@ -60,34 +60,39 @@ type DraftOverride = {
   effect: AuthorityOverrideEffect;
 };
 
-const sourceColor: Record<string, string> = {
-  db: 'blue',
-  break_glass: 'gold',
+const sourceTone: Record<string, 'default' | 'warning'> = {
+  db: 'default',
+  break_glass: 'warning',
+};
+
+const formatRoleLabel = (role: Role | null | undefined) => {
+  if (!role) return 'No DB role';
+  return role.replace(/_/g, ' ');
 };
 
 export const AuthorityPage = () => {
+  const [form] = Form.useForm();
   const queryClient = useQueryClient();
-  const [keyword, setKeyword] = useState('');
+  const [filters, setFilters] = useState({
+    page: 1,
+    limit: 20,
+    keyword: undefined as string | undefined,
+  });
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [draftRole, setDraftRole] = useState<Exclude<Role, 'superadmin' | 'admin'> | undefined>();
   const [draftOverrides, setDraftOverrides] = useState<DraftOverride[]>([]);
-
-  const params = useMemo(
-    () => ({
-      page: 1,
-      limit: 20,
-      keyword: keyword || undefined,
-    }),
-    [keyword],
-  );
+  const [changeReason, setChangeReason] = useState('');
+  const [removeRoleConfirmOpen, setRemoveRoleConfirmOpen] = useState(false);
 
   const listQuery = useQuery({
-    queryKey: queryKeys.authorityUsers(JSON.stringify(params)),
-    queryFn: () => authorityClient.listUsers(params),
+    queryKey: queryKeys.authorityUsers(JSON.stringify(filters)),
+    queryFn: () => authorityClient.listUsers(filters),
   });
 
   const detailQuery = useQuery({
-    queryKey: selectedUserId ? queryKeys.authorityUserDetail(selectedUserId) : ['authority-user-detail-empty'],
+    queryKey: selectedUserId
+      ? queryKeys.authorityUserDetail(selectedUserId)
+      : ['authority-user-detail-empty'],
     queryFn: () => authorityClient.getUser(selectedUserId ?? ''),
     enabled: Boolean(selectedUserId),
   });
@@ -96,6 +101,7 @@ export const AuthorityPage = () => {
     if (!detailQuery.data) {
       setDraftRole(undefined);
       setDraftOverrides([]);
+      setChangeReason('');
       return;
     }
 
@@ -109,53 +115,60 @@ export const AuthorityPage = () => {
     );
   }, [detailQuery.data]);
 
+  const activeFilterCount = [filters.keyword].filter(Boolean).length;
+
   const refreshAuthorityData = async (userId?: string | null) => {
-    await queryClient.invalidateQueries({ queryKey: ['authority-users'] });
-    if (userId) {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.authorityUserDetail(userId) });
-    }
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['authority-users'] }),
+      queryClient.invalidateQueries({ queryKey: ['authority-user-detail'] }),
+      userId
+        ? queryClient.invalidateQueries({ queryKey: queryKeys.authorityUserDetail(userId) })
+        : Promise.resolve(),
+    ]);
   };
 
   const roleMutation = useMutation({
     mutationFn: async () => {
       if (!selectedUserId || !draftRole) {
-        throw new Error('Chua chon role.');
+        throw new Error('Select a canonical role before saving.');
       }
 
       return authorityClient.updateRole(selectedUserId, {
         role: draftRole,
+        reason: changeReason.trim() || undefined,
       });
     },
     onSuccess: async () => {
-      message.success('Da cap nhat role.');
+      message.success('Canonical role updated.');
       await refreshAuthorityData(selectedUserId);
     },
     onError: (error) => {
-      message.error(error instanceof Error ? error.message : 'Cap nhat role that bai.');
+      message.error(getErrorMessage(error));
     },
   });
 
   const deleteRoleMutation = useMutation({
     mutationFn: async () => {
       if (!selectedUserId) {
-        throw new Error('Chua chon user.');
+        throw new Error('Select a user before removing the DB role.');
       }
 
-      return authorityClient.deleteRole(selectedUserId);
+      return authorityClient.deleteRole(selectedUserId, changeReason.trim() || undefined);
     },
     onSuccess: async () => {
-      message.success('Da xoa role DB.');
+      message.success('DB role removed.');
+      setRemoveRoleConfirmOpen(false);
       await refreshAuthorityData(selectedUserId);
     },
     onError: (error) => {
-      message.error(error instanceof Error ? error.message : 'Xoa role that bai.');
+      message.error(getErrorMessage(error));
     },
   });
 
   const overridesMutation = useMutation({
     mutationFn: async () => {
       if (!selectedUserId) {
-        throw new Error('Chua chon user.');
+        throw new Error('Select a user before saving overrides.');
       }
 
       const overrides = draftOverrides
@@ -166,256 +179,487 @@ export const AuthorityPage = () => {
         }));
 
       return authorityClient.replaceOverrides(selectedUserId, {
+        reason: changeReason.trim() || undefined,
         overrides,
       });
     },
     onSuccess: async () => {
-      message.success('Da cap nhat overrides.');
+      message.success('Overrides updated.');
       await refreshAuthorityData(selectedUserId);
     },
     onError: (error) => {
-      message.error(error instanceof Error ? error.message : 'Cap nhat overrides that bai.');
+      message.error(getErrorMessage(error));
     },
   });
 
+  const columns = useMemo<ColumnsType<AuthorityListItem>>(
+    () => [
+      {
+        title: 'Account',
+        key: 'account',
+        render: (_, record) => (
+          <div className="ds-table-primary-cell">
+            <strong>{record.email}</strong>
+            <span>{record.username ?? 'No username'}</span>
+          </div>
+        ),
+      },
+      {
+        title: 'Canonical role',
+        dataIndex: 'role',
+        width: 160,
+        render: (value: Role | null) => (
+          <span className="ds-shell-chip ds-shell-chip--ghost">{formatRoleLabel(value)}</span>
+        ),
+      },
+      {
+        title: 'Authority source',
+        dataIndex: 'authoritySource',
+        width: 160,
+        render: (value: string | null) =>
+          value ? (
+            <span
+              className={`ds-shell-chip ${sourceTone[value] === 'warning' ? 'ds-shell-chip--warning' : 'ds-shell-chip--ghost'}`}
+            >
+              {value.replace(/_/g, ' ')}
+            </span>
+          ) : (
+            '-'
+          ),
+      },
+      {
+        title: 'Effective permissions',
+        key: 'permissions',
+        width: 140,
+        render: (_, record) => record.effectivePermissions.length,
+      },
+      {
+        title: 'Overrides',
+        dataIndex: 'overrideCount',
+        width: 110,
+      },
+      {
+        title: 'Effective window',
+        key: 'window',
+        render: (_, record) => (
+          <span>
+            {record.effectiveFrom ? formatDateTime(record.effectiveFrom) : 'Now'} →{' '}
+            {record.effectiveUntil ? formatDateTime(record.effectiveUntil) : 'Open-ended'}
+          </span>
+        ),
+      },
+      {
+        title: '',
+        key: 'actions',
+        width: 72,
+        render: (_, record) => (
+          <RowActionsDropdown
+            actions={[
+              {
+                key: 'detail',
+                label: 'Open detail',
+                onClick: () => setSelectedUserId(record.userId),
+              },
+            ]}
+          />
+        ),
+      },
+    ],
+    [],
+  );
+
+  const applyFilters = () => {
+    const values = form.getFieldsValue() as { keyword?: string };
+
+    setFilters((current) => ({
+      ...current,
+      page: 1,
+      keyword: values.keyword?.trim() || undefined,
+    }));
+  };
+
+  const resetFilters = () => {
+    form.resetFields();
+    setFilters((current) => ({
+      ...current,
+      page: 1,
+      keyword: undefined,
+    }));
+  };
+
   if (listQuery.isLoading && !listQuery.data) {
-    return <QueryStateView kind="loading" title="Dang tai admin authority..." />;
+    return (
+      <PageShell
+        title="Admin Authority"
+        description="Review canonical roles, break-glass posture, and permission overrides."
+      >
+        <QueryStateView kind="loading" title="Loading authority workspace..." />
+      </PageShell>
+    );
   }
 
   if (listQuery.isError) {
     return (
-      <QueryStateView kind="error" title="Khong the tai admin authority" onRetry={() => listQuery.refetch()} />
+      <PageShell
+        title="Admin Authority"
+        description="Review canonical roles, break-glass posture, and permission overrides."
+      >
+        <QueryStateView
+          kind="error"
+          description="Unable to load authority records."
+          onRetry={() => {
+            void listQuery.refetch();
+          }}
+        />
+      </PageShell>
     );
   }
 
-  const items = listQuery.data?.items ?? [];
+  const detail = detailQuery.data;
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <div>
-        <Title level={3} style={{ marginBottom: 4 }}>
-          Admin Authority
-        </Title>
-        <Text type="secondary">
-          DB canonical role va permission overrides cho admin accounts. Break-glass chi dung khi user chua co authority DB.
-        </Text>
-      </div>
-
-      <Card>
-        <Space wrap style={{ marginBottom: 16 }}>
-          <Input.Search
-            allowClear
-            placeholder="Tim theo email hoac username"
-            style={{ width: 320 }}
-            onSearch={setKeyword}
-          />
-        </Space>
-
-        <Table<AuthorityListItem>
-          rowKey="userId"
-          dataSource={items}
-          pagination={false}
-          onRow={(record) => ({
-            onClick: () => setSelectedUserId(record.userId),
-          })}
-          columns={[
-            {
-              title: 'Email',
-              dataIndex: 'email',
-            },
-            {
-              title: 'User',
-              dataIndex: 'username',
-              render: (value: string | undefined) => value ?? '-',
-            },
-            {
-              title: 'Role',
-              dataIndex: 'role',
-              render: (value: Role | null) => value ? <Tag color="purple">{value}</Tag> : <Tag>none</Tag>,
-            },
-            {
-              title: 'Source',
-              dataIndex: 'authoritySource',
-              render: (value: string | null) =>
-                value ? <Tag color={sourceColor[value] ?? 'default'}>{value}</Tag> : <Tag>none</Tag>,
-            },
-            {
-              title: 'Effective Permissions',
-              render: (_, record) => record.effectivePermissions.length,
-            },
-            {
-              title: 'Overrides',
-              dataIndex: 'overrideCount',
-            },
-          ]}
-        />
-      </Card>
-
-      <Drawer
-        width={860}
-        title="Authority Detail"
-        open={Boolean(selectedUserId)}
-        onClose={() => setSelectedUserId(null)}
+    <>
+      <PageShell
+        title="Admin Authority"
+        description="Keep canonical role, authority source, and effective permissions visible in one governance workspace."
+        headerExtra={
+          <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
+            <Button
+              icon={<ReloadOutlined />}
+              loading={listQuery.isFetching}
+              onClick={() => {
+                void listQuery.refetch();
+              }}
+            >
+              Refresh
+            </Button>
+          </div>
+        }
       >
-        {detailQuery.isLoading || !detailQuery.data ? (
-          <QueryStateView kind="loading" compact title="Dang tai authority detail..." />
-        ) : (
-          <Space direction="vertical" size={16} style={{ width: '100%' }}>
-            <Descriptions bordered size="small" column={1}>
-              <Descriptions.Item label="Email">{detailQuery.data.user.email}</Descriptions.Item>
-              <Descriptions.Item label="Username">{detailQuery.data.user.username ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="Authority Source">
-                {detailQuery.data.authoritySource ? (
-                  <Tag color={sourceColor[detailQuery.data.authoritySource] ?? 'default'}>
-                    {detailQuery.data.authoritySource}
-                  </Tag>
-                ) : (
-                  <Tag>none</Tag>
-                )}
-              </Descriptions.Item>
-              <Descriptions.Item label="DB Role">
-                {detailQuery.data.role ? <Tag color="purple">{detailQuery.data.role}</Tag> : <Tag>none</Tag>}
-              </Descriptions.Item>
-              <Descriptions.Item label="Break-glass Eligible">
-                {detailQuery.data.breakGlassEligible ? 'Yes' : 'No'}
-              </Descriptions.Item>
-            </Descriptions>
+        <FilterBar>
+          <Form form={form} layout="inline" className="ds-toolbar-form">
+            <Form.Item
+              label="Search"
+              name="keyword"
+              className="ds-toolbar-field ds-toolbar-field--lg"
+            >
+              <Input allowClear placeholder="Email or username" />
+            </Form.Item>
+            <Form.Item className="ds-toolbar-field ds-toolbar-actions">
+              <Space>
+                <Button type="primary" onClick={applyFilters}>
+                  Apply filters
+                </Button>
+                <Button onClick={resetFilters}>Reset</Button>
+              </Space>
+            </Form.Item>
+          </Form>
+          <div className="ds-filter-toolbar-meta">
+            <span>
+              {listQuery.data?.pagination.total ?? 0} authority record
+              {(listQuery.data?.pagination.total ?? 0) === 1 ? '' : 's'}
+            </span>
+            <span>
+              {activeFilterCount > 0
+                ? `${activeFilterCount} active filter${activeFilterCount === 1 ? '' : 's'}`
+                : 'No active filters'}
+            </span>
+            <span>
+              Last sync:{' '}
+              {listQuery.dataUpdatedAt
+                ? formatDateTime(new Date(listQuery.dataUpdatedAt).toISOString())
+                : '-'}
+            </span>
+          </div>
+        </FilterBar>
 
-            <Card
-              size="small"
-              title="Canonical Role"
-              extra={
-                <Space>
+        <DataTableShell
+          title="Authority assignments"
+          meta="Use the list to find the operator quickly, then open detail for role and override changes."
+          toolbar={
+            <DataTableToolbar>
+              <span className="ds-toolbar-summary">
+                Page {listQuery.data?.pagination.page ?? 1} of{' '}
+                {listQuery.data?.pagination.totalPages ?? 1}
+              </span>
+            </DataTableToolbar>
+          }
+        >
+          <DataTable
+            rowKey="userId"
+            columns={columns}
+            minHeight={360}
+            dataSource={listQuery.data?.items ?? []}
+            emptyNode={<EmptyState description="No authority records matched the current filter." />}
+            onRow={(record) => ({
+              onClick: () => setSelectedUserId(record.userId),
+              onKeyDown: (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setSelectedUserId(record.userId);
+                }
+              },
+              tabIndex: 0,
+              style: { cursor: 'pointer' },
+            })}
+            pagination={{
+              current: listQuery.data?.pagination.page,
+              pageSize: listQuery.data?.pagination.limit,
+              total: listQuery.data?.pagination.total,
+              showSizeChanger: true,
+              onChange: (page, pageSize) => {
+                setFilters((current) => ({ ...current, page, limit: pageSize }));
+              },
+            }}
+          />
+        </DataTableShell>
+      </PageShell>
+
+      <AppDrawer
+        open={Boolean(selectedUserId)}
+        onClose={() => {
+          setSelectedUserId(null);
+          setChangeReason('');
+          setRemoveRoleConfirmOpen(false);
+        }}
+        title="Authority detail"
+        width={920}
+      >
+        {!selectedUserId ? (
+          <EmptyState description="Select an authority record to inspect permissions." />
+        ) : detailQuery.isLoading && !detail ? (
+          <QueryStateView kind="loading" compact title="Loading authority detail..." />
+        ) : detailQuery.isError ? (
+          <QueryStateView
+            kind="error"
+            compact
+            description="Unable to load authority detail."
+            onRetry={() => {
+              void detailQuery.refetch();
+            }}
+          />
+        ) : !detail ? (
+          <EmptyState description="Authority detail is unavailable." />
+        ) : (
+          <div className="ds-settings-stack">
+            <div className="ds-detail-overview-grid">
+              <div className="ds-summary-tile">
+                <span className="ds-summary-tile-label">Authority source</span>
+                <strong className="ds-summary-tile-value">
+                  {detail.authoritySource ? detail.authoritySource.replace(/_/g, ' ') : 'none'}
+                </strong>
+                <span className="ds-summary-tile-meta">Current authority resolution path.</span>
+              </div>
+              <div className="ds-summary-tile">
+                <span className="ds-summary-tile-label">DB role</span>
+                <strong className="ds-summary-tile-value">{formatRoleLabel(detail.role)}</strong>
+                <span className="ds-summary-tile-meta">Canonical role stored in the authority DB.</span>
+              </div>
+              <div className="ds-summary-tile">
+                <span className="ds-summary-tile-label">Overrides</span>
+                <strong className="ds-summary-tile-value">{detail.overrides.length}</strong>
+                <span className="ds-summary-tile-meta">Grant or deny diffs applied on top of the base role.</span>
+              </div>
+              <div className="ds-summary-tile">
+                <span className="ds-summary-tile-label">Effective permissions</span>
+                <strong className="ds-summary-tile-value">{detail.effectivePermissions.length}</strong>
+                <span className="ds-summary-tile-meta">Permissions the runtime will currently honor.</span>
+              </div>
+            </div>
+
+            <SurfaceCard
+              eyebrow="Identity"
+              title={detail.user.email}
+              description="Review the operator identity and authority timing before editing roles or overrides."
+            >
+              <div className="ds-detail-list">
+                <div className="ds-detail-list-item">
+                  <span>Username</span>
+                  <strong>{detail.user.username ?? '-'}</strong>
+                </div>
+                <div className="ds-detail-list-item">
+                  <span>Authority source</span>
+                  <strong>{detail.authoritySource ?? '-'}</strong>
+                </div>
+                <div className="ds-detail-list-item">
+                  <span>Effective from</span>
+                  <strong>{detail.effectiveFrom ? formatDateTime(detail.effectiveFrom) : 'Now'}</strong>
+                </div>
+                <div className="ds-detail-list-item">
+                  <span>Effective until</span>
+                  <strong>
+                    {detail.effectiveUntil ? formatDateTime(detail.effectiveUntil) : 'Open-ended'}
+                  </strong>
+                </div>
+                <div className="ds-detail-list-item">
+                  <span>Break-glass eligible</span>
+                  <strong>{detail.breakGlassEligible ? 'Yes' : 'No'}</strong>
+                </div>
+              </div>
+            </SurfaceCard>
+
+            <SurfaceCard
+              eyebrow="Change log reason"
+              title="Operator note"
+              description="Use a reason whenever you change the canonical role or override list so later reviewers understand why the change happened."
+            >
+              <Input.TextArea
+                rows={3}
+                value={changeReason}
+                placeholder="Reason for this authority change"
+                onChange={(event) => setChangeReason(event.target.value)}
+              />
+            </SurfaceCard>
+
+            <SurfaceCard
+              eyebrow="Canonical role"
+              title="DB-backed role assignment"
+              description="Keep the base role explicit. Remove the DB role only when you intentionally want break-glass or no authority source to take over."
+            >
+              <div className="ds-admin-form-grid">
+                <Select
+                  value={draftRole}
+                  placeholder="Select canonical role"
+                  options={ROLE_OPTIONS}
+                  onChange={setDraftRole}
+                  allowClear
+                />
+                <div className="ds-admin-inline-actions">
                   <Button
                     type="primary"
-                    onClick={() => roleMutation.mutate()}
-                    loading={roleMutation.isPending}
                     disabled={!draftRole}
+                    loading={roleMutation.isPending}
+                    onClick={() => roleMutation.mutate()}
                   >
-                    Save Role
+                    Save role
                   </Button>
                   <Button
                     danger
-                    onClick={() => deleteRoleMutation.mutate()}
+                    disabled={!detail.role}
                     loading={deleteRoleMutation.isPending}
+                    onClick={() => setRemoveRoleConfirmOpen(true)}
                   >
-                    Remove DB Role
+                    Remove DB role
                   </Button>
-                </Space>
+                </div>
+              </div>
+            </SurfaceCard>
+
+            <SurfaceCard
+              eyebrow="Permission overrides"
+              title="Grant / deny diffs"
+              description="Use overrides sparingly. Prefer the base role when possible, and keep the diff set short enough to review quickly."
+              actions={
+                <Button
+                  onClick={() =>
+                    setDraftOverrides((current) => [
+                      ...current,
+                      {
+                        id: crypto.randomUUID(),
+                        effect: 'grant',
+                      },
+                    ])
+                  }
+                >
+                  Add override
+                </Button>
               }
             >
-              <Select
-                value={draftRole}
-                onChange={setDraftRole}
-                placeholder="Chon role DB"
-                style={{ width: 240 }}
-                options={ROLE_OPTIONS}
-                allowClear
-              />
-            </Card>
+              {draftOverrides.length > 0 ? (
+                <div className="ds-admin-override-list">
+                  {draftOverrides.map((override) => (
+                    <div key={override.id} className="ds-admin-override-row">
+                      <Select
+                        value={override.permission}
+                        placeholder="Permission"
+                        options={PERMISSION_OPTIONS.map((permission) => ({
+                          label: permission,
+                          value: permission,
+                        }))}
+                        onChange={(value) =>
+                          setDraftOverrides((current) =>
+                            current.map((item) =>
+                              item.id === override.id ? { ...item, permission: value } : item,
+                            ),
+                          )
+                        }
+                      />
+                      <Select
+                        value={override.effect}
+                        options={[
+                          { label: 'Grant', value: 'grant' },
+                          { label: 'Deny', value: 'deny' },
+                        ]}
+                        onChange={(value: AuthorityOverrideEffect) =>
+                          setDraftOverrides((current) =>
+                            current.map((item) =>
+                              item.id === override.id ? { ...item, effect: value } : item,
+                            ),
+                          )
+                        }
+                      />
+                      <Button
+                        danger
+                        onClick={() =>
+                          setDraftOverrides((current) =>
+                            current.filter((item) => item.id !== override.id),
+                          )
+                        }
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  compact
+                  title="No overrides configured"
+                  description="Save an empty list when you want the DB diff set cleared."
+                />
+              )}
 
-            <Card size="small" title="Base Permissions">
-              <Space wrap>
-                {detailQuery.data.basePermissions.map((permission) => (
-                  <Tag key={permission}>{permission}</Tag>
-                ))}
-                {detailQuery.data.basePermissions.length === 0 ? <Text type="secondary">Khong co.</Text> : null}
-              </Space>
-            </Card>
+              <div className="ds-settings-action-bar">
+                <div className="ds-settings-action-copy">
+                  Overrides apply on top of the canonical role. A deny should be rare and explicitly justified.
+                </div>
+                <Button type="primary" loading={overridesMutation.isPending} onClick={() => overridesMutation.mutate()}>
+                  Save overrides
+                </Button>
+              </div>
+            </SurfaceCard>
 
-            <Card
-              size="small"
-              title="Permission Overrides"
-              extra={
-                <Space>
-                  <Button
-                    onClick={() =>
-                      setDraftOverrides((current) => [
-                        ...current,
-                        {
-                          id: crypto.randomUUID(),
-                          effect: 'grant',
-                        },
-                      ])
-                    }
-                  >
-                    Add Override
-                  </Button>
-                  <Button
-                    type="primary"
-                    onClick={() => overridesMutation.mutate()}
-                    loading={overridesMutation.isPending}
-                  >
-                    Save Overrides
-                  </Button>
-                </Space>
-              }
+            <SurfaceCard
+              eyebrow="Effective permissions"
+              title="Runtime permission set"
+              description="This is the final permission set the admin panel should honor after role plus overrides are resolved."
             >
-              <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                {draftOverrides.map((override) => (
-                  <Space key={override.id} wrap>
-                    <Select
-                      value={override.permission}
-                      style={{ width: 300 }}
-                      placeholder="Permission"
-                      options={PERMISSION_OPTIONS.map((permission) => ({
-                        value: permission,
-                        label: permission,
-                      }))}
-                      onChange={(value) =>
-                        setDraftOverrides((current) =>
-                          current.map((item) =>
-                            item.id === override.id ? { ...item, permission: value } : item,
-                          ),
-                        )
-                      }
-                    />
-                    <Select
-                      value={override.effect}
-                      style={{ width: 120 }}
-                      options={[
-                        { label: 'Grant', value: 'grant' },
-                        { label: 'Deny', value: 'deny' },
-                      ]}
-                      onChange={(value: AuthorityOverrideEffect) =>
-                        setDraftOverrides((current) =>
-                          current.map((item) =>
-                            item.id === override.id ? { ...item, effect: value } : item,
-                          ),
-                        )
-                      }
-                    />
-                    <Button
-                      danger
-                      onClick={() =>
-                        setDraftOverrides((current) => current.filter((item) => item.id !== override.id))
-                      }
-                    >
-                      Remove
-                    </Button>
-                  </Space>
-                ))}
-                {draftOverrides.length === 0 ? (
-                  <Text type="secondary">Khong co override. Luu danh sach rong de xoa het diff trong DB.</Text>
-                ) : null}
-              </Space>
-            </Card>
-
-            <Card size="small" title="Effective Permissions">
-              <Space wrap>
-                {detailQuery.data.effectivePermissions.map((permission) => (
-                  <Tag key={permission} color="green">
-                    {permission}
-                  </Tag>
-                ))}
-                {detailQuery.data.effectivePermissions.length === 0 ? (
-                  <Text type="secondary">Khong co effective permission.</Text>
-                ) : null}
-              </Space>
-            </Card>
-          </Space>
+              {detail.effectivePermissions.length > 0 ? (
+                <div className="ds-admin-chip-list">
+                  {detail.effectivePermissions.map((permission) => (
+                    <span key={permission} className="ds-shell-chip ds-shell-chip--ghost">
+                      {permission}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState compact description="No effective permissions were returned." />
+              )}
+            </SurfaceCard>
+          </div>
         )}
-      </Drawer>
-    </Space>
+      </AppDrawer>
+
+      <ConfirmDialog
+        open={removeRoleConfirmOpen}
+        title="Remove canonical DB role?"
+        description="This removes the DB-backed role assignment for the selected operator. Continue only if that fallback behavior is intentional."
+        confirmText="Remove role"
+        danger
+        loading={deleteRoleMutation.isPending}
+        onCancel={() => setRemoveRoleConfirmOpen(false)}
+        onConfirm={() => deleteRoleMutation.mutate()}
+      />
+    </>
   );
 };

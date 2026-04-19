@@ -22,7 +22,7 @@ export const PageShell = ({ title, description, headerExtra, children }: PageShe
       <PageHeader>
         <div>
           <PageHeaderTitle>
-            <Typography.Title level={3} style={{ margin: 0 }}>
+            <Typography.Title level={1} style={{ margin: 0 }}>
               {title}
             </Typography.Title>
           </PageHeaderTitle>

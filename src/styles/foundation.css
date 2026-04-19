@@ -3089,6 +3089,56 @@ body {
   padding-top: 0;
 }
 
+.ds-table-primary-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ds-table-primary-cell strong {
+  color: var(--text-primary);
+}
+
+.ds-table-primary-cell span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.ds-admin-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ds-admin-form-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.ds-admin-form-grid .ant-select,
+.ds-admin-override-row .ant-select {
+  width: 100%;
+}
+
+.ds-admin-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ds-admin-override-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.ds-admin-override-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 @media (max-width: 1280px) {
   .ds-dashboard-span-3 {
     grid-column: span 6;
@@ -3111,6 +3161,10 @@ body {
 
   .ds-incident-banner-meta {
     align-items: flex-start;
+  }
+
+  .ds-admin-override-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

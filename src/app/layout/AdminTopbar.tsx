@@ -8,6 +8,7 @@ import { appConfig } from '@/config/appConfig';
 import { CommandPalette } from '@/components/CommandPalette';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { useAuthStore } from '@/store/authStore';
+import { hasSomeRole } from '@/utils/role';
 import { TopbarActions } from './TopbarActions';
 import { TopbarSearch } from './TopbarSearch';
 import { commandRouteItems, resolveNavigationContext } from './navigationConfig';
@@ -25,6 +26,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
   const location = useLocation();
   const navigate = useNavigate();
   const clearAuth = useAuthStore((state) => state.clearAuth);
+  const currentRole = useAuthStore((state) => state.user?.role);
   const { user, isAuthServiceUnavailable } = useCurrentUser();
   const { isOpen, openPalette, closePalette } = useCommandPalette();
 
@@ -36,14 +38,16 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
 
   const paletteItems = useMemo(
     () => [
-      ...commandRouteItems.map((item) => ({
-        ...item,
-        onSelect: () => {
-          if (item.route) {
-            navigate(item.route);
-          }
-        },
-      })),
+      ...commandRouteItems
+        .filter((item) => !item.roles || hasSomeRole(currentRole, item.roles))
+        .map((item) => ({
+          ...item,
+          onSelect: () => {
+            if (item.route) {
+              navigate(item.route);
+            }
+          },
+        })),
       {
         id: 'quick-create-user',
         label: 'Create User',
@@ -75,7 +79,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
         },
       },
     ],
-    [message, navigate],
+    [currentRole, message, navigate],
   );
 
   const handleLogout = () => {

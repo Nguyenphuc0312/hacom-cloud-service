@@ -1,4 +1,5 @@
 import type { TableProps } from 'antd';
+import type { ReactNode } from 'react';
 
 import { AdminTable } from '@/components/AdminTable';
 
@@ -6,6 +7,7 @@ interface DataTableProps<T extends object> extends TableProps<T> {
   loadingSkeletonRows?: number;
   minHeight?: number;
   containerClassName?: string;
+  emptyNode?: ReactNode;
 }
 
 export function DataTable<T extends object>({

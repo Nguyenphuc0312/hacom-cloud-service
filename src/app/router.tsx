@@ -61,7 +61,7 @@ const AuthorityPage = lazy(() =>
 );
 
 const withSuspense = (element: ReactNode) => (
-  <Suspense fallback={<QueryStateView kind="loading" title="Đang tải trang..." />}>
+  <Suspense fallback={<QueryStateView kind="loading" title="Loading page..." />}>
     {element}
   </Suspense>
 );

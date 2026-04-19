@@ -1,5 +1,6 @@
 import { Alert, Button, Empty, Result, Skeleton, Space, Spin, Typography } from 'antd';
 import type { ReactNode } from 'react';
+
 import { commonMessages } from '../shared/messages/common';
 
 interface LoadingStateProps {
@@ -56,7 +57,7 @@ export const QueryStateView = ({
   title,
   description,
   onRetry,
-  retryLabel = 'Thử lại',
+  retryLabel = commonMessages.actions.retry,
   retrying = false,
   compact = false,
 }: QueryStateViewProps) => {
@@ -64,18 +65,18 @@ export const QueryStateView = ({
     return compact ? (
       <Skeleton active paragraph={{ rows: 3 }} />
     ) : (
-      <LoadingState tip={title ?? 'Đang tải dữ liệu...'} />
+      <LoadingState tip={title ?? commonMessages.table.loading} />
     );
   }
 
   if (kind === 'empty') {
-    return <EmptyState description={description ?? 'Không có dữ liệu phù hợp.'} />;
+    return <EmptyState description={description ?? 'No matching data was found.'} />;
   }
 
   if (kind === 'error') {
     return (
       <ErrorState
-        title={title ?? 'Không thể tải dữ liệu'}
+        title={title ?? 'Unable to load data'}
         subTitle={description}
         extra={
           onRetry ? (
@@ -92,8 +93,10 @@ export const QueryStateView = ({
     return (
       <Result
         status="403"
-        title={title ?? 'Không đủ quyền truy cập'}
-        subTitle={description ?? 'Role hiện tại không có quyền thực hiện thao tác này.'}
+        title={title ?? 'You do not have access'}
+        subTitle={
+          description ?? 'Your current role does not allow this action in the admin panel.'
+        }
       />
     );
   }
@@ -103,8 +106,8 @@ export const QueryStateView = ({
       <Alert
         type="info"
         showIcon
-        message={title ?? 'Tính năng đang tạm khóa'}
-        description={description ?? 'Write actions hiện bị tắt bởi cấu hình release.'}
+        message={title ?? 'This feature is currently disabled'}
+        description={description ?? 'Write actions are disabled by the current release settings.'}
       />
     );
   }
@@ -114,11 +117,12 @@ export const QueryStateView = ({
       <Alert
         type="warning"
         showIcon
-        message={title ?? 'Hệ thống đang degraded'}
+        message={title ?? 'Some upstream systems are degraded'}
         description={
           <Space direction="vertical" size={8}>
             <Typography.Text>
-              {description ?? 'Một số upstream đang không ổn định. Dữ liệu có thể thiếu hoặc chậm.'}
+              {description ??
+                'One or more upstream dependencies are unstable. Data may be delayed or incomplete.'}
             </Typography.Text>
             {onRetry ? (
               <Button size="small" onClick={onRetry} loading={retrying}>
@@ -135,9 +139,10 @@ export const QueryStateView = ({
     <Alert
       type="warning"
       showIcon
-      message={title ?? 'Dữ liệu có thể chưa mới nhất'}
+      message={title ?? 'This data may be stale'}
       description={
-        description ?? 'Đây là dữ liệu stale và sẽ được đồng bộ lại ở lần fetch tiếp theo.'
+        description ??
+        'The latest refresh has not completed yet. A newer snapshot will appear on the next successful fetch.'
       }
     />
   );

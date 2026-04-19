@@ -2,9 +2,9 @@ import React from 'react';
 
 import { appConfig } from '@/config/appConfig';
 import { useAuthStore } from '@/store/authStore';
-import { toDisplayRole } from '@/utils/role';
-import { SidebarNavItem } from './SidebarNavItem';
-import { navItems } from './navigationConfig';
+import { hasSomeRole, toDisplayRole } from '@/utils/role';
+import { SidebarNavSection } from './SidebarNavSection';
+import { SIDEBAR_SECTIONS, navItems } from './navigationConfig';
 
 interface AdminSidebarProps {
   collapsed?: boolean;
@@ -14,7 +14,13 @@ interface AdminSidebarProps {
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({ collapsed = false, id }) => {
   const user = useAuthStore((state) => state.user);
   const roleLabel = toDisplayRole(user?.role).replace('_', ' ');
-  const primaryItems = navItems;
+  const visibleItems = navItems.filter(
+    (item) => !item.roles || hasSomeRole(user?.role, item.roles),
+  );
+  const sections = SIDEBAR_SECTIONS.map((section) => ({
+    ...section,
+    items: visibleItems.filter((item) => item.section === section.key),
+  })).filter((section) => section.items.length > 0);
 
   return (
     <aside
@@ -34,8 +40,16 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ collapsed = false, i
 
       <nav className="ds-admin-sidebar-nav" role="navigation" aria-label="Main navigation">
         <div className="ds-sidebar-nav-list">
-          {primaryItems.map((item) => (
-            <SidebarNavItem key={item.key} item={item} collapsed={collapsed} />
+          {sections.map((section) => (
+            <SidebarNavSection
+              key={section.key}
+              label={section.label}
+              description={section.description}
+              icon={section.icon}
+              itemCount={section.items.length}
+              items={section.items}
+              collapsed={collapsed}
+            />
           ))}
         </div>
       </nav>

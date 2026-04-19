@@ -28,7 +28,6 @@ export const AppModal: React.FC<AppModalProps> = ({
     footer={footer}
     width={width}
     className={clsx('ds-app-modal', className)}
-    closeIcon={<span className="ds-modal-close">×</span>}
     centered
     destroyOnClose
     maskClosable={false}

@@ -38,7 +38,7 @@ export const SidebarNavSection = ({
 
     <div className="ds-sidebar-section-list">
       {items.map((item) => (
-        <span key={item.key}>
+        <div key={item.key}>
           <SidebarNavItem item={item} collapsed={collapsed} />
           {item.children && item.children.length > 0 && (
             <div className="ds-sidebar-submenu">
@@ -47,7 +47,7 @@ export const SidebarNavSection = ({
               ))}
             </div>
           )}
-        </span>
+        </div>
       ))}
     </div>
   </div>

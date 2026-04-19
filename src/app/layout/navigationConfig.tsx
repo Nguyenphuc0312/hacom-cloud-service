@@ -10,6 +10,8 @@ import {
 } from '@ant-design/icons';
 import type { ReactNode } from 'react';
 
+import type { Role } from '@/api/types';
+
 export interface NavItem {
   key: string;
   label: string;
@@ -18,7 +20,7 @@ export interface NavItem {
   section: SidebarSectionKey;
   route: string;
   badge?: ReactNode;
-  roles?: string[];
+  roles?: Role[];
   children?: NavItem[];
 }
 
@@ -209,6 +211,7 @@ export interface CommandRouteItem {
   keywords: string[];
   route?: string;
   disabled?: boolean;
+  roles?: Role[];
 }
 
 export const commandRouteItems: CommandRouteItem[] = [
@@ -238,6 +241,7 @@ export const commandRouteItems: CommandRouteItem[] = [
     icon: <KeyOutlined />,
     keywords: ['authority', 'admin', 'permissions', 'roles'],
     route: '/authority',
+    roles: ['super_admin'],
   },
   {
     id: 'go-users',
