@@ -373,7 +373,7 @@
       "createGroupFailed": "Unable to create new group",
       "fetchConversationsFailed": "Unable to load conversations",
       "fetchMessagesFailed": "Unable to load messages",
-      "roomIdMissing": "Missing room id",
+      "conversationIdMissing": "Missing conversation id",
       "invalidSendResponse": "Invalid send message response",
       "invalidResendResponse": "Invalid resend message response"
     },

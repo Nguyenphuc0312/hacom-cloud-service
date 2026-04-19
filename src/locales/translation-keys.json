@@ -302,7 +302,7 @@
     "chat.fetchMessagesFailed",
     "chat.invalidResendResponse",
     "chat.invalidSendResponse",
-    "chat.roomIdMissing",
+    "chat.conversationIdMissing",
     "chat.sendFailed",
     "chat.startConversationFailed",
     "generic.requestFailed",

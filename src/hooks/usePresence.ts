@@ -21,10 +21,6 @@ interface UsePresenceOptions {
   userIds?: string[];
   /** Conversation ID (server resolves members) */
   conversationId?: string;
-  /**
-   * @deprecated Use conversationId.
-   */
-  roomId?: string;
   /** Auto-subscribe on mount (default true) */
   enabled?: boolean;
 }
@@ -76,7 +72,7 @@ export function usePresence(
   options: UsePresenceOptions = {},
 ): UsePresenceReturn {
   const { userIds, enabled = true } = options;
-  const conversationId = options.conversationId ?? options.roomId;
+  const conversationId = options.conversationId;
   const normalizedUserIds = useRef<string[]>([]);
   const userIdsKey = Array.isArray(userIds)
     ? Array.from(
@@ -112,9 +108,8 @@ export function usePresence(
     }
     if (conversationId) {
       payload.conversationId = conversationId;
-      payload.roomId = conversationId;
     }
-    if (!payload.userIds && !payload.roomId) return;
+    if (!payload.userIds && !payload.conversationId) return;
 
     socket.send("presence:subscribe", payload);
     subscribedRef.current = true;
@@ -132,7 +127,6 @@ export function usePresence(
     }
     if (conversationId) {
       payload.conversationId = conversationId;
-      payload.roomId = conversationId;
     }
 
     socket.send("presence:unsubscribe", payload);

@@ -373,7 +373,7 @@
       "createGroupFailed": "Không thể tạo nhóm mới",
       "fetchConversationsFailed": "Không thể tải danh sách hội thoại",
       "fetchMessagesFailed": "Không thể tải tin nhắn",
-      "roomIdMissing": "Không nhận được mã phòng",
+      "conversationIdMissing": "Không nhận được mã hội thoại",
       "invalidSendResponse": "Phản hồi gửi tin nhắn không hợp lệ",
       "invalidResendResponse": "Phản hồi gửi lại tin nhắn không hợp lệ"
     },

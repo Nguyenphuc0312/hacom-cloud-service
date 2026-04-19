@@ -11,6 +11,7 @@ import {
   buildAuthEndpoint,
   normalizeAuthRequestPath,
 } from "./authPath";
+import { warnLegacyRoomsRequest } from "./conversationIdentity";
 import i18n from "../i18n";
 import {
   clearTokens,
@@ -264,11 +265,23 @@ apiClient.interceptors.request.use(
     }
 
     if (!shouldAttachAuth) {
+      if (
+        typeof config.url === "string" &&
+        /\/rooms(?:\/|$)/i.test(config.url.split("?")[0] ?? "")
+      ) {
+        warnLegacyRoomsRequest(config.url);
+      }
       setAuthHeader(config, null);
       return config;
     }
 
     const accessToken = getAccessToken();
+    if (
+      typeof config.url === "string" &&
+      /\/rooms(?:\/|$)/i.test(config.url.split("?")[0] ?? "")
+    ) {
+      warnLegacyRoomsRequest(config.url);
+    }
     setAuthHeader(config, accessToken);
     return config;
   },

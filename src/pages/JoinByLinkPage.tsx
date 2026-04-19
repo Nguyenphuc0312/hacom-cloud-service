@@ -5,6 +5,7 @@ import { ArrowLeftIcon, LinkIcon } from "@heroicons/react/24/outline";
 import { Button, toast } from "../components/ui";
 import { groupApi } from "../services/api";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
+import { resolveConversationId } from "../lib/conversationIdentity";
 import { ROUTE_PATHS } from "../router/paths";
 
 type JoinStatus = "idle" | "joining" | "joined" | "pending" | "failed";
@@ -31,13 +32,13 @@ export const JoinByLinkPage: React.FC = () => {
 
     try {
       const response = await groupApi.joinByLink(token);
-      const payload = unwrapApiSuccess(response) as {
-        conversationId?: string;
-        roomId?: string;
-        status?: "joined" | "pending";
-      };
+      const payload = unwrapApiSuccess(response) as Record<string, unknown>;
 
-      setConversationId(payload.conversationId ?? payload.roomId ?? null);
+      setConversationId(
+        resolveConversationId(payload, {
+          source: "JoinByLinkPage.handleJoin",
+        }),
+      );
       if (payload.status === "pending") {
         setStatus("pending");
         return;

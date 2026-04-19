@@ -179,7 +179,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const exitSelectionMode = useUIStore((s) => s.exitSelectionMode);
   const toggleMessageSelection = useUIStore((s) => s.toggleMessageSelection);
   const slowModeUntil = useGroupStore(
-    (state) => state.slowModeUntilByRoom[conversation.id] || 0,
+    (state) => state.slowModeUntilByConversation[conversation.id] || 0,
   );
   const clearSlowModeCooldown = useGroupStore((s) => s.clearSlowModeCooldown);
   const addMessage = useChatStore((s) => s.addMessage);

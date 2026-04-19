@@ -82,11 +82,11 @@ interface UseConversationSessionOptions {
     conversationId: string,
     lastVisibleMessageId?: string,
   ) => Promise<void>;
-  joinRoom: (
-    roomId: string,
+  joinConversation: (
+    conversationId: string,
     options?: { skipInitialDeltaSync?: boolean; reason?: string },
   ) => void;
-  leaveRoom: (roomId: string) => void;
+  leaveConversation: (conversationId: string) => void;
   stopTyping: (conversationId: string) => void;
   sendTyping: (conversationId: string) => void;
   updateConversation: (id: string, updates: Partial<Conversation>) => void;
@@ -128,8 +128,8 @@ export const useConversationSession = ({
   messageCount,
   fetchMessages,
   markAsRead,
-  joinRoom,
-  leaveRoom,
+  joinConversation,
+  leaveConversation,
   stopTyping,
   sendTyping,
   updateConversation,
@@ -232,12 +232,14 @@ export const useConversationSession = ({
         isValidatingRoom,
         hasNewer: hasNewerMessages,
       });
-      logMessageDebug("ChatPage", "room_join_requested", {
+      logMessageDebug("ChatPage", "conversation_join_requested", {
         conversationId: selectedConversationId,
         skipInitialDeltaSync: false,
         reason: "conversation_open",
       });
-      joinRoom(selectedConversationId, { skipInitialDeltaSync: false });
+      joinConversation(selectedConversationId, {
+        skipInitialDeltaSync: false,
+      });
 
       const unreadCount = Math.max(0, conversation?.unreadCount ?? 0);
       const shouldBootstrapUnreadFeed =
@@ -339,14 +341,14 @@ export const useConversationSession = ({
 
     return () => {
       stopTyping(selectedConversationId);
-      leaveRoom(selectedConversationId);
+      leaveConversation(selectedConversationId);
     };
   }, [
     canBootstrapConversationFromCache,
     fetchMessages,
     isValidatingRoom,
-    joinRoom,
-    leaveRoom,
+    joinConversation,
+    leaveConversation,
     selectedConversationId,
     stopTyping,
     updateConversation,

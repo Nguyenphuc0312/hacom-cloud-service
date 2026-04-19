@@ -4,7 +4,7 @@ import { registerStoreResetter } from "./storeResetRegistry";
 
 export interface InviteLinkItem {
   id: string;
-  roomId: string;
+  conversationId: string;
   name?: string;
   inviteUrl?: string;
   token?: string;
@@ -18,7 +18,7 @@ export interface InviteLinkItem {
 
 export interface JoinRequestItem {
   id: string;
-  roomId: string;
+  conversationId: string;
   userId: string;
   status: "pending" | "approved" | "rejected";
   note?: string;
@@ -27,85 +27,96 @@ export interface JoinRequestItem {
 }
 
 interface GroupStoreState {
-  slowModeUntilByRoom: Record<string, number>;
-  inviteLinksByRoom: Record<string, InviteLinkItem[]>;
-  joinRequestsByRoom: Record<string, JoinRequestItem[]>;
-  memberListVersionByRoom: Record<string, number>;
+  slowModeUntilByConversation: Record<string, number>;
+  inviteLinksByConversation: Record<string, InviteLinkItem[]>;
+  joinRequestsByConversation: Record<string, JoinRequestItem[]>;
+  memberListVersionByConversation: Record<string, number>;
 
-  setSlowModeCooldown: (roomId: string, retryAfterSeconds: number) => void;
-  clearSlowModeCooldown: (roomId: string) => void;
-  getSlowModeRemainingSeconds: (roomId: string) => number;
+  setSlowModeCooldown: (conversationId: string, retryAfterSeconds: number) => void;
+  clearSlowModeCooldown: (conversationId: string) => void;
+  getSlowModeRemainingSeconds: (conversationId: string) => number;
 
-  upsertInviteLink: (roomId: string, link: InviteLinkItem) => void;
-  setInviteLinks: (roomId: string, links: InviteLinkItem[]) => void;
-  markInviteLinkRevoked: (roomId: string, linkId: string, revokedAt?: string) => void;
+  upsertInviteLink: (conversationId: string, link: InviteLinkItem) => void;
+  setInviteLinks: (conversationId: string, links: InviteLinkItem[]) => void;
+  markInviteLinkRevoked: (
+    conversationId: string,
+    linkId: string,
+    revokedAt?: string,
+  ) => void;
 
-  upsertJoinRequest: (roomId: string, request: JoinRequestItem) => void;
-  setJoinRequests: (roomId: string, requests: JoinRequestItem[]) => void;
+  upsertJoinRequest: (conversationId: string, request: JoinRequestItem) => void;
+  setJoinRequests: (conversationId: string, requests: JoinRequestItem[]) => void;
   markJoinRequestResolved: (
-    roomId: string,
+    conversationId: string,
     requestId: string,
     status: "approved" | "rejected",
   ) => void;
-  removeJoinRequest: (roomId: string, requestId: string) => void;
-  bumpMemberListVersion: (roomId: string) => void;
+  removeJoinRequest: (conversationId: string, requestId: string) => void;
+  bumpMemberListVersion: (conversationId: string) => void;
   reset: () => void;
 }
 
 const initialState: Pick<
   GroupStoreState,
-  | "slowModeUntilByRoom"
-  | "inviteLinksByRoom"
-  | "joinRequestsByRoom"
-  | "memberListVersionByRoom"
+  | "slowModeUntilByConversation"
+  | "inviteLinksByConversation"
+  | "joinRequestsByConversation"
+  | "memberListVersionByConversation"
 > = {
-  slowModeUntilByRoom: {},
-  inviteLinksByRoom: {},
-  joinRequestsByRoom: {},
-  memberListVersionByRoom: {},
+  slowModeUntilByConversation: {},
+  inviteLinksByConversation: {},
+  joinRequestsByConversation: {},
+  memberListVersionByConversation: {},
 };
 
 export const useGroupStore = create<GroupStoreState>()(
   subscribeWithSelector((set, get) => ({
     ...initialState,
 
-    setSlowModeCooldown: (roomId, retryAfterSeconds) => {
-      if (!roomId || !Number.isFinite(retryAfterSeconds) || retryAfterSeconds <= 0) {
+    setSlowModeCooldown: (conversationId, retryAfterSeconds) => {
+      if (
+        !conversationId ||
+        !Number.isFinite(retryAfterSeconds) ||
+        retryAfterSeconds <= 0
+      ) {
         return;
       }
 
       const until = Date.now() + retryAfterSeconds * 1000;
       set((state) => ({
-        slowModeUntilByRoom: {
-          ...state.slowModeUntilByRoom,
-          [roomId]: Math.max(state.slowModeUntilByRoom[roomId] || 0, until),
+        slowModeUntilByConversation: {
+          ...state.slowModeUntilByConversation,
+          [conversationId]: Math.max(
+            state.slowModeUntilByConversation[conversationId] || 0,
+            until,
+          ),
         },
       }));
     },
 
-    clearSlowModeCooldown: (roomId) => {
-      if (!roomId) return;
+    clearSlowModeCooldown: (conversationId) => {
+      if (!conversationId) return;
 
       set((state) => {
-        const next = { ...state.slowModeUntilByRoom };
-        delete next[roomId];
-        return { slowModeUntilByRoom: next };
+        const next = { ...state.slowModeUntilByConversation };
+        delete next[conversationId];
+        return { slowModeUntilByConversation: next };
       });
     },
 
-    getSlowModeRemainingSeconds: (roomId) => {
-      if (!roomId) return 0;
-      const until = get().slowModeUntilByRoom[roomId] || 0;
+    getSlowModeRemainingSeconds: (conversationId) => {
+      if (!conversationId) return 0;
+      const until = get().slowModeUntilByConversation[conversationId] || 0;
       const deltaMs = until - Date.now();
       if (deltaMs <= 0) return 0;
       return Math.ceil(deltaMs / 1000);
     },
 
-    upsertInviteLink: (roomId, link) => {
-      if (!roomId || !link?.id) return;
+    upsertInviteLink: (conversationId, link) => {
+      if (!conversationId || !link?.id) return;
 
       set((state) => {
-        const current = state.inviteLinksByRoom[roomId] || [];
+        const current = state.inviteLinksByConversation[conversationId] || [];
         const existingIdx = current.findIndex((item) => item.id === link.id);
         const nextLinks =
           existingIdx >= 0
@@ -113,46 +124,52 @@ export const useGroupStore = create<GroupStoreState>()(
             : [link, ...current];
 
         return {
-          inviteLinksByRoom: {
-            ...state.inviteLinksByRoom,
-            [roomId]: nextLinks,
+          inviteLinksByConversation: {
+            ...state.inviteLinksByConversation,
+            [conversationId]: nextLinks,
           },
         };
       });
     },
 
-    setInviteLinks: (roomId, links) => {
-      if (!roomId) return;
+    setInviteLinks: (conversationId, links) => {
+      if (!conversationId) return;
       set((state) => ({
-        inviteLinksByRoom: {
-          ...state.inviteLinksByRoom,
-          [roomId]: Array.isArray(links) ? links : [],
+        inviteLinksByConversation: {
+          ...state.inviteLinksByConversation,
+          [conversationId]: Array.isArray(links) ? links : [],
         },
       }));
     },
 
-    markInviteLinkRevoked: (roomId, linkId, revokedAt = new Date().toISOString()) => {
-      if (!roomId || !linkId) return;
+    markInviteLinkRevoked: (
+      conversationId,
+      linkId,
+      revokedAt = new Date().toISOString(),
+    ) => {
+      if (!conversationId || !linkId) return;
 
       set((state) => {
-        const current = state.inviteLinksByRoom[roomId] || [];
+        const current =
+          state.inviteLinksByConversation[conversationId] || [];
         const next = current.map((item) =>
           item.id === linkId ? { ...item, revokedAt } : item,
         );
         return {
-          inviteLinksByRoom: {
-            ...state.inviteLinksByRoom,
-            [roomId]: next,
+          inviteLinksByConversation: {
+            ...state.inviteLinksByConversation,
+            [conversationId]: next,
           },
         };
       });
     },
 
-    upsertJoinRequest: (roomId, request) => {
-      if (!roomId || !request?.id) return;
+    upsertJoinRequest: (conversationId, request) => {
+      if (!conversationId || !request?.id) return;
 
       set((state) => {
-        const current = state.joinRequestsByRoom[roomId] || [];
+        const current =
+          state.joinRequestsByConversation[conversationId] || [];
         const existingIdx = current.findIndex((item) => item.id === request.id);
         const next =
           existingIdx >= 0
@@ -160,29 +177,30 @@ export const useGroupStore = create<GroupStoreState>()(
             : [request, ...current];
 
         return {
-          joinRequestsByRoom: {
-            ...state.joinRequestsByRoom,
-            [roomId]: next,
+          joinRequestsByConversation: {
+            ...state.joinRequestsByConversation,
+            [conversationId]: next,
           },
         };
       });
     },
 
-    setJoinRequests: (roomId, requests) => {
-      if (!roomId) return;
+    setJoinRequests: (conversationId, requests) => {
+      if (!conversationId) return;
       set((state) => ({
-        joinRequestsByRoom: {
-          ...state.joinRequestsByRoom,
-          [roomId]: Array.isArray(requests) ? requests : [],
+        joinRequestsByConversation: {
+          ...state.joinRequestsByConversation,
+          [conversationId]: Array.isArray(requests) ? requests : [],
         },
       }));
     },
 
-    markJoinRequestResolved: (roomId, requestId, status) => {
-      if (!roomId || !requestId) return;
+    markJoinRequestResolved: (conversationId, requestId, status) => {
+      if (!conversationId || !requestId) return;
 
       set((state) => {
-        const current = state.joinRequestsByRoom[roomId] || [];
+        const current =
+          state.joinRequestsByConversation[conversationId] || [];
         const next = current.map((item) =>
           item.id === requestId
             ? { ...item, status, resolvedAt: new Date().toISOString() }
@@ -190,33 +208,35 @@ export const useGroupStore = create<GroupStoreState>()(
         );
 
         return {
-          joinRequestsByRoom: {
-            ...state.joinRequestsByRoom,
-            [roomId]: next,
+          joinRequestsByConversation: {
+            ...state.joinRequestsByConversation,
+            [conversationId]: next,
           },
         };
       });
     },
 
-    removeJoinRequest: (roomId, requestId) => {
-      if (!roomId || !requestId) return;
+    removeJoinRequest: (conversationId, requestId) => {
+      if (!conversationId || !requestId) return;
       set((state) => {
-        const current = state.joinRequestsByRoom[roomId] || [];
+        const current =
+          state.joinRequestsByConversation[conversationId] || [];
         return {
-          joinRequestsByRoom: {
-            ...state.joinRequestsByRoom,
-            [roomId]: current.filter((item) => item.id !== requestId),
+          joinRequestsByConversation: {
+            ...state.joinRequestsByConversation,
+            [conversationId]: current.filter((item) => item.id !== requestId),
           },
         };
       });
     },
 
-    bumpMemberListVersion: (roomId) => {
-      if (!roomId) return;
+    bumpMemberListVersion: (conversationId) => {
+      if (!conversationId) return;
       set((state) => ({
-        memberListVersionByRoom: {
-          ...state.memberListVersionByRoom,
-          [roomId]: (state.memberListVersionByRoom[roomId] || 0) + 1,
+        memberListVersionByConversation: {
+          ...state.memberListVersionByConversation,
+          [conversationId]:
+            (state.memberListVersionByConversation[conversationId] || 0) + 1,
         },
       }));
     },

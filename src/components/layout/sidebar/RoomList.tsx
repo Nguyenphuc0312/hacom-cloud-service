@@ -48,7 +48,7 @@ interface RowData {
   layoutState: ChatLayoutState;
   currentUser: UserSummary;
   currentConversationId: string | null;
-  keyboardActiveRoomId: string | null;
+  keyboardActiveConversationId: string | null;
   onSelect: (conversationId: string) => void;
 }
 
@@ -70,10 +70,10 @@ const measureViewportHeight = (node: HTMLDivElement): number => {
   return 0;
 };
 
-const isRoomActive = (
-  roomId: string,
+const isConversationActive = (
+  conversationId: string,
   currentConversationId: string | null,
-): boolean => currentConversationId === roomId;
+): boolean => currentConversationId === conversationId;
 
 const Row = ({ index, style, data }: ListChildComponentProps<RowData>) => {
   const item = data.items[index];
@@ -87,8 +87,13 @@ const Row = ({ index, style, data }: ListChildComponentProps<RowData>) => {
         conversationId={item.conversationId}
         layoutState={data.layoutState}
         currentUser={data.currentUser}
-        isActive={isRoomActive(item.conversationId, data.currentConversationId)}
-        isKeyboardActive={data.keyboardActiveRoomId === item.conversationId}
+        isActive={isConversationActive(
+          item.conversationId,
+          data.currentConversationId,
+        )}
+        isKeyboardActive={
+          data.keyboardActiveConversationId === item.conversationId
+        }
         onSelect={data.onSelect}
       />
     </div>
@@ -146,11 +151,11 @@ export const RoomList: React.FC<RoomListProps> = ({
     [flatItems],
   );
 
-  const selectedRoomPosition = useMemo(() => {
+  const selectedConversationPosition = useMemo(() => {
     if (!selectedId) return -1;
     return roomIndexes.findIndex((listIndex) => {
       const item = flatItems[listIndex];
-      return item && isRoomActive(item.conversationId, selectedId);
+      return item && isConversationActive(item.conversationId, selectedId);
     });
   }, [flatItems, roomIndexes, selectedId]);
 
@@ -162,19 +167,19 @@ export const RoomList: React.FC<RoomListProps> = ({
   const currentCursor = useMemo(() => {
     if (roomIndexes.length === 0) return 0;
     if (isKeyboardMode) return clampedKeyboardCursor;
-    return selectedRoomPosition >= 0
-      ? selectedRoomPosition
+    return selectedConversationPosition >= 0
+      ? selectedConversationPosition
       : clampedKeyboardCursor;
   }, [
     clampedKeyboardCursor,
     isKeyboardMode,
     roomIndexes.length,
-    selectedRoomPosition,
+    selectedConversationPosition,
   ]);
 
   const rowData = useMemo<RowData>(() => {
     const keyboardListIndex = roomIndexes[currentCursor];
-    const keyboardActiveRoomId =
+    const keyboardActiveConversationId =
       typeof keyboardListIndex === "number"
         ? flatItems[keyboardListIndex]?.conversationId ?? null
         : null;
@@ -184,7 +189,9 @@ export const RoomList: React.FC<RoomListProps> = ({
       layoutState,
       currentUser,
       currentConversationId: selectedId,
-      keyboardActiveRoomId: isKeyboardMode ? keyboardActiveRoomId : null,
+      keyboardActiveConversationId: isKeyboardMode
+        ? keyboardActiveConversationId
+        : null,
       onSelect: handleSelect,
     };
   }, [
@@ -431,7 +438,7 @@ export const RoomList: React.FC<RoomListProps> = ({
                 conversationId={item.conversationId}
                 layoutState={layoutState}
                 currentUser={currentUser}
-                isActive={isRoomActive(item.conversationId, selectedId)}
+                isActive={isConversationActive(item.conversationId, selectedId)}
                 isKeyboardActive={
                   isKeyboardMode &&
                   roomIndexes[currentCursor] === index

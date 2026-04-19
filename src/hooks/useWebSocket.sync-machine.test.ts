@@ -16,7 +16,9 @@ describe("useWebSocket sync machine", () => {
 
     const drained = drainPendingRoomSync(pending, joined, ["room-1"]);
 
-    expect(drained).toEqual([{ roomId: "room-1", strategy: "initial-sync" }]);
+    expect(drained).toEqual([
+      { conversationId: "room-1", strategy: "initial-sync" },
+    ]);
     expect(pending.has("room-1")).toBe(false);
   });
 
@@ -30,8 +32,8 @@ describe("useWebSocket sync machine", () => {
     const drained = drainPendingRoomSyncForResyncRequired(pending, joined);
 
     expect(drained).toEqual([
-      { roomId: "room-1", strategy: "reconnect" },
-      { roomId: "room-2", strategy: "reconnect" },
+      { conversationId: "room-1", strategy: "reconnect" },
+      { conversationId: "room-2", strategy: "reconnect" },
     ]);
     expect(pending.size).toBe(0);
   });

@@ -1,62 +1,74 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { apiGetMock } = vi.hoisted(() => ({
-  apiGetMock: vi.fn(),
+const { apiClientMock, authClientMock } = vi.hoisted(() => ({
+  apiClientMock: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+    request: vi.fn(),
+  },
+  authClientMock: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+    request: vi.fn(),
+  },
 }));
 
-vi.mock("../lib/axios", () => {
-  const noop = vi.fn();
-  return {
-    __esModule: true,
-    default: {
-      get: apiGetMock,
-      post: noop,
-      put: noop,
-      patch: noop,
-      delete: noop,
-    },
-    authClient: {
-      get: noop,
-      post: noop,
-      put: noop,
-      patch: noop,
-      delete: noop,
-    },
-  };
-});
+vi.mock("../lib/axios", () => ({
+  default: apiClientMock,
+  authClient: authClientMock,
+}));
 
-import { conversationApi, messageApi } from "./api";
+import { contactApi, messageApi } from "./api";
 
-describe("messageApi contract normalization", () => {
+describe("api contract", () => {
   beforeEach(() => {
-    apiGetMock.mockReset();
+    apiClientMock.get.mockReset();
+    apiClientMock.post.mockReset();
   });
 
-  it("normalizes unread payload to canonical unreadCount", async () => {
-    apiGetMock.mockResolvedValueOnce({
+  it("searchMessages sends canonical conversationId query parameter", async () => {
+    apiClientMock.get.mockResolvedValue({
       data: {
         success: true,
-        data: { count: 7 },
+        data: { messages: [], total: 0, page: 1, limit: 20 },
       },
     });
 
-    const response = await conversationApi.getUnreadCount("room-1");
+    await messageApi.searchMessages({
+      q: "hello",
+      conversationId: "conv-1",
+      page: 2,
+      limit: 20,
+    });
 
-    expect(response.data).toEqual({ unreadCount: 7 });
+    expect(apiClientMock.get).toHaveBeenCalledWith(
+      expect.stringContaining("/messages/search?q=hello&conversationId=conv-1&page=2&limit=20"),
+      expect.any(Object),
+    );
   });
 
-  it("normalizes pinned payload to canonical messages wrapper", async () => {
-    apiGetMock.mockResolvedValueOnce({
+  it("shareContact posts canonical conversationId only", async () => {
+    apiClientMock.post.mockResolvedValue({
       data: {
         success: true,
-        data: [{ id: "m-1", content: "hello" }],
+        data: null,
       },
     });
 
-    const response = await messageApi.getPinnedMessages("room-1");
+    await contactApi.shareContact({
+      contactUserId: "user-b",
+      conversationId: "conv-2",
+    });
 
-    expect(response.data).toEqual({
-      messages: [{ id: "m-1", content: "hello" }],
+    expect(apiClientMock.post).toHaveBeenCalledWith("/contacts/share", {
+      contactUserId: "user-b",
+      conversationId: "conv-2",
     });
   });
 });

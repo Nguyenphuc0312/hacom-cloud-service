@@ -266,6 +266,12 @@ const seedAuth = async (page: Page) => {
 };
 
 const installApiMocks = async (page: Page, state: MockState) => {
+  await page.route("**/api/v1/rooms/**", async (route) => {
+    throw new Error(
+      `Frontend should not call deprecated /rooms/* endpoints: ${route.request().url()}`,
+    );
+  });
+
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -320,7 +326,42 @@ const installApiMocks = async (page: Page, state: MockState) => {
     }
 
     if (pathname === "/api/v1/conversations" && method === "GET") {
-      await fulfillJson(success(state.conversations));
+      if (state.conversations.length > 0) {
+        await fulfillJson(success(state.conversations));
+        return;
+      }
+
+      const synthesizedAliasRows = Object.entries(state.messagesByConversation).map(
+        ([conversationId, messages]) => ({
+          roomId: conversationId,
+          type: "group",
+          name: `Alias ${conversationId}`,
+          displayName: `Alias ${conversationId}`,
+          unreadCount: 0,
+          membershipState: "active",
+          memberCount: 2,
+          summaryVersion: 1,
+          updatedAt:
+            messages.at(-1)?.updatedAt ?? iso("2026-04-16T09:00:00.000Z"),
+          createdAt:
+            messages[0]?.createdAt ?? iso("2026-04-16T09:00:00.000Z"),
+          lastActivityAt:
+            messages.at(-1)?.updatedAt ?? iso("2026-04-16T09:00:00.000Z"),
+          lastMessage: messages.at(-1)
+            ? toMessageSummary(messages.at(-1) as MockMessage)
+            : null,
+          participants: [
+            state.currentUser,
+            {
+              id: "user-b",
+              username: "bob",
+              displayName: "Bob",
+              status: "online",
+            },
+          ],
+        }),
+      );
+      await fulfillJson(success(synthesizedAliasRows));
       return;
     }
 
@@ -347,7 +388,45 @@ const installApiMocks = async (page: Page, state: MockState) => {
     if (conversationMatch && method === "GET") {
       const [, conversationId] = conversationMatch;
       const conversation = state.conversations.find((item) => item.id === conversationId);
-      await fulfillJson(success(conversation ?? null));
+      if (conversation) {
+        await fulfillJson(success(conversation));
+        return;
+      }
+
+      const aliasOnlyMessages = state.messagesByConversation[conversationId] ?? [];
+      if (aliasOnlyMessages.length > 0) {
+        await fulfillJson(
+          success({
+            roomId: conversationId,
+            type: "group",
+            name: `Alias ${conversationId}`,
+            displayName: `Alias ${conversationId}`,
+            unreadCount: 0,
+            membershipState: "active",
+            memberCount: 2,
+            summaryVersion: 1,
+            updatedAt: aliasOnlyMessages.at(-1)?.updatedAt ?? iso("2026-04-16T09:00:00.000Z"),
+            createdAt: aliasOnlyMessages[0]?.createdAt ?? iso("2026-04-16T09:00:00.000Z"),
+            lastActivityAt:
+              aliasOnlyMessages.at(-1)?.updatedAt ?? iso("2026-04-16T09:00:00.000Z"),
+            lastMessage: aliasOnlyMessages.at(-1)
+              ? toMessageSummary(aliasOnlyMessages.at(-1) as MockMessage)
+              : null,
+            participants: [
+              state.currentUser,
+              {
+                id: "user-b",
+                username: "bob",
+                displayName: "Bob",
+                status: "online",
+              },
+            ],
+          }),
+        );
+        return;
+      }
+
+      await fulfillJson(success(null));
       return;
     }
 
@@ -614,6 +693,40 @@ test("conversation with unread bootstraps from server unread feed and lands on f
   await expect(page.getByText("First unread from server")).toBeVisible();
   await expect(page.getByText("Read before anchor")).toBeVisible();
   expect(state.unreadFeedHits).toBeGreaterThan(0);
+});
+
+test("compat conversation payload with roomId only is normalized at the boundary without using /rooms routes", async ({
+  page,
+}) => {
+  const state: MockState = {
+    currentUser: {
+      id: "user-a",
+      username: "alice",
+      displayName: "Alice",
+      status: "online",
+    },
+    conversations: [],
+    messagesByConversation: {
+      "alias-only-conv": [
+        makeMessage({
+          id: "seed-alias",
+          conversationId: "alias-only-conv",
+          content: "Canonical message after alias normalization",
+        }),
+      ],
+    },
+    sentPayloads: [],
+    unreadFeedHits: 0,
+  };
+
+  await bootChatPage(page, state, "/chat/alias-only-conv");
+
+  await expect(
+    page.getByRole("heading", { name: "Alias alias-only-conv" }),
+  ).toBeVisible();
+  await expect(page.getByTestId("message-item-seed-alias")).toContainText(
+    "Canonical message after alias normalization",
+  );
 });
 
 test("profile panel follows the active direct conversation instead of keeping stale user context", async ({ page }) => {

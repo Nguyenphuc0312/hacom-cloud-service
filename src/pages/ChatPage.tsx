@@ -33,6 +33,10 @@ import type { PreviewTarget } from "../hooks/useFilePreview";
 import { getPreviewType } from "../utils/formatFileSize";
 import { UserStatus } from "../types";
 import { isDirectConversation } from "../lib/conversationAdapter";
+import {
+  resolveConversationId,
+  warnConversationIdentityMismatch,
+} from "../lib/conversationIdentity";
 import { getOtherParticipant } from "../utils/messageHelpers";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import { logMessageDebug } from "../utils/messageDebug";
@@ -179,7 +183,13 @@ export const ChatPage: React.FC = () => {
   const typingStatus = useCurrentTypingStatus();
   const conversationCount = useConversationCount();
   // WebSocket
-  const { connectionState, sendTyping, stopTyping, joinRoom, leaveRoom } =
+  const {
+    connectionState,
+    sendTyping,
+    stopTyping,
+    joinConversation,
+    leaveConversation,
+  } =
     useWebSocket();
 
   // Local state
@@ -260,6 +270,10 @@ export const ChatPage: React.FC = () => {
   useEffect(() => {
     const storeSelectedConversationId =
       useChatStore.getState().selectedConversationId;
+    warnConversationIdentityMismatch("ChatPage.route_sync", {
+      routeConversationId,
+      activeConversationId: storeSelectedConversationId,
+    });
     if (storeSelectedConversationId !== routeConversationId) {
       if (shouldTraceRenderLoop) {
         logMessageDebug("ChatPage", "selected_conversation_sync", {
@@ -322,8 +336,8 @@ export const ChatPage: React.FC = () => {
     messageCount: conversationMessageCount,
     fetchMessages,
     markAsRead,
-    joinRoom,
-    leaveRoom,
+    joinConversation,
+    leaveConversation,
     stopTyping,
     sendTyping,
     updateConversation,
@@ -612,9 +626,12 @@ export const ChatPage: React.FC = () => {
           await loadConversationMutationUseCases();
         const response = await createPrivateConversationUseCase(userId);
         const payload = unwrapApiSuccess(response);
-        const conversationId = payload.id;
+        const conversationId = resolveConversationId(payload, {
+          source: "ChatPage.handleStartChat.createPrivateConversation",
+          includeEntityId: true,
+        });
         if (!conversationId) {
-          throw new Error(t("error:chat.roomIdMissing"));
+          throw new Error(t("error:chat.conversationIdMissing"));
         }
 
         // Refresh list to get full conversation shape (participants, display fields...)
@@ -632,12 +649,9 @@ export const ChatPage: React.FC = () => {
           apiError.details && typeof apiError.details === "object"
             ? (apiError.details as Record<string, unknown>)
             : null;
-        const existingConversationId =
-          details && typeof details.conversationId === "string"
-            ? details.conversationId
-            : details && typeof details.roomId === "string"
-              ? details.roomId
-              : null;
+        const existingConversationId = resolveConversationId(details, {
+          source: "ChatPage.handleStartChat.errorDetails",
+        });
 
         if (
           existingConversationId &&
@@ -691,9 +705,12 @@ export const ChatPage: React.FC = () => {
           memberIds: payload.memberIds,
         });
         const conversationPayload = unwrapApiSuccess(response);
-        const conversationId = conversationPayload.id;
+        const conversationId = resolveConversationId(conversationPayload, {
+          source: "ChatPage.handleCreateGroup.createGroupConversation",
+          includeEntityId: true,
+        });
         if (!conversationId) {
-          throw new Error(t("error:chat.roomIdMissing"));
+          throw new Error(t("error:chat.conversationIdMissing"));
         }
 
         fetchConversations().catch((error) => {

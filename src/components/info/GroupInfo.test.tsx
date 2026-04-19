@@ -43,7 +43,7 @@ vi.mock("../../services/api", async (importOriginal) => {
         data: {
           members: [
             {
-              roomId: "room-1",
+              conversationId: "room-1",
               userId: "user-1",
               role: "owner",
               joinedAt: new Date("2026-04-16T00:00:00.000Z"),
@@ -55,7 +55,7 @@ vi.mock("../../services/api", async (importOriginal) => {
               },
             },
             {
-              roomId: "room-1",
+              conversationId: "room-1",
               userId: "user-2",
               role: "member",
               joinedAt: new Date("2026-04-16T00:00:00.000Z"),

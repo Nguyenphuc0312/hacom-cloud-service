@@ -85,8 +85,8 @@ export const useMessages = ({
   const clearError = useChatStore((state) => state.clearError);
 
   const {
-    joinRoom,
-    leaveRoom,
+    joinConversation,
+    leaveConversation,
     sendTyping: wsSendTyping,
     stopTyping: wsStopTyping,
     emit,
@@ -102,7 +102,7 @@ export const useMessages = ({
         previousConversationRef.current &&
         previousConversationRef.current !== conversationId
       ) {
-        leaveRoom(previousConversationRef.current);
+        leaveConversation(previousConversationRef.current);
       }
 
       previousConversationRef.current = conversationId;
@@ -116,7 +116,7 @@ export const useMessages = ({
         }
 
         if (!cancelled) {
-          joinRoom(conversationId, { skipInitialDeltaSync });
+          joinConversation(conversationId, { skipInitialDeltaSync });
         }
       })();
     }
@@ -124,13 +124,13 @@ export const useMessages = ({
     return () => {
       cancelled = true;
       if (conversationId) {
-        leaveRoom(conversationId);
+        leaveConversation(conversationId);
       }
     };
   }, [
     conversationId,
-    joinRoom,
-    leaveRoom,
+    joinConversation,
+    leaveConversation,
     autoLoad,
     fetchMessages,
     hasNewerMessages,

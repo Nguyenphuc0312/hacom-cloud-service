@@ -24,10 +24,6 @@ interface UseMessageSearchOptions {
   limit?: number;
   /** Optional conversation ID to scope search */
   conversationId?: string;
-  /**
-   * @deprecated Use conversationId.
-   */
-  roomId?: string;
 }
 
 interface UseMessageSearchReturn {
@@ -65,7 +61,7 @@ export const useMessageSearch = (
   options: UseMessageSearchOptions = {},
 ): UseMessageSearchReturn => {
   const { debounceMs = 400, limit = 20 } = options;
-  const conversationId = options.conversationId ?? options.roomId;
+  const conversationId = options.conversationId;
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Message[]>([]);

@@ -255,14 +255,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const removeConversation = useChatStore((state) => state.removeConversation);
   const loadMembersFailedMessage = t("profile:toast.loadMembersFailed");
   const inviteLinks = useGroupStore(
-    (state) => state.inviteLinksByRoom[conversation.id] ?? EMPTY_INVITE_LINKS,
+    (state) =>
+      state.inviteLinksByConversation[conversation.id] ?? EMPTY_INVITE_LINKS,
   );
   const joinRequests = useGroupStore(
     (state) =>
-      state.joinRequestsByRoom[conversation.id] ?? EMPTY_JOIN_REQUESTS,
+      state.joinRequestsByConversation[conversation.id] ?? EMPTY_JOIN_REQUESTS,
   );
   const memberListVersion = useGroupStore(
-    (state) => state.memberListVersionByRoom[conversation.id] || 0,
+    (state) => state.memberListVersionByConversation[conversation.id] || 0,
   );
   const upsertInviteLink = useGroupStore((state) => state.upsertInviteLink);
   const setInviteLinks = useGroupStore((state) => state.setInviteLinks);
@@ -461,9 +462,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
               items.push({
                 id: item.id,
-                roomId:
-                  asString(item.roomId) ??
+                conversationId:
                   asString(item.conversationId) ??
+                  asString(item.roomId) ??
                   conversation.id,
                 name: asString(item.name),
                 inviteUrl: asString(item.inviteUrl),
@@ -504,9 +505,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
               items.push({
                 id: item.id,
-                roomId:
-                  asString(item.roomId) ??
+                conversationId:
                   asString(item.conversationId) ??
+                  asString(item.roomId) ??
                   conversation.id,
                 userId: asString(item.userId) ?? "",
                 status,
@@ -738,7 +739,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
       upsertInviteLink(conversation.id, {
         id,
-        roomId: conversation.id,
+        conversationId: conversation.id,
         name: typeof payload.name === "string" ? payload.name : undefined,
         inviteUrl:
           typeof payload.inviteUrl === "string" ? payload.inviteUrl : undefined,
