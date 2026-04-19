@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type {
   FriendshipCapabilitiesDto,
   FriendshipRelationDto,
-} from "@hacom/chat-shared-types";
-import { FriendshipStatus } from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/chat";
+import { FriendshipStatus } from "@hacom/chat-shared-types/chat";
 import {
   deriveRelationshipState,
   useFriendshipStore,

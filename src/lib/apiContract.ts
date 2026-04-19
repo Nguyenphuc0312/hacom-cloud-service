@@ -4,7 +4,7 @@ import {
   ErrorCode,
   type ApiFailure,
   type ApiResponse,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/core";
 
 interface ApiContractErrorOptions {
   statusCode: number;

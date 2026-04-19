@@ -12,7 +12,7 @@ import {
 import {
   QrLoginSessionStatus,
   type LoginResponse,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/auth";
 import { Button } from "../ui";
 import { extractApiError } from "../../lib/apiContract";
 import { qrLoginService } from "../../services/qrLoginService";

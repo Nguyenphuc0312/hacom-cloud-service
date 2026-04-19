@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { ErrorCode } from "@hacom/chat-shared-types";
+import { ErrorCode } from "@hacom/chat-shared-types/core";
 import { useChatStore, useGroupStore } from "../../../stores";
 import { extractApiError } from "../../../lib/apiContract";
 import { logMessageDebug } from "../../../utils/messageDebug";

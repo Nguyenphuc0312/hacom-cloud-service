@@ -1,4 +1,4 @@
-import { ErrorCode } from "@hacom/chat-shared-types";
+import { ErrorCode } from "@hacom/chat-shared-types/core";
 
 export type AuthStatus =
   | "idle"

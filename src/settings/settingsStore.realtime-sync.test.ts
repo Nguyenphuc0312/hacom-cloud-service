@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { UserSettingsUpdatedPayload } from "@hacom/chat-shared-types";
+import type { UserSettingsUpdatedPayload } from "@hacom/chat-shared-types/chat";
 import { defaultSettings } from "./defaults";
 import type { SettingsSchema } from "./types";
 

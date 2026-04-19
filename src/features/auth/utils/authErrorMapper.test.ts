@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ErrorCode } from "@hacom/chat-shared-types";
+import { ErrorCode } from "@hacom/chat-shared-types/core";
 import { resolveAuthFailure } from "./authErrorMapper";
 
 const createAxiosApiFailure = (

@@ -6,7 +6,7 @@ import { Modal, Input, Button, Spinner } from "../ui";
 import { Avatar } from "../common/Avatar";
 import { useDebounce } from "../../hooks/useDebounce";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
-import type { PublicUserSummary } from "@hacom/chat-shared-types";
+import type { PublicUserSummary } from "@hacom/chat-shared-types/auth";
 import { searchUsersUseCase } from "../../features/chat/usecases/searchUsers";
 
 type TabKey = "my" | "choose";

@@ -9,7 +9,7 @@ import apiClient, {
   resetAuthFailureState,
   setAuthFailureHandler,
 } from "../lib/axios";
-import { ErrorCode, type ApiResponse } from "@hacom/chat-shared-types";
+import { ErrorCode, type ApiResponse } from "@hacom/chat-shared-types/core";
 import type { LoginFormData, RegisterFormData } from "../lib/validations";
 import {
   getAccessToken,

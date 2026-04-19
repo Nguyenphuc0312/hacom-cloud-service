@@ -7,22 +7,26 @@ import apiClient, { authClient } from "../lib/axios";
 import axios from "axios";
 import type {
   ApiResponse,
+} from "@hacom/chat-shared-types/core";
+import type {
+  LoginResponse,
+  RefreshTokenResponse,
+  RegisterResponseDto,
+} from "@hacom/chat-shared-types/auth";
+import type {
   CompleteUploadResponse,
   CreateMessageResponse,
   FriendshipCapabilitiesDto,
   FriendshipPendingCountDto,
+  FriendshipRelationDto,
   FriendshipStatusResponseDto,
   FriendshipWriteResponseDto,
-  FriendshipRelationDto,
   GetDownloadUrlResponse,
-  LoginResponse,
-  RefreshTokenResponse,
-  RegisterResponseDto,
   ConversationReadStateDto,
   RoomMessagesResponse,
   UnreadFeedResponseDto,
   UploadSignedUrlResponse,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/chat";
 import type { User } from "../stores/authStore";
 import type { Attachment, Conversation, Message } from "../types";
 import { RoomMemberRole } from "../types";

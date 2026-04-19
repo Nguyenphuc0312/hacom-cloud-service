@@ -1,4 +1,4 @@
-import type { FriendshipRelationDto } from "@hacom/chat-shared-types";
+import type { FriendshipRelationDto } from "@hacom/chat-shared-types/chat";
 
 const friendshipRealtimeListeners = new Set<
   (detail: FriendshipRealtimeDetail) => void

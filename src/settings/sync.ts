@@ -13,11 +13,11 @@
  */
 
 import apiClient from "../lib/axios";
+import type { ApiResponse } from "@hacom/chat-shared-types/core";
 import type {
-  ApiResponse,
-  SettingsResponseDto,
   SettingsPatchDto,
-} from "@hacom/chat-shared-types";
+  SettingsResponseDto,
+} from "@hacom/chat-shared-types/chat";
 import type { SettingsSchema } from "./types";
 import { getAccessToken } from "../services/tokenService";
 import { triggerSettingsConflictSync } from "./settingsSyncBridge";

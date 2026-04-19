@@ -12,7 +12,7 @@ import {
   ChatBubbleLeftRightIcon,
   NoSymbolIcon,
 } from "@heroicons/react/24/outline";
-import type { FriendshipRelationDto } from "@hacom/chat-shared-types";
+import type { FriendshipRelationDto } from "@hacom/chat-shared-types/chat";
 import { Avatar } from "../common/Avatar";
 import { Button, ConfirmDialog, Input, Modal, Spinner, toast } from "../ui";
 import { useAuthStore } from "../../stores";

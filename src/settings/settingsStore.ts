@@ -14,7 +14,7 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import type { SettingsSchema, SettingsPatch, SettingsSection } from "./types";
-import type { UserSettingsUpdatedPayload } from "@hacom/chat-shared-types";
+import type { UserSettingsUpdatedPayload } from "@hacom/chat-shared-types/chat";
 import { defaultSettings } from "./defaults";
 import { loadSettings, saveSettings } from "./persistence";
 import { syncSettingsToServer, fetchSettingsFromServer } from "./sync";

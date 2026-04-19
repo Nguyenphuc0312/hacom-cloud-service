@@ -8,44 +8,48 @@ export type {
   UserSummary,
   UserProfile,
   UserPresence,
-  MessageSummary,
-  Attachment,
-  Reaction,
-  ForwardInfo,
-  MessageMetadata,
-  Room,
-  RoomSettings,
-  RoomSummary,
-  RoomMember,
-} from "@hacom/chat-shared-types";
-
-// Re-export shared enums
-export {
-  UserStatus,
-  MessageType,
-  MessageStatus,
-  ConversationType,
-  RoomType,
-  RoomMemberRole,
-  FileType,
-  EventType,
-} from "@hacom/chat-shared-types";
-
-// Re-export shared DTOs
-export type {
-  SendMessageDto,
-  EditMessageDto,
-  GetMessagesDto,
-  MessagesListResponseDto,
-  CreateRoomDto,
-  UpdateRoomDto,
   LoginDto,
   RegisterDto,
   AuthResponseDto,
   SearchUsersDto,
   UpdateUserDto,
   UpdateUserStatusDto,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/auth";
+
+export type {
+  MessageSummary,
+  Attachment,
+  Reaction,
+  ForwardInfo,
+  MessageMetadata,
+  SendMessageDto,
+  EditMessageDto,
+  GetMessagesDto,
+  MessagesListResponseDto,
+} from "@hacom/chat-shared-types/chat";
+
+export type {
+  Room,
+  RoomSettings,
+  RoomSummary,
+  RoomMember,
+  CreateRoomDto,
+  UpdateRoomDto,
+} from "@hacom/chat-shared-types/compat";
+
+// Re-export shared enums
+export { UserStatus } from "@hacom/chat-shared-types/core";
+export {
+  MessageType,
+  MessageStatus,
+  ConversationType,
+  FileType,
+} from "@hacom/chat-shared-types/chat";
+export {
+  RoomType,
+  RoomMemberRole,
+  EventType,
+} from "@hacom/chat-shared-types/compat";
 
 // Re-export shared API utility types
 export type {
@@ -58,7 +62,7 @@ export type {
   CursorMeta,
   PaginationParams,
   PaginatedResponse,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/core";
 
 // Re-export shared WebSocket payload types
 export type {
@@ -66,14 +70,16 @@ export type {
   MessageUpdateEvent,
   MessageDeletedEvent,
   MessageReactionEvent,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/ws";
 
 import type {
   Conversation as SharedConversation,
   ConversationDetail as SharedConversationDetail,
+  Message as SharedMessage,
   TypingUser as SharedTypingUser,
-  User,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/chat";
+import { MessageStatus as SharedMessageStatus } from "@hacom/chat-shared-types/chat";
+import type { User, UserSummary as SharedUserSummary } from "@hacom/chat-shared-types/auth";
 
 export interface TypingUser extends SharedTypingUser {}
 
@@ -87,7 +93,7 @@ export type Conversation = Omit<
   lastActivityAt?: Date | string | null;
   displayName?: string;
   displayAvatar?: string | null;
-  otherUser?: import("@hacom/chat-shared-types").UserSummary | null;
+  otherUser?: SharedUserSummary | null;
   directKey?: string | null;
   currentUserId?: string;
   updatedAt: Date;
@@ -140,10 +146,7 @@ export interface SendMessageResult {
   messageId: string;
 }
 
-export interface Message extends Omit<
-  import("@hacom/chat-shared-types").Message,
-  "id" | "status"
-> {
+export interface Message extends Omit<SharedMessage, "id" | "status"> {
   id: string;
   localId?: string;
   stableId?: string;
@@ -165,7 +168,7 @@ export interface Message extends Omit<
   sendAttempts?: number;
   lastSendAttemptAt?: Date;
   updatedAt?: Date;
-  status: import("@hacom/chat-shared-types").MessageStatus | "uploading";
+  status: SharedMessageStatus | "uploading";
 }
 
 export interface TypingStatus {

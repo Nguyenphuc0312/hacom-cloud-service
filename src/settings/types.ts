@@ -1,7 +1,7 @@
 /**
  * @fileoverview Settings data model (schema, types, versioning)
  *
- * Re-exports canonical types from @hacom/chat-shared-types for type-safety,
+ * Re-exports canonical settings types from @hacom/chat-shared-types/chat,
  * and adds frontend-specific helpers (SettingsPatch, SettingsSection).
  *
  * Mỗi section (appearance, notifications, privacy, chat) là một object con
@@ -28,13 +28,13 @@ export type {
   SettingsResponseDto,
   SettingsUpdateResponseDto,
   UserSettingsUpdatedPayload,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/chat";
 
 // ============================================
 // FRONTEND-SPECIFIC HELPERS
 // ============================================
 
-import type { SettingsSchema, LanguageCode } from "@hacom/chat-shared-types";
+import type { LanguageCode, SettingsSchema } from "@hacom/chat-shared-types/chat";
 
 /** Deep-partial variant so consumers can patch a single field */
 export type SettingsPatch = {

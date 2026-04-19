@@ -16,7 +16,7 @@ import {
   getAccessToken as getStoredAccessToken,
   updateAccessToken,
 } from "../services/tokenService";
-import { WsEventNames } from "@hacom/chat-shared-types";
+import { WsEventNames } from "@hacom/chat-shared-types/ws";
 import {
   getJwtExpirationMs,
   isJwtLike,

@@ -1,4 +1,4 @@
-import type { ApiResponse } from "@hacom/chat-shared-types";
+import type { ApiResponse } from "@hacom/chat-shared-types/core";
 import { authClient } from "../../../lib/axios";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
 import { AUTH_ENDPOINTS } from "../../../lib/authEndpoints";

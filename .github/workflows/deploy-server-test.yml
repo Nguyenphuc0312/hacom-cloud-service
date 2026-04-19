@@ -48,13 +48,13 @@ jobs:
             chat-web-client/package-lock.json
             chat-shared-types/package-lock.json
 
-      - name: Build shared types
+      - name: Build and verify shared types contracts
         shell: bash
         run: |
           set -Eeuo pipefail
           cd ./chat-shared-types
           npm ci --no-audit --no-fund
-          npm run build
+          npm run contract:check
 
       - name: Install frontend dependencies
         shell: bash

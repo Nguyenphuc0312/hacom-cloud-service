@@ -79,4 +79,135 @@ describe("canonical frontend contract boundaries", () => {
 
     expect(violations).toEqual([]);
   });
+
+  it("keeps the frontend type hub off the shared-types root umbrella surface", () => {
+    const typeHub = fs.readFileSync(path.join(SOURCE_ROOT, "types", "index.ts"), "utf8");
+
+    expect(typeHub).not.toContain('@hacom/chat-shared-types";');
+    expect(typeHub).not.toContain("@hacom/chat-shared-types';");
+    expect(typeHub).not.toContain('import("@hacom/chat-shared-types")');
+    expect(typeHub).toContain('@hacom/chat-shared-types/core');
+    expect(typeHub).toContain('@hacom/chat-shared-types/auth');
+    expect(typeHub).toContain('@hacom/chat-shared-types/chat');
+    expect(typeHub).toContain('@hacom/chat-shared-types/ws');
+    expect(typeHub).toContain('@hacom/chat-shared-types/compat');
+  });
+
+  it("keeps migrated frontend low-risk consumers on subpath imports only", () => {
+    const rootImportPattern =
+      /from\s+['"]@hacom\/chat-shared-types['"]|import\(['"]@hacom\/chat-shared-types['"]\)/;
+    const cases = [
+      {
+        file: "lib/apiContract.ts",
+        expectedSubpaths: ["@hacom/chat-shared-types/core"],
+      },
+      {
+        file: "services/api.ts",
+        expectedSubpaths: [
+          "@hacom/chat-shared-types/core",
+          "@hacom/chat-shared-types/auth",
+          "@hacom/chat-shared-types/chat",
+        ],
+      },
+      {
+        file: "features/auth/api/authApi.ts",
+        expectedSubpaths: ["@hacom/chat-shared-types/core"],
+      },
+      {
+        file: "stores/authStore.ts",
+        expectedSubpaths: ["@hacom/chat-shared-types/core"],
+      },
+      {
+        file: "hooks/usePresence.ts",
+        expectedSubpaths: ["@hacom/chat-shared-types/ws"],
+      },
+      {
+        file: "lib/socket.ts",
+        expectedSubpaths: ["@hacom/chat-shared-types/ws"],
+      },
+      {
+        file: "services/qrLoginService.ts",
+        expectedSubpaths: [
+          "@hacom/chat-shared-types/core",
+          "@hacom/chat-shared-types/auth",
+        ],
+      },
+      {
+        file: "features/auth/utils/authErrorMapper.ts",
+        expectedSubpaths: ["@hacom/chat-shared-types/core"],
+      },
+      {
+        file: "features/auth/model/authState.ts",
+        expectedSubpaths: ["@hacom/chat-shared-types/core"],
+      },
+      {
+        file: "hooks/useFriendship.ts",
+        expectedSubpaths: [
+          "@hacom/chat-shared-types/core",
+          "@hacom/chat-shared-types/chat",
+        ],
+      },
+      {
+        file: "stores/friendshipStore.ts",
+        expectedSubpaths: ["@hacom/chat-shared-types/chat"],
+      },
+      {
+        file: "features/chat/realtime/friendshipRealtime.ts",
+        expectedSubpaths: ["@hacom/chat-shared-types/chat"],
+      },
+      {
+        file: "components/friends/FriendQrWorkspace.tsx",
+        expectedSubpaths: ["@hacom/chat-shared-types/chat"],
+      },
+      {
+        file: "components/auth/QrLoginPanel.tsx",
+        expectedSubpaths: ["@hacom/chat-shared-types/auth"],
+      },
+      {
+        file: "components/modals/ShareContactModal.tsx",
+        expectedSubpaths: ["@hacom/chat-shared-types/auth"],
+      },
+      {
+        file: "pages/VerifyEmailPage.tsx",
+        expectedSubpaths: ["@hacom/chat-shared-types/core"],
+      },
+      {
+        file: "pages/ChatPage.tsx",
+        expectedSubpaths: ["@hacom/chat-shared-types/core"],
+      },
+      {
+        file: "features/chat/hooks/useSendMessage.ts",
+        expectedSubpaths: ["@hacom/chat-shared-types/core"],
+      },
+      {
+        file: "hooks/useWebSocket.ts",
+        expectedSubpaths: ["@hacom/chat-shared-types/chat"],
+      },
+      {
+        file: "features/auth/utils/authErrorMapper.test.ts",
+        expectedSubpaths: ["@hacom/chat-shared-types/core"],
+      },
+      {
+        file: "hooks/useFriendship.mapping.test.ts",
+        expectedSubpaths: ["@hacom/chat-shared-types/chat"],
+      },
+      {
+        file: "stores/friendshipStore.realtime-qr.test.ts",
+        expectedSubpaths: ["@hacom/chat-shared-types/chat"],
+      },
+      {
+        file: "components/friends/FriendQrWorkspace.test.tsx",
+        expectedSubpaths: ["@hacom/chat-shared-types/chat"],
+      },
+    ] as const;
+
+    for (const entry of cases) {
+      const source = fs.readFileSync(path.join(SOURCE_ROOT, entry.file), "utf8");
+
+      expect(source).not.toMatch(rootImportPattern);
+      for (const subpath of entry.expectedSubpaths) {
+        expect(source).toContain(subpath);
+      }
+    }
+  });
 });

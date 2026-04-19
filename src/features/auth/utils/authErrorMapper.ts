@@ -1,5 +1,5 @@
 import axios from "axios";
-import { ErrorCode, type ApiFailure } from "@hacom/chat-shared-types";
+import { ErrorCode, type ApiFailure } from "@hacom/chat-shared-types/core";
 import type {
   ActivationContext,
   ActivationNextAction,

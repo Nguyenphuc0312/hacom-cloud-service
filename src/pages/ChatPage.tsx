@@ -40,7 +40,7 @@ import {
 import { getOtherParticipant } from "../utils/messageHelpers";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import { logMessageDebug } from "../utils/messageDebug";
-import { ErrorCode } from "@hacom/chat-shared-types";
+import { ErrorCode } from "@hacom/chat-shared-types/core";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import { useSendMessage } from "../features/chat/hooks/useSendMessage";
 import { useConversationSession } from "../features/chat/hooks/useConversationSession";

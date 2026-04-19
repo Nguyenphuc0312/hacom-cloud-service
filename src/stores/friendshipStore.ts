@@ -5,7 +5,7 @@ import type {
   FriendshipCapabilitiesDto,
   FriendshipRelationDto,
   FriendshipStatus,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/chat";
 import { friendshipApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import type { User } from "./authStore";

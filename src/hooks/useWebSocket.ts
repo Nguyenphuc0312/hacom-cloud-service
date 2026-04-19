@@ -61,6 +61,7 @@ import { getConversationByIdUseCase } from "../features/chat/usecases/getConvers
 import { useSettingsStore } from "../settings/settingsStore";
 import type { Conversation } from "../types";
 import { useNotificationStore } from "../features/notification/state/notificationStore";
+import type { UserSettingsUpdatedPayload } from "@hacom/chat-shared-types/chat";
 
 interface UseWebSocketOptions {
   autoConnect?: boolean;
@@ -2299,9 +2300,9 @@ export const useWebSocket = (
       useSettingsStore
         .getState()
         .applyRemoteUpdate(
-          payload as unknown as import("@hacom/chat-shared-types").UserSettingsUpdatedPayload,
-        );
-    };
+          payload as unknown as UserSettingsUpdatedPayload,
+          );
+      };
 
     const unsubscribeSyncEvents = registerSyncEvents(socket, {
       onConversationResynced: handleConversationResynced,

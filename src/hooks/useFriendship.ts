@@ -5,11 +5,11 @@
 
 import { useCallback, useEffect } from "react";
 import type {
-  ApiResponse,
   FriendshipActorRole,
   FriendshipCapabilitiesDto,
   FriendshipRelationDto,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/chat";
+import type { ApiResponse } from "@hacom/chat-shared-types/core";
 import { friendshipApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import { useAuthStore, type User } from "../stores";
