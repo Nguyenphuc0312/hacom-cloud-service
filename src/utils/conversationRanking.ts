@@ -215,8 +215,9 @@ export const getConversationRankBreakdown = (
 
 export const rankConversations = (
   conversations: Conversation[] | null | undefined,
-  _context: ConversationRankContext = {},
+  context: ConversationRankContext = {},
 ): Conversation[] => {
+  void context;
   return sortConversationsByActivity(conversations);
 };
 

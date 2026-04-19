@@ -22,14 +22,17 @@ export const useInViewport = <T extends Element>(
 
   useEffect(() => {
     if (!enabled) {
-      setIsVisible(false);
       return;
     }
 
     const node = target.current;
     if (!node || typeof IntersectionObserver === "undefined") {
-      setIsVisible(true);
-      return;
+      const rafId = requestAnimationFrame(() => {
+        setIsVisible(true);
+      });
+      return () => {
+        cancelAnimationFrame(rafId);
+      };
     }
 
     const observer = new IntersectionObserver(
@@ -60,7 +63,7 @@ export const useInViewport = <T extends Element>(
     };
   }, [enabled, once, rootMargin, target, threshold]);
 
-  return isVisible;
+  return enabled ? isVisible : false;
 };
 
 export default useInViewport;

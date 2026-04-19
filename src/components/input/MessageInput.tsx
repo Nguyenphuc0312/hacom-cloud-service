@@ -13,11 +13,11 @@ import { ShareContactModal } from "../modals/ShareContactModal";
 import { ConversationLane } from "../layout/ConversationLane";
 import {
   useAutoResizeTextarea,
-  useSendMessage,
   useTypingIndicator,
 } from "../../hooks";
+import { useSendMessage } from "../../features/chat/hooks/useSendMessage";
 import type { ComposerMode } from "../../hooks/useComposerAvailability";
-import type { AttachmentPickerMode } from "../../hooks/useSendMessage";
+import type { AttachmentPickerMode } from "../../features/chat/hooks/useSendMessage";
 import type { InputMode, Message } from "../../types";
 import type { AttachmentDraft } from "../../types/attachmentDraft";
 import { UPLOAD_CONFIG } from "../../config";
@@ -472,9 +472,11 @@ export const MessageInput = React.forwardRef<
         ? t("chat:composer.failedAnnouncement")
         : result === "queued"
           ? t("chat:composer.queuedAnnouncement")
+          : result === "optimistic"
+            ? optimisticAnnouncement
           : t("chat:composer.sentAnnouncement"),
     );
-  }, [sendAttachmentMessage, t]);
+  }, [optimisticAnnouncement, sendAttachmentMessage, t]);
 
   const handlePrimarySend = React.useCallback(async () => {
     // Multi-file queue path: send text (attachments handled by ChatWindow)

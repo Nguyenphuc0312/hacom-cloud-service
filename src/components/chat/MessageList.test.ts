@@ -4,7 +4,7 @@ import {
   resolveTimelineMessageRenderState,
   resolveScrollCommandPriority,
   shouldAcceptScrollCommand,
-} from "./MessageList";
+} from "./messageListShared";
 import { MessageStatus, MessageType } from "../../types";
 import type { TimelineItem } from "../../hooks/useMessageGrouping";
 

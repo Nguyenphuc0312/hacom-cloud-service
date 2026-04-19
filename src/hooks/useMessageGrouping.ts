@@ -35,6 +35,11 @@ interface GroupingSnapshot {
   unreadMarker?: UnreadTimelineMarker | null;
 }
 
+interface GroupingCache {
+  keyMap: Map<string, TimelineItem>;
+  snapshot: GroupingSnapshot | null;
+}
+
 export const isAppendOnlyUpdate = (
   prev: Message[],
   next: Message[],
@@ -76,11 +81,28 @@ export const useMessageGrouping = ({
   groupingThresholdMs = DEFAULT_GROUPING_THRESHOLD_MS,
   unreadMarker,
 }: UseMessageGroupingParams): TimelineItem[] => {
-  const prevKeyMapRef = React.useRef<Map<string, TimelineItem>>(new Map());
-  const prevSnapshotRef = React.useRef<GroupingSnapshot | null>(null);
+  const [cache, setCache] = React.useState<GroupingCache>(() => ({
+    keyMap: new Map(),
+    snapshot: null,
+  }));
 
-  return React.useMemo(() => {
-    const prevSnapshot = prevSnapshotRef.current;
+  const computed = React.useMemo(() => {
+    const prevSnapshot = cache.snapshot;
+    const hasCurrentSnapshot = Boolean(
+      prevSnapshot &&
+        prevSnapshot.messages === messages &&
+        prevSnapshot.currentUserId === currentUserId &&
+        prevSnapshot.conversationType === conversationType &&
+        prevSnapshot.groupingThresholdMs === groupingThresholdMs &&
+        prevSnapshot.unreadMarker === unreadMarker,
+    );
+    if (hasCurrentSnapshot && prevSnapshot) {
+      return {
+        items: prevSnapshot.items,
+        nextCache: cache,
+      };
+    }
+
     const canIncrementallyAppend = Boolean(
       prevSnapshot &&
         prevSnapshot.currentUserId === currentUserId &&
@@ -132,7 +154,7 @@ export const useMessageGrouping = ({
           unreadMarker,
         });
 
-    const prevKeyMap = prevKeyMapRef.current;
+    const prevKeyMap = cache.keyMap;
     const nextKeyMap = new Map<string, TimelineItem>();
 
     for (let i = 0; i < items.length; i += 1) {
@@ -144,23 +166,55 @@ export const useMessageGrouping = ({
       nextKeyMap.set(items[i].key, items[i]);
     }
 
-    prevKeyMapRef.current = nextKeyMap;
-    prevSnapshotRef.current = {
-      messages,
+    return {
       items,
-      currentUserId,
-      conversationType,
-      groupingThresholdMs,
-      unreadMarker,
+      nextCache: {
+        keyMap: nextKeyMap,
+        snapshot: {
+          messages,
+          items,
+          currentUserId,
+          conversationType,
+          groupingThresholdMs,
+          unreadMarker,
+        },
+      },
     };
-    return items;
   }, [
+    cache,
     conversationType,
     currentUserId,
     groupingThresholdMs,
     messages,
     unreadMarker,
   ]);
+
+  React.useEffect(() => {
+    setCache((current) => {
+      const currentSnapshot = current.snapshot;
+      if (
+        currentSnapshot &&
+        currentSnapshot.messages === messages &&
+        currentSnapshot.currentUserId === currentUserId &&
+        currentSnapshot.conversationType === conversationType &&
+        currentSnapshot.groupingThresholdMs === groupingThresholdMs &&
+        currentSnapshot.unreadMarker === unreadMarker
+      ) {
+        return current;
+      }
+
+      return computed.nextCache;
+    });
+  }, [
+    computed.nextCache,
+    conversationType,
+    currentUserId,
+    groupingThresholdMs,
+    messages,
+    unreadMarker,
+  ]);
+
+  return computed.items;
 };
 
 export default useMessageGrouping;

@@ -127,9 +127,10 @@ export const useChatUserSearch = (
   const limit = options?.limit ?? 20;
   const enabled = options?.enabled ?? true;
   const excludedUserIdsList = options?.excludeUserIds ?? EMPTY_EXCLUDED_USER_IDS;
+  const excludedUserIdsKey = JSON.stringify(excludedUserIdsList);
   const excludedUserIds = useMemo(
-    () => new Set(excludedUserIdsList),
-    [excludedUserIdsList.join("|")],
+    () => new Set<string>(JSON.parse(excludedUserIdsKey) as string[]),
+    [excludedUserIdsKey],
   );
   const debouncedQuery = useDebounce(query, 300);
   const [results, setResults] = useState<ChatSearchUser[]>([]);

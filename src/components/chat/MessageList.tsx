@@ -13,7 +13,6 @@ import {
   CHAT_VIRTUALIZER_V2_ENABLED,
 } from "../../features/chat/config/experienceFlags";
 import {
-  type TimelineItem,
   type UnreadTimelineMarker,
 } from "../../hooks/useMessageGrouping";
 import { useVirtualizedMessages } from "../../hooks/useVirtualizedMessages";
@@ -26,6 +25,16 @@ import {
   isFailedMessage,
   isPendingMessage,
 } from "../../utils/messageTimeline";
+import {
+  isTargetMessage,
+  type PendingScrollCommand,
+  resolveScrollCommandPriority,
+  resolveTimelineMessageRenderState,
+  type ScrollCommand,
+  shouldAcceptScrollCommand,
+  type RenderableTimelineItem,
+  type TimelineMessageRenderState,
+} from "./messageListShared";
 import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 import { logScrollTrace } from "../../utils/scrollTrace";
 import { useMessageScrollMachine } from "../../features/chat/hooks/useMessageScrollMachine";
@@ -39,10 +48,6 @@ import {
   DEFAULT_TEXT_CHARS_PER_LINE,
   estimateTextLineCount,
   hasInlineUrl,
-  isCollapsiblePlainTextMessage,
-  isPlainStaticTextMessage,
-  type LongMessageRenderMode,
-  type TimelineMeasurementMode,
   LONG_MESSAGE_COLLAPSE_ESTIMATED_LINE_THRESHOLD,
 } from "../../utils/longMessagePolicy";
 
@@ -126,14 +131,6 @@ interface TimelineRowData {
 
 const EMPTY_SELECTED_MESSAGE_IDS = new Set<string>();
 const ITEM_SIZE_CHANGE_THRESHOLD = 2;
-
-interface TimelineMessageRenderState {
-  renderMode: LongMessageRenderMode;
-  measurementMode: TimelineMeasurementMode;
-  isCollapsible: boolean;
-}
-
-type RenderableTimelineItem = ConversationTimelineItem | TimelineItem;
 
 const isImageTimelineItem = (
   item: RenderableTimelineItem | undefined,
@@ -283,30 +280,6 @@ const areEqualTimelineRowProps = (
   );
 };
 
-export const resolveTimelineMessageRenderState = (
-  item: RenderableTimelineItem,
-  expandedLongMessageIds: Set<string>,
-): TimelineMessageRenderState => {
-  if (item.kind !== "message") {
-    return {
-      renderMode: "expanded",
-      measurementMode: "static",
-      isCollapsible: false,
-    };
-  }
-
-  const message = item.message;
-  const isCollapsible = isCollapsiblePlainTextMessage(message);
-  const isExpanded = isCollapsible && expandedLongMessageIds.has(message.id);
-  const isStaticPlainText = isPlainStaticTextMessage(message);
-
-  return {
-    renderMode: isExpanded ? "expanded" : isCollapsible ? "collapsed" : "expanded",
-    measurementMode: isStaticPlainText ? "static" : "dynamic",
-    isCollapsible,
-  };
-};
-
 const shouldObserveTimelineItemResize = (
   item: RenderableTimelineItem,
   renderState: TimelineMessageRenderState,
@@ -401,19 +374,6 @@ const estimateTimelineItemHeight = (
   }
 
   return baseHeight;
-};
-
-const isTargetMessage = (
-  message: Message,
-  targetId: string | null,
-): boolean => {
-  if (!targetId) return false;
-  return (
-    message.id === targetId ||
-    message.localId === targetId ||
-    message.stableId === targetId ||
-    message.clientMessageId === targetId
-  );
 };
 
 const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
@@ -642,125 +602,6 @@ const toDayKey = (date: Date | null): string => {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 };
 
-type ScrollCommand =
-  | {
-      kind: "bottom";
-      reason: string;
-    }
-  | {
-      kind: "offset";
-      offset: number;
-      reason: string;
-    };
-
-type PendingScrollCommand = ScrollCommand & {
-  priority: number;
-  requestedAt: number;
-};
-
-const HIGH_VALUE_SCROLL_REASONS = new Set([
-  "jump-to-latest",
-  "jump-to-message",
-  "incoming-message",
-  "self-message",
-  "prepend-history-preserve",
-]);
-
-export const resolveScrollCommandPriority = (reason: string): number => {
-  switch (reason) {
-    case "jump-to-latest":
-      return 100;
-    case "jump-to-message":
-      return 95;
-    case "incoming-message":
-      return 90;
-    case "self-message":
-      return 85;
-    case "prepend-history-preserve":
-      return 80;
-    case "conversation-restore-anchor":
-      return 70;
-    case "conversation-restore":
-      return 65;
-    case "conversation-restore-unread":
-      return 60;
-    case "item-resize-preserve":
-      return 50;
-    case "item-resize-while-pinned":
-      return 48;
-    case "layout-change":
-      return 40;
-    case "keyboard-home":
-    case "keyboard-page-down":
-    case "keyboard-page-up":
-      return 30;
-    case "conversation-change":
-      return 25;
-    default:
-      return 20;
-  }
-};
-
-export const shouldAcceptScrollCommand = ({
-  nextCommand,
-  pendingCommand,
-  isPinnedToBottom,
-}: {
-  nextCommand: ScrollCommand;
-  pendingCommand: PendingScrollCommand | null;
-  isPinnedToBottom: boolean;
-}): {
-  accepted: boolean;
-  reason: string;
-} => {
-  if (
-    nextCommand.reason === "conversation-restore-unread" &&
-    isPinnedToBottom
-  ) {
-    return {
-      accepted: false,
-      reason: "restore_unread_blocked_while_pinned",
-    };
-  }
-
-  if (!pendingCommand) {
-    return { accepted: true, reason: "accepted_no_pending" };
-  }
-
-  const nextPriority = resolveScrollCommandPriority(nextCommand.reason);
-  if (pendingCommand.priority > nextPriority) {
-    return {
-      accepted: false,
-      reason: "lower_priority_than_pending",
-    };
-  }
-
-  if (pendingCommand.priority === nextPriority) {
-    const sameFamily = pendingCommand.reason === nextCommand.reason;
-    if (!sameFamily) {
-      return {
-        accepted: false,
-        reason: "equal_priority_keep_existing",
-      };
-    }
-  }
-
-  if (
-    nextCommand.reason === "conversation-restore-unread" &&
-    HIGH_VALUE_SCROLL_REASONS.has(pendingCommand.reason)
-  ) {
-    return {
-      accepted: false,
-      reason: "restore_unread_cannot_override_high_value_scroll",
-    };
-  }
-
-  return {
-    accepted: true,
-    reason: pendingCommand ? "accepted_replaced_pending" : "accepted_no_pending",
-  };
-};
-
 const MessageListComponent: React.FC<MessageListProps> = ({
   conversationId,
   conversationType,
@@ -825,7 +666,6 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     viewportHeight: 0,
     composerHeight,
   });
-  const timelineItemCountRef = React.useRef(0);
   const [stickyDate, setStickyDate] = React.useState<Date | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = React.useState<
     string | null
@@ -834,7 +674,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const [expandedLongMessageIds, setExpandedLongMessageIds] = React.useState<
     Set<string>
   >(() => new Set());
-  const previousMessageStableKeysRef = React.useRef<Set<string>>(new Set());
+  const [previousMessageStableKeys, setPreviousMessageStableKeys] =
+    React.useState<Set<string>>(() => new Set());
   const [liveUnreadMarker, setLiveUnreadMarker] =
     React.useState<UnreadTimelineMarker | null>(unreadMarker ?? null);
   const getTimelineItemKey = React.useCallback(
@@ -857,21 +698,28 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     [messages],
   );
   const insertedMessageKeys = React.useMemo(() => {
-    const previousKeys = previousMessageStableKeysRef.current;
     const insertedKeys = new Set<string>();
 
     latestMessageStableKeys.forEach((key) => {
-      if (!previousKeys.has(key)) {
+      if (!previousMessageStableKeys.has(key)) {
         insertedKeys.add(key);
       }
     });
 
     return insertedKeys;
-  }, [latestMessageStableKeys]);
-  timelineItemCountRef.current = timelineItems.length;
+  }, [latestMessageStableKeys, previousMessageStableKeys]);
 
   React.useEffect(() => {
-    previousMessageStableKeysRef.current = latestMessageStableKeys;
+    setPreviousMessageStableKeys((current) => {
+      if (
+        current.size === latestMessageStableKeys.size &&
+        Array.from(latestMessageStableKeys).every((key) => current.has(key))
+      ) {
+        return current;
+      }
+
+      return latestMessageStableKeys;
+    });
   }, [conversationId, latestMessageStableKeys]);
 
   React.useEffect(() => {
@@ -1022,7 +870,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     pendingScrollCommandRef.current = null;
     if (!command) return;
 
-    const itemCount = timelineItemCountRef.current;
+    const itemCount = timelineItems.length;
     if (command.kind === "bottom" && itemCount === 0) {
       logScrollTrace("scroll_command_skipped", {
         conversationId,
@@ -1050,7 +898,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         scrollToOffset(command.offset);
         break;
     }
-  }, [conversationId, scrollToIndex, scrollToOffset]);
+  }, [conversationId, scrollToIndex, scrollToOffset, timelineItems.length]);
 
   const requestScrollCommand = React.useCallback(
     (command: ScrollCommand): boolean => {

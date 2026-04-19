@@ -7,6 +7,7 @@ import { ImageMessage } from "../../message/ImageMessage";
 import { FileMessageCard } from "../../message/FileMessageCard";
 import { VoiceMessage } from "../../message/VoiceMessage";
 import { LinkPreviewCard } from "../../message/LinkPreviewCard";
+import { dispatchContactProfileView } from "../../../features/chat/events/chatUiEvents";
 import type { Attachment, Message } from "../../../types";
 import { MessageType } from "../../../types";
 import type { LongMessageRenderMode } from "../../../utils/longMessagePolicy";
@@ -123,12 +124,7 @@ const ContactCard: React.FC<{
         <button
           type="button"
           onClick={() => {
-            if (typeof window === "undefined") return;
-            window.dispatchEvent(
-              new CustomEvent("chat:contact:view-profile", {
-                detail: { userId: payload.contactUserId },
-              }),
-            );
+            dispatchContactProfileView({ userId: payload.contactUserId });
           }}
           className={clsx(
             "text-xs font-medium underline-offset-2 hover:underline",

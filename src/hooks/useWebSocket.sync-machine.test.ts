@@ -6,6 +6,13 @@ import {
   shouldUseDeltaConversationRefresh,
   type PendingConversationSyncStrategy,
 } from "./useWebSocket";
+import {
+  acknowledgeConversationJoined,
+  createConversationSyncCoordinatorState,
+  registerConversationJoinIntent,
+  registerReconnectConversationJoins,
+  removeConversationSyncTracking,
+} from "./useWebSocketConversationCoordinator";
 
 describe("useWebSocket sync machine", () => {
   it("join conversation + conversation:resynced drains pending sync deterministically", () => {
@@ -83,5 +90,42 @@ describe("useWebSocket sync machine", () => {
         joinedConversationIds,
       }),
     ).toBe(false);
+  });
+
+  it("registers join intent and reconnect sync strategy through the coordinator", () => {
+    const state = createConversationSyncCoordinatorState();
+
+    const initialStrategy = registerConversationJoinIntent(state, "room-1");
+    const skippedStrategy = registerConversationJoinIntent(state, "room-2", {
+      skipInitialDeltaSync: true,
+    });
+
+    expect(initialStrategy).toBe("initial-sync");
+    expect(skippedStrategy).toBe("skip");
+    expect(state.joinedConversationIds.has("room-1")).toBe(true);
+    expect(state.pendingConversationSync.get("room-2")).toBe("skip");
+
+    const reconnectRooms = registerReconnectConversationJoins(state, true);
+
+    expect(reconnectRooms).toEqual(["room-1", "room-2"]);
+    expect(state.pendingConversationSync.get("room-1")).toBe("reconnect");
+    expect(state.pendingConversationSync.get("room-2")).toBe("reconnect");
+  });
+
+  it("acknowledges joins and clears tracking when a room leaves scope", () => {
+    const state = createConversationSyncCoordinatorState();
+
+    registerConversationJoinIntent(state, "room-1");
+    const pending = acknowledgeConversationJoined(state, "room-1");
+
+    expect(pending).toBe("initial-sync");
+    expect(state.subscribedConversationIds.has("room-1")).toBe(true);
+
+    removeConversationSyncTracking(state, "room-1");
+
+    expect(state.joinedConversationIds.has("room-1")).toBe(false);
+    expect(state.subscribedConversationIds.has("room-1")).toBe(false);
+    expect(state.pendingConversationSync.has("room-1")).toBe(false);
+    expect(state.joinRetryAttempts.has("room-1")).toBe(false);
   });
 });

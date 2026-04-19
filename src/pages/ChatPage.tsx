@@ -39,6 +39,10 @@ import {
 } from "../lib/conversationIdentity";
 import { getOtherParticipant } from "../utils/messageHelpers";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
+import {
+  listenForContactProfileView,
+  listenForNotificationClick,
+} from "../features/chat/events/chatUiEvents";
 import { logMessageDebug } from "../utils/messageDebug";
 import { ErrorCode } from "@hacom/chat-shared-types/core";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
@@ -394,7 +398,7 @@ export const ChatPage: React.FC = () => {
     [navigate, routeConversationId],
   );
 
-  const handleSendMessage = useSendMessage({
+  const { sendMessage: handleSendMessage } = useSendMessage({
     selectedConversationId,
     isConversationReady: sessionIsConversationReady,
     source: "ChatPage",
@@ -808,65 +812,31 @@ export const ChatPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const handler = (event: Event) => {
-      const customEvent = event as CustomEvent<{ userId?: string }>;
-      const userId = customEvent.detail?.userId;
+    return listenForContactProfileView(({ userId }) => {
       if (!userId) return;
 
       void handleStartChat(userId).then(() => {
         openConversationInfoPanel();
       });
-    };
-
-    window.addEventListener(
-      "chat:contact:view-profile",
-      handler as EventListener,
-    );
-    return () => {
-      window.removeEventListener(
-        "chat:contact:view-profile",
-        handler as EventListener,
-      );
-    };
+    });
   }, [handleStartChat, openConversationInfoPanel]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    return listenForNotificationClick(
+      ({ conversationId: nextConversationId, messageId: nextMessageId }) => {
+        if (!nextConversationId) return;
 
-    const handler = (
-      event: Event,
-    ) => {
-      const customEvent = event as CustomEvent<{
-        conversationId?: string;
-        messageId?: string;
-      }>;
-      const nextConversationId = customEvent.detail?.conversationId;
-      const nextMessageId = customEvent.detail?.messageId;
-      if (!nextConversationId) return;
+        setIsMobileMenuOpen(false);
+        if (nextMessageId) {
+          setExternalJumpTargetMessageId(nextMessageId);
+          setExternalJumpRequestVersion((current) => current + 1);
+        }
 
-      setIsMobileMenuOpen(false);
-      if (nextMessageId) {
-        setExternalJumpTargetMessageId(nextMessageId);
-        setExternalJumpRequestVersion((current) => current + 1);
-      }
-
-      if (routeConversationId !== nextConversationId) {
-        navigate(`/chat/${nextConversationId}`);
-      }
-    };
-
-    window.addEventListener(
-      "chat:notification:clicked",
-      handler as EventListener,
+        if (routeConversationId !== nextConversationId) {
+          navigate(`/chat/${nextConversationId}`);
+        }
+      },
     );
-    return () => {
-      window.removeEventListener(
-        "chat:notification:clicked",
-        handler as EventListener,
-      );
-    };
   }, [navigate, routeConversationId]);
 
   const handleRetryBootstrap = useCallback(() => {

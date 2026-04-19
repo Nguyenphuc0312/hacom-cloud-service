@@ -5,13 +5,16 @@ const { getUnreadFeedMock } = vi.hoisted(() => ({
   getUnreadFeedMock: vi.fn(),
 }));
 
-vi.mock("../../../services/api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../services/api")>();
+vi.mock("../api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../api")>();
   return {
     ...actual,
-    conversationApi: {
-      ...actual.conversationApi,
-      getUnreadFeed: getUnreadFeedMock,
+    chatApi: {
+      ...actual.chatApi,
+      conversation: {
+        ...actual.chatApi.conversation,
+        getUnreadFeed: getUnreadFeedMock,
+      },
     },
   };
 });

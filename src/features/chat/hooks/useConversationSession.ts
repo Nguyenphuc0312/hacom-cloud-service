@@ -8,7 +8,7 @@ import type {
   Message,
   UserSummary,
 } from "../../../types";
-import { conversationApi } from "../../../services/api";
+import { chatApi } from "../api";
 import { getConversationByIdUseCase } from "../usecases/getConversationById";
 import { logMessageDebug } from "../../../utils/messageDebug";
 
@@ -249,7 +249,7 @@ export const useConversationSession = ({
       if (shouldBootstrapUnreadFeed) {
         try {
           const bootstrapRequestId = `unread:${selectedConversationId}:${Date.now()}`;
-          const unreadFeedResponse = await conversationApi.getUnreadFeed(
+          const unreadFeedResponse = await chatApi.conversation.getUnreadFeed(
             selectedConversationId,
             isConversationHydrated ? 1 : Math.min(Math.max(unreadCount, 20), 100),
           );

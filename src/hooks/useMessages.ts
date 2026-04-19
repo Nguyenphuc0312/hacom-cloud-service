@@ -1,6 +1,9 @@
 ﻿/**
  * @fileoverview useMessages hook
  * Custom hook quan ly messages trong mot conversation
+ *
+ * @deprecated Legacy compatibility hook. Do not import in production code.
+ * Prefer feature-level chat session/send hooks instead.
  */
 
 import { useEffect, useCallback, useRef } from "react";

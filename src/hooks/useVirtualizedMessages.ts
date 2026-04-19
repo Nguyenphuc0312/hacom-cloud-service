@@ -384,7 +384,7 @@ export const useVirtualizedMessages = <Item, ListData>({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [debugLabel, enabled, observeViewport, viewportRef]);
+  }, [debugLabel, enabled, items.length, observeViewport, viewportRef]);
 
   const scrollToOffset = React.useCallback(
     (offset: number) => {

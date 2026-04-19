@@ -430,7 +430,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
         setIsProfileActionLoading(null);
       }
     },
-    [],
+    [t],
   );
 
   const handleOpenMessage = React.useCallback(async () => {

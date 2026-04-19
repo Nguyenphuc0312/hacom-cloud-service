@@ -25,6 +25,7 @@ import { useChatStore, useGroupStore } from "../../stores";
 import type { InviteLinkItem, JoinRequestItem } from "../../stores/groupStore";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import { resolveConversationId } from "../../lib/conversationIdentity";
+import { chatApi } from "../../features/chat/api/chatApi";
 import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
 import {
   buildUserSearchSecondaryText,
@@ -42,7 +43,6 @@ import {
 import { createGroupInviteLinkUseCase } from "../../features/chat/usecases/createGroupInviteLink";
 import { revokeGroupInviteLinkUseCase } from "../../features/chat/usecases/revokeGroupInviteLink";
 import { resolveGroupJoinRequestUseCase } from "../../features/chat/usecases/resolveGroupJoinRequest";
-import { groupApi } from "../../services/api";
 import { getUserDisplayName } from "../../utils/messageHelpers";
 
 interface GroupInfoProps {
@@ -388,7 +388,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const fetchMembers = useCallback(async () => {
     setIsLoadingMembers(true);
     try {
-      const response = await groupApi.getMembers(conversation.id, 1, 200);
+      const response = await chatApi.group.getMembers(conversation.id, 1, 200);
       const payload = unwrapApiSuccess(response);
       const rows = extractMemberRows(payload);
       const nextMembers = rows
@@ -444,8 +444,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     const hydrateRealtimeState = async () => {
       try {
         const [inviteLinksResponse, joinRequestsResponse] = await Promise.all([
-          groupApi.getInviteLinks(conversation.id),
-          groupApi.getJoinRequests(conversation.id),
+          chatApi.group.getInviteLinks(conversation.id),
+          chatApi.group.getJoinRequests(conversation.id),
         ]);
 
         if (cancelled) return;
@@ -547,7 +547,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     async (userId: string) => {
       setIsSubmitting(true);
       try {
-        await groupApi.addMember(conversation.id, userId);
+        await chatApi.group.addMember(conversation.id, userId);
         await refreshGroupState();
         setSearchQuery("");
         setShowAddMember(false);
@@ -577,7 +577,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
     setIsSubmitting(true);
     try {
-      await groupApi.updateSettings(conversation.id, { title: nextName });
+      await chatApi.group.updateSettings(conversation.id, { title: nextName });
       await refreshGroupState();
       setIsRenamingGroup(false);
       toast.success(t("profile:toast.groupRenamed"));
@@ -615,7 +615,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
       setActingMemberId(member.id);
       try {
-        await groupApi.updateMemberRole(conversation.id, member.id, nextRole);
+        await chatApi.group.updateMemberRole(conversation.id, member.id, nextRole);
         await refreshGroupState();
         toast.success(
           nextRole === RoomMemberRole.ADMIN
@@ -647,7 +647,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
       setActingMemberId(member.id);
       try {
-        await groupApi.removeMember(conversation.id, member.id);
+        await chatApi.group.removeMember(conversation.id, member.id);
         await refreshGroupState();
         toast.success(t("profile:toast.memberRemoved"));
       } catch (error) {
@@ -674,7 +674,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
     setIsSubmitting(true);
     try {
-      await groupApi.leaveGroup(conversation.id);
+      await chatApi.group.leaveGroup(conversation.id);
       removeConversation(conversation.id);
       toast.success(t("profile:toast.leftGroup"));
       onClose();

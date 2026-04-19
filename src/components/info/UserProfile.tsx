@@ -204,7 +204,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         });
       } catch {
         if (!isMounted) return;
-        setUser((current) => current ?? initialUser ?? null);
+        setUser((current) => current ?? resolvedInitialUser ?? null);
       } finally {
         if (isMounted) {
           setIsLoading(false);

@@ -32,45 +32,49 @@ vi.mock("../../features/chat/usecases/resolveGroupJoinRequest", () => ({
   resolveGroupJoinRequestUseCase: vi.fn(),
 }));
 
-vi.mock("../../services/api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../services/api")>();
+vi.mock("../../features/chat/api/chatApi", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../features/chat/api/chatApi")>();
   return {
     ...actual,
-    groupApi: {
-      ...actual.groupApi,
-      getMembers: vi.fn().mockResolvedValue({
-        success: true,
-        data: {
-          members: [
-            {
-              conversationId: "room-1",
-              userId: "user-1",
-              role: "owner",
-              joinedAt: new Date("2026-04-16T00:00:00.000Z"),
-              user: {
-                id: "user-1",
-                username: "owner",
-                displayName: "Owner",
-                status: "online",
+    chatApi: {
+      ...actual.chatApi,
+      group: {
+        ...actual.chatApi.group,
+        getMembers: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            members: [
+              {
+                conversationId: "room-1",
+                userId: "user-1",
+                role: "owner",
+                joinedAt: new Date("2026-04-16T00:00:00.000Z"),
+                user: {
+                  id: "user-1",
+                  username: "owner",
+                  displayName: "Owner",
+                  status: "online",
+                },
               },
-            },
-            {
-              conversationId: "room-1",
-              userId: "user-2",
-              role: "member",
-              joinedAt: new Date("2026-04-16T00:00:00.000Z"),
-              user: {
-                id: "user-2",
-                username: "member",
-                displayName: "Member",
-                status: "online",
+              {
+                conversationId: "room-1",
+                userId: "user-2",
+                role: "member",
+                joinedAt: new Date("2026-04-16T00:00:00.000Z"),
+                user: {
+                  id: "user-2",
+                  username: "member",
+                  displayName: "Member",
+                  status: "online",
+                },
               },
-            },
-          ],
-        },
-      }),
-      getInviteLinks: vi.fn().mockResolvedValue({ success: true, data: [] }),
-      getJoinRequests: vi.fn().mockResolvedValue({ success: true, data: [] }),
+            ],
+          },
+        }),
+        getInviteLinks: vi.fn().mockResolvedValue({ success: true, data: [] }),
+        getJoinRequests: vi.fn().mockResolvedValue({ success: true, data: [] }),
+      },
     },
   };
 });

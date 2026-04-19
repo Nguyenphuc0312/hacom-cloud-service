@@ -1,6 +1,7 @@
 import {
   contactApi,
   conversationApi,
+  fileApi,
   friendshipApi,
   groupApi,
   messageApi,
@@ -11,6 +12,7 @@ export const chatApi = {
   conversation: conversationApi,
   message: messageApi,
   contact: contactApi,
+  file: fileApi,
   group: groupApi,
   user: userApi,
   friendship: friendshipApi,

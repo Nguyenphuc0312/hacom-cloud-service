@@ -16,6 +16,7 @@ import {
   type NotificationFilter,
   type NotificationItem,
 } from "../../features/notification/state/notificationStore";
+import { dispatchNotificationClick } from "../../features/chat/events/chatUiEvents";
 import { formatRelativeTime } from "../../utils/formatTime";
 import { useChatStore } from "../../stores/chatStore";
 import { sortConversationsByActivity } from "../../utils/conversationRanking";
@@ -120,7 +121,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
               kind: "message" as const,
               title,
               body,
-              createdAt: new Date(activityAt ?? Date.now()).toISOString(),
+              createdAt: new Date(activityAt ?? conversation.updatedAt).toISOString(),
               isRead: false,
               readAt: null,
               conversationId: conversation.id,
@@ -172,15 +173,11 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
         markAsRead(item.id);
       }
 
-      if (typeof window !== "undefined" && item.conversationId) {
-        window.dispatchEvent(
-          new CustomEvent("chat:notification:clicked", {
-            detail: {
-              conversationId: item.conversationId,
-              messageId: item.messageId,
-            },
-          }),
-        );
+      if (item.conversationId) {
+        dispatchNotificationClick({
+          conversationId: item.conversationId,
+          messageId: item.messageId,
+        });
       }
 
       onClose();

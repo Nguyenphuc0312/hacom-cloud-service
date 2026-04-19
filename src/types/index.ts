@@ -81,7 +81,7 @@ import type {
 import { MessageStatus as SharedMessageStatus } from "@hacom/chat-shared-types/chat";
 import type { User, UserSummary as SharedUserSummary } from "@hacom/chat-shared-types/auth";
 
-export interface TypingUser extends SharedTypingUser {}
+export type TypingUser = SharedTypingUser;
 
 export type Conversation = Omit<
   SharedConversation,

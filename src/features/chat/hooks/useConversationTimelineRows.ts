@@ -24,6 +24,12 @@ interface UseConversationTimelineRowsParams {
   unreadMarker?: UnreadTimelineMarker | null;
 }
 
+interface TimelineRowsCache {
+  groupedItems: TimelineItem[] | null;
+  items: ConversationTimelineItem[];
+  itemsByKey: Map<string, ConversationTimelineItem>;
+}
+
 const getAttachmentLayoutSignature = (
   attachments?: Attachment[],
 ): string => {
@@ -177,14 +183,23 @@ export const useConversationTimelineRows = ({
     conversationType,
     unreadMarker,
   });
-  const previousItemsByKeyRef = React.useRef<
-    Map<string, ConversationTimelineItem>
-  >(new Map());
+  const [cache, setCache] = React.useState<TimelineRowsCache>(() => ({
+    groupedItems: null,
+    items: [],
+    itemsByKey: new Map(),
+  }));
 
-  return React.useMemo(() => {
+  const computed = React.useMemo(() => {
+    if (cache.groupedItems === groupedItems) {
+      return {
+        items: cache.items,
+        nextCache: cache,
+      };
+    }
+
     const nextItems = groupedItems.map(toConversationTimelineItem);
     const nextItemsByKey = new Map<string, ConversationTimelineItem>();
-    const previousItemsByKey = previousItemsByKeyRef.current;
+    const previousItemsByKey = cache.itemsByKey;
 
     for (let index = 0; index < nextItems.length; index += 1) {
       const nextItem = nextItems[index];
@@ -200,9 +215,27 @@ export const useConversationTimelineRows = ({
       nextItemsByKey.set(nextItems[index].key, nextItems[index]);
     }
 
-    previousItemsByKeyRef.current = nextItemsByKey;
-    return nextItems;
-  }, [groupedItems]);
+    return {
+      items: nextItems,
+      nextCache: {
+        groupedItems,
+        items: nextItems,
+        itemsByKey: nextItemsByKey,
+      },
+    };
+  }, [cache, groupedItems]);
+
+  React.useEffect(() => {
+    setCache((current) => {
+      if (current.groupedItems === groupedItems) {
+        return current;
+      }
+
+      return computed.nextCache;
+    });
+  }, [computed.nextCache, groupedItems]);
+
+  return computed.items;
 };
 
 export default useConversationTimelineRows;
