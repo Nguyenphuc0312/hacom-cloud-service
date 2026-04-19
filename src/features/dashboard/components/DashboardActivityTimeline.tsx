@@ -18,10 +18,10 @@ interface DashboardActivityTimelineProps {
 }
 
 const FILTERS: Array<{ id: TimelineFilter; label: string }> = [
-  { id: 'all', label: 'All' },
-  { id: 'incident', label: 'Incidents' },
-  { id: 'service', label: 'Services' },
-  { id: 'warning', label: 'Warnings' },
+  { id: 'all', label: 'Tất cả' },
+  { id: 'incident', label: 'Sự cố' },
+  { id: 'service', label: 'Dịch vụ' },
+  { id: 'warning', label: 'Cảnh báo' },
 ];
 
 export const DashboardActivityTimeline = ({
@@ -52,9 +52,9 @@ export const DashboardActivityTimeline = ({
 
   return (
     <SurfaceCard
-      eyebrow="Activity"
-      title="Recent operational timeline"
-      description="Keep the latest incidents, degradations, and warnings in one drill-down surface."
+      eyebrow="Hoạt động"
+      title="Dòng thời gian vận hành gần đây"
+      description="Giữ sự cố, suy giảm và cảnh báo mới nhất trong một vùng drill-down duy nhất."
       className="ds-dashboard-activity-card"
       status={
         <div className="ds-dashboard-segmented">
@@ -76,7 +76,7 @@ export const DashboardActivityTimeline = ({
       ) : error ? (
         <ErrorState compact onRetry={onRetry} />
       ) : filteredItems.length === 0 ? (
-        <EmptyState compact title="No matching events" description="Try another activity filter." />
+        <EmptyState compact title="Không có sự kiện phù hợp" description="Hãy thử bộ lọc hoạt động khác." />
       ) : (
         <div className="ds-dashboard-activity-layout">
           <div className="ds-dashboard-activity-list">
@@ -106,12 +106,16 @@ export const DashboardActivityTimeline = ({
           {activeItem ? (
             <div className="ds-dashboard-activity-detail">
               <span className={`ds-dashboard-activity-type type-${activeItem.type}`}>
-                {activeItem.type}
+                {activeItem.type === 'incident'
+                  ? 'Sự cố'
+                  : activeItem.type === 'service'
+                    ? 'Dịch vụ'
+                    : 'Cảnh báo'}
               </span>
               <strong>{activeItem.title}</strong>
               <p>{activeItem.description}</p>
               <time>{formatDateTime(activeItem.timestamp)}</time>
-              <Button onClick={() => navigate(activeItem.route)}>View detail</Button>
+              <Button onClick={() => navigate(activeItem.route)}>Xem chi tiết</Button>
             </div>
           ) : null}
         </div>

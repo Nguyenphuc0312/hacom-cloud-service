@@ -89,26 +89,26 @@ export const ServicesPage = () => {
   const columns = useMemo<ColumnsType<ServiceHealthItem>>(
     () => [
       {
-        title: 'Service',
+        title: 'Dịch vụ',
         dataIndex: 'name',
       },
       {
-        title: 'Status',
+        title: 'Trạng thái',
         dataIndex: 'status',
         render: (value: string) => <StatusBadge status={value} mode="badge" />,
       },
       {
-        title: 'Checked at',
+        title: 'Kiểm tra lúc',
         dataIndex: 'checkedAt',
         render: (value: string) => formatDateTime(value),
       },
       {
-        title: 'Latency',
+        title: 'Độ trễ',
         dataIndex: 'latencyMs',
         render: (value: number) => formatMs(value),
       },
       {
-        title: 'Summary',
+        title: 'Tóm tắt',
         dataIndex: 'summary',
         render: (value: string) => (
           <Typography.Text ellipsis style={{ maxWidth: 260 }}>
@@ -117,7 +117,7 @@ export const ServicesPage = () => {
         ),
       },
       {
-        title: 'Version / Build / Env',
+        title: 'Version / Build / Môi trường',
         key: 'meta',
         render: (_, record) => {
           const parts = [record.version, record.build, record.env].filter(Boolean);
@@ -131,10 +131,10 @@ export const ServicesPage = () => {
   if (activeSection === 'health' && healthQuery.isLoading) {
     return (
       <PageShell
-        title="Services"
-        description="Dependency health and service configuration."
+      title="Dịch vụ"
+      description="Sức khỏe phụ thuộc và cấu hình dịch vụ."
       >
-        <QueryStateView kind="loading" title="Loading service health..." />
+        <QueryStateView kind="loading" title="Đang tải sức khỏe dịch vụ..." />
       </PageShell>
     );
   }
@@ -142,12 +142,12 @@ export const ServicesPage = () => {
   if (activeSection === 'health' && healthQuery.isError) {
     return (
       <PageShell
-        title="Services"
-        description="Dependency health and service configuration."
+      title="Dịch vụ"
+      description="Sức khỏe phụ thuộc và cấu hình dịch vụ."
       >
         <QueryStateView
           kind="error"
-          description="Unable to load service health."
+          description="Không thể tải sức khỏe dịch vụ."
           onRetry={() => {
             void healthQuery.refetch();
           }}
@@ -160,8 +160,8 @@ export const ServicesPage = () => {
 
   return (
     <PageShell
-      title="Services"
-      description="Manage service health, SMTP runtime, and outbound template controls from one lean workspace."
+      title="Dịch vụ"
+      description="Quản lý sức khỏe dịch vụ, runtime SMTP và kiểm soát mẫu gửi ra ngoài trong một workspace gọn."
       headerExtra={
         <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
           {activeSection === 'health' ? (
@@ -172,7 +172,7 @@ export const ServicesPage = () => {
                 void healthQuery.refetch();
               }}
             >
-              Refresh
+              Làm mới
             </Button>
           ) : null}
         </div>
@@ -185,28 +185,28 @@ export const ServicesPage = () => {
         items={[
           {
             key: 'health',
-            label: 'Service Health',
+            label: 'Sức khỏe dịch vụ',
             children: (
               <div className="ds-tab-page">
                 {focusedService ? (
                   <SurfaceCard
-                    eyebrow="Focused service"
+                    eyebrow="Dịch vụ đang tập trung"
                     title={
                       focusedServiceRecord
                         ? focusedServiceRecord.name
-                        : `No service matched '${focusedService}'`
+                        : `Không có dịch vụ nào khớp '${focusedService}'`
                     }
                     description={
                       focusedServiceRecord
-                        ? focusedServiceRecord.summary || 'No summary available.'
-                        : 'The service name may have changed or was not present in the latest health check.'
+                        ? focusedServiceRecord.summary || 'Chưa có mô tả tóm tắt.'
+                        : 'Tên dịch vụ có thể đã thay đổi hoặc không xuất hiện trong lần kiểm tra gần nhất.'
                     }
                     status={
                       focusedServiceRecord ? <StatusBadge status={focusedServiceRecord.status} /> : null
                     }
                     actions={
                       <Button size="small" onClick={clearFocusedService}>
-                        Clear focus
+                        Bỏ tập trung
                       </Button>
                     }
                   />
@@ -214,31 +214,31 @@ export const ServicesPage = () => {
 
                 <div className="ds-data-summary-grid">
                   <div className="ds-summary-tile">
-                    <span className="ds-summary-tile-label">Healthy</span>
+                    <span className="ds-summary-tile-label">Ổn định</span>
                     <strong className="ds-summary-tile-value">{data?.summary.up ?? 0}</strong>
-                    <span className="ds-summary-tile-meta">Dependencies fully available in the latest run.</span>
+                    <span className="ds-summary-tile-meta">Phụ thuộc đều khả dụng hoàn toàn ở lần chạy gần nhất.</span>
                   </div>
                   <div className="ds-summary-tile">
-                    <span className="ds-summary-tile-label">Degraded</span>
+                    <span className="ds-summary-tile-label">Suy giảm</span>
                     <strong className="ds-summary-tile-value">{data?.summary.degraded ?? 0}</strong>
-                    <span className="ds-summary-tile-meta">Serving but not within the expected latency or quality band.</span>
+                    <span className="ds-summary-tile-meta">Vẫn phục vụ nhưng nằm ngoài ngưỡng độ trễ hoặc chất lượng kỳ vọng.</span>
                   </div>
                   <div className="ds-summary-tile">
-                    <span className="ds-summary-tile-label">Down</span>
+                    <span className="ds-summary-tile-label">Ngừng hoạt động</span>
                     <strong className="ds-summary-tile-value">{data?.summary.down ?? 0}</strong>
-                    <span className="ds-summary-tile-meta">Needs operator attention or dependency escalation.</span>
+                    <span className="ds-summary-tile-meta">Cần operator xử lý hoặc leo thang cho dịch vụ phụ thuộc.</span>
                   </div>
                 </div>
 
                 <DataTableShell
-                  title="Dependency health"
-                  meta="Primary surface for dependency status, latency, and release metadata."
+                  title="Sức khỏe phụ thuộc"
+                  meta="Bề mặt chính cho trạng thái phụ thuộc, độ trễ và metadata phát hành."
                   toolbar={
                     <DataTableToolbar>
                       <span className="ds-toolbar-summary">
                         {focusedService
-                          ? `Focused service: ${focusedService}`
-                          : `${data?.summary.total ?? 0} tracked service${(data?.summary.total ?? 0) === 1 ? '' : 's'} · Last sync ${
+                          ? `Dịch vụ đang tập trung: ${focusedService}`
+                          : `${data?.summary.total ?? 0} dịch vụ đang theo dõi · Đồng bộ gần nhất ${
                               healthQuery.dataUpdatedAt
                                 ? formatDateTime(new Date(healthQuery.dataUpdatedAt).toISOString())
                                 : '-'
@@ -258,7 +258,7 @@ export const ServicesPage = () => {
                         : ''
                     }
                     pagination={{ pageSize: 10 }}
-                    emptyNode={<EmptyState description="No service health data is available." />}
+                    emptyNode={<EmptyState description="Chưa có dữ liệu sức khỏe dịch vụ." />}
                   />
                 </DataTableShell>
               </div>
@@ -266,12 +266,12 @@ export const ServicesPage = () => {
           },
           {
             key: 'smtp',
-            label: 'SMTP Settings',
+            label: 'Cấu hình SMTP',
             children: <SmtpSettingsCard />,
           },
           {
             key: 'email-templates',
-            label: 'Email Templates',
+            label: 'Mẫu email',
             children: <EmailTemplatesCard />,
           },
         ]}

@@ -12,10 +12,10 @@ export const SearchTrigger = memo(({ onOpen, shortcutLabel = 'Ctrl + K' }: Searc
       type="button"
       className="search-trigger"
       onClick={onOpen}
-      aria-label="Open command palette"
+      aria-label="Mở bảng lệnh nhanh"
     >
       <SearchOutlined className="search-trigger-icon" />
-      <span className="search-trigger-placeholder">Search...</span>
+      <span className="search-trigger-placeholder">Tìm kiếm...</span>
       <span className="search-trigger-hint" aria-hidden>
         {shortcutLabel}
       </span>

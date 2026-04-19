@@ -13,8 +13,8 @@ interface ErrorStateProps {
 }
 
 export const ErrorState = ({
-  title = 'Unable to load this section',
-  description = 'The latest data could not be retrieved from the backend.',
+  title = 'Không thể tải khu vực này',
+  description = 'Không thể lấy dữ liệu mới nhất từ hệ thống phía sau.',
   compact = false,
   className,
   action,
@@ -29,7 +29,7 @@ export const ErrorState = ({
       <div className="ds-error-state-action">{action}</div>
     ) : onRetry ? (
       <Button icon={<ReloadOutlined />} onClick={onRetry}>
-        Retry
+        Thử lại
       </Button>
     ) : null}
   </div>

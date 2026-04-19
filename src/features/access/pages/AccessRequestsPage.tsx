@@ -27,23 +27,23 @@ import { formatDateTime } from '@/utils/date';
 type AccessAction = 'approve' | 'reject' | 'revoke';
 
 const statusOptions = [
-  { label: 'Pending first', value: 'pending' },
-  { label: 'Approved', value: 'approved' },
-  { label: 'Rejected', value: 'rejected' },
-  { label: 'Revoked', value: 'revoked' },
-  { label: 'Expired', value: 'expired' },
+  { label: 'Ưu tiên chờ duyệt', value: 'pending' },
+  { label: 'Đã duyệt', value: 'approved' },
+  { label: 'Đã từ chối', value: 'rejected' },
+  { label: 'Đã thu hồi', value: 'revoked' },
+  { label: 'Hết hạn', value: 'expired' },
 ];
 
 const actionLabels: Record<AccessAction, string> = {
-  approve: 'Approve request',
-  reject: 'Reject request',
-  revoke: 'Revoke access',
+  approve: 'Duyệt yêu cầu',
+  reject: 'Từ chối yêu cầu',
+  revoke: 'Thu hồi truy cập',
 };
 
 const actionSuccessMessages: Record<AccessAction, string> = {
-  approve: 'Request approved.',
-  reject: 'Request rejected.',
-  revoke: 'Access revoked.',
+  approve: 'Đã duyệt yêu cầu.',
+  reject: 'Đã từ chối yêu cầu.',
+  revoke: 'Đã thu hồi truy cập.',
 };
 
 const actionFallbackReasons: Record<AccessAction, string> = {
@@ -54,14 +54,14 @@ const actionFallbackReasons: Record<AccessAction, string> = {
 
 const renderRiskChips = (record: Pick<AccessRequestListItem, 'risk'>) => {
   if (!record.risk.sharedIp && !record.risk.expiringSoon) {
-    return <span className="ds-shell-chip ds-shell-chip--ghost">No active risk flags</span>;
+    return <span className="ds-shell-chip ds-shell-chip--ghost">Không có cờ rủi ro</span>;
   }
 
   return (
     <div className="ds-admin-chip-list">
-      {record.risk.sharedIp ? <span className="ds-shell-chip ds-shell-chip--warning">Shared IP</span> : null}
+      {record.risk.sharedIp ? <span className="ds-shell-chip ds-shell-chip--warning">IP dùng chung</span> : null}
       {record.risk.expiringSoon ? (
-        <span className="ds-shell-chip ds-shell-chip--warning">Expiring soon</span>
+        <span className="ds-shell-chip ds-shell-chip--warning">Sắp hết hạn</span>
       ) : null}
     </div>
   );
@@ -154,42 +154,42 @@ export const AccessRequestsPage = () => {
   const columns = useMemo<ColumnsType<AccessRequestListItem>>(
     () => [
       {
-        title: 'Request',
+        title: 'Yêu cầu',
         key: 'request',
         render: (_, record) => (
           <div className="ds-table-primary-cell">
             <strong>{record.normalizedIp}</strong>
             <span>
-              Scope: {record.scope} · Source: {record.source}
+              Phạm vi: {record.scope} / Nguồn: {record.source}
             </span>
           </div>
         ),
       },
       {
-        title: 'Status',
+        title: 'Trạng thái',
         dataIndex: 'status',
         width: 140,
         render: (value: AccessRequestListItem['status']) => <StatusBadge status={value} />,
       },
       {
-        title: 'Linked users',
+        title: 'Người dùng liên quan',
         dataIndex: 'requestUserCount',
         width: 120,
       },
       {
-        title: 'Last seen',
+        title: 'Lần thấy gần nhất',
         dataIndex: 'lastSeenAt',
         width: 180,
         render: (value: string) => formatDateTime(value),
       },
       {
-        title: 'Expires',
+        title: 'Hết hạn',
         dataIndex: 'expiresAt',
         width: 180,
         render: (value: string | null) => (value ? formatDateTime(value) : '-'),
       },
       {
-        title: 'Risk',
+        title: 'Rủi ro',
         key: 'risk',
         render: (_, record) => renderRiskChips(record),
       },
@@ -202,7 +202,7 @@ export const AccessRequestsPage = () => {
             actions={[
               {
                 key: 'detail',
-                label: 'Open detail',
+                label: 'Mở chi tiết',
                 onClick: () => setSelectedId(record.id),
               },
               {
@@ -239,33 +239,35 @@ export const AccessRequestsPage = () => {
   const historyColumns = useMemo<ColumnsType<AccessRequestHistoryItem>>(
     () => [
       {
-        title: 'Time',
+        title: 'Thời gian',
         dataIndex: 'createdAt',
         width: 180,
         render: (value: string) => formatDateTime(value),
       },
       {
-        title: 'Action',
+        title: 'Hành động',
         dataIndex: 'action',
         width: 140,
       },
       {
-        title: 'Status change',
+        title: 'Đổi trạng thái',
         key: 'statusChange',
         width: 220,
         render: (_, record) => (
           <span>
-            {record.previousStatus ?? '-'} → {record.newStatus ?? '-'}
+            {record.previousStatus ?? '-'}
+            {' -> '}
+            {record.newStatus ?? '-'}
           </span>
         ),
       },
       {
-        title: 'Actor',
+        title: 'Người thao tác',
         dataIndex: 'actorUserId',
-        render: (value: string | null) => value ?? 'System',
+        render: (value: string | null) => value ?? 'Hệ thống',
       },
       {
-        title: 'Reason',
+        title: 'Lý do',
         key: 'reason',
         render: (_, record) => record.note ?? record.reason ?? '-',
       },
@@ -302,10 +304,10 @@ export const AccessRequestsPage = () => {
   if (listQuery.isLoading && !listQuery.data) {
     return (
       <PageShell
-        title="IP Access Requests"
-        description="Review pending IP requests, shared-address risk, and approval history."
+        title="Yêu cầu truy cập IP"
+        description="Duyệt yêu cầu IP đang chờ, rủi ro địa chỉ dùng chung và lịch sử phê duyệt."
       >
-        <QueryStateView kind="loading" title="Loading IP access requests..." />
+        <QueryStateView kind="loading" title="Đang tải yêu cầu truy cập IP..." />
       </PageShell>
     );
   }
@@ -313,12 +315,12 @@ export const AccessRequestsPage = () => {
   if (listQuery.isError) {
     return (
       <PageShell
-        title="IP Access Requests"
-        description="Review pending IP requests, shared-address risk, and approval history."
+        title="Yêu cầu truy cập IP"
+        description="Duyệt yêu cầu IP đang chờ, rủi ro địa chỉ dùng chung và lịch sử phê duyệt."
       >
         <QueryStateView
           kind="error"
-          description="Unable to load IP access requests."
+          description="Không thể tải yêu cầu truy cập IP."
           onRetry={() => {
             void listQuery.refetch();
           }}
@@ -330,8 +332,8 @@ export const AccessRequestsPage = () => {
   return (
     <>
       <PageShell
-        title="IP Access Requests"
-        description="Use this queue to approve, reject, or revoke IP-based access without losing user and audit context."
+        title="Yêu cầu truy cập IP"
+        description="Dùng hàng đợi này để duyệt, từ chối hoặc thu hồi truy cập theo IP mà không mất ngữ cảnh người dùng và audit."
         headerExtra={
           <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
             <Button
@@ -341,7 +343,7 @@ export const AccessRequestsPage = () => {
                 void listQuery.refetch();
               }}
             >
-              Refresh
+              Làm mới
             </Button>
           </div>
         }
@@ -354,40 +356,39 @@ export const AccessRequestsPage = () => {
             initialValues={{ status: filters.status }}
           >
             <Form.Item
-              label="Status"
+              label="Trạng thái"
               name="status"
               className="ds-toolbar-field ds-toolbar-field--md"
             >
-              <Select allowClear options={statusOptions} placeholder="All statuses" />
+              <Select allowClear options={statusOptions} placeholder="Tất cả trạng thái" />
             </Form.Item>
             <Form.Item
-              label="Search"
+              label="Tìm kiếm"
               name="keyword"
               className="ds-toolbar-field ds-toolbar-field--lg"
             >
-              <Input allowClear placeholder="IP or user email" />
+              <Input allowClear placeholder="IP hoặc email người dùng" />
             </Form.Item>
             <Form.Item className="ds-toolbar-field ds-toolbar-actions">
               <Space>
                 <Button type="primary" onClick={applyFilters}>
-                  Apply filters
+                  Áp dụng bộ lọc
                 </Button>
-                <Button onClick={resetFilters}>Reset</Button>
+                <Button onClick={resetFilters}>Đặt lại</Button>
               </Space>
             </Form.Item>
           </Form>
           <div className="ds-filter-toolbar-meta">
             <span>
-              {listQuery.data?.pagination.total ?? 0} matched request
-              {(listQuery.data?.pagination.total ?? 0) === 1 ? '' : 's'}
+              {listQuery.data?.pagination.total ?? 0} yêu cầu phù hợp
             </span>
             <span>
               {activeFilterCount > 0
-                ? `${activeFilterCount} active filter${activeFilterCount === 1 ? '' : 's'}`
-                : 'No active filters'}
+                ? `${activeFilterCount} bộ lọc đang hoạt động`
+                : 'Không có bộ lọc đang hoạt động'}
             </span>
             <span>
-              Last sync:{' '}
+              Đồng bộ gần nhất:{' '}
               {listQuery.dataUpdatedAt
                 ? formatDateTime(new Date(listQuery.dataUpdatedAt).toISOString())
                 : '-'}
@@ -396,12 +397,12 @@ export const AccessRequestsPage = () => {
         </FilterBar>
 
         <DataTableShell
-          title="Approval queue"
-          meta="Keep the risky requests visible, then open detail only when you need linked-user and history context."
+          title="Hàng đợi phê duyệt"
+          meta="Giữ các yêu cầu rủi ro luôn hiển thị, rồi chỉ mở chi tiết khi cần ngữ cảnh người dùng liên quan và lịch sử."
           toolbar={
             <DataTableToolbar>
               <span className="ds-toolbar-summary">
-                Page {listQuery.data?.pagination.page ?? 1} of{' '}
+                Trang {listQuery.data?.pagination.page ?? 1} /{' '}
                 {listQuery.data?.pagination.totalPages ?? 1}
               </span>
             </DataTableToolbar>
@@ -412,7 +413,7 @@ export const AccessRequestsPage = () => {
             columns={columns}
             minHeight={360}
             dataSource={listQuery.data?.items ?? []}
-            emptyNode={<EmptyState description="No access requests matched the current filters." />}
+            emptyNode={<EmptyState description="Không có yêu cầu truy cập nào khớp với bộ lọc hiện tại." />}
             onRow={(record) => ({
               onClick: () => setSelectedId(record.id),
               onKeyDown: (event) => {
@@ -443,96 +444,96 @@ export const AccessRequestsPage = () => {
           setSelectedId(null);
           setActionReason('');
         }}
-        title="IP access review"
+        title="Duyệt truy cập IP"
         width={840}
       >
         {!selectedId ? (
-          <EmptyState description="Select a request to inspect approval context." />
+          <EmptyState description="Chọn một yêu cầu để xem ngữ cảnh phê duyệt." />
         ) : detailQuery.isLoading && !selectedRequest ? (
-          <QueryStateView kind="loading" compact title="Loading request detail..." />
+          <QueryStateView kind="loading" compact title="Đang tải chi tiết yêu cầu..." />
         ) : detailQuery.isError ? (
           <QueryStateView
             kind="error"
             compact
-            description="Unable to load request detail."
+            description="Không thể tải chi tiết yêu cầu."
             onRetry={() => {
               void detailQuery.refetch();
             }}
           />
         ) : !selectedRequest ? (
-          <EmptyState description="Request detail is unavailable." />
+          <EmptyState description="Chi tiết yêu cầu hiện không khả dụng." />
         ) : (
           <div className="ds-settings-stack">
             <div className="ds-detail-overview-grid">
               <div className="ds-summary-tile">
-                <span className="ds-summary-tile-label">Request status</span>
+                <span className="ds-summary-tile-label">Trạng thái yêu cầu</span>
                 <div className="ds-summary-tile-value">
                   <StatusBadge status={selectedRequest.status} />
                 </div>
-                <span className="ds-summary-tile-meta">Current access-review decision state.</span>
+                <span className="ds-summary-tile-meta">Trạng thái quyết định duyệt truy cập hiện tại.</span>
               </div>
               <div className="ds-summary-tile">
-                <span className="ds-summary-tile-label">Linked users</span>
+                <span className="ds-summary-tile-label">Người dùng liên quan</span>
                 <strong className="ds-summary-tile-value">
                   {selectedRequest.linkedUsers.length}
                 </strong>
-                <span className="ds-summary-tile-meta">Accounts seen from this IP.</span>
+                <span className="ds-summary-tile-meta">Các tài khoản được ghi nhận từ IP này.</span>
               </div>
               <div className="ds-summary-tile">
-                <span className="ds-summary-tile-label">Source</span>
+                <span className="ds-summary-tile-label">Nguồn</span>
                 <strong className="ds-summary-tile-value">{selectedRequest.source}</strong>
-                <span className="ds-summary-tile-meta">How this request entered the system.</span>
+                <span className="ds-summary-tile-meta">Cách yêu cầu này đi vào hệ thống.</span>
               </div>
               <div className="ds-summary-tile">
-                <span className="ds-summary-tile-label">Expires</span>
+                <span className="ds-summary-tile-label">Hết hạn</span>
                 <strong className="ds-summary-tile-value">
                   {selectedRequest.expiresAt ? formatDateTime(selectedRequest.expiresAt) : '-'}
                 </strong>
-                <span className="ds-summary-tile-meta">Empty means no expiry is currently set.</span>
+                <span className="ds-summary-tile-meta">Để trống nghĩa là hiện chưa đặt thời hạn hết hạn.</span>
               </div>
             </div>
 
             <SurfaceCard
-              eyebrow="Request context"
+              eyebrow="Ngữ cảnh yêu cầu"
               title={selectedRequest.normalizedIp}
-              description="Keep scope, reason, and network metadata visible before you approve or revoke access."
+              description="Giữ phạm vi, lý do và metadata mạng luôn hiển thị trước khi duyệt hoặc thu hồi truy cập."
               status={<StatusBadge status={selectedRequest.status} />}
             >
               <div className="ds-detail-list">
                 <div className="ds-detail-list-item">
-                  <span>Scope</span>
+                  <span>Phạm vi</span>
                   <strong>{selectedRequest.scope}</strong>
                 </div>
                 <div className="ds-detail-list-item">
-                  <span>Original IP</span>
+                  <span>IP gốc</span>
                   <strong>{selectedRequest.ipAddress}</strong>
                 </div>
                 <div className="ds-detail-list-item">
-                  <span>First seen</span>
+                  <span>Lần thấy đầu tiên</span>
                   <strong>{formatDateTime(selectedRequest.firstSeenAt)}</strong>
                 </div>
                 <div className="ds-detail-list-item">
-                  <span>Last seen</span>
+                  <span>Lần thấy gần nhất</span>
                   <strong>{formatDateTime(selectedRequest.lastSeenAt)}</strong>
                 </div>
                 <div className="ds-detail-list-item">
-                  <span>Approved by</span>
+                  <span>Duyệt bởi</span>
                   <strong>{selectedRequest.approvedBy ?? '-'}</strong>
                 </div>
                 <div className="ds-detail-list-item">
-                  <span>Rejected by</span>
+                  <span>Từ chối bởi</span>
                   <strong>{selectedRequest.rejectedBy ?? '-'}</strong>
                 </div>
                 <div className="ds-detail-list-item">
-                  <span>Reason</span>
+                  <span>Lý do</span>
                   <strong>{selectedRequest.reason ?? '-'}</strong>
                 </div>
                 <div className="ds-detail-list-item">
-                  <span>Note</span>
+                  <span>Ghi chú</span>
                   <strong>{selectedRequest.note ?? '-'}</strong>
                 </div>
                 <div className="ds-detail-list-item">
-                  <span>Forwarded chain</span>
+                  <span>Chuỗi forwarded</span>
                   <strong>
                     {selectedRequest.lastForwardedChain.length > 0
                       ? selectedRequest.lastForwardedChain.join(', ')
@@ -543,17 +544,17 @@ export const AccessRequestsPage = () => {
             </SurfaceCard>
 
             <SurfaceCard
-              eyebrow="Risk review"
-              title="Shared-address and expiry signals"
-              description="These flags help prevent approving transient or multi-user IPs without enough context."
+              eyebrow="Rà soát rủi ro"
+              title="Tín hiệu địa chỉ dùng chung và hết hạn"
+              description="Các cờ này giúp tránh duyệt IP tạm thời hoặc dùng cho nhiều người khi chưa đủ ngữ cảnh."
             >
               {renderRiskChips(selectedRequest)}
             </SurfaceCard>
 
             <SurfaceCard
-              eyebrow="Linked users"
-              title="Accounts observed on this IP"
-              description="Review the user footprint before approving a shared or unusual address."
+              eyebrow="Người dùng liên quan"
+              title="Các tài khoản quan sát được trên IP này"
+              description="Rà soát footprint người dùng trước khi duyệt địa chỉ dùng chung hoặc bất thường."
             >
               {selectedRequest.linkedUsers.length > 0 ? (
                 <div className="ds-detail-list">
@@ -565,28 +566,27 @@ export const AccessRequestsPage = () => {
                   ))}
                 </div>
               ) : (
-                <EmptyState description="No linked users were returned for this request." />
+                <EmptyState description="Không có người dùng liên quan nào được trả về cho yêu cầu này." />
               )}
             </SurfaceCard>
 
             <SurfaceCard
-              eyebrow="Review action"
-              title="Apply the decision with explicit operator intent"
-              description="Approvals and revocations affect access enforcement immediately. Log a reason before proceeding."
+              eyebrow="Thao tác duyệt"
+              title="Áp dụng quyết định với ý định rõ ràng của operator"
+              description="Duyệt và thu hồi sẽ tác động ngay tới enforcement truy cập. Hãy ghi lý do trước khi tiếp tục."
             >
               <div className="ds-settings-action-copy">
-                The note below is written into the action payload so later reviewers can understand
-                why this IP was approved, rejected, or revoked.
+                Ghi chú dưới đây sẽ được ghi vào payload thao tác để người rà soát sau hiểu vì sao IP này được duyệt, từ chối hoặc thu hồi.
               </div>
               <Input.TextArea
                 rows={3}
                 value={actionReason}
-                placeholder="Reason for this decision"
+                placeholder="Lý do cho quyết định này"
                 onChange={(event) => setActionReason(event.target.value)}
               />
               <div className="ds-settings-action-bar">
                 <div className="ds-settings-action-copy">
-                  Safe actions stay secondary. Destructive actions remain visually separated.
+                  Tác vụ an toàn giữ mức thứ cấp. Tác vụ phá hủy luôn được tách thị giác rõ ràng.
                 </div>
                 <Space wrap>
                   <Button
@@ -598,7 +598,7 @@ export const AccessRequestsPage = () => {
                     }
                     onClick={() => actionMutation.mutate({ action: 'approve', id: selectedRequest.id })}
                   >
-                    Approve
+                    Duyệt
                   </Button>
                   <Button
                     danger
@@ -609,7 +609,7 @@ export const AccessRequestsPage = () => {
                     }
                     onClick={() => actionMutation.mutate({ action: 'reject', id: selectedRequest.id })}
                   >
-                    Reject
+                    Từ chối
                   </Button>
                   <Button
                     danger
@@ -620,18 +620,18 @@ export const AccessRequestsPage = () => {
                     }
                     onClick={() => actionMutation.mutate({ action: 'revoke', id: selectedRequest.id })}
                   >
-                    Revoke
+                    Thu hồi
                   </Button>
                 </Space>
               </div>
             </SurfaceCard>
 
             <DataTableShell
-              title="Decision history"
-              meta="Use the audit trail to understand how the request changed over time."
+              title="Lịch sử quyết định"
+              meta="Dùng audit trail để hiểu yêu cầu này đã thay đổi theo thời gian như thế nào."
             >
               {historyQuery.isError ? (
-                <QueryStateView kind="error" compact description="Unable to load request history." />
+                <QueryStateView kind="error" compact description="Không thể tải lịch sử yêu cầu." />
               ) : (
                 <DataTable
                   rowKey="id"
@@ -640,7 +640,7 @@ export const AccessRequestsPage = () => {
                   loading={historyQuery.isLoading}
                   dataSource={historyQuery.data?.items ?? []}
                   pagination={false}
-                  emptyNode={<EmptyState description="No history entries were returned." />}
+                  emptyNode={<EmptyState description="Không có bản ghi lịch sử nào được trả về." />}
                   scroll={{ x: 'max-content', y: 320 }}
                 />
               )}

@@ -63,10 +63,8 @@ export const ChartWrapper = ({
     if (state === 'permission') {
       return (
         <EmptyState
-          title={stateTitle ?? 'Restricted data'}
-          description={
-            stateDescription ?? 'Your current role does not have access to this dataset.'
-          }
+          title={stateTitle ?? 'Dữ liệu bị giới hạn'}
+          description={stateDescription ?? 'Vai trò hiện tại của bạn không có quyền xem tập dữ liệu này.'}
           compact
         />
       );
@@ -108,7 +106,7 @@ export const ChartWrapper = ({
         actions ??
         (onRetry ? (
           <Button icon={<ReloadOutlined />} onClick={onRetry}>
-            Refresh
+            Làm mới
           </Button>
         ) : undefined)
       }

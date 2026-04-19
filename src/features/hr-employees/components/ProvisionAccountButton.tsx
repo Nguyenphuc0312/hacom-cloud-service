@@ -8,19 +8,19 @@ import { useProvisionHrEmployeeAccountMutation } from '../hooks/useHrEmployeeMut
 
 const getProvisionDisableReason = (employee: HrEmployee, canWrite: boolean): string | null => {
   if (!canWrite) {
-    return 'Provision action is disabled by current role or release flag.';
+    return 'Thao tác cấp tài khoản bị tắt bởi vai trò hiện tại hoặc cờ phát hành.';
   }
 
   if (!employee.email) {
-    return 'Missing company email.';
+    return 'Thiếu email công ty.';
   }
 
   if (employee.linkedUser?.id) {
-    return 'Employee already linked to an account.';
+    return 'Nhân sự đã được liên kết với một tài khoản.';
   }
 
   if (employee.provisioningStatus === 'PROVISIONED' || employee.provisioningStatus === 'PENDING') {
-    return `Provisioning status is ${employee.provisioningStatus}.`;
+    return `Trạng thái cấp tài khoản hiện là ${employee.provisioningStatus}.`;
   }
 
   return null;
@@ -36,7 +36,7 @@ interface ProvisionAccountButtonProps {
 export const ProvisionAccountButton = ({
   employee,
   canWrite,
-  buttonText = 'Provision',
+  buttonText = 'Cấp tài khoản',
   onSuccess,
 }: ProvisionAccountButtonProps) => {
   const currentAdmin = useAuthStore((state) => state.user);
@@ -51,11 +51,11 @@ export const ProvisionAccountButton = ({
     }
 
     Modal.confirm({
-      title: 'Provision account',
+      title: 'Cấp tài khoản',
       content:
-        'Tao tai khoan cho nhan su nay theo contract backend hien tai. Du lieu danh sach va chi tiet se duoc refresh sau khi thanh cong.',
-      okText: 'Provision',
-      cancelText: 'Cancel',
+        'Tạo tài khoản cho nhân sự này theo contract backend hiện tại. Dữ liệu danh sách và chi tiết sẽ được làm mới sau khi thành công.',
+      okText: 'Cấp tài khoản',
+      cancelText: 'Hủy',
       onOk: async () => {
         if (provisionLockRef.current) {
           return;
@@ -74,8 +74,8 @@ export const ProvisionAccountButton = ({
           });
           message.success(
             result.loginIdentifier
-              ? `Provisioned account ${result.loginIdentifier}.`
-              : 'Provisioned account successfully.',
+              ? `Đã cấp tài khoản ${result.loginIdentifier}.`
+              : 'Đã cấp tài khoản thành công.',
           );
           await Promise.resolve(onSuccess?.());
         } catch (error) {

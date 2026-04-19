@@ -22,10 +22,10 @@ import { SurfaceCard } from '@/components/ui/SurfaceCard';
 import { formatDateTime } from '@/utils/date';
 
 const ROLE_OPTIONS: Array<{ label: string; value: Exclude<Role, 'superadmin' | 'admin'> }> = [
-  { label: 'Super Admin', value: 'super_admin' },
-  { label: 'Operator', value: 'operator' },
-  { label: 'Viewer', value: 'viewer' },
-  { label: 'HR Admin', value: 'hr_admin' },
+  { label: 'Quản trị cấp cao', value: 'super_admin' },
+  { label: 'Điều hành', value: 'operator' },
+  { label: 'Người xem', value: 'viewer' },
+  { label: 'Quản trị nhân sự', value: 'hr_admin' },
 ];
 
 const PERMISSION_OPTIONS = [
@@ -65,8 +65,19 @@ const sourceTone: Record<string, 'default' | 'warning'> = {
   break_glass: 'warning',
 };
 
+const formatSourceLabel = (value: string | null | undefined) => {
+  if (!value) return '-';
+  if (value === 'db') return 'DB';
+  if (value === 'break_glass') return 'Break-glass';
+  return value.replace(/_/g, ' ');
+};
+
 const formatRoleLabel = (role: Role | null | undefined) => {
-  if (!role) return 'No DB role';
+  if (!role) return 'Không có vai trò DB';
+  if (role === 'super_admin') return 'Quản trị cấp cao';
+  if (role === 'operator') return 'Điều hành';
+  if (role === 'viewer') return 'Người xem';
+  if (role === 'hr_admin') return 'Quản trị nhân sự';
   return role.replace(/_/g, ' ');
 };
 
@@ -130,7 +141,7 @@ export const AuthorityPage = () => {
   const roleMutation = useMutation({
     mutationFn: async () => {
       if (!selectedUserId || !draftRole) {
-        throw new Error('Select a canonical role before saving.');
+        throw new Error('Hãy chọn vai trò chuẩn trước khi lưu.');
       }
 
       return authorityClient.updateRole(selectedUserId, {
@@ -139,7 +150,7 @@ export const AuthorityPage = () => {
       });
     },
     onSuccess: async () => {
-      message.success('Canonical role updated.');
+      message.success('Đã cập nhật vai trò chuẩn.');
       await refreshAuthorityData(selectedUserId);
     },
     onError: (error) => {
@@ -150,13 +161,13 @@ export const AuthorityPage = () => {
   const deleteRoleMutation = useMutation({
     mutationFn: async () => {
       if (!selectedUserId) {
-        throw new Error('Select a user before removing the DB role.');
+        throw new Error('Hãy chọn người dùng trước khi xóa vai trò DB.');
       }
 
       return authorityClient.deleteRole(selectedUserId, changeReason.trim() || undefined);
     },
     onSuccess: async () => {
-      message.success('DB role removed.');
+      message.success('Đã xóa vai trò DB.');
       setRemoveRoleConfirmOpen(false);
       await refreshAuthorityData(selectedUserId);
     },
@@ -168,7 +179,7 @@ export const AuthorityPage = () => {
   const overridesMutation = useMutation({
     mutationFn: async () => {
       if (!selectedUserId) {
-        throw new Error('Select a user before saving overrides.');
+        throw new Error('Hãy chọn người dùng trước khi lưu override.');
       }
 
       const overrides = draftOverrides
@@ -184,7 +195,7 @@ export const AuthorityPage = () => {
       });
     },
     onSuccess: async () => {
-      message.success('Overrides updated.');
+      message.success('Đã cập nhật override.');
       await refreshAuthorityData(selectedUserId);
     },
     onError: (error) => {
@@ -195,17 +206,17 @@ export const AuthorityPage = () => {
   const columns = useMemo<ColumnsType<AuthorityListItem>>(
     () => [
       {
-        title: 'Account',
+        title: 'Tài khoản',
         key: 'account',
         render: (_, record) => (
           <div className="ds-table-primary-cell">
             <strong>{record.email}</strong>
-            <span>{record.username ?? 'No username'}</span>
+            <span>{record.username ?? 'Chưa có username'}</span>
           </div>
         ),
       },
       {
-        title: 'Canonical role',
+        title: 'Vai trò chuẩn',
         dataIndex: 'role',
         width: 160,
         render: (value: Role | null) => (
@@ -213,7 +224,7 @@ export const AuthorityPage = () => {
         ),
       },
       {
-        title: 'Authority source',
+        title: 'Nguồn phân quyền',
         dataIndex: 'authoritySource',
         width: 160,
         render: (value: string | null) =>
@@ -221,30 +232,31 @@ export const AuthorityPage = () => {
             <span
               className={`ds-shell-chip ${sourceTone[value] === 'warning' ? 'ds-shell-chip--warning' : 'ds-shell-chip--ghost'}`}
             >
-              {value.replace(/_/g, ' ')}
+              {formatSourceLabel(value)}
             </span>
           ) : (
             '-'
           ),
       },
       {
-        title: 'Effective permissions',
+        title: 'Quyền hiệu lực',
         key: 'permissions',
         width: 140,
         render: (_, record) => record.effectivePermissions.length,
       },
       {
-        title: 'Overrides',
+        title: 'Override',
         dataIndex: 'overrideCount',
         width: 110,
       },
       {
-        title: 'Effective window',
+        title: 'Khoảng hiệu lực',
         key: 'window',
         render: (_, record) => (
           <span>
-            {record.effectiveFrom ? formatDateTime(record.effectiveFrom) : 'Now'} →{' '}
-            {record.effectiveUntil ? formatDateTime(record.effectiveUntil) : 'Open-ended'}
+            {record.effectiveFrom ? formatDateTime(record.effectiveFrom) : 'Ngay bây giờ'}
+            {' -> '}
+            {record.effectiveUntil ? formatDateTime(record.effectiveUntil) : 'Không thời hạn'}
           </span>
         ),
       },
@@ -257,7 +269,7 @@ export const AuthorityPage = () => {
             actions={[
               {
                 key: 'detail',
-                label: 'Open detail',
+                label: 'Mở chi tiết',
                 onClick: () => setSelectedUserId(record.userId),
               },
             ]}
@@ -290,10 +302,10 @@ export const AuthorityPage = () => {
   if (listQuery.isLoading && !listQuery.data) {
     return (
       <PageShell
-        title="Admin Authority"
-        description="Review canonical roles, break-glass posture, and permission overrides."
+        title="Phân quyền quản trị"
+        description="Xem vai trò chuẩn, trạng thái break-glass và phần ghi đè quyền."
       >
-        <QueryStateView kind="loading" title="Loading authority workspace..." />
+        <QueryStateView kind="loading" title="Đang tải workspace phân quyền..." />
       </PageShell>
     );
   }
@@ -301,12 +313,12 @@ export const AuthorityPage = () => {
   if (listQuery.isError) {
     return (
       <PageShell
-        title="Admin Authority"
-        description="Review canonical roles, break-glass posture, and permission overrides."
+        title="Phân quyền quản trị"
+        description="Xem vai trò chuẩn, trạng thái break-glass và phần ghi đè quyền."
       >
         <QueryStateView
           kind="error"
-          description="Unable to load authority records."
+          description="Không thể tải dữ liệu phân quyền."
           onRetry={() => {
             void listQuery.refetch();
           }}
@@ -320,8 +332,8 @@ export const AuthorityPage = () => {
   return (
     <>
       <PageShell
-        title="Admin Authority"
-        description="Keep canonical role, authority source, and effective permissions visible in one governance workspace."
+        title="Phân quyền quản trị"
+        description="Giữ vai trò chuẩn, nguồn phân quyền và quyền hiệu lực hiển thị trong cùng một workspace governance."
         headerExtra={
           <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
             <Button
@@ -331,7 +343,7 @@ export const AuthorityPage = () => {
                 void listQuery.refetch();
               }}
             >
-              Refresh
+              Làm mới
             </Button>
           </div>
         }
@@ -339,33 +351,32 @@ export const AuthorityPage = () => {
         <FilterBar>
           <Form form={form} layout="inline" className="ds-toolbar-form">
             <Form.Item
-              label="Search"
+              label="Tìm kiếm"
               name="keyword"
               className="ds-toolbar-field ds-toolbar-field--lg"
             >
-              <Input allowClear placeholder="Email or username" />
+              <Input allowClear placeholder="Email hoặc username" />
             </Form.Item>
             <Form.Item className="ds-toolbar-field ds-toolbar-actions">
               <Space>
                 <Button type="primary" onClick={applyFilters}>
-                  Apply filters
+                  Áp dụng bộ lọc
                 </Button>
-                <Button onClick={resetFilters}>Reset</Button>
+                <Button onClick={resetFilters}>Đặt lại</Button>
               </Space>
             </Form.Item>
           </Form>
           <div className="ds-filter-toolbar-meta">
             <span>
-              {listQuery.data?.pagination.total ?? 0} authority record
-              {(listQuery.data?.pagination.total ?? 0) === 1 ? '' : 's'}
+              {listQuery.data?.pagination.total ?? 0} bản ghi phân quyền
             </span>
             <span>
               {activeFilterCount > 0
-                ? `${activeFilterCount} active filter${activeFilterCount === 1 ? '' : 's'}`
-                : 'No active filters'}
+                ? `${activeFilterCount} bộ lọc đang hoạt động`
+                : 'Không có bộ lọc đang hoạt động'}
             </span>
             <span>
-              Last sync:{' '}
+              Đồng bộ gần nhất:{' '}
               {listQuery.dataUpdatedAt
                 ? formatDateTime(new Date(listQuery.dataUpdatedAt).toISOString())
                 : '-'}
@@ -374,12 +385,12 @@ export const AuthorityPage = () => {
         </FilterBar>
 
         <DataTableShell
-          title="Authority assignments"
-          meta="Use the list to find the operator quickly, then open detail for role and override changes."
+          title="Phân công quyền"
+          meta="Dùng danh sách để tìm operator thật nhanh, rồi mở chi tiết khi cần đổi vai trò hoặc override."
           toolbar={
             <DataTableToolbar>
               <span className="ds-toolbar-summary">
-                Page {listQuery.data?.pagination.page ?? 1} of{' '}
+                Trang {listQuery.data?.pagination.page ?? 1} /{' '}
                 {listQuery.data?.pagination.totalPages ?? 1}
               </span>
             </DataTableToolbar>
@@ -390,7 +401,7 @@ export const AuthorityPage = () => {
             columns={columns}
             minHeight={360}
             dataSource={listQuery.data?.items ?? []}
-            emptyNode={<EmptyState description="No authority records matched the current filter." />}
+            emptyNode={<EmptyState description="Không có bản ghi phân quyền nào khớp với bộ lọc hiện tại." />}
             onRow={(record) => ({
               onClick: () => setSelectedUserId(record.userId),
               onKeyDown: (event) => {
@@ -422,55 +433,55 @@ export const AuthorityPage = () => {
           setChangeReason('');
           setRemoveRoleConfirmOpen(false);
         }}
-        title="Authority detail"
+        title="Chi tiết phân quyền"
         width={920}
       >
         {!selectedUserId ? (
-          <EmptyState description="Select an authority record to inspect permissions." />
+          <EmptyState description="Chọn một bản ghi phân quyền để xem quyền hạn." />
         ) : detailQuery.isLoading && !detail ? (
-          <QueryStateView kind="loading" compact title="Loading authority detail..." />
+          <QueryStateView kind="loading" compact title="Đang tải chi tiết phân quyền..." />
         ) : detailQuery.isError ? (
           <QueryStateView
             kind="error"
             compact
-            description="Unable to load authority detail."
+            description="Không thể tải chi tiết phân quyền."
             onRetry={() => {
               void detailQuery.refetch();
             }}
           />
         ) : !detail ? (
-          <EmptyState description="Authority detail is unavailable." />
+          <EmptyState description="Chi tiết phân quyền hiện không khả dụng." />
         ) : (
           <div className="ds-settings-stack">
             <div className="ds-detail-overview-grid">
               <div className="ds-summary-tile">
-                <span className="ds-summary-tile-label">Authority source</span>
+                <span className="ds-summary-tile-label">Nguồn phân quyền</span>
                 <strong className="ds-summary-tile-value">
-                  {detail.authoritySource ? detail.authoritySource.replace(/_/g, ' ') : 'none'}
+                  {detail.authoritySource ? formatSourceLabel(detail.authoritySource) : 'không có'}
                 </strong>
-                <span className="ds-summary-tile-meta">Current authority resolution path.</span>
+                <span className="ds-summary-tile-meta">Luồng phân giải phân quyền hiện tại.</span>
               </div>
               <div className="ds-summary-tile">
-                <span className="ds-summary-tile-label">DB role</span>
+                <span className="ds-summary-tile-label">Vai trò DB</span>
                 <strong className="ds-summary-tile-value">{formatRoleLabel(detail.role)}</strong>
-                <span className="ds-summary-tile-meta">Canonical role stored in the authority DB.</span>
+                <span className="ds-summary-tile-meta">Vai trò chuẩn đang được lưu trong authority DB.</span>
               </div>
               <div className="ds-summary-tile">
-                <span className="ds-summary-tile-label">Overrides</span>
+                <span className="ds-summary-tile-label">Override</span>
                 <strong className="ds-summary-tile-value">{detail.overrides.length}</strong>
-                <span className="ds-summary-tile-meta">Grant or deny diffs applied on top of the base role.</span>
+                <span className="ds-summary-tile-meta">Các diff cấp hoặc từ chối áp lên trên vai trò gốc.</span>
               </div>
               <div className="ds-summary-tile">
-                <span className="ds-summary-tile-label">Effective permissions</span>
+                <span className="ds-summary-tile-label">Quyền hiệu lực</span>
                 <strong className="ds-summary-tile-value">{detail.effectivePermissions.length}</strong>
-                <span className="ds-summary-tile-meta">Permissions the runtime will currently honor.</span>
+                <span className="ds-summary-tile-meta">Những quyền mà runtime hiện đang chấp nhận.</span>
               </div>
             </div>
 
             <SurfaceCard
-              eyebrow="Identity"
+              eyebrow="Danh tính"
               title={detail.user.email}
-              description="Review the operator identity and authority timing before editing roles or overrides."
+              description="Rà soát danh tính operator và thời gian hiệu lực trước khi sửa vai trò hoặc override."
             >
               <div className="ds-detail-list">
                 <div className="ds-detail-list-item">
@@ -478,48 +489,48 @@ export const AuthorityPage = () => {
                   <strong>{detail.user.username ?? '-'}</strong>
                 </div>
                 <div className="ds-detail-list-item">
-                  <span>Authority source</span>
-                  <strong>{detail.authoritySource ?? '-'}</strong>
+                  <span>Nguồn phân quyền</span>
+                  <strong>{formatSourceLabel(detail.authoritySource)}</strong>
                 </div>
                 <div className="ds-detail-list-item">
-                  <span>Effective from</span>
-                  <strong>{detail.effectiveFrom ? formatDateTime(detail.effectiveFrom) : 'Now'}</strong>
+                  <span>Có hiệu lực từ</span>
+                  <strong>{detail.effectiveFrom ? formatDateTime(detail.effectiveFrom) : 'Ngay bây giờ'}</strong>
                 </div>
                 <div className="ds-detail-list-item">
-                  <span>Effective until</span>
+                  <span>Có hiệu lực đến</span>
                   <strong>
-                    {detail.effectiveUntil ? formatDateTime(detail.effectiveUntil) : 'Open-ended'}
+                    {detail.effectiveUntil ? formatDateTime(detail.effectiveUntil) : 'Không thời hạn'}
                   </strong>
                 </div>
                 <div className="ds-detail-list-item">
-                  <span>Break-glass eligible</span>
-                  <strong>{detail.breakGlassEligible ? 'Yes' : 'No'}</strong>
+                  <span>Cho phép break-glass</span>
+                  <strong>{detail.breakGlassEligible ? 'Có' : 'Không'}</strong>
                 </div>
               </div>
             </SurfaceCard>
 
             <SurfaceCard
-              eyebrow="Change log reason"
-              title="Operator note"
-              description="Use a reason whenever you change the canonical role or override list so later reviewers understand why the change happened."
+              eyebrow="Lý do thay đổi"
+              title="Ghi chú operator"
+              description="Hãy ghi lý do mỗi khi đổi vai trò chuẩn hoặc danh sách override để người rà soát sau hiểu vì sao thay đổi xảy ra."
             >
               <Input.TextArea
                 rows={3}
                 value={changeReason}
-                placeholder="Reason for this authority change"
+                placeholder="Lý do cho thay đổi phân quyền này"
                 onChange={(event) => setChangeReason(event.target.value)}
               />
             </SurfaceCard>
 
             <SurfaceCard
-              eyebrow="Canonical role"
-              title="DB-backed role assignment"
-              description="Keep the base role explicit. Remove the DB role only when you intentionally want break-glass or no authority source to take over."
+              eyebrow="Vai trò chuẩn"
+              title="Phân công vai trò dựa trên DB"
+              description="Giữ vai trò gốc luôn rõ ràng. Chỉ xóa vai trò DB khi bạn thực sự muốn break-glass hoặc không còn nguồn phân quyền nào tiếp quản."
             >
               <div className="ds-admin-form-grid">
                 <Select
                   value={draftRole}
-                  placeholder="Select canonical role"
+                  placeholder="Chọn vai trò chuẩn"
                   options={ROLE_OPTIONS}
                   onChange={setDraftRole}
                   allowClear
@@ -531,7 +542,7 @@ export const AuthorityPage = () => {
                     loading={roleMutation.isPending}
                     onClick={() => roleMutation.mutate()}
                   >
-                    Save role
+                    Lưu vai trò
                   </Button>
                   <Button
                     danger
@@ -539,16 +550,16 @@ export const AuthorityPage = () => {
                     loading={deleteRoleMutation.isPending}
                     onClick={() => setRemoveRoleConfirmOpen(true)}
                   >
-                    Remove DB role
+                    Xóa vai trò DB
                   </Button>
                 </div>
               </div>
             </SurfaceCard>
 
             <SurfaceCard
-              eyebrow="Permission overrides"
-              title="Grant / deny diffs"
-              description="Use overrides sparingly. Prefer the base role when possible, and keep the diff set short enough to review quickly."
+              eyebrow="Override quyền"
+              title="Diff cấp / từ chối"
+              description="Chỉ dùng override khi thật cần. Ưu tiên vai trò gốc nếu có thể, và giữ tập diff đủ ngắn để rà soát nhanh."
               actions={
                 <Button
                   onClick={() =>
@@ -561,7 +572,7 @@ export const AuthorityPage = () => {
                     ])
                   }
                 >
-                  Add override
+                  Thêm override
                 </Button>
               }
             >
@@ -571,7 +582,7 @@ export const AuthorityPage = () => {
                     <div key={override.id} className="ds-admin-override-row">
                       <Select
                         value={override.permission}
-                        placeholder="Permission"
+                        placeholder="Quyền"
                         options={PERMISSION_OPTIONS.map((permission) => ({
                           label: permission,
                           value: permission,
@@ -587,8 +598,8 @@ export const AuthorityPage = () => {
                       <Select
                         value={override.effect}
                         options={[
-                          { label: 'Grant', value: 'grant' },
-                          { label: 'Deny', value: 'deny' },
+                          { label: 'Cấp quyền', value: 'grant' },
+                          { label: 'Từ chối quyền', value: 'deny' },
                         ]}
                         onChange={(value: AuthorityOverrideEffect) =>
                           setDraftOverrides((current) =>
@@ -606,7 +617,7 @@ export const AuthorityPage = () => {
                           )
                         }
                       >
-                        Remove
+                        Xóa
                       </Button>
                     </div>
                   ))}
@@ -614,25 +625,25 @@ export const AuthorityPage = () => {
               ) : (
                 <EmptyState
                   compact
-                  title="No overrides configured"
-                  description="Save an empty list when you want the DB diff set cleared."
+                  title="Chưa cấu hình override"
+                  description="Lưu danh sách rỗng khi bạn muốn xóa toàn bộ tập diff trong DB."
                 />
               )}
 
               <div className="ds-settings-action-bar">
                 <div className="ds-settings-action-copy">
-                  Overrides apply on top of the canonical role. A deny should be rare and explicitly justified.
+                  Override được áp trên vai trò chuẩn. Một lệnh từ chối nên hiếm và luôn cần được giải thích rõ.
                 </div>
                 <Button type="primary" loading={overridesMutation.isPending} onClick={() => overridesMutation.mutate()}>
-                  Save overrides
+                  Lưu override
                 </Button>
               </div>
             </SurfaceCard>
 
             <SurfaceCard
-              eyebrow="Effective permissions"
-              title="Runtime permission set"
-              description="This is the final permission set the admin panel should honor after role plus overrides are resolved."
+              eyebrow="Quyền hiệu lực"
+              title="Tập quyền runtime"
+              description="Đây là tập quyền cuối cùng mà admin panel phải tôn trọng sau khi đã resolve vai trò và override."
             >
               {detail.effectivePermissions.length > 0 ? (
                 <div className="ds-admin-chip-list">
@@ -643,7 +654,7 @@ export const AuthorityPage = () => {
                   ))}
                 </div>
               ) : (
-                <EmptyState compact description="No effective permissions were returned." />
+                <EmptyState compact description="Không có quyền hiệu lực nào được trả về." />
               )}
             </SurfaceCard>
           </div>
@@ -652,9 +663,9 @@ export const AuthorityPage = () => {
 
       <ConfirmDialog
         open={removeRoleConfirmOpen}
-        title="Remove canonical DB role?"
-        description="This removes the DB-backed role assignment for the selected operator. Continue only if that fallback behavior is intentional."
-        confirmText="Remove role"
+        title="Xóa vai trò DB chuẩn?"
+        description="Thao tác này xóa phân công vai trò dựa trên DB cho operator đã chọn. Chỉ tiếp tục nếu đây là hành vi fallback mà bạn chủ đích."
+        confirmText="Xóa vai trò"
         danger
         loading={deleteRoleMutation.isPending}
         onCancel={() => setRemoveRoleConfirmOpen(false)}

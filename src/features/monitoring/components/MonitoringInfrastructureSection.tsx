@@ -34,18 +34,18 @@ export const MonitoringInfrastructureSection = ({
   return (
     <section>
       <MonitoringSectionHeader
-        title="Dependency / Infra Snapshot"
-        description="Short operator view of Redis, API, and host pressure without opening Grafana first."
+        title="Ảnh chụp phụ thuộc / hạ tầng"
+        description="Góc nhìn ngắn cho operator về Redis, API và áp lực host mà chưa cần mở Grafana."
         deepLink={overview.links.server}
         secondaryAction={
           <Space size={8}>
             {overview.links.redis ? (
               <Button type="link" href={overview.links.redis} target="_blank" rel="noreferrer">
-                Redis dashboard
+                Dashboard Redis
               </Button>
             ) : null}
             <Button type="link" onClick={() => navigate(overview.links.serviceHealth)}>
-              Service health
+              Sức khỏe dịch vụ
             </Button>
           </Space>
         }
@@ -56,31 +56,31 @@ export const MonitoringInfrastructureSection = ({
           <WidgetCard title="Redis">
             <div className="monitoring-summary-list">
               <div className="monitoring-summary-list-item">
-                <span>Redis service</span>
+                <span>Dịch vụ Redis</span>
                 <StatusBadge status={redis.status} />
               </div>
               <div className="monitoring-summary-list-item">
-                <span>Metrics pipeline</span>
+                <span>Pipeline metric</span>
                 <StatusBadge status={availabilityToStatus(redis.metricsStatus)} />
               </div>
               <div className="monitoring-summary-list-item">
-                <span>Exporter status</span>
+                <span>Trạng thái exporter</span>
                 <StatusBadge status={redis.exporterStatus === 'up' ? 'healthy' : redis.exporterStatus === 'down' ? 'down' : 'unknown'} />
               </div>
               <div className="monitoring-summary-list-item">
-                <span>Connected clients</span>
+                <span>Client đang kết nối</span>
                 <strong>{formatMetricValue(`${redis.connectedClients ?? '-'}`, redis.metricsStatus)}</strong>
               </div>
               <div className="monitoring-summary-list-item">
-                <span>Memory used</span>
+                <span>Bộ nhớ đã dùng</span>
                 <strong>{formatMetricValue(formatBytes(redis.memoryUsedBytes), redis.metricsStatus)}</strong>
               </div>
               <div className="monitoring-summary-list-item">
-                <span>Ops / sec</span>
+                <span>Ops / giây</span>
                 <strong>{formatMetricValue(formatRate(redis.opsPerSecond, '/s'), redis.metricsStatus)}</strong>
               </div>
               <div className="monitoring-summary-list-item">
-                <span>Blocked clients</span>
+                <span>Client bị chặn</span>
                 <strong>{formatMetricValue(`${redis.blockedClients ?? '-'}`, redis.metricsStatus)}</strong>
               </div>
             </div>
@@ -88,18 +88,18 @@ export const MonitoringInfrastructureSection = ({
           </WidgetCard>
         </Col>
         <Col xs={24} lg={8}>
-          <WidgetCard title="Chat API">
+          <WidgetCard title="API chat">
             <div className="monitoring-summary-list">
               <div className="monitoring-summary-list-item">
-                <span>Status</span>
+                <span>Trạng thái</span>
                 <StatusBadge status={api.status} />
               </div>
               <div className="monitoring-summary-list-item">
-                <span>Health latency</span>
+                <span>Độ trễ health</span>
                 <strong>{formatMs(api.latencyMs)}</strong>
               </div>
               <div className="monitoring-summary-list-item">
-                <span>Message write p95</span>
+                <span>Ghi tin nhắn p95</span>
                 <strong>{formatMetricValue(formatMs(api.messageWriteP95Ms), availability)}</strong>
               </div>
             </div>
@@ -107,37 +107,37 @@ export const MonitoringInfrastructureSection = ({
           </WidgetCard>
         </Col>
         <Col xs={24} lg={8}>
-          <WidgetCard title="Infrastructure">
+          <WidgetCard title="Hạ tầng">
             <div className="monitoring-summary-list">
               <div className="monitoring-summary-list-item">
-                <span>Avg CPU</span>
+                <span>CPU trung bình</span>
                 <strong>{formatMetricValue(formatPercent(infrastructure.aggregateCpuPercent, 1), availability)}</strong>
               </div>
               <div className="monitoring-summary-list-item">
-                <span>Avg RAM</span>
+                <span>RAM trung bình</span>
                 <strong>{formatMetricValue(formatPercent(infrastructure.aggregateMemoryPercent, 1), availability)}</strong>
               </div>
               <div className="monitoring-summary-list-item">
-                <span>Network RX</span>
+                <span>Lưu lượng vào mạng</span>
                 <strong>{formatMetricValue(formatBytes(infrastructure.networkReceiveBytesPerSecond, true), availability)}</strong>
               </div>
               <div className="monitoring-summary-list-item">
-                <span>Network TX</span>
+                <span>Lưu lượng ra mạng</span>
                 <strong>{formatMetricValue(formatBytes(infrastructure.networkTransmitBytesPerSecond, true), availability)}</strong>
               </div>
               <div className="monitoring-summary-list-item">
-                <span>Top CPU host</span>
+                <span>Máy chủ CPU cao nhất</span>
                 <strong>{infrastructure.topCpuServer?.instance ?? '-'}</strong>
               </div>
               <div className="monitoring-summary-list-item">
-                <span>Top RAM host</span>
+                <span>Máy chủ RAM cao nhất</span>
                 <strong>{infrastructure.topMemoryServer?.instance ?? '-'}</strong>
               </div>
             </div>
           </WidgetCard>
         </Col>
         <Col xs={24}>
-          <WidgetCard title="Core service snapshot">
+          <WidgetCard title="Ảnh chụp dịch vụ cốt lõi">
             <div className="monitoring-service-list">
               {priorityServices.length > 0 ? (
                 priorityServices.map((service) => (
@@ -153,7 +153,7 @@ export const MonitoringInfrastructureSection = ({
                   </div>
                 ))
               ) : (
-                <Text type="secondary">Service dependency data is not available yet.</Text>
+                <Text type="secondary">Chưa có dữ liệu phụ thuộc dịch vụ.</Text>
               )}
             </div>
           </WidgetCard>

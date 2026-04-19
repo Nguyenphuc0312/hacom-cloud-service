@@ -40,9 +40,16 @@ const liveUpdatesUrl =
   normalizeOptionalUrl(import.meta.env.VITE_LIVE_UPDATES_URL) ??
   normalizeOptionalUrl(import.meta.env.VITE_WS_URL);
 
+const environmentLabelMap: Record<AppEnvironment, string> = {
+  DEV: 'Phát triển',
+  TEST: 'Kiểm thử',
+  STAGING: 'Staging',
+  PROD: 'Production',
+};
+
 export const appConfig = {
   environment,
-  environmentLabel: environment,
+  environmentLabel: environmentLabelMap[environment],
   dashboardRefetchIntervalMs: parsePositiveInteger(
     import.meta.env.VITE_DASHBOARD_REFETCH_INTERVAL_MS,
     DEFAULT_DASHBOARD_REFETCH_INTERVAL_MS,
@@ -51,7 +58,7 @@ export const appConfig = {
     (import.meta.env.VITE_ADMIN_WRITE_ACTIONS_ENABLED ?? 'false').toLowerCase() === 'true',
   liveUpdatesUrl,
   liveUpdatesMode: liveUpdatesUrl ? 'live' : 'polling',
-  liveUpdatesLabel: liveUpdatesUrl ? 'Live feed' : 'Polling',
+  liveUpdatesLabel: liveUpdatesUrl ? 'Luồng trực tiếp' : 'Làm mới theo chu kỳ',
 } as const;
 
 export type AppConfig = typeof appConfig;

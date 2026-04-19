@@ -46,24 +46,24 @@ export const AuditLogPage = () => {
   const columns = useMemo<ColumnsType<AuditEntry>>(
     () => [
       {
-        title: 'Time',
+        title: 'Thời gian',
         dataIndex: 'time',
         width: 188,
         render: (value: string) => formatDateTime(value),
       },
       {
-        title: 'Actor',
+        title: 'Người thao tác',
         dataIndex: 'actorEmail',
         render: (value: string | null) =>
           value ? <Typography.Text strong>{value}</Typography.Text> : '-',
       },
       {
-        title: 'Action',
+        title: 'Hành động',
         dataIndex: 'action',
         render: (value: string) => <Typography.Text>{value}</Typography.Text>,
       },
       {
-        title: 'Entity',
+        title: 'Đối tượng',
         key: 'entity',
         render: (_, record) => {
           const type = record.entityType ?? '-';
@@ -78,7 +78,7 @@ export const AuditLogPage = () => {
         },
       },
       {
-        title: 'Source',
+        title: 'Nguồn',
         dataIndex: 'source',
         render: (value: string | null) => (
           <Typography.Text type="secondary">{value ?? '-'}</Typography.Text>
@@ -91,7 +91,7 @@ export const AuditLogPage = () => {
           value ? <Typography.Text code>{value}</Typography.Text> : '-',
       },
       {
-        title: 'Request ID',
+        title: 'Mã request',
         key: 'requestId',
         render: (_, record) => {
           const requestId = readMetaValue(record.metadata, 'requestId');
@@ -106,7 +106,7 @@ export const AuditLogPage = () => {
         },
       },
       {
-        title: 'Result',
+        title: 'Kết quả',
         key: 'actionResult',
         render: (_, record) => (
           <StatusBadge
@@ -150,10 +150,10 @@ export const AuditLogPage = () => {
   if (query.isLoading) {
     return (
       <PageShell
-        title="Audit Logs"
-        description="Trace admin actions, request correlation, and outcome signals."
+        title="Nhật ký kiểm toán"
+        description="Lần theo thao tác quản trị, tương quan request và tín hiệu kết quả."
       >
-        <QueryStateView kind="loading" title="Loading audit logs..." />
+        <QueryStateView kind="loading" title="Đang tải nhật ký kiểm toán..." />
       </PageShell>
     );
   }
@@ -161,12 +161,12 @@ export const AuditLogPage = () => {
   if (query.isError) {
     return (
       <PageShell
-        title="Audit Logs"
-        description="Trace admin actions, request correlation, and outcome signals."
+        title="Nhật ký kiểm toán"
+        description="Lần theo thao tác quản trị, tương quan request và tín hiệu kết quả."
       >
         <QueryStateView
           kind="error"
-          description="Unable to load audit logs."
+          description="Không thể tải nhật ký kiểm toán."
           onRetry={() => {
             void query.refetch();
           }}
@@ -179,8 +179,8 @@ export const AuditLogPage = () => {
 
   return (
     <PageShell
-      title="Audit Logs"
-      description="Search the event stream by actor, action, entity, source, and time range."
+      title="Nhật ký kiểm toán"
+      description="Tìm trong dòng sự kiện theo người thao tác, hành động, đối tượng, nguồn và khoảng thời gian."
       headerExtra={
         <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
           <Button
@@ -190,7 +190,7 @@ export const AuditLogPage = () => {
               void query.refetch();
             }}
           >
-            Refresh
+            Làm mới
           </Button>
         </div>
       }
@@ -198,16 +198,16 @@ export const AuditLogPage = () => {
       <FilterBar>
         <Form form={form} layout="inline" className="ds-toolbar-form">
           <Form.Item name="action" className="ds-toolbar-field ds-toolbar-field--sm">
-            <Input allowClear placeholder="Action" />
+            <Input allowClear placeholder="Hành động" />
           </Form.Item>
           <Form.Item name="actorEmail" className="ds-toolbar-field ds-toolbar-field--lg">
-            <Input allowClear placeholder="Actor email" />
+            <Input allowClear placeholder="Email người thao tác" />
           </Form.Item>
           <Form.Item name="entityType" className="ds-toolbar-field ds-toolbar-field--sm">
-            <Input allowClear placeholder="Entity type" />
+            <Input allowClear placeholder="Loại đối tượng" />
           </Form.Item>
           <Form.Item name="source" className="ds-toolbar-field ds-toolbar-field--sm">
-            <Input allowClear placeholder="Source" />
+            <Input allowClear placeholder="Nguồn" />
           </Form.Item>
           <Form.Item name="range" className="ds-toolbar-field ds-toolbar-field--range">
             <DatePicker.RangePicker showTime />
@@ -215,34 +215,34 @@ export const AuditLogPage = () => {
           <Form.Item className="ds-toolbar-field ds-toolbar-actions">
             <Space>
               <Button type="primary" onClick={applyFilters}>
-                Apply filters
+                Áp dụng bộ lọc
               </Button>
-              <Button onClick={resetFilters}>Reset</Button>
+              <Button onClick={resetFilters}>Đặt lại</Button>
             </Space>
           </Form.Item>
         </Form>
         <div className="ds-filter-toolbar-meta">
           <span>
-            {data?.pagination.total ?? 0} matched event{(data?.pagination.total ?? 0) === 1 ? '' : 's'}
+            {data?.pagination.total ?? 0} sự kiện phù hợp
           </span>
           <span>
             {activeFilterCount > 0
-              ? `${activeFilterCount} active filter${activeFilterCount === 1 ? '' : 's'}`
-              : 'No active filters'}
+              ? `${activeFilterCount} bộ lọc đang hoạt động`
+              : 'Không có bộ lọc đang hoạt động'}
           </span>
           <span>
-            Last sync:{' '}
+            Đồng bộ gần nhất:{' '}
             {query.dataUpdatedAt ? formatDateTime(new Date(query.dataUpdatedAt).toISOString()) : '-'}
           </span>
         </div>
       </FilterBar>
 
       <DataTableShell
-        title="Audit records"
-        meta="Primary surface for investigation and correlation."
+        title="Bản ghi kiểm toán"
+        meta="Bề mặt chính để điều tra và đối chiếu tương quan."
         toolbar={
           <DataTableToolbar>
-            <span className="ds-toolbar-summary">Page {data?.pagination.page ?? 1}</span>
+            <span className="ds-toolbar-summary">Trang {data?.pagination.page ?? 1}</span>
           </DataTableToolbar>
         }
       >
@@ -251,7 +251,7 @@ export const AuditLogPage = () => {
           columns={columns}
           minHeight={360}
           dataSource={data?.items ?? []}
-          emptyNode={<EmptyState description="No audit records matched the current query." />}
+          emptyNode={<EmptyState description="Không có bản ghi kiểm toán nào khớp với truy vấn hiện tại." />}
           pagination={{
             current: data?.pagination.page,
             pageSize: data?.pagination.limit,

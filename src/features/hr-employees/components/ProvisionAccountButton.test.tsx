@@ -68,7 +68,7 @@ describe('ProvisionAccountButton', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Provision' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cấp tài khoản' })).toBeDisabled();
   });
 
   it('opens confirm flow when provisioning is allowed', () => {
@@ -90,7 +90,7 @@ describe('ProvisionAccountButton', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Provision' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cấp tài khoản' }));
 
     expect(confirmMock).toHaveBeenCalledTimes(1);
   });
@@ -124,7 +124,7 @@ describe('ProvisionAccountButton', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Provision' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cấp tài khoản' }));
 
     const confirmConfig = confirmMock.mock.calls[0]?.[0] as {
       onOk?: () => Promise<void>;

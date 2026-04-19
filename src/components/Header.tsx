@@ -39,7 +39,7 @@ export const Header = memo(
             type="text"
             icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             onClick={onToggleSidebar}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={collapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'}
           />
         </div>
 
@@ -51,7 +51,7 @@ export const Header = memo(
           <Space size={8} className="app-header-status" wrap>
             <Tag color={envColor}>{environment}</Tag>
             <Tag color={isAuthServiceUnavailable ? 'gold' : 'green'}>
-              {isAuthServiceUnavailable ? 'DEGRADED' : 'HEALTHY'}
+              {isAuthServiceUnavailable ? 'SUY GIẢM' : 'ỔN ĐỊNH'}
             </Tag>
           </Space>
           <UserMenu

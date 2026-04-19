@@ -22,7 +22,7 @@ export const DataTableShell: React.FC<DataTableShellProps> = ({
   children,
   className,
 }) => {
-  const ariaLabel = typeof title === 'string' ? title : 'Data table';
+  const ariaLabel = typeof title === 'string' ? title : 'Bảng dữ liệu';
 
   return (
     <div
@@ -51,7 +51,7 @@ export const DataTableShell: React.FC<DataTableShellProps> = ({
         ) : children ? (
           children
         ) : (
-          emptyState || <div className="ds-table-empty-state">No data</div>
+          emptyState || <div className="ds-table-empty-state">Chưa có dữ liệu</div>
         )}
       </div>
 

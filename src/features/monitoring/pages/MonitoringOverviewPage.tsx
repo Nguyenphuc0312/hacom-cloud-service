@@ -23,29 +23,29 @@ export const MonitoringOverviewPage = () => {
   if (overviewQuery.isLoading && !overviewQuery.data) {
     return (
       <PageShell
-        title="Monitoring Overview"
-        description="Operational snapshot for realtime health, correctness, and dependency posture."
+        title="Tổng quan giám sát"
+        description="Ảnh chụp vận hành cho sức khỏe thời gian thực, độ đúng và trạng thái phụ thuộc."
       >
-        <QueryStateView kind="loading" title="Loading monitoring overview..." />
+        <QueryStateView kind="loading" title="Đang tải tổng quan giám sát..." />
       </PageShell>
     );
   }
 
   if (overviewQuery.isError && !overviewQuery.data) {
     const status = getApiErrorStatus(overviewQuery.error);
-    const message = getErrorMessage(overviewQuery.error, 'Monitoring overview is unavailable.');
+    const message = getErrorMessage(overviewQuery.error, 'Tổng quan giám sát hiện không khả dụng.');
 
     return (
       <PageShell
-        title="Monitoring Overview"
-        description="Operational snapshot for realtime health, correctness, and dependency posture."
+        title="Tổng quan giám sát"
+        description="Ảnh chụp vận hành cho sức khỏe thời gian thực, độ đúng và trạng thái phụ thuộc."
       >
         <QueryStateView
           kind={status === 403 ? 'permission' : 'error'}
           title={
             status === 403
-              ? 'You do not have access to monitoring overview'
-              : 'Unable to load monitoring overview'
+              ? 'Bạn không có quyền xem tổng quan giám sát'
+              : 'Không thể tải tổng quan giám sát'
           }
           description={message}
           onRetry={() => {
@@ -61,10 +61,10 @@ export const MonitoringOverviewPage = () => {
   if (!overview) {
     return (
       <PageShell
-        title="Monitoring Overview"
-        description="Operational snapshot for realtime health, correctness, and dependency posture."
+        title="Tổng quan giám sát"
+        description="Ảnh chụp vận hành cho sức khỏe thời gian thực, độ đúng và trạng thái phụ thuộc."
       >
-        <QueryStateView kind="empty" description="No monitoring data available yet." />
+        <QueryStateView kind="empty" description="Chưa có dữ liệu giám sát." />
       </PageShell>
     );
   }
@@ -75,8 +75,8 @@ export const MonitoringOverviewPage = () => {
 
   return (
     <PageShell
-      title="Monitoring Overview"
-      description="Watch runtime health, delivery failures, and dependency posture from one operator cockpit."
+      title="Tổng quan giám sát"
+      description="Theo dõi sức khỏe runtime, lỗi gửi tin và trạng thái phụ thuộc trong một cockpit vận hành."
       headerExtra={
         <div className="ds-page-toolbar-stack">
           <div className="ds-page-toolbar-group">
@@ -90,10 +90,10 @@ export const MonitoringOverviewPage = () => {
               loading={overviewQuery.isFetching}
               icon={<ReloadOutlined />}
             >
-              Refresh
+              Làm mới
             </Button>
             <span className="ds-page-toolbar-meta">
-              Last updated: {formatDateTime(overview.generatedAt)}
+              Cập nhật lần cuối: {formatDateTime(overview.generatedAt)}
             </span>
           </div>
         </div>
@@ -102,17 +102,17 @@ export const MonitoringOverviewPage = () => {
       <div className="ds-monitoring-stack">
         <div className="ds-monitoring-kpi-grid">
           <MetricCard
-            label="Online users"
+            label="Người dùng trực tuyến"
             value={formatNumber(overview.systemOverview.onlineUsers)}
             changeLabel={formatNumber(overview.systemOverview.activeConnections)}
-            trendCaption="active websocket connections"
+            trendCaption="kết nối websocket đang hoạt động"
             tone="default"
           />
           <MetricCard
             label="Sender ACK p95"
             value={formatMs(overview.systemOverview.senderAckP95Ms)}
             changeLabel={formatRate(overview.systemOverview.messagesPerSecond, '/s')}
-            trendCaption="paired with current throughput"
+            trendCaption="đi cùng throughput hiện tại"
             tone={
               (overview.systemOverview.senderAckP95Ms ?? 0) > 900
                 ? 'danger'
@@ -122,21 +122,21 @@ export const MonitoringOverviewPage = () => {
             }
           />
           <MetricCard
-            label="Delivery failures"
+            label="Lỗi gửi tin"
             value={formatRate(overview.realtimeHealth.deliveryFailuresPerMinute, '/min')}
             changeLabel={formatRate(overview.realtimeHealth.resyncsPerMinute, '/min')}
-            trendCaption="resync pressure"
+            trendCaption="áp lực resync"
             tone={
               (overview.realtimeHealth.deliveryFailuresPerMinute ?? 0) > 0 ? 'danger' : 'success'
             }
           />
           <MetricCard
-            label="Healthy services"
+            label="Dịch vụ ổn định"
             value={`${services.healthy}/${services.total}`}
             changeLabel={
-              healthyServiceRate === null ? 'No data' : formatPercent(healthyServiceRate, 0)
+              healthyServiceRate === null ? 'Chưa có dữ liệu' : formatPercent(healthyServiceRate, 0)
             }
-            trendCaption="dependency coverage"
+            trendCaption="độ phủ phụ thuộc"
             tone={services.down > 0 ? 'danger' : services.degraded > 0 ? 'warning' : 'success'}
           />
         </div>

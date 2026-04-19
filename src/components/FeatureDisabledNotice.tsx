@@ -7,12 +7,12 @@ interface FeatureDisabledNoticeProps {
 }
 
 export const FeatureDisabledNotice = ({
-  title = 'Write actions unavailable',
+  title = 'Tác vụ ghi hiện không khả dụng',
   description,
 }: FeatureDisabledNoticeProps) => {
   return (
     <SurfaceCard
-      eyebrow="Release guard"
+      eyebrow="Ràng buộc phát hành"
       title={title}
       description={description}
       status={<StatusBadge status="warning" />}

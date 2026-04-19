@@ -15,13 +15,13 @@ export const DashboardInsightPanel = ({ insights }: DashboardInsightPanelProps) 
 
   return (
     <SurfaceCard
-      eyebrow="Insights"
-      title="What needs attention"
-      description="Short explanations keep the dashboard actionable instead of decorative."
+      eyebrow="Nhận định"
+      title="Điểm cần chú ý"
+      description="Mô tả ngắn giúp dashboard phục vụ hành động thay vì chỉ để trang trí."
       className="ds-dashboard-insight-panel"
     >
       {insights.length === 0 ? (
-        <EmptyState compact title="No insights yet" description="Signals will appear after the first refresh cycle." />
+        <EmptyState compact title="Chưa có nhận định" description="Tín hiệu sẽ xuất hiện sau chu kỳ làm mới đầu tiên." />
       ) : (
         <div className="ds-dashboard-insight-list">
           {insights.map((insight) => (

@@ -69,7 +69,7 @@ export const calculatePercentDelta = (first: number | null, last: number | null)
 
 export const formatDeltaLabel = (delta: number | null): string => {
   if (delta === null || Number.isNaN(delta)) {
-    return 'No baseline';
+    return 'Chưa có baseline';
   }
 
   const prefix = delta > 0 ? '+' : '';
@@ -129,18 +129,18 @@ export const buildInsights = ({
       id: 'realtime',
       title:
         overview.freshness === 'live'
-          ? 'Realtime telemetry is current'
+          ? 'Telemetry thời gian thực đang mới'
           : overview.freshness === 'partial'
-            ? 'Realtime feeds are partially delayed'
-            : 'Realtime telemetry is stale',
-      description: `Snapshot generated at ${formatDateTime(overview.generatedAt)} with ${overview.warnings.length} active warning signals.`,
+            ? 'Luồng thời gian thực đang bị chậm một phần'
+            : 'Telemetry thời gian thực đã cũ',
+      description: `Ảnh chụp được tạo lúc ${formatDateTime(overview.generatedAt)} với ${overview.warnings.length} tín hiệu cảnh báo đang hoạt động.`,
       tone:
         overview.freshness === 'live'
           ? 'good'
           : overview.freshness === 'partial'
             ? 'warning'
             : 'critical',
-      ctaLabel: 'Open monitoring',
+      ctaLabel: 'Mở giám sát',
       ctaTo: '/monitoring',
     });
 
@@ -149,21 +149,21 @@ export const buildInsights = ({
       id: 'capacity',
       title:
         riskState === 'near-breaking'
-          ? 'Capacity headroom is tightening'
+          ? 'Biên dung lượng an toàn đang thu hẹp'
           : riskState === 'warning'
-            ? 'Load is approaching the measured baseline'
-            : 'Capacity is within a safe operating window',
+            ? 'Tải đang tiến gần baseline đã đo'
+            : 'Dung lượng vẫn nằm trong vùng an toàn',
       description:
         riskState === 'pending'
-          ? 'Baseline measurement has not been completed yet, so risk scoring is conservative.'
-          : `Current baseline evaluation is ${riskState}. Refresh cadence: ${formatDateTime(overview.generatedAt)}.`,
+          ? 'Đo baseline chưa hoàn tất, nên chấm điểm rủi ro đang được giữ ở mức thận trọng.'
+          : `Đánh giá baseline hiện tại là ${riskState}. Nhịp làm mới: ${formatDateTime(overview.generatedAt)}.`,
       tone:
         riskState === 'near-breaking'
           ? 'critical'
           : riskState === 'warning' || riskState === 'pending'
             ? 'warning'
             : 'good',
-      ctaLabel: 'Open monitoring',
+      ctaLabel: 'Mở giám sát',
       ctaTo: '/monitoring',
     });
   }
@@ -173,18 +173,18 @@ export const buildInsights = ({
       id: 'services',
       title:
         serviceHealth.summary.down > 0
-          ? `${serviceHealth.summary.down} services need immediate attention`
+          ? `${serviceHealth.summary.down} dịch vụ cần xử lý ngay`
           : serviceHealth.summary.degraded > 0
-            ? `${serviceHealth.summary.degraded} services are degraded`
-            : 'All tracked services are healthy',
-      description: `Service health snapshot checked at ${formatDateTime(serviceHealth.checkedAt)}.`,
+            ? `${serviceHealth.summary.degraded} dịch vụ đang suy giảm`
+            : 'Tất cả dịch vụ đang được theo dõi đều ổn định',
+      description: `Ảnh chụp sức khỏe dịch vụ được kiểm tra lúc ${formatDateTime(serviceHealth.checkedAt)}.`,
       tone:
         serviceHealth.summary.down > 0
           ? 'critical'
           : serviceHealth.summary.degraded > 0
             ? 'warning'
             : 'good',
-      ctaLabel: 'View health console',
+      ctaLabel: 'Mở console sức khỏe',
       ctaTo: '/services/health',
     });
   }
@@ -193,14 +193,14 @@ export const buildInsights = ({
     id: 'incidents',
     title:
       incidents.length > 0
-        ? `${incidents.length} active incidents are still firing`
-        : 'No active incidents in the current window',
+        ? `${incidents.length} sự cố đang hoạt động vẫn còn báo động`
+        : 'Không có sự cố hoạt động trong khung thời gian hiện tại',
     description:
       incidents.length > 0
-        ? incidents[0]?.summary || incidents[0]?.title || 'Investigate the incident feed for the latest details.'
-        : 'The incident channel is quiet. Keep monitoring for regressions.',
+        ? incidents[0]?.summary || incidents[0]?.title || 'Hãy mở luồng sự cố để xem chi tiết mới nhất.'
+        : 'Kênh sự cố hiện yên tĩnh. Tiếp tục theo dõi để phát hiện hồi quy.',
     tone: incidents.length > 0 ? 'critical' : 'good',
-    ctaLabel: incidents.length > 0 ? 'Review incidents' : 'Open audit logs',
+    ctaLabel: incidents.length > 0 ? 'Xem sự cố' : 'Mở nhật ký kiểm toán',
     ctaTo: incidents.length > 0 ? '/services/health' : '/audit',
   });
 
@@ -216,7 +216,7 @@ const toServiceIncident = (service: ServiceHealthItem): Incident | null => {
     fingerprint: `service:${service.name}`,
     status: 'firing',
     severity: 'critical',
-    title: `${service.name} is down`,
+    title: `${service.name} đang ngừng hoạt động`,
     summary: service.summary,
     startsAt: service.checkedAt,
   };
@@ -235,7 +235,7 @@ const toWarningIncident = (
     status: 'firing',
     severity: 'critical',
     title: warning.message,
-    summary: `${warning.source} reported ${warning.code}.`,
+    summary: `${warning.source} báo ${warning.code}.`,
     startsAt: timestamp,
   };
 };
@@ -269,7 +269,7 @@ const toServiceActivity = (service: ServiceHealthItem): DashboardActivityItem | 
   return {
     id: `service-${service.name}`,
     type: 'service',
-    title: `${service.name} is ${service.status}`,
+    title: `${service.name} đang ở trạng thái ${service.status}`,
     description: service.summary,
     timestamp: service.checkedAt,
     route: `/services/health?service=${encodeURIComponent(service.name)}`,
@@ -284,7 +284,7 @@ const toWarningActivity = (
   id: `warning-${warning.key}`,
   type: 'warning',
   title: warning.message,
-  description: `${warning.source} reported ${warning.code}.`,
+  description: `${warning.source} báo ${warning.code}.`,
   timestamp,
   route: '/monitoring',
   highlight: warning.severity === 'error',
@@ -294,7 +294,7 @@ const toIncidentActivity = (incident: Incident): DashboardActivityItem => ({
   id: `incident-${incident.fingerprint}`,
   type: 'incident',
   title: incident.title,
-  description: incident.summary || 'No incident summary provided.',
+  description: incident.summary || 'Không có tóm tắt sự cố.',
   timestamp: incident.startsAt,
   route: '/services/health',
   highlight: incident.status === 'firing',

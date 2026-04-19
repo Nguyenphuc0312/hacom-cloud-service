@@ -25,22 +25,22 @@ export const DashboardQuickActions = ({
   const actions: DashboardQuickAction[] = [
     {
       id: 'create-user',
-      label: 'Create user',
-      description: 'Invite and provision a new admin account.',
+      label: 'Tạo người dùng',
+      description: 'Mời và cấp tài khoản quản trị mới.',
       onSelect: onCreateUser,
       icon: <UserAddOutlined />,
     },
     {
       id: 'send-broadcast',
-      label: 'Send broadcast',
-      description: 'Prepare an outbound notification or announcement.',
+      label: 'Gửi broadcast',
+      description: 'Chuẩn bị thông báo hoặc bản tin gửi ra ngoài.',
       onSelect: onSendBroadcast,
       icon: <NotificationOutlined />,
     },
     {
       id: 'create-group',
-      label: 'Create group',
-      description: 'Set up a new operator cohort or permission slice.',
+      label: 'Tạo nhóm',
+      description: 'Thiết lập nhóm vận hành hoặc tập quyền mới.',
       onSelect: onCreateGroup,
       icon: <TeamOutlined />,
     },
@@ -48,9 +48,9 @@ export const DashboardQuickActions = ({
 
   return (
     <SurfaceCard
-      eyebrow="Quick actions"
-      title="Next actions"
-      description="Use the dashboard as a routing hub, not as a second monitoring screen."
+      eyebrow="Tác vụ nhanh"
+      title="Việc cần làm"
+      description="Dùng dashboard như điểm điều phối thao tác, không phải màn giám sát thứ hai."
       className="ds-dashboard-quick-actions"
     >
       <div className="ds-dashboard-quick-actions-list">

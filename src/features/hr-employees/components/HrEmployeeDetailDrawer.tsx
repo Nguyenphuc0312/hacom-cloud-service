@@ -27,36 +27,40 @@ const renderSection = (title: string, items: Array<{ label: string; value: React
 );
 
 const renderAccountData = (employee: HrEmployee) =>
-  renderSection('Account Data', [
+  renderSection('Dữ liệu tài khoản', [
     {
-      label: 'Linked user',
+      label: 'Người dùng liên kết',
       value: employee.linkedUser?.id || '-',
     },
     {
-      label: 'Login identifier',
+      label: 'Định danh đăng nhập',
       value: employee.linkedUser?.loginIdentifier || '-',
     },
     {
-      label: 'Provisioning status',
+      label: 'Trạng thái cấp tài khoản',
       value: (
         <StatusBadge
           status={employee.provisioningStatus}
-          title="Provisioning status from HR/account provisioning pipeline"
+          title="Trạng thái cấp tài khoản từ pipeline HR / provisioning"
         />
       ),
     },
     {
-      label: 'Activation status',
+      label: 'Trạng thái kích hoạt',
       value: (
         <StatusBadge
           status={employee.activationStatus}
-          title="Current activation/account access state"
+          title="Trạng thái kích hoạt / truy cập tài khoản hiện tại"
         />
       ),
     },
     {
-      label: 'Account state',
-      value: employee.linkedUser?.accountState || '-',
+      label: 'Trạng thái tài khoản',
+      value: employee.linkedUser?.accountState ? (
+        <StatusBadge status={employee.linkedUser.accountState} />
+      ) : (
+        '-'
+      ),
     },
   ]);
 
@@ -95,7 +99,7 @@ export const HrEmployeeDetailDrawer = ({
 
   return (
     <Drawer
-      title="HR employee detail"
+      title="Chi tiết nhân sự"
       width={520}
       open={open}
       onClose={onClose}
@@ -106,13 +110,13 @@ export const HrEmployeeDetailDrawer = ({
             onClick={() => void handleRefresh()}
             loading={detailQuery.isFetching || manualRefreshLoading}
           >
-            Refresh
+            Làm mới
           </Button>
           {employee ? (
             <ProvisionAccountButton
               employee={employee}
               canWrite={canWrite}
-              buttonText="Provision account"
+              buttonText="Cấp tài khoản"
               onSuccess={async () => {
                 await detailQuery.refetch();
                 if (employeeId) {
@@ -125,63 +129,63 @@ export const HrEmployeeDetailDrawer = ({
       }
     >
       {!employeeId ? (
-        <EmptyState description="Select an HR employee to inspect details." />
+        <EmptyState description="Chọn một nhân sự để xem chi tiết." />
       ) : detailQuery.isLoading ? (
-        <LoadingState tip="Loading HR employee detail..." />
+        <LoadingState tip="Đang tải chi tiết nhân sự..." />
       ) : detailQuery.isError ? (
         <ErrorState
           subTitle={getErrorMessage(detailQuery.error)}
-          extra={<Button onClick={() => detailQuery.refetch()}>Retry</Button>}
+          extra={<Button onClick={() => detailQuery.refetch()}>Thử lại</Button>}
         />
       ) : !employee ? (
-        <EmptyState description="HR employee detail is unavailable." />
+        <EmptyState description="Chi tiết nhân sự hiện không khả dụng." />
       ) : (
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <Alert
             type="info"
             showIcon
-            message="Profile and account fields are rendered defensively."
-            description="If backend has not exposed a field in this environment yet, the drawer shows a safe fallback instead of failing."
+            message="Các trường hồ sơ và tài khoản được render theo cơ chế phòng thủ."
+            description="Nếu backend chưa expose một trường nào đó trong môi trường này, drawer sẽ hiển thị giá trị dự phòng an toàn thay vì lỗi."
           />
 
           <Typography.Text type="secondary">
-            Last updated: {employee.updatedAt || '-'}
+            Cập nhật lần cuối: {employee.updatedAt || '-'}
           </Typography.Text>
 
-          {renderSection('HR Source Data', [
-            { label: 'Employee code', value: readValue(employee.employeeCode) },
+          {renderSection('Dữ liệu nguồn HR', [
+            { label: 'Mã nhân viên', value: readValue(employee.employeeCode) },
             {
-              label: 'HR full name',
+              label: 'Họ tên từ HR',
               value: readValue(employee.fullNameFromHr || employee.fullName),
             },
             {
-              label: 'Email from HR',
+              label: 'Email từ HR',
               value: readValue(employee.emailFromHr || employee.email),
             },
             {
-              label: 'Department',
+              label: 'Phòng ban',
               value: readValue(employee.departmentName || employee.orgUnit),
             },
-            { label: 'Unit code', value: readValue(employee.unitCode) },
-            { label: 'Status', value: <StatusBadge status={employee.status} /> },
+            { label: 'Mã đơn vị', value: readValue(employee.unitCode) },
+            { label: 'Trạng thái', value: <StatusBadge status={employee.status} /> },
           ])}
 
           {renderAccountData(employee)}
 
-          {renderSection('Profile Data', [
+          {renderSection('Dữ liệu hồ sơ', [
             {
-              label: 'Display name',
+              label: 'Tên hiển thị',
               value: readValue(employee.linkedUser?.displayName),
             },
             {
-              label: 'Avatar',
+              label: 'Ảnh đại diện',
               value: employee.linkedUser?.id
-                ? 'Available from chat profile when backend exposes profile detail.'
+                ? 'Có thể lấy từ hồ sơ chat khi backend expose chi tiết profile.'
                 : '-',
             },
           ])}
 
-          <Card title="Actions" size="small">
+          <Card title="Thao tác" size="small">
             <Space wrap>
               <ProvisionAccountButton
                 employee={employee}
@@ -193,8 +197,8 @@ export const HrEmployeeDetailDrawer = ({
                   }
                 }}
               />
-              <Button disabled title="Resend activation is not exposed in the admin backend yet.">
-                Resend activation
+              <Button disabled title="Chức năng gửi lại kích hoạt chưa được expose ở backend admin.">
+                Gửi lại kích hoạt
               </Button>
             </Space>
           </Card>

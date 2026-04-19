@@ -50,31 +50,31 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
         })),
       {
         id: 'quick-create-user',
-        label: 'Create User',
-        description: 'Jump to user management and open the create workflow',
-        category: 'Quick Actions' as const,
+        label: 'Tạo người dùng',
+        description: 'Mở khu quản lý người dùng để bắt đầu quy trình tạo tài khoản',
+        category: 'Tác vụ nhanh' as const,
         icon: commandRouteItems.find((item) => item.id === 'go-users')?.icon,
         keywords: ['create', 'user', 'invite', 'admin'],
         onSelect: () => navigate('/users'),
       },
       {
         id: 'quick-send-broadcast',
-        label: 'Send Broadcast',
-        description: 'Open messaging templates for broadcast preparation',
-        category: 'Quick Actions' as const,
+        label: 'Gửi broadcast',
+        description: 'Mở mẫu email để chuẩn bị thông báo hàng loạt',
+        category: 'Tác vụ nhanh' as const,
         icon: commandRouteItems.find((item) => item.id === 'go-email-templates')?.icon,
         keywords: ['broadcast', 'announcement', 'message'],
         onSelect: () => navigate('/services/email-templates'),
       },
       {
         id: 'quick-create-group',
-        label: 'Create Group',
-        description: 'Stage the future group-management workflow from the users workspace',
-        category: 'Quick Actions' as const,
+        label: 'Tạo nhóm',
+        description: 'Đi tới khu người dùng để chuẩn bị luồng quản lý nhóm',
+        category: 'Tác vụ nhanh' as const,
         icon: commandRouteItems.find((item) => item.id === 'go-users')?.icon,
         keywords: ['group', 'team', 'segment'],
         onSelect: () => {
-          message.info('Group creation workflow is not wired yet. Opening users workspace.');
+          message.info('Luồng tạo nhóm chưa được kết nối. Đang mở khu người dùng.');
           navigate('/users');
         },
       },
@@ -94,7 +94,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
           <button
             type="button"
             className="ds-topbar-toggle ds-btn ds-btn--icon"
-            aria-label={collapsed ? 'Open navigation' : 'Collapse navigation'}
+            aria-label={collapsed ? 'Mở điều hướng' : 'Thu gọn điều hướng'}
             aria-expanded={!collapsed}
             aria-controls="app-sidebar"
             onClick={onToggleSidebar}
@@ -102,7 +102,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
             {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
           </button>
           <div className="ds-topbar-title-block">
-            <span className="ds-topbar-eyebrow">{breadcrumbTrail || 'Workspace'}</span>
+            <span className="ds-topbar-eyebrow">{breadcrumbTrail || 'Không gian làm việc'}</span>
             <strong className="ds-topbar-page-title">{currentPage.title}</strong>
           </div>
         </div>
@@ -116,8 +116,8 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
             user={user}
             environmentLabel={appConfig.environmentLabel}
             systemTone={isAuthServiceUnavailable ? 'degraded' : 'healthy'}
-            onOpenNotifications={() => message.info('Notifications center is not wired yet.')}
-            onOpenProfile={() => message.info('Profile panel is not available yet.')}
+            onOpenNotifications={() => message.info('Trung tâm thông báo chưa được kết nối.')}
+            onOpenProfile={() => message.info('Khu hồ sơ hiện chưa khả dụng.')}
             onOpenSettings={() => navigate('/services/smtp')}
             onLogout={handleLogout}
           />

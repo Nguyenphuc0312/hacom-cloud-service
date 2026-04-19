@@ -82,7 +82,7 @@ export const LoginPage = () => {
       <Card className="login-card" bordered={false}>
         <Space direction="vertical" size={8} style={{ width: '100%' }}>
           <Title level={3} style={{ marginBottom: 0 }}>
-            Chat Admin Console
+            Bảng điều hành Chat Admin
           </Title>
           <Text type="secondary">
             Đăng nhập để quản trị người dùng, hạ tầng dịch vụ và cấu hình hệ thống.
@@ -95,7 +95,7 @@ export const LoginPage = () => {
           items={[
             {
               key: 'email',
-              label: 'Email & Password',
+              label: 'Email và mật khẩu',
               children: (
                 <Form<LoginFormValues>
                   layout="vertical"
@@ -112,7 +112,7 @@ export const LoginPage = () => {
                   </Form.Item>
 
                   <Form.Item
-                    label="Password"
+                    label="Mật khẩu"
                     name="password"
                     rules={[{ required: true, message: 'Vui lòng nhập mật khẩu.' }]}
                   >
@@ -142,17 +142,17 @@ export const LoginPage = () => {
             },
             {
               key: 'qr',
-              label: 'QR Login',
+              label: 'Đăng nhập QR',
               children: (
                 <Space direction="vertical" size={12} style={{ width: '100%', marginTop: 8 }}>
                   <Alert
                     type="info"
                     showIcon
-                    message="QR login"
+                    message="Đăng nhập QR"
                     description="Dùng app nội bộ để quét QR hoặc dán mã pairing để đăng nhập nhanh không cần nhập mật khẩu."
                   />
-                  <div className="login-qr-placeholder" aria-label="QR login placeholder">
-                    <Text strong>QR Session</Text>
+                  <div className="login-qr-placeholder" aria-label="Vùng chờ đăng nhập QR">
+                    <Text strong>Phiên QR</Text>
                     <Text type="secondary">Quét QR bằng ứng dụng mobile admin</Text>
                   </div>
                   <Input
@@ -171,7 +171,7 @@ export const LoginPage = () => {
                         return;
                       }
                       message.info(
-                        'QR login sẽ được bật khi auth-service phát hành endpoint tương ứng.',
+                        'Đăng nhập QR sẽ được bật khi auth-service phát hành endpoint tương ứng.',
                       );
                     }}
                   >

@@ -115,16 +115,16 @@ describe('HrImportWizard', () => {
       target: { files: [file] },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /Validate preview/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Kiểm tra xem trước/i }));
 
     await waitFor(() => {
       expect(validateMutateAsyncMock).toHaveBeenCalled();
     });
 
-    expect(screen.getByText('Step 2: Validate preview')).toBeInTheDocument();
+    expect(screen.getByText('Bước 2: Kiểm tra xem trước')).toBeInTheDocument();
     expect(screen.getByText('Nguyen Van B')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Commit import' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thực thi import' }));
 
     await waitFor(() => {
       expect(commitMutateAsyncMock).toHaveBeenCalledWith({
@@ -149,7 +149,7 @@ describe('HrImportWizard', () => {
       expect(
         screen.getAllByText(
           (_, element) =>
-            element?.textContent?.includes('Commit result is normalized defensively') ?? false,
+            element?.textContent?.includes('Kết quả commit được chuẩn hóa theo cơ chế phòng thủ') ?? false,
         ).length,
       ).toBeGreaterThan(0);
     });
@@ -178,10 +178,10 @@ describe('HrImportWizard', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText(/Selected file:/i)).toBeInTheDocument();
+      expect(screen.getByText(/Tệp đã chọn:/i)).toBeInTheDocument();
     });
 
-    const validateButton = screen.getByRole('button', { name: /Validate preview/i });
+    const validateButton = screen.getByRole('button', { name: /Kiểm tra xem trước/i });
     fireEvent.click(validateButton);
     fireEvent.click(validateButton);
 
@@ -205,7 +205,7 @@ describe('HrImportWizard', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Step 2: Validate preview')).toBeInTheDocument();
+      expect(screen.getByText('Bước 2: Kiểm tra xem trước')).toBeInTheDocument();
     });
   });
 });

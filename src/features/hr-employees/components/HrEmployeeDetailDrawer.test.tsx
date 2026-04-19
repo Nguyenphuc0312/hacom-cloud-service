@@ -13,7 +13,7 @@ vi.mock('@/api/clients', () => ({
 }));
 
 vi.mock('./ProvisionAccountButton', () => ({
-  ProvisionAccountButton: () => <button type="button">Provision account</button>,
+  ProvisionAccountButton: () => <button type="button">Cấp tài khoản</button>,
 }));
 
 import { HrEmployeeDetailDrawer } from './HrEmployeeDetailDrawer';
@@ -64,14 +64,14 @@ describe('HrEmployeeDetailDrawer', () => {
     renderWithQuery(<HrEmployeeDetailDrawer employeeId="hr-1" open canWrite onClose={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('HR Source Data')).toBeInTheDocument();
+      expect(screen.getByText('Dữ liệu nguồn HR')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Account Data')).toBeInTheDocument();
-    expect(screen.getByText('Profile Data')).toBeInTheDocument();
-    expect(screen.getAllByText('Provision account').length).toBeGreaterThan(0);
+    expect(screen.getByText('Dữ liệu tài khoản')).toBeInTheDocument();
+    expect(screen.getByText('Dữ liệu hồ sơ')).toBeInTheDocument();
+    expect(screen.getAllByText('Cấp tài khoản').length).toBeGreaterThan(0);
     expect(
-      screen.getByText('Profile and account fields are rendered defensively.'),
+      screen.getByText('Các trường hồ sơ và tài khoản được render theo cơ chế phòng thủ.'),
     ).toBeInTheDocument();
   });
 
@@ -114,10 +114,10 @@ describe('HrEmployeeDetailDrawer', () => {
     renderWithQuery(<HrEmployeeDetailDrawer employeeId="hr-1" open canWrite onClose={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('HR Source Data')).toBeInTheDocument();
+      expect(screen.getByText('Dữ liệu nguồn HR')).toBeInTheDocument();
     });
 
-    const refreshButton = screen.getByRole('button', { name: /Refresh/i });
+    const refreshButton = screen.getByRole('button', { name: /Làm mới/i });
     fireEvent.click(refreshButton);
     fireEvent.click(refreshButton);
 

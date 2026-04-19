@@ -70,13 +70,13 @@ export const QueryStateView = ({
   }
 
   if (kind === 'empty') {
-    return <EmptyState description={description ?? 'No matching data was found.'} />;
+    return <EmptyState description={description ?? 'Không tìm thấy dữ liệu phù hợp.'} />;
   }
 
   if (kind === 'error') {
     return (
       <ErrorState
-        title={title ?? 'Unable to load data'}
+        title={title ?? 'Không thể tải dữ liệu'}
         subTitle={description}
         extra={
           onRetry ? (
@@ -93,9 +93,9 @@ export const QueryStateView = ({
     return (
       <Result
         status="403"
-        title={title ?? 'You do not have access'}
+        title={title ?? 'Bạn không có quyền truy cập'}
         subTitle={
-          description ?? 'Your current role does not allow this action in the admin panel.'
+          description ?? 'Vai trò hiện tại của bạn không được phép thực hiện thao tác này trong trang quản trị.'
         }
       />
     );
@@ -106,8 +106,8 @@ export const QueryStateView = ({
       <Alert
         type="info"
         showIcon
-        message={title ?? 'This feature is currently disabled'}
-        description={description ?? 'Write actions are disabled by the current release settings.'}
+        message={title ?? 'Tính năng này hiện đang bị tắt'}
+        description={description ?? 'Các thao tác ghi đang bị tắt theo cấu hình phát hành hiện tại.'}
       />
     );
   }
@@ -117,12 +117,12 @@ export const QueryStateView = ({
       <Alert
         type="warning"
         showIcon
-        message={title ?? 'Some upstream systems are degraded'}
+        message={title ?? 'Một số hệ thống phụ thuộc đang suy giảm'}
         description={
           <Space direction="vertical" size={8}>
             <Typography.Text>
               {description ??
-                'One or more upstream dependencies are unstable. Data may be delayed or incomplete.'}
+                'Một hoặc nhiều dịch vụ phụ thuộc đang không ổn định. Dữ liệu có thể chậm hoặc chưa đầy đủ.'}
             </Typography.Text>
             {onRetry ? (
               <Button size="small" onClick={onRetry} loading={retrying}>
@@ -139,10 +139,10 @@ export const QueryStateView = ({
     <Alert
       type="warning"
       showIcon
-      message={title ?? 'This data may be stale'}
+      message={title ?? 'Dữ liệu này có thể đã cũ'}
       description={
         description ??
-        'The latest refresh has not completed yet. A newer snapshot will appear on the next successful fetch.'
+        'Lần làm mới gần nhất chưa hoàn tất. Ảnh chụp mới hơn sẽ xuất hiện ở lần tải thành công tiếp theo.'
       }
     />
   );

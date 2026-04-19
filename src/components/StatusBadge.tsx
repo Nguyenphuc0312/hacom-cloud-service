@@ -17,7 +17,7 @@ export const StatusBadge = ({ status, mode = 'tag', title }: StatusBadgeProps) =
   const tagNode = <Tag color={config.color}>{config.text}</Tag>;
 
   const tooltipTitle =
-    title || (config.rawStatus ? `Unknown backend state: ${config.rawStatus}` : undefined);
+    title || (config.rawStatus ? `Trạng thái backend chưa ánh xạ: ${config.rawStatus}` : undefined);
 
   if (!tooltipTitle) {
     return tagNode;

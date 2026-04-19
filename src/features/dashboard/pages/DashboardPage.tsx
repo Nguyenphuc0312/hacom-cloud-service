@@ -71,8 +71,8 @@ export const DashboardPage = () => {
   if (isInitialLoading) {
     return (
       <PageShell
-        title="Dashboard"
-        description="Fast production snapshot for system posture and next actions."
+        title="Bảng điều khiển"
+        description="Ảnh chụp nhanh trạng thái hệ thống và các việc cần xử lý tiếp theo."
       >
         <DashboardLoadingState />
       </PageShell>
@@ -91,18 +91,18 @@ export const DashboardPage = () => {
 
     return (
       <PageShell
-        title="Dashboard"
-        description="Fast production snapshot for system posture and next actions."
+        title="Bảng điều khiển"
+        description="Ảnh chụp nhanh trạng thái hệ thống và các việc cần xử lý tiếp theo."
       >
         <ErrorState
           title={
             monitoringStatus === 403
-              ? 'Dashboard telemetry is restricted'
-              : 'Unable to load the dashboard'
+              ? 'Bạn không có quyền xem telemetry của dashboard'
+              : 'Không thể tải bảng điều khiển'
           }
           description={getErrorMessage(
             monitoringQuery.error ?? serviceHealthQuery.error,
-            'The dashboard sources are temporarily unavailable.',
+            'Các nguồn dữ liệu của dashboard tạm thời không khả dụng.',
           )}
           onRetry={() => {
             void monitoringQuery.refetch();
@@ -162,32 +162,32 @@ export const DashboardPage = () => {
   const metricCards: DashboardMetricView[] = [
     {
       id: 'admins',
-      label: 'Active admins',
+      label: 'Admin đang hoạt động',
       value: formatNumber(activeUsers),
       changeLabel: formatPercent(adminActivationRate * 100, 0),
-      trendCaption: 'of all admin accounts',
+      trendCaption: 'trên tổng số tài khoản admin',
       tone: pendingUsers > 0 ? 'warning' : 'default',
       onClick: () => navigate('/users'),
       sparkline: [Math.max(activeUsers - 3, 0), Math.max(activeUsers - 1, 0), activeUsers],
     },
     {
       id: 'online',
-      label: 'Online users',
+      label: 'Người dùng trực tuyến',
       value: formatNumber(overview?.systemOverview.onlineUsers),
       changeLabel: formatDeltaLabel(trafficTrend.delta),
       trendDirection: trafficTrend.direction,
-      trendCaption: 'vs start of window',
+      trendCaption: 'so với đầu khung thời gian',
       tone: 'default',
       onClick: () => navigate('/monitoring'),
       sparkline: buildSparkline(overview?.realtimeHealth.connectionsTrend ?? [], ['connection']),
     },
     {
       id: 'services',
-      label: 'Healthy services',
+      label: 'Dịch vụ ổn định',
       value: `${servicesSummary?.up ?? 0}/${servicesTotal}`,
       changeLabel:
-        healthyServiceRate === null ? 'No data' : formatPercent(healthyServiceRate * 100, 0),
-      trendCaption: 'service coverage',
+        healthyServiceRate === null ? 'Chưa có dữ liệu' : formatPercent(healthyServiceRate * 100, 0),
+      trendCaption: 'độ phủ dịch vụ',
       tone:
         (servicesSummary?.down ?? 0) > 0
           ? 'danger'
@@ -203,11 +203,11 @@ export const DashboardPage = () => {
     },
     {
       id: 'failures',
-      label: 'Delivery failures',
+      label: 'Lỗi gửi tin',
       value: formatRate(overview?.realtimeHealth.deliveryFailuresPerMinute, '/min'),
       changeLabel: formatDeltaLabel(reliabilityTrend.delta),
       trendDirection: reliabilityTrend.direction,
-      trendCaption: 'failure pressure',
+      trendCaption: 'áp lực lỗi',
       tone:
         (overview?.realtimeHealth.deliveryFailuresPerMinute ?? 0) > 0 ? 'danger' : 'success',
       onClick: () => navigate('/monitoring'),
@@ -220,8 +220,8 @@ export const DashboardPage = () => {
 
   return (
     <PageShell
-      title="Dashboard"
-      description="Fast production snapshot for system posture, active issues, and next actions."
+      title="Bảng điều khiển"
+      description="Ảnh chụp nhanh trạng thái hệ thống, vấn đề đang hoạt động và các bước xử lý tiếp theo."
       headerExtra={
         <div className="ds-page-toolbar-stack">
           <div className="ds-page-toolbar-group">
@@ -236,11 +236,11 @@ export const DashboardPage = () => {
               }
               onClick={refetchDashboard}
             >
-              Refresh
+              Làm mới
             </Button>
             {overview?.generatedAt ? (
               <span className="ds-page-toolbar-meta">
-                Last sync: {formatDateTime(overview.generatedAt)}
+                Đồng bộ gần nhất: {formatDateTime(overview.generatedAt)}
               </span>
             ) : null}
           </div>
@@ -249,34 +249,34 @@ export const DashboardPage = () => {
     >
       {!hasOverviewData ? (
         <SurfaceCard
-          eyebrow="Dashboard"
-          title="No operational data yet"
-          description="The shell is ready, but the dashboard has not received its first telemetry payload."
+          eyebrow="Bảng điều khiển"
+          title="Chưa có dữ liệu vận hành"
+          description="Khung giao diện đã sẵn sàng nhưng dashboard chưa nhận được lô telemetry đầu tiên."
         >
           <EmptyState
-            title="No data available"
-            description="Wait for the next refresh window or verify that monitoring and service health endpoints are enabled."
-            action={<Button onClick={refetchDashboard}>Refresh dashboard</Button>}
+            title="Chưa có dữ liệu"
+            description="Hãy chờ đợt làm mới tiếp theo hoặc kiểm tra endpoint monitoring và service health đã được bật."
+            action={<Button onClick={refetchDashboard}>Làm mới dashboard</Button>}
           />
         </SurfaceCard>
       ) : (
         <div className="ds-dashboard-layout ds-dashboard-layout--snapshot">
           <div className="ds-dashboard-span-8">
             <DashboardHero
-              eyebrow="System status"
+              eyebrow="Trạng thái hệ thống"
               title={
                 heroTone === 'healthy'
-                  ? 'System posture is stable'
+                  ? 'Hệ thống đang ổn định'
                   : heroTone === 'degraded'
-                    ? 'Some signals need attention'
-                    : 'Immediate action is required'
+                    ? 'Một số tín hiệu cần chú ý'
+                    : 'Cần xử lý ngay'
               }
               description={
                 heroTone === 'healthy'
-                  ? 'The system is serving normally. Use monitoring only when you need deeper diagnostics.'
+                  ? 'Hệ thống đang phục vụ bình thường. Chỉ mở giám sát khi cần chẩn đoán sâu hơn.'
                   : heroTone === 'degraded'
-                    ? 'At least one dependency, feed, or freshness window is outside the expected range.'
-                    : 'A service outage, active incident, or near-breaking capacity signal is affecting operations.'
+                    ? 'Ít nhất một phụ thuộc, luồng dữ liệu hoặc cửa sổ freshness đang nằm ngoài ngưỡng mong đợi.'
+                    : 'Sự cố dịch vụ, incident đang hoạt động hoặc tín hiệu gần quá tải đang ảnh hưởng vận hành.'
               }
               tone={heroTone}
               status={
@@ -298,19 +298,19 @@ export const DashboardPage = () => {
                 ) : null
               }
               stats={[
-                { label: 'Active incidents', value: formatNumber(incidents.length) },
+                { label: 'Sự cố đang hoạt động', value: formatNumber(incidents.length) },
                 {
-                  label: 'Telemetry freshness',
-                  value: overview ? getFreshnessLabel(overview.freshness).toUpperCase() : 'UNKNOWN',
+                  label: 'Độ mới telemetry',
+                  value: overview ? getFreshnessLabel(overview.freshness).toUpperCase() : 'KHÔNG XÁC ĐỊNH',
                 },
                 {
                   label: 'Sender ACK p95',
                   value: formatMs(overview?.systemOverview.senderAckP95Ms),
                 },
               ]}
-              primaryActionLabel="Open monitoring"
+              primaryActionLabel="Mở giám sát"
               onPrimaryAction={() => navigate('/monitoring')}
-              secondaryActionLabel="Service health"
+              secondaryActionLabel="Sức khỏe dịch vụ"
               onSecondaryAction={() => navigate('/services/health')}
             />
           </div>
@@ -369,7 +369,7 @@ export const DashboardPage = () => {
                     {criticalInsights.slice(1).map((item) => (
                       <div key={item.id} className="monitoring-warning-group-item">
                         <span>{item.title}</span>
-                        <strong>{item.tone === 'critical' ? 'Escalate' : 'Review'}</strong>
+                        <strong>{item.tone === 'critical' ? 'Leo thang' : 'Xem lại'}</strong>
                       </div>
                     ))}
                   </div>

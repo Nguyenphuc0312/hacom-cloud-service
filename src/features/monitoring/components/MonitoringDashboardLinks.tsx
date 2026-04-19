@@ -14,43 +14,43 @@ export const MonitoringDashboardLinks = ({ overview }: MonitoringDashboardLinksP
 
   return (
     <WidgetCard
-      title="Drill-down Links"
+      title="Liên kết đi sâu"
       actions={
         <Button type="link" onClick={() => navigate(overview.links.serviceHealth)}>
-          Service health
+          Sức khỏe dịch vụ
         </Button>
       }
     >
       <div className="monitoring-dashboard-links">
         {overview.links.realtime ? (
           <Button href={overview.links.realtime} target="_blank" rel="noreferrer">
-            Realtime dashboard
+            Dashboard realtime
           </Button>
         ) : null}
         {overview.links.correctness ? (
           <Button href={overview.links.correctness} target="_blank" rel="noreferrer">
-            Correctness dashboard
+            Dashboard độ đúng
           </Button>
         ) : null}
         {overview.links.redis ? (
           <Button href={overview.links.redis} target="_blank" rel="noreferrer">
-            Redis dashboard
+            Dashboard Redis
           </Button>
         ) : null}
         {overview.links.server ? (
           <Button href={overview.links.server} target="_blank" rel="noreferrer">
-            Server dashboard
+            Dashboard máy chủ
           </Button>
         ) : null}
         {overview.links.capacityBaseline ? (
           <Button href={overview.links.capacityBaseline} target="_blank" rel="noreferrer">
-            Load vs baseline
+            Tải so với baseline
           </Button>
         ) : null}
       </div>
       <Text type="secondary">
-        This page stays opinionated and compact. Use Grafana only when you need deeper traces,
-        longer timelines, or exporter-level detail.
+        Trang này chủ đích giữ gọn và có quan điểm. Chỉ mở Grafana khi cần trace sâu hơn,
+        timeline dài hơn hoặc chi tiết ở mức exporter.
       </Text>
     </WidgetCard>
   );

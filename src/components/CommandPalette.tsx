@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 
 import type { CommandCategory } from '@/app/layout/navigationConfig';
 
-const CATEGORY_ORDER: CommandCategory[] = ['Navigation', 'Quick Actions', 'System', 'Settings'];
+const CATEGORY_ORDER: CommandCategory[] = ['Điều hướng', 'Tác vụ nhanh', 'Hệ thống', 'Cấu hình'];
 
 export interface CommandPaletteItem {
   id: string;
@@ -149,7 +149,7 @@ export const CommandPalette = ({ open, onClose, items }: CommandPaletteProps) =>
           value={query}
           className="command-palette-input"
           prefix={<SearchOutlined />}
-          placeholder="Search pages, settings..."
+          placeholder="Tìm trang, cài đặt..."
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown') {
@@ -177,7 +177,7 @@ export const CommandPalette = ({ open, onClose, items }: CommandPaletteProps) =>
               onClose();
             }
           }}
-          aria-label="Command palette search"
+          aria-label="Tìm trong bảng lệnh nhanh"
         />
       </div>
 
@@ -222,11 +222,11 @@ export const CommandPalette = ({ open, onClose, items }: CommandPaletteProps) =>
           ))}
         </div>
       ) : (
-        <div className="command-palette-empty">No matching command found</div>
+        <div className="command-palette-empty">Không tìm thấy lệnh phù hợp</div>
       )}
 
       <div className="command-palette-footer">
-        Use Up/Down to move, Enter to select, Esc to close
+        Dùng mũi tên lên/xuống để di chuyển, Enter để chọn, Esc để đóng
       </div>
     </Modal>
   );

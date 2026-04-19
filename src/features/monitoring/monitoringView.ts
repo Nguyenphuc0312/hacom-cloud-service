@@ -21,7 +21,7 @@ export const availabilityToStatus = (
 export const formatMetricValue = (
   value: string,
   availability: MonitoringAvailability,
-  fallback = 'Unavailable',
+  fallback = 'Không khả dụng',
 ): string => {
   if (availability === 'unavailable') {
     return fallback;
@@ -36,7 +36,7 @@ export const formatMetricValue = (
 
 export const summarizeWarnings = (warnings: MonitoringWarning[]): string => {
   if (warnings.length === 0) {
-    return 'Some upstream metrics may be delayed or temporarily missing.';
+    return 'Một số metric upstream có thể đang trễ hoặc tạm thời thiếu dữ liệu.';
   }
 
   const grouped = new Map<string, number>();
@@ -70,51 +70,59 @@ export const riskStateToStatus = (
 };
 
 export const getRiskStateLabel = (riskState: MonitoringCapacityRiskState): string => {
-  if (riskState === 'near-breaking') {
-    return 'Near-breaking';
+  if (riskState === 'comfortable') {
+    return 'An toàn';
   }
 
-  return riskState.charAt(0).toUpperCase() + riskState.slice(1);
+  if (riskState === 'warning') {
+    return 'Cảnh báo';
+  }
+
+  if (riskState === 'near-breaking') {
+    return 'Cận gãy';
+  }
+
+  return 'Đang chờ';
 };
 
-export const formatRatioValue = (value: number | null, fallback = 'Baseline unavailable'): string => {
+export const formatRatioValue = (value: number | null, fallback = 'Baseline chưa khả dụng'): string => {
   if (value === null || Number.isNaN(value)) {
     return fallback;
   }
 
   if (value < 1) {
-    return `${(value * 100).toFixed(value < 0.1 ? 1 : 0)}% of comfortable`;
+    return `${(value * 100).toFixed(value < 0.1 ? 1 : 0)}% so với ngưỡng an toàn`;
   }
 
-  return `${value.toFixed(value >= 10 ? 0 : 2)}x comfortable`;
+  return `${value.toFixed(value >= 10 ? 0 : 2)}x ngưỡng an toàn`;
 };
 
 export const describeRatioState = (value: number | null): string => {
   if (value === null || Number.isNaN(value)) {
-    return 'No measured baseline yet.';
+    return 'Chưa có baseline đo kiểm.';
   }
 
   if (value >= 1) {
-    return 'At or above the tested comfortable threshold.';
+    return 'Đã chạm hoặc vượt ngưỡng an toàn đã đo.';
   }
 
   if (value >= 0.8) {
-    return 'Close to the tested comfortable threshold.';
+    return 'Đang tiến gần ngưỡng an toàn đã đo.';
   }
 
-  return 'Within measured headroom.';
+  return 'Vẫn nằm trong khoảng đệm đã đo.';
 };
 
 export const getFreshnessLabel = (
   freshness: 'live' | 'partial' | 'unavailable',
 ): string => {
   if (freshness === 'live') {
-    return 'Live';
+    return 'Trực tiếp';
   }
 
   if (freshness === 'partial') {
-    return 'Degraded';
+    return 'Suy giảm';
   }
 
-  return 'Unavailable';
+  return 'Không khả dụng';
 };

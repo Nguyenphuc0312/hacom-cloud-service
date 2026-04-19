@@ -42,19 +42,19 @@ export const HeaderUserMenu = ({
       {
         key: 'profile',
         icon: <UserOutlined />,
-        label: 'My Profile',
+        label: 'Hồ sơ của tôi',
         onClick: onOpenProfile,
       },
       {
         key: 'settings',
         icon: <SettingOutlined />,
-        label: 'Settings',
+        label: 'Cài đặt',
         onClick: onOpenSettings,
       },
       {
         key: 'change-password',
         icon: <LockOutlined />,
-        label: 'Change password',
+        label: 'Đổi mật khẩu',
         disabled: !onChangePassword,
         onClick: onChangePassword,
       },
@@ -62,7 +62,7 @@ export const HeaderUserMenu = ({
       {
         key: 'logout',
         icon: <LogoutOutlined />,
-        label: 'Logout',
+        label: 'Đăng xuất',
         danger: true,
         onClick: onLogout,
       },
@@ -77,7 +77,7 @@ export const HeaderUserMenu = ({
       overlayClassName="header-user-dropdown"
       menu={{ items: menuItems }}
     >
-      <Button className="header-user-menu-trigger" aria-label="Open user menu">
+      <Button className="header-user-menu-trigger" aria-label="Mở menu người dùng">
         <Avatar size={30} className="header-user-avatar">
           {avatarText}
         </Avatar>

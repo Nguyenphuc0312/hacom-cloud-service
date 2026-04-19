@@ -30,24 +30,24 @@ import { formatDateTime } from '@/utils/date';
 import { canManageUsers } from '@/utils/role';
 
 const accountStatusOptions = [
-  { label: 'All statuses', value: 'all' },
-  { label: 'Active', value: 'ACTIVE' },
-  { label: 'Pending verification', value: 'PENDING_VERIFICATION' },
-  { label: 'Disabled', value: 'DISABLED' },
+  { label: 'Tất cả trạng thái', value: 'all' },
+  { label: 'Đang hoạt động', value: 'ACTIVE' },
+  { label: 'Chờ xác minh', value: 'PENDING_VERIFICATION' },
+  { label: 'Đã tắt', value: 'DISABLED' },
 ];
 
 const presenceOptions: Array<{ label: string; value: 'all' | UserPresenceStatus }> = [
-  { label: 'Any presence', value: 'all' },
-  { label: 'Online', value: 'online' },
-  { label: 'Offline', value: 'offline' },
-  { label: 'Away', value: 'away' },
-  { label: 'Do not disturb', value: 'dnd' },
+  { label: 'Mọi trạng thái hiện diện', value: 'all' },
+  { label: 'Trực tuyến', value: 'online' },
+  { label: 'Ngoại tuyến', value: 'offline' },
+  { label: 'Vắng mặt', value: 'away' },
+  { label: 'Không làm phiền', value: 'dnd' },
 ];
 
 const activityOptions = [
-  { label: 'Any activity', value: 'all' },
-  { label: 'Active only', value: 'active' },
-  { label: 'Inactive only', value: 'inactive' },
+  { label: 'Mọi mức độ hoạt động', value: 'all' },
+  { label: 'Chỉ đang hoạt động', value: 'active' },
+  { label: 'Chỉ không hoạt động', value: 'inactive' },
 ];
 
 export const UsersPage = () => {
@@ -94,11 +94,11 @@ export const UsersPage = () => {
     },
     onSuccess: (_data, variables) => {
       if (variables.action === 'lock') {
-        message.success('Account locked.');
+        message.success('Đã khóa tài khoản.');
       } else if (variables.action === 'unlock') {
-        message.success('Account unlocked.');
+        message.success('Đã mở khóa tài khoản.');
       } else {
-        message.success('Sessions revoked.');
+        message.success('Đã thu hồi các phiên.');
       }
 
       void queryClient.invalidateQueries({ queryKey: queryKeys.usersList(JSON.stringify(params)) });
@@ -113,32 +113,32 @@ export const UsersPage = () => {
   const confirmAction = useCallback(
     (action: 'lock' | 'unlock' | 'revoke', user: UserListItem) => {
       if (!isAdminWriteActionsEnabled) {
-        message.info('Write actions are disabled by release configuration.');
+        message.info('Các thao tác ghi đang bị tắt theo cấu hình phát hành.');
         return;
       }
 
       if (!canManageUsers(currentRole)) {
-        message.warning('Your current role cannot run account write actions.');
+        message.warning('Vai trò hiện tại của bạn không thể thực hiện thao tác ghi lên tài khoản.');
         return;
       }
 
       const titleMap: Record<typeof action, string> = {
-        lock: 'Lock account',
-        unlock: 'Unlock account',
-        revoke: 'Revoke active sessions',
+        lock: 'Khóa tài khoản',
+        unlock: 'Mở khóa tài khoản',
+        revoke: 'Thu hồi phiên đang hoạt động',
       };
 
       const contentMap: Record<typeof action, string> = {
-        lock: 'The account will be disabled and the user will be signed out of active sessions.',
-        unlock: 'The account will be restored according to the current auth-service policy.',
-        revoke: 'All current sessions for this user will be revoked immediately.',
+        lock: 'Tài khoản sẽ bị vô hiệu hóa và người dùng sẽ bị đăng xuất khỏi các phiên đang hoạt động.',
+        unlock: 'Tài khoản sẽ được khôi phục theo chính sách auth-service hiện tại.',
+        revoke: 'Toàn bộ phiên hiện tại của người dùng này sẽ bị thu hồi ngay lập tức.',
       };
 
       Modal.confirm({
         title: titleMap[action],
         content: contentMap[action],
-        okText: 'Confirm',
-        cancelText: 'Cancel',
+        okText: 'Xác nhận',
+        cancelText: 'Hủy',
         onOk: async () => {
           await actionMutation.mutateAsync({
             action,
@@ -154,37 +154,37 @@ export const UsersPage = () => {
   const columns = useMemo<ColumnsType<UserListItem>>(
     () => [
       {
-        title: 'Account',
+        title: 'Tài khoản',
         key: 'account',
         render: (_, record) => (
           <Space direction="vertical" size={0}>
-            <Typography.Text strong>{record.username ?? 'No username'}</Typography.Text>
+            <Typography.Text strong>{record.username ?? 'Chưa có username'}</Typography.Text>
             <Typography.Text type="secondary">{record.email}</Typography.Text>
           </Space>
         ),
       },
       {
-        title: 'Employee',
+        title: 'Nhân viên',
         dataIndex: 'employeeId',
         render: (value: string | null) => value ?? '-',
       },
       {
-        title: 'Account state',
+        title: 'Trạng thái tài khoản',
         dataIndex: 'accountStatus',
         render: (value: string | null) => <StatusBadge status={value} />,
       },
       {
-        title: 'Presence',
+        title: 'Hiện diện',
         dataIndex: 'status',
         render: (value: string | null) => <StatusBadge status={value ?? 'offline'} />,
       },
       {
-        title: 'Last seen',
+        title: 'Lần thấy gần nhất',
         dataIndex: 'lastSeen',
         render: (value: string | null) => (value ? formatDateTime(value) : '-'),
       },
       {
-        title: 'Updated at',
+        title: 'Cập nhật lúc',
         dataIndex: 'updatedAt',
         sorter: true,
         render: (value: string | null) => (value ? formatDateTime(value) : '-'),
@@ -198,12 +198,12 @@ export const UsersPage = () => {
             actions={[
               {
                 key: 'detail',
-                label: 'Open detail',
+                label: 'Mở chi tiết',
                 onClick: () => navigate(`/users/${record.id}`),
               },
               {
                 key: 'lock',
-                label: 'Lock account',
+                label: 'Khóa tài khoản',
                 danger: true,
                 disabled:
                   !isAdminWriteActionsEnabled ||
@@ -214,7 +214,7 @@ export const UsersPage = () => {
               },
               {
                 key: 'unlock',
-                label: 'Unlock account',
+                label: 'Mở khóa tài khoản',
                 disabled:
                   !isAdminWriteActionsEnabled ||
                   !canWriteUserActions ||
@@ -224,7 +224,7 @@ export const UsersPage = () => {
               },
               {
                 key: 'revoke',
-                label: 'Revoke sessions',
+                label: 'Thu hồi phiên',
                 disabled: !canWriteUserActions || actionMutation.isPending,
                 onClick: () => confirmAction('revoke', record),
               },
@@ -299,10 +299,10 @@ export const UsersPage = () => {
   if (usersQuery.isLoading) {
     return (
       <PageShell
-        title="Users"
-        description="Review admin accounts, presence, and access state."
+        title="Người dùng"
+        description="Xem tài khoản admin, trạng thái hiện diện và trạng thái truy cập."
       >
-        <QueryStateView kind="loading" title="Loading accounts..." />
+        <QueryStateView kind="loading" title="Đang tải danh sách tài khoản..." />
       </PageShell>
     );
   }
@@ -310,12 +310,12 @@ export const UsersPage = () => {
   if (usersQuery.isError) {
     return (
       <PageShell
-        title="Users"
-        description="Review admin accounts, presence, and access state."
+        title="Người dùng"
+        description="Xem tài khoản admin, trạng thái hiện diện và trạng thái truy cập."
       >
         <QueryStateView
           kind="error"
-          description="Unable to load the accounts list."
+          description="Không thể tải danh sách tài khoản."
           onRetry={() => {
             void usersQuery.refetch();
           }}
@@ -328,8 +328,8 @@ export const UsersPage = () => {
 
   return (
     <PageShell
-      title="Users"
-      description="Find the right operator fast, then open detail only when a write action is needed."
+      title="Người dùng"
+      description="Tìm đúng operator thật nhanh, rồi chỉ mở chi tiết khi cần thực hiện thao tác ghi."
       headerExtra={
         <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
           <Button
@@ -339,7 +339,7 @@ export const UsersPage = () => {
               void usersQuery.refetch();
             }}
           >
-            Refresh
+            Làm mới
           </Button>
         </div>
       }
@@ -348,8 +348,8 @@ export const UsersPage = () => {
         <FeatureDisabledNotice
           description={
             !isAdminWriteActionsEnabled
-              ? 'Write actions are disabled by release configuration.'
-              : 'Your current role is read-only for lock, unlock, and session revocation.'
+              ? 'Các thao tác ghi đang bị tắt theo cấu hình phát hành.'
+              : 'Vai trò hiện tại của bạn chỉ có quyền đọc với thao tác khóa, mở khóa và thu hồi phiên.'
           }
         />
       )}
@@ -362,7 +362,7 @@ export const UsersPage = () => {
           initialValues={{ accountStatus: 'all', status: 'all', active: 'all' }}
         >
           <Form.Item name="keyword" className="ds-toolbar-field ds-toolbar-field--lg">
-            <Input allowClear placeholder="Search username, email, or employee" />
+            <Input allowClear placeholder="Tìm username, email hoặc mã nhân viên" />
           </Form.Item>
           <Form.Item name="accountStatus" className="ds-toolbar-field ds-toolbar-field--md">
             <Select options={accountStatusOptions} />
@@ -376,24 +376,23 @@ export const UsersPage = () => {
           <Form.Item className="ds-toolbar-field ds-toolbar-actions">
             <Space>
               <Button type="primary" onClick={applyFilters}>
-                Apply filters
+                Áp dụng bộ lọc
               </Button>
-              <Button onClick={resetFilters}>Reset</Button>
+              <Button onClick={resetFilters}>Đặt lại</Button>
             </Space>
           </Form.Item>
         </Form>
         <div className="ds-filter-toolbar-meta">
           <span>
-            {data?.pagination.total ?? 0} matched account
-            {(data?.pagination.total ?? 0) === 1 ? '' : 's'}
+            {data?.pagination.total ?? 0} tài khoản phù hợp
           </span>
           <span>
             {activeFilterCount > 0
-              ? `${activeFilterCount} active filter${activeFilterCount === 1 ? '' : 's'}`
-              : 'No active filters'}
+              ? `${activeFilterCount} bộ lọc đang hoạt động`
+              : 'Không có bộ lọc đang hoạt động'}
           </span>
           <span>
-            Last sync:{' '}
+            Đồng bộ gần nhất:{' '}
             {usersQuery.dataUpdatedAt
               ? formatDateTime(new Date(usersQuery.dataUpdatedAt).toISOString())
               : '-'}
@@ -402,12 +401,12 @@ export const UsersPage = () => {
       </FilterBar>
 
       <DataTableShell
-        title="Accounts"
-        meta="Primary workspace for account state, presence, and row-level actions."
+        title="Tài khoản"
+        meta="Không gian chính để theo dõi trạng thái tài khoản, hiện diện và thao tác theo từng dòng."
         toolbar={
           <DataTableToolbar>
             <span className="ds-toolbar-summary">
-              Sort: {params.sortBy ?? 'created_at'} / {params.sortOrder ?? 'desc'}
+              Sắp xếp: {params.sortBy ?? 'created_at'} / {params.sortOrder ?? 'desc'}
             </span>
           </DataTableToolbar>
         }
@@ -417,7 +416,7 @@ export const UsersPage = () => {
           columns={columns}
           minHeight={320}
           dataSource={data?.items ?? []}
-          emptyNode={<EmptyState description="No users matched the current filters." />}
+          emptyNode={<EmptyState description="Không có người dùng nào khớp với bộ lọc hiện tại." />}
           onRow={(record) => ({
             onClick: () => navigate(`/users/${record.id}`),
             style: { cursor: 'pointer' },

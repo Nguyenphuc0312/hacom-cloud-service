@@ -20,7 +20,7 @@ const normalizeUsername = (user: CurrentAdmin | null): string => {
 };
 
 const normalizeRoleLabel = (user: CurrentAdmin | null): string => {
-  return toDisplayRole(user?.role).replace('_', ' ').toUpperCase();
+  return toDisplayRole(user?.role);
 };
 
 export const UserMenu = memo(({ user, onOpenProfile, onOpenSettings, onLogout }: UserMenuProps) => {
@@ -44,20 +44,20 @@ export const UserMenu = memo(({ user, onOpenProfile, onOpenSettings, onLogout }:
       {
         key: 'profile',
         icon: <UserOutlined />,
-        label: 'Profile',
+        label: 'Hồ sơ',
         onClick: onOpenProfile,
       },
       {
         key: 'settings',
         icon: <SettingOutlined />,
-        label: 'Settings',
+        label: 'Cài đặt',
         onClick: onOpenSettings,
       },
       { type: 'divider' },
       {
         key: 'logout',
         icon: <LogoutOutlined />,
-        label: 'Logout',
+        label: 'Đăng xuất',
         danger: true,
         onClick: onLogout,
       },
@@ -72,7 +72,7 @@ export const UserMenu = memo(({ user, onOpenProfile, onOpenSettings, onLogout }:
       overlayClassName="user-menu-dropdown"
       menu={{ items: menuItems }}
     >
-      <Button className="user-menu-trigger" aria-label="Open user menu">
+      <Button className="user-menu-trigger" aria-label="Mở menu người dùng">
         <Avatar size={30} className="user-menu-avatar">
           {avatarText}
         </Avatar>
