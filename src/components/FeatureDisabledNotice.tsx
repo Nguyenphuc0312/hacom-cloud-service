@@ -1,4 +1,5 @@
-import { Alert } from 'antd';
+import { StatusBadge } from '@/components/StatusBadge';
+import { SurfaceCard } from '@/components/ui/SurfaceCard';
 
 interface FeatureDisabledNoticeProps {
   title?: string;
@@ -9,5 +10,13 @@ export const FeatureDisabledNotice = ({
   title = 'Write actions unavailable',
   description,
 }: FeatureDisabledNoticeProps) => {
-  return <Alert type="info" showIcon message={title} description={description} />;
+  return (
+    <SurfaceCard
+      eyebrow="Release guard"
+      title={title}
+      description={description}
+      status={<StatusBadge status="warning" />}
+      className="ds-feature-disabled-notice"
+    />
+  );
 };

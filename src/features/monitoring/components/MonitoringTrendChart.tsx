@@ -1,7 +1,9 @@
 import dayjs from 'dayjs';
 import ReactECharts from 'echarts-for-react';
+
 import type { MonitoringAvailability, MonitoringSeries } from '@/api/types';
 import { QueryStateView } from '@/components/QueryStates';
+import { useTheme } from '@/theme/theme-context';
 
 interface MonitoringTrendChartProps {
   series: MonitoringSeries[];
@@ -10,14 +12,13 @@ interface MonitoringTrendChartProps {
   formatter?: (value: number | null) => string;
 }
 
-const COLORS = ['#2563eb', '#0f766e', '#d97706', '#dc2626'];
-
 export const MonitoringTrendChart = ({
   series,
   availability = 'available',
   height = 260,
   formatter = (value) => (value === null ? '-' : `${value}`),
 }: MonitoringTrendChartProps) => {
+  const { tokens } = useTheme();
   const timeline = series.find((entry) => entry.points.length > 0)?.points ?? [];
   const hasData = series.some((entry) => entry.points.some((point) => point.value !== null));
 
@@ -35,7 +36,7 @@ export const MonitoringTrendChart = ({
   }
 
   const option = {
-    color: COLORS,
+    color: tokens.chartPalette,
     grid: {
       left: 24,
       right: 16,
@@ -45,26 +46,42 @@ export const MonitoringTrendChart = ({
     },
     tooltip: {
       trigger: 'axis',
+      backgroundColor: tokens.chart.tooltipBackground,
+      textStyle: {
+        color: tokens.chart.tooltipText,
+      },
       valueFormatter: (value: number | string) =>
         typeof value === 'number' ? formatter(value) : `${value}`,
     },
     legend: {
       type: 'scroll',
       bottom: 0,
+      textStyle: {
+        color: tokens.semantic.textTertiary,
+      },
     },
     xAxis: {
       type: 'category',
       boundaryGap: false,
       data: timeline.map((point) => point.timestamp),
+      axisLine: {
+        lineStyle: {
+          color: tokens.chart.grid,
+        },
+      },
       axisLabel: {
+        color: tokens.semantic.textTertiary,
         formatter: (value: string) => dayjs(value).format('HH:mm'),
       },
     },
     yAxis: {
       type: 'value',
+      axisLabel: {
+        color: tokens.semantic.textTertiary,
+      },
       splitLine: {
         lineStyle: {
-          color: 'rgba(148, 163, 184, 0.16)',
+          color: tokens.chart.grid,
         },
       },
     },

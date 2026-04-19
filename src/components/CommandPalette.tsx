@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 
 import type { CommandCategory } from '@/app/layout/navigationConfig';
 
-const CATEGORY_ORDER: CommandCategory[] = ['Navigation', 'System', 'Settings'];
+const CATEGORY_ORDER: CommandCategory[] = ['Navigation', 'Quick Actions', 'System', 'Settings'];
 
 export interface CommandPaletteItem {
   id: string;
@@ -138,7 +138,7 @@ export const CommandPalette = ({ open, onClose, items }: CommandPaletteProps) =>
       className="command-palette-modal"
       styles={{
         mask: {
-          backgroundColor: 'rgba(15, 23, 42, 0.42)',
+          backgroundColor: 'var(--color-overlay)',
           backdropFilter: 'blur(2px)',
         },
       }}

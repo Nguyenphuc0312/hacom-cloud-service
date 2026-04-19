@@ -55,34 +55,6 @@ export const MonitoringCorrectnessSection = ({
           meta={availability === 'unavailable' ? 'Metrics unavailable' : 'Current backlog'}
         />
       </Col>
-      <Col xs={24} sm={12} xl={4}>
-        <StatCard
-          title="Reconcile success"
-          value={formatMetricValue(formatNumber(overview.messageCorrectness.reconcileSuccessTotal), availability)}
-          meta={availability === 'unavailable' ? 'Metrics unavailable' : 'Total recovered successfully'}
-        />
-      </Col>
-      <Col xs={24} sm={12} xl={4}>
-        <StatCard
-          title="Reconcile fail"
-          value={formatMetricValue(formatNumber(overview.messageCorrectness.reconcileFailureTotal), availability)}
-          meta={availability === 'unavailable' ? 'Metrics unavailable' : 'Recovery attempts still failing'}
-        />
-      </Col>
-      <Col xs={24} sm={12} xl={4}>
-        <StatCard
-          title="Orphan Mongo"
-          value={formatMetricValue(formatNumber(overview.messageCorrectness.orphanMongoCurrent), availability)}
-          meta={availability === 'unavailable' ? 'Metrics unavailable' : 'Current orphan documents'}
-        />
-      </Col>
-      <Col xs={24} sm={12} xl={4}>
-        <StatCard
-          title="Projection missing"
-          value={formatMetricValue(formatNumber(overview.messageCorrectness.projectionMissingCurrent), availability)}
-          meta={availability === 'unavailable' ? 'Metrics unavailable' : 'Current PG projection gap'}
-        />
-      </Col>
       <Col xs={24} xl={14}>
         <WidgetCard title="Outcome trend">
           <MonitoringTrendChart

@@ -1,15 +1,15 @@
 import React from 'react';
-import { BellOutlined, PlusOutlined } from '@ant-design/icons';
+import { BellOutlined } from '@ant-design/icons';
 
 import type { CurrentAdmin } from '@/api/types';
 import { UserMenu } from '@/components/UserMenu';
+import { ThemeToggleButton } from '@/components/ui/ThemeToggleButton';
 
 interface TopbarActionsProps {
   user: CurrentAdmin | null;
   environmentLabel?: string;
   systemTone: 'healthy' | 'degraded';
   onOpenNotifications: () => void;
-  onOpenQuickAction: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
   onLogout: () => void;
@@ -20,7 +20,6 @@ export const TopbarActions: React.FC<TopbarActionsProps> = ({
   environmentLabel = 'Production',
   systemTone,
   onOpenNotifications,
-  onOpenQuickAction,
   onOpenProfile,
   onOpenSettings,
   onLogout,
@@ -35,6 +34,7 @@ export const TopbarActions: React.FC<TopbarActionsProps> = ({
           {systemTone === 'healthy' ? 'Healthy' : 'Degraded'}
         </span>
       </div>
+      <ThemeToggleButton compact />
       <button
         type="button"
         className="ds-btn ds-btn--icon"
@@ -42,14 +42,6 @@ export const TopbarActions: React.FC<TopbarActionsProps> = ({
         onClick={onOpenNotifications}
       >
         <BellOutlined />
-      </button>
-      <button
-        type="button"
-        className="ds-btn ds-btn--icon"
-        aria-label="Create quick action"
-        onClick={onOpenQuickAction}
-      >
-        <PlusOutlined />
       </button>
       <UserMenu
         user={user}

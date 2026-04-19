@@ -1,4 +1,4 @@
-import { Space, Typography } from 'antd';
+import { Typography } from 'antd';
 import type { ReactNode } from 'react';
 import {
   PageHeader,
@@ -34,9 +34,7 @@ export const PageShell = ({ title, description, headerExtra, children }: PageShe
         </div>
         {headerExtra ? <PageHeaderMeta>{headerExtra}</PageHeaderMeta> : null}
       </PageHeader>
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        {children}
-      </Space>
+      <div className="ds-page-shell-body">{children}</div>
     </section>
   );
 };

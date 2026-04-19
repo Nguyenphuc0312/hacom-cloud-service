@@ -1,5 +1,6 @@
+import { ReloadOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Button, Card, Space, Tabs, Typography } from 'antd';
+import { Button, Tabs, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -7,11 +8,13 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { serviceHealthClient } from '@/api/clients';
 import { queryKeys } from '@/api/queryKeys';
 import type { ServiceHealthItem } from '@/api/types';
-import { DataTableShell } from '@/components/DataTableShell';
 import { AdminTable } from '@/components/AdminTable';
-import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
+import { DataTableShell } from '@/components/DataTableShell';
+import { DataTableToolbar } from '@/components/DataTableToolbar';
+import { EmptyState, QueryStateView } from '@/components/QueryStates';
 import { PageShell } from '@/components/PageShell';
 import { StatusBadge } from '@/components/StatusBadge';
+import { SurfaceCard } from '@/components/ui/SurfaceCard';
 import { EmailTemplatesCard } from '../components/EmailTemplatesCard';
 import { SmtpSettingsCard } from '../components/SmtpSettingsCard';
 import { formatDateTime } from '@/utils/date';
@@ -38,7 +41,8 @@ export const ServicesPage = () => {
   const healthQuery = useQuery({
     queryKey: queryKeys.serviceHealth,
     queryFn: serviceHealthClient.getServiceHealth,
-    refetchInterval: 30_000,
+    enabled: activeSection === 'health',
+    refetchInterval: activeSection === 'health' ? 30_000 : false,
   });
 
   const focusedService = searchParams.get('service')?.trim() ?? '';
@@ -113,7 +117,7 @@ export const ServicesPage = () => {
         ),
       },
       {
-        title: 'Version/Build/Env',
+        title: 'Version / Build / Env',
         key: 'meta',
         render: (_, record) => {
           const parts = [record.version, record.build, record.env].filter(Boolean);
@@ -124,26 +128,29 @@ export const ServicesPage = () => {
     [],
   );
 
-  if (healthQuery.isLoading) {
+  if (activeSection === 'health' && healthQuery.isLoading) {
     return (
       <PageShell
         title="Services"
-        description="Service health + SMTP + Email templates cho vận hành admin"
+        description="Dependency health and service configuration."
       >
-        <LoadingState tip="Đang tải service health..." />
+        <QueryStateView kind="loading" title="Loading service health..." />
       </PageShell>
     );
   }
 
-  if (healthQuery.isError) {
+  if (activeSection === 'health' && healthQuery.isError) {
     return (
       <PageShell
         title="Services"
-        description="Service health + SMTP + Email templates cho vận hành admin"
+        description="Dependency health and service configuration."
       >
-        <ErrorState
-          subTitle="Không thể tải service health."
-          extra={<Button onClick={() => healthQuery.refetch()}>Thử lại</Button>}
+        <QueryStateView
+          kind="error"
+          description="Unable to load service health."
+          onRetry={() => {
+            void healthQuery.refetch();
+          }}
         />
       </PageShell>
     );
@@ -154,10 +161,25 @@ export const ServicesPage = () => {
   return (
     <PageShell
       title="Services"
-      description="Giám sát service health và cấu hình mail runtime theo mô hình control panel"
-      headerExtra={<Button onClick={() => healthQuery.refetch()}>Refresh health</Button>}
+      description="Manage service health, SMTP runtime, and outbound template controls from one lean workspace."
+      headerExtra={
+        <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
+          {activeSection === 'health' ? (
+            <Button
+              icon={<ReloadOutlined />}
+              loading={healthQuery.isFetching}
+              onClick={() => {
+                void healthQuery.refetch();
+              }}
+            >
+              Refresh
+            </Button>
+          ) : null}
+        </div>
+      }
     >
       <Tabs
+        className="ds-tab-page"
         activeKey={activeSection}
         onChange={(nextKey) => navigate(`/services/${nextKey}`)}
         items={[
@@ -165,54 +187,65 @@ export const ServicesPage = () => {
             key: 'health',
             label: 'Service Health',
             children: (
-              <Space direction="vertical" size={16} style={{ width: '100%' }}>
+              <div className="ds-tab-page">
                 {focusedService ? (
-                  focusedServiceRecord ? (
-                    <Alert
-                      type="info"
-                      showIcon
-                      message={`Focused service: ${focusedServiceRecord.name}`}
-                      description={
-                        <Space size={10} wrap>
-                          <StatusBadge status={focusedServiceRecord.status} />
-                          <Typography.Text type="secondary">
-                            {focusedServiceRecord.summary || 'No summary'}
-                          </Typography.Text>
-                          <Button size="small" onClick={clearFocusedService}>
-                            Clear focus
-                          </Button>
-                        </Space>
-                      }
-                    />
-                  ) : (
-                    <Alert
-                      type="warning"
-                      showIcon
-                      message={`No service matched '${focusedService}'`}
-                      description="Tên service có thể đã thay đổi hoặc chưa xuất hiện trong lần check gần nhất."
-                      action={
-                        <Button size="small" onClick={clearFocusedService}>
-                          Clear focus
-                        </Button>
-                      }
-                    />
-                  )
+                  <SurfaceCard
+                    eyebrow="Focused service"
+                    title={
+                      focusedServiceRecord
+                        ? focusedServiceRecord.name
+                        : `No service matched '${focusedService}'`
+                    }
+                    description={
+                      focusedServiceRecord
+                        ? focusedServiceRecord.summary || 'No summary available.'
+                        : 'The service name may have changed or was not present in the latest health check.'
+                    }
+                    status={
+                      focusedServiceRecord ? <StatusBadge status={focusedServiceRecord.status} /> : null
+                    }
+                    actions={
+                      <Button size="small" onClick={clearFocusedService}>
+                        Clear focus
+                      </Button>
+                    }
+                  />
                 ) : null}
 
-                <Card>
-                  <Space size={16} wrap>
-                    <Typography.Text strong>Total: {data?.summary.total ?? 0}</Typography.Text>
-                    <Typography.Text type="success">Up: {data?.summary.up ?? 0}</Typography.Text>
-                    <Typography.Text type="warning">
-                      Degraded: {data?.summary.degraded ?? 0}
-                    </Typography.Text>
-                    <Typography.Text type="danger">Down: {data?.summary.down ?? 0}</Typography.Text>
-                  </Space>
-                </Card>
+                <div className="ds-data-summary-grid">
+                  <div className="ds-summary-tile">
+                    <span className="ds-summary-tile-label">Healthy</span>
+                    <strong className="ds-summary-tile-value">{data?.summary.up ?? 0}</strong>
+                    <span className="ds-summary-tile-meta">Dependencies fully available in the latest run.</span>
+                  </div>
+                  <div className="ds-summary-tile">
+                    <span className="ds-summary-tile-label">Degraded</span>
+                    <strong className="ds-summary-tile-value">{data?.summary.degraded ?? 0}</strong>
+                    <span className="ds-summary-tile-meta">Serving but not within the expected latency or quality band.</span>
+                  </div>
+                  <div className="ds-summary-tile">
+                    <span className="ds-summary-tile-label">Down</span>
+                    <strong className="ds-summary-tile-value">{data?.summary.down ?? 0}</strong>
+                    <span className="ds-summary-tile-meta">Needs operator attention or dependency escalation.</span>
+                  </div>
+                </div>
 
                 <DataTableShell
-                  title="Dependency health table"
-                  meta="Theo dõi latency, status và build metadata cho các service phụ thuộc"
+                  title="Dependency health"
+                  meta="Primary surface for dependency status, latency, and release metadata."
+                  toolbar={
+                    <DataTableToolbar>
+                      <span className="ds-toolbar-summary">
+                        {focusedService
+                          ? `Focused service: ${focusedService}`
+                          : `${data?.summary.total ?? 0} tracked service${(data?.summary.total ?? 0) === 1 ? '' : 's'} · Last sync ${
+                              healthQuery.dataUpdatedAt
+                                ? formatDateTime(new Date(healthQuery.dataUpdatedAt).toISOString())
+                                : '-'
+                            }`}
+                      </span>
+                    </DataTableToolbar>
+                  }
                 >
                   <AdminTable
                     rowKey="name"
@@ -225,10 +258,10 @@ export const ServicesPage = () => {
                         : ''
                     }
                     pagination={{ pageSize: 10 }}
-                    emptyNode={<EmptyState description="Không có dữ liệu service health." />}
+                    emptyNode={<EmptyState description="No service health data is available." />}
                   />
                 </DataTableShell>
-              </Space>
+              </div>
             ),
           },
           {

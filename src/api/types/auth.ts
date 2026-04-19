@@ -7,6 +7,8 @@ export interface CurrentAdmin {
   status?: string;
   isVerified?: boolean;
   role?: Role;
+  authoritySource?: 'db' | 'break_glass';
+  permissions?: string[];
 }
 
 export interface LoginRequest {

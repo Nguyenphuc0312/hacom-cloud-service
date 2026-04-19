@@ -1,5 +1,6 @@
+import { ReloadOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Form, Input, Modal, Select, Space, Tag, Typography, message } from 'antd';
+import { Button, Form, Input, Modal, Select, Space, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
 import { useCallback, useMemo, useState } from 'react';
@@ -14,30 +15,39 @@ import type {
   UserPresenceStatus,
   UsersListQuery,
 } from '@/api/types';
-import { DataTableShell } from '@/components/DataTableShell';
 import { AdminTable } from '@/components/AdminTable';
+import { DataTableShell } from '@/components/DataTableShell';
+import { DataTableToolbar } from '@/components/DataTableToolbar';
 import { FeatureDisabledNotice } from '@/components/FeatureDisabledNotice';
 import { FilterBar } from '@/components/FilterBar';
 import { PageShell } from '@/components/PageShell';
 import { EmptyState, QueryStateView } from '@/components/QueryStates';
+import { RowActionsDropdown } from '@/components/RowActionsDropdown';
+import { StatusBadge } from '@/components/StatusBadge';
 import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
 import { useAuthStore } from '@/store/authStore';
 import { formatDateTime } from '@/utils/date';
 import { canManageUsers } from '@/utils/role';
 
 const accountStatusOptions = [
-  { label: 'Tất cả', value: 'all' },
-  { label: 'Đang hoạt động', value: 'ACTIVE' },
-  { label: 'Chờ xác minh', value: 'PENDING_VERIFICATION' },
-  { label: 'Đã khóa', value: 'DISABLED' },
+  { label: 'All statuses', value: 'all' },
+  { label: 'Active', value: 'ACTIVE' },
+  { label: 'Pending verification', value: 'PENDING_VERIFICATION' },
+  { label: 'Disabled', value: 'DISABLED' },
 ];
 
 const presenceOptions: Array<{ label: string; value: 'all' | UserPresenceStatus }> = [
-  { label: 'Mọi trạng thái', value: 'all' },
+  { label: 'Any presence', value: 'all' },
   { label: 'Online', value: 'online' },
   { label: 'Offline', value: 'offline' },
   { label: 'Away', value: 'away' },
   { label: 'Do not disturb', value: 'dnd' },
+];
+
+const activityOptions = [
+  { label: 'Any activity', value: 'all' },
+  { label: 'Active only', value: 'active' },
+  { label: 'Inactive only', value: 'inactive' },
 ];
 
 export const UsersPage = () => {
@@ -59,6 +69,13 @@ export const UsersPage = () => {
     queryFn: () => usersClient.list(params),
   });
 
+  const activeFilterCount = [
+    params.keyword,
+    params.accountStatus,
+    params.status,
+    typeof params.isActive === 'boolean' ? `${params.isActive}` : null,
+  ].filter(Boolean).length;
+
   const actionMutation = useMutation({
     mutationFn: async (input: {
       action: 'lock' | 'unlock' | 'revoke';
@@ -77,11 +94,11 @@ export const UsersPage = () => {
     },
     onSuccess: (_data, variables) => {
       if (variables.action === 'lock') {
-        message.success('Đã khóa tài khoản.');
+        message.success('Account locked.');
       } else if (variables.action === 'unlock') {
-        message.success('Đã mở khóa tài khoản.');
+        message.success('Account unlocked.');
       } else {
-        message.success('Đã thu hồi phiên đăng nhập.');
+        message.success('Sessions revoked.');
       }
 
       void queryClient.invalidateQueries({ queryKey: queryKeys.usersList(JSON.stringify(params)) });
@@ -101,27 +118,27 @@ export const UsersPage = () => {
       }
 
       if (!canManageUsers(currentRole)) {
-        message.warning('Role hiện tại không có quyền thực hiện user write actions.');
+        message.warning('Your current role cannot run account write actions.');
         return;
       }
 
       const titleMap: Record<typeof action, string> = {
-        lock: 'Khóa tài khoản',
-        unlock: 'Mở khóa tài khoản',
-        revoke: 'Thu hồi mọi phiên',
+        lock: 'Lock account',
+        unlock: 'Unlock account',
+        revoke: 'Revoke active sessions',
       };
 
       const contentMap: Record<typeof action, string> = {
-        lock: 'Tài khoản sẽ bị vô hiệu hóa và người dùng sẽ bị đăng xuất khỏi các phiên hoạt động.',
-        unlock: 'Tài khoản sẽ được kích hoạt lại theo chính sách của auth-service.',
-        revoke: 'Toàn bộ phiên đăng nhập hiện tại của người dùng sẽ bị thu hồi.',
+        lock: 'The account will be disabled and the user will be signed out of active sessions.',
+        unlock: 'The account will be restored according to the current auth-service policy.',
+        revoke: 'All current sessions for this user will be revoked immediately.',
       };
 
       Modal.confirm({
         title: titleMap[action],
         content: contentMap[action],
-        okText: 'Xác nhận',
-        cancelText: 'Hủy',
+        okText: 'Confirm',
+        cancelText: 'Cancel',
         onOk: async () => {
           await actionMutation.mutateAsync({
             action,
@@ -137,34 +154,29 @@ export const UsersPage = () => {
   const columns = useMemo<ColumnsType<UserListItem>>(
     () => [
       {
-        title: 'Tài khoản',
+        title: 'Account',
         key: 'account',
         render: (_, record) => (
           <Space direction="vertical" size={0}>
-            <Typography.Text strong>{record.username ?? '(không có username)'}</Typography.Text>
+            <Typography.Text strong>{record.username ?? 'No username'}</Typography.Text>
             <Typography.Text type="secondary">{record.email}</Typography.Text>
           </Space>
         ),
       },
       {
-        title: 'Nhân sự',
+        title: 'Employee',
         dataIndex: 'employeeId',
         render: (value: string | null) => value ?? '-',
       },
       {
-        title: 'Trạng thái account',
+        title: 'Account state',
         dataIndex: 'accountStatus',
-        render: (value: string | null) => {
-          if (value === 'ACTIVE') return <Tag color="green">ACTIVE</Tag>;
-          if (value === 'DISABLED') return <Tag color="red">DISABLED</Tag>;
-          if (value === 'PENDING_VERIFICATION') return <Tag color="gold">PENDING_VERIFICATION</Tag>;
-          return <Tag>{value ?? 'UNKNOWN'}</Tag>;
-        },
+        render: (value: string | null) => <StatusBadge status={value} />,
       },
       {
         title: 'Presence',
         dataIndex: 'status',
-        render: (value: string | null) => value ?? '-',
+        render: (value: string | null) => <StatusBadge status={value ?? 'offline'} />,
       },
       {
         title: 'Last seen',
@@ -178,61 +190,46 @@ export const UsersPage = () => {
         render: (value: string | null) => (value ? formatDateTime(value) : '-'),
       },
       {
-        title: 'Hành động',
+        title: '',
         key: 'actions',
+        width: 72,
         render: (_, record) => (
-          <Space wrap>
-            <Button
-              size="small"
-              onClick={(event) => {
-                event.stopPropagation();
-                navigate(`/users/${record.id}`);
-              }}
-            >
-              Chi tiết
-            </Button>
-            <Button
-              size="small"
-              danger
-              disabled={
-                !isAdminWriteActionsEnabled ||
-                !canWriteUserActions ||
-                record.accountStatus === 'DISABLED' ||
-                actionMutation.isPending
-              }
-              onClick={(event) => {
-                event.stopPropagation();
-                confirmAction('lock', record);
-              }}
-            >
-              Lock
-            </Button>
-            <Button
-              size="small"
-              disabled={
-                !isAdminWriteActionsEnabled ||
-                !canWriteUserActions ||
-                record.accountStatus !== 'DISABLED' ||
-                actionMutation.isPending
-              }
-              onClick={(event) => {
-                event.stopPropagation();
-                confirmAction('unlock', record);
-              }}
-            >
-              Unlock
-            </Button>
-            <Button
-              size="small"
-              disabled={!canWriteUserActions || actionMutation.isPending}
-              onClick={(event) => {
-                event.stopPropagation();
-                confirmAction('revoke', record);
-              }}
-            >
-              Revoke sessions
-            </Button>
-          </Space>
+          <RowActionsDropdown
+            actions={[
+              {
+                key: 'detail',
+                label: 'Open detail',
+                onClick: () => navigate(`/users/${record.id}`),
+              },
+              {
+                key: 'lock',
+                label: 'Lock account',
+                danger: true,
+                disabled:
+                  !isAdminWriteActionsEnabled ||
+                  !canWriteUserActions ||
+                  record.accountStatus === 'DISABLED' ||
+                  actionMutation.isPending,
+                onClick: () => confirmAction('lock', record),
+              },
+              {
+                key: 'unlock',
+                label: 'Unlock account',
+                disabled:
+                  !isAdminWriteActionsEnabled ||
+                  !canWriteUserActions ||
+                  record.accountStatus !== 'DISABLED' ||
+                  actionMutation.isPending,
+                onClick: () => confirmAction('unlock', record),
+              },
+              {
+                key: 'revoke',
+                label: 'Revoke sessions',
+                disabled: !canWriteUserActions || actionMutation.isPending,
+                onClick: () => confirmAction('revoke', record),
+              },
+            ]}
+          />
         ),
       },
     ],
@@ -264,6 +261,18 @@ export const UsersPage = () => {
     }));
   };
 
+  const resetFilters = () => {
+    form.resetFields();
+    setParams((prev) => ({
+      ...prev,
+      page: 1,
+      keyword: undefined,
+      accountStatus: undefined,
+      status: undefined,
+      isActive: undefined,
+    }));
+  };
+
   const handleTableChange = (
     pagination: TablePaginationConfig,
     _filters: Record<string, unknown>,
@@ -291,9 +300,9 @@ export const UsersPage = () => {
     return (
       <PageShell
         title="Users"
-        description="Quản trị người dùng và chính sách thao tác write an toàn"
+        description="Review admin accounts, presence, and access state."
       >
-        <QueryStateView kind="loading" title="Đang tải danh sách người dùng..." />
+        <QueryStateView kind="loading" title="Loading accounts..." />
       </PageShell>
     );
   }
@@ -302,11 +311,11 @@ export const UsersPage = () => {
     return (
       <PageShell
         title="Users"
-        description="Quản trị người dùng và chính sách thao tác write an toàn"
+        description="Review admin accounts, presence, and access state."
       >
         <QueryStateView
           kind="error"
-          description="Không thể tải users list."
+          description="Unable to load the accounts list."
           onRetry={() => {
             void usersQuery.refetch();
           }}
@@ -320,22 +329,27 @@ export const UsersPage = () => {
   return (
     <PageShell
       title="Users"
-      description="Tra cứu người dùng, xem trạng thái tài khoản và thực hiện action quản trị tối thiểu"
+      description="Find the right operator fast, then open detail only when a write action is needed."
       headerExtra={
-        <Typography.Text type="secondary">
-          Last updated:{' '}
-          {usersQuery.dataUpdatedAt
-            ? formatDateTime(new Date(usersQuery.dataUpdatedAt).toISOString())
-            : '-'}
-        </Typography.Text>
+        <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
+          <Button
+            icon={<ReloadOutlined />}
+            loading={usersQuery.isFetching}
+            onClick={() => {
+              void usersQuery.refetch();
+            }}
+          >
+            Refresh
+          </Button>
+        </div>
       }
     >
       {(!isAdminWriteActionsEnabled || !canManageUsers(currentRole)) && (
         <FeatureDisabledNotice
           description={
             !isAdminWriteActionsEnabled
-              ? 'Write actions (lock/unlock/revoke sessions) are disabled by release configuration.'
-              : 'Role hiện tại chỉ có quyền xem, không có quyền lock/unlock/revoke sessions.'
+              ? 'Write actions are disabled by release configuration.'
+              : 'Your current role is read-only for lock, unlock, and session revocation.'
           }
         />
       )}
@@ -344,66 +358,66 @@ export const UsersPage = () => {
         <Form
           form={form}
           layout="inline"
+          className="ds-toolbar-form"
           initialValues={{ accountStatus: 'all', status: 'all', active: 'all' }}
         >
-          <Form.Item name="keyword">
-            <Input
-              allowClear
-              placeholder="Tìm theo username, email, employee"
-              style={{ width: 260 }}
-            />
+          <Form.Item name="keyword" className="ds-toolbar-field ds-toolbar-field--lg">
+            <Input allowClear placeholder="Search username, email, or employee" />
           </Form.Item>
-          <Form.Item name="accountStatus">
-            <Select style={{ width: 190 }} options={accountStatusOptions} />
+          <Form.Item name="accountStatus" className="ds-toolbar-field ds-toolbar-field--md">
+            <Select options={accountStatusOptions} />
           </Form.Item>
-          <Form.Item name="status">
-            <Select style={{ width: 170 }} options={presenceOptions} />
+          <Form.Item name="status" className="ds-toolbar-field ds-toolbar-field--sm">
+            <Select options={presenceOptions} />
           </Form.Item>
-          <Form.Item name="active">
-            <Select
-              style={{ width: 160 }}
-              options={[
-                { label: 'Mọi active state', value: 'all' },
-                { label: 'isActive=true', value: 'active' },
-                { label: 'isActive=false', value: 'inactive' },
-              ]}
-            />
+          <Form.Item name="active" className="ds-toolbar-field ds-toolbar-field--sm">
+            <Select options={activityOptions} />
           </Form.Item>
-          <Form.Item>
+          <Form.Item className="ds-toolbar-field ds-toolbar-actions">
             <Space>
               <Button type="primary" onClick={applyFilters}>
-                Áp dụng
+                Apply filters
               </Button>
-              <Button
-                onClick={() => {
-                  form.resetFields();
-                  setParams((prev) => ({
-                    ...prev,
-                    page: 1,
-                    keyword: undefined,
-                    accountStatus: undefined,
-                    status: undefined,
-                    isActive: undefined,
-                  }));
-                }}
-              >
-                Reset
-              </Button>
+              <Button onClick={resetFilters}>Reset</Button>
             </Space>
           </Form.Item>
         </Form>
+        <div className="ds-filter-toolbar-meta">
+          <span>
+            {data?.pagination.total ?? 0} matched account
+            {(data?.pagination.total ?? 0) === 1 ? '' : 's'}
+          </span>
+          <span>
+            {activeFilterCount > 0
+              ? `${activeFilterCount} active filter${activeFilterCount === 1 ? '' : 's'}`
+              : 'No active filters'}
+          </span>
+          <span>
+            Last sync:{' '}
+            {usersQuery.dataUpdatedAt
+              ? formatDateTime(new Date(usersQuery.dataUpdatedAt).toISOString())
+              : '-'}
+          </span>
+        </div>
       </FilterBar>
 
       <DataTableShell
-        title="Users list"
-        meta={`${data?.pagination.total ?? 0} record(s) matched current filters`}
+        title="Accounts"
+        meta="Primary workspace for account state, presence, and row-level actions."
+        toolbar={
+          <DataTableToolbar>
+            <span className="ds-toolbar-summary">
+              Sort: {params.sortBy ?? 'created_at'} / {params.sortOrder ?? 'desc'}
+            </span>
+          </DataTableToolbar>
+        }
       >
         <AdminTable
           rowKey="id"
           columns={columns}
           minHeight={320}
           dataSource={data?.items ?? []}
-          emptyNode={<EmptyState description="Không có người dùng phù hợp bộ lọc." />}
+          emptyNode={<EmptyState description="No users matched the current filters." />}
           onRow={(record) => ({
             onClick: () => navigate(`/users/${record.id}`),
             style: { cursor: 'pointer' },

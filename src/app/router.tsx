@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 import { RequireAuth } from '@/app/guards/RequireAuth';
+import { RequireApprovedAccess } from '@/app/guards/RequireApprovedAccess';
+import { RequireRole } from '@/app/guards/RequireRole';
 import { AppLayout } from '@/app/layout/AppLayout';
 import { QueryStateView } from '@/components/QueryStates';
 
@@ -42,6 +44,21 @@ const MonitoringOverviewPage = lazy(() =>
     default: module.MonitoringOverviewPage,
   })),
 );
+const AccessPendingPage = lazy(() =>
+  import('@/features/access/pages/AccessPendingPage').then((module) => ({
+    default: module.AccessPendingPage,
+  })),
+);
+const AccessRequestsPage = lazy(() =>
+  import('@/features/access/pages/AccessRequestsPage').then((module) => ({
+    default: module.AccessRequestsPage,
+  })),
+);
+const AuthorityPage = lazy(() =>
+  import('@/features/authority/pages/AuthorityPage').then((module) => ({
+    default: module.AuthorityPage,
+  })),
+);
 
 const withSuspense = (element: ReactNode) => (
   <Suspense fallback={<QueryStateView kind="loading" title="Đang tải trang..." />}>
@@ -55,10 +72,20 @@ const routes = [
     element: withSuspense(<LoginPage />),
   },
   {
+    path: '/access',
+    element: (
+      <RequireAuth>
+        {withSuspense(<AccessPendingPage />)}
+      </RequireAuth>
+    ),
+  },
+  {
     path: '/',
     element: (
       <RequireAuth>
-        <AppLayout />
+        <RequireApprovedAccess>
+          <AppLayout />
+        </RequireApprovedAccess>
       </RequireAuth>
     ),
     children: [
@@ -83,6 +110,14 @@ const routes = [
         element: withSuspense(<UsersPage />),
       },
       {
+        path: 'authority',
+        element: (
+          <RequireRole roles={['super_admin']}>
+            {withSuspense(<AuthorityPage />)}
+          </RequireRole>
+        ),
+      },
+      {
         path: 'users/:id',
         element: withSuspense(<UserDetailPage />),
       },
@@ -93,6 +128,10 @@ const routes = [
       {
         path: 'audit',
         element: withSuspense(<AuditLogPage />),
+      },
+      {
+        path: 'access-requests',
+        element: withSuspense(<AccessRequestsPage />),
       },
       {
         path: '*',

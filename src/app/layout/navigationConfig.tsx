@@ -2,7 +2,7 @@ import {
   AuditOutlined,
   DashboardOutlined,
   FileTextOutlined,
-  MailOutlined,
+  KeyOutlined,
   SafetyCertificateOutlined,
   SolutionOutlined,
   TeamOutlined,
@@ -23,12 +23,11 @@ export interface NavItem {
 }
 
 export type SidebarSectionKey =
-  | 'overview'
+  | 'analytics'
   | 'users'
-  | 'chat'
-  | 'security'
+  | 'conversations'
+  | 'system'
   | 'settings'
-  | 'monitoring'
   | 'support';
 
 export interface SidebarSection {
@@ -39,111 +38,115 @@ export interface SidebarSection {
 }
 
 export const SIDEBAR_SECTIONS: SidebarSection[] = [
-  { key: 'overview', label: 'Tong Quan', description: 'Snapshot', icon: <DashboardOutlined /> },
+  {
+    key: 'analytics',
+    label: 'Analytics',
+    description: 'Overview and monitoring',
+    icon: <DashboardOutlined />,
+  },
   {
     key: 'users',
-    label: 'Nguoi Dung & Nhan Su',
-    description: 'Identity',
+    label: 'Users',
+    description: 'Identity and access',
     icon: <TeamOutlined />,
   },
-  { key: 'chat', label: 'He Thong Chat', description: 'Messaging', icon: <MailOutlined /> },
   {
-    key: 'security',
-    label: 'Phan Quyen & Bao Mat',
-    description: 'Security',
-    icon: <SafetyCertificateOutlined />,
-  },
-  {
-    key: 'settings',
-    label: 'Cau Hinh',
-    description: 'Configuration',
+    key: 'conversations',
+    label: 'Conversations',
+    description: 'Messaging workflows',
     icon: <FileTextOutlined />,
   },
   {
-    key: 'monitoring',
-    label: 'Theo Doi & Logs',
-    description: 'Observability',
-    icon: <AuditOutlined />,
+    key: 'system',
+    label: 'System',
+    description: 'Health and audit',
+    icon: <ThunderboltOutlined />,
   },
-  { key: 'support', label: 'Ho Tro / Tai Lieu', description: 'Support', icon: <SolutionOutlined /> },
+  {
+    key: 'settings',
+    label: 'Settings',
+    description: 'Infrastructure config',
+    icon: <FileTextOutlined />,
+  },
 ];
 
 export const navItems: NavItem[] = [
   {
     key: 'dashboard',
     label: 'Dashboard',
-    description: 'Operational overview and service posture',
+    description: 'Production snapshot for system posture and next actions.',
     icon: <DashboardOutlined />,
-    section: 'overview',
+    section: 'analytics',
     route: '/',
   },
   {
+    key: 'monitoring-overview',
+    label: 'Monitoring',
+    description: 'Realtime health, failures, and dependency posture.',
+    icon: <ThunderboltOutlined />,
+    section: 'analytics',
+    route: '/monitoring',
+  },
+  {
+    key: 'authority',
+    label: 'Admin Authority',
+    description: 'Canonical admin roles and permission overrides.',
+    icon: <KeyOutlined />,
+    section: 'users',
+    route: '/authority',
+    roles: ['super_admin'],
+  },
+  {
     key: 'users',
-    label: 'Nguoi Dung',
-    description: 'Admin accounts, access state, and sessions',
+    label: 'Users',
+    description: 'Admin accounts, presence, and access state.',
     icon: <TeamOutlined />,
     section: 'users',
     route: '/users',
-    children: [
-      {
-        key: 'hr-employees',
-        label: 'Nhan Su',
-        description: 'Employee records and account provisioning',
-        icon: <SolutionOutlined />,
-        section: 'users',
-        route: '/hr-employees',
-      },
-    ],
   },
   {
-    key: 'smtp',
-    label: 'SMTP',
-    description: 'Mail transport configuration and runtime activation',
-    icon: <MailOutlined />,
-    section: 'chat',
-    route: '/services/smtp',
+    key: 'hr-employees',
+    label: 'HR Directory',
+    description: 'Employee records, imports, and provisioning.',
+    icon: <SolutionOutlined />,
+    section: 'users',
+    route: '/hr-employees',
   },
   {
     key: 'email-templates',
-    label: 'Email Templates',
-    description: 'Draft, preview, publish, and rollback email content',
+    label: 'Services',
+    description: 'Service health, SMTP, and email template controls.',
     icon: <FileTextOutlined />,
-    section: 'chat',
-    route: '/services/email-templates',
+    section: 'settings',
+    route: '/services/health',
+  },
+  {
+    key: 'access-requests',
+    label: 'IP Access',
+    description: 'Review pending, approved, and rejected IP requests.',
+    icon: <SafetyCertificateOutlined />,
+    section: 'system',
+    route: '/access-requests',
   },
   {
     key: 'audit',
     label: 'Audit Logs',
-    description: 'Trace admin actions, requests, and security events',
+    description: 'Admin actions, requests, and security events.',
     icon: <AuditOutlined />,
-    section: 'security',
+    section: 'system',
     route: '/audit',
-  },
-  {
-    key: 'monitoring-overview',
-    label: 'Monitoring Overview',
-    description: 'Realtime, correctness, and infra snapshot',
-    icon: <ThunderboltOutlined />,
-    section: 'monitoring',
-    route: '/monitoring',
-  },
-  {
-    key: 'service-health',
-    label: 'Service Health',
-    description: 'Dependency health, latency, and runtime status',
-    icon: <SafetyCertificateOutlined />,
-    section: 'monitoring',
-    route: '/services/health',
   },
 ];
 
 export const breadcrumbNameMap: Record<string, string> = {
   '/': 'Dashboard',
-  '/users': 'Nguoi Dung',
-  '/hr-employees': 'Nhan Su',
+  '/authority': 'Admin Authority',
+  '/users': 'Users',
+  '/hr-employees': 'HR Directory',
+  '/access-requests': 'IP Access',
   '/audit': 'Audit Logs',
-  '/monitoring': 'Monitoring Overview',
-  '/services': 'Dich Vu',
+  '/monitoring': 'Monitoring',
+  '/services': 'Services',
   '/services/smtp': 'SMTP',
   '/services/email-templates': 'Email Templates',
   '/services/health': 'Service Health',
@@ -163,31 +166,39 @@ export const resolveNavigationContext = (pathname: string) => {
       ) ?? null;
 
   const section = item ? SIDEBAR_SECTIONS.find((entry) => entry.key === item.section) ?? null : null;
+  const breadcrumbs = ['/', ...pathname.split('/').filter(Boolean).map((_segment, index, parts) => `/${parts.slice(0, index + 1).join('/')}`)]
+    .map((route) => ({
+      route,
+      label:
+        breadcrumbNameMap[route] ??
+        (route.startsWith('/users/') ? 'User Detail' : route.startsWith('/services/') ? 'Service Detail' : null),
+    }))
+    .filter((entry): entry is { route: string; label: string } => Boolean(entry.label));
 
   return {
     item,
     section,
     title: item?.label ?? 'Dashboard',
     description: item?.description ?? 'Operational visibility and control surface',
-    sectionLabel: section?.label ?? 'Tong Quan',
+    sectionLabel: section?.label ?? 'Analytics',
     sectionDescription: section?.description ?? 'Workspace',
+    breadcrumbs,
   };
 };
 
 export const pickSelectedMenuKey = (pathname: string): string => {
   if (pathname === '/') return 'dashboard';
   if (pathname.startsWith('/monitoring')) return 'monitoring-overview';
+  if (pathname.startsWith('/authority')) return 'authority';
   if (pathname.startsWith('/users')) return 'users';
   if (pathname.startsWith('/hr-employees')) return 'hr-employees';
-  if (pathname.startsWith('/services/email-templates')) return 'email-templates';
-  if (pathname.startsWith('/services/smtp')) return 'smtp';
-  if (pathname.startsWith('/services/health') || pathname.startsWith('/services'))
-    return 'service-health';
+  if (pathname.startsWith('/services')) return 'email-templates';
+  if (pathname.startsWith('/access-requests')) return 'access-requests';
   if (pathname.startsWith('/audit')) return 'audit';
   return 'dashboard';
 };
 
-export type CommandCategory = 'Navigation' | 'System' | 'Settings';
+export type CommandCategory = 'Navigation' | 'Quick Actions' | 'System' | 'Settings';
 
 export interface CommandRouteItem {
   id: string;
@@ -220,6 +231,15 @@ export const commandRouteItems: CommandRouteItem[] = [
     route: '/monitoring',
   },
   {
+    id: 'go-authority',
+    label: 'Admin Authority',
+    description: 'Manage canonical admin roles and permission overrides',
+    category: 'Navigation',
+    icon: <KeyOutlined />,
+    keywords: ['authority', 'admin', 'permissions', 'roles'],
+    route: '/authority',
+  },
+  {
     id: 'go-users',
     label: 'Users / Accounts',
     description: 'Manage admin users and permissions',
@@ -242,7 +262,7 @@ export const commandRouteItems: CommandRouteItem[] = [
     label: 'SMTP Settings',
     description: 'Configure email transport and credentials',
     category: 'Settings',
-    icon: <MailOutlined />,
+    icon: <FileTextOutlined />,
     keywords: ['smtp', 'mail', 'settings'],
     route: '/services/smtp',
   },
@@ -260,7 +280,7 @@ export const commandRouteItems: CommandRouteItem[] = [
     label: 'Service Health / Monitoring',
     description: 'Check integrations and API health status',
     category: 'System',
-    icon: <SafetyCertificateOutlined />,
+    icon: <ThunderboltOutlined />,
     keywords: ['health', 'monitoring', 'status', 'services'],
     route: '/services/health',
   },
@@ -272,5 +292,14 @@ export const commandRouteItems: CommandRouteItem[] = [
     icon: <AuditOutlined />,
     keywords: ['logs', 'audit', 'events'],
     route: '/audit',
+  },
+  {
+    id: 'go-access-requests',
+    label: 'IP Access Requests',
+    description: 'Review pending, approved, and rejected IP access requests',
+    category: 'System',
+    icon: <SafetyCertificateOutlined />,
+    keywords: ['ip', 'access', 'requests', 'approval', 'review'],
+    route: '/access-requests',
   },
 ];

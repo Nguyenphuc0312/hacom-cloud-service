@@ -1,10 +1,8 @@
-import { Alert, Space, Typography } from 'antd';
+import { Button } from 'antd';
 import type { MonitoringOverviewResponse } from '@/api/types';
 import { StatusBadge } from '@/components/StatusBadge';
-import { formatDateTime } from '@/utils/date';
+import { IncidentBanner } from '@/components/ui/IncidentBanner';
 import { getFreshnessLabel, summarizeWarnings } from '../monitoringView';
-
-const { Text } = Typography;
 
 interface MonitoringWarningsProps {
   overview: MonitoringOverviewResponse;
@@ -37,77 +35,72 @@ export const MonitoringWarnings = ({ overview }: MonitoringWarningsProps) => {
   }
 
   const warningGroups = groupWarnings(overview);
+  const tone = overview.freshness === 'unavailable' ? 'danger' : 'warning';
+  const title =
+    overview.freshness === 'unavailable'
+      ? 'Monitoring pipeline is unavailable'
+      : overview.freshness === 'partial'
+        ? 'Monitoring overview is degraded'
+        : 'Monitoring overview has active warnings';
+  const description =
+    overview.sources.prometheus.status === 'unavailable'
+      ? overview.sources.prometheus.message
+      : summarizeWarnings(overview.warnings);
 
   return (
-    <Space direction="vertical" size={12} style={{ width: '100%' }}>
-      {showHealthBanner ? (
-        <Alert
-          type={overview.freshness === 'unavailable' ? 'error' : 'warning'}
-          showIcon
-          message={
-            overview.freshness === 'unavailable'
-              ? 'Monitoring pipeline is unavailable'
-              : overview.freshness === 'partial'
-                ? 'Monitoring overview is degraded'
-                : 'Monitoring overview has active warnings'
-          }
-          description={
-            <Space direction="vertical" size={8} style={{ width: '100%' }}>
-              <Text type="secondary">
-                {overview.sources.prometheus.status === 'unavailable'
-                  ? overview.sources.prometheus.message
-                  : summarizeWarnings(overview.warnings)}
-              </Text>
-              <div className="monitoring-source-grid">
-                <div className="monitoring-source-pill">
-                  <span>Freshness</span>
-                  <StatusBadge status={getFreshnessLabel(overview.freshness)} />
-                </div>
-                <div className="monitoring-source-pill">
-                  <span>Prometheus</span>
-                  <StatusBadge status={overview.sources.prometheus.status} />
-                </div>
-                <div className="monitoring-source-pill">
-                  <span>Service health</span>
-                  <StatusBadge status={overview.sources.serviceHealth.status} />
-                </div>
-              </div>
-              {warningGroups.length > 0 ? (
-                <div className="monitoring-warning-group-list">
-                  {warningGroups.map((item) => (
-                    <div key={item.label} className="monitoring-warning-group-item">
-                      <span>{item.label}</span>
-                      <strong>{item.count > 1 ? `${item.count} signals` : '1 signal'}</strong>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </Space>
-          }
-        />
+    <IncidentBanner
+      title={showHealthBanner ? title : 'Capacity baseline is not configured'}
+      description={
+        showHealthBanner
+          ? description
+          : 'Current load is visible, but risk classification stays incomplete until a measured baseline is exported.'
+      }
+      tone={showHealthBanner ? tone : 'info'}
+      status={
+        <div className="ds-page-toolbar-group">
+          <StatusBadge status={getFreshnessLabel(overview.freshness)} />
+          <StatusBadge status={overview.sources.prometheus.status} />
+          <StatusBadge status={overview.sources.serviceHealth.status} />
+        </div>
+      }
+      actions={
+        overview.links.realtime ? (
+          <Button type="link" href={overview.links.realtime} target="_blank" rel="noreferrer">
+            Open realtime dashboard
+          </Button>
+        ) : null
+      }
+    >
+      <div className="monitoring-source-grid">
+        <div className="monitoring-source-pill">
+          <span>Freshness</span>
+          <strong>{overview.freshness.toUpperCase()}</strong>
+        </div>
+        <div className="monitoring-source-pill">
+          <span>Prometheus</span>
+          <strong>{overview.sources.prometheus.status.toUpperCase()}</strong>
+        </div>
+        <div className="monitoring-source-pill">
+          <span>Service health</span>
+          <strong>{overview.sources.serviceHealth.status.toUpperCase()}</strong>
+        </div>
+      </div>
+      {warningGroups.length > 0 ? (
+        <div className="monitoring-warning-group-list">
+          {warningGroups.map((item) => (
+            <div key={item.label} className="monitoring-warning-group-item">
+              <span>{item.label}</span>
+              <strong>{item.count > 1 ? `${item.count} signals` : '1 signal'}</strong>
+            </div>
+          ))}
+        </div>
       ) : null}
-
       {showBaselineBanner ? (
-        <Alert
-          type="info"
-          showIcon
-          message="Capacity baseline is not configured yet"
-          description={
-            <Space direction="vertical" size={6} style={{ width: '100%' }}>
-              <Text type="secondary">
-                Current load is still visible, but the panel cannot classify it against tested
-                comfortable, warning, and near-breaking zones until a measured baseline is exported.
-              </Text>
-              <Text type="secondary">
-                Baseline generated at:{' '}
-                {overview.capacityBaseline.generatedAt
-                  ? formatDateTime(overview.capacityBaseline.generatedAt)
-                  : 'Pending'}
-              </Text>
-            </Space>
-          }
-        />
+        <div className="monitoring-warning-note">
+          Capacity baseline is not configured yet. Keep the current load visible, but do not treat
+          risk labels as calibrated thresholds.
+        </div>
       ) : null}
-    </Space>
+    </IncidentBanner>
   );
 };

@@ -8,13 +8,14 @@ import { useAuthStore } from '@/store/authStore';
 
 export const useCurrentUser = () => {
   const accessToken = useAuthStore((state) => state.accessToken);
+  const accessBootstrapStatus = useAuthStore((state) => state.accessBootstrapStatus);
   const user = useAuthStore((state) => state.user);
   const setUser = useAuthStore((state) => state.setUser);
 
   const meQuery = useQuery({
     queryKey: queryKeys.currentAdmin,
     queryFn: currentAdminClient.getCurrentAdmin,
-    enabled: Boolean(accessToken),
+    enabled: Boolean(accessToken) && accessBootstrapStatus === 'approved',
     retry: (failureCount, error) => {
       const status = getApiErrorStatus(error);
       const code = getApiErrorCode(error);
@@ -42,8 +43,15 @@ export const useCurrentUser = () => {
 
   return {
     user: user ?? meQuery.data ?? null,
-    isLoading: Boolean(accessToken) && meQuery.isLoading && !user,
-    isRetryingCurrentUser: Boolean(accessToken) && meQuery.isFetching,
+    isLoading:
+      Boolean(accessToken) &&
+      accessBootstrapStatus === 'approved' &&
+      meQuery.isLoading &&
+      !user,
+    isRetryingCurrentUser:
+      Boolean(accessToken) &&
+      accessBootstrapStatus === 'approved' &&
+      meQuery.isFetching,
     isAuthServiceUnavailable,
     currentUserErrorMessage: meQuery.error
       ? getErrorMessage(meQuery.error, 'Admin auth service unavailable')

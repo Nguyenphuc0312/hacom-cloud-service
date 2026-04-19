@@ -1,5 +1,11 @@
 export const queryKeys = {
   currentAdmin: ['current-admin'] as const,
+  accessStatus: ['access-status'] as const,
+  authorityUsers: (params: string) => ['authority-users', params] as const,
+  authorityUserDetail: (userId: string) => ['authority-user-detail', userId] as const,
+  accessIpRequests: (params: string) => ['access-ip-requests', params] as const,
+  accessIpRequestDetail: (id: string) => ['access-ip-request-detail', id] as const,
+  accessIpRequestHistory: (id: string) => ['access-ip-request-history', id] as const,
   usersList: (params: string) => ['users-list', params] as const,
   userDetail: (id: string) => ['user-detail', id] as const,
   userSessions: (id: string, params: string) => ['user-sessions', id, params] as const,
