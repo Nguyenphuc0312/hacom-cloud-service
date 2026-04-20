@@ -24,7 +24,7 @@ vi.mock("../lib/axios", () => ({
   authClient: authClientMock,
 }));
 
-import { contactApi, messageApi } from "./api";
+import { contactApi, conversationApi, messageApi } from "./api";
 
 describe("api contract", () => {
   beforeEach(() => {
@@ -69,6 +69,24 @@ describe("api contract", () => {
     expect(apiClientMock.post).toHaveBeenCalledWith("/contacts/share", {
       contactUserId: "user-b",
       conversationId: "conv-2",
+    });
+  });
+
+  it("createPrivateConversation posts canonical peerUserId only", async () => {
+    apiClientMock.post.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          id: "conv-1",
+          type: "direct",
+        },
+      },
+    });
+
+    await conversationApi.createPrivateConversation("user-b");
+
+    expect(apiClientMock.post).toHaveBeenCalledWith("/conversations/direct", {
+      peerUserId: "user-b",
     });
   });
 });
