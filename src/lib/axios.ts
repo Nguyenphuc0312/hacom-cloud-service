@@ -5,6 +5,10 @@
 
 import axios, { AxiosError, AxiosHeaders } from "axios";
 import type { AxiosInstance, InternalAxiosRequestConfig } from "axios";
+import {
+  PUBLIC_CHAT_CONTRACT_HEADER,
+  PUBLIC_CHAT_CONTRACT_VERSION,
+} from "@hacom/chat-shared-types/runtime";
 import { API_BASE_URL, AUTH_BASE_URL, USE_AUTH_SERVICE } from "../config";
 import {
   authBaseUrl,
@@ -39,8 +43,8 @@ const PUBLIC_ENDPOINT_PATTERNS = [
   /\/auth\/reset-password$/i,
   /\/users\/check-username(?:\/|$)/i,
 ];
-const API_CONTRACT_HEADER = "X-Api-Contract";
-const API_CONTRACT_VERSION = "2";
+const API_CONTRACT_HEADER = PUBLIC_CHAT_CONTRACT_HEADER;
+const API_CONTRACT_VERSION = PUBLIC_CHAT_CONTRACT_VERSION;
 
 const toOrigin = (baseUrl: string): string | null => {
   try {

@@ -210,4 +210,12 @@ describe("canonical frontend contract boundaries", () => {
       }
     }
   });
+
+  it("pins the frontend HTTP client to public contract V3", () => {
+    const axiosSource = fs.readFileSync(path.join(SOURCE_ROOT, "lib", "axios.ts"), "utf8");
+
+    expect(axiosSource).toContain('@hacom/chat-shared-types/runtime');
+    expect(axiosSource).toContain('PUBLIC_CHAT_CONTRACT_VERSION');
+    expect(axiosSource).not.toContain('const API_CONTRACT_VERSION = "2"');
+  });
 });
