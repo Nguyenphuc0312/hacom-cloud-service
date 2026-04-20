@@ -42,6 +42,8 @@ type CreateWebSocketConnectionLifecycleOptions = {
   log: (event: string, details: Record<string, unknown>) => void;
 };
 
+const RECONNECT_JOIN_REPLAY_DELAY_MS = 150;
+
 export const createWebSocketConnectionLifecycleState =
   (): WebSocketConnectionLifecycleState => ({
     hasConnectedOnce: false,
@@ -127,10 +129,22 @@ export const createWebSocketConnectionLifecycle = ({
   const handleSocketConnected = (): void => {
     onConnect?.();
     const { conversationIdsToJoin, shouldResync } = getReconnectPlan();
-    conversationIdsToJoin.forEach((conversationId) => {
-      requestConversationJoin(conversationId, {
-        reason: shouldResync ? "reconnect" : "initial",
-      });
+    conversationIdsToJoin.forEach((conversationId, index) => {
+      const delayMs = index * RECONNECT_JOIN_REPLAY_DELAY_MS;
+      window.setTimeout(() => {
+        if (getConnectionState() !== "connected") {
+          log("conversation_join_replay_skipped", {
+            conversationId,
+            delayMs,
+            connectionState: getConnectionState(),
+          });
+          return;
+        }
+
+        requestConversationJoin(conversationId, {
+          reason: shouldResync ? "reconnect" : "initial",
+        });
+      }, delayMs);
     });
 
     state.hasConnectedOnce = true;

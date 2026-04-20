@@ -80,6 +80,25 @@ const createLifecycle = () => {
 };
 
 describe("useWebSocketConnectionLifecycle", () => {
+  it("replays joined rooms and flushes queues on socket connect", () => {
+    vi.useFakeTimers();
+    const { lifecycle, deps, calls } = createLifecycle();
+
+    lifecycle.handleSocketConnected();
+    vi.runAllTimers();
+
+    expect(deps.onConnect).toHaveBeenCalled();
+    expect(deps.requestConversationJoin).toHaveBeenNthCalledWith(1, "room-1", {
+      reason: "reconnect",
+    });
+    expect(deps.requestConversationJoin).toHaveBeenNthCalledWith(2, "room-2", {
+      reason: "reconnect",
+    });
+    expect(calls).toContain("flushEmitQueue");
+    expect(calls).toContain("flushQueuedMessages");
+    vi.useRealTimers();
+  });
+
   it("connect ensures a fresh token before setup and socket connect", async () => {
     const { lifecycle, calls } = createLifecycle();
 
@@ -101,22 +120,6 @@ describe("useWebSocketConnectionLifecycle", () => {
     await lifecycle.connect();
 
     expect(deps.handleConnectFailure).toHaveBeenCalled();
-  });
-
-  it("replays joined rooms and flushes queues on socket connect", () => {
-    const { lifecycle, deps, calls } = createLifecycle();
-
-    lifecycle.handleSocketConnected();
-
-    expect(deps.onConnect).toHaveBeenCalled();
-    expect(deps.requestConversationJoin).toHaveBeenNthCalledWith(1, "room-1", {
-      reason: "reconnect",
-    });
-    expect(deps.requestConversationJoin).toHaveBeenNthCalledWith(2, "room-2", {
-      reason: "reconnect",
-    });
-    expect(calls).toContain("flushEmitQueue");
-    expect(calls).toContain("flushQueuedMessages");
   });
 
   it("disconnect clears timers, sync state, and socket connection", () => {

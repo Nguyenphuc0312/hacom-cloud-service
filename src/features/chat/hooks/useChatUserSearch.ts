@@ -132,13 +132,14 @@ export const useChatUserSearch = (
     () => new Set<string>(JSON.parse(excludedUserIdsKey) as string[]),
     [excludedUserIdsKey],
   );
-  const debouncedQuery = useDebounce(query, 300);
+  const debouncedQuery = useDebounce(query, 400);
   const [results, setResults] = useState<ChatSearchUser[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    const abortController = new AbortController();
 
     const runSearch = async () => {
       const trimmedQuery = debouncedQuery.trim();
@@ -153,7 +154,9 @@ export const useChatUserSearch = (
       setErrorMessage(null);
 
       try {
-        const response = await searchUsersUseCase(trimmedQuery, 1, limit);
+        const response = await searchUsersUseCase(trimmedQuery, 1, limit, {
+          signal: abortController.signal,
+        });
         const payload = unwrapApiSuccess(response);
         const nextResults = extractSearchRows(payload)
           .map((row) => normalizeSearchUser(row))
@@ -164,6 +167,9 @@ export const useChatUserSearch = (
           setResults(nextResults);
         }
       } catch (error) {
+        if (abortController.signal.aborted) {
+          return;
+        }
         if (!cancelled) {
           setResults([]);
           setErrorMessage(extractApiError(error).message);
@@ -179,6 +185,7 @@ export const useChatUserSearch = (
 
     return () => {
       cancelled = true;
+      abortController.abort();
     };
   }, [debouncedQuery, enabled, excludedUserIds, limit, minQueryLength]);
 

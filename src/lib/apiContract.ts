@@ -94,12 +94,37 @@ export const extractApiError = (error: unknown): ApiContractError => {
       return fromPayload;
     }
 
-    const fallbackMessage = axiosError.message || "Request failed";
     const statusCode = axiosError.response?.status ?? 500;
+    const retryAfterHeader = axiosError.response?.headers?.["retry-after"];
+    const retryAfterSeconds =
+      typeof retryAfterHeader === "string"
+        ? Number.parseInt(retryAfterHeader, 10)
+        : Array.isArray(retryAfterHeader) && typeof retryAfterHeader[0] === "string"
+          ? Number.parseInt(retryAfterHeader[0], 10)
+          : null;
+    const fallbackMessage =
+      statusCode === 429
+        ? "Bạn đang thao tác quá nhanh. Vui lòng thử lại sau."
+        : axiosError.message || "Request failed";
+    const code =
+      statusCode === 401
+        ? ErrorCode.UNAUTHORIZED
+        : statusCode === 429
+          ? ErrorCode.RATE_LIMITED
+          : ErrorCode.INTERNAL_ERROR;
 
     return new ApiContractError(fallbackMessage, {
       statusCode,
-      code: statusCode === 401 ? ErrorCode.UNAUTHORIZED : ErrorCode.INTERNAL_ERROR,
+      code,
+      details:
+        statusCode === 429
+          ? {
+              retryAfterSeconds:
+                Number.isFinite(retryAfterSeconds) && retryAfterSeconds !== null
+                  ? retryAfterSeconds
+                  : undefined,
+            }
+          : undefined,
     });
   }
 

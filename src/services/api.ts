@@ -346,9 +346,15 @@ export const userApi = {
     return response.data;
   },
 
-  searchUsers: async (query: string, page = 1, limit = 20) => {
+  searchUsers: async (
+    query: string,
+    page = 1,
+    limit = 20,
+    options?: { signal?: AbortSignal },
+  ) => {
     const response = await apiClient.get<ApiResponse<User[]>>(
       `/users/search?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`,
+      { signal: options?.signal },
     );
     return response.data;
   },
