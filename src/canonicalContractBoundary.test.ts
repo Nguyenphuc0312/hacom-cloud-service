@@ -218,4 +218,22 @@ describe("canonical frontend contract boundaries", () => {
     expect(axiosSource).toContain('PUBLIC_CHAT_CONTRACT_VERSION');
     expect(axiosSource).not.toContain('const API_CONTRACT_VERSION = "2"');
   });
+
+  it("exposes runtime diagnostics with build metadata and public contract version", () => {
+    const diagnosticsSource = fs.readFileSync(
+      path.join(SOURCE_ROOT, "lib", "runtimeDiagnostics.ts"),
+      "utf8",
+    );
+    const mainSource = fs.readFileSync(path.join(SOURCE_ROOT, "main.tsx"), "utf8");
+    const diagnosticsTypes = fs.readFileSync(
+      path.join(SOURCE_ROOT, "types", "runtimeDiagnostics.d.ts"),
+      "utf8",
+    );
+
+    expect(diagnosticsSource).toContain("PUBLIC_CHAT_CONTRACT_VERSION");
+    expect(diagnosticsSource).toContain("window.__CHAT_WEB_DIAGNOSTICS__");
+    expect(diagnosticsSource).toContain("__CHAT_WEB_BUILD_SHA__");
+    expect(mainSource).toContain("installChatWebDiagnostics()");
+    expect(diagnosticsTypes).toContain("__CHAT_WEB_DIAGNOSTICS__");
+  });
 });

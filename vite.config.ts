@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { loadEnv } from "vite";
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
@@ -48,6 +50,9 @@ const resolveWsProxyTarget = (
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+  const packageJson = JSON.parse(
+    fs.readFileSync(path.resolve(process.cwd(), "package.json"), "utf8"),
+  ) as { version?: string };
   const apiProxyTarget = resolveHttpProxyTarget(
     env.VITE_DEV_API_PROXY_TARGET,
     "http://localhost:3001",
@@ -64,6 +69,17 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: normalizeBasePath(env.VITE_APP_BASE_PATH),
+    define: {
+      __CHAT_WEB_APP_VERSION__: JSON.stringify(
+        env.VITE_APP_VERSION || packageJson.version || "0.0.0",
+      ),
+      __CHAT_WEB_BUILD_SHA__: JSON.stringify(
+        env.VITE_APP_BUILD_SHA || env.GIT_SHA || env.COMMIT_SHA || "unknown",
+      ),
+      __CHAT_WEB_BUILD_TIME__: JSON.stringify(
+        env.VITE_APP_BUILD_TIME || new Date().toISOString(),
+      ),
+    },
     plugins: [
       react(),
       shouldAnalyzeBundle &&
