@@ -1210,6 +1210,7 @@ export const useWebSocket = (
         conversationId,
         lastMessageId,
         asString(payload.userId) ?? asString(payload.senderId) ?? undefined,
+        typeof payload.lastReadSeq === "number" ? payload.lastReadSeq : null,
       );
     };
 

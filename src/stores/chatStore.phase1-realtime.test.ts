@@ -335,6 +335,53 @@ describe("chatStore phase-1 realtime flows", () => {
     );
   });
 
+  it("marks normalized message entities as read using lastReadSeq when the boundary message is missing", () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+        unreadCount: 0,
+      }),
+    ] as never);
+    useChatStore.getState().setMessages("room-1", [
+      makeMessage({
+        id: "msg-1",
+        senderId: "user-a",
+        serverSeq: 10,
+        createdAt: "2026-04-10T09:00:00.000Z",
+        updatedAt: "2026-04-10T09:00:00.000Z",
+      }),
+      makeMessage({
+        id: "msg-2",
+        senderId: "user-a",
+        serverSeq: 11,
+        createdAt: "2026-04-10T09:01:00.000Z",
+        updatedAt: "2026-04-10T09:01:00.000Z",
+      }),
+      makeMessage({
+        id: "msg-3",
+        senderId: "user-a",
+        serverSeq: 12,
+        createdAt: "2026-04-10T09:02:00.000Z",
+        updatedAt: "2026-04-10T09:02:00.000Z",
+      }),
+    ] as never);
+
+    useChatStore
+      .getState()
+      .markMessagesReadUpTo("room-1", "missing-message", "user-b", 11);
+
+    const selectedMessages = selectConversationMessagesFromState(
+      useChatStore.getState(),
+      "room-1",
+    );
+    expect(selectedMessages.map((message) => message.status)).toEqual([
+      MessageStatus.READ,
+      MessageStatus.READ,
+      MessageStatus.SENT,
+    ]);
+  });
+
   it("does not zero unread just because the selected conversation fetches latest messages", async () => {
     useChatStore.getState().setConversations([
       makeConversation({

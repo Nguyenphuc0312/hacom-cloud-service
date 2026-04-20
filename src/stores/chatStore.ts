@@ -192,6 +192,7 @@ interface ChatState {
     conversationId: string,
     lastMessageId: string,
     readerId?: string,
+    lastReadSeq?: number | null,
   ) => void;
   removeMessage: (conversationId: string, messageId: string) => void;
   fetchMessages: (
@@ -3220,7 +3221,7 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
-      markMessagesReadUpTo: (conversationId, lastMessageId, readerId) => {
+      markMessagesReadUpTo: (conversationId, lastMessageId, readerId, lastReadSeq) => {
         const currentUserId = useAuthStore.getState().user?.id;
         if (!currentUserId) return;
         if (readerId && readerId === currentUserId) return;
@@ -3236,14 +3237,20 @@ export const useChatStore = create<ChatState>()(
           const updatedMessages = sortedMessages.map((message, index) => {
             if (message.senderId !== currentUserId) return message;
             if (message.status === MessageStatus.READ) return message;
+            const messageSeq = toFiniteNumber(message.serverSeq);
+            const withinSeqBoundary =
+              typeof lastReadSeq === "number" &&
+              Number.isFinite(lastReadSeq) &&
+              messageSeq !== null &&
+              messageSeq <= lastReadSeq;
 
             if (boundaryIndex < 0) {
-              return matchesMessageIdentityValue(message, lastMessageId)
+              return withinSeqBoundary || matchesMessageIdentityValue(message, lastMessageId)
                 ? { ...message, status: MessageStatus.READ, readAt }
                 : message;
             }
 
-            return index <= boundaryIndex
+            return withinSeqBoundary || index <= boundaryIndex
               ? { ...message, status: MessageStatus.READ, readAt }
               : message;
           });
