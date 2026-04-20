@@ -1202,12 +1202,14 @@ export const useWebSocket = (
       logMessageDebug("useWebSocket", "socket_message_read_received", {
         conversationId,
         lastMessageId,
+        lastReadSeq:
+          typeof payload.lastReadSeq === "number" ? payload.lastReadSeq : null,
       });
 
       markMessagesReadUpTo(
         conversationId,
         lastMessageId,
-        asString(payload.senderId) ?? asString(payload.userId) ?? undefined,
+        asString(payload.userId) ?? asString(payload.senderId) ?? undefined,
       );
     };
 

@@ -89,4 +89,69 @@ describe("api contract", () => {
       peerUserId: "user-b",
     });
   });
+
+  it("createGroupConversation posts canonical /groups payload only", async () => {
+    apiClientMock.post.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          id: "conv-2",
+          type: "group",
+        },
+      },
+    });
+
+    await conversationApi.createGroupConversation({
+      name: "Team Alpha",
+      memberIds: ["user-a", "user-b"],
+      avatar: "https://cdn.example.com/a.png",
+      description: "desc",
+    });
+
+    expect(apiClientMock.post).toHaveBeenCalledWith("/groups", {
+      type: "basic_group",
+      title: "Team Alpha",
+      memberIds: ["user-a", "user-b"],
+      avatarUrl: "https://cdn.example.com/a.png",
+      description: "desc",
+    });
+  });
+
+  it("markAsRead posts lastVisibleMessageId only", async () => {
+    apiClientMock.post.mockResolvedValue({
+      data: {
+        success: true,
+        data: null,
+      },
+    });
+
+    await conversationApi.markAsRead("conv-3", "msg-9");
+
+    expect(apiClientMock.post).toHaveBeenCalledWith(
+      "/conversations/conv-3/messages/read",
+      {
+        lastVisibleMessageId: "msg-9",
+      },
+    );
+  });
+
+  it("getMessages sends canonical beforeId cursor without timestamp aliases", async () => {
+    apiClientMock.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: { messages: [] },
+        meta: { pagination: { limit: 20, hasNext: false, hasPrev: true } },
+      },
+    });
+
+    await messageApi.getMessages("conv-9", {
+      before: "2026-04-20T10:00:00.000Z",
+      beforeId: "msg-42",
+      limit: 20,
+    });
+
+    expect(apiClientMock.get).toHaveBeenCalledWith(
+      "/conversations/conv-9/messages?limit=20&beforeId=msg-42",
+    );
+  });
 });

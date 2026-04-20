@@ -128,6 +128,7 @@ const normalizeConversationReadState = (
 
   return {
     unreadCount: asFiniteNumber(record.unreadCount) ?? 0,
+    lastReadSeq: asFiniteNumber(record.lastReadSeq) ?? 0,
     lastReadMessageId: asStringValue(record.lastReadMessageId),
     lastReadAt: asStringValue(record.lastReadAt),
     firstUnreadMessageId: asStringValue(record.firstUnreadMessageId),
@@ -425,6 +426,7 @@ export const conversationApi = {
         conversations: Array<{
           conversationId: string;
           unreadCount: number;
+          lastReadSeq: number;
           lastReadMessageId: string | null;
           lastReadAt: string | null;
         }>;
@@ -485,12 +487,13 @@ export const conversationApi = {
     description?: string;
   }) => {
     const response = await apiClient.post<ApiResponse<unknown>>(
-      "/conversations/group",
+      "/groups",
       {
-        name: data.name,
+        type: "basic_group",
+        title: data.name,
         memberIds: data.memberIds,
         description: data.description,
-        avatar: data.avatar,
+        avatarUrl: data.avatar,
       },
     );
 
@@ -601,7 +604,6 @@ export const conversationApi = {
     const payload = lastVisibleMessageId
       ? {
           lastVisibleMessageId,
-          messageId: lastVisibleMessageId,
         }
       : undefined;
     await apiClient.post(
@@ -837,7 +839,9 @@ export const messageApi = {
       | {
           page?: number;
           limit?: number;
+          /** @deprecated Legacy timestamp hint. Do not send as public HTTP contract. */
           before?: string;
+          /** @deprecated Legacy timestamp hint. Do not send as public HTTP contract. */
           after?: string;
           beforeId?: string;
           afterId?: string;
@@ -855,12 +859,14 @@ export const messageApi = {
           : 50,
       ),
     });
+    const hasBeforeCursor =
+      typeof options.beforeId === "string" && options.beforeId.trim().length > 0;
+    const hasAfterCursor =
+      typeof options.afterId === "string" && options.afterId.trim().length > 0;
 
-    if (options.before) query.set("before", options.before);
-    if (options.after) query.set("after", options.after);
     if (options.beforeId) query.set("beforeId", options.beforeId);
     if (options.afterId) query.set("afterId", options.afterId);
-    if (!options.before && !options.after) {
+    if (!hasBeforeCursor && !hasAfterCursor) {
       query.set(
         "page",
         String(

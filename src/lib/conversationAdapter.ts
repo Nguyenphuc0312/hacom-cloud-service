@@ -370,6 +370,7 @@ export const normalizeConversation = (
     asString(payload.last_message_id) ??
     lastMessage?.id ??
     null;
+  const lastReadSeq = asNumber(payload.lastReadSeq) ?? 0;
   const updatedAt = toDate(
     payload.lastActivityAt ??
       payload.updatedAt ??
@@ -454,9 +455,15 @@ export const normalizeConversation = (
     ...(payload.lastReadAt
       ? { lastReadAt: toDate(payload.lastReadAt, updatedAt) }
       : {}),
+    ...(lastReadSeq >= 0 ? { lastReadSeq } : {}),
     ...(asString(payload.lastReadMessageId)
       ? { lastReadMessageId: asString(payload.lastReadMessageId) }
       : {}),
+    ...(asString(payload.peerUserId)
+      ? { peerUserId: asString(payload.peerUserId) }
+      : otherUser
+        ? { peerUserId: otherUser.id }
+        : {}),
     ...(asString(payload.firstUnreadMessageId)
       ? { firstUnreadMessageId: asString(payload.firstUnreadMessageId) }
       : {}),

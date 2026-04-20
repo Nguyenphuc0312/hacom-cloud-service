@@ -1082,6 +1082,7 @@ const applyConversationReadState = (
   conversation: Conversation,
   readState: {
     unreadCount: number;
+    lastReadSeq?: number;
     lastReadMessageId: string | null;
     lastReadAt: string | null;
     firstUnreadMessageId?: string | null;
@@ -1091,6 +1092,7 @@ const applyConversationReadState = (
   (normalizeConversation({
     ...conversation,
     unreadCount: Math.max(0, readState.unreadCount ?? conversation.unreadCount ?? 0),
+    lastReadSeq: readState.lastReadSeq ?? conversation.lastReadSeq ?? 0,
     lastReadMessageId:
       readState.lastReadMessageId ?? conversation.lastReadMessageId ?? undefined,
     lastReadAt: readState.lastReadAt ?? conversation.lastReadAt ?? undefined,
@@ -1105,6 +1107,7 @@ const applyConversationReadState = (
   }) ?? {
     ...conversation,
     unreadCount: Math.max(0, readState.unreadCount ?? conversation.unreadCount ?? 0),
+    lastReadSeq: readState.lastReadSeq ?? conversation.lastReadSeq ?? 0,
     lastReadMessageId:
       readState.lastReadMessageId ?? conversation.lastReadMessageId ?? null,
     lastReadAt: readState.lastReadAt ?? conversation.lastReadAt ?? null,
@@ -2617,6 +2620,7 @@ const normalizeConversationReadStateFromMeta = (
   responseMeta?: Record<string, unknown> | null,
 ): {
   unreadCount: number;
+  lastReadSeq: number;
   lastReadMessageId: string | null;
   lastReadAt: string | null;
   firstUnreadMessageId: string | null;
@@ -2629,6 +2633,7 @@ const normalizeConversationReadStateFromMeta = (
 
   return {
     unreadCount: Math.max(0, asNumberValue(payload.unreadCount) ?? 0),
+    lastReadSeq: Math.max(0, asNumberValue(payload.lastReadSeq) ?? 0),
     lastReadMessageId: asStringValue(payload.lastReadMessageId) ?? null,
     lastReadAt: asStringValue(payload.lastReadAt) ?? null,
     firstUnreadMessageId: asStringValue(payload.firstUnreadMessageId) ?? null,
@@ -3314,10 +3319,14 @@ export const useChatStore = create<ChatState>()(
       },
 
       fetchMessages: async (conversationId, before, after, options) => {
-        const isInitialFetch = !before && !after;
-        const fetchMode: FetchMessagesResult["mode"] = after
+        const beforeId = asStringValue(options?.beforeId);
+        const afterId = asStringValue(options?.afterId);
+        const hasBeforeCursor = Boolean(beforeId || before);
+        const hasAfterCursor = Boolean(afterId || after);
+        const isInitialFetch = !hasBeforeCursor && !hasAfterCursor;
+        const fetchMode: FetchMessagesResult["mode"] = hasAfterCursor
           ? "newer"
-          : before
+          : hasBeforeCursor
             ? "older"
             : "initial";
         const fetchRequestedAt = new Date();
@@ -3428,12 +3437,8 @@ export const useChatStore = create<ChatState>()(
             options.limit > 0
               ? Math.min(100, Math.floor(options.limit))
               : 50;
-          const beforeId = asStringValue(options?.beforeId);
-          const afterId = asStringValue(options?.afterId);
           const params = new URLSearchParams({ limit: String(limit) });
-          if (before) params.set("before", before);
           if (beforeId) params.set("beforeId", beforeId);
-          if (after) params.set("after", after);
           if (afterId) params.set("afterId", afterId);
           logMessageDebug("chatStore", "fetch_requested", {
             conversationId,
@@ -3460,9 +3465,7 @@ export const useChatStore = create<ChatState>()(
 
           const response = await messageApi.getMessages(conversationId, {
             limit,
-            ...(before ? { before } : {}),
             ...(beforeId ? { beforeId } : {}),
-            ...(after ? { after } : {}),
             ...(afterId ? { afterId } : {}),
           });
           const responseEnvelope = asRecord(response);
@@ -3470,44 +3473,7 @@ export const useChatStore = create<ChatState>()(
           const payload = unwrapApiSuccess(response);
           let normalized = normalizeMessagesResponse(payload, responseMeta);
           let readState = normalizeConversationReadStateFromMeta(responseMeta);
-
-          if (
-            after &&
-            !afterId &&
-            Array.isArray(normalized.messages) &&
-            normalized.messages.length === 0
-          ) {
-            try {
-              const parsedAfter = Date.parse(after);
-              if (!Number.isNaN(parsedAfter)) {
-                const earlierTs = Math.max(0, parsedAfter - 1);
-                const earlier = new Date(earlierTs).toISOString();
-                const retryResp = await messageApi.getMessages(conversationId, {
-                  limit,
-                  after: earlier,
-                });
-                const retryPayload = unwrapApiSuccess(retryResp);
-                const retryMeta =
-                  asRecord(asRecord(retryResp)?.meta) ?? responseMeta;
-                const retryNormalized = normalizeMessagesResponse(
-                  retryPayload,
-                  retryMeta,
-                );
-                const retryReadState =
-                  normalizeConversationReadStateFromMeta(retryMeta);
-                if (
-                  Array.isArray(retryNormalized.messages) &&
-                  retryNormalized.messages.length > 0
-                ) {
-                  normalized = retryNormalized;
-                  readState = retryReadState ?? readState;
-                }
-              }
-            } catch {
-              // ignore retry errors
-            }
-          }
-          const hasMoreForDirection = after
+          const hasMoreForDirection = hasAfterCursor
             ? normalized.hasNext
             : normalized.hasPrev;
 
