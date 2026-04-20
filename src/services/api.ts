@@ -462,7 +462,7 @@ export const conversationApi = {
     const response = await apiClient.post<ApiResponse<unknown>>(
       "/conversations/direct",
       {
-        userId,
+        peerUserId: userId,
       },
     );
 
