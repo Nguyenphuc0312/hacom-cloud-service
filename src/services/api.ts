@@ -5,9 +5,7 @@
 
 import apiClient, { authClient } from "../lib/axios";
 import axios from "axios";
-import type {
-  ApiResponse,
-} from "@hacom/chat-shared-types/core";
+import { ErrorCode, type ApiResponse } from "@hacom/chat-shared-types/core";
 import type {
   LoginResponse,
   RefreshTokenResponse,
@@ -15,6 +13,7 @@ import type {
 } from "@hacom/chat-shared-types/auth";
 import type {
   CompleteUploadResponse,
+  CreateDirectConversationDto,
   CreateMessageResponse,
   FriendshipCapabilitiesDto,
   FriendshipPendingCountDto,
@@ -34,9 +33,45 @@ import {
   normalizeConversation,
   normalizeConversationsPayload,
 } from "../lib/conversationAdapter";
-import { unwrapApiSuccess } from "../lib/apiContract";
+import { ApiContractError, unwrapApiSuccess } from "../lib/apiContract";
 import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 import { getCsrfToken, isRefreshTokenCookieMode } from "./tokenService";
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const buildCreateDirectConversationPayload = (
+  userId: string,
+): CreateDirectConversationDto => {
+  const peerUserId = typeof userId === "string" ? userId.trim() : "";
+
+  if (!peerUserId) {
+    throw new ApiContractError("peerUserId is required", {
+      statusCode: 422,
+      code: ErrorCode.VALIDATION_ERROR,
+      details: [
+        {
+          field: "peerUserId",
+          message: "peerUserId is required",
+        },
+      ],
+    });
+  }
+
+  if (!UUID_PATTERN.test(peerUserId)) {
+    throw new ApiContractError("peerUserId must be a valid UUID", {
+      statusCode: 422,
+      code: ErrorCode.VALIDATION_ERROR,
+      details: [
+        {
+          field: "peerUserId",
+          message: "peerUserId must be a valid UUID",
+        },
+      ],
+    });
+  }
+
+  return { peerUserId };
+};
 
 type EmailOtpChallengePurpose = "signup";
 
@@ -461,12 +496,11 @@ export const conversationApi = {
   },
 
   createPrivateConversation: async (userId: string) => {
-    const response = await apiClient.post<ApiResponse<unknown>>(
-      "/conversations/direct",
-      {
-        peerUserId: userId,
-      },
-    );
+      const payload = buildCreateDirectConversationPayload(userId);
+      const response = await apiClient.post<ApiResponse<unknown>>(
+        "/conversations/direct",
+        payload,
+      );
 
     if (!response.data.success) {
       return response.data as ApiResponse<Conversation>;

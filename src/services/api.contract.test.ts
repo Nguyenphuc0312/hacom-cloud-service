@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ErrorCode } from "@hacom/chat-shared-types/core";
 
 const { apiClientMock, authClientMock } = vi.hoisted(() => ({
   apiClientMock: {
@@ -25,6 +26,9 @@ vi.mock("../lib/axios", () => ({
 }));
 
 import { contactApi, conversationApi, messageApi } from "./api";
+
+const DIRECT_USER_ID = "0f3112fc-b70c-446a-a873-f85f1a4ea6f6";
+const ACTOR_USER_ID = "41b29701-9b96-4a50-97c1-04ed835bf2c6";
 
 describe("api contract", () => {
   beforeEach(() => {
@@ -83,11 +87,22 @@ describe("api contract", () => {
       },
     });
 
-    await conversationApi.createPrivateConversation("user-b");
+    await conversationApi.createPrivateConversation(` ${DIRECT_USER_ID} `);
 
     expect(apiClientMock.post).toHaveBeenCalledWith("/conversations/direct", {
-      peerUserId: "user-b",
+      peerUserId: DIRECT_USER_ID,
     });
+  });
+
+  it("createPrivateConversation rejects malformed peerUserId values before sending the request", async () => {
+    await expect(conversationApi.createPrivateConversation(ACTOR_USER_ID.slice(0, 8))).rejects.toMatchObject({
+      name: "ApiContractError",
+      statusCode: 422,
+      code: ErrorCode.VALIDATION_ERROR,
+      message: "peerUserId must be a valid UUID",
+    });
+
+    expect(apiClientMock.post).not.toHaveBeenCalled();
   });
 
   it("createGroupConversation posts canonical /groups payload only", async () => {
