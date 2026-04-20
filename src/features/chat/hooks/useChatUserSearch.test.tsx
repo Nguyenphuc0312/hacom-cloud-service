@@ -102,7 +102,17 @@ describe("useChatUserSearch helpers", () => {
       }),
     );
 
-    await waitFor(() => expect(searchUsersUseCaseMock).toHaveBeenCalledWith("alice", 1, 20));
+    await waitFor(() => {
+      expect(searchUsersUseCaseMock).toHaveBeenCalledTimes(1);
+      expect(searchUsersUseCaseMock).toHaveBeenCalledWith(
+        "alice",
+        1,
+        20,
+        expect.objectContaining({
+          signal: expect.any(AbortSignal),
+        }),
+      );
+    });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.results).toHaveLength(1);
 
