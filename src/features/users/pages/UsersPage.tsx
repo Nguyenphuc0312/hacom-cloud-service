@@ -1,10 +1,15 @@
-import { ReloadOutlined } from '@ant-design/icons';
+import {
+  EyeOutlined,
+  LockOutlined,
+  ReloadOutlined,
+  UnlockOutlined,
+  WarningOutlined,
+} from '@ant-design/icons';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Form, Input, Modal, Select, Space, Typography, message } from 'antd';
+import { Button, Form, Input, Popconfirm, Select, Space, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
-import { useCallback, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo, useState } from 'react';
 
 import { usersClient } from '@/api/clients';
 import { getErrorMessage } from '@/api/error';
@@ -17,18 +22,19 @@ import type {
   UsersListQuery,
   UsersListResponse,
 } from '@/api/types';
+import { AppTooltip } from '@/components/AppTooltip';
 import { DataTableShell } from '@/components/DataTableShell';
-import { DataTableToolbar } from '@/components/DataTableToolbar';
+import { DetailPanel } from '@/components/DetailPanel';
 import { FeatureDisabledNotice } from '@/components/FeatureDisabledNotice';
 import { FilterBar } from '@/components/FilterBar';
+import { IconActionButton } from '@/components/IconActionButton';
 import { PageShell } from '@/components/PageShell';
 import { EmptyState, QueryStateView } from '@/components/QueryStates';
-import { RowActionsDropdown } from '@/components/RowActionsDropdown';
 import { StatusBadge } from '@/components/StatusBadge';
 import { DataTable } from '@/components/ui/DataTable';
 import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
 import { useAuthStore } from '@/store/authStore';
-import { formatDateTime } from '@/utils/date';
+import { formatDateTime, formatRelativeTime } from '@/utils/date';
 import { canManageUsers } from '@/utils/role';
 
 const accountStatusOptions = [
@@ -52,8 +58,9 @@ const activityOptions = [
   { label: 'Chỉ không hoạt động', value: 'inactive' },
 ];
 
+const readOnlyFallback = 'Tài khoản đang ở chế độ chỉ đọc.';
+
 export const UsersPage = () => {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const currentRole = useAuthStore((state) => state.user?.role);
@@ -62,14 +69,21 @@ export const UsersPage = () => {
   const [params, setParams] = useState<UsersListQuery>({
     page: 1,
     limit: 20,
-    sortBy: 'created_at',
+    sortBy: 'updated_at',
     sortOrder: 'desc',
   });
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const usersQuery = useQuery({
     queryKey: queryKeys.usersList(params),
     queryFn: () => usersClient.list(params),
     placeholderData: keepPreviousData,
+  });
+
+  const selectedUserQuery = useQuery({
+    queryKey: queryKeys.userDetail(selectedUserId ?? ''),
+    queryFn: () => usersClient.getById(selectedUserId ?? ''),
+    enabled: Boolean(selectedUserId),
   });
 
   const activeFilterCount = [
@@ -101,7 +115,7 @@ export const UsersPage = () => {
       } else if (variables.action === 'unlock') {
         message.success('Đã mở khóa tài khoản.');
       } else {
-        message.success('Đã thu hồi các phiên.');
+        message.success('Đã thu hồi phiên.');
       }
 
       const nextAccountStatus =
@@ -130,7 +144,6 @@ export const UsersPage = () => {
         );
       }
 
-      void queryClient.invalidateQueries({ queryKey: queryKeys.usersRoot });
       void queryClient.invalidateQueries({ queryKey: queryKeys.userDetail(variables.userId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.auditLogsRoot });
     },
@@ -139,66 +152,25 @@ export const UsersPage = () => {
     },
   });
 
-  const confirmAction = useCallback(
-    (action: 'lock' | 'unlock' | 'revoke', user: UserListItem) => {
-      if (!isAdminWriteActionsEnabled) {
-        message.info('Các thao tác ghi đang bị tắt theo cấu hình phát hành.');
-        return;
-      }
-
-      if (!canManageUsers(currentRole)) {
-        message.warning('Vai trò hiện tại của bạn không thể thực hiện thao tác ghi lên tài khoản.');
-        return;
-      }
-
-      const titleMap: Record<typeof action, string> = {
-        lock: 'Khóa tài khoản',
-        unlock: 'Mở khóa tài khoản',
-        revoke: 'Thu hồi phiên đang hoạt động',
-      };
-
-      const contentMap: Record<typeof action, string> = {
-        lock: 'Tài khoản sẽ bị vô hiệu hóa và người dùng sẽ bị đăng xuất khỏi các phiên đang hoạt động.',
-        unlock: 'Tài khoản sẽ được khôi phục theo chính sách auth-service hiện tại.',
-        revoke: 'Toàn bộ phiên hiện tại của người dùng này sẽ bị thu hồi ngay lập tức.',
-      };
-
-      Modal.confirm({
-        title: titleMap[action],
-        content: contentMap[action],
-        okText: 'Xác nhận',
-        cancelText: 'Hủy',
-        onOk: async () => {
-          await actionMutation.mutateAsync({
-            action,
-            userId: user.id,
-            payload: { reason: `panel_${action}` },
-          });
-        },
-      });
-    },
-    [actionMutation, currentRole],
-  );
-
   const columns = useMemo<ColumnsType<UserListItem>>(
     () => [
       {
         title: 'Tài khoản',
         key: 'account',
         render: (_, record) => (
-          <Space direction="vertical" size={0}>
-            <Typography.Text strong>{record.username ?? 'Chưa có username'}</Typography.Text>
-            <Typography.Text type="secondary">{record.email}</Typography.Text>
-          </Space>
+          <div className="ds-table-primary-cell">
+            <strong>{record.username ?? 'Chưa có username'}</strong>
+            <span>{record.email}</span>
+          </div>
         ),
       },
       {
-        title: 'Nhân viên',
+        title: 'Vai trò nội bộ',
         dataIndex: 'employeeId',
         render: (value: string | null) => value ?? '-',
       },
       {
-        title: 'Trạng thái tài khoản',
+        title: 'Trạng thái',
         dataIndex: 'accountStatus',
         render: (value: string | null) => <StatusBadge status={value} />,
       },
@@ -208,61 +180,31 @@ export const UsersPage = () => {
         render: (value: string | null) => <StatusBadge status={value ?? 'offline'} />,
       },
       {
-        title: 'Lần thấy gần nhất',
+        title: 'Lần cuối hoạt động',
         dataIndex: 'lastSeen',
-        render: (value: string | null) => (value ? formatDateTime(value) : '-'),
-      },
-      {
-        title: 'Cập nhật lúc',
-        dataIndex: 'updatedAt',
-        sorter: true,
-        render: (value: string | null) => (value ? formatDateTime(value) : '-'),
+        render: (value: string | null) =>
+          value ? (
+            <AppTooltip title={formatDateTime(value)}>
+              <span>{formatRelativeTime(value)}</span>
+            </AppTooltip>
+          ) : (
+            '-'
+          ),
       },
       {
         title: '',
         key: 'actions',
-        width: 72,
+        width: 64,
         render: (_, record) => (
-          <RowActionsDropdown
-            actions={[
-              {
-                key: 'detail',
-                label: 'Mở chi tiết',
-                onClick: () => navigate(`/users/${record.id}`),
-              },
-              {
-                key: 'lock',
-                label: 'Khóa tài khoản',
-                danger: true,
-                disabled:
-                  !isAdminWriteActionsEnabled ||
-                  !canWriteUserActions ||
-                  record.accountStatus === 'DISABLED' ||
-                  actionMutation.isPending,
-                onClick: () => confirmAction('lock', record),
-              },
-              {
-                key: 'unlock',
-                label: 'Mở khóa tài khoản',
-                disabled:
-                  !isAdminWriteActionsEnabled ||
-                  !canWriteUserActions ||
-                  record.accountStatus !== 'DISABLED' ||
-                  actionMutation.isPending,
-                onClick: () => confirmAction('unlock', record),
-              },
-              {
-                key: 'revoke',
-                label: 'Thu hồi phiên',
-                disabled: !canWriteUserActions || actionMutation.isPending,
-                onClick: () => confirmAction('revoke', record),
-              },
-            ]}
+          <IconActionButton
+            icon={<EyeOutlined />}
+            tooltip="Xem chi tiết"
+            onClick={() => setSelectedUserId(record.id)}
           />
         ),
       },
     ],
-    [actionMutation.isPending, canWriteUserActions, confirmAction, navigate],
+    [],
   );
 
   const applyFilters = () => {
@@ -325,12 +267,31 @@ export const UsersPage = () => {
     }));
   };
 
+  const handleUserAction = async (action: 'lock' | 'unlock' | 'revoke') => {
+    if (!selectedUserId) {
+      return;
+    }
+
+    if (!isAdminWriteActionsEnabled) {
+      message.info('Các thao tác ghi đang bị tắt theo cấu hình phát hành.');
+      return;
+    }
+
+    if (!canManageUsers(currentRole)) {
+      message.warning('Vai trò hiện tại của bạn không thể thực hiện thao tác ghi.');
+      return;
+    }
+
+    await actionMutation.mutateAsync({
+      action,
+      userId: selectedUserId,
+      payload: { reason: `panel_${action}` },
+    });
+  };
+
   if (usersQuery.isPending && !usersQuery.data) {
     return (
-      <PageShell
-        title="Người dùng"
-        description="Xem tài khoản admin, trạng thái hiện diện và trạng thái truy cập."
-      >
+      <PageShell eyebrow="Vận hành người dùng" title="Tài khoản" description="Tra cứu trạng thái truy cập và hành động quản trị.">
         <QueryStateView kind="loading" title="Đang tải danh sách tài khoản..." />
       </PageShell>
     );
@@ -338,10 +299,7 @@ export const UsersPage = () => {
 
   if (usersQuery.isError && !usersQuery.data) {
     return (
-      <PageShell
-        title="Người dùng"
-        description="Xem tài khoản admin, trạng thái hiện diện và trạng thái truy cập."
-      >
+      <PageShell eyebrow="Vận hành người dùng" title="Tài khoản" description="Tra cứu trạng thái truy cập và hành động quản trị.">
         <QueryStateView
           kind="error"
           description="Không thể tải danh sách tài khoản."
@@ -354,11 +312,13 @@ export const UsersPage = () => {
   }
 
   const data = usersQuery.data;
+  const selectedUser = selectedUserQuery.data;
 
   return (
     <PageShell
-      title="Người dùng"
-      description="Tìm đúng operator thật nhanh, rồi chỉ mở chi tiết khi cần thực hiện thao tác ghi."
+      eyebrow="Vận hành người dùng"
+      title="Tài khoản"
+      description="Bảng chính để tìm tài khoản, kiểm tra trạng thái và mở panel xử lý."
       headerExtra={
         <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
           <Button
@@ -373,93 +333,226 @@ export const UsersPage = () => {
         </div>
       }
     >
-      {(!isAdminWriteActionsEnabled || !canManageUsers(currentRole)) && (
+      {(!isAdminWriteActionsEnabled || !canManageUsers(currentRole)) ? (
         <FeatureDisabledNotice
           description={
             !isAdminWriteActionsEnabled
               ? 'Các thao tác ghi đang bị tắt theo cấu hình phát hành.'
-              : 'Vai trò hiện tại của bạn chỉ có quyền đọc với thao tác khóa, mở khóa và thu hồi phiên.'
+              : readOnlyFallback
           }
         />
-      )}
+      ) : null}
 
-      <FilterBar>
-        <Form
-          form={form}
-          layout="inline"
-          className="ds-toolbar-form"
-          initialValues={{ accountStatus: 'all', status: 'all', active: 'all' }}
-        >
-          <Form.Item name="keyword" className="ds-toolbar-field ds-toolbar-field--lg">
-            <Input allowClear placeholder="Tìm username, email hoặc mã nhân viên" />
-          </Form.Item>
-          <Form.Item name="accountStatus" className="ds-toolbar-field ds-toolbar-field--md">
-            <Select options={accountStatusOptions} />
-          </Form.Item>
-          <Form.Item name="status" className="ds-toolbar-field ds-toolbar-field--sm">
-            <Select options={presenceOptions} />
-          </Form.Item>
-          <Form.Item name="active" className="ds-toolbar-field ds-toolbar-field--sm">
-            <Select options={activityOptions} />
-          </Form.Item>
-          <Form.Item className="ds-toolbar-field ds-toolbar-actions">
-            <Space>
-              <Button type="primary" onClick={applyFilters}>
-                Áp dụng bộ lọc
-              </Button>
-              <Button onClick={resetFilters}>Đặt lại</Button>
-            </Space>
-          </Form.Item>
-        </Form>
-        <div className="ds-filter-toolbar-meta">
-          <span>
-            {data?.pagination.total ?? 0} tài khoản phù hợp
-          </span>
-          <span>
-            {activeFilterCount > 0
-              ? `${activeFilterCount} bộ lọc đang hoạt động`
-              : 'Không có bộ lọc đang hoạt động'}
-          </span>
-          <span>
-            Đồng bộ gần nhất:{' '}
-            {usersQuery.dataUpdatedAt
-              ? formatDateTime(new Date(usersQuery.dataUpdatedAt).toISOString())
-              : '-'}
-          </span>
+      <div className="ds-page-with-detail">
+        <div className="ds-page-main-stack">
+          <FilterBar>
+            <Form
+              form={form}
+              layout="inline"
+              className="ds-toolbar-form"
+              initialValues={{ accountStatus: 'all', status: 'all', active: 'all' }}
+            >
+              <Form.Item name="keyword" className="ds-toolbar-field ds-toolbar-field--lg">
+                <Input allowClear placeholder="Tìm username, email hoặc mã nhân sự" />
+              </Form.Item>
+              <Form.Item name="accountStatus" className="ds-toolbar-field ds-toolbar-field--md">
+                <Select options={accountStatusOptions} />
+              </Form.Item>
+              <Form.Item name="status" className="ds-toolbar-field ds-toolbar-field--sm">
+                <Select options={presenceOptions} />
+              </Form.Item>
+              <Form.Item name="active" className="ds-toolbar-field ds-toolbar-field--sm">
+                <Select options={activityOptions} />
+              </Form.Item>
+              <Form.Item className="ds-toolbar-field ds-toolbar-actions">
+                <Space>
+                  <Button type="primary" onClick={applyFilters}>
+                    Áp dụng
+                  </Button>
+                  <Button onClick={resetFilters}>Đặt lại</Button>
+                </Space>
+              </Form.Item>
+            </Form>
+            <div className="ds-filter-toolbar-meta">
+              <span>{data?.pagination.total ?? 0} tài khoản</span>
+              <span>{activeFilterCount > 0 ? `${activeFilterCount} bộ lọc` : 'Không có bộ lọc'}</span>
+            </div>
+          </FilterBar>
+
+          <DataTableShell
+            title="Danh sách tài khoản"
+            meta="Chỉ giữ các cột phục vụ quyết định; chi tiết mở ở panel phải."
+          >
+            <DataTable
+              rowKey="id"
+              columns={columns}
+              minHeight={360}
+              loading={usersQuery.isFetching && !usersQuery.isPending}
+              dataSource={data?.items ?? []}
+              emptyNode={<EmptyState description="Không có tài khoản nào khớp với bộ lọc hiện tại." />}
+              onRow={(record) => ({
+                onClick: () => setSelectedUserId(record.id),
+                style: { cursor: 'pointer' },
+              })}
+              pagination={{
+                current: data?.pagination.page,
+                pageSize: data?.pagination.limit,
+                total: data?.pagination.total,
+                showSizeChanger: true,
+              }}
+              onChange={handleTableChange}
+            />
+          </DataTableShell>
         </div>
-      </FilterBar>
 
-      <DataTableShell
-        title="Tài khoản"
-        meta="Không gian chính để theo dõi trạng thái tài khoản, hiện diện và thao tác theo từng dòng."
-        toolbar={
-          <DataTableToolbar>
-            <span className="ds-toolbar-summary">
-              Sắp xếp: {params.sortBy ?? 'created_at'} / {params.sortOrder ?? 'desc'}
-            </span>
-          </DataTableToolbar>
-        }
-      >
-        <DataTable
-          rowKey="id"
-          columns={columns}
-          minHeight={320}
-          loading={usersQuery.isFetching && !usersQuery.isPending}
-          dataSource={data?.items ?? []}
-          emptyNode={<EmptyState description="Không có người dùng nào khớp với bộ lọc hiện tại." />}
-          onRow={(record) => ({
-            onClick: () => navigate(`/users/${record.id}`),
-            style: { cursor: 'pointer' },
-          })}
-          pagination={{
-            current: data?.pagination.page,
-            pageSize: data?.pagination.limit,
-            total: data?.pagination.total,
-            showSizeChanger: true,
-          }}
-          onChange={handleTableChange}
-        />
-      </DataTableShell>
+        <DetailPanel
+          open={Boolean(selectedUserId)}
+          title={selectedUser?.username ?? selectedUser?.email ?? 'Chi tiết tài khoản'}
+          onClose={() => setSelectedUserId(null)}
+          width={420}
+          className="ds-ops-detail-panel"
+        >
+          {selectedUserQuery.isPending && !selectedUser ? (
+            <QueryStateView kind="loading" compact />
+          ) : selectedUserQuery.isError ? (
+            <QueryStateView
+              kind="error"
+              compact
+              description="Không thể tải chi tiết tài khoản."
+              onRetry={() => {
+                void selectedUserQuery.refetch();
+              }}
+            />
+          ) : selectedUser ? (
+            <div className="ds-ops-detail-stack">
+              <section className="ds-ops-detail-section">
+                <div className="ds-ops-detail-header">
+                  <div>
+                    <strong>{selectedUser.email}</strong>
+                    <p>{selectedUser.employeeId ?? 'Chưa liên kết hồ sơ nhân sự'}</p>
+                  </div>
+                  <StatusBadge status={selectedUser.accountStatus} />
+                </div>
+              </section>
+
+              <section className="ds-ops-detail-section">
+                <h3>Tình trạng</h3>
+                <dl className="ds-ops-fact-list">
+                  <div>
+                    <dt>Hiện diện</dt>
+                    <dd>
+                      <StatusBadge status={selectedUser.status ?? 'offline'} />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Lần cuối hoạt động</dt>
+                    <dd>{selectedUser.lastSeen ? formatDateTime(selectedUser.lastSeen) : '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>Phiên hoạt động</dt>
+                    <dd>{selectedUser.activeSessionCount ?? '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>Thiết bị</dt>
+                    <dd>{selectedUser.deviceCount ?? '-'}</dd>
+                  </div>
+                </dl>
+              </section>
+
+              <section className="ds-ops-detail-section">
+                <h3>Danh tính</h3>
+                <dl className="ds-ops-fact-list">
+                  <div>
+                    <dt>Phòng ban</dt>
+                    <dd>{selectedUser.orgUnit ?? '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>Chức danh</dt>
+                    <dd>{selectedUser.title ?? '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>Xác minh email</dt>
+                    <dd>{selectedUser.emailVerifiedAt ? formatDateTime(selectedUser.emailVerifiedAt) : '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>Xác minh điện thoại</dt>
+                    <dd>{selectedUser.phoneVerifiedAt ? formatDateTime(selectedUser.phoneVerifiedAt) : '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>ID</dt>
+                    <dd>
+                      <AppTooltip title={selectedUser.id}>
+                        <Typography.Text code ellipsis style={{ maxWidth: 220 }}>
+                          {selectedUser.id}
+                        </Typography.Text>
+                      </AppTooltip>
+                    </dd>
+                  </div>
+                </dl>
+              </section>
+
+              <section className="ds-ops-detail-section">
+                <h3>Hành động</h3>
+                <div className="ds-ops-detail-actions">
+                  <Popconfirm
+                    title="Khóa tài khoản này?"
+                    description="Người dùng sẽ bị vô hiệu hóa và đăng xuất khỏi các phiên đang hoạt động."
+                    okText="Khóa"
+                    cancelText="Hủy"
+                    onConfirm={() => void handleUserAction('lock')}
+                    disabled={!canWriteUserActions || selectedUser.accountStatus === 'DISABLED'}
+                  >
+                    <Button
+                      danger
+                      icon={<LockOutlined />}
+                      disabled={!canWriteUserActions || selectedUser.accountStatus === 'DISABLED'}
+                      loading={actionMutation.isPending}
+                    >
+                      Khóa tài khoản
+                    </Button>
+                  </Popconfirm>
+
+                  <Popconfirm
+                    title="Mở khóa tài khoản này?"
+                    description="Tài khoản sẽ quay lại trạng thái hoạt động theo chính sách hiện tại."
+                    okText="Mở khóa"
+                    cancelText="Hủy"
+                    onConfirm={() => void handleUserAction('unlock')}
+                    disabled={!canWriteUserActions || selectedUser.accountStatus !== 'DISABLED'}
+                  >
+                    <Button
+                      icon={<UnlockOutlined />}
+                      disabled={!canWriteUserActions || selectedUser.accountStatus !== 'DISABLED'}
+                      loading={actionMutation.isPending}
+                    >
+                      Mở khóa
+                    </Button>
+                  </Popconfirm>
+
+                  <Popconfirm
+                    title="Thu hồi tất cả phiên?"
+                    description="Tất cả phiên hiện tại của tài khoản này sẽ bị đăng xuất."
+                    okText="Thu hồi"
+                    cancelText="Hủy"
+                    onConfirm={() => void handleUserAction('revoke')}
+                    disabled={!canWriteUserActions}
+                  >
+                    <Button
+                      icon={<WarningOutlined />}
+                      disabled={!canWriteUserActions}
+                      loading={actionMutation.isPending}
+                    >
+                      Thu hồi phiên
+                    </Button>
+                  </Popconfirm>
+                </div>
+              </section>
+            </div>
+          ) : (
+            <EmptyState description="Chọn một tài khoản để xem chi tiết." />
+          )}
+        </DetailPanel>
+      </div>
     </PageShell>
   );
 };

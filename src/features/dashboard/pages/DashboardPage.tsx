@@ -10,34 +10,31 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { TimeRangePicker } from '@/components/TimeRangePicker';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { IncidentBanner } from '@/components/ui/IncidentBanner';
-import { MetricCard } from '@/components/ui/MetricCard';
-import { SurfaceCard } from '@/components/ui/SurfaceCard';
 import { formatDateTime } from '@/utils/date';
 import { formatMs, formatNumber, formatPercent, formatRate } from '@/utils/formatters';
 import { getFreshnessLabel, riskStateToStatus } from '@/features/monitoring/monitoringView';
-import { DashboardHero } from '../components/DashboardHero';
-import { DashboardInsightPanel } from '../components/DashboardInsightPanel';
-import { DashboardLoadingState } from '../components/DashboardLoadingState';
-import { DashboardQuickActions } from '../components/DashboardQuickActions';
 import { useDashboardOverview } from '../hooks/useDashboardOverview';
 import {
+  buildActivityTimeline,
   buildInsights,
-  buildSparkline,
   formatDeltaLabel,
   summarizeTrend,
 } from '../utils/dashboardView';
 
-type DashboardMetricView = {
+type SummaryMetric = {
   id: string;
   label: string;
   value: string;
-  changeLabel: string;
-  trendDirection?: 'up' | 'down' | 'neutral';
-  trendCaption: string;
-  tone: 'default' | 'success' | 'warning' | 'danger';
-  onClick: () => void;
-  sparkline?: Array<number | null>;
+  hint: string;
+  tone?: 'default' | 'success' | 'warning' | 'danger';
+  route: string;
+};
+
+const toneToStatus = (tone: SummaryMetric['tone']) => {
+  if (tone === 'danger') return 'down';
+  if (tone === 'warning') return 'warning';
+  if (tone === 'success') return 'healthy';
+  return 'unknown';
 };
 
 export const DashboardPage = () => {
@@ -57,6 +54,9 @@ export const DashboardPage = () => {
   const pendingUsers = pendingUsersQuery.data?.pagination.total ?? 0;
   const overview = monitoringQuery.data;
   const serviceHealth = serviceHealthQuery.data;
+  const servicesSummary = serviceHealth?.summary;
+  const servicesTotal = servicesSummary?.total ?? 0;
+  const adminActivationRate = totalUsers > 0 ? activeUsers / totalUsers : 0;
 
   const isInitialLoading =
     !overview &&
@@ -71,10 +71,19 @@ export const DashboardPage = () => {
   if (isInitialLoading) {
     return (
       <PageShell
-        title="Bảng điều khiển"
-        description="Ảnh chụp nhanh trạng thái hệ thống và các việc cần xử lý tiếp theo."
+        eyebrow="Tổng quan"
+        title="Dashboard"
+        description="Tình trạng hệ thống và hạng mục cần xử lý."
       >
-        <DashboardLoadingState />
+        <div className="ds-ops-skeleton-grid" aria-hidden>
+          <div className="ds-ops-skeleton ds-ops-skeleton--alert" />
+          <div className="ds-ops-skeleton ds-ops-skeleton--metric" />
+          <div className="ds-ops-skeleton ds-ops-skeleton--metric" />
+          <div className="ds-ops-skeleton ds-ops-skeleton--metric" />
+          <div className="ds-ops-skeleton ds-ops-skeleton--metric" />
+          <div className="ds-ops-skeleton ds-ops-skeleton--panel" />
+          <div className="ds-ops-skeleton ds-ops-skeleton--panel" />
+        </div>
       </PageShell>
     );
   }
@@ -91,18 +100,19 @@ export const DashboardPage = () => {
 
     return (
       <PageShell
-        title="Bảng điều khiển"
-        description="Ảnh chụp nhanh trạng thái hệ thống và các việc cần xử lý tiếp theo."
+        eyebrow="Tổng quan"
+        title="Dashboard"
+        description="Tình trạng hệ thống và hạng mục cần xử lý."
       >
         <ErrorState
           title={
             monitoringStatus === 403
               ? 'Bạn không có quyền xem telemetry của dashboard'
-              : 'Không thể tải bảng điều khiển'
+              : 'Không thể tải dashboard vận hành'
           }
           description={getErrorMessage(
             monitoringQuery.error ?? serviceHealthQuery.error,
-            'Các nguồn dữ liệu của dashboard tạm thời không khả dụng.',
+            'Nguồn dữ liệu tổng quan tạm thời không khả dụng.',
           )}
           onRetry={() => {
             void monitoringQuery.refetch();
@@ -112,36 +122,6 @@ export const DashboardPage = () => {
       </PageShell>
     );
   }
-
-  const servicesSummary = serviceHealth?.summary;
-  const servicesTotal = servicesSummary?.total ?? 0;
-  const healthyServiceRate = servicesTotal > 0 ? (servicesSummary?.up ?? 0) / servicesTotal : null;
-  const adminActivationRate = totalUsers > 0 ? activeUsers / totalUsers : 0;
-  const heroTone =
-    (servicesSummary?.down ?? 0) > 0 ||
-    incidents.length > 0 ||
-    overview?.capacityBaseline.currentRiskState === 'near-breaking'
-      ? 'critical'
-      : (servicesSummary?.degraded ?? 0) > 0 ||
-          monitoringQuery.isError ||
-          overview?.freshness === 'partial' ||
-          overview?.capacityBaseline.currentRiskState === 'warning'
-        ? 'degraded'
-        : 'healthy';
-
-  const trafficTrend = summarizeTrend(overview?.realtimeHealth.connectionsTrend ?? [], ['connection']);
-  const reliabilityTrend = summarizeTrend(
-    overview?.realtimeHealth.reliabilityTrend ?? [],
-    ['failure', 'resync', 'delivery'],
-    true,
-  );
-
-  const insights = buildInsights({
-    overview,
-    serviceHealth,
-    incidents,
-  });
-  const criticalInsights = insights.filter((item) => item.tone !== 'good');
 
   const refetchDashboard = () => {
     void monitoringQuery.refetch();
@@ -159,69 +139,122 @@ export const DashboardPage = () => {
     activeUsers > 0 ||
     pendingUsers > 0;
 
-  const metricCards: DashboardMetricView[] = [
+  if (!hasOverviewData) {
+    return (
+      <PageShell
+        eyebrow="Tổng quan"
+        title="Dashboard"
+        description="Tình trạng hệ thống và hạng mục cần xử lý."
+        headerExtra={
+          <Button icon={<ReloadOutlined />} onClick={refetchDashboard}>
+            Làm mới
+          </Button>
+        }
+      >
+        <div className="ds-ops-panel">
+          <EmptyState description="Chưa có dữ liệu vận hành để hiển thị." />
+        </div>
+      </PageShell>
+    );
+  }
+
+  const trafficTrend = summarizeTrend(overview?.realtimeHealth.connectionsTrend ?? [], ['connection']);
+  const reliabilityTrend = summarizeTrend(
+    overview?.realtimeHealth.reliabilityTrend ?? [],
+    ['failure', 'resync', 'delivery'],
+    true,
+  );
+  const insights = buildInsights({ overview, serviceHealth, incidents });
+  const activityTimeline = buildActivityTimeline({ overview, serviceHealth, incidents });
+
+  const primaryAlert =
+    incidents.length > 0
+      ? {
+          tone: 'danger' as const,
+          title: `${incidents.length} sự cố đang hoạt động`,
+          description: incidents[0]?.summary || incidents[0]?.title || 'Có tín hiệu cần xử lý ngay.',
+          actionLabel: 'Mở dịch vụ',
+          actionTo: '/services/health',
+        }
+      : (servicesSummary?.down ?? 0) > 0
+        ? {
+            tone: 'danger' as const,
+            title: `${servicesSummary?.down ?? 0} dịch vụ ngừng hoạt động`,
+            description: 'Một hoặc nhiều phụ thuộc đang down trong lần kiểm tra gần nhất.',
+            actionLabel: 'Xem sức khỏe dịch vụ',
+            actionTo: '/services/health',
+          }
+        : (servicesSummary?.degraded ?? 0) > 0 || overview?.freshness === 'partial'
+          ? {
+              tone: 'warning' as const,
+              title: 'Có tín hiệu suy giảm',
+              description: 'Một phần telemetry hoặc phụ thuộc đang ngoài ngưỡng kỳ vọng.',
+              actionLabel: 'Mở giám sát',
+              actionTo: '/monitoring',
+            }
+          : {
+              tone: 'success' as const,
+              title: 'Hệ thống ổn định',
+              description: 'Không có cảnh báo khẩn trong khung thời gian hiện tại.',
+              actionLabel: 'Xem giám sát',
+              actionTo: '/monitoring',
+            };
+
+  const metrics: SummaryMetric[] = [
     {
       id: 'admins',
-      label: 'Admin đang hoạt động',
+      label: 'Admin hoạt động',
       value: formatNumber(activeUsers),
-      changeLabel: formatPercent(adminActivationRate * 100, 0),
-      trendCaption: 'trên tổng số tài khoản admin',
+      hint: `${formatPercent(adminActivationRate * 100, 0)} trên tổng tài khoản`,
       tone: pendingUsers > 0 ? 'warning' : 'default',
-      onClick: () => navigate('/users'),
-      sparkline: [Math.max(activeUsers - 3, 0), Math.max(activeUsers - 1, 0), activeUsers],
-    },
-    {
-      id: 'online',
-      label: 'Người dùng trực tuyến',
-      value: formatNumber(overview?.systemOverview.onlineUsers),
-      changeLabel: formatDeltaLabel(trafficTrend.delta),
-      trendDirection: trafficTrend.direction,
-      trendCaption: 'so với đầu khung thời gian',
-      tone: 'default',
-      onClick: () => navigate('/monitoring'),
-      sparkline: buildSparkline(overview?.realtimeHealth.connectionsTrend ?? [], ['connection']),
+      route: '/users',
     },
     {
       id: 'services',
       label: 'Dịch vụ ổn định',
       value: `${servicesSummary?.up ?? 0}/${servicesTotal}`,
-      changeLabel:
-        healthyServiceRate === null ? 'Chưa có dữ liệu' : formatPercent(healthyServiceRate * 100, 0),
-      trendCaption: 'độ phủ dịch vụ',
+      hint:
+        (servicesSummary?.down ?? 0) > 0
+          ? `${servicesSummary?.down ?? 0} dịch vụ down`
+          : (servicesSummary?.degraded ?? 0) > 0
+            ? `${servicesSummary?.degraded ?? 0} dịch vụ suy giảm`
+            : 'Không có dịch vụ lỗi',
       tone:
         (servicesSummary?.down ?? 0) > 0
           ? 'danger'
           : (servicesSummary?.degraded ?? 0) > 0
             ? 'warning'
             : 'success',
-      onClick: () => navigate('/services/health'),
-      sparkline: [
-        Math.max((servicesSummary?.up ?? 0) - 2, 0),
-        Math.max((servicesSummary?.up ?? 0) - 1, 0),
-        servicesSummary?.up ?? 0,
-      ],
+      route: '/services/health',
     },
     {
-      id: 'failures',
-      label: 'Lỗi gửi tin',
-      value: formatRate(overview?.realtimeHealth.deliveryFailuresPerMinute, '/min'),
-      changeLabel: formatDeltaLabel(reliabilityTrend.delta),
-      trendDirection: reliabilityTrend.direction,
-      trendCaption: 'áp lực lỗi',
+      id: 'connections',
+      label: 'Kết nối thời gian thực',
+      value: formatNumber(overview?.systemOverview.activeConnections),
+      hint: `Biến động ${formatDeltaLabel(trafficTrend.delta)}`,
+      tone: 'default',
+      route: '/monitoring',
+    },
+    {
+      id: 'ack',
+      label: 'Sender ACK p95',
+      value: formatMs(overview?.systemOverview.senderAckP95Ms),
+      hint: `Lỗi gửi ${formatRate(overview?.realtimeHealth.deliveryFailuresPerMinute, '/phút')}`,
       tone:
-        (overview?.realtimeHealth.deliveryFailuresPerMinute ?? 0) > 0 ? 'danger' : 'success',
-      onClick: () => navigate('/monitoring'),
-      sparkline: buildSparkline(
-        overview?.realtimeHealth.reliabilityTrend ?? [],
-        ['failure', 'resync', 'delivery'],
-      ),
+        (overview?.systemOverview.senderAckP95Ms ?? 0) > 900
+          ? 'danger'
+          : (overview?.systemOverview.senderAckP95Ms ?? 0) > 450
+            ? 'warning'
+            : 'success',
+      route: '/monitoring',
     },
   ];
 
   return (
     <PageShell
-      title="Bảng điều khiển"
-      description="Ảnh chụp nhanh trạng thái hệ thống, vấn đề đang hoạt động và các bước xử lý tiếp theo."
+      eyebrow="Tổng quan"
+      title="Dashboard"
+      description="Tình trạng hệ thống và hạng mục cần xử lý."
       headerExtra={
         <div className="ds-page-toolbar-stack">
           <div className="ds-page-toolbar-group">
@@ -230,157 +263,179 @@ export const DashboardPage = () => {
           <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
             <Button
               icon={<ReloadOutlined />}
-              loading={
-                monitoringQuery.isFetching ||
-                serviceHealthQuery.isFetching
-              }
+              loading={monitoringQuery.isFetching || serviceHealthQuery.isFetching}
               onClick={refetchDashboard}
             >
               Làm mới
             </Button>
             {overview?.generatedAt ? (
-              <span className="ds-page-toolbar-meta">
-                Đồng bộ gần nhất: {formatDateTime(overview.generatedAt)}
-              </span>
+              <span className="ds-page-toolbar-meta">{formatDateTime(overview.generatedAt)}</span>
             ) : null}
           </div>
         </div>
       }
     >
-      {!hasOverviewData ? (
-        <SurfaceCard
-          eyebrow="Bảng điều khiển"
-          title="Chưa có dữ liệu vận hành"
-          description="Khung giao diện đã sẵn sàng nhưng dashboard chưa nhận được lô telemetry đầu tiên."
-        >
-          <EmptyState
-            title="Chưa có dữ liệu"
-            description="Hãy chờ đợt làm mới tiếp theo hoặc kiểm tra endpoint monitoring và service health đã được bật."
-            action={<Button onClick={refetchDashboard}>Làm mới dashboard</Button>}
-          />
-        </SurfaceCard>
-      ) : (
-        <div className="ds-dashboard-layout ds-dashboard-layout--snapshot">
-          <div className="ds-dashboard-span-8">
-            <DashboardHero
-              eyebrow="Trạng thái hệ thống"
-              title={
-                heroTone === 'healthy'
-                  ? 'Hệ thống đang ổn định'
-                  : heroTone === 'degraded'
-                    ? 'Một số tín hiệu cần chú ý'
-                    : 'Cần xử lý ngay'
-              }
-              description={
-                heroTone === 'healthy'
-                  ? 'Hệ thống đang phục vụ bình thường. Chỉ mở giám sát khi cần chẩn đoán sâu hơn.'
-                  : heroTone === 'degraded'
-                    ? 'Ít nhất một phụ thuộc, luồng dữ liệu hoặc cửa sổ freshness đang nằm ngoài ngưỡng mong đợi.'
-                    : 'Sự cố dịch vụ, incident đang hoạt động hoặc tín hiệu gần quá tải đang ảnh hưởng vận hành.'
-              }
-              tone={heroTone}
+      <div className="ds-ops-overview">
+        <section className={`ds-ops-alert-strip tone-${primaryAlert.tone}`}>
+          <div className="ds-ops-alert-copy">
+            <span className="ds-ops-alert-label">Ưu tiên hiện tại</span>
+            <strong>{primaryAlert.title}</strong>
+            <p>{primaryAlert.description}</p>
+          </div>
+          <div className="ds-ops-alert-actions">
+            <StatusBadge
               status={
-                <StatusBadge
-                  status={
-                    heroTone === 'critical'
-                      ? 'down'
-                      : heroTone === 'degraded'
-                        ? 'degraded'
-                        : 'healthy'
-                  }
-                />
+                primaryAlert.tone === 'danger'
+                  ? 'down'
+                  : primaryAlert.tone === 'warning'
+                    ? 'warning'
+                    : 'healthy'
               }
-              secondaryStatus={
-                overview ? (
-                  <StatusBadge
-                    status={riskStateToStatus(overview.capacityBaseline.currentRiskState)}
-                  />
-                ) : null
-              }
-              stats={[
-                { label: 'Sự cố đang hoạt động', value: formatNumber(incidents.length) },
-                {
-                  label: 'Độ mới telemetry',
-                  value: overview ? getFreshnessLabel(overview.freshness).toUpperCase() : 'KHÔNG XÁC ĐỊNH',
-                },
-                {
-                  label: 'Sender ACK p95',
-                  value: formatMs(overview?.systemOverview.senderAckP95Ms),
-                },
-              ]}
-              primaryActionLabel="Mở giám sát"
-              onPrimaryAction={() => navigate('/monitoring')}
-              secondaryActionLabel="Sức khỏe dịch vụ"
-              onSecondaryAction={() => navigate('/services/health')}
             />
+            <Button type="primary" onClick={() => navigate(primaryAlert.actionTo)}>
+              {primaryAlert.actionLabel}
+            </Button>
           </div>
+        </section>
 
-          <div className="ds-dashboard-span-4">
-            <DashboardQuickActions
-              onCreateUser={() => navigate('/users')}
-              onSendBroadcast={() => navigate('/services/email-templates')}
-              onCreateGroup={() => navigate('/users')}
-            />
-          </div>
-
-          {metricCards.map((metric) => (
-            <div key={metric.id} className="ds-dashboard-span-3">
-              <MetricCard
-                label={metric.label}
-                value={metric.value}
-                changeLabel={metric.changeLabel}
-                trendDirection={metric.trendDirection}
-                trendCaption={metric.trendCaption}
-                tone={metric.tone}
-                onClick={metric.onClick}
-                sparkline={metric.sparkline}
-              />
-            </div>
+        <section className="ds-ops-summary-grid" aria-label="Tóm tắt nhanh">
+          {metrics.map((metric) => (
+            <button
+              key={metric.id}
+              type="button"
+              className="ds-ops-summary-item"
+              onClick={() => navigate(metric.route)}
+            >
+              <span className="ds-ops-summary-label">{metric.label}</span>
+              <strong className="ds-ops-summary-value">{metric.value}</strong>
+              <span className="ds-ops-summary-meta">{metric.hint}</span>
+              <StatusBadge status={toneToStatus(metric.tone)} />
+            </button>
           ))}
+        </section>
 
-          <div className="ds-dashboard-span-12">
-            {criticalInsights.length > 0 ? (
-              <IncidentBanner
-                title={criticalInsights[0].title}
-                description={criticalInsights[0].description}
-                tone={criticalInsights[0].tone === 'critical' ? 'danger' : 'warning'}
-                status={
-                  <div className="ds-page-toolbar-group">
-                    <StatusBadge status={overview ? getFreshnessLabel(overview.freshness) : 'unknown'} />
-                    <StatusBadge
-                      status={
-                        (servicesSummary?.down ?? 0) > 0
-                          ? 'down'
-                          : (servicesSummary?.degraded ?? 0) > 0
-                            ? 'degraded'
-                            : 'healthy'
-                      }
-                    />
+        <div className="ds-ops-grid ds-ops-grid--two-column">
+          <section className="ds-ops-panel">
+            <div className="ds-ops-panel-header">
+              <div>
+                <h2>Hàng đợi xử lý</h2>
+                <p>Những mục ảnh hưởng trực tiếp tới vận hành.</p>
+              </div>
+            </div>
+            <div className="ds-ops-list">
+              {[
+                ...(pendingUsers > 0
+                  ? [
+                      {
+                        id: 'pending-users',
+                        title: `${pendingUsers} tài khoản chờ xác minh`,
+                        description: 'Kiểm tra danh sách tài khoản cần xử lý thủ công.',
+                        route: '/users',
+                        status: 'warning',
+                      },
+                    ]
+                  : []),
+                ...insights.map((item) => ({
+                  id: item.id,
+                  title: item.title,
+                  description: item.description,
+                  route: item.ctaTo,
+                  status:
+                    item.tone === 'critical'
+                      ? 'down'
+                      : item.tone === 'warning'
+                        ? 'warning'
+                        : 'healthy',
+                })),
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="ds-ops-list-row"
+                  onClick={() => navigate(item.route)}
+                >
+                  <div>
+                    <strong>{item.title}</strong>
+                    <p>{item.description}</p>
                   </div>
-                }
-                actions={
-                  <Button type="primary" onClick={() => navigate(criticalInsights[0].ctaTo)}>
-                    {criticalInsights[0].ctaLabel}
-                  </Button>
-                }
-              >
-                {criticalInsights.length > 1 ? (
-                  <div className="monitoring-warning-group-list">
-                    {criticalInsights.slice(1).map((item) => (
-                      <div key={item.id} className="monitoring-warning-group-item">
-                        <span>{item.title}</span>
-                        <strong>{item.tone === 'critical' ? 'Leo thang' : 'Xem lại'}</strong>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </IncidentBanner>
-            ) : (
-              <DashboardInsightPanel insights={insights} />
-            )}
-          </div>
+                  <StatusBadge status={item.status} />
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="ds-ops-panel">
+            <div className="ds-ops-panel-header">
+              <div>
+                <h2>Trạng thái hệ thống</h2>
+                <p>Chỉ số phụ trợ để đối chiếu nhanh trước khi điều tra sâu.</p>
+              </div>
+            </div>
+            <dl className="ds-ops-fact-list">
+              <div>
+                <dt>Telemetry</dt>
+                <dd>
+                  <StatusBadge status={overview ? getFreshnessLabel(overview.freshness) : 'unknown'} />
+                </dd>
+              </div>
+              <div>
+                <dt>Capacity baseline</dt>
+                <dd>
+                  <StatusBadge
+                    status={overview ? riskStateToStatus(overview.capacityBaseline.currentRiskState) : 'unknown'}
+                  />
+                </dd>
+              </div>
+              <div>
+                <dt>Lỗi gửi tin</dt>
+                <dd>{formatRate(overview?.realtimeHealth.deliveryFailuresPerMinute, '/phút')}</dd>
+              </div>
+              <div>
+                <dt>Resync</dt>
+                <dd>{formatRate(overview?.realtimeHealth.resyncsPerMinute, '/phút')}</dd>
+              </div>
+              <div>
+                <dt>Biến động reliability</dt>
+                <dd>{formatDeltaLabel(reliabilityTrend.delta)}</dd>
+              </div>
+              <div>
+                <dt>Ảnh chụp gần nhất</dt>
+                <dd>{overview?.generatedAt ? formatDateTime(overview.generatedAt) : '-'}</dd>
+              </div>
+            </dl>
+          </section>
         </div>
-      )}
+
+        <section className="ds-ops-panel">
+          <div className="ds-ops-panel-header">
+            <div>
+              <h2>Hoạt động gần nhất</h2>
+              <p>Luồng sự cố, cảnh báo và dịch vụ cần theo dõi.</p>
+            </div>
+            <Button type="link" onClick={() => navigate('/audit')}>
+              Mở audit trail
+            </Button>
+          </div>
+          <div className="ds-ops-activity-list">
+            {activityTimeline.slice(0, 6).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`ds-ops-activity-row ${item.highlight ? 'is-highlighted' : ''}`}
+                onClick={() => navigate(item.route)}
+              >
+                <div className="ds-ops-activity-main">
+                  <strong>{item.title}</strong>
+                  <p>{item.description}</p>
+                </div>
+                <div className="ds-ops-activity-side">
+                  <span>{formatDateTime(item.timestamp)}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
     </PageShell>
   );
 };

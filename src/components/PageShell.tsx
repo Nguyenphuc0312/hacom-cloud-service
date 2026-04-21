@@ -1,10 +1,11 @@
 import { Typography } from 'antd';
 import type { ReactNode } from 'react';
+
 import {
   PageHeader,
-  PageHeaderTitle,
   PageHeaderDescription,
   PageHeaderMeta,
+  PageHeaderTitle,
 } from '@/components/PageHeader';
 
 const { Text } = Typography;
@@ -14,13 +15,21 @@ interface PageShellProps {
   description?: ReactNode;
   headerExtra?: ReactNode;
   children: ReactNode;
+  eyebrow?: ReactNode;
 }
 
-export const PageShell = ({ title, description, headerExtra, children }: PageShellProps) => {
+export const PageShell = ({
+  title,
+  description,
+  headerExtra,
+  children,
+  eyebrow,
+}: PageShellProps) => {
   return (
     <section className="ds-page-shell">
       <PageHeader>
         <div>
+          {eyebrow ? <div className="ds-page-eyebrow">{eyebrow}</div> : null}
           <PageHeaderTitle>
             <Typography.Title level={1} style={{ margin: 0 }}>
               {title}

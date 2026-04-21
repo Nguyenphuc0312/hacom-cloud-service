@@ -1,9 +1,11 @@
 import {
   AuditOutlined,
   DashboardOutlined,
+  DatabaseOutlined,
   FileTextOutlined,
   KeyOutlined,
   SafetyCertificateOutlined,
+  SettingOutlined,
   SolutionOutlined,
   TeamOutlined,
   ThunderboltOutlined,
@@ -15,7 +17,6 @@ import type { Role } from '@/api/types';
 export interface NavItem {
   key: string;
   label: string;
-  description?: string;
   icon: ReactNode;
   section: SidebarSectionKey;
   route: string;
@@ -25,142 +26,166 @@ export interface NavItem {
 }
 
 export type SidebarSectionKey =
-  | 'analytics'
-  | 'users'
-  | 'conversations'
+  | 'overview'
+  | 'identity-access'
+  | 'operations'
   | 'system'
-  | 'settings'
-  | 'support';
+  | 'configuration';
 
 export interface SidebarSection {
   key: SidebarSectionKey;
   label: string;
-  description?: string;
   icon?: ReactNode;
 }
 
 export const SIDEBAR_SECTIONS: SidebarSection[] = [
   {
-    key: 'analytics',
+    key: 'overview',
     label: 'Tổng quan',
-    description: 'Bảng điều khiển và giám sát',
     icon: <DashboardOutlined />,
   },
   {
-    key: 'users',
-    label: 'Người dùng',
-    description: 'Danh tính và quyền truy cập',
+    key: 'identity-access',
+    label: 'Danh tính và truy cập',
     icon: <TeamOutlined />,
   },
   {
-    key: 'conversations',
-    label: 'Hội thoại',
-    description: 'Luồng xử lý tin nhắn',
-    icon: <FileTextOutlined />,
+    key: 'operations',
+    label: 'Vận hành',
+    icon: <DatabaseOutlined />,
   },
   {
     key: 'system',
     label: 'Hệ thống',
-    description: 'Sức khỏe hệ thống và nhật ký',
     icon: <ThunderboltOutlined />,
   },
   {
-    key: 'settings',
+    key: 'configuration',
     label: 'Cấu hình',
-    description: 'Thiết lập hạ tầng',
-    icon: <FileTextOutlined />,
+    icon: <SettingOutlined />,
   },
 ];
 
 export const navItems: NavItem[] = [
   {
     key: 'dashboard',
-    label: 'Bảng điều khiển',
-    description: 'Ảnh chụp nhanh hệ thống và các việc cần xử lý tiếp theo.',
+    label: 'Dashboard',
     icon: <DashboardOutlined />,
-    section: 'analytics',
+    section: 'overview',
     route: '/',
   },
   {
-    key: 'monitoring-overview',
-    label: 'Giám sát',
-    description: 'Sức khỏe thời gian thực, lỗi và trạng thái phụ thuộc.',
-    icon: <ThunderboltOutlined />,
-    section: 'analytics',
-    route: '/monitoring',
+    key: 'users',
+    label: 'Tài khoản',
+    icon: <TeamOutlined />,
+    section: 'identity-access',
+    route: '/users',
+  },
+  {
+    key: 'access-requests',
+    label: 'Yêu cầu truy cập',
+    icon: <SafetyCertificateOutlined />,
+    section: 'identity-access',
+    route: '/access-requests',
   },
   {
     key: 'authority',
-    label: 'Phân quyền quản trị',
-    description: 'Vai trò chuẩn và phần ghi đè quyền quản trị.',
+    label: 'Quyền và vai trò',
     icon: <KeyOutlined />,
-    section: 'users',
+    section: 'identity-access',
     route: '/authority',
     roles: ['super_admin'],
   },
   {
-    key: 'users',
-    label: 'Người dùng',
-    description: 'Tài khoản admin, trạng thái hiện diện và quyền truy cập.',
-    icon: <TeamOutlined />,
-    section: 'users',
-    route: '/users',
-  },
-  {
     key: 'hr-employees',
-    label: 'Danh bạ nhân sự',
-    description: 'Hồ sơ nhân viên, import và cấp tài khoản.',
+    label: 'Nhân sự',
     icon: <SolutionOutlined />,
-    section: 'users',
+    section: 'identity-access',
     route: '/hr-employees',
   },
   {
     key: 'conversations',
-    label: 'Hội thoại',
-    description: 'Danh sách hội thoại và workspace xử lý tin nhắn.',
+    label: 'Tra cứu hội thoại',
     icon: <FileTextOutlined />,
-    section: 'conversations',
+    section: 'operations',
     route: '/conversations',
   },
   {
-    key: 'email-templates',
-    label: 'Dịch vụ',
-    description: 'Sức khỏe dịch vụ, SMTP và mẫu email.',
-    icon: <FileTextOutlined />,
-    section: 'settings',
-    route: '/services/health',
-  },
-  {
-    key: 'access-requests',
-    label: 'Truy cập IP',
-    description: 'Duyệt yêu cầu IP đang chờ, đã duyệt và đã từ chối.',
-    icon: <SafetyCertificateOutlined />,
-    section: 'system',
-    route: '/access-requests',
+    key: 'logs',
+    label: 'System logs',
+    icon: <DatabaseOutlined />,
+    section: 'operations',
+    route: '/logs',
   },
   {
     key: 'audit',
-    label: 'Nhật ký kiểm toán',
-    description: 'Thao tác quản trị, yêu cầu và sự kiện bảo mật.',
+    label: 'Audit trail',
     icon: <AuditOutlined />,
-    section: 'system',
+    section: 'operations',
     route: '/audit',
+  },
+  {
+    key: 'monitoring-overview',
+    label: 'Giám sát runtime',
+    icon: <ThunderboltOutlined />,
+    section: 'system',
+    route: '/monitoring',
+  },
+  {
+    key: 'services',
+    label: 'Trạng thái dịch vụ',
+    icon: <DatabaseOutlined />,
+    section: 'system',
+    route: '/services/health',
+  },
+  {
+    key: 'settings',
+    label: 'System settings',
+    icon: <SettingOutlined />,
+    section: 'configuration',
+    route: '/settings',
+    children: [
+      {
+        key: 'settings-smtp',
+        label: 'SMTP',
+        icon: <FileTextOutlined />,
+        section: 'configuration',
+        route: '/settings/smtp',
+      },
+      {
+        key: 'settings-email-templates',
+        label: 'Mẫu email',
+        icon: <FileTextOutlined />,
+        section: 'configuration',
+        route: '/settings/email-templates',
+      },
+      {
+        key: 'settings-system',
+        label: 'Thiết lập hệ thống',
+        icon: <SettingOutlined />,
+        section: 'configuration',
+        route: '/settings/system',
+      },
+    ],
   },
 ];
 
 export const breadcrumbNameMap: Record<string, string> = {
-  '/': 'Bảng điều khiển',
-  '/authority': 'Phân quyền quản trị',
-  '/users': 'Người dùng',
-  '/hr-employees': 'Danh bạ nhân sự',
-  '/conversations': 'Hội thoại',
-  '/access-requests': 'Truy cập IP',
-  '/audit': 'Nhật ký kiểm toán',
-  '/monitoring': 'Giám sát',
-  '/services': 'Dịch vụ',
-  '/services/smtp': 'SMTP',
-  '/services/email-templates': 'Mẫu email',
+  '/': 'Dashboard',
+  '/authority': 'Quyền và vai trò',
+  '/users': 'Tài khoản',
+  '/hr-employees': 'Nhân sự',
+  '/access-requests': 'Yêu cầu truy cập',
+  '/conversations': 'Tra cứu hội thoại',
+  '/logs': 'System logs',
+  '/audit': 'Audit trail',
+  '/monitoring': 'Giám sát runtime',
+  '/services': 'Trạng thái dịch vụ',
   '/services/health': 'Sức khỏe dịch vụ',
+  '/settings': 'System settings',
+  '/settings/smtp': 'SMTP',
+  '/settings/email-templates': 'Mẫu email',
+  '/settings/system': 'Thiết lập hệ thống',
 };
 
 const flattenNavItems = (items: NavItem[]): NavItem[] =>
@@ -185,38 +210,43 @@ export const resolveNavigationContext = (pathname: string) => {
       .map((_segment, index, parts) => `/${parts.slice(0, index + 1).join('/')}`),
   ]
     .map((route) => ({
-          route,
-          label:
-            breadcrumbNameMap[route] ??
-            (route.startsWith('/users/')
-          ? 'Chi tiết người dùng'
+      route,
+      label:
+        breadcrumbNameMap[route] ??
+        (route.startsWith('/users/')
+          ? 'Chi tiết tài khoản'
           : route.startsWith('/services/')
             ? 'Chi tiết dịch vụ'
-            : null),
+            : route.startsWith('/settings/')
+              ? 'Chi tiết cấu hình'
+              : null),
     }))
     .filter((entry): entry is { route: string; label: string } => Boolean(entry.label));
 
   return {
     item,
     section,
-    title: item?.label ?? 'Bảng điều khiển',
-    description: item?.description ?? 'Không gian quan sát và điều khiển vận hành',
+    title: item?.label ?? 'Dashboard',
     sectionLabel: section?.label ?? 'Tổng quan',
-    sectionDescription: section?.description ?? 'Không gian làm việc',
     breadcrumbs,
   };
 };
 
 export const pickSelectedMenuKey = (pathname: string): string => {
   if (pathname === '/') return 'dashboard';
-  if (pathname.startsWith('/monitoring')) return 'monitoring-overview';
-  if (pathname.startsWith('/authority')) return 'authority';
   if (pathname.startsWith('/users')) return 'users';
+  if (pathname.startsWith('/access-requests')) return 'access-requests';
+  if (pathname.startsWith('/authority')) return 'authority';
   if (pathname.startsWith('/hr-employees')) return 'hr-employees';
   if (pathname.startsWith('/conversations')) return 'conversations';
-  if (pathname.startsWith('/services')) return 'email-templates';
-  if (pathname.startsWith('/access-requests')) return 'access-requests';
+  if (pathname.startsWith('/logs')) return 'logs';
   if (pathname.startsWith('/audit')) return 'audit';
+  if (pathname.startsWith('/monitoring')) return 'monitoring-overview';
+  if (pathname.startsWith('/services')) return 'services';
+  if (pathname.startsWith('/settings/email-templates')) return 'settings-email-templates';
+  if (pathname.startsWith('/settings/system')) return 'settings-system';
+  if (pathname.startsWith('/settings/smtp')) return 'settings-smtp';
+  if (pathname.startsWith('/settings')) return 'settings';
   return 'dashboard';
 };
 
@@ -237,26 +267,35 @@ export interface CommandRouteItem {
 export const commandRouteItems: CommandRouteItem[] = [
   {
     id: 'go-dashboard',
-    label: 'Bảng điều khiển',
-    description: 'Chỉ số tổng quan và ảnh chụp nhanh hệ thống',
+    label: 'Dashboard',
+    description: 'Tình trạng hệ thống và hạng mục cần xử lý',
     category: 'Điều hướng',
     icon: <DashboardOutlined />,
     keywords: ['home', 'overview', 'dashboard'],
     route: '/',
   },
   {
-    id: 'go-monitoring-overview',
-    label: 'Tổng quan giám sát',
-    description: 'Mở màn hình giám sát tổng quan cho vận hành',
-    category: 'Hệ thống',
-    icon: <ThunderboltOutlined />,
-    keywords: ['monitoring', 'realtime', 'correctness', 'overview'],
-    route: '/monitoring',
+    id: 'go-users',
+    label: 'Tài khoản',
+    description: 'Tra cứu tài khoản admin và trạng thái truy cập',
+    category: 'Điều hướng',
+    icon: <TeamOutlined />,
+    keywords: ['users', 'accounts', 'admins'],
+    route: '/users',
+  },
+  {
+    id: 'go-access-requests',
+    label: 'Yêu cầu truy cập',
+    description: 'Duyệt các yêu cầu IP và quyền truy cập',
+    category: 'Điều hướng',
+    icon: <SafetyCertificateOutlined />,
+    keywords: ['ip', 'access', 'requests', 'approval', 'review'],
+    route: '/access-requests',
   },
   {
     id: 'go-authority',
-    label: 'Phân quyền quản trị',
-    description: 'Quản lý vai trò chuẩn và phần ghi đè quyền',
+    label: 'Quyền và vai trò',
+    description: 'Quản trị vai trò chuẩn và phạm vi truy cập',
     category: 'Điều hướng',
     icon: <KeyOutlined />,
     keywords: ['authority', 'admin', 'permissions', 'roles'],
@@ -264,18 +303,9 @@ export const commandRouteItems: CommandRouteItem[] = [
     roles: ['super_admin'],
   },
   {
-    id: 'go-users',
-    label: 'Người dùng / Tài khoản',
-    description: 'Quản lý người dùng quản trị và quyền hạn',
-    category: 'Điều hướng',
-    icon: <TeamOutlined />,
-    keywords: ['users', 'accounts', 'admins'],
-    route: '/users',
-  },
-  {
     id: 'go-hr-employees',
     label: 'Nhân sự',
-    description: 'Xem và quản lý hồ sơ nhân viên',
+    description: 'Đối chiếu hồ sơ nhân sự và cấp tài khoản',
     category: 'Điều hướng',
     icon: <SolutionOutlined />,
     keywords: ['hr', 'employees', 'people'],
@@ -283,56 +313,74 @@ export const commandRouteItems: CommandRouteItem[] = [
   },
   {
     id: 'go-conversations',
-    label: 'Hội thoại',
-    description: 'Mở workspace chat để xử lý conversation đang mở',
+    label: 'Tra cứu hội thoại',
+    description: 'Đọc lịch sử chat, kiểm tra user context và xử lý moderation',
     category: 'Điều hướng',
     icon: <FileTextOutlined />,
     keywords: ['chat', 'conversation', 'messages', 'support'],
     route: '/conversations',
   },
   {
-    id: 'go-smtp-settings',
-    label: 'Cấu hình SMTP',
-    description: 'Thiết lập gửi email và thông tin xác thực',
-    category: 'Cấu hình',
-    icon: <FileTextOutlined />,
-    keywords: ['smtp', 'mail', 'settings'],
-    route: '/services/smtp',
+    id: 'go-logs',
+    label: 'System logs',
+    description: 'Tra cứu log runtime theo service, level và correlation',
+    category: 'Điều hướng',
+    icon: <DatabaseOutlined />,
+    keywords: ['logs', 'system', 'runtime', 'trace'],
+    route: '/logs',
   },
   {
-    id: 'go-email-templates',
-    label: 'Mẫu email',
-    description: 'Quản lý các mẫu email hệ thống',
-    category: 'Cấu hình',
-    icon: <FileTextOutlined />,
-    keywords: ['email', 'templates', 'content'],
-    route: '/services/email-templates',
+    id: 'go-audit',
+    label: 'Audit trail',
+    description: 'Theo dõi actor, action, target và thay đổi quản trị',
+    category: 'Điều hướng',
+    icon: <AuditOutlined />,
+    keywords: ['audit', 'events', 'history'],
+    route: '/audit',
+  },
+  {
+    id: 'go-monitoring-overview',
+    label: 'Giám sát runtime',
+    description: 'Theo dõi telemetry, freshness và tình trạng runtime',
+    category: 'Hệ thống',
+    icon: <ThunderboltOutlined />,
+    keywords: ['monitoring', 'realtime', 'correctness', 'overview'],
+    route: '/monitoring',
   },
   {
     id: 'go-service-health',
-    label: 'Sức khỏe dịch vụ / Giám sát',
-    description: 'Kiểm tra trạng thái tích hợp và API',
+    label: 'Trạng thái dịch vụ',
+    description: 'Kiểm tra trạng thái phụ thuộc, độ trễ và build đang chạy',
     category: 'Hệ thống',
-    icon: <ThunderboltOutlined />,
+    icon: <DatabaseOutlined />,
     keywords: ['health', 'monitoring', 'status', 'services'],
     route: '/services/health',
   },
   {
-    id: 'go-logs',
-    label: 'Nhật ký kiểm toán',
-    description: 'Mở nhật ký kiểm toán và sự kiện bảo mật',
-    category: 'Điều hướng',
-    icon: <AuditOutlined />,
-    keywords: ['logs', 'audit', 'events'],
-    route: '/audit',
+    id: 'go-smtp-settings',
+    label: 'Cấu hình SMTP',
+    description: 'Thiết lập gửi mail và xác thực',
+    category: 'Cấu hình',
+    icon: <FileTextOutlined />,
+    keywords: ['smtp', 'mail', 'settings'],
+    route: '/settings/smtp',
   },
   {
-    id: 'go-access-requests',
-    label: 'Yêu cầu truy cập IP',
-    description: 'Duyệt các yêu cầu IP đang chờ, đã duyệt và đã từ chối',
-    category: 'Hệ thống',
-    icon: <SafetyCertificateOutlined />,
-    keywords: ['ip', 'access', 'requests', 'approval', 'review'],
-    route: '/access-requests',
+    id: 'go-email-templates',
+    label: 'Mẫu email',
+    description: 'Quản lý nội dung email hệ thống',
+    category: 'Cấu hình',
+    icon: <FileTextOutlined />,
+    keywords: ['email', 'templates', 'content'],
+    route: '/settings/email-templates',
+  },
+  {
+    id: 'go-system-settings',
+    label: 'Thiết lập hệ thống',
+    description: 'Xem môi trường, chế độ cập nhật và guardrail vận hành',
+    category: 'Cấu hình',
+    icon: <SettingOutlined />,
+    keywords: ['settings', 'system', 'environment', 'ops'],
+    route: '/settings/system',
   },
 ];

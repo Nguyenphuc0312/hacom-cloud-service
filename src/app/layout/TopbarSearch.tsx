@@ -16,7 +16,7 @@ export const TopbarSearch: React.FC<TopbarSearchProps> = ({ onOpen }) => {
     >
       <SearchOutlined className="ds-topbar-search-icon" aria-hidden />
       <span className="ds-topbar-search-copy">
-        <span className="ds-topbar-search-label">Tìm trang, thao tác và cài đặt</span>
+        <span className="ds-topbar-search-label">Tìm module, thao tác, cấu hình</span>
       </span>
       <span className="ds-topbar-search-shortcuts" aria-hidden>
         <kbd className="ds-topbar-search-shortcut">Ctrl K</kbd>

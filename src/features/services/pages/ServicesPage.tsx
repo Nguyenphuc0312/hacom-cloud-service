@@ -1,9 +1,9 @@
 import { ReloadOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Tabs, Typography } from 'antd';
+import { Button } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useEffect, useMemo } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { serviceHealthClient } from '@/api/clients';
 import { queryKeys } from '@/api/queryKeys';
@@ -15,34 +15,16 @@ import { EmptyState, QueryStateView } from '@/components/QueryStates';
 import { PageShell } from '@/components/PageShell';
 import { StatusBadge } from '@/components/StatusBadge';
 import { SurfaceCard } from '@/components/ui/SurfaceCard';
-import { EmailTemplatesCard } from '../components/EmailTemplatesCard';
-import { SmtpSettingsCard } from '../components/SmtpSettingsCard';
 import { formatDateTime } from '@/utils/date';
 import { formatMs } from '@/utils/formatters';
 
-const SECTION_KEYS = ['health', 'smtp', 'email-templates'] as const;
-
 export const ServicesPage = () => {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { section } = useParams<{ section?: string }>();
-  const activeSection = SECTION_KEYS.includes(
-    (section ?? 'health') as (typeof SECTION_KEYS)[number],
-  )
-    ? (section ?? 'health')
-    : 'health';
-
-  useEffect(() => {
-    if (!section || !SECTION_KEYS.includes(section as (typeof SECTION_KEYS)[number])) {
-      navigate('/services/health', { replace: true });
-    }
-  }, [navigate, section]);
 
   const healthQuery = useQuery({
     queryKey: queryKeys.serviceHealth,
     queryFn: serviceHealthClient.getServiceHealth,
-    enabled: activeSection === 'health',
-    refetchInterval: activeSection === 'health' ? 30_000 : false,
+    refetchInterval: 30_000,
   });
 
   const focusedService = searchParams.get('service')?.trim() ?? '';
@@ -95,55 +77,53 @@ export const ServicesPage = () => {
       {
         title: 'Trạng thái',
         dataIndex: 'status',
-        render: (value: string) => <StatusBadge status={value} mode="badge" />,
+        width: 140,
+        render: (value: string) => <StatusBadge status={value} />,
       },
       {
         title: 'Kiểm tra lúc',
         dataIndex: 'checkedAt',
+        width: 188,
         render: (value: string) => formatDateTime(value),
       },
       {
         title: 'Độ trễ',
         dataIndex: 'latencyMs',
+        width: 120,
         render: (value: number) => formatMs(value),
       },
       {
-        title: 'Tóm tắt',
-        dataIndex: 'summary',
-        render: (value: string) => (
-          <Typography.Text ellipsis style={{ maxWidth: 260 }}>
-            {value}
-          </Typography.Text>
+        title: 'Thông tin chính',
+        key: 'summary',
+        render: (_, record) => (
+          <div className="ds-table-primary-cell">
+            <strong>{record.summary}</strong>
+            <span>{[record.version, record.build, record.env].filter(Boolean).join(' · ') || 'Không có metadata phát hành'}</span>
+          </div>
         ),
-      },
-      {
-        title: 'Version / Build / Môi trường',
-        key: 'meta',
-        render: (_, record) => {
-          const parts = [record.version, record.build, record.env].filter(Boolean);
-          return parts.length > 0 ? parts.join(' | ') : '-';
-        },
       },
     ],
     [],
   );
 
-  if (activeSection === 'health' && healthQuery.isLoading) {
+  if (healthQuery.isLoading && !healthQuery.data) {
     return (
       <PageShell
-      title="Dịch vụ"
-      description="Sức khỏe phụ thuộc và cấu hình dịch vụ."
+        eyebrow="Hệ thống"
+        title="Trạng thái dịch vụ"
+        description="Workspace theo dõi phụ thuộc, độ trễ và build đang chạy trong môi trường hiện tại."
       >
         <QueryStateView kind="loading" title="Đang tải sức khỏe dịch vụ..." />
       </PageShell>
     );
   }
 
-  if (activeSection === 'health' && healthQuery.isError) {
+  if (healthQuery.isError && !healthQuery.data) {
     return (
       <PageShell
-      title="Dịch vụ"
-      description="Sức khỏe phụ thuộc và cấu hình dịch vụ."
+        eyebrow="Hệ thống"
+        title="Trạng thái dịch vụ"
+        description="Workspace theo dõi phụ thuộc, độ trễ và build đang chạy trong môi trường hiện tại."
       >
         <QueryStateView
           kind="error"
@@ -160,122 +140,100 @@ export const ServicesPage = () => {
 
   return (
     <PageShell
-      title="Dịch vụ"
-      description="Quản lý sức khỏe dịch vụ, runtime SMTP và kiểm soát mẫu gửi ra ngoài trong một workspace gọn."
+      eyebrow="Hệ thống"
+      title="Trạng thái dịch vụ"
+      description="Bề mặt service health chỉ giữ runtime status; toàn bộ cấu hình đã được tách sang khu System settings."
       headerExtra={
         <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
-          {activeSection === 'health' ? (
-            <Button
-              icon={<ReloadOutlined />}
-              loading={healthQuery.isFetching}
-              onClick={() => {
-                void healthQuery.refetch();
-              }}
-            >
-              Làm mới
-            </Button>
-          ) : null}
+          <Button
+            icon={<ReloadOutlined />}
+            loading={healthQuery.isFetching}
+            onClick={() => {
+              void healthQuery.refetch();
+            }}
+          >
+            Làm mới
+          </Button>
         </div>
       }
     >
-      <Tabs
-        className="ds-tab-page"
-        activeKey={activeSection}
-        onChange={(nextKey) => navigate(`/services/${nextKey}`)}
-        items={[
-          {
-            key: 'health',
-            label: 'Sức khỏe dịch vụ',
-            children: (
-              <div className="ds-tab-page">
-                {focusedService ? (
-                  <SurfaceCard
-                    eyebrow="Dịch vụ đang tập trung"
-                    title={
-                      focusedServiceRecord
-                        ? focusedServiceRecord.name
-                        : `Không có dịch vụ nào khớp '${focusedService}'`
-                    }
-                    description={
-                      focusedServiceRecord
-                        ? focusedServiceRecord.summary || 'Chưa có mô tả tóm tắt.'
-                        : 'Tên dịch vụ có thể đã thay đổi hoặc không xuất hiện trong lần kiểm tra gần nhất.'
-                    }
-                    status={
-                      focusedServiceRecord ? <StatusBadge status={focusedServiceRecord.status} /> : null
-                    }
-                    actions={
-                      <Button size="small" onClick={clearFocusedService}>
-                        Bỏ tập trung
-                      </Button>
-                    }
-                  />
-                ) : null}
+      <div className="ds-service-health-stack">
+        {focusedService ? (
+          <SurfaceCard
+            eyebrow="Dịch vụ đang tập trung"
+            title={
+              focusedServiceRecord
+                ? focusedServiceRecord.name
+                : `Không có dịch vụ nào khớp '${focusedService}'`
+            }
+            description={
+              focusedServiceRecord
+                ? focusedServiceRecord.summary || 'Chưa có mô tả tóm tắt.'
+                : 'Tên dịch vụ có thể đã thay đổi hoặc không xuất hiện trong lần kiểm tra gần nhất.'
+            }
+            status={focusedServiceRecord ? <StatusBadge status={focusedServiceRecord.status} /> : null}
+            actions={
+              <Button size="small" onClick={clearFocusedService}>
+                Bỏ tập trung
+              </Button>
+            }
+          />
+        ) : null}
 
-                <div className="ds-data-summary-grid">
-                  <div className="ds-summary-tile">
-                    <span className="ds-summary-tile-label">Ổn định</span>
-                    <strong className="ds-summary-tile-value">{data?.summary.up ?? 0}</strong>
-                    <span className="ds-summary-tile-meta">Phụ thuộc đều khả dụng hoàn toàn ở lần chạy gần nhất.</span>
-                  </div>
-                  <div className="ds-summary-tile">
-                    <span className="ds-summary-tile-label">Suy giảm</span>
-                    <strong className="ds-summary-tile-value">{data?.summary.degraded ?? 0}</strong>
-                    <span className="ds-summary-tile-meta">Vẫn phục vụ nhưng nằm ngoài ngưỡng độ trễ hoặc chất lượng kỳ vọng.</span>
-                  </div>
-                  <div className="ds-summary-tile">
-                    <span className="ds-summary-tile-label">Ngừng hoạt động</span>
-                    <strong className="ds-summary-tile-value">{data?.summary.down ?? 0}</strong>
-                    <span className="ds-summary-tile-meta">Cần operator xử lý hoặc leo thang cho dịch vụ phụ thuộc.</span>
-                  </div>
-                </div>
+        <div className="ds-data-summary-grid">
+          <div className="ds-summary-tile">
+            <span className="ds-summary-tile-label">Ổn định</span>
+            <strong className="ds-summary-tile-value">{data?.summary.up ?? 0}</strong>
+            <span className="ds-summary-tile-meta">
+              Phụ thuộc đều khả dụng hoàn toàn ở lần chạy gần nhất.
+            </span>
+          </div>
+          <div className="ds-summary-tile">
+            <span className="ds-summary-tile-label">Suy giảm</span>
+            <strong className="ds-summary-tile-value">{data?.summary.degraded ?? 0}</strong>
+            <span className="ds-summary-tile-meta">
+              Vẫn phục vụ nhưng đã vượt ra ngoài ngưỡng latency hoặc reliability.
+            </span>
+          </div>
+          <div className="ds-summary-tile">
+            <span className="ds-summary-tile-label">Ngừng hoạt động</span>
+            <strong className="ds-summary-tile-value">{data?.summary.down ?? 0}</strong>
+            <span className="ds-summary-tile-meta">
+              Những mục này phải được operator hoặc owner xử lý trước.
+            </span>
+          </div>
+        </div>
 
-                <DataTableShell
-                  title="Sức khỏe phụ thuộc"
-                  meta="Bề mặt chính cho trạng thái phụ thuộc, độ trễ và metadata phát hành."
-                  toolbar={
-                    <DataTableToolbar>
-                      <span className="ds-toolbar-summary">
-                        {focusedService
-                          ? `Dịch vụ đang tập trung: ${focusedService}`
-                          : `${data?.summary.total ?? 0} dịch vụ đang theo dõi · Đồng bộ gần nhất ${
-                              healthQuery.dataUpdatedAt
-                                ? formatDateTime(new Date(healthQuery.dataUpdatedAt).toISOString())
-                                : '-'
-                            }`}
-                      </span>
-                    </DataTableToolbar>
-                  }
-                >
-                  <AdminTable
-                    rowKey="name"
-                    columns={columns}
-                    minHeight={300}
-                    dataSource={healthItemsForTable}
-                    rowClassName={(record) =>
-                      record.name.toLowerCase() === focusedServiceNormalized
-                        ? 'service-row-focused'
-                        : ''
-                    }
-                    pagination={{ pageSize: 10 }}
-                    emptyNode={<EmptyState description="Chưa có dữ liệu sức khỏe dịch vụ." />}
-                  />
-                </DataTableShell>
-              </div>
-            ),
-          },
-          {
-            key: 'smtp',
-            label: 'Cấu hình SMTP',
-            children: <SmtpSettingsCard />,
-          },
-          {
-            key: 'email-templates',
-            label: 'Mẫu email',
-            children: <EmailTemplatesCard />,
-          },
-        ]}
-      />
+        <DataTableShell
+          title="Dependency status"
+          meta="Danh sách chính ưu tiên trạng thái, độ trễ và phát hành; metadata sâu chỉ hiển thị trong nội dung dòng."
+          toolbar={
+            <DataTableToolbar>
+              <span className="ds-toolbar-summary">
+                {focusedService
+                  ? `Dịch vụ đang tập trung: ${focusedService}`
+                  : `${data?.summary.total ?? 0} dịch vụ đang theo dõi · Đồng bộ gần nhất ${
+                      healthQuery.dataUpdatedAt
+                        ? formatDateTime(new Date(healthQuery.dataUpdatedAt).toISOString())
+                        : '-'
+                    }`}
+              </span>
+            </DataTableToolbar>
+          }
+        >
+          <AdminTable
+            rowKey="name"
+            columns={columns}
+            minHeight={320}
+            dataSource={healthItemsForTable}
+            rowClassName={(record) =>
+              record.name.toLowerCase() === focusedServiceNormalized ? 'service-row-focused' : ''
+            }
+            pagination={{ pageSize: 10 }}
+            emptyNode={<EmptyState description="Chưa có dữ liệu sức khỏe dịch vụ." />}
+          />
+        </DataTableShell>
+      </div>
     </PageShell>
   );
 };

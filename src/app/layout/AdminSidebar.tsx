@@ -14,9 +14,7 @@ interface AdminSidebarProps {
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({ mobile = false, id }) => {
   const user = useAuthStore((state) => state.user);
   const roleLabel = toDisplayRole(user?.role).replace('_', ' ');
-  const visibleItems = navItems.filter(
-    (item) => !item.roles || hasSomeRole(user?.role, item.roles),
-  );
+  const visibleItems = navItems.filter((item) => !item.roles || hasSomeRole(user?.role, item.roles));
   const sections = SIDEBAR_SECTIONS.map((section) => ({
     ...section,
     items: visibleItems.filter((item) => item.section === section.key),
@@ -28,11 +26,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ mobile = false, id }
       className={`ds-admin-sidebar ${mobile ? 'is-mobile' : ''}`}
       aria-label="Primary navigation"
     >
-      <div className="ds-admin-sidebar-logo" aria-label="Chat Admin Panel">
-        <span className="ds-sidebar-brand-mark">CA</span>
+      <div className="ds-admin-sidebar-logo" aria-label="Admin Operations Panel">
+        <span className="ds-sidebar-brand-mark">AO</span>
         <span className="ds-sidebar-brand-copy">
-          <strong>Chat Admin</strong>
-          <small>Control Center</small>
+          <strong>Admin Operations</strong>
+          <small>Internal control panel</small>
         </span>
       </div>
 
@@ -42,9 +40,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ mobile = false, id }
             <SidebarNavSection
               key={section.key}
               label={section.label}
-              description={section.description}
               icon={section.icon}
-              itemCount={section.items.length}
               items={section.items}
             />
           ))}

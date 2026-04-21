@@ -1,4 +1,4 @@
-import { ReloadOutlined } from '@ant-design/icons';
+import { EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Button, DatePicker, Form, Input, Space, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -8,18 +8,32 @@ import { useMemo, useState } from 'react';
 import { auditClient } from '@/api/clients';
 import { queryKeys } from '@/api/queryKeys';
 import type { AuditEntry, AuditQuery } from '@/api/types';
+import { AppTooltip } from '@/components/AppTooltip';
 import { DataTableShell } from '@/components/DataTableShell';
-import { DataTableToolbar } from '@/components/DataTableToolbar';
+import { DetailPanel } from '@/components/DetailPanel';
 import { FilterBar } from '@/components/FilterBar';
+import { IconActionButton } from '@/components/IconActionButton';
+import { JsonDiffDrawer } from '@/components/JsonDiffDrawer';
 import { EmptyState, QueryStateView } from '@/components/QueryStates';
 import { PageShell } from '@/components/PageShell';
 import { StatusBadge } from '@/components/StatusBadge';
 import { DataTable } from '@/components/ui/DataTable';
-import { formatDateTime } from '@/utils/date';
+import { formatDateTime, formatRelativeTime } from '@/utils/date';
 
 const getActiveFilterCount = (filters: AuditQuery) =>
   [filters.action, filters.actorEmail, filters.entityType, filters.source, filters.from, filters.to]
-    .filter(Boolean).length;
+    .filter(Boolean)
+    .length;
+
+const readMetaValue = (metadata: unknown, key: string): string | null => {
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  const record = metadata as Record<string, unknown>;
+  const value = record[key];
+  return typeof value === 'string' && value.trim() ? value : null;
+};
 
 export const AuditLogPage = () => {
   const [form] = Form.useForm();
@@ -27,6 +41,8 @@ export const AuditLogPage = () => {
     page: 1,
     limit: 20,
   });
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [diffOpen, setDiffOpen] = useState(false);
 
   const query = useQuery({
     queryKey: queryKeys.auditLogs(filters),
@@ -34,85 +50,61 @@ export const AuditLogPage = () => {
     placeholderData: keepPreviousData,
   });
 
-  const readMetaValue = (metadata: unknown, key: string): string | null => {
-    if (!metadata || typeof metadata !== 'object') {
-      return null;
-    }
-
-    const record = metadata as Record<string, unknown>;
-    const value = record[key];
-    return typeof value === 'string' && value.trim() ? value : null;
-  };
+  const selectedEntry = selectedEntryId
+    ? query.data?.items.find((entry) => entry.id === selectedEntryId) ?? null
+    : null;
 
   const columns = useMemo<ColumnsType<AuditEntry>>(
     () => [
       {
         title: 'Thời gian',
         dataIndex: 'time',
-        width: 188,
-        render: (value: string) => formatDateTime(value),
-      },
-      {
-        title: 'Người thao tác',
-        dataIndex: 'actorEmail',
-        render: (value: string | null) =>
-          value ? <Typography.Text strong>{value}</Typography.Text> : '-',
-      },
-      {
-        title: 'Hành động',
-        dataIndex: 'action',
-        render: (value: string) => <Typography.Text>{value}</Typography.Text>,
-      },
-      {
-        title: 'Đối tượng',
-        key: 'entity',
-        render: (_, record) => {
-          const type = record.entityType ?? '-';
-          const id = record.entityId ?? '-';
-
-          return (
-            <Space direction="vertical" size={0}>
-              <Typography.Text strong>{type}</Typography.Text>
-              <Typography.Text type="secondary">{id}</Typography.Text>
-            </Space>
-          );
-        },
-      },
-      {
-        title: 'Nguồn',
-        dataIndex: 'source',
-        render: (value: string | null) => (
-          <Typography.Text type="secondary">{value ?? '-'}</Typography.Text>
+        width: 172,
+        render: (value: string) => (
+          <AppTooltip title={formatDateTime(value)}>
+            <span>{formatRelativeTime(value)}</span>
+          </AppTooltip>
         ),
       },
       {
-        title: 'IP',
-        dataIndex: 'ipAddress',
-        render: (value: string | null | undefined) =>
-          value ? <Typography.Text code>{value}</Typography.Text> : '-',
+        title: 'Actor',
+        dataIndex: 'actorEmail',
+        render: (value: string | null) => (value ? <Typography.Text strong>{value}</Typography.Text> : '-'),
       },
       {
-        title: 'Mã request',
-        key: 'requestId',
-        render: (_, record) => {
-          const requestId = readMetaValue(record.metadata, 'requestId');
-
-          return requestId ? (
-            <Typography.Text code ellipsis style={{ maxWidth: 180 }}>
-              {requestId}
-            </Typography.Text>
-          ) : (
-            '-'
-          );
-        },
+        title: 'Action',
+        dataIndex: 'action',
+        width: 180,
       },
       {
-        title: 'Kết quả',
+        title: 'Target',
+        key: 'entity',
+        render: (_, record) => (
+          <div className="ds-table-primary-cell">
+            <strong>{record.entityType ?? '-'}</strong>
+            <span>{record.entityId ?? 'Không có entity ID'}</span>
+          </div>
+        ),
+      },
+      {
+        title: 'Result',
+        width: 140,
         key: 'actionResult',
         render: (_, record) => (
           <StatusBadge
             status={readMetaValue(record.metadata, 'actionResult') ?? (record.action ? 'success' : '-')}
-            mode="tag"
+          />
+        ),
+      },
+      {
+        title: '',
+        key: 'detail',
+        width: 64,
+        render: (_, record) => (
+          <IconActionButton
+            icon={<EyeOutlined />}
+            tooltip="Xem chi tiết"
+            onClick={() => setSelectedEntryId(record.id)}
           />
         ),
       },
@@ -151,10 +143,11 @@ export const AuditLogPage = () => {
   if (query.isPending && !query.data) {
     return (
       <PageShell
-        title="Nhật ký kiểm toán"
-        description="Lần theo thao tác quản trị, tương quan request và tín hiệu kết quả."
+        eyebrow="Vận hành"
+        title="Audit trail"
+        description="Theo dõi actor, action, target và các thay đổi quản trị trong cùng một luồng điều tra."
       >
-        <QueryStateView kind="loading" title="Đang tải nhật ký kiểm toán..." />
+        <QueryStateView kind="loading" title="Đang tải audit trail..." />
       </PageShell>
     );
   }
@@ -162,12 +155,13 @@ export const AuditLogPage = () => {
   if (query.isError && !query.data) {
     return (
       <PageShell
-        title="Nhật ký kiểm toán"
-        description="Lần theo thao tác quản trị, tương quan request và tín hiệu kết quả."
+        eyebrow="Vận hành"
+        title="Audit trail"
+        description="Theo dõi actor, action, target và các thay đổi quản trị trong cùng một luồng điều tra."
       >
         <QueryStateView
           kind="error"
-          description="Không thể tải nhật ký kiểm toán."
+          description="Không thể tải audit trail."
           onRetry={() => {
             void query.refetch();
           }}
@@ -180,8 +174,9 @@ export const AuditLogPage = () => {
 
   return (
     <PageShell
-      title="Nhật ký kiểm toán"
-      description="Tìm trong dòng sự kiện theo người thao tác, hành động, đối tượng, nguồn và khoảng thời gian."
+      eyebrow="Vận hành"
+      title="Audit trail"
+      description="Màn hình này ưu tiên actor, action, target, time; before/after và metadata sâu chỉ mở khi cần."
       headerExtra={
         <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
           <Button
@@ -196,75 +191,167 @@ export const AuditLogPage = () => {
         </div>
       }
     >
-      <FilterBar>
-        <Form form={form} layout="inline" className="ds-toolbar-form">
-          <Form.Item name="action" className="ds-toolbar-field ds-toolbar-field--sm">
-            <Input allowClear placeholder="Hành động" />
-          </Form.Item>
-          <Form.Item name="actorEmail" className="ds-toolbar-field ds-toolbar-field--lg">
-            <Input allowClear placeholder="Email người thao tác" />
-          </Form.Item>
-          <Form.Item name="entityType" className="ds-toolbar-field ds-toolbar-field--sm">
-            <Input allowClear placeholder="Loại đối tượng" />
-          </Form.Item>
-          <Form.Item name="source" className="ds-toolbar-field ds-toolbar-field--sm">
-            <Input allowClear placeholder="Nguồn" />
-          </Form.Item>
-          <Form.Item name="range" className="ds-toolbar-field ds-toolbar-field--range">
-            <DatePicker.RangePicker showTime />
-          </Form.Item>
-          <Form.Item className="ds-toolbar-field ds-toolbar-actions">
-            <Space>
-              <Button type="primary" onClick={applyFilters}>
-                Áp dụng bộ lọc
-              </Button>
-              <Button onClick={resetFilters}>Đặt lại</Button>
-            </Space>
-          </Form.Item>
-        </Form>
-        <div className="ds-filter-toolbar-meta">
-          <span>
-            {data?.pagination.total ?? 0} sự kiện phù hợp
-          </span>
-          <span>
-            {activeFilterCount > 0
-              ? `${activeFilterCount} bộ lọc đang hoạt động`
-              : 'Không có bộ lọc đang hoạt động'}
-          </span>
-          <span>
-            Đồng bộ gần nhất:{' '}
-            {query.dataUpdatedAt ? formatDateTime(new Date(query.dataUpdatedAt).toISOString()) : '-'}
-          </span>
-        </div>
-      </FilterBar>
+      <div className="ds-page-with-detail">
+        <div className="ds-page-main-stack">
+          <FilterBar>
+            <Form form={form} layout="inline" className="ds-toolbar-form">
+              <Form.Item name="action" className="ds-toolbar-field ds-toolbar-field--sm">
+                <Input allowClear placeholder="Action" />
+              </Form.Item>
+              <Form.Item name="actorEmail" className="ds-toolbar-field ds-toolbar-field--lg">
+                <Input allowClear placeholder="Email actor" />
+              </Form.Item>
+              <Form.Item name="entityType" className="ds-toolbar-field ds-toolbar-field--sm">
+                <Input allowClear placeholder="Target type" />
+              </Form.Item>
+              <Form.Item name="source" className="ds-toolbar-field ds-toolbar-field--sm">
+                <Input allowClear placeholder="Source" />
+              </Form.Item>
+              <Form.Item name="range" className="ds-toolbar-field ds-toolbar-field--range">
+                <DatePicker.RangePicker showTime />
+              </Form.Item>
+              <Form.Item className="ds-toolbar-field ds-toolbar-actions">
+                <Space>
+                  <Button type="primary" onClick={applyFilters}>
+                    Áp dụng
+                  </Button>
+                  <Button onClick={resetFilters}>Đặt lại</Button>
+                </Space>
+              </Form.Item>
+            </Form>
+            <div className="ds-filter-toolbar-meta">
+              <span>{data?.pagination.total ?? 0} sự kiện</span>
+              <span>{activeFilterCount > 0 ? `${activeFilterCount} bộ lọc` : 'Không có bộ lọc'}</span>
+              <span>
+                Đồng bộ gần nhất:{' '}
+                {query.dataUpdatedAt ? formatDateTime(new Date(query.dataUpdatedAt).toISOString()) : '-'}
+              </span>
+            </div>
+          </FilterBar>
 
-      <DataTableShell
-        title="Bản ghi kiểm toán"
-        meta="Bề mặt chính để điều tra và đối chiếu tương quan."
-        toolbar={
-          <DataTableToolbar>
-            <span className="ds-toolbar-summary">Trang {data?.pagination.page ?? 1}</span>
-          </DataTableToolbar>
-        }
-      >
-        <DataTable
-          rowKey="id"
-          columns={columns}
-          minHeight={360}
-          loading={query.isFetching && !query.isPending}
-          dataSource={data?.items ?? []}
-          emptyNode={<EmptyState description="Không có bản ghi kiểm toán nào khớp với truy vấn hiện tại." />}
-          pagination={{
-            current: data?.pagination.page,
-            pageSize: data?.pagination.limit,
-            total: data?.pagination.total,
-            showSizeChanger: true,
-            onChange: (page, pageSize) => {
-              setFilters((prev) => ({ ...prev, page, limit: pageSize }));
-            },
-          }}
+          <DataTableShell
+            title="Administrative events"
+            meta="Bảng chính dùng để scan quyết định và lựa chọn bản ghi cần mở inspector."
+          >
+            <DataTable
+              rowKey="id"
+              columns={columns}
+              minHeight={420}
+              loading={query.isFetching && !query.isPending}
+              dataSource={data?.items ?? []}
+              emptyNode={<EmptyState description="Không có bản ghi nào khớp với bộ lọc hiện tại." />}
+              onRow={(record) => ({
+                onClick: () => setSelectedEntryId(record.id),
+                style: { cursor: 'pointer' },
+              })}
+              pagination={{
+                current: data?.pagination.page,
+                pageSize: data?.pagination.limit,
+                total: data?.pagination.total,
+                showSizeChanger: true,
+                onChange: (page, pageSize) => {
+                  setFilters((prev) => ({ ...prev, page, limit: pageSize }));
+                },
+              }}
+            />
+          </DataTableShell>
+        </div>
+
+        <DetailPanel
+          open={Boolean(selectedEntry)}
+          title={selectedEntry?.action ?? 'Audit detail'}
+          onClose={() => setSelectedEntryId(null)}
+          width={420}
+          className="ds-ops-detail-panel"
+        >
+          {selectedEntry ? (
+            <div className="ds-ops-detail-stack">
+              <section className="ds-ops-detail-section">
+                <div className="ds-ops-detail-header">
+                  <div>
+                    <strong>{selectedEntry.actorEmail ?? 'System actor'}</strong>
+                    <p>{selectedEntry.entityType ?? 'Unknown target'}</p>
+                  </div>
+                  <StatusBadge
+                    status={
+                      readMetaValue(selectedEntry.metadata, 'actionResult') ?? (selectedEntry.action ? 'success' : '-')
+                    }
+                  />
+                </div>
+              </section>
+
+              <section className="ds-ops-detail-section">
+                <h3>Summary</h3>
+                <dl className="ds-ops-fact-list">
+                  <div>
+                    <dt>Action</dt>
+                    <dd>{selectedEntry.action}</dd>
+                  </div>
+                  <div>
+                    <dt>Target</dt>
+                    <dd>{selectedEntry.entityId ?? '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>Source</dt>
+                    <dd>{selectedEntry.source ?? '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>Time</dt>
+                    <dd>{formatDateTime(selectedEntry.time)}</dd>
+                  </div>
+                </dl>
+              </section>
+
+              <section className="ds-ops-detail-section">
+                <h3>Request context</h3>
+                <dl className="ds-ops-fact-list">
+                  <div>
+                    <dt>IP</dt>
+                    <dd>{selectedEntry.ipAddress ?? '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>Request ID</dt>
+                    <dd>{readMetaValue(selectedEntry.metadata, 'requestId') ?? '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>User agent</dt>
+                    <dd>{selectedEntry.userAgent ?? '-'}</dd>
+                  </div>
+                </dl>
+              </section>
+
+              <section className="ds-ops-detail-section">
+                <h3>Metadata</h3>
+                <div className="ds-ops-code-block">
+                  <pre>{JSON.stringify(selectedEntry.metadata ?? {}, null, 2)}</pre>
+                </div>
+              </section>
+
+              <section className="ds-ops-detail-section">
+                <h3>Change set</h3>
+                <div className="ds-ops-inline-list">
+                  <Button
+                    disabled={!selectedEntry.before && !selectedEntry.after}
+                    onClick={() => setDiffOpen(true)}
+                  >
+                    Mở before/after
+                  </Button>
+                </div>
+              </section>
+            </div>
+          ) : (
+            <EmptyState description="Chọn một bản ghi để xem metadata và change set." />
+          )}
+        </DetailPanel>
+
+        <JsonDiffDrawer
+          open={diffOpen}
+          title={selectedEntry ? `So sánh thay đổi · ${selectedEntry.action}` : 'So sánh thay đổi'}
+          before={selectedEntry?.before}
+          after={selectedEntry?.after}
+          onClose={() => setDiffOpen(false)}
         />
-      </DataTableShell>
+      </div>
     </PageShell>
   );
 };

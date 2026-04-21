@@ -2,8 +2,8 @@ import { lazy, Suspense } from 'react';
 import type { ReactNode } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
-import { RequireAuth } from '@/app/guards/RequireAuth';
 import { RequireApprovedAccess } from '@/app/guards/RequireApprovedAccess';
+import { RequireAuth } from '@/app/guards/RequireAuth';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { AppLayout } from '@/app/layout/AppLayout';
 import { QueryStateView } from '@/components/QueryStates';
@@ -34,9 +34,19 @@ const AuditLogPage = lazy(() =>
     default: module.AuditLogPage,
   })),
 );
+const SystemLogsPage = lazy(() =>
+  import('@/features/system-logs/pages/SystemLogsPage').then((module) => ({
+    default: module.SystemLogsPage,
+  })),
+);
 const ServicesPage = lazy(() =>
   import('@/features/services/pages/ServicesPage').then((module) => ({
     default: module.ServicesPage,
+  })),
+);
+const SettingsPage = lazy(() =>
+  import('@/features/settings/pages/SettingsPage').then((module) => ({
+    default: module.SettingsPage,
   })),
 );
 const MonitoringOverviewPage = lazy(() =>
@@ -103,8 +113,24 @@ const routes = [
         element: <Navigate to="/services/health" replace />,
       },
       {
-        path: 'services/:section',
+        path: 'services/health',
         element: withSuspense(<ServicesPage />),
+      },
+      {
+        path: 'services/smtp',
+        element: <Navigate to="/settings/smtp" replace />,
+      },
+      {
+        path: 'services/email-templates',
+        element: <Navigate to="/settings/email-templates" replace />,
+      },
+      {
+        path: 'settings',
+        element: <Navigate to="/settings/smtp" replace />,
+      },
+      {
+        path: 'settings/:section',
+        element: withSuspense(<SettingsPage />),
       },
       {
         path: 'monitoring',
@@ -113,6 +139,10 @@ const routes = [
       {
         path: 'conversations',
         element: withSuspense(<ConversationsPage />),
+      },
+      {
+        path: 'logs',
+        element: withSuspense(<SystemLogsPage />),
       },
       {
         path: 'users',

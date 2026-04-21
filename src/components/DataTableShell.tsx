@@ -31,15 +31,15 @@ export const DataTableShell: React.FC<DataTableShellProps> = ({
       aria-label={ariaLabel}
       aria-busy={loading ? 'true' : 'false'}
     >
-      {(title || toolbar || meta) && (
+      {(title || toolbar || meta) ? (
         <div className="ds-table-shell-header">
           <div style={{ flex: 1 }}>
-            {title && <div className="ds-table-shell-title">{title}</div>}
-            {meta && <div className="ds-table-shell-meta">{meta}</div>}
+            {title ? <div className="ds-table-shell-title">{title}</div> : null}
+            {meta ? <div className="ds-table-shell-meta">{meta}</div> : null}
           </div>
-          {toolbar && <div className="ds-table-shell-toolbar">{toolbar}</div>}
+          {toolbar ? <div className="ds-table-shell-toolbar">{toolbar}</div> : null}
         </div>
-      )}
+      ) : null}
 
       <div className="ds-table-shell-body">
         {loading ? (
@@ -55,7 +55,7 @@ export const DataTableShell: React.FC<DataTableShellProps> = ({
         )}
       </div>
 
-      {footer && <div className="ds-table-shell-footer">{footer}</div>}
+      {footer ? <div className="ds-table-shell-footer">{footer}</div> : null}
     </div>
   );
 };
