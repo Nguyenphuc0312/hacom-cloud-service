@@ -99,7 +99,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
     <div
       className={clsx(
         "border-b border-border/60",
-        isDense ? "px-3 pb-2.5 pt-2.5" : "px-3.5 pb-3 pt-3",
+        isDense ? "px-3 py-3" : "px-4 py-3.5",
       )}
     >
       <div className={clsx("flex items-center", isDense ? "gap-2" : "gap-2.5")}>
@@ -107,7 +107,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           type="button"
           onClick={onCurrentUserClick}
           className={clsx(
-            "flex min-w-0 flex-1 items-center rounded-[0.95rem] text-left transition-micro hover:bg-surface-hover/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+            "flex min-w-0 flex-1 items-center rounded-md text-left transition-micro hover:bg-surface-hover/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             isDense ? "gap-2 px-1 py-1" : "gap-2.5 px-1.5 py-1.5",
           )}
           aria-label={currentUserName}
@@ -150,8 +150,8 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           <IconButtonSurface
             onClick={onNewChat}
             className={clsx(
-              "rounded-[0.9rem] bg-[hsl(var(--chat-active-surface)/0.12)] text-primary shadow-none hover:bg-[hsl(var(--chat-active-surface)/0.18)] hover:text-primary",
-              isDense ? "h-9 w-9" : "h-9 w-9",
+              "rounded-md bg-[hsl(var(--chat-active-surface)/0.12)] text-primary shadow-none hover:bg-[hsl(var(--chat-active-surface)/0.18)] hover:text-primary",
+              "h-[var(--control-height-md)] w-[var(--control-height-md)]",
             )}
             aria-label={t("sidebar:header.startNewChat")}
           >
@@ -161,8 +161,8 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           <IconButtonSurface
             onClick={onFocusSearch}
             className={clsx(
-              "rounded-[0.9rem] text-text-muted hover:bg-surface-hover/70 hover:text-text-primary",
-              "h-9 w-9",
+              "rounded-md text-text-muted hover:bg-surface-hover/70 hover:text-text-primary",
+              "h-[var(--control-height-md)] w-[var(--control-height-md)]",
             )}
             aria-label={t("sidebar:search.aria")}
           >
@@ -172,8 +172,8 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           <IconButtonSurface
             onClick={() => setIsMenuOpen((current) => !current)}
             className={clsx(
-              "rounded-[0.9rem] text-text-muted hover:bg-surface-hover/70 hover:text-text-primary",
-              "h-9 w-9",
+              "rounded-md text-text-muted hover:bg-surface-hover/70 hover:text-text-primary",
+              "h-[var(--control-height-md)] w-[var(--control-height-md)]",
             )}
             aria-label={t("common:actions.more", {
               defaultValue: "More actions",
@@ -185,7 +185,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           {isMenuOpen && (
             <div
               className={clsx(
-                "absolute right-0 top-[calc(100%+0.4rem)] z-[70] min-w-[13rem] overflow-hidden rounded-[1rem] border border-border/80 bg-surface p-1.5 shadow-elev3",
+                "absolute right-0 top-[calc(100%+0.4rem)] z-[70] min-w-[13rem] overflow-hidden rounded-xl border border-border/80 bg-surface p-1.5 shadow-elev3",
               )}
               role="menu"
             >

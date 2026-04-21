@@ -836,7 +836,7 @@ export const MessageInput = React.forwardRef<
     <div
       ref={rootRef}
       className={clsx(
-        "chat-composer-root bg-transparent pb-[max(env(safe-area-inset-bottom),10px)] pt-1",
+        "chat-composer-root border-t border-border/55 bg-[hsl(var(--chat-panel-bg))/0.96] pb-[max(env(safe-area-inset-bottom),10px)] pt-2 backdrop-blur",
         className,
       )}
     >
@@ -968,7 +968,7 @@ export const MessageInput = React.forwardRef<
           <div
             data-composer-state={composerVisualState}
             className={clsx(
-              "chat-composer-shell relative flex min-w-0 flex-1 items-end rounded-[1.1rem] border px-2.5 py-1.5 transition-micro",
+              "chat-composer-shell relative flex min-w-0 flex-1 items-end rounded-xl border px-3 py-2 transition-micro",
               composerVisualStyles.shell,
             )}
           >
@@ -1060,7 +1060,7 @@ export const MessageInput = React.forwardRef<
                   : undefined
               }
               className={clsx(
-                "chat-composer-textarea w-full min-h-[40px] flex-1 resize-none bg-transparent px-1 py-[9px]",
+                "chat-composer-textarea w-full min-h-[var(--control-height-md)] flex-1 resize-none bg-transparent px-1 py-1.5",
                 "text-sm text-text-primary placeholder:text-text-muted",
                 "transition-colors focus:outline-none",
                 disabled && "cursor-not-allowed opacity-70",
@@ -1078,7 +1078,7 @@ export const MessageInput = React.forwardRef<
                   type="button"
                   onClick={() => setShowAttachmentMenu((previous) => !previous)}
                   className={clsx(
-                    "chat-composer-attachment inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors",
+                    "chat-composer-attachment inline-flex h-[var(--control-height-md)] w-[var(--control-height-md)] items-center justify-center rounded-md transition-colors",
                     showAttachmentMenu
                       ? "bg-surface-active text-text-primary"
                       : composerVisualStyles.attachmentButton,
@@ -1122,7 +1122,7 @@ export const MessageInput = React.forwardRef<
               void handlePrimarySend();
             }}
             ariaLabel={sendButtonLabel}
-            className="mb-0.5 shrink-0"
+            className="shrink-0"
           />
         </div>
 

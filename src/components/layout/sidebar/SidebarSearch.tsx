@@ -21,7 +21,7 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
   const isDense = layoutState !== "normal";
 
   return (
-    <div className={clsx(isDense ? "px-3 pb-2 pt-2" : "px-3.5 pb-2.5 pt-2.5")}>
+    <div className={clsx(isDense ? "px-3 pb-2 pt-2" : "px-4 pb-3 pt-2.5")}>
       <label className="relative block">
         <MagnifyingGlassIcon
           className={clsx(
@@ -40,11 +40,11 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
             defaultValue: "Search conversations",
           })}
           className={clsx(
-            "w-full border border-border/55 bg-surface text-text-primary placeholder:text-text-muted",
+            "input-surface w-full text-text-primary placeholder:text-text-muted",
             isDense
-              ? "h-9 rounded-[0.95rem] pl-9 pr-8 text-[13px]"
-              : "h-9.5 rounded-[0.95rem] pl-10 pr-9 text-[13px]",
-            "transition-micro focus:border-border-focus focus:bg-surface focus:outline-none focus:ring-2 focus:ring-focus/16",
+              ? "pl-9 pr-8 text-[13px]"
+              : "pl-10 pr-9 text-[13px]",
+            "focus:bg-surface focus:outline-none",
           )}
           aria-label={t("sidebar:search.aria")}
         />

@@ -1,38 +1,40 @@
 /**
- * @fileoverview Appearance Settings sub-section
- * Theme / accent color / font size / display density
+ * @fileoverview Appearance settings section.
  */
 
 import React from "react";
 import { useTranslation } from "react-i18next";
 import {
-  SunIcon,
-  MoonIcon,
   ComputerDesktopIcon,
-  PaintBrushIcon,
+  MoonIcon,
+  SunIcon,
 } from "@heroicons/react/24/outline";
-import { SettingsSection } from "./SettingsSection";
-import { RadioGroup } from "./RadioGroup";
 import { ColorPicker } from "./ColorPicker";
-import { ThemePreview } from "./ThemePreview";
+import { RadioGroup } from "./RadioGroup";
+import { SettingsFieldGroup } from "./SettingsFieldGroup";
+import { SettingsSection } from "./SettingsSection";
 import { useSettingsSection, useUpdateSettings } from "../../settings";
 import type {
-  ThemeMode,
-  FontSize,
-  DisplayDensity,
   AccentColor,
+  DisplayDensity,
+  FontSize,
+  ThemeMode,
 } from "../../settings/types";
 
-export const AppearanceSection: React.FC = () => {
+interface AppearanceSectionProps {
+  id?: string;
+}
+
+export const AppearanceSection: React.FC<AppearanceSectionProps> = ({ id }) => {
   const { t } = useTranslation("settings");
   const appearance = useSettingsSection("appearance");
   const update = useUpdateSettings();
 
-  const themeOptions: {
+  const themeOptions: Array<{
     value: ThemeMode;
     label: string;
     icon: React.ReactNode;
-  }[] = [
+  }> = [
     {
       value: "light",
       label: t("appearance.themeLight"),
@@ -50,11 +52,11 @@ export const AppearanceSection: React.FC = () => {
     },
   ];
 
-  const fontSizeOptions: {
+  const fontSizeOptions: Array<{
     value: FontSize;
     label: string;
     description: string;
-  }[] = [
+  }> = [
     {
       value: "small",
       label: t("appearance.fontSmall"),
@@ -72,11 +74,11 @@ export const AppearanceSection: React.FC = () => {
     },
   ];
 
-  const densityOptions: {
+  const densityOptions: Array<{
     value: DisplayDensity;
     label: string;
     description: string;
-  }[] = [
+  }> = [
     {
       value: "compact",
       label: t("appearance.densityCompact"),
@@ -91,58 +93,55 @@ export const AppearanceSection: React.FC = () => {
 
   return (
     <SettingsSection
-      icon={<PaintBrushIcon className="h-5 w-5" />}
+      id={id}
       title={t("appearance.title")}
       description={t("appearance.description")}
     >
-      {/* Theme */}
-      <RadioGroup
-        label={t("appearance.themeLabel")}
-        options={themeOptions}
-        value={appearance.theme}
-        onChange={(v) => update({ appearance: { theme: v } })}
-        variant="cards"
-      />
-
-      {/* Accent colour */}
-      <ColorPicker
-        label={t("appearance.accentLabel")}
-        description={t("appearance.accentDesc")}
-        value={appearance.accentColor}
-        onChange={(v: AccentColor) =>
-          update({ appearance: { accentColor: v } })
-        }
-      />
-
-      {/* Font size */}
-      <RadioGroup
-        label={t("appearance.fontSizeLabel")}
-        description={t("appearance.fontSizeDesc")}
-        options={fontSizeOptions}
-        value={appearance.fontSize}
-        onChange={(v) => update({ appearance: { fontSize: v } })}
-        variant="pills"
-      />
-
-      {/* Display density */}
-      <RadioGroup
-        label={t("appearance.densityLabel")}
-        options={densityOptions}
-        value={appearance.displayDensity}
-        onChange={(v) => update({ appearance: { displayDensity: v } })}
-        variant="pills"
-      />
-
-      {/* Live preview */}
-      <div className="pt-2">
-        <span className="mb-2 block text-sm font-medium text-text-primary">
-          {t("appearance.preview")}
-        </span>
-        <ThemePreview
-          fontSize={appearance.fontSize}
-          density={appearance.displayDensity}
+      <SettingsFieldGroup>
+        <RadioGroup
+          label={t("appearance.themeLabel")}
+          options={themeOptions}
+          value={appearance.theme}
+          onChange={(value) => update({ appearance: { theme: value } })}
+          variant="list"
+          className="py-0"
         />
-      </div>
+        <div className="border-t border-border/60 pt-4">
+          <ColorPicker
+            label={t("appearance.accentLabel")}
+            description={t("appearance.accentDesc")}
+            value={appearance.accentColor}
+            onChange={(value: AccentColor) =>
+              update({ appearance: { accentColor: value } })
+            }
+            className="py-0"
+          />
+        </div>
+      </SettingsFieldGroup>
+
+      <SettingsFieldGroup>
+        <RadioGroup
+          label={t("appearance.fontSizeLabel")}
+          description={t("appearance.fontSizeDesc")}
+          options={fontSizeOptions}
+          value={appearance.fontSize}
+          onChange={(value) => update({ appearance: { fontSize: value } })}
+          variant="list"
+          className="py-0"
+        />
+        <div className="border-t border-border/60 pt-4">
+          <RadioGroup
+            label={t("appearance.densityLabel")}
+            options={densityOptions}
+            value={appearance.displayDensity}
+            onChange={(value) =>
+              update({ appearance: { displayDensity: value } })
+            }
+            variant="list"
+            className="py-0"
+          />
+        </div>
+      </SettingsFieldGroup>
     </SettingsSection>
   );
 };

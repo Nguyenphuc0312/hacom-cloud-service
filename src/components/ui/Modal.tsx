@@ -45,6 +45,8 @@ export const Modal: React.FC<ModalProps> = ({
   contentClassName,
 }) => {
   const { t } = useTranslation();
+  const titleId = React.useId();
+  const descriptionId = React.useId();
 
   const handleEsc = useCallback(
     (e: KeyboardEvent) => {
@@ -58,12 +60,20 @@ export const Modal: React.FC<ModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       document.addEventListener("keydown", handleEsc);
+      const scrollbarWidth =
+        window.innerWidth - document.documentElement.clientWidth;
+      document.body.dataset.scrollLocked = "true";
       document.body.style.overflow = "hidden";
+      if (scrollbarWidth > 0) {
+        document.body.style.paddingRight = `${scrollbarWidth}px`;
+      }
     }
 
     return () => {
       document.removeEventListener("keydown", handleEsc);
       document.body.style.overflow = "";
+      document.body.style.paddingRight = "";
+      delete document.body.dataset.scrollLocked;
     };
   }, [isOpen, handleEsc]);
 
@@ -72,7 +82,7 @@ export const Modal: React.FC<ModalProps> = ({
   return (
     <div
       className={clsx(
-        "fixed inset-0 z-modal flex items-center justify-center p-4",
+        "fixed inset-0 z-modal flex items-center justify-center p-4 sm:p-6",
         className,
       )}
     >
@@ -83,26 +93,26 @@ export const Modal: React.FC<ModalProps> = ({
 
       <div
         className={clsx(
-          "relative w-full rounded-xl border border-border bg-surface shadow-elev3",
+          "relative flex w-full max-h-[min(90vh,48rem)] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-elev3",
           "animate-slide-in-up",
           sizeClasses[size],
           contentClassName,
         )}
         role="dialog"
         aria-modal="true"
-        aria-labelledby={title ? "modal-title" : undefined}
-        aria-describedby={description ? "modal-description" : undefined}
+        aria-labelledby={title ? titleId : undefined}
+        aria-describedby={description ? descriptionId : undefined}
       >
         {(title || showCloseButton) && (
-          <div className="flex items-start justify-between border-b border-border px-6 py-4">
+          <div className="flex items-start justify-between border-b border-border px-5 py-4 sm:px-6">
             <div>
               {title && (
-                <h2 id="modal-title" className="text-lg font-semibold text-text-primary">
+                <h2 id={titleId} className="text-lg font-semibold text-text-primary">
                   {title}
                 </h2>
               )}
               {description && (
-                <p id="modal-description" className="mt-1 text-sm text-text-secondary">
+                <p id={descriptionId} className="mt-1 text-sm text-text-secondary">
                   {description}
                 </p>
               )}
@@ -119,7 +129,9 @@ export const Modal: React.FC<ModalProps> = ({
           </div>
         )}
 
-        <div className="p-6">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
+          {children}
+        </div>
       </div>
     </div>
   );

@@ -125,7 +125,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <div
           className={
-            layoutState === "normal" ? "px-3.5 pb-2.5" : "px-3 pb-2"
+            layoutState === "normal" ? "px-4 pb-3" : "px-3 pb-2.5"
           }
         >
           <SegmentedControl
@@ -165,7 +165,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div
           className={clsx(
             "flex min-h-0 flex-1",
-            layoutState === "normal" ? "px-1.5 pb-2.5" : "px-1 pb-2",
+            layoutState === "normal" ? "px-2 pb-3" : "px-1.5 pb-2.5",
           )}
         >
           <RoomList

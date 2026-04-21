@@ -256,7 +256,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
       className={clsx(
         "group relative mx-1 flex h-[var(--size-room-item)] w-[calc(100%-0.5rem)] items-center text-left",
         "transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-        isDense ? "rounded-[0.85rem] px-2" : "rounded-[0.95rem] px-2.5",
+        isDense ? "rounded-md px-2" : "rounded-lg px-2.5",
         visualStyles.container,
         hoverStyles?.container,
       )}

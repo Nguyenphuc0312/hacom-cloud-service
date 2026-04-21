@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { ErrorCode } from "@hacom/chat-shared-types/core";
 import {
-  ArrowLeftIcon,
   MagnifyingGlassIcon,
   NoSymbolIcon,
   UserGroupIcon,
@@ -20,6 +20,7 @@ import {
   StateBlock,
   toast,
 } from "../components/ui";
+import { AppPage, AppPageBody, AppPageHeader } from "../components/layout/AppPage";
 import { useAuthStore, usePresenceStore } from "../stores";
 import { useDebounce } from "../hooks/useDebounce";
 import { useFriendship } from "../hooks/useFriendship";
@@ -196,7 +197,7 @@ const ContactRow: React.FC<ContactRowProps> = ({
       type="button"
       onClick={onClick}
       className={clsx(
-        "flex w-full items-center gap-3 rounded-[1.35rem] px-3 py-3 text-left transition-micro",
+        "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-micro",
         selected
           ? "bg-[hsl(var(--chat-active-surface)/0.14)] ring-1 ring-[hsl(var(--chat-active-surface)/0.2)]"
           : "hover:bg-surface-overlay/80",
@@ -349,6 +350,9 @@ export const FriendsPage: React.FC = () => {
         }
       } catch (error) {
         const apiError = extractApiError(error);
+        if (apiError.code === ErrorCode.DIRECT_CHAT_TARGET_UNAVAILABLE) {
+          void refreshDirectory();
+        }
         toast.error(
           apiError.message || t("error:chat.startConversationFailed"),
         );
@@ -356,7 +360,7 @@ export const FriendsPage: React.FC = () => {
         setActingKey(null);
       }
     },
-    [navigate, t],
+    [navigate, refreshDirectory, t],
   );
 
   const handleRelationshipAction = useCallback(
@@ -675,14 +679,6 @@ export const FriendsPage: React.FC = () => {
 
   const renderDiscoverTab = () => (
     <div className="space-y-4">
-      <Input
-        type="text"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder={t("friends:searchPlaceholder")}
-        leftIcon={<MagnifyingGlassIcon className="h-5 w-5" />}
-      />
-
       {isSearching ? (
         <div className="flex justify-center py-10">
           <Spinner size="sm" />
@@ -759,79 +755,123 @@ export const FriendsPage: React.FC = () => {
   );
 
   return (
-    <div className="app-page-shell flex h-full min-h-0">
-      <section className="flex min-w-0 flex-1 flex-col">
-        <header className="app-page-header sticky top-0 z-10 px-4 py-3">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => navigate(ROUTE_PATHS.CHAT)}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
-              aria-label={t("common:actions.back")}
-            >
-              <ArrowLeftIcon className="h-5 w-5" />
-            </button>
+    <AppPage layout="workspace">
+      <AppPageHeader
+        title={t("friends:title")}
+        subtitle={t("friends:subtitle")}
+        onBack={() => navigate(ROUTE_PATHS.CHAT)}
+        backLabel={t("common:actions.back")}
+        badge={
+          pendingCount > 0 ? (
+            <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary">
+              {t("friends:requests.incoming")} {pendingCount}
+            </span>
+          ) : null
+        }
+        actions={
+          isDirectoryLoading ? (
+            <div className="inline-flex h-[var(--control-height-md)] w-[var(--control-height-md)] items-center justify-center rounded-md border border-border/60 bg-surface">
+              <Spinner size="xs" />
+            </div>
+          ) : null
+        }
+      />
 
-            <div className="min-w-0">
-              <h1 className="text-lg font-semibold text-text-primary">
-                {t("friends:title")}
-              </h1>
-              <p className="text-xs text-text-secondary">
-                {t("friends:subtitle")}
-              </p>
+      <AppPageBody>
+        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(22rem,27rem),minmax(0,1fr)]">
+          <section className="app-page-panel flex min-h-0 flex-col overflow-hidden">
+            <div className="border-b border-border/60 p-4">
+              <SegmentedControl
+                value={activeTab}
+                onChange={(next) => setActiveTab(next as TabKey)}
+                options={tabs.map((tab) => ({
+                  id: tab.id,
+                  label: tab.label,
+                  count: tab.count,
+                }))}
+                ariaLabel={t("friends:title")}
+                size="sm"
+              />
+
+              {activeTab === "discover" ? (
+                <div className="mt-3">
+                  <Input
+                    type="text"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder={t("friends:searchPlaceholder")}
+                    leftIcon={<MagnifyingGlassIcon className="h-5 w-5" />}
+                  />
+                </div>
+              ) : null}
             </div>
 
-            {isDirectoryLoading ? (
-              <div className="ml-auto">
-                <Spinner size="xs" />
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              {activeTab === "friends" && renderFriendsTab()}
+              {activeTab === "requests" && renderRequestsTab()}
+              {activeTab === "discover" && renderDiscoverTab()}
+              {activeTab === "blocked" && renderBlockedTab()}
+              {activeTab === "qr" && (
+                <>
+                  <div className="hidden lg:block">
+                    <StateBlock
+                      icon={<UserGroupIcon className="h-6 w-6" />}
+                      title={t("friends:tabs.qr")}
+                      description={t("friends:previewBody")}
+                      className="min-h-[12rem] border-dashed shadow-none"
+                    />
+                  </div>
+                  <div className="lg:hidden">{renderQrTab()}</div>
+                </>
+              )}
+            </div>
+          </section>
+
+          <aside className="hidden min-h-0 flex-col overflow-hidden lg:flex">
+            <div className="app-page-panel flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="border-b border-border/60 px-5 py-4">
+                <h2 className="text-base font-semibold text-text-primary">
+                  {activeTab === "qr"
+                    ? t("friends:tabs.qr")
+                    : previewTarget
+                      ? toDisplayName(previewTarget.initialUser)
+                      : t("friends:previewTitle")}
+                </h2>
+                <p className="mt-1 text-sm text-text-secondary">
+                  {activeTab === "qr"
+                    ? t("friends:subtitle")
+                    : t("friends:previewBody")}
+                </p>
               </div>
-            ) : null}
-          </div>
 
-          <div className="mt-4">
-            <SegmentedControl
-              value={activeTab}
-              onChange={(next) => setActiveTab(next as TabKey)}
-              options={tabs.map((tab) => ({
-                id: tab.id,
-                label: tab.label,
-                count: tab.count,
-              }))}
-              ariaLabel={t("friends:title")}
-              size="sm"
-            />
-          </div>
-        </header>
-
-        <main className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
-          {activeTab === "friends" && renderFriendsTab()}
-          {activeTab === "requests" && renderRequestsTab()}
-          {activeTab === "discover" && renderDiscoverTab()}
-          {activeTab === "blocked" && renderBlockedTab()}
-          {activeTab === "qr" && renderQrTab()}
-        </main>
-      </section>
-
-      <aside className="hidden w-[clamp(22rem,34vw,26rem)] flex-col bg-[hsl(var(--chat-panel-bg))] lg:flex">
-        {previewTarget ? (
-          <UserProfile
-            userId={previewTarget.userId}
-            currentUserId={currentUserId ?? ""}
-            initialUser={previewTarget.initialUser}
-            onClose={() => setPreviewTarget(null)}
-            onStartConversation={handleMessage}
-          />
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center px-8 text-center">
-            <StateBlock
-              icon={<UserGroupIcon className="h-6 w-6" />}
-              title={t("friends:previewTitle")}
-              description={t("friends:previewBody")}
-            className="w-full max-w-sm border-dashed bg-[hsl(var(--surface-subtle))/0.48] shadow-none"
-          />
+              <div className="min-h-0 flex-1 overflow-hidden">
+                {activeTab === "qr" ? (
+                  <div className="h-full overflow-y-auto p-4">
+                    {renderQrTab()}
+                  </div>
+                ) : previewTarget ? (
+                  <UserProfile
+                    userId={previewTarget.userId}
+                    currentUserId={currentUserId ?? ""}
+                    initialUser={previewTarget.initialUser}
+                    onClose={() => setPreviewTarget(null)}
+                    onStartConversation={handleMessage}
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center p-6">
+                    <StateBlock
+                      icon={<UserGroupIcon className="h-6 w-6" />}
+                      title={t("friends:previewTitle")}
+                      description={t("friends:previewBody")}
+                      className="w-full border-dashed shadow-none"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </aside>
         </div>
-      )}
-      </aside>
+      </AppPageBody>
 
       {previewTarget ? (
         <>
@@ -852,7 +892,7 @@ export const FriendsPage: React.FC = () => {
           />
         </>
       ) : null}
-    </div>
+    </AppPage>
   );
 };
 

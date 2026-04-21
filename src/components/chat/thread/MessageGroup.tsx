@@ -157,11 +157,7 @@ const MessageGroupItem: React.FC<{
     isFailedMessage(message) ||
     isPendingMessage(message);
 
-  const inlineActions = coarsePointer
-    ? actionPolicy.menuActions.length > 0
-      ? (["more"] as MessageActionId[])
-      : actionPolicy.railActions.slice(0, 1)
-    : actionPolicy.railActions;
+  const inlineActions = coarsePointer ? [] : actionPolicy.railActions;
 
   const handleAction = React.useCallback(
     (actionId: MessageActionId) => {
@@ -234,7 +230,6 @@ const MessageGroupItem: React.FC<{
             className={clsx(
               "pointer-events-none absolute -top-2 z-10 flex translate-y-0.5 opacity-0 transition-all duration-150",
               isOwn ? "right-0 justify-end" : "left-0 justify-start",
-              coarsePointer && "pointer-events-auto opacity-100",
               "group-hover/message-item:pointer-events-auto group-hover/message-item:translate-y-0 group-hover/message-item:opacity-100",
               "group-focus-within/message-item:pointer-events-auto group-focus-within/message-item:translate-y-0 group-focus-within/message-item:opacity-100",
             )}

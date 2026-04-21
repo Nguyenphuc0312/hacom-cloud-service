@@ -5,26 +5,31 @@ import { useTranslation } from "react-i18next";
 import {
   ArrowPathIcon,
   AtSymbolIcon,
-  BriefcaseIcon,
   BuildingOffice2Icon,
   CheckCircleIcon,
   EnvelopeIcon,
-  IdentificationIcon,
   PhoneIcon,
   PhotoIcon,
-  SparklesIcon,
-  UserCircleIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../../../components/common/Avatar";
+import {
+  SettingsFieldGroup,
+  SettingsProfileSummary,
+  SettingsSection,
+} from "../../../components/settings";
 import { Button, Input, Textarea, toast } from "../../../components/ui";
-import { SettingsSection } from "../../../components/settings";
-import { useAuthStore, type User } from "../../../stores";
-import { userApi } from "../../../services/api";
-import apiClient from "../../../lib/axios";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
+import apiClient from "../../../lib/axios";
+import { userApi } from "../../../services/api";
+import { useAuthStore, type User } from "../../../stores";
 import { resolveUserDisplayName } from "../../chat/identity/resolveUserDisplayName";
 
-const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
 const AVATAR_MAX_SIZE = 5 * 1024 * 1024;
 const BACKGROUND_MAX_SIZE = 8 * 1024 * 1024;
 const PHONE_PATTERN = /^\+?[0-9]{10,15}$/;
@@ -35,12 +40,21 @@ type FormState = { displayName: string; phone: string; bio: string };
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === "object" ? (value as Record<string, unknown>) : null;
 
-const readValue = (user: Record<string, unknown> | null | undefined, ...keys: string[]) => {
-  if (!user) return null;
+const readValue = (
+  user: Record<string, unknown> | null | undefined,
+  ...keys: string[]
+) => {
+  if (!user) {
+    return null;
+  }
+
   for (const key of keys) {
     const value = user[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
   }
+
   return null;
 };
 
@@ -68,21 +82,74 @@ const resolveAvatarFromUploadResponse = (payload: unknown, fallback?: string) =>
     return readValue(data, "avatar", "avatarUrl", "url") || fallback;
   } catch {
     const root = asRecord(payload);
-    return readValue(asRecord(root?.data), "avatar", "avatarUrl", "url") || readValue(root, "avatar", "avatarUrl", "url") || fallback;
+    return (
+      readValue(asRecord(root?.data), "avatar", "avatarUrl", "url") ||
+      readValue(root, "avatar", "avatarUrl", "url") ||
+      fallback
+    );
   }
 };
 
 const revokeBlobUrl = (value: string | null) => {
-  if (value?.startsWith("blob:")) URL.revokeObjectURL(value);
+  if (value?.startsWith("blob:")) {
+    URL.revokeObjectURL(value);
+  }
 };
 
-export const ProfileSettingsSection: React.FC = () => {
+interface ProfileSettingsSectionProps {
+  id?: string;
+}
+
+interface SummaryMetaItemProps {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}
+
+const SummaryMetaItem: React.FC<SummaryMetaItemProps> = ({
+  icon,
+  label,
+  value,
+}) => (
+  <div className="flex items-start gap-3 rounded-xl border border-border/60 bg-surface px-3 py-3">
+    <span className="mt-0.5 text-text-muted">{icon}</span>
+    <div className="min-w-0">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
+        {label}
+      </p>
+      <p className="mt-1 truncate text-sm text-text-primary">{value}</p>
+    </div>
+  </div>
+);
+
+interface EnterpriseInfoItemProps {
+  label: string;
+  value: string;
+}
+
+const EnterpriseInfoItem: React.FC<EnterpriseInfoItemProps> = ({
+  label,
+  value,
+}) => (
+  <div className="rounded-xl border border-border/60 bg-surface px-3 py-3">
+    <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
+      {label}
+    </dt>
+    <dd className="mt-1 text-sm text-text-primary">{value}</dd>
+  </div>
+);
+
+export const ProfileSettingsSection: React.FC<ProfileSettingsSectionProps> = ({
+  id,
+}) => {
   const { t } = useTranslation(["profile", "common"]);
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const updateUser = useAuthStore((state) => state.updateUser);
   const refreshProfile = useAuthStore((state) => state.refreshProfile);
+  const updateUser = useAuthStore((state) => state.updateUser);
+
   const userRecord = (user as Record<string, unknown> | null) ?? null;
+
   const [form, setForm] = React.useState<FormState>(() => normalizeForm(user));
   const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
   const [backgroundFile, setBackgroundFile] = React.useState<File | null>(null);
@@ -90,56 +157,129 @@ export const ProfileSettingsSection: React.FC = () => {
   const [backgroundPreview, setBackgroundPreview] = React.useState<string | null>(
     readValue(userRecord, "backgroundImageUrl", "background_image_url"),
   );
-  const [isSaving, setIsSaving] = React.useState(false);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
-  const [avatarSupport, setAvatarSupport] = React.useState<UploadSupportState>("unknown");
-  const [backgroundSupport, setBackgroundSupport] = React.useState<UploadSupportState>("unknown");
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [avatarSupport, setAvatarSupport] =
+    React.useState<UploadSupportState>("unknown");
+  const [backgroundSupport, setBackgroundSupport] =
+    React.useState<UploadSupportState>("unknown");
+
   const avatarInputRef = React.useRef<HTMLInputElement | null>(null);
   const backgroundInputRef = React.useRef<HTMLInputElement | null>(null);
   const saveActionRef = React.useRef(false);
 
   const errors = React.useMemo(() => {
     const next: Partial<FormState> = {};
-    if (form.displayName.trim().length > 120) next.displayName = t("profile:settings.validation.displayNameMax", { defaultValue: "Display name must not exceed 120 characters." });
-    if (form.bio.trim().length > 500) next.bio = t("profile:settings.validation.bioMax", { count: 500, defaultValue: "Bio must not exceed 500 characters." });
-    if (form.phone.trim() && !PHONE_PATTERN.test(form.phone.trim())) next.phone = t("profile:settings.validation.phoneInvalid", { defaultValue: "Use a valid international phone number." });
+
+    if (form.displayName.trim().length > 120) {
+      next.displayName = t("profile:settings.validation.displayNameMax", {
+        defaultValue: "Display name must not exceed 120 characters.",
+      });
+    }
+
+    if (form.bio.trim().length > 500) {
+      next.bio = t("profile:settings.validation.bioMax", {
+        count: 500,
+        defaultValue: "Bio must not exceed 500 characters.",
+      });
+    }
+
+    if (form.phone.trim() && !PHONE_PATTERN.test(form.phone.trim())) {
+      next.phone = t("profile:settings.validation.phoneInvalid", {
+        defaultValue: "Use a valid international phone number.",
+      });
+    }
+
     return next;
   }, [form, t]);
 
   const employeeCode = readValue(userRecord, "employeeCode", "employee_code");
-  const hrLegalName = readValue(userRecord, "fullNameFromHR", "full_name_from_hr", "fullName", "full_name");
-  const corporateEmail = readValue(userRecord, "corporateEmail", "emailFromHr", "email_from_hr", "email");
-  const departmentName = readValue(userRecord, "departmentName", "department_name", "orgUnit", "org_unit");
+  const hrLegalName = readValue(
+    userRecord,
+    "fullNameFromHR",
+    "full_name_from_hr",
+    "fullName",
+    "full_name",
+  );
+  const corporateEmail = readValue(
+    userRecord,
+    "corporateEmail",
+    "emailFromHr",
+    "email_from_hr",
+    "email",
+  );
+  const departmentName = readValue(
+    userRecord,
+    "departmentName",
+    "department_name",
+    "orgUnit",
+    "org_unit",
+  );
   const unitCode = readValue(userRecord, "unitCode", "unit_code");
   const jobTitle = readValue(userRecord, "title");
-  const displayLabel = resolveUserDisplayName(user, { allowLegacyFallback: true }) || t("common:labels.user");
+
   const baseForm = React.useMemo(() => normalizeForm(user), [user]);
-  const hasChanges = form.displayName !== baseForm.displayName || form.phone !== baseForm.phone || form.bio !== baseForm.bio || Boolean(avatarFile) || Boolean(backgroundFile);
+  const displayLabel =
+    resolveUserDisplayName(user, { allowLegacyFallback: true }) ||
+    t("common:labels.user");
+  const effectiveAvatar = avatarPreview || user?.avatar;
+  const effectiveBackground =
+    backgroundPreview ||
+    readValue(userRecord, "backgroundImageUrl", "background_image_url");
+  const identityLine =
+    corporateEmail ||
+    (user?.username ? `@${user.username}` : null) ||
+    user?.phone ||
+    employeeCode ||
+    t("profile:settings.identityFallback", {
+      defaultValue: "Add your personal details so teammates can recognize you.",
+    });
+  const hasChanges =
+    form.displayName !== baseForm.displayName ||
+    form.phone !== baseForm.phone ||
+    form.bio !== baseForm.bio ||
+    Boolean(avatarFile) ||
+    Boolean(backgroundFile);
   const hasErrors = Boolean(errors.displayName || errors.phone || errors.bio);
-  const effectiveBackground = backgroundPreview || readValue(userRecord, "backgroundImageUrl", "background_image_url");
-  const identityLine = corporateEmail || (user?.username ? `@${user.username}` : null) || user?.phone || employeeCode || t("profile:settings.identityFallback", { defaultValue: "Add your personal details so teammates can recognize you." });
 
   React.useEffect(() => {
     setForm(normalizeForm(user));
-    setBackgroundPreview(readValue((user as Record<string, unknown> | null) ?? null, "backgroundImageUrl", "background_image_url"));
+    setBackgroundPreview(
+      readValue(
+        (user as Record<string, unknown> | null) ?? null,
+        "backgroundImageUrl",
+        "background_image_url",
+      ),
+    );
   }, [user]);
 
   React.useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      return;
+    }
+
     let cancelled = false;
     setIsRefreshing(true);
-    void refreshProfile().catch(() => undefined).finally(() => {
-      if (!cancelled) setIsRefreshing(false);
-    });
+    void refreshProfile()
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) {
+          setIsRefreshing(false);
+        }
+      });
+
     return () => {
       cancelled = true;
     };
   }, [isAuthenticated, refreshProfile]);
 
-  React.useEffect(() => () => {
-    revokeBlobUrl(avatarPreview);
-    revokeBlobUrl(backgroundPreview);
-  }, [avatarPreview, backgroundPreview]);
+  React.useEffect(
+    () => () => {
+      revokeBlobUrl(avatarPreview);
+      revokeBlobUrl(backgroundPreview);
+    },
+    [avatarPreview, backgroundPreview],
+  );
 
   const resetDrafts = () => {
     setForm(normalizeForm(user));
@@ -149,47 +289,93 @@ export const ProfileSettingsSection: React.FC = () => {
       revokeBlobUrl(current);
       return null;
     });
-    setBackgroundPreview(readValue((user as Record<string, unknown> | null) ?? null, "backgroundImageUrl", "background_image_url"));
+    setBackgroundPreview(
+      readValue(
+        (user as Record<string, unknown> | null) ?? null,
+        "backgroundImageUrl",
+        "background_image_url",
+      ),
+    );
   };
 
   const pickImage = (file: File, maxSize: number, onPick: () => void) => {
-    if (!ALLOWED_IMAGE_TYPES.has(file.type)) return toast.error(t("profile:settings.upload.unsupportedType"));
-    if (file.size > maxSize) return toast.error(t("profile:settings.upload.exceedsSize", { maxMb: Math.floor(maxSize / (1024 * 1024)) }));
+    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+      toast.error(t("profile:settings.upload.unsupportedType"));
+      return;
+    }
+
+    if (file.size > maxSize) {
+      toast.error(
+        t("profile:settings.upload.exceedsSize", {
+          maxMb: Math.floor(maxSize / (1024 * 1024)),
+        }),
+      );
+      return;
+    }
+
     onPick();
   };
 
   const uploadBackground = async (file: File, fallback: string | null) => {
     const formData = new FormData();
     formData.append("background", file);
+
     try {
-      const response = await apiClient.put("/users/background", formData, { headers: { "Content-Type": "multipart/form-data" } });
+      const response = await apiClient.put("/users/background", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
       setBackgroundSupport("supported");
-      return readValue(asRecord(response.data), "backgroundImageUrl", "background") || readValue(asRecord(asRecord(response.data)?.data), "backgroundImageUrl", "background") || fallback;
+      return (
+        readValue(asRecord(response.data), "backgroundImageUrl", "background") ||
+        readValue(
+          asRecord(asRecord(response.data)?.data),
+          "backgroundImageUrl",
+          "background",
+        ) ||
+        fallback
+      );
     } catch (error) {
-      if (isUnsupportedUploadError(error)) setBackgroundSupport("unsupported");
+      if (isUnsupportedUploadError(error)) {
+        setBackgroundSupport("unsupported");
+      }
       throw error;
     }
   };
 
   const handleSave = async () => {
-    if (!user || !hasChanges || hasErrors || isSaving || saveActionRef.current) return;
+    if (!user || !hasChanges || hasErrors || isSaving || saveActionRef.current) {
+      return;
+    }
+
     saveActionRef.current = true;
     setIsSaving(true);
+
     try {
       let avatar = user.avatar;
       let background = effectiveBackground || null;
+
       if (avatarFile) {
         const response = await userApi.updateAvatar(avatarFile);
         avatar = resolveAvatarFromUploadResponse(response, avatar);
         setAvatarSupport("supported");
       }
-      if (backgroundFile) background = await uploadBackground(backgroundFile, background);
+
+      if (backgroundFile) {
+        background = await uploadBackground(backgroundFile, background);
+      }
+
       const response = await userApi.patchProfile({
         displayName: form.displayName.trim() || undefined,
         phone: form.phone.trim() || undefined,
         bio: form.bio.trim() || undefined,
       });
-      updateUser({ ...resolvePatchedProfileData(response), avatar, backgroundImageUrl: background || undefined });
+
+      updateUser({
+        ...resolvePatchedProfileData(response),
+        avatar,
+        backgroundImageUrl: background || undefined,
+      });
+
       const refreshed = await refreshProfile().catch(() => null);
       setForm(normalizeForm((refreshed as User | null) || { ...user, avatar }));
       setAvatarFile(null);
@@ -201,7 +387,16 @@ export const ProfileSettingsSection: React.FC = () => {
       setBackgroundPreview(background);
       toast.success(t("profile:settings.saved"));
     } catch (error) {
-      toast.error((error as { response?: { data?: { message?: string } } })?.response?.data?.message || (isUnsupportedUploadError(error) ? t("profile:settings.uploadUnavailable", { defaultValue: "Upload endpoint is unavailable right now. Try again later." }) : t("profile:settings.saveFailed")));
+      toast.error(
+        (error as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ||
+          (isUnsupportedUploadError(error)
+            ? t("profile:settings.uploadUnavailable", {
+                defaultValue:
+                  "Upload endpoint is unavailable right now. Try again later.",
+              })
+            : t("profile:settings.saveFailed")),
+      );
     } finally {
       saveActionRef.current = false;
       setIsSaving(false);
@@ -210,492 +405,411 @@ export const ProfileSettingsSection: React.FC = () => {
 
   return (
     <SettingsSection
-      icon={<UserCircleIcon className="h-5 w-5" />}
+      id={id}
       title={t("profile:settings.title")}
       description={t("profile:settings.description")}
-      className="overflow-hidden"
     >
-      <div className="space-y-5">
-        <div className="overflow-hidden rounded-[28px] border border-border/70 bg-surface shadow-xs">
-          <div
-            className="relative overflow-hidden px-5 py-5 sm:px-6 sm:py-6"
-            style={
-              effectiveBackground
-                ? {
-                    backgroundImage: `linear-gradient(135deg, rgba(15,23,42,0.72), rgba(15,23,42,0.38)), url(${effectiveBackground})`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                  }
-                : undefined
-            }
-          >
-            {!effectiveBackground && (
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.18),transparent_42%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.18),transparent_36%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(30,41,59,0.88))]" />
+      <SettingsProfileSummary
+        avatar={
+          <Avatar
+            src={effectiveAvatar}
+            alt={displayLabel}
+            size="xl"
+            className="h-16 w-16 rounded-2xl"
+          />
+        }
+        title={displayLabel}
+        subtitle={identityLine}
+        status={
+          <span
+            className={clsx(
+              "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
+              hasChanges
+                ? "bg-primary/10 text-primary"
+                : "bg-success/10 text-success",
             )}
+          >
+            {hasChanges ? (
+              <ArrowPathIcon className="h-3.5 w-3.5" />
+            ) : (
+              <CheckCircleIcon className="h-3.5 w-3.5" />
+            )}
+            {hasChanges
+              ? t("profile:settings.unsaved", {
+                  defaultValue: "Unsaved changes",
+                })
+              : t("profile:settings.synced", {
+                  defaultValue: "Synced",
+                })}
+          </span>
+        }
+        actions={
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={isSaving || avatarSupport === "unsupported"}
+              onClick={() => avatarInputRef.current?.click()}
+              leftIcon={<PhotoIcon className="h-4 w-4" />}
+            >
+              {t("profile:settings.chooseAvatar")}
+            </Button>
+            {avatarFile ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={isSaving}
+                onClick={() => {
+                  setAvatarFile(null);
+                  setAvatarPreview((current) => {
+                    revokeBlobUrl(current);
+                    return null;
+                  });
+                }}
+              >
+                {t("common:actions.cancel")}
+              </Button>
+            ) : null}
+          </>
+        }
+        meta={
+          <div className="grid gap-3 sm:grid-cols-2">
+            <SummaryMetaItem
+              icon={<AtSymbolIcon className="h-4 w-4" />}
+              label={t("profile:settings.username", {
+                defaultValue: "Username",
+              })}
+              value={user?.username ? `@${user.username}` : t("common:status.unknown")}
+            />
+            <SummaryMetaItem
+              icon={<EnvelopeIcon className="h-4 w-4" />}
+              label={t("profile:settings.corporateEmail")}
+              value={corporateEmail || t("common:status.unknown")}
+            />
+            <SummaryMetaItem
+              icon={<PhoneIcon className="h-4 w-4" />}
+              label={t("profile:editProfileModal.phone")}
+              value={
+                user?.phone ||
+                t("profile:settings.phoneEmpty", {
+                  defaultValue: "No phone number saved",
+                })
+              }
+            />
+            <SummaryMetaItem
+              icon={<BuildingOffice2Icon className="h-4 w-4" />}
+              label={t("profile:settings.departmentName", {
+                defaultValue: "Department",
+              })}
+              value={departmentName || t("common:status.unknown")}
+            />
+          </div>
+        }
+      />
 
-            <div className="relative z-10 space-y-5 text-left text-white">
-              <div className="flex flex-wrap gap-2 text-xs">
-                <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 font-semibold uppercase tracking-[0.18em] backdrop-blur-sm">
-                  <SparklesIcon className="h-3.5 w-3.5" />
-                  {t("profile:settings.summaryBadge", {
-                    defaultValue: "Profile overview",
-                  })}
-                </span>
-                <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 backdrop-blur-sm">
-                  {hasChanges ? (
-                    <ArrowPathIcon className="h-3.5 w-3.5" />
-                  ) : (
-                    <CheckCircleIcon className="h-3.5 w-3.5" />
-                  )}
-                  {hasChanges
-                    ? t("profile:settings.unsaved", {
-                        defaultValue: "Unsaved changes",
-                      })
-                    : t("profile:settings.synced", {
-                        defaultValue: "Synced",
-                      })}
-                </span>
-              </div>
-
-              <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr),minmax(18rem,0.8fr)]">
-                <div className="flex min-w-0 items-start gap-4">
-                  <div className="rounded-[1.7rem] border border-white/15 bg-white/10 p-1.5 backdrop-blur-sm">
-                    <Avatar
-                      src={avatarPreview || user?.avatar}
-                      alt={displayLabel}
-                      size="xl"
-                      className="h-24 w-24"
-                    />
-                  </div>
-
-                  <div className="min-w-0 space-y-2 text-left">
-                    <div>
-                      <h3 className="truncate text-2xl font-semibold sm:text-3xl">
-                        {displayLabel}
-                      </h3>
-                      <p className="mt-1 truncate text-sm text-white/78">
-                        {identityLine}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 text-sm text-white/78">
-                      {user?.username ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/8 px-3 py-1">
-                          <AtSymbolIcon className="h-4 w-4" />
-                          {user.username}
-                        </span>
-                      ) : null}
-                      {corporateEmail ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/8 px-3 py-1">
-                          <EnvelopeIcon className="h-4 w-4" />
-                          {corporateEmail}
-                        </span>
-                      ) : null}
-                      {employeeCode ? (
-                        <span className="inline-flex rounded-full border border-white/12 bg-white/8 px-3 py-1">
-                          {employeeCode}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <p className="max-w-2xl text-sm leading-6 text-white/82">
-                      {form.bio.trim() ||
-                        user?.bio?.trim() ||
-                        t("profile:userProfile.emptyBioSelf", {
-                          defaultValue:
-                            "Add a short introduction so people know who you are.",
-                        })}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm">
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-white/60">
-                      {t("profile:settings.departmentName", {
-                        defaultValue: "Department",
-                      })}
-                    </p>
-                    <p className="mt-2 text-sm font-medium">
-                      {departmentName || t("common:status.unknown")}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm">
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-white/60">
-                      {t("profile:settings.jobTitle", { defaultValue: "Title" })}
-                    </p>
-                    <p className="mt-2 text-sm font-medium">
-                      {jobTitle || t("common:status.unknown")}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm">
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-white/60">
-                      {t("profile:settings.employeeCode")}
-                    </p>
-                    <p className="mt-2 text-sm font-medium">
-                      {employeeCode || t("common:status.unknown")}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm">
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-white/60">
-                      {t("profile:settings.unitCode", {
-                        defaultValue: "Unit code",
-                      })}
-                    </p>
-                    <p className="mt-2 text-sm font-medium">
-                      {unitCode || t("common:status.unknown")}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
+      <SettingsFieldGroup
+        title={t("profile:settings.personalIdentityTitle", {
+          defaultValue: "Profile details",
+        })}
+        description={t("profile:settings.saveHint", {
+          defaultValue:
+            "Save to apply your latest profile details everywhere instantly.",
+        })}
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <Input
+            label={t("profile:settings.displayName")}
+            value={form.displayName}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                displayName: event.target.value,
+              }))
+            }
+            placeholder={t("profile:settings.displayNamePlaceholder")}
+            maxLength={120}
+            disabled={isSaving}
+            error={errors.displayName}
+            hint={t("profile:settings.displayNameHint", {
+              defaultValue:
+                "This is the name everyone sees across the product.",
+            })}
+          />
+          <Input
+            label={t("profile:editProfileModal.phone")}
+            value={form.phone}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                phone: event.target.value,
+              }))
+            }
+            placeholder={t("profile:editProfileModal.phonePlaceholder")}
+            maxLength={16}
+            disabled={isSaving}
+            error={errors.phone}
+            leftIcon={<PhoneIcon className="h-4 w-4" />}
+            hint={t("profile:settings.phoneHint", {
+              defaultValue:
+                "Use an international format so your contact info stays consistent.",
+            })}
+          />
+          <div className="md:col-span-2">
+            <Textarea
+              label={t("profile:settings.bio")}
+              value={form.bio}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  bio: event.target.value,
+                }))
+              }
+              rows={3}
+              maxLength={500}
+              disabled={isSaving}
+              error={errors.bio}
+              hint={t("profile:settings.bioHint", {
+                count: form.bio.trim().length,
+                defaultValue:
+                  "Keep it short and recognisable. {{count}} / 500 characters.",
+              })}
+            />
           </div>
         </div>
 
-        <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
-          <div className="space-y-5">
-            <div className="grid gap-3 sm:grid-cols-2">
-              {[
-                {
-                  icon: EnvelopeIcon,
-                  label: t("profile:settings.corporateEmail"),
-                  value: corporateEmail || t("common:status.unknown"),
-                },
-                {
-                  icon: PhoneIcon,
-                  label: t("profile:editProfileModal.phone"),
-                  value:
-                    user?.phone ||
-                    t("profile:settings.phoneEmpty", {
-                      defaultValue: "No phone number saved",
-                    }),
-                },
-                {
-                  icon: BuildingOffice2Icon,
-                  label: t("profile:settings.departmentName", {
-                    defaultValue: "Department",
-                  }),
-                  value: departmentName || t("common:status.unknown"),
-                },
-                {
-                  icon: BriefcaseIcon,
-                  label: t("profile:settings.jobTitle", {
-                    defaultValue: "Title",
-                  }),
-                  value: jobTitle || t("common:status.unknown"),
-                },
-              ].map(({ icon: Icon, label, value }) => (
-                <div
-                  key={label}
-                  className="rounded-2xl border border-border/70 bg-background/70 p-4"
-                >
-                  <div className="flex items-start gap-3">
-                    <Icon className="mt-0.5 h-5 w-5 text-text-muted" />
-                    <div className="min-w-0 text-left">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">
-                        {label}
-                      </p>
-                      <p className="mt-2 truncate text-sm font-medium text-text-primary">
-                        {value}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
+        <div className="border-t border-border/60 pt-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-text-primary">
+                {hasChanges
+                  ? t("profile:settings.unsaved", {
+                      defaultValue: "Unsaved changes",
+                    })
+                  : t("profile:settings.synced", {
+                      defaultValue: "Everything is up to date",
+                    })}
+              </p>
+              <p className="mt-1 text-sm text-text-muted">
+                {isRefreshing
+                  ? t("profile:settings.refreshing", {
+                      defaultValue: "Refreshing profile data...",
+                    })
+                  : t("profile:settings.saveHint", {
+                      defaultValue:
+                        "Save to apply your latest profile details everywhere instantly.",
+                    })}
+              </p>
             </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={!hasChanges || isSaving}
+                onClick={resetDrafts}
+              >
+                {t("common:actions.cancel")}
+              </Button>
+              <Button
+                type="button"
+                disabled={!hasChanges || isSaving || hasErrors}
+                isLoading={isSaving}
+                onClick={() => {
+                  void handleSave();
+                }}
+              >
+                {t("profile:settings.save")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </SettingsFieldGroup>
 
-            <div className="rounded-[24px] border border-border/70 bg-background/70 p-5">
-              <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary">
-                <PhotoIcon className="h-4 w-4" />
-                {t("profile:settings.mediaTitle", {
-                  defaultValue: "Visual identity",
-                })}
-              </div>
-
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-2xl border border-border/70 bg-surface p-4">
-                  <div className="flex items-center gap-3">
-                    <Avatar
-                      src={avatarPreview || user?.avatar}
-                      alt={displayLabel}
-                      size="lg"
-                    />
-                    <div className="text-left">
-                      <p className="text-sm font-semibold text-text-primary">
-                        {t("profile:settings.avatar")}
-                      </p>
-                      <p className="mt-1 text-xs text-text-muted">
-                        {avatarSupport === "unsupported"
-                          ? t("profile:settings.avatarUnsupported", {
-                              defaultValue:
-                                "Avatar upload is not available in this environment right now.",
-                            })
-                          : t("profile:settings.avatarEditableHint", {
-                              defaultValue:
-                                "JPG, PNG, WEBP or GIF up to 5MB.",
-                            })}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={isSaving || avatarSupport === "unsupported"}
-                      onClick={() => avatarInputRef.current?.click()}
-                      leftIcon={<PhotoIcon className="h-4 w-4" />}
-                    >
-                      {t("profile:settings.chooseAvatar")}
-                    </Button>
-                    {avatarFile ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        disabled={isSaving}
-                        onClick={() => {
-                          setAvatarFile(null);
-                          setAvatarPreview((current) => {
-                            revokeBlobUrl(current);
-                            return null;
-                          });
-                        }}
-                      >
-                        {t("common:actions.cancel")}
-                      </Button>
-                    ) : null}
-                  </div>
-
-                  <input
-                    ref={avatarInputRef}
-                    type="file"
-                    accept="image/*"
-                    disabled={isSaving || avatarSupport === "unsupported"}
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) {
-                        pickImage(file, AVATAR_MAX_SIZE, () => {
-                          setAvatarFile(file);
-                          setAvatarSupport("supported");
-                          setAvatarPreview((current) => {
-                            revokeBlobUrl(current);
-                            return URL.createObjectURL(file);
-                          });
-                        });
-                      }
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                </div>
-
-                <div className="rounded-2xl border border-border/70 bg-surface p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-left">
-                      <p className="text-sm font-semibold text-text-primary">
-                        {t("profile:settings.background")}
-                      </p>
-                      <p className="mt-1 text-xs text-text-muted">
-                        {backgroundSupport === "unsupported"
-                          ? t("profile:settings.backgroundUnsupported", {
-                              defaultValue:
-                                "Background upload is not available in this environment right now.",
-                            })
-                          : t("profile:settings.backgroundEditableHint", {
-                              defaultValue:
-                                "Optional background image up to 8MB.",
-                            })}
-                      </p>
-                    </div>
-
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={isSaving || backgroundSupport === "unsupported"}
-                      onClick={() => backgroundInputRef.current?.click()}
-                      leftIcon={<PhotoIcon className="h-4 w-4" />}
-                    >
-                      {t("profile:settings.chooseBackground")}
-                    </Button>
-                  </div>
-
-                  <div className="mt-4 h-32 overflow-hidden rounded-2xl border border-border/70 bg-surface-overlay">
-                    {effectiveBackground ? (
-                      <img
-                        src={effectiveBackground}
-                        alt={t("profile:settings.backgroundPreview")}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.16),transparent_36%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.16),transparent_36%),linear-gradient(135deg,rgba(226,232,240,0.8),rgba(248,250,252,0.96))] px-4 text-center text-xs text-text-muted">
-                        {t("profile:settings.noBackground")}
-                      </div>
-                    )}
-                  </div>
-
-                  <input
-                    ref={backgroundInputRef}
-                    type="file"
-                    accept="image/*"
-                    disabled={isSaving || backgroundSupport === "unsupported"}
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) {
-                        pickImage(file, BACKGROUND_MAX_SIZE, () => {
-                          setBackgroundFile(file);
-                          setBackgroundSupport("supported");
-                          setBackgroundPreview((current) => {
-                            revokeBlobUrl(current);
-                            return URL.createObjectURL(file);
-                          });
-                        });
-                      }
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                </div>
+      <SettingsFieldGroup
+        title={t("profile:settings.mediaTitle", {
+          defaultValue: "Visual identity",
+        })}
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl border border-border/60 bg-surface px-4 py-4">
+            <div className="flex items-start gap-3">
+              <Avatar src={effectiveAvatar} alt={displayLabel} size="lg" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-text-primary">
+                  {t("profile:settings.avatar")}
+                </p>
+                <p className="mt-1 text-sm text-text-muted">
+                  {avatarSupport === "unsupported"
+                    ? t("profile:settings.avatarUnsupported", {
+                        defaultValue:
+                          "Avatar upload is not available in this environment right now.",
+                      })
+                    : t("profile:settings.avatarEditableHint", {
+                        defaultValue: "JPG, PNG, WEBP or GIF up to 5MB.",
+                      })}
+                </p>
+                {avatarFile ? (
+                  <p className="mt-3 text-xs font-medium text-primary">
+                    {avatarFile.name}
+                  </p>
+                ) : null}
               </div>
             </div>
           </div>
 
-          <div className="space-y-5">
-            <div className="rounded-[24px] border border-border/70 bg-background/70 p-5">
-              <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary">
-                <UserCircleIcon className="h-4 w-4" />
-                {t("profile:settings.personalIdentityTitle", {
-                  defaultValue: "Profile details",
-                })}
+          <div className="rounded-xl border border-border/60 bg-surface px-4 py-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-text-primary">
+                  {t("profile:settings.background")}
+                </p>
+                <p className="mt-1 text-sm text-text-muted">
+                  {backgroundSupport === "unsupported"
+                    ? t("profile:settings.backgroundUnsupported", {
+                        defaultValue:
+                          "Background upload is not available in this environment right now.",
+                      })
+                    : t("profile:settings.backgroundEditableHint", {
+                        defaultValue: "Optional background image up to 8MB.",
+                      })}
+                </p>
               </div>
-
-              <div className="space-y-4">
-                <Input
-                  label={t("profile:settings.displayName")}
-                  value={form.displayName}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      displayName: event.target.value,
-                    }))
-                  }
-                  placeholder={t("profile:settings.displayNamePlaceholder")}
-                  maxLength={120}
-                  disabled={isSaving}
-                  error={errors.displayName}
-                  hint={t("profile:settings.displayNameHint", {
-                    defaultValue:
-                      "This is the name everyone sees across the product.",
-                  })}
-                />
-                <Input
-                  label={t("profile:editProfileModal.phone")}
-                  value={form.phone}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      phone: event.target.value,
-                    }))
-                  }
-                  placeholder={t("profile:editProfileModal.phonePlaceholder")}
-                  maxLength={16}
-                  disabled={isSaving}
-                  error={errors.phone}
-                  leftIcon={<PhoneIcon className="h-4 w-4" />}
-                  hint={t("profile:settings.phoneHint", {
-                    defaultValue:
-                      "Use an international format so your contact info stays consistent.",
-                  })}
-                />
-                <Textarea
-                  label={t("profile:settings.bio")}
-                  value={form.bio}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      bio: event.target.value,
-                    }))
-                  }
-                  rows={4}
-                  maxLength={500}
-                  disabled={isSaving}
-                  error={errors.bio}
-                  hint={t("profile:settings.bioHint", {
-                    count: form.bio.trim().length,
-                    defaultValue:
-                      "Keep it short and recognisable. {{count}} / 500 characters.",
-                  })}
-                />
-              </div>
-            </div>
-
-            <div className="rounded-[24px] border border-border/70 bg-background/70 p-5">
-              <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary">
-                <IdentificationIcon className="h-4 w-4" />
-                {t("profile:settings.readOnlyTitle")}
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Input label={t("profile:settings.employeeCode")} value={employeeCode || "-"} disabled readOnly />
-                <Input label={t("profile:settings.hrLegalName")} value={hrLegalName || "-"} disabled readOnly />
-                <Input label={t("profile:settings.departmentName", { defaultValue: "Department" })} value={departmentName || "-"} disabled readOnly />
-                <Input label={t("profile:settings.jobTitle", { defaultValue: "Title" })} value={jobTitle || "-"} disabled readOnly />
-                <Input label={t("profile:settings.unitCode", { defaultValue: "Unit code" })} value={unitCode || "-"} disabled readOnly />
-                <Input label={t("profile:settings.corporateEmail")} value={corporateEmail || "-"} disabled readOnly />
-              </div>
-            </div>
-
-            <div className="rounded-[24px] border border-border/70 bg-surface p-5 shadow-xs">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-left">
-                  <p className="text-sm font-semibold text-text-primary">
-                    {hasChanges
-                      ? t("profile:settings.unsaved", {
-                          defaultValue: "Unsaved changes",
-                        })
-                      : t("profile:settings.synced", {
-                          defaultValue: "Everything is up to date",
-                        })}
-                  </p>
-                  <p className="mt-1 text-sm text-text-muted">
-                    {isRefreshing
-                      ? t("profile:settings.refreshing", {
-                          defaultValue: "Refreshing profile data...",
-                        })
-                      : t("profile:settings.saveHint", {
-                          defaultValue:
-                            "Save to apply your latest profile details everywhere instantly.",
-                        })}
-                  </p>
-                </div>
-
-                <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={isSaving || backgroundSupport === "unsupported"}
+                  onClick={() => backgroundInputRef.current?.click()}
+                  leftIcon={<PhotoIcon className="h-4 w-4" />}
+                >
+                  {t("profile:settings.chooseBackground")}
+                </Button>
+                {backgroundFile ? (
                   <Button
                     type="button"
+                    size="sm"
                     variant="ghost"
-                    disabled={!hasChanges || isSaving}
-                    onClick={resetDrafts}
+                    disabled={isSaving}
+                    onClick={() => {
+                      setBackgroundFile(null);
+                      setBackgroundPreview(
+                        readValue(
+                          (user as Record<string, unknown> | null) ?? null,
+                          "backgroundImageUrl",
+                          "background_image_url",
+                        ),
+                      );
+                    }}
                   >
                     {t("common:actions.cancel")}
                   </Button>
-                  <Button
-                    type="button"
-                    disabled={!hasChanges || isSaving || hasErrors}
-                    isLoading={isSaving}
-                    onClick={() => {
-                      void handleSave();
-                    }}
-                    className={clsx(hasChanges && !hasErrors && "shadow-sm")}
-                  >
-                    {t("profile:settings.save")}
-                  </Button>
-                </div>
+                ) : null}
               </div>
+            </div>
+
+            <div className="mt-4 overflow-hidden rounded-xl border border-border/60 bg-surface-overlay">
+              {effectiveBackground ? (
+                <img
+                  src={effectiveBackground}
+                  alt={t("profile:settings.backgroundPreview")}
+                  className="h-32 w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-32 items-center justify-center px-4 text-center text-sm text-text-muted">
+                  {t("profile:settings.noBackground")}
+                </div>
+              )}
             </div>
           </div>
         </div>
-      </div>
+      </SettingsFieldGroup>
+
+      <SettingsFieldGroup
+        title={t("profile:settings.readOnlyTitle")}
+        description={t("profile:settings.enterpriseInfoHint", {
+          defaultValue:
+            "These fields are synced from your organisation and cannot be edited here.",
+        })}
+      >
+        <dl className="grid gap-3 sm:grid-cols-2">
+          <EnterpriseInfoItem
+            label={t("profile:settings.employeeCode")}
+            value={employeeCode || "-"}
+          />
+          <EnterpriseInfoItem
+            label={t("profile:settings.hrLegalName")}
+            value={hrLegalName || "-"}
+          />
+          <EnterpriseInfoItem
+            label={t("profile:settings.departmentName", {
+              defaultValue: "Department",
+            })}
+            value={departmentName || "-"}
+          />
+          <EnterpriseInfoItem
+            label={t("profile:settings.jobTitle", {
+              defaultValue: "Title",
+            })}
+            value={jobTitle || "-"}
+          />
+          <EnterpriseInfoItem
+            label={t("profile:settings.unitCode", {
+              defaultValue: "Unit code",
+            })}
+            value={unitCode || "-"}
+          />
+          <EnterpriseInfoItem
+            label={t("profile:settings.corporateEmail")}
+            value={corporateEmail || "-"}
+          />
+        </dl>
+      </SettingsFieldGroup>
+
+      <input
+        ref={avatarInputRef}
+        type="file"
+        accept="image/*"
+        disabled={isSaving || avatarSupport === "unsupported"}
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            pickImage(file, AVATAR_MAX_SIZE, () => {
+              setAvatarFile(file);
+              setAvatarSupport("supported");
+              setAvatarPreview((current) => {
+                revokeBlobUrl(current);
+                return URL.createObjectURL(file);
+              });
+            });
+          }
+          event.currentTarget.value = "";
+        }}
+      />
+
+      <input
+        ref={backgroundInputRef}
+        type="file"
+        accept="image/*"
+        disabled={isSaving || backgroundSupport === "unsupported"}
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            pickImage(file, BACKGROUND_MAX_SIZE, () => {
+              setBackgroundFile(file);
+              setBackgroundSupport("supported");
+              setBackgroundPreview((current) => {
+                revokeBlobUrl(current);
+                return URL.createObjectURL(file);
+              });
+            });
+          }
+          event.currentTarget.value = "";
+        }}
+      />
     </SettingsSection>
   );
 };

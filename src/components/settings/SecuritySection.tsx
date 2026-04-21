@@ -1,26 +1,27 @@
 /**
- * @fileoverview Security Settings Section
- *
- * Change-password form using existing changePasswordSchema.
- * Uses SettingsSection wrapper + react-hook-form + Zod.
+ * @fileoverview Security settings section.
  */
 
 import React, { useState } from "react";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { LockClosedIcon } from "@heroicons/react/24/outline";
+import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { LockClosedIcon, KeyIcon } from "@heroicons/react/24/outline";
+import { SettingsFieldGroup } from "./SettingsFieldGroup";
 import { SettingsSection } from "./SettingsSection";
-import { Button, Input, toast } from "../ui";
-import { PasswordStrength } from "../ui";
+import { Button, Input, PasswordStrength, toast } from "../ui";
+import { extractApiError } from "../../lib/apiContract";
 import {
   changePasswordSchema,
   type ChangePasswordFormData,
 } from "../../lib/validations";
 import { authApi } from "../../services/api";
-import { extractApiError } from "../../lib/apiContract";
 
-export const SecuritySection: React.FC = () => {
+interface SecuritySectionProps {
+  id?: string;
+}
+
+export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
   const { t } = useTranslation("settings");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -29,8 +30,8 @@ export const SecuritySection: React.FC = () => {
     handleSubmit,
     formState: { errors },
     reset,
-    watch,
     setError,
+    watch,
   } = useForm<ChangePasswordFormData>({
     resolver: zodResolver(changePasswordSchema),
     defaultValues: {
@@ -52,10 +53,9 @@ export const SecuritySection: React.FC = () => {
       });
       toast.success(t("security.changeSuccess"));
       reset();
-    } catch (err) {
-      const apiError = extractApiError(err);
-      if (apiError.statusCode === 422 || apiError.statusCode === 400) {
-        // Wrong current password
+    } catch (error) {
+      const apiError = extractApiError(error);
+      if (apiError.statusCode === 400 || apiError.statusCode === 422) {
         setError("currentPassword", {
           message: t("security.wrongPassword"),
         });
@@ -69,63 +69,64 @@ export const SecuritySection: React.FC = () => {
 
   return (
     <SettingsSection
-      icon={<KeyIcon className="h-5 w-5" />}
+      id={id}
       title={t("security.title")}
       description={t("security.description")}
     >
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <Input
-          {...register("currentPassword")}
-          type="password"
-          label={t("security.currentPassword")}
-          placeholder="••••••••"
-          leftIcon={<LockClosedIcon className="h-4 w-4" />}
-          error={errors.currentPassword?.message}
-          disabled={isLoading}
-          autoComplete="current-password"
-        />
-
-        <div>
+      <SettingsFieldGroup>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <Input
-            {...register("newPassword")}
+            {...register("currentPassword")}
             type="password"
-            label={t("security.newPassword")}
-            placeholder="••••••••"
+            label={t("security.currentPassword")}
+            placeholder="********"
             leftIcon={<LockClosedIcon className="h-4 w-4" />}
-            error={errors.newPassword?.message}
+            error={errors.currentPassword?.message}
+            disabled={isLoading}
+            autoComplete="current-password"
+          />
+
+          <div>
+            <Input
+              {...register("newPassword")}
+              type="password"
+              label={t("security.newPassword")}
+              placeholder="********"
+              leftIcon={<LockClosedIcon className="h-4 w-4" />}
+              error={errors.newPassword?.message}
+              disabled={isLoading}
+              autoComplete="new-password"
+            />
+            {newPasswordValue ? (
+              <div className="mt-2">
+                <PasswordStrength password={newPasswordValue} />
+              </div>
+            ) : null}
+          </div>
+
+          <Input
+            {...register("confirmPassword")}
+            type="password"
+            label={t("security.confirmPassword")}
+            placeholder="********"
+            leftIcon={<LockClosedIcon className="h-4 w-4" />}
+            error={errors.confirmPassword?.message}
             disabled={isLoading}
             autoComplete="new-password"
           />
-          {newPasswordValue && (
-            <div className="mt-2">
-              <PasswordStrength password={newPasswordValue} />
-            </div>
-          )}
-        </div>
 
-        <Input
-          {...register("confirmPassword")}
-          type="password"
-          label={t("security.confirmPassword")}
-          placeholder="••••••••"
-          leftIcon={<LockClosedIcon className="h-4 w-4" />}
-          error={errors.confirmPassword?.message}
-          disabled={isLoading}
-          autoComplete="new-password"
-        />
-
-        <div className="flex justify-end pt-2">
-          <Button
-            type="submit"
-            variant="primary"
-            size="sm"
-            isLoading={isLoading}
-            disabled={isLoading}
-          >
-            {t("security.changePassword")}
-          </Button>
-        </div>
-      </form>
+          <div className="flex justify-end pt-2">
+            <Button
+              type="submit"
+              size="sm"
+              isLoading={isLoading}
+              disabled={isLoading}
+            >
+              {t("security.changePassword")}
+            </Button>
+          </div>
+        </form>
+      </SettingsFieldGroup>
     </SettingsSection>
   );
 };

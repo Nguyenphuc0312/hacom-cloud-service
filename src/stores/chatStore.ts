@@ -3478,8 +3478,8 @@ export const useChatStore = create<ChatState>()(
           const responseEnvelope = asRecord(response);
           const responseMeta = asRecord(responseEnvelope?.meta);
           const payload = unwrapApiSuccess(response);
-          let normalized = normalizeMessagesResponse(payload, responseMeta);
-          let readState = normalizeConversationReadStateFromMeta(responseMeta);
+          const normalized = normalizeMessagesResponse(payload, responseMeta);
+          const readState = normalizeConversationReadStateFromMeta(responseMeta);
           const hasMoreForDirection = hasAfterCursor
             ? normalized.hasNext
             : normalized.hasPrev;

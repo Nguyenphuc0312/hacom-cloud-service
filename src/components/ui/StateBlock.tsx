@@ -21,8 +21,8 @@ export interface StateBlockProps {
 }
 
 const variantClassMap: Record<StateBlockVariant, string> = {
-  empty: "border-border/70 bg-surface/82",
-  "search-empty": "border-border/70 bg-surface/82",
+  empty: "border-border/70 bg-surface/88",
+  "search-empty": "border-border/70 bg-surface/88",
   error: "border-danger/18 bg-danger/8",
   success: "border-success/18 bg-success/10",
   warning: "border-warning/18 bg-warning/10",
@@ -40,13 +40,13 @@ export const StateBlock: React.FC<StateBlockProps> = ({
   return (
     <section
       className={clsx(
-        "flex flex-col items-center justify-center rounded-[1.75rem] border px-6 py-8 text-center",
+        "flex min-h-[15rem] flex-col items-center justify-center rounded-xl border px-6 py-8 text-center",
         variantClassMap[variant],
         className,
       )}
     >
       {icon ? (
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-overlay text-text-muted">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-surface-overlay text-text-muted">
           {icon}
         </div>
       ) : null}

@@ -25,6 +25,7 @@ import {
   useConversationMessageCount,
   useCurrentTypingStatus,
   useConversationCount,
+  useFriendshipStore,
 } from "../stores";
 import { useWebSocket } from "../hooks";
 import type { Attachment, UserSummary } from "../types";
@@ -187,6 +188,9 @@ export const ChatPage: React.FC = () => {
   );
   const typingStatus = useCurrentTypingStatus();
   const conversationCount = useConversationCount();
+  const refreshFriendshipDirectory = useFriendshipStore(
+    (state) => state.refreshDirectory,
+  );
   // WebSocket
   const {
     connectionState,
@@ -689,6 +693,12 @@ export const ChatPage: React.FC = () => {
         }
 
         console.error("Create direct conversation failed:", apiError);
+        if (apiError.code === ErrorCode.DIRECT_CHAT_TARGET_UNAVAILABLE) {
+          void refreshFriendshipDirectory({
+            reason: "explicit_refresh",
+            includeFullSnapshot: true,
+          });
+        }
         toast.error(
           apiError.message || t("error:chat.startConversationFailed"),
         );
@@ -697,7 +707,14 @@ export const ChatPage: React.FC = () => {
         setIsCreatingRoom(false);
       }
     },
-    [fetchConversations, isCreatingRoom, navigate, selectConversation, t],
+    [
+      fetchConversations,
+      isCreatingRoom,
+      navigate,
+      refreshFriendshipDirectory,
+      selectConversation,
+      t,
+    ],
   );
 
   const handleOpenCurrentUserProfile = useCallback(() => {
@@ -865,7 +882,7 @@ export const ChatPage: React.FC = () => {
   if (!currentUserSummary) {
     if (!isAuthInitialized || isAuthLoading) {
       return (
-        <div className="flex h-[100dvh] items-center justify-center bg-[hsl(var(--color-chat-canvas))] px-6">
+        <div className="flex h-full items-center justify-center bg-[hsl(var(--color-chat-canvas))] px-6">
           <div className="w-full max-w-xl space-y-5 rounded-2xl border border-border/80 bg-surface/90 p-6 shadow-elev1">
             <div className="flex items-center gap-3">
               <Spinner size="md" />
@@ -886,7 +903,7 @@ export const ChatPage: React.FC = () => {
     }
 
     return (
-      <div className="flex h-[100dvh] items-center justify-center bg-[hsl(var(--color-chat-canvas))] px-6">
+      <div className="flex h-full items-center justify-center bg-[hsl(var(--color-chat-canvas))] px-6">
         <ErrorState
           title={t("error:auth.profileMissing", {
             defaultValue: "Unable to load profile",
@@ -903,13 +920,17 @@ export const ChatPage: React.FC = () => {
 
   return (
     <div
-      className="chat-page-shell relative flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-[hsl(var(--color-chat-canvas))]"
+      className="chat-page-shell relative flex h-full min-h-0 overflow-hidden bg-[hsl(var(--color-chat-canvas))]"
       data-chat-layout-state={chatLayoutState}
     >
       {/* Sidebar */}
       <div
         className={clsx(
-          "absolute inset-y-0 left-0 z-30 w-full max-w-full transition-transform duration-300 sm:max-w-[min(23rem,94vw)] lg:relative lg:z-0 lg:w-auto lg:max-w-none lg:flex-shrink-0",
+          "absolute inset-y-0 left-0 z-30 w-full max-w-full transition-transform duration-300 sm:max-w-[min(23rem,94vw)] lg:relative lg:z-0 lg:max-w-none lg:flex-shrink-0 lg:transition-[width]",
+          "lg:border-r lg:border-border/60",
+          shouldRenderInfoContent
+            ? "lg:w-[var(--app-sidebar-width-compact)]"
+            : "lg:w-[var(--app-sidebar-width)]",
           showSidebarOnMobile
             ? "translate-x-0"
             : "-translate-x-full lg:translate-x-0",
@@ -945,7 +966,7 @@ export const ChatPage: React.FC = () => {
       {/* Chat window */}
       <div
         className={clsx(
-          "relative z-10 flex min-w-0 flex-1 flex-col",
+          "relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden bg-[hsl(var(--chat-panel-bg))]",
           !selectedConversation && "hidden lg:flex",
         )}
       >
@@ -1009,11 +1030,13 @@ export const ChatPage: React.FC = () => {
         Boolean(selectedConversation)) && (
         <div
           className={clsx(
-            "fixed inset-y-0 right-0 z-40 w-full max-w-full border-l border-border bg-surface transition-transform duration-300 sm:max-w-[min(26rem,94vw)] lg:relative lg:z-0 lg:w-[clamp(19.5rem,24vw,22rem)] lg:max-w-none",
-            isInfoPanelOpen ? "translate-x-0" : "translate-x-full lg:hidden",
+            "fixed inset-y-0 right-0 z-40 w-full max-w-full bg-surface transition-transform duration-300 sm:max-w-[min(26rem,94vw)] lg:relative lg:z-0 lg:max-w-none lg:flex-shrink-0 lg:border-l lg:border-border/60",
+            isInfoPanelOpen
+              ? "translate-x-0 lg:w-[var(--app-inspector-width)]"
+              : "translate-x-full lg:hidden",
           )}
-            style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}
-          >
+          style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}
+        >
             {shouldRenderInfoContent ? (
               <React.Suspense fallback={<DeferredPanelFallback />}>
                 {infoPanelMode === "self-profile" ? (

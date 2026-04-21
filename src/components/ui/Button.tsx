@@ -41,10 +41,10 @@ const variantClasses = {
 };
 
 const sizeClasses = {
-  xs: "rounded-sm px-2 py-1 text-caption",
-  sm: "rounded-md px-3 py-2 text-body-sm",
-  md: "rounded-md px-4 py-2 text-body-sm",
-  lg: "rounded-lg px-5 py-3 text-body",
+  xs: "min-h-8 rounded-sm px-2.5 text-caption",
+  sm: "min-h-[var(--control-height-sm)] rounded-md px-3 text-body-sm",
+  md: "min-h-[var(--control-height-md)] rounded-md px-4 text-body-sm",
+  lg: "min-h-[var(--control-height-lg)] rounded-lg px-5 text-body",
 };
 
 const iconSizeClasses = {
@@ -74,7 +74,7 @@ export const Button: React.FC<ButtonProps> = ({
     <button
       disabled={isDisabled}
       className={clsx(
-        "inline-flex min-h-10 items-center justify-center gap-2 font-medium",
+        "inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium",
         "transition-micro",
         "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface",
         "disabled:cursor-not-allowed disabled:border-disabled-border disabled:bg-disabled-bg disabled:text-text-disabled disabled:opacity-65",
@@ -131,10 +131,10 @@ export const IconButton: React.FC<IconButtonProps> = ({
   ...props
 }) => {
   const iconButtonSizes = {
-    xs: "h-6 w-6",
-    sm: "h-8 w-8",
-    md: "h-10 w-10 rounded-md",
-    lg: "h-12 w-12",
+    xs: "h-8 w-8 rounded-sm",
+    sm: "h-[var(--control-height-sm)] w-[var(--control-height-sm)] rounded-md",
+    md: "h-[var(--control-height-md)] w-[var(--control-height-md)] rounded-md",
+    lg: "h-[var(--control-height-lg)] w-[var(--control-height-lg)] rounded-lg",
   };
 
   return (

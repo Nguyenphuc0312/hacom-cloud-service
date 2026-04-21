@@ -50,7 +50,7 @@ interface HeaderAction {
 }
 
 const iconButtonClass = clsx(
-  "chat-header-action inline-flex h-9 w-9 items-center justify-center rounded-[0.85rem] border border-transparent",
+  "chat-header-action inline-flex h-[var(--control-height-md)] w-[var(--control-height-md)] items-center justify-center rounded-md border border-transparent",
   "text-text-muted transition-micro",
   "hover:bg-surface-hover/80 hover:text-text-primary",
   "active:scale-[0.98] active:bg-surface-active",
@@ -205,13 +205,13 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   return (
     <header
       className={clsx(
-        "chat-header sticky top-0 z-sticky border-b border-border/55 py-1.5",
+        "chat-header sticky top-0 z-sticky border-b border-border/55",
         className,
       )}
-      style={{ backgroundColor: "hsl(var(--color-chat-canvas) / 0.96)" }}
+      style={{ backgroundColor: "hsl(var(--chat-panel-bg) / 0.94)" }}
     >
       <ConversationLane>
-        <div className="chat-header-row flex min-h-10 items-center gap-1.5">
+        <div className="chat-header-row flex min-h-[var(--app-header-height)] items-center gap-2">
           {onBack && (
             <button
               type="button"
@@ -227,7 +227,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             type="button"
             onClick={onInfoClick}
             className={clsx(
-              "chat-header-avatar-button inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+              "chat-header-avatar-button inline-flex h-[var(--control-height-md)] w-[var(--control-height-md)] shrink-0 items-center justify-center rounded-full",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             )}
             aria-label={t("chat:header.viewInfo")}
@@ -256,7 +256,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             type="button"
             onClick={onInfoClick}
             className={clsx(
-              "min-w-0 flex-1 rounded-[0.9rem] px-1 py-0.5 text-left transition-fast hover:bg-surface-hover/40",
+              "min-w-0 flex-1 rounded-md px-2 py-1 text-left transition-fast hover:bg-surface-hover/40",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             )}
           >

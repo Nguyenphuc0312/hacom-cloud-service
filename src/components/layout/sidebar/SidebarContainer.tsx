@@ -18,7 +18,7 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({
       className={clsx(
         "flex h-full min-h-0 w-full flex-col overflow-hidden",
         "bg-[hsl(var(--chat-panel-bg))]",
-        "lg:w-sidebar",
+        "lg:w-full",
         className,
       )}
       aria-label={t("sidebar:sidebar.aria")}

@@ -191,9 +191,9 @@ const optimisticAcceptSnapshot = (
       ...incoming.requester,
       relationId: incoming.relationId,
       capabilities: {
-        ...incoming.capabilities,
-        canMessage: true,
+        ...EMPTY_CAPABILITIES,
         canUnfriend: true,
+        canBlock: true,
       },
       actorRole: "friend",
       relationStatus: "accepted" as FriendshipStatusType,

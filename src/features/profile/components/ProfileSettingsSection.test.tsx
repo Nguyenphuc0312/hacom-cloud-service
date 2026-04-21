@@ -96,11 +96,11 @@ describe("ProfileSettingsSection", () => {
     expect(screen.getByLabelText("profile:settings.displayName")).toBeEnabled();
     expect(screen.getByLabelText("profile:editProfileModal.phone")).toBeEnabled();
     expect(screen.getByLabelText("profile:settings.bio")).toBeEnabled();
-    expect(screen.getByDisplayValue("EMP001")).toBeDisabled();
-    expect(screen.getByDisplayValue("Nguyen Van A")).toBeDisabled();
-    expect(screen.getByDisplayValue("Engineering")).toBeDisabled();
-    expect(screen.getByDisplayValue("ENG")).toBeDisabled();
-    expect(screen.getByDisplayValue("user@company.test")).toBeDisabled();
+    expect(screen.getByText("EMP001")).toBeInTheDocument();
+    expect(screen.getByText("Nguyen Van A")).toBeInTheDocument();
+    expect(screen.getAllByText("Engineering").length).toBeGreaterThan(0);
+    expect(screen.getByText("ENG")).toBeInTheDocument();
+    expect(screen.getAllByText("user@company.test").length).toBeGreaterThan(0);
   });
 
   it("submits the latest profile payload including phone", async () => {

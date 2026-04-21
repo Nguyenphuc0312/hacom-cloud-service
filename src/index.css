@@ -51,6 +51,22 @@
   --space-10: 40px;
   --space-12: 48px;
 
+  --control-height-sm: 32px;
+  --control-height-md: 36px;
+  --control-height-lg: 40px;
+  --app-header-height: 56px;
+  --app-header-height-mobile: 52px;
+  --app-shell-gutter: 24px;
+  --app-shell-gutter-mobile: 16px;
+  --app-page-max: 1520px;
+  --app-page-narrow-max: 56rem;
+  --app-sidebar-width: 320px;
+  --app-sidebar-width-compact: 288px;
+  --app-inspector-width: 360px;
+  --app-rail-width: 248px;
+  --layout-panel-min: 280px;
+  --layout-panel-max: 420px;
+
   --size-room-item: 56px;
   --size-room-meta: 40px;
   --size-sidebar-width: 320px;
@@ -62,16 +78,16 @@
   --chat-bubble-px: 0.75rem;
   --chat-bubble-py: 0.5rem;
   --chat-lane-padding: 20px;
-  --chat-content-lane: 52rem;
-  --chat-rich-lane: 46rem;
-  --chat-bubble-max: min(32rem, 72%);
-  --chat-bubble-max-compact: min(28rem, 66%);
+  --chat-content-lane: 46rem;
+  --chat-rich-lane: 42rem;
+  --chat-bubble-max: min(34rem, 68%);
+  --chat-bubble-max-compact: min(30rem, 64%);
 
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
-  --radius-xl: 20px;
-  --radius-2xl: 24px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
 
   --shadow-xs: 0 1px 2px hsl(215 25% 15% / 0.08);
   --shadow-sm: 0 4px 12px hsl(215 25% 15% / 0.12);
@@ -152,7 +168,7 @@
   --color-sidebar-surface: var(--core-gray-0);
   --color-sidebar-hover: var(--core-gray-100);
   --color-sidebar-active: var(--core-gray-200);
-  --chat-shell-bg: 205 28% 95%;
+  --chat-shell-bg: 210 24% 96%;
   --chat-bubble-self: 146 34% 87%;
   --chat-bubble-other: 0 0% 100%;
   --chat-active-surface: var(--core-brand-500);
@@ -359,7 +375,8 @@ body,
   padding: 0;
   width: 100%;
   height: 100%;
-  overflow: auto;
+  overflow: hidden;
+  scrollbar-gutter: stable both-edges;
 }
 
 body {
@@ -373,6 +390,10 @@ body {
     sans-serif;
   background-color: hsl(var(--color-background));
   color: hsl(var(--color-text-primary));
+}
+
+#root {
+  isolation: isolate;
 }
 
 .chat-shell[data-chat-layout-profile="desktop-wide"] {
@@ -823,7 +844,7 @@ a:focus-visible {
   .app-shell-section {
     border: 1px solid hsl(var(--surface-border) / 0.72);
     border-radius: calc(var(--radius-2xl) - 2px);
-    background: hsl(var(--chat-panel-bg) / 0.94);
+    background: hsl(var(--chat-panel-bg) / 0.96);
   }
 
   .state-block {
@@ -833,8 +854,6 @@ a:focus-visible {
   }
 
   .auth-shell {
-    position: relative;
-    isolation: isolate;
     min-height: 100dvh;
     display: grid;
     place-items: center;
@@ -842,46 +861,20 @@ a:focus-visible {
     padding: var(--space-6) var(--space-4);
     background:
       radial-gradient(
-        1100px circle at top right,
-        hsl(var(--color-primary) / 0.12),
-        transparent 46%
-      ),
-      radial-gradient(
-        860px circle at bottom left,
-        hsl(var(--color-secondary) / 0.16),
-        transparent 52%
+        720px circle at top right,
+        hsl(var(--color-primary) / 0.05),
+        transparent 44%
       ),
       linear-gradient(
         180deg,
         hsl(var(--surface-background)),
-        hsl(var(--surface-background))
+        hsl(var(--chat-shell-bg) / 0.88)
       );
   }
 
   .auth-shell::before,
   .auth-shell::after {
-    content: "";
-    position: absolute;
-    border-radius: 9999px;
-    pointer-events: none;
-    filter: blur(56px);
-    z-index: -1;
-  }
-
-  .auth-shell::before {
-    top: -96px;
-    right: 8%;
-    width: 224px;
-    height: 224px;
-    background: hsl(var(--color-primary) / 0.14);
-  }
-
-  .auth-shell::after {
-    bottom: 8%;
-    left: 10%;
-    width: 248px;
-    height: 248px;
-    background: hsl(var(--color-secondary) / 0.16);
+    content: none;
   }
 
   .auth-shell-inner {
@@ -891,9 +884,8 @@ a:focus-visible {
   .auth-card {
     border: 1px solid hsl(var(--surface-border) / 0.82);
     border-radius: var(--radius-2xl);
-    background: hsl(var(--color-surface) / 0.96);
-    box-shadow: var(--elevation-2);
-    backdrop-filter: blur(6px);
+    background: hsl(var(--color-surface) / 0.98);
+    box-shadow: var(--elevation-1);
   }
 
   .icon-button-surface {
@@ -946,10 +938,10 @@ a:focus-visible {
 
   .toast-base {
     border: 1px solid hsl(var(--color-border));
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg);
     box-shadow: var(--elevation-2);
     font-weight: var(--font-weight-medium);
-    padding: 12px 24px;
+    padding: 10px 14px;
   }
 
   .toast-success {
@@ -977,7 +969,52 @@ a:focus-visible {
     color: hsl(var(--color-text-inverse));
   }
 
+  .private-app-shell {
+    position: relative;
+    display: flex;
+    height: 100%;
+    min-height: 100%;
+    flex-direction: column;
+    overflow: hidden;
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--color-background)),
+        hsl(var(--chat-shell-bg))
+      );
+  }
+
+  .private-app-viewport {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .private-app-route {
+    display: flex;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+
+  .private-app-route > * {
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 auto;
+  }
+
   .app-page-shell {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    flex: 1;
+    width: 100%;
+    flex-direction: column;
+    overflow: hidden;
     background: hsl(var(--chat-shell-bg));
   }
 
@@ -987,14 +1024,109 @@ a:focus-visible {
     backdrop-filter: blur(10px);
   }
 
+  .app-page-header__inner {
+    display: flex;
+    min-height: var(--app-header-height);
+    width: 100%;
+    align-items: center;
+    gap: var(--space-3);
+    padding-inline: var(--app-shell-gutter);
+  }
+
+  .app-page-back-button {
+    display: inline-flex;
+    height: var(--control-height-lg);
+    width: var(--control-height-lg);
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    color: hsl(var(--color-text-secondary));
+    transition:
+      background-color var(--motion-duration-hover) var(--motion-ease-enter),
+      color var(--motion-duration-hover) var(--motion-ease-enter);
+  }
+
+  .app-page-back-button:hover {
+    background: hsl(var(--surface-hover));
+    color: hsl(var(--surface-text-primary));
+  }
+
+  .app-page-back-button:focus-visible {
+    outline: 2px solid hsl(var(--color-focus-ring));
+    outline-offset: 2px;
+  }
+
+  .app-page-body {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    width: 100%;
+    overflow: hidden;
+    padding: var(--space-5) var(--app-shell-gutter);
+  }
+
+  .app-page-shell--narrow .app-page-header__inner,
+  .app-page-shell--narrow .app-page-body {
+    margin-inline: auto;
+    max-width: var(--app-page-narrow-max);
+  }
+
+  .app-page-scroll {
+    min-height: 0;
+    flex: 1;
+    overflow: auto;
+  }
+
   .app-page-panel {
-    border: 1px solid hsl(var(--surface-border) / 0.68);
-    border-radius: calc(var(--radius-2xl) - 2px);
+    border: 1px solid hsl(var(--surface-border) / 0.72);
+    border-radius: var(--radius-xl);
     background: hsl(var(--chat-panel-bg) / 0.96);
   }
 
+  .app-page-panel-soft {
+    border: 1px solid hsl(var(--surface-border) / 0.62);
+    border-radius: var(--radius-lg);
+    background: hsl(var(--color-surface) / 0.88);
+  }
+
+  .app-page-sidebar {
+    width: var(--app-sidebar-width);
+    min-width: var(--app-sidebar-width);
+  }
+
   .app-page-subtle {
-    border-radius: calc(var(--radius-xl) - 2px);
-    background: hsl(var(--surface-subtle) / 0.78);
+    border-radius: var(--radius-md);
+    background: hsl(var(--surface-subtle) / 0.72);
+  }
+
+  .input-surface {
+    height: var(--control-height-lg);
+    border: 1px solid hsl(var(--surface-border) / 0.88);
+    border-radius: var(--radius-md);
+    background: hsl(var(--color-surface));
+    transition:
+      border-color var(--motion-duration-hover) var(--motion-ease-enter),
+      box-shadow var(--motion-duration-hover) var(--motion-ease-enter),
+      background-color var(--motion-duration-hover) var(--motion-ease-enter);
+  }
+
+  .input-surface:focus-within {
+    border-color: hsl(var(--color-border-focus) / 0.92);
+    box-shadow: 0 0 0 3px hsl(var(--color-focus-ring) / 0.12);
+  }
+
+  .scrollbar-stable {
+    scrollbar-gutter: stable both-edges;
+  }
+
+  @media (max-width: 1023px) {
+    .app-page-header__inner {
+      min-height: var(--app-header-height-mobile);
+      padding-inline: var(--app-shell-gutter-mobile);
+    }
+
+    .app-page-body {
+      padding: var(--space-4) var(--app-shell-gutter-mobile);
+    }
   }
 }

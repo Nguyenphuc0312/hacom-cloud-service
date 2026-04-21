@@ -36,10 +36,11 @@ vi.mock("../../../features/chat/events/chatUiEvents", () => ({
 
 import { MessageBodyRenderer } from "./MessageBodyRenderer";
 import { MessageType } from "../../../types";
+import type { Message } from "../../../types";
 
 const VALID_CONTACT_USER_ID = "0f3112fc-b70c-446a-a873-f85f1a4ea6f6";
 
-const buildContactMessage = (contactUserId: string) =>
+const buildContactMessage = (contactUserId: string): Message =>
   ({
     id: "msg-contact-1",
     conversationId: "conv-contact-1",
@@ -51,7 +52,7 @@ const buildContactMessage = (contactUserId: string) =>
       username: "alice",
     },
     attachments: [],
-  }) as any;
+  }) as unknown as Message;
 
 describe("MessageBodyRenderer contact-card direct DM dispatch", () => {
   beforeEach(() => {

@@ -38,13 +38,17 @@ export const AppLayout: React.FC = () => {
   }, []);
 
   return (
-    <>
-      <Outlet />
+    <div className="private-app-shell">
+      <div className="private-app-viewport">
+        <div className="private-app-route">
+          <Outlet />
+        </div>
+      </div>
       <CommandPalette
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
       />
-    </>
+    </div>
   );
 };
 

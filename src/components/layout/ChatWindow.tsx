@@ -820,7 +820,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             onClick={() => setOverlayMode(null)}
             aria-label={t("common:actions.close")}
           />
-          <div className="pointer-events-auto absolute inset-y-0 right-0 w-full max-w-[min(24rem,100%)] bg-[hsl(var(--chat-panel-bg))] shadow-elev3 animate-slide-up-fade">
+          <div className="pointer-events-auto absolute inset-y-0 right-0 w-full max-w-[min(24rem,100%)] border-l border-border/60 bg-[hsl(var(--chat-panel-bg))] shadow-elev3 animate-slide-up-fade">
             <React.Suspense fallback={<OverlayPanelFallback />}>
               {overlayMode === "search" ? (
                 <SearchPanel

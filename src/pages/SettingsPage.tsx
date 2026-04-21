@@ -1,10 +1,8 @@
 /**
- * @fileoverview Settings Page
- *
- * Desktop-first preferences center with lighter navigation and clearer scan paths.
+ * @fileoverview Settings page with a dedicated settings shell.
  */
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
@@ -14,39 +12,129 @@ import {
   BellIcon,
   ChatBubbleLeftRightIcon,
   Cog6ToothIcon,
+  ExclamationTriangleIcon,
   PaintBrushIcon,
   ShieldCheckIcon,
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
 import {
   AppearanceSection,
+  BlockedUsersSection,
+  ChatSection,
+  DangerZoneSection,
+  LanguageSection,
   NotificationSection,
   PrivacySection,
-  ChatSection,
-  LanguageSection,
   SecuritySection,
-  DangerZoneSection,
-  BlockedUsersSection,
+  SettingsContent,
+  SettingsPageShell,
+  SettingsSidebar,
+  type SettingsSidebarItem,
 } from "../components/settings";
-import { InlineNotice, StateBlock } from "../components/ui";
+import { AppPageHeader } from "../components/layout/AppPage";
+import { InlineNotice } from "../components/ui";
+import { ProfileSettingsSection } from "../features/profile/components/ProfileSettingsSection";
+import { ROUTE_PATHS } from "../router/paths";
 import { useSettings } from "../settings";
 import { useAuthStore } from "../stores";
-import { ROUTE_PATHS } from "../router/paths";
-import { ProfileSettingsSection } from "../features/profile/components/ProfileSettingsSection";
 
-const SettingsPage: React.FC = () => {
+const MOBILE_MEDIA_QUERY = "(max-width: 767px)";
+
+const NAV_TARGETS = {
+  profile: "settings-profile",
+  notifications: "settings-notifications",
+  appearance: "settings-appearance",
+  privacy: "settings-privacy",
+  chatData: "settings-chat",
+  securityDevices: "settings-security",
+  danger: "settings-danger",
+} as const;
+
+type SettingsNavId = keyof typeof NAV_TARGETS;
+
+const SECTION_TO_NAV: Record<string, SettingsNavId> = {
+  "settings-profile": "profile",
+  "settings-notifications": "notifications",
+  "settings-appearance": "appearance",
+  "settings-privacy": "privacy",
+  "settings-chat": "chatData",
+  "settings-language": "chatData",
+  "settings-security": "securityDevices",
+  "settings-blocked-users": "securityDevices",
+  "settings-danger": "danger",
+};
+
+const OBSERVED_SECTION_IDS = Object.keys(SECTION_TO_NAV);
+const DEFAULT_NAV_ID: SettingsNavId = "profile";
+
+const readHashTargetId = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const hash = window.location.hash.replace(/^#/, "").trim();
+  return hash || null;
+};
+
+const resolveNavIdFromTarget = (targetId: string | null): SettingsNavId | null => {
+  if (!targetId) {
+    return null;
+  }
+
+  return SECTION_TO_NAV[targetId] ?? null;
+};
+
+const replaceHash = (targetId: string | null) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const nextHash = targetId ? `#${targetId}` : "";
+  window.history.replaceState(
+    null,
+    "",
+    `${window.location.pathname}${window.location.search}${nextHash}`,
+  );
+};
+
+export const SettingsPage: React.FC = () => {
   const { t } = useTranslation(["settings", "common", "profile"]);
   const navigate = useNavigate();
   const {
-    syncFromServer,
-    resetSettings,
     isSyncing,
-    syncError,
     lastSyncedAt,
+    resetSettings,
+    syncError,
+    syncFromServer,
     updatedAt,
   } = useSettings();
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const currentUser = useAuthStore((state) => state.user);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return window.matchMedia(MOBILE_MEDIA_QUERY).matches;
+  });
+  const [activeNavId, setActiveNavId] = useState<SettingsNavId>(() => {
+    return resolveNavIdFromTarget(readHashTargetId()) ?? DEFAULT_NAV_ID;
+  });
+  const [selectedMobileNavId, setSelectedMobileNavId] = useState<SettingsNavId | null>(
+    () => {
+      if (
+        typeof window !== "undefined" &&
+        window.matchMedia(MOBILE_MEDIA_QUERY).matches
+      ) {
+        return resolveNavIdFromTarget(readHashTargetId());
+      }
+
+      return null;
+    },
+  );
+
+  const contentRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -55,9 +143,129 @@ const SettingsPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
-  const handleRetrySync = () => {
-    void syncFromServer();
-  };
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia(MOBILE_MEDIA_QUERY);
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIsMobile(event.matches);
+    };
+
+    setIsMobile(mediaQuery.matches);
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleChange);
+      return () => mediaQuery.removeEventListener("change", handleChange);
+    }
+
+    mediaQuery.addListener(handleChange);
+    return () => mediaQuery.removeListener(handleChange);
+  }, []);
+
+  useEffect(() => {
+    const navFromHash = resolveNavIdFromTarget(readHashTargetId());
+    if (!navFromHash) {
+      return;
+    }
+
+    setActiveNavId(navFromHash);
+    if (isMobile) {
+      setSelectedMobileNavId(navFromHash);
+    }
+  }, [isMobile]);
+
+  useEffect(() => {
+    if (isMobile) {
+      return;
+    }
+
+    const navFromHash = resolveNavIdFromTarget(readHashTargetId());
+    if (!navFromHash) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      scrollToNavItem(navFromHash, "auto");
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [isMobile]);
+
+  useEffect(() => {
+    if (!contentRef.current || isMobile || typeof IntersectionObserver === "undefined") {
+      return undefined;
+    }
+
+    const root = contentRef.current;
+    const visibleEntries = new Map<string, IntersectionObserverEntry>();
+
+    const resolveMostVisibleNav = () => {
+      const nextEntry = Array.from(visibleEntries.values()).sort((left, right) => {
+        if (right.intersectionRatio !== left.intersectionRatio) {
+          return right.intersectionRatio - left.intersectionRatio;
+        }
+
+        return left.boundingClientRect.top - right.boundingClientRect.top;
+      })[0];
+
+      const nextNavId = nextEntry
+        ? SECTION_TO_NAV[(nextEntry.target as HTMLElement).id]
+        : null;
+
+      if (nextNavId) {
+        setActiveNavId(nextNavId);
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const entryId = (entry.target as HTMLElement).id;
+          if (!entryId) {
+            return;
+          }
+
+          if (entry.isIntersecting) {
+            visibleEntries.set(entryId, entry);
+          } else {
+            visibleEntries.delete(entryId);
+          }
+        });
+
+        resolveMostVisibleNav();
+      },
+      {
+        root,
+        rootMargin: "-14% 0px -55% 0px",
+        threshold: [0.2, 0.45, 0.7],
+      },
+    );
+
+    OBSERVED_SECTION_IDS.forEach((sectionId) => {
+      const element = document.getElementById(sectionId);
+      if (element && root.contains(element)) {
+        observer.observe(element);
+      }
+    });
+
+    return () => observer.disconnect();
+  }, [isMobile]);
+
+  useEffect(() => {
+    if (isMobile || !selectedMobileNavId) {
+      return;
+    }
+
+    const root = contentRef.current;
+    const targetId = NAV_TARGETS[selectedMobileNavId];
+    const element = root?.querySelector<HTMLElement>(`#${targetId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: "auto", block: "start" });
+    }
+    setSelectedMobileNavId(null);
+  }, [isMobile, selectedMobileNavId]);
 
   const formatTimestamp = (value: string | null) => {
     if (!value) {
@@ -67,323 +275,317 @@ const SettingsPage: React.FC = () => {
     return new Date(value).toLocaleString();
   };
 
-  const navItems = [
+  const navItems: Array<SettingsSidebarItem & { navId: SettingsNavId }> = [
     {
-      id: "settings-profile",
+      navId: "profile",
+      id: "profile",
       label: t("profile:pageTitle", { defaultValue: "Profile" }),
       description: t("settings:profile.description", {
-        defaultValue:
-          "Personal details and how your account appears across the app.",
+        defaultValue: "Identity, contact details, and enterprise information.",
       }),
       icon: <UserCircleIcon className="h-4 w-4" />,
     },
     {
-      id: "settings-notifications",
+      navId: "notifications",
+      id: "notifications",
       label: t("settings:notifications.title"),
-      description: t("settings:notifications.description"),
       icon: <BellIcon className="h-4 w-4" />,
     },
     {
-      id: "settings-appearance-chat",
+      navId: "appearance",
+      id: "appearance",
       label: t("settings:appearance.title"),
-      description: t("settings:appearance.description"),
       icon: <PaintBrushIcon className="h-4 w-4" />,
     },
     {
-      id: "settings-privacy-security",
+      navId: "privacy",
+      id: "privacy",
       label: t("settings:privacy.title"),
-      description: t("settings:privacy.description"),
       icon: <ShieldCheckIcon className="h-4 w-4" />,
     },
     {
-      id: "settings-advanced",
-      label: t("settings:dangerZone.title"),
-      description: t("settings:dangerZone.description", {
-        defaultValue: "Language, advanced preferences and destructive actions.",
+      navId: "chatData",
+      id: "chatData",
+      label: t("settings:chatData.title", {
+        defaultValue: "Chat & data",
       }),
       icon: <ChatBubbleLeftRightIcon className="h-4 w-4" />,
     },
+    {
+      navId: "securityDevices",
+      id: "securityDevices",
+      label: t("settings:securityDevices.title", {
+        defaultValue: "Security & devices",
+      }),
+      description: t("settings:securityDevices.description", {
+        defaultValue: "Password controls, blocked users, and account access.",
+      }),
+      icon: <ShieldCheckIcon className="h-4 w-4" />,
+    },
+    {
+      navId: "danger",
+      id: "danger",
+      label: t("settings:dangerZone.title"),
+      description: t("settings:dangerZone.description"),
+      icon: <ExclamationTriangleIcon className="h-4 w-4" />,
+    },
   ];
 
-  return (
-    <div className="app-page-shell flex h-full flex-col">
-      <header
-        className={clsx(
-          "app-page-header sticky top-0 z-10",
-          "supports-[backdrop-filter]:bg-[hsl(var(--chat-panel-bg))/0.88]",
-        )}
-      >
-        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
+  const handleRetrySync = () => {
+    void syncFromServer();
+  };
+
+  const scrollToNavItem = (navId: SettingsNavId, behavior: ScrollBehavior) => {
+    const root = contentRef.current;
+    const targetId = NAV_TARGETS[navId];
+    const element = root?.querySelector<HTMLElement>(`#${targetId}`);
+    if (element) {
+      element.scrollIntoView({ behavior, block: "start" });
+      setActiveNavId(navId);
+      replaceHash(targetId);
+    }
+  };
+
+  const handleSelectNav = (navId: SettingsNavId) => {
+    if (isMobile) {
+      setActiveNavId(navId);
+      setSelectedMobileNavId(navId);
+      replaceHash(NAV_TARGETS[navId]);
+      return;
+    }
+
+    scrollToNavItem(navId, "smooth");
+  };
+
+  const handleMobileBack = () => {
+    setSelectedMobileNavId(null);
+    replaceHash(null);
+  };
+
+  const currentMobileItem =
+    navItems.find((item) => item.navId === selectedMobileNavId) ?? null;
+
+  const syncNotice = syncError ? (
+    <InlineNotice
+      tone="error"
+      message={syncError || t("common:error.syncFailed")}
+      action={
+        <button
+          type="button"
+          onClick={handleRetrySync}
+          disabled={isSyncing}
+          className={clsx(
+            "rounded-full px-2.5 py-1 text-xs font-semibold transition-fast",
+            isSyncing ? "cursor-not-allowed opacity-60" : "hover:bg-danger/10",
+          )}
+        >
+          {t("common:actions.retry")}
+        </button>
+      }
+    />
+  ) : undefined;
+
+  const renderSettingsFooter = () => (
+    <div className="border-t border-border/60 pt-5 text-sm text-text-muted">
+      <p>{t("version", { version: 2 })}</p>
+      <p className="mt-1">
+        {t("common:status.lastSynced", {
+          time: formatTimestamp(lastSyncedAt),
+        })}
+        {" · "}
+        {t("common:status.lastUpdated", {
+          time: formatTimestamp(updatedAt || null),
+        })}
+      </p>
+    </div>
+  );
+
+  const renderDesktopSections = () => (
+    <>
+      <ProfileSettingsSection id="settings-profile" />
+      <NotificationSection id="settings-notifications" />
+      <AppearanceSection id="settings-appearance" />
+      <PrivacySection id="settings-privacy" />
+      <ChatSection id="settings-chat" />
+      <LanguageSection id="settings-language" />
+      <SecuritySection id="settings-security" />
+      <BlockedUsersSection id="settings-blocked-users" />
+      <DangerZoneSection id="settings-danger" />
+      {renderSettingsFooter()}
+    </>
+  );
+
+  const renderMobileDetail = (navId: SettingsNavId | null) => {
+    switch (navId) {
+      case "profile":
+        return (
+          <>
+            <ProfileSettingsSection id="settings-profile" />
+            {renderSettingsFooter()}
+          </>
+        );
+      case "notifications":
+        return (
+          <>
+            <NotificationSection id="settings-notifications" />
+            {renderSettingsFooter()}
+          </>
+        );
+      case "appearance":
+        return (
+          <>
+            <AppearanceSection id="settings-appearance" />
+            {renderSettingsFooter()}
+          </>
+        );
+      case "privacy":
+        return (
+          <>
+            <PrivacySection id="settings-privacy" />
+            {renderSettingsFooter()}
+          </>
+        );
+      case "chatData":
+        return (
+          <>
+            <ChatSection id="settings-chat" />
+            <LanguageSection id="settings-language" />
+            {renderSettingsFooter()}
+          </>
+        );
+      case "securityDevices":
+        return (
+          <>
+            <SecuritySection id="settings-security" />
+            <BlockedUsersSection id="settings-blocked-users" />
+            {renderSettingsFooter()}
+          </>
+        );
+      case "danger":
+        return (
+          <>
+            <DangerZoneSection id="settings-danger" />
+            {renderSettingsFooter()}
+          </>
+        );
+      default:
+        return renderSettingsFooter();
+    }
+  };
+
+  const mobileContent = selectedMobileNavId ? (
+    <SettingsContent
+      ref={contentRef}
+      notice={syncNotice}
+      header={
+        <div className="border-b border-border/60 pb-4">
           <button
             type="button"
-            onClick={() => navigate(ROUTE_PATHS.CHAT)}
-            className={clsx(
-              "flex h-10 w-10 items-center justify-center rounded-xl",
-              "text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-            )}
-            aria-label={t("common:actions.back")}
+            onClick={handleMobileBack}
+            className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium text-text-secondary transition-micro hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
-            <ArrowLeftIcon className="h-5 w-5" />
+            <ArrowLeftIcon className="h-4 w-4" />
+            {t("common:actions.back")}
           </button>
+          {currentMobileItem ? (
+            <div className="mt-3">
+              <p className="text-sm font-semibold text-text-primary">
+                {currentMobileItem.label}
+              </p>
+              {currentMobileItem.description ? (
+                <p className="mt-1 text-sm text-text-secondary">
+                  {currentMobileItem.description}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      }
+    >
+      {renderMobileDetail(selectedMobileNavId)}
+    </SettingsContent>
+  ) : (
+    <SettingsContent ref={contentRef} notice={syncNotice}>
+      <SettingsSidebar
+        items={navItems}
+        activeItemId={activeNavId}
+        onSelect={(id) => handleSelectNav(id as SettingsNavId)}
+        ariaLabel={t("pageTitle")}
+        mode="list"
+      />
+      {renderSettingsFooter()}
+    </SettingsContent>
+  );
 
-          <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 items-center gap-2">
-              <h1 className="truncate text-lg font-semibold text-text-primary">
-                {t("pageTitle")}
-              </h1>
-              <span className="hidden rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary sm:inline-flex">
-                {currentUser?.displayName || currentUser?.username || t("profile:pageTitle")}
+  return (
+    <SettingsPageShell
+      header={
+        <AppPageHeader
+          title={t("pageTitle")}
+          subtitle={t("common:status.lastUpdated", {
+            time: formatTimestamp(updatedAt || null),
+          })}
+          onBack={() => navigate(ROUTE_PATHS.CHAT)}
+          backLabel={t("common:actions.back")}
+          badge={
+            currentUser ? (
+              <span className="hidden rounded-full bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary sm:inline-flex">
+                {currentUser.displayName || currentUser.username}
+              </span>
+            ) : null
+          }
+          meta={
+            <div className="app-page-subtle inline-flex min-h-[var(--control-height-md)] items-center gap-1.5 rounded-full px-3 text-xs text-text-muted">
+              {isSyncing ? (
+                <ArrowPathIcon className="h-4 w-4 animate-spin" />
+              ) : (
+                <Cog6ToothIcon className="h-4 w-4" />
+              )}
+              <span>
+                {isSyncing
+                  ? t("common:loading.syncing")
+                  : t("common:status.idle")}
               </span>
             </div>
-            <p className="mt-0.5 truncate text-xs text-text-secondary">
-              {t("common:status.lastUpdated", {
-                time: formatTimestamp(updatedAt || null),
-              })}
-            </p>
-          </div>
-
-          <div className="app-page-subtle hidden min-h-9 items-center gap-1.5 rounded-full px-3 text-xs text-text-muted sm:inline-flex">
-            {isSyncing ? (
-              <ArrowPathIcon className="h-4 w-4 animate-spin" />
-            ) : (
-              <Cog6ToothIcon className="h-4 w-4" />
-            )}
-            <span>
-              {isSyncing ? t("common:loading.syncing") : t("common:status.idle")}
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={resetSettings}
-            className={clsx(
-              "app-page-subtle rounded-xl px-3 py-2 text-xs font-medium",
-              "text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-            )}
-          >
-            {t("resetAll")}
-          </button>
-        </div>
-      </header>
-
-      {syncError && (
-        <div className="border-b border-border/60 px-4 py-3 sm:px-6">
-          <div className="mx-auto max-w-6xl">
-            <InlineNotice
-              tone="error"
-              message={syncError || t("common:error.syncFailed")}
-              action={
-                <button
-                  type="button"
-                  onClick={handleRetrySync}
-                  disabled={isSyncing}
-                  className={clsx(
-                    "rounded-full px-2.5 py-1 text-xs font-semibold transition-fast",
-                    isSyncing
-                      ? "cursor-not-allowed opacity-60"
-                      : "hover:bg-danger/10",
-                  )}
-                >
-                  {t("common:actions.retry")}
-                </button>
-              }
-            />
-          </div>
-        </div>
+          }
+          actions={
+            <button
+              type="button"
+              onClick={resetSettings}
+              className={clsx(
+                "app-page-subtle min-h-[var(--control-height-md)] rounded-md px-3 text-xs font-medium",
+                "text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              )}
+            >
+              {t("resetAll")}
+            </button>
+          }
+        />
+      }
+      sidebar={
+        !isMobile ? (
+          <SettingsSidebar
+            items={navItems}
+            activeItemId={activeNavId}
+            onSelect={(id) => handleSelectNav(id as SettingsNavId)}
+            heading={t("pageTitle")}
+            meta={t("common:status.lastSynced", {
+              time: formatTimestamp(lastSyncedAt),
+            })}
+            ariaLabel={t("pageTitle")}
+          />
+        ) : undefined
+      }
+    >
+      {isMobile ? (
+        mobileContent
+      ) : (
+        <SettingsContent ref={contentRef} notice={syncNotice}>
+          {renderDesktopSections()}
+        </SettingsContent>
       )}
-
-      <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6">
-          <section className="app-page-panel p-4 sm:p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
-                  {t("pageTitle")}
-                </p>
-                <div className="space-y-1">
-                  <h2 className="text-xl font-semibold text-text-primary">
-                    {t("profile:pageTitle", { defaultValue: "Profile" })},{" "}
-                    {t("settings:notifications.title").toLowerCase()},
-                    {" "}
-                    {t("settings:appearance.title").toLowerCase()}
-                  </h2>
-                  <p className="max-w-2xl text-sm leading-6 text-text-secondary">
-                    {t("settings:description", {
-                      defaultValue:
-                        "Keep your profile complete, review notifications, and adjust privacy or chat preferences without digging through dense admin-style menus.",
-                    })}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid gap-2 sm:grid-cols-3">
-                <div className="app-page-subtle px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-                    {t("common:status.lastSynced", { time: "" }).trim()}
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-text-primary">
-                    {formatTimestamp(lastSyncedAt)}
-                  </p>
-                </div>
-                <div className="app-page-subtle px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-                    {t("common:status.lastUpdated", { time: "" }).trim()}
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-text-primary">
-                    {formatTimestamp(updatedAt || null)}
-                  </p>
-                </div>
-                <div className="app-page-subtle px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-                    {t("common:labels.sections", { defaultValue: "Sections" })}
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-text-primary">
-                    {navItems.length}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 flex gap-2 overflow-x-auto pb-1 xl:hidden">
-              {navItems.map((item) => (
-                <a
-                  key={item.id}
-                  href={`#${item.id}`}
-                  className="app-page-subtle inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-xs font-medium text-text-secondary transition-micro hover:text-text-primary"
-                >
-                  {item.icon}
-                  <span>{item.label}</span>
-                </a>
-              ))}
-            </div>
-          </section>
-
-          <div className="mt-6 grid gap-6 xl:grid-cols-[17rem,minmax(0,1fr)]">
-            <aside className="hidden xl:block">
-              <div className="app-page-panel sticky top-24 p-3">
-                <div className="px-3 pb-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
-                    {t("pageTitle")}
-                  </p>
-                  <p className="mt-1 text-sm text-text-secondary">
-                    {t("common:status.lastSynced", {
-                      time: formatTimestamp(lastSyncedAt),
-                    })}
-                  </p>
-                </div>
-
-                <nav className="mt-3 space-y-1.5">
-                  {navItems.map((item) => (
-                    <a
-                      key={item.id}
-                      href={`#${item.id}`}
-                      className="block rounded-[1rem] px-3 py-3 transition-micro hover:bg-surface-hover/80"
-                    >
-                      <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                          {item.icon}
-                        </span>
-                        <span>{item.label}</span>
-                      </div>
-                      <p className="mt-2 text-xs leading-5 text-text-muted">
-                        {item.description}
-                      </p>
-                    </a>
-                  ))}
-                </nav>
-              </div>
-            </aside>
-
-            <div className="space-y-8">
-              <section id="settings-profile" className="space-y-4 scroll-mt-24">
-                <div className="space-y-1 px-1">
-                  <h2 className="text-title text-text-primary">
-                    {navItems[0]?.label}
-                  </h2>
-                  <p className="text-body-sm text-text-secondary">
-                    {navItems[0]?.description}
-                  </p>
-                </div>
-                <ProfileSettingsSection />
-              </section>
-
-              <section
-                id="settings-notifications"
-                className="space-y-4 scroll-mt-24"
-              >
-                <div className="space-y-1 px-1">
-                  <h2 className="text-title text-text-primary">
-                    {navItems[1]?.label}
-                  </h2>
-                  <p className="text-body-sm text-text-secondary">
-                    {navItems[1]?.description}
-                  </p>
-                </div>
-                <NotificationSection />
-              </section>
-
-              <section
-                id="settings-appearance-chat"
-                className="space-y-4 scroll-mt-24"
-              >
-                <div className="space-y-1 px-1">
-                  <h2 className="text-title text-text-primary">
-                    {navItems[2]?.label}
-                  </h2>
-                  <p className="text-body-sm text-text-secondary">
-                    {navItems[2]?.description}
-                  </p>
-                </div>
-                <AppearanceSection />
-                <ChatSection />
-              </section>
-
-              <section
-                id="settings-privacy-security"
-                className="space-y-4 scroll-mt-24"
-              >
-                <div className="space-y-1 px-1">
-                  <h2 className="text-title text-text-primary">
-                    {navItems[3]?.label}
-                  </h2>
-                  <p className="text-body-sm text-text-secondary">
-                    {navItems[3]?.description}
-                  </p>
-                </div>
-                <PrivacySection />
-                <SecuritySection />
-                <BlockedUsersSection />
-              </section>
-
-              <section id="settings-advanced" className="space-y-4 scroll-mt-24">
-                <div className="space-y-1 px-1">
-                  <h2 className="text-title text-text-primary">
-                    {navItems[4]?.label}
-                  </h2>
-                  <p className="text-body-sm text-text-secondary">
-                    {navItems[4]?.description}
-                  </p>
-                </div>
-                <LanguageSection />
-                <DangerZoneSection />
-              </section>
-
-              <StateBlock
-                title={t("version", { version: 2 })}
-                description={`${t("common:status.lastSynced", {
-                  time: formatTimestamp(lastSyncedAt),
-                })} - ${t("common:status.lastUpdated", {
-                  time: formatTimestamp(updatedAt || null),
-                })}`}
-                className="border-dashed bg-[hsl(var(--surface-subtle))/0.48] shadow-none"
-              />
-            </div>
-          </div>
-        </div>
-      </main>
-    </div>
+    </SettingsPageShell>
   );
 };
 
