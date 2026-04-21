@@ -168,5 +168,6 @@
     "roleUpdateFailed": "Không thể cập nhật vai trò thành viên",
     "leftGroup": "Đã rời nhóm",
     "leaveGroupFailed": "Không thể rời nhóm lúc này"
-  }
+  },
+  "title": "Hồ sơ"
 }

@@ -168,5 +168,6 @@
     "roleUpdateFailed": "Unable to update member role",
     "leftGroup": "Left group",
     "leaveGroupFailed": "Unable to leave group right now"
-  }
+  },
+  "title": "Profile"
 }
