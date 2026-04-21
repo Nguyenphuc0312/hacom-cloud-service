@@ -102,31 +102,31 @@ const COMPOSER_VISUAL_STATE_MAP: Record<
 > = {
   idle: {
     shell:
-      "border-transparent bg-[hsl(var(--chat-panel-bg))] shadow-none",
+      "border-border/45 bg-[hsl(var(--chat-panel-bg))] shadow-none",
     attachmentButton:
       "text-text-muted hover:bg-surface-hover hover:text-text-primary",
     attachmentDivider: "border-transparent",
   },
   focus: {
     shell:
-      "border-primary/40 bg-[hsl(var(--chat-active-surface)/0.12)] shadow-none ring-1 ring-primary/18",
+      "border-primary/26 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-primary/12",
     attachmentButton:
       "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
-    attachmentDivider: "border-primary/20",
+    attachmentDivider: "border-border/40",
   },
   "ready-to-send": {
     shell:
-      "border-primary/34 bg-[hsl(var(--chat-active-surface)/0.1)] shadow-none ring-1 ring-primary/14",
+      "border-primary/22 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-primary/10",
     attachmentButton:
       "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
-    attachmentDivider: "border-transparent",
+    attachmentDivider: "border-border/35",
   },
   uploading: {
     shell:
-      "border-primary/24 bg-[hsl(var(--chat-active-surface)/0.1)] shadow-none ring-1 ring-primary/14",
+      "border-primary/20 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-primary/10",
     attachmentButton:
       "text-primary hover:bg-primary/8 hover:text-primary-hover",
-    attachmentDivider: "border-primary/18",
+    attachmentDivider: "border-border/35",
   },
   disabled: {
     shell: "border-transparent bg-disabled-bg shadow-none",
@@ -875,9 +875,9 @@ export const MessageInput = React.forwardRef<
         />
 
         {mode === "reply" && replyToMessage && (
-          <div className="mb-2 flex items-center justify-between rounded-[1rem] border border-border/80 bg-surface px-3 py-2 animate-slide-up-fade">
+          <div className="mb-2 flex items-center justify-between rounded-[0.95rem] border border-border/70 bg-surface px-3 py-2 animate-slide-up-fade">
             <div className="flex min-w-0 items-center gap-2">
-              <div className="h-8 w-1 rounded-full bg-primary" />
+              <div className="h-7 w-1 rounded-full bg-primary" />
               <div className="min-w-0">
                 <p className="text-xs font-medium text-primary">
                   {t("chat:composer.replyingTo", {
@@ -904,9 +904,9 @@ export const MessageInput = React.forwardRef<
         )}
 
         {mode === "edit" && editingMessage && (
-          <div className="mb-2 flex items-center justify-between rounded-[1rem] border border-warning/30 bg-warning/10 px-3 py-2 animate-slide-up-fade">
+          <div className="mb-2 flex items-center justify-between rounded-[0.95rem] border border-warning/30 bg-warning/10 px-3 py-2 animate-slide-up-fade">
             <div className="flex min-w-0 items-center gap-2">
-              <div className="h-8 w-1 rounded-full bg-warning" />
+              <div className="h-7 w-1 rounded-full bg-warning" />
               <div className="min-w-0">
                 <p className="text-xs font-medium text-warning">
                   {t("chat:composer.editing")}
@@ -968,7 +968,7 @@ export const MessageInput = React.forwardRef<
           <div
             data-composer-state={composerVisualState}
             className={clsx(
-              "chat-composer-shell relative flex min-w-0 flex-1 items-end rounded-[1rem] border px-3 py-2 transition-micro",
+              "chat-composer-shell relative flex min-w-0 flex-1 items-end rounded-[1.1rem] border px-2.5 py-1.5 transition-micro",
               composerVisualStyles.shell,
             )}
           >
@@ -1060,7 +1060,7 @@ export const MessageInput = React.forwardRef<
                   : undefined
               }
               className={clsx(
-                "chat-composer-textarea w-full min-h-[44px] flex-1 resize-none bg-transparent px-1 py-[10px]",
+                "chat-composer-textarea w-full min-h-[40px] flex-1 resize-none bg-transparent px-1 py-[9px]",
                 "text-sm text-text-primary placeholder:text-text-muted",
                 "transition-colors focus:outline-none",
                 disabled && "cursor-not-allowed opacity-70",
@@ -1078,7 +1078,7 @@ export const MessageInput = React.forwardRef<
                   type="button"
                   onClick={() => setShowAttachmentMenu((previous) => !previous)}
                   className={clsx(
-                    "chat-composer-attachment inline-flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
+                    "chat-composer-attachment inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors",
                     showAttachmentMenu
                       ? "bg-surface-active text-text-primary"
                       : composerVisualStyles.attachmentButton,
@@ -1090,7 +1090,7 @@ export const MessageInput = React.forwardRef<
                   aria-expanded={showAttachmentMenu}
                   disabled={disableAttachmentActions}
                 >
-                  <PaperClipIcon className="h-5 w-5" />
+                  <PaperClipIcon className="h-[18px] w-[18px]" />
                 </button>
 
                 {showAttachmentMenu && (

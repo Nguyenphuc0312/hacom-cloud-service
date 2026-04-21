@@ -41,13 +41,13 @@ export const SendButton: React.FC<SendButtonProps> = ({
       onClick={onClick}
       disabled={disabled}
       className={clsx(
-        "chat-composer-send inline-flex h-11 w-11 items-center justify-center rounded-lg border transition-micro",
+        "chat-composer-send inline-flex h-10 w-10 items-center justify-center rounded-full border transition-micro",
         resolvedState === "disabled" &&
-          "cursor-not-allowed border-border/70 bg-[hsl(var(--color-chat-pill))] text-text-disabled shadow-none opacity-72",
+          "cursor-not-allowed border-border/60 bg-[hsl(var(--color-chat-pill))] text-text-disabled shadow-none opacity-72",
         resolvedState === "idle" &&
-          "border-border/70 bg-[hsl(var(--color-chat-pill))] text-text-muted shadow-none",
+          "border-border/55 bg-[hsl(var(--color-chat-pill))] text-text-muted shadow-none hover:bg-surface-hover/80 hover:text-text-primary",
         resolvedState === "ready-to-send" &&
-          "border-primary/24 bg-[hsl(var(--chat-active-surface))] text-text-inverse shadow-none hover:bg-primary-hover",
+          "border-primary/12 bg-[hsl(var(--chat-active-surface)/0.9)] text-text-inverse shadow-none hover:bg-primary-hover",
         resolvedState === "uploading" &&
           "border-primary/18 bg-primary/12 text-primary shadow-none",
         resolvedState === "slow-mode" &&
@@ -59,10 +59,10 @@ export const SendButton: React.FC<SendButtonProps> = ({
       )}
       aria-label={ariaLabel}
       data-testid={dataTestId}
-    >
+      >
       <PaperAirplaneIcon
         className={clsx(
-          "h-5 w-5 transition-transform duration-150",
+          "h-[18px] w-[18px] transition-transform duration-150",
           resolvedState === "ready-to-send" && "translate-x-px -translate-y-px",
           isBusy && "opacity-85",
         )}

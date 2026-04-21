@@ -27,7 +27,7 @@ export const DateDivider: React.FC<DateDividerProps> = ({
     >
       <span
         className={clsx(
-          "rounded-full border border-border/70 bg-[hsl(var(--chat-panel-bg))/0.96] text-text-muted backdrop-blur",
+          "rounded-full border border-border/55 bg-[hsl(var(--chat-panel-bg))/0.92] text-text-muted/92 backdrop-blur",
           contract.dateDivider.pill,
         )}
       >

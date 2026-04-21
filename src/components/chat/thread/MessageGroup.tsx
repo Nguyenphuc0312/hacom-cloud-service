@@ -7,6 +7,7 @@ import { ReactionBar } from "../../message/ReactionBar";
 import { ThreadIndicator } from "../../message/ThreadIndicator";
 import { MessageBodyRenderer } from "../message-layout/MessageBodyRenderer";
 import { MessageMeta } from "../message-layout/MessageMeta";
+import { MessageBubble, type MessageBubblePosition } from "./MessageBubble";
 import type { Attachment, Message } from "../../../types";
 import { useChatStore } from "../../../stores";
 import {
@@ -19,7 +20,6 @@ import {
   getMessageStableKey,
 } from "../../../utils/messageTimeline";
 import { resolveUserDisplayName } from "../../../features/chat/identity/resolveUserDisplayName";
-import { formatMessageTime } from "../../../utils/formatTime";
 import type { ChatDensity } from "../../../stores/uiStore";
 import type {
   ConversationThreadGroupRow,
@@ -53,31 +53,35 @@ const isCoarsePointer = (): boolean =>
   typeof window.matchMedia === "function" &&
   window.matchMedia("(pointer: coarse)").matches;
 
-const getTechnicalTimestamp = (value: Date | string | undefined): string => {
-  const date = new Date(value ?? "");
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return new Intl.DateTimeFormat("vi-VN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).format(date);
-};
-
 const getThreadCount = (message: Message): number => {
   const candidate = message as Message & { threadCount?: number };
   return typeof candidate.threadCount === "number" ? candidate.threadCount : 0;
+};
+
+const resolveBubblePosition = (
+  index: number,
+  total: number,
+): MessageBubblePosition => {
+  if (total <= 1) {
+    return "single";
+  }
+
+  if (index === 0) {
+    return "first";
+  }
+
+  if (index === total - 1) {
+    return "last";
+  }
+
+  return "middle";
 };
 
 const MessageGroupItem: React.FC<{
   item: ConversationThreadMessageItem;
   isOwn: boolean;
   isGroupTail: boolean;
+  bubblePosition: MessageBubblePosition;
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
   onInspect?: (message: Message) => void;
@@ -98,6 +102,7 @@ const MessageGroupItem: React.FC<{
   item,
   isOwn,
   isGroupTail,
+  bubblePosition,
   onReply,
   onReact,
   onInspect,
@@ -144,7 +149,7 @@ const MessageGroupItem: React.FC<{
     [coarsePointer, isOwn, isSelectionMode, message, onDelete, onEdit, onInspect],
   );
   const threadCount = getThreadCount(message);
-  const hasInlineShell =
+  const isRichBubble =
     message.type !== "text" ||
     Boolean(message.replyToMessage) ||
     Boolean(message.forwardedFrom) ||
@@ -201,7 +206,7 @@ const MessageGroupItem: React.FC<{
   return (
     <div
       className={clsx(
-        "group/message-item relative flex max-w-[min(44rem,68ch)] gap-2",
+        "group/message-item relative flex max-w-[var(--chat-bubble-max)] gap-2",
         isOwn ? "self-end" : "self-start",
         insertedMessageKeys.has(getMessageStableKey(message)) &&
           isPendingMessage(message) &&
@@ -227,7 +232,8 @@ const MessageGroupItem: React.FC<{
         {inlineActions.length > 0 && !isSelectionMode && (
           <div
             className={clsx(
-              "pointer-events-none absolute -top-2 right-0 z-10 flex translate-y-0.5 justify-end opacity-0 transition-all duration-150",
+              "pointer-events-none absolute -top-2 z-10 flex translate-y-0.5 opacity-0 transition-all duration-150",
+              isOwn ? "right-0 justify-end" : "left-0 justify-start",
               coarsePointer && "pointer-events-auto opacity-100",
               "group-hover/message-item:pointer-events-auto group-hover/message-item:translate-y-0 group-hover/message-item:opacity-100",
               "group-focus-within/message-item:pointer-events-auto group-focus-within/message-item:translate-y-0 group-focus-within/message-item:opacity-100",
@@ -241,14 +247,11 @@ const MessageGroupItem: React.FC<{
           </div>
         )}
 
-        <div
-          className={clsx(
-            "rounded-xl transition-colors",
-            hasInlineShell
-              ? "border border-border/70 bg-surface-raised/90 px-3 py-2.5"
-              : "px-0 py-0.5",
-            isHighlighted && "bg-warning/10 ring-1 ring-warning/35",
-          )}
+        <MessageBubble
+          isOwn={isOwn}
+          position={bubblePosition}
+          isRich={isRichBubble}
+          isHighlighted={isHighlighted}
         >
           {message.replyToMessage && (
             <button
@@ -260,18 +263,31 @@ const MessageGroupItem: React.FC<{
                 }
               }}
               className={clsx(
-                "mb-2 flex w-full items-start gap-2 border-l-2 border-border-strong/70 bg-surface-overlay/70 px-2.5 py-2 text-left transition-colors hover:bg-surface-hover",
+                "mb-2 flex w-full items-start gap-2 rounded-[12px] border-l-2 px-2.5 py-2 text-left transition-colors",
+                isOwn
+                  ? "border-text-primary/20 bg-text-primary/8 hover:bg-text-primary/12"
+                  : "border-border-strong/70 bg-surface-overlay/78 hover:bg-surface-hover",
                 !onNavigateToMessage && "cursor-default",
               )}
             >
               <div className="min-w-0">
-                <div className="text-[11px] font-semibold leading-4 text-text-secondary">
+                <div
+                  className={clsx(
+                    "text-[11px] font-semibold leading-4",
+                    isOwn ? "text-text-primary/78" : "text-text-secondary",
+                  )}
+                >
                   {resolveUserDisplayName({
                     displayName: message.replyToMessage.senderName,
                     username: message.replyToMessage.senderId,
                   })}
                 </div>
-                <p className="truncate text-[12px] leading-4 text-text-muted">
+                <p
+                  className={clsx(
+                    "truncate text-[12px] leading-4",
+                    isOwn ? "text-text-primary/68" : "text-text-muted",
+                  )}
+                >
                   {message.replyToMessage.isDeleted
                     ? t("chat:message.deleted", {
                         defaultValue: "Message deleted",
@@ -283,7 +299,12 @@ const MessageGroupItem: React.FC<{
           )}
 
           {message.forwardedFrom && (
-            <div className="mb-2 text-[11px] font-medium leading-4 text-text-muted">
+            <div
+              className={clsx(
+                "mb-2 text-[11px] font-medium leading-4",
+                isOwn ? "text-text-primary/68" : "text-text-muted",
+              )}
+            >
               {t("chat:message.forwardedFrom", {
                 defaultValue: "Forwarded from {{name}}",
                 name: resolveUserDisplayName({
@@ -298,7 +319,7 @@ const MessageGroupItem: React.FC<{
 
           <MessageBodyRenderer
             message={message}
-            isOwn={false}
+            isOwn={isOwn}
             currentUsername={currentUsername}
             textRenderMode={renderState.renderMode}
             isCollapsibleText={renderState.isCollapsible}
@@ -306,10 +327,24 @@ const MessageGroupItem: React.FC<{
             onImageClick={onImageClick}
             onFilePreview={onFilePreview}
           />
-        </div>
+
+          {isGroupTail && (
+            <MessageMeta
+              message={message}
+              isOwn={isOwn}
+              showStatus={item.showStatus}
+              density="comfortable"
+              layout="inline"
+              className={clsx(
+                "mt-1 justify-end text-[11px]",
+                isOwn ? "text-text-primary/64" : "text-text-muted/84",
+              )}
+            />
+          )}
+        </MessageBubble>
 
         {(message.reactions?.length ?? 0) > 0 && (
-          <div className="mt-1.5">
+          <div className="mt-1">
             <ReactionBar
               reactions={message.reactions}
               onReact={(emoji) => onReact(message.id, emoji)}
@@ -321,16 +356,6 @@ const MessageGroupItem: React.FC<{
           <ThreadIndicator
             threadCount={threadCount}
             isOwn={isOwn}
-            className="mt-1.5"
-          />
-        )}
-
-        {isGroupTail && (
-          <MessageMeta
-            message={message}
-            isOwn={isOwn}
-            showStatus={item.showStatus}
-            density="comfortable"
             className="mt-1"
           />
         )}
@@ -375,13 +400,11 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
     displayName: leadMessage.senderName,
     username: leadMessage.senderId,
   });
-  const shortTime = formatMessageTime(row.endedAt);
-  const fullTime = getTechnicalTimestamp(row.endedAt);
 
   return (
     <section
       className={clsx(
-        "thread-message-group grid grid-cols-[40px,minmax(0,1fr)] gap-x-3",
+        "thread-message-group grid grid-cols-[36px,minmax(0,1fr)] gap-x-2.5",
         row.isOwn && "grid-cols-[minmax(0,1fr)]",
       )}
     >
@@ -402,31 +425,25 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
 
       <div
         className={clsx(
-          "min-w-0 space-y-1",
+          "min-w-0",
           row.isOwn ? "items-end" : "items-start",
           "flex flex-col",
         )}
       >
-        <div
-          className={clsx(
-            "flex w-full items-center gap-2 text-[11px] font-medium leading-4 text-text-muted",
-            row.isOwn ? "justify-end" : "justify-start",
-          )}
-          title={fullTime}
-        >
-          {!row.isOwn && row.showSenderName && (
-            <span className="text-text-secondary">{senderDisplayName}</span>
-          )}
-          <span>{shortTime}</span>
-        </div>
+        {!row.isOwn && row.showSenderName && (
+          <div className="mb-1 px-1 text-[12px] font-medium leading-4 text-text-secondary/92">
+            {senderDisplayName}
+          </div>
+        )}
 
-        <div className="flex w-full flex-col gap-1">
+        <div className="flex w-full flex-col gap-0.5">
           {row.items.map((item, index) => (
             <MessageGroupItem
               key={item.key}
               item={item}
               isOwn={row.isOwn}
               isGroupTail={index === row.items.length - 1}
+              bubblePosition={resolveBubblePosition(index, row.items.length)}
               onReply={onReply}
               onReact={onReact}
               onInspect={onInspect}

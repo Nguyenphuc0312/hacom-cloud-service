@@ -55,9 +55,9 @@ interface RowData {
 const VIRTUALIZATION_THRESHOLD = 10;
 const LOAD_MORE_THRESHOLD_PX = 280;
 const ROOM_HEIGHT_BY_LAYOUT: Record<ChatLayoutState, number> = {
-  normal: 60,
-  "with-panel": 56,
-  mobile: 58,
+  normal: 56,
+  "with-panel": 52,
+  mobile: 54,
 };
 
 const measureViewportHeight = (node: HTMLDivElement): number => {

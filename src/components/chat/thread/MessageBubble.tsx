@@ -1,0 +1,53 @@
+import React from "react";
+import clsx from "clsx";
+
+export type MessageBubblePosition = "single" | "first" | "middle" | "last";
+
+interface MessageBubbleProps {
+  isOwn: boolean;
+  position: MessageBubblePosition;
+  isRich?: boolean;
+  isHighlighted?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}
+
+const INCOMING_RADIUS_MAP: Record<MessageBubblePosition, string> = {
+  single: "rounded-[18px]",
+  first: "rounded-[18px_18px_18px_8px]",
+  middle: "rounded-[18px_12px_12px_8px]",
+  last: "rounded-[18px_12px_18px_8px]",
+};
+
+const OUTGOING_RADIUS_MAP: Record<MessageBubblePosition, string> = {
+  single: "rounded-[18px]",
+  first: "rounded-[18px_18px_8px_18px]",
+  middle: "rounded-[12px_18px_8px_12px]",
+  last: "rounded-[12px_18px_8px_18px]",
+};
+
+export const MessageBubble: React.FC<MessageBubbleProps> = ({
+  isOwn,
+  position,
+  isRich = false,
+  isHighlighted = false,
+  className,
+  children,
+}) => (
+  <div
+    className={clsx(
+      "relative overflow-hidden transition-colors",
+      isOwn
+        ? "bg-[hsl(var(--chat-bubble-sent))] text-[hsl(var(--chat-bubble-sent-text))]"
+        : "bg-[hsl(var(--chat-bubble-received))] text-[hsl(var(--chat-bubble-received-text))]",
+      isOwn ? OUTGOING_RADIUS_MAP[position] : INCOMING_RADIUS_MAP[position],
+      isRich ? "px-2 py-2" : "px-3 py-2",
+      isHighlighted && "ring-1 ring-warning/35",
+      className,
+    )}
+  >
+    {children}
+  </div>
+);
+
+export default MessageBubble;

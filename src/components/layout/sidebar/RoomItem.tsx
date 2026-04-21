@@ -77,7 +77,7 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
   },
   hover: {
     container:
-      "hover:bg-surface-hover/90 data-[keyboard-active=true]:bg-surface-hover/90",
+      "hover:bg-surface-hover/70 data-[keyboard-active=true]:bg-surface-hover/70",
     title:
       "group-hover:text-text-primary group-data-[keyboard-active=true]:text-text-primary",
     preview:
@@ -89,22 +89,22 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
     unreadBadge: "",
   },
   active: {
-    container: "bg-[hsl(var(--chat-active-surface)/0.18)]",
+    container: "bg-[hsl(var(--chat-active-surface)/0.12)]",
     title: "text-text-primary",
     preview: "text-text-secondary",
-    time: "text-primary",
+    time: "text-text-secondary",
     timeBadge:
-      "bg-[hsl(var(--chat-active-surface)/0.18)] text-primary",
+      "bg-[hsl(var(--chat-active-surface)/0.1)] text-text-secondary",
     unreadBadge:
       "bg-[hsl(var(--chat-badge-bg))] text-text-inverse",
   },
   unread: {
-    container: "bg-[hsl(var(--chat-active-surface)/0.1)]",
+    container: "bg-[hsl(var(--chat-active-surface)/0.08)]",
     title: "text-text-primary",
     preview: "text-text-secondary",
-    time: "text-primary",
+    time: "text-text-secondary",
     timeBadge:
-      "bg-[hsl(var(--chat-badge-bg)/0.16)] text-primary",
+      "bg-[hsl(var(--chat-badge-bg)/0.12)] text-text-secondary",
     unreadBadge:
       "bg-[hsl(var(--chat-badge-bg))] text-text-inverse",
   },
@@ -117,7 +117,7 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
     unreadBadge: "bg-text-muted text-text-inverse",
   },
   mention: {
-    container: "bg-danger/10",
+    container: "bg-danger/9",
     title: "text-text-primary",
     preview: "text-text-secondary",
     time: "text-danger",
@@ -254,9 +254,9 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
       data-room-state={visualState}
       data-keyboard-active={isKeyboardActive}
       className={clsx(
-        "group relative mx-1.5 flex h-[var(--size-room-item)] w-[calc(100%-0.75rem)] items-center text-left",
+        "group relative mx-1 flex h-[var(--size-room-item)] w-[calc(100%-0.5rem)] items-center text-left",
         "transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-        isDense ? "rounded-[0.95rem] px-2.5" : "rounded-[1rem] px-3",
+        isDense ? "rounded-[0.85rem] px-2" : "rounded-[0.95rem] px-2.5",
         visualStyles.container,
         hoverStyles?.container,
       )}
@@ -272,7 +272,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
           <Avatar
             src={avatarSrc}
             alt={displayName}
-            size={isDense ? "sm" : "md"}
+            size="sm"
             status={avatarStatus}
             showStatus
           />
@@ -280,17 +280,17 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
           <GroupAvatar
             conversation={conversation}
             currentUserId={currentUserId}
-            size={isDense ? "sm" : "md"}
+            size="sm"
           />
         )}
 
         <div className="min-w-0 text-left">
           <p
             className={clsx(
-              "truncate text-left font-semibold",
+              "truncate text-left font-medium",
               isDense
-                ? "text-[13px] leading-[1.1rem]"
-                : "text-[14px] leading-5",
+                ? "text-[13px] leading-[1.05rem]"
+                : "text-[14px] leading-[1.1rem]",
               visualStyles.title,
               hoverStyles?.title,
             )}
@@ -300,10 +300,10 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
 
           <p
             className={clsx(
-              "truncate pr-1 text-left",
+              "mt-0.5 truncate pr-1 text-left",
               isDense
-                ? "text-[12px] leading-[1rem]"
-                : "text-[13px] leading-5",
+                ? "text-[11px] leading-[0.95rem]"
+                : "text-[12px] leading-[1rem]",
               hoverStyles?.preview,
               previewToneClass,
             )}
@@ -321,15 +321,15 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
         <div
           className={clsx(
             "flex h-full min-w-room-meta flex-col items-end justify-center",
-            isDense ? "gap-0.5" : "gap-1",
+            isDense ? "gap-1" : "gap-1.5",
           )}
         >
           <span
             className={clsx(
               "inline-flex items-center rounded-full font-medium tabular-nums",
               isDense
-                ? "min-h-4 px-1.5 py-0 text-[10px]"
-                : "min-h-5 px-2 py-0.5 text-[11px]",
+                ? "min-h-4 px-1 py-0 text-[10px]"
+                : "min-h-4 px-1 py-0 text-[11px]",
               visualStyles.time,
               timeBadgeClasses,
               hoverStyles?.time,
@@ -345,7 +345,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
                 "sidebar-unread-badge inline-flex items-center justify-center rounded-full font-semibold leading-none",
                 isDense
                   ? "min-h-4 min-w-4 px-1 text-[10px]"
-                  : "min-h-5 min-w-5 px-1.5 text-[11px]",
+                  : "min-h-[18px] min-w-[18px] px-1.5 text-[10px]",
                 visualStyles.unreadBadge,
               )}
             >

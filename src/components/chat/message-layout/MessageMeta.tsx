@@ -23,6 +23,7 @@ interface MessageMetaProps {
   isOwn: boolean;
   showStatus?: boolean;
   density?: ChatDensity;
+  layout?: "block" | "inline";
   className?: string;
 }
 
@@ -109,6 +110,7 @@ export const MessageMeta: React.FC<MessageMetaProps> = ({
   isOwn,
   showStatus = false,
   density,
+  layout = "block",
   className,
 }) => {
   const { t } = useTranslation();
@@ -128,9 +130,11 @@ export const MessageMeta: React.FC<MessageMetaProps> = ({
   return (
     <div
       className={clsx(
-        "flex min-h-4 flex-wrap items-center text-[11px] font-medium leading-4",
+        "flex min-h-4 items-center text-[11px] leading-4",
         contract.cluster.meta,
+        layout === "inline" ? "gap-1.5" : "flex-wrap gap-2",
         isOwn ? "justify-end text-text-muted/92" : "text-text-muted/84",
+        layout === "inline" && "whitespace-nowrap",
         className,
       )}
       title={fullTimestamp}
@@ -147,7 +151,7 @@ export const MessageMeta: React.FC<MessageMetaProps> = ({
       )}
       <span>{timeStr}</span>
       {isOwn && showStatus && (
-        <span className="text-text-muted/82">
+        <span className="inline-flex items-center text-text-muted/82">
           <MessageStatusGlyph message={message} />
         </span>
       )}

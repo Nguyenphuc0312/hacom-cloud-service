@@ -32,7 +32,7 @@ export const SegmentedControl: React.FC<SegmentedControlProps> = ({
       role="tablist"
       aria-label={ariaLabel}
       className={clsx(
-        "segmented-control inline-flex w-full items-center gap-1 rounded-[1.2rem] border border-border/60 bg-surface p-1",
+        "segmented-control inline-flex w-full items-center gap-1 rounded-[0.95rem] border border-border/55 bg-surface p-1",
         className,
       )}
     >
@@ -46,10 +46,10 @@ export const SegmentedControl: React.FC<SegmentedControlProps> = ({
             aria-selected={active}
             onClick={() => onChange(option.id)}
             className={clsx(
-              "segmented-control__option inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-[0.95rem] font-medium transition-micro",
-              isCompact ? "min-h-8 px-3 py-2 text-caption" : "min-h-10 px-3.5 py-2.5 text-body-sm",
+              "segmented-control__option inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[0.75rem] font-medium transition-micro",
+              isCompact ? "min-h-7 px-2.5 py-1.5 text-[12px]" : "min-h-9 px-3 py-2 text-body-sm",
               active
-                ? "bg-surface-hover text-text-primary"
+                ? "bg-surface-hover/95 text-text-primary"
                 : "text-text-secondary hover:bg-surface-hover/80 hover:text-text-primary",
             )}
           >
@@ -62,7 +62,7 @@ export const SegmentedControl: React.FC<SegmentedControlProps> = ({
             {typeof option.count === "number" && option.count > 0 ? (
               <span
                 className={clsx(
-                  "inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold transition-fast",
+                  "inline-flex min-w-[1.1rem] items-center justify-center rounded-full px-1.5 text-[10px] font-semibold transition-fast",
                   active
                     ? "bg-primary/12 text-primary"
                     : "bg-surface-overlay text-text-muted",

@@ -35,7 +35,7 @@ export const UnreadDivider: React.FC<UnreadDividerProps> = ({
       />
       <span
         className={clsx(
-          "shrink-0 rounded-full border border-border/70 bg-[hsl(var(--chat-panel-bg))/0.96] text-text-secondary",
+          "shrink-0 rounded-full border border-border/55 bg-[hsl(var(--chat-panel-bg))/0.92] text-text-secondary",
           contract.unreadDivider.pill,
         )}
       >

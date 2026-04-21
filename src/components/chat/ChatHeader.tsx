@@ -50,9 +50,9 @@ interface HeaderAction {
 }
 
 const iconButtonClass = clsx(
-  "chat-header-action inline-flex h-11 w-11 items-center justify-center rounded-[0.95rem] border border-transparent",
+  "chat-header-action inline-flex h-9 w-9 items-center justify-center rounded-[0.85rem] border border-transparent",
   "text-text-muted transition-micro",
-  "hover:bg-surface-hover hover:text-text-primary",
+  "hover:bg-surface-hover/80 hover:text-text-primary",
   "active:scale-[0.98] active:bg-surface-active",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
 );
@@ -205,13 +205,13 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   return (
     <header
       className={clsx(
-        "chat-header sticky top-0 z-sticky border-b border-border/60 py-2",
+        "chat-header sticky top-0 z-sticky border-b border-border/55 py-1.5",
         className,
       )}
       style={{ backgroundColor: "hsl(var(--color-chat-canvas) / 0.96)" }}
     >
       <ConversationLane>
-        <div className="chat-header-row flex min-h-10 items-center gap-2">
+        <div className="chat-header-row flex min-h-10 items-center gap-1.5">
           {onBack && (
             <button
               type="button"
@@ -227,7 +227,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             type="button"
             onClick={onInfoClick}
             className={clsx(
-              "chat-header-avatar-button inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
+              "chat-header-avatar-button inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             )}
             aria-label={t("chat:header.viewInfo")}
@@ -256,11 +256,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             type="button"
             onClick={onInfoClick}
             className={clsx(
-              "min-w-0 flex-1 rounded-2xl px-1 py-1 text-left transition-fast hover:bg-surface-hover/45",
+              "min-w-0 flex-1 rounded-[0.9rem] px-1 py-0.5 text-left transition-fast hover:bg-surface-hover/40",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             )}
           >
-            <h2 className="chat-header-title truncate text-body-sm font-semibold text-text-primary sm:text-body">
+            <h2 className="chat-header-title truncate text-[15px] font-medium leading-5 text-text-primary">
               {displayName}
             </h2>
 
@@ -273,7 +273,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             ) : (
               <p
                 className={clsx(
-                  "chat-header-subtitle truncate text-caption",
+                  "chat-header-subtitle truncate text-[12px] leading-4",
                   isOnline ? "text-text-secondary" : "text-text-muted",
                 )}
               >
@@ -282,14 +282,14 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             )}
           </button>
 
-          <div className="relative ml-1 flex items-center gap-1">
+          <div className="relative ml-1 flex items-center gap-0.5">
             <button
               type="button"
               onClick={onInfoClick}
               className={iconButtonClass}
               aria-label={t("chat:header.toggleInfoPanel")}
             >
-              <InformationCircleIcon className="h-5 w-5" />
+              <InformationCircleIcon className="h-[18px] w-[18px]" />
             </button>
 
             <button
@@ -301,14 +301,14 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               aria-haspopup="menu"
               aria-expanded={isMenuOpen}
             >
-              <EllipsisHorizontalIcon className="h-5 w-5" />
+              <EllipsisHorizontalIcon className="h-[18px] w-[18px]" />
             </button>
 
             {isMenuOpen && (
               <div
                 ref={menuRef}
                 className={clsx(
-                  "absolute right-0 top-full z-dropdown mt-2 min-w-52 overflow-hidden rounded-[1.1rem] border border-border/80 bg-surface-raised p-1.5 shadow-elev2",
+                  "absolute right-0 top-full z-dropdown mt-2 min-w-52 overflow-hidden rounded-[1rem] border border-border/80 bg-surface-raised p-1.5 shadow-elev2",
                   "animate-slide-up-fade",
                 )}
                 role="menu"

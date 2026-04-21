@@ -125,7 +125,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <div
           className={
-            layoutState === "normal" ? "px-4 pb-3" : "px-3 pb-2.5"
+            layoutState === "normal" ? "px-3.5 pb-2.5" : "px-3 pb-2"
           }
         >
           <SegmentedControl
@@ -155,7 +155,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           />
 
           {isLoadingConversations && conversationIds.length > 0 && (
-            <div className="mt-2 inline-flex items-center gap-2 px-1 text-caption text-text-muted">
+            <div className="mt-1.5 inline-flex items-center gap-2 px-1 text-caption text-text-muted">
               <Spinner size="sm" />
               <span>{t("common:loading.default")}</span>
             </div>
@@ -165,7 +165,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div
           className={clsx(
             "flex min-h-0 flex-1",
-            layoutState === "normal" ? "px-2 pb-3" : "px-1.5 pb-2.5",
+            layoutState === "normal" ? "px-1.5 pb-2.5" : "px-1 pb-2",
           )}
         >
           <RoomList

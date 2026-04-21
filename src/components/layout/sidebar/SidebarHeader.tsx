@@ -99,23 +99,23 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
     <div
       className={clsx(
         "border-b border-border/60",
-        isDense ? "px-3 pb-3 pt-3" : "px-4 pb-4 pt-4",
+        isDense ? "px-3 pb-2.5 pt-2.5" : "px-3.5 pb-3 pt-3",
       )}
     >
-      <div className={clsx("flex items-start", isDense ? "gap-2.5" : "gap-3")}>
+      <div className={clsx("flex items-center", isDense ? "gap-2" : "gap-2.5")}>
         <button
           type="button"
           onClick={onCurrentUserClick}
           className={clsx(
-            "flex min-w-0 flex-1 items-center rounded-[1.2rem] text-left transition-micro hover:bg-surface-hover/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-            isDense ? "gap-2.5 px-1.5 py-1" : "gap-3 px-2 py-1.5",
+            "flex min-w-0 flex-1 items-center rounded-[0.95rem] text-left transition-micro hover:bg-surface-hover/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+            isDense ? "gap-2 px-1 py-1" : "gap-2.5 px-1.5 py-1.5",
           )}
           aria-label={currentUserName}
         >
           <Avatar
             src={currentUser.avatar}
             alt={currentUserName}
-            size={isDense ? "md" : "lg"}
+            size="md"
             status={currentUser.status}
             showStatus
           />
@@ -123,8 +123,8 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           <div className="min-w-0">
             <p
               className={clsx(
-                "truncate font-semibold text-text-primary",
-                isDense ? "text-[13px] leading-[1.1rem]" : "text-sm",
+                "truncate font-medium text-text-primary",
+                isDense ? "text-[13px] leading-[1.05rem]" : "text-[14px] leading-[1.1rem]",
               )}
             >
               {currentUserName}
@@ -132,7 +132,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
             <p
               className={clsx(
                 "truncate text-text-muted",
-                isDense ? "text-[11px] leading-4" : "text-caption",
+                isDense ? "text-[11px] leading-4" : "text-[12px] leading-4",
               )}
             >
               {currentStatusLabel}
@@ -150,46 +150,48 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           <IconButtonSurface
             onClick={onNewChat}
             className={clsx(
-              "rounded-[1rem] bg-primary text-text-inverse shadow-xs hover:bg-primary-hover hover:text-text-inverse",
-              isDense ? "h-10 w-10" : "h-11 w-11",
+              "rounded-[0.9rem] bg-[hsl(var(--chat-active-surface)/0.12)] text-primary shadow-none hover:bg-[hsl(var(--chat-active-surface)/0.18)] hover:text-primary",
+              isDense ? "h-9 w-9" : "h-9 w-9",
             )}
             aria-label={t("sidebar:header.startNewChat")}
           >
-            <PencilSquareIcon className="h-5 w-5" />
+            <PencilSquareIcon className="h-[18px] w-[18px]" />
           </IconButtonSurface>
 
           <IconButtonSurface
             onClick={onFocusSearch}
-            className={clsx("rounded-[1rem]", isDense ? "h-9 w-9" : "h-10 w-10")}
+            className={clsx(
+              "rounded-[0.9rem] text-text-muted hover:bg-surface-hover/70 hover:text-text-primary",
+              "h-9 w-9",
+            )}
             aria-label={t("sidebar:search.aria")}
           >
-            <MagnifyingGlassIcon
-              className={isDense ? "h-[18px] w-[18px]" : "h-5 w-5"}
-            />
+            <MagnifyingGlassIcon className="h-[18px] w-[18px]" />
           </IconButtonSurface>
 
           <IconButtonSurface
             onClick={() => setIsMenuOpen((current) => !current)}
-            className={clsx("rounded-[1rem]", isDense ? "h-9 w-9" : "h-10 w-10")}
+            className={clsx(
+              "rounded-[0.9rem] text-text-muted hover:bg-surface-hover/70 hover:text-text-primary",
+              "h-9 w-9",
+            )}
             aria-label={t("common:actions.more", {
               defaultValue: "More actions",
             })}
           >
-            <EllipsisHorizontalIcon
-              className={isDense ? "h-[18px] w-[18px]" : "h-5 w-5"}
-            />
+            <EllipsisHorizontalIcon className="h-[18px] w-[18px]" />
           </IconButtonSurface>
 
           {isMenuOpen && (
             <div
               className={clsx(
-                "absolute right-0 top-[calc(100%+0.5rem)] z-[70] min-w-[13rem] overflow-hidden rounded-[1.25rem] border border-border/80 bg-surface p-1.5 shadow-elev3",
+                "absolute right-0 top-[calc(100%+0.4rem)] z-[70] min-w-[13rem] overflow-hidden rounded-[1rem] border border-border/80 bg-surface p-1.5 shadow-elev3",
               )}
               role="menu"
             >
               <button
                 type="button"
-                className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-medium text-text-secondary transition-micro hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-text-secondary transition-micro hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
                 onClick={() => {
                   setIsMenuOpen(false);
                   onCurrentUserClick?.();
@@ -201,7 +203,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
               </button>
               <button
                 type="button"
-                className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-medium text-text-secondary transition-micro hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-text-secondary transition-micro hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
                 onClick={() => {
                   setIsMenuOpen(false);
                   onOpenFriends?.();
@@ -213,7 +215,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
               </button>
               <button
                 type="button"
-                className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-medium text-text-secondary transition-micro hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-text-secondary transition-micro hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
                 onClick={() => {
                   setIsMenuOpen(false);
                   onOpenSettings?.();
@@ -227,7 +229,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
               </button>
               <button
                 type="button"
-                className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-medium text-danger transition-micro hover:bg-danger/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-danger transition-micro hover:bg-danger/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
                 onClick={() => {
                   setIsMenuOpen(false);
                   onRequestLogout?.();
