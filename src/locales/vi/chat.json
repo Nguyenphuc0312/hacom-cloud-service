@@ -136,6 +136,7 @@
     "noResults": "Không tìm thấy liên hệ",
     "shareAction": "Chia sẻ",
     "viewProfile": "Xem hồ sơ",
+    "invalidProfile": "Danh thiếp này không thể bắt đầu cuộc trò chuyện.",
     "sent": "Đã chia sẻ liên hệ",
     "failed": "Không thể chia sẻ liên hệ"
   },

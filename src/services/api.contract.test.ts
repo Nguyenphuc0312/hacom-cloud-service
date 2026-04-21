@@ -89,9 +89,18 @@ describe("api contract", () => {
 
     await conversationApi.createPrivateConversation(` ${DIRECT_USER_ID} `);
 
-    expect(apiClientMock.post).toHaveBeenCalledWith("/conversations/direct", {
-      peerUserId: DIRECT_USER_ID,
-    });
+    expect(apiClientMock.post).toHaveBeenCalledWith(
+      "/conversations/direct",
+      {
+        peerUserId: DIRECT_USER_ID,
+      },
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "X-Request-Id": expect.stringMatching(/^direct-dm:/),
+        }),
+      }),
+    );
+    expect(apiClientMock.post.mock.calls[0][1]).not.toHaveProperty("userId");
   });
 
   it("createPrivateConversation rejects malformed peerUserId values before sending the request", async () => {

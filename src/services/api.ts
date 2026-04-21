@@ -36,10 +36,20 @@ import {
 import { ApiContractError, unwrapApiSuccess } from "../lib/apiContract";
 import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 import { getCsrfToken, isRefreshTokenCookieMode } from "./tokenService";
+import { isUuid } from "../utils/isUuid";
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const DIRECT_DM_TRACE_PREFIX = "direct_dm.request_trace";
+const DIRECT_DM_PATH = "/conversations/direct";
 
-const buildCreateDirectConversationPayload = (
+const buildDirectDmTraceRequestId = (): string => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `direct-dm:${crypto.randomUUID()}`;
+  }
+
+  return `direct-dm:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+};
+
+export const buildCreateDirectConversationPayload = (
   userId: string,
 ): CreateDirectConversationDto => {
   const peerUserId = typeof userId === "string" ? userId.trim() : "";
@@ -57,7 +67,7 @@ const buildCreateDirectConversationPayload = (
     });
   }
 
-  if (!UUID_PATTERN.test(peerUserId)) {
+  if (!isUuid(peerUserId)) {
     throw new ApiContractError("peerUserId must be a valid UUID", {
       statusCode: 422,
       code: ErrorCode.VALIDATION_ERROR,
@@ -496,11 +506,30 @@ export const conversationApi = {
   },
 
   createPrivateConversation: async (userId: string) => {
-      const payload = buildCreateDirectConversationPayload(userId);
-      const response = await apiClient.post<ApiResponse<unknown>>(
-        "/conversations/direct",
-        payload,
-      );
+    const requestId = buildDirectDmTraceRequestId();
+    const payload = buildCreateDirectConversationPayload(userId);
+
+    console.info(DIRECT_DM_TRACE_PREFIX, {
+      requestId,
+      method: "POST",
+      url: DIRECT_DM_PATH,
+      rawInputUserId: userId,
+      payload,
+      diagnostics:
+        typeof window !== "undefined"
+          ? window.__CHAT_WEB_DIAGNOSTICS__
+          : undefined,
+    });
+
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      DIRECT_DM_PATH,
+      payload,
+      {
+        headers: {
+          "X-Request-Id": requestId,
+        },
+      },
+    );
 
     if (!response.data.success) {
       return response.data as ApiResponse<Conversation>;

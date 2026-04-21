@@ -56,6 +56,7 @@ import {
 import { chatApi } from "../features/chat/api";
 import { selectConversationMessagesFromState } from "../stores/chatStore";
 import type { ChatLayoutState } from "../utils/densityPolicy";
+import { isUuid } from "../utils/isUuid";
 
 const UserProfile = React.lazy(() => import("../components/info/UserProfile"));
 const GroupInfo = React.lazy(() => import("../components/info/GroupInfo"));
@@ -616,6 +617,20 @@ export const ChatPage: React.FC = () => {
   // Handle new chat
   const handleStartChat = useCallback(
     async (userId: string) => {
+      console.info("direct_dm.source_trace", {
+        source: "ChatPage.handleStartChat",
+        userId,
+      });
+
+      if (!isUuid(typeof userId === "string" ? userId.trim() : "")) {
+        toast.error(
+          t("chat:contactShare.invalidProfile", {
+            defaultValue: "This contact card cannot start a chat.",
+          }),
+        );
+        return;
+      }
+
       if (isCreatingRoom) {
         return;
       }

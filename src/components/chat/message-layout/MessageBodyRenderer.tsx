@@ -7,10 +7,12 @@ import { ImageMessage } from "../../message/ImageMessage";
 import { FileMessageCard } from "../../message/FileMessageCard";
 import { VoiceMessage } from "../../message/VoiceMessage";
 import { LinkPreviewCard } from "../../message/LinkPreviewCard";
+import { toast } from "../../ui";
 import { dispatchContactProfileView } from "../../../features/chat/events/chatUiEvents";
 import type { Attachment, Message } from "../../../types";
 import { MessageType } from "../../../types";
 import type { LongMessageRenderMode } from "../../../utils/longMessagePolicy";
+import { isUuid } from "../../../utils/isUuid";
 
 interface MessageBodyRendererProps {
   message: Message;
@@ -84,8 +86,13 @@ const extractContactPayload = (message: Message): ContactPayloadView | null => {
 const ContactCard: React.FC<{
   payload: ContactPayloadView;
   isOwn: boolean;
-}> = ({ payload, isOwn }) => {
+  messageId: string;
+  conversationId?: string;
+}> = ({ payload, isOwn, messageId, conversationId }) => {
   const { t } = useTranslation();
+  const hasDispatchableContactUserId = Boolean(
+    payload.contactUserId && isUuid(payload.contactUserId),
+  );
 
   return (
     <div
@@ -124,6 +131,22 @@ const ContactCard: React.FC<{
         <button
           type="button"
           onClick={() => {
+            console.info("direct_dm.source_trace", {
+              source: "MessageBodyRenderer.contactCard",
+              messageId,
+              conversationId,
+              contactUserId: payload.contactUserId,
+            });
+
+            if (!hasDispatchableContactUserId) {
+              toast.error(
+                t("chat:contactShare.invalidProfile", {
+                  defaultValue: "This contact card cannot start a chat.",
+                }),
+              );
+              return;
+            }
+
             dispatchContactProfileView({ userId: payload.contactUserId });
           }}
           className={clsx(
@@ -232,7 +255,12 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
       );
     case MessageType.CONTACT:
       return contactPayload ? (
-        <ContactCard payload={contactPayload} isOwn={isOwn} />
+        <ContactCard
+          payload={contactPayload}
+          isOwn={isOwn}
+          messageId={message.id}
+          conversationId={message.conversationId}
+        />
       ) : (
         <TextMessage
           content={message.content}

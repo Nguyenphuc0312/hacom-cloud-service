@@ -136,6 +136,7 @@
     "noResults": "No contacts found",
     "shareAction": "Share",
     "viewProfile": "View profile",
+    "invalidProfile": "This contact card cannot start a chat.",
     "sent": "Contact shared",
     "failed": "Unable to share contact"
   },
