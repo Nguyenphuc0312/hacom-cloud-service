@@ -14,7 +14,7 @@ const SETTING_SECTIONS = [
   {
     key: 'smtp',
     label: 'SMTP',
-    description: 'Transport và danh tính gửi mail',
+    description: 'Transport và định danh gửi mail',
   },
   {
     key: 'email-templates',
@@ -38,19 +38,19 @@ const SYSTEM_SURFACES = [
     id: 'environment',
     label: 'Môi trường',
     value: appConfig.environmentLabel,
-    meta: 'Nguồn tham chiếu để operator phân biệt production và môi trường kiểm thử.',
+    meta: 'Giúp operator phân biệt production và môi trường kiểm thử.',
   },
   {
     id: 'live-updates',
     label: 'Cập nhật dữ liệu',
     value: appConfig.liveUpdatesLabel,
-    meta: 'Cho biết panel đang nhận cập nhật trực tiếp hay theo chu kỳ polling.',
+    meta: 'Cho biết panel đang dùng realtime stream hay polling.',
   },
   {
     id: 'write-actions',
     label: 'Admin write actions',
     value: isAdminWriteActionsEnabled ? 'Đang bật' : 'Đang tắt',
-    meta: 'Guardrail cho các thao tác ghi như khóa tài khoản, publish cấu hình hoặc rollback.',
+    meta: 'Guardrail cho thao tác ghi như khóa tài khoản, publish cấu hình hoặc rollback.',
   },
 ] as const;
 
@@ -84,7 +84,7 @@ export const SettingsPage = () => {
         <SurfaceCard
           eyebrow="Guardrail vận hành"
           title="Thiết lập hệ thống"
-          description="Những thông tin này không cần chiếm chỗ ở shell chính nhưng phải sẵn sàng để operator đối chiếu khi thao tác."
+          description="Các thông tin này không cần nằm ở shell chính nhưng phải sẵn sàng để operator đối chiếu khi thao tác."
           status={<StatusBadge status={isAdminWriteActionsEnabled ? 'active' : 'inactive'} />}
         >
           <div className="ds-data-summary-grid">
@@ -99,9 +99,9 @@ export const SettingsPage = () => {
         </SurfaceCard>
 
         <SurfaceCard
-          eyebrow="Nguyên tắc"
+          eyebrow="Mặc định vận hành"
           title="Operational defaults"
-          description="Thiết lập hệ thống ưu tiên predictability. Chỉ cấu hình những gì ảnh hưởng trực tiếp tới vận hành hoặc audit."
+          description="Khu này chỉ hiển thị những tham số ảnh hưởng trực tiếp tới hành vi hệ thống hoặc kiểm toán."
         >
           <div className="ds-ops-fact-list">
             <div>
@@ -125,8 +125,8 @@ export const SettingsPage = () => {
   return (
     <PageShell
       eyebrow="Cấu hình"
-      title="System settings"
-      description="Cấu hình được tách khỏi service health để operator không trộn lẫn runtime status với thay đổi hệ thống."
+      title="Thiết lập hệ thống"
+      description="Tách riêng khu cấu hình để operator không nhầm trạng thái runtime với thay đổi hệ thống."
       headerExtra={
         <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
           <StatusBadge status={isAdminWriteActionsEnabled ? 'active' : 'inactive'} />

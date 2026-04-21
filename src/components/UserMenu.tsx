@@ -1,9 +1,9 @@
-import { DownOutlined, LogoutOutlined, SettingOutlined, UserOutlined } from '@ant-design/icons';
 import { Avatar, Button, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import { memo, useMemo } from 'react';
 
 import type { CurrentAdmin } from '@/api/types';
+import { AppIcon } from '@/components/AppIcon';
 import { toDisplayRole } from '@/utils/role';
 
 interface UserMenuProps {
@@ -43,20 +43,20 @@ export const UserMenu = memo(({ user, onOpenProfile, onOpenSettings, onLogout }:
       { type: 'divider' },
       {
         key: 'profile',
-        icon: <UserOutlined />,
+        icon: <AppIcon name="user" size={15} aria-hidden />,
         label: 'Hồ sơ',
         onClick: onOpenProfile,
       },
       {
         key: 'settings',
-        icon: <SettingOutlined />,
-        label: 'Cài đặt',
+        icon: <AppIcon name="settings" size={15} aria-hidden />,
+        label: 'Thiết lập',
         onClick: onOpenSettings,
       },
       { type: 'divider' },
       {
         key: 'logout',
-        icon: <LogoutOutlined />,
+        icon: <AppIcon name="logout" size={15} aria-hidden />,
         label: 'Đăng xuất',
         danger: true,
         onClick: onLogout,
@@ -79,7 +79,7 @@ export const UserMenu = memo(({ user, onOpenProfile, onOpenSettings, onLogout }:
         <span className="user-menu-name" aria-hidden>
           {username}
         </span>
-        <DownOutlined className="user-menu-caret" />
+        <AppIcon name="chevronDown" size={14} className="user-menu-caret" aria-hidden />
       </Button>
     </Dropdown>
   );

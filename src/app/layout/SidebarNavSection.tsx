@@ -1,19 +1,23 @@
-import type { ReactNode } from 'react';
-
+import { AppIcon } from '@/components/AppIcon';
+import type { AppIconKey } from '@/components/AppIcon';
 import type { NavItem as NavItemType } from './navigationConfig';
 import { SidebarNavItem } from './SidebarNavItem';
 
 interface SidebarNavSectionProps {
   label: string;
   items: NavItemType[];
-  icon?: ReactNode;
+  iconKey?: AppIconKey;
 }
 
-export const SidebarNavSection = ({ label, items, icon }: SidebarNavSectionProps) => (
+export const SidebarNavSection = ({ label, items, iconKey }: SidebarNavSectionProps) => (
   <div className="ds-sidebar-section">
     <div className="ds-sidebar-section-label">
       <span className="ds-sidebar-section-label-main">
-        {icon ? <span className="ds-sidebar-section-icon">{icon}</span> : null}
+        {iconKey ? (
+          <span className="ds-sidebar-section-icon">
+            <AppIcon name={iconKey} size={14} aria-hidden />
+          </span>
+        ) : null}
         <span>{label}</span>
       </span>
     </div>

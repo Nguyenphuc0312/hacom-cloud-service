@@ -1,9 +1,9 @@
-import { SearchOutlined } from '@ant-design/icons';
 import { Input, Modal, Typography } from 'antd';
 import type { InputRef } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { AppIcon } from '@/components/AppIcon';
 import type { CommandCategory } from '@/app/layout/navigationConfig';
 
 const CATEGORY_ORDER: CommandCategory[] = ['Điều hướng', 'Tác vụ nhanh', 'Hệ thống', 'Cấu hình'];
@@ -148,7 +148,7 @@ export const CommandPalette = ({ open, onClose, items }: CommandPaletteProps) =>
           ref={inputRef}
           value={query}
           className="command-palette-input"
-          prefix={<SearchOutlined />}
+          prefix={<AppIcon name="search" size={15} aria-hidden />}
           placeholder="Tìm trang, cài đặt..."
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
@@ -184,14 +184,8 @@ export const CommandPalette = ({ open, onClose, items }: CommandPaletteProps) =>
       {groupedItems.length > 0 ? (
         <div className="command-palette-results" role="listbox" aria-label="Admin commands">
           {groupedItems.map((group) => (
-            <section
-              key={group.category}
-              className="command-palette-group"
-              aria-label={group.category}
-            >
-              <Typography.Text className="command-palette-group-title">
-                {group.category}
-              </Typography.Text>
+            <section key={group.category} className="command-palette-group" aria-label={group.category}>
+              <Typography.Text className="command-palette-group-title">{group.category}</Typography.Text>
               {group.items.map((item) => {
                 const isActive = item.id === activeItemId;
 
@@ -202,13 +196,11 @@ export const CommandPalette = ({ open, onClose, items }: CommandPaletteProps) =>
                     role="option"
                     disabled={item.disabled}
                     aria-selected={isActive}
-                    className={'command-palette-item ' + (isActive ? 'is-active' : '')}
+                    className={`command-palette-item ${isActive ? 'is-active' : ''}`}
                     onMouseEnter={() => !item.disabled && setActiveItemId(item.id)}
                     onClick={() => handleSelect(item)}
                   >
-                    {item.icon ? (
-                      <span className="command-palette-item-icon">{item.icon}</span>
-                    ) : null}
+                    {item.icon ? <span className="command-palette-item-icon">{item.icon}</span> : null}
                     <span className="command-palette-item-main">
                       <span className="command-palette-item-label">{item.label}</span>
                       {item.description ? (

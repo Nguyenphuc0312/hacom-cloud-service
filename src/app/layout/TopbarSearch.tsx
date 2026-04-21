@@ -1,5 +1,6 @@
 import React from 'react';
-import { SearchOutlined } from '@ant-design/icons';
+
+import { AppIcon } from '@/components/AppIcon';
 
 interface TopbarSearchProps {
   onOpen: () => void;
@@ -14,7 +15,7 @@ export const TopbarSearch: React.FC<TopbarSearchProps> = ({ onOpen }) => {
       aria-label="Mở bảng lệnh nhanh"
       onClick={onOpen}
     >
-      <SearchOutlined className="ds-topbar-search-icon" aria-hidden />
+      <AppIcon name="search" className="ds-topbar-search-icon" aria-hidden />
       <span className="ds-topbar-search-copy">
         <span className="ds-topbar-search-label">Tìm module, thao tác, cấu hình</span>
       </span>

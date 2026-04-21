@@ -25,7 +25,7 @@ export const DataTableShell: React.FC<DataTableShellProps> = ({
   const ariaLabel = typeof title === 'string' ? title : 'Bảng dữ liệu';
 
   return (
-    <div
+    <section
       className={clsx('ds-table-shell', className)}
       role="region"
       aria-label={ariaLabel}
@@ -33,7 +33,7 @@ export const DataTableShell: React.FC<DataTableShellProps> = ({
     >
       {(title || toolbar || meta) ? (
         <div className="ds-table-shell-header">
-          <div style={{ flex: 1 }}>
+          <div className="ds-table-shell-copy">
             {title ? <div className="ds-table-shell-title">{title}</div> : null}
             {meta ? <div className="ds-table-shell-meta">{meta}</div> : null}
           </div>
@@ -56,7 +56,7 @@ export const DataTableShell: React.FC<DataTableShellProps> = ({
       </div>
 
       {footer ? <div className="ds-table-shell-footer">{footer}</div> : null}
-    </div>
+    </section>
   );
 };
 

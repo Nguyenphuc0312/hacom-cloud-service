@@ -5,10 +5,19 @@ import { PageContainer } from '@/components/PageContainer';
 import { AdminSidebar } from './AdminSidebar';
 import { AdminTopbar } from './AdminTopbar';
 
+const SIDEBAR_PREFERENCE_KEY = 'chat-admin-sidebar-collapsed';
+
 export const AdminShell: React.FC = () => {
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth < 992 : false,
   );
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
+    return window.localStorage.getItem(SIDEBAR_PREFERENCE_KEY) === '1';
+  });
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   useEffect(() => {
@@ -20,6 +29,7 @@ export const AdminShell: React.FC = () => {
 
     const syncViewport = (matches: boolean) => {
       setIsMobile(matches);
+
       if (!matches) {
         setIsMobileNavOpen(false);
       }
@@ -38,16 +48,29 @@ export const AdminShell: React.FC = () => {
     };
   }, []);
 
-  const toggleSidebar = () => {
-    if (!isMobile) {
+  useEffect(() => {
+    if (typeof window === 'undefined' || isMobile) {
       return;
     }
 
-    setIsMobileNavOpen((state) => !state);
+    window.localStorage.setItem(SIDEBAR_PREFERENCE_KEY, isSidebarCollapsed ? '1' : '0');
+  }, [isMobile, isSidebarCollapsed]);
+
+  const toggleSidebar = () => {
+    if (isMobile) {
+      setIsMobileNavOpen((state) => !state);
+      return;
+    }
+
+    setIsSidebarCollapsed((state) => !state);
   };
 
   return (
-    <div className={`ds-admin-shell ${isMobileNavOpen ? 'is-mobile-nav-open' : ''}`}>
+    <div
+      className={`ds-admin-shell ${isMobileNavOpen ? 'is-mobile-nav-open' : ''} ${
+        !isMobile && isSidebarCollapsed ? 'is-collapsed' : ''
+      }`}
+    >
       <a className="ds-skip-link" href="#main-content">
         Bỏ qua đến nội dung chính
       </a>
@@ -56,7 +79,7 @@ export const AdminShell: React.FC = () => {
         <button
           type="button"
           className="ds-admin-sidebar-backdrop"
-          aria-label="Close navigation"
+          aria-label="Đóng điều hướng"
           onClick={toggleSidebar}
         />
       ) : null}
@@ -64,6 +87,7 @@ export const AdminShell: React.FC = () => {
         <AdminTopbar
           mobile={isMobile}
           mobileNavOpen={isMobileNavOpen}
+          sidebarCollapsed={isSidebarCollapsed}
           onToggleSidebar={toggleSidebar}
         />
         <main id="main-content" className="ds-admin-main-content" role="main">

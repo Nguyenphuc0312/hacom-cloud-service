@@ -1,11 +1,11 @@
-import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
 import { App } from 'antd';
 import React, { useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useCurrentUser } from '@/app/useCurrentUser';
-import { appConfig } from '@/config/appConfig';
+import { AppIcon } from '@/components/AppIcon';
 import { CommandPalette } from '@/components/CommandPalette';
+import { appConfig } from '@/config/appConfig';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { useAuthStore } from '@/store/authStore';
 import { hasSomeRole } from '@/utils/role';
@@ -16,12 +16,14 @@ import { commandRouteItems, resolveNavigationContext } from './navigationConfig'
 interface AdminTopbarProps {
   mobile?: boolean;
   mobileNavOpen?: boolean;
+  sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
 }
 
 export const AdminTopbar: React.FC<AdminTopbarProps> = ({
   mobile = false,
   mobileNavOpen = false,
+  sidebarCollapsed = false,
   onToggleSidebar,
 }) => {
   const { message } = App.useApp();
@@ -40,6 +42,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
         .filter((item) => !item.roles || hasSomeRole(currentRole, item.roles))
         .map((item) => ({
           ...item,
+          icon: <AppIcon name={item.iconKey} size={16} aria-hidden />,
           onSelect: () => {
             if (item.route) {
               navigate(item.route);
@@ -51,7 +54,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
         label: 'Mở quản trị tài khoản',
         description: 'Đi tới danh sách tài khoản để tra cứu hoặc thao tác',
         category: 'Tác vụ nhanh' as const,
-        icon: commandRouteItems.find((item) => item.id === 'go-users')?.icon,
+        icon: <AppIcon name="users" size={16} aria-hidden />,
         keywords: ['users', 'accounts', 'admin'],
         onSelect: () => navigate('/users'),
       },
@@ -60,7 +63,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
         label: 'Mở mẫu email',
         description: 'Đi tới khu mẫu email để chuẩn bị thông báo',
         category: 'Tác vụ nhanh' as const,
-        icon: commandRouteItems.find((item) => item.id === 'go-email-templates')?.icon,
+        icon: <AppIcon name="fileStack" size={16} aria-hidden />,
         keywords: ['broadcast', 'announcement', 'message'],
         onSelect: () => navigate('/settings/email-templates'),
       },
@@ -69,7 +72,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
         label: 'Mở tra cứu hội thoại',
         description: 'Đọc lịch sử chat và xử lý moderation',
         category: 'Điều hướng' as const,
-        icon: commandRouteItems.find((item) => item.id === 'go-conversations')?.icon,
+        icon: <AppIcon name="messages" size={16} aria-hidden />,
         keywords: ['chat', 'conversation', 'support'],
         onSelect: () => navigate('/conversations'),
       },
@@ -78,7 +81,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
         label: 'Mở nhân sự',
         description: 'Đi tới hồ sơ nhân sự để đối chiếu và cấp tài khoản',
         category: 'Tác vụ nhanh' as const,
-        icon: commandRouteItems.find((item) => item.id === 'go-hr-employees')?.icon,
+        icon: <AppIcon name="hr" size={16} aria-hidden />,
         keywords: ['hr', 'employees', 'directory'],
         onSelect: () => navigate('/hr-employees'),
       },
@@ -91,6 +94,14 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
     navigate('/login', { replace: true });
   };
 
+  const sidebarToggleLabel = mobile
+    ? mobileNavOpen
+      ? 'Đóng điều hướng'
+      : 'Mở điều hướng'
+    : sidebarCollapsed
+      ? 'Mở rộng điều hướng'
+      : 'Thu gọn điều hướng';
+
   return (
     <>
       <header className="ds-admin-topbar" role="banner">
@@ -98,13 +109,12 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
           <button
             type="button"
             className="ds-topbar-toggle ds-btn ds-btn--icon"
-            aria-label={mobileNavOpen ? 'Đóng điều hướng' : 'Mở điều hướng'}
-            aria-expanded={mobileNavOpen}
+            aria-label={sidebarToggleLabel}
+            aria-expanded={mobile ? mobileNavOpen : !sidebarCollapsed}
             aria-controls="app-sidebar"
             onClick={onToggleSidebar}
-            disabled={!mobile}
           >
-            {mobileNavOpen ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
+            <AppIcon name="menu" size={18} aria-hidden />
           </button>
           <div className="ds-topbar-title-block">
             <span className="ds-topbar-eyebrow">{currentPage.sectionLabel || 'Không gian làm việc'}</span>
@@ -123,7 +133,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
             systemTone={isAuthServiceUnavailable ? 'degraded' : 'healthy'}
             onOpenNotifications={() => message.info('Trung tâm thông báo chưa được kết nối.')}
             onOpenProfile={() => message.info('Khu hồ sơ hiện chưa khả dụng.')}
-            onOpenSettings={() => navigate('/settings/smtp')}
+            onOpenSettings={() => navigate('/settings/system')}
             onLogout={handleLogout}
           />
         </div>

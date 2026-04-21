@@ -1,4 +1,3 @@
-import { Typography } from 'antd';
 import type { ReactNode } from 'react';
 
 import {
@@ -7,8 +6,6 @@ import {
   PageHeaderMeta,
   PageHeaderTitle,
 } from '@/components/PageHeader';
-
-const { Text } = Typography;
 
 interface PageShellProps {
   title: string;
@@ -30,16 +27,8 @@ export const PageShell = ({
       <PageHeader>
         <div>
           {eyebrow ? <div className="ds-page-eyebrow">{eyebrow}</div> : null}
-          <PageHeaderTitle>
-            <Typography.Title level={1} style={{ margin: 0 }}>
-              {title}
-            </Typography.Title>
-          </PageHeaderTitle>
-          {description ? (
-            <PageHeaderDescription>
-              <Text type="secondary">{description}</Text>
-            </PageHeaderDescription>
-          ) : null}
+          <PageHeaderTitle>{title}</PageHeaderTitle>
+          {description ? <PageHeaderDescription>{description}</PageHeaderDescription> : null}
         </div>
         {headerExtra ? <PageHeaderMeta>{headerExtra}</PageHeaderMeta> : null}
       </PageHeader>

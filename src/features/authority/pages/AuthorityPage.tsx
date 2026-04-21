@@ -1,4 +1,3 @@
-import { ReloadOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Form, Input, Select, Space, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -8,6 +7,7 @@ import { authorityClient } from '@/api/clients';
 import { getErrorMessage } from '@/api/error';
 import { queryKeys } from '@/api/queryKeys';
 import type { AuthorityListItem, AuthorityOverrideEffect, Role } from '@/api/types';
+import { AppIcon } from '@/components/AppIcon';
 import { AppDrawer } from '@/components/AppDrawer';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTableShell } from '@/components/DataTableShell';
@@ -224,13 +224,15 @@ export const AuthorityPage = () => {
         ),
       },
       {
-        title: 'Nguồn phân quyền',
+        title: 'Nguồn quyền',
         dataIndex: 'authoritySource',
         width: 160,
         render: (value: string | null) =>
           value ? (
             <span
-              className={`ds-shell-chip ${sourceTone[value] === 'warning' ? 'ds-shell-chip--warning' : 'ds-shell-chip--ghost'}`}
+              className={`ds-shell-chip ${
+                sourceTone[value] === 'warning' ? 'ds-shell-chip--warning' : 'ds-shell-chip--ghost'
+              }`}
             >
               {formatSourceLabel(value)}
             </span>
@@ -255,7 +257,7 @@ export const AuthorityPage = () => {
         render: (_, record) => (
           <span>
             {record.effectiveFrom ? formatDateTime(record.effectiveFrom) : 'Ngay bây giờ'}
-            {' -> '}
+            {' → '}
             {record.effectiveUntil ? formatDateTime(record.effectiveUntil) : 'Không thời hạn'}
           </span>
         ),
@@ -270,6 +272,7 @@ export const AuthorityPage = () => {
               {
                 key: 'detail',
                 label: 'Mở chi tiết',
+                icon: <AppIcon name="eye" size={14} aria-hidden />,
                 onClick: () => setSelectedUserId(record.userId),
               },
             ]}
@@ -299,12 +302,15 @@ export const AuthorityPage = () => {
     }));
   };
 
+  const pageHeader = {
+    eyebrow: 'Danh tính và truy cập',
+    title: 'Quyền và vai trò',
+    description: 'Quản trị vai trò chuẩn, nguồn phân quyền và các override runtime trong cùng một workspace.',
+  };
+
   if (listQuery.isLoading && !listQuery.data) {
     return (
-      <PageShell
-        title="Phân quyền quản trị"
-        description="Xem vai trò chuẩn, trạng thái break-glass và phần ghi đè quyền."
-      >
+      <PageShell {...pageHeader}>
         <QueryStateView kind="loading" title="Đang tải workspace phân quyền..." />
       </PageShell>
     );
@@ -312,10 +318,7 @@ export const AuthorityPage = () => {
 
   if (listQuery.isError) {
     return (
-      <PageShell
-        title="Phân quyền quản trị"
-        description="Xem vai trò chuẩn, trạng thái break-glass và phần ghi đè quyền."
-      >
+      <PageShell {...pageHeader}>
         <QueryStateView
           kind="error"
           description="Không thể tải dữ liệu phân quyền."
@@ -332,12 +335,11 @@ export const AuthorityPage = () => {
   return (
     <>
       <PageShell
-        title="Phân quyền quản trị"
-        description="Giữ vai trò chuẩn, nguồn phân quyền và quyền hiệu lực hiển thị trong cùng một workspace governance."
+        {...pageHeader}
         headerExtra={
           <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
             <Button
-              icon={<ReloadOutlined />}
+              icon={<AppIcon name="refresh" size={16} aria-hidden />}
               loading={listQuery.isFetching}
               onClick={() => {
                 void listQuery.refetch();
@@ -350,11 +352,7 @@ export const AuthorityPage = () => {
       >
         <FilterBar>
           <Form form={form} layout="inline" className="ds-toolbar-form">
-            <Form.Item
-              label="Tìm kiếm"
-              name="keyword"
-              className="ds-toolbar-field ds-toolbar-field--lg"
-            >
+            <Form.Item name="keyword" className="ds-toolbar-field ds-toolbar-field--lg">
               <Input allowClear placeholder="Email hoặc username" />
             </Form.Item>
             <Form.Item className="ds-toolbar-field ds-toolbar-actions">
@@ -367,31 +365,24 @@ export const AuthorityPage = () => {
             </Form.Item>
           </Form>
           <div className="ds-filter-toolbar-meta">
+            <span>{listQuery.data?.pagination.total ?? 0} bản ghi phân quyền</span>
             <span>
-              {listQuery.data?.pagination.total ?? 0} bản ghi phân quyền
-            </span>
-            <span>
-              {activeFilterCount > 0
-                ? `${activeFilterCount} bộ lọc đang hoạt động`
-                : 'Không có bộ lọc đang hoạt động'}
+              {activeFilterCount > 0 ? `${activeFilterCount} bộ lọc đang bật` : 'Không có bộ lọc'}
             </span>
             <span>
               Đồng bộ gần nhất:{' '}
-              {listQuery.dataUpdatedAt
-                ? formatDateTime(new Date(listQuery.dataUpdatedAt).toISOString())
-                : '-'}
+              {listQuery.dataUpdatedAt ? formatDateTime(new Date(listQuery.dataUpdatedAt).toISOString()) : '-'}
             </span>
           </div>
         </FilterBar>
 
         <DataTableShell
           title="Phân công quyền"
-          meta="Dùng danh sách để tìm operator thật nhanh, rồi mở chi tiết khi cần đổi vai trò hoặc override."
+          meta="Dùng danh sách để tìm operator thật nhanh, sau đó mở inspector để chỉnh vai trò hoặc override."
           toolbar={
             <DataTableToolbar>
               <span className="ds-toolbar-summary">
-                Trang {listQuery.data?.pagination.page ?? 1} /{' '}
-                {listQuery.data?.pagination.totalPages ?? 1}
+                Trang {listQuery.data?.pagination.page ?? 1} / {listQuery.data?.pagination.totalPages ?? 1}
               </span>
             </DataTableToolbar>
           }
@@ -459,7 +450,7 @@ export const AuthorityPage = () => {
                 <strong className="ds-summary-tile-value">
                   {detail.authoritySource ? formatSourceLabel(detail.authoritySource) : 'không có'}
                 </strong>
-                <span className="ds-summary-tile-meta">Luồng phân giải phân quyền hiện tại.</span>
+                <span className="ds-summary-tile-meta">Luồng phân giải quyền hiện tại.</span>
               </div>
               <div className="ds-summary-tile">
                 <span className="ds-summary-tile-label">Vai trò DB</span>
@@ -469,19 +460,19 @@ export const AuthorityPage = () => {
               <div className="ds-summary-tile">
                 <span className="ds-summary-tile-label">Override</span>
                 <strong className="ds-summary-tile-value">{detail.overrides.length}</strong>
-                <span className="ds-summary-tile-meta">Các diff cấp hoặc từ chối áp lên trên vai trò gốc.</span>
+                <span className="ds-summary-tile-meta">Số diff cấp hoặc từ chối đang áp trên vai trò gốc.</span>
               </div>
               <div className="ds-summary-tile">
                 <span className="ds-summary-tile-label">Quyền hiệu lực</span>
                 <strong className="ds-summary-tile-value">{detail.effectivePermissions.length}</strong>
-                <span className="ds-summary-tile-meta">Những quyền mà runtime hiện đang chấp nhận.</span>
+                <span className="ds-summary-tile-meta">Tập quyền cuối cùng mà runtime đang chấp nhận.</span>
               </div>
             </div>
 
             <SurfaceCard
               eyebrow="Danh tính"
               title={detail.user.email}
-              description="Rà soát danh tính operator và thời gian hiệu lực trước khi sửa vai trò hoặc override."
+              description="Rà soát operator và cửa sổ hiệu lực trước khi đổi vai trò hoặc override."
             >
               <div className="ds-detail-list">
                 <div className="ds-detail-list-item">
@@ -498,9 +489,7 @@ export const AuthorityPage = () => {
                 </div>
                 <div className="ds-detail-list-item">
                   <span>Có hiệu lực đến</span>
-                  <strong>
-                    {detail.effectiveUntil ? formatDateTime(detail.effectiveUntil) : 'Không thời hạn'}
-                  </strong>
+                  <strong>{detail.effectiveUntil ? formatDateTime(detail.effectiveUntil) : 'Không thời hạn'}</strong>
                 </div>
                 <div className="ds-detail-list-item">
                   <span>Cho phép break-glass</span>
@@ -512,7 +501,7 @@ export const AuthorityPage = () => {
             <SurfaceCard
               eyebrow="Lý do thay đổi"
               title="Ghi chú operator"
-              description="Hãy ghi lý do mỗi khi đổi vai trò chuẩn hoặc danh sách override để người rà soát sau hiểu vì sao thay đổi xảy ra."
+              description="Luôn ghi lý do khi đổi vai trò chuẩn hoặc danh sách override để phục vụ rà soát sau này."
             >
               <Input.TextArea
                 rows={3}
@@ -525,7 +514,7 @@ export const AuthorityPage = () => {
             <SurfaceCard
               eyebrow="Vai trò chuẩn"
               title="Phân công vai trò dựa trên DB"
-              description="Giữ vai trò gốc luôn rõ ràng. Chỉ xóa vai trò DB khi bạn thực sự muốn break-glass hoặc không còn nguồn phân quyền nào tiếp quản."
+              description="Ưu tiên vai trò gốc rõ ràng. Chỉ xóa vai trò DB khi bạn thực sự cần fallback hoặc break-glass."
             >
               <div className="ds-admin-form-grid">
                 <Select
@@ -558,8 +547,8 @@ export const AuthorityPage = () => {
 
             <SurfaceCard
               eyebrow="Override quyền"
-              title="Diff cấp / từ chối"
-              description="Chỉ dùng override khi thật cần. Ưu tiên vai trò gốc nếu có thể, và giữ tập diff đủ ngắn để rà soát nhanh."
+              title="Diff cấp hoặc từ chối"
+              description="Chỉ dùng override khi thật cần. Giữ tập diff ngắn để operator khác có thể rà soát nhanh."
               actions={
                 <Button
                   onClick={() =>
@@ -612,9 +601,7 @@ export const AuthorityPage = () => {
                       <Button
                         danger
                         onClick={() =>
-                          setDraftOverrides((current) =>
-                            current.filter((item) => item.id !== override.id),
-                          )
+                          setDraftOverrides((current) => current.filter((item) => item.id !== override.id))
                         }
                       >
                         Xóa
@@ -632,7 +619,7 @@ export const AuthorityPage = () => {
 
               <div className="ds-settings-action-bar">
                 <div className="ds-settings-action-copy">
-                  Override được áp trên vai trò chuẩn. Một lệnh từ chối nên hiếm và luôn cần được giải thích rõ.
+                  Override được áp trên vai trò chuẩn. Lệnh từ chối nên là ngoại lệ và luôn cần giải thích rõ.
                 </div>
                 <Button type="primary" loading={overridesMutation.isPending} onClick={() => overridesMutation.mutate()}>
                   Lưu override
@@ -643,7 +630,7 @@ export const AuthorityPage = () => {
             <SurfaceCard
               eyebrow="Quyền hiệu lực"
               title="Tập quyền runtime"
-              description="Đây là tập quyền cuối cùng mà admin panel phải tôn trọng sau khi đã resolve vai trò và override."
+              description="Đây là tập quyền cuối cùng mà admin panel phải tôn trọng sau khi resolve vai trò và override."
             >
               {detail.effectivePermissions.length > 0 ? (
                 <div className="ds-admin-chip-list">

@@ -1,6 +1,5 @@
-import { EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Button, DatePicker, Form, Input, Space, Typography } from 'antd';
+import { Button, DatePicker, Form, Input, Space } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import { useMemo, useState } from 'react';
@@ -8,16 +7,18 @@ import { useMemo, useState } from 'react';
 import { auditClient } from '@/api/clients';
 import { queryKeys } from '@/api/queryKeys';
 import type { AuditEntry, AuditQuery } from '@/api/types';
+import { AppIcon } from '@/components/AppIcon';
 import { AppTooltip } from '@/components/AppTooltip';
 import { DataTableShell } from '@/components/DataTableShell';
 import { DetailPanel } from '@/components/DetailPanel';
 import { FilterBar } from '@/components/FilterBar';
-import { IconActionButton } from '@/components/IconActionButton';
 import { JsonDiffDrawer } from '@/components/JsonDiffDrawer';
-import { EmptyState, QueryStateView } from '@/components/QueryStates';
 import { PageShell } from '@/components/PageShell';
+import { QueryStateView } from '@/components/QueryStates';
+import { RowActionsDropdown } from '@/components/RowActionsDropdown';
 import { StatusBadge } from '@/components/StatusBadge';
 import { DataTable } from '@/components/ui/DataTable';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { formatDateTime, formatRelativeTime } from '@/utils/date';
 
 const getActiveFilterCount = (filters: AuditQuery) =>
@@ -59,7 +60,7 @@ export const AuditLogPage = () => {
       {
         title: 'Thời gian',
         dataIndex: 'time',
-        width: 172,
+        width: 168,
         render: (value: string) => (
           <AppTooltip title={formatDateTime(value)}>
             <span>{formatRelativeTime(value)}</span>
@@ -69,7 +70,7 @@ export const AuditLogPage = () => {
       {
         title: 'Actor',
         dataIndex: 'actorEmail',
-        render: (value: string | null) => (value ? <Typography.Text strong>{value}</Typography.Text> : '-'),
+        render: (value: string | null) => value ?? 'System actor',
       },
       {
         title: 'Action',
@@ -87,7 +88,7 @@ export const AuditLogPage = () => {
         ),
       },
       {
-        title: 'Result',
+        title: 'Kết quả',
         width: 140,
         key: 'actionResult',
         render: (_, record) => (
@@ -99,12 +100,17 @@ export const AuditLogPage = () => {
       {
         title: '',
         key: 'detail',
-        width: 64,
+        width: 72,
         render: (_, record) => (
-          <IconActionButton
-            icon={<EyeOutlined />}
-            tooltip="Xem chi tiết"
-            onClick={() => setSelectedEntryId(record.id)}
+          <RowActionsDropdown
+            actions={[
+              {
+                key: 'detail',
+                label: 'Mở chi tiết',
+                icon: <AppIcon name="eye" size={14} aria-hidden />,
+                onClick: () => setSelectedEntryId(record.id),
+              },
+            ]}
           />
         ),
       },
@@ -140,13 +146,15 @@ export const AuditLogPage = () => {
 
   const activeFilterCount = getActiveFilterCount(filters);
 
+  const pageHeader = {
+    eyebrow: 'Vận hành',
+    title: 'Audit trail',
+    description: 'Theo dõi actor, action, target và mở metadata sâu chỉ khi cần điều tra.',
+  };
+
   if (query.isPending && !query.data) {
     return (
-      <PageShell
-        eyebrow="Vận hành"
-        title="Audit trail"
-        description="Theo dõi actor, action, target và các thay đổi quản trị trong cùng một luồng điều tra."
-      >
+      <PageShell {...pageHeader}>
         <QueryStateView kind="loading" title="Đang tải audit trail..." />
       </PageShell>
     );
@@ -154,11 +162,7 @@ export const AuditLogPage = () => {
 
   if (query.isError && !query.data) {
     return (
-      <PageShell
-        eyebrow="Vận hành"
-        title="Audit trail"
-        description="Theo dõi actor, action, target và các thay đổi quản trị trong cùng một luồng điều tra."
-      >
+      <PageShell {...pageHeader}>
         <QueryStateView
           kind="error"
           description="Không thể tải audit trail."
@@ -174,13 +178,11 @@ export const AuditLogPage = () => {
 
   return (
     <PageShell
-      eyebrow="Vận hành"
-      title="Audit trail"
-      description="Màn hình này ưu tiên actor, action, target, time; before/after và metadata sâu chỉ mở khi cần."
+      {...pageHeader}
       headerExtra={
         <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
           <Button
-            icon={<ReloadOutlined />}
+            icon={<AppIcon name="refresh" size={16} aria-hidden />}
             loading={query.isFetching}
             onClick={() => {
               void query.refetch();
@@ -221,7 +223,7 @@ export const AuditLogPage = () => {
             </Form>
             <div className="ds-filter-toolbar-meta">
               <span>{data?.pagination.total ?? 0} sự kiện</span>
-              <span>{activeFilterCount > 0 ? `${activeFilterCount} bộ lọc` : 'Không có bộ lọc'}</span>
+              <span>{activeFilterCount > 0 ? `${activeFilterCount} bộ lọc đang bật` : 'Không có bộ lọc'}</span>
               <span>
                 Đồng bộ gần nhất:{' '}
                 {query.dataUpdatedAt ? formatDateTime(new Date(query.dataUpdatedAt).toISOString()) : '-'}
@@ -231,7 +233,7 @@ export const AuditLogPage = () => {
 
           <DataTableShell
             title="Administrative events"
-            meta="Bảng chính dùng để scan quyết định và lựa chọn bản ghi cần mở inspector."
+            meta="Bảng chính để scan nhanh các thay đổi; metadata và before/after được giữ trong inspector."
           >
             <DataTable
               rowKey="id"
@@ -259,9 +261,9 @@ export const AuditLogPage = () => {
 
         <DetailPanel
           open={Boolean(selectedEntry)}
-          title={selectedEntry?.action ?? 'Audit detail'}
+          title={selectedEntry?.action ?? 'Chi tiết audit'}
           onClose={() => setSelectedEntryId(null)}
-          width={420}
+          width={400}
           className="ds-ops-detail-panel"
         >
           {selectedEntry ? (
@@ -281,7 +283,7 @@ export const AuditLogPage = () => {
               </section>
 
               <section className="ds-ops-detail-section">
-                <h3>Summary</h3>
+                <h3>Tóm tắt</h3>
                 <dl className="ds-ops-fact-list">
                   <div>
                     <dt>Action</dt>
@@ -329,7 +331,7 @@ export const AuditLogPage = () => {
 
               <section className="ds-ops-detail-section">
                 <h3>Change set</h3>
-                <div className="ds-ops-inline-list">
+                <div className="ds-admin-inline-actions">
                   <Button
                     disabled={!selectedEntry.before && !selectedEntry.after}
                     onClick={() => setDiffOpen(true)}

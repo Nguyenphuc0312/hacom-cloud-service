@@ -22,7 +22,11 @@ interface HeaderUserMenuProps {
 
 const normalizeDisplayName = (user: CurrentAdmin | null): string => {
   const fallback = user?.email?.split('@')[0] ?? 'Admin';
-  const source = user?.username?.trim() || fallback;
+  const source =
+    user?.fullName?.trim() ||
+    user?.displayName?.trim() ||
+    user?.username?.trim() ||
+    fallback;
   return source.length > 16 ? `${source.slice(0, 15)}...` : source;
 };
 
@@ -35,7 +39,9 @@ export const HeaderUserMenu = ({
 }: HeaderUserMenuProps) => {
   const displayName = normalizeDisplayName(user);
   const roleLabel = toDisplayRole(user?.role).replace('_', ' ');
-  const avatarText = (user?.username ?? user?.email ?? 'A').charAt(0).toUpperCase();
+  const avatarText = (user?.fullName ?? user?.displayName ?? user?.username ?? user?.email ?? 'A')
+    .charAt(0)
+    .toUpperCase();
 
   const menuItems = useMemo<NonNullable<MenuProps['items']>>(
     () => [

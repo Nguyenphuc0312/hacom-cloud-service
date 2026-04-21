@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { AppIcon } from '@/components/AppIcon';
 import { appConfig } from '@/config/appConfig';
 import { useAuthStore } from '@/store/authStore';
 import { hasSomeRole, toDisplayRole } from '@/utils/role';
@@ -27,10 +28,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ mobile = false, id }
       aria-label="Primary navigation"
     >
       <div className="ds-admin-sidebar-logo" aria-label="Admin Operations Panel">
-        <span className="ds-sidebar-brand-mark">AO</span>
+        <span className="ds-sidebar-brand-mark">
+          <AppIcon name="shield" size={18} strokeWidth={2.1} aria-hidden />
+        </span>
         <span className="ds-sidebar-brand-copy">
-          <strong>Admin Operations</strong>
-          <small>Internal control panel</small>
+          <strong>Admin Console</strong>
+          <small>Quản trị vận hành</small>
         </span>
       </div>
 
@@ -40,7 +43,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ mobile = false, id }
             <SidebarNavSection
               key={section.key}
               label={section.label}
-              icon={section.icon}
+              iconKey={section.iconKey}
               items={section.items}
             />
           ))}

@@ -1,10 +1,10 @@
-import { ReloadOutlined } from '@ant-design/icons';
 import { Button } from 'antd';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { getApiErrorStatus, getErrorMessage } from '@/api/error';
 import type { TimeRange } from '@/api/types';
+import { AppIcon } from '@/components/AppIcon';
 import { PageShell } from '@/components/PageShell';
 import { StatusBadge } from '@/components/StatusBadge';
 import { TimeRangePicker } from '@/components/TimeRangePicker';
@@ -68,13 +68,15 @@ export const DashboardPage = () => {
       totalUsersQuery.isLoading ||
       activeUsersQuery.isLoading);
 
+  const dashboardHeader = {
+    eyebrow: 'Tổng quan',
+    title: 'Dashboard',
+    description: 'Theo dõi nhanh sức khỏe hệ thống, tài khoản quản trị và các điểm cần xử lý.',
+  };
+
   if (isInitialLoading) {
     return (
-      <PageShell
-        eyebrow="Tổng quan"
-        title="Dashboard"
-        description="Tình trạng hệ thống và hạng mục cần xử lý."
-      >
+      <PageShell {...dashboardHeader}>
         <div className="ds-ops-skeleton-grid" aria-hidden>
           <div className="ds-ops-skeleton ds-ops-skeleton--alert" />
           <div className="ds-ops-skeleton ds-ops-skeleton--metric" />
@@ -99,15 +101,11 @@ export const DashboardPage = () => {
     const monitoringStatus = getApiErrorStatus(monitoringQuery.error);
 
     return (
-      <PageShell
-        eyebrow="Tổng quan"
-        title="Dashboard"
-        description="Tình trạng hệ thống và hạng mục cần xử lý."
-      >
+      <PageShell {...dashboardHeader}>
         <ErrorState
           title={
             monitoringStatus === 403
-              ? 'Bạn không có quyền xem telemetry của dashboard'
+              ? 'Bạn không có quyền xem dữ liệu telemetry'
               : 'Không thể tải dashboard vận hành'
           }
           description={getErrorMessage(
@@ -142,11 +140,9 @@ export const DashboardPage = () => {
   if (!hasOverviewData) {
     return (
       <PageShell
-        eyebrow="Tổng quan"
-        title="Dashboard"
-        description="Tình trạng hệ thống và hạng mục cần xử lý."
+        {...dashboardHeader}
         headerExtra={
-          <Button icon={<ReloadOutlined />} onClick={refetchDashboard}>
+          <Button icon={<AppIcon name="refresh" size={16} aria-hidden />} onClick={refetchDashboard}>
             Làm mới
           </Button>
         }
@@ -173,14 +169,14 @@ export const DashboardPage = () => {
           tone: 'danger' as const,
           title: `${incidents.length} sự cố đang hoạt động`,
           description: incidents[0]?.summary || incidents[0]?.title || 'Có tín hiệu cần xử lý ngay.',
-          actionLabel: 'Mở dịch vụ',
+          actionLabel: 'Mở trạng thái dịch vụ',
           actionTo: '/services/health',
         }
       : (servicesSummary?.down ?? 0) > 0
         ? {
             tone: 'danger' as const,
-            title: `${servicesSummary?.down ?? 0} dịch vụ ngừng hoạt động`,
-            description: 'Một hoặc nhiều phụ thuộc đang down trong lần kiểm tra gần nhất.',
+            title: `${servicesSummary?.down ?? 0} dịch vụ đang down`,
+            description: 'Một hoặc nhiều phụ thuộc không vượt qua lần kiểm tra gần nhất.',
             actionLabel: 'Xem sức khỏe dịch vụ',
             actionTo: '/services/health',
           }
@@ -188,15 +184,15 @@ export const DashboardPage = () => {
           ? {
               tone: 'warning' as const,
               title: 'Có tín hiệu suy giảm',
-              description: 'Một phần telemetry hoặc phụ thuộc đang ngoài ngưỡng kỳ vọng.',
-              actionLabel: 'Mở giám sát',
+              description: 'Một phần telemetry hoặc dịch vụ đang ngoài ngưỡng kỳ vọng.',
+              actionLabel: 'Mở giám sát runtime',
               actionTo: '/monitoring',
             }
           : {
               tone: 'success' as const,
-              title: 'Hệ thống ổn định',
-              description: 'Không có cảnh báo khẩn trong khung thời gian hiện tại.',
-              actionLabel: 'Xem giám sát',
+              title: 'Hệ thống đang ổn định',
+              description: 'Hiện chưa có cảnh báo khẩn hoặc dịch vụ down trong cửa sổ đang theo dõi.',
+              actionLabel: 'Mở giám sát runtime',
               actionTo: '/monitoring',
             };
 
@@ -229,7 +225,7 @@ export const DashboardPage = () => {
     },
     {
       id: 'connections',
-      label: 'Kết nối thời gian thực',
+      label: 'Kết nối realtime',
       value: formatNumber(overview?.systemOverview.activeConnections),
       hint: `Biến động ${formatDeltaLabel(trafficTrend.delta)}`,
       tone: 'default',
@@ -252,9 +248,7 @@ export const DashboardPage = () => {
 
   return (
     <PageShell
-      eyebrow="Tổng quan"
-      title="Dashboard"
-      description="Tình trạng hệ thống và hạng mục cần xử lý."
+      {...dashboardHeader}
       headerExtra={
         <div className="ds-page-toolbar-stack">
           <div className="ds-page-toolbar-group">
@@ -262,7 +256,7 @@ export const DashboardPage = () => {
           </div>
           <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
             <Button
-              icon={<ReloadOutlined />}
+              icon={<AppIcon name="refresh" size={16} aria-hidden />}
               loading={monitoringQuery.isFetching || serviceHealthQuery.isFetching}
               onClick={refetchDashboard}
             >
@@ -319,7 +313,7 @@ export const DashboardPage = () => {
             <div className="ds-ops-panel-header">
               <div>
                 <h2>Hàng đợi xử lý</h2>
-                <p>Những mục ảnh hưởng trực tiếp tới vận hành.</p>
+                <p>Các hạng mục ảnh hưởng trực tiếp tới vận hành và cần được mở ngay.</p>
               </div>
             </div>
             <div className="ds-ops-list">
@@ -367,8 +361,8 @@ export const DashboardPage = () => {
           <section className="ds-ops-panel">
             <div className="ds-ops-panel-header">
               <div>
-                <h2>Trạng thái hệ thống</h2>
-                <p>Chỉ số phụ trợ để đối chiếu nhanh trước khi điều tra sâu.</p>
+                <h2>Trạng thái nền</h2>
+                <p>Các chỉ số kiểm soát nhanh trước khi đi sâu vào giám sát hoặc điều tra.</p>
               </div>
             </div>
             <dl className="ds-ops-fact-list">
@@ -387,7 +381,7 @@ export const DashboardPage = () => {
                 </dd>
               </div>
               <div>
-                <dt>Lỗi gửi tin</dt>
+                <dt>Lỗi gửi</dt>
                 <dd>{formatRate(overview?.realtimeHealth.deliveryFailuresPerMinute, '/phút')}</dd>
               </div>
               <div>
@@ -395,7 +389,7 @@ export const DashboardPage = () => {
                 <dd>{formatRate(overview?.realtimeHealth.resyncsPerMinute, '/phút')}</dd>
               </div>
               <div>
-                <dt>Biến động reliability</dt>
+                <dt>Reliability delta</dt>
                 <dd>{formatDeltaLabel(reliabilityTrend.delta)}</dd>
               </div>
               <div>
@@ -410,7 +404,7 @@ export const DashboardPage = () => {
           <div className="ds-ops-panel-header">
             <div>
               <h2>Hoạt động gần nhất</h2>
-              <p>Luồng sự cố, cảnh báo và dịch vụ cần theo dõi.</p>
+              <p>Sự cố, cảnh báo và thay đổi gần đây để operator tiếp tục điều tra.</p>
             </div>
             <Button type="link" onClick={() => navigate('/audit')}>
               Mở audit trail

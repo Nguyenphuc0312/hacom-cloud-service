@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 
+import { AppIcon } from '@/components/AppIcon';
 import { useAuthStore } from '@/store/authStore';
 import { hasSomeRole } from '@/utils/role';
 import type { NavItem as NavItemType } from './navigationConfig';
@@ -28,7 +29,9 @@ export const SidebarNavItem = ({ item, isSubmenu = false }: SidebarNavItemProps)
       aria-label={item.label}
     >
       <span className="ds-sidebar-item-marker" aria-hidden />
-      {item.icon && <span className="ds-sidebar-item-icon">{item.icon}</span>}
+      <span className="ds-sidebar-item-icon">
+        <AppIcon name={item.iconKey} size={18} aria-hidden />
+      </span>
       <span className="ds-sidebar-item-content">
         <span className="ds-sidebar-item-label">{item.label}</span>
       </span>
