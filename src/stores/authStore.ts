@@ -55,10 +55,14 @@ export interface User {
   firstName?: string;
   lastName?: string;
   displayName?: string;
+  effectiveDisplayName?: string;
+  fullName?: string | null;
   fullNameFromHR?: string;
   full_name_from_hr?: string;
   employeeCode?: string;
   employee_code?: string;
+  hrLinked?: boolean;
+  accountType?: "employee" | "exception" | "bot" | string;
   hrLegalName?: string;
   avatar?: string;
   backgroundImageUrl?: string;
@@ -520,8 +524,10 @@ export const useAuthStore = create<AuthState>()(
 
           try {
             const payload = await loginAuthApi.login({
-              loginIdentifier: data.email,
-              email: data.email,
+              loginIdentifier: data.loginIdentifier,
+              email: data.loginIdentifier.includes("@")
+                ? data.loginIdentifier
+                : undefined,
               password: data.password,
             });
             get().applyLoginResponse(payload, data.rememberMe);

@@ -7,7 +7,6 @@ import {
   ArrowUturnLeftIcon,
   ClipboardDocumentIcon,
   EllipsisHorizontalIcon,
-  EyeIcon,
   FaceSmileIcon,
   PencilIcon,
   TrashIcon,
@@ -61,13 +60,6 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
         id: "copy",
         label: t("chat:message.actions.copy"),
         icon: ClipboardDocumentIcon,
-      },
-      inspect: {
-        id: "inspect",
-        label: t("chat:message.actions.inspect", {
-          defaultValue: "Inspect",
-        }),
-        icon: EyeIcon,
       },
       edit: {
         id: "edit",

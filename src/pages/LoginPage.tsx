@@ -68,12 +68,12 @@ export const LoginPage: React.FC = () => {
     watch,
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", password: "", rememberMe: false },
+    defaultValues: { loginIdentifier: "", password: "", rememberMe: false },
   });
 
   useEffect(() => {
     if (authMethod === "password") {
-      setFocus("email");
+      setFocus("loginIdentifier");
     }
   }, [authMethod, setFocus]);
 

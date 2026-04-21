@@ -4,6 +4,10 @@ import { SearchPanel } from "../../../components/chat/SearchPanel";
 import { UserProfile } from "../../../components/info/UserProfile";
 import { useAuthStore } from "../../../stores";
 
+const { getRelationshipStateMock } = vi.hoisted(() => ({
+  getRelationshipStateMock: vi.fn(),
+}));
+
 vi.mock("react-i18next", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-i18next")>();
   return {
@@ -40,10 +44,7 @@ vi.mock("../../../hooks/useMessageSearch", () => ({
 vi.mock("../../../hooks/useFriendship", () => ({
   useFriendship: () => ({
     refreshDirectory: vi.fn(),
-    getRelationshipState: () => ({
-      kind: "self",
-      capabilities: {},
-    }),
+    getRelationshipState: getRelationshipStateMock,
     sendFriendRequest: vi.fn(),
     acceptFriendRequest: vi.fn(),
     rejectFriendRequest: vi.fn(),
@@ -58,8 +59,26 @@ vi.mock("../../../hooks/usePresence", () => ({
   usePresence: vi.fn(),
 }));
 
+vi.mock("../../../features/chat/usecases/getUserById", () => ({
+  getUserByIdUseCase: vi.fn().mockResolvedValue({
+    success: true,
+    data: {
+      id: "user-2",
+      username: "user-2",
+      displayName: "Tran Thi B",
+      avatar: null,
+      status: "offline",
+    },
+  }),
+}));
+
 describe("identity rendering surfaces", () => {
   beforeEach(() => {
+    getRelationshipStateMock.mockReturnValue({
+      kind: "self",
+      capabilities: {},
+    });
+
     useAuthStore.setState((state) => ({
       ...state,
       user: {
@@ -96,5 +115,69 @@ describe("identity rendering surfaces", () => {
 
     expect(screen.getByText("Nguyen Van A")).toBeInTheDocument();
     expect(screen.getByText("@user-1")).toBeInTheDocument();
+  });
+
+  it("hides the message action when viewing someone inside an active direct conversation", () => {
+    getRelationshipStateMock.mockReturnValue({
+      kind: "friend",
+      friendshipId: "friendship-1",
+      capabilities: {
+        canMessage: true,
+        canUnfriend: true,
+        canBlock: true,
+      },
+    });
+
+    render(
+      <UserProfile
+        userId="user-2"
+        currentUserId="user-1"
+        initialUser={{
+          id: "user-2",
+          username: "user-2",
+          displayName: "Tran Thi B",
+        }}
+        onClose={vi.fn()}
+        onStartConversation={vi.fn()}
+        conversationContext="direct"
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "friends:message" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "friends:unfriend" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the message action when viewing someone outside the active direct chat", () => {
+    getRelationshipStateMock.mockReturnValue({
+      kind: "friend",
+      friendshipId: "friendship-1",
+      capabilities: {
+        canMessage: true,
+        canUnfriend: false,
+        canBlock: true,
+      },
+    });
+
+    render(
+      <UserProfile
+        userId="user-2"
+        currentUserId="user-1"
+        initialUser={{
+          id: "user-2",
+          username: "user-2",
+          displayName: "Tran Thi B",
+        }}
+        onClose={vi.fn()}
+        onStartConversation={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "friends:message" }),
+    ).toBeInTheDocument();
   });
 });

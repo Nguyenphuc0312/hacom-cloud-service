@@ -2,7 +2,10 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { FieldErrors, UseFormRegister } from "react-hook-form";
-import { EnvelopeIcon, LockClosedIcon } from "@heroicons/react/24/outline";
+import {
+  IdentificationIcon,
+  LockClosedIcon,
+} from "@heroicons/react/24/outline";
 import { Button, Checkbox, Input } from "../ui";
 import type { LoginFormData } from "../../lib/validations";
 import { SocialLoginRow, type SocialProvider } from "./SocialLoginRow";
@@ -50,14 +53,14 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
         )}
 
         <Input
-          {...register("email")}
-          type="email"
-          label={t("auth:login.email")}
-          placeholder={t("auth:placeholders.email")}
-          leftIcon={<EnvelopeIcon className="h-4 w-4" />}
-          error={errors.email?.message}
-          autoComplete="email"
-          inputMode="email"
+          {...register("loginIdentifier")}
+          type="text"
+          label={t("auth:login.loginIdentifier")}
+          placeholder={t("auth:placeholders.loginIdentifier")}
+          leftIcon={<IdentificationIcon className="h-4 w-4" />}
+          error={errors.loginIdentifier?.message}
+          autoComplete="username"
+          inputMode="text"
           disabled={isBusy}
           className="h-11 rounded-xl py-0 text-sm"
         />

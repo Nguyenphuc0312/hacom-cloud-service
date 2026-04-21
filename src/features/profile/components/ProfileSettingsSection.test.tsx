@@ -3,16 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "../../../stores";
 
 const {
-  updateAvatarMock,
+  checkUsernameMock,
   patchProfileMock,
-  apiPutMock,
-  toastErrorMock,
+  updateAvatarMock,
+  updateUsernameMock,
   toastSuccessMock,
 } = vi.hoisted(() => ({
-  updateAvatarMock: vi.fn(),
+  checkUsernameMock: vi.fn(),
   patchProfileMock: vi.fn(),
-  apiPutMock: vi.fn(),
-  toastErrorMock: vi.fn(),
+  updateAvatarMock: vi.fn(),
+  updateUsernameMock: vi.fn(),
   toastSuccessMock: vi.fn(),
 }));
 
@@ -29,21 +29,12 @@ vi.mock("react-i18next", async (importOriginal) => {
 
 vi.mock("../../../services/api", () => ({
   userApi: {
-    updateAvatar: updateAvatarMock,
+    checkUsername: checkUsernameMock,
     patchProfile: patchProfileMock,
+    updateAvatar: updateAvatarMock,
+    updateUsername: updateUsernameMock,
   },
 }));
-
-vi.mock("../../../lib/axios", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../lib/axios")>();
-  return {
-    ...actual,
-    default: {
-      ...actual.default,
-      put: apiPutMock,
-    },
-  };
-});
 
 vi.mock("../../../components/ui", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../components/ui")>();
@@ -51,7 +42,7 @@ vi.mock("../../../components/ui", async (importOriginal) => {
     ...actual,
     toast: {
       success: toastSuccessMock,
-      error: toastErrorMock,
+      error: vi.fn(),
       warning: vi.fn(),
       info: vi.fn(),
     },
@@ -60,12 +51,15 @@ vi.mock("../../../components/ui", async (importOriginal) => {
 
 import { ProfileSettingsSection } from "./ProfileSettingsSection";
 
+const refreshProfileMock = vi.fn();
+const updateUserMock = vi.fn();
+
 const resetStore = () => {
   useAuthStore.setState((state) => ({
     ...state,
     user: {
       id: "user-1",
-      username: "user-1",
+      username: "user_1",
       displayName: "Current Name",
       bio: "Current bio",
       phone: "+84912345678",
@@ -77,33 +71,66 @@ const resetStore = () => {
     },
     isAuthenticated: true,
     authStatus: "authenticated",
+    refreshProfile: refreshProfileMock,
+    updateUser: updateUserMock,
   }));
 };
 
 describe("ProfileSettingsSection", () => {
   beforeEach(() => {
-    updateAvatarMock.mockReset();
+    checkUsernameMock.mockReset();
     patchProfileMock.mockReset();
-    apiPutMock.mockReset();
-    toastErrorMock.mockReset();
+    updateAvatarMock.mockReset();
+    updateUsernameMock.mockReset();
     toastSuccessMock.mockReset();
+    refreshProfileMock.mockReset();
+    updateUserMock.mockReset();
+    refreshProfileMock.mockResolvedValue(null);
     resetStore();
   });
 
-  it("renders editable profile fields and read-only HR data", () => {
+  it("renders a compact summary and keeps edit fields out of settings by default", () => {
     render(<ProfileSettingsSection />);
 
-    expect(screen.getByLabelText("profile:settings.displayName")).toBeEnabled();
-    expect(screen.getByLabelText("profile:editProfileModal.phone")).toBeEnabled();
-    expect(screen.getByLabelText("profile:settings.bio")).toBeEnabled();
-    expect(screen.getByText("EMP001")).toBeInTheDocument();
     expect(screen.getByText("Nguyen Van A")).toBeInTheDocument();
-    expect(screen.getAllByText("Engineering").length).toBeGreaterThan(0);
-    expect(screen.getByText("ENG")).toBeInTheDocument();
-    expect(screen.getAllByText("user@company.test").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("user@company.test")).toHaveLength(2);
+    expect(screen.getByText("Engineering")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "profile:editProfileModal.title" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("profile:settings.displayName"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "profile:settings.chooseBackground" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("submits the latest profile payload including phone", async () => {
+  it("opens the full dialog from settings with username and phone fields", () => {
+    render(<ProfileSettingsSection />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "profile:editProfileModal.title" }),
+    );
+
+    expect(
+      screen.getByLabelText("profile:settings.displayName"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("profile:settings.username"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("profile:editProfileModal.phone"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("profile:editProfileModal.bio"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("profile:settings.readOnlyTitle"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("saves full-profile edits without rendering the legacy inline editor", async () => {
     patchProfileMock.mockResolvedValue({
       success: true,
       data: {
@@ -115,17 +142,22 @@ describe("ProfileSettingsSection", () => {
 
     render(<ProfileSettingsSection />);
 
+    fireEvent.click(
+      screen.getByRole("button", { name: "profile:editProfileModal.title" }),
+    );
     fireEvent.change(screen.getByLabelText("profile:settings.displayName"), {
       target: { value: "Updated Name" },
     });
     fireEvent.change(screen.getByLabelText("profile:editProfileModal.phone"), {
       target: { value: "+84987654321" },
     });
-    fireEvent.change(screen.getByLabelText("profile:settings.bio"), {
+    fireEvent.change(screen.getByLabelText("profile:editProfileModal.bio"), {
       target: { value: "Updated bio" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "profile:settings.save" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "profile:editProfileModal.save" }),
+    );
 
     await waitFor(() => {
       expect(patchProfileMock).toHaveBeenCalledWith({
@@ -135,101 +167,5 @@ describe("ProfileSettingsSection", () => {
       });
       expect(toastSuccessMock).toHaveBeenCalled();
     });
-  });
-
-  it("disables background upload after backend reports unsupported endpoint", async () => {
-    patchProfileMock.mockResolvedValue({
-      success: true,
-      data: {
-        displayName: "Current Name",
-      },
-    });
-    apiPutMock.mockRejectedValue({
-      isAxiosError: true,
-      response: { status: 404 },
-    });
-
-    render(<ProfileSettingsSection />);
-
-    const fileInputs = document.querySelectorAll(
-      'input[type="file"]',
-    ) as NodeListOf<HTMLInputElement>;
-    const backgroundInput = fileInputs[1];
-    const file = new File(["image"], "background.png", { type: "image/png" });
-
-    fireEvent.change(backgroundInput, { target: { files: [file] } });
-    fireEvent.click(screen.getByRole("button", { name: "profile:settings.save" }));
-
-    await waitFor(() => {
-      expect(toastErrorMock).toHaveBeenCalled();
-    });
-
-    expect(
-      screen.getByText(
-        "Background upload is not available in this environment right now.",
-      ),
-    ).toBeInTheDocument();
-
-    expect(
-      screen.getByRole("button", { name: "profile:settings.chooseBackground" }),
-    ).toBeDisabled();
-  });
-
-  it("prevents duplicate submits while save is pending", async () => {
-    let resolvePatch: (value: unknown) => void = () => {
-      throw new Error("resolvePatch not initialized");
-    };
-    patchProfileMock.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolvePatch = resolve;
-        }),
-    );
-
-    render(<ProfileSettingsSection />);
-
-    fireEvent.change(screen.getByLabelText("profile:settings.displayName"), {
-      target: { value: "Updated Name" },
-    });
-
-    const saveButton = screen.getByRole("button", {
-      name: "profile:settings.save",
-    });
-
-    fireEvent.click(saveButton);
-    fireEvent.click(saveButton);
-
-    expect(patchProfileMock).toHaveBeenCalledTimes(1);
-
-    resolvePatch({
-      success: true,
-      data: {
-        displayName: "Updated Name",
-        bio: "Current bio",
-      },
-    });
-
-    await waitFor(() => {
-      expect(toastSuccessMock).toHaveBeenCalled();
-    });
-  });
-
-  it("rejects unsupported avatar file types before upload", () => {
-    render(<ProfileSettingsSection />);
-
-    const fileInputs = document.querySelectorAll(
-      'input[type="file"]',
-    ) as NodeListOf<HTMLInputElement>;
-    const avatarInput = fileInputs[0];
-
-    fireEvent.change(avatarInput, {
-      target: {
-        files: [new File(["raw"], "avatar.txt", { type: "text/plain" })],
-      },
-    });
-
-    expect(toastErrorMock).toHaveBeenCalledWith(
-      "profile:settings.upload.unsupportedType",
-    );
   });
 });

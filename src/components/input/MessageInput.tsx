@@ -23,11 +23,15 @@ import type { AttachmentDraft } from "../../types/attachmentDraft";
 import { UPLOAD_CONFIG } from "../../config";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { InlineNotice, toast } from "../ui";
+import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 
 export interface MentionCandidate {
   id: string;
   username: string;
   displayName?: string;
+  fullName?: string | null;
+  fullNameFromHR?: string | null;
+  full_name_from_hr?: string | null;
 }
 
 /** Imperative handle for MessageInput — allows parent to programmatically add files */
@@ -990,7 +994,9 @@ export const MessageInput = React.forwardRef<
                   mentionSuggestions.map((candidate, index) => {
                     const isActive = index === activeMentionIndex;
                     const mentionLabel =
-                      candidate.displayName || candidate.username;
+                      resolveUserDisplayName(candidate, {
+                        allowLegacyFallback: true,
+                      }) || candidate.username;
                     return (
                       <button
                         key={`${candidate.id}:${candidate.username}`}
@@ -1017,7 +1023,7 @@ export const MessageInput = React.forwardRef<
                           @{candidate.username}
                         </span>
                         {candidate.displayName &&
-                          candidate.displayName !== candidate.username && (
+                          candidate.displayName !== mentionLabel && (
                             <span className="truncate text-xs text-text-muted">
                               {candidate.displayName}
                             </span>

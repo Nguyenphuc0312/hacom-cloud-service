@@ -6,7 +6,6 @@ export type MessageActionId =
   | "react"
   | "reply"
   | "copy"
-  | "inspect"
   | "edit"
   | "delete"
   | "retry"
@@ -20,7 +19,6 @@ export interface MessageActionPolicyInput {
   canEdit?: boolean;
   canDelete?: boolean;
   canRetry?: boolean;
-  canInspect?: boolean;
 }
 
 interface ActionCandidate {
@@ -65,7 +63,6 @@ const getActionCandidates = ({
   canEdit = false,
   canDelete = false,
   canRetry = false,
-  canInspect = false,
 }: MessageActionPolicyInput): ActionCandidate[] => {
   const failed = isFailedMessage(message);
   const candidates: ActionCandidate[] = [];
@@ -101,15 +98,6 @@ const getActionCandidates = ({
     candidates.push({
       id: "copy",
       score: failed ? 76 : 72,
-      railEligible: true,
-      menuEligible: true,
-    });
-  }
-
-  if (canInspect) {
-    candidates.push({
-      id: "inspect",
-      score: 88,
       railEligible: true,
       menuEligible: true,
     });

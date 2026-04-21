@@ -77,7 +77,7 @@
   /* Chat bubble density (overridden by SettingsApplier) */
   --chat-bubble-px: 0.75rem;
   --chat-bubble-py: 0.5rem;
-  --chat-lane-padding: 20px;
+  --chat-lane-padding: 16px;
   --chat-content-lane: 46rem;
   --chat-rich-lane: 42rem;
   --chat-bubble-max: min(34rem, 68%);
@@ -397,7 +397,7 @@ body {
 }
 
 .chat-shell[data-chat-layout-profile="desktop-wide"] {
-  --chat-lane-padding: 24px;
+  --chat-lane-padding: 18px;
   --chat-content-lane: 45rem;
   --chat-rich-lane: 43rem;
   --chat-bubble-max: min(31rem, 70%);
@@ -405,7 +405,7 @@ body {
 }
 
 .chat-shell[data-chat-layout-profile="laptop"] {
-  --chat-lane-padding: 20px;
+  --chat-lane-padding: 16px;
   --chat-content-lane: 46rem;
   --chat-rich-lane: 44rem;
   --chat-bubble-max: min(31rem, 72%);
@@ -432,7 +432,7 @@ body {
 }
 
 .chat-shell[data-chat-layout-state="with-panel"] {
-  --chat-lane-padding: 14px;
+  --chat-lane-padding: 12px;
   --chat-content-lane: 39rem;
   --chat-rich-lane: 38rem;
   --chat-bubble-max: min(29rem, 66%);

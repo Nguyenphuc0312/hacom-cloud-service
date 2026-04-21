@@ -3,7 +3,7 @@
  * Reusable button with semantic design tokens.
  */
 
-import React from "react";
+import React, { forwardRef } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { Spinner } from "./Spinner";
@@ -54,69 +54,77 @@ const iconSizeClasses = {
   lg: "h-5 w-5",
 };
 
-export const Button: React.FC<ButtonProps> = ({
-  children,
-  variant = "primary",
-  size = "md",
-  isLoading = false,
-  leftIcon,
-  rightIcon,
-  fullWidth = false,
-  disabled,
-  className,
-  ...props
-}) => {
-  const { t } = useTranslation();
-  const isDisabled = disabled || isLoading;
-  const resolvedVariant = variant === "danger" ? "destructive" : variant;
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  (
+    {
+      children,
+      variant = "primary",
+      size = "md",
+      isLoading = false,
+      leftIcon,
+      rightIcon,
+      fullWidth = false,
+      disabled,
+      className,
+      ...props
+    },
+    ref,
+  ) => {
+    const { t } = useTranslation();
+    const isDisabled = disabled || isLoading;
+    const resolvedVariant = variant === "danger" ? "destructive" : variant;
 
-  return (
-    <button
-      disabled={isDisabled}
-      className={clsx(
-        "inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium",
-        "transition-micro",
-        "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface",
-        "disabled:cursor-not-allowed disabled:border-disabled-border disabled:bg-disabled-bg disabled:text-text-disabled disabled:opacity-65",
-        resolvedVariant !== "link" && variantClasses[resolvedVariant],
-        resolvedVariant !== "link" && sizeClasses[size],
-        variant === "link" && variantClasses.link,
-        fullWidth && "w-full",
-        !isDisabled && resolvedVariant !== "link" && "active:scale-[0.98]",
-        className,
-      )}
-      {...props}
-    >
-      {isLoading ? (
-        <>
-          <Spinner
-            size={size === "lg" ? "sm" : "xs"}
-            variant={
-              resolvedVariant === "primary" || resolvedVariant === "destructive"
-                ? "inverse"
-                : "neutral"
-            }
-          />
-          <span>{t("common:loading.processing")}</span>
-        </>
-      ) : (
-        <>
-          {leftIcon && (
-            <span className={clsx("shrink-0", iconSizeClasses[size])}>
-              {leftIcon}
-            </span>
-          )}
-          {children}
-          {rightIcon && (
-            <span className={clsx("shrink-0", iconSizeClasses[size])}>
-              {rightIcon}
-            </span>
-          )}
-        </>
-      )}
-    </button>
-  );
-};
+    return (
+      <button
+        ref={ref}
+        disabled={isDisabled}
+        className={clsx(
+          "inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium",
+          "transition-micro",
+          "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface",
+          "disabled:cursor-not-allowed disabled:border-disabled-border disabled:bg-disabled-bg disabled:text-text-disabled disabled:opacity-65",
+          resolvedVariant !== "link" && variantClasses[resolvedVariant],
+          resolvedVariant !== "link" && sizeClasses[size],
+          variant === "link" && variantClasses.link,
+          fullWidth && "w-full",
+          !isDisabled && resolvedVariant !== "link" && "active:scale-[0.98]",
+          className,
+        )}
+        {...props}
+      >
+        {isLoading ? (
+          <>
+            <Spinner
+              size={size === "lg" ? "sm" : "xs"}
+              variant={
+                resolvedVariant === "primary" || resolvedVariant === "destructive"
+                  ? "inverse"
+                  : "neutral"
+              }
+            />
+            <span>{t("common:loading.processing")}</span>
+          </>
+        ) : (
+          <>
+            {leftIcon && (
+              <span className={clsx("shrink-0", iconSizeClasses[size])}>
+                {leftIcon}
+              </span>
+            )}
+            {children}
+            {rightIcon && (
+              <span className={clsx("shrink-0", iconSizeClasses[size])}>
+                {rightIcon}
+              </span>
+            )}
+          </>
+        )}
+      </button>
+    );
+  },
+);
+
+Button.displayName = "Button";
 
 interface IconButtonProps extends Omit<ButtonProps, "leftIcon" | "rightIcon"> {
   icon: React.ReactNode;

@@ -1,12 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
 import { useAuthStore } from "../../stores";
-
-const { updateAvatarMock, patchProfileMock } = vi.hoisted(() => ({
-  updateAvatarMock: vi.fn(),
-  patchProfileMock: vi.fn(),
-}));
 
 vi.mock("react-i18next", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-i18next")>();
@@ -21,8 +15,10 @@ vi.mock("react-i18next", async (importOriginal) => {
 
 vi.mock("../../services/api", () => ({
   userApi: {
-    updateAvatar: updateAvatarMock,
-    patchProfile: patchProfileMock,
+    patchProfile: vi.fn(),
+    updateAvatar: vi.fn(),
+    updateUsername: vi.fn(),
+    checkUsername: vi.fn(),
   },
 }));
 
@@ -44,41 +40,55 @@ const seedAuthStore = () => {
     },
     isAuthenticated: true,
     authStatus: "authenticated",
+    refreshProfile: vi.fn().mockResolvedValue(state.user),
+    updateUser: vi.fn(),
   }));
 };
 
 describe("EditProfileModal", () => {
   beforeEach(() => {
-    updateAvatarMock.mockReset();
-    patchProfileMock.mockReset();
     seedAuthStore();
   });
 
-  it("renders a close action, anchored avatar actions, and readonly identity fields", () => {
+  it("renders the quick-edit variant with avatar, display name, and bio only", () => {
     render(<EditProfileModal isOpen onClose={() => {}} />);
 
     expect(
       screen.getByRole("button", { name: "common:actions.close" }),
     ).toBeInTheDocument();
     expect(
-      screen.getAllByRole("button", { name: "profile:settings.chooseAvatar" }),
-    ).toHaveLength(2);
+      screen.getByRole("button", { name: "profile:settings.chooseAvatar" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByLabelText("profile:settings.displayName"),
     ).toBeInTheDocument();
     expect(
-      screen.getByLabelText("profile:editProfileModal.phone"),
+      screen.getByLabelText("profile:editProfileModal.bio"),
     ).toBeInTheDocument();
-    expect(screen.getByDisplayValue("EMP001")).toBeDisabled();
-    expect(screen.getByDisplayValue("Nguyen Thi Alice")).toBeDisabled();
-    expect(screen.getByDisplayValue("alice@company.test")).toBeDisabled();
+    expect(
+      screen.queryByLabelText("profile:editProfileModal.phone"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("profile:settings.username"),
+    ).not.toBeInTheDocument();
   });
 
-  it("closes from the modal header close button", () => {
+  it("confirms before closing when there are unsaved changes", () => {
     const onClose = vi.fn();
     render(<EditProfileModal isOpen onClose={onClose} />);
 
+    fireEvent.change(screen.getByLabelText("profile:settings.displayName"), {
+      target: { value: "Alice Updated" },
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "common:actions.close" }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("profile:editProfileModal.discardTitle"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "common:actions.confirm" }));
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });

@@ -267,7 +267,7 @@ export interface MessageInputProps {
 }
 
 export interface LoginFormData {
-  email: string;
+  loginIdentifier: string;
   password: string;
   rememberMe: boolean;
 }

@@ -37,6 +37,7 @@ import { ProfileSettingsSection } from "../features/profile/components/ProfileSe
 import { ROUTE_PATHS } from "../router/paths";
 import { useSettings } from "../settings";
 import { useAuthStore } from "../stores";
+import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 
 const MOBILE_MEDIA_QUERY = "(max-width: 767px)";
 
@@ -533,7 +534,9 @@ export const SettingsPage: React.FC = () => {
           badge={
             currentUser ? (
               <span className="hidden rounded-full bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary sm:inline-flex">
-                {currentUser.displayName || currentUser.username}
+                {resolveUserDisplayName(currentUser, {
+                  allowLegacyFallback: true,
+                })}
               </span>
             ) : null
           }

@@ -59,16 +59,16 @@ export const resolveUserDisplayName = (
     asString(user.employee_code) ||
     asString(user.code);
 
-  if (displayName) {
-    return displayName;
-  }
-
   if (fullNameFromHr) {
     return fullNameFromHr;
   }
 
   if (fullName) {
     return fullName;
+  }
+
+  if (displayName) {
+    return displayName;
   }
 
   if (username) {

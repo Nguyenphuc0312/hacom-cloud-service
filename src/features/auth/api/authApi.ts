@@ -83,6 +83,8 @@ const normalizeUser = (value: unknown): Record<string, unknown> => {
   const id = asString(user.id) || asString(user.userId) || "unknown-user";
   const username =
     asString(user.username) ||
+    asString(user.fullName) ||
+    asString(user.fullNameFromHr) ||
     asString(user.email) ||
     asString(user.employeeCode) ||
     asString(user.employee_code) ||

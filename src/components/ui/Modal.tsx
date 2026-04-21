@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { XMarkIcon } from "@heroicons/react/24/outline";
@@ -19,8 +20,12 @@ interface ModalProps {
   showCloseButton?: boolean;
   closeOnOverlayClick?: boolean;
   closeOnEsc?: boolean;
+  footer?: React.ReactNode;
   className?: string;
   contentClassName?: string;
+  bodyClassName?: string;
+  initialFocusRef?: React.RefObject<HTMLElement | null>;
+  restoreFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
 const sizeClasses = {
@@ -29,6 +34,76 @@ const sizeClasses = {
   lg: "max-w-lg",
   xl: "max-w-xl",
   full: "max-w-4xl",
+};
+
+let openModalCount = 0;
+let previousBodyOverflow = "";
+let previousBodyPaddingRight = "";
+
+const focusableSelector = [
+  "a[href]",
+  "button:not([disabled])",
+  "textarea:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+const getFocusableElements = (container: HTMLElement | null): HTMLElement[] => {
+  if (!container) {
+    return [];
+  }
+
+  return Array.from(container.querySelectorAll<HTMLElement>(focusableSelector)).filter(
+    (element) => {
+      if (element.hasAttribute("disabled")) {
+        return false;
+      }
+
+      if (element.getAttribute("aria-hidden") === "true") {
+        return false;
+      }
+
+      return element.offsetParent !== null || document.activeElement === element;
+    },
+  );
+};
+
+const lockBodyScroll = () => {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  if (openModalCount === 0) {
+    previousBodyOverflow = document.body.style.overflow;
+    previousBodyPaddingRight = document.body.style.paddingRight;
+
+    const scrollbarWidth =
+      window.innerWidth - document.documentElement.clientWidth;
+
+    document.body.dataset.scrollLocked = "true";
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+  }
+
+  openModalCount += 1;
+};
+
+const unlockBodyScroll = () => {
+  if (typeof document === "undefined" || openModalCount === 0) {
+    return;
+  }
+
+  openModalCount -= 1;
+  if (openModalCount > 0) {
+    return;
+  }
+
+  document.body.style.overflow = previousBodyOverflow;
+  document.body.style.paddingRight = previousBodyPaddingRight;
+  delete document.body.dataset.scrollLocked;
 };
 
 export const Modal: React.FC<ModalProps> = ({
@@ -41,45 +116,99 @@ export const Modal: React.FC<ModalProps> = ({
   showCloseButton = true,
   closeOnOverlayClick = true,
   closeOnEsc = true,
+  footer,
   className,
   contentClassName,
+  bodyClassName,
+  initialFocusRef,
+  restoreFocusRef,
 }) => {
   const { t } = useTranslation();
   const titleId = React.useId();
   const descriptionId = React.useId();
+  const contentRef = React.useRef<HTMLDivElement | null>(null);
+  const lastActiveElementRef = React.useRef<HTMLElement | null>(null);
 
   const handleEsc = useCallback(
     (e: KeyboardEvent) => {
-      if (e.key === "Escape" && closeOnEsc) {
+      if (!isOpen) {
+        return;
+      }
+
+      const contentElement = contentRef.current;
+      const activeElement = document.activeElement;
+      const isActiveInside =
+        contentElement && activeElement instanceof Node
+          ? contentElement.contains(activeElement)
+          : false;
+
+      if (e.key === "Tab" && isActiveInside) {
+        const focusableElements = getFocusableElements(contentElement);
+        if (focusableElements.length === 0) {
+          e.preventDefault();
+          return;
+        }
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey && activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        } else if (!e.shiftKey && activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      }
+
+      if (e.key === "Escape" && closeOnEsc && isActiveInside) {
+        e.preventDefault();
         onClose();
       }
     },
-    [closeOnEsc, onClose],
+    [closeOnEsc, isOpen, onClose],
   );
 
   useEffect(() => {
-    if (isOpen) {
-      document.addEventListener("keydown", handleEsc);
-      const scrollbarWidth =
-        window.innerWidth - document.documentElement.clientWidth;
-      document.body.dataset.scrollLocked = "true";
-      document.body.style.overflow = "hidden";
-      if (scrollbarWidth > 0) {
-        document.body.style.paddingRight = `${scrollbarWidth}px`;
-      }
+    if (!isOpen) {
+      return undefined;
     }
 
+    const restoreTargetRef = restoreFocusRef?.current ?? null;
+    lastActiveElementRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    document.addEventListener("keydown", handleEsc);
+    lockBodyScroll();
+
+    const focusTimer = window.requestAnimationFrame(() => {
+      const preferredTarget = initialFocusRef?.current;
+      if (preferredTarget) {
+        preferredTarget.focus();
+        return;
+      }
+
+      const focusableElements = getFocusableElements(contentRef.current);
+      focusableElements[0]?.focus();
+    });
+
     return () => {
+      window.cancelAnimationFrame(focusTimer);
       document.removeEventListener("keydown", handleEsc);
-      document.body.style.overflow = "";
-      document.body.style.paddingRight = "";
-      delete document.body.dataset.scrollLocked;
+      unlockBodyScroll();
+
+      const restoreTarget = restoreTargetRef ?? lastActiveElementRef.current;
+      if (restoreTarget && typeof restoreTarget.focus === "function") {
+        window.requestAnimationFrame(() => {
+          restoreTarget.focus();
+        });
+      }
     };
-  }, [isOpen, handleEsc]);
+  }, [isOpen, handleEsc, initialFocusRef, restoreFocusRef]);
 
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === "undefined") return null;
 
-  return (
+  const modalContent = (
     <div
       className={clsx(
         "fixed inset-0 z-modal flex items-center justify-center p-4 sm:p-6",
@@ -98,6 +227,7 @@ export const Modal: React.FC<ModalProps> = ({
           sizeClasses[size],
           contentClassName,
         )}
+        ref={contentRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
@@ -129,12 +259,17 @@ export const Modal: React.FC<ModalProps> = ({
           </div>
         )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
+        <div className={clsx("min-h-0 flex-1 overflow-y-auto p-5 sm:p-6", bodyClassName)}>
           {children}
         </div>
+        {footer ? (
+          <div className="border-t border-border px-5 py-4 sm:px-6">{footer}</div>
+        ) : null}
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };
 
 interface ConfirmDialogProps {

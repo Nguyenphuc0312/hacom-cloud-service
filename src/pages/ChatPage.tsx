@@ -1058,10 +1058,11 @@ export const ChatPage: React.FC = () => {
                   <DeferredPanelFallback />
                 ) : isSelectedDirectConversation ? (
                   otherUser ? (
-                    <UserProfile
-                      key={`conversation-profile:${selectedConversation?.id ?? "unknown"}:${otherUser.id}`}
-                      userId={otherUser.id}
-                      currentUserId={currentUserSummary.id}
+                  <UserProfile
+                    key={`conversation-profile:${selectedConversation?.id ?? "unknown"}:${otherUser.id}`}
+                    userId={otherUser.id}
+                    currentUserId={currentUserSummary.id}
+                    conversationContext="direct"
                     initialUser={{
                       id: otherUser.id,
                       username: otherUser.username,
