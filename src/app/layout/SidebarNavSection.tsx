@@ -9,7 +9,6 @@ interface SidebarNavSectionProps {
   itemCount?: number;
   items: NavItemType[];
   icon?: ReactNode;
-  collapsed?: boolean;
 }
 
 export const SidebarNavSection = ({
@@ -18,32 +17,29 @@ export const SidebarNavSection = ({
   itemCount,
   items,
   icon,
-  collapsed = false,
 }: SidebarNavSectionProps) => (
   <div className="ds-sidebar-section">
-    <div className="ds-sidebar-section-label" title={collapsed ? label : undefined}>
+    <div className="ds-sidebar-section-label">
       <span className="ds-sidebar-section-label-main">
         {icon && <span className="ds-sidebar-section-icon">{icon}</span>}
-        {!collapsed && <span>{label}</span>}
+        <span>{label}</span>
       </span>
-      {!collapsed && (
-        <span className="ds-sidebar-section-meta">
-          {description ? <span>{description}</span> : null}
-          {typeof itemCount === 'number' ? (
-            <span className="ds-sidebar-section-count">{itemCount}</span>
-          ) : null}
-        </span>
-      )}
+      <span className="ds-sidebar-section-meta">
+        {description ? <span>{description}</span> : null}
+        {typeof itemCount === 'number' ? (
+          <span className="ds-sidebar-section-count">{itemCount}</span>
+        ) : null}
+      </span>
     </div>
 
     <div className="ds-sidebar-section-list">
       {items.map((item) => (
         <div key={item.key}>
-          <SidebarNavItem item={item} collapsed={collapsed} />
+          <SidebarNavItem item={item} />
           {item.children && item.children.length > 0 && (
             <div className="ds-sidebar-submenu">
               {item.children.map((child) => (
-                <SidebarNavItem key={child.key} item={child} isSubmenu collapsed={collapsed} />
+                <SidebarNavItem key={child.key} item={child} isSubmenu />
               ))}
             </div>
           )}

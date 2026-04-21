@@ -115,6 +115,14 @@ export const navItems: NavItem[] = [
     route: '/hr-employees',
   },
   {
+    key: 'conversations',
+    label: 'Hội thoại',
+    description: 'Danh sách hội thoại và workspace xử lý tin nhắn.',
+    icon: <FileTextOutlined />,
+    section: 'conversations',
+    route: '/conversations',
+  },
+  {
     key: 'email-templates',
     label: 'Dịch vụ',
     description: 'Sức khỏe dịch vụ, SMTP và mẫu email.',
@@ -145,6 +153,7 @@ export const breadcrumbNameMap: Record<string, string> = {
   '/authority': 'Phân quyền quản trị',
   '/users': 'Người dùng',
   '/hr-employees': 'Danh bạ nhân sự',
+  '/conversations': 'Hội thoại',
   '/access-requests': 'Truy cập IP',
   '/audit': 'Nhật ký kiểm toán',
   '/monitoring': 'Giám sát',
@@ -168,12 +177,18 @@ export const resolveNavigationContext = (pathname: string) => {
       ) ?? null;
 
   const section = item ? SIDEBAR_SECTIONS.find((entry) => entry.key === item.section) ?? null : null;
-  const breadcrumbs = ['/', ...pathname.split('/').filter(Boolean).map((_segment, index, parts) => `/${parts.slice(0, index + 1).join('/')}`)]
+  const breadcrumbs = [
+    '/',
+    ...pathname
+      .split('/')
+      .filter(Boolean)
+      .map((_segment, index, parts) => `/${parts.slice(0, index + 1).join('/')}`),
+  ]
     .map((route) => ({
-      route,
-      label:
-        breadcrumbNameMap[route] ??
-        (route.startsWith('/users/')
+          route,
+          label:
+            breadcrumbNameMap[route] ??
+            (route.startsWith('/users/')
           ? 'Chi tiết người dùng'
           : route.startsWith('/services/')
             ? 'Chi tiết dịch vụ'
@@ -198,6 +213,7 @@ export const pickSelectedMenuKey = (pathname: string): string => {
   if (pathname.startsWith('/authority')) return 'authority';
   if (pathname.startsWith('/users')) return 'users';
   if (pathname.startsWith('/hr-employees')) return 'hr-employees';
+  if (pathname.startsWith('/conversations')) return 'conversations';
   if (pathname.startsWith('/services')) return 'email-templates';
   if (pathname.startsWith('/access-requests')) return 'access-requests';
   if (pathname.startsWith('/audit')) return 'audit';
@@ -264,6 +280,15 @@ export const commandRouteItems: CommandRouteItem[] = [
     icon: <SolutionOutlined />,
     keywords: ['hr', 'employees', 'people'],
     route: '/hr-employees',
+  },
+  {
+    id: 'go-conversations',
+    label: 'Hội thoại',
+    description: 'Mở workspace chat để xử lý conversation đang mở',
+    category: 'Điều hướng',
+    icon: <FileTextOutlined />,
+    keywords: ['chat', 'conversation', 'messages', 'support'],
+    route: '/conversations',
   },
   {
     id: 'go-smtp-settings',

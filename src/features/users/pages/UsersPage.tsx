@@ -1,5 +1,5 @@
 import { ReloadOutlined } from '@ant-design/icons';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Form, Input, Modal, Select, Space, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
@@ -11,11 +11,12 @@ import { getErrorMessage } from '@/api/error';
 import { queryKeys } from '@/api/queryKeys';
 import type {
   UserActionPayload,
+  UserDetail,
   UserListItem,
   UserPresenceStatus,
   UsersListQuery,
+  UsersListResponse,
 } from '@/api/types';
-import { AdminTable } from '@/components/AdminTable';
 import { DataTableShell } from '@/components/DataTableShell';
 import { DataTableToolbar } from '@/components/DataTableToolbar';
 import { FeatureDisabledNotice } from '@/components/FeatureDisabledNotice';
@@ -24,6 +25,7 @@ import { PageShell } from '@/components/PageShell';
 import { EmptyState, QueryStateView } from '@/components/QueryStates';
 import { RowActionsDropdown } from '@/components/RowActionsDropdown';
 import { StatusBadge } from '@/components/StatusBadge';
+import { DataTable } from '@/components/ui/DataTable';
 import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
 import { useAuthStore } from '@/store/authStore';
 import { formatDateTime } from '@/utils/date';
@@ -65,8 +67,9 @@ export const UsersPage = () => {
   });
 
   const usersQuery = useQuery({
-    queryKey: queryKeys.usersList(JSON.stringify(params)),
+    queryKey: queryKeys.usersList(params),
     queryFn: () => usersClient.list(params),
+    placeholderData: keepPreviousData,
   });
 
   const activeFilterCount = [
@@ -101,9 +104,35 @@ export const UsersPage = () => {
         message.success('Đã thu hồi các phiên.');
       }
 
-      void queryClient.invalidateQueries({ queryKey: queryKeys.usersList(JSON.stringify(params)) });
+      const nextAccountStatus =
+        variables.action === 'lock'
+          ? 'DISABLED'
+          : variables.action === 'unlock'
+            ? 'ACTIVE'
+            : undefined;
+
+      if (nextAccountStatus) {
+        queryClient.setQueriesData<UsersListResponse>(
+          { queryKey: queryKeys.usersRoot },
+          (current) =>
+            current
+              ? {
+                  ...current,
+                  items: current.items.map((item) =>
+                    item.id === variables.userId ? { ...item, accountStatus: nextAccountStatus } : item,
+                  ),
+                }
+              : current,
+        );
+
+        queryClient.setQueryData<UserDetail>(queryKeys.userDetail(variables.userId), (current) =>
+          current ? { ...current, accountStatus: nextAccountStatus } : current,
+        );
+      }
+
+      void queryClient.invalidateQueries({ queryKey: queryKeys.usersRoot });
       void queryClient.invalidateQueries({ queryKey: queryKeys.userDetail(variables.userId) });
-      void queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.auditLogsRoot });
     },
     onError: (error) => {
       message.error(getErrorMessage(error));
@@ -296,7 +325,7 @@ export const UsersPage = () => {
     }));
   };
 
-  if (usersQuery.isLoading) {
+  if (usersQuery.isPending && !usersQuery.data) {
     return (
       <PageShell
         title="Người dùng"
@@ -307,7 +336,7 @@ export const UsersPage = () => {
     );
   }
 
-  if (usersQuery.isError) {
+  if (usersQuery.isError && !usersQuery.data) {
     return (
       <PageShell
         title="Người dùng"
@@ -411,10 +440,11 @@ export const UsersPage = () => {
           </DataTableToolbar>
         }
       >
-        <AdminTable
+        <DataTable
           rowKey="id"
           columns={columns}
           minHeight={320}
+          loading={usersQuery.isFetching && !usersQuery.isPending}
           dataSource={data?.items ?? []}
           emptyNode={<EmptyState description="Không có người dùng nào khớp với bộ lọc hiện tại." />}
           onRow={(record) => ({

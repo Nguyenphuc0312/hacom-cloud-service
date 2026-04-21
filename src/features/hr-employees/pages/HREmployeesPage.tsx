@@ -1,5 +1,5 @@
 import { ReloadOutlined } from '@ant-design/icons';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Form, Input, Modal, Select, Space, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -14,7 +14,6 @@ import type {
   HrEmployeeStatus,
   UpdateHrEmployeePayload,
 } from '@/api/types';
-import { AdminTable } from '@/components/AdminTable';
 import { DataTableShell } from '@/components/DataTableShell';
 import { DataTableToolbar } from '@/components/DataTableToolbar';
 import { FeatureDisabledNotice } from '@/components/FeatureDisabledNotice';
@@ -23,6 +22,7 @@ import { PageShell } from '@/components/PageShell';
 import { EmptyState, QueryStateView } from '@/components/QueryStates';
 import { RowActionsDropdown } from '@/components/RowActionsDropdown';
 import { StatusBadge } from '@/components/StatusBadge';
+import { DataTable } from '@/components/ui/DataTable';
 import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
 import { useAuthStore } from '@/store/authStore';
 import { formatDateTime } from '@/utils/date';
@@ -84,8 +84,9 @@ export const HREmployeesPage = () => {
   );
 
   const listQuery = useQuery({
-    queryKey: queryKeys.hrEmployeesList(JSON.stringify(params)),
+    queryKey: queryKeys.hrEmployeesList(params),
     queryFn: () => hrEmployeesClient.list(params),
+    placeholderData: keepPreviousData,
   });
 
   const detailQuery = useQuery({
@@ -128,7 +129,7 @@ export const HREmployeesPage = () => {
       setEditorOpen(false);
       setCreating(false);
       void queryClient.invalidateQueries({
-        queryKey: queryKeys.hrEmployeesList(JSON.stringify(params)),
+        queryKey: queryKeys.hrEmployeesRoot,
       });
     },
     onError: (error) => {
@@ -143,7 +144,7 @@ export const HREmployeesPage = () => {
       message.success('Đã cập nhật hồ sơ nhân sự.');
       setEditorOpen(false);
       void queryClient.invalidateQueries({
-        queryKey: queryKeys.hrEmployeesList(JSON.stringify(params)),
+        queryKey: queryKeys.hrEmployeesRoot,
       });
       if (editingId) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.hrEmployeeDetail(editingId) });
@@ -159,7 +160,7 @@ export const HREmployeesPage = () => {
     onSuccess: () => {
       message.success('Đã vô hiệu hóa hồ sơ nhân sự.');
       void queryClient.invalidateQueries({
-        queryKey: queryKeys.hrEmployeesList(JSON.stringify(params)),
+        queryKey: queryKeys.hrEmployeesRoot,
       });
     },
     onError: (error) => {
@@ -349,7 +350,7 @@ export const HREmployeesPage = () => {
     }));
   };
 
-  if (listQuery.isLoading) {
+  if (listQuery.isPending && !listQuery.data) {
     return (
       <PageShell
         title="Danh bạ nhân sự"
@@ -360,7 +361,7 @@ export const HREmployeesPage = () => {
     );
   }
 
-  if (listQuery.isError) {
+  if (listQuery.isError && !listQuery.data) {
     return (
       <PageShell
         title="Danh bạ nhân sự"
@@ -460,10 +461,11 @@ export const HREmployeesPage = () => {
           </DataTableToolbar>
         }
       >
-        <AdminTable
+        <DataTable
           rowKey="id"
           columns={columns}
           minHeight={320}
+          loading={listQuery.isFetching && !listQuery.isPending}
           dataSource={data?.items ?? []}
           emptyNode={<EmptyState description="Không có nhân viên nào khớp với bộ lọc hiện tại." />}
           onRow={(record) => ({

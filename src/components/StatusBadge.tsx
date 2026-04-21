@@ -1,4 +1,6 @@
-import { Badge, Tag, Tooltip } from 'antd';
+import { Badge, Tag } from 'antd';
+
+import { AppTooltip } from '@/components/AppTooltip';
 import { resolveStatusBadgeConfig } from './statusBadgeUtils';
 
 interface StatusBadgeProps {
@@ -23,5 +25,5 @@ export const StatusBadge = ({ status, mode = 'tag', title }: StatusBadgeProps) =
     return tagNode;
   }
 
-  return <Tooltip title={tooltipTitle}>{tagNode}</Tooltip>;
+  return <AppTooltip title={tooltipTitle}>{tagNode}</AppTooltip>;
 };

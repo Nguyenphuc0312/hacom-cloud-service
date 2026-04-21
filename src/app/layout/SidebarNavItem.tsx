@@ -7,14 +7,9 @@ import type { NavItem as NavItemType } from './navigationConfig';
 interface SidebarNavItemProps {
   item: NavItemType;
   isSubmenu?: boolean;
-  collapsed?: boolean;
 }
 
-export const SidebarNavItem = ({
-  item,
-  isSubmenu = false,
-  collapsed = false,
-}: SidebarNavItemProps) => {
+export const SidebarNavItem = ({ item, isSubmenu = false }: SidebarNavItemProps) => {
   const currentRole = useAuthStore((state) => state.user?.role);
 
   if (item.roles && item.roles.length > 0) {
@@ -30,7 +25,6 @@ export const SidebarNavItem = ({
       className={({ isActive }) =>
         `ds-sidebar-item${isActive ? ' is-active' : ''}${isSubmenu ? ' is-submenu' : ''}`
       }
-      title={collapsed ? item.label : undefined}
       aria-label={item.label}
     >
       <span className="ds-sidebar-item-marker" aria-hidden />

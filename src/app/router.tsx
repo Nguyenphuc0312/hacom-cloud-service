@@ -44,6 +44,11 @@ const MonitoringOverviewPage = lazy(() =>
     default: module.MonitoringOverviewPage,
   })),
 );
+const ConversationsPage = lazy(() =>
+  import('@/features/conversations/pages/ConversationsPage').then((module) => ({
+    default: module.ConversationsPage,
+  })),
+);
 const AccessPendingPage = lazy(() =>
   import('@/features/access/pages/AccessPendingPage').then((module) => ({
     default: module.AccessPendingPage,
@@ -104,6 +109,10 @@ const routes = [
       {
         path: 'monitoring',
         element: withSuspense(<MonitoringOverviewPage />),
+      },
+      {
+        path: 'conversations',
+        element: withSuspense(<ConversationsPage />),
       },
       {
         path: 'users',

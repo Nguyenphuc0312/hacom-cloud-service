@@ -4,6 +4,7 @@ export * from './audit';
 export * from './authority';
 export * from './auth';
 export * from './common';
+export * from './conversations';
 export * from './email-templates';
 export * from './hr-employees';
 export * from './metrics';

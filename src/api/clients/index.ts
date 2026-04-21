@@ -4,6 +4,7 @@ export * from './currentAdminClient';
 export * from './monitoringClient';
 export * from './auditClient';
 export * from './authorityClient';
+export * from './conversationsClient';
 export * from './emailTemplatesClient';
 export * from './hrEmployeesClient';
 export * from './smtpClient';

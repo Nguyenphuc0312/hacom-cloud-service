@@ -3,6 +3,8 @@ import { Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import { MoreOutlined } from '@ant-design/icons';
 
+import { AppTooltip } from '@/components/AppTooltip';
+
 interface RowActionsDropdownProps {
   actions: Array<{
     key: string;
@@ -30,9 +32,11 @@ export const RowActionsDropdown: React.FC<RowActionsDropdownProps> = ({ actions 
 
   return (
     <Dropdown menu={{ items, onClick: onMenuClick }} trigger={['click']} placement="bottomRight">
-      <button type="button" className="ds-table-row-action-btn" aria-label="Row actions">
-        <MoreOutlined />
-      </button>
+      <AppTooltip title="Tác vụ">
+        <button type="button" className="ds-table-row-action-btn" aria-label="Row actions">
+          <MoreOutlined />
+        </button>
+      </AppTooltip>
     </Dropdown>
   );
 };

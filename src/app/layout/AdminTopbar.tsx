@@ -14,12 +14,14 @@ import { TopbarSearch } from './TopbarSearch';
 import { commandRouteItems, resolveNavigationContext } from './navigationConfig';
 
 interface AdminTopbarProps {
-  collapsed?: boolean;
+  mobile?: boolean;
+  mobileNavOpen?: boolean;
   onToggleSidebar?: () => void;
 }
 
 export const AdminTopbar: React.FC<AdminTopbarProps> = ({
-  collapsed = false,
+  mobile = false,
+  mobileNavOpen = false,
   onToggleSidebar,
 }) => {
   const { message } = App.useApp();
@@ -67,6 +69,15 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
         onSelect: () => navigate('/services/email-templates'),
       },
       {
+        id: 'quick-open-conversations',
+        label: 'Mở hội thoại',
+        description: 'Đi tới workspace chat để xử lý hội thoại đang mở',
+        category: 'Điều hướng' as const,
+        icon: commandRouteItems.find((item) => item.id === 'go-conversations')?.icon,
+        keywords: ['chat', 'conversation', 'support'],
+        onSelect: () => navigate('/conversations'),
+      },
+      {
         id: 'quick-create-group',
         label: 'Tạo nhóm',
         description: 'Đi tới khu người dùng để chuẩn bị luồng quản lý nhóm',
@@ -94,12 +105,13 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
           <button
             type="button"
             className="ds-topbar-toggle ds-btn ds-btn--icon"
-            aria-label={collapsed ? 'Mở điều hướng' : 'Thu gọn điều hướng'}
-            aria-expanded={!collapsed}
+            aria-label={mobileNavOpen ? 'Đóng điều hướng' : 'Mở điều hướng'}
+            aria-expanded={mobileNavOpen}
             aria-controls="app-sidebar"
             onClick={onToggleSidebar}
+            disabled={!mobile}
           >
-            {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            {mobileNavOpen ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
           </button>
           <div className="ds-topbar-title-block">
             <span className="ds-topbar-eyebrow">{breadcrumbTrail || 'Không gian làm việc'}</span>

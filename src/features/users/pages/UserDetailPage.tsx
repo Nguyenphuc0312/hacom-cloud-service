@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Modal, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useMemo, useState } from 'react';
@@ -7,8 +7,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { sessionsClient, usersClient } from '@/api/clients';
 import { getErrorMessage } from '@/api/error';
 import { queryKeys } from '@/api/queryKeys';
-import type { UserActionPayload, UserDevice, UserSession } from '@/api/types';
-import { AdminTable } from '@/components/AdminTable';
+import type { UserActionPayload, UserDetail, UserDevice, UserSession } from '@/api/types';
 import { DataTableShell } from '@/components/DataTableShell';
 import { DataTableToolbar } from '@/components/DataTableToolbar';
 import { EmptyState, QueryStateView } from '@/components/QueryStates';
@@ -17,6 +16,7 @@ import { PageShell } from '@/components/PageShell';
 import { FeatureDisabledNotice } from '@/components/FeatureDisabledNotice';
 import { StatusBadge } from '@/components/StatusBadge';
 import { SurfaceCard } from '@/components/ui/SurfaceCard';
+import { DataTable } from '@/components/ui/DataTable';
 import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
 import { useAuthStore } from '@/store/authStore';
 import { formatDateTime } from '@/utils/date';
@@ -42,15 +42,17 @@ export const UserDetailPage = () => {
   });
 
   const sessionsQuery = useQuery({
-    queryKey: queryKeys.userSessions(userId, JSON.stringify({ page: sessionsPage, limit: 10 })),
+    queryKey: queryKeys.userSessions(userId, { page: sessionsPage, limit: 10 }),
     queryFn: () => sessionsClient.listByUserId(userId, { page: sessionsPage, limit: 10 }),
     enabled: Boolean(userId),
+    placeholderData: keepPreviousData,
   });
 
   const devicesQuery = useQuery({
-    queryKey: queryKeys.userDevices(userId, JSON.stringify({ page: devicesPage, limit: 10 })),
+    queryKey: queryKeys.userDevices(userId, { page: devicesPage, limit: 10 }),
     queryFn: () => sessionsClient.listDevicesByUserId(userId, { page: devicesPage, limit: 10 }),
     enabled: Boolean(userId),
+    placeholderData: keepPreviousData,
   });
 
   const actionMutation = useMutation({
@@ -77,12 +79,23 @@ export const UserDetailPage = () => {
         message.success('Đã thu hồi các phiên.');
       }
 
+      const nextAccountStatus =
+        variables.action === 'lock'
+          ? 'DISABLED'
+          : variables.action === 'unlock'
+            ? 'ACTIVE'
+            : undefined;
+
+      if (nextAccountStatus) {
+        queryClient.setQueryData<UserDetail>(queryKeys.userDetail(userId), (current) =>
+          current ? { ...current, accountStatus: nextAccountStatus } : current,
+        );
+      }
+
       void queryClient.invalidateQueries({ queryKey: queryKeys.userDetail(userId) });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.userSessions(userId, JSON.stringify({ page: sessionsPage, limit: 10 })),
-      });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.usersList('') });
-      void queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.userSessionsRoot });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.usersRoot });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.auditLogsRoot });
     },
     onError: (error) => {
       message.error(getErrorMessage(error));
@@ -175,7 +188,7 @@ export const UserDetailPage = () => {
     );
   }
 
-  if (detailQuery.isLoading) {
+  if (detailQuery.isPending && !detailQuery.data) {
     return (
       <PageShell
         title="Chi tiết người dùng"
@@ -186,7 +199,7 @@ export const UserDetailPage = () => {
     );
   }
 
-  if (detailQuery.isError || !detailQuery.data) {
+  if ((detailQuery.isError && !detailQuery.data) || !detailQuery.data) {
     return (
       <PageShell
         title="Chi tiết người dùng"
@@ -373,10 +386,10 @@ export const UserDetailPage = () => {
         {sessionsQuery.isError ? (
           <QueryStateView kind="error" compact description="Không thể tải danh sách phiên." />
         ) : (
-          <AdminTable
+          <DataTable
             rowKey="id"
             columns={sessionColumns}
-            loading={sessionsQuery.isLoading}
+            loading={sessionsQuery.isFetching && !sessionsQuery.isPending}
             minHeight={280}
             dataSource={sessionsQuery.data?.items ?? []}
             emptyNode={<EmptyState description="Không tìm thấy phiên nào." />}
@@ -406,10 +419,10 @@ export const UserDetailPage = () => {
         {devicesQuery.isError ? (
           <QueryStateView kind="error" compact description="Không thể tải danh sách thiết bị." />
         ) : (
-          <AdminTable
+          <DataTable
             rowKey="id"
             columns={deviceColumns}
-            loading={devicesQuery.isLoading}
+            loading={devicesQuery.isFetching && !devicesQuery.isPending}
             minHeight={280}
             dataSource={devicesQuery.data?.items ?? []}
             emptyNode={<EmptyState description="Không tìm thấy thiết bị nào." />}

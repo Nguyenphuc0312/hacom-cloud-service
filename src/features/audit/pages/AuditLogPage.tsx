@@ -1,5 +1,5 @@
 import { ReloadOutlined } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Button, DatePicker, Form, Input, Space, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
@@ -8,13 +8,13 @@ import { useMemo, useState } from 'react';
 import { auditClient } from '@/api/clients';
 import { queryKeys } from '@/api/queryKeys';
 import type { AuditEntry, AuditQuery } from '@/api/types';
-import { AdminTable } from '@/components/AdminTable';
 import { DataTableShell } from '@/components/DataTableShell';
 import { DataTableToolbar } from '@/components/DataTableToolbar';
 import { FilterBar } from '@/components/FilterBar';
 import { EmptyState, QueryStateView } from '@/components/QueryStates';
 import { PageShell } from '@/components/PageShell';
 import { StatusBadge } from '@/components/StatusBadge';
+import { DataTable } from '@/components/ui/DataTable';
 import { formatDateTime } from '@/utils/date';
 
 const getActiveFilterCount = (filters: AuditQuery) =>
@@ -29,8 +29,9 @@ export const AuditLogPage = () => {
   });
 
   const query = useQuery({
-    queryKey: queryKeys.auditLogs(JSON.stringify(filters)),
+    queryKey: queryKeys.auditLogs(filters),
     queryFn: () => auditClient.list(filters),
+    placeholderData: keepPreviousData,
   });
 
   const readMetaValue = (metadata: unknown, key: string): string | null => {
@@ -147,7 +148,7 @@ export const AuditLogPage = () => {
 
   const activeFilterCount = getActiveFilterCount(filters);
 
-  if (query.isLoading) {
+  if (query.isPending && !query.data) {
     return (
       <PageShell
         title="Nhật ký kiểm toán"
@@ -158,7 +159,7 @@ export const AuditLogPage = () => {
     );
   }
 
-  if (query.isError) {
+  if (query.isError && !query.data) {
     return (
       <PageShell
         title="Nhật ký kiểm toán"
@@ -246,10 +247,11 @@ export const AuditLogPage = () => {
           </DataTableToolbar>
         }
       >
-        <AdminTable
+        <DataTable
           rowKey="id"
           columns={columns}
           minHeight={360}
+          loading={query.isFetching && !query.isPending}
           dataSource={data?.items ?? []}
           emptyNode={<EmptyState description="Không có bản ghi kiểm toán nào khớp với truy vấn hiện tại." />}
           pagination={{
