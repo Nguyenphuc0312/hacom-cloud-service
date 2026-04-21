@@ -20,9 +20,13 @@ export interface ChatSearchUser {
   id: string;
   username: string;
   displayName: string;
+  fullName?: string | null;
   avatarUrl?: string | null;
   status?: UserStatus | null;
   employeeCode?: string | null;
+  departmentName?: string | null;
+  unitCode?: string | null;
+  title?: string | null;
   isFriend: boolean;
   canAddFriend: boolean;
   friendshipStatus:
@@ -84,6 +88,12 @@ export const normalizeSearchUser = (value: unknown): ChatSearchUser | null => {
     id,
     username,
     displayName,
+    fullName:
+      asString(value.fullName) ??
+      asString(value.full_name) ??
+      asString(value.fullNameFromHR) ??
+      asString(value.full_name_from_hr) ??
+      null,
     avatarUrl:
       asString(value.avatarUrl) ??
       asString(value.avatar_url) ??
@@ -95,6 +105,17 @@ export const normalizeSearchUser = (value: unknown): ChatSearchUser | null => {
       asString(value.employeeCode) ??
       asString(value.employee_code) ??
       asString(value.employeeId) ??
+      null,
+    departmentName:
+      asString(value.departmentName) ??
+      asString(value.department_name) ??
+      null,
+    unitCode:
+      asString(value.unitCode) ??
+      asString(value.unit_code) ??
+      null,
+    title:
+      asString(value.title) ??
       null,
     isFriend:
       asBoolean(value.isFriend) ??
@@ -112,6 +133,14 @@ export const buildUserSearchSecondaryText = (user: ChatSearchUser): string => {
   const parts = [`@${user.username}`];
   if (user.employeeCode) {
     parts.push(user.employeeCode);
+  }
+  if (user.departmentName) {
+    parts.push(user.departmentName);
+  }
+  if (user.unitCode) {
+    parts.push(user.unitCode);
+  } else if (user.title) {
+    parts.push(user.title);
   }
   return parts.join(" / ");
 };

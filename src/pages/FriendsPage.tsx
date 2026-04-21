@@ -43,6 +43,10 @@ interface ContactUser {
   status?: UserStatus;
   bio?: string;
   phone?: string;
+  employeeCode?: string;
+  departmentName?: string;
+  unitCode?: string;
+  title?: string;
   createdAt?: string;
 }
 
@@ -98,6 +102,10 @@ const toContactUser = (value: {
   status?: unknown;
   bio?: string;
   phone?: string;
+  employeeCode?: string;
+  departmentName?: string;
+  unitCode?: string;
+  title?: string;
   createdAt?: string;
 }): ContactUser => ({
   id: value.id,
@@ -109,8 +117,23 @@ const toContactUser = (value: {
   status: normalizeStatus(value.status),
   bio: value.bio,
   phone: value.phone,
+  employeeCode: value.employeeCode,
+  departmentName: value.departmentName,
+  unitCode: value.unitCode,
+  title: value.title,
   createdAt: value.createdAt,
 });
+
+const buildSearchContextSubtitle = (user: ContactUser): string | undefined => {
+  const parts = [
+    user.username ? `@${user.username}` : null,
+    user.employeeCode ?? null,
+    user.departmentName ?? null,
+    user.unitCode ?? user.title ?? null,
+  ].filter(Boolean);
+
+  return parts.length > 0 ? parts.join(" / ") : undefined;
+};
 
 const normalizeSearchResults = (payload: unknown): ContactUser[] => {
   const rows = extractArray<Record<string, unknown>>(payload);
@@ -138,6 +161,27 @@ const normalizeSearchResults = (payload: unknown): ContactUser[] => {
           (typeof row.avatarUrl === "string" && row.avatarUrl) ||
           (typeof row.avatar === "string" ? row.avatar : undefined),
         status: normalizeStatus(row.status),
+        employeeCode:
+          typeof row.employeeCode === "string"
+            ? row.employeeCode
+            : typeof row.employee_code === "string"
+              ? row.employee_code
+              : typeof row.employeeId === "string"
+                ? row.employeeId
+                : undefined,
+        departmentName:
+          typeof row.departmentName === "string"
+            ? row.departmentName
+            : typeof row.department_name === "string"
+              ? row.department_name
+              : undefined,
+        unitCode:
+          typeof row.unitCode === "string"
+            ? row.unitCode
+            : typeof row.unit_code === "string"
+              ? row.unit_code
+              : undefined,
+        title: typeof row.title === "string" ? row.title : undefined,
       });
     })
     .filter((item): item is ContactUser => Boolean(item));
@@ -705,6 +749,7 @@ export const FriendsPage: React.FC = () => {
             <ContactRow
               key={user.id}
               user={user}
+              subtitle={buildSearchContextSubtitle(user)}
               selected={previewTarget?.userId === user.id}
               onClick={() => setPreviewTarget(profileFromSummary(user))}
               action={renderRelationshipAction(user)}

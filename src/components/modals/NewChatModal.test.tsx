@@ -40,6 +40,8 @@ describe("NewChatModal", () => {
           avatarUrl: null,
           status: "online",
           employeeCode: "EMP001",
+          departmentName: "Engineering",
+          unitCode: "ENG",
           isFriend: true,
           canAddFriend: false,
           friendshipStatus: "accepted",
@@ -80,5 +82,6 @@ describe("NewChatModal", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getAllByText("Alice Nguyen").length).toBeGreaterThan(1);
+    expect(screen.getByText("@alice / EMP001 / Engineering / ENG")).toBeInTheDocument();
   });
 });

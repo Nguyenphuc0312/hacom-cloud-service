@@ -32,6 +32,8 @@ describe("useChatUserSearch helpers", () => {
       username: "alice",
       fullNameFromHR: "Alice Nguyen",
       employeeCode: "EMP001",
+      departmentName: "Engineering",
+      unitCode: "ENG",
       avatarUrl: "https://example.com/a.png",
       status: UserStatus.ONLINE,
       isFriend: true,
@@ -43,14 +45,20 @@ describe("useChatUserSearch helpers", () => {
       id: "user-1",
       username: "alice",
       displayName: "Alice Nguyen",
+      fullName: "Alice Nguyen",
       avatarUrl: "https://example.com/a.png",
       status: UserStatus.ONLINE,
       employeeCode: "EMP001",
+      departmentName: "Engineering",
+      unitCode: "ENG",
+      title: null,
       isFriend: true,
       canAddFriend: false,
       friendshipStatus: "accepted",
     });
-    expect(buildUserSearchSecondaryText(user!)).toBe("@alice / EMP001");
+    expect(buildUserSearchSecondaryText(user!)).toBe(
+      "@alice / EMP001 / Engineering / ENG",
+    );
     expect(isDirectConversationEligible(user!)).toBe(true);
     expect(isGroupMemberEligible(user!)).toBe(true);
   });
@@ -81,6 +89,8 @@ describe("useChatUserSearch helpers", () => {
       display_name: "Linh Tran",
       avatar_url: "https://example.com/linh.png",
       employee_code: "EMP003",
+      department_name: "Finance",
+      unit_code: "FIN",
       is_friend: true,
       can_add_friend: false,
       friendship_status: "accepted",
@@ -90,9 +100,13 @@ describe("useChatUserSearch helpers", () => {
       id: "user-3",
       username: "linh",
       displayName: "Linh Tran",
+      fullName: null,
       avatarUrl: "https://example.com/linh.png",
       status: UserStatus.OFFLINE,
       employeeCode: "EMP003",
+      departmentName: "Finance",
+      unitCode: "FIN",
+      title: null,
       isFriend: true,
       canAddFriend: false,
       friendshipStatus: "accepted",
