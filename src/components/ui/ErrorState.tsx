@@ -1,7 +1,8 @@
-import { ReloadOutlined } from '@ant-design/icons';
 import { Button } from 'antd';
 import type { ReactNode } from 'react';
 import clsx from 'clsx';
+
+import { AppIcon } from '@/components/AppIcon';
 
 interface ErrorStateProps {
   title?: string;
@@ -28,7 +29,7 @@ export const ErrorState = ({
     {action ? (
       <div className="ds-error-state-action">{action}</div>
     ) : onRetry ? (
-      <Button icon={<ReloadOutlined />} onClick={onRetry}>
+      <Button icon={<AppIcon name="refresh" size={14} />} onClick={onRetry}>
         Thử lại
       </Button>
     ) : null}

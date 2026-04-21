@@ -1,5 +1,6 @@
-import { SearchOutlined } from '@ant-design/icons';
 import { memo } from 'react';
+
+import { AppIcon } from '@/components/AppIcon';
 
 interface SearchTriggerProps {
   onOpen: () => void;
@@ -14,7 +15,7 @@ export const SearchTrigger = memo(({ onOpen, shortcutLabel = 'Ctrl + K' }: Searc
       onClick={onOpen}
       aria-label="Mở bảng lệnh nhanh"
     >
-      <SearchOutlined className="search-trigger-icon" />
+      <AppIcon name="search" size={14} className="search-trigger-icon" />
       <span className="search-trigger-placeholder">Tìm kiếm...</span>
       <span className="search-trigger-hint" aria-hidden>
         {shortcutLabel}

@@ -1,15 +1,9 @@
-import {
-  DownOutlined,
-  LockOutlined,
-  LogoutOutlined,
-  SettingOutlined,
-  UserOutlined,
-} from '@ant-design/icons';
 import { Avatar, Button, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import { useMemo } from 'react';
 
 import type { CurrentAdmin } from '@/api/types';
+import { AppIcon } from '@/components/AppIcon';
 import { toDisplayRole } from '@/utils/role';
 
 interface HeaderUserMenuProps {
@@ -47,19 +41,19 @@ export const HeaderUserMenu = ({
     () => [
       {
         key: 'profile',
-        icon: <UserOutlined />,
+        icon: <AppIcon name="user" size={14} />,
         label: 'Hồ sơ của tôi',
         onClick: onOpenProfile,
       },
       {
         key: 'settings',
-        icon: <SettingOutlined />,
+        icon: <AppIcon name="settings" size={14} />,
         label: 'Cài đặt',
         onClick: onOpenSettings,
       },
       {
         key: 'change-password',
-        icon: <LockOutlined />,
+        icon: <AppIcon name="lock" size={14} />,
         label: 'Đổi mật khẩu',
         disabled: !onChangePassword,
         onClick: onChangePassword,
@@ -67,7 +61,7 @@ export const HeaderUserMenu = ({
       { type: 'divider' },
       {
         key: 'logout',
-        icon: <LogoutOutlined />,
+        icon: <AppIcon name="logout" size={14} />,
         label: 'Đăng xuất',
         danger: true,
         onClick: onLogout,
@@ -91,7 +85,7 @@ export const HeaderUserMenu = ({
           <span className="header-user-menu-name">{displayName}</span>
           <span className="header-user-menu-role">{roleLabel}</span>
         </span>
-        <DownOutlined className="header-user-menu-caret" />
+        <AppIcon name="chevronDown" size={14} className="header-user-menu-caret" />
       </Button>
     </Dropdown>
   );

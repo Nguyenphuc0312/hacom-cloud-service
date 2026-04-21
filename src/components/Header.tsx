@@ -1,8 +1,8 @@
-import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
 import { Button, Space, Tag } from 'antd';
 import { memo } from 'react';
 
 import type { CurrentAdmin } from '@/api/types';
+import { AppIcon } from '@/components/AppIcon';
 import { SearchTrigger } from '@/components/SearchTrigger';
 import { UserMenu } from '@/components/UserMenu';
 
@@ -37,7 +37,7 @@ export const Header = memo(
         <div className="app-header-zone app-header-zone-left">
           <Button
             type="text"
-            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            icon={<AppIcon name="menu" size={16} />}
             onClick={onToggleSidebar}
             aria-label={collapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'}
           />

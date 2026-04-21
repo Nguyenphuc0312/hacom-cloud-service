@@ -1,13 +1,18 @@
-import { Alert, Button, Card, Descriptions, Drawer, Space, Typography } from 'antd';
 import { useQuery } from '@tanstack/react-query';
-import React from 'react';
+import { Button, Space } from 'antd';
+import { useCallback, useRef, useState } from 'react';
 
 import { hrEmployeesClient } from '@/api/clients';
+import type { HrEmployee } from '@/api/types';
 import { getErrorMessage } from '@/api/error';
 import { queryKeys } from '@/api/queryKeys';
+import { AppDrawer } from '@/components/AppDrawer';
+import { AppIcon } from '@/components/AppIcon';
 import { StatusBadge } from '@/components/StatusBadge';
-import { EmptyState, ErrorState, LoadingState } from '@/components/QueryStates';
-import type { HrEmployee } from '@/api/types';
+import { QueryStateView } from '@/components/QueryStates';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SurfaceCard } from '@/components/ui/SurfaceCard';
+import { formatDateTime } from '@/utils/date';
 import { ProvisionAccountButton } from './ProvisionAccountButton';
 
 const readValue = (value?: string | null) => value || '-';
@@ -20,49 +25,75 @@ interface HrEmployeeDetailDrawerProps {
   onProvisioned?: (employeeId: string) => void | Promise<void>;
 }
 
-const renderSection = (title: string, items: Array<{ label: string; value: React.ReactNode }>) => (
-  <Card title={title} size="small">
-    <Descriptions column={1} size="small" items={items} />
-  </Card>
+const renderProfileRows = (employee: HrEmployee) => (
+  <div className="ds-detail-list">
+    <div className="ds-detail-list-item">
+      <span>Mã nhân viên</span>
+      <strong>{readValue(employee.employeeCode)}</strong>
+    </div>
+    <div className="ds-detail-list-item">
+      <span>Họ tên</span>
+      <strong>{readValue(employee.fullNameFromHr || employee.fullName)}</strong>
+    </div>
+    <div className="ds-detail-list-item">
+      <span>Email</span>
+      <strong>{readValue(employee.emailFromHr || employee.email)}</strong>
+    </div>
+    <div className="ds-detail-list-item">
+      <span>Phòng ban</span>
+      <strong>{readValue(employee.departmentName || employee.orgUnit)}</strong>
+    </div>
+    <div className="ds-detail-list-item">
+      <span>Mã đơn vị</span>
+      <strong>{readValue(employee.unitCode)}</strong>
+    </div>
+    <div className="ds-detail-list-item">
+      <span>Trạng thái HR</span>
+      <strong>
+        <StatusBadge status={employee.status} />
+      </strong>
+    </div>
+  </div>
 );
 
-const renderAccountData = (employee: HrEmployee) =>
-  renderSection('Dữ liệu tài khoản', [
-    {
-      label: 'Người dùng liên kết',
-      value: employee.linkedUser?.id || '-',
-    },
-    {
-      label: 'Định danh đăng nhập',
-      value: employee.linkedUser?.loginIdentifier || '-',
-    },
-    {
-      label: 'Trạng thái cấp tài khoản',
-      value: (
-        <StatusBadge
-          status={employee.provisioningStatus}
-          title="Trạng thái cấp tài khoản từ pipeline HR / provisioning"
-        />
-      ),
-    },
-    {
-      label: 'Trạng thái kích hoạt',
-      value: (
-        <StatusBadge
-          status={employee.activationStatus}
-          title="Trạng thái kích hoạt / truy cập tài khoản hiện tại"
-        />
-      ),
-    },
-    {
-      label: 'Trạng thái tài khoản',
-      value: employee.linkedUser?.accountState ? (
-        <StatusBadge status={employee.linkedUser.accountState} />
-      ) : (
-        '-'
-      ),
-    },
-  ]);
+const renderAccountRows = (employee: HrEmployee) => (
+  <div className="ds-detail-list">
+    <div className="ds-detail-list-item">
+      <span>Người dùng liên kết</span>
+      <strong>{employee.linkedUser?.id || '-'}</strong>
+    </div>
+    <div className="ds-detail-list-item">
+      <span>Định danh đăng nhập</span>
+      <strong>{employee.linkedUser?.loginIdentifier || '-'}</strong>
+    </div>
+    <div className="ds-detail-list-item">
+      <span>Cấp tài khoản</span>
+      <strong>
+        <StatusBadge status={employee.provisioningStatus} />
+      </strong>
+    </div>
+    <div className="ds-detail-list-item">
+      <span>Kích hoạt</span>
+      <strong>
+        <StatusBadge status={employee.activationStatus} />
+      </strong>
+    </div>
+    <div className="ds-detail-list-item">
+      <span>Trạng thái tài khoản</span>
+      <strong>
+        {employee.linkedUser?.accountState ? (
+          <StatusBadge status={employee.linkedUser.accountState} />
+        ) : (
+          '-'
+        )}
+      </strong>
+    </div>
+    <div className="ds-detail-list-item">
+      <span>Cập nhật</span>
+      <strong>{employee.updatedAt ? formatDateTime(employee.updatedAt) : '-'}</strong>
+    </div>
+  </div>
+);
 
 export const HrEmployeeDetailDrawer = ({
   employeeId,
@@ -71,9 +102,8 @@ export const HrEmployeeDetailDrawer = ({
   onClose,
   onProvisioned,
 }: HrEmployeeDetailDrawerProps) => {
-  const manualRefreshLockRef = React.useRef(false);
-  const [manualRefreshLoading, setManualRefreshLoading] = React.useState(false);
-
+  const manualRefreshLockRef = useRef(false);
+  const [manualRefreshLoading, setManualRefreshLoading] = useState(false);
   const detailQuery = useQuery({
     queryKey: queryKeys.hrEmployeeDetail(employeeId ?? ''),
     queryFn: () => hrEmployeesClient.getById(employeeId ?? ''),
@@ -82,13 +112,14 @@ export const HrEmployeeDetailDrawer = ({
 
   const employee = detailQuery.data;
 
-  const handleRefresh = React.useCallback(async () => {
+  const handleRefresh = useCallback(async () => {
     if (manualRefreshLockRef.current) {
       return;
     }
 
     manualRefreshLockRef.current = true;
     setManualRefreshLoading(true);
+
     try {
       await detailQuery.refetch();
     } finally {
@@ -98,98 +129,28 @@ export const HrEmployeeDetailDrawer = ({
   }, [detailQuery]);
 
   return (
-    <Drawer
-      title="Chi tiết nhân sự"
-      width={520}
+    <AppDrawer
       open={open}
       onClose={onClose}
-      destroyOnHidden
-      extra={
-        <Space>
-          <Button
-            onClick={() => void handleRefresh()}
-            loading={detailQuery.isFetching || manualRefreshLoading}
-          >
-            Làm mới
-          </Button>
-          {employee ? (
-            <ProvisionAccountButton
-              employee={employee}
-              canWrite={canWrite}
-              buttonText="Cấp tài khoản"
-              onSuccess={async () => {
-                await detailQuery.refetch();
-                if (employeeId) {
-                  await Promise.resolve(onProvisioned?.(employeeId));
-                }
-              }}
-            />
-          ) : null}
-        </Space>
-      }
-    >
-      {!employeeId ? (
-        <EmptyState description="Chọn một nhân sự để xem chi tiết." />
-      ) : detailQuery.isLoading ? (
-        <LoadingState tip="Đang tải chi tiết nhân sự..." />
-      ) : detailQuery.isError ? (
-        <ErrorState
-          subTitle={getErrorMessage(detailQuery.error)}
-          extra={<Button onClick={() => detailQuery.refetch()}>Thử lại</Button>}
-        />
-      ) : !employee ? (
-        <EmptyState description="Chi tiết nhân sự hiện không khả dụng." />
-      ) : (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
-          <Alert
-            type="info"
-            showIcon
-            message="Các trường hồ sơ và tài khoản được render theo cơ chế phòng thủ."
-            description="Nếu backend chưa expose một trường nào đó trong môi trường này, drawer sẽ hiển thị giá trị dự phòng an toàn thay vì lỗi."
-          />
-
-          <Typography.Text type="secondary">
-            Cập nhật lần cuối: {employee.updatedAt || '-'}
-          </Typography.Text>
-
-          {renderSection('Dữ liệu nguồn HR', [
-            { label: 'Mã nhân viên', value: readValue(employee.employeeCode) },
-            {
-              label: 'Họ tên từ HR',
-              value: readValue(employee.fullNameFromHr || employee.fullName),
-            },
-            {
-              label: 'Email từ HR',
-              value: readValue(employee.emailFromHr || employee.email),
-            },
-            {
-              label: 'Phòng ban',
-              value: readValue(employee.departmentName || employee.orgUnit),
-            },
-            { label: 'Mã đơn vị', value: readValue(employee.unitCode) },
-            { label: 'Trạng thái', value: <StatusBadge status={employee.status} /> },
-          ])}
-
-          {renderAccountData(employee)}
-
-          {renderSection('Dữ liệu hồ sơ', [
-            {
-              label: 'Tên hiển thị',
-              value: readValue(employee.linkedUser?.displayName),
-            },
-            {
-              label: 'Ảnh đại diện',
-              value: employee.linkedUser?.id
-                ? 'Có thể lấy từ hồ sơ chat khi backend expose chi tiết profile.'
-                : '-',
-            },
-          ])}
-
-          <Card title="Thao tác" size="small">
-            <Space wrap>
+      title="Chi tiết nhân sự"
+      width={560}
+      footer={
+        employee ? (
+          <div className="ds-app-drawer-footer">
+            <Space>
+              <Button
+                icon={<AppIcon name="refresh" size={14} />}
+                loading={detailQuery.isFetching || manualRefreshLoading}
+                onClick={() => {
+                  void handleRefresh();
+                }}
+              >
+                Làm mới
+              </Button>
               <ProvisionAccountButton
                 employee={employee}
                 canWrite={canWrite}
+                buttonText="Cấp tài khoản"
                 onSuccess={async () => {
                   await detailQuery.refetch();
                   if (employeeId) {
@@ -197,14 +158,72 @@ export const HrEmployeeDetailDrawer = ({
                   }
                 }}
               />
-              <Button disabled title="Chức năng gửi lại kích hoạt chưa được expose ở backend admin.">
-                Gửi lại kích hoạt
-              </Button>
             </Space>
-          </Card>
-        </Space>
+          </div>
+        ) : undefined
+      }
+    >
+      {!employeeId ? (
+        <EmptyState description="Chọn một nhân sự để xem chi tiết." />
+      ) : detailQuery.isLoading ? (
+        <QueryStateView kind="loading" compact title="Đang tải chi tiết nhân sự..." />
+      ) : detailQuery.isError ? (
+        <QueryStateView
+          kind="error"
+          compact
+          description={getErrorMessage(detailQuery.error)}
+          onRetry={() => {
+            void detailQuery.refetch();
+          }}
+        />
+      ) : !employee ? (
+        <EmptyState description="Chi tiết nhân sự hiện không khả dụng." />
+      ) : (
+        <div className="ds-settings-stack">
+          <SurfaceCard
+            eyebrow="Hồ sơ HR"
+            title={readValue(employee.fullNameFromHr || employee.fullName)}
+            description="Drawer này chỉ để inspect nhanh và cấp tài khoản khi đủ điều kiện."
+            status={<StatusBadge status={employee.status} />}
+          >
+            {renderProfileRows(employee)}
+          </SurfaceCard>
+
+          <SurfaceCard
+            eyebrow="Liên kết tài khoản"
+            title="Trạng thái provisioning"
+            description="Giữ đúng phần cần vận hành: định danh, trạng thái cấp và trạng thái kích hoạt."
+          >
+            {renderAccountRows(employee)}
+          </SurfaceCard>
+
+          <SurfaceCard
+            eyebrow="Hành động"
+            title="Tác vụ nhanh"
+            description="Edit sâu nên đi qua luồng chỉnh sửa riêng; drawer không mang thêm wizard hoặc helper text dài."
+          >
+            <div className="ds-settings-action-bar">
+              <span className="ds-settings-action-copy">
+                Dùng cấp tài khoản khi bản ghi HR đã đủ email công ty và chưa liên kết người dùng.
+              </span>
+              <Space wrap>
+                <ProvisionAccountButton
+                  employee={employee}
+                  canWrite={canWrite}
+                  onSuccess={async () => {
+                    await detailQuery.refetch();
+                    if (employeeId) {
+                      await Promise.resolve(onProvisioned?.(employeeId));
+                    }
+                  }}
+                />
+                <Button disabled>Gửi lại kích hoạt</Button>
+              </Space>
+            </div>
+          </SurfaceCard>
+        </div>
       )}
-    </Drawer>
+    </AppDrawer>
   );
 };
 

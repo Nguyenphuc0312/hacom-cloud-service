@@ -425,7 +425,7 @@ export const AuthorityPage = () => {
           setRemoveRoleConfirmOpen(false);
         }}
         title="Chi tiết phân quyền"
-        width={920}
+        width={760}
       >
         {!selectedUserId ? (
           <EmptyState description="Chọn một bản ghi phân quyền để xem quyền hạn." />

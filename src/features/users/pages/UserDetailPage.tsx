@@ -192,7 +192,7 @@ export const UserDetailPage = () => {
     return (
       <PageShell
         title="Chi tiết người dùng"
-        description="Xem danh tính, xác minh, phiên và thiết bị."
+        description="Trang sâu cho danh tính, phiên và thiết bị. Bảng người dùng chỉ giữ inspect nhanh."
       >
         <QueryStateView kind="loading" title="Đang tải chi tiết người dùng..." />
       </PageShell>
@@ -203,7 +203,7 @@ export const UserDetailPage = () => {
     return (
       <PageShell
         title="Chi tiết người dùng"
-        description="Xem danh tính, xác minh, phiên và thiết bị."
+        description="Trang sâu cho danh tính, phiên và thiết bị. Bảng người dùng chỉ giữ inspect nhanh."
       >
         <QueryStateView
           kind="error"
@@ -221,7 +221,7 @@ export const UserDetailPage = () => {
   return (
     <PageShell
       title="Chi tiết người dùng"
-      description="Đặt danh tính và tư thế bảo mật lên trên cùng, sau đó mới đi vào phiên và thiết bị."
+      description="Đây là deep admin page. Inspector ở danh sách người dùng chỉ để xem nhanh và thao tác nhanh."
       headerExtra={
         <div className="ds-page-toolbar-stack">
           <div className="ds-page-toolbar-group">
@@ -267,38 +267,11 @@ export const UserDetailPage = () => {
         />
       )}
 
-      <div className="ds-detail-overview-grid">
-        <div className="ds-summary-tile">
-          <span className="ds-summary-tile-label">Trạng thái tài khoản</span>
-          <div className="ds-summary-tile-value">
-            <StatusBadge status={user.accountStatus} />
-          </div>
-          <span className="ds-summary-tile-meta">Trạng thái truy cập hiện tại từ auth-service.</span>
-        </div>
-        <div className="ds-summary-tile">
-          <span className="ds-summary-tile-label">Hiện diện</span>
-          <div className="ds-summary-tile-value">
-            <StatusBadge status={user.status ?? 'offline'} />
-          </div>
-          <span className="ds-summary-tile-meta">Trạng thái hiện diện mới nhất mà panel ghi nhận.</span>
-        </div>
-        <div className="ds-summary-tile">
-          <span className="ds-summary-tile-label">Phiên đang hoạt động</span>
-          <strong className="ds-summary-tile-value">{user.activeSessionCount ?? 0}</strong>
-          <span className="ds-summary-tile-meta">Các phiên trình duyệt hoặc thiết bị còn mở.</span>
-        </div>
-        <div className="ds-summary-tile">
-          <span className="ds-summary-tile-label">Thiết bị đã biết</span>
-          <strong className="ds-summary-tile-value">{user.deviceCount ?? 0}</strong>
-          <span className="ds-summary-tile-meta">Bản ghi thiết bị đã đăng ký gắn với tài khoản.</span>
-        </div>
-      </div>
-
       <div className="ds-detail-grid">
         <SurfaceCard
           eyebrow="Danh tính và tổ chức"
           title={user.username ?? 'Chưa có username'}
-          description="Định danh cốt lõi, thông tin sở hữu và hoạt động gần nhất."
+          description="Khối này giữ hồ sơ chính; thống kê nhanh đã nằm ở inspector ngoài danh sách."
           className="ds-detail-panel"
         >
           <div className="ds-detail-list">
@@ -336,7 +309,7 @@ export const UserDetailPage = () => {
         <SurfaceCard
           eyebrow="Bảo mật và xác minh"
           title="Tư thế xác minh"
-          description="Mốc thời gian xác minh, dấu vết tài khoản và định danh runtime."
+          description="Giữ những mốc xác minh và tư thế runtime cần cho điều tra sâu."
           className="ds-detail-panel"
         >
           <div className="ds-detail-list">

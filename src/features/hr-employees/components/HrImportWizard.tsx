@@ -13,12 +13,12 @@ import {
   message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { InboxOutlined, UploadOutlined } from '@ant-design/icons';
 import React from 'react';
 
 import { hrEmployeesClient } from '@/api/clients';
 import { getErrorMessage } from '@/api/error';
 import type { HrImportPreviewRow, HrImportValidationResult } from '@/api/types';
+import { AppIcon } from '@/components/AppIcon';
 import { useAuthStore } from '@/store/authStore';
 import {
   useCommitHrImportMutation,
@@ -311,12 +311,16 @@ export const HrImportWizard = ({ open, onClose, onCommitted }: HrImportWizardPro
                 handleFileChange(nextFile as File);
                 return false;
               }}
+              onChange={({ fileList }) => {
+                const nextFile = fileList[0]?.originFileObj as File | undefined;
+                handleFileChange(nextFile ?? null);
+              }}
               maxCount={1}
               showUploadList={false}
               accept={ACCEPTED_EXTENSIONS.join(',')}
             >
               <p className="ant-upload-drag-icon">
-                <InboxOutlined />
+                <AppIcon name="inbox" size={24} />
               </p>
               <p className="ant-upload-text">Thả tệp import HR vào đây hoặc bấm để chọn.</p>
               <p className="ant-upload-hint">Định dạng chấp nhận: .csv, .xlsx, .xls</p>
@@ -334,7 +338,7 @@ export const HrImportWizard = ({ open, onClose, onCommitted }: HrImportWizardPro
             <Space>
               <Button
                 type="primary"
-                icon={<UploadOutlined />}
+                icon={<AppIcon name="upload" size={14} />}
                 loading={validateMutation.isPending}
                 disabled={!file || validateMutation.isPending || commitMutation.isPending}
                 onClick={() => void handleValidate()}

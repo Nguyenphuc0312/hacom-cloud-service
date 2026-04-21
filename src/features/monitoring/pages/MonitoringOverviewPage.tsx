@@ -1,20 +1,30 @@
-import { ReloadOutlined } from '@ant-design/icons';
 import { Button } from 'antd';
 import { useState } from 'react';
 
 import { getApiErrorStatus, getErrorMessage } from '@/api/error';
 import type { TimeRange } from '@/api/types';
+import { AppIcon } from '@/components/AppIcon';
 import { PageShell } from '@/components/PageShell';
 import { QueryStateView } from '@/components/QueryStates';
+import { StatusBadge } from '@/components/StatusBadge';
 import { TimeRangePicker } from '@/components/TimeRangePicker';
 import { MetricCard } from '@/components/ui/MetricCard';
+import { SurfaceCard } from '@/components/ui/SurfaceCard';
 import { formatDateTime } from '@/utils/date';
-import { formatMs, formatNumber, formatPercent, formatRate } from '@/utils/formatters';
-import { MonitoringCorrectnessSection } from '../components/MonitoringCorrectnessSection';
-import { MonitoringInfrastructureSection } from '../components/MonitoringInfrastructureSection';
-import { MonitoringRealtimeSection } from '../components/MonitoringRealtimeSection';
-import { MonitoringWarnings } from '../components/MonitoringWarnings';
+import {
+  formatBytes,
+  formatMs,
+  formatNumber,
+  formatPercent,
+  formatRate,
+} from '@/utils/formatters';
 import { useMonitoringOverview } from '../hooks/useMonitoringOverview';
+
+const formatOptional = (
+  value: number | null | undefined,
+  formatter: (input: number) => string,
+  fallback = '-',
+) => (typeof value === 'number' ? formatter(value) : fallback);
 
 export const MonitoringOverviewPage = () => {
   const [range, setRange] = useState<TimeRange>('1h');
@@ -23,10 +33,10 @@ export const MonitoringOverviewPage = () => {
   if (overviewQuery.isLoading && !overviewQuery.data) {
     return (
       <PageShell
-        title="Tổng quan giám sát"
-        description="Ảnh chụp vận hành cho sức khỏe thời gian thực, độ đúng và trạng thái phụ thuộc."
+        title="Giám sát vận hành"
+        description="Console theo dõi runtime, phụ thuộc và các điểm cần xử lý ngay."
       >
-        <QueryStateView kind="loading" title="Đang tải tổng quan giám sát..." />
+        <QueryStateView kind="loading" title="Đang tải dữ liệu giám sát..." />
       </PageShell>
     );
   }
@@ -37,15 +47,13 @@ export const MonitoringOverviewPage = () => {
 
     return (
       <PageShell
-        title="Tổng quan giám sát"
-        description="Ảnh chụp vận hành cho sức khỏe thời gian thực, độ đúng và trạng thái phụ thuộc."
+        title="Giám sát vận hành"
+        description="Console theo dõi runtime, phụ thuộc và các điểm cần xử lý ngay."
       >
         <QueryStateView
           kind={status === 403 ? 'permission' : 'error'}
           title={
-            status === 403
-              ? 'Bạn không có quyền xem tổng quan giám sát'
-              : 'Không thể tải tổng quan giám sát'
+            status === 403 ? 'Bạn không có quyền xem dữ liệu giám sát' : 'Không thể tải dữ liệu giám sát'
           }
           description={message}
           onRetry={() => {
@@ -61,8 +69,8 @@ export const MonitoringOverviewPage = () => {
   if (!overview) {
     return (
       <PageShell
-        title="Tổng quan giám sát"
-        description="Ảnh chụp vận hành cho sức khỏe thời gian thực, độ đúng và trạng thái phụ thuộc."
+        title="Giám sát vận hành"
+        description="Console theo dõi runtime, phụ thuộc và các điểm cần xử lý ngay."
       >
         <QueryStateView kind="empty" description="Chưa có dữ liệu giám sát." />
       </PageShell>
@@ -70,13 +78,32 @@ export const MonitoringOverviewPage = () => {
   }
 
   const services = overview.systemOverview.services;
-  const healthyServiceRate =
-    services.total > 0 ? (services.healthy / services.total) * 100 : null;
+  const problematicServices = overview.dependencySnapshot.services.filter(
+    (service) => service.status !== 'up',
+  );
+  const topSignals = [
+    ...overview.warnings.map((warning) => ({
+      key: warning.key,
+      title: warning.message,
+      meta: `${warning.source} · ${warning.code}`,
+      level: warning.severity,
+    })),
+    ...overview.messageCorrectness.topFailureReasons
+      .filter((reason) => typeof reason.ratePerMinute === 'number' && reason.ratePerMinute > 0)
+      .map((reason) => ({
+        key: reason.reason,
+        title: reason.reason,
+        meta: `${formatRate(reason.ratePerMinute ?? 0, '/min')} lỗi cần theo dõi`,
+        level: 'warning' as const,
+      })),
+  ].slice(0, 6);
+
+  const healthyServiceRate = services.total > 0 ? (services.healthy / services.total) * 100 : null;
 
   return (
     <PageShell
-      title="Tổng quan giám sát"
-      description="Theo dõi sức khỏe runtime, lỗi gửi tin và trạng thái phụ thuộc trong một cockpit vận hành."
+      title="Giám sát vận hành"
+      description="Giữ trọng tâm vào sức khỏe runtime, phụ thuộc và các tín hiệu buộc operator phải quyết định."
       headerExtra={
         <div className="ds-page-toolbar-stack">
           <div className="ds-page-toolbar-group">
@@ -88,12 +115,12 @@ export const MonitoringOverviewPage = () => {
                 void overviewQuery.refetch();
               }}
               loading={overviewQuery.isFetching}
-              icon={<ReloadOutlined />}
+              icon={<AppIcon name="refresh" size={14} />}
             >
               Làm mới
             </Button>
             <span className="ds-page-toolbar-meta">
-              Cập nhật lần cuối: {formatDateTime(overview.generatedAt)}
+              Cập nhật: {formatDateTime(overview.generatedAt)}
             </span>
           </div>
         </div>
@@ -103,16 +130,18 @@ export const MonitoringOverviewPage = () => {
         <div className="ds-monitoring-kpi-grid">
           <MetricCard
             label="Người dùng trực tuyến"
-            value={formatNumber(overview.systemOverview.onlineUsers)}
-            changeLabel={formatNumber(overview.systemOverview.activeConnections)}
-            trendCaption="kết nối websocket đang hoạt động"
+            value={formatOptional(overview.systemOverview.onlineUsers, formatNumber)}
+            changeLabel={formatOptional(overview.systemOverview.activeConnections, formatNumber)}
+            trendCaption="kết nối đang mở"
             tone="default"
           />
           <MetricCard
             label="Sender ACK p95"
-            value={formatMs(overview.systemOverview.senderAckP95Ms)}
-            changeLabel={formatRate(overview.systemOverview.messagesPerSecond, '/s')}
-            trendCaption="đi cùng throughput hiện tại"
+            value={formatOptional(overview.systemOverview.senderAckP95Ms, formatMs)}
+            changeLabel={formatOptional(overview.systemOverview.messagesPerSecond, (value) =>
+              formatRate(value, '/s'),
+            )}
+            trendCaption="throughput hiện tại"
             tone={
               (overview.systemOverview.senderAckP95Ms ?? 0) > 900
                 ? 'danger'
@@ -123,9 +152,13 @@ export const MonitoringOverviewPage = () => {
           />
           <MetricCard
             label="Lỗi gửi tin"
-            value={formatRate(overview.realtimeHealth.deliveryFailuresPerMinute, '/min')}
-            changeLabel={formatRate(overview.realtimeHealth.resyncsPerMinute, '/min')}
-            trendCaption="áp lực resync"
+            value={formatOptional(overview.realtimeHealth.deliveryFailuresPerMinute, (value) =>
+              formatRate(value, '/min'),
+            )}
+            changeLabel={formatOptional(overview.realtimeHealth.resyncsPerMinute, (value) =>
+              formatRate(value, '/min'),
+            )}
+            trendCaption="resync mỗi phút"
             tone={
               (overview.realtimeHealth.deliveryFailuresPerMinute ?? 0) > 0 ? 'danger' : 'success'
             }
@@ -136,15 +169,149 @@ export const MonitoringOverviewPage = () => {
             changeLabel={
               healthyServiceRate === null ? 'Chưa có dữ liệu' : formatPercent(healthyServiceRate, 0)
             }
-            trendCaption="độ phủ phụ thuộc"
+            trendCaption="tỷ lệ service healthy"
             tone={services.down > 0 ? 'danger' : services.degraded > 0 ? 'warning' : 'success'}
           />
         </div>
 
-        <MonitoringWarnings overview={overview} />
-        <MonitoringRealtimeSection overview={overview} />
-        <MonitoringCorrectnessSection overview={overview} />
-        <MonitoringInfrastructureSection overview={overview} />
+        <div className="ds-ops-grid ds-ops-grid--two-column">
+          <SurfaceCard
+            eyebrow="Runtime"
+            title="Tín hiệu cần theo dõi"
+            description="Chỉ giữ những số liệu trực tiếp ảnh hưởng quyết định vận hành."
+            status={<StatusBadge status={overview.freshness} />}
+            className="ds-ops-panel"
+          >
+            <div className="ds-detail-list">
+              <div className="ds-detail-list-item">
+                <span>WebSocket tới API p95</span>
+                <strong>{formatOptional(overview.realtimeHealth.wsToApiP95Ms, formatMs)}</strong>
+              </div>
+              <div className="ds-detail-list-item">
+                <span>Partial failures</span>
+                <strong>
+                  {formatOptional(overview.systemOverview.partialFailuresPerMinute, (value) =>
+                    formatRate(value, '/min'),
+                  )}
+                </strong>
+              </div>
+              <div className="ds-detail-list-item">
+                <span>Khôi phục yêu cầu</span>
+                <strong>
+                  {formatOptional(overview.messageCorrectness.reconcileRequiredCurrent, formatNumber)}
+                </strong>
+              </div>
+              <div className="ds-detail-list-item">
+                <span>Projection missing</span>
+                <strong>
+                  {formatOptional(overview.messageCorrectness.projectionMissingCurrent, formatNumber)}
+                </strong>
+              </div>
+              <div className="ds-detail-list-item">
+                <span>Orphan records</span>
+                <strong>
+                  {formatOptional(overview.messageCorrectness.orphanMongoCurrent, formatNumber)}
+                </strong>
+              </div>
+              <div className="ds-detail-list-item">
+                <span>Rủi ro tải hiện tại</span>
+                <strong>
+                  <StatusBadge status={overview.capacityBaseline.currentRiskState} />
+                </strong>
+              </div>
+            </div>
+          </SurfaceCard>
+
+          <SurfaceCard
+            eyebrow="Phụ thuộc"
+            title="API, Redis và hạ tầng"
+            description="Giữ đủ ngữ cảnh để xác định nghẽn chính mà không biến page thành analytics dashboard."
+            status={<StatusBadge status={overview.dependencySnapshot.redis.status} />}
+            className="ds-ops-panel"
+          >
+            <div className="ds-detail-list">
+              <div className="ds-detail-list-item">
+                <span>API latency</span>
+                <strong>{formatOptional(overview.dependencySnapshot.api.latencyMs, formatMs)}</strong>
+              </div>
+              <div className="ds-detail-list-item">
+                <span>Redis ops/s</span>
+                <strong>
+                  {formatOptional(overview.dependencySnapshot.redis.opsPerSecond, formatNumber)}
+                </strong>
+              </div>
+              <div className="ds-detail-list-item">
+                <span>Redis blocked clients</span>
+                <strong>
+                  {formatOptional(overview.dependencySnapshot.redis.blockedClients, formatNumber)}
+                </strong>
+              </div>
+              <div className="ds-detail-list-item">
+                <span>Bộ nhớ Redis</span>
+                <strong>
+                  {formatOptional(overview.dependencySnapshot.redis.memoryUsedBytes, formatBytes)}
+                </strong>
+              </div>
+              <div className="ds-detail-list-item">
+                <span>CPU hạ tầng</span>
+                <strong>
+                  {formatOptional(
+                    overview.dependencySnapshot.infrastructure.aggregateCpuPercent,
+                    (value) => formatPercent(value, 0),
+                  )}
+                </strong>
+              </div>
+              <div className="ds-detail-list-item">
+                <span>Bộ nhớ hạ tầng</span>
+                <strong>
+                  {formatOptional(
+                    overview.dependencySnapshot.infrastructure.aggregateMemoryPercent,
+                    (value) => formatPercent(value, 0),
+                  )}
+                </strong>
+              </div>
+            </div>
+            <div className="ds-monitoring-inline-meta">
+              <span className="ds-shell-chip ds-shell-chip--ghost">
+                {problematicServices.length > 0
+                  ? `${problematicServices.length} service cần chú ý`
+                  : 'Không có service suy giảm'}
+              </span>
+              <span className="ds-shell-chip ds-shell-chip--ghost">
+                Nguồn Prometheus: {overview.sources.prometheus.status}
+              </span>
+              <span className="ds-shell-chip ds-shell-chip--ghost">
+                Service health: {overview.sources.serviceHealth.status}
+              </span>
+            </div>
+          </SurfaceCard>
+        </div>
+
+        <SurfaceCard
+          eyebrow="Ưu tiên xử lý"
+          title="Cảnh báo và lỗi nổi bật"
+          description="Danh sách này thay cho nhiều block rời rạc. Nếu một tín hiệu không dẫn tới hành động, nó không ở đây."
+          className="ds-ops-panel"
+        >
+          {topSignals.length > 0 ? (
+            <div className="ds-monitoring-signal-list">
+              {topSignals.map((signal) => (
+                <div key={signal.key} className="ds-ops-list-row">
+                  <div>
+                    <strong>{signal.title}</strong>
+                    <p>{signal.meta}</p>
+                  </div>
+                  <StatusBadge status={signal.level} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <QueryStateView
+              kind="empty"
+              description="Không có cảnh báo hoặc failure hotspot nào cần xử lý trong khoảng thời gian này."
+            />
+          )}
+        </SurfaceCard>
       </div>
     </PageShell>
   );

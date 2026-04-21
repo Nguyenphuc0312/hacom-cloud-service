@@ -1,7 +1,8 @@
-import { ArrowDownOutlined, ArrowRightOutlined, ArrowUpOutlined, MinusOutlined } from '@ant-design/icons';
 import { Skeleton } from 'antd';
 import type { ReactNode } from 'react';
 import clsx from 'clsx';
+
+import { AppIcon } from '@/components/AppIcon';
 
 type MetricTrendDirection = 'up' | 'down' | 'neutral';
 type MetricTone = 'default' | 'success' | 'warning' | 'danger';
@@ -47,9 +48,9 @@ const buildSparklinePath = (values: Array<number | null>) => {
 };
 
 const trendIconByDirection: Record<MetricTrendDirection, ReactNode> = {
-  up: <ArrowUpOutlined />,
-  down: <ArrowDownOutlined />,
-  neutral: <MinusOutlined />,
+  up: <AppIcon name="arrowUp" size={14} />,
+  down: <AppIcon name="arrowDown" size={14} />,
+  neutral: <AppIcon name="minus" size={14} />,
 };
 
 export const MetricCard = ({
@@ -94,7 +95,7 @@ export const MetricCard = ({
             </svg>
           </span>
         ) : null}
-        {onClick ? <ArrowRightOutlined className="ds-metric-card-arrow" /> : null}
+        {onClick ? <AppIcon name="arrowRight" size={14} className="ds-metric-card-arrow" /> : null}
       </div>
     </>
   );

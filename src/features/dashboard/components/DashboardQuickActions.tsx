@@ -1,6 +1,6 @@
-import { NotificationOutlined, TeamOutlined, UserAddOutlined } from '@ant-design/icons';
 import type { ReactNode } from 'react';
 
+import { AppIcon } from '@/components/AppIcon';
 import { SurfaceCard } from '@/components/ui/SurfaceCard';
 
 interface DashboardQuickAction {
@@ -28,21 +28,21 @@ export const DashboardQuickActions = ({
       label: 'Tạo người dùng',
       description: 'Mời và cấp tài khoản quản trị mới.',
       onSelect: onCreateUser,
-      icon: <UserAddOutlined />,
+      icon: <AppIcon name="user" size={16} />,
     },
     {
       id: 'send-broadcast',
       label: 'Gửi broadcast',
       description: 'Chuẩn bị thông báo hoặc bản tin gửi ra ngoài.',
       onSelect: onSendBroadcast,
-      icon: <NotificationOutlined />,
+      icon: <AppIcon name="bell" size={16} />,
     },
     {
       id: 'create-group',
       label: 'Tạo nhóm',
       description: 'Thiết lập nhóm vận hành hoặc tập quyền mới.',
       onSelect: onCreateGroup,
-      icon: <TeamOutlined />,
+      icon: <AppIcon name="users" size={16} />,
     },
   ];
 

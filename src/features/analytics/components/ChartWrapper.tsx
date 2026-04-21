@@ -1,8 +1,8 @@
-import { ReloadOutlined } from '@ant-design/icons';
 import { Button, Skeleton } from 'antd';
 import { Suspense, lazy } from 'react';
 import type { ReactNode } from 'react';
 
+import { AppIcon } from '@/components/AppIcon';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { SurfaceCard } from '@/components/ui/SurfaceCard';
@@ -105,7 +105,7 @@ export const ChartWrapper = ({
       actions={
         actions ??
         (onRetry ? (
-          <Button icon={<ReloadOutlined />} onClick={onRetry}>
+          <Button icon={<AppIcon name="refresh" size={14} />} onClick={onRetry}>
             Làm mới
           </Button>
         ) : undefined)

@@ -1,8 +1,8 @@
-import { ArrowRightOutlined } from '@ant-design/icons';
 import { Button } from 'antd';
 import type { ReactNode } from 'react';
 import clsx from 'clsx';
 
+import { AppIcon } from '@/components/AppIcon';
 import { SurfaceCard } from '@/components/ui/SurfaceCard';
 
 type DashboardHeroTone = 'healthy' | 'degraded' | 'critical';
@@ -47,7 +47,7 @@ export const DashboardHero = ({
     actions={
       <div className="ds-dashboard-hero-actions">
         <Button type="primary" onClick={onPrimaryAction}>
-          {primaryActionLabel} <ArrowRightOutlined />
+          {primaryActionLabel} <AppIcon name="arrowRight" size={14} />
         </Button>
         {secondaryActionLabel && onSecondaryAction ? (
           <Button onClick={onSecondaryAction}>{secondaryActionLabel}</Button>

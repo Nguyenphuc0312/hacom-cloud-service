@@ -1,4 +1,3 @@
-import { CheckOutlined, CopyOutlined } from '@ant-design/icons';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Empty, Input, Select, message } from 'antd';
 import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 'react';
@@ -8,6 +7,7 @@ import { conversationsClient } from '@/api/clients';
 import { queryKeys } from '@/api/queryKeys';
 import type { ConversationMessage, ConversationSummary } from '@/api/types';
 import { AppTooltip } from '@/components/AppTooltip';
+import { AppIcon } from '@/components/AppIcon';
 import { IconActionButton } from '@/components/IconActionButton';
 import { PageShell } from '@/components/PageShell';
 import { QueryStateView } from '@/components/QueryStates';
@@ -281,7 +281,7 @@ export const ConversationsPage = () => {
                   <StatusBadge status={selectedConversation.status} />
                   <StatusBadge status={selectedConversation.presence} />
                   <IconActionButton
-                    icon={<CheckOutlined />}
+                    icon={<AppIcon name="check" size={14} />}
                     tooltip="Đánh dấu đã đọc"
                     onClick={() => {
                       void markReadMutation.mutateAsync(selectedConversation.id);
@@ -332,7 +332,13 @@ export const ConversationsPage = () => {
                               <div className="ds-conversation-event-code-bar">
                                 <span>{message.kind.toUpperCase()}</span>
                                 <IconActionButton
-                                  icon={copiedMessageId === message.id ? <CheckOutlined /> : <CopyOutlined />}
+                                  icon={
+                                    copiedMessageId === message.id ? (
+                                      <AppIcon name="check" size={14} />
+                                    ) : (
+                                      <AppIcon name="copy" size={14} />
+                                    )
+                                  }
                                   tooltip={copiedMessageId === message.id ? 'Đã copy' : 'Copy'}
                                   onClick={() => {
                                     void copyMessageBody(message);

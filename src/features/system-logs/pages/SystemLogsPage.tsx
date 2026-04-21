@@ -1,8 +1,8 @@
-import { ReloadOutlined } from '@ant-design/icons';
 import { Button, Input, Select, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useMemo, useState } from 'react';
 
+import { AppIcon } from '@/components/AppIcon';
 import { AppTooltip } from '@/components/AppTooltip';
 import { DataTableShell } from '@/components/DataTableShell';
 import { DetailPanel } from '@/components/DetailPanel';
@@ -289,12 +289,12 @@ export const SystemLogsPage = () => {
   return (
     <PageShell
       eyebrow="Vận hành"
-      title="System logs"
-      description="Bề mặt log runtime ưu tiên scan nhanh theo level, service và correlation; metadata sâu chỉ mở ở inspector."
+      title="Nhật ký hệ thống"
+      description="Triage runtime logs theo level, service và correlation. Không có phần trình diễn ngoài tác vụ điều tra."
       headerExtra={
         <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
-          <Button icon={<ReloadOutlined />} onClick={handleReset}>
-            Làm mới bộ lọc
+          <Button icon={<AppIcon name="refresh" size={14} />} onClick={handleReset}>
+            Đặt lại bộ lọc
           </Button>
         </div>
       }
@@ -331,13 +331,13 @@ export const SystemLogsPage = () => {
             <div className="ds-filter-toolbar-meta">
               <span>{filteredLogs.length} bản ghi</span>
               <span>{activeFilterCount > 0 ? `${activeFilterCount} bộ lọc` : 'Không có bộ lọc'}</span>
-              <span>Inspector dùng cho trace, request ID và payload chi tiết</span>
+              <span>Inspector chỉ dùng cho correlation và payload chi tiết</span>
             </div>
           </FilterBar>
 
           <DataTableShell
             title="Runtime events"
-            meta="Danh sách chính chỉ giữ level, service, message và host để operator đọc nhanh trong cùng một surface."
+            meta="Danh sách chính chỉ giữ level, service, message và host. Correlation đi vào inspector."
           >
             <DataTable
               rowKey="id"
@@ -356,7 +356,7 @@ export const SystemLogsPage = () => {
 
         <DetailPanel
           open={Boolean(selectedLog)}
-          title={selectedLog ? `${selectedLog.service} · ${selectedLog.level}` : 'Log detail'}
+          title={selectedLog ? `${selectedLog.service} · ${selectedLog.level}` : 'Chi tiết log'}
           onClose={() => setSelectedLogId(null)}
           width={420}
           className="ds-ops-detail-panel"
@@ -399,12 +399,15 @@ export const SystemLogsPage = () => {
                 <h3>Correlation</h3>
                 <div className="ds-ops-inline-list">
                   <Button size="small" onClick={() => void copyValue(selectedLog.requestId)}>
+                    <AppIcon name="copy" size={12} />
                     Request ID
                   </Button>
                   <Button size="small" onClick={() => void copyValue(selectedLog.traceId)}>
+                    <AppIcon name="copy" size={12} />
                     Trace ID
                   </Button>
                   <Button size="small" onClick={() => void copyValue(selectedLog.spanId)}>
+                    <AppIcon name="copy" size={12} />
                     Span ID
                   </Button>
                 </div>

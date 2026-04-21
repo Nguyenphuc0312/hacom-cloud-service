@@ -1,7 +1,7 @@
-import { ArrowRightOutlined } from '@ant-design/icons';
 import { Button } from 'antd';
 import { useNavigate } from 'react-router-dom';
 
+import { AppIcon } from '@/components/AppIcon';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SurfaceCard } from '@/components/ui/SurfaceCard';
 import type { DashboardInsight } from '../utils/dashboardView';
@@ -32,7 +32,7 @@ export const DashboardInsightPanel = ({ insights }: DashboardInsightPanelProps) 
                 <p>{insight.description}</p>
               </div>
               <Button type="link" onClick={() => navigate(insight.ctaTo)}>
-                {insight.ctaLabel} <ArrowRightOutlined />
+                {insight.ctaLabel} <AppIcon name="arrowRight" size={14} />
               </Button>
             </article>
           ))}

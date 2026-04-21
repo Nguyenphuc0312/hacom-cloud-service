@@ -1,4 +1,3 @@
-import { ReloadOutlined } from '@ant-design/icons';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Form, Input, Modal, Select, Space, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -14,6 +13,7 @@ import type {
   HrEmployeeStatus,
   UpdateHrEmployeePayload,
 } from '@/api/types';
+import { AppIcon } from '@/components/AppIcon';
 import { DataTableShell } from '@/components/DataTableShell';
 import { DataTableToolbar } from '@/components/DataTableToolbar';
 import { FeatureDisabledNotice } from '@/components/FeatureDisabledNotice';
@@ -383,23 +383,17 @@ export const HREmployeesPage = () => {
   return (
     <PageShell
       title="Danh bạ nhân sự"
-      description="Tìm trong danh sách, chỉ mở chi tiết khi cần, và giữ việc cấp tài khoản trong các luồng có kiểm soát."
+      description="Page này ưu tiên danh bạ và provisioning. Import và tạo mới chỉ là luồng phụ."
       headerExtra={
         <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
           <Button
-            icon={<ReloadOutlined />}
+            icon={<AppIcon name="refresh" size={14} />}
             loading={listQuery.isFetching}
             onClick={() => {
               void listQuery.refetch();
             }}
           >
             Làm mới
-          </Button>
-          <Button disabled={!canWriteHrActions} onClick={() => setImportOpen(true)}>
-            Import file HR
-          </Button>
-          <Button type="primary" disabled={!canWriteHrActions} onClick={openCreate}>
-            Nhân viên mới
           </Button>
         </div>
       }
@@ -452,12 +446,16 @@ export const HREmployeesPage = () => {
 
       <DataTableShell
         title="Hồ sơ nhân viên"
-        meta="Workspace chính để rà soát, cấp tài khoản và thao tác theo từng dòng."
+        meta="Bảng là trọng tâm. Import và tạo mới được đẩy xuống toolbar để page không biến thành super-screen."
         toolbar={
           <DataTableToolbar>
-            <span className="ds-toolbar-summary">
-              Đang hiển thị {data?.items.length ?? 0} dòng
-            </span>
+            <span className="ds-toolbar-summary">Đang hiển thị {data?.items.length ?? 0} dòng</span>
+            <Button size="small" disabled={!canWriteHrActions} onClick={() => setImportOpen(true)}>
+              Import file HR
+            </Button>
+            <Button size="small" disabled={!canWriteHrActions} onClick={openCreate}>
+              Tạo thủ công
+            </Button>
           </DataTableToolbar>
         }
       >

@@ -1,14 +1,7 @@
-import {
-  CheckCircleFilled,
-  CloseCircleFilled,
-  DashboardOutlined,
-  ExclamationCircleFilled,
-  FieldTimeOutlined,
-  ThunderboltOutlined,
-} from '@ant-design/icons';
 import { Button, Col, Row, Space, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import type { MonitoringOverviewResponse } from '@/api/types';
+import { AppIcon } from '@/components/AppIcon';
 import { StatCard } from '@/components/StatCard';
 import { StatusBadge } from '@/components/StatusBadge';
 import { WidgetCard } from '@/components/WidgetCard';
@@ -100,7 +93,7 @@ export const MonitoringSystemOverviewSection = ({
           <StatCard
             title="Kết nối WS hoạt động"
             value={formatMetricValue(formatNumber(overview.systemOverview.activeConnections), availability)}
-            icon={<ThunderboltOutlined />}
+            icon={<AppIcon name="activity" size={16} />}
             meta={availability === 'unavailable' ? 'Không có số liệu' : 'Số phiên WebSocket đang hoạt động'}
           />
         </Col>
@@ -108,7 +101,7 @@ export const MonitoringSystemOverviewSection = ({
           <StatCard
             title="Người dùng trực tuyến"
             value={formatMetricValue(formatNumber(overview.systemOverview.onlineUsers), availability)}
-            icon={<CheckCircleFilled style={{ color: 'var(--state-success)' }} />}
+            icon={<AppIcon name="check" size={16} />}
             meta={availability === 'unavailable' ? 'Không có số liệu' : 'Số người dùng riêng biệt đang trực tuyến'}
           />
         </Col>
@@ -116,7 +109,7 @@ export const MonitoringSystemOverviewSection = ({
           <StatCard
             title="Tin nhắn / giây"
             value={formatMetricValue(formatRate(overview.systemOverview.messagesPerSecond, '/s'), availability)}
-            icon={<DashboardOutlined />}
+            icon={<AppIcon name="dashboard" size={16} />}
             meta={availability === 'unavailable' ? 'Không có số liệu' : 'Thông lượng realtime đầu vào'}
           />
         </Col>
@@ -124,7 +117,7 @@ export const MonitoringSystemOverviewSection = ({
           <StatCard
             title="Sender ACK p95"
             value={formatMetricValue(formatMs(overview.systemOverview.senderAckP95Ms), availability)}
-            icon={<ExclamationCircleFilled style={{ color: 'var(--state-warning)' }} />}
+            icon={<AppIcon name="warning" size={16} />}
             meta={availability === 'unavailable' ? 'Không có số liệu' : 'Độ trễ end-to-end nhìn từ phía sender'}
           />
         </Col>
@@ -132,7 +125,7 @@ export const MonitoringSystemOverviewSection = ({
           <StatCard
             title="Mức rủi ro hiện tại"
             value={<StatusBadge status={riskState} title={getRiskStateLabel(riskState)} />}
-            icon={<DashboardOutlined />}
+            icon={<AppIcon name="dashboard" size={16} />}
             meta={
               overview.capacityBaseline.status === 'configured'
                 ? 'Tải realtime được so với baseline đã đo'
@@ -144,7 +137,7 @@ export const MonitoringSystemOverviewSection = ({
           <StatCard
             title="Tốc độ resync"
             value={formatMetricValue(formatRate(overview.systemOverview.resyncsPerMinute, '/min'), availability)}
-            icon={<CloseCircleFilled style={{ color: 'var(--state-error)' }} />}
+            icon={<AppIcon name="close" size={16} />}
             meta={availability === 'unavailable' ? 'Không có số liệu' : 'Số yêu cầu khôi phục từ client'}
           />
         </Col>
@@ -152,7 +145,7 @@ export const MonitoringSystemOverviewSection = ({
           <StatCard
             title="Tốc độ lỗi cục bộ"
             value={formatMetricValue(formatRate(overview.systemOverview.partialFailuresPerMinute, '/min'), availability)}
-            icon={<ExclamationCircleFilled style={{ color: 'var(--state-warning)' }} />}
+            icon={<AppIcon name="warning" size={16} />}
             meta={
               availability === 'unavailable'
                 ? 'Không có số liệu'
@@ -164,7 +157,7 @@ export const MonitoringSystemOverviewSection = ({
           <StatCard
             title="Cập nhật lần cuối"
             value={formatDateTime(overview.generatedAt)}
-            icon={<FieldTimeOutlined />}
+            icon={<AppIcon name="history" size={16} />}
             meta={isRefreshing ? 'Đang làm mới…' : 'Lần làm mới tổng quan gần nhất'}
           />
         </Col>

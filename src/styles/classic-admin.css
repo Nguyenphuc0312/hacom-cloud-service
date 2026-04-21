@@ -447,6 +447,18 @@ body {
   color: var(--text-primary);
 }
 
+.ds-monitoring-inline-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.ds-monitoring-signal-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
 .ds-ops-summary-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-3);
@@ -513,6 +525,11 @@ body {
 
 .ds-app-icon {
   flex: 0 0 auto;
+}
+
+.ds-app-drawer-footer {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .ds-admin-shell.is-collapsed .ds-sidebar-brand-copy,

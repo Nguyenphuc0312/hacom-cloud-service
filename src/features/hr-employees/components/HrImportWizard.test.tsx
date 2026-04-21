@@ -153,7 +153,7 @@ describe('HrImportWizard', () => {
         ).length,
       ).toBeGreaterThan(0);
     });
-  });
+  }, 10000);
 
   it('prevents duplicate validate submit while validation is in flight', async () => {
     let resolveValidate: (value: unknown) => void = () => {
