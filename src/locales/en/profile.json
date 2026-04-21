@@ -26,9 +26,9 @@
     },
     "addMember": "Add member",
     "addMemberEligibilityHint": "Only eligible contacts can be added to this group.",
-    "searchMemberPlaceholder": "Search members...",
-    "searchHint": "Search by name or username to add members faster.",
-    "noSearchResult": "No matching result",
+    "searchMemberPlaceholder": "Search by name or username",
+    "searchHint": "Search by name or username.",
+    "noSearchResult": "No matching results",
     "noMembers": "No members",
     "youSuffix": "(You)",
     "removeMemberConfirm": "Are you sure you want to remove {{name}} from this group?",
@@ -38,7 +38,7 @@
       "member": "Member"
     },
     "actions": {
-      "makeAdmin": "Set as admin",
+      "makeAdmin": "Make admin",
       "removeAdmin": "Remove admin",
       "removeMember": "Remove member"
     },
@@ -73,7 +73,7 @@
       "rejected": "Join request rejected",
       "resolveFailed": "Unable to resolve join request",
       "noPermission": "Only admins can resolve join requests.",
-      "empty": "No pending join requests."
+      "empty": "No join requests."
     }
   },
   "newChatModal": {
@@ -90,11 +90,13 @@
     "sending": "Sending...",
     "friendRequestSent": "Friend request sent.",
     "friendRequestFailed": "Unable to send friend request.",
-    "searchPlaceholder": "Search by name or username...",
-    "groupNamePlaceholder": "Enter group name...",
-    "searchMinChars": "Type at least {{count}} characters to search",
-    "createGroupButton": "Create group ({{count}} users)"
-  },
+      "searchPlaceholder": "Search by name or username...",
+      "groupNamePlaceholder": "Enter group name...",
+      "searchMinChars": "Type at least {{count}} characters to search",
+      "createGroupButton": "Create group ({{count}} users)",
+      "selectMember": "Select contact",
+      "unselectMember": "Remove contact"
+    },
   "editProfileModal": {
     "title": "Edit profile",
     "fullDescription": "Update the details people use to recognise you across the app.",

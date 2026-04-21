@@ -63,6 +63,7 @@ export const normalizeSearchUser = (value: unknown): ChatSearchUser | null => {
   const username = asString(value.username);
   const displayName =
     asString(value.displayName) ??
+    asString(value.display_name) ??
     asString(value.fullNameFromHR) ??
     asString(value.full_name_from_hr) ??
     username ??
@@ -76,13 +77,18 @@ export const normalizeSearchUser = (value: unknown): ChatSearchUser | null => {
 
   const friendshipStatus =
     asString(value.friendshipStatus) ??
+    asString(value.friendship_status) ??
     (asBoolean(value.isFriend) ? "accepted" : "none");
 
   return {
     id,
     username,
     displayName,
-    avatarUrl: asString(value.avatarUrl) ?? asString(value.avatar) ?? null,
+    avatarUrl:
+      asString(value.avatarUrl) ??
+      asString(value.avatar_url) ??
+      asString(value.avatar) ??
+      null,
     status:
       (asString(value.status) as UserStatus | undefined) ?? UserStatus.OFFLINE,
     employeeCode:
@@ -90,8 +96,14 @@ export const normalizeSearchUser = (value: unknown): ChatSearchUser | null => {
       asString(value.employee_code) ??
       asString(value.employeeId) ??
       null,
-    isFriend: asBoolean(value.isFriend) ?? friendshipStatus === "accepted",
-    canAddFriend: asBoolean(value.canAddFriend) ?? friendshipStatus === "none",
+    isFriend:
+      asBoolean(value.isFriend) ??
+      asBoolean(value.is_friend) ??
+      friendshipStatus === "accepted",
+    canAddFriend:
+      asBoolean(value.canAddFriend) ??
+      asBoolean(value.can_add_friend) ??
+      friendshipStatus === "none",
     friendshipStatus: (friendshipStatus as ChatSearchUser["friendshipStatus"]) ?? "none",
   };
 };

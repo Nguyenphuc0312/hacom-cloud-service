@@ -222,7 +222,8 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
           ? t("profile:newChatModal.descriptionGroup")
           : t("profile:newChatModal.descriptionDirect")
       }
-      size="md"
+      size="full"
+      contentClassName="max-w-[42rem] sm:w-[42rem]"
     >
       <div className="space-y-4">
         <div className="flex gap-2">
@@ -304,7 +305,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
           </div>
         ) : null}
 
-        <div className="-mx-6 max-h-80 overflow-y-auto px-6">
+        <div className="-mx-6 min-h-[18rem] max-h-80 overflow-y-auto px-6">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Spinner size="lg" />
@@ -346,12 +347,31 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                     trailing={
                       isGroupMode ? (
                         canSelectForGroup ? (
-                          <div
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              toggleSelectedUser(user);
+                            }}
+                            disabled={isBusy}
+                            aria-label={
+                              isSelected
+                                ? t("profile:newChatModal.unselectMember", {
+                                    defaultValue: "Remove member",
+                                  })
+                                : t("profile:newChatModal.selectMember", {
+                                    defaultValue: "Select member",
+                                  })
+                            }
+                            aria-pressed={isSelected}
                             className={clsx(
-                              "flex h-5 w-5 items-center justify-center rounded-full border-2",
+                              "flex h-6 w-6 items-center justify-center rounded-full border-2 transition-colors",
+                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
                               isSelected
                                 ? "border-primary bg-primary text-text-inverse"
-                                : "border-border-strong text-transparent",
+                                : "border-border-strong text-transparent hover:border-primary/40",
+                              isBusy && "cursor-not-allowed opacity-60",
                             )}
                           >
                             <svg
@@ -367,7 +387,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                                 d="M5 13l4 4L19 7"
                               />
                             </svg>
-                          </div>
+                          </button>
                         ) : (
                           <span className="rounded-lg bg-surface-overlay px-2 py-1 text-xs text-text-muted">
                             {t("profile:newChatModal.friendsOnly", {

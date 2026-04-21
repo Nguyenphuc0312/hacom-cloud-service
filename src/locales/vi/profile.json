@@ -26,9 +26,9 @@
     },
     "addMember": "Thêm thành viên",
     "addMemberEligibilityHint": "Chỉ những liên hệ đủ điều kiện mới có thể được thêm vào nhóm này.",
-    "searchMemberPlaceholder": "Tìm kiếm thành viên...",
-    "searchHint": "Tìm theo tên hoặc username để thêm thành viên nhanh hơn.",
-    "noSearchResult": "Không có kết quả phù hợp",
+    "searchMemberPlaceholder": "Tìm theo tên hoặc username",
+    "searchHint": "Tìm theo tên hoặc username.",
+    "noSearchResult": "Không tìm thấy kết quả phù hợp",
     "noMembers": "Không có thành viên",
     "youSuffix": "(Bạn)",
     "removeMemberConfirm": "Bạn có chắc muốn xóa {{name}} khỏi nhóm?",
@@ -38,7 +38,7 @@
       "member": "Thành viên"
     },
     "actions": {
-      "makeAdmin": "Đặt làm admin",
+      "makeAdmin": "Cấp admin",
       "removeAdmin": "Gỡ admin",
       "removeMember": "Xóa khỏi nhóm"
     },
@@ -58,11 +58,11 @@
       "copyFailed": "Sao chép thất bại",
       "revoked": "Đã thu hồi liên kết mời",
       "revokeFailed": "Không thể thu hồi liên kết mời",
-      "noPermission": "Chỉ quản trị viên mới có thể quản lý liên kết mời.",
+      "noPermission": "Chỉ admin mới quản lý được liên kết mời.",
       "create": "Tạo liên kết mời",
       "namePlaceholder": "Tên liên kết (tùy chọn)",
       "usageLimitPlaceholder": "Giới hạn lượt dùng (tùy chọn)",
-      "empty": "Chưa có liên kết mời nào.",
+      "empty": "Chưa có liên kết mời.",
       "unnamed": "Liên kết mời",
       "usage": "Lượt dùng: {{count}}/{{limit}}",
       "revokedLabel": "Đã thu hồi",
@@ -72,8 +72,8 @@
       "approved": "Đã duyệt yêu cầu tham gia",
       "rejected": "Đã từ chối yêu cầu tham gia",
       "resolveFailed": "Không thể xử lý yêu cầu tham gia",
-      "noPermission": "Chỉ quản trị viên mới có thể xử lý yêu cầu tham gia.",
-      "empty": "Không có yêu cầu tham gia đang chờ."
+      "noPermission": "Chỉ admin mới xử lý được yêu cầu tham gia.",
+      "empty": "Không có yêu cầu tham gia."
     }
   },
   "newChatModal": {
@@ -90,11 +90,13 @@
     "sending": "Đang gửi...",
     "friendRequestSent": "Đã gửi lời mời kết bạn.",
     "friendRequestFailed": "Không thể gửi lời mời kết bạn.",
-    "searchPlaceholder": "Tìm kiếm theo tên hoặc username...",
-    "groupNamePlaceholder": "Nhập tên nhóm...",
-    "searchMinChars": "Nhập ít nhất {{count}} ký tự để tìm kiếm",
-    "createGroupButton": "Tạo nhóm ({{count}} người)"
-  },
+      "searchPlaceholder": "Tìm kiếm theo tên hoặc username...",
+      "groupNamePlaceholder": "Nhập tên nhóm...",
+      "searchMinChars": "Nhập ít nhất {{count}} ký tự để tìm kiếm",
+      "createGroupButton": "Tạo nhóm ({{count}} người)",
+      "selectMember": "Chọn liên hệ",
+      "unselectMember": "Bỏ chọn liên hệ"
+    },
   "editProfileModal": {
     "title": "Chỉnh sửa hồ sơ",
     "fullDescription": "Cập nhật những thông tin mọi người dùng để nhận ra bạn trong ứng dụng.",

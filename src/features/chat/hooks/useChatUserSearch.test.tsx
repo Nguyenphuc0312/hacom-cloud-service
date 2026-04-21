@@ -74,6 +74,32 @@ describe("useChatUserSearch helpers", () => {
     expect(isGroupMemberEligible(user!)).toBe(false);
   });
 
+  it("normalizes snake_case friendship fields from search responses", () => {
+    const user = normalizeSearchUser({
+      id: "user-3",
+      username: "linh",
+      display_name: "Linh Tran",
+      avatar_url: "https://example.com/linh.png",
+      employee_code: "EMP003",
+      is_friend: true,
+      can_add_friend: false,
+      friendship_status: "accepted",
+    });
+
+    expect(user).toEqual({
+      id: "user-3",
+      username: "linh",
+      displayName: "Linh Tran",
+      avatarUrl: "https://example.com/linh.png",
+      status: UserStatus.OFFLINE,
+      employeeCode: "EMP003",
+      isFriend: true,
+      canAddFriend: false,
+      friendshipStatus: "accepted",
+    });
+    expect(isGroupMemberEligible(user!)).toBe(true);
+  });
+
   it("debounces search, unwraps rows, and excludes configured user ids", async () => {
     searchUsersUseCaseMock.mockResolvedValue({
       success: true,
