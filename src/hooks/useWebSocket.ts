@@ -120,6 +120,72 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
 const asString = (value: unknown): string | null =>
   typeof value === "string" && value.trim().length > 0 ? value : null;
 
+const normalizeRealtimeSenderProfiles = (
+  value: unknown,
+): Record<
+  string,
+  {
+    id: string;
+    username: string;
+    displayName: string;
+    avatar?: string | null;
+    status?: string | null;
+  }
+> => {
+  const source = asRecord(value);
+  if (!source) {
+    return {};
+  }
+
+  return Object.entries(source).reduce<
+    Record<
+      string,
+      {
+        id: string;
+        username: string;
+        displayName: string;
+        avatar?: string | null;
+        status?: string | null;
+      }
+    >
+  >((accumulator, [userId, rawProfile]) => {
+    const profile = asRecord(rawProfile);
+    if (!profile) {
+      return accumulator;
+    }
+
+    const id =
+      asString(profile.id) ??
+      asString(profile.userId) ??
+      asString(profile.user_id) ??
+      userId;
+    const username =
+      asString(profile.username) ??
+      asString(profile.employeeCode) ??
+      asString(profile.employee_code) ??
+      id;
+    const displayName =
+      asString(profile.displayName) ??
+      asString(profile.display_name) ??
+      asString(profile.fullNameFromHr) ??
+      asString(profile.full_name_from_hr) ??
+      username;
+
+    if (!id || !displayName) {
+      return accumulator;
+    }
+
+    accumulator[id] = {
+      id,
+      username,
+      displayName,
+      avatar: asString(profile.avatar),
+      status: asString(profile.status),
+    };
+    return accumulator;
+  }, {});
+};
+
 const getConversationId = (payload: Record<string, unknown>): string | null => {
   return resolveConversationId(payload, {
     source: "useWebSocket.payload",
@@ -208,6 +274,9 @@ export const useWebSocket = (
 
   const ingestConversationMessageEvent = useChatStore(
     (s) => s.ingestConversationMessageEvent,
+  );
+  const applyConversationParticipantSummary = useChatStore(
+    (s) => s.applyConversationParticipantSummary,
   );
   const removeMessage = useChatStore((s) => s.removeMessage);
   const upsertConversationSummary = useChatStore(
@@ -615,6 +684,7 @@ export const useWebSocket = (
     handleConversationJoinedAck,
     handleConversationResynced,
     handleResyncRequired,
+    resyncClientState,
     reset: resetResyncCoordinator,
   } = resyncCoordinator;
 
@@ -997,6 +1067,9 @@ export const useWebSocket = (
         asString(messagePayload.stableId) ?? localId ?? messageId;
       const senderId =
         asString(messagePayload.senderId) ?? asString(payload.senderId);
+      const senderProfiles = normalizeRealtimeSenderProfiles(
+        payload.senderProfiles,
+      );
       const correlationKey = buildMessageCorrelationKey({
         conversationId,
         clientMessageId,
@@ -1072,6 +1145,7 @@ export const useWebSocket = (
       }, {
         incrementUnread: shouldIncrementUnread,
         source: eventType,
+        ...(Object.keys(senderProfiles).length > 0 ? { senderProfiles } : {}),
       });
       logMessageDebug("useWebSocket", "realtime.client.state_updated", {
         requestId:
@@ -1184,6 +1258,19 @@ export const useWebSocket = (
         void scheduleConversationSnapshotRefresh(conversationId, {
           reason: "socket:message:deleted",
         });
+      },
+      onConversationParticipantUpdated: (data: unknown) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+
+        const conversationId = getConversationId(payload);
+        const participant =
+          asRecord(payload.participant) ?? asRecord(payload.user) ?? null;
+        if (!conversationId || !participant) {
+          return;
+        }
+
+        applyConversationParticipantSummary(conversationId, participant);
       },
     });
     unsubscribersRef.current.push(unsubscribeChatEvents);
@@ -1811,6 +1898,7 @@ export const useWebSocket = (
     maybeNotifyIncomingMessage,
     maybeNotifyMembershipEvent,
     maybeReconcileGap,
+    applyConversationParticipantSummary,
     ingestConversationMessageEvent,
     scheduleConversationSnapshotRefresh,
     scheduleRemoteTypingDecay,
@@ -1862,6 +1950,7 @@ export const useWebSocket = (
         },
         recoverSocketAuth: (trigger, reason) =>
           recoverSocketAuth(trigger, reason),
+        resyncClientState,
         log: (event, details) => {
           logMessageDebug("useWebSocket", event, details);
         },
@@ -1878,6 +1967,7 @@ export const useWebSocket = (
       onConnect,
       onDisconnect,
       recoverSocketAuth,
+      resyncClientState,
       requestConversationJoin,
       resetResyncCoordinator,
       setupSocket,
@@ -1886,6 +1976,8 @@ export const useWebSocket = (
   const {
     connect: connectLifecycle,
     disconnect: disconnectLifecycle,
+    handleBrowserOnline,
+    handleResume,
   } = connectionLifecycle;
 
   useEffect(() => {
@@ -1988,19 +2080,66 @@ export const useWebSocket = (
       return;
     }
 
-    const handleOnline = () => {
-      logMessageDebug("useWebSocket", "offline_queue_flush_requested", {
-        reason: "browser_online",
-        connectionState: getSocket()?.getConnectionState() ?? "unknown",
-      });
-      void flushQueuedMessages();
+    let lastResumeHandledAt = 0;
+    const shouldHandleResume = () => {
+      const now = Date.now();
+      if (now - lastResumeHandledAt < 1200) {
+        return false;
+      }
+
+      lastResumeHandledAt = now;
+      return true;
     };
 
-    window.addEventListener("online", handleOnline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
+    const handleOnlineEvent = () => {
+      if (!shouldHandleResume()) {
+        return;
+      }
+      handleBrowserOnline();
     };
-  }, [flushQueuedMessages]);
+
+    const handleVisibilityChange = () => {
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "visible" &&
+        shouldHandleResume()
+      ) {
+        handleResume("visibility_resume");
+      }
+    };
+
+    const handlePageShow = () => {
+      if (!shouldHandleResume()) {
+        return;
+      }
+      handleResume("pageshow");
+    };
+
+    const handleFocus = () => {
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState !== "hidden" &&
+        shouldHandleResume()
+      ) {
+        handleResume("focus");
+      }
+    };
+
+    window.addEventListener("online", handleOnlineEvent);
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("online", handleOnlineEvent);
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange,
+      );
+    };
+  }, [handleBrowserOnline, handleResume]);
 
   useEffect(() => {
     if (!autoConnect) {

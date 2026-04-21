@@ -752,6 +752,7 @@ export const WebSocketEvents = {
   CONVERSATION_RESYNCED: WsEventNames.CONVERSATION_RESYNCED,
   CONVERSATION_SUMMARY_UPDATED: "conversation:summary:updated",
   CONVERSATION_MEMBERSHIP_UPDATED: "conversation:membership:updated",
+  CONVERSATION_PARTICIPANT_UPDATED: "conversation:participant:updated",
   RESYNC_REQUIRED: WsEventNames.RESYNC_REQUIRED,
   // Deprecated transport aliases kept for inbound compat only.
   ROOM_JOINED: "room:joined",

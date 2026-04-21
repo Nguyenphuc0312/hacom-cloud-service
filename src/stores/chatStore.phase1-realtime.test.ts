@@ -1618,6 +1618,138 @@ describe("chatStore phase-1 realtime flows", () => {
     ]);
   });
 
+  it("prefers senderProfiles from history over legacy senderName snapshots", async () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+        participants: [
+          {
+            id: "user-b",
+            username: "bob",
+            displayName: "Bob Snapshot",
+            status: "offline",
+          },
+        ],
+        lastMessage: {
+          id: "msg-legacy",
+          senderId: "user-b",
+          senderName: "Bob Snapshot",
+          content: "legacy",
+          type: "text",
+          isDeleted: false,
+          createdAt: "2026-04-10T09:00:00.000Z",
+        },
+      }),
+    ] as never);
+
+    getMessagesMock.mockResolvedValueOnce(
+      makeSuccessEnvelope({
+        messages: [
+          makeMessage({
+            id: "msg-history-1",
+            senderId: "user-b",
+            senderName: "Bob Snapshot",
+            content: "hello from history",
+          }),
+        ],
+        senderProfiles: {
+          "user-b": {
+            id: "user-b",
+            username: "bob",
+            displayName: "Bob Current",
+            avatar: null,
+            status: "online",
+          },
+        },
+        hasNext: false,
+        hasPrev: false,
+      }),
+    );
+
+    await useChatStore.getState().fetchMessages("room-1", undefined, undefined, {
+      force: true,
+    });
+
+    const messages = getRoomMessages();
+    const conversation = useChatStore
+      .getState()
+      .conversations.find((item) => item.id === "room-1");
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.senderName).toBe("Bob Current");
+    expect(conversation?.participants?.[0]?.displayName).toBe("Bob Current");
+  });
+
+  it("updates existing conversation messages and reply previews when participant summary changes", () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+        participants: [
+          {
+            id: "user-b",
+            username: "bob",
+            displayName: "Bob Old",
+            status: "offline",
+          },
+        ],
+        lastMessage: {
+          id: "msg-last",
+          senderId: "user-b",
+          senderName: "Bob Old",
+          content: "latest",
+          type: "text",
+          isDeleted: false,
+          createdAt: "2026-04-10T10:00:00.000Z",
+        },
+      }),
+    ] as never);
+    useChatStore.getState().setMessages("room-1", [
+      makeMessage({
+        id: "msg-sender-old",
+        senderId: "user-b",
+        senderName: "Bob Old",
+        content: "older message",
+      }) as never,
+      makeMessage({
+        id: "msg-reply",
+        senderId: "user-a",
+        senderName: "Alice",
+        content: "replying",
+        replyToMessage: {
+          id: "msg-sender-old",
+          senderId: "user-b",
+          senderName: "Bob Old",
+          content: "older message",
+          type: MessageType.TEXT,
+          isDeleted: false,
+          createdAt: "2026-04-10T09:00:00.000Z",
+        },
+      }) as never,
+    ] as never);
+
+    useChatStore.getState().applyConversationParticipantSummary("room-1", {
+      id: "user-b",
+      username: "bob",
+      displayName: "Bob Renamed",
+      avatar: null,
+      status: "online",
+    });
+
+    const messages = getRoomMessages();
+    const conversation = useChatStore
+      .getState()
+      .conversations.find((item) => item.id === "room-1");
+    const renamedMessage = messages.find((message) => message.id === "msg-sender-old");
+    const replyMessage = messages.find((message) => message.id === "msg-reply");
+
+    expect(renamedMessage?.senderName).toBe("Bob Renamed");
+    expect(replyMessage?.replyToMessage?.senderName).toBe("Bob Renamed");
+    expect(conversation?.lastMessage?.senderName).toBe("Bob Renamed");
+    expect(conversation?.participants?.[0]?.displayName).toBe("Bob Renamed");
+  });
+
   it("does not collapse a same-content server message into a pending optimistic one without identity aliases", () => {
     useChatStore.getState().addMessage(
       "room-1",

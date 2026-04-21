@@ -215,6 +215,22 @@ describe("useWebSocketResyncCoordinator", () => {
     expect(harness.syncUserSettings).toHaveBeenCalledTimes(1);
   });
 
+  it("resyncs summaries, unread, and joined rooms when the app resumes", async () => {
+    const harness = createCoordinatorHarness();
+    registerConversationJoinIntent(harness.conversationSyncState, "room-1");
+    harness.controller.handleConversationJoinedAck("room-1");
+
+    await harness.controller.resyncClientState("visibility_resume");
+
+    expect(harness.fetchConversations).toHaveBeenCalledTimes(1);
+    expect(harness.refreshUnreadSummarySnapshot).toHaveBeenCalledTimes(1);
+    expect(harness.fetchMessages).toHaveBeenCalledTimes(1);
+    expect(harness.fetchConversationSummary).toHaveBeenCalledTimes(1);
+    expect(harness.triggerFriendshipResync).toHaveBeenCalledWith(
+      "socket_reconnect",
+    );
+  });
+
   it("classifies resync scopes consistently", () => {
     expect(shouldRefreshConversationSummariesForScopes(["permissions"])).toBe(
       true,

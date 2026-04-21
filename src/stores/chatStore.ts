@@ -100,6 +100,10 @@ interface ChatState {
     reason?: "inserted" | "updated" | "stale_version" | "stale_timestamp";
   };
   updateConversation: (id: string, updates: Partial<Conversation>) => void;
+  applyConversationParticipantSummary: (
+    conversationId: string,
+    participant: Record<string, unknown>,
+  ) => void;
   removeConversation: (id: string) => void;
   selectConversation: (id: string | null) => void;
   markAsRead: (
@@ -137,6 +141,7 @@ interface ChatState {
       incrementUnread?: boolean;
       hydrated?: boolean;
       source?: string;
+      senderProfiles?: Record<string, SenderProfileSummary>;
     },
   ) => {
     status: "new" | "merged" | "ignored";
@@ -2414,11 +2419,15 @@ const ingestConversationMessagesWithMetadata = (
     prefetchedWindow?: boolean;
     historyScopeKey?: string | null;
     requestContext?: ConversationHistoryRequest;
+    senderProfiles?: Record<string, SenderProfileSummary>;
   },
 ) => {
-  const incomingList = (Array.isArray(messages) ? messages : [messages])
-    .map((item) => normalizeMessage(item, conversationId))
-    .filter((item): item is Message => item !== null);
+  const incomingList = applySenderProfilesToMessages(
+    (Array.isArray(messages) ? messages : [messages])
+      .map((item) => normalizeMessage(item, conversationId))
+      .filter((item): item is Message => item !== null),
+    options?.senderProfiles ?? {},
+  );
   if (incomingList.length === 0 && options?.mode !== "replace") {
     return {
       nextState: {
@@ -2557,10 +2566,289 @@ const ingestConversationMessagesWithMetadata = (
   };
 };
 
+type SenderProfileSummary = {
+  id: string;
+  username: string;
+  displayName: string;
+  avatar?: string | null;
+  status?: string | null;
+};
+
+const normalizeSenderProfileSummary = (
+  value: unknown,
+  fallbackUserId?: string,
+): SenderProfileSummary | null => {
+  const source = asRecord(value);
+  if (!source) {
+    return null;
+  }
+
+  const id =
+    asStringValue(source.id) ??
+    asStringValue(source.userId) ??
+    asStringValue(source.user_id) ??
+    fallbackUserId;
+  if (!id) {
+    return null;
+  }
+
+  const username =
+    asStringValue(source.username) ??
+    asStringValue(source.employeeCode) ??
+    asStringValue(source.employee_code) ??
+    id;
+  const displayName =
+    resolveUserDisplayName(
+      {
+        ...source,
+        id,
+        username,
+      },
+      { allowLegacyFallback: false },
+    ) ?? username;
+
+  return {
+    id,
+    username,
+    displayName,
+    avatar: asStringValue(source.avatar) ?? null,
+    status: asStringValue(source.status) ?? null,
+  };
+};
+
+const normalizeSenderProfiles = (
+  value: unknown,
+): Record<string, SenderProfileSummary> => {
+  const source = asRecord(value);
+  if (!source) {
+    return {};
+  }
+
+  return Object.entries(source).reduce<Record<string, SenderProfileSummary>>(
+    (accumulator, [userId, rawProfile]) => {
+      const normalized = normalizeSenderProfileSummary(rawProfile, userId);
+      if (!normalized) {
+        return accumulator;
+      }
+
+      accumulator[normalized.id] = normalized;
+      return accumulator;
+    },
+    {},
+  );
+};
+
+const applySenderProfilesToMessage = (
+  message: Message,
+  senderProfiles: Record<string, SenderProfileSummary>,
+): Message => {
+  if (!message || Object.keys(senderProfiles).length === 0) {
+    return message;
+  }
+
+  const senderProfile = senderProfiles[message.senderId];
+  const replySenderProfile = message.replyToMessage
+    ? senderProfiles[message.replyToMessage.senderId]
+    : undefined;
+  const nextSenderName = senderProfile?.displayName ?? message.senderName;
+  const nextSenderAvatar =
+    senderProfile?.avatar && senderProfile.avatar.trim().length > 0
+      ? senderProfile.avatar
+      : message.senderAvatar;
+  const nextReplySenderName =
+    replySenderProfile?.displayName ?? message.replyToMessage?.senderName;
+  const nextReplySenderAvatar =
+    replySenderProfile?.avatar && replySenderProfile.avatar.trim().length > 0
+      ? replySenderProfile.avatar
+      : message.replyToMessage?.senderAvatar;
+
+  const senderUnchanged =
+    nextSenderName === message.senderName &&
+    nextSenderAvatar === message.senderAvatar;
+  const replyUnchanged =
+    !message.replyToMessage ||
+    (nextReplySenderName === message.replyToMessage.senderName &&
+      nextReplySenderAvatar === message.replyToMessage.senderAvatar);
+
+  if (senderUnchanged && replyUnchanged) {
+    return message;
+  }
+
+  return {
+    ...message,
+    senderName: nextSenderName,
+    senderAvatar: nextSenderAvatar,
+    ...(message.replyToMessage
+      ? {
+          replyToMessage: {
+            ...message.replyToMessage,
+            senderName:
+              nextReplySenderName ?? message.replyToMessage.senderName,
+            senderAvatar: nextReplySenderAvatar,
+          },
+        }
+      : {}),
+  };
+};
+
+const applySenderProfilesToMessages = (
+  messages: Message[],
+  senderProfiles: Record<string, SenderProfileSummary>,
+): Message[] => {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return messages;
+  }
+
+  let changed = false;
+  const nextMessages = messages.map((message) => {
+    const nextMessage = applySenderProfilesToMessage(message, senderProfiles);
+    if (nextMessage !== message) {
+      changed = true;
+    }
+    return nextMessage;
+  });
+
+  return changed ? nextMessages : messages;
+};
+
+const applySenderProfilesToConversation = (
+  conversation: Conversation,
+  senderProfiles: Record<string, SenderProfileSummary>,
+): Conversation => {
+  if (!conversation || Object.keys(senderProfiles).length === 0) {
+    return conversation;
+  }
+
+  let changed = false;
+
+  const nextParticipants = Array.isArray(conversation.participants)
+    ? conversation.participants.map((participant) => {
+        const senderProfile = senderProfiles[participant.id];
+        if (!senderProfile) {
+          return participant;
+        }
+
+        const nextDisplayName =
+          senderProfile.displayName || participant.displayName;
+        const nextAvatar =
+          senderProfile.avatar && senderProfile.avatar.trim().length > 0
+            ? senderProfile.avatar
+            : participant.avatar;
+        const nextStatus =
+          senderProfile.status && senderProfile.status.trim().length > 0
+            ? senderProfile.status
+            : participant.status;
+        const nextUsername =
+          senderProfile.username || participant.username;
+
+        if (
+          nextDisplayName === participant.displayName &&
+          nextAvatar === participant.avatar &&
+          nextStatus === participant.status &&
+          nextUsername === participant.username
+        ) {
+          return participant;
+        }
+
+        changed = true;
+        return {
+          ...participant,
+          displayName: nextDisplayName,
+          avatar: nextAvatar,
+          status: nextStatus as typeof participant.status,
+          username: nextUsername,
+        };
+      })
+    : conversation.participants;
+
+  const otherUserProfile =
+    conversation.otherUser?.id &&
+    senderProfiles[conversation.otherUser.id]
+      ? senderProfiles[conversation.otherUser.id]
+      : null;
+  const nextOtherUser =
+    otherUserProfile && conversation.otherUser
+      ? {
+          ...conversation.otherUser,
+          displayName:
+            otherUserProfile.displayName || conversation.otherUser.displayName,
+          avatar:
+            otherUserProfile.avatar && otherUserProfile.avatar.trim().length > 0
+              ? otherUserProfile.avatar
+              : conversation.otherUser.avatar,
+          status:
+            (otherUserProfile.status &&
+            otherUserProfile.status.trim().length > 0
+              ? otherUserProfile.status
+              : conversation.otherUser.status) as typeof conversation.otherUser.status,
+          username:
+            otherUserProfile.username || conversation.otherUser.username,
+        }
+      : conversation.otherUser;
+
+  if (nextOtherUser !== conversation.otherUser) {
+    changed = true;
+  }
+
+  const lastMessageProfile =
+    conversation.lastMessage?.senderId &&
+    senderProfiles[conversation.lastMessage.senderId]
+      ? senderProfiles[conversation.lastMessage.senderId]
+      : null;
+  const nextLastMessage =
+    lastMessageProfile && conversation.lastMessage
+      ? {
+          ...conversation.lastMessage,
+          senderName:
+            lastMessageProfile.displayName || conversation.lastMessage.senderName,
+        }
+      : conversation.lastMessage;
+
+  if (nextLastMessage !== conversation.lastMessage) {
+    changed = true;
+  }
+
+  const nextDisplayName =
+    conversation.type === "direct" || conversation.type === "private"
+      ? nextOtherUser?.displayName ?? conversation.displayName
+      : conversation.displayName;
+  const nextDisplayAvatar =
+    conversation.type === "direct" || conversation.type === "private"
+      ? nextOtherUser?.avatar ?? conversation.displayAvatar
+      : conversation.displayAvatar;
+
+  if (
+    nextDisplayName !== conversation.displayName ||
+    nextDisplayAvatar !== conversation.displayAvatar
+  ) {
+    changed = true;
+  }
+
+  if (!changed) {
+    return conversation;
+  }
+
+  return {
+    ...conversation,
+    ...(nextParticipants ? { participants: nextParticipants } : {}),
+    ...(nextOtherUser ? { otherUser: nextOtherUser } : {}),
+    ...(nextLastMessage ? { lastMessage: nextLastMessage } : {}),
+    ...(nextDisplayName ? { displayName: nextDisplayName } : {}),
+    ...(nextDisplayAvatar !== undefined
+      ? { displayAvatar: nextDisplayAvatar ?? null }
+      : {}),
+  };
+};
+
 const normalizeMessagesResponse = (
   rawData: unknown,
   responseMeta?: Record<string, unknown> | null,
-): { messages: Message[]; hasNext: boolean; hasPrev: boolean } => {
+): {
+  messages: Message[];
+  hasNext: boolean;
+  hasPrev: boolean;
+  senderProfiles: Record<string, SenderProfileSummary>;
+} => {
   const getBoolean = (
     source: Record<string, unknown> | null | undefined,
     key: string,
@@ -2601,12 +2889,13 @@ const normalizeMessagesResponse = (
         .filter((item): item is Message => item !== null),
       hasNext: flags.hasNext ?? false,
       hasPrev: flags.hasPrev ?? false,
+      senderProfiles: {},
     };
   }
 
   const payload = asRecord(rawData);
   if (!payload) {
-    return { messages: [], hasNext: false, hasPrev: false };
+    return { messages: [], hasNext: false, hasPrev: false, senderProfiles: {} };
   }
 
   const rawMessages = Array.isArray(payload.messages)
@@ -2614,9 +2903,13 @@ const normalizeMessagesResponse = (
     : Array.isArray(payload.items)
       ? payload.items
       : [];
-  const messages = rawMessages
+  const senderProfiles = normalizeSenderProfiles(payload.senderProfiles);
+  const messages = applySenderProfilesToMessages(
+    rawMessages
     .map((item) => normalizeMessage(item))
-    .filter((item): item is Message => item !== null);
+    .filter((item): item is Message => item !== null),
+    senderProfiles,
+  );
   const pagination = asRecord(payload.pagination);
   const flags = resolveFlags(payload);
 
@@ -2632,6 +2925,7 @@ const normalizeMessagesResponse = (
       (typeof pagination?.hasPrevPage === "boolean"
         ? Boolean(pagination.hasPrevPage)
         : false),
+    senderProfiles,
   };
 };
 
@@ -2899,6 +3193,72 @@ export const useChatStore = create<ChatState>()(
         if (nextConversation?.canCurrentUserSend === true) {
           outboxController.clearSendRestriction(id);
         }
+      },
+
+      applyConversationParticipantSummary: (conversationId, participant) => {
+        const normalizedParticipant = normalizeSenderProfileSummary(participant);
+        if (!normalizedParticipant) {
+          return;
+        }
+
+        set((state) => {
+          const senderProfiles = {
+            [normalizedParticipant.id]: normalizedParticipant,
+          };
+          const currentMessages = state.messages[conversationId] || EMPTY_MESSAGES;
+          const nextMessages = applySenderProfilesToMessages(
+            currentMessages,
+            senderProfiles,
+          );
+          const messagesChanged = nextMessages !== currentMessages;
+          const currentConversation = state.conversationById[conversationId];
+          const nextConversation = currentConversation
+            ? applySenderProfilesToConversation(currentConversation, senderProfiles)
+            : null;
+          const conversationChanged = nextConversation !== currentConversation;
+
+          if (!messagesChanged && !conversationChanged) {
+            return state;
+          }
+
+          const nextMessageById = messagesChanged
+            ? nextMessages.reduce<Record<string, Message>>((accumulator, message) => {
+                accumulator[message.id] = message;
+                return accumulator;
+              }, {
+                ...state.messageById,
+              })
+            : state.messageById;
+
+          const nextConversations = conversationChanged
+            ? mergeConversationCollections(
+                (Array.isArray(state.conversations) ? state.conversations : []).map(
+                  (conversation) =>
+                    conversation.id === conversationId && nextConversation
+                      ? nextConversation
+                      : conversation,
+                ),
+              )
+            : state.conversations;
+
+          return {
+            ...(messagesChanged
+              ? {
+                  messages: {
+                    ...state.messages,
+                    [conversationId]: nextMessages,
+                  },
+                  messageById: nextMessageById,
+                }
+              : {}),
+            ...(conversationChanged
+              ? {
+                  conversations: nextConversations,
+                  ...buildConversationCollectionState(nextConversations),
+                }
+              : {}),
+          };
+        });
       },
 
       removeConversation: (id) => {
@@ -3184,6 +3544,7 @@ export const useChatStore = create<ChatState>()(
                 false,
               source: options?.source ?? "realtime",
               incrementUnread: options?.incrementUnread,
+              senderProfiles: options?.senderProfiles,
             },
           );
           metadata = result.metadata;
@@ -3682,24 +4043,40 @@ export const useChatStore = create<ChatState>()(
               },
             );
             const currentConversation = messageState.conversationById[conversationId];
+            const resolvedConversation = currentConversation
+              ? applySenderProfilesToConversation(
+                  currentConversation,
+                  normalized.senderProfiles,
+                )
+              : null;
             const readStateConversation =
-              readState && currentConversation
-                ? applyConversationReadState(currentConversation, readState)
+              readState && resolvedConversation
+                ? applyConversationReadState(resolvedConversation, readState)
                 : null;
+            const finalConversation =
+              readStateConversation ?? resolvedConversation ?? currentConversation;
+            const nextConversationById =
+              finalConversation && finalConversation !== currentConversation
+                ? {
+                    ...messageState.conversationById,
+                    [conversationId]: finalConversation,
+                  }
+                : messageState.conversationById;
+            const nextConversations =
+              finalConversation && finalConversation !== currentConversation
+                ? messageState.conversations.map((conversation) =>
+                    conversation.id === conversationId
+                      ? finalConversation
+                      : conversation,
+                  )
+                : messageState.conversations;
 
             return {
               ...messageState,
-              ...(readStateConversation
+              ...(finalConversation && finalConversation !== currentConversation
                 ? {
-                    conversations: messageState.conversations.map((conversation) =>
-                      conversation.id === conversationId
-                        ? readStateConversation
-                        : conversation,
-                    ),
-                    conversationById: {
-                      ...messageState.conversationById,
-                      [conversationId]: readStateConversation,
-                    },
+                    conversations: nextConversations,
+                    conversationById: nextConversationById,
                   }
                 : {}),
               hasMoreMessages: {

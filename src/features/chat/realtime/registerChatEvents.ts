@@ -9,6 +9,7 @@ interface ChatEventHandlers {
   onMessageNew?: RealtimeEventHandler;
   onMessageUpdated?: RealtimeEventHandler;
   onMessageDeleted?: RealtimeEventHandler;
+  onConversationParticipantUpdated?: RealtimeEventHandler;
 }
 
 export const registerChatEvents = (
@@ -37,6 +38,10 @@ export const registerChatEvents = (
   register(WebSocketEvents.MESSAGE_NEW, handlers.onMessageNew);
   register(WebSocketEvents.MESSAGE_UPDATED, handlers.onMessageUpdated);
   register(WebSocketEvents.MESSAGE_DELETED, handlers.onMessageDeleted);
+  register(
+    WebSocketEvents.CONVERSATION_PARTICIPANT_UPDATED,
+    handlers.onConversationParticipantUpdated,
+  );
 
   return () => {
     cleanups.forEach((cleanup) => cleanup());

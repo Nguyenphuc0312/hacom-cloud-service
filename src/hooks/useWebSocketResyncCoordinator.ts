@@ -365,7 +365,7 @@ export const createWebSocketResyncCoordinator = ({
     });
 
   const refreshChangedConversationSummaries = async (options?: {
-    reason?: "initial" | "reconnect" | "retry" | "resync_required";
+    reason?: "initial" | "reconnect" | "retry" | "resync_required" | "resume";
     forceFull?: boolean;
   }): Promise<void> => {
     if (state.conversationListRefreshInFlight) {
@@ -618,6 +618,34 @@ export const createWebSocketResyncCoordinator = ({
     }
   };
 
+  const resyncClientState = async (
+    reason: "browser_online" | "visibility_resume" | "pageshow" | "focus",
+  ): Promise<void> => {
+    logMessageDebug("useWebSocket", "client_state_resync_requested", {
+      reason,
+      joinedConversationIds: Array.from(conversationSyncState.joinedConversationIds),
+    });
+
+    await Promise.allSettled([
+      refreshChangedConversationSummaries({
+        reason: "resume",
+        forceFull: true,
+      }),
+      refreshUnreadSummarySnapshot(),
+    ]);
+
+    const joinedConversationIds = Array.from(
+      conversationSyncState.joinedConversationIds,
+    );
+    await Promise.allSettled(
+      joinedConversationIds.map((conversationId) =>
+        reconcileConversationAuthoritative(conversationId, "reconnect"),
+      ),
+    );
+
+    triggerFriendshipResync("socket_reconnect");
+  };
+
   const reset = () => {
     clearAllConversationSnapshotRefreshes();
     clearAllConversationSyncFallbacks();
@@ -643,6 +671,7 @@ export const createWebSocketResyncCoordinator = ({
     handleConversationJoinedAck,
     handleConversationResynced,
     handleResyncRequired,
+    resyncClientState,
     reset,
   };
 };

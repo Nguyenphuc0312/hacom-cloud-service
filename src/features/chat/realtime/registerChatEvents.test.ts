@@ -22,6 +22,7 @@ describe("registerChatEvents", () => {
       onMessageNew: noop,
       onMessageUpdated: noop,
       onMessageDeleted: noop,
+      onConversationParticipantUpdated: noop,
     });
 
     expect(registered.map((row) => row.eventName)).toEqual(
@@ -29,6 +30,7 @@ describe("registerChatEvents", () => {
         "message:new",
         "message:updated",
         "message:deleted",
+        "conversation:participant:updated",
       ]),
     );
     expect(registered.map((row) => row.eventName)).not.toContain(
@@ -40,6 +42,6 @@ describe("registerChatEvents", () => {
 
     unsubscribe();
 
-    expect(socket.off).toHaveBeenCalledTimes(3);
+    expect(socket.off).toHaveBeenCalledTimes(4);
   });
 });

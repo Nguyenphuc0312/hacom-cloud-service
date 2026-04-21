@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ConnectionState } from "../lib/socket";
 import {
   createWebSocketConnectionLifecycle,
   createWebSocketConnectionLifecycleState,
@@ -39,7 +40,9 @@ const createLifecycle = () => {
     flushQueuedMessages: vi.fn(async () => {
       calls.push("flushQueuedMessages");
     }),
-    getConnectionState: vi.fn(() => "connected" as const),
+    getConnectionState: vi.fn<() => ConnectionState | "unknown">(
+      () => "connected",
+    ),
     getJoinedConversationIds: vi.fn(() => ["room-1", "room-2"]),
     getQueuedEmitCount: vi.fn(() => 3),
     clearActiveTypingTimeout: vi.fn(() => {
@@ -65,6 +68,9 @@ const createLifecycle = () => {
     }),
     recoverSocketAuth: vi.fn(async () => {
       calls.push("recoverSocketAuth");
+    }),
+    resyncClientState: vi.fn(async (reason: string) => {
+      calls.push(`resyncClientState:${reason}`);
     }),
     log: vi.fn((event: string) => {
       calls.push(`log:${event}`);
@@ -156,6 +162,38 @@ describe("useWebSocketConnectionLifecycle", () => {
       "close_4401",
     );
     expect(deps.onDisconnect).toHaveBeenCalledWith("close_4401");
+  });
+
+  it("resyncs instead of reconnecting when the app resumes while already connected", async () => {
+    const { lifecycle, deps } = createLifecycle();
+
+    lifecycle.handleResume("visibility_resume");
+    await Promise.resolve();
+
+    expect(deps.resyncClientState).toHaveBeenCalledWith("visibility_resume");
+    expect(deps.connectSocket).not.toHaveBeenCalled();
+  });
+
+  it("reconnects on browser resume when the socket is offline", async () => {
+    const { lifecycle, deps } = createLifecycle();
+    deps.getConnectionState.mockReturnValue("disconnected");
+
+    lifecycle.handleResume("pageshow");
+    await Promise.resolve();
+
+    expect(deps.ensureFreshAccessToken).toHaveBeenCalledTimes(1);
+    expect(deps.resyncClientState).not.toHaveBeenCalled();
+  });
+
+  it("flushes queued messages and resyncs when the browser comes back online", async () => {
+    const { lifecycle, deps } = createLifecycle();
+
+    lifecycle.handleBrowserOnline();
+    await Promise.resolve();
+
+    expect(deps.flushQueuedMessages).toHaveBeenCalledTimes(1);
+    expect(deps.resyncClientState).toHaveBeenCalledWith("browser_online");
+    expect(deps.connectSocket).not.toHaveBeenCalled();
   });
 
   it("normalizes disconnect payloads defensively", () => {

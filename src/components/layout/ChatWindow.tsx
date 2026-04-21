@@ -19,6 +19,7 @@ import {
 import {
   useComposerAvailability,
   useDropZone,
+  useMobileViewportMetrics,
   useUploadQueue,
   usePresence,
 } from "../../hooks";
@@ -43,6 +44,7 @@ import { logScrollTrace } from "../../utils/scrollTrace";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { getMessageByIdUseCase } from "../../features/chat/usecases/getMessageById";
 import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
+import { useChatUiStore } from "../../features/chat/state";
 import { selectConversationMessagesFromState } from "../../stores/chatStore";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
 
@@ -191,8 +193,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const sendRestriction = useChatStore(
     (state) => state.sendRestrictionsByConversation[conversation.id],
   );
+  const persistedDraft = useChatUiStore(
+    (state) => state.composerDraftByConversation[conversation.id] ?? "",
+  );
+  const setComposerDraft = useChatUiStore((state) => state.setComposerDraft);
+  const clearComposerDraft = useChatUiStore(
+    (state) => state.clearComposerDraft,
+  );
 
-  const [inputValue, setInputValue] = React.useState("");
+  const [inputValue, setInputValue] = React.useState(() => persistedDraft);
   const [inputMode, setInputMode] = React.useState<InputMode>("normal");
   const [replyToMessage, setReplyToMessage] = React.useState<
     Message | undefined
@@ -200,6 +209,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [editingMessage, setEditingMessage] = React.useState<
     Message | undefined
   >(undefined);
+  const draftBeforeEditRef = React.useRef<string>("");
+  const previousConversationIdRef = React.useRef(conversation.id);
 
   const handleReply = React.useCallback((message: Message) => {
     setReplyToMessage(message);
@@ -216,14 +227,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const handleCancelEdit = React.useCallback(() => {
     setEditingMessage(undefined);
+    setInputValue(draftBeforeEditRef.current);
     if (!replyToMessage) {
       setInputMode("normal");
     }
   }, [replyToMessage]);
 
-  const handleInputChange = React.useCallback((nextValue: string) => {
-    setInputValue(nextValue);
-  }, []);
+  const handleInputChange = React.useCallback(
+    (nextValue: string) => {
+      setInputValue(nextValue);
+      if (inputMode !== "edit") {
+        setComposerDraft(conversation.id, nextValue);
+      }
+    },
+    [conversation.id, inputMode, setComposerDraft],
+  );
 
   const handleReact = React.useCallback(
     (messageId: string, emoji: string) => {
@@ -234,11 +252,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   );
 
   const handleEdit = React.useCallback((message: Message) => {
+    draftBeforeEditRef.current = inputValue;
     setReplyToMessage(undefined);
     setEditingMessage(message);
     setInputValue(message.content || "");
     setInputMode("edit");
-  }, []);
+  }, [inputValue]);
 
   const handleDelete = React.useCallback(
     (messageId: string) => {
@@ -263,12 +282,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           nextContent === (editingMessage.content || "").trim()
         ) {
           setEditingMessage(undefined);
+          setInputValue(draftBeforeEditRef.current);
           setInputMode(replyToMessage ? "reply" : "normal");
           return;
         }
 
         await Promise.resolve(onEditMessage(editingMessage.id, nextContent));
-        setInputValue("");
+        setInputValue(draftBeforeEditRef.current);
         setReplyToMessage(undefined);
         setEditingMessage(undefined);
         setInputMode("normal");
@@ -327,6 +347,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         );
 
         setInputValue("");
+        clearComposerDraft(conversation.id);
         setReplyToMessage(undefined);
         setEditingMessage(undefined);
         setInputMode("normal");
@@ -364,6 +385,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     },
     [
       conversation.id,
+      clearComposerDraft,
       editingMessage,
       inputMode,
       onEditMessage,
@@ -388,10 +410,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [ephemeralNotice, setEphemeralNotice] =
     React.useState<EphemeralNotice | null>(null);
   const [composerHeight, setComposerHeight] = React.useState(0);
-  const [viewportMetrics, setViewportMetrics] = React.useState(() => ({
-    width: typeof window !== "undefined" ? window.innerWidth : 1280,
-    height: typeof window !== "undefined" ? window.innerHeight : 900,
-  }));
+  const viewportMetrics = useMobileViewportMetrics();
   const previousConnectionStateRef =
     React.useRef<ConnectionState>(connectionState);
   const ephemeralNoticeTimerRef = React.useRef<number | null>(null);
@@ -479,8 +498,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   });
 
   const bottomFloatingOffset = React.useMemo(
-    () => Math.max(12, composerHeight + 12),
-    [composerHeight],
+    () => Math.max(12, composerHeight + viewportMetrics.keyboardInset + 12),
+    [composerHeight, viewportMetrics.keyboardInset],
   );
 
   React.useEffect(() => {
@@ -681,21 +700,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   );
 
   React.useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (previousConversationIdRef.current === conversation.id) {
+      return;
+    }
 
-    const handleResize = () => {
-      setViewportMetrics({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, []);
+    previousConversationIdRef.current = conversation.id;
+    draftBeforeEditRef.current = persistedDraft;
+    setInputValue(persistedDraft);
+    setReplyToMessage(undefined);
+    setEditingMessage(undefined);
+    setInputMode("normal");
+  }, [conversation.id, persistedDraft]);
 
   const mentionCandidates = React.useMemo<MentionCandidate[]>(() => {
     const participants = Array.isArray(conversation.participants)
@@ -918,7 +933,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {/* Message input - hidden during selection mode */}
       {!isMessageSelectionMode && (
-        <div className="sticky bottom-0 z-sticky">
+        <div
+          className="sticky z-sticky"
+          style={{
+            bottom:
+              viewportMetrics.keyboardInset > 0
+                ? `${viewportMetrics.keyboardInset}px`
+                : "0px",
+          }}
+        >
           <MessageInput
             value={inputValue}
             onChange={handleInputChange}

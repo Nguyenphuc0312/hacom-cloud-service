@@ -4,6 +4,8 @@ type WebSocketConnectionLifecycleState = {
   hasConnectedOnce: boolean;
 };
 
+type ResumeReason = "browser_online" | "visibility_resume" | "pageshow" | "focus";
+
 type CreateWebSocketConnectionLifecycleOptions = {
   state: WebSocketConnectionLifecycleState;
   onConnect?: () => void;
@@ -39,6 +41,7 @@ type CreateWebSocketConnectionLifecycleOptions = {
     trigger: "ws_close_4401",
     reason: string,
   ) => Promise<void>;
+  resyncClientState: (reason: ResumeReason) => Promise<void> | void;
   log: (event: string, details: Record<string, unknown>) => void;
 };
 
@@ -94,6 +97,7 @@ export const createWebSocketConnectionLifecycle = ({
   resetConversationSyncState,
   clearEmitQueue,
   recoverSocketAuth,
+  resyncClientState,
   log,
 }: CreateWebSocketConnectionLifecycleOptions) => {
   const connect = async (): Promise<void> => {
@@ -171,10 +175,64 @@ export const createWebSocketConnectionLifecycle = ({
     onDisconnect?.(input.reason);
   };
 
+  const handleResume = (reason: Exclude<ResumeReason, "browser_online">): void => {
+    const connectionState = getConnectionState();
+    log("resume_detected", {
+      reason,
+      connectionState,
+      hasConnectedOnce: state.hasConnectedOnce,
+    });
+
+    if (connectionState === "connected") {
+      void resyncClientState(reason);
+      return;
+    }
+
+    if (
+      connectionState === "connecting" ||
+      connectionState === "authenticating" ||
+      connectionState === "reconnecting"
+    ) {
+      return;
+    }
+
+    void connect();
+  };
+
+  const handleBrowserOnline = (): void => {
+    const connectionState = getConnectionState();
+    log("browser_online_detected", {
+      connectionState,
+      hasConnectedOnce: state.hasConnectedOnce,
+    });
+
+    if (connectionState === "connected") {
+      log("offline_queue_flush_requested", {
+        reason: "browser_online",
+        joinedConversationIds: getJoinedConversationIds(),
+      });
+      void flushQueuedMessages();
+      void resyncClientState("browser_online");
+      return;
+    }
+
+    if (
+      connectionState === "connecting" ||
+      connectionState === "authenticating" ||
+      connectionState === "reconnecting"
+    ) {
+      return;
+    }
+
+    void connect();
+  };
+
   return {
     connect,
     disconnect,
     handleSocketConnected,
     handleSocketDisconnected,
+    handleBrowserOnline,
+    handleResume,
   };
 };
