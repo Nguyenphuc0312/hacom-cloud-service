@@ -1,24 +1,6 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getUnreadFeedMock } = vi.hoisted(() => ({
-  getUnreadFeedMock: vi.fn(),
-}));
-
-vi.mock("../api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../api")>();
-  return {
-    ...actual,
-    chatApi: {
-      ...actual.chatApi,
-      conversation: {
-        ...actual.chatApi.conversation,
-        getUnreadFeed: getUnreadFeedMock,
-      },
-    },
-  };
-});
-
 import { useAuthStore } from "../../../stores/authStore";
 import { useChatStore } from "../../../stores/chatStore";
 import type { Conversation } from "../../../types";
@@ -57,14 +39,13 @@ describe("useConversationSession", () => {
       isLoading: false,
       error: null,
     });
-    getUnreadFeedMock.mockReset();
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("bootstraps unread feed but still triggers authoritative open fetch", async () => {
+  it("skips unread bootstrap and triggers authoritative open fetch", async () => {
     useChatStore.getState().setConversations([
       makeConversation({
         id: "room-1",
@@ -72,33 +53,6 @@ describe("useConversationSession", () => {
       }),
     ]);
     useChatStore.getState().selectConversation("room-1");
-
-    getUnreadFeedMock.mockResolvedValue({
-      success: true,
-      data: {
-        messages: [
-          {
-            id: "msg-unread-1",
-            conversationId: "room-1",
-            senderId: "user-b",
-            senderName: "Bob",
-            content: "Unread 1",
-            type: "text",
-            createdAt: "2026-04-10T09:10:00.000Z",
-            updatedAt: "2026-04-10T09:10:00.000Z",
-          },
-        ],
-        readState: {
-          unreadCount: 3,
-          lastReadMessageId: "msg-read-1",
-          lastReadAt: "2026-04-10T09:00:00.000Z",
-          firstUnreadMessageId: "msg-unread-1",
-          firstUnreadMessageAt: "2026-04-10T09:10:00.000Z",
-        },
-        limit: 20,
-        hasMore: true,
-      },
-    });
 
     const fetchMessages = vi.fn().mockResolvedValue({
       loaded: 20,
@@ -133,7 +87,6 @@ describe("useConversationSession", () => {
       }),
     );
 
-    await waitFor(() => expect(getUnreadFeedMock).toHaveBeenCalledTimes(1));
     await waitFor(() =>
       expect(fetchMessages).toHaveBeenCalledWith(
         "room-1",
@@ -146,15 +99,6 @@ describe("useConversationSession", () => {
         }),
       ),
     );
-
-    const state = useChatStore.getState();
-    expect(state.historyStageByConversation["room-1"]).toBe(
-      "partial_unread_bootstrap",
-    );
-    expect(state.hasAuthoritativeHistoryByConversation["room-1"]).toBe(false);
-    expect(state.messages["room-1"]?.map((message) => message.id)).toEqual([
-      "msg-unread-1",
-    ]);
   });
 
   it("prefetches adjacent rooms with partial provenance only", async () => {

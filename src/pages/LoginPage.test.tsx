@@ -82,14 +82,14 @@ describe("LoginPage", () => {
       </MemoryRouter>,
     );
 
-    const emailInput = document.querySelector(
-      'input[name="email"]',
+    const loginIdentifierInput = screen.getByLabelText(
+      "auth:login.loginIdentifier",
     ) as HTMLInputElement;
-    const passwordInput = document.querySelector(
-      'input[name="password"]',
+    const passwordInput = screen.getByLabelText(
+      "auth:login.password",
     ) as HTMLInputElement;
 
-    fireEvent.change(emailInput, {
+    fireEvent.change(loginIdentifierInput, {
       target: { value: "user@company.test" },
     });
     fireEvent.change(passwordInput, {
