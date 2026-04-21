@@ -24,7 +24,7 @@ describe("timelineDensity spacing", () => {
         },
         "comfortable",
       ),
-    ).toBe("mb-4.5");
+    ).toBe("mb-4");
   });
 
   it("uses a medium semantic pause for reply-context breaks", () => {
@@ -37,7 +37,7 @@ describe("timelineDensity spacing", () => {
         },
         "compact",
       ),
-    ).toBe("mb-2");
+    ).toBe("mb-2.5");
   });
 
   it("uses the largest intra-thread pause for real time gaps", () => {

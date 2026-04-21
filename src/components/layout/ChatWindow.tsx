@@ -4,12 +4,18 @@ import { useTranslation } from "react-i18next";
 import { ChatHeader } from "../chat/ChatHeader";
 import { ConversationViewport } from "../chat/ConversationViewport";
 import { SelectionToolbar } from "../chat/SelectionToolbar";
+import { MessageInspectDrawer } from "../chat/thread/MessageInspectDrawer";
 import { DropOverlay } from "../input/DropOverlay";
 import { MessageInput } from "../input/MessageInput";
 import { ConversationLane } from "./ConversationLane";
 import type { MentionCandidate } from "../input/MessageInput";
 import { Spinner, toast } from "../ui";
-import { useChatStore, useGroupStore, useUIStore } from "../../stores";
+import {
+  useChatStore,
+  useGroupStore,
+  useMessageEntity,
+  useUIStore,
+} from "../../stores";
 import {
   useComposerAvailability,
   useDropZone,
@@ -29,7 +35,6 @@ import type { UploadedFileMeta } from "../../types/attachmentDraft";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import type { ConnectionState } from "../../hooks/useWebSocket";
 import {
-  resolveChatDensity,
   resolveChatLayoutProfile,
 } from "../../utils/densityPolicy";
 import { resolveOverlayPlacements } from "../../utils/overlayResolver";
@@ -172,7 +177,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
-  const chatDensity = useUIStore((s) => s.chatDensity);
   const isMessageSelectionMode = useUIStore((s) => s.isMessageSelectionMode);
   const selectedMessageIds = useUIStore((s) => s.selectedMessageIds);
   const enterSelectionMode = useUIStore((s) => s.enterSelectionMode);
@@ -371,8 +375,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Search & pinned panel state
   const [overlayMode, setOverlayMode] = React.useState<
-    "search" | "pinned" | null
+    "search" | "pinned" | "inspect" | null
   >(null);
+  const [inspectMessageId, setInspectMessageId] = React.useState<string | null>(
+    null,
+  );
   const [jumpTargetMessageId, setJumpTargetMessageId] = React.useState<
     string | null
   >(null);
@@ -388,24 +395,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const previousConnectionStateRef =
     React.useRef<ConnectionState>(connectionState);
   const ephemeralNoticeTimerRef = React.useRef<number | null>(null);
-
-  const resolvedDensity = React.useMemo(
-    () =>
-      resolveChatDensity({
-        preference: chatDensity,
-        viewportWidth: viewportMetrics.width,
-        viewportHeight: viewportMetrics.height,
-        layoutState,
-        conversationType: conversation.type,
-      }),
-    [
-      chatDensity,
-      conversation.type,
-      layoutState,
-      viewportMetrics.height,
-      viewportMetrics.width,
-    ],
-  );
+  const inspectedMessage = useMessageEntity(inspectMessageId);
+  const resolvedDensity = "comfortable" as const;
   const layoutProfile = React.useMemo(
     () => resolveChatLayoutProfile(viewportMetrics.width, layoutState),
     [layoutState, viewportMetrics.width],
@@ -522,6 +513,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setOverlayMode((prev) => (prev === "pinned" ? null : "pinned"));
   }, []);
 
+  const handleInspectMessage = React.useCallback((message: Message) => {
+    setInspectMessageId(message.id);
+    setOverlayMode("inspect");
+  }, []);
+
   const handleJumpHandled = React.useCallback((messageId: string) => {
     setJumpTargetMessageId((current) =>
       current === messageId ? null : current,
@@ -629,6 +625,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   // Close panels when switching conversations
   React.useEffect(() => {
     setOverlayMode(null);
+    setInspectMessageId(null);
   }, [conversation.id]);
 
   React.useEffect(() => {
@@ -832,6 +829,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   onClose={() => setOverlayMode(null)}
                   className="h-full"
                 />
+              ) : overlayMode === "inspect" ? (
+                <MessageInspectDrawer
+                  message={inspectedMessage ?? null}
+                  onClose={() => setOverlayMode(null)}
+                  className="h-full"
+                />
               ) : (
                 <PinnedMessagesPanel
                   conversationId={conversation.id}
@@ -853,6 +856,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onReact={handleReact}
         onEdit={handleEdit}
         onDelete={handleDelete}
+        onInspect={handleInspectMessage}
         hasMoreMessages={hasMoreMessages}
         isLoadingMessages={isLoadingMessages}
         isConversationReady={isConversationReady}

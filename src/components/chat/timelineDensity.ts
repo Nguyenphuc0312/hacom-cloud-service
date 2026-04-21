@@ -38,12 +38,12 @@ const TIMELINE_DENSITY_CONTRACT: Record<
 > = {
   compact: {
     itemSpacing: {
-      tight: "mb-0.5",
-      related: "mb-1.5",
-      cluster: "mb-3",
-      semanticPause: "mb-2",
-      mediaCluster: "mb-3.5",
-      timePause: "mb-4",
+      tight: "mb-1",
+      related: "mb-2",
+      cluster: "mb-4",
+      semanticPause: "mb-2.5",
+      mediaCluster: "mb-4",
+      timePause: "mb-5",
     },
     dateDivider: {
       outer: "my-3",
@@ -59,12 +59,12 @@ const TIMELINE_DENSITY_CONTRACT: Record<
     cluster: {
       rowGap: "gap-1",
       senderLabel:
-        "mb-0.5 px-1 text-[10px] font-semibold leading-4 text-primary/80",
+        "mb-0.5 px-0.5 text-[12px] font-semibold leading-4 text-text-secondary",
       replyPreview:
-        "mb-0.5 gap-1.5 rounded-[0.95rem] px-2.5 py-1 text-[10px]",
-      forwardedBadge: "mb-1 flex items-center gap-1 text-[10px] leading-4",
+        "mb-1 gap-1.5 rounded-[0.8rem] px-2.5 py-1.5 text-[11px]",
+      forwardedBadge: "mb-1 flex items-center gap-1 text-[11px] leading-4",
       meta:
-        "mt-0.5 min-h-[0.75rem] gap-x-1 gap-y-0.5 px-1 text-[9px] leading-3.5",
+        "mt-0.5 min-h-[1rem] gap-x-1.5 gap-y-0.5 px-0.5 text-[11px] leading-4",
       reactionOffset: "mt-0.5",
       threadOffset: "mt-0.5",
     },
@@ -73,9 +73,9 @@ const TIMELINE_DENSITY_CONTRACT: Record<
     itemSpacing: {
       tight: "mb-1",
       related: "mb-2",
-      cluster: "mb-3.5",
-      semanticPause: "mb-2.5",
-      mediaCluster: "mb-4.5",
+      cluster: "mb-4",
+      semanticPause: "mb-2",
+      mediaCluster: "mb-4",
       timePause: "mb-5",
     },
     dateDivider: {
@@ -92,12 +92,12 @@ const TIMELINE_DENSITY_CONTRACT: Record<
     cluster: {
       rowGap: "gap-1.25",
       senderLabel:
-        "mb-0.5 px-1 text-[10px] font-semibold leading-4 text-primary/82",
+        "mb-0.5 px-0.5 text-[12px] font-semibold leading-4 text-text-secondary",
       replyPreview:
-        "mb-0.75 gap-2 rounded-[1rem] px-2.75 py-1.25 text-[10px]",
-      forwardedBadge: "mb-1.5 flex items-center gap-1 text-[10px] leading-4",
+        "mb-1 gap-2 rounded-[0.8rem] px-3 py-2 text-[11px]",
+      forwardedBadge: "mb-1.5 flex items-center gap-1 text-[11px] leading-4",
       meta:
-        "mt-0.5 min-h-[0.875rem] gap-x-1.25 gap-y-0.5 px-1 text-[9px] leading-3.5",
+        "mt-0.5 min-h-[1rem] gap-x-1.5 gap-y-0.5 px-0.5 text-[11px] leading-4",
       reactionOffset: "mt-0.75",
       threadOffset: "mt-0.5",
     },
@@ -107,7 +107,7 @@ const TIMELINE_DENSITY_CONTRACT: Record<
       tight: "mb-1.5",
       related: "mb-2.5",
       cluster: "mb-4.5",
-      semanticPause: "mb-3.5",
+      semanticPause: "mb-3",
       mediaCluster: "mb-5",
       timePause: "mb-6",
     },
@@ -123,12 +123,12 @@ const TIMELINE_DENSITY_CONTRACT: Record<
     cluster: {
       rowGap: "gap-1.5",
       senderLabel:
-        "mb-0.75 px-1 text-[11px] font-semibold leading-4 text-primary/84",
+        "mb-0.75 px-0.5 text-[12px] font-semibold leading-4 text-text-secondary",
       replyPreview:
-        "mb-1 gap-2 rounded-[1.05rem] px-3 py-1.5 text-[11px]",
+        "mb-1 gap-2 rounded-[0.85rem] px-3 py-2 text-[11px]",
       forwardedBadge: "mb-1.5 flex items-center gap-1 text-[11px] leading-4",
       meta:
-        "mt-0.75 min-h-[0.875rem] gap-x-1.5 gap-y-0.5 px-1 text-[10px] leading-4",
+        "mt-0.75 min-h-[1rem] gap-x-1.5 gap-y-0.5 px-0.5 text-[11px] leading-4",
       reactionOffset: "mt-1",
       threadOffset: "mt-0.75",
     },

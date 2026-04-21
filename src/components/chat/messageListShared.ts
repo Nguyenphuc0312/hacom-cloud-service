@@ -1,5 +1,9 @@
 import type { Message } from "../../types";
 import type { TimelineItem } from "../../hooks/useMessageGrouping";
+import type {
+  ConversationThreadMessageItem,
+  ConversationThreadRow,
+} from "../../features/chat/hooks/useConversationThreadRows";
 import {
   hasInlineUrl,
   isCollapsiblePlainTextMessage,
@@ -14,10 +18,10 @@ export interface TimelineMessageRenderState {
   isCollapsible: boolean;
 }
 
-export type RenderableTimelineItem = TimelineItem;
+export type RenderableTimelineItem = TimelineItem | ConversationThreadRow;
 
-export const resolveTimelineMessageRenderState = (
-  item: RenderableTimelineItem,
+export const resolveThreadMessageRenderState = (
+  item: Pick<ConversationThreadMessageItem, "kind" | "message">,
   expandedLongMessageIds: Set<string>,
 ): TimelineMessageRenderState => {
   if (item.kind !== "message") {
@@ -42,6 +46,32 @@ export const resolveTimelineMessageRenderState = (
         : "dynamic",
     isCollapsible,
   };
+};
+
+export const resolveTimelineMessageRenderState = (
+  item: RenderableTimelineItem,
+  expandedLongMessageIds: Set<string>,
+): TimelineMessageRenderState => {
+  if (item.kind === "group") {
+    const rowModes = item.items.map((messageItem) =>
+      resolveThreadMessageRenderState(messageItem, expandedLongMessageIds),
+    );
+
+    return {
+      renderMode: rowModes.some((state) => state.renderMode === "collapsed")
+        ? "collapsed"
+        : "expanded",
+      measurementMode: rowModes.some((state) => state.measurementMode === "dynamic")
+        ? "dynamic"
+        : "static",
+      isCollapsible: rowModes.some((state) => state.isCollapsible),
+    };
+  }
+
+  return resolveThreadMessageRenderState(
+    item as Pick<ConversationThreadMessageItem, "kind" | "message">,
+    expandedLongMessageIds,
+  );
 };
 
 export type ScrollCommand =

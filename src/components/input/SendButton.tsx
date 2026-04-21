@@ -41,7 +41,7 @@ export const SendButton: React.FC<SendButtonProps> = ({
       onClick={onClick}
       disabled={disabled}
       className={clsx(
-        "chat-composer-send inline-flex h-11 w-11 items-center justify-center rounded-[1rem] border transition-micro",
+        "chat-composer-send inline-flex h-11 w-11 items-center justify-center rounded-lg border transition-micro",
         resolvedState === "disabled" &&
           "cursor-not-allowed border-border/70 bg-[hsl(var(--color-chat-pill))] text-text-disabled shadow-none opacity-72",
         resolvedState === "idle" &&

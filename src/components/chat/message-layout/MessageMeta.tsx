@@ -114,6 +114,7 @@ export const MessageMeta: React.FC<MessageMetaProps> = ({
   const { t } = useTranslation();
   const contract = getTimelineDensityContract(density);
   const timeStr = formatMessageTime(new Date(message.createdAt));
+  const fullTimestamp = new Date(message.createdAt).toLocaleString();
   const editedLabel = t("chat:message.edited");
   const editedTitle = message.editedAt
     ? t("chat:message.editedAtNoHistory", {
@@ -127,15 +128,16 @@ export const MessageMeta: React.FC<MessageMetaProps> = ({
   return (
     <div
       className={clsx(
-        "flex min-h-4 flex-wrap items-center",
+        "flex min-h-4 flex-wrap items-center text-[11px] font-medium leading-4",
         contract.cluster.meta,
-        isOwn ? "justify-end text-text-muted/88" : "text-text-muted/80",
+        isOwn ? "justify-end text-text-muted/92" : "text-text-muted/84",
         className,
       )}
+      title={fullTimestamp}
     >
       {message.isEdited && (
         <span
-          className="inline-flex items-center gap-1 text-[10px] font-medium"
+          className="inline-flex items-center gap-1"
           title={editedTitle}
           aria-label={editedTitle}
         >

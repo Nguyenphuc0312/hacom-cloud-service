@@ -968,7 +968,7 @@ export const MessageInput = React.forwardRef<
           <div
             data-composer-state={composerVisualState}
             className={clsx(
-              "chat-composer-shell relative flex min-w-0 flex-1 items-end rounded-[1.35rem] border px-2 py-1 transition-micro",
+              "chat-composer-shell relative flex min-w-0 flex-1 items-end rounded-[1rem] border px-3 py-2 transition-micro",
               composerVisualStyles.shell,
             )}
           >
@@ -1060,7 +1060,7 @@ export const MessageInput = React.forwardRef<
                   : undefined
               }
               className={clsx(
-                "chat-composer-textarea w-full min-h-[44px] flex-1 resize-none bg-transparent px-2 py-[11px]",
+                "chat-composer-textarea w-full min-h-[44px] flex-1 resize-none bg-transparent px-1 py-[10px]",
                 "text-sm text-text-primary placeholder:text-text-muted",
                 "transition-colors focus:outline-none",
                 disabled && "cursor-not-allowed opacity-70",
@@ -1078,7 +1078,7 @@ export const MessageInput = React.forwardRef<
                   type="button"
                   onClick={() => setShowAttachmentMenu((previous) => !previous)}
                   className={clsx(
-                    "chat-composer-attachment inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
+                    "chat-composer-attachment inline-flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
                     showAttachmentMenu
                       ? "bg-surface-active text-text-primary"
                       : composerVisualStyles.attachmentButton,

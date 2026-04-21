@@ -27,13 +27,9 @@ export const DateDivider: React.FC<DateDividerProps> = ({
     >
       <span
         className={clsx(
-          "rounded-full border text-text-secondary/85 backdrop-blur",
+          "rounded-full border border-border/70 bg-[hsl(var(--chat-panel-bg))/0.96] text-text-muted backdrop-blur",
           contract.dateDivider.pill,
         )}
-        style={{
-          backgroundColor: "hsl(var(--color-chat-pill) / 0.88)",
-          borderColor: "hsl(var(--color-chat-pill-border) / 0.45)",
-        }}
       >
         {formatDateDivider(date)}
       </span>

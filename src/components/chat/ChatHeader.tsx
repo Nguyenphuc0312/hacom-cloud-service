@@ -14,9 +14,8 @@ import {
 import { Avatar } from "../common/Avatar";
 import { GroupAvatar } from "../common/GroupAvatar";
 import { TypingIndicator } from "../common/TypingIndicator";
-import { DensityToggle } from "./DensityToggle";
 import { ConversationLane } from "../layout/ConversationLane";
-import { useUIStore, usePresenceStore } from "../../stores";
+import { usePresenceStore } from "../../stores";
 import { UserStatus } from "../../types";
 import type { Conversation, TypingStatus } from "../../types";
 import {
@@ -72,8 +71,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
-  const chatDensity = useUIStore((s) => s.chatDensity);
-  const setChatDensity = useUIStore((s) => s.setChatDensity);
   const otherUser = getOtherParticipant(conversation, currentUserId);
   const normalizedType = normalizeRoomType(
     conversation.type,
@@ -316,12 +313,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 )}
                 role="menu"
               >
-                <div className="px-2 py-1.5">
-                  <DensityToggle
-                    density={chatDensity}
-                    onChange={setChatDensity}
-                  />
-                </div>
                 {menuActions.map((action) => {
                   const Icon = action.icon;
                   return (

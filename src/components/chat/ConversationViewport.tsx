@@ -39,6 +39,7 @@ interface ConversationViewportProps {
   onReact: (messageId: string, emoji: string) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (messageId: string) => void | Promise<void>;
+  onInspect?: (message: Message) => void;
   hasMoreMessages?: boolean;
   isLoadingMessages?: boolean;
   historyLoadingState?: {
@@ -81,6 +82,7 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
       onReact,
       onEdit,
       onDelete,
+      onInspect,
       hasMoreMessages,
       isLoadingMessages,
       historyLoadingState,
@@ -187,6 +189,7 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
           onReact={onReact}
           onEdit={onEdit}
           onDelete={onDelete}
+          onInspect={onInspect}
           hasMore={hasMoreMessages}
           isLoadingMore={Boolean(isLoadingMessages && messageCount > 0)}
           isInitialLoading={Boolean(

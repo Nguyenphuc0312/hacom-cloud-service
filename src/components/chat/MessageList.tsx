@@ -6,8 +6,8 @@ import {
   type ListChildComponentProps,
 } from "react-window";
 import { MessageItem } from "./MessageItem";
-import { MessageRowContainer } from "./MessageRowContainer";
 import { MessageListOverlays } from "./MessageListOverlays";
+import { MessageGroup } from "./thread/MessageGroup";
 import { EmptyMessages, ErrorState, MessageListSkeleton } from "../ui";
 import {
   CHAT_VIRTUALIZER_V2_ENABLED,
@@ -39,9 +39,12 @@ import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 import { logScrollTrace } from "../../utils/scrollTrace";
 import { useMessageScrollMachine } from "../../features/chat/hooks/useMessageScrollMachine";
 import {
-  type ConversationTimelineItem,
   useConversationTimelineRows,
 } from "../../features/chat/hooks/useConversationTimelineRows";
+import {
+  type ConversationThreadRow,
+  useConversationThreadRows,
+} from "../../features/chat/hooks/useConversationThreadRows";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
 import { getDistanceFromBottom } from "../../utils/scrollController";
 import {
@@ -59,6 +62,7 @@ interface MessageListProps {
   onReact: (messageId: string, emoji: string) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (messageId: string) => void | Promise<void>;
+  onInspect?: (message: Message) => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
   isInitialLoading?: boolean;
@@ -96,11 +100,12 @@ interface MessageListProps {
 }
 
 interface TimelineRowData {
-  items: ConversationTimelineItem[];
+  items: ConversationThreadRow[];
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (messageId: string) => void | Promise<void>;
+  onInspect?: (message: Message) => void;
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
   setItemSize: (
@@ -132,10 +137,19 @@ interface TimelineRowData {
 const EMPTY_SELECTED_MESSAGE_IDS = new Set<string>();
 const ITEM_SIZE_CHANGE_THRESHOLD = 2;
 
+const isThreadRowMessageLike = (
+  item: ConversationThreadRow | undefined,
+): item is Extract<ConversationThreadRow, { kind: "group" | "system" }> =>
+  Boolean(item && (item.kind === "group" || item.kind === "system"));
+
 const isImageTimelineItem = (
   item: RenderableTimelineItem | undefined,
-): item is Extract<RenderableTimelineItem, { kind: "message" }> =>
-  Boolean(item && item.kind === "message" && item.message.type === "image");
+): item is Extract<RenderableTimelineItem, { kind: "group" }> =>
+  Boolean(
+    item &&
+      item.kind === "group" &&
+      item.items.some((entry) => entry.message.type === "image"),
+  );
 
 const getImageTimelinePlaceholderMinHeight = (
   item: RenderableTimelineItem | undefined,
@@ -144,9 +158,9 @@ const getImageTimelinePlaceholderMinHeight = (
     return null;
   }
 
-  const attachments = Array.isArray(item.message.attachments)
-    ? item.message.attachments
-    : [];
+  const attachments = item.items.flatMap((entry) =>
+    Array.isArray(entry.message.attachments) ? entry.message.attachments : [],
+  );
   const mediaHeight = attachments.reduce((total, attachment, index) => {
     const mediaWidth = attachment.width ? Math.min(attachment.width, 300) : 240;
     const mediaRatio =
@@ -157,7 +171,9 @@ const getImageTimelinePlaceholderMinHeight = (
     return total + nextHeight + (index > 0 ? 8 : 0);
   }, 0);
 
-  const captionHeight = item.message.content?.trim() ? 28 : 0;
+  const captionHeight = item.items.some((entry) => entry.message.content?.trim())
+    ? 28
+    : 0;
   return Math.max(180, mediaHeight + captionHeight + 12);
 };
 
@@ -166,7 +182,16 @@ const shouldAnimateInsertedMessage = (
   insertedMessageKeys: Set<string>,
 ): boolean => {
   if (!item || item.kind !== "message") {
-    return false;
+    if (item?.kind !== "group") {
+      return false;
+    }
+
+    return item.items.some(
+      (entry) =>
+        entry.isOwn &&
+        isPendingMessage(entry.message) &&
+        insertedMessageKeys.has(getMessageStableKey(entry.message)),
+    );
   }
 
   return Boolean(
@@ -201,23 +226,37 @@ const areEqualTimelineRowProps = (
   }
 
   const previousMessageId =
-    previousItem?.kind === "message" || previousItem?.kind === "system"
-      ? previousItem.messageId
+    previousItem?.kind === "group"
+      ? previousItem.anchorMessageId
+      : previousItem?.kind === "system"
+        ? previousItem.messageId
       : null;
   const nextMessageId =
-    nextItem?.kind === "message" || nextItem?.kind === "system"
-      ? nextItem.messageId
+    nextItem?.kind === "group"
+      ? nextItem.anchorMessageId
+      : nextItem?.kind === "system"
+        ? nextItem.messageId
       : null;
   if (previousMessageId !== nextMessageId) {
     return false;
   }
 
-  const previousSelected = previousMessageId
-    ? previousProps.data.selectedMessageIds.has(previousMessageId)
-    : false;
-  const nextSelected = nextMessageId
-    ? nextProps.data.selectedMessageIds.has(nextMessageId)
-    : false;
+  const previousSelected =
+    previousItem?.kind === "group"
+      ? previousItem.messageIds.some((messageId) =>
+          previousProps.data.selectedMessageIds.has(messageId),
+        )
+      : previousMessageId
+        ? previousProps.data.selectedMessageIds.has(previousMessageId)
+        : false;
+  const nextSelected =
+    nextItem?.kind === "group"
+      ? nextItem.messageIds.some((messageId) =>
+          nextProps.data.selectedMessageIds.has(messageId),
+        )
+      : nextMessageId
+        ? nextProps.data.selectedMessageIds.has(nextMessageId)
+        : false;
   if (previousSelected !== nextSelected) {
     return false;
   }
@@ -235,14 +274,17 @@ const areEqualTimelineRowProps = (
   }
 
   const previousHighlighted =
-    previousItem?.kind === "message" &&
-    isTargetMessage(
-      previousItem.message,
-      previousProps.data.highlightedMessageId,
-    );
+    previousItem?.kind === "group"
+      ? previousItem.items.some((entry) =>
+          isTargetMessage(entry.message, previousProps.data.highlightedMessageId),
+        )
+      : false;
   const nextHighlighted =
-    nextItem?.kind === "message" &&
-    isTargetMessage(nextItem.message, nextProps.data.highlightedMessageId);
+    nextItem?.kind === "group"
+      ? nextItem.items.some((entry) =>
+          isTargetMessage(entry.message, nextProps.data.highlightedMessageId),
+        )
+      : false;
   const previousRenderState = previousItem
     ? resolveTimelineMessageRenderState(
         previousItem,
@@ -268,6 +310,7 @@ const areEqualTimelineRowProps = (
     previousProps.data.onReact === nextProps.data.onReact &&
     previousProps.data.onEdit === nextProps.data.onEdit &&
     previousProps.data.onDelete === nextProps.data.onDelete &&
+    previousProps.data.onInspect === nextProps.data.onInspect &&
     previousProps.data.onImageClick === nextProps.data.onImageClick &&
     previousProps.data.onFilePreview === nextProps.data.onFilePreview &&
     previousProps.data.onToggleSelect === nextProps.data.onToggleSelect &&
@@ -284,7 +327,7 @@ const shouldObserveTimelineItemResize = (
   item: RenderableTimelineItem,
   renderState: TimelineMessageRenderState,
 ): boolean => {
-  if (item.kind !== "message") {
+  if (item.kind !== "group") {
     return false;
   }
 
@@ -292,88 +335,100 @@ const shouldObserveTimelineItemResize = (
     return false;
   }
 
-  const message = item.message;
-  if (
-    message.type === "image" ||
-    message.type === "file" ||
-    message.type === "voice"
-  ) {
-    return true;
-  }
+  return item.items.some(({ message }) => {
+    if (
+      message.type === "image" ||
+      message.type === "file" ||
+      message.type === "voice"
+    ) {
+      return true;
+    }
 
-  return Boolean(
-    message.replyToMessage ||
-    message.forwardedFrom ||
-    (message.reactions?.length ?? 0) > 0 ||
-    (message.attachments?.length ?? 0) > 0 ||
-    hasInlineUrl(message.content),
-  );
+    return Boolean(
+      message.replyToMessage ||
+      message.forwardedFrom ||
+      (message.reactions?.length ?? 0) > 0 ||
+      (message.attachments?.length ?? 0) > 0 ||
+      hasInlineUrl(message.content),
+    );
+  });
 };
 
 const estimateTimelineItemHeight = (
   item: RenderableTimelineItem,
   density: ChatDensity,
   layoutState: ChatLayoutState,
-  renderState: TimelineMessageRenderState,
 ): number => {
   if (item.kind === "date") return 64;
   if (item.kind === "system") return 68;
   if (item.kind === "unread") return 48;
+  if (item.kind !== "group") return 72;
 
-  const message = item.message;
   const densityOffset =
     density === "compact" ? -8 : density === "expanded" ? 14 : 0;
   const layoutOffset =
     layoutState === "with-panel" ? -6 : layoutState === "mobile" ? -4 : 0;
-  let baseHeight =
-    (item.showMeta ? 76 : 56) + densityOffset + layoutOffset;
+  let baseHeight = 26 + densityOffset + layoutOffset;
 
-  if (message.replyToMessage) baseHeight += 52;
-  if (message.forwardedFrom) baseHeight += 22;
-  if ((message.reactions?.length ?? 0) > 0) baseHeight += 32;
-  if (!item.isOwn && item.showSenderName) baseHeight += 20;
-  if (isFailedMessage(message) || isPendingMessage(message)) baseHeight += 28;
-
-  switch (message.type) {
-    case "image":
-      baseHeight += 240;
-      if (message.content?.trim()) baseHeight += 28;
-      break;
-    case "file":
-      baseHeight += 96;
-      break;
-    case "voice":
-      baseHeight += 82;
-      break;
-    default: {
-      const approximateLines = Math.max(
-        1,
-        estimateTextLineCount(message.content, DEFAULT_TEXT_CHARS_PER_LINE),
-      );
-      const visibleLines =
-        renderState.renderMode === "collapsed"
-          ? Math.min(
-              approximateLines,
-              LONG_MESSAGE_COLLAPSE_ESTIMATED_LINE_THRESHOLD,
-            )
-          : approximateLines;
-      baseHeight +=
-        visibleLines *
-        (layoutState === "normal" ? 18 : 17);
-      if (
-        renderState.renderMode === "collapsed" &&
-        renderState.isCollapsible
-      ) {
-        baseHeight += 34;
-      }
-      if (hasInlineUrl(message.content)) {
-        baseHeight += 58;
-      }
-      break;
-    }
+  if (!item.isOwn && item.showSenderName) {
+    baseHeight += 16;
   }
 
-  return baseHeight;
+  return (
+    baseHeight +
+    item.items.reduce((total, entry) => {
+      const message = entry.message;
+      const messageRenderState = resolveTimelineMessageRenderState(
+        entry,
+        new Set<string>(),
+      );
+      let nextHeight = entry.showMeta ? 36 : 16;
+
+      if (message.replyToMessage) nextHeight += 48;
+      if (message.forwardedFrom) nextHeight += 18;
+      if ((message.reactions?.length ?? 0) > 0) nextHeight += 28;
+      if (isFailedMessage(message) || isPendingMessage(message)) nextHeight += 8;
+
+      switch (message.type) {
+        case "image":
+          nextHeight += 240;
+          if (message.content?.trim()) nextHeight += 28;
+          break;
+        case "file":
+          nextHeight += 112;
+          break;
+        case "voice":
+          nextHeight += 92;
+          break;
+        default: {
+          const approximateLines = Math.max(
+            1,
+            estimateTextLineCount(message.content, DEFAULT_TEXT_CHARS_PER_LINE),
+          );
+          const visibleLines =
+            messageRenderState.renderMode === "collapsed"
+              ? Math.min(
+                  approximateLines,
+                  LONG_MESSAGE_COLLAPSE_ESTIMATED_LINE_THRESHOLD,
+                )
+              : approximateLines;
+          nextHeight += visibleLines * (layoutState === "normal" ? 18 : 17);
+          if (
+            messageRenderState.renderMode === "collapsed" &&
+            messageRenderState.isCollapsible
+          ) {
+            nextHeight += 32;
+          }
+          if (hasInlineUrl(message.content)) {
+            nextHeight += 48;
+          }
+          break;
+        }
+      }
+
+      return total + nextHeight + 4;
+    }, 0)
+  );
 };
 
 const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
@@ -506,25 +561,23 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
     if (!item) return null;
 
     const messageId =
-      item.kind === "message" || item.kind === "system"
-        ? item.messageId
+      item.kind === "group"
+        ? item.anchorMessageId
+        : item.kind === "system"
+          ? item.messageId
         : undefined;
     const timelineKey = item.key || `${item.kind}-${index}`;
     const isHighlighted =
-      (item.kind === "message" || item.kind === "system") &&
-      isTargetMessage(item.message, data.highlightedMessageId);
+      item.kind === "group"
+        ? item.items.some((entry) =>
+            isTargetMessage(entry.message, data.highlightedMessageId),
+          )
+        : item.kind === "system" &&
+          isTargetMessage(item.message, data.highlightedMessageId);
     const shouldAnimateInsert = shouldAnimateInsertedMessage(
       item,
       data.insertedMessageKeys,
     );
-    const textRenderMode = renderState?.renderMode ?? "expanded";
-    const isCollapsibleText = renderState?.isCollapsible ?? false;
-    const handleToggleLongMessageExpand = () => {
-      if (!messageId) {
-        return;
-      }
-      data.onToggleLongMessageExpand(messageId);
-    };
 
     return (
       <div style={style}>
@@ -541,29 +594,26 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
                   "rounded-2xl bg-warning/14 ring-2 ring-warning/35 transition-colors duration-300",
               )}
             >
-              {item.kind === "message" || item.kind === "system" ? (
-                <MessageRowContainer
-                  item={item}
+              {item.kind === "group" ? (
+                <MessageGroup
+                  row={item}
                   onReply={data.onReply}
                   onReact={data.onReact}
+                  onInspect={data.onInspect}
                   onEdit={data.onEdit}
                   onDelete={data.onDelete}
                   onImageClick={data.onImageClick}
                   onFilePreview={data.onFilePreview}
                   density={data.density}
                   isSelectionMode={data.isSelectionMode}
-                  isSelected={
-                    messageId ? data.selectedMessageIds.has(messageId) : false
-                  }
+                  selectedMessageIds={data.selectedMessageIds}
                   onToggleSelect={data.onToggleSelect}
                   onNavigateToMessage={data.onNavigateToMessage}
                   currentUsername={data.currentUsername}
-                  textRenderMode={textRenderMode}
-                  isCollapsibleText={isCollapsibleText}
-                  onToggleTextExpand={
-                    isCollapsibleText ? handleToggleLongMessageExpand : undefined
-                  }
-                  shouldAnimateInsert={shouldAnimateInsert}
+                  expandedLongMessageIds={data.expandedLongMessageIds}
+                  onToggleLongMessageExpand={data.onToggleLongMessageExpand}
+                  insertedMessageKeys={data.insertedMessageKeys}
+                  highlightedMessageId={data.highlightedMessageId}
                 />
               ) : (
                 <MessageItem
@@ -580,11 +630,8 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
                   onToggleSelect={data.onToggleSelect}
                   onNavigateToMessage={data.onNavigateToMessage}
                   currentUsername={data.currentUsername}
-                  textRenderMode={textRenderMode}
-                  isCollapsibleText={isCollapsibleText}
-                  onToggleTextExpand={
-                    isCollapsibleText ? handleToggleLongMessageExpand : undefined
-                  }
+                  textRenderMode="expanded"
+                  isCollapsibleText={false}
                   shouldAnimateInsert={shouldAnimateInsert}
                 />
               )}
@@ -610,6 +657,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   onReact,
   onEdit,
   onDelete,
+  onInspect,
   hasMore = false,
   isLoadingMore = false,
   isInitialLoading = false,
@@ -679,7 +727,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const [liveUnreadMarker, setLiveUnreadMarker] =
     React.useState<UnreadTimelineMarker | null>(unreadMarker ?? null);
   const getTimelineItemKey = React.useCallback(
-    (item: ConversationTimelineItem, index: number) =>
+    (item: ConversationThreadRow, index: number) =>
       item.key || `${item.kind}-${index}`,
     [],
   );
@@ -689,6 +737,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     conversationType,
     unreadMarker: liveUnreadMarker,
   });
+  const threadRows = useConversationThreadRows(timelineItems);
   const latestMessageStableKeys = React.useMemo(
     () => new Set(messages.map((message) => getMessageStableKey(message))),
     [messages],
@@ -739,17 +788,16 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   }, []);
 
   const estimateItemSize = React.useCallback(
-    (item: ConversationTimelineItem) =>
+    (item: ConversationThreadRow) =>
       estimateTimelineItemHeight(
         item,
         density,
         layoutState,
-        resolveTimelineMessageRenderState(item, expandedLongMessageIds),
       ),
-    [density, expandedLongMessageIds, layoutState],
+    [density, layoutState],
   );
   const getTimelineMeasurementKey = React.useCallback(
-    (item: ConversationTimelineItem, index: number) => {
+    (item: ConversationThreadRow, index: number) => {
       const renderState = resolveTimelineMessageRenderState(
         item,
         expandedLongMessageIds,
@@ -766,10 +814,10 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const listOverscan = isLoadingMore && !isInitialLoading ? 20 : 10;
 
   const legacyVirtualizer = useVirtualizedMessages<
-    ConversationTimelineItem,
+    ConversationThreadRow,
     TimelineRowData
   >({
-    items: timelineItems,
+    items: threadRows,
     viewportRef,
     observeViewport: !isInitialLoading && messages.length > 0,
     enabled: !CHAT_VIRTUALIZER_V2_ENABLED,
@@ -784,7 +832,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     outerRef,
   });
   const tanStackVirtualizer = useTanStackVirtualizedMessages({
-    items: timelineItems,
+    items: threadRows,
     viewportRef,
     outerRef,
     observeViewport: !isInitialLoading && messages.length > 0,
@@ -870,7 +918,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     pendingScrollCommandRef.current = null;
     if (!command) return;
 
-    const itemCount = timelineItems.length;
+    const itemCount = threadRows.length;
     if (command.kind === "bottom" && itemCount === 0) {
       logScrollTrace("scroll_command_skipped", {
         conversationId,
@@ -898,7 +946,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         scrollToOffset(command.offset);
         break;
     }
-  }, [conversationId, scrollToIndex, scrollToOffset, timelineItems.length]);
+  }, [conversationId, scrollToIndex, scrollToOffset, threadRows.length]);
 
   const requestScrollCommand = React.useCallback(
     (command: ScrollCommand): boolean => {
@@ -973,41 +1021,43 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         return -1;
       }
 
-      return timelineItems.findIndex(
-        (item) =>
-          (item.kind === "message" || item.kind === "system") &&
-          item.messageId === resolvedMessageId,
-      );
+      return threadRows.findIndex((item) => {
+        if (item.kind === "group") {
+          return item.messageIds.includes(resolvedMessageId);
+        }
+
+        return item.kind === "system" && item.messageId === resolvedMessageId;
+      });
     },
-    [messageIds, timelineItems],
+    [messageIds, threadRows],
   );
 
   const captureVisibleAnchor = React.useCallback(() => {
     const outer = outerRef.current;
-    if (!outer || timelineItems.length === 0) return null;
+    if (!outer || threadRows.length === 0) return null;
 
     const visibleItem = findItemAtOffset(outer.scrollTop);
     if (!visibleItem) return null;
 
-    const anchorIndex = timelineItems.findIndex(
+    const anchorIndex = threadRows.findIndex(
       (item, index) =>
         index >= visibleItem.index &&
-        (item.kind === "message" || item.kind === "system"),
+        isThreadRowMessageLike(item),
     );
     if (anchorIndex < 0) {
       return null;
     }
 
-    const item = timelineItems[anchorIndex];
-    if (!item || (item.kind !== "message" && item.kind !== "system")) {
+    const item = threadRows[anchorIndex];
+    if (!item || !isThreadRowMessageLike(item)) {
       return null;
     }
 
     return {
-      messageId: item.messageId,
+      messageId: item.kind === "group" ? item.anchorMessageId : item.messageId,
       offsetFromTop: outer.scrollTop - getItemOffset(anchorIndex),
     };
-  }, [findItemAtOffset, getItemOffset, outerRef, timelineItems]);
+  }, [findItemAtOffset, getItemOffset, outerRef, threadRows]);
 
   const restoreAnchor = React.useCallback(
     (
@@ -1038,27 +1088,31 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   );
 
   const resolveUnreadAnchorIndex = React.useCallback((): number => {
-    const unreadDividerIndex = timelineItems.findIndex((item) => item.kind === "unread");
+    const unreadDividerIndex = threadRows.findIndex((item) => item.kind === "unread");
     if (unreadDividerIndex >= 0) {
       return unreadDividerIndex;
     }
 
     if (unreadMarker?.firstUnreadMessageId) {
-      return timelineItems.findIndex(
+      return threadRows.findIndex(
         (item) =>
-          item.kind === "message" &&
-          isTargetMessage(item.message, unreadMarker.firstUnreadMessageId!),
+          item.kind === "group" &&
+          item.items.some((entry) =>
+            isTargetMessage(entry.message, unreadMarker.firstUnreadMessageId!),
+          ),
       );
     }
 
     if (unreadMarker?.lastReadMessageId) {
-      const lastReadIndex = timelineItems.findIndex(
+      const lastReadIndex = threadRows.findIndex(
         (item) =>
-          item.kind === "message" &&
-          isTargetMessage(item.message, unreadMarker.lastReadMessageId!),
+          item.kind === "group" &&
+          item.items.some((entry) =>
+            isTargetMessage(entry.message, unreadMarker.lastReadMessageId!),
+          ),
       );
       if (lastReadIndex >= 0) {
-        return Math.min(lastReadIndex + 1, Math.max(0, timelineItems.length - 1));
+        return Math.min(lastReadIndex + 1, Math.max(0, threadRows.length - 1));
       }
     }
 
@@ -1067,12 +1121,14 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     }
 
     const lastReadAtMs = new Date(unreadMarker.lastReadAt).getTime();
-    return timelineItems.findIndex(
+    return threadRows.findIndex(
       (item) =>
-        item.kind === "message" &&
-        new Date(item.message.createdAt).getTime() > lastReadAtMs,
+        item.kind === "group" &&
+        item.items.some(
+          (entry) => new Date(entry.message.createdAt).getTime() > lastReadAtMs,
+        ),
     );
-  }, [timelineItems, unreadMarker]);
+  }, [threadRows, unreadMarker]);
   const unreadAnchorIndex = React.useMemo(
     () => resolveUnreadAnchorIndex(),
     [resolveUnreadAnchorIndex],
@@ -1274,11 +1330,12 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
   const rowData = React.useMemo<TimelineRowData>(
     () => ({
-      items: timelineItems,
+      items: threadRows,
       onReply,
       onReact,
       onEdit,
       onDelete,
+      onInspect,
       onImageClick,
       onFilePreview,
       setItemSize,
@@ -1304,6 +1361,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       isSelectionMode,
       onDelete,
       onEdit,
+      onInspect,
       onFilePreview,
       onImageClick,
       onNavigateToMessage,
@@ -1313,7 +1371,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       onToggleSelect,
       selectedMessageIds,
       setItemSize,
-      timelineItems,
+      threadRows,
     ],
   );
 
@@ -1330,13 +1388,17 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
         let nextStickyDate: Date | null = null;
         for (let index = targetIndex; index >= 0; index -= 1) {
-          const item = timelineItems[index];
+          const item = threadRows[index];
           if (!item) continue;
           if (item.kind === "date") {
             nextStickyDate = item.date;
             break;
           }
-          if (item.kind === "message" || item.kind === "system") {
+          if (item.kind === "group") {
+            nextStickyDate = item.startedAt;
+            break;
+          }
+          if (item.kind === "system") {
             nextStickyDate = new Date(item.message.createdAt);
             break;
           }
@@ -1350,7 +1412,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         stickyDateRafRef.current = null;
       });
     },
-    [findItemAtOffset, handleScroll, timelineItems],
+    [findItemAtOffset, handleScroll, threadRows],
   );
 
   const handleLegacyListScroll = React.useCallback(
@@ -1612,10 +1674,12 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   React.useEffect(() => {
     if (!jumpToMessageId) return;
 
-    const targetIndex = timelineItems.findIndex(
+    const targetIndex = threadRows.findIndex(
       (item) =>
-        item.kind === "message" &&
-        isTargetMessage(item.message, jumpToMessageId),
+        item.kind === "group" &&
+        item.items.some((entry) =>
+          isTargetMessage(entry.message, jumpToMessageId),
+        ),
     );
     if (targetIndex < 0) {
       logScrollTrace("jump_target_waiting_for_render", {
@@ -1637,11 +1701,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     jumpRequestVersion,
     jumpToMessageId,
     onJumpHandled,
-    timelineItems,
+    threadRows,
   ]);
 
   React.useEffect(() => {
-    if (timelineItems.length === 0) {
+    if (threadRows.length === 0) {
       setStickyDate(null);
       return;
     }
@@ -1650,20 +1714,24 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     const targetIndex = findItemAtOffset(scrollTop)?.index ?? 0;
 
     for (let index = targetIndex; index >= 0; index -= 1) {
-      const item = timelineItems[index];
+      const item = threadRows[index];
       if (!item) continue;
       if (item.kind === "date") {
         setStickyDate(item.date);
         return;
       }
-      if (item.kind === "message" || item.kind === "system") {
+      if (item.kind === "group") {
+        setStickyDate(item.startedAt);
+        return;
+      }
+      if (item.kind === "system") {
         setStickyDate(new Date(item.message.createdAt));
         return;
       }
     }
 
     setStickyDate(null);
-  }, [conversationId, findItemAtOffset, timelineItems]);
+  }, [conversationId, findItemAtOffset, threadRows]);
 
   React.useEffect(() => {
     if (
@@ -1785,7 +1853,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
                     outerRef={outerRef}
                     height={viewportHeight}
                     width="100%"
-                    itemCount={timelineItems.length}
+                    itemCount={threadRows.length}
                     itemSize={getItemSize}
                     itemData={rowData}
                     itemKey={(index, data) =>
@@ -1844,6 +1912,7 @@ const areEqualMessageListProps = (
   previousProps.onReact === nextProps.onReact &&
   previousProps.onEdit === nextProps.onEdit &&
   previousProps.onDelete === nextProps.onDelete &&
+  previousProps.onInspect === nextProps.onInspect &&
   previousProps.hasMore === nextProps.hasMore &&
   previousProps.isLoadingMore === nextProps.isLoadingMore &&
   previousProps.isInitialLoading === nextProps.isInitialLoading &&

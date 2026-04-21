@@ -62,10 +62,10 @@
   --chat-bubble-px: 0.75rem;
   --chat-bubble-py: 0.5rem;
   --chat-lane-padding: 20px;
-  --chat-content-lane: 50rem;
+  --chat-content-lane: 60rem;
   --chat-rich-lane: 50rem;
-  --chat-bubble-max: min(41rem, 68%);
-  --chat-bubble-max-compact: min(36rem, 64%);
+  --chat-bubble-max: min(44rem, 68ch);
+  --chat-bubble-max-compact: min(40rem, 64ch);
 
   --radius-sm: 8px;
   --radius-md: 12px;
