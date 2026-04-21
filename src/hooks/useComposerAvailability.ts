@@ -78,6 +78,19 @@ export const useComposerAvailability = ({
       };
     }
 
+    if (conversation.canCurrentUserSend === false) {
+      return {
+        mode: "restricted",
+        canType: false,
+        canAttach: false,
+        canSubmit: false,
+        statusTone: "warn",
+        statusMessage: t("chat:composer.readonlyGroup", {
+          defaultValue: "Only group admins can send messages right now.",
+        }),
+      };
+    }
+
     if (sendRestriction) {
       const isSlowModeRestriction = sendRestriction.kind === "slow_mode";
       return {
@@ -142,6 +155,7 @@ export const useComposerAvailability = ({
   }, [
     connectionState,
     conversation.isBlocked,
+    conversation.canCurrentUserSend,
     isConversationReady,
     sendRestriction,
     slowModeRemainingSeconds,

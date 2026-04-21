@@ -124,6 +124,9 @@ describe("normalizeConversation", () => {
       name: "Realtime",
       unreadCount: 4,
       membershipState: "active",
+      currentUserRole: "member",
+      allowMemberMessaging: false,
+      canCurrentUserSend: false,
       memberCount: 3,
       summaryVersion: 12,
       lastActivityAt: "2026-04-13T08:30:00.000Z",
@@ -145,6 +148,9 @@ describe("normalizeConversation", () => {
 
     expect(conversation?.unreadCount).toBe(4);
     expect(conversation?.membershipState).toBe("active");
+    expect(conversation?.currentUserRole).toBe("member");
+    expect(conversation?.allowMemberMessaging).toBe(false);
+    expect(conversation?.canCurrentUserSend).toBe(false);
     expect(conversation?.summaryVersion).toBe(12);
     expect(conversation?.lastReadMessageId).toBe("msg-9");
     expect(conversation?.firstUnreadMessageId).toBe("msg-10");

@@ -640,6 +640,108 @@ describe("chatStore phase-1 realtime flows", () => {
     expect(state.messagesHydratedByConversation["room-1"]).toBeFalsy();
   });
 
+  it("cancels superseded authoritative-open history fetches during fast room switching", async () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+      }),
+      makeConversation({
+        id: "room-2",
+        conversationId: "room-2",
+      }),
+    ] as never);
+    useChatStore.getState().selectConversation("room-1");
+
+    const firstRequestAborted = vi.fn();
+    getMessagesMock
+      .mockImplementationOnce(
+        (
+          _conversationId: string,
+          options?: { signal?: AbortSignal },
+        ) =>
+          new Promise((_, reject) => {
+            options?.signal?.addEventListener(
+              "abort",
+              () => {
+                firstRequestAborted();
+                reject(
+                  Object.assign(new Error("cancelled"), {
+                    name: "AbortError",
+                    code: "ERR_CANCELED",
+                  }),
+                );
+              },
+              { once: true },
+            );
+          }),
+      )
+      .mockResolvedValueOnce({
+        success: true,
+        statusCode: 200,
+        message: "ok",
+        data: {
+          messages: [
+            makeMessage({
+              id: "msg-room-2",
+              conversationId: "room-2",
+              createdAt: "2026-04-10T10:05:00.000Z",
+              updatedAt: "2026-04-10T10:05:00.000Z",
+            }),
+          ],
+        },
+        meta: {
+          hasNext: false,
+          hasPrev: true,
+          returnedWindow: "latest",
+        },
+      });
+
+    const firstRequest = useChatStore.getState().fetchMessages(
+      "room-1",
+      undefined,
+      undefined,
+      {
+        force: true,
+        queryType: "authoritative_open",
+        source: "initial_fetch",
+        selectedConversationIdAtDispatch: "room-1",
+      },
+    );
+
+    useChatStore.getState().selectConversation("room-2");
+    const secondRequest = useChatStore.getState().fetchMessages(
+      "room-2",
+      undefined,
+      undefined,
+      {
+        force: true,
+        queryType: "authoritative_open",
+        source: "initial_fetch",
+        selectedConversationIdAtDispatch: "room-2",
+      },
+    );
+
+    await expect(firstRequest).resolves.toEqual(
+      expect.objectContaining({
+        applied: false,
+        loaded: 0,
+      }),
+    );
+    await expect(secondRequest).resolves.toEqual(
+      expect.objectContaining({
+        applied: true,
+        loaded: 1,
+      }),
+    );
+
+    expect(firstRequestAborted).toHaveBeenCalledTimes(1);
+    expect((useChatStore.getState().messages["room-1"] ?? []).map((message) => message.id)).toEqual([]);
+    expect((useChatStore.getState().messages["room-2"] ?? []).map((message) => message.id)).toEqual([
+      "msg-room-2",
+    ]);
+  });
+
   it("preserves websocket delta that lands while initial snapshot is still in flight", async () => {
     const deferred = createDeferred<{
       success: boolean;

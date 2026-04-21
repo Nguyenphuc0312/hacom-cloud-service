@@ -89,6 +89,8 @@ const DeferredModalFallback: React.FC = () => (
   </div>
 );
 
+const INFO_PANEL_EXIT_DURATION_MS = 240;
+
 const loadReactionUseCases = () =>
   import("../features/chat/usecases/addReaction").then(
     async ({ addReactionUseCase }) => {
@@ -530,7 +532,6 @@ export const ChatPage: React.FC = () => {
 
   const closeInfoPanel = useCallback(() => {
     setIsInfoPanelOpen(false);
-    setInfoPanelMode(null);
   }, []);
 
   const openSelfProfile = useCallback(() => {
@@ -797,16 +798,47 @@ export const ChatPage: React.FC = () => {
     isInfoPanelOpen &&
     (infoPanelMode === "self-profile" ||
       (infoPanelMode === "conversation" && Boolean(routeConversationId)));
+  const isDockedInfoPanelViewport = viewportWidth >= 1280;
   const chatLayoutState = useMemo<ChatLayoutState>(() => {
     if (viewportWidth < 1024) {
       return "mobile";
     }
 
-    return shouldRenderInfoContent ? "with-panel" : "normal";
-  }, [shouldRenderInfoContent, viewportWidth]);
+    return shouldRenderInfoContent && isDockedInfoPanelViewport
+      ? "with-panel"
+      : "normal";
+  }, [isDockedInfoPanelViewport, shouldRenderInfoContent, viewportWidth]);
+  const chatWindowLayoutState = useMemo<ChatLayoutState>(() => {
+    if (viewportWidth < 1024) {
+      return "mobile";
+    }
+
+    return "normal";
+  }, [viewportWidth]);
+  const sidebarLayoutState = useMemo<ChatLayoutState>(() => {
+    if (viewportWidth < 1024) {
+      return "mobile";
+    }
+
+    return "normal";
+  }, [viewportWidth]);
   const showConversationSkeleton =
     (!hasFetchedConversationsOnce && conversationCount === 0) ||
     (isLoadingConversations && conversationCount === 0);
+
+  useEffect(() => {
+    if (isInfoPanelOpen || infoPanelMode === null) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setInfoPanelMode(null);
+    }, INFO_PANEL_EXIT_DURATION_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [infoPanelMode, isInfoPanelOpen]);
 
   const handleOpenFilePreview = useCallback(
     (attachment: Attachment) => {
@@ -817,7 +849,10 @@ export const ChatPage: React.FC = () => {
       const target: PreviewTarget = {
         attachment,
         conversationId: selectedConversation.id,
-        previewType: getPreviewType(attachment.mimeType),
+        previewType: getPreviewType(
+          attachment.mimeType,
+          attachment.fileName,
+        ),
       };
       const gallery = selectConversationMessagesFromState(
         useChatStore.getState(),
@@ -828,7 +863,10 @@ export const ChatPage: React.FC = () => {
             attachment: candidate,
             conversationId: selectedConversation.id,
             messageId: message.id,
-            previewType: getPreviewType(candidate.mimeType),
+            previewType: getPreviewType(
+              candidate.mimeType,
+              candidate.fileName,
+            ),
           })),
         )
         .filter((candidate) => candidate.previewType !== "unsupported");
@@ -928,9 +966,7 @@ export const ChatPage: React.FC = () => {
         className={clsx(
           "absolute inset-y-0 left-0 z-30 w-full max-w-full transition-transform duration-300 sm:max-w-[min(23rem,94vw)] lg:relative lg:z-0 lg:max-w-none lg:flex-shrink-0 lg:transition-[width]",
           "lg:border-r lg:border-border/60",
-          shouldRenderInfoContent
-            ? "lg:w-[var(--app-sidebar-width-compact)]"
-            : "lg:w-[var(--app-sidebar-width)]",
+          "lg:w-[var(--app-sidebar-width)]",
           showSidebarOnMobile
             ? "translate-x-0"
             : "-translate-x-full lg:translate-x-0",
@@ -938,7 +974,7 @@ export const ChatPage: React.FC = () => {
         aria-hidden={!showSidebarOnMobile}
       >
         <Sidebar
-          layoutState={chatLayoutState}
+          layoutState={sidebarLayoutState}
           currentUser={currentUserSummary}
           selectedId={routeConversationId}
           isLoadingConversations={isLoadingConversations}
@@ -972,7 +1008,7 @@ export const ChatPage: React.FC = () => {
       >
         {selectedConversation ? (
           <ChatWindow
-            layoutState={chatLayoutState}
+            layoutState={chatWindowLayoutState}
             conversation={selectedConversation}
             currentUser={currentUserSummary}
             typingStatus={typingStatus || undefined}
@@ -1030,14 +1066,23 @@ export const ChatPage: React.FC = () => {
         Boolean(selectedConversation)) && (
         <div
           className={clsx(
-            "fixed inset-y-0 right-0 z-40 w-full max-w-full bg-surface transition-transform duration-300 sm:max-w-[min(26rem,94vw)] lg:relative lg:z-0 lg:max-w-none lg:flex-shrink-0 lg:border-l lg:border-border/60",
+            "fixed inset-y-0 right-0 z-40 w-full max-w-full transform-gpu transition-transform duration-300 ease-out sm:max-w-[min(26rem,94vw)] xl:relative xl:z-0 xl:max-w-none xl:flex-shrink-0 xl:overflow-hidden xl:bg-transparent xl:transition-[width,border-color] xl:duration-300",
             isInfoPanelOpen
-              ? "translate-x-0 lg:w-[var(--app-inspector-width)]"
-              : "translate-x-full lg:hidden",
+              ? "translate-x-0 xl:w-[var(--app-inspector-width)] xl:border-l xl:border-border/60"
+              : "translate-x-full xl:w-0 xl:border-l xl:border-border/0",
           )}
-          style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}
+          aria-hidden={!isInfoPanelOpen}
         >
-            {shouldRenderInfoContent ? (
+          <div
+            className={clsx(
+              "h-full w-full transform-gpu bg-surface transition-[transform,opacity] duration-300 ease-out xl:absolute xl:inset-y-0 xl:right-0 xl:w-[var(--app-inspector-width)]",
+              isInfoPanelOpen
+                ? "translate-x-0 opacity-100"
+                : "pointer-events-none translate-x-4 opacity-0 xl:translate-x-6",
+            )}
+            style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}
+          >
+            {infoPanelMode !== null ? (
               <React.Suspense fallback={<DeferredPanelFallback />}>
                 {infoPanelMode === "self-profile" ? (
                   <UserProfile
@@ -1092,6 +1137,7 @@ export const ChatPage: React.FC = () => {
               ) : null}
             </React.Suspense>
           ) : null}
+          </div>
         </div>
       )}
 
@@ -1099,7 +1145,7 @@ export const ChatPage: React.FC = () => {
       {isInfoPanelOpen && (
         <button
           type="button"
-          className="fixed inset-0 z-30 bg-text-primary/50 lg:hidden"
+          className="fixed inset-0 z-30 bg-text-primary/50 xl:hidden"
           onClick={closeInfoPanel}
           onKeyDown={(e) => {
             if (e.key === "Escape") closeInfoPanel();

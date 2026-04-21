@@ -35,9 +35,7 @@
     "roles": {
       "owner": "Chủ nhóm",
       "admin": "Quản trị viên",
-      "moderator": "Điều hành viên",
-      "member": "Thành viên",
-      "guest": "Khách"
+      "member": "Thành viên"
     },
     "actions": {
       "makeAdmin": "Đặt làm admin",

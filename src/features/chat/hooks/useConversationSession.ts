@@ -8,9 +8,12 @@ import type {
   Message,
   UserSummary,
 } from "../../../types";
-import { chatApi } from "../api";
 import { getConversationByIdUseCase } from "../usecases/getConversationById";
 import { logMessageDebug } from "../../../utils/messageDebug";
+
+const INITIAL_CONVERSATION_WINDOW_LIMIT = 40;
+const OLDER_MESSAGES_PAGE_LIMIT = 30;
+const ADJACENT_PREFETCH_LIMIT = 20;
 
 type IdleCallbackDeadline = {
   didTimeout: boolean;
@@ -216,8 +219,6 @@ export const useConversationSession = ({
 
     void (async () => {
       const chatState = useChatStore.getState();
-      const conversation =
-        chatState.conversationById[selectedConversationId] ?? null;
       const isConversationHydrated =
         chatState.hasAuthoritativeHistoryByConversation[
           selectedConversationId
@@ -241,73 +242,6 @@ export const useConversationSession = ({
         skipInitialDeltaSync: false,
       });
 
-      const unreadCount = Math.max(0, conversation?.unreadCount ?? 0);
-      const shouldBootstrapUnreadFeed =
-        unreadCount > 0 &&
-        (!isConversationHydrated || !conversation?.firstUnreadMessageId);
-
-      if (shouldBootstrapUnreadFeed) {
-        try {
-          const bootstrapRequestId = `unread:${selectedConversationId}:${Date.now()}`;
-          const unreadFeedResponse = await chatApi.conversation.getUnreadFeed(
-            selectedConversationId,
-            isConversationHydrated ? 1 : Math.min(Math.max(unreadCount, 20), 100),
-          );
-          const unreadFeed = unwrapApiSuccess(unreadFeedResponse);
-          updateConversation(selectedConversationId, unreadFeed.readState);
-
-          if (!isConversationHydrated && Array.isArray(unreadFeed.messages) && unreadFeed.messages.length > 0) {
-            const chatState = useChatStore.getState();
-            chatState.ingestMessages(selectedConversationId, unreadFeed.messages, {
-              mode: "replace",
-              hydrated: false,
-              hasNewer: unreadFeed.hasMore,
-              source: "unread_feed",
-              stage: "partial_unread_bootstrap",
-              hasAuthoritativeHistory: false,
-              prefetchedWindow: false,
-              requestContext: {
-                requestId: bootstrapRequestId,
-                queryType: "unread_feed",
-                source: "unread_feed",
-                selectedConversationIdAtDispatch: selectedConversationId,
-                historyScopeKey: null,
-              },
-            });
-            useChatStore.setState((state) => ({
-              hasMoreMessages: {
-                ...state.hasMoreMessages,
-                [selectedConversationId]:
-                  Boolean(unreadFeed.readState.lastReadMessageId) ||
-                  (state.hasMoreMessages[selectedConversationId] ?? false),
-              },
-              hasNewerMessagesByConversation: {
-                ...state.hasNewerMessagesByConversation,
-                [selectedConversationId]: unreadFeed.hasMore,
-              },
-            }));
-            logMessageDebug("ChatPage", "unread_feed_bootstrap_completed", {
-              conversationId: selectedConversationId,
-              requestId: bootstrapRequestId,
-              loaded: unreadFeed.messages.length,
-              hasMoreUnread: unreadFeed.hasMore,
-              firstUnreadMessageId: unreadFeed.readState.firstUnreadMessageId,
-            }, {
-              alwaysOn: true,
-              level: "info",
-            });
-          }
-        } catch (error) {
-          logMessageDebug("ChatPage", "unread_feed_bootstrap_failed", {
-            conversationId: selectedConversationId,
-            errorMessage: error instanceof Error ? error.message : "unknown_error",
-          }, {
-            alwaysOn: true,
-            level: "warn",
-          });
-        }
-      }
-
       const latestState = useChatStore.getState();
       const latestStage =
         latestState.historyStageByConversation[selectedConversationId] ?? "empty";
@@ -324,6 +258,7 @@ export const useConversationSession = ({
           undefined,
           undefined,
           {
+            limit: INITIAL_CONVERSATION_WINDOW_LIMIT,
             source: "initial_fetch",
             queryType: "authoritative_open",
             selectedConversationIdAtDispatch: selectedConversationId,
@@ -376,7 +311,11 @@ export const useConversationSession = ({
       selectedConversationId,
       new Date(loadedWindow.oldestLoadedAt).toISOString(),
       undefined,
-      { beforeId: loadedWindow.oldestLoadedMessageId },
+      {
+        limit: OLDER_MESSAGES_PAGE_LIMIT,
+        beforeId: loadedWindow.oldestLoadedMessageId,
+        source: "scroll_pagination",
+      },
     );
   }, [fetchMessages, selectedConversationId]);
 
@@ -388,6 +327,8 @@ export const useConversationSession = ({
     }
     await fetchMessages(selectedConversationId, undefined, undefined, {
       force: true,
+      limit: INITIAL_CONVERSATION_WINDOW_LIMIT,
+      source: "retry_initial_fetch",
     });
   }, [fetchMessages, selectedConversationId]);
 
@@ -447,7 +388,7 @@ export const useConversationSession = ({
           }
           if (state.isLoadingMessagesByConversation[candidateRoomId]) continue;
           await state.fetchMessages(candidateRoomId, undefined, undefined, {
-            limit: 20,
+            limit: ADJACENT_PREFETCH_LIMIT,
             source: "prefetch_adjacent",
             queryType: "prefetch",
             selectedConversationIdAtDispatch:

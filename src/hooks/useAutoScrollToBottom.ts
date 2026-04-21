@@ -81,7 +81,6 @@ export const useAutoScrollToBottom = ({
   conversationId,
   messages,
   currentUserId,
-  preferUnreadAnchor = false,
   hasMore,
   isLoadingMore,
   onLoadMore,
@@ -102,7 +101,7 @@ export const useAutoScrollToBottom = ({
   } | null>(null);
   const [pendingRestoreScrollTop, setPendingRestoreScrollTop] =
     React.useState<number | null>(null);
-  const [pendingRestoreVersion, setPendingRestoreVersion] = React.useState(0);
+  const pendingRestoreVersion = 0;
 
   const isPinnedRef = React.useRef(true);
   const loadingOlderRef = React.useRef(false);
@@ -224,49 +223,13 @@ export const useAutoScrollToBottom = ({
     setPendingRestoreAnchor(null);
     setPendingRestoreScrollTop(null);
 
-    // `preferUnreadAnchor` represents a pending one-shot unread restore request.
-    // It must not follow the lifetime of the unread divider itself.
-    if (preferUnreadAnchor) {
-      isPinnedRef.current = false;
-      setIsPinnedToBottom(false);
-      setScrollMode("reading_history");
-      logScrollTrace("conversation_restore_requested", {
-        conversationId,
-        reason: "unread-anchor",
-      });
-      return;
-    }
-
-    const savedSession = conversationScrollSessions.get(conversationId);
-    if (savedSession && !savedSession.isPinnedToBottom) {
-      isPinnedRef.current = false;
-      setIsPinnedToBottom(false);
-      setScrollMode("reading_history");
-      setPendingRestoreAnchor(
-        savedSession.anchorMessageId
-          ? {
-              messageId: savedSession.anchorMessageId,
-              offsetFromTop: savedSession.anchorOffsetFromTop,
-            }
-          : null,
-      );
-      if (!savedSession.anchorMessageId) {
-        setPendingRestoreScrollTop(savedSession.scrollTop);
-      }
-      setPendingRestoreVersion((value) => value + 1);
-      logScrollTrace("conversation_restore_requested", {
-        conversationId,
-        scrollTop: savedSession.scrollTop,
-        anchorMessageId: savedSession.anchorMessageId,
-      });
-      return;
-    }
-
+    // Opening a conversation should settle at the latest messages instead of
+    // restoring prior reading anchors from a previous visit.
     isPinnedRef.current = true;
     setIsPinnedToBottom(true);
     setScrollMode("at_bottom");
     requestScrollToBottom("conversation-change");
-  }, [conversationId, messages, preferUnreadAnchor, requestScrollToBottom]);
+  }, [conversationId, messages, requestScrollToBottom]);
 
   React.useEffect(() => {
     const previousMessages = prevMessagesRef.current;

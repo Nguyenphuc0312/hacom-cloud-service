@@ -35,9 +35,7 @@
     "roles": {
       "owner": "Owner",
       "admin": "Admin",
-      "moderator": "Moderator",
-      "member": "Member",
-      "guest": "Guest"
+      "member": "Member"
     },
     "actions": {
       "makeAdmin": "Set as admin",

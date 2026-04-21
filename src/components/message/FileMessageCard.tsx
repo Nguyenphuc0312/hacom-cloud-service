@@ -65,7 +65,10 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
 }) => {
   const { t } = useTranslation();
 
-  const previewType = getPreviewType(attachment.mimeType);
+  const previewType = getPreviewType(
+    attachment.mimeType,
+    attachment.fileName,
+  );
   const iconType = getFileIconType(attachment.mimeType, attachment.fileName);
   const extension = getFileExtension(attachment.fileName || "file");
   const size = formatFileSize(attachment.fileSize);

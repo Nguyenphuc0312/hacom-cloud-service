@@ -108,49 +108,51 @@ export const MessageListOverlays = React.memo(
 
         {showBottomFloating && (
           <div
-            className="pointer-events-none absolute inset-x-0 z-sticky"
+            className="pointer-events-none absolute inset-x-0 z-[12]"
             style={{
               bottom: `calc(env(safe-area-inset-bottom) + ${floatingBottomOffset}px)`,
             }}
           >
             <ConversationLane>
               <div className="flex justify-end">
-                {showJumpToBottom && (
-                  <button
-                    type="button"
-                    onClick={onJumpToLatest}
-                    className={clsx(
-                      "pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/8 bg-[hsl(var(--color-chat-pill))] shadow-elev2",
-                      "transition-micro hover:bg-white/10 hover:shadow-elev3 hover:-translate-y-0.5",
-                      "active:scale-95",
-                      "animate-slide-up-fade",
-                    )}
-                    aria-label={jumpToLatestLabel}
-                  >
-                    <ChevronDownIcon className="h-5 w-5 text-text-secondary" />
-                  </button>
-                )}
+                <div className="pointer-events-auto flex items-center">
+                  {showJumpToBottom && (
+                    <button
+                      type="button"
+                      onClick={onJumpToLatest}
+                      className={clsx(
+                        "flex h-10 w-10 items-center justify-center rounded-full border border-white/8 bg-[hsl(var(--color-chat-pill))] shadow-elev2",
+                        "transition-micro hover:bg-white/10 hover:shadow-elev3 hover:-translate-y-0.5",
+                        "active:scale-95",
+                        "animate-slide-up-fade",
+                      )}
+                      aria-label={jumpToLatestLabel}
+                    >
+                      <ChevronDownIcon className="h-5 w-5 text-text-secondary" />
+                    </button>
+                  )}
 
-                {showNewMessagesPill && (
-                  <button
-                    type="button"
-                    onClick={onJumpToLatest}
-                    className={clsx(
-                      "pointer-events-auto flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/8 bg-[hsl(var(--color-chat-pill))] px-3 shadow-elev2",
-                      "transition-micro hover:bg-white/10 hover:shadow-elev3 hover:-translate-y-0.5",
-                      "active:scale-95",
-                      "animate-slide-up-fade",
-                      showJumpToBottom && "ml-2",
-                    )}
-                    aria-label={newMessagesAriaLabel}
-                    data-pending-messages={pendingNewMessages}
-                  >
-                    <ChevronDownIcon className="h-5 w-5 text-text-secondary" />
-                    <span className="text-xs font-medium text-text-primary">
-                      {newMessagesLabel}
-                    </span>
-                  </button>
-                )}
+                  {showNewMessagesPill && (
+                    <button
+                      type="button"
+                      onClick={onJumpToLatest}
+                      className={clsx(
+                        "flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/8 bg-[hsl(var(--color-chat-pill))] px-3 shadow-elev2",
+                        "transition-micro hover:bg-white/10 hover:shadow-elev3 hover:-translate-y-0.5",
+                        "active:scale-95",
+                        "animate-slide-up-fade",
+                        showJumpToBottom && "ml-2",
+                      )}
+                      aria-label={newMessagesAriaLabel}
+                      data-pending-messages={pendingNewMessages}
+                    >
+                      <ChevronDownIcon className="h-5 w-5 text-text-secondary" />
+                      <span className="text-xs font-medium text-text-primary">
+                        {newMessagesLabel}
+                      </span>
+                    </button>
+                  )}
+                </div>
               </div>
             </ConversationLane>
           </div>

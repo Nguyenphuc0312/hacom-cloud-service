@@ -5,6 +5,7 @@ import type {
   ConversationVirtualizerAlign,
   ConversationVirtualizerMeasurementResult,
   ConversationVirtualizerOffsetMatch,
+  ConversationVirtualizerScrollBehavior,
 } from "./virtualizerContract";
 import { useVirtualizedMessages } from "./useVirtualizedMessages";
 
@@ -41,10 +42,14 @@ interface UseTanStackVirtualizedMessagesResult {
   ) => ConversationVirtualizerMeasurementResult;
   clearMeasuredSizes: () => void;
   resetMeasurements: () => void;
-  scrollToOffset: (offset: number) => void;
+  scrollToOffset: (
+    offset: number,
+    behavior?: ConversationVirtualizerScrollBehavior,
+  ) => void;
   scrollToIndex: (
     index: number,
     align?: ConversationVirtualizerAlign,
+    behavior?: ConversationVirtualizerScrollBehavior,
   ) => void;
   measureIndex: (index: number) => void;
   consumeProgrammaticScroll: (scrollOffset: number) => boolean;
@@ -108,6 +113,7 @@ export const useTanStackVirtualizedMessages = <Item,>({
   const pendingProgrammaticScrollRef = React.useRef<{
     offset: number;
     expiresAt: number;
+    behavior: ConversationVirtualizerScrollBehavior;
   } | null>(null);
 
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
@@ -126,10 +132,14 @@ export const useTanStackVirtualizedMessages = <Item,>({
     useAnimationFrameWithResizeObserver: true,
   });
 
-  const scheduleProgrammaticScroll = React.useCallback((offset: number) => {
+  const scheduleProgrammaticScroll = React.useCallback((
+    offset: number,
+    behavior: ConversationVirtualizerScrollBehavior = "auto",
+  ) => {
     pendingProgrammaticScrollRef.current = {
       offset: Math.max(0, offset),
       expiresAt: Date.now() + PROGRAMMATIC_SCROLL_TTL_MS,
+      behavior,
     };
   }, []);
 
@@ -161,19 +171,34 @@ export const useTanStackVirtualizedMessages = <Item,>({
   );
 
   const scrollToOffset = React.useCallback(
-    (offset: number) => {
+    (
+      offset: number,
+      behavior: ConversationVirtualizerScrollBehavior = "auto",
+    ) => {
       if (!enabled) {
         return;
       }
       const nextOffset = Math.max(0, offset);
-      scheduleProgrammaticScroll(nextOffset);
+      scheduleProgrammaticScroll(nextOffset, behavior);
+      const outer = outerRef.current;
+      if (outer) {
+        outer.scrollTo({
+          top: nextOffset,
+          behavior,
+        });
+        return;
+      }
       virtualizer.scrollToOffset(nextOffset);
     },
-    [enabled, scheduleProgrammaticScroll, virtualizer],
+    [enabled, outerRef, scheduleProgrammaticScroll, virtualizer],
   );
 
   const scrollToIndex = React.useCallback(
-    (index: number, align: ConversationVirtualizerAlign = "auto") => {
+    (
+      index: number,
+      align: ConversationVirtualizerAlign = "auto",
+      behavior: ConversationVirtualizerScrollBehavior = "auto",
+    ) => {
       if (!enabled) {
         return;
       }
@@ -183,9 +208,20 @@ export const useTanStackVirtualizedMessages = <Item,>({
       const itemSize = getItemSize(index);
       const viewportSize =
         outer?.clientHeight ?? viewportHeight ?? 0;
-      scheduleProgrammaticScroll(
-        resolveAlignedOffset(itemTop, itemSize, viewportSize, align),
+      const targetOffset = resolveAlignedOffset(
+        itemTop,
+        itemSize,
+        viewportSize,
+        align,
       );
+      scheduleProgrammaticScroll(targetOffset, behavior);
+      if (outer) {
+        outer.scrollTo({
+          top: targetOffset,
+          behavior,
+        });
+        return;
+      }
       virtualizer.scrollToIndex(index, { align });
     },
     [
@@ -226,7 +262,8 @@ export const useTanStackVirtualizedMessages = <Item,>({
       pendingProgrammaticScrollRef.current = null;
       return true;
     }
-    return false;
+
+    return pending.behavior === "smooth";
   }, []);
 
   React.useEffect(() => {

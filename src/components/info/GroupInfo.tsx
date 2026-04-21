@@ -53,7 +53,10 @@ interface GroupInfoProps {
   className?: string;
 }
 
-type GroupMemberRole = RoomMemberRole;
+type GroupMemberRole =
+  | RoomMemberRole.OWNER
+  | RoomMemberRole.ADMIN
+  | RoomMemberRole.MEMBER;
 const EMPTY_INVITE_LINKS: InviteLinkItem[] = [];
 const EMPTY_JOIN_REQUESTS: JoinRequestItem[] = [];
 
@@ -73,13 +76,14 @@ interface GroupMember {
 const ROLE_PRIORITY: Record<GroupMemberRole, number> = {
   [RoomMemberRole.OWNER]: 0,
   [RoomMemberRole.ADMIN]: 1,
-  [RoomMemberRole.MODERATOR]: 2,
-  [RoomMemberRole.MEMBER]: 3,
-  [RoomMemberRole.RESTRICTED]: 4,
-  [RoomMemberRole.BANNED]: 5,
+  [RoomMemberRole.MEMBER]: 2,
 };
 
-const VALID_ROLES = new Set<string>(Object.values(RoomMemberRole));
+const VALID_ROLES = new Set<string>([
+  RoomMemberRole.OWNER,
+  RoomMemberRole.ADMIN,
+  RoomMemberRole.MEMBER,
+]);
 const VALID_STATUSES = new Set<string>(Object.values(UserStatus));
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

@@ -477,6 +477,19 @@ export const normalizeConversation = (
           >,
         }
       : {}),
+    ...(asString(payload.currentUserRole)
+      ? {
+          currentUserRole: asString(payload.currentUserRole) as NonNullable<
+            Conversation["currentUserRole"]
+          >,
+        }
+      : {}),
+    ...(typeof payload.allowMemberMessaging === "boolean"
+      ? { allowMemberMessaging: payload.allowMemberMessaging }
+      : {}),
+    ...(typeof payload.canCurrentUserSend === "boolean"
+      ? { canCurrentUserSend: payload.canCurrentUserSend }
+      : {}),
     ...(asNumber(payload.summaryVersion) !== undefined
       ? { summaryVersion: asNumber(payload.summaryVersion) }
       : {}),

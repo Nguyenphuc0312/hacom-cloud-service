@@ -87,6 +87,9 @@ export type Conversation = Omit<
   SharedConversation,
   "lastReadAt" | "lastReadMessageId"
 > & {
+  currentUserRole?: "owner" | "admin" | "member" | null;
+  allowMemberMessaging?: boolean;
+  canCurrentUserSend?: boolean;
   createdBy?: string;
   createdAt?: Date | string;
   lastMessageAt?: Date | string | null;

@@ -651,7 +651,7 @@ export const conversationApi = {
   updateMemberRole: async (
     conversationId: string,
     userId: string,
-    role: RoomMemberRole | "owner",
+    role: RoomMemberRole.ADMIN | RoomMemberRole.MEMBER | "owner",
   ) => {
     const response = await apiClient.patch<ApiResponse<unknown>>(
       `${canonicalConversationPath(conversationId)}/members/${userId}/role`,
@@ -715,16 +715,10 @@ export const conversationApi = {
 
 export const groupApi = {
   createGroup: async (payload: {
-    type: "basic_group" | "supergroup" | "channel";
+    type: "basic_group";
     title: string;
     description?: string;
     avatarUrl?: string;
-    isPublic?: boolean;
-    username?: string;
-    joinApprovalRequired?: boolean;
-    historyVisibleToNewMembers?: boolean;
-    slowModeSeconds?: number;
-    defaultPermissions?: Record<string, boolean>;
     memberIds?: string[];
   }) => {
     const response = await apiClient.post<ApiResponse<unknown>>(
@@ -818,7 +812,7 @@ export const groupApi = {
   updateMemberRole: async (
     groupId: string,
     userId: string,
-    role: "owner" | "admin" | "moderator" | "member" | "restricted" | "banned",
+    role: "admin" | "member",
   ) => {
     const response = await apiClient.patch<ApiResponse<unknown>>(
       `/groups/${groupId}/members/${userId}/role`,
@@ -897,24 +891,17 @@ export const groupApi = {
 export const messageApi = {
   getMessages: async (
     conversationId: string,
-    pageOrOptions:
-      | number
-      | {
-          page?: number;
-          limit?: number;
-          /** @deprecated Legacy timestamp hint. Do not send as public HTTP contract. */
-          before?: string;
-          /** @deprecated Legacy timestamp hint. Do not send as public HTTP contract. */
-          after?: string;
-          beforeId?: string;
-          afterId?: string;
-        } = 1,
-    limit = 50,
+    options: {
+      limit?: number;
+      /** @deprecated Legacy timestamp hint. Do not send as public HTTP contract. */
+      before?: string;
+      /** @deprecated Legacy timestamp hint. Do not send as public HTTP contract. */
+      after?: string;
+      beforeId?: string;
+      afterId?: string;
+      signal?: AbortSignal;
+    } = {},
   ) => {
-    const options =
-      typeof pageOrOptions === "number"
-        ? { page: pageOrOptions, limit }
-        : pageOrOptions;
     const query = new URLSearchParams({
       limit: String(
         typeof options.limit === "number" && Number.isFinite(options.limit)
@@ -922,26 +909,15 @@ export const messageApi = {
           : 50,
       ),
     });
-    const hasBeforeCursor =
-      typeof options.beforeId === "string" && options.beforeId.trim().length > 0;
-    const hasAfterCursor =
-      typeof options.afterId === "string" && options.afterId.trim().length > 0;
 
     if (options.beforeId) query.set("beforeId", options.beforeId);
     if (options.afterId) query.set("afterId", options.afterId);
-    if (!hasBeforeCursor && !hasAfterCursor) {
-      query.set(
-        "page",
-        String(
-          typeof options.page === "number" && Number.isFinite(options.page)
-            ? Math.max(1, Math.floor(options.page))
-            : 1,
-        ),
-      );
-    }
 
     const response = await apiClient.get<ApiResponse<RoomMessagesResponse>>(
       `${canonicalConversationMessagesPath(conversationId)}?${query.toString()}`,
+      {
+        signal: options.signal,
+      },
     );
     return response.data;
   },

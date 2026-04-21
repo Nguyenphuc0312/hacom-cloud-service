@@ -4,10 +4,13 @@ import type {
   ConversationVirtualizerAlign,
   ConversationVirtualizerMeasurementResult,
   ConversationVirtualizerOffsetMatch,
+  ConversationVirtualizerScrollBehavior,
 } from "./virtualizerContract";
 import { logMessageDebug } from "../utils/messageDebug";
 
 const ITEM_SIZE_CHANGE_THRESHOLD = 2;
+const PROGRAMMATIC_SCROLL_MATCH_THRESHOLD_PX = 12;
+const PROGRAMMATIC_SCROLL_TTL_MS = 450;
 
 interface UseVirtualizedMessagesParams<Item, ListData> {
   items: Item[];
@@ -38,14 +41,38 @@ interface UseVirtualizedMessagesResult<ListData> {
   ) => ConversationVirtualizerMeasurementResult;
   clearMeasuredSizes: () => void;
   resetMeasurements: () => void;
-  scrollToOffset: (offset: number) => void;
+  scrollToOffset: (
+    offset: number,
+    behavior?: ConversationVirtualizerScrollBehavior,
+  ) => void;
   scrollToIndex: (
     index: number,
     align?: ConversationVirtualizerAlign,
+    behavior?: ConversationVirtualizerScrollBehavior,
   ) => void;
   measureIndex: (index: number) => void;
+  consumeProgrammaticScroll: (scrollOffset: number) => boolean;
   measureVersion: number;
 }
+
+const resolveAlignedOffset = (
+  itemTop: number,
+  itemSize: number,
+  viewportHeight: number,
+  align: ConversationVirtualizerAlign,
+): number => {
+  switch (align) {
+    case "end":
+      return Math.max(0, itemTop + itemSize - viewportHeight);
+    case "center":
+      return Math.max(0, itemTop - Math.max(0, viewportHeight - itemSize) / 2);
+    case "start":
+      return Math.max(0, itemTop);
+    case "auto":
+    default:
+      return Math.max(0, itemTop);
+  }
+};
 
 export const useVirtualizedMessages = <Item, ListData>({
   items,
@@ -86,6 +113,11 @@ export const useVirtualizedMessages = <Item, ListData>({
     >
   >(new Map());
   const flushPendingSizeUpdatesRafRef = React.useRef<number | null>(null);
+  const pendingProgrammaticScrollRef = React.useRef<{
+    offset: number;
+    expiresAt: number;
+    behavior: ConversationVirtualizerScrollBehavior;
+  } | null>(null);
   const [viewportHeight, setViewportHeight] = React.useState(0);
   const resolveMeasurementKey = React.useCallback(
     (item: Item, index: number) =>
@@ -386,24 +418,80 @@ export const useVirtualizedMessages = <Item, ListData>({
     };
   }, [debugLabel, enabled, items.length, observeViewport, viewportRef]);
 
+  const scheduleProgrammaticScroll = React.useCallback(
+    (
+      offset: number,
+      behavior: ConversationVirtualizerScrollBehavior = "auto",
+    ) => {
+      pendingProgrammaticScrollRef.current = {
+        offset: Math.max(0, offset),
+        expiresAt: Date.now() + PROGRAMMATIC_SCROLL_TTL_MS,
+        behavior,
+      };
+    },
+    [],
+  );
+
   const scrollToOffset = React.useCallback(
-    (offset: number) => {
+    (
+      offset: number,
+      behavior: ConversationVirtualizerScrollBehavior = "auto",
+    ) => {
       if (!enabled) {
         return;
       }
-      listRef.current?.scrollTo(Math.max(0, offset));
+      const nextOffset = Math.max(0, offset);
+      scheduleProgrammaticScroll(nextOffset, behavior);
+      const outer = outerRef.current;
+      if (outer) {
+        outer.scrollTo({
+          top: nextOffset,
+          behavior,
+        });
+        return;
+      }
+      listRef.current?.scrollTo(nextOffset);
     },
-    [enabled, listRef],
+    [enabled, listRef, outerRef, scheduleProgrammaticScroll],
   );
 
   const scrollToIndex = React.useCallback(
-    (index: number, align: ConversationVirtualizerAlign = "auto") => {
+    (
+      index: number,
+      align: ConversationVirtualizerAlign = "auto",
+      behavior: ConversationVirtualizerScrollBehavior = "auto",
+    ) => {
       if (!enabled) {
+        return;
+      }
+
+      const outer = outerRef.current;
+      const targetOffset = resolveAlignedOffset(
+        getItemOffset(index),
+        getItemSize(index),
+        outer?.clientHeight ?? viewportHeight ?? 0,
+        align,
+      );
+      scheduleProgrammaticScroll(targetOffset, behavior);
+
+      if (outer) {
+        outer.scrollTo({
+          top: targetOffset,
+          behavior,
+        });
         return;
       }
       listRef.current?.scrollToItem(index, align);
     },
-    [enabled, listRef],
+    [
+      enabled,
+      getItemOffset,
+      getItemSize,
+      listRef,
+      outerRef,
+      scheduleProgrammaticScroll,
+      viewportHeight,
+    ],
   );
 
   const measureIndex = React.useCallback(
@@ -415,6 +503,29 @@ export const useVirtualizedMessages = <Item, ListData>({
     },
     [enabled, listRef],
   );
+
+  const consumeProgrammaticScroll = React.useCallback((scrollOffset: number) => {
+    const pending = pendingProgrammaticScrollRef.current;
+    if (!pending) {
+      return false;
+    }
+
+    if (Date.now() > pending.expiresAt) {
+      pendingProgrammaticScrollRef.current = null;
+      return false;
+    }
+
+    const reachedTarget =
+      Math.abs(scrollOffset - pending.offset) <=
+      PROGRAMMATIC_SCROLL_MATCH_THRESHOLD_PX;
+
+    if (reachedTarget) {
+      pendingProgrammaticScrollRef.current = null;
+      return true;
+    }
+
+    return pending.behavior === "smooth";
+  }, []);
 
   return {
     listRef,
@@ -429,6 +540,7 @@ export const useVirtualizedMessages = <Item, ListData>({
     scrollToOffset,
     scrollToIndex,
     measureIndex,
+    consumeProgrammaticScroll,
     measureVersion: viewportHeight,
   };
 };

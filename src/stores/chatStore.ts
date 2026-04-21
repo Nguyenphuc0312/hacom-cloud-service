@@ -321,6 +321,7 @@ const EMPTY_MESSAGES: Message[] = [];
 const roomMessageFetchInFlight = new Map<string, number>();
 const initialFetchSeqByConversation = new Map<string, number>();
 const messageFetchGenerationByConversation = new Map<string, number>();
+let activeAuthoritativeHistoryAbortController: AbortController | null = null;
 let conversationsFetchPromise: Promise<void> | null = null;
 let nextLocalMessageOrder = 1;
 
@@ -357,6 +358,23 @@ const asStringValue = (value: unknown): string | undefined =>
 
 const asNumberValue = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) ? value : undefined;
+
+const isCanceledRequestError = (error: unknown): boolean => {
+  if (axios.isCancel(error)) {
+    return true;
+  }
+
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const value = error as { code?: string; name?: string };
+  return (
+    value.code === "ERR_CANCELED" ||
+    value.name === "AbortError" ||
+    value.name === "CanceledError"
+  );
+};
 
 const buildHistoryRequestId = (
   conversationId: string,
@@ -2738,11 +2756,23 @@ export const useChatStore = create<ChatState>()(
     return {
       ...initialState,
 
-      setConversations: (conversations) =>
-        set((state) => replaceConversationsInState(state, conversations)),
+      setConversations: (conversations) => {
+        set((state) => replaceConversationsInState(state, conversations));
+        conversations.forEach((conversation) => {
+          if (conversation.canCurrentUserSend === true) {
+            outboxController.clearSendRestriction(conversation.id);
+          }
+        });
+      },
 
-      mergeConversationPage: (conversations) =>
-        set((state) => mergeConversationPageIntoState(state, conversations)),
+      mergeConversationPage: (conversations) => {
+        set((state) => mergeConversationPageIntoState(state, conversations));
+        conversations.forEach((conversation) => {
+          if (conversation.canCurrentUserSend === true) {
+            outboxController.clearSendRestriction(conversation.id);
+          }
+        });
+      },
 
       addConversation: (conversation) => {
         const normalized = normalizeConversation(conversation);
@@ -2759,6 +2789,10 @@ export const useChatStore = create<ChatState>()(
             ...buildConversationCollectionState(conversations),
           };
         });
+
+        if (normalized.canCurrentUserSend === true) {
+          outboxController.clearSendRestriction(normalized.id);
+        }
       },
 
       upsertConversationSummary: (conversation) => {
@@ -2834,10 +2868,15 @@ export const useChatStore = create<ChatState>()(
           };
         });
 
+        if (normalized.canCurrentUserSend === true) {
+          outboxController.clearSendRestriction(normalized.id);
+        }
+
         return result;
       },
 
       updateConversation: (id, updates) => {
+        const nextConversation = normalizeConversation({ id, ...updates });
         set((state) => {
           const conversations = mergeConversationCollections((Array.isArray(state.conversations)
             ? state.conversations
@@ -2856,6 +2895,10 @@ export const useChatStore = create<ChatState>()(
             ...buildConversationCollectionState(conversations),
           };
         });
+
+        if (nextConversation?.canCurrentUserSend === true) {
+          outboxController.clearSendRestriction(id);
+        }
       },
 
       removeConversation: (id) => {
@@ -3437,6 +3480,15 @@ export const useChatStore = create<ChatState>()(
           },
         }));
 
+        const abortController =
+          queryType === "authoritative_open" ? new AbortController() : null;
+        if (abortController) {
+          activeAuthoritativeHistoryAbortController?.abort(
+            "superseded_authoritative_history_request",
+          );
+          activeAuthoritativeHistoryAbortController = abortController;
+        }
+
         try {
           const limit =
             typeof options?.limit === "number" &&
@@ -3474,6 +3526,7 @@ export const useChatStore = create<ChatState>()(
             limit,
             ...(beforeId ? { beforeId } : {}),
             ...(afterId ? { afterId } : {}),
+            ...(abortController ? { signal: abortController.signal } : {}),
           });
           const responseEnvelope = asRecord(response);
           const responseMeta = asRecord(responseEnvelope?.meta);
@@ -3697,6 +3750,32 @@ export const useChatStore = create<ChatState>()(
                   initialFetchSeq),
           };
         } catch (error: unknown) {
+          if (isCanceledRequestError(error)) {
+            logMessageDebug("chatStore", "fetch_cancelled", {
+              conversationId,
+              fetchMode,
+              queryType,
+              requestId,
+              syncReason,
+              before,
+              after,
+              beforeId: options?.beforeId,
+              afterId: options?.afterId,
+              selectedConversationIdAtDispatch,
+            }, {
+              alwaysOn: queryType === "authoritative_open",
+              level: "info",
+            });
+            return {
+              loaded: 0,
+              hasMore: false,
+              hasNext: false,
+              hasPrev: false,
+              mode: fetchMode,
+              applied: false,
+            };
+          }
+
           const apiError = extractApiError(error);
           const errorMessage =
             apiError.message || i18n.t("error:chat.fetchMessagesFailed");
@@ -3732,6 +3811,9 @@ export const useChatStore = create<ChatState>()(
             applied: false,
           };
         } finally {
+          if (abortController && activeAuthoritativeHistoryAbortController === abortController) {
+            activeAuthoritativeHistoryAbortController = null;
+          }
           const nextInFlight = Math.max(
             0,
             (roomMessageFetchInFlight.get(conversationId) ?? 1) - 1,
@@ -3794,6 +3876,23 @@ export const useChatStore = create<ChatState>()(
           logMessageDebug("chatStore", "send_blocked_conversation", {
             conversationId,
             reason,
+          });
+          throw new Error(reason);
+        }
+        if (conversation?.canCurrentUserSend === false) {
+          const reason = i18n.t("chat:composer.readonlyGroup", {
+            defaultValue: "Only group admins can send messages right now.",
+          });
+          outboxController.setSendRestriction(conversationId, {
+            kind: "readonly",
+            reason,
+            code: "GROUP_READ_ONLY",
+          });
+          logMessageDebug("chatStore", "send_blocked_readonly_group", {
+            conversationId,
+            reason,
+            currentUserRole: conversation.currentUserRole ?? null,
+            allowMemberMessaging: conversation.allowMemberMessaging ?? null,
           });
           throw new Error(reason);
         }
@@ -3919,6 +4018,8 @@ export const useChatStore = create<ChatState>()(
         roomMessageFetchInFlight.clear();
         initialFetchSeqByConversation.clear();
         messageFetchGenerationByConversation.clear();
+        activeAuthoritativeHistoryAbortController?.abort("chat_store_reset");
+        activeAuthoritativeHistoryAbortController = null;
         unreadController.reset();
         conversationsFetchPromise = null;
         outboxController.reset();

@@ -26,7 +26,7 @@ const makeMessage = (
 });
 
 describe("useAutoScrollToBottom", () => {
-  it("restores saved anchor instead of raw pixel offset when re-entering a conversation", () => {
+  it("always reattaches to the latest messages when re-entering a conversation", () => {
     const outerRef = {
       current: {
         scrollTop: 180,
@@ -77,14 +77,14 @@ describe("useAutoScrollToBottom", () => {
     rerender({ conversationId: "room-2", preferUnreadAnchor: false });
     rerender({ conversationId: "room-1", preferUnreadAnchor: false });
 
-    expect(result.current.pendingRestoreAnchor).toEqual({
-      messageId: "msg-2",
-      offsetFromTop: 24,
-    });
+    expect(result.current.pendingRestoreAnchor).toBeNull();
     expect(result.current.pendingRestoreScrollTop).toBeNull();
+    expect(result.current.isPinnedToBottom).toBe(true);
+    expect(result.current.scrollMode).toBe("at_bottom");
+    expect(requestScrollToBottom).toHaveBeenCalled();
   });
 
-  it("prioritizes unread anchor over saved session when reopening a conversation with unread messages", () => {
+  it("keeps the viewport pinned to latest even when unread restore was requested on reopen", () => {
     const outerRef = {
       current: {
         scrollTop: 220,
@@ -137,8 +137,9 @@ describe("useAutoScrollToBottom", () => {
 
     expect(result.current.pendingRestoreAnchor).toBeNull();
     expect(result.current.pendingRestoreScrollTop).toBeNull();
-    expect(result.current.isPinnedToBottom).toBe(false);
-    expect(result.current.scrollMode).toBe("reading_history");
+    expect(result.current.isPinnedToBottom).toBe(true);
+    expect(result.current.scrollMode).toBe("at_bottom");
+    expect(requestScrollToBottom).toHaveBeenCalled();
   });
 
   it("buffers remote incoming messages without changing follow mode while reading history", () => {
@@ -187,7 +188,8 @@ describe("useAutoScrollToBottom", () => {
     expect(result.current.scrollMode).toBe("reading_history");
     expect(result.current.pendingNewMessages).toBe(1);
     expect(result.current.isPinnedToBottom).toBe(false);
-    expect(requestScrollToBottom).not.toHaveBeenCalled();
+    expect(requestScrollToBottom).toHaveBeenCalledTimes(1);
+    expect(requestScrollToBottom).toHaveBeenCalledWith("conversation-change");
   });
 
   it("reattaches and follows when the detached user sends their own message", () => {
@@ -237,5 +239,99 @@ describe("useAutoScrollToBottom", () => {
     expect(result.current.pendingNewMessages).toBe(0);
     expect(result.current.isPinnedToBottom).toBe(true);
     expect(requestScrollToBottom).toHaveBeenCalledWith("self-message");
+  });
+
+  it("jumpToLatest reattaches and requests a bottom scroll from the live DOM position", () => {
+    const outerRef = {
+      current: {
+        scrollTop: 320,
+        scrollHeight: 1800,
+        clientHeight: 420,
+      },
+    } as React.RefObject<HTMLDivElement | null>;
+    const requestScrollToBottom = vi.fn();
+
+    const { result } = renderHook(() =>
+      useAutoScrollToBottom({
+        conversationId: "room-1",
+        messages: [
+          makeMessage("msg-1", "2026-04-10T10:00:00.000Z"),
+          makeMessage("msg-2", "2026-04-10T10:01:00.000Z"),
+        ],
+        currentUserId: "user-a",
+        hasMore: false,
+        isLoadingMore: false,
+        outerRef,
+        requestScrollToBottom,
+      }),
+    );
+
+    act(() => {
+      result.current.detachAutoFollow("reading-history");
+      result.current.jumpToLatest();
+    });
+
+    expect(result.current.isPinnedToBottom).toBe(true);
+    expect(result.current.pendingNewMessages).toBe(0);
+    expect(result.current.scrollMode).toBe("at_bottom");
+    expect(requestScrollToBottom).toHaveBeenLastCalledWith("jump-to-latest");
+  });
+
+  it("treats prepended older history as anchor-preserving pagination instead of a tail append", () => {
+    const outerRef = {
+      current: {
+        scrollTop: 48,
+        scrollHeight: 1500,
+        clientHeight: 420,
+      },
+    } as React.RefObject<HTMLDivElement | null>;
+    const requestScrollToBottom = vi.fn();
+    const onLoadMore = vi.fn().mockResolvedValue(undefined);
+    const onBeforeLoadMore = vi.fn();
+    const onAfterPrepend = vi.fn();
+
+    const existingSecond = makeMessage("msg-2", "2026-04-10T10:01:00.000Z");
+    const existingThird = makeMessage("msg-3", "2026-04-10T10:02:00.000Z");
+
+    const { result, rerender } = renderHook(
+      ({ messages }: { messages: ReturnType<typeof makeMessage>[] }) =>
+        useAutoScrollToBottom({
+          conversationId: "room-1",
+          messages,
+          currentUserId: "user-a",
+          hasMore: true,
+          isLoadingMore: false,
+          onLoadMore,
+          onBeforeLoadMore,
+          onAfterPrepend,
+          outerRef,
+          requestScrollToBottom,
+        }),
+      {
+        initialProps: {
+          messages: [existingSecond, existingThird],
+        },
+      },
+    );
+
+    act(() => {
+      result.current.detachAutoFollow("reading-history");
+      result.current.handleScroll(40);
+    });
+
+    expect(onBeforeLoadMore).toHaveBeenCalledTimes(1);
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+
+    rerender({
+      messages: [
+        makeMessage("msg-1", "2026-04-10T10:00:00.000Z"),
+        existingSecond,
+        existingThird,
+      ],
+    });
+
+    expect(onAfterPrepend).toHaveBeenCalledTimes(1);
+    expect(requestScrollToBottom).toHaveBeenCalledTimes(1);
+    expect(requestScrollToBottom).toHaveBeenCalledWith("conversation-change");
   });
 });

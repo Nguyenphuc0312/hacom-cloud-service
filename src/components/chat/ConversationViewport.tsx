@@ -5,32 +5,6 @@ import { MessageList } from "./MessageList";
 import type { ChatDensity } from "../../stores/uiStore";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
 
-const buildUnreadRestoreSignature = ({
-  conversationId,
-  firstUnreadMessageId,
-  lastReadMessageId,
-  lastReadAt,
-}: {
-  conversationId: string;
-  firstUnreadMessageId?: string | null;
-  lastReadMessageId?: string | null;
-  lastReadAt?: string | Date | null;
-}): string => {
-  const lastReadAtIso =
-    typeof lastReadAt === "string"
-      ? lastReadAt
-      : lastReadAt instanceof Date
-        ? lastReadAt.toISOString()
-        : "";
-
-  return [
-    conversationId,
-    firstUnreadMessageId ?? "",
-    lastReadMessageId ?? "",
-    lastReadAtIso,
-  ].join("|");
-};
-
 interface ConversationViewportProps {
   layoutState: ChatLayoutState;
   conversation: Conversation;
@@ -121,8 +95,6 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
         firstUnreadMessageId?: string;
         active?: boolean;
       } | null>(null);
-      const [pendingUnreadRestoreSignature, setPendingUnreadRestoreSignature] =
-        React.useState<string | null>(null);
 
       React.useEffect(() => {
         const hasUnreadContext =
@@ -131,50 +103,25 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
 
         if (!hasUnreadContext) {
           setUnreadMarker(null);
-          setPendingUnreadRestoreSignature(null);
           return;
         }
 
-        const nextUnreadMarker = {
+        setUnreadMarker({
           lastReadMessageId,
           lastReadAt,
           firstUnreadMessageId,
           active: true,
-        };
-        const nextUnreadRestoreSignature = buildUnreadRestoreSignature({
-          conversationId: conversation.id,
-          firstUnreadMessageId,
-          lastReadMessageId,
-          lastReadAt,
         });
-
-        setUnreadMarker(nextUnreadMarker);
-        setPendingUnreadRestoreSignature((current) =>
-          current === nextUnreadRestoreSignature
-            ? current
-            : nextUnreadRestoreSignature,
-        );
       }, [
-        conversation.id,
         conversation.unreadCount,
         firstUnreadMessageId,
         lastReadAt,
         lastReadMessageId,
       ]);
 
-      const handleUnreadRestoreConsumed = React.useCallback(
-        (signature: string) => {
-          setPendingUnreadRestoreSignature((current) =>
-            current === signature ? null : current,
-          );
-        },
-        [],
-      );
-
       const handleReachedLatest = React.useCallback(
         (message: Message) => {
           setUnreadMarker((current) => (current ? null : current));
-          setPendingUnreadRestoreSignature(null);
           onReachedLatest?.(message);
         },
         [onReachedLatest],
@@ -209,8 +156,6 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
           onNavigateToMessage={onNavigateToMessage}
           currentUsername={currentUsername}
           unreadMarker={unreadMarker}
-          unreadRestoreSignature={pendingUnreadRestoreSignature}
-          onUnreadRestoreConsumed={handleUnreadRestoreConsumed}
           onReachedLatest={handleReachedLatest}
           jumpToMessageId={jumpToMessageId}
           jumpRequestVersion={jumpRequestVersion}

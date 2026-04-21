@@ -17,6 +17,7 @@ import {
 } from "../../hooks/useMessageGrouping";
 import { useVirtualizedMessages } from "../../hooks/useVirtualizedMessages";
 import { useTanStackVirtualizedMessages } from "../../hooks/useTanStackVirtualizedMessages";
+import type { ConversationVirtualizerScrollBehavior } from "../../hooks/virtualizerContract";
 import type { Conversation, Message, Attachment } from "../../types";
 import type { ChatDensity } from "../../stores/uiStore";
 import { useMessagesByConversation } from "../../stores";
@@ -136,6 +137,7 @@ interface TimelineRowData {
 
 const EMPTY_SELECTED_MESSAGE_IDS = new Set<string>();
 const ITEM_SIZE_CHANGE_THRESHOLD = 2;
+const SMOOTH_SCROLL_MAX_DISTANCE_PX = 240;
 
 const isThreadRowMessageLike = (
   item: ConversationThreadRow | undefined,
@@ -705,6 +707,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     messageId: string | null;
     offsetFromTop: number;
   } | null>(null);
+  const initialBottomSettledConversationRef = React.useRef<string | null>(null);
+  const bottomSettleRafRef = React.useRef<number | null>(null);
   const timelineSizeChangeRafRef = React.useRef<number | null>(null);
   const pendingTimelineSizeChangesRef = React.useRef<
     Map<string, { index: number; delta: number }>
@@ -859,6 +863,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     resetMeasurements,
     scrollToOffset,
     scrollToIndex,
+    consumeProgrammaticScroll,
   } = activeVirtualizer;
   const tanStackVirtualItems = CHAT_VIRTUALIZER_V2_ENABLED
     ? tanStackVirtualizer.virtualItems
@@ -912,6 +917,102 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     resetMeasurements,
   ]);
 
+  React.useEffect(() => {
+    if (scrollCommandRafRef.current !== null) {
+      cancelAnimationFrame(scrollCommandRafRef.current);
+      scrollCommandRafRef.current = null;
+    }
+    if (timelineSizeChangeRafRef.current !== null) {
+      cancelAnimationFrame(timelineSizeChangeRafRef.current);
+      timelineSizeChangeRafRef.current = null;
+    }
+    pendingScrollCommandRef.current = null;
+    prependAnchorRef.current = null;
+    pendingResizeAnchorRef.current = null;
+    pendingTimelineSizeChangesRef.current.clear();
+    initialBottomSettledConversationRef.current = null;
+  }, [conversationId]);
+
+  const resolveScrollBehavior = React.useCallback(
+    (command: ScrollCommand): ConversationVirtualizerScrollBehavior => {
+      const outer = outerRef.current;
+      if (!outer) {
+        return "auto";
+      }
+
+      const distanceFromBottom = getDistanceFromBottom(outer);
+      switch (command.reason) {
+        case "incoming-message":
+          return distanceFromBottom <= SMOOTH_SCROLL_MAX_DISTANCE_PX
+            ? "smooth"
+            : "auto";
+        case "self-message":
+          return distanceFromBottom <= SMOOTH_SCROLL_MAX_DISTANCE_PX
+            ? "smooth"
+            : "auto";
+        case "jump-to-latest":
+          return distanceFromBottom <= outer.clientHeight * 1.5
+            ? "smooth"
+            : "auto";
+        default:
+          return "auto";
+      }
+    },
+    [outerRef],
+  );
+
+  const scrollViewportToBottom = React.useCallback(
+    (behavior: ConversationVirtualizerScrollBehavior = "auto") => {
+      const outer = outerRef.current;
+      if (!outer) {
+        return false;
+      }
+
+      const runSettle = (remainingAttempts: number) => {
+        const element = outerRef.current;
+        if (!element) {
+          bottomSettleRafRef.current = null;
+          return;
+        }
+
+        const targetOffset = Math.max(
+          0,
+          Math.ceil(element.scrollHeight - element.clientHeight),
+        );
+        scrollToOffset(targetOffset, behavior);
+
+        if (remainingAttempts <= 0) {
+          bottomSettleRafRef.current = null;
+          return;
+        }
+
+        bottomSettleRafRef.current = requestAnimationFrame(() => {
+          const settledElement = outerRef.current;
+          if (!settledElement) {
+            bottomSettleRafRef.current = null;
+            return;
+          }
+
+          if (getDistanceFromBottom(settledElement) <= 2) {
+            bottomSettleRafRef.current = null;
+            return;
+          }
+
+          runSettle(remainingAttempts - 1);
+        });
+      };
+
+      if (bottomSettleRafRef.current !== null) {
+        cancelAnimationFrame(bottomSettleRafRef.current);
+        bottomSettleRafRef.current = null;
+      }
+
+      runSettle(2);
+      return true;
+    },
+    [outerRef, scrollToOffset],
+  );
+
   const flushScrollCommand = React.useCallback(() => {
     scrollCommandRafRef.current = null;
     const command = pendingScrollCommandRef.current;
@@ -927,9 +1028,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       return;
     }
 
+    const behavior = resolveScrollBehavior(command);
     logScrollTrace("scroll_command_flush", {
       conversationId,
       ...command,
+      behavior,
       currentScrollTop: outerRef.current?.scrollTop ?? 0,
       clientHeight: outerRef.current?.clientHeight ?? 0,
       scrollHeight: outerRef.current?.scrollHeight ?? 0,
@@ -940,13 +1043,23 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
     switch (command.kind) {
       case "bottom":
-        scrollToIndex(itemCount - 1, "end");
+        if (!scrollViewportToBottom(behavior)) {
+          scrollToIndex(itemCount - 1, "end", behavior);
+        }
         break;
       case "offset":
-        scrollToOffset(command.offset);
+        scrollToOffset(command.offset, behavior);
         break;
     }
-  }, [conversationId, scrollToIndex, scrollToOffset, threadRows.length]);
+  }, [
+    conversationId,
+    outerRef,
+    resolveScrollBehavior,
+    scrollViewportToBottom,
+    scrollToIndex,
+    scrollToOffset,
+    threadRows.length,
+  ]);
 
   const requestScrollCommand = React.useCallback(
     (command: ScrollCommand): boolean => {
@@ -1423,9 +1536,12 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       scrollOffset: number;
       scrollUpdateWasRequested: boolean;
     }) => {
-      handleScrollUpdate(scrollOffset, scrollUpdateWasRequested);
+      handleScrollUpdate(
+        scrollOffset,
+        scrollUpdateWasRequested || consumeProgrammaticScroll(scrollOffset),
+      );
     },
-    [handleScrollUpdate],
+    [consumeProgrammaticScroll, handleScrollUpdate],
   );
 
   const handleTanStackScroll = React.useCallback(
@@ -1433,10 +1549,10 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       const scrollOffset = event.currentTarget.scrollTop;
       handleScrollUpdate(
         scrollOffset,
-        tanStackVirtualizer.consumeProgrammaticScroll(scrollOffset),
+        consumeProgrammaticScroll(scrollOffset),
       );
     },
-    [handleScrollUpdate, tanStackVirtualizer],
+    [consumeProgrammaticScroll, handleScrollUpdate],
   );
 
   const handleRetry = React.useCallback(() => {
@@ -1595,6 +1711,44 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     pendingRestoreVersion,
     requestScrollCommand,
     syncScrollStateFromDom,
+    viewportHeight,
+  ]);
+
+  React.useEffect(() => {
+    if (initialBottomSettledConversationRef.current === conversationId) {
+      return;
+    }
+    if (isInitialLoading || messages.length === 0 || viewportHeight <= 0) {
+      return;
+    }
+    if (pendingRestoreAnchor || pendingRestoreScrollTop !== null) {
+      return;
+    }
+
+    initialBottomSettledConversationRef.current = conversationId;
+
+    if (unreadRestoreSignature) {
+      appliedUnreadRestoreSignatureRef.current = unreadRestoreSignature;
+      onUnreadRestoreConsumed?.(unreadRestoreSignature);
+    }
+
+    requestScrollToBottom("conversation-change");
+    const settleRafId = requestAnimationFrame(() => {
+      requestScrollToBottom("conversation-change");
+    });
+
+    return () => {
+      cancelAnimationFrame(settleRafId);
+    };
+  }, [
+    conversationId,
+    isInitialLoading,
+    messages.length,
+    onUnreadRestoreConsumed,
+    pendingRestoreAnchor,
+    pendingRestoreScrollTop,
+    requestScrollToBottom,
+    unreadRestoreSignature,
     viewportHeight,
   ]);
 
@@ -1765,6 +1919,9 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       }
       if (timelineSizeChangeRafRef.current !== null) {
         cancelAnimationFrame(timelineSizeChangeRafRef.current);
+      }
+      if (bottomSettleRafRef.current !== null) {
+        cancelAnimationFrame(bottomSettleRafRef.current);
       }
       pendingTimelineSizeChangesRef.current.clear();
       if (highlightTimerRef.current !== null) {

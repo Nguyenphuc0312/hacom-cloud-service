@@ -176,6 +176,48 @@ describe("api contract", () => {
 
     expect(apiClientMock.get).toHaveBeenCalledWith(
       "/conversations/conv-9/messages?limit=20&beforeId=msg-42",
+      expect.objectContaining({ signal: undefined }),
+    );
+  });
+
+  it("getMessages omits page for cursorless recent-window requests", async () => {
+    apiClientMock.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: { messages: [] },
+        meta: { pagination: { limit: 40, hasNext: false, hasPrev: true } },
+      },
+    });
+
+    await messageApi.getMessages("conv-10", {
+      limit: 40,
+    });
+
+    expect(apiClientMock.get).toHaveBeenCalledWith(
+      "/conversations/conv-10/messages?limit=40",
+      expect.objectContaining({ signal: undefined }),
+    );
+  });
+
+  it("getMessages forwards AbortSignal for cancellable room switches", async () => {
+    apiClientMock.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: { messages: [] },
+        meta: { hasNext: false, hasPrev: true, returnedWindow: "latest" },
+      },
+    });
+
+    const abortController = new AbortController();
+
+    await messageApi.getMessages("conv-11", {
+      limit: 25,
+      signal: abortController.signal,
+    });
+
+    expect(apiClientMock.get).toHaveBeenCalledWith(
+      "/conversations/conv-11/messages?limit=25",
+      expect.objectContaining({ signal: abortController.signal }),
     );
   });
 });

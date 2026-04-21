@@ -4,6 +4,8 @@ export type ConversationVirtualizerAlign =
   | "center"
   | "end";
 
+export type ConversationVirtualizerScrollBehavior = "auto" | "smooth";
+
 export interface ConversationVirtualizerOffsetMatch {
   index: number;
   offsetWithinItem: number;

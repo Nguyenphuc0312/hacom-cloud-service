@@ -420,10 +420,10 @@ body {
 }
 
 .chat-page-shell[data-chat-layout-state="with-panel"] {
-  --size-sidebar-width: 304px;
-  --size-sidebar-expanded: 304px;
-  --size-room-item: 52px;
-  --size-room-meta: 38px;
+  --size-sidebar-width: 320px;
+  --size-sidebar-expanded: 320px;
+  --size-room-item: 56px;
+  --size-room-meta: 40px;
 }
 
 .chat-page-shell[data-chat-layout-state="mobile"] {

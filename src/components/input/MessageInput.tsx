@@ -2,7 +2,7 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
-  PaperClipIcon,
+  EllipsisHorizontalIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { AttachmentMenu } from "./AttachmentMenu";
@@ -1091,12 +1091,12 @@ export const MessageInput = React.forwardRef<
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                     disableAttachmentActions && "cursor-not-allowed opacity-50",
                   )}
-                  aria-label={t("chat:composer.attachFile")}
+                  aria-label={t("chat:header.moreActions")}
                   aria-haspopup="menu"
                   aria-expanded={showAttachmentMenu}
                   disabled={disableAttachmentActions}
                 >
-                  <PaperClipIcon className="h-[18px] w-[18px]" />
+                  <EllipsisHorizontalIcon className="h-[18px] w-[18px]" />
                 </button>
 
                 {showAttachmentMenu && (
