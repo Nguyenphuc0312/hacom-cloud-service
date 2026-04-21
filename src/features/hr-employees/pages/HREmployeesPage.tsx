@@ -263,7 +263,7 @@ export const HREmployeesPage = () => {
         render: (value: string | null | undefined) => displayValue(value),
       },
       {
-        title: 'Cấp tài khoản',
+        title: 'Trạng thái cấp tài khoản',
         dataIndex: 'provisioningStatus',
         render: (value: HrEmployee['provisioningStatus']) => <StatusBadge status={value} />,
       },

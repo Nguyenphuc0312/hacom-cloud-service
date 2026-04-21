@@ -13,7 +13,7 @@ vi.mock('@/api/clients', () => ({
 }));
 
 vi.mock('./ProvisionAccountButton', () => ({
-  ProvisionAccountButton: () => <button type="button">Cấp tài khoản</button>,
+  ProvisionAccountButton: () => <button type="button">Provision account</button>,
 }));
 
 import { HrEmployeeDetailDrawer } from './HrEmployeeDetailDrawer';
@@ -69,7 +69,8 @@ describe('HrEmployeeDetailDrawer', () => {
 
     expect(screen.getByText('Liên kết tài khoản')).toBeInTheDocument();
     expect(screen.getByText('Tác vụ nhanh')).toBeInTheDocument();
-    expect(screen.getAllByText('Cấp tài khoản').length).toBeGreaterThan(0);
+    expect(screen.getByText('Trạng thái cấp tài khoản')).toBeInTheDocument();
+    expect(screen.queryByText('Cấp tài khoản')).not.toBeInTheDocument();
     expect(
       screen.getByText('Drawer này chỉ để inspect nhanh và cấp tài khoản khi đủ điều kiện.'),
     ).toBeInTheDocument();

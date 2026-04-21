@@ -67,7 +67,7 @@ const renderAccountRows = (employee: HrEmployee) => (
       <strong>{employee.linkedUser?.loginIdentifier || '-'}</strong>
     </div>
     <div className="ds-detail-list-item">
-      <span>Cấp tài khoản</span>
+      <span>Trạng thái cấp tài khoản</span>
       <strong>
         <StatusBadge status={employee.provisioningStatus} />
       </strong>
