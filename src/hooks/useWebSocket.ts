@@ -1030,6 +1030,19 @@ export const useWebSocket = (
         clientMessageId,
         stableId,
       });
+      logMessageDebug("useWebSocket", "realtime.client.event_received", {
+        requestId:
+          asString(payload.requestId) ?? asString(messagePayload.requestId),
+        conversationId,
+        messageId,
+        actorUserId: senderId ?? null,
+        peerUserId: null,
+        socketId: null,
+        eventType,
+        roomKey: conversationId,
+        eventId,
+        correlationKey,
+      });
       const chatState = useChatStore.getState();
       const currentUserId = useAuthStore.getState().user?.id;
       const isActiveConversation =
@@ -1059,6 +1072,20 @@ export const useWebSocket = (
       }, {
         incrementUnread: shouldIncrementUnread,
         source: eventType,
+      });
+      logMessageDebug("useWebSocket", "realtime.client.state_updated", {
+        requestId:
+          asString(payload.requestId) ?? asString(messagePayload.requestId),
+        conversationId,
+        messageId,
+        actorUserId: senderId ?? null,
+        peerUserId: null,
+        socketId: null,
+        eventType,
+        roomKey: conversationId,
+        eventId,
+        stateTransition: ingestResult.status,
+        incrementUnread: shouldIncrementUnread,
       });
 
       if (eventType === "message:new" && ingestResult.status === "new") {
