@@ -61,7 +61,8 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const resetKey = `${currentIndex}:${secureUrl ?? ""}`;
+  const [scaleState, setScaleState] = useState({ key: resetKey, value: 1 });
 
   const previewType: PreviewType = current?.previewType ?? "unsupported";
   const fileName = current?.attachment.fileName ?? "";
@@ -87,21 +88,31 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
     };
   }, [isOpen]);
 
-  useEffect(() => {
-    setScale(1);
-  }, [currentIndex, secureUrl]);
+  const scale = scaleState.key === resetKey ? scaleState.value : 1;
 
   const handleZoomIn = useCallback(() => {
-    setScale((currentScale) => Math.min(MAX_SCALE, currentScale + ZOOM_STEP));
-  }, []);
+    setScaleState((currentScale) => {
+      const baseScale = currentScale.key === resetKey ? currentScale.value : 1;
+      return {
+        key: resetKey,
+        value: Math.min(MAX_SCALE, baseScale + ZOOM_STEP),
+      };
+    });
+  }, [resetKey]);
 
   const handleZoomOut = useCallback(() => {
-    setScale((currentScale) => Math.max(MIN_SCALE, currentScale - ZOOM_STEP));
-  }, []);
+    setScaleState((currentScale) => {
+      const baseScale = currentScale.key === resetKey ? currentScale.value : 1;
+      return {
+        key: resetKey,
+        value: Math.max(MIN_SCALE, baseScale - ZOOM_STEP),
+      };
+    });
+  }, [resetKey]);
 
   const handleResetZoom = useCallback(() => {
-    setScale(1);
-  }, []);
+    setScaleState({ key: resetKey, value: 1 });
+  }, [resetKey]);
 
   const handleDownload = useCallback(async () => {
     if (!secureUrl) return;
