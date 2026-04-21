@@ -4,6 +4,7 @@ import path from "node:path";
 const projectRoot = process.cwd();
 const localesRoot = path.join(projectRoot, "src", "locales");
 const srcRoot = path.join(projectRoot, "src");
+const defaultNamespace = "common";
 
 const flattenObject = (value, parent = "", out = {}) => {
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -60,21 +61,109 @@ const walkFiles = (root, allowExt = [".ts", ".tsx"]) => {
   return result;
 };
 
-const extractUsedI18nKeys = (filePath) => {
+const uniq = (items) => [...new Set(items)];
+
+const resolveDynamicCandidates = (key, namespaces, baseKeys) => {
+  const parts = key.split(/\$\{[^}]+\}/g);
+  const prefix = parts[0] ?? "";
+  const suffix = parts.at(-1) ?? "";
+
+  return uniq(
+    namespaces.flatMap((namespace) =>
+      [...baseKeys].filter(
+        (candidate) =>
+          candidate.startsWith(`${namespace}:${prefix}`) &&
+          candidate.endsWith(suffix),
+      ),
+    ),
+  );
+};
+
+const extractDeclaredNamespaces = (code) => {
+  const namespaces = [];
+  const matcher =
+    /useTranslation\(\s*(?:\[\s*([\s\S]*?)\s*\]|["'`]([^"'`]+)["'`])?\s*\)/g;
+
+  let match = matcher.exec(code);
+  while (match) {
+    if (match[1]) {
+      const nsMatcher = /["'`]([^"'`]+)["'`]/g;
+      let nsMatch = nsMatcher.exec(match[1]);
+      while (nsMatch) {
+        namespaces.push(nsMatch[1]);
+        nsMatch = nsMatcher.exec(match[1]);
+      }
+    } else if (match[2]) {
+      namespaces.push(match[2]);
+    } else {
+      namespaces.push(defaultNamespace);
+    }
+
+    match = matcher.exec(code);
+  }
+
+  return uniq(namespaces.length > 0 ? namespaces : [defaultNamespace]);
+};
+
+const extractUsedI18nKeys = (filePath, baseKeys) => {
   const code = fs.readFileSync(filePath, "utf8");
+  const fileNamespaces = extractDeclaredNamespaces(code);
   const matcher = /(?:^|[^\w.])(?:i18n\.)?t\(\s*["'`]([^"'`]+)["'`]/g;
-  const keys = [];
+  const usedKeys = new Set();
+  const unresolved = [];
 
   let match = matcher.exec(code);
   while (match) {
     const key = match[1];
+
     if (key.includes(":")) {
-      keys.push(key);
+      usedKeys.add(key);
+      match = matcher.exec(code);
+      continue;
     }
+
+    if (key.includes("${")) {
+      const dynamicCandidates = resolveDynamicCandidates(
+        key,
+        fileNamespaces,
+        baseKeys,
+      );
+
+      if (dynamicCandidates.length > 0) {
+        dynamicCandidates.forEach((candidate) => usedKeys.add(candidate));
+      } else {
+        unresolved.push({
+          filePath,
+          key,
+          namespaces: [...fileNamespaces],
+        });
+      }
+
+      match = matcher.exec(code);
+      continue;
+    }
+
+    const resolvedKey = fileNamespaces
+      .map((namespace) => `${namespace}:${key}`)
+      .find((candidate) => baseKeys.has(candidate));
+
+    if (resolvedKey) {
+      usedKeys.add(resolvedKey);
+    } else {
+      unresolved.push({
+        filePath,
+        key,
+        namespaces: [...fileNamespaces],
+      });
+    }
+
     match = matcher.exec(code);
   }
 
-  return keys;
+  return {
+    usedKeys: [...usedKeys],
+    unresolved,
+  };
 };
 
 const languages = fs
@@ -94,15 +183,23 @@ const localeMaps = Object.fromEntries(
 
 const baseLanguage = languages.includes("en") ? "en" : languages[0];
 const baseNamespaces = localeMaps[baseLanguage];
-
 const baseKeys = new Set(
   Object.values(baseNamespaces).flatMap((set) => [...set.values()]),
 );
 
 const sourceFiles = walkFiles(srcRoot);
-const usedKeys = new Set(
-  sourceFiles.flatMap((filePath) => extractUsedI18nKeys(filePath)),
+const extracted = sourceFiles.map((filePath) =>
+  extractUsedI18nKeys(filePath, baseKeys),
 );
+
+const usedKeys = new Set(extracted.flatMap((item) => item.usedKeys));
+const unresolvedUnqualified = extracted
+  .flatMap((item) => item.unresolved)
+  .sort((left, right) =>
+    left.filePath === right.filePath
+      ? left.key.localeCompare(right.key)
+      : left.filePath.localeCompare(right.filePath),
+  );
 
 const missingKeys = [...usedKeys].filter((key) => !baseKeys.has(key)).sort();
 const unusedKeys = [...baseKeys].filter((key) => !usedKeys.has(key)).sort();
@@ -131,6 +228,16 @@ if (missingKeys.length > 0) {
   console.error("\nMissing i18n keys (used in code but not defined):");
   for (const key of missingKeys) {
     console.error(`- ${key}`);
+  }
+}
+
+if (unresolvedUnqualified.length > 0) {
+  hasIssue = true;
+  console.error("\nUnresolved unqualified i18n keys:");
+  for (const item of unresolvedUnqualified) {
+    const relativePath = path.relative(projectRoot, item.filePath);
+    const namespaceHint = item.namespaces.join(", ");
+    console.error(`- ${relativePath}: "${item.key}" (namespaces: ${namespaceHint})`);
   }
 }
 

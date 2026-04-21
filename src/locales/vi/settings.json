@@ -3,6 +3,17 @@
   "description": "Điều chỉnh các tùy chọn của bạn",
   "resetAll": "Đặt lại mặc định",
   "version": "Cài đặt v{{version}}",
+  "profile": {
+    "description": "Thông tin nhận diện, liên hệ và dữ liệu doanh nghiệp."
+  },
+  "chatData": {
+    "title": "Trò chuyện & dữ liệu",
+    "description": "Hành vi nhắn tin, ngôn ngữ và các tùy chọn hội thoại cục bộ."
+  },
+  "securityDevices": {
+    "title": "Bảo mật & thiết bị",
+    "description": "Mật khẩu, người dùng đã chặn và quyền truy cập tài khoản."
+  },
   "appearance": {
     "title": "Giao diện",
     "description": "Tùy chỉnh giao diện, màu sắc, cỡ chữ và mật độ hiển thị",

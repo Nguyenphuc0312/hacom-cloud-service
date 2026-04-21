@@ -51,9 +51,16 @@
       "reply": "Trả lời",
       "forward": "Chuyển tiếp",
       "copy": "Sao chép",
+      "copyDetails": "Sao chép chi tiết",
+      "inspect": "Xem chi tiết",
       "edit": "Chỉnh sửa",
       "delete": "Xóa"
     },
+    "structuredBlock": "Nội dung có cấu trúc",
+    "expandLong": "Xem thêm",
+    "collapseLong": "Thu gọn",
+    "editedAtNoHistory": "Đã chỉnh sửa lúc {{time}}",
+    "editedNoHistory": "Đã chỉnh sửa",
     "newLabel": "Tin nhắn mới ({{count}})",
     "newAria": "Tin nhắn mới",
     "inConversationAria": "Tin nhắn trong cuộc trò chuyện",
@@ -76,6 +83,7 @@
     "sendMessage": "Gửi tin nhắn",
     "sending": "Đang gửi tin nhắn",
     "sentAnnouncement": "Đã gửi tin nhắn",
+    "optimisticAnnouncement": "Tin nhắn đang chờ máy chủ xác nhận",
     "queuedAnnouncement": "Tin nhắn đã được xếp hàng đợi",
     "failedAnnouncement": "Gửi tin nhắn thất bại",
     "reconnectingHint": "Đang kết nối lại. Bạn vẫn có thể tiếp tục gửi trong lúc hệ thống xác nhận.",
@@ -109,6 +117,7 @@
   "selection": {
     "enter": "Chọn tin nhắn",
     "toolbar": "Thao tác chọn",
+    "selectMessage": "Chọn tin nhắn",
     "selected": "Đã chọn {{count}}",
     "selected_one": "Đã chọn {{count}}",
     "selected_other": "Đã chọn {{count}}"
@@ -122,6 +131,9 @@
     "resultCount": "{{count}} kết quả",
     "resultCount_one": "{{count}} kết quả",
     "resultCount_other": "{{count}} kết quả"
+  },
+  "conversation": {
+    "untitled": "Cuộc trò chuyện chưa đặt tên"
   },
   "contactShare": {
     "title": "Chia sẻ liên hệ",

@@ -25,6 +25,7 @@
     "copy": "Sao chép",
     "forward": "Chuyển tiếp",
     "reply": "Trả lời",
+    "more": "Thêm",
     "startChat": "Bắt đầu chat",
     "signOut": "Đăng xuất"
   },
@@ -65,6 +66,27 @@
   },
   "toast": {
     "featureInDevelopment": "Tính năng đang phát triển"
+  },
+  "notifications": {
+    "panelTitle": "Thông báo",
+    "panelSubtitle": "Nhắc tên, tin nhắn và hoạt động hội thoại",
+    "conversationFallback": "{{count}} tin nhắn chưa đọc",
+    "actions": {
+      "markAllRead": "Đánh dấu đã đọc",
+      "clear": "Xóa"
+    },
+    "filter": {
+      "all": "Tất cả",
+      "unread": "Chưa đọc",
+      "message": "Tin nhắn",
+      "mention": "Nhắc tên",
+      "groupActivity": "Hoạt động nhóm",
+      "system": "Hệ thống"
+    },
+    "empty": {
+      "title": "Chưa có thông báo",
+      "description": "Các nhắc tên, tin nhắn mới và cập nhật hệ thống sẽ xuất hiện tại đây."
+    }
   },
   "commandPalette": {
     "openChatWorkspace": "Mở không gian trò chuyện",

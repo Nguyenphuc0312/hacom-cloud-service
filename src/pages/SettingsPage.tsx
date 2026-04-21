@@ -76,7 +76,9 @@ const readHashTargetId = () => {
   return hash || null;
 };
 
-const resolveNavIdFromTarget = (targetId: string | null): SettingsNavId | null => {
+const resolveNavIdFromTarget = (
+  targetId: string | null,
+): SettingsNavId | null => {
   if (!targetId) {
     return null;
   }
@@ -121,8 +123,8 @@ export const SettingsPage: React.FC = () => {
   const [activeNavId, setActiveNavId] = useState<SettingsNavId>(() => {
     return resolveNavIdFromTarget(readHashTargetId()) ?? DEFAULT_NAV_ID;
   });
-  const [selectedMobileNavId, setSelectedMobileNavId] = useState<SettingsNavId | null>(
-    () => {
+  const [selectedMobileNavId, setSelectedMobileNavId] =
+    useState<SettingsNavId | null>(() => {
       if (
         typeof window !== "undefined" &&
         window.matchMedia(MOBILE_MEDIA_QUERY).matches
@@ -131,8 +133,7 @@ export const SettingsPage: React.FC = () => {
       }
 
       return null;
-    },
-  );
+    });
 
   const contentRef = useRef<HTMLDivElement | null>(null);
 
@@ -144,7 +145,10 @@ export const SettingsPage: React.FC = () => {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    if (
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
+    ) {
       return undefined;
     }
 
@@ -194,7 +198,11 @@ export const SettingsPage: React.FC = () => {
   }, [isMobile]);
 
   useEffect(() => {
-    if (!contentRef.current || isMobile || typeof IntersectionObserver === "undefined") {
+    if (
+      !contentRef.current ||
+      isMobile ||
+      typeof IntersectionObserver === "undefined"
+    ) {
       return undefined;
     }
 
@@ -202,13 +210,15 @@ export const SettingsPage: React.FC = () => {
     const visibleEntries = new Map<string, IntersectionObserverEntry>();
 
     const resolveMostVisibleNav = () => {
-      const nextEntry = Array.from(visibleEntries.values()).sort((left, right) => {
-        if (right.intersectionRatio !== left.intersectionRatio) {
-          return right.intersectionRatio - left.intersectionRatio;
-        }
+      const nextEntry = Array.from(visibleEntries.values()).sort(
+        (left, right) => {
+          if (right.intersectionRatio !== left.intersectionRatio) {
+            return right.intersectionRatio - left.intersectionRatio;
+          }
 
-        return left.boundingClientRect.top - right.boundingClientRect.top;
-      })[0];
+          return left.boundingClientRect.top - right.boundingClientRect.top;
+        },
+      )[0];
 
       const nextNavId = nextEntry
         ? SECTION_TO_NAV[(nextEntry.target as HTMLElement).id]
@@ -280,9 +290,6 @@ export const SettingsPage: React.FC = () => {
       navId: "profile",
       id: "profile",
       label: t("profile:pageTitle", { defaultValue: "Profile" }),
-      description: t("settings:profile.description", {
-        defaultValue: "Identity, contact details, and enterprise information.",
-      }),
       icon: <UserCircleIcon className="h-4 w-4" />,
     },
     {
@@ -317,16 +324,12 @@ export const SettingsPage: React.FC = () => {
       label: t("settings:securityDevices.title", {
         defaultValue: "Security & devices",
       }),
-      description: t("settings:securityDevices.description", {
-        defaultValue: "Password controls, blocked users, and account access.",
-      }),
       icon: <ShieldCheckIcon className="h-4 w-4" />,
     },
     {
       navId: "danger",
       id: "danger",
       label: t("settings:dangerZone.title"),
-      description: t("settings:dangerZone.description"),
       icon: <ExclamationTriangleIcon className="h-4 w-4" />,
     },
   ];
@@ -387,7 +390,7 @@ export const SettingsPage: React.FC = () => {
 
   const renderSettingsFooter = () => (
     <div className="border-t border-border/60 pt-5 text-sm text-text-muted">
-      <p>{t("version", { version: 2 })}</p>
+      <p>{t("settings:version", { version: 2 })}</p>
       <p className="mt-1">
         {t("common:status.lastSynced", {
           time: formatTimestamp(lastSyncedAt),
@@ -510,7 +513,7 @@ export const SettingsPage: React.FC = () => {
         items={navItems}
         activeItemId={activeNavId}
         onSelect={(id) => handleSelectNav(id as SettingsNavId)}
-        ariaLabel={t("pageTitle")}
+        ariaLabel={t("settings:pageTitle")}
         mode="list"
       />
       {renderSettingsFooter()}
@@ -521,7 +524,7 @@ export const SettingsPage: React.FC = () => {
     <SettingsPageShell
       header={
         <AppPageHeader
-          title={t("pageTitle")}
+          title={t("settings:pageTitle")}
           subtitle={t("common:status.lastUpdated", {
             time: formatTimestamp(updatedAt || null),
           })}
@@ -558,7 +561,7 @@ export const SettingsPage: React.FC = () => {
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
               )}
             >
-              {t("resetAll")}
+              {t("settings:resetAll")}
             </button>
           }
         />
@@ -569,11 +572,11 @@ export const SettingsPage: React.FC = () => {
             items={navItems}
             activeItemId={activeNavId}
             onSelect={(id) => handleSelectNav(id as SettingsNavId)}
-            heading={t("pageTitle")}
+            heading={t("settings:pageTitle")}
             meta={t("common:status.lastSynced", {
               time: formatTimestamp(lastSyncedAt),
             })}
-            ariaLabel={t("pageTitle")}
+            ariaLabel={t("settings:pageTitle")}
           />
         ) : undefined
       }

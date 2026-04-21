@@ -21,6 +21,16 @@ export const appNamespaces = [
 
 const isProduction =
   typeof import.meta !== "undefined" && Boolean(import.meta.env?.PROD);
+const missingTranslationKeys = new Set<string>();
+
+const handleMissingKey = (key: string) => {
+  if (!isProduction && !missingTranslationKeys.has(key)) {
+    missingTranslationKeys.add(key);
+    console.warn(`[i18n] Missing translation key: ${key}`);
+  }
+
+  return "";
+};
 
 if (!i18n.isInitialized) {
   void i18n
@@ -41,7 +51,7 @@ if (!i18n.isInitialized) {
       load: "languageOnly",
       returnNull: false,
       returnEmptyString: false,
-      parseMissingKeyHandler: (key) => (isProduction ? "" : `[${key}]`),
+      parseMissingKeyHandler: handleMissingKey,
       interpolation: {
         escapeValue: false,
       },

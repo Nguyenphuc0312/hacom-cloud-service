@@ -12,7 +12,9 @@
     "missingRefreshToken": "Không tìm thấy refresh token",
     "refreshMissingToken": "Phản hồi refresh không có access token",
     "loginTokenMissing": "Phản hồi đăng nhập không có access token",
-    "registerTokenMissing": "Phản hồi đăng ký không có access token"
+    "registerTokenMissing": "Phản hồi đăng ký không có access token",
+    "profileMissing": "Không thể tải hồ sơ của bạn.",
+    "profileRetryHint": "Hãy làm mới hồ sơ hoặc đăng nhập lại."
   },
   "chat": {
     "conversationAccessDenied": "Không thể truy cập cuộc trò chuyện này",
@@ -36,6 +38,7 @@
     "tooLarge": "Tệp quá lớn",
     "tooManyFiles": "Tối đa {{max}} tệp",
     "fileTooLargeNamed": "{{name}} quá lớn",
+    "unsupportedTypeNamed": "{{name}} có định dạng tệp không được hỗ trợ",
     "totalSizeTooLarge": "Tổng dung lượng tệp vượt giới hạn"
   }
 }

@@ -25,6 +25,7 @@
     "copy": "Copy",
     "forward": "Forward",
     "reply": "Reply",
+    "more": "More",
     "startChat": "Start chat",
     "signOut": "Sign out"
   },
@@ -65,6 +66,27 @@
   },
   "toast": {
     "featureInDevelopment": "This feature is in development"
+  },
+  "notifications": {
+    "panelTitle": "Notifications",
+    "panelSubtitle": "Mentions, messages and conversation activity",
+    "conversationFallback": "{{count}} unread message(s)",
+    "actions": {
+      "markAllRead": "Mark read",
+      "clear": "Clear"
+    },
+    "filter": {
+      "all": "All",
+      "unread": "Unread",
+      "message": "Messages",
+      "mention": "Mentions",
+      "groupActivity": "Group activity",
+      "system": "System"
+    },
+    "empty": {
+      "title": "No notifications yet",
+      "description": "New mentions, messages, and system updates will appear here."
+    }
   },
   "commandPalette": {
     "openChatWorkspace": "Open your chat workspace",

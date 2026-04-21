@@ -51,9 +51,16 @@
       "reply": "Reply",
       "forward": "Forward",
       "copy": "Copy",
+      "copyDetails": "Copy details",
+      "inspect": "Inspect message",
       "edit": "Edit",
       "delete": "Delete"
     },
+    "structuredBlock": "Structured content",
+    "expandLong": "Show more",
+    "collapseLong": "Show less",
+    "editedAtNoHistory": "Edited at {{time}}",
+    "editedNoHistory": "Edited",
     "newLabel": "New messages ({{count}})",
     "newAria": "New messages",
     "inConversationAria": "Messages in conversation",
@@ -76,6 +83,7 @@
     "sendMessage": "Send message",
     "sending": "Sending message",
     "sentAnnouncement": "Message sent",
+    "optimisticAnnouncement": "Message pending server confirmation",
     "queuedAnnouncement": "Message queued",
     "failedAnnouncement": "Message failed to send",
     "reconnectingHint": "Reconnecting. You can keep sending while messages are being confirmed.",
@@ -109,6 +117,7 @@
   "selection": {
     "enter": "Select messages",
     "toolbar": "Selection actions",
+    "selectMessage": "Select message",
     "selected": "{{count}} selected",
     "selected_one": "{{count}} selected",
     "selected_other": "{{count}} selected"
@@ -122,6 +131,9 @@
     "resultCount": "{{count}} results",
     "resultCount_one": "{{count}} result",
     "resultCount_other": "{{count}} results"
+  },
+  "conversation": {
+    "untitled": "Untitled conversation"
   },
   "contactShare": {
     "title": "Share contact",

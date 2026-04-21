@@ -3,6 +3,17 @@
   "description": "Adjust your preferences",
   "resetAll": "Reset to defaults",
   "version": "Settings v{{version}}",
+  "profile": {
+    "description": "Identity, contact details, and enterprise information."
+  },
+  "chatData": {
+    "title": "Chat & data",
+    "description": "Message behaviour, language, and local conversation preferences."
+  },
+  "securityDevices": {
+    "title": "Security & devices",
+    "description": "Password controls, blocked users, and account access."
+  },
   "appearance": {
     "title": "Appearance",
     "description": "Customise theme, colours, font size, and density",
