@@ -30,6 +30,8 @@ export const queryKeys = {
   hrEmployeeImportReport: (batchId: string) => ['hr-import-report', batchId] as const,
   auditLogsRoot: ['audit-logs'] as const,
   auditLogs: (params: QueryParams) => ['audit-logs', params] as const,
+  systemLogsRoot: ['system-logs'] as const,
+  systemLogs: (params: QueryParams) => ['system-logs', params] as const,
   conversationsRoot: ['conversations'] as const,
   conversationsList: (params: QueryParams) => ['conversations', 'list', params] as const,
   conversationDetailRoot: ['conversations', 'detail'] as const,

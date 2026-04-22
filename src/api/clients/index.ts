@@ -8,6 +8,7 @@ export * from './conversationsClient';
 export * from './emailTemplatesClient';
 export * from './hrEmployeesClient';
 export * from './smtpClient';
+export * from './systemLogsClient';
 export * from './serviceHealthClient';
 export * from './sessionsClient';
 export * from './usersClient';

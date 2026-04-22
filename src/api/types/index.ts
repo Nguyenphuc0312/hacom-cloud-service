@@ -13,4 +13,5 @@ export * from './service-health';
 export * from './sessions';
 export * from './smtp';
 export * from './status';
+export * from './system-logs';
 export * from './users';

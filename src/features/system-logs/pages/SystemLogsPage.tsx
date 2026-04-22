@@ -1,239 +1,125 @@
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Button, Input, Select, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 
+import { getErrorMessage } from '@/api/error';
+import { systemLogsClient } from '@/api/clients';
+import { queryKeys } from '@/api/queryKeys';
+import type { SystemLogItem, SystemLogLevel, SystemLogQuery, SystemLogRange } from '@/api/types';
 import { AppIcon } from '@/components/AppIcon';
 import { AppTooltip } from '@/components/AppTooltip';
 import { DataTableShell } from '@/components/DataTableShell';
 import { DetailPanel } from '@/components/DetailPanel';
 import { FilterBar } from '@/components/FilterBar';
 import { PageShell } from '@/components/PageShell';
-import { EmptyState } from '@/components/QueryStates';
+import { QueryStateView } from '@/components/QueryStates';
 import { StatusBadge } from '@/components/StatusBadge';
 import { DataTable } from '@/components/ui/DataTable';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { formatDateTime, formatRelativeTime } from '@/utils/date';
 
-type LogLevel = 'info' | 'warning' | 'error' | 'success';
-
-interface SystemLogEntry {
-  id: string;
-  timestamp: string;
-  level: LogLevel;
-  service: string;
-  host: string;
-  summary: string;
-  message: string;
-  requestId: string;
-  traceId: string;
-  spanId: string;
-  source: string;
-  metadata: Record<string, unknown>;
-}
-
-const now = Date.now();
-
-const LOG_ENTRIES: SystemLogEntry[] = [
-  {
-    id: 'log-1001',
-    timestamp: new Date(now - 1000 * 60 * 3).toISOString(),
-    level: 'error',
-    service: 'chat-api',
-    host: 'api-node-02',
-    summary: 'Sender ACK exceeded threshold during persistence.',
-    message:
-      'Persistence completed after retry window. ACK p95 crossed threshold and queue drain was delayed by redis contention.',
-    requestId: 'req_a1f92ce4',
-    traceId: 'trace_7d31b182',
-    spanId: 'span_209fa13d',
-    source: 'runtime',
-    metadata: {
-      ackP95Ms: 1294,
-      queue: 'message_sender',
-      retryCount: 3,
-      region: 'sgn-a',
-    },
-  },
-  {
-    id: 'log-1002',
-    timestamp: new Date(now - 1000 * 60 * 11).toISOString(),
-    level: 'warning',
-    service: 'auth-service',
-    host: 'auth-01',
-    summary: 'Token validation latency trending up.',
-    message:
-      'Validation remained successful but the 95th percentile latency stayed above the warning baseline for 6 minutes.',
-    requestId: 'req_91dc44bf',
-    traceId: 'trace_11d03a77',
-    spanId: 'span_33fa10ca',
-    source: 'telemetry',
-    metadata: {
-      p95Ms: 462,
-      baselineMs: 280,
-      environment: 'production',
-      region: 'sgn-a',
-    },
-  },
-  {
-    id: 'log-1003',
-    timestamp: new Date(now - 1000 * 60 * 17).toISOString(),
-    level: 'info',
-    service: 'smtp-gateway',
-    host: 'mailer-01',
-    summary: 'SMTP draft activated successfully.',
-    message:
-      'Operator published the current SMTP draft and health checks completed without credential or transport errors.',
-    requestId: 'req_238f8120',
-    traceId: 'trace_f00297ce',
-    spanId: 'span_c81992ef',
-    source: 'admin_action',
-    metadata: {
-      actor: 'admin@hacom.vn',
-      change: 'activate_smtp_draft',
-      fromHost: 'smtp.old.local',
-      toHost: 'smtp.prod.local',
-    },
-  },
-  {
-    id: 'log-1004',
-    timestamp: new Date(now - 1000 * 60 * 26).toISOString(),
-    level: 'error',
-    service: 'conversation-worker',
-    host: 'worker-03',
-    summary: 'Moderation enrichment job failed for attachment payload.',
-    message:
-      'The worker skipped the attachment due to malformed metadata and moved the conversation into manual review.',
-    requestId: 'req_140e1ab6',
-    traceId: 'trace_1831d9bf',
-    spanId: 'span_6d9cc0d8',
-    source: 'background_job',
-    metadata: {
-      job: 'moderation_enrichment',
-      conversationId: 'c-1002',
-      attachmentType: 'application/json',
-      resolution: 'manual_review',
-    },
-  },
-  {
-    id: 'log-1005',
-    timestamp: new Date(now - 1000 * 60 * 41).toISOString(),
-    level: 'success',
-    service: 'access-control',
-    host: 'acl-01',
-    summary: 'Pending IP request approved.',
-    message:
-      'Approval propagated to the access-control cache and the request entered the active allow-list without rollback.',
-    requestId: 'req_d43ef800',
-    traceId: 'trace_bb0f4d20',
-    spanId: 'span_e85b9342',
-    source: 'admin_action',
-    metadata: {
-      actor: 'security.ops@hacom.vn',
-      requestId: 'acl-4892',
-      policy: 'temporary_allow',
-      expiresAt: new Date(now + 1000 * 60 * 60 * 6).toISOString(),
-    },
-  },
-  {
-    id: 'log-1006',
-    timestamp: new Date(now - 1000 * 60 * 70).toISOString(),
-    level: 'warning',
-    service: 'redis',
-    host: 'redis-primary',
-    summary: 'Blocked clients above comfort baseline.',
-    message:
-      'Redis stayed available but blocked clients and write amplification moved beyond the established comfort range.',
-    requestId: 'req_f0ce8aa1',
-    traceId: 'trace_44f78301',
-    spanId: 'span_71a0dbaf',
-    source: 'telemetry',
-    metadata: {
-      blockedClients: 12,
-      opsPerSecond: 5821,
-      memoryUsedBytes: 235721728,
-    },
-  },
-];
+const LOG_FETCH_LIMIT = 200;
+const KEYWORD_DEBOUNCE_MS = 250;
 
 const LEVEL_OPTIONS = [
-  { label: 'Mọi level', value: 'all' },
+  { label: 'Moi level', value: 'all' },
   { label: 'Error', value: 'error' },
   { label: 'Warning', value: 'warning' },
   { label: 'Info', value: 'info' },
   { label: 'Success', value: 'success' },
 ] as const;
 
-const SERVICE_OPTIONS = [
-  { label: 'Mọi service', value: 'all' },
-  ...Array.from(new Set(LOG_ENTRIES.map((entry) => entry.service))).map((service) => ({
-    label: service,
-    value: service,
-  })),
-] as const;
-
 const TIME_RANGE_OPTIONS = [
-  { label: '15 phút', value: '15m' },
-  { label: '1 giờ', value: '1h' },
-  { label: '24 giờ', value: '24h' },
-  { label: 'Tất cả', value: 'all' },
+  { label: '15 phut', value: '15m' },
+  { label: '1 gio', value: '1h' },
+  { label: '24 gio', value: '24h' },
+  { label: 'Tat ca', value: 'all' },
 ] as const;
 
-const resolveRangeCutoff = (value: string) => {
-  if (value === '15m') return now - 1000 * 60 * 15;
-  if (value === '1h') return now - 1000 * 60 * 60;
-  if (value === '24h') return now - 1000 * 60 * 60 * 24;
-  return null;
-};
+const renderOptionalValue = (value: string | null) => value ?? '-';
 
 export const SystemLogsPage = () => {
   const [keyword, setKeyword] = useState('');
-  const [level, setLevel] = useState<'all' | LogLevel>('all');
+  const [level, setLevel] = useState<'all' | SystemLogLevel>('all');
   const [service, setService] = useState<string>('all');
-  const [timeRange, setTimeRange] = useState<'15m' | '1h' | '24h' | 'all'>('1h');
+  const [timeRange, setTimeRange] = useState<SystemLogRange>('1h');
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
+  const deferredKeyword = useDeferredValue(keyword.trim());
+  const [debouncedKeyword, setDebouncedKeyword] = useState(deferredKeyword);
 
-  const filteredLogs = useMemo(() => {
-    const normalizedKeyword = keyword.trim().toLowerCase();
-    const cutoff = resolveRangeCutoff(timeRange);
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedKeyword(deferredKeyword);
+    }, KEYWORD_DEBOUNCE_MS);
 
-    return LOG_ENTRIES.filter((entry) => {
-      const entryTimestamp = new Date(entry.timestamp).getTime();
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [deferredKeyword]);
 
-      if (cutoff !== null && entryTimestamp < cutoff) {
-        return false;
-      }
+  const queryParams = useMemo<SystemLogQuery>(
+    () => ({
+      keyword: debouncedKeyword || undefined,
+      level: level === 'all' ? undefined : level,
+      service: service === 'all' ? undefined : service,
+      range: timeRange,
+      limit: LOG_FETCH_LIMIT,
+    }),
+    [debouncedKeyword, level, service, timeRange],
+  );
 
-      if (level !== 'all' && entry.level !== level) {
-        return false;
-      }
+  const query = useQuery({
+    queryKey: queryKeys.systemLogs(queryParams),
+    queryFn: () => systemLogsClient.list(queryParams),
+    placeholderData: keepPreviousData,
+  });
 
-      if (service !== 'all' && entry.service !== service) {
-        return false;
-      }
+  const logs = useMemo(() => query.data?.items ?? [], [query.data?.items]);
 
-      if (!normalizedKeyword) {
-        return true;
-      }
+  useEffect(() => {
+    if (!selectedLogId) {
+      return;
+    }
 
-      return `${entry.service} ${entry.summary} ${entry.message} ${entry.requestId} ${entry.traceId}`
-        .toLowerCase()
-        .includes(normalizedKeyword);
-    }).sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime());
-  }, [keyword, level, service, timeRange]);
+    if (!logs.some((item) => item.id === selectedLogId)) {
+      setSelectedLogId(null);
+    }
+  }, [logs, selectedLogId]);
 
   const selectedLog = selectedLogId
-    ? filteredLogs.find((entry) => entry.id === selectedLogId) ??
-      LOG_ENTRIES.find((entry) => entry.id === selectedLogId) ??
-      null
+    ? logs.find((entry) => entry.id === selectedLogId) ?? null
     : null;
 
-  const activeFilterCount = [keyword.trim(), level !== 'all' ? level : null, service !== 'all' ? service : null]
-    .filter(Boolean)
-    .length;
+  const serviceOptions = useMemo(
+    () => [
+      { label: 'Moi service', value: 'all' },
+      ...Array.from(
+        new Set(
+          logs
+            .map((entry) => entry.service)
+            .filter(Boolean)
+            .concat(service !== 'all' ? [service] : []),
+        ),
+      ).map((value) => ({
+        label: value,
+        value,
+      })),
+    ],
+    [logs, service],
+  );
 
-  const columns = useMemo<ColumnsType<SystemLogEntry>>(
+  const activeFilterCount = [
+    debouncedKeyword,
+    level !== 'all' ? level : null,
+    service !== 'all' ? service : null,
+    timeRange !== '1h' ? timeRange : null,
+  ].filter(Boolean).length;
+
+  const columns = useMemo<ColumnsType<SystemLogItem>>(
     () => [
       {
-        title: 'Thời gian',
+        title: 'Thoi gian',
         dataIndex: 'timestamp',
         width: 168,
         render: (value: string) => (
@@ -246,12 +132,12 @@ export const SystemLogsPage = () => {
         title: 'Level',
         dataIndex: 'level',
         width: 120,
-        render: (value: LogLevel) => <StatusBadge status={value} />,
+        render: (value: SystemLogLevel) => <StatusBadge status={value} />,
       },
       {
         title: 'Service',
         dataIndex: 'service',
-        width: 160,
+        width: 180,
         render: (value: string) => <Typography.Text code>{value}</Typography.Text>,
       },
       {
@@ -267,7 +153,8 @@ export const SystemLogsPage = () => {
       {
         title: 'Host',
         dataIndex: 'host',
-        width: 140,
+        width: 160,
+        render: (value: string | null) => renderOptionalValue(value),
       },
     ],
     [],
@@ -281,20 +168,57 @@ export const SystemLogsPage = () => {
     setSelectedLogId(null);
   };
 
-  const copyValue = async (value: string) => {
+  const copyValue = async (value: string | null) => {
+    if (!value) {
+      return;
+    }
+
     await navigator.clipboard.writeText(value);
-    message.success('Đã copy giá trị tham chiếu.');
+    message.success('Da copy gia tri tham chieu.');
   };
+
+  const pageHeader = {
+    eyebrow: 'Van hanh',
+    title: 'Nhat ky he thong',
+    description:
+      'Triage runtime logs theo level, service va correlation. Khong co du lieu mock hay fallback ngoai datasource van hanh.',
+  };
+
+  if (query.isPending && !query.data) {
+    return (
+      <PageShell {...pageHeader}>
+        <QueryStateView kind="loading" title="Dang tai nhat ky he thong..." />
+      </PageShell>
+    );
+  }
+
+  if (query.isError && !query.data) {
+    return (
+      <PageShell {...pageHeader}>
+        <QueryStateView
+          kind="error"
+          description={getErrorMessage(query.error, 'Khong the tai nhat ky he thong.')}
+          onRetry={() => {
+            void query.refetch();
+          }}
+        />
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell
-      eyebrow="Vận hành"
-      title="Nhật ký hệ thống"
-      description="Triage runtime logs theo level, service và correlation. Không có phần trình diễn ngoài tác vụ điều tra."
+      {...pageHeader}
       headerExtra={
         <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
-          <Button icon={<AppIcon name="refresh" size={14} />} onClick={handleReset}>
-            Đặt lại bộ lọc
+          <Button
+            icon={<AppIcon name="refresh" size={14} />}
+            loading={query.isFetching}
+            onClick={() => {
+              void query.refetch();
+            }}
+          >
+            Lam moi
           </Button>
         </div>
       }
@@ -306,45 +230,69 @@ export const SystemLogsPage = () => {
               <div className="ds-toolbar-field ds-toolbar-field--lg">
                 <Input
                   allowClear
+                  aria-label="System log keyword filter"
                   value={keyword}
-                  placeholder="Tìm message, request ID, trace ID"
+                  placeholder="Tim message, request ID, trace ID"
                   onChange={(event) => setKeyword(event.target.value)}
                 />
               </div>
               <div className="ds-toolbar-field ds-toolbar-field--sm">
-                <Select value={level} options={LEVEL_OPTIONS as unknown as { label: string; value: string }[]} onChange={(value) => setLevel(value as 'all' | LogLevel)} />
+                <Select
+                  aria-label="System log level filter"
+                  value={level}
+                  options={LEVEL_OPTIONS as unknown as { label: string; value: string }[]}
+                  onChange={(value) => setLevel(value as 'all' | SystemLogLevel)}
+                />
               </div>
               <div className="ds-toolbar-field ds-toolbar-field--md">
-                <Select value={service} options={SERVICE_OPTIONS as unknown as { label: string; value: string }[]} onChange={setService} />
+                <Select
+                  aria-label="System log service filter"
+                  value={service}
+                  options={serviceOptions}
+                  onChange={setService}
+                />
               </div>
               <div className="ds-toolbar-field ds-toolbar-field--sm">
                 <Select
+                  aria-label="System log range filter"
                   value={timeRange}
                   options={TIME_RANGE_OPTIONS as unknown as { label: string; value: string }[]}
-                  onChange={(value) => setTimeRange(value as '15m' | '1h' | '24h' | 'all')}
+                  onChange={(value) => setTimeRange(value as SystemLogRange)}
                 />
               </div>
               <div className="ds-toolbar-field ds-toolbar-actions">
-                <Button onClick={handleReset}>Đặt lại</Button>
+                <Button onClick={handleReset}>Dat lai</Button>
               </div>
             </div>
             <div className="ds-filter-toolbar-meta">
-              <span>{filteredLogs.length} bản ghi</span>
-              <span>{activeFilterCount > 0 ? `${activeFilterCount} bộ lọc` : 'Không có bộ lọc'}</span>
-              <span>Inspector chỉ dùng cho correlation và payload chi tiết</span>
+              <span>{logs.length} ban ghi</span>
+              <span>{activeFilterCount > 0 ? `${activeFilterCount} bo loc` : 'Khong co bo loc'}</span>
+              <span>
+                Dong bo gan nhat:{' '}
+                {query.dataUpdatedAt
+                  ? formatDateTime(new Date(query.dataUpdatedAt).toISOString())
+                  : '-'}
+              </span>
             </div>
           </FilterBar>
 
           <DataTableShell
             title="Runtime events"
-            meta="Danh sách chính chỉ giữ level, service, message và host. Correlation đi vào inspector."
+            meta="Danh sach chinh chi giu level, service, message va host. Correlation va payload di vao inspector."
           >
             <DataTable
               rowKey="id"
               columns={columns}
               minHeight={420}
-              dataSource={filteredLogs}
-              emptyNode={<EmptyState description="Không có log nào khớp với bộ lọc hiện tại." />}
+              loading={query.isFetching && !query.isPending}
+              dataSource={logs}
+              emptyNode={
+                <EmptyState
+                  title="Chua co ban ghi"
+                  description="Khong co log nao khop voi bo loc hien tai."
+                  compact
+                />
+              }
               pagination={{ pageSize: 8, hideOnSinglePage: true }}
               onRow={(record) => ({
                 onClick: () => setSelectedLogId(record.id),
@@ -356,7 +304,7 @@ export const SystemLogsPage = () => {
 
         <DetailPanel
           open={Boolean(selectedLog)}
-          title={selectedLog ? `${selectedLog.service} · ${selectedLog.level}` : 'Chi tiết log'}
+          title={selectedLog ? `${selectedLog.service} · ${selectedLog.level}` : 'Chi tiet log'}
           onClose={() => setSelectedLogId(null)}
           width={420}
           className="ds-ops-detail-panel"
@@ -367,17 +315,17 @@ export const SystemLogsPage = () => {
                 <div className="ds-ops-detail-header">
                   <div>
                     <strong>{selectedLog.summary}</strong>
-                    <p>{selectedLog.host}</p>
+                    <p>{renderOptionalValue(selectedLog.host)}</p>
                   </div>
                   <StatusBadge status={selectedLog.level} />
                 </div>
               </section>
 
               <section className="ds-ops-detail-section">
-                <h3>Ngữ cảnh</h3>
+                <h3>Ngu canh</h3>
                 <dl className="ds-ops-fact-list">
                   <div>
-                    <dt>Thời gian</dt>
+                    <dt>Thoi gian</dt>
                     <dd>{formatDateTime(selectedLog.timestamp)}</dd>
                   </div>
                   <div>
@@ -385,12 +333,12 @@ export const SystemLogsPage = () => {
                     <dd>{selectedLog.service}</dd>
                   </div>
                   <div>
-                    <dt>Nguồn</dt>
-                    <dd>{selectedLog.source}</dd>
+                    <dt>Nguon</dt>
+                    <dd>{renderOptionalValue(selectedLog.source)}</dd>
                   </div>
                   <div>
                     <dt>Host</dt>
-                    <dd>{selectedLog.host}</dd>
+                    <dd>{renderOptionalValue(selectedLog.host)}</dd>
                   </div>
                 </dl>
               </section>
@@ -398,15 +346,33 @@ export const SystemLogsPage = () => {
               <section className="ds-ops-detail-section">
                 <h3>Correlation</h3>
                 <div className="ds-ops-inline-list">
-                  <Button size="small" onClick={() => void copyValue(selectedLog.requestId)}>
+                  <Button
+                    size="small"
+                    disabled={!selectedLog.requestId}
+                    onClick={() => {
+                      void copyValue(selectedLog.requestId);
+                    }}
+                  >
                     <AppIcon name="copy" size={12} />
                     Request ID
                   </Button>
-                  <Button size="small" onClick={() => void copyValue(selectedLog.traceId)}>
+                  <Button
+                    size="small"
+                    disabled={!selectedLog.traceId}
+                    onClick={() => {
+                      void copyValue(selectedLog.traceId);
+                    }}
+                  >
                     <AppIcon name="copy" size={12} />
                     Trace ID
                   </Button>
-                  <Button size="small" onClick={() => void copyValue(selectedLog.spanId)}>
+                  <Button
+                    size="small"
+                    disabled={!selectedLog.spanId}
+                    onClick={() => {
+                      void copyValue(selectedLog.spanId);
+                    }}
+                  >
                     <AppIcon name="copy" size={12} />
                     Span ID
                   </Button>
@@ -414,15 +380,15 @@ export const SystemLogsPage = () => {
                 <dl className="ds-ops-fact-list">
                   <div>
                     <dt>Request ID</dt>
-                    <dd>{selectedLog.requestId}</dd>
+                    <dd>{renderOptionalValue(selectedLog.requestId)}</dd>
                   </div>
                   <div>
                     <dt>Trace ID</dt>
-                    <dd>{selectedLog.traceId}</dd>
+                    <dd>{renderOptionalValue(selectedLog.traceId)}</dd>
                   </div>
                   <div>
                     <dt>Span ID</dt>
-                    <dd>{selectedLog.spanId}</dd>
+                    <dd>{renderOptionalValue(selectedLog.spanId)}</dd>
                   </div>
                 </dl>
               </section>
@@ -437,12 +403,16 @@ export const SystemLogsPage = () => {
               <section className="ds-ops-detail-section">
                 <h3>Metadata</h3>
                 <div className="ds-ops-code-block">
-                  <pre>{JSON.stringify(selectedLog.metadata, null, 2)}</pre>
+                  <pre>{JSON.stringify(selectedLog.metadata ?? {}, null, 2)}</pre>
                 </div>
               </section>
             </div>
           ) : (
-            <EmptyState description="Chọn một bản ghi để xem correlation và payload." />
+            <EmptyState
+              title="Chua chon log"
+              description="Chon mot ban ghi de xem correlation va payload chi tiet."
+              compact
+            />
           )}
         </DetailPanel>
       </div>

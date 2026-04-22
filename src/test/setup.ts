@@ -18,6 +18,18 @@ if (!window.matchMedia) {
   });
 }
 
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  class ResizeObserverMock {
+    observe() {}
+
+    unobserve() {}
+
+    disconnect() {}
+  }
+
+  globalThis.ResizeObserver = ResizeObserverMock as typeof ResizeObserver;
+}
+
 afterEach(() => {
   cleanup();
 });
