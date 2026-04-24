@@ -271,10 +271,10 @@ interface ConversationHistoryRequest {
 interface ConversationMessageWindow {
   oldestLoadedMessageId: string | null;
   oldestLoadedAt: string | null;
-  oldestLoadedSeq: number | null;
+  oldestLoadedSeq?: number;
   newestLoadedMessageId: string | null;
   newestLoadedAt: string | null;
-  newestLoadedSeq: number | null;
+  newestLoadedSeq?: number;
 }
 
 interface FetchMessagesOptions {
@@ -1766,24 +1766,23 @@ const buildConversationMessageWindow = (
   const newestLoadedMessage =
     canonicalMessages[canonicalMessages.length - 1] ?? null;
 
-  return {
+  const window: ConversationMessageWindow = {
     oldestLoadedMessageId: oldestLoadedMessage?.id ?? null,
     oldestLoadedAt: oldestLoadedMessage?.createdAt
       ? new Date(oldestLoadedMessage.createdAt).toISOString()
       : null,
-    oldestLoadedSeq:
-      typeof oldestLoadedMessage?.serverSeq === "number"
-        ? oldestLoadedMessage.serverSeq
-        : null,
     newestLoadedMessageId: newestLoadedMessage?.id ?? null,
     newestLoadedAt: newestLoadedMessage?.createdAt
       ? new Date(newestLoadedMessage.createdAt).toISOString()
       : null,
-    newestLoadedSeq:
-      typeof newestLoadedMessage?.serverSeq === "number"
-        ? newestLoadedMessage.serverSeq
-        : null,
   };
+  if (typeof oldestLoadedMessage?.serverSeq === "number") {
+    window.oldestLoadedSeq = oldestLoadedMessage.serverSeq;
+  }
+  if (typeof newestLoadedMessage?.serverSeq === "number") {
+    window.newestLoadedSeq = newestLoadedMessage.serverSeq;
+  }
+  return window;
 };
 
 const attachReplySnapshots = (messages: Message[]): Message[] => {
@@ -1822,10 +1821,8 @@ const attachReplySnapshots = (messages: Message[]): Message[] => {
 const EMPTY_MESSAGE_WINDOW: ConversationMessageWindow = {
   oldestLoadedMessageId: null,
   oldestLoadedAt: null,
-  oldestLoadedSeq: null,
   newestLoadedMessageId: null,
   newestLoadedAt: null,
-  newestLoadedSeq: null,
 };
 
 const updateConversationForLatestMessage = (
@@ -1914,15 +1911,22 @@ const appendMessageWindow = (
     ? new Date(message.createdAt).toISOString()
     : null;
 
-  return {
+  const nextWindow: ConversationMessageWindow = {
     oldestLoadedMessageId:
       currentWindow?.oldestLoadedMessageId ?? message.id,
     oldestLoadedAt: currentWindow?.oldestLoadedAt ?? nextTimestamp,
-    oldestLoadedSeq: currentWindow?.oldestLoadedSeq ?? message.serverSeq ?? null,
     newestLoadedMessageId: message.id,
     newestLoadedAt: nextTimestamp,
-    newestLoadedSeq: message.serverSeq ?? null,
   };
+  if (typeof currentWindow?.oldestLoadedSeq === "number") {
+    nextWindow.oldestLoadedSeq = currentWindow.oldestLoadedSeq;
+  } else if (typeof message.serverSeq === "number") {
+    nextWindow.oldestLoadedSeq = message.serverSeq;
+  }
+  if (typeof message.serverSeq === "number") {
+    nextWindow.newestLoadedSeq = message.serverSeq;
+  }
+  return nextWindow;
 };
 
 const resolveNewestCanonicalConversationMessage = (
