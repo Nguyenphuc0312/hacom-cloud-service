@@ -120,6 +120,28 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
 const asString = (value: unknown): string | null =>
   typeof value === "string" && value.trim().length > 0 ? value : null;
 
+const asFiniteNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const getLatestServerSeq = (messages: Array<{ serverSeq?: number }>): number | null => {
+  let latest: number | null = null;
+  messages.forEach((message) => {
+    if (typeof message.serverSeq !== "number" || !Number.isFinite(message.serverSeq)) {
+      return;
+    }
+    latest = latest === null ? message.serverSeq : Math.max(latest, message.serverSeq);
+  });
+  return latest;
+};
+
 const normalizeRealtimeSenderProfiles = (
   value: unknown,
 ): Record<
@@ -1070,6 +1092,13 @@ export const useWebSocket = (
       const senderProfiles = normalizeRealtimeSenderProfiles(
         payload.senderProfiles,
       );
+      const incomingSeq = asFiniteNumber(
+        messagePayload.serverSeq ??
+          messagePayload.messageSeq ??
+          messagePayload.message_seq ??
+          payload.messageSeq ??
+          payload.message_seq,
+      );
       const correlationKey = buildMessageCorrelationKey({
         conversationId,
         clientMessageId,
@@ -1102,6 +1131,7 @@ export const useWebSocket = (
         localId,
         clientMessageId,
         stableId,
+        incomingSeq,
       });
       logMessageDebug("useWebSocket", "realtime.client.event_received", {
         requestId:
@@ -1117,6 +1147,14 @@ export const useWebSocket = (
         correlationKey,
       });
       const chatState = useChatStore.getState();
+      const latestKnownSeq = getLatestServerSeq(
+        chatState.messages[conversationId] ?? [],
+      );
+      const hasMessageSeqGap =
+        eventType === "message:new" &&
+        latestKnownSeq !== null &&
+        incomingSeq !== null &&
+        incomingSeq > latestKnownSeq + 1;
       const currentUserId = useAuthStore.getState().user?.id;
       const isActiveConversation =
         chatState.selectedConversationId === conversationId;
@@ -1160,6 +1198,9 @@ export const useWebSocket = (
         eventId,
         stateTransition: ingestResult.status,
         incrementUnread: shouldIncrementUnread,
+        latestKnownSeq,
+        incomingSeq,
+        hasMessageSeqGap,
       });
 
       if (eventType === "message:new" && ingestResult.status === "new") {
@@ -1207,6 +1248,17 @@ export const useWebSocket = (
             reason: "socket:self-reconcile",
           });
         }
+      }
+
+      if (hasMessageSeqGap) {
+        logMessageDebug("useWebSocket", "socket_message_seq_gap_detected", {
+          conversationId,
+          eventId,
+          messageId,
+          latestKnownSeq,
+          incomingSeq,
+        });
+        maybeReconcileGap(conversationId, "message_seq_gap");
       }
 
       if (

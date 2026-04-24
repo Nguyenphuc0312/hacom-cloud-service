@@ -271,8 +271,10 @@ interface ConversationHistoryRequest {
 interface ConversationMessageWindow {
   oldestLoadedMessageId: string | null;
   oldestLoadedAt: string | null;
+  oldestLoadedSeq: number | null;
   newestLoadedMessageId: string | null;
   newestLoadedAt: string | null;
+  newestLoadedSeq: number | null;
 }
 
 interface FetchMessagesOptions {
@@ -280,6 +282,8 @@ interface FetchMessagesOptions {
   limit?: number;
   beforeId?: string;
   afterId?: string;
+  beforeSeq?: number;
+  afterSeq?: number;
   syncReason?: "initial-sync" | "reconnect" | "conversation-refresh";
   source?: string;
   queryType?: HistoryQueryType;
@@ -599,7 +603,9 @@ const normalizeMessage = (
     undefined;
   const serverSeq =
     asNumberValue(source.serverSeq) ??
+    asNumberValue(source.messageSeq) ??
     asNumberValue(source.server_seq) ??
+    asNumberValue(source.message_seq) ??
     asNumberValue(source.seq) ??
     asNumberValue(source.sequence) ??
     undefined;
@@ -1765,10 +1771,18 @@ const buildConversationMessageWindow = (
     oldestLoadedAt: oldestLoadedMessage?.createdAt
       ? new Date(oldestLoadedMessage.createdAt).toISOString()
       : null,
+    oldestLoadedSeq:
+      typeof oldestLoadedMessage?.serverSeq === "number"
+        ? oldestLoadedMessage.serverSeq
+        : null,
     newestLoadedMessageId: newestLoadedMessage?.id ?? null,
     newestLoadedAt: newestLoadedMessage?.createdAt
       ? new Date(newestLoadedMessage.createdAt).toISOString()
       : null,
+    newestLoadedSeq:
+      typeof newestLoadedMessage?.serverSeq === "number"
+        ? newestLoadedMessage.serverSeq
+        : null,
   };
 };
 
@@ -1808,8 +1822,10 @@ const attachReplySnapshots = (messages: Message[]): Message[] => {
 const EMPTY_MESSAGE_WINDOW: ConversationMessageWindow = {
   oldestLoadedMessageId: null,
   oldestLoadedAt: null,
+  oldestLoadedSeq: null,
   newestLoadedMessageId: null,
   newestLoadedAt: null,
+  newestLoadedSeq: null,
 };
 
 const updateConversationForLatestMessage = (
@@ -1902,8 +1918,10 @@ const appendMessageWindow = (
     oldestLoadedMessageId:
       currentWindow?.oldestLoadedMessageId ?? message.id,
     oldestLoadedAt: currentWindow?.oldestLoadedAt ?? nextTimestamp,
+    oldestLoadedSeq: currentWindow?.oldestLoadedSeq ?? message.serverSeq ?? null,
     newestLoadedMessageId: message.id,
     newestLoadedAt: nextTimestamp,
+    newestLoadedSeq: message.serverSeq ?? null,
   };
 };
 
@@ -3732,8 +3750,16 @@ export const useChatStore = create<ChatState>()(
       fetchMessages: async (conversationId, before, after, options) => {
         const beforeId = asStringValue(options?.beforeId);
         const afterId = asStringValue(options?.afterId);
-        const hasBeforeCursor = Boolean(beforeId || before);
-        const hasAfterCursor = Boolean(afterId || after);
+        const beforeSeq =
+          typeof options?.beforeSeq === "number" && Number.isFinite(options.beforeSeq)
+            ? Math.floor(options.beforeSeq)
+            : undefined;
+        const afterSeq =
+          typeof options?.afterSeq === "number" && Number.isFinite(options.afterSeq)
+            ? Math.floor(options.afterSeq)
+            : undefined;
+        const hasBeforeCursor = Boolean(beforeSeq || beforeId || before);
+        const hasAfterCursor = Boolean(afterSeq || afterId || after);
         const isInitialFetch = !hasBeforeCursor && !hasAfterCursor;
         const fetchMode: FetchMessagesResult["mode"] = hasAfterCursor
           ? "newer"
@@ -3779,6 +3805,8 @@ export const useChatStore = create<ChatState>()(
             syncReason,
             before,
             after,
+            beforeSeq,
+            afterSeq,
             beforeId: options?.beforeId,
             afterId: options?.afterId,
           });
@@ -3858,6 +3886,8 @@ export const useChatStore = create<ChatState>()(
               ? Math.min(100, Math.floor(options.limit))
               : 50;
           const params = new URLSearchParams({ limit: String(limit) });
+          if (typeof beforeSeq === "number") params.set("beforeSeq", String(beforeSeq));
+          if (typeof afterSeq === "number") params.set("afterSeq", String(afterSeq));
           if (beforeId) params.set("beforeId", beforeId);
           if (afterId) params.set("afterId", afterId);
           logMessageDebug("chatStore", "fetch_requested", {
@@ -3871,6 +3901,8 @@ export const useChatStore = create<ChatState>()(
             fetchRequestedAt: fetchRequestedAt.toISOString(),
             before,
             after,
+            beforeSeq,
+            afterSeq,
             beforeId,
             afterId,
             limit,
@@ -3885,6 +3917,8 @@ export const useChatStore = create<ChatState>()(
 
           const response = await messageApi.getMessages(conversationId, {
             limit,
+            ...(typeof beforeSeq === "number" ? { beforeSeq } : {}),
+            ...(typeof afterSeq === "number" ? { afterSeq } : {}),
             ...(beforeId ? { beforeId } : {}),
             ...(afterId ? { afterId } : {}),
             ...(abortController ? { signal: abortController.signal } : {}),

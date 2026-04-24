@@ -899,6 +899,8 @@ export const messageApi = {
       after?: string;
       beforeId?: string;
       afterId?: string;
+      beforeSeq?: number;
+      afterSeq?: number;
       signal?: AbortSignal;
     } = {},
   ) => {
@@ -912,6 +914,12 @@ export const messageApi = {
 
     if (options.beforeId) query.set("beforeId", options.beforeId);
     if (options.afterId) query.set("afterId", options.afterId);
+    if (typeof options.beforeSeq === "number" && Number.isFinite(options.beforeSeq)) {
+      query.set("beforeSeq", String(Math.floor(options.beforeSeq)));
+    }
+    if (typeof options.afterSeq === "number" && Number.isFinite(options.afterSeq)) {
+      query.set("afterSeq", String(Math.floor(options.afterSeq)));
+    }
 
     const response = await apiClient.get<ApiResponse<RoomMessagesResponse>>(
       `${canonicalConversationMessagesPath(conversationId)}?${query.toString()}`,

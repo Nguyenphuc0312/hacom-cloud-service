@@ -47,6 +47,7 @@ const createChatState = () => ({
     "room-1": {
       newestLoadedMessageId: "msg-1",
       newestLoadedAt: "2026-04-19T00:00:00.000Z",
+      newestLoadedSeq: 41,
     },
   },
   messages: {
@@ -148,6 +149,26 @@ describe("useWebSocketResyncCoordinator", () => {
 
     deferred.resolve({ loaded: 0, hasMore: false });
     await first;
+  });
+
+  it("uses last known messageSeq for reconnect delta recovery", async () => {
+    const { controller, fetchMessages } = createCoordinatorHarness();
+
+    await controller.scheduleConversationResync("room-1", {
+      reason: "reconnect",
+    });
+
+    expect(fetchMessages).toHaveBeenCalledWith(
+      "room-1",
+      undefined,
+      "2026-04-19T00:00:00.000Z",
+      expect.objectContaining({
+        afterId: "msg-1",
+        afterSeq: 41,
+        source: "delta_sync",
+        queryType: "pagination_newer",
+      }),
+    );
   });
 
   it("marks reconnect work and returns rejoin rooms when the socket reconnects", async () => {

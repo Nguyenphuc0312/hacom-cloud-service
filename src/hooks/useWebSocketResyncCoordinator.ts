@@ -13,6 +13,7 @@ import type { Conversation, Message } from "../types";
 type MessageCursor = {
   at: string;
   id: string;
+  seq?: number;
 };
 
 type ChatStateSnapshot = {
@@ -26,6 +27,7 @@ type ChatStateSnapshot = {
     {
       newestLoadedMessageId: string | null;
       newestLoadedAt: string | null;
+      newestLoadedSeq?: number | null;
     }
   >;
   messages: Record<string, Message[]>;
@@ -102,6 +104,19 @@ const toCursorValue = (value: unknown): string | undefined => {
   return undefined;
 };
 
+const toCursorSeq = (value: unknown): number | undefined => {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return Math.floor(value);
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Math.floor(parsed);
+    }
+  }
+  return undefined;
+};
+
 const resolveLatestCursor = (
   chatState: ChatStateSnapshot,
   conversationId: string,
@@ -111,6 +126,7 @@ const resolveLatestCursor = (
     return {
       at: loadedWindow.newestLoadedAt,
       id: loadedWindow.newestLoadedMessageId,
+      seq: toCursorSeq(loadedWindow.newestLoadedSeq),
     };
   }
 
@@ -119,6 +135,7 @@ const resolveLatestCursor = (
     const candidate = conversationMessages[index];
     const candidateId = candidate?.id;
     const candidateAt = toCursorValue(candidate?.createdAt);
+    const candidateSeq = toCursorSeq(candidate?.serverSeq);
     if (
       typeof candidateId === "string" &&
       !candidateId.startsWith("temp-") &&
@@ -127,6 +144,7 @@ const resolveLatestCursor = (
       return {
         at: candidateAt,
         id: candidateId,
+        seq: candidateSeq,
       };
     }
   }
@@ -166,6 +184,7 @@ export const createWebSocketResyncCoordinator = ({
     after?: string,
     options?: {
       afterId?: string;
+      afterSeq?: number;
       syncReason?: "initial-sync" | "reconnect" | "conversation-refresh";
       source?: string;
       queryType?: "pagination_newer";
@@ -252,6 +271,7 @@ export const createWebSocketResyncCoordinator = ({
     for (let attempts = 0; attempts < 10; attempts += 1) {
       const result = await fetchMessages(conversationId, undefined, afterCursor.at, {
         afterId: afterCursor.id,
+        ...(typeof afterCursor.seq === "number" ? { afterSeq: afterCursor.seq } : {}),
         syncReason: options?.reason,
         source: "delta_sync",
         queryType: "pagination_newer",
