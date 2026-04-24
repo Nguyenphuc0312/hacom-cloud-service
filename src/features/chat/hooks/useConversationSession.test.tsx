@@ -45,7 +45,7 @@ describe("useConversationSession", () => {
     vi.useRealTimers();
   });
 
-  it("skips unread bootstrap and triggers authoritative open fetch", async () => {
+  it("bootstraps unread feed before authoritative open fetch", async () => {
     useChatStore.getState().setConversations([
       makeConversation({
         id: "room-1",
@@ -87,17 +87,28 @@ describe("useConversationSession", () => {
       }),
     );
 
-    await waitFor(() =>
-      expect(fetchMessages).toHaveBeenCalledWith(
-        "room-1",
-        undefined,
-        undefined,
-        expect.objectContaining({
-          source: "initial_fetch",
-          queryType: "authoritative_open",
-          selectedConversationIdAtDispatch: "room-1",
-        }),
-      ),
+    await waitFor(() => expect(fetchMessages).toHaveBeenCalledTimes(2));
+    expect(fetchMessages).toHaveBeenNthCalledWith(
+      1,
+      "room-1",
+      undefined,
+      undefined,
+      expect.objectContaining({
+        source: "unread_feed",
+        queryType: "unread_feed",
+        selectedConversationIdAtDispatch: "room-1",
+      }),
+    );
+    expect(fetchMessages).toHaveBeenNthCalledWith(
+      2,
+      "room-1",
+      undefined,
+      undefined,
+      expect.objectContaining({
+        source: "initial_fetch",
+        queryType: "authoritative_open",
+        selectedConversationIdAtDispatch: "room-1",
+      }),
     );
   });
 

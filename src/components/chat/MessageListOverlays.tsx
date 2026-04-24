@@ -1,5 +1,6 @@
 import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { ChevronDownIcon } from "@heroicons/react/24/solid";
 import { ConversationLane } from "../layout/ConversationLane";
 import { formatDateDivider } from "../../utils/formatTime";
@@ -57,6 +58,7 @@ export const MessageListOverlays = React.memo(
     newMessagesLabel,
     floatingBottomOffset,
   }: MessageListOverlaysProps) => {
+    const { t } = useTranslation();
     const showBottomFloating = showJumpToBottom || showNewMessagesPill;
 
     return (
@@ -101,7 +103,7 @@ export const MessageListOverlays = React.memo(
         {hasMessages && historyLoadingState?.isPartial && (
           <div className="pointer-events-none absolute inset-x-[var(--chat-lane-padding)] top-11 z-[4] flex justify-center">
             <div className="rounded-full border border-primary/20 bg-surface/95 px-3 py-1 text-xs text-text-secondary shadow-xs backdrop-blur">
-              Dang tai them lich su
+              {t("chat:message.loadingMoreHistory")}
             </div>
           </div>
         )}

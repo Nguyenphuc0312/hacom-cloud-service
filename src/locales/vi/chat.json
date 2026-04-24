@@ -65,6 +65,8 @@
     "newAria": "Tin nhắn mới",
     "inConversationAria": "Tin nhắn trong cuộc trò chuyện",
     "loadMore": "Đang tải...",
+    "loadingHistory": "Đang tải lịch sử trò chuyện...",
+    "loadingMoreHistory": "Đang tải thêm lịch sử",
     "senderYou": "Bạn:"
   },
   "composer": {

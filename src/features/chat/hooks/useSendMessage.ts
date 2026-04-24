@@ -9,7 +9,6 @@ import type {
   Attachment,
   Message,
   MessageType,
-  SendMessageResult,
 } from "../../../types";
 import { FileType, MessageType as MessageTypeEnum } from "../../../types";
 import { logMessageDebug } from "../../../utils/messageDebug";
@@ -92,9 +91,15 @@ const isCanceledUploadError = (error: unknown): boolean => {
 };
 
 const resolveDisposition = (result: unknown): SendDisposition => {
-  const candidate = result as SendMessageResult | undefined;
-  if (candidate?.disposition === "optimistic") return "optimistic";
-  if (candidate?.disposition === "queued") return "queued";
+  const candidate = result as { disposition?: unknown } | undefined;
+  const disposition =
+    typeof candidate?.disposition === "string"
+      ? candidate.disposition
+      : undefined;
+
+  if (disposition === "acceptedOptimistic") return "optimistic";
+  if (disposition === "optimistic") return "optimistic";
+  if (disposition === "queued") return "queued";
   return "sent";
 };
 
@@ -183,14 +188,14 @@ export const useSendMessage = ({
   );
 
   const sendMessage = React.useCallback(
-    async (
+    (
       content: string,
       replyTo?: Message,
       fileMeta?: Attachment | Attachment[] | undefined,
       type: MessageType = MessageTypeEnum.TEXT,
     ) => {
       if (onSend) {
-        return onSend(content, fileMeta, type);
+        return Promise.resolve(onSend(content, fileMeta, type));
       }
 
       if (!selectedConversationId) {
@@ -225,16 +230,7 @@ export const useSendMessage = ({
         throw error;
       }
 
-      try {
-        return await storeSendMessage(
-          selectedConversationId,
-          content,
-          type,
-          fileMeta,
-          replyTo?.id,
-          replyTo,
-        );
-      } catch (error) {
+      const handleSendError = (error: unknown) => {
         const apiError = extractApiError(error);
         const details =
           apiError.details && typeof apiError.details === "object"
@@ -255,6 +251,21 @@ export const useSendMessage = ({
         }
 
         throw error;
+      };
+
+      try {
+        return Promise.resolve(
+          storeSendMessage(
+            selectedConversationId,
+            content,
+            type,
+            fileMeta,
+            replyTo?.id,
+            replyTo,
+          ),
+        ).catch(handleSendError);
+      } catch (error) {
+        return handleSendError(error);
       }
     },
     [

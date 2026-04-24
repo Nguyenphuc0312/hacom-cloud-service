@@ -289,6 +289,8 @@ export const MessageInput = React.forwardRef<
   );
   const [activeMentionIndex, setActiveMentionIndex] = React.useState(0);
   const [liveRegionMessage, setLiveRegionMessage] = React.useState("");
+  const [isPrimarySendLocked, setIsPrimarySendLocked] = React.useState(false);
+  const primarySendLockedRef = React.useRef(false);
 
   const mentionListId = React.useId();
 
@@ -370,6 +372,20 @@ export const MessageInput = React.forwardRef<
   const clearMentionState = React.useCallback(() => {
     setMentionMatch(null);
     setActiveMentionIndex(0);
+  }, []);
+
+  const releasePrimarySendLock = React.useCallback(() => {
+    const release = () => {
+      primarySendLockedRef.current = false;
+      setIsPrimarySendLocked(false);
+    };
+
+    if (typeof window === "undefined") {
+      release();
+      return;
+    }
+
+    window.setTimeout(release, 0);
   }, []);
 
   const updateMentionState = React.useCallback(
@@ -483,6 +499,13 @@ export const MessageInput = React.forwardRef<
   }, [optimisticAnnouncement, sendAttachmentMessage, t]);
 
   const handlePrimarySend = React.useCallback(async () => {
+    if (primarySendLockedRef.current) {
+      return;
+    }
+
+    primarySendLockedRef.current = true;
+    setIsPrimarySendLocked(true);
+
     // Multi-file queue path: send text (attachments handled by ChatWindow)
     const hasQueueDrafts = (uploadDrafts?.length ?? 0) > 0;
     logMessageDebug("MessageInput", "submit_intent", {
@@ -495,32 +518,31 @@ export const MessageInput = React.forwardRef<
       disabled,
       submitDisabled,
     });
-    if (hasQueueDrafts && hasReadyDrafts) {
-      const content = value.trim();
-      // Call onSend — ChatWindow.handleSend gathers ready metas
-      try {
-        const sendPromise = Promise.resolve(onSend(content || undefined));
+    try {
+      if (hasQueueDrafts && hasReadyDrafts) {
+        const content = value.trim();
+        // ChatWindow gathers ready attachment metadata; only clear once it
+        // confirms the send was accepted into the optimistic/server flow.
+        await Promise.resolve(onSend(content || undefined));
         onChange("");
         clearMentionState();
         stopTypingNow();
         setLiveRegionMessage(optimisticAnnouncement);
-
-        void sendPromise.catch(() => {
-          setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
-        });
-      } catch {
-        setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
+        return;
       }
-      return;
-    }
 
-    // Legacy single-file path
-    if (selectedFile) {
-      await handleSendAttachment();
-      return;
-    }
+      // Legacy single-file path
+      if (selectedFile) {
+        await handleSendAttachment();
+        return;
+      }
 
-    await handleSendText();
+      await handleSendText();
+    } catch {
+      setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
+    } finally {
+      releasePrimarySendLock();
+    }
   }, [
     clearMentionState,
     conversationId,
@@ -531,6 +553,7 @@ export const MessageInput = React.forwardRef<
     optimisticAnnouncement,
     onChange,
     onSend,
+    releasePrimarySendLock,
     selectedFile,
     stopTypingNow,
     submitDisabled,
@@ -590,7 +613,7 @@ export const MessageInput = React.forwardRef<
 
   const hasText = value.trim().length > 0;
   const hasQueueDrafts = (uploadDrafts?.length ?? 0) > 0;
-  const isSubmitBusy = isUploading || isSending;
+  const isSubmitBusy = isUploading || isSending || isPrimarySendLocked;
   const canSend = hasQueueDrafts
     ? !submitDisabled &&
       !isSubmitBusy &&

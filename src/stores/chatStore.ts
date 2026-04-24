@@ -3919,19 +3919,41 @@ export const useChatStore = create<ChatState>()(
             level: "info",
           });
 
-          const response = await messageApi.getMessages(conversationId, {
-            limit,
-            ...(typeof beforeSeq === "number" ? { beforeSeq } : {}),
-            ...(typeof afterSeq === "number" ? { afterSeq } : {}),
-            ...(beforeId ? { beforeId } : {}),
-            ...(afterId ? { afterId } : {}),
-            ...(abortController ? { signal: abortController.signal } : {}),
-          });
+          const isUnreadFeedQuery = queryType === "unread_feed";
+          const response = isUnreadFeedQuery
+            ? await conversationApi.getUnreadFeed(conversationId, limit)
+            : await messageApi.getMessages(conversationId, {
+                limit,
+                ...(typeof beforeSeq === "number" ? { beforeSeq } : {}),
+                ...(typeof afterSeq === "number" ? { afterSeq } : {}),
+                ...(beforeId ? { beforeId } : {}),
+                ...(afterId ? { afterId } : {}),
+                ...(abortController ? { signal: abortController.signal } : {}),
+              });
           const responseEnvelope = asRecord(response);
           const responseMeta = asRecord(responseEnvelope?.meta);
-          const payload = unwrapApiSuccess(response);
-          const normalized = normalizeMessagesResponse(payload, responseMeta);
-          const readState = normalizeConversationReadStateFromMeta(responseMeta);
+          const payload = unwrapApiSuccess(response as never);
+          const unreadPayload = isUnreadFeedQuery ? asRecord(payload) : null;
+          const unreadReadState = isUnreadFeedQuery
+            ? asRecord(unreadPayload?.readState)
+            : null;
+          const normalized = normalizeMessagesResponse(
+            payload,
+            isUnreadFeedQuery
+              ? {
+                  hasNext: false,
+                  hasPrev: unreadPayload?.hasMore === true,
+                  ...(unreadReadState ? { readState: unreadReadState } : {}),
+                }
+              : responseMeta,
+          );
+          const readState = normalizeConversationReadStateFromMeta(
+            isUnreadFeedQuery
+              ? unreadReadState
+                ? { readState: unreadReadState }
+                : null
+              : responseMeta,
+          );
           const hasMoreForDirection = hasAfterCursor
             ? normalized.hasNext
             : normalized.hasPrev;
@@ -4042,6 +4064,8 @@ export const useChatStore = create<ChatState>()(
             const nextStage: HistoryStage =
               shouldPromoteToAuthoritative
                 ? "authoritative_initial_window"
+                : queryType === "unread_feed"
+                  ? "partial_unread_bootstrap"
                 : queryType === "prefetch"
                   ? "partial_prefetch"
                   : queryType === "pagination_older"
@@ -4243,7 +4267,7 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      sendMessage: async (
+      sendMessage: (
         conversationId,
         content,
         type = MessageType.TEXT,

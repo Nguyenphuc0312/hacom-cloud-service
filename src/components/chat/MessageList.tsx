@@ -1958,7 +1958,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
             <EmptyMessages />
           ) : messages.length === 0 ? (
             <div className="flex h-full items-center justify-center px-6 text-sm text-text-secondary">
-              Dang tai lich su hoi thoai...
+              {t("chat:message.loadingHistory")}
             </div>
           ) : (
             <div

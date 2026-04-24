@@ -65,6 +65,8 @@
     "newAria": "New messages",
     "inConversationAria": "Messages in conversation",
     "loadMore": "Loading...",
+    "loadingHistory": "Loading conversation history...",
+    "loadingMoreHistory": "Loading more history",
     "senderYou": "You:"
   },
   "composer": {

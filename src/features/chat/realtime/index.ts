@@ -12,3 +12,16 @@ export {
 export { registerGroupEvents } from "./registerGroupEvents";
 export { registerPresenceEvents } from "./registerPresenceEvents";
 export { registerSyncEvents } from "./registerSyncEvents";
+export {
+  createChatRealtimeAdapter,
+  normalizeMessageRealtimeEvent,
+} from "./chatRealtimeAdapter";
+export {
+  buildRealtimeEventKey,
+  createRealtimeEventDeduper,
+} from "./realtimeEventKeys";
+export { applyMessagePatch } from "./applyMessagePatch";
+export {
+  hasMessageSequenceGap,
+  needsSelfMessageIdentityResync,
+} from "./resyncPolicy";

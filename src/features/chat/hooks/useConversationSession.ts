@@ -208,6 +208,9 @@ export const useConversationSession = ({
       isCurrentRouteValidated,
   );
   const websocketReady = connectionState === "connected";
+  const selectedUnreadCount = selectedConversation?.unreadCount ?? 0;
+  const selectedFirstUnreadMessageId =
+    selectedConversation?.firstUnreadMessageId ?? null;
 
   useEffect(() => {
     if (
@@ -248,10 +251,33 @@ export const useConversationSession = ({
       const latestHasAuthoritativeHistory =
         latestState.hasAuthoritativeHistoryByConversation[selectedConversationId] ===
         true;
+
       if (
-        !latestHasAuthoritativeHistory ||
-        latestStage === "partial_unread_bootstrap" ||
-        latestStage === "partial_prefetch"
+        !latestHasAuthoritativeHistory &&
+        latestStage !== "partial_unread_bootstrap" &&
+        (selectedUnreadCount > 0 || Boolean(selectedFirstUnreadMessageId))
+      ) {
+        await fetchMessages(selectedConversationId, undefined, undefined, {
+          limit: INITIAL_CONVERSATION_WINDOW_LIMIT,
+          source: "unread_feed",
+          queryType: "unread_feed",
+          selectedConversationIdAtDispatch: selectedConversationId,
+        });
+      }
+
+      const stateAfterUnreadBootstrap = useChatStore.getState();
+      const stageAfterUnreadBootstrap =
+        stateAfterUnreadBootstrap.historyStageByConversation[
+          selectedConversationId
+        ] ?? "empty";
+      const hasAuthoritativeHistoryAfterUnreadBootstrap =
+        stateAfterUnreadBootstrap.hasAuthoritativeHistoryByConversation[
+          selectedConversationId
+        ] === true;
+      if (
+        !hasAuthoritativeHistoryAfterUnreadBootstrap ||
+        stageAfterUnreadBootstrap === "partial_unread_bootstrap" ||
+        stageAfterUnreadBootstrap === "partial_prefetch"
       ) {
         const initialFetchResult = await fetchMessages(
           selectedConversationId,
@@ -285,6 +311,8 @@ export const useConversationSession = ({
     joinConversation,
     leaveConversation,
     selectedConversationId,
+    selectedFirstUnreadMessageId,
+    selectedUnreadCount,
     stopTyping,
     updateConversation,
   ]);

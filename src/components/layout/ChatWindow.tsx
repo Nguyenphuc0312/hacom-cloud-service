@@ -274,7 +274,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   usePresence({ conversationId: conversation.id });
 
   const handleSend = React.useCallback(
-    async (content?: string, fileMeta?: unknown, type?: string) => {
+    (content?: string, fileMeta?: unknown, type?: string) => {
       if (inputMode === "edit" && editingMessage && onEditMessage) {
         const nextContent = (content || "").trim();
         if (
@@ -287,12 +287,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           return;
         }
 
-        await Promise.resolve(onEditMessage(editingMessage.id, nextContent));
-        setInputValue(draftBeforeEditRef.current);
-        setReplyToMessage(undefined);
-        setEditingMessage(undefined);
-        setInputMode("normal");
-        return;
+        return Promise.resolve(onEditMessage(editingMessage.id, nextContent))
+          .then(() => {
+            setInputValue(draftBeforeEditRef.current);
+            setReplyToMessage(undefined);
+            setEditingMessage(undefined);
+            setInputMode("normal");
+            return { disposition: "sent" as const };
+          });
       }
 
       // ── Build attachments from upload queue + legacy single file ──
@@ -337,14 +339,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         replyToId: replyToMessage?.id,
       });
       try {
-        const sendPromise = Promise.resolve(
-          onSendMessage(
-            outgoingContent,
-            replyToMessage,
-            attachmentArg,
-            messageType,
-          ),
+        const sendResult = onSendMessage(
+          outgoingContent,
+          replyToMessage,
+          attachmentArg,
+          messageType,
         );
+        const sendPromise = Promise.resolve(sendResult);
 
         setInputValue("");
         clearComposerDraft(conversation.id);
@@ -373,7 +374,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             });
           });
 
-        return { disposition: "optimistic" as const };
+        return { disposition: "acceptedOptimistic" as const };
       } catch (error) {
         logMessageDebug("ChatWindow", "send_rejected", {
           conversationId: conversation.id,
@@ -663,9 +664,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     } else if (connectionState === "disconnected") {
       setEphemeralNotice({
         kind: "error",
-        message: t("chat:toast.connectionOffline", {
-          defaultValue: "Mat ket noi. Dang cho dong bo lai.",
-        }),
+        message: t("chat:toast.connectionOffline"),
       });
     } else if (
       connectionState === "connected" &&
@@ -673,9 +672,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     ) {
       setEphemeralNotice({
         kind: "success",
-        message: t("chat:toast.connectionRestored", {
-          defaultValue: "Da ket noi lai",
-        }),
+        message: t("chat:toast.connectionRestored"),
       });
       ephemeralNoticeTimerRef.current = window.setTimeout(() => {
         setEphemeralNotice((current) =>

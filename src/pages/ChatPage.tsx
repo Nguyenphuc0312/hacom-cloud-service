@@ -90,6 +90,8 @@ const DeferredModalFallback: React.FC = () => (
 );
 
 const INFO_PANEL_EXIT_DURATION_MS = 240;
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 const loadReactionUseCases = () =>
   import("../features/chat/usecases/addReaction").then(
@@ -227,6 +229,10 @@ export const ChatPage: React.FC = () => {
   const [externalJumpRequestVersion, setExternalJumpRequestVersion] =
     useState(0);
   const renderCountRef = useRef(0);
+  const mobileSidebarRef = useRef<HTMLDivElement | null>(null);
+  const chatPaneRef = useRef<HTMLDivElement | null>(null);
+  const focusBeforeMobileSidebarRef = useRef<HTMLElement | null>(null);
+  const previousMobileSidebarVisibleRef = useRef(false);
 
   const conversationAccessDeniedMessage = t(
     "error:chat.conversationAccessDenied",
@@ -794,6 +800,7 @@ export const ChatPage: React.FC = () => {
   }, []);
 
   const showSidebarOnMobile = !routeConversationId || isMobileMenuOpen;
+  const isMobileSidebarHidden = viewportWidth < 1024 && !showSidebarOnMobile;
   const shouldRenderInfoContent =
     isInfoPanelOpen &&
     (infoPanelMode === "self-profile" ||
@@ -822,6 +829,54 @@ export const ChatPage: React.FC = () => {
 
     return "normal";
   }, [viewportWidth]);
+
+  useEffect(() => {
+    const sidebar = mobileSidebarRef.current;
+    if (!sidebar) return;
+
+    if (isMobileSidebarHidden) {
+      sidebar.setAttribute("inert", "");
+    } else {
+      sidebar.removeAttribute("inert");
+    }
+  }, [isMobileSidebarHidden]);
+
+  useEffect(() => {
+    if (viewportWidth >= 1024) {
+      previousMobileSidebarVisibleRef.current = false;
+      return;
+    }
+
+    const wasVisible = previousMobileSidebarVisibleRef.current;
+
+    if (showSidebarOnMobile && !wasVisible) {
+      const activeElement = document.activeElement;
+      focusBeforeMobileSidebarRef.current =
+        activeElement instanceof HTMLElement ? activeElement : null;
+
+      window.requestAnimationFrame(() => {
+        const focusTarget =
+          mobileSidebarRef.current?.querySelector<HTMLElement>(
+            FOCUSABLE_SELECTOR,
+          );
+        focusTarget?.focus();
+      });
+    }
+
+    if (!showSidebarOnMobile && wasVisible) {
+      window.requestAnimationFrame(() => {
+        const previous = focusBeforeMobileSidebarRef.current;
+        if (previous && document.contains(previous)) {
+          previous.focus();
+          return;
+        }
+        chatPaneRef.current?.focus();
+      });
+    }
+
+    previousMobileSidebarVisibleRef.current = showSidebarOnMobile;
+  }, [showSidebarOnMobile, viewportWidth]);
+
   const showConversationSkeleton =
     (!hasFetchedConversationsOnce && conversationCount === 0) ||
     (isLoadingConversations && conversationCount === 0);
@@ -963,6 +1018,7 @@ export const ChatPage: React.FC = () => {
     >
       {/* Sidebar */}
       <div
+        ref={mobileSidebarRef}
         className={clsx(
           "absolute inset-y-0 left-0 z-30 w-full max-w-full transition-transform duration-300 sm:max-w-[min(23rem,94vw)] lg:relative lg:z-0 lg:max-w-none lg:flex-shrink-0 lg:transition-[width]",
           "lg:border-r lg:border-border/60",
@@ -971,7 +1027,7 @@ export const ChatPage: React.FC = () => {
             ? "translate-x-0"
             : "-translate-x-full lg:translate-x-0",
         )}
-        aria-hidden={!showSidebarOnMobile}
+        aria-hidden={isMobileSidebarHidden}
       >
         <Sidebar
           layoutState={sidebarLayoutState}
@@ -1001,6 +1057,8 @@ export const ChatPage: React.FC = () => {
 
       {/* Chat window */}
       <div
+        ref={chatPaneRef}
+        tabIndex={-1}
         className={clsx(
           "relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden bg-[hsl(var(--chat-panel-bg))]",
           !selectedConversation && "hidden lg:flex",

@@ -274,6 +274,7 @@ const MessageGroupItem: React.FC<{
           hideActionRail(false);
         }
       }}
+      data-testid={`message-item-${message.id}`}
       data-message-id={message.id}
     >
       {isSelectionMode && (

@@ -45,7 +45,6 @@ import {
   syncDocumentTitleBadge,
 } from "../utils/realtimeNotifications";
 import { logMessageDebug } from "../utils/messageDebug";
-import { buildMessageCorrelationKey } from "../utils/messageIdentity";
 import { normalizeConversation } from "../lib/conversationAdapter";
 import {
   registerChatEvents,
@@ -56,6 +55,11 @@ import {
   registerPresenceEvents,
   registerSyncEvents,
   toFriendshipRealtimeDetail,
+  applyMessagePatch,
+  createChatRealtimeAdapter,
+  hasMessageSequenceGap,
+  needsSelfMessageIdentityResync,
+  normalizeMessageRealtimeEvent,
 } from "../features/chat/realtime";
 import { dispatchNotificationClick } from "../features/chat/events/chatUiEvents";
 import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
@@ -119,17 +123,6 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
 
 const asString = (value: unknown): string | null =>
   typeof value === "string" && value.trim().length > 0 ? value : null;
-
-const asFiniteNumber = (value: unknown): number | null => {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-};
 
 const getLatestServerSeq = (messages: Array<{ serverSeq?: number }>): number | null => {
   let latest: number | null = null;
@@ -213,21 +206,6 @@ const getConversationId = (payload: Record<string, unknown>): string | null => {
     source: "useWebSocket.payload",
     nestedKeys: ["message"],
   });
-};
-
-const getMessagePayload = (
-  payload: Record<string, unknown>,
-): Record<string, unknown> | null => {
-  const nested = asRecord(payload.message);
-  if (nested) return nested;
-  if (
-    asString(payload.id) ||
-    asString(payload._id) ||
-    asString(payload.messageId)
-  ) {
-    return payload;
-  }
-  return null;
 };
 
 const getConversationIds = (payload: Record<string, unknown>): string[] => {
@@ -341,7 +319,7 @@ export const useWebSocket = (
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const processedRealtimeEventIdsRef = useRef<Map<string, number>>(new Map());
+  const chatRealtimeAdapterRef = useRef(createChatRealtimeAdapter());
   const suppressUnreadBroadcastRef = useRef(false);
   const emitQueueRef = useRef<Array<{ event: string; data: unknown }>>([]);
   const resyncCoordinatorStateRef = useRef(
@@ -442,27 +420,12 @@ export const useWebSocket = (
         return true;
       }
 
-      const now = Date.now();
-      processedRealtimeEventIdsRef.current.forEach((seenAt, key) => {
-        if (now - seenAt > 5 * 60_000) {
-          processedRealtimeEventIdsRef.current.delete(key);
-        }
-      });
-
-      if (processedRealtimeEventIdsRef.current.has(eventKey)) {
+      if (!chatRealtimeAdapterRef.current.shouldProcessEvent(eventKey)) {
         logMessageDebug("useWebSocket", "duplicate_realtime_event_suppressed", {
           eventKey,
           ...details,
         });
         return false;
-      }
-
-      processedRealtimeEventIdsRef.current.set(eventKey, now);
-      if (processedRealtimeEventIdsRef.current.size > 1000) {
-        const oldestKey = processedRealtimeEventIdsRef.current.keys().next().value;
-        if (typeof oldestKey === "string") {
-          processedRealtimeEventIdsRef.current.delete(oldestKey);
-        }
       }
 
       return true;
@@ -1055,64 +1018,26 @@ export const useWebSocket = (
       data: unknown,
       eventType: "message:new" | "message:updated",
     ) => {
-      const payload = asRecord(data);
-      if (!payload) return;
+      const normalizedEvent = normalizeMessageRealtimeEvent(data, eventType);
+      if (!normalizedEvent) return;
 
-      const conversationId = getConversationId(payload);
-      const messagePayload = getMessagePayload(payload);
-      const messageId = messagePayload
-        ? (asString(messagePayload.id) ??
-          asString(messagePayload._id) ??
-          asString(messagePayload.messageId) ??
-          asString(messagePayload.stableId) ??
-          asString(messagePayload.localId) ??
-          asString(messagePayload.tempId))
-        : null;
-      if (!conversationId || !messagePayload || !messageId) return;
-
-      const tempId =
-        asString(payload.tempId) ??
-        asString(messagePayload.tempId) ??
-        asString(payload.clientMessageId) ??
-        asString(messagePayload.clientMessageId);
-      const clientMessageId =
-        asString(payload.clientMessageId) ??
-        asString(messagePayload.clientMessageId) ??
-        tempId ??
-        undefined;
-      const localId =
-        asString(messagePayload.localId) ??
-        asString(payload.localId) ??
-        tempId ??
-        undefined;
-      const stableId =
-        asString(messagePayload.stableId) ?? localId ?? messageId;
-      const senderId =
-        asString(messagePayload.senderId) ?? asString(payload.senderId);
+      const {
+        payload,
+        conversationId,
+        messagePayload,
+        messageId,
+        tempId,
+        clientMessageId,
+        localId,
+        stableId,
+        senderId,
+        incomingSeq,
+        eventId,
+        correlationKey,
+      } = normalizedEvent;
       const senderProfiles = normalizeRealtimeSenderProfiles(
         payload.senderProfiles,
       );
-      const incomingSeq = asFiniteNumber(
-        messagePayload.serverSeq ??
-          messagePayload.messageSeq ??
-          messagePayload.message_seq ??
-          payload.messageSeq ??
-          payload.message_seq,
-      );
-      const correlationKey = buildMessageCorrelationKey({
-        conversationId,
-        clientMessageId,
-        tempId: tempId ?? undefined,
-        localId,
-      });
-      const eventId =
-        asString(payload.eventId) ??
-        asString(messagePayload.eventId) ??
-        `${eventType}:${conversationId}:${messageId}:${
-          asString(messagePayload.updatedAt) ??
-          asString(messagePayload.createdAt) ??
-          "unknown"
-        }`;
       if (
         !shouldProcessRealtimeEvent(eventId, {
           eventType,
@@ -1150,22 +1075,18 @@ export const useWebSocket = (
       const latestKnownSeq = getLatestServerSeq(
         chatState.messages[conversationId] ?? [],
       );
-      const hasMessageSeqGap =
-        eventType === "message:new" &&
-        latestKnownSeq !== null &&
-        incomingSeq !== null &&
-        incomingSeq > latestKnownSeq + 1;
+      const hasMessageSeqGap = hasMessageSequenceGap({
+        event: normalizedEvent,
+        latestKnownSeq,
+      });
       const currentUserId = useAuthStore.getState().user?.id;
       const isActiveConversation =
         chatState.selectedConversationId === conversationId;
       const visibleAndFocused = isDocumentVisibleAndFocused();
-      const isSelfAuthoredMessage =
-        Boolean(senderId && currentUserId && senderId === currentUserId);
-      const isAmbiguousSelfReconcile =
-        eventType === "message:new" &&
-        isSelfAuthoredMessage &&
-        !clientMessageId &&
-        !localId;
+      const isAmbiguousSelfReconcile = needsSelfMessageIdentityResync({
+        event: normalizedEvent,
+        currentUserId,
+      });
       const shouldIncrementUnread = Boolean(
         eventType === "message:new" &&
           senderId &&
@@ -1173,16 +1094,10 @@ export const useWebSocket = (
           senderId !== currentUserId &&
           (!isActiveConversation || !visibleAndFocused),
       );
-      const ingestResult = ingestConversationMessageEvent(conversationId, {
-        ...(messagePayload as unknown as Parameters<
-          typeof ingestConversationMessageEvent
-        >[1]),
-        ...(stableId ? { stableId } : {}),
-        ...(clientMessageId ? { clientMessageId } : {}),
-        ...(localId ? { localId } : {}),
-      }, {
+      const ingestResult = applyMessagePatch({
+        ingestConversationMessageEvent,
+      }, normalizedEvent, {
         incrementUnread: shouldIncrementUnread,
-        source: eventType,
         ...(Object.keys(senderProfiles).length > 0 ? { senderProfiles } : {}),
       });
       logMessageDebug("useWebSocket", "realtime.client.state_updated", {
@@ -1207,7 +1122,7 @@ export const useWebSocket = (
         maybeNotifyIncomingMessage({
           conversationId,
           messageId,
-          senderId,
+          senderId: senderId ?? null,
           senderName:
             asString(messagePayload.senderName) ?? asString(payload.senderName),
           content:
