@@ -217,22 +217,18 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={t("profile:newChatModal.title")}
-      description={
-        isGroupMode
-          ? t("profile:newChatModal.descriptionGroup")
-          : t("profile:newChatModal.descriptionDirect")
-      }
-      size="full"
-      contentClassName="max-w-[42rem] sm:w-[42rem]"
+      size="lg"
+      contentClassName="sm:w-[36rem]"
+      bodyClassName="p-4 sm:p-5"
     >
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div className="flex gap-2">
           <button
             type="button"
             onClick={() => setIsGroupMode(false)}
             disabled={isBusy}
             className={clsx(
-              "flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors",
+              "flex flex-1 items-center justify-center gap-2 rounded-[var(--chat-control-radius)] px-3 py-2 text-sm font-medium transition-colors",
               !isGroupMode
                 ? "bg-primary text-text-inverse"
                 : "bg-surface-overlay text-text-secondary hover:bg-surface-active",
@@ -246,7 +242,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             onClick={() => setIsGroupMode(true)}
             disabled={isBusy}
             className={clsx(
-              "flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors",
+              "flex flex-1 items-center justify-center gap-2 rounded-[var(--chat-control-radius)] px-3 py-2 text-sm font-medium transition-colors",
               isGroupMode
                 ? "bg-primary text-text-inverse"
                 : "bg-surface-overlay text-text-secondary hover:bg-surface-active",
@@ -276,10 +272,10 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
               onChange={(event) => setGroupName(event.target.value)}
               disabled={isBusy}
             />
-            <p className="text-xs leading-5 text-text-muted">
+            <p className="text-xs leading-4 text-text-muted">
               {t("profile:newChatModal.groupEligibilityHint", {
                 defaultValue:
-                  "Directly adding members requires accepted friendship. Use invite links for broader access when group settings allow.",
+                  "Members must be accepted contacts.",
               })}
             </p>
           </div>
@@ -290,7 +286,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             {selectedUsers.map((user) => (
               <div
                 key={user.id}
-                className="flex items-center gap-2 rounded-full bg-primary/15 px-3 py-2 text-sm text-primary"
+                className="flex items-center gap-2 rounded-full bg-primary/12 px-2.5 py-1.5 text-sm text-primary"
               >
                 <span>{getDisplayName(user)}</span>
                 <button
@@ -305,7 +301,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
           </div>
         ) : null}
 
-        <div className="-mx-6 min-h-[18rem] max-h-80 overflow-y-auto px-6">
+        <div className="-mx-4 min-h-[18rem] max-h-[22rem] overflow-y-auto px-4 sm:-mx-5 sm:px-5">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Spinner size="lg" />
@@ -436,7 +432,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
         {isGroupMode && selectedUsers.length > 0 ? (
           <Button
             fullWidth
-            size="lg"
+            size="md"
             onClick={() => void handleCreateGroup()}
             isLoading={isBusy}
             disabled={isBusy}

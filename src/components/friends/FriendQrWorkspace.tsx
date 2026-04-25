@@ -271,17 +271,24 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
     async (rawInput: string) => {
       const toFriendlyResolveMessage = (
         message: string | undefined,
+        originalError?: unknown,
       ): string => {
-        if (!message) {
+        const originalMessage =
+          originalError instanceof Error ? originalError.message : undefined;
+        const candidate = [message, originalMessage]
+          .filter((value): value is string => Boolean(value))
+          .join(" ");
+
+        if (!candidate) {
           return t("friends:qr.invalidCode");
         }
 
-        const normalized = message.toLowerCase();
+        const normalized = candidate.toLowerCase();
         if (normalized.includes("invalid") || normalized.includes("expired")) {
           return t("friends:qr.invalidCode");
         }
 
-        return message;
+        return message ?? t("friends:qr.invalidCode");
       };
 
       const parsedCode = parseShareCodeInput(rawInput);
@@ -305,7 +312,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
         setResolveInput(parsedCode);
       } catch (error) {
         const apiError = extractApiError(error);
-        setResolveError(toFriendlyResolveMessage(apiError.message));
+        setResolveError(toFriendlyResolveMessage(apiError.message, error));
       } finally {
         setIsResolving(false);
       }

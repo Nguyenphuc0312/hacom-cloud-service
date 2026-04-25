@@ -28,6 +28,11 @@ import {
   isChatPerformanceEnabled,
   recordChatPerformanceMeasure,
 } from "../../utils/chatPerformance";
+import {
+  createLongMessageTextFile,
+  getInlineMessageValidationState,
+  MESSAGE_SOFT_LIMIT,
+} from "../../utils/messageLengthPolicy";
 
 export interface MentionCandidate {
   id: string;
@@ -299,6 +304,7 @@ const MessageInputComponent = React.forwardRef<
   const [activeMentionIndex, setActiveMentionIndex] = React.useState(0);
   const [liveRegionMessage, setLiveRegionMessage] = React.useState("");
   const [isPrimarySendLocked, setIsPrimarySendLocked] = React.useState(false);
+  const [showLongPasteNotice, setShowLongPasteNotice] = React.useState(false);
   const primarySendLockedRef = React.useRef(false);
 
   const mentionListId = React.useId();
@@ -392,7 +398,13 @@ const MessageInputComponent = React.forwardRef<
   React.useEffect(() => {
     setDraftValue(externalValue);
     clearMentionState();
+    setShowLongPasteNotice(false);
   }, [clearMentionState, externalValue, valueResetKey]);
+
+  const messageValidation = React.useMemo(
+    () => getInlineMessageValidationState(draftValue),
+    [draftValue],
+  );
 
   const recordInputLatency = React.useCallback(
     (nextValue: string) => {
@@ -509,6 +521,16 @@ const MessageInputComponent = React.forwardRef<
   );
 
   const handleSendText = React.useCallback(async () => {
+    if (!messageValidation.canSendInlineMessage) {
+      setLiveRegionMessage(
+        t("chat:composer.hardLimitError", {
+          max: messageValidation.hardLimit.toLocaleString("vi-VN"),
+          defaultValue: "Tin nhắn vượt giới hạn 20.000 ký tự.",
+        }),
+      );
+      return;
+    }
+
     const result = await sendTextMessage(draftValue);
     if (result === "failed") {
       setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
@@ -534,6 +556,8 @@ const MessageInputComponent = React.forwardRef<
     stopTypingNow,
     t,
     draftValue,
+    messageValidation.canSendInlineMessage,
+    messageValidation.hardLimit,
   ]);
 
   const handleSendAttachment = React.useCallback(async () => {
@@ -551,6 +575,16 @@ const MessageInputComponent = React.forwardRef<
 
   const handlePrimarySend = React.useCallback(async () => {
     if (primarySendLockedRef.current) {
+      return;
+    }
+
+    if (!messageValidation.canSendInlineMessage) {
+      setLiveRegionMessage(
+        t("chat:composer.hardLimitError", {
+          max: messageValidation.hardLimit.toLocaleString("vi-VN"),
+          defaultValue: "Tin nhắn vượt giới hạn 20.000 ký tự.",
+        }),
+      );
       return;
     }
 
@@ -612,6 +646,8 @@ const MessageInputComponent = React.forwardRef<
     t,
     uploadDrafts?.length,
     draftValue,
+    messageValidation.canSendInlineMessage,
+    messageValidation.hardLimit,
   ]);
 
   const handleInputChange = React.useCallback(
@@ -621,6 +657,9 @@ const MessageInputComponent = React.forwardRef<
 
       setDraftValue(nextValue);
       onChange(nextValue);
+      if (nextValue.length <= MESSAGE_SOFT_LIMIT) {
+        setShowLongPasteNotice(false);
+      }
       updateMentionState(nextValue, caret);
       recordInputLatency(nextValue);
 
@@ -631,6 +670,32 @@ const MessageInputComponent = React.forwardRef<
     },
     [notifyInput, onChange, recordInputLatency, updateMentionState],
   );
+
+  const handleSendAsTextFile = React.useCallback(() => {
+    if (!onAddFiles || draftValue.length === 0) {
+      return;
+    }
+
+    const result = onAddFiles([createLongMessageTextFile(draftValue)]);
+    const validationErrors = result?.errors;
+    if (Array.isArray(validationErrors) && validationErrors.length > 0) {
+      Array.from(new Set(validationErrors))
+        .slice(0, 2)
+        .forEach((message) => toast.error(message));
+      return;
+    }
+
+    setDraftValue("");
+    onChange("");
+    clearMentionState();
+    stopTypingNow();
+    setShowLongPasteNotice(false);
+    setLiveRegionMessage(
+      t("chat:composer.sendAsFileReady", {
+        defaultValue: "Đã chuyển nội dung thành tệp văn bản để gửi",
+      }),
+    );
+  }, [clearMentionState, draftValue, onAddFiles, onChange, stopTypingNow, t]);
 
   const handleMentionSelect = React.useCallback(
     (candidate: MentionCandidate) => {
@@ -680,11 +745,15 @@ const MessageInputComponent = React.forwardRef<
   const canSend = hasQueueDrafts
     ? !submitDisabled &&
       !isSubmitBusy &&
+      messageValidation.canSendInlineMessage &&
       !hasUploadingDrafts &&
       (hasReadyDrafts || hasText)
     : selectedFile
       ? !submitDisabled && !isSubmitBusy && composerMode === "online"
-      : !submitDisabled && !isSubmitBusy && hasText;
+      : !submitDisabled &&
+        !isSubmitBusy &&
+        hasText &&
+        messageValidation.canSendInlineMessage;
   const disableAttachmentActions = attachmentsDisabled || isSubmitBusy;
   const sendButtonLabel = t("chat:composer.sendMessage");
   const composerVisualState: ComposerVisualState = disabled
@@ -1137,6 +1206,17 @@ const MessageInputComponent = React.forwardRef<
                 notifyBlur();
                 clearMentionState();
               }}
+              onPaste={(event) => {
+                const pastedText = event.clipboardData.getData("text");
+                const selectionLength =
+                  (event.currentTarget.selectionEnd ?? 0) -
+                  (event.currentTarget.selectionStart ?? 0);
+                const nextLength =
+                  draftValue.length - Math.max(0, selectionLength) + pastedText.length;
+                if (nextLength >= MESSAGE_SOFT_LIMIT) {
+                  setShowLongPasteNotice(true);
+                }
+              }}
               onFocus={() => setIsComposerFocused(true)}
               placeholder={t("chat:composer.placeholder")}
               disabled={disabled}
@@ -1217,6 +1297,83 @@ const MessageInputComponent = React.forwardRef<
             className="shrink-0"
           />
         </div>
+
+        {(messageValidation.showCounter ||
+          messageValidation.isOverSoftLimit ||
+          messageValidation.isOverHardLimit) && (
+          <div className="mt-2 flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              {messageValidation.isOverHardLimit ? (
+                <InlineNotice
+                  tone="error"
+                  className="mb-0"
+                  message={t("chat:composer.hardLimitError", {
+                    max: messageValidation.hardLimit.toLocaleString("vi-VN"),
+                    defaultValue: "Tin nhắn vượt giới hạn 20.000 ký tự.",
+                  })}
+                  action={
+                    onAddFiles ? (
+                      <button
+                        type="button"
+                        onClick={handleSendAsTextFile}
+                        className="text-xs font-semibold underline-offset-2 hover:underline"
+                      >
+                        {t("chat:composer.sendAsTextFile", {
+                          defaultValue: "Gửi dưới dạng tệp .txt",
+                        })}
+                      </button>
+                    ) : undefined
+                  }
+                />
+              ) : messageValidation.isOverSoftLimit || showLongPasteNotice ? (
+                <InlineNotice
+                  tone="warning"
+                  className="mb-0"
+                  message={
+                    showLongPasteNotice
+                      ? t("chat:composer.longPasteNotice", {
+                          defaultValue:
+                            "Nội dung quá dài. Bạn có thể gửi dưới dạng tệp văn bản.",
+                        })
+                      : t("chat:composer.softLimitWarning", {
+                          defaultValue:
+                            "Tin nhắn khá dài. Hãy cân nhắc gửi dưới dạng tệp nếu là log hoặc tài liệu.",
+                        })
+                  }
+                  action={
+                    onAddFiles ? (
+                      <button
+                        type="button"
+                        onClick={handleSendAsTextFile}
+                        className="text-xs font-semibold underline-offset-2 hover:underline"
+                      >
+                        {t("chat:composer.sendAsTextFile", {
+                          defaultValue: "Gửi dưới dạng tệp .txt",
+                        })}
+                      </button>
+                    ) : undefined
+                  }
+                />
+              ) : null}
+            </div>
+
+            {messageValidation.showCounter && (
+              <p
+                className={clsx(
+                  "shrink-0 text-[11px] font-medium",
+                  messageValidation.isOverHardLimit
+                    ? "text-danger"
+                    : messageValidation.isOverSoftLimit
+                      ? "text-warning"
+                      : "text-text-muted",
+                )}
+              >
+                {messageValidation.charCount.toLocaleString("vi-VN")}/
+                {messageValidation.hardLimit.toLocaleString("vi-VN")}
+              </p>
+            )}
+          </div>
+        )}
 
         {onShareContact && currentUserId && (
           <ShareContactModal

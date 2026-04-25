@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../../stores";
 import { PageSpinner } from "../../components/ui";
+import { ForbiddenPage } from "../../pages/errors";
 import { ROUTE_PATHS } from "../paths";
 import { isBlockedAuthStatus } from "../../features/auth/model/authState";
 
@@ -82,7 +83,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     const isAllowed = !!userRole && allowedRoles.includes(userRole);
 
     if (!isAllowed) {
-      return <Navigate to={ROUTE_PATHS.CHAT} replace />;
+      return <ForbiddenPage />;
     }
   }
 

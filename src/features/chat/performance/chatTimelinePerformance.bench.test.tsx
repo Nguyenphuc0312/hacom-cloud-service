@@ -29,8 +29,20 @@ const makeMessage = (index: number, createdAtBaseMs = Date.UTC(2026, 0, 1)): Mes
     attachments: [],
   }) as Message;
 
+const makeLongMessage = (
+  index: number,
+  createdAtBaseMs = Date.UTC(2026, 0, 1),
+): Message =>
+  makeMessage(index, createdAtBaseMs) as Message;
+
 const makeMessages = (count: number, startIndex = 0): Message[] =>
   Array.from({ length: count }, (_, offset) => makeMessage(startIndex + offset));
+
+const makeLongMessages = (count: number, startIndex = 0): Message[] =>
+  Array.from({ length: count }, (_, offset) => ({
+    ...makeLongMessage(startIndex + offset),
+    content: `INFO block ${startIndex + offset}\n${"line=value\n".repeat(140)}`,
+  }));
 
 const useBenchmarkPipeline = (messages: Message[]) => {
   const timelineItems = useConversationTimelineRows({
@@ -71,6 +83,20 @@ describe("chat timeline performance benchmark", () => {
     });
     durations.set(open100.name, open100.durationMs);
     open100.value.unmount();
+
+    const open100Long = measure("open_100_long_messages", () =>
+      renderHook(({ messages }) => useBenchmarkPipeline(messages), {
+        initialProps: { messages: makeLongMessages(100) },
+      }),
+    );
+    results.push({
+      scenario: open100Long.name,
+      durationMs: open100Long.durationMs,
+      timelineRows: open100Long.value.result.current.timelineItems.length,
+      threadRows: open100Long.value.result.current.threadRows.length,
+    });
+    durations.set(open100Long.name, open100Long.durationMs);
+    open100Long.value.unmount();
 
     const messages10k = makeMessages(10_000);
     const open10k = measure("open_10k", () =>
@@ -177,6 +203,7 @@ describe("chat timeline performance benchmark", () => {
     console.table(results);
 
     expect(durations.get("open_100")).toBeLessThanOrEqual(1_000);
+    expect(durations.get("open_100_long_messages")).toBeLessThanOrEqual(1_000);
     expect(durations.get("open_10k")).toBeLessThanOrEqual(1_000);
     expect(durations.get("open_50k")).toBeLessThanOrEqual(2_500);
     expect(durations.get("append_1")).toBeLessThanOrEqual(100);

@@ -431,12 +431,34 @@ export const patchReadCursorInCache = (
 export const markMessageFailedInCache = (
   cache: ConversationMessagesCache,
   clientMessageId: string,
-  errorMessage?: string,
+  failure?:
+    | string
+    | {
+        message?: string;
+        code?: string;
+        statusCode?: number;
+      },
 ): void => {
+  const failureMessage =
+    typeof failure === "string" ? failure : failure?.message;
+  const failureCode =
+    typeof failure === "string" ? undefined : failure?.code;
+  const failureStatusCode =
+    typeof failure === "string" ? undefined : failure?.statusCode;
+  const failureReason =
+    typeof failureStatusCode === "number"
+      ? failureStatusCode >= 500
+        ? "backend_5xx"
+        : failureStatusCode >= 400
+          ? "backend_4xx"
+          : "server"
+      : "server";
+
   patchMessageInCache(cache, clientMessageId, {
     status: MessageStatus.FAILED,
     sendState: "failed",
-    failureReason: "server",
-    errorMessage,
+    failureReason,
+    errorCode: failureCode,
+    errorMessage: failureMessage,
   });
 };

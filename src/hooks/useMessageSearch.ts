@@ -24,6 +24,8 @@ interface UseMessageSearchOptions {
   limit?: number;
   /** Optional conversation ID to scope search */
   conversationId?: string;
+  /** Optional initial query, used when a panel restores per-conversation state */
+  initialQuery?: string;
 }
 
 interface UseMessageSearchReturn {
@@ -63,7 +65,7 @@ export const useMessageSearch = (
   const { debounceMs = 400, limit = 20 } = options;
   const conversationId = options.conversationId;
 
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => options.initialQuery ?? "");
   const [results, setResults] = useState<Message[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);

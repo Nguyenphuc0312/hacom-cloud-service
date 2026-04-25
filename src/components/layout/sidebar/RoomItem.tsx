@@ -89,22 +89,22 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
     unreadBadge: "",
   },
   active: {
-    container: "bg-[hsl(var(--chat-active-surface)/0.12)]",
-    title: "text-text-primary",
-    preview: "text-text-secondary",
-    time: "text-text-secondary",
-    timeBadge:
-      "bg-[hsl(var(--chat-active-surface)/0.1)] text-text-secondary",
-    unreadBadge:
-      "bg-[hsl(var(--chat-badge-bg))] text-text-inverse",
-  },
-  unread: {
     container: "bg-[hsl(var(--chat-active-surface)/0.08)]",
     title: "text-text-primary",
     preview: "text-text-secondary",
     time: "text-text-secondary",
     timeBadge:
-      "bg-[hsl(var(--chat-badge-bg)/0.12)] text-text-secondary",
+      "bg-transparent text-text-secondary",
+    unreadBadge:
+      "bg-[hsl(var(--chat-badge-bg))] text-text-inverse",
+  },
+  unread: {
+    container: "bg-transparent",
+    title: "text-text-primary",
+    preview: "text-text-secondary",
+    time: "text-text-secondary",
+    timeBadge:
+      "bg-transparent text-text-secondary",
     unreadBadge:
       "bg-[hsl(var(--chat-badge-bg))] text-text-inverse",
   },
@@ -117,11 +117,11 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
     unreadBadge: "bg-text-muted text-text-inverse",
   },
   mention: {
-    container: "bg-danger/9",
+    container: "bg-danger/6",
     title: "text-text-primary",
     preview: "text-text-secondary",
     time: "text-danger",
-    timeBadge: "bg-danger/12 text-danger",
+    timeBadge: "bg-transparent text-danger",
     unreadBadge: "bg-danger text-text-inverse",
   },
 };
@@ -262,6 +262,17 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
       )}
       aria-label={displayName}
     >
+      {(visualState === "active" || visualState === "mention") && (
+        <span
+          className={clsx(
+            "absolute left-0 top-2 bottom-2 w-1 rounded-full",
+            visualState === "mention"
+              ? "bg-danger"
+              : "bg-[hsl(var(--chat-active-surface))]",
+          )}
+          aria-hidden="true"
+        />
+      )}
       <div
         className={clsx(
           "grid w-full grid-cols-[auto,1fr,auto] items-center",

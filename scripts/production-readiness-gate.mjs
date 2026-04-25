@@ -126,6 +126,12 @@ for (const file of sourceTextFiles) {
 
 const rawConsoleRegex = /\bconsole\.(debug|info|log|warn|error)\s*\(/;
 const allowedConsoleFiles = new Set(["src/utils/logger.ts"]);
+const blockingDialogRegex = /\bwindow\.(alert|confirm)\s*\(/;
+const rawErrorStackRegex = /\berror\.stack\b|\b\w+Error\.stack\b/;
+const allowedErrorStackFiles = new Set([
+  "src/components/common/RouterErrorBoundary.tsx",
+  "src/components/error/AppErrorBoundary.tsx",
+]);
 
 for (const file of sourceTextFiles) {
   if (isTestFile(file.relativePath) || allowedConsoleFiles.has(file.relativePath)) {
@@ -134,6 +140,17 @@ for (const file of sourceTextFiles) {
 
   if (rawConsoleRegex.test(file.text)) {
     fail(`Raw console call outside logger/test: ${file.relativePath}`);
+  }
+
+  if (blockingDialogRegex.test(file.text)) {
+    fail(`Blocking browser dialog used in production code: ${file.relativePath}`);
+  }
+
+  if (
+    rawErrorStackRegex.test(file.text) &&
+    !allowedErrorStackFiles.has(file.relativePath)
+  ) {
+    fail(`Raw error stack access outside error boundary: ${file.relativePath}`);
   }
 }
 
@@ -182,6 +199,12 @@ if (/image\/(?:svg|xml)|svg\+xml|text\/html/i.test(configText)) {
 
 if (!/allowDataImage\s*===\s*true/.test(configText)) {
   fail("Data image URLs must require explicit allowDataImage opt-in");
+}
+
+const routerPath = join(root, "src/router/router.tsx");
+const routerText = readFileSync(routerPath, "utf8");
+if (!routerText.includes('path: "*"') || !routerText.includes("NotFoundPage")) {
+  fail("Router must keep an explicit catch-all NotFoundPage route");
 }
 
 if (failures.length > 0) {

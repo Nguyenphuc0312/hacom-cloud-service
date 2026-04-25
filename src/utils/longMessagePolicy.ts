@@ -1,9 +1,17 @@
 import { MessageType } from "../types";
 import type { Message } from "../types";
+import {
+  MESSAGE_COLLAPSE_CHAR_THRESHOLD,
+  MESSAGE_COLLAPSE_LINE_THRESHOLD,
+  MESSAGE_PREVIEW_CHAR_LIMIT,
+} from "./messageLengthPolicy";
 
-export const LONG_MESSAGE_COLLAPSE_CHAR_THRESHOLD = 4_000;
-export const LONG_MESSAGE_COLLAPSE_ESTIMATED_LINE_THRESHOLD = 24;
-export const LONG_MESSAGE_COLLAPSE_PREVIEW_CHAR_LIMIT = 1_600;
+export const LONG_MESSAGE_COLLAPSE_CHAR_THRESHOLD =
+  MESSAGE_COLLAPSE_CHAR_THRESHOLD;
+export const LONG_MESSAGE_COLLAPSE_ESTIMATED_LINE_THRESHOLD =
+  MESSAGE_COLLAPSE_LINE_THRESHOLD;
+export const LONG_MESSAGE_COLLAPSE_PREVIEW_CHAR_LIMIT =
+  MESSAGE_PREVIEW_CHAR_LIMIT;
 export const DEFAULT_TEXT_CHARS_PER_LINE = 42;
 
 const INLINE_URL_REGEX = /https?:\/\/[^\s]+/i;
@@ -73,8 +81,7 @@ export const isPlainStaticTextMessage = (message: Message): boolean =>
   !message.replyToMessage &&
   !message.forwardedFrom &&
   (message.reactions?.length ?? 0) === 0 &&
-  (message.attachments?.length ?? 0) === 0 &&
-  !hasInlineUrl(message.content);
+  (message.attachments?.length ?? 0) === 0;
 
 export const isCollapsiblePlainTextMessage = (message: Message): boolean =>
   isPlainStaticTextMessage(message) && isLongMessageContent(message.content);

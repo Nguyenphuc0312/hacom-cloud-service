@@ -1,49 +1,99 @@
 import React from "react";
+import { isRouteErrorResponse, useRouteError } from "react-router-dom";
+import { AppErrorPage } from "../error";
 import {
-  isRouteErrorResponse,
-  Link,
-  useRouteError,
-} from "react-router-dom";
+  ForbiddenPage,
+  MaintenancePage,
+  NotFoundPage,
+  RateLimitPage,
+  ServerErrorPage,
+  UnauthorizedPage,
+} from "../../pages/errors";
 import { ROUTE_PATHS } from "../../router/paths";
 
-const getErrorMessage = (error: unknown): string => {
+const getRouteErrorDetails = (error: unknown): string | undefined => {
   if (isRouteErrorResponse(error)) {
-    return error.data?.message ?? error.statusText ?? `HTTP ${error.status}`;
+    const data =
+      typeof error.data === "string"
+        ? error.data
+        : JSON.stringify(error.data, null, 2);
+    return `HTTP ${error.status} ${error.statusText}\n${data}`;
   }
 
   if (error instanceof Error) {
-    return error.message;
+    return error.stack ?? error.message;
   }
 
-  return "An unexpected error occurred while loading this page.";
+  return undefined;
+};
+
+const readRouteErrorRequestId = (error: unknown): string | undefined => {
+  if (!isRouteErrorResponse(error) || typeof error.data !== "object" || !error.data) {
+    return undefined;
+  }
+
+  const data = error.data as Record<string, unknown>;
+  return typeof data.requestId === "string" ? data.requestId : undefined;
+};
+
+const readRetryAfterSeconds = (error: unknown): number | undefined => {
+  if (!isRouteErrorResponse(error) || typeof error.data !== "object" || !error.data) {
+    return undefined;
+  }
+
+  const data = error.data as Record<string, unknown>;
+  return typeof data.retryAfterSeconds === "number"
+    ? data.retryAfterSeconds
+    : undefined;
 };
 
 export const RouterErrorBoundary: React.FC = () => {
   const error = useRouteError();
-  const message = getErrorMessage(error);
+  const details = getRouteErrorDetails(error);
+  const requestId = readRouteErrorRequestId(error);
+
+  if (isRouteErrorResponse(error)) {
+    if (error.status === 401) {
+      return <UnauthorizedPage />;
+    }
+    if (error.status === 403) {
+      return <ForbiddenPage />;
+    }
+    if (error.status === 404) {
+      return <NotFoundPage />;
+    }
+    if (error.status === 429) {
+      return (
+        <RateLimitPage
+          requestId={requestId}
+          retryAfterSeconds={readRetryAfterSeconds(error)}
+        />
+      );
+    }
+    if (error.status === 503) {
+      return <MaintenancePage requestId={requestId} />;
+    }
+    if (error.status === 500 || error.status === 502 || error.status === 504) {
+      return (
+        <ServerErrorPage
+          statusCode={error.status}
+          requestId={requestId}
+          details={details}
+        />
+      );
+    }
+  }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-6">
-      <div className="w-full max-w-xl rounded-2xl border border-red-200 bg-white p-6 shadow-sm">
-        <h1 className="text-xl font-semibold text-red-700">Something went wrong</h1>
-        <p className="mt-2 text-sm text-gray-700">{message}</p>
-        <div className="mt-5 flex gap-3">
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-          >
-            Retry
-          </button>
-          <Link
-            to={ROUTE_PATHS.CHAT}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
-          >
-            Back to chat
-          </Link>
-        </div>
-      </div>
-    </div>
+    <AppErrorPage
+      statusCode={500}
+      variant="server"
+      title="Hệ thống đang gặp sự cố"
+      description="Vui lòng thử lại. Nếu lỗi tiếp tục xảy ra, hãy gửi mã yêu cầu cho quản trị viên."
+      details={details}
+      primaryAction={{ label: "Thử lại", reload: true }}
+      secondaryAction={{ label: "Về trang chat", to: ROUTE_PATHS.CHAT }}
+    />
   );
 };
 

@@ -401,7 +401,7 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
               src={`${secureUrl}#toolbar=0`}
               className="h-full w-full rounded-xl border-0 bg-white"
               title={fileName || "PDF Preview"}
-              sandbox="allow-same-origin allow-scripts"
+              sandbox="allow-same-origin"
             />
             <p className="mt-2 text-xs text-text-inverse/50">
               {t("chat:filePreview.pdfFallback", {

@@ -77,6 +77,14 @@
   /* Chat bubble density (overridden by SettingsApplier) */
   --chat-bubble-px: 0.75rem;
   --chat-bubble-py: 0.5rem;
+  --chat-bubble-radius: 16px;
+  --chat-bubble-corner-radius: 9px;
+  --chat-panel-radius: 14px;
+  --chat-control-radius: 10px;
+  --chat-message-padding-x: 0.6875rem;
+  --chat-message-padding-y: 0.4375rem;
+  --chat-message-line-height: 1.42;
+  --chat-transition-fast: 120ms;
   --chat-lane-padding: 16px;
   --chat-content-lane: 46rem;
   --chat-rich-lane: 42rem;
@@ -437,6 +445,9 @@ body {
   --chat-rich-lane: 38rem;
   --chat-bubble-max: min(29rem, 66%);
   --chat-bubble-max-compact: min(26rem, 60%);
+  --chat-message-padding-x: 0.625rem;
+  --chat-message-padding-y: 0.375rem;
+  --chat-message-line-height: 1.4;
 }
 
 .chat-shell[data-chat-layout-state="with-panel"] .chat-header {
@@ -484,9 +495,9 @@ body {
 }
 
 .chat-shell[data-chat-layout-state="with-panel"] .chat-message-surface {
-  padding: 0.5rem 0.6875rem;
+  padding: var(--chat-message-padding-y) var(--chat-message-padding-x);
   font-size: 14px;
-  line-height: 1.4;
+  line-height: var(--chat-message-line-height);
 }
 
 .chat-shell[data-chat-layout-state="with-panel"] .chat-message-text:not(.text-3xl) {
@@ -522,6 +533,9 @@ body {
   --chat-rich-lane: 100%;
   --chat-bubble-max: min(24.75rem, 80vw);
   --chat-bubble-max-compact: min(23rem, 76vw);
+  --chat-message-padding-x: 0.625rem;
+  --chat-message-padding-y: 0.375rem;
+  --chat-message-line-height: 1.4;
 }
 
 .chat-shell[data-chat-layout-profile="mobile-compact"] .chat-header {
@@ -569,9 +583,9 @@ body {
 }
 
 .chat-shell[data-chat-layout-profile="mobile-compact"] .chat-message-surface {
-  padding: 0.5rem 0.6875rem;
+  padding: var(--chat-message-padding-y) var(--chat-message-padding-x);
   font-size: 14px;
-  line-height: 1.42;
+  line-height: var(--chat-message-line-height);
 }
 
 .chat-shell[data-chat-layout-profile="mobile-compact"] .chat-message-text:not(.text-3xl) {

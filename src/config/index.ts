@@ -1,4 +1,5 @@
 import { logger } from "../utils/logger";
+import { MESSAGE_HARD_LIMIT } from "../utils/messageLengthPolicy";
 
 /**
  * @fileoverview Cấu hình ứng dụng
@@ -358,5 +359,5 @@ export const VALIDATION_CONFIG = {
   PASSWORD_MIN_LENGTH: 8,
   PASSWORD_MAX_LENGTH: 128,
   BIO_MAX_LENGTH: 500,
-  MESSAGE_MAX_LENGTH: 4000,
+  MESSAGE_MAX_LENGTH: MESSAGE_HARD_LIMIT,
 };

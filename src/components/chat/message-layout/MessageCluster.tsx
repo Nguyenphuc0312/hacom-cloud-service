@@ -116,8 +116,6 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   const [isRailVisible, setIsRailVisible] = React.useState(false);
   const [isActionsOpen, setIsActionsOpen] = React.useState(false);
   const longPressTimerRef = React.useRef<number | null>(null);
-  const openRailTimerRef = React.useRef<number | null>(null);
-  const closeRailTimerRef = React.useRef<number | null>(null);
   const normalizedConversationType = normalizeRoomType(conversationType);
   const isGroupConversation =
     normalizedConversationType !== RoomType.PRIVATE &&
@@ -158,44 +156,24 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
     longPressTimerRef.current = null;
   }, []);
 
-  const clearRailTimers = React.useCallback(() => {
-    if (openRailTimerRef.current !== null) {
-      window.clearTimeout(openRailTimerRef.current);
-      openRailTimerRef.current = null;
-    }
-    if (closeRailTimerRef.current !== null) {
-      window.clearTimeout(closeRailTimerRef.current);
-      closeRailTimerRef.current = null;
-    }
+  const showRail = React.useCallback(() => {
+    setIsRailVisible(true);
   }, []);
 
-  const scheduleRailOpen = React.useCallback(() => {
-    clearRailTimers();
-    openRailTimerRef.current = window.setTimeout(() => {
-      setIsRailVisible(true);
-      openRailTimerRef.current = null;
-    }, 70);
-  }, [clearRailTimers]);
-
-  const scheduleRailClose = React.useCallback(
+  const hideRail = React.useCallback(
     (force = false) => {
-      clearRailTimers();
-      closeRailTimerRef.current = window.setTimeout(() => {
-        if (force || !isActionsOpen) {
-          setIsRailVisible(false);
-        }
-        closeRailTimerRef.current = null;
-      }, 90);
+      if (force || !isActionsOpen) {
+        setIsRailVisible(false);
+      }
     },
-    [clearRailTimers, isActionsOpen],
+    [isActionsOpen],
   );
 
   React.useEffect(
     () => () => {
       clearLongPressTimer();
-      clearRailTimers();
     },
-    [clearLongPressTimer, clearRailTimers],
+    [clearLongPressTimer],
   );
 
   const handleRetry = React.useCallback(() => {
@@ -204,15 +182,14 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   }, [message, resendMessage]);
 
   const openActions = React.useCallback(() => {
-    clearRailTimers();
     setIsActionsOpen(true);
     setIsRailVisible(true);
-  }, [clearRailTimers]);
+  }, []);
 
   const closeActions = React.useCallback(() => {
     setIsActionsOpen(false);
-    scheduleRailClose(true);
-  }, [scheduleRailClose]);
+    hideRail(true);
+  }, [hideRail]);
 
   const handleCopy = React.useCallback(() => {
     void navigator.clipboard.writeText(message.content || "");
@@ -328,16 +305,13 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   return (
     <div
       className={clsx("group/message-cluster w-full", className)}
-      onMouseEnter={scheduleRailOpen}
-      onMouseLeave={() => scheduleRailClose()}
-      onFocusCapture={() => {
-        clearRailTimers();
-        setIsRailVisible(true);
-      }}
+      onMouseEnter={showRail}
+      onMouseLeave={() => hideRail()}
+      onFocusCapture={showRail}
       onBlurCapture={(event) => {
         const nextFocused = event.relatedTarget as Node | null;
         if (!event.currentTarget.contains(nextFocused)) {
-          scheduleRailClose();
+          hideRail();
         }
       }}
     >

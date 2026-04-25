@@ -151,6 +151,21 @@ describe("MessageList scroll arbitration", () => {
     });
   });
 
+  it("keeps long url-heavy plain text on the collapsed static path", () => {
+    const renderState = resolveTimelineMessageRenderState(
+      buildMessageItem({
+        content: `https://example.com/${"segment/".repeat(300)}`,
+      }),
+      new Set<string>(),
+    );
+
+    expect(renderState).toEqual({
+      renderMode: "collapsed",
+      measurementMode: "static",
+      isCollapsible: true,
+    });
+  });
+
   it("keeps reply and inline-url messages on the dynamic render path", () => {
     const renderState = resolveTimelineMessageRenderState(
       buildMessageItem({

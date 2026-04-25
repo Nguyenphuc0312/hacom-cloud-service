@@ -3,10 +3,12 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { ClipboardDocumentIcon } from "@heroicons/react/24/outline";
 import { isOnlyEmoji } from "../../utils/messageHelpers";
+import { toast } from "../ui";
 import {
   getCollapsedTextPreview,
   type LongMessageRenderMode,
 } from "../../utils/longMessagePolicy";
+import { MESSAGE_LINKIFY_MAX_CHARS } from "../../utils/messageLengthPolicy";
 
 interface TextMessageProps {
   content: string;
@@ -20,6 +22,7 @@ interface TextMessageProps {
 
 const LOG_LEVEL_REGEX = /(^|\n)\s*(TRACE|DEBUG|INFO|WARN|WARNING|ERROR)\b/m;
 const KEY_VALUE_LINE_REGEX = /(^|\n)\s*[\w.-]+\s*[:=]\s*.+/m;
+const STRUCTURED_BLOCK_PARSE_MAX_CHARS = 20_000;
 
 const tryFormatJson = (content: string): string | null => {
   const trimmed = content.trim();
@@ -35,6 +38,10 @@ const tryFormatJson = (content: string): string | null => {
 };
 
 const getStructuredBlockContent = (content: string): string | null => {
+  if (content.length > STRUCTURED_BLOCK_PARSE_MAX_CHARS) {
+    return null;
+  }
+
   if (!content.includes("\n")) {
     return null;
   }
@@ -107,9 +114,13 @@ export const TextMessage: React.FC<TextMessageProps> = ({
       ? getCollapsedTextPreview(content)
       : content;
   const structuredBlockContent = getStructuredBlockContent(displayContent);
+  const fullStructuredBlockContent = getStructuredBlockContent(content) ?? content;
   const onlyEmoji = isOnlyEmoji(displayContent);
+  const shouldLinkify =
+    displayContent.length <= MESSAGE_LINKIFY_MAX_CHARS &&
+    !structuredBlockContent;
   const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const parts = displayContent.split(urlRegex);
+  const parts = shouldLinkify ? displayContent.split(urlRegex) : [displayContent];
 
   if (structuredBlockContent) {
     return (
@@ -123,14 +134,21 @@ export const TextMessage: React.FC<TextMessageProps> = ({
             </span>
             <button
               type="button"
-              onClick={() => void navigator.clipboard.writeText(structuredBlockContent)}
+              onClick={() => {
+                void navigator.clipboard.writeText(fullStructuredBlockContent);
+                toast.success(
+                  t("chat:message.copyFullSuccess", {
+                    defaultValue: "Đã sao chép toàn bộ tin nhắn",
+                  }),
+                );
+              }}
               className="inline-flex items-center gap-1 text-[11px] font-medium text-text-muted transition-colors hover:text-text-primary"
             >
               <ClipboardDocumentIcon className="h-3.5 w-3.5" />
               {t("chat:message.actions.copy", { defaultValue: "Copy" })}
             </button>
           </div>
-          <pre className="max-h-60 overflow-auto px-3 py-2 text-[12px] leading-[18px] text-text-secondary">
+          <pre className="max-h-60 overflow-auto overflow-x-hidden whitespace-pre-wrap break-words px-3 py-2 text-[12px] leading-[18px] text-text-secondary [overflow-wrap:anywhere]">
             {structuredBlockContent}
           </pre>
         </div>
@@ -152,41 +170,52 @@ export const TextMessage: React.FC<TextMessageProps> = ({
 
   return (
     <div className="space-y-2">
-      <p
+      <div
         className={clsx(
-          "chat-message-text max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere]",
-          onlyEmoji ? "leading-tight text-3xl" : "text-[14px] leading-[21px] text-text-primary",
-          className,
+          "relative",
+          isCollapsible &&
+            renderMode === "collapsed" &&
+            "after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-10 after:bg-gradient-to-t after:from-[hsl(var(--chat-panel-bg))/0.98] after:to-transparent",
         )}
       >
-        {parts.map((part, index) => {
-          const isLink = /^https?:\/\/[^\s]+$/i.test(part);
-          if (isLink) {
-            return (
-              <a
-                key={index}
-                href={part}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={clsx(
-                  "underline decoration-border-strong underline-offset-2 transition-colors",
-                  isOwn
-                    ? "text-text-primary hover:text-secondary"
-                    : "text-primary hover:text-secondary",
-                )}
-              >
-                {part}
-              </a>
-            );
-          }
+        <p
+          className={clsx(
+            "chat-message-text max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere]",
+            onlyEmoji
+              ? "leading-tight text-3xl"
+              : "text-[14px] leading-[21px] text-text-primary",
+            className,
+          )}
+        >
+          {parts.map((part, index) => {
+            const isLink = shouldLinkify && /^https?:\/\/[^\s]+$/i.test(part);
+            if (isLink) {
+              return (
+                <a
+                  key={index}
+                  href={part}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={clsx(
+                    "underline decoration-border-strong underline-offset-2 transition-colors",
+                    isOwn
+                      ? "text-text-primary hover:text-secondary"
+                      : "text-primary hover:text-secondary",
+                  )}
+                >
+                  {part}
+                </a>
+              );
+            }
 
-          return (
-            <React.Fragment key={index}>
-              {renderWithMentions(part, isOwn, currentUsername)}
-            </React.Fragment>
-          );
-        })}
-      </p>
+            return (
+              <React.Fragment key={index}>
+                {renderWithMentions(part, isOwn, currentUsername)}
+              </React.Fragment>
+            );
+          })}
+        </p>
+      </div>
 
       {isCollapsible && onToggleExpand ? (
         <button

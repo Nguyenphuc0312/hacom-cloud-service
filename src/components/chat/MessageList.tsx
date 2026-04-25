@@ -18,6 +18,7 @@ import {
 } from "../../utils/messageTimeline";
 import {
   isTargetMessage,
+  resolveThreadMessageRenderState,
   resolveTimelineMessageRenderState,
   type RenderableTimelineItem,
   type TimelineMessageRenderState,
@@ -1699,6 +1700,48 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       return;
     }
 
+    const targetMessage = threadRows[targetIndex]?.kind === "group"
+      ? threadRows[targetIndex].items.find((entry) =>
+          isTargetMessage(entry.message, jumpToMessageId),
+        )?.message
+      : null;
+    const shouldExpandTarget = targetMessage
+      ? resolveThreadMessageRenderState(
+          {
+            kind: "message",
+            message: targetMessage,
+          },
+          expandedLongMessageIds,
+        ).isCollapsible && !expandedLongMessageIds.has(targetMessage.id)
+      : false;
+
+    if (shouldExpandTarget && targetMessage) {
+      setExpandedLongMessageIds((previous) => {
+        if (previous.has(targetMessage.id)) {
+          return previous;
+        }
+        const next = new Set(previous);
+        next.add(targetMessage.id);
+        return next;
+      });
+
+      if (typeof window === "undefined") {
+        detachForJump("jump-to-message");
+        ensureItemVisible(targetIndex, "jump-to-message");
+        highlightMessage(jumpToMessageId);
+        onJumpHandled?.(jumpToMessageId);
+        return;
+      }
+
+      window.requestAnimationFrame(() => {
+        detachForJump("jump-to-message");
+        ensureItemVisible(targetIndex, "jump-to-message");
+        highlightMessage(jumpToMessageId);
+        onJumpHandled?.(jumpToMessageId);
+      });
+      return;
+    }
+
     detachForJump("jump-to-message");
     ensureItemVisible(targetIndex, "jump-to-message");
     highlightMessage(jumpToMessageId);
@@ -1706,6 +1749,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   }, [
     conversationId,
     detachForJump,
+    expandedLongMessageIds,
     ensureItemVisible,
     highlightMessage,
     jumpRequestVersion,

@@ -20,28 +20,28 @@ const getBubbleRadiusClass = (
   mergeLevel: TimelineMergeLevel,
 ): string => {
   const semanticOwn = {
-    single: "rounded-[22px] rounded-br-[14px]",
-    start: "rounded-[22px] rounded-br-[14px]",
-    end: "rounded-[22px] rounded-tr-[14px]",
-    middle: "rounded-[22px] rounded-r-[14px]",
+    single: "rounded-[var(--chat-bubble-radius)] rounded-br-[var(--chat-bubble-corner-radius)]",
+    start: "rounded-[var(--chat-bubble-radius)] rounded-br-[var(--chat-bubble-corner-radius)]",
+    end: "rounded-[var(--chat-bubble-radius)] rounded-tr-[var(--chat-bubble-corner-radius)]",
+    middle: "rounded-[var(--chat-bubble-radius)] rounded-r-[var(--chat-bubble-corner-radius)]",
   };
   const semanticOther = {
-    single: "rounded-[22px] rounded-bl-[14px]",
-    start: "rounded-[22px] rounded-bl-[14px]",
-    end: "rounded-[22px] rounded-tl-[14px]",
-    middle: "rounded-[22px] rounded-l-[14px]",
+    single: "rounded-[var(--chat-bubble-radius)] rounded-bl-[var(--chat-bubble-corner-radius)]",
+    start: "rounded-[var(--chat-bubble-radius)] rounded-bl-[var(--chat-bubble-corner-radius)]",
+    end: "rounded-[var(--chat-bubble-radius)] rounded-tl-[var(--chat-bubble-corner-radius)]",
+    middle: "rounded-[var(--chat-bubble-radius)] rounded-l-[var(--chat-bubble-corner-radius)]",
   };
   const defaultOwn = {
-    single: "rounded-[22px] rounded-br-[10px]",
-    start: "rounded-[22px] rounded-br-[10px]",
-    end: "rounded-[22px] rounded-tr-[10px]",
-    middle: "rounded-[22px] rounded-r-[10px]",
+    single: "rounded-[var(--chat-bubble-radius)] rounded-br-[var(--chat-bubble-corner-radius)]",
+    start: "rounded-[var(--chat-bubble-radius)] rounded-br-[var(--chat-bubble-corner-radius)]",
+    end: "rounded-[var(--chat-bubble-radius)] rounded-tr-[var(--chat-bubble-corner-radius)]",
+    middle: "rounded-[var(--chat-bubble-radius)] rounded-r-[var(--chat-bubble-corner-radius)]",
   };
   const defaultOther = {
-    single: "rounded-[22px] rounded-bl-[10px]",
-    start: "rounded-[22px] rounded-bl-[10px]",
-    end: "rounded-[22px] rounded-tl-[10px]",
-    middle: "rounded-[22px] rounded-l-[10px]",
+    single: "rounded-[var(--chat-bubble-radius)] rounded-bl-[var(--chat-bubble-corner-radius)]",
+    start: "rounded-[var(--chat-bubble-radius)] rounded-bl-[var(--chat-bubble-corner-radius)]",
+    end: "rounded-[var(--chat-bubble-radius)] rounded-tl-[var(--chat-bubble-corner-radius)]",
+    middle: "rounded-[var(--chat-bubble-radius)] rounded-l-[var(--chat-bubble-corner-radius)]",
   };
   const palette =
     mergeLevel === "semantically-merged"
@@ -71,7 +71,7 @@ export const MessageSurface: React.FC<MessageSurfaceProps> = ({
   return (
     <div
       className={clsx(
-        "chat-message-surface relative min-w-0 px-3 py-2.5 text-[15px] leading-[1.48] transition-colors",
+        "chat-message-surface relative min-w-0 px-[var(--chat-message-padding-x)] py-[var(--chat-message-padding-y)] text-[14.5px] leading-[var(--chat-message-line-height)] transition-colors",
         getBubbleRadiusClass(isOwn, isGroupStart, isGroupEnd, mergeLevel),
         isOwn
           ? "bg-[hsl(var(--chat-bubble-sent))] text-[hsl(var(--chat-bubble-sent-text))]"

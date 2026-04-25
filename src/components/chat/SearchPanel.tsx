@@ -4,14 +4,20 @@
  * click-to-navigate, paging, loading/error/empty states.
  */
 
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  MagnifyingGlassIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 import { Spinner } from "../ui";
 import { Avatar } from "../common/Avatar";
 import { useMessageSearch } from "../../hooks/useMessageSearch";
 import { formatRelativeTime } from "../../utils/formatTime";
+import { getMessageSearchPreview } from "../../utils/messageLengthPolicy";
 import type { Message } from "../../types";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 
@@ -24,6 +30,9 @@ interface SearchPanelProps {
   onClose: () => void;
   className?: string;
 }
+
+const QUERY_SCOPE_ALL = "__all__";
+const searchQueryByScope = new Map<string, string>();
 
 /** Highlight matching text fragments in message content */
 const HighlightedText: React.FC<{ text: string; query: string }> = ({
@@ -63,6 +72,12 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const queryScope = conversationId ?? QUERY_SCOPE_ALL;
+  const initialQuery = useMemo(
+    () => searchQueryByScope.get(queryScope) ?? "",
+    [queryScope],
+  );
+  const [activeIndex, setActiveIndex] = useState(0);
 
   const {
     query,
@@ -74,22 +89,75 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     hasMore,
     loadMore,
     reset,
-  } = useMessageSearch({ conversationId, debounceMs: 400, limit: 20 });
+  } = useMessageSearch({
+    conversationId,
+    debounceMs: 400,
+    initialQuery,
+    limit: 20,
+  });
+  const safeActiveIndex =
+    results.length === 0 ? 0 : Math.min(activeIndex, results.length - 1);
 
   // Auto-focus input on mount
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
+  useEffect(() => {
+    searchQueryByScope.set(queryScope, query);
+  }, [query, queryScope]);
+
+  const jumpToResult = useCallback(
+    (index: number) => {
+      const message = results[index];
+      if (!message) return;
+      setActiveIndex(index);
+      onSelectMessage(message);
+    },
+    [onSelectMessage, results],
+  );
+
+  const goToPrevious = useCallback(() => {
+    if (results.length === 0) return;
+    const nextIndex =
+      safeActiveIndex <= 0 ? results.length - 1 : safeActiveIndex - 1;
+    jumpToResult(nextIndex);
+  }, [jumpToResult, results.length, safeActiveIndex]);
+
+  const goToNext = useCallback(() => {
+    if (results.length === 0) return;
+    if (safeActiveIndex >= results.length - 1 && hasMore) {
+      void loadMore();
+      return;
+    }
+    const nextIndex =
+      safeActiveIndex >= results.length - 1 ? 0 : safeActiveIndex + 1;
+    jumpToResult(nextIndex);
+  }, [hasMore, jumpToResult, loadMore, results.length, safeActiveIndex]);
+
   // Handle keyboard
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        if (query.trim()) {
+          setQuery("");
+        } else {
+          onClose();
+        }
+        return;
+      }
+
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          goToPrevious();
+        } else {
+          goToNext();
+        }
       }
     },
-    [onClose],
+    [goToNext, goToPrevious, onClose, query, setQuery],
   );
 
   // Infinite scroll handler
@@ -102,9 +170,14 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   }, [isLoading, hasMore, loadMore]);
 
   const handleClose = useCallback(() => {
-    reset();
     onClose();
-  }, [reset, onClose]);
+  }, [onClose]);
+
+  const handleClear = useCallback(() => {
+    reset();
+    searchQueryByScope.delete(queryScope);
+    setActiveIndex(0);
+  }, [queryScope, reset]);
 
   return (
     <div
@@ -151,7 +224,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           {query && (
             <button
               type="button"
-              onClick={() => setQuery("")}
+              onClick={handleClear}
               className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-text-muted hover:text-text-secondary"
               aria-label={t("common:actions.clear")}
             >
@@ -186,41 +259,65 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
 
         {/* Empty state */}
         {!isLoading && !error && query.trim() && results.length === 0 && (
-          <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
-            <MagnifyingGlassIcon className="h-10 w-10 text-text-muted" />
-            <p className="text-sm font-medium text-text-secondary">
+          <div className="px-4 py-6 text-center">
+            <p className="text-sm text-text-secondary">
               {t("chat:search.noResults")}
-            </p>
-            <p className="text-xs text-text-muted">
-              {t("chat:search.noResultsDescription")}
             </p>
           </div>
         )}
 
         {/* Results count */}
         {results.length > 0 && (
-          <p className="px-4 pb-1 text-xs text-text-muted">
-            {t("chat:search.resultCount", { count: total })}
-          </p>
+          <div className="sticky top-0 z-10 flex items-center justify-between border-y border-border/70 bg-surface/95 px-4 py-2 backdrop-blur">
+            <p className="text-xs font-medium text-text-muted">
+              {safeActiveIndex + 1}/{total || results.length}
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={goToPrevious}
+                className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                aria-label={t("chat:search.previousResult", {
+                  defaultValue: "Previous result",
+                })}
+              >
+                <ChevronUpIcon className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={goToNext}
+                className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                aria-label={t("chat:search.nextResult", {
+                  defaultValue: "Next result",
+                })}
+              >
+                <ChevronDownIcon className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Results list */}
-        {results.map((message) => {
+        {results.map((message, index) => {
           const senderDisplayName = resolveUserDisplayName({
             displayName: message.senderName,
             username: message.senderId,
           });
+          const isActive = index === safeActiveIndex;
+          const preview = getMessageSearchPreview(message.content ?? "", query);
 
           return (
             <button
               key={message.id}
               type="button"
-              onClick={() => onSelectMessage(message)}
+              onClick={() => jumpToResult(index)}
               className={clsx(
                 "flex w-full items-start gap-3 px-4 py-3 text-left",
                 "transition-colors hover:bg-surface-overlay",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-inset",
+                isActive && "bg-primary/8",
               )}
+              aria-current={isActive ? "true" : undefined}
             >
               <Avatar
                 src={message.senderAvatar}
@@ -237,7 +334,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                   </span>
                 </div>
                 <p className="mt-0.5 line-clamp-2 text-sm text-text-secondary">
-                  <HighlightedText text={message.content} query={query} />
+                  <HighlightedText text={preview} query={query} />
                 </p>
               </div>
             </button>

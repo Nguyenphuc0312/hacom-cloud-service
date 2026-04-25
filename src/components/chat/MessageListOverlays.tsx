@@ -123,8 +123,8 @@ export const MessageListOverlays = React.memo(
                       type="button"
                       onClick={onJumpToLatest}
                       className={clsx(
-                        "flex h-10 w-10 items-center justify-center rounded-full border border-white/8 bg-[hsl(var(--color-chat-pill))] shadow-elev2",
-                        "transition-micro hover:bg-white/10 hover:shadow-elev3 hover:-translate-y-0.5",
+                        "flex h-10 w-10 items-center justify-center rounded-full border border-white/8 bg-[hsl(var(--color-chat-pill))] shadow-xs",
+                        "transition-micro hover:bg-white/10 hover:shadow-elev1",
                         "active:scale-95",
                         "animate-slide-up-fade",
                       )}
@@ -139,8 +139,8 @@ export const MessageListOverlays = React.memo(
                       type="button"
                       onClick={onJumpToLatest}
                       className={clsx(
-                        "flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/8 bg-[hsl(var(--color-chat-pill))] px-3 shadow-elev2",
-                        "transition-micro hover:bg-white/10 hover:shadow-elev3 hover:-translate-y-0.5",
+                        "flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/8 bg-[hsl(var(--color-chat-pill))] px-3 shadow-xs",
+                        "transition-micro hover:bg-white/10 hover:shadow-elev1",
                         "active:scale-95",
                         "animate-slide-up-fade",
                         showJumpToBottom && "ml-2",

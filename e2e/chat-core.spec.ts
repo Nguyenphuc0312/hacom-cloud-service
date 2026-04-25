@@ -931,3 +931,78 @@ test("new conversation search supports multiple identifiers and group mode enfor
     page.getByRole("button", { name: "Create group (1 users)" }),
   ).toBeVisible();
 });
+
+test("long messages render collapsed by default and can expand inline", async ({ page }) => {
+  const longTail = "tail-marker-long-message";
+  const state: MockState = {
+    currentUser: {
+      id: "user-a",
+      username: "alice",
+      displayName: "Alice",
+      status: "online",
+    },
+    conversations: [
+      makeConversation("room-1", "Room 1", {
+        lastMessage: toMessageSummary(
+          makeMessage({
+            id: "msg-long",
+            conversationId: "room-1",
+            content: `INFO request\n${"line=value\n".repeat(180)}${longTail}`,
+          }),
+        ),
+      }),
+    ],
+    messagesByConversation: {
+      "room-1": [
+        makeMessage({
+          id: "msg-long",
+          conversationId: "room-1",
+          content: `INFO request\n${"line=value\n".repeat(180)}${longTail}`,
+        }),
+      ],
+    },
+    sentPayloads: [],
+    unreadFeedHits: 0,
+  };
+
+  await bootChatPage(page, state);
+
+  await expect(page.getByTestId("message-item-msg-long")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Show more|Xem thêm/ })).toBeVisible();
+  await expect(page.getByText(longTail)).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Show more|Xem thêm/ }).click();
+  await expect(page.getByRole("button", { name: /Show less|Thu gọn/ })).toBeVisible();
+  await expect(page.getByText(longTail)).toBeVisible();
+});
+
+test("composer blocks over-limit inline messages and suggests sending a text file", async ({ page }) => {
+  const state: MockState = {
+    currentUser: {
+      id: "user-a",
+      username: "alice",
+      displayName: "Alice",
+      status: "online",
+    },
+    conversations: [makeConversation("room-1", "Room 1")],
+    messagesByConversation: {
+      "room-1": [],
+    },
+    sentPayloads: [],
+    unreadFeedHits: 0,
+  };
+
+  await bootChatPage(page, state);
+
+  await page.getByTestId("chat-composer-input").fill("x".repeat(20_001));
+
+  await expect(
+    page.getByText(/Message exceeds the 20\.000 character limit\.|Tin nhắn vượt giới hạn 20\.000 ký tự\./),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Send as \.txt file|Gửi dưới dạng tệp \.txt/ }),
+  ).toBeVisible();
+  await expect(page.getByTestId("chat-send-button")).toBeDisabled();
+
+  expect(state.sentPayloads).toHaveLength(0);
+});

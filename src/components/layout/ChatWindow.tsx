@@ -46,7 +46,8 @@ import { resolveUserDisplayName } from "../../features/chat/identity/resolveUser
 import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
 import { useChatUiStore } from "../../features/chat/state";
 import { useMessageJumpTargetRTK } from "../../features/chat/hooks/useMessageJumpTargetRTK";
-import { selectConversationMessagesFromState } from "../../stores/chatStore";
+import { chatApi as rtkChatApi } from "../../features/api/chatApi";
+import { store } from "../../store";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
 
 const SearchPanel = React.lazy(() => import("../chat/SearchPanel"));
@@ -882,12 +883,22 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [onDeleteMessage, selectedMessageIds, exitSelectionMode]);
 
   const handleSelectionCopy = React.useCallback(() => {
-    const selectedMsgs = selectConversationMessagesFromState(
-      useChatStore.getState(),
-      conversation.id,
-    )
-      .filter((message) => selectedMessageIds.has(message.id))
-      .map((m) => m.content)
+    const cachedMessages =
+      rtkChatApi.endpoints.getMessages
+        .select({ conversationId: conversation.id })(store.getState())
+        .data?.messages ?? [];
+
+    const isSelectedMessage = (message: Message) =>
+      [
+        message.id,
+        message.localId,
+        message.stableId,
+        message.clientMessageId,
+      ].some((id) => typeof id === "string" && selectedMessageIds.has(id));
+
+    const selectedMsgs = cachedMessages
+      .filter(isSelectedMessage)
+      .map((message) => message.content)
       .join("\n");
     void navigator.clipboard.writeText(selectedMsgs);
     toast.success(t("chat:message.actions.copy", { defaultValue: "Copied" }));

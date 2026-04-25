@@ -37,16 +37,18 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   return (
     <div
       className={clsx(
-        "flex flex-col items-center justify-center px-6 py-8 text-center",
+        "flex flex-col items-center justify-center px-5 py-5 text-center",
         className,
       )}
     >
-      {icon && <div className="mb-4 h-20 w-20 text-text-muted/55">{icon}</div>}
+      {icon && <div className="mb-3 h-12 w-12 text-text-muted/55">{icon}</div>}
 
-      <h3 className="mb-2 text-title-sm text-text-primary">{title}</h3>
+      <h3 className="mb-1.5 text-sm font-semibold text-text-primary">
+        {title}
+      </h3>
 
       {description && (
-        <p className="mb-5 max-w-sm text-body-sm text-text-secondary">
+        <p className="mb-4 max-w-xs text-sm leading-5 text-text-secondary">
           {description}
         </p>
       )}
@@ -179,7 +181,7 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
 
   return (
     <section className="chat-background flex flex-1 flex-col items-center justify-center px-6 py-8 text-text-secondary">
-      <div className="mb-5 h-24 w-24 text-text-muted/60 sm:mb-6 sm:h-32 sm:w-32">
+      <div className="mb-4 h-16 w-16 text-text-muted/55 sm:h-20 sm:w-20">
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -193,10 +195,10 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
           />
         </svg>
       </div>
-      <h2 className="mb-2 text-title text-text-primary sm:text-title">
+      <h2 className="mb-1.5 text-base font-semibold text-text-primary">
         {t("chat:empty.noChatTitle")}
       </h2>
-      <p className="mb-5 max-w-sm text-center text-body-sm text-text-secondary">
+      <p className="mb-4 max-w-xs text-center text-sm leading-5 text-text-secondary">
         {t("chat:empty.noChatDescription")}
       </p>
       {onNewChat && (

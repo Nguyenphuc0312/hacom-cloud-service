@@ -2,6 +2,7 @@ import React, { Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { Outlet } from "react-router-dom";
 import { ToastProvider, PageSpinner } from "../components/ui";
+import { AppErrorBoundary } from "../components/error";
 import { SettingsApplier } from "../components/settings";
 
 /**
@@ -15,7 +16,9 @@ export const RootLayout: React.FC = () => {
       <ToastProvider />
       <SettingsApplier />
       <Suspense fallback={<PageSpinner message={t("common:loading.page")} />}>
-        <Outlet />
+        <AppErrorBoundary>
+          <Outlet />
+        </AppErrorBoundary>
       </Suspense>
     </>
   );

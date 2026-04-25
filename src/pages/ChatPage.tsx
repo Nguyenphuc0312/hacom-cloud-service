@@ -16,7 +16,7 @@ import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Sidebar } from "../components/layout/Sidebar";
 import { ChatWindow } from "../components/layout/ChatWindow";
-import { ErrorState, NoChatSelected, Spinner } from "../components/ui";
+import { ConfirmDialog, ErrorState, NoChatSelected, Spinner } from "../components/ui";
 import { toast } from "../components/ui";
 import {
   useAuthStore,
@@ -60,7 +60,6 @@ import {
 } from "../lib/commandPalette";
 import { chatApi } from "../features/chat/api";
 import { store } from "../store";
-import { selectConversationMessagesFromState } from "../stores/chatStore";
 import type { ChatLayoutState } from "../utils/densityPolicy";
 import { isUuid } from "../utils/isUuid";
 
@@ -197,6 +196,9 @@ export const ChatPage: React.FC = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const filePreview = useFilePreview();
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const [isDeleteConversationConfirmOpen, setIsDeleteConversationConfirmOpen] =
+    useState(false);
+  const [isDeletingConversation, setIsDeletingConversation] = useState(false);
   const [isLoadingMoreConversations, setIsLoadingMoreConversations] =
     useState(false);
   const [hasMoreConversations, setHasMoreConversations] = useState(true);
@@ -524,15 +526,20 @@ export const ChatPage: React.FC = () => {
     routeConversationId,
   ]);
 
-  const handleDeleteConversation = useCallback(async () => {
+  const handleDeleteConversation = useCallback(() => {
     if (!selectedConversation) return;
-    if (!window.confirm(t("profile:userProfile.deleteConversation"))) return;
+    setIsDeleteConversationConfirmOpen(true);
+  }, [selectedConversation]);
 
+  const confirmDeleteConversation = useCallback(async () => {
+    if (!selectedConversation) return;
+    setIsDeletingConversation(true);
     try {
       const { deleteConversationUseCase } =
         await loadConversationMutationUseCases();
       await deleteConversationUseCase(selectedConversation.id);
       removeConversation(selectedConversation.id);
+      setIsDeleteConversationConfirmOpen(false);
       closeInfoPanel();
       selectConversation(null);
       navigate("/chat");
@@ -540,6 +547,8 @@ export const ChatPage: React.FC = () => {
     } catch (error) {
       const apiError = extractApiError(error);
       toast.error(apiError.message || t("error:generic.requestFailed"));
+    } finally {
+      setIsDeletingConversation(false);
     }
   }, [
     closeInfoPanel,
@@ -851,10 +860,10 @@ export const ChatPage: React.FC = () => {
           attachment.fileName,
         ),
       };
-      const gallery = selectConversationMessagesFromState(
-        useChatStore.getState(),
-        selectedConversation.id,
-      )
+      const cachedMessages = rtkChatApi.endpoints.getMessages
+        .select({ conversationId: selectedConversation.id })(store.getState())
+        .data?.messages ?? [];
+      const gallery = cachedMessages
         .flatMap((message) =>
           (message.attachments ?? []).map((candidate) => ({
             attachment: candidate,
@@ -1198,6 +1207,30 @@ export const ChatPage: React.FC = () => {
           />
         </React.Suspense>
       )}
+
+      <ConfirmDialog
+        isOpen={isDeleteConversationConfirmOpen}
+        onClose={() => {
+          if (!isDeletingConversation) {
+            setIsDeleteConversationConfirmOpen(false);
+          }
+        }}
+        onConfirm={() => {
+          void confirmDeleteConversation();
+        }}
+        title={t("profile:userProfile.deleteConversation", {
+          defaultValue: "Delete conversation",
+        })}
+        message={t("profile:userProfile.deleteConversationConfirm", {
+          defaultValue:
+            "This conversation will be removed from your chat list.",
+        })}
+        confirmText={t("common:actions.delete", {
+          defaultValue: "Delete",
+        })}
+        isLoading={isDeletingConversation}
+        variant="danger"
+      />
     </div>
   );
 };

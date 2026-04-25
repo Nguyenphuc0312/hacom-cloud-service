@@ -7,6 +7,7 @@ import { ProtectedRoute } from "./guards/RouteGuards";
 import { buildPrivateRouteObjects, buildPublicRouteObjects } from "./builders";
 import { ROUTE_PATHS } from "./paths";
 import { RouterErrorBoundary } from "../components/common/RouterErrorBoundary";
+import { NotFoundPage } from "../pages/errors";
 import { APP_BASE_PATH } from "../config";
 
 const routeTree: RouteObject[] = [
@@ -27,7 +28,7 @@ const routeTree: RouteObject[] = [
         children: buildPrivateRouteObjects(),
       },
       { path: ROUTE_PATHS.ROOT, element: <Navigate to={ROUTE_PATHS.CHAT} replace /> },
-      { path: "*", element: <Navigate to={ROUTE_PATHS.CHAT} replace /> },
+      { path: "*", element: <NotFoundPage /> },
     ],
   },
 ];
