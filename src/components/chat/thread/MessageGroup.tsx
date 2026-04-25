@@ -26,6 +26,7 @@ import type {
   ConversationThreadMessageItem,
 } from "../../../features/chat/hooks/useConversationThreadRows";
 import { resolveThreadMessageRenderState } from "../messageListShared";
+import { recordChatRenderCount } from "../../../utils/chatPerformance";
 
 interface MessageGroupProps {
   row: ConversationThreadGroupRow;
@@ -122,6 +123,12 @@ const MessageGroupItem: React.FC<{
   const [isActionSheetOpen, setIsActionSheetOpen] = React.useState(false);
   const [isActionRailVisible, setIsActionRailVisible] = React.useState(false);
   const message = item.message;
+  recordChatRenderCount("MessageGroupItem", message.id, {
+    isOwn,
+    isSelectionMode,
+    isSelected,
+    isGroupTail,
+  });
   const resendMessage = useChatStore((state) => state.resendMessage);
   const hideActionRailTimerRef = React.useRef<number | null>(null);
   const isHighlighted =

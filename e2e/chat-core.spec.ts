@@ -637,7 +637,7 @@ test("reply sends canonical replyTo and still renders reply preview after reload
   await expect(page.getByTestId("message-item-msg-2")).toContainText("Parent seed");
 });
 
-test("conversation with unread bootstraps from server unread feed and lands on first unread anchor", async ({ page }) => {
+test("conversation with unread uses canonical message readState and lands on first unread anchor", async ({ page }) => {
   const readMessage = makeMessage({
     id: "msg-read",
     conversationId: "room-1",
@@ -692,7 +692,7 @@ test("conversation with unread bootstraps from server unread feed and lands on f
 
   await expect(page.getByText("First unread from server")).toBeVisible();
   await expect(page.getByText("Read before anchor")).toBeVisible();
-  expect(state.unreadFeedHits).toBeGreaterThan(0);
+  expect(state.unreadFeedHits).toBe(0);
 });
 
 test("compat conversation payload with roomId only is normalized at the boundary without using /rooms routes", async ({

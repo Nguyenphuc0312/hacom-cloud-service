@@ -1,5 +1,11 @@
+/* eslint-disable react-hooks/refs -- Immutable derived-row cache preserves row identity without scheduling a second render. */
 import React from "react";
 import type { ConversationTimelineItem } from "./useConversationTimelineRows";
+import {
+  getChatPerformanceDuration,
+  getChatPerformanceTimestamp,
+  recordChatPerformanceMeasure,
+} from "../../../utils/chatPerformance";
 
 type ThreadSeparatorRow = Extract<
   ConversationTimelineItem,
@@ -156,27 +162,181 @@ interface ThreadRowsCache {
   rowsByKey: Map<string, ConversationThreadRow>;
 }
 
+const findCommonPrefixLength = <T,>(
+  previousItems: readonly T[],
+  nextItems: readonly T[],
+): number => {
+  const limit = Math.min(previousItems.length, nextItems.length);
+  let index = 0;
+
+  while (index < limit && previousItems[index] === nextItems[index]) {
+    index += 1;
+  }
+
+  return index;
+};
+
+const rowContainsTimelineItemKey = (
+  row: ConversationThreadRow,
+  itemKey: string,
+): boolean => {
+  if (row.kind === "group") {
+    return row.items.some((item) => item.key === itemKey);
+  }
+
+  return row.key === itemKey;
+};
+
+const getFirstTimelineItemKeyForRow = (
+  row: ConversationThreadRow,
+): string | null => {
+  if (row.kind === "group") {
+    return row.items[0]?.key ?? null;
+  }
+
+  return row.key;
+};
+
+const findThreadRowIndexForTimelineItemKey = (
+  rows: readonly ConversationThreadRow[],
+  itemKey: string,
+): number =>
+  rows.findIndex((row) => rowContainsTimelineItemKey(row, itemKey));
+
+const compactMapIfNeeded = (
+  rowsByKey: Map<string, ConversationThreadRow>,
+  rows: readonly ConversationThreadRow[],
+): Map<string, ConversationThreadRow> => {
+  if (rowsByKey.size <= rows.length * 2) {
+    return rowsByKey;
+  }
+
+  const compacted = new Map<string, ConversationThreadRow>();
+  rows.forEach((row) => {
+    compacted.set(row.key, row);
+  });
+  return compacted;
+};
+
+const buildTailThreadRows = (
+  items: ConversationTimelineItem[],
+  cache: ThreadRowsCache,
+): {
+  rows: ConversationThreadRow[];
+  reconciliationStartIndex: number;
+  incrementalTail: boolean;
+  commonPrefixLength: number;
+} => {
+  const previousItems = cache.timelineItems;
+  const commonPrefixLength = previousItems
+    ? findCommonPrefixLength(previousItems, items)
+    : 0;
+
+  if (!previousItems || commonPrefixLength === 0) {
+    return {
+      rows: buildConversationThreadRows(items),
+      reconciliationStartIndex: 0,
+      incrementalTail: false,
+      commonPrefixLength,
+    };
+  }
+
+  if (commonPrefixLength >= previousItems.length) {
+    const tailRows = buildConversationThreadRows(items.slice(commonPrefixLength));
+    return {
+      rows: cache.rows.concat(tailRows),
+      reconciliationStartIndex: cache.rows.length,
+      incrementalTail: true,
+      commonPrefixLength,
+    };
+  }
+
+  const firstChangedKey = items[commonPrefixLength]?.key;
+  if (!firstChangedKey) {
+    return {
+      rows: buildConversationThreadRows(items),
+      reconciliationStartIndex: 0,
+      incrementalTail: false,
+      commonPrefixLength,
+    };
+  }
+
+  const rowIndex = findThreadRowIndexForTimelineItemKey(
+    cache.rows,
+    firstChangedKey,
+  );
+  if (rowIndex < 0) {
+    return {
+      rows: buildConversationThreadRows(items),
+      reconciliationStartIndex: 0,
+      incrementalTail: false,
+      commonPrefixLength,
+    };
+  }
+
+  const rebuildStartKey = getFirstTimelineItemKeyForRow(cache.rows[rowIndex]);
+  const rebuildStartIndex = rebuildStartKey
+    ? items.findIndex((item) => item.key === rebuildStartKey)
+    : -1;
+  if (rebuildStartIndex < 0) {
+    return {
+      rows: buildConversationThreadRows(items),
+      reconciliationStartIndex: 0,
+      incrementalTail: false,
+      commonPrefixLength,
+    };
+  }
+
+  const preservedRows = cache.rows.slice(0, rowIndex);
+  const tailRows = buildConversationThreadRows(items.slice(rebuildStartIndex));
+
+  return {
+    rows: preservedRows.concat(tailRows),
+    reconciliationStartIndex: preservedRows.length,
+    incrementalTail: true,
+    commonPrefixLength,
+  };
+};
+
 export const useConversationThreadRows = (
   items: ConversationTimelineItem[],
 ): ConversationThreadRow[] => {
-  const [cache, setCache] = React.useState<ThreadRowsCache>(() => ({
+  const cacheRef = React.useRef<ThreadRowsCache>({
     timelineItems: null,
     rows: [],
     rowsByKey: new Map(),
-  }));
+  });
 
   const computed = React.useMemo(() => {
+    const startedAt = getChatPerformanceTimestamp();
+    const cache = cacheRef.current;
     if (cache.timelineItems === items) {
-      return {
+      const result = {
         rows: cache.rows,
-        nextCache: cache,
       };
+      recordChatPerformanceMeasure(
+        "thread-row-derive",
+        getChatPerformanceDuration(startedAt),
+        {
+          timelineItemCount: items.length,
+          rowCount: result.rows.length,
+          cacheHit: true,
+        },
+      );
+      return result;
     }
 
-    const nextRows = buildConversationThreadRows(items);
-    const nextRowsByKey = new Map<string, ConversationThreadRow>();
+    const {
+      rows: nextRows,
+      reconciliationStartIndex,
+      incrementalTail,
+      commonPrefixLength,
+    } = buildTailThreadRows(items, cache);
+    const nextRowsByKey = incrementalTail
+      ? new Map(cache.rowsByKey)
+      : new Map<string, ConversationThreadRow>();
 
-    for (let index = 0; index < nextRows.length; index += 1) {
+    for (let index = reconciliationStartIndex; index < nextRows.length; index += 1) {
       const nextRow = nextRows[index];
       const previousRow = cache.rowsByKey.get(nextRow.key);
 
@@ -186,26 +346,31 @@ export const useConversationThreadRows = (
 
       nextRowsByKey.set(nextRows[index].key, nextRows[index]);
     }
+    const compactedRowsByKey = compactMapIfNeeded(nextRowsByKey, nextRows);
+
+    const nextCache = {
+      timelineItems: items,
+      rows: nextRows,
+      rowsByKey: compactedRowsByKey,
+    };
+    cacheRef.current = nextCache;
+
+    recordChatPerformanceMeasure(
+      "thread-row-derive",
+      getChatPerformanceDuration(startedAt),
+      {
+        timelineItemCount: items.length,
+        rowCount: nextRows.length,
+        cacheHit: false,
+        incrementalTail,
+        commonPrefixLength,
+      },
+    );
 
     return {
       rows: nextRows,
-      nextCache: {
-        timelineItems: items,
-        rows: nextRows,
-        rowsByKey: nextRowsByKey,
-      },
     };
-  }, [cache, items]);
-
-  React.useEffect(() => {
-    setCache((current) => {
-      if (current.timelineItems === items) {
-        return current;
-      }
-
-      return computed.nextCache;
-    });
-  }, [computed.nextCache, items]);
+  }, [items]);
 
   return computed.rows;
 };

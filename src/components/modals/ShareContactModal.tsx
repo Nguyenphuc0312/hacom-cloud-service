@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { MagnifyingGlassIcon, UserIcon } from "@heroicons/react/24/outline";
@@ -53,6 +53,8 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [sendingUserId, setSendingUserId] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
+  const searchGenerationRef = useRef(0);
 
   const debouncedQuery = useDebounce(query, 300);
 
@@ -72,36 +74,75 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
     [t],
   );
 
+  const abortSearch = useCallback(() => {
+    searchGenerationRef.current += 1;
+    searchAbortRef.current?.abort();
+    searchAbortRef.current = null;
+  }, []);
+
   const runSearch = useCallback(async (rawQuery: string) => {
     if (!rawQuery.trim() || rawQuery.trim().length < 2) {
+      abortSearch();
       setResults([]);
       setErrorText(null);
+      setIsLoading(false);
       return;
     }
+
+    searchAbortRef.current?.abort();
+    const abortController = new AbortController();
+    searchAbortRef.current = abortController;
+    const generation = searchGenerationRef.current + 1;
+    searchGenerationRef.current = generation;
 
     setIsLoading(true);
     setErrorText(null);
     try {
-      const response = await searchUsersUseCase(rawQuery.trim(), 1, 20);
+      const response = await searchUsersUseCase(rawQuery.trim(), 1, 20, {
+        signal: abortController.signal,
+      });
       const payload = unwrapApiSuccess(response);
+      if (
+        abortController.signal.aborted ||
+        generation !== searchGenerationRef.current
+      ) {
+        return;
+      }
       setResults(extractSearchUsers(payload));
     } catch (error) {
+      if (
+        abortController.signal.aborted ||
+        generation !== searchGenerationRef.current
+      ) {
+        return;
+      }
       const apiError = extractApiError(error);
       setResults([]);
       setErrorText(apiError.message);
     } finally {
-      setIsLoading(false);
+      if (
+        !abortController.signal.aborted &&
+        generation === searchGenerationRef.current
+      ) {
+        setIsLoading(false);
+        if (searchAbortRef.current === abortController) {
+          searchAbortRef.current = null;
+        }
+      }
     }
-  }, []);
+  }, [abortSearch]);
 
   useEffect(() => {
-    if (!isOpen) return;
-    if (activeTab !== "choose") return;
+    if (!isOpen || activeTab !== "choose") {
+      abortSearch();
+      return;
+    }
     void runSearch(debouncedQuery);
-  }, [activeTab, debouncedQuery, isOpen, runSearch]);
+  }, [abortSearch, activeTab, debouncedQuery, isOpen, runSearch]);
 
   useEffect(() => {
     if (!isOpen) {
+      abortSearch();
       setActiveTab("my");
       setQuery("");
       setResults([]);
@@ -109,7 +150,13 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
       setSendingUserId(null);
       setErrorText(null);
     }
-  }, [isOpen]);
+  }, [abortSearch, isOpen]);
+
+  useEffect(() => {
+    return () => {
+      abortSearch();
+    };
+  }, [abortSearch]);
 
   const handleShare = useCallback(
     async (contactUserId: string) => {

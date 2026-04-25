@@ -11,18 +11,30 @@ type ChatPerformanceWindow = Window & {
     durationMs?: number;
     details?: ChatPerformanceDetail;
   }>;
+  __chatRenderCounts?: Record<string, number>;
 };
 
-const isChatPerformanceEnabled = (): boolean => {
+const isPerfEnvFlagEnabled = (): boolean =>
+  import.meta.env.VITE_CHAT_PERF_DEBUG === "true";
+
+const isPerfQueryFlagEnabled = (): boolean => {
   if (typeof window === "undefined") return false;
-  return import.meta.env.DEV;
+  return (
+    new URLSearchParams(window.location.search).get("debugPerformance") === "1"
+  );
+};
+
+export const isChatPerformanceEnabled = (): boolean => {
+  if (typeof window === "undefined") return false;
+  return (
+    import.meta.env.DEV &&
+    (isPerfEnvFlagEnabled() || isPerfQueryFlagEnabled())
+  );
 };
 
 const shouldConsoleLogChatPerformance = (): boolean => {
   if (!isChatPerformanceEnabled()) return false;
-  return (
-    new URLSearchParams(window.location.search).get("debugPerformance") === "1"
-  );
+  return isPerfEnvFlagEnabled() || isPerfQueryFlagEnabled();
 };
 
 const sanitizeMarkSegment = (value: string): string =>
@@ -127,10 +139,40 @@ export const logChatPerformance = (
   recordChatPerformanceEvent(name, undefined, details);
 };
 
+export const getChatPerformanceTimestamp = (): number =>
+  isChatPerformanceEnabled() ? performance.now() : 0;
+
+export const getChatPerformanceDuration = (startedAt: number): number =>
+  startedAt > 0 ? performance.now() - startedAt : 0;
+
 export const recordChatPerformanceMeasure = (
   name: string,
   durationMs: number,
   details?: ChatPerformanceDetail,
 ): void => {
   recordChatPerformanceEvent(name, durationMs, details);
+};
+
+export const recordChatRenderCount = (
+  componentName: string,
+  instanceKey: string,
+  details?: ChatPerformanceDetail,
+): void => {
+  if (!isChatPerformanceEnabled()) return;
+
+  const performanceWindow = window as ChatPerformanceWindow;
+  const counterKey = `${componentName}:${instanceKey}`;
+  const counts = performanceWindow.__chatRenderCounts ?? {};
+  const nextCount = (counts[counterKey] ?? 0) + 1;
+  performanceWindow.__chatRenderCounts = {
+    ...counts,
+    [counterKey]: nextCount,
+  };
+
+  recordChatPerformanceEvent("chat-render-count", undefined, {
+    componentName,
+    instanceKey,
+    renderCount: nextCount,
+    ...details,
+  });
 };

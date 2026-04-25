@@ -35,6 +35,7 @@ import {
 import { useConversationMessagesRTK } from "../../features/chat/hooks/useConversationMessagesRTK";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
 import {
+  isChatPerformanceEnabled,
   logChatPerformance,
   measureChatPerformance,
 } from "../../utils/chatPerformance";
@@ -1068,7 +1069,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   }, [conversationId, messages]);
 
   React.useEffect(() => {
-    if (!import.meta.env.DEV || viewportHeight <= 0) {
+    if (!isChatPerformanceEnabled() || viewportHeight <= 0) {
       return;
     }
 
@@ -1814,7 +1815,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       </div>
     ) : null;
 
-  const profiledVirtualizedRows = import.meta.env.DEV ? (
+  const profiledVirtualizedRows = isChatPerformanceEnabled() ? (
     <React.Profiler
       id={`MessageList:${conversationId}`}
       onRender={handleProfilerRender}

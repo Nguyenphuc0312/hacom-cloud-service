@@ -24,7 +24,10 @@ import { UPLOAD_CONFIG } from "../../config";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { InlineNotice, toast } from "../ui";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
-import { recordChatPerformanceMeasure } from "../../utils/chatPerformance";
+import {
+  isChatPerformanceEnabled,
+  recordChatPerformanceMeasure,
+} from "../../utils/chatPerformance";
 
 export interface MentionCandidate {
   id: string;
@@ -394,7 +397,7 @@ const MessageInputComponent = React.forwardRef<
   const recordInputLatency = React.useCallback(
     (nextValue: string) => {
       if (
-        !import.meta.env.DEV ||
+        !isChatPerformanceEnabled() ||
         typeof window === "undefined" ||
         typeof window.requestAnimationFrame !== "function"
       ) {

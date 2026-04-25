@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs -- Immutable derived-row cache preserves item identity without scheduling a second render. */
 import React from "react";
 import {
   areTimelineItemsEqual,
@@ -6,6 +7,11 @@ import {
   type UnreadTimelineMarker,
 } from "../utils/timelinePlanner";
 import type { Conversation, Message } from "../types";
+import {
+  getChatPerformanceDuration,
+  getChatPerformanceTimestamp,
+  recordChatPerformanceMeasure,
+} from "../utils/chatPerformance";
 
 export type {
   ClusterBreakReason,
@@ -81,12 +87,14 @@ export const useMessageGrouping = ({
   groupingThresholdMs = DEFAULT_GROUPING_THRESHOLD_MS,
   unreadMarker,
 }: UseMessageGroupingParams): TimelineItem[] => {
-  const [cache, setCache] = React.useState<GroupingCache>(() => ({
+  const cacheRef = React.useRef<GroupingCache>({
     keyMap: new Map(),
     snapshot: null,
-  }));
+  });
 
   const computed = React.useMemo(() => {
+    const startedAt = getChatPerformanceTimestamp();
+    const cache = cacheRef.current;
     const prevSnapshot = cache.snapshot;
     const hasCurrentSnapshot = Boolean(
       prevSnapshot &&
@@ -97,10 +105,20 @@ export const useMessageGrouping = ({
         prevSnapshot.unreadMarker === unreadMarker,
     );
     if (hasCurrentSnapshot && prevSnapshot) {
-      return {
+      const result = {
         items: prevSnapshot.items,
-        nextCache: cache,
       };
+      recordChatPerformanceMeasure(
+        "message-grouping-derive",
+        getChatPerformanceDuration(startedAt),
+        {
+          messageCount: messages.length,
+          itemCount: result.items.length,
+          cacheHit: true,
+          incrementalAppend: false,
+        },
+      );
+      return result;
     }
 
     const canIncrementallyAppend = Boolean(
@@ -112,6 +130,7 @@ export const useMessageGrouping = ({
         isAppendOnlyUpdate(prevSnapshot.messages, messages),
     );
 
+    let reconciliationStartIndex = 0;
     const items = canIncrementallyAppend
       ? (() => {
           const prevMessages = prevSnapshot!.messages;
@@ -129,6 +148,7 @@ export const useMessageGrouping = ({
                   ),
                 )
               : [];
+          reconciliationStartIndex = preservedPrefix.length;
           const rebuiltTail = buildTimelineItems({
             messages: messages.slice(planningStartIndex),
             currentUserId,
@@ -155,9 +175,11 @@ export const useMessageGrouping = ({
         });
 
     const prevKeyMap = cache.keyMap;
-    const nextKeyMap = new Map<string, TimelineItem>();
+    const nextKeyMap = canIncrementallyAppend
+      ? prevKeyMap
+      : new Map<string, TimelineItem>();
 
-    for (let i = 0; i < items.length; i += 1) {
+    for (let i = reconciliationStartIndex; i < items.length; i += 1) {
       const newItem = items[i];
       const prevItem = prevKeyMap.get(newItem.key);
       if (prevItem && areTimelineItemsEqual(prevItem, newItem)) {
@@ -166,47 +188,34 @@ export const useMessageGrouping = ({
       nextKeyMap.set(items[i].key, items[i]);
     }
 
-    return {
-      items,
-      nextCache: {
-        keyMap: nextKeyMap,
-        snapshot: {
-          messages,
-          items,
-          currentUserId,
-          conversationType,
-          groupingThresholdMs,
-          unreadMarker,
-        },
+    const nextCache = {
+      keyMap: nextKeyMap,
+      snapshot: {
+        messages,
+        items,
+        currentUserId,
+        conversationType,
+        groupingThresholdMs,
+        unreadMarker,
       },
     };
-  }, [
-    cache,
-    conversationType,
-    currentUserId,
-    groupingThresholdMs,
-    messages,
-    unreadMarker,
-  ]);
+    cacheRef.current = nextCache;
 
-  React.useEffect(() => {
-    setCache((current) => {
-      const currentSnapshot = current.snapshot;
-      if (
-        currentSnapshot &&
-        currentSnapshot.messages === messages &&
-        currentSnapshot.currentUserId === currentUserId &&
-        currentSnapshot.conversationType === conversationType &&
-        currentSnapshot.groupingThresholdMs === groupingThresholdMs &&
-        currentSnapshot.unreadMarker === unreadMarker
-      ) {
-        return current;
-      }
+    recordChatPerformanceMeasure(
+      "message-grouping-derive",
+      getChatPerformanceDuration(startedAt),
+      {
+        messageCount: messages.length,
+        itemCount: items.length,
+        cacheHit: false,
+        incrementalAppend: canIncrementallyAppend,
+      },
+    );
 
-      return computed.nextCache;
-    });
+    return {
+      items,
+    };
   }, [
-    computed.nextCache,
     conversationType,
     currentUserId,
     groupingThresholdMs,
