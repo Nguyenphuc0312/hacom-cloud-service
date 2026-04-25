@@ -1,4 +1,5 @@
 import { API_BASE_URL, AUTH_BASE_URL, USE_AUTH_SERVICE } from "../config";
+import { logger } from "../utils/logger";
 
 const resolveBasePathname = (baseUrl: string): string => {
   try {
@@ -39,12 +40,7 @@ export const buildAuthEndpoint = (path: string): string => {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
 
   if (!authBaseOwnsCanonicalPath && USE_AUTH_SERVICE && import.meta.env.DEV) {
-    console.warn(
-      "[auth-config] AUTH_BASE_URL is expected to end with /api/v1/auth",
-      {
-        authBaseUrl,
-      },
-    );
+    logger.warn("auth-config", "auth_base_path_unexpected", { authBaseUrl });
   }
 
   return `${authBaseUrl}${normalizedPath}`;

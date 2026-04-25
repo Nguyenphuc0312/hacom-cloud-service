@@ -33,7 +33,7 @@ import type {
 } from "../../types";
 import { MessageType } from "../../types";
 import type { UploadedFileMeta } from "../../types/attachmentDraft";
-import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
+import { extractApiError } from "../../lib/apiContract";
 import type { ConnectionState } from "../../hooks/useWebSocket";
 import {
   resolveChatLayoutProfile,
@@ -43,9 +43,9 @@ import { logMessageDebug } from "../../utils/messageDebug";
 import { logScrollTrace } from "../../utils/scrollTrace";
 import { logChatPerformance } from "../../utils/chatPerformance";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
-import { getMessageByIdUseCase } from "../../features/chat/usecases/getMessageById";
 import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
 import { useChatUiStore } from "../../features/chat/state";
+import { useMessageJumpTargetRTK } from "../../features/chat/hooks/useMessageJumpTargetRTK";
 import { selectConversationMessagesFromState } from "../../stores/chatStore";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
 
@@ -76,12 +76,6 @@ function metaToAttachment(meta: UploadedFileMeta): Attachment {
     ...(meta.thumbnailUrl ? { thumbnailUrl: meta.thumbnailUrl } : {}),
   } as Attachment;
 }
-
-const matchesMessageIdentity = (message: Message, targetId: string): boolean =>
-  message.id === targetId ||
-  message.localId === targetId ||
-  message.stableId === targetId ||
-  message.clientMessageId === targetId;
 
 const DRAFT_PERSIST_DEBOUNCE_MS = 450;
 
@@ -191,8 +185,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     (state) => state.slowModeUntilByConversation[conversation.id] || 0,
   );
   const clearSlowModeCooldown = useGroupStore((s) => s.clearSlowModeCooldown);
-  const addMessage = useChatStore((s) => s.addMessage);
-  const fetchMessages = useChatStore((s) => s.fetchMessages);
+  const { ensureMessageLoaded } = useMessageJumpTargetRTK(conversation.id);
   const sendRestriction = useChatStore(
     (state) => state.sendRestrictionsByConversation[conversation.id],
   );
@@ -227,6 +220,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   } | null>(null);
   const draftPersistTimerRef = React.useRef<number | null>(null);
   const previousConversationIdRef = React.useRef(conversation.id);
+  const navigationRequestSeqRef = React.useRef(0);
   const renderCountRef = React.useRef(0);
 
   const replaceComposerSeed = React.useCallback((nextValue: string) => {
@@ -680,43 +674,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     [conversation.id],
   );
 
-  const ensureMessageLoaded = React.useCallback(
-    async (messageId: string, fallbackMessage?: Message) => {
-      const existingMessage = selectConversationMessagesFromState(
-        useChatStore.getState(),
-        conversation.id,
-      ).find((message) => matchesMessageIdentity(message, messageId));
-      if (existingMessage) {
-        return existingMessage;
-      }
-
-      let targetMessage = fallbackMessage;
-      if (!targetMessage) {
-        const response = await getMessageByIdUseCase(messageId);
-        targetMessage = unwrapApiSuccess(response) as Message;
-      }
-
-      addMessage(conversation.id, targetMessage);
-      const cursor = new Date(targetMessage.createdAt).toISOString();
-      await Promise.allSettled([
-        fetchMessages(conversation.id, cursor, undefined, {
-          beforeId: targetMessage.id,
-          limit: 24,
-        }),
-        fetchMessages(conversation.id, undefined, cursor, {
-          afterId: targetMessage.id,
-          limit: 24,
-        }),
-      ]);
-
-      return targetMessage;
-    },
-    [addMessage, conversation.id, fetchMessages],
-  );
-
   const handleJumpToMessage = React.useCallback(
     async (message: Message) => {
-      await ensureMessageLoaded(message.id, message);
+      const requestSeq = (navigationRequestSeqRef.current += 1);
+      const result = await ensureMessageLoaded(message.id, message);
+      if (result.stale || navigationRequestSeqRef.current !== requestSeq) {
+        return;
+      }
       queueJumpToMessage(message.id);
     },
     [ensureMessageLoaded, queueJumpToMessage],
@@ -724,8 +688,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const handleNavigateToMessage = React.useCallback(
     async (messageId: string) => {
+      const requestSeq = (navigationRequestSeqRef.current += 1);
       try {
-        await ensureMessageLoaded(messageId);
+        const result = await ensureMessageLoaded(messageId);
+        if (result.stale || navigationRequestSeqRef.current !== requestSeq) {
+          logScrollTrace("jump_request_ignored_stale", {
+            conversationId: conversation.id,
+            messageId,
+          });
+          return;
+        }
         queueJumpToMessage(messageId);
       } catch (error) {
         const apiError = extractApiError(error);
@@ -817,6 +789,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       return;
     }
 
+    navigationRequestSeqRef.current += 1;
     flushPendingDraftPersist();
     previousConversationIdRef.current = conversation.id;
     const nextDraft = readPersistedDraft(conversation.id);

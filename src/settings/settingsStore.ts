@@ -19,6 +19,7 @@ import { defaultSettings } from "./defaults";
 import { loadSettings, saveSettings } from "./persistence";
 import { syncSettingsToServer, fetchSettingsFromServer } from "./sync";
 import { registerSettingsConflictHandler } from "./settingsSyncBridge";
+import { logger } from "../utils/logger";
 
 // ============================================
 // STORE INTERFACE
@@ -82,7 +83,7 @@ const debouncedServerSync = (
         handlers?.onSuccess?.();
       })
       .catch((err) => {
-        console.warn("[settingsStore] server sync failed", err);
+        logger.warn("settings", "server_sync_failed", err);
         handlers?.onError?.(resolveSyncErrorMessage(err));
       });
   }, SYNC_DEBOUNCE_MS);
@@ -212,7 +213,7 @@ export const useSettingsStore = create<SettingsState>()(
           lastSyncedAt: new Date().toISOString(),
         });
       } catch (err) {
-        console.warn("[settingsStore] syncFromServer failed", err);
+        logger.warn("settings", "sync_from_server_failed", err);
         set({ syncError: resolveSyncErrorMessage(err) });
       } finally {
         set({ isSyncing: false });
@@ -224,7 +225,7 @@ export const useSettingsStore = create<SettingsState>()(
 
       // Idempotency: ignore events with version <= local version
       if (payload.version <= current.version) {
-        console.debug("[settingsStore] Ignoring stale settings event", {
+        logger.debug("settings", "stale_remote_event_ignored", {
           remoteVersion: payload.version,
           localVersion: current.version,
         });
@@ -246,7 +247,7 @@ export const useSettingsStore = create<SettingsState>()(
         lastSyncedAt: new Date().toISOString(),
       });
 
-      console.info("[settingsStore] Applied remote settings update", {
+      logger.info("settings", "remote_update_applied", {
         version: payload.version,
         changedFields: payload.changedFields,
       });

@@ -17,6 +17,7 @@ const ALLOWED_FILES = new Set([
   "lib/conversationAdapter.ts",
   "lib/conversationIdentity.ts",
   "lib/socket.ts",
+  "features/realtime/realtimeMiddleware.ts",
   "features/chat/realtime/registerConversationEvents.ts",
 ]);
 const DISALLOWED_PATTERNS = [

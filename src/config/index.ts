@@ -1,3 +1,5 @@
+import { logger } from "../utils/logger";
+
 /**
  * @fileoverview Cấu hình ứng dụng
  * Quản lý tất cả các biến môi trường và cấu hình
@@ -124,16 +126,44 @@ const resolveWithAbsoluteBase = (
   }
 };
 
+export type PublicResourceContext = "generic" | "image" | "media" | "download";
+
+export type PublicResourceUrlOptions = {
+  context?: PublicResourceContext;
+  allowBlob?: boolean;
+  allowDataImage?: boolean;
+};
+
+const SAFE_DATA_IMAGE_URL_REGEX =
+  /^data:image\/(?:png|jpe?g|gif|webp);base64,[a-z0-9+/=\s]+$/i;
+
 export const resolvePublicResourceUrl = (
   value: string | undefined,
+  options: PublicResourceUrlOptions = {},
 ): string | undefined => {
   const trimmed = value?.trim();
   if (!trimmed) {
     return undefined;
   }
 
-  if (/^(?:https?:|wss?:|blob:|data:)/i.test(trimmed)) {
+  if (/^https?:/i.test(trimmed)) {
     return trimmed;
+  }
+
+  if (/^blob:/i.test(trimmed)) {
+    return options.allowBlob === true ? trimmed : undefined;
+  }
+
+  if (/^data:/i.test(trimmed)) {
+    const isSafeImageDataUrl =
+      options.context === "image" &&
+      options.allowDataImage === true &&
+      SAFE_DATA_IMAGE_URL_REGEX.test(trimmed);
+    return isSafeImageDataUrl ? trimmed : undefined;
+  }
+
+  if (/^wss?:/i.test(trimmed)) {
+    return undefined;
   }
 
   if (trimmed.startsWith("//")) {
@@ -188,7 +218,7 @@ const normalizedAuthBaseUrl = normalizeBaseUrl(AUTH_BASE_URL);
 export const FILE_BASE_URL = resolveFileBaseUrl();
 
 if (import.meta.env.DEV) {
-  console.info("[auth-config]", {
+  logger.info("auth-config", "resolved", {
     VITE_APP_BASE_PATH: APP_BASE_PATH,
     VITE_USE_AUTH_SERVICE: rawUseAuthService ?? "(unset -> true)",
     USE_AUTH_SERVICE,
@@ -214,9 +244,9 @@ if (
 }
 
 if (import.meta.env.DEV && !USE_AUTH_SERVICE) {
-  console.warn(
-    "[auth-config] USE_AUTH_SERVICE=false: auth requests will fallback to API_BASE_URL.",
-  );
+  logger.warn("auth-config", "auth_service_disabled", {
+    reason: "auth requests will fallback to API_BASE_URL",
+  });
 }
 
 const rawWebSocketBaseUrl =
@@ -248,10 +278,9 @@ if (import.meta.env.PROD) {
   );
 
   if (localhostTargets.length > 0) {
-    console.warn(
-      "[runtime-config] Localhost URL detected in production bundle.",
+    logger.warn("runtime-config", "localhost_url_in_production", {
       localhostTargets,
-    );
+    });
   }
 }
 

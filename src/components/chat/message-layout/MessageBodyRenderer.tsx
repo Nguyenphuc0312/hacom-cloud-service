@@ -13,6 +13,7 @@ import type { Attachment, Message } from "../../../types";
 import { MessageType } from "../../../types";
 import type { LongMessageRenderMode } from "../../../utils/longMessagePolicy";
 import { isUuid } from "../../../utils/isUuid";
+import { logger } from "../../../utils/logger";
 
 interface MessageBodyRendererProps {
   message: Message;
@@ -131,7 +132,7 @@ const ContactCard: React.FC<{
         <button
           type="button"
           onClick={() => {
-            console.info("direct_dm.source_trace", {
+            logger.debug("direct_dm", "source_trace", {
               source: "MessageBodyRenderer.contactCard",
               messageId,
               conversationId,

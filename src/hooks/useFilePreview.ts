@@ -24,6 +24,14 @@ const URL_CACHE = new ExpiringLruCache<CacheEntry>({
 });
 const CACHE_MARGIN_MS = 30_000;
 
+const getPreviewUrlPolicy = (attachment: Attachment, previewType: PreviewType) => ({
+  context: previewType === "image" ? ("image" as const) : ("media" as const),
+  allowBlob: true,
+  allowDataImage:
+    previewType === "image" &&
+    attachment.mimeType?.toLowerCase().startsWith("image/") === true,
+});
+
 const cacheKey = (conversationId: string, att: Attachment): string => {
   const id = att.id || att.objectKey || att.url || "";
   return `preview:${conversationId}:${id}`;
@@ -115,6 +123,7 @@ export function useFilePreview(): UseFilePreviewReturn {
           if (expiresAtMs - Date.now() > CACHE_MARGIN_MS) {
             const resolvedDownloadUrl = resolvePublicResourceUrl(
               target.attachment.downloadUrl,
+              getPreviewUrlPolicy(target.attachment, target.previewType),
             );
             if (resolvedDownloadUrl) {
               URL_CACHE.set(key, { url: resolvedDownloadUrl }, expiresAtMs);
@@ -130,7 +139,12 @@ export function useFilePreview(): UseFilePreviewReturn {
       const hasIdentity = target.attachment.objectKey || target.attachment.id;
       if (!hasIdentity) {
         // Fallback: use raw url if available
-        setSecureUrl(resolvePublicResourceUrl(target.attachment.url) ?? null);
+        setSecureUrl(
+          resolvePublicResourceUrl(
+            target.attachment.url,
+            getPreviewUrlPolicy(target.attachment, target.previewType),
+          ) ?? null,
+        );
         return;
       }
 
@@ -152,9 +166,17 @@ export function useFilePreview(): UseFilePreviewReturn {
           ? Date.parse(payload.expiresAt)
           : Date.now() + 5 * 60 * 1000;
 
-        const signedUrl = resolvePublicResourceUrl(payload.url);
+        const signedUrl = resolvePublicResourceUrl(payload.url, {
+          context: target.previewType === "image" ? "image" : "media",
+          allowBlob: true,
+        });
         if (!signedUrl) {
-          setSecureUrl(resolvePublicResourceUrl(target.attachment.url) ?? null);
+          setSecureUrl(
+            resolvePublicResourceUrl(
+              target.attachment.url,
+              getPreviewUrlPolicy(target.attachment, target.previewType),
+            ) ?? null,
+          );
           return;
         }
 
@@ -166,7 +188,12 @@ export function useFilePreview(): UseFilePreviewReturn {
           err instanceof Error ? err.message : "Failed to load preview URL",
         );
         // Fallback to raw URL
-        setSecureUrl(resolvePublicResourceUrl(target.attachment.url) ?? null);
+        setSecureUrl(
+          resolvePublicResourceUrl(
+            target.attachment.url,
+            getPreviewUrlPolicy(target.attachment, target.previewType),
+          ) ?? null,
+        );
       } finally {
         if (!controller.signal.aborted) {
           setIsLoadingUrl(false);

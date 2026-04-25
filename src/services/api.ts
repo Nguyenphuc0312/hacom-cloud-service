@@ -37,6 +37,7 @@ import { ApiContractError, unwrapApiSuccess } from "../lib/apiContract";
 import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 import { getCsrfToken, isRefreshTokenCookieMode } from "./tokenService";
 import { isUuid } from "../utils/isUuid";
+import { logger } from "../utils/logger";
 
 const DIRECT_DM_TRACE_PREFIX = "direct_dm.request_trace";
 const DIRECT_DM_PATH = "/conversations/direct";
@@ -509,7 +510,7 @@ export const conversationApi = {
     const requestId = buildDirectDmTraceRequestId();
     const payload = buildCreateDirectConversationPayload(userId);
 
-    console.info(DIRECT_DM_TRACE_PREFIX, {
+    logger.debug("direct_dm", DIRECT_DM_TRACE_PREFIX, {
       requestId,
       method: "POST",
       url: DIRECT_DM_PATH,

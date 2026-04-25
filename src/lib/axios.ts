@@ -25,6 +25,7 @@ import {
 } from "../services/tokenService";
 import { updateSocketAuth } from "./socket";
 import { refreshAccessTokenShared } from "../services/authRefreshCoordinator";
+import { logger } from "../utils/logger";
 
 type AuthFailureReason = "missing_refresh_token" | "refresh_failed";
 type AuthFailureHandler = (reason: AuthFailureReason) => void | Promise<void>;
@@ -167,7 +168,7 @@ const refreshAccessToken = async (): Promise<string> => {
     const refreshEndpoint = buildAuthEndpoint("/refresh");
     if (import.meta.env.DEV && !refreshEndpointLogged) {
       refreshEndpointLogged = true;
-      console.info("[auth-refresh]", {
+      logger.info("auth-refresh", "endpoint_resolved", {
         USE_AUTH_SERVICE,
         refreshEndpoint,
       });

@@ -13,6 +13,7 @@ import type {
   FriendshipRealtimeDetail,
   FriendshipResyncReason,
 } from "../features/chat/realtime/friendshipRealtime";
+import { logger } from "../utils/logger";
 
 export type FriendshipStatusType = FriendshipRelationDto["status"];
 
@@ -543,7 +544,7 @@ const logFriendshipMetric = (
   event: string,
   payload: Record<string, unknown>,
 ): void => {
-  console.info(`[friendship-metric] ${event}`, payload);
+  logger.info("friendship-metric", event, payload, { debugOnly: true });
 };
 
 export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({

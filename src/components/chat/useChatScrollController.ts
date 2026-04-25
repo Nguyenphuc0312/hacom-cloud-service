@@ -45,6 +45,11 @@ type CommandName =
   | "realtime_follow_if_near_bottom"
   | "hold_reading_history";
 
+type ScheduleCommandInput = Omit<PendingCommand, "priority" | "requestedAt"> & {
+  priority?: number;
+  requestedAt?: number;
+};
+
 interface ScrollAnchor {
   messageId: string | null;
   offsetFromTop: number;
@@ -286,6 +291,10 @@ export const useChatScrollController = ({
   const isPinnedRef = React.useRef(true);
   const pendingCommandRef = React.useRef<PendingCommand | null>(null);
   const commandRafRef = React.useRef<number | null>(null);
+  const runCommandRef = React.useRef<((command: PendingCommand) => void) | null>(null);
+  const scheduleCommandRef = React.useRef<((command: ScheduleCommandInput) => boolean) | null>(
+    null,
+  );
   const previousSnapshotRef = React.useRef<MessageSnapshot | null>(null);
   const openingRef = React.useRef<{
     conversationId: string;
@@ -300,11 +309,14 @@ export const useChatScrollController = ({
   const appliedUnreadSignatureRef = React.useRef<string | null>(null);
   const firstRenderMeasuredRef = React.useRef<string | null>(null);
   const appendStartedAtRef = React.useRef<number | null>(null);
+  const lastOpeningBottomCommandKeyRef = React.useRef<string | null>(null);
 
   const latestKey = getChatMessageLatestKey(messages);
 
   const setControllerMode = React.useCallback(
-    (nextMode: ChatScrollMode, _event: ChatScrollEvent, _reason: string) => {
+    (nextMode: ChatScrollMode, event: ChatScrollEvent, reason: string) => {
+      void event;
+      void reason;
       setMode((previous) => {
         if (previous === nextMode) return previous;
         modeRef.current = nextMode;
@@ -451,6 +463,20 @@ export const useChatScrollController = ({
     [traceScrollDecision],
   );
 
+  const cleanupHandlersRef = React.useRef<{
+    persistSession: (reason: string) => void;
+    traceScrollDecision: (decision: Parameters<typeof traceScrollDecision>[0]) => void;
+    cancelPendingCommand: (reason: string) => void;
+  } | null>(null);
+
+  React.useLayoutEffect(() => {
+    cleanupHandlersRef.current = {
+      persistSession,
+      traceScrollDecision,
+      cancelPendingCommand,
+    };
+  }, [cancelPendingCommand, persistSession, traceScrollDecision]);
+
   const isReadyForBottom = React.useCallback(() => {
     const outer = outerRef.current;
     if (!outer || outer.clientHeight <= 0 || viewportHeight <= 0) return false;
@@ -504,6 +530,8 @@ export const useChatScrollController = ({
 
   const finishBottom = React.useCallback(
     (command: PendingCommand, distanceToBottom: number) => {
+      pendingCommandRef.current = null;
+      commandRafRef.current = null;
       isPinnedRef.current = true;
       setIsPinnedToBottom(true);
       setPendingNewMessages(0);
@@ -617,7 +645,7 @@ export const useChatScrollController = ({
             });
             return;
           }
-          scheduleCommand({
+          scheduleCommandRef.current?.({
             ...command,
             attempts: command.attempts + 1,
           });
@@ -627,6 +655,28 @@ export const useChatScrollController = ({
         if (messages.length === 0) {
           finishBottom(command, 0);
           return;
+        }
+
+        if (
+          command.command === "conversation_open_latest_bottom" ||
+          command.command === "unread_or_newer_tail_bottom"
+        ) {
+          const openingBottomCommandKey = [
+            command.conversationId,
+            command.command,
+            latestKey,
+            messages.length,
+          ].join(":");
+          if (lastOpeningBottomCommandKeyRef.current === openingBottomCommandKey) {
+            traceScrollDecision({
+              event: command.event,
+              command: command.command,
+              priority: command.priority,
+              reason: "bottom_skipped_duplicate_opening_command",
+            });
+            return;
+          }
+          lastOpeningBottomCommandKeyRef.current = openingBottomCommandKey;
         }
 
         setControllerMode("scrolling_to_bottom", command.event, command.reason);
@@ -659,7 +709,7 @@ export const useChatScrollController = ({
             return;
           }
 
-          scheduleCommand({
+          scheduleCommandRef.current?.({
             ...command,
             attempts: command.attempts + 1,
             behavior: "auto",
@@ -681,7 +731,7 @@ export const useChatScrollController = ({
           });
           return;
         }
-        scheduleCommand({
+        scheduleCommandRef.current?.({
           ...command,
           attempts: command.attempts + 1,
         });
@@ -740,6 +790,8 @@ export const useChatScrollController = ({
             anchorMessageId: command.anchor?.messageId ?? null,
           },
         });
+        pendingCommandRef.current = null;
+        commandRafRef.current = null;
       });
     },
     [
@@ -753,6 +805,7 @@ export const useChatScrollController = ({
       isReadyForBottom,
       isReadyForOffset,
       itemCount,
+      latestKey,
       messages.length,
       resolveBottomBehavior,
       resolveMessageIndex,
@@ -770,15 +823,22 @@ export const useChatScrollController = ({
     commandRafRef.current = null;
     const command = pendingCommandRef.current;
     pendingCommandRef.current = null;
-    if (!command) return;
-    runCommand(command);
+    const runLatestCommand = runCommandRef.current;
+    if (!command || !runLatestCommand) return;
+    runLatestCommand(command);
+  }, []);
+
+  React.useLayoutEffect(() => {
+    runCommandRef.current = runCommand;
+    return () => {
+      if (runCommandRef.current === runCommand) {
+        runCommandRef.current = null;
+      }
+    };
   }, [runCommand]);
 
   const scheduleCommand = React.useCallback(
-    (command: Omit<PendingCommand, "priority" | "requestedAt"> & {
-      priority?: number;
-      requestedAt?: number;
-    }) => {
+    (command: ScheduleCommandInput) => {
       const priority = command.priority ?? getCommandPriority(command.command);
       const nextCommand: PendingCommand = {
         ...command,
@@ -830,6 +890,15 @@ export const useChatScrollController = ({
     [flushCommand, traceScrollDecision],
   );
 
+  React.useLayoutEffect(() => {
+    scheduleCommandRef.current = scheduleCommand;
+    return () => {
+      if (scheduleCommandRef.current === scheduleCommand) {
+        scheduleCommandRef.current = null;
+      }
+    };
+  }, [scheduleCommand]);
+
   const scheduleBottom = React.useCallback(
     (
       command: CommandName,
@@ -872,17 +941,19 @@ export const useChatScrollController = ({
 
   React.useEffect(() => {
     return () => {
+      const cleanupHandlers = cleanupHandlersRef.current;
+      if (!cleanupHandlers) return;
       if (hasUserScrollSinceOpenRef.current || isPinnedRef.current) {
-        persistSession("conversation-cleanup");
+        cleanupHandlers.persistSession("conversation-cleanup");
       } else {
-        traceScrollDecision({
+        cleanupHandlers.traceScrollDecision({
           event: "CONVERSATION_CHANGED",
           command: null,
           priority: null,
           reason: "cleanup_skipped_consumed_restore_without_user_scroll",
         });
       }
-      cancelPendingCommand("conversation-cleanup");
+      cleanupHandlers.cancelPendingCommand("conversation-cleanup");
     };
   }, [conversationId]);
 
@@ -901,6 +972,7 @@ export const useChatScrollController = ({
     appliedUnreadSignatureRef.current = null;
     firstRenderMeasuredRef.current = null;
     loadingOlderAnchorRef.current = null;
+    lastOpeningBottomCommandKeyRef.current = null;
 
     const session = scrollSessions.get(conversationId) ?? null;
     const restoreCandidate = Boolean(

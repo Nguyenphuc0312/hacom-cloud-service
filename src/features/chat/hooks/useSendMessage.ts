@@ -4,9 +4,7 @@ import { ErrorCode } from "@hacom/chat-shared-types/core";
 import { toast } from "../../../components/ui";
 import { UPLOAD_CONFIG } from "../../../config";
 import { extractApiError, unwrapApiSuccess } from "../../../lib/apiContract";
-import { useChatStore, useGroupStore } from "../../../stores";
-import { selectConversationMessagesFromState } from "../../../stores/chatStore";
-import { useAppDispatch } from "../../../store/hooks";
+import { useAuthStore, useGroupStore } from "../../../stores";
 import type {
   Attachment,
   Message,
@@ -15,10 +13,10 @@ import type {
 import { FileType, MessageType as MessageTypeEnum } from "../../../types";
 import { logMessageDebug } from "../../../utils/messageDebug";
 import {
-  realtimeMessageReceived,
-  realtimeMessageUpdated,
-} from "../../realtime/realtimeMiddleware";
-import { chatApi } from "../api/chatApi";
+  useSendMessageMutation,
+  type SendMessageAttachmentInput,
+} from "../../api/chatApi";
+import { chatApi as legacyChatApi } from "../api/chatApi";
 
 export type AttachmentPickerMode = "photo" | "document";
 
@@ -58,7 +56,7 @@ interface UseSendMessageResult {
     replyTo?: Message,
     fileMeta?: Attachment | Attachment[] | undefined,
     type?: MessageType,
-  ) => Promise<unknown>;
+  ) => unknown | Promise<unknown>;
 }
 
 const resolveFileType = (mimeType: string): FileType => {
@@ -117,42 +115,34 @@ const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
       typeof (value as PromiseLike<unknown>).then === "function",
   );
 
-const getMessageBridgeKey = (message: Message): string =>
-  message.clientMessageId || message.stableId || message.localId || message.id;
+const createClientMessageId = (): string => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
 
-const findOptimisticMessage = (
-  beforeMessages: readonly Message[],
-  afterMessages: readonly Message[],
-): Message | null => {
-  const beforeKeys = new Set(beforeMessages.map(getMessageBridgeKey));
-  return (
-    afterMessages.find((message) => !beforeKeys.has(getMessageBridgeKey(message))) ??
-    null
-  );
+  return `client-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 };
 
-const findCurrentMessageForBridge = (
-  messages: readonly Message[],
-  optimisticMessage: Message | null,
-): Message | null => {
-  if (!optimisticMessage) return null;
-  const optimisticKeys = new Set([
-    optimisticMessage.id,
-    optimisticMessage.localId,
-    optimisticMessage.clientMessageId,
-    optimisticMessage.stableId,
-  ].filter((value): value is string => typeof value === "string" && value.length > 0));
-
-  return (
-    messages.find((message) =>
-      [
-        message.id,
-        message.localId,
-        message.clientMessageId,
-        message.stableId,
-      ].some((value) => typeof value === "string" && optimisticKeys.has(value)),
-    ) ?? null
-  );
+const toSendMessageAttachments = (
+  fileMeta: Attachment | Attachment[] | undefined,
+): SendMessageAttachmentInput[] | undefined => {
+  if (!fileMeta) return undefined;
+  const attachments = Array.isArray(fileMeta) ? fileMeta : [fileMeta];
+  return attachments.map((attachment) => ({
+    id: attachment.id,
+    type: attachment.type,
+    objectKey: attachment.objectKey,
+    url: attachment.url,
+    downloadUrl: attachment.downloadUrl,
+    expiresAt: attachment.expiresAt,
+    fileName: attachment.fileName || "attachment",
+    mimeType: attachment.mimeType || "application/octet-stream",
+    fileSize: attachment.fileSize ?? 0,
+    width: attachment.width,
+    height: attachment.height,
+    duration: attachment.duration,
+    thumbnailUrl: attachment.thumbnailUrl,
+  }));
 };
 
 export const useSendMessage = ({
@@ -164,8 +154,9 @@ export const useSendMessage = ({
   source = "ChatPage",
 }: UseSendMessageOptions): UseSendMessageResult => {
   const { t } = useTranslation();
-  const dispatch = useAppDispatch();
   const resolvedConversationId = conversationId ?? selectedConversationId;
+  const currentUser = useAuthStore((state) => state.user);
+  const [sendMessageMutation] = useSendMessageMutation();
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = React.useState(0);
@@ -176,7 +167,6 @@ export const useSendMessage = ({
   const setSlowModeCooldown = useGroupStore(
     (state) => state.setSlowModeCooldown,
   );
-  const storeSendMessage = useChatStore((state) => state.sendMessage);
 
   const clearSelectedFile = React.useCallback(() => {
     setSelectedFile(null);
@@ -264,10 +254,6 @@ export const useSendMessage = ({
         );
         logMessageDebug(source, "send_blocked_conversation_not_ready", {
           conversationId: selectedConversationId,
-          isHistoryHydrated:
-            useChatStore.getState().messagesHydratedByConversation[
-              selectedConversationId
-            ] === true,
           isConversationReady,
           contentLength: content.trim().length,
           type,
@@ -299,85 +285,52 @@ export const useSendMessage = ({
       };
 
       try {
-        const beforeMessages = selectConversationMessagesFromState(
-          useChatStore.getState(),
-          selectedConversationId,
-        );
-        const sendPromise = Promise.resolve(
-          storeSendMessage(
-            selectedConversationId,
-            content,
-            type,
-            fileMeta,
-            replyTo?.id,
-            replyTo,
-          ),
-        );
-        const afterMessages = selectConversationMessagesFromState(
-          useChatStore.getState(),
-          selectedConversationId,
-        );
-        const optimisticMessage = findOptimisticMessage(
-          beforeMessages,
-          afterMessages,
-        );
+        const clientMessageId = createClientMessageId();
+        const localId = `temp-${clientMessageId}`;
+        const sendPromise = sendMessageMutation({
+          conversationId: selectedConversationId,
+          clientMessageId,
+          localId,
+          content,
+          type,
+          replyToId: replyTo?.id,
+          senderId: currentUser?.id,
+          senderName:
+            currentUser?.displayName ||
+            currentUser?.effectiveDisplayName ||
+            currentUser?.username,
+          senderAvatar: currentUser?.avatar,
+          attachments: toSendMessageAttachments(fileMeta),
+        })
+          .unwrap()
+          .catch(handleSendError);
 
-        if (optimisticMessage) {
-          dispatch(
-            realtimeMessageReceived({
-              conversationId: selectedConversationId,
-              message: optimisticMessage,
-            }),
-          );
-        }
+        void sendPromise.catch(() => {
+          // RTKQ cache marks the optimistic row as failed; callers can still
+          // inspect the ack promise if they need transport-level handling.
+        });
 
-        void sendPromise
-          .then(() => {
-            const currentMessage = findCurrentMessageForBridge(
-              selectConversationMessagesFromState(
-                useChatStore.getState(),
-                selectedConversationId,
-              ),
-              optimisticMessage,
-            );
-            if (!currentMessage) return;
-            dispatch(
-              realtimeMessageUpdated({
-                conversationId: selectedConversationId,
-                message: currentMessage,
-              }),
-            );
-          })
-          .catch(() => {
-            const currentMessage = findCurrentMessageForBridge(
-              selectConversationMessagesFromState(
-                useChatStore.getState(),
-                selectedConversationId,
-              ),
-              optimisticMessage,
-            );
-            if (!currentMessage) return;
-            dispatch(
-              realtimeMessageUpdated({
-                conversationId: selectedConversationId,
-                message: currentMessage,
-              }),
-            );
-          });
-
-        return sendPromise.catch(handleSendError);
+        return {
+          disposition: "optimistic",
+          messageId: clientMessageId,
+          ack: sendPromise,
+        };
       } catch (error) {
         return handleSendError(error);
       }
     },
     [
+      currentUser?.avatar,
+      currentUser?.displayName,
+      currentUser?.effectiveDisplayName,
+      currentUser?.id,
+      currentUser?.username,
       isConversationReady,
       onSend,
       selectedConversationId,
-      dispatch,
+      sendMessageMutation,
       setSlowModeCooldown,
       source,
-      storeSendMessage,
       t,
     ],
   );
@@ -402,7 +355,7 @@ export const useSendMessage = ({
             : "optimistic";
         }
 
-        const sendResult = await sendMessage(text);
+        const sendResult = sendMessage(text);
         const disposition = resolveDisposition(sendResult);
         return disposition === "sent" ? "optimistic" : disposition;
       } catch (error) {
@@ -432,14 +385,14 @@ export const useSendMessage = ({
     setUploadProgress(0);
 
     try {
-      const response = await chatApi.file.uploadFile(
+      const response = await legacyChatApi.file.uploadFile(
         resolvedConversationId,
         selectedFile,
         setUploadProgress,
         abortController.signal,
       );
       const uploaded = unwrapApiSuccess(response);
-      const attachment = chatApi.file.toAttachment(uploaded);
+      const attachment = legacyChatApi.file.toAttachment(uploaded);
       const mimeType = attachment.mimeType || selectedFile.type;
       const attachmentType = resolveFileType(mimeType);
       const messageType =

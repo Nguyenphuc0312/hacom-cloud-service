@@ -22,7 +22,6 @@ import {
   useAuthStore,
   useChatStore,
   useSelectedConversation,
-  useConversationMessageCount,
   useCurrentTypingStatus,
   useConversationCount,
   useFriendshipStore,
@@ -42,8 +41,16 @@ import {
   listenForNotificationClick,
 } from "../features/chat/events/chatUiEvents";
 import { logMessageDebug } from "../utils/messageDebug";
+import { logger } from "../utils/logger";
 import { ErrorCode } from "@hacom/chat-shared-types/core";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
+import {
+  chatApi as rtkChatApi,
+  useAddReactionMutation,
+  useDeleteMessageMutation,
+  useEditMessageMutation,
+  useRemoveReactionMutation,
+} from "../features/api/chatApi";
 import { useSendMessage } from "../features/chat/hooks/useSendMessage";
 import { useConversationSession } from "../features/chat/hooks/useConversationSession";
 import { useConversationValidation } from "../features/chat/hooks/useConversationValidation";
@@ -52,6 +59,7 @@ import {
   consumeOpenNewChatIntent,
 } from "../lib/commandPalette";
 import { chatApi } from "../features/chat/api";
+import { store } from "../store";
 import { selectConversationMessagesFromState } from "../stores/chatStore";
 import type { ChatLayoutState } from "../utils/densityPolicy";
 import { isUuid } from "../utils/isUuid";
@@ -89,26 +97,6 @@ const DeferredModalFallback: React.FC = () => (
 const INFO_PANEL_EXIT_DURATION_MS = 240;
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-const loadReactionUseCases = () =>
-  import("../features/chat/usecases/addReaction").then(
-    async ({ addReactionUseCase }) => {
-      const { removeReactionUseCase } = await import(
-        "../features/chat/usecases/removeReaction"
-      );
-      return { addReactionUseCase, removeReactionUseCase };
-    },
-  );
-
-const loadMessageMutationUseCases = () =>
-  import("../features/chat/usecases/editMessage").then(
-    async ({ editMessageUseCase }) => {
-      const { deleteMessageUseCase } = await import(
-        "../features/chat/usecases/deleteMessage"
-      );
-      return { editMessageUseCase, deleteMessageUseCase };
-    },
-  );
 
 const loadConversationMutationUseCases = () =>
   import("../features/chat/usecases/createPrivateConversation").then(
@@ -152,8 +140,6 @@ export const ChatPage: React.FC = () => {
     addConversation,
     updateConversation,
     removeConversation,
-    updateStoreMessage,
-    removeStoreMessage,
     isLoadingConversations,
     hasFetchedConversationsOnce,
     conversationsError,
@@ -167,8 +153,6 @@ export const ChatPage: React.FC = () => {
       addConversation: state.addConversation,
       updateConversation: state.updateConversation,
       removeConversation: state.removeConversation,
-      updateStoreMessage: state.updateMessage,
-      removeStoreMessage: state.removeMessage,
       isLoadingConversations: state.isLoadingConversations,
       hasFetchedConversationsOnce: state.hasFetchedConversationsOnce,
       conversationsError: state.conversationsError,
@@ -184,9 +168,6 @@ export const ChatPage: React.FC = () => {
 
   // Selectors
   const selectedConversation = useSelectedConversation();
-  const conversationMessageCount = useConversationMessageCount(
-    selectedConversationId,
-  );
   const typingStatus = useCurrentTypingStatus();
   const conversationCount = useConversationCount();
   const refreshFriendshipDirectory = useFriendshipStore(
@@ -343,7 +324,7 @@ export const ChatPage: React.FC = () => {
     connectionState,
     isValidatingRoom,
     lastValidatedConversationId,
-    messageCount: conversationMessageCount,
+    messageCount: 0,
     fetchMessages,
     markAsRead,
     joinConversation,
@@ -409,21 +390,25 @@ export const ChatPage: React.FC = () => {
     isConversationReady: sessionIsConversationReady,
     source: "ChatPage",
   });
+  const [editMessageMutation] = useEditMessageMutation();
+  const [deleteMessageMutation] = useDeleteMessageMutation();
+  const [addReactionMutation] = useAddReactionMutation();
+  const [removeReactionMutation] = useRemoveReactionMutation();
 
   const handleReactMessage = useCallback(
     async (messageId: string, emoji: string) => {
       if (!selectedConversationId || !currentUserSummary) return;
 
-      // Read directly from store to avoid depending on conversationMessages
-      // (prevents callback recreation on every incoming message)
-      const storeState = useChatStore.getState();
-      const storeMessages = selectConversationMessagesFromState(
-        storeState,
-        selectedConversationId,
-      );
-      const targetMessage = storeMessages.find(
-        (message) => message.id === messageId || message.localId === messageId,
-      );
+      const targetMessage = rtkChatApi.endpoints.getMessages
+        .select({ conversationId: selectedConversationId })(store.getState())
+        .data?.messages.find((message) =>
+          [
+            message.id,
+            message.localId,
+            message.stableId,
+            message.clientMessageId,
+          ].some((value) => value === messageId),
+        );
       if (!targetMessage) return;
 
       const existingReaction = targetMessage.reactions?.find(
@@ -433,60 +418,30 @@ export const ChatPage: React.FC = () => {
         existingReaction?.userIds?.includes(currentUserSummary.id),
       );
 
-      // Optimistic update — apply immediately for snappy UX
-      const optimisticReactions = hasReacted
-        ? (targetMessage.reactions || [])
-            .map((r) =>
-              r.emoji === emoji
-                ? {
-                    ...r,
-                    userIds: r.userIds.filter(
-                      (id) => id !== currentUserSummary.id,
-                    ),
-                    count: r.count - 1,
-                  }
-                : r,
-            )
-            .filter((r) => r.count > 0)
-        : [
-            ...(targetMessage.reactions || []).filter((r) => r.emoji !== emoji),
-            {
-              emoji,
-              userIds: [
-                ...(existingReaction?.userIds || []),
-                currentUserSummary.id,
-              ],
-              count: (existingReaction?.count || 0) + 1,
-            },
-          ];
-
-      updateStoreMessage(selectedConversationId, messageId, {
-        reactions: optimisticReactions,
-      });
-
+      // RTKQ mutation owns the optimistic timeline patch and rollback.
       try {
-        const { addReactionUseCase, removeReactionUseCase } =
-          await loadReactionUseCases();
-        const response = hasReacted
-          ? await removeReactionUseCase({ messageId, emoji })
-          : await addReactionUseCase({ messageId, emoji });
-        const updatedMessage = unwrapApiSuccess(response);
-
-        updateStoreMessage(selectedConversationId, messageId, {
-          reactions: Array.isArray(updatedMessage.reactions)
-            ? updatedMessage.reactions
-            : [],
-        });
+        const mutationInput = {
+          conversationId: selectedConversationId,
+          messageId,
+          emoji,
+          userId: currentUserSummary.id,
+        };
+        await (hasReacted
+          ? removeReactionMutation(mutationInput)
+          : addReactionMutation(mutationInput)
+        ).unwrap();
       } catch (error) {
-        // Rollback to pre-optimistic state
-        updateStoreMessage(selectedConversationId, messageId, {
-          reactions: targetMessage.reactions,
-        });
         const apiError = extractApiError(error);
         toast.error(apiError.message || t("error:generic.requestFailed"));
       }
     },
-    [currentUserSummary, selectedConversationId, t, updateStoreMessage],
+    [
+      addReactionMutation,
+      currentUserSummary,
+      removeReactionMutation,
+      selectedConversationId,
+      t,
+    ],
   );
 
   const handleEditMessage = useCallback(
@@ -494,22 +449,18 @@ export const ChatPage: React.FC = () => {
       if (!selectedConversationId) return;
 
       try {
-        const { editMessageUseCase } = await loadMessageMutationUseCases();
-        const response = await editMessageUseCase({ messageId, content });
-        const updatedMessage = unwrapApiSuccess(response);
-
-        updateStoreMessage(selectedConversationId, messageId, {
-          content: updatedMessage.content || content,
-          isEdited: true,
-          editedAt: updatedMessage.editedAt || new Date(),
-        });
+        await editMessageMutation({
+          conversationId: selectedConversationId,
+          messageId,
+          content,
+        }).unwrap();
         toast.success(t("chat:toast.messageEdited"));
       } catch (error) {
         const apiError = extractApiError(error);
         toast.error(apiError.message || t("chat:toast.editFailed"));
       }
     },
-    [selectedConversationId, t, updateStoreMessage],
+    [editMessageMutation, selectedConversationId, t],
   );
 
   const handleDeleteMessage = useCallback(
@@ -517,16 +468,17 @@ export const ChatPage: React.FC = () => {
       if (!selectedConversationId) return;
 
       try {
-        const { deleteMessageUseCase } = await loadMessageMutationUseCases();
-        await deleteMessageUseCase(messageId);
-        removeStoreMessage(selectedConversationId, messageId);
+        await deleteMessageMutation({
+          conversationId: selectedConversationId,
+          messageId,
+        }).unwrap();
         toast.success(t("chat:toast.messageDeleted"));
       } catch (error) {
         const apiError = extractApiError(error);
         toast.error(apiError.message || t("chat:toast.deleteFailed"));
       }
     },
-    [removeStoreMessage, selectedConversationId, t],
+    [deleteMessageMutation, selectedConversationId, t],
   );
 
   const closeInfoPanel = useCallback(() => {
@@ -621,7 +573,7 @@ export const ChatPage: React.FC = () => {
   // Handle new chat
   const handleStartChat = useCallback(
     async (userId: string) => {
-      console.info("direct_dm.source_trace", {
+      logger.debug("direct_dm", "source_trace", {
         source: "ChatPage.handleStartChat",
         userId,
       });
@@ -659,10 +611,9 @@ export const ChatPage: React.FC = () => {
 
         // Refresh list to get full conversation shape (participants, display fields...)
         fetchConversations().catch((error) => {
-          console.warn(
-            "Refresh conversations after creating direct conversation failed:",
+          logger.warn("conversation", "refresh_after_direct_create_failed", {
             error,
-          );
+          });
         });
         selectConversation(conversationId);
         navigate(`/chat/${conversationId}`);
@@ -682,17 +633,16 @@ export const ChatPage: React.FC = () => {
             apiError.code === ErrorCode.ROOM_ALREADY_EXISTS)
         ) {
           fetchConversations().catch((refreshError) => {
-            console.warn(
-              "Refresh conversations after conflict conversation lookup failed:",
+            logger.warn("conversation", "refresh_after_conflict_failed", {
               refreshError,
-            );
+            });
           });
           selectConversation(existingConversationId);
           navigate(`/chat/${existingConversationId}`);
           return;
         }
 
-        console.error("Create direct conversation failed:", apiError);
+        logger.error("conversation", "create_direct_failed", apiError);
         if (apiError.code === ErrorCode.DIRECT_CHAT_TARGET_UNAVAILABLE) {
           void refreshFriendshipDirectory({
             reason: "explicit_refresh",
@@ -750,16 +700,15 @@ export const ChatPage: React.FC = () => {
         }
 
         fetchConversations().catch((error) => {
-          console.warn(
-            "Refresh conversations after creating group conversation failed:",
+          logger.warn("conversation", "refresh_after_group_create_failed", {
             error,
-          );
+          });
         });
         selectConversation(conversationId);
         navigate(`/chat/${conversationId}`);
       } catch (error) {
         const apiError = extractApiError(error);
-        console.error("Create group conversation failed:", apiError);
+        logger.error("conversation", "create_group_failed", apiError);
         toast.error(apiError.message || t("error:chat.createGroupFailed"));
       } finally {
         roomCreationLockRef.current = false;

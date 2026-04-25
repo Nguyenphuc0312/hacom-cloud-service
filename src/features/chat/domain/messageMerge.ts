@@ -1,9 +1,10 @@
 import { MessageStatus } from "../../../types";
-import type { Message } from "../../../types";
+import type { Message, Reaction } from "../../../types";
 import {
   findMessageIdentityIndex,
   getStableMessageId,
   isTempMessageId,
+  messagesShareIdentity,
 } from "./messageIdentity";
 import {
   findSortedInsertIndex,
@@ -40,6 +41,13 @@ const getMessageSeq = (message: Message): number | null =>
   typeof message.serverSeq === "number" && Number.isFinite(message.serverSeq)
     ? message.serverSeq
     : null;
+
+const isLocalPendingMessage = (message: Message): boolean =>
+  message.transportStatus === "optimistic" ||
+  message.sendState === "sending" ||
+  message.sendState === "queued" ||
+  message.sendState === "retrying" ||
+  message.sendState === "failed";
 
 const indexMessagesById = (messages: readonly Message[]) =>
   messages.reduce<Record<string, Message>>((accumulator, message) => {
@@ -186,17 +194,33 @@ export const mergeIncomingMessagesPage = (
   }
 
   if (mode === "replace") {
-    const localPendingMessages = current.messages.filter(
-      (message) =>
-        message.transportStatus === "optimistic" ||
-        message.sendState === "sending" ||
-        message.sendState === "queued" ||
-        message.sendState === "retrying" ||
-        message.sendState === "failed",
+    const incomingMessages = normalizeMessagesForReduxCache(incoming.messages);
+    const incomingNewestSeq = incomingMessages.reduce<number | null>(
+      (latest, message) => {
+        const seq = getMessageSeq(message);
+        if (seq === null) return latest;
+        return latest === null ? seq : Math.max(latest, seq);
+      },
+      null,
     );
+    const localPendingMessages = current.messages.filter(isLocalPendingMessage);
+    const liveTailMessages =
+      incomingNewestSeq === null
+        ? []
+        : current.messages.filter((message) => {
+            const seq = getMessageSeq(message);
+            return (
+              !isLocalPendingMessage(message) &&
+              seq !== null &&
+              seq > incomingNewestSeq
+            );
+          });
     return buildConversationMessagesCache(
       incoming.conversationId,
-      mergeMessageLists(incoming.messages, localPendingMessages),
+      mergeMessageLists(incomingMessages, [
+        ...localPendingMessages,
+        ...liveTailMessages,
+      ]),
       {
         hasMoreOlder: incoming.hasMoreOlder,
         hasMoreNewer: incoming.hasMoreNewer,
@@ -265,6 +289,143 @@ export const patchMessageInCache = (
 
   const current = cache.messages[matchingIndex];
   upsertMessageInCache(cache, { ...current, ...patch });
+};
+
+export const patchReactionSummary = (
+  message: Message,
+  emoji: string,
+  userId: string | undefined,
+  action: "add" | "remove",
+): Reaction[] => {
+  const currentReactions = message.reactions ?? [];
+  if (!userId) {
+    return currentReactions;
+  }
+
+  const existingReaction = currentReactions.find(
+    (reaction) => reaction.emoji === emoji,
+  );
+  const otherReactions = currentReactions.filter(
+    (reaction) => reaction.emoji !== emoji,
+  );
+
+  if (action === "remove") {
+    if (!existingReaction) {
+      return currentReactions;
+    }
+
+    const nextUserIds = existingReaction.userIds.filter((id) => id !== userId);
+    const nextCount = Math.max(0, existingReaction.count - 1);
+    return nextCount > 0 || nextUserIds.length > 0
+      ? [
+          ...otherReactions,
+          {
+            ...existingReaction,
+            userIds: nextUserIds,
+            count: Math.max(nextCount, nextUserIds.length),
+          },
+        ]
+      : otherReactions;
+  }
+
+  if (existingReaction?.userIds.includes(userId)) {
+    return currentReactions;
+  }
+
+  return [
+    ...otherReactions,
+    {
+      emoji,
+      userIds: [...(existingReaction?.userIds ?? []), userId],
+      count: (existingReaction?.count ?? 0) + 1,
+    },
+  ];
+};
+
+export const patchMessageReactionInCache = (
+  cache: ConversationMessagesCache,
+  input: {
+    messageId: string;
+    emoji: string;
+    userId?: string;
+  },
+  action: "add" | "remove",
+): void => {
+  const currentMessage = cache.messages.find((message) =>
+    [
+      message.id,
+      message.localId,
+      message.stableId,
+      message.clientMessageId,
+    ].some((value) => value === input.messageId),
+  );
+
+  if (!currentMessage) return;
+
+  patchMessageInCache(cache, input.messageId, {
+    reactions: patchReactionSummary(
+      currentMessage,
+      input.emoji,
+      input.userId,
+      action,
+    ),
+  });
+};
+
+export const patchReadCursorInCache = (
+  cache: ConversationMessagesCache,
+  input: {
+    lastReadMessageId: string;
+    lastReadSeq?: number;
+    currentUserId?: string;
+    readerId?: string;
+  },
+): void => {
+  if (!input.currentUserId) return;
+  if (input.readerId && input.readerId === input.currentUserId) return;
+
+  const boundaryIndex = findMessageIdentityIndex(cache.messages, {
+    id: input.lastReadMessageId,
+    localId: input.lastReadMessageId,
+    stableId: input.lastReadMessageId,
+    clientMessageId: input.lastReadMessageId,
+  });
+  const readAt = new Date().toISOString() as unknown as Date;
+  const messagesToPatch = cache.messages.filter((message, index) => {
+    if (message.senderId !== input.currentUserId) return false;
+    if (message.status === MessageStatus.READ) return false;
+
+    const messageSeq =
+      typeof message.serverSeq === "number" && Number.isFinite(message.serverSeq)
+        ? message.serverSeq
+        : null;
+    const withinSeqBoundary =
+      typeof input.lastReadSeq === "number" &&
+      Number.isFinite(input.lastReadSeq) &&
+      messageSeq !== null &&
+      messageSeq <= input.lastReadSeq;
+
+    if (boundaryIndex < 0) {
+      return (
+        withinSeqBoundary ||
+        messagesShareIdentity(message, {
+          id: input.lastReadMessageId,
+          localId: input.lastReadMessageId,
+          stableId: input.lastReadMessageId,
+          clientMessageId: input.lastReadMessageId,
+        })
+      );
+    }
+
+    return withinSeqBoundary || index <= boundaryIndex;
+  });
+
+  for (const message of messagesToPatch) {
+    patchMessageInCache(cache, message.id, {
+      status: MessageStatus.READ,
+      readAt,
+    });
+  }
 };
 
 export const markMessageFailedInCache = (

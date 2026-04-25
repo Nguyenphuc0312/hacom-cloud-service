@@ -140,32 +140,44 @@ export const useConversationSession = ({
   updateConversation,
 }: UseConversationSessionOptions): UseConversationSessionResult => {
   const currentHasMore = useChatStore((state) =>
-    selectedConversationId
+    CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED
+      ? false
+      : selectedConversationId
       ? (state.hasMoreMessages[selectedConversationId] ?? true)
       : false,
   );
   const currentIsLoading = useChatStore((state) =>
-    selectedConversationId
+    CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED
+      ? false
+      : selectedConversationId
       ? Boolean(state.isLoadingMessagesByConversation[selectedConversationId])
       : false,
   );
   const currentMessageError = useChatStore((state) =>
-    selectedConversationId
+    CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED
+      ? null
+      : selectedConversationId
       ? (state.messageErrors[selectedConversationId] ?? null)
       : null,
   );
   const isSelectedConversationHydrated = useChatStore((state) =>
-    selectedConversationId
+    CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED
+      ? Boolean(selectedConversationId)
+      : selectedConversationId
       ? Boolean(state.messagesHydratedByConversation[selectedConversationId])
       : false,
   );
   const currentHistoryStage = useChatStore((state) =>
-    selectedConversationId
+    CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED
+      ? "live_realtime"
+      : selectedConversationId
       ? (state.historyStageByConversation[selectedConversationId] ?? "empty")
       : "empty",
   );
   const hasAuthoritativeHistory = useChatStore((state) =>
-    selectedConversationId
+    CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED
+      ? Boolean(selectedConversationId)
+      : selectedConversationId
       ? Boolean(
           state.hasAuthoritativeHistoryByConversation[selectedConversationId],
         )
@@ -335,6 +347,9 @@ export const useConversationSession = ({
   }, [selectedConversationId]);
 
   const handleLoadOlderMessages = useCallback(async () => {
+    if (CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED) {
+      return;
+    }
     if (!selectedConversationId) return;
 
     const storeState = useChatStore.getState();
@@ -365,6 +380,9 @@ export const useConversationSession = ({
   }, [fetchMessages, selectedConversationId]);
 
   const handleRetryMessages = useCallback(async () => {
+    if (CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED) {
+      return;
+    }
     if (!selectedConversationId) return;
     const storeState = useChatStore.getState();
     if (storeState.isLoadingMessagesByConversation[selectedConversationId]) {
@@ -410,6 +428,9 @@ export const useConversationSession = ({
   );
 
   useEffect(() => {
+    if (CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED) {
+      return;
+    }
     if (
       !selectedConversationId ||
       (isValidatingRoom && !canBootstrapConversationFromCache)

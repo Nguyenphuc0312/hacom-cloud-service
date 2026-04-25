@@ -95,8 +95,13 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   );
 
   const directThumbnailUrl = useMemo(
-    () => resolvePublicResourceUrl(attachment.thumbnailUrl) ?? undefined,
-    [attachment.thumbnailUrl],
+    () =>
+      resolvePublicResourceUrl(attachment.thumbnailUrl, {
+        context: "image",
+        allowBlob: true,
+        allowDataImage: attachment.mimeType?.startsWith("image/") === true,
+      }) ?? undefined,
+    [attachment.mimeType, attachment.thumbnailUrl],
   );
 
   // Thumbnail URL: use thumbnail if available, otherwise resolve on-demand only

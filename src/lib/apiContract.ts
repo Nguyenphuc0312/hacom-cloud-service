@@ -82,9 +82,35 @@ const fromFailurePayload = (payload: unknown): ApiContractError | null => {
   });
 };
 
+const fromPlainApiError = (payload: unknown): ApiContractError | null => {
+  if (!isRecord(payload) || typeof payload.message !== "string") {
+    return null;
+  }
+
+  const statusCode =
+    typeof payload.statusCode === "number" ? payload.statusCode : null;
+  const code = isKnownErrorCode(payload.code) ? payload.code : null;
+  if (!statusCode && !code) {
+    return null;
+  }
+
+  return new ApiContractError(payload.message, {
+    statusCode: statusCode ?? 500,
+    code: code ?? ErrorCode.INTERNAL_ERROR,
+    details: payload.details,
+    requestId:
+      typeof payload.requestId === "string" ? payload.requestId : undefined,
+  });
+};
+
 export const extractApiError = (error: unknown): ApiContractError => {
   if (error instanceof ApiContractError) {
     return error;
+  }
+
+  const plainApiError = fromPlainApiError(error);
+  if (plainApiError) {
+    return plainApiError;
   }
 
   if (axios.isAxiosError(error)) {

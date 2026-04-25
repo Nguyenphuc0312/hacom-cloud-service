@@ -7,9 +7,15 @@ import App from "./App.tsx";
 import { installChatWebDiagnostics } from "./lib/runtimeDiagnostics";
 import { store } from "./store";
 import { ThemeProvider, bootstrapThemeAttributes } from "./theme";
+import { logger } from "./utils/logger";
 
 bootstrapThemeAttributes();
-console.info("[chat-web] runtime diagnostics", installChatWebDiagnostics());
+logger.info(
+  "runtime",
+  "diagnostics_installed",
+  installChatWebDiagnostics(),
+  { debugOnly: true },
+);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

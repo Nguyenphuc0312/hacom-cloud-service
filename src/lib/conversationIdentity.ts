@@ -1,3 +1,5 @@
+import { logger } from "../utils/logger";
+
 type UnknownRecord = Record<string, unknown>;
 
 const warnedMessages = new Set<string>();
@@ -15,11 +17,11 @@ const warnOnce = (key: string, message: string, extra?: unknown): void => {
 
   warnedMessages.add(key);
   if (extra === undefined) {
-    console.warn(message);
+    logger.warn("conversation-identity", key, { message });
     return;
   }
 
-  console.warn(message, extra);
+  logger.warn("conversation-identity", key, { message, extra });
 };
 
 export const warnLegacyRoomAlias = (

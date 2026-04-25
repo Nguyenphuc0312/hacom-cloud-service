@@ -55,22 +55,25 @@ import {
   registerPresenceEvents,
   registerSyncEvents,
   toFriendshipRealtimeDetail,
-  applyMessagePatch,
   createChatRealtimeAdapter,
   hasMessageSequenceGap,
   needsSelfMessageIdentityResync,
   normalizeMessageRealtimeEvent,
 } from "../features/chat/realtime";
 import type { NormalizedMessageRealtimeEvent } from "../features/chat/realtime/realtimeEventTypes";
+import { chatApi } from "../features/api/chatApi";
+import { findMessageIdentityIndex } from "../features/chat/domain/messageIdentity";
 import { dispatchNotificationClick } from "../features/chat/events/chatUiEvents";
 import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
 import {
   realtimeMessageDeleted,
+  realtimeMessageReactionChanged,
   realtimeMessageReceived,
   realtimeMessageUpdated,
   realtimeReadCursorUpdated,
 } from "../features/realtime/realtimeMiddleware";
 import { realtimeActions } from "../features/realtime/realtimeSlice";
+import { store } from "../store";
 import { useAppDispatch } from "../store/hooks";
 import { useSettingsStore } from "../settings/settingsStore";
 import {
@@ -145,72 +148,6 @@ const getLatestServerSeq = (messages: Array<{ serverSeq?: number }>): number | n
   return latest;
 };
 
-const normalizeRealtimeSenderProfiles = (
-  value: unknown,
-): Record<
-  string,
-  {
-    id: string;
-    username: string;
-    displayName: string;
-    avatar?: string | null;
-    status?: string | null;
-  }
-> => {
-  const source = asRecord(value);
-  if (!source) {
-    return {};
-  }
-
-  return Object.entries(source).reduce<
-    Record<
-      string,
-      {
-        id: string;
-        username: string;
-        displayName: string;
-        avatar?: string | null;
-        status?: string | null;
-      }
-    >
-  >((accumulator, [userId, rawProfile]) => {
-    const profile = asRecord(rawProfile);
-    if (!profile) {
-      return accumulator;
-    }
-
-    const id =
-      asString(profile.id) ??
-      asString(profile.userId) ??
-      asString(profile.user_id) ??
-      userId;
-    const username =
-      asString(profile.username) ??
-      asString(profile.employeeCode) ??
-      asString(profile.employee_code) ??
-      id;
-    const displayName =
-      asString(profile.displayName) ??
-      asString(profile.display_name) ??
-      asString(profile.fullNameFromHr) ??
-      asString(profile.full_name_from_hr) ??
-      username;
-
-    if (!id || !displayName) {
-      return accumulator;
-    }
-
-    accumulator[id] = {
-      id,
-      username,
-      displayName,
-      avatar: asString(profile.avatar),
-      status: asString(profile.status),
-    };
-    return accumulator;
-  }, {});
-};
-
 const getConversationId = (payload: Record<string, unknown>): string | null => {
   return resolveConversationId(payload, {
     source: "useWebSocket.payload",
@@ -244,6 +181,17 @@ const toRealtimeCacheMessage = (
   ...(event.clientMessageId ? { clientMessageId: event.clientMessageId } : {}),
   ...(event.localId ? { localId: event.localId } : {}),
 });
+
+const getConversationMessageCache = (conversationId: string) =>
+  chatApi.endpoints.getMessages.select({ conversationId })(store.getState())
+    .data?.messages ?? [];
+
+const hasMessageInRtkCache = (
+  conversationId: string,
+  message: Message,
+): boolean =>
+  findMessageIdentityIndex(getConversationMessageCache(conversationId), message) >=
+  0;
 
 const toRealtimeConnectionStatus = (
   state: ConnectionState,
@@ -316,13 +264,9 @@ export const useWebSocket = (
   const totalUnreadCount = useChatStore((s) => s.totalUnreadCount);
   const conversations = useChatStore((s) => s.conversations);
 
-  const ingestConversationMessageEvent = useChatStore(
-    (s) => s.ingestConversationMessageEvent,
-  );
   const applyConversationParticipantSummary = useChatStore(
     (s) => s.applyConversationParticipantSummary,
   );
-  const removeMessage = useChatStore((s) => s.removeMessage);
   const upsertConversationSummary = useChatStore(
     (s) => s.upsertConversationSummary,
   );
@@ -336,7 +280,6 @@ export const useWebSocket = (
     (s) => s.clearConversationTypingStatuses,
   );
   const fetchMessages = useChatStore((s) => s.fetchMessages);
-  const markMessagesReadUpTo = useChatStore((s) => s.markMessagesReadUpTo);
   const updateConversation = useChatStore((s) => s.updateConversation);
   const removeConversation = useChatStore((s) => s.removeConversation);
   const selectConversation = useChatStore((s) => s.selectConversation);
@@ -1082,9 +1025,6 @@ export const useWebSocket = (
         eventId,
         correlationKey,
       } = normalizedEvent;
-      const senderProfiles = normalizeRealtimeSenderProfiles(
-        payload.senderProfiles,
-      );
       if (
         !shouldProcessRealtimeEvent(eventId, {
           eventType,
@@ -1119,8 +1059,13 @@ export const useWebSocket = (
         correlationKey,
       });
       const chatState = useChatStore.getState();
+      const rtkCacheMessage = toRealtimeCacheMessage(normalizedEvent);
+      const hadMessageBeforeRtkPatch = hasMessageInRtkCache(
+        conversationId,
+        rtkCacheMessage,
+      );
       const latestKnownSeq = getLatestServerSeq(
-        chatState.messages[conversationId] ?? [],
+        getConversationMessageCache(conversationId),
       );
       const hasMessageSeqGap = hasMessageSequenceGap({
         event: normalizedEvent,
@@ -1141,12 +1086,6 @@ export const useWebSocket = (
           senderId !== currentUserId &&
           (!isActiveConversation || !visibleAndFocused),
       );
-      const ingestResult = applyMessagePatch({
-        ingestConversationMessageEvent,
-      }, normalizedEvent, {
-        incrementUnread: shouldIncrementUnread,
-        ...(Object.keys(senderProfiles).length > 0 ? { senderProfiles } : {}),
-      });
       logMessageDebug("useWebSocket", "realtime.client.state_updated", {
         requestId:
           asString(payload.requestId) ?? asString(messagePayload.requestId),
@@ -1158,14 +1097,13 @@ export const useWebSocket = (
         eventType,
         roomKey: conversationId,
         eventId,
-        stateTransition: ingestResult.status,
+        stateTransition: hadMessageBeforeRtkPatch ? "merged" : "new",
         incrementUnread: shouldIncrementUnread,
         latestKnownSeq,
         incomingSeq,
         hasMessageSeqGap,
       });
 
-      const rtkCacheMessage = toRealtimeCacheMessage(normalizedEvent);
       dispatch(
         eventType === "message:new"
           ? realtimeMessageReceived({
@@ -1178,7 +1116,7 @@ export const useWebSocket = (
             }),
       );
 
-      if (eventType === "message:new" && ingestResult.status === "new") {
+      if (eventType === "message:new" && !hadMessageBeforeRtkPatch) {
         maybeNotifyIncomingMessage({
           conversationId,
           messageId,
@@ -1238,8 +1176,7 @@ export const useWebSocket = (
 
       if (
         eventType !== "message:new" ||
-        ingestResult.status === "ignored" ||
-        ingestResult.status === "merged" ||
+        hadMessageBeforeRtkPatch ||
         (chatState.selectedConversationId !== conversationId &&
           senderId &&
           currentUserId &&
@@ -1281,7 +1218,6 @@ export const useWebSocket = (
           messageId,
         });
 
-        removeMessage(conversationId, messageId);
         dispatch(
           realtimeMessageDeleted({
             conversationId,
@@ -1291,6 +1227,72 @@ export const useWebSocket = (
         void scheduleConversationSnapshotRefresh(conversationId, {
           reason: "socket:message:deleted",
         });
+      },
+      onReactionAdded: (data: unknown) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+
+        const messagePayload = asRecord(payload.message);
+        const reactionPayload = asRecord(payload.reaction);
+        const conversationId = getConversationId(payload);
+        const messageId =
+          asString(payload.messageId) ??
+          asString(payload.id) ??
+          asString(payload._id) ??
+          asString(messagePayload?.id) ??
+          asString(messagePayload?.messageId);
+        const emoji =
+          asString(payload.emoji) ?? asString(reactionPayload?.emoji);
+        const userId =
+          asString(payload.userId) ??
+          asString(payload.senderId) ??
+          asString(reactionPayload?.userId) ??
+          asString(reactionPayload?.senderId);
+
+        if (!conversationId || !messageId || !emoji) return;
+
+        dispatch(
+          realtimeMessageReactionChanged({
+            conversationId,
+            messageId,
+            emoji,
+            ...(userId ? { userId } : {}),
+            action: "add",
+          }),
+        );
+      },
+      onReactionRemoved: (data: unknown) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+
+        const messagePayload = asRecord(payload.message);
+        const reactionPayload = asRecord(payload.reaction);
+        const conversationId = getConversationId(payload);
+        const messageId =
+          asString(payload.messageId) ??
+          asString(payload.id) ??
+          asString(payload._id) ??
+          asString(messagePayload?.id) ??
+          asString(messagePayload?.messageId);
+        const emoji =
+          asString(payload.emoji) ?? asString(reactionPayload?.emoji);
+        const userId =
+          asString(payload.userId) ??
+          asString(payload.senderId) ??
+          asString(reactionPayload?.userId) ??
+          asString(reactionPayload?.senderId);
+
+        if (!conversationId || !messageId || !emoji) return;
+
+        dispatch(
+          realtimeMessageReactionChanged({
+            conversationId,
+            messageId,
+            emoji,
+            ...(userId ? { userId } : {}),
+            action: "remove",
+          }),
+        );
       },
       onConversationParticipantUpdated: (data: unknown) => {
         const payload = asRecord(data);
@@ -1353,16 +1355,15 @@ export const useWebSocket = (
           typeof payload.lastReadSeq === "number" ? payload.lastReadSeq : null,
       });
 
-      markMessagesReadUpTo(
-        conversationId,
-        lastMessageId,
-        asString(payload.userId) ?? asString(payload.senderId) ?? undefined,
-        typeof payload.lastReadSeq === "number" ? payload.lastReadSeq : null,
-      );
+      const readerId =
+        asString(payload.userId) ?? asString(payload.senderId) ?? undefined;
+      const currentUserId = useAuthStore.getState().user?.id;
       dispatch(
         realtimeReadCursorUpdated({
           conversationId,
           lastReadMessageId: lastMessageId,
+          ...(currentUserId ? { currentUserId } : {}),
+          ...(readerId ? { readerId } : {}),
           ...(typeof payload.lastReadSeq === "number"
             ? { lastReadSeq: payload.lastReadSeq }
             : {}),
@@ -1937,10 +1938,8 @@ export const useWebSocket = (
     dispatch,
     handleReauthRequiredEvent,
     handleUnauthorizedEvent,
-    markMessagesReadUpTo,
     onError,
     removeConversation,
-    removeMessage,
     handleConversationJoinedAck,
     handleConversationResynced,
     handleResyncRequired,
@@ -1950,7 +1949,6 @@ export const useWebSocket = (
     maybeNotifyMembershipEvent,
     maybeReconcileGap,
     applyConversationParticipantSummary,
-    ingestConversationMessageEvent,
     scheduleConversationSnapshotRefresh,
     scheduleRemoteTypingDecay,
     selectConversation,

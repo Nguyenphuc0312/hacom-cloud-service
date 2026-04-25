@@ -1,8 +1,10 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { Provider } from "react-redux";
 import { describe, expect, it, vi } from "vitest";
 
 import { MessageInput } from "./MessageInput";
+import { store } from "../../store";
 import type { AttachmentDraft } from "../../types/attachmentDraft";
 
 vi.mock("react-i18next", async (importOriginal) => {
@@ -15,6 +17,11 @@ vi.mock("react-i18next", async (importOriginal) => {
     }),
   };
 });
+
+const renderWithProviders = (ui: React.ReactElement) =>
+  render(ui, {
+    wrapper: ({ children }) => <Provider store={store}>{children}</Provider>,
+  });
 
 const renderComposer = (
   onSend: (
@@ -48,7 +55,7 @@ const renderComposer = (
     );
   };
 
-  render(<Harness />);
+  renderWithProviders(<Harness />);
 };
 
 describe("MessageInput send flow", () => {
@@ -56,7 +63,7 @@ describe("MessageInput send flow", () => {
     const onChange = vi.fn();
     const onSend = vi.fn();
 
-    render(
+    renderWithProviders(
       <MessageInput
         value=""
         onChange={onChange}
@@ -80,7 +87,7 @@ describe("MessageInput send flow", () => {
   it("resets the local draft when parent sends a new seed key", () => {
     const onChange = vi.fn();
     const onSend = vi.fn();
-    const { rerender } = render(
+    const { rerender } = renderWithProviders(
       <MessageInput
         value="old draft"
         valueResetKey={0}

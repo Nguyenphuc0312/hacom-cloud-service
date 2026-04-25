@@ -34,6 +34,15 @@ const parseExpiry = (expiresAt?: string): number => {
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
 
+const getAttachmentUrlPolicy = (attachment: Attachment | undefined) => {
+  const isImage = attachment?.mimeType?.toLowerCase().startsWith("image/");
+  return {
+    context: isImage ? ("image" as const) : ("download" as const),
+    allowBlob: true,
+    allowDataImage: Boolean(isImage),
+  };
+};
+
 export const useAttachmentDownloadUrl = (
   conversationId: string | undefined,
   attachment: Attachment | undefined,
@@ -49,14 +58,15 @@ export const useAttachmentDownloadUrl = (
   }, [attachment?.id, attachment?.objectKey, attachment?.url, conversationId]);
 
   const fallbackUrl = React.useMemo(() => {
+    const urlPolicy = getAttachmentUrlPolicy(attachment);
     if (isNonEmptyString(attachment?.downloadUrl)) {
-      return resolvePublicResourceUrl(attachment.downloadUrl);
+      return resolvePublicResourceUrl(attachment.downloadUrl, urlPolicy);
     }
     if (isNonEmptyString(attachment?.url)) {
-      return resolvePublicResourceUrl(attachment.url);
+      return resolvePublicResourceUrl(attachment.url, urlPolicy);
     }
     return undefined;
-  }, [attachment?.downloadUrl, attachment?.url]);
+  }, [attachment]);
 
   const [url, setUrl] = React.useState<string | undefined>(() => {
     const cached = cacheKey
@@ -78,7 +88,10 @@ export const useAttachmentDownloadUrl = (
       if (isNonEmptyString(attachment.downloadUrl) && !force) {
         const expiresAtMs = parseExpiry(attachment.expiresAt);
         if (expiresAtMs - Date.now() > CACHE_SKEW_MS) {
-          const directUrl = resolvePublicResourceUrl(attachment.downloadUrl);
+          const directUrl = resolvePublicResourceUrl(
+            attachment.downloadUrl,
+            getAttachmentUrlPolicy(attachment),
+          );
           if (!directUrl) {
             setUrl(fallbackUrl);
             return fallbackUrl;
@@ -122,7 +135,10 @@ export const useAttachmentDownloadUrl = (
             : undefined,
         });
         const payload = unwrapApiSuccess(response);
-        const signedUrl = resolvePublicResourceUrl(payload.url);
+        const signedUrl = resolvePublicResourceUrl(payload.url, {
+          context: "download",
+          allowBlob: true,
+        });
         if (!signedUrl) {
           setUrl(fallbackUrl);
           return fallbackUrl;

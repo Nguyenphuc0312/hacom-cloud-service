@@ -1,3 +1,5 @@
+import { logger } from "./logger";
+
 type MessageDebugEvent = {
   ts: string;
   scope: string;
@@ -46,15 +48,7 @@ export const logMessageDebug = (
     debugWindow.__chatMessageDebugEvents = nextEvents.slice(-300);
   }
 
-  if (entry.level === "warn") {
-    console.warn("[chat-debug]", entry);
-    return;
-  }
-
-  if (entry.level === "info") {
-    console.info("[chat-debug]", entry);
-    return;
-  }
-
-  console.debug("[chat-debug]", entry);
+  logger[entry.level ?? "debug"]("chat-debug", event, entry, {
+    debugOnly: true,
+  });
 };

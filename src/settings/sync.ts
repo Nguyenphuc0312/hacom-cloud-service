@@ -21,6 +21,7 @@ import type {
 import type { SettingsSchema } from "./types";
 import { getAccessToken } from "../services/tokenService";
 import { triggerSettingsConflictSync } from "./settingsSyncBridge";
+import { logger } from "../utils/logger";
 
 // ============================================
 // FETCH FROM SERVER
@@ -100,9 +101,7 @@ export const syncSettingsToServer = async (
 
     // 409 = version conflict → refetch server state, store will re-merge
     if (status === 409) {
-      console.warn(
-        "[sync] Settings version conflict (409). Refetching from server…",
-      );
+      logger.warn("settings", "version_conflict_refetching", { status });
       void triggerSettingsConflictSync();
       return;
     }

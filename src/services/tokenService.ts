@@ -1,7 +1,5 @@
 import { AUTH_CONFIG } from "../config";
 
-type StorageArea = "local" | "session";
-
 const isBrowser = (): boolean =>
   typeof window !== "undefined" &&
   typeof localStorage !== "undefined" &&
@@ -12,8 +10,10 @@ const REFRESH_TOKEN_STORAGE_MODE =
     ? "cookie"
     : "session";
 
-const getStorageByArea = (area: StorageArea): Storage =>
-  area === "local" ? localStorage : sessionStorage;
+const ACCESS_TOKEN_STORAGE_MODE =
+  import.meta.env.VITE_ACCESS_TOKEN_STORAGE_MODE === "local"
+    ? "local"
+    : "session";
 
 const getCookieValue = (name: string): string | null => {
   if (typeof document === "undefined") return null;
@@ -37,9 +37,10 @@ const setAuthSessionActive = (active: boolean): void => {
   localStorage.setItem(AUTH_CONFIG.AUTH_SESSION_ACTIVE_KEY, active ? "true" : "false");
 };
 
-const getPreferredAccessStorage = (): Storage => {
-  const rememberMe = isRememberMeEnabled();
-  return rememberMe ? localStorage : sessionStorage;
+const getPreferredAccessStorage = (rememberMe = isRememberMeEnabled()): Storage => {
+  return ACCESS_TOKEN_STORAGE_MODE === "local" && rememberMe
+    ? localStorage
+    : sessionStorage;
 };
 
 const clearTokenKeys = (): void => {
@@ -53,6 +54,9 @@ const clearTokenKeys = (): void => {
 
 export const isRefreshTokenCookieMode = (): boolean =>
   REFRESH_TOKEN_STORAGE_MODE === "cookie";
+
+export const isAccessTokenLocalStorageMode = (): boolean =>
+  ACCESS_TOKEN_STORAGE_MODE === "local";
 
 export const getCsrfToken = (): string | null =>
   isBrowser() ? getCookieValue("csrfToken") : null;
@@ -113,7 +117,10 @@ export const storeTokens = (
 
   clearTokenKeys();
 
-  const accessStorage = getStorageByArea(rememberMe ? "local" : "session");
+  // Safer default: access token stays in sessionStorage even when remember-me
+  // is enabled. Persisting access tokens in localStorage is legacy opt-in via
+  // VITE_ACCESS_TOKEN_STORAGE_MODE=local.
+  const accessStorage = getPreferredAccessStorage(rememberMe);
   accessStorage.setItem(AUTH_CONFIG.ACCESS_TOKEN_KEY, accessToken);
   setAuthSessionActive(true);
 

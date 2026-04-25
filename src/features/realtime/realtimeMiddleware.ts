@@ -8,7 +8,9 @@ import type { Message } from "../../types";
 import { chatApi } from "../api/chatApi";
 import {
   buildConversationMessagesCache,
+  patchMessageReactionInCache,
   patchMessageInCache,
+  patchReadCursorInCache,
   upsertMessageInCache,
 } from "../chat/domain/messageMerge";
 import { normalizeMessageForReduxCache } from "../chat/domain/serializableMessage";
@@ -28,6 +30,16 @@ export interface RealtimeReadCursorPayload {
   conversationId: string;
   lastReadMessageId?: string;
   lastReadSeq?: number;
+  currentUserId?: string;
+  readerId?: string;
+}
+
+export interface RealtimeMessageReactionPayload {
+  conversationId: string;
+  messageId: string;
+  emoji: string;
+  userId?: string;
+  action: "add" | "remove";
 }
 
 const prepareRealtimeMessagePayload = (payload: RealtimeMessagePayload) => ({
@@ -49,6 +61,10 @@ export const realtimeMessageDeleted =
   createAction<RealtimeMessageDeletedPayload>("realtime/messageDeleted");
 export const realtimeReadCursorUpdated =
   createAction<RealtimeReadCursorPayload>("realtime/readCursorUpdated");
+export const realtimeMessageReactionChanged =
+  createAction<RealtimeMessageReactionPayload>(
+    "realtime/messageReactionChanged",
+  );
 
 const getMessageQueryArg = (conversationId: string) => ({ conversationId });
 
@@ -165,7 +181,43 @@ export const realtimeMiddleware: Middleware<
       );
     }
 
+    if (realtimeMessageReactionChanged.match(action)) {
+      storeApi.dispatch(
+        chatApi.util.updateQueryData(
+          "getMessages",
+          getMessageQueryArg(action.payload.conversationId),
+          (draft) => {
+            patchMessageReactionInCache(
+              draft,
+              {
+                messageId: action.payload.messageId,
+                emoji: action.payload.emoji,
+                userId: action.payload.userId,
+              },
+              action.payload.action,
+            );
+          },
+        ),
+      );
+    }
+
     if (realtimeReadCursorUpdated.match(action)) {
+      if (action.payload.lastReadMessageId) {
+        storeApi.dispatch(
+          chatApi.util.updateQueryData(
+            "getMessages",
+            getMessageQueryArg(action.payload.conversationId),
+            (draft) => {
+              patchReadCursorInCache(draft, {
+                lastReadMessageId: action.payload.lastReadMessageId!,
+                lastReadSeq: action.payload.lastReadSeq,
+                currentUserId: action.payload.currentUserId,
+                readerId: action.payload.readerId,
+              });
+            },
+          ),
+        );
+      }
       storeApi.dispatch(
         chatApi.util.invalidateTags([
           { type: "Unread", id: action.payload.conversationId },

@@ -1,5 +1,9 @@
 # Chat Scroll Debug Checklist
 
+Use this checklist as the Phase 0 baseline before cleanup or RTKQ/Zustand
+migration work. Capture console traces and any observed regressions before
+changing runtime behavior.
+
 Enable debug traces before running the matrix:
 
 ```powershell
@@ -36,3 +40,26 @@ Benchmark events to capture:
 - `append_to_bottom_latency`
 - `message-list-dom-node-count`
 - `react-profiler-message-list`
+
+Phase 0 minimum baseline:
+
+1. Open conversation with 100 messages. Record latest visible message id and
+   `open_to_bottom_applied`.
+2. Open conversation with 10,000 messages. Record virtual row count and DOM
+   node count.
+3. Receive realtime append while pinned to bottom. Record
+   `append_to_bottom_latency`.
+4. Send own message while reading history. Confirm `own_message_follow_bottom`.
+5. Load older from top. Confirm `load_older_anchor_restore` and no bottom
+   command applies.
+6. Switch conversations 20 times. Confirm stale commands are skipped for old
+   conversation ids.
+
+Recommended local commands for the baseline:
+
+```powershell
+npm run typecheck
+npm run lint
+npm run build
+npm test
+```

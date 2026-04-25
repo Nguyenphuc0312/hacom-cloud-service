@@ -17,6 +17,7 @@ import {
   buildConversationMessagesCache,
   markMessageFailedInCache,
   mergeIncomingMessagesPage,
+  patchMessageReactionInCache,
   patchMessageInCache,
   upsertMessageInCache,
 } from "../chat/domain/messageMerge";
@@ -80,6 +81,13 @@ export interface DeleteMessageInput {
   messageId: string;
 }
 
+export interface ReactToMessageInput {
+  conversationId: string;
+  messageId: string;
+  emoji: string;
+  userId?: string;
+}
+
 export interface MarkConversationReadInput {
   conversationId: string;
   lastVisibleMessageId?: string;
@@ -109,6 +117,29 @@ interface MessageResponseEnvelope {
   hasMoreOlder: boolean;
   hasMoreNewer: boolean;
 }
+
+type ExtractedApiError = ReturnType<typeof extractApiError>;
+
+interface ChatQueryError {
+  name: string;
+  message: string;
+  statusCode: number;
+  code: ExtractedApiError["code"];
+  details?: unknown;
+  requestId?: string;
+}
+
+const toChatQueryError = (error: unknown): ChatQueryError => {
+  const apiError = extractApiError(error);
+  return {
+    name: apiError.name,
+    message: apiError.message,
+    statusCode: apiError.statusCode,
+    code: apiError.code,
+    details: apiError.details,
+    requestId: apiError.requestId,
+  };
+};
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value !== null && typeof value === "object"
@@ -199,7 +230,7 @@ const buildOptimisticMessage = (input: SendMessageInput): Message => {
     isPinned: false,
     isDeleted: false,
     isSystem: false,
-    createdAt: new Date(),
+    createdAt: new Date().toISOString() as unknown as Date,
     ...(input.replyToId ? { replyTo: input.replyToId } : {}),
     ...(input.attachments?.length ? { attachments: input.attachments } : {}),
   };
@@ -207,7 +238,7 @@ const buildOptimisticMessage = (input: SendMessageInput): Message => {
 
 export const chatApi = createApi({
   reducerPath: "chatApi",
-  baseQuery: fakeBaseQuery<ReturnType<typeof extractApiError>>(),
+  baseQuery: fakeBaseQuery<ChatQueryError>(),
   tagTypes: ["Conversation", "Messages", "Unread"],
   endpoints: (build) => ({
     getConversations: build.query<Conversation[], GetConversationsArgs | void>({
@@ -220,7 +251,7 @@ export const chatApi = createApi({
           });
           return { data: normalizeConversationsPayload(unwrapApiSuccess(response)) };
         } catch (error) {
-          return { error: extractApiError(error) };
+          return { error: toChatQueryError(error) };
         }
       },
       providesTags: (result) =>
@@ -247,7 +278,7 @@ export const chatApi = createApi({
           }
           return { data: normalized };
         } catch (error) {
-          return { error: extractApiError(error) };
+          return { error: toChatQueryError(error) };
         }
       },
       providesTags: (_result, _error, conversationId) => [
@@ -279,7 +310,7 @@ export const chatApi = createApi({
             ),
           };
         } catch (error) {
-          return { error: extractApiError(error) };
+          return { error: toChatQueryError(error) };
         }
       },
       serializeQueryArgs: ({ endpointName, queryArgs }) =>
@@ -312,6 +343,17 @@ export const chatApi = createApi({
       ],
     }),
 
+    getMessageById: build.query<Message, string>({
+      async queryFn(messageId) {
+        try {
+          const response = await messageApi.getMessageById(messageId);
+          return { data: unwrapApiSuccess(response) };
+        } catch (error) {
+          return { error: toChatQueryError(error) };
+        }
+      },
+    }),
+
     sendMessage: build.mutation<Message, SendMessageInput>({
       async queryFn(input) {
         try {
@@ -328,16 +370,28 @@ export const chatApi = createApi({
           });
           return { data: unwrapApiSuccess(response) };
         } catch (error) {
-          return { error: extractApiError(error) };
+          return { error: toChatQueryError(error) };
         }
       },
       async onQueryStarted(input, { dispatch, queryFulfilled }) {
         const queryArg = getMessageQueryArgForConversation(input.conversationId);
-        dispatch(
+        const optimisticMessage = buildOptimisticMessage(input);
+        const optimisticPatch = dispatch(
           chatApi.util.updateQueryData("getMessages", queryArg, (draft) => {
-            upsertMessageInCache(draft, buildOptimisticMessage(input));
+            upsertMessageInCache(draft, optimisticMessage);
           }),
         );
+        if (optimisticPatch.patches.length === 0) {
+          dispatch(
+            chatApi.util.upsertQueryData(
+              "getMessages",
+              queryArg,
+              buildConversationMessagesCache(input.conversationId, [
+                optimisticMessage,
+              ]),
+            ),
+          );
+        }
 
         try {
           const { data } = await queryFulfilled;
@@ -379,10 +433,24 @@ export const chatApi = createApi({
           );
           return { data: unwrapApiSuccess(response) };
         } catch (error) {
-          return { error: extractApiError(error) };
+          return { error: toChatQueryError(error) };
         }
       },
       async onQueryStarted(input, { dispatch, queryFulfilled }) {
+        const patch = dispatch(
+          chatApi.util.updateQueryData(
+            "getMessages",
+            getMessageQueryArgForConversation(input.conversationId),
+            (draft) => {
+              patchMessageInCache(draft, input.messageId, {
+                content: input.content,
+                isEdited: true,
+                editedAt: new Date().toISOString() as unknown as Date,
+              });
+            },
+          ),
+        );
+
         try {
           const { data } = await queryFulfilled;
           dispatch(
@@ -395,7 +463,7 @@ export const chatApi = createApi({
             ),
           );
         } catch {
-          // The mutation error is surfaced by RTK Query; no cache patch is safe here.
+          patch.undo();
         }
       },
     }),
@@ -406,26 +474,93 @@ export const chatApi = createApi({
           await messageApi.deleteMessage(input.messageId);
           return { data: undefined };
         } catch (error) {
-          return { error: extractApiError(error) };
+          return { error: toChatQueryError(error) };
         }
       },
       async onQueryStarted(input, { dispatch, queryFulfilled }) {
+        const patch = dispatch(
+          chatApi.util.updateQueryData(
+            "getMessages",
+            getMessageQueryArgForConversation(input.conversationId),
+            (draft) => {
+              patchMessageInCache(draft, input.messageId, {
+                isDeleted: true,
+                content: "",
+              });
+            },
+          ),
+        );
+
         try {
           await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+    }),
+
+    addReaction: build.mutation<Message, ReactToMessageInput>({
+      async queryFn(input) {
+        try {
+          const response = await messageApi.addReaction(
+            input.messageId,
+            input.emoji,
+          );
+          return { data: unwrapApiSuccess(response) };
+        } catch (error) {
+          return { error: toChatQueryError(error) };
+        }
+      },
+      async onQueryStarted(input, { dispatch, queryFulfilled }) {
+        const queryArg = getMessageQueryArgForConversation(input.conversationId);
+        const patch = dispatch(
+          chatApi.util.updateQueryData("getMessages", queryArg, (draft) => {
+            patchMessageReactionInCache(draft, input, "add");
+          }),
+        );
+
+        try {
+          const { data } = await queryFulfilled;
           dispatch(
-            chatApi.util.updateQueryData(
-              "getMessages",
-              getMessageQueryArgForConversation(input.conversationId),
-              (draft) => {
-                patchMessageInCache(draft, input.messageId, {
-                  isDeleted: true,
-                  content: "",
-                });
-              },
-            ),
+            chatApi.util.updateQueryData("getMessages", queryArg, (draft) => {
+              upsertMessageInCache(draft, data);
+            }),
           );
         } catch {
-          // The mutation error is surfaced by RTK Query; keep the current cache.
+          patch.undo();
+        }
+      },
+    }),
+
+    removeReaction: build.mutation<Message, ReactToMessageInput>({
+      async queryFn(input) {
+        try {
+          const response = await messageApi.removeReaction(
+            input.messageId,
+            input.emoji,
+          );
+          return { data: unwrapApiSuccess(response) };
+        } catch (error) {
+          return { error: toChatQueryError(error) };
+        }
+      },
+      async onQueryStarted(input, { dispatch, queryFulfilled }) {
+        const queryArg = getMessageQueryArgForConversation(input.conversationId);
+        const patch = dispatch(
+          chatApi.util.updateQueryData("getMessages", queryArg, (draft) => {
+            patchMessageReactionInCache(draft, input, "remove");
+          }),
+        );
+
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(
+            chatApi.util.updateQueryData("getMessages", queryArg, (draft) => {
+              upsertMessageInCache(draft, data);
+            }),
+          );
+        } catch {
+          patch.undo();
         }
       },
     }),
@@ -439,7 +574,7 @@ export const chatApi = createApi({
           );
           return { data: undefined };
         } catch (error) {
-          return { error: extractApiError(error) };
+          return { error: toChatQueryError(error) };
         }
       },
       invalidatesTags: (_result, _error, input) => [
@@ -453,7 +588,7 @@ export const chatApi = createApi({
           const response = await conversationApi.getUnreadSummary();
           return { data: unwrapApiSuccess(response) };
         } catch (error) {
-          return { error: extractApiError(error) };
+          return { error: toChatQueryError(error) };
         }
       },
       providesTags: [{ type: "Unread", id: "SUMMARY" }],
@@ -473,7 +608,7 @@ export const chatApi = createApi({
           });
           return { data: unwrapApiSuccess(response) };
         } catch (error) {
-          return { error: extractApiError(error) };
+          return { error: toChatQueryError(error) };
         }
       },
     }),
@@ -483,12 +618,15 @@ export const chatApi = createApi({
 export const {
   useDeleteMessageMutation,
   useEditMessageMutation,
+  useAddReactionMutation,
   useGetConversationByIdQuery,
   useGetConversationsQuery,
+  useLazyGetMessageByIdQuery,
   useLazyGetMessagesQuery,
   useGetMessagesQuery,
   useGetUnreadSummaryQuery,
   useMarkConversationReadMutation,
+  useRemoveReactionMutation,
   useSearchMessagesQuery,
   useSendMessageMutation,
 } = chatApi;

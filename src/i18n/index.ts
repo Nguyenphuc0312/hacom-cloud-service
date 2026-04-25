@@ -2,6 +2,7 @@ import i18n from "i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
 import resourcesToBackend from "i18next-resources-to-backend";
 import { initReactI18next } from "react-i18next";
+import { logger } from "../utils/logger";
 
 export const supportedLanguages = ["vi", "en"] as const;
 export const defaultNamespace = "common";
@@ -26,7 +27,7 @@ const missingTranslationKeys = new Set<string>();
 const handleMissingKey = (key: string) => {
   if (!isProduction && !missingTranslationKeys.has(key)) {
     missingTranslationKeys.add(key);
-    console.warn(`[i18n] Missing translation key: ${key}`);
+    logger.warn("i18n", "missing_translation_key", { key });
   }
 
   return "";

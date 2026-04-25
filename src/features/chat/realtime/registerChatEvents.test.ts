@@ -22,6 +22,8 @@ describe("registerChatEvents", () => {
       onMessageNew: noop,
       onMessageUpdated: noop,
       onMessageDeleted: noop,
+      onReactionAdded: noop,
+      onReactionRemoved: noop,
       onConversationParticipantUpdated: noop,
     });
 
@@ -30,6 +32,11 @@ describe("registerChatEvents", () => {
         "message:new",
         "message:updated",
         "message:deleted",
+        "message:revoked",
+        "reaction:added",
+        "message:reaction_added",
+        "reaction:removed",
+        "message:reaction_removed",
         "conversation:participant:updated",
       ]),
     );
@@ -42,6 +49,6 @@ describe("registerChatEvents", () => {
 
     unsubscribe();
 
-    expect(socket.off).toHaveBeenCalledTimes(4);
+    expect(socket.off).toHaveBeenCalledTimes(9);
   });
 });
