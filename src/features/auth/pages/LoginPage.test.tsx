@@ -47,9 +47,27 @@ const admin: CurrentAdmin = {
   permissions: ['admin.profile.read'],
 };
 
-const buildAxiosError = (status: number, code?: string): AxiosError<ApiErrorBody> => {
+const buildAxiosError = (
+  status: number,
+  code?: string,
+  upstreamReason?: string,
+): AxiosError<ApiErrorBody> => {
   const response: AxiosResponse<ApiErrorBody> = {
-    data: code ? { success: false, error: { code } } : { success: false },
+    data: code
+      ? {
+          success: false,
+          error: {
+            code,
+            details: upstreamReason
+              ? {
+                  upstreamDetails: {
+                    reason: upstreamReason,
+                  },
+                }
+              : undefined,
+          },
+        }
+      : { success: false },
     status,
     statusText: `${status}`,
     headers: {},
@@ -156,6 +174,22 @@ describe('LoginPage admin preflight', () => {
 
     const expectedMessage =
       'IP của bạn đang chờ quản trị viên phê duyệt để truy cập admin panel.';
+    expect(await screen.findByText(expectedMessage)).toBeInTheDocument();
+    expect(useAuthStore.getState().accessToken).toBeNull();
+    expect(message.error).toHaveBeenCalledWith(expectedMessage);
+  });
+
+  it('clears token and shows inactive admin account reason from upstream details', async () => {
+    loginMock.mockResolvedValue({ accessToken: 'inactive-admin-token' });
+    getCurrentAdminMock.mockRejectedValue(
+      buildAxiosError(403, 'ADMIN_PERMISSION_DENIED', 'ADMIN_ACCOUNT_NOT_ACTIVE'),
+    );
+
+    const { container } = renderLoginPage();
+    await submitLogin(container);
+
+    const expectedMessage =
+      'Tài khoản admin của bạn chưa active. Vui lòng liên hệ quản trị viên để kích hoạt.';
     expect(await screen.findByText(expectedMessage)).toBeInTheDocument();
     expect(useAuthStore.getState().accessToken).toBeNull();
     expect(message.error).toHaveBeenCalledWith(expectedMessage);

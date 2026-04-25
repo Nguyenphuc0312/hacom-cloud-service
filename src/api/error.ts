@@ -18,8 +18,11 @@ const CODE_MESSAGE_MAP: Record<string, string> = {
   ALLOWLIST_EMAIL_DENIED: 'Email nay khong duoc phep truy cap admin panel.',
   RBAC_PERMISSION_DENIED: 'Tai khoan khong co quyen quan tri.',
   ADMIN_ACCESS_DENIED: 'Ban khong co quyen truy cap admin panel.',
+  ADMIN_PERMISSION_DENIED: 'Ban khong co quyen truy cap admin panel.',
   ADMIN_AUTH_REQUIRED: 'Phien dang nhap khong hop le hoac da het han.',
   ADMIN_AUTH_TOKEN_INVALID: 'Phien dang nhap khong hop le hoac da het han.',
+  ADMIN_ACCOUNT_NOT_ACTIVE:
+    'Tai khoan admin chua active. Vui long lien he quan tri vien de kich hoat.',
   ADMIN_CANONICAL_PERMISSIONS_MISSING:
     'Phien dang nhap chua co quyen admin hop le. Vui long dang nhap lai.',
   CLIENT_IP_UNRESOLVED: 'Khong the xac dinh IP client thuc te.',
@@ -54,6 +57,9 @@ const ADMIN_LOGIN_MESSAGE_MAP: Record<string, string> = {
   ALLOWLIST_EMAIL_DENIED: 'Email này không được phép truy cập admin panel.',
   RBAC_PERMISSION_DENIED: 'Tài khoản của bạn không có quyền quản trị.',
   ADMIN_ACCESS_DENIED: 'Bạn không có quyền truy cập admin panel.',
+  ADMIN_PERMISSION_DENIED: 'Bạn không có quyền truy cập admin panel.',
+  ADMIN_ACCOUNT_NOT_ACTIVE:
+    'Tài khoản admin của bạn chưa active. Vui lòng liên hệ quản trị viên để kích hoạt.',
   ADMIN_AUTH_REQUIRED: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
   ADMIN_AUTH_TOKEN_INVALID: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
   UNAUTHORIZED: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
@@ -67,7 +73,17 @@ const extractReasonCode = (body: ApiErrorBody | undefined): string | undefined =
   }
 
   const reason = (details as { reason?: unknown }).reason;
-  return typeof reason === 'string' ? reason : undefined;
+  if (typeof reason === 'string') {
+    return reason;
+  }
+
+  const upstreamDetails = (details as { upstreamDetails?: unknown }).upstreamDetails;
+  if (!upstreamDetails || typeof upstreamDetails !== 'object') {
+    return undefined;
+  }
+
+  const upstreamReason = (upstreamDetails as { reason?: unknown }).reason;
+  return typeof upstreamReason === 'string' ? upstreamReason : undefined;
 };
 
 export const getApiErrorCode = (error: unknown): string | undefined => {
