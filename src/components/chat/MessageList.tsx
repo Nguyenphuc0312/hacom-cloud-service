@@ -1,26 +1,16 @@
 import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import {
-  VariableSizeList as VirtualList,
-  type ListChildComponentProps,
-} from "react-window";
 import { MessageItem } from "./MessageItem";
 import { MessageListOverlays } from "./MessageListOverlays";
 import { MessageGroup } from "./thread/MessageGroup";
 import { EmptyMessages, ErrorState, MessageListSkeleton } from "../ui";
 import {
-  CHAT_VIRTUALIZER_V2_ENABLED,
-} from "../../features/chat/config/experienceFlags";
-import {
   type UnreadTimelineMarker,
 } from "../../hooks/useMessageGrouping";
-import { useVirtualizedMessages } from "../../hooks/useVirtualizedMessages";
 import { useTanStackVirtualizedMessages } from "../../hooks/useTanStackVirtualizedMessages";
-import type { ConversationVirtualizerScrollBehavior } from "../../hooks/virtualizerContract";
 import type { Conversation, Message, Attachment } from "../../types";
 import type { ChatDensity } from "../../stores/uiStore";
-import { useMessagesByConversation } from "../../stores";
 import {
   getMessageStableKey,
   isFailedMessage,
@@ -28,17 +18,13 @@ import {
 } from "../../utils/messageTimeline";
 import {
   isTargetMessage,
-  type PendingScrollCommand,
-  resolveScrollCommandPriority,
   resolveTimelineMessageRenderState,
-  type ScrollCommand,
-  shouldAcceptScrollCommand,
   type RenderableTimelineItem,
   type TimelineMessageRenderState,
 } from "./messageListShared";
 import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 import { logScrollTrace } from "../../utils/scrollTrace";
-import { useMessageScrollMachine } from "../../features/chat/hooks/useMessageScrollMachine";
+import { useChatScrollController } from "./useChatScrollController";
 import {
   useConversationTimelineRows,
 } from "../../features/chat/hooks/useConversationTimelineRows";
@@ -46,8 +32,12 @@ import {
   type ConversationThreadRow,
   useConversationThreadRows,
 } from "../../features/chat/hooks/useConversationThreadRows";
+import { useConversationMessagesRTK } from "../../features/chat/hooks/useConversationMessagesRTK";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
-import { getDistanceFromBottom } from "../../utils/scrollController";
+import {
+  logChatPerformance,
+  measureChatPerformance,
+} from "../../utils/chatPerformance";
 import {
   DEFAULT_TEXT_CHARS_PER_LINE,
   estimateTextLineCount,
@@ -135,9 +125,23 @@ interface TimelineRowData {
   }) => void;
 }
 
+interface TimelineRowRenderProps<Data> {
+  index: number;
+  style: React.CSSProperties;
+  data: Data;
+  isScrolling?: boolean;
+}
+
 const EMPTY_SELECTED_MESSAGE_IDS = new Set<string>();
+const EMPTY_INSERTED_MESSAGE_KEYS = new Set<string>();
 const ITEM_SIZE_CHANGE_THRESHOLD = 2;
-const SMOOTH_SCROLL_MAX_DISTANCE_PX = 240;
+
+type BottomSettlePhase =
+  | "idle"
+  | "loading-initial"
+  | "waiting-for-measurement"
+  | "scrolling-to-bottom"
+  | "settled";
 
 const isThreadRowMessageLike = (
   item: ConversationThreadRow | undefined,
@@ -204,8 +208,8 @@ const shouldAnimateInsertedMessage = (
 };
 
 const areEqualTimelineRowProps = (
-  previousProps: ListChildComponentProps<TimelineRowData>,
-  nextProps: ListChildComponentProps<TimelineRowData>,
+  previousProps: TimelineRowRenderProps<TimelineRowData>,
+  nextProps: TimelineRowRenderProps<TimelineRowData>,
 ): boolean => {
   if (previousProps.index !== nextProps.index) {
     return false;
@@ -433,7 +437,7 @@ const estimateTimelineItemHeight = (
   );
 };
 
-const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
+const TimelineRow: React.FC<TimelineRowRenderProps<TimelineRowData>> =
   React.memo(({ index, style, data }) => {
     const item = data.items[index];
     const rowRef = React.useRef<HTMLDivElement>(null);
@@ -686,34 +690,49 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   composerHeight = 0,
   className,
 }) => {
-  const messages = useMessagesByConversation(conversationId);
+  const rtkMessages = useConversationMessagesRTK(conversationId);
+  const messages = rtkMessages.messages;
+  const rtkErrorMessage = rtkMessages.errorMessage;
+  const retryRtkInitialMessages = rtkMessages.retryInitial;
+  const hasRtkRuntimeWindow =
+    rtkMessages.hasLoaded ||
+    rtkMessages.isFetching ||
+    messages.length > 0 ||
+    Boolean(rtkErrorMessage);
+  const effectiveHasMore = hasRtkRuntimeWindow
+    ? rtkMessages.hasMoreOlder
+    : hasMore;
+  const effectiveIsLoadingMore =
+    rtkMessages.isLoadingOlder ||
+    (!hasRtkRuntimeWindow && Boolean(isLoadingMore));
+  const effectiveIsInitialLoading =
+    rtkMessages.isInitialLoading ||
+    (!hasRtkRuntimeWindow && messages.length === 0 && Boolean(isInitialLoading));
+  const effectiveError = rtkErrorMessage ?? error ?? null;
+  const effectiveLoadMore = hasRtkRuntimeWindow
+    ? rtkMessages.loadOlder
+    : onLoadMore;
   const { t } = useTranslation();
   const viewportRef = React.useRef<HTMLDivElement | null>(null);
-  const legacyListRef = React.useRef<VirtualList<TimelineRowData> | null>(null);
   const outerRef = React.useRef<HTMLDivElement | null>(null);
   const stickyDateRafRef = React.useRef<number | null>(null);
   const highlightTimerRef = React.useRef<number | null>(null);
-  const scrollCommandRafRef = React.useRef<number | null>(null);
-  const pendingScrollCommandRef = React.useRef<PendingScrollCommand | null>(
-    null,
-  );
-  const appliedUnreadRestoreSignatureRef = React.useRef<string | null>(null);
   const lastSeenUnreadRestoreSignatureRef = React.useRef<string | null>(null);
-  const prependAnchorRef = React.useRef<{
-    messageId: string | null;
-    offsetFromTop: number;
-  } | null>(null);
   const pendingResizeAnchorRef = React.useRef<{
     messageId: string | null;
     offsetFromTop: number;
   } | null>(null);
-  const initialBottomSettledConversationRef = React.useRef<string | null>(null);
-  const bottomSettleRafRef = React.useRef<number | null>(null);
+  const bottomSettlePhaseRef = React.useRef<BottomSettlePhase>("idle");
   const timelineSizeChangeRafRef = React.useRef<number | null>(null);
   const pendingTimelineSizeChangesRef = React.useRef<
     Map<string, { index: number; delta: number }>
   >(new Map());
   const isPinnedToBottomRef = React.useRef(true);
+  const previousMessagesForInsertRef = React.useRef<Message[]>([]);
+  const previousMessagesForPerfRef = React.useRef<Message[]>([]);
+  const previousPerfConversationIdRef = React.useRef<string | null>(null);
+  const lastResetConversationRef = React.useRef<string | null>(null);
+  const firstRenderMeasuredConversationRef = React.useRef<string | null>(null);
   const lastLayoutRef = React.useRef({
     viewportHeight: 0,
     composerHeight,
@@ -726,14 +745,30 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const [expandedLongMessageIds, setExpandedLongMessageIds] = React.useState<
     Set<string>
   >(() => new Set());
-  const [previousMessageStableKeys, setPreviousMessageStableKeys] =
-    React.useState<Set<string>>(() => new Set());
+  const [insertedMessageKeys, setInsertedMessageKeys] = React.useState<
+    Set<string>
+  >(EMPTY_INSERTED_MESSAGE_KEYS);
   const [liveUnreadMarker, setLiveUnreadMarker] =
     React.useState<UnreadTimelineMarker | null>(unreadMarker ?? null);
   const getTimelineItemKey = React.useCallback(
     (item: ConversationThreadRow, index: number) =>
       item.key || `${item.kind}-${index}`,
     [],
+  );
+  const setBottomSettlePhase = React.useCallback(
+    (phase: BottomSettlePhase, details?: Record<string, unknown>) => {
+      if (bottomSettlePhaseRef.current === phase) {
+        return;
+      }
+
+      bottomSettlePhaseRef.current = phase;
+      logScrollTrace("bottom_settle_phase_changed", {
+        conversationId,
+        phase,
+        ...(details ?? {}),
+      });
+    },
+    [conversationId],
   );
   const timelineItems = useConversationTimelineRows({
     messages,
@@ -742,38 +777,40 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     unreadMarker: liveUnreadMarker,
   });
   const threadRows = useConversationThreadRows(timelineItems);
-  const latestMessageStableKeys = React.useMemo(
-    () => new Set(messages.map((message) => getMessageStableKey(message))),
-    [messages],
-  );
-  const messageIds = React.useMemo(
-    () => messages.map((message) => message.id),
-    [messages],
-  );
-  const insertedMessageKeys = React.useMemo(() => {
-    const insertedKeys = new Set<string>();
-
-    latestMessageStableKeys.forEach((key) => {
-      if (!previousMessageStableKeys.has(key)) {
-        insertedKeys.add(key);
-      }
-    });
-
-    return insertedKeys;
-  }, [latestMessageStableKeys, previousMessageStableKeys]);
-
   React.useEffect(() => {
-    setPreviousMessageStableKeys((current) => {
-      if (
-        current.size === latestMessageStableKeys.size &&
-        Array.from(latestMessageStableKeys).every((key) => current.has(key))
-      ) {
-        return current;
-      }
+    const previousMessages = previousMessagesForInsertRef.current;
+    if (
+      previousMessages.length === 0 ||
+      messages.length <= previousMessages.length
+    ) {
+      setInsertedMessageKeys(EMPTY_INSERTED_MESSAGE_KEYS);
+      previousMessagesForInsertRef.current = messages;
+      return;
+    }
 
-      return latestMessageStableKeys;
-    });
-  }, [conversationId, latestMessageStableKeys]);
+    const previousTail = previousMessages[previousMessages.length - 1];
+    if (
+      !previousTail ||
+      messages[previousMessages.length - 1] !== previousTail
+    ) {
+      setInsertedMessageKeys(EMPTY_INSERTED_MESSAGE_KEYS);
+      previousMessagesForInsertRef.current = messages;
+      return;
+    }
+
+    const insertedKeys = new Set<string>();
+    for (let index = previousMessages.length; index < messages.length; index += 1) {
+      const message = messages[index];
+      if (message) {
+        insertedKeys.add(getMessageStableKey(message));
+      }
+    }
+
+    setInsertedMessageKeys(
+      insertedKeys.size > 0 ? insertedKeys : EMPTY_INSERTED_MESSAGE_KEYS,
+    );
+    previousMessagesForInsertRef.current = messages;
+  }, [messages]);
 
   React.useEffect(() => {
     setExpandedLongMessageIds(new Set());
@@ -815,32 +852,14 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     },
     [contentWidthBucket, density, expandedLongMessageIds, getTimelineItemKey],
   );
-  const listOverscan = isLoadingMore && !isInitialLoading ? 20 : 10;
+  const listOverscan = effectiveIsLoadingMore && !effectiveIsInitialLoading ? 20 : 10;
 
-  const legacyVirtualizer = useVirtualizedMessages<
-    ConversationThreadRow,
-    TimelineRowData
-  >({
-    items: threadRows,
-    viewportRef,
-    observeViewport: !isInitialLoading && messages.length > 0,
-    enabled: !CHAT_VIRTUALIZER_V2_ENABLED,
-    debugLabel: conversationId,
-    estimateItemSize,
-    getItemKey: getTimelineItemKey,
-    getMeasurementKey: getTimelineMeasurementKey,
-    shouldResetAfterSizeChange: (item) =>
-      resolveTimelineMessageRenderState(item, expandedLongMessageIds)
-        .measurementMode === "dynamic",
-    listRef: legacyListRef,
-    outerRef,
-  });
   const tanStackVirtualizer = useTanStackVirtualizedMessages({
     items: threadRows,
     viewportRef,
     outerRef,
-    observeViewport: !isInitialLoading && messages.length > 0,
-    enabled: CHAT_VIRTUALIZER_V2_ENABLED,
+    observeViewport: !effectiveIsInitialLoading && messages.length > 0,
+    enabled: !effectiveIsInitialLoading && messages.length > 0,
     debugLabel: conversationId,
     overscan: listOverscan,
     estimateItemSize,
@@ -851,9 +870,6 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         .measurementMode === "dynamic",
   });
 
-  const activeVirtualizer = CHAT_VIRTUALIZER_V2_ENABLED
-    ? tanStackVirtualizer
-    : legacyVirtualizer;
   const {
     viewportHeight,
     getItemSize,
@@ -864,13 +880,9 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     scrollToOffset,
     scrollToIndex,
     consumeProgrammaticScroll,
-  } = activeVirtualizer;
-  const tanStackVirtualItems = CHAT_VIRTUALIZER_V2_ENABLED
-    ? tanStackVirtualizer.virtualItems
-    : [];
-  const tanStackTotalSize = CHAT_VIRTUALIZER_V2_ENABLED
-    ? tanStackVirtualizer.totalSize
-    : 0;
+  } = tanStackVirtualizer;
+  const tanStackVirtualItems = tanStackVirtualizer.virtualItems;
+  const tanStackTotalSize = tanStackVirtualizer.totalSize;
 
   React.useLayoutEffect(() => {
     const viewportElement = viewportRef.current;
@@ -918,218 +930,290 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   ]);
 
   React.useEffect(() => {
-    if (scrollCommandRafRef.current !== null) {
-      cancelAnimationFrame(scrollCommandRafRef.current);
-      scrollCommandRafRef.current = null;
+    if (lastResetConversationRef.current === conversationId) {
+      return;
     }
+
+    lastResetConversationRef.current = conversationId;
     if (timelineSizeChangeRafRef.current !== null) {
       cancelAnimationFrame(timelineSizeChangeRafRef.current);
       timelineSizeChangeRafRef.current = null;
     }
-    pendingScrollCommandRef.current = null;
-    prependAnchorRef.current = null;
     pendingResizeAnchorRef.current = null;
     pendingTimelineSizeChangesRef.current.clear();
-    initialBottomSettledConversationRef.current = null;
-  }, [conversationId]);
+    logScrollTrace("conversation_open_start", {
+      conversationId,
+      messageCount: messages.length,
+      lastMessageId: messages[messages.length - 1]?.id ?? null,
+      lastSeq: messages[messages.length - 1]?.serverSeq ?? null,
+      scrollTop: outerRef.current?.scrollTop ?? 0,
+      scrollHeight: outerRef.current?.scrollHeight ?? 0,
+      clientHeight: outerRef.current?.clientHeight ?? 0,
+      distanceToBottom: null,
+      virtualItemsCount: tanStackVirtualItems.length,
+      reason: "conversation-change",
+      source: "MessageList",
+    });
+    setBottomSettlePhase("loading-initial", {
+      messageCount: messages.length,
+    });
+    firstRenderMeasuredConversationRef.current = null;
+    previousMessagesForInsertRef.current = messages;
+    previousMessagesForPerfRef.current = messages;
+    previousPerfConversationIdRef.current = conversationId;
+  }, [conversationId, messages, setBottomSettlePhase, tanStackVirtualItems.length]);
 
-  const resolveScrollBehavior = React.useCallback(
-    (command: ScrollCommand): ConversationVirtualizerScrollBehavior => {
-      const outer = outerRef.current;
-      if (!outer) {
-        return "auto";
-      }
-
-      const distanceFromBottom = getDistanceFromBottom(outer);
-      switch (command.reason) {
-        case "incoming-message":
-          return distanceFromBottom <= SMOOTH_SCROLL_MAX_DISTANCE_PX
-            ? "smooth"
-            : "auto";
-        case "self-message":
-          return distanceFromBottom <= SMOOTH_SCROLL_MAX_DISTANCE_PX
-            ? "smooth"
-            : "auto";
-        case "jump-to-latest":
-          return distanceFromBottom <= outer.clientHeight * 1.5
-            ? "smooth"
-            : "auto";
-        default:
-          return "auto";
-      }
-    },
-    [outerRef],
-  );
-
-  const scrollViewportToBottom = React.useCallback(
-    (behavior: ConversationVirtualizerScrollBehavior = "auto") => {
-      const outer = outerRef.current;
-      if (!outer) {
-        return false;
-      }
-
-      const runSettle = (remainingAttempts: number) => {
-        const element = outerRef.current;
-        if (!element) {
-          bottomSettleRafRef.current = null;
-          return;
-        }
-
-        const targetOffset = Math.max(
-          0,
-          Math.ceil(element.scrollHeight - element.clientHeight),
-        );
-        scrollToOffset(targetOffset, behavior);
-
-        if (remainingAttempts <= 0) {
-          bottomSettleRafRef.current = null;
-          return;
-        }
-
-        bottomSettleRafRef.current = requestAnimationFrame(() => {
-          const settledElement = outerRef.current;
-          if (!settledElement) {
-            bottomSettleRafRef.current = null;
-            return;
-          }
-
-          if (getDistanceFromBottom(settledElement) <= 2) {
-            bottomSettleRafRef.current = null;
-            return;
-          }
-
-          runSettle(remainingAttempts - 1);
-        });
-      };
-
-      if (bottomSettleRafRef.current !== null) {
-        cancelAnimationFrame(bottomSettleRafRef.current);
-        bottomSettleRafRef.current = null;
-      }
-
-      runSettle(2);
-      return true;
-    },
-    [outerRef, scrollToOffset],
-  );
-
-  const flushScrollCommand = React.useCallback(() => {
-    scrollCommandRafRef.current = null;
-    const command = pendingScrollCommandRef.current;
-    pendingScrollCommandRef.current = null;
-    if (!command) return;
-
-    const itemCount = threadRows.length;
-    if (command.kind === "bottom" && itemCount === 0) {
-      logScrollTrace("scroll_command_skipped", {
-        conversationId,
-        ...command,
+  React.useEffect(() => {
+    if (effectiveIsInitialLoading) {
+      setBottomSettlePhase("loading-initial", {
+        messageCount: messages.length,
       });
       return;
     }
 
-    const behavior = resolveScrollBehavior(command);
-    logScrollTrace("scroll_command_flush", {
-      conversationId,
-      ...command,
-      behavior,
-      currentScrollTop: outerRef.current?.scrollTop ?? 0,
-      clientHeight: outerRef.current?.clientHeight ?? 0,
-      scrollHeight: outerRef.current?.scrollHeight ?? 0,
-      distanceFromBottom: outerRef.current
-        ? getDistanceFromBottom(outerRef.current)
-        : null,
-    });
-
-    switch (command.kind) {
-      case "bottom":
-        if (!scrollViewportToBottom(behavior)) {
-          scrollToIndex(itemCount - 1, "end", behavior);
-        }
-        break;
-      case "offset":
-        scrollToOffset(command.offset, behavior);
-        break;
+    if (messages.length === 0 && rtkMessages.hasLoaded) {
+      setBottomSettlePhase("settled", {
+        messageCount: 0,
+      });
+      return;
     }
+
+    if (
+      messages.length === 0 ||
+      threadRows.length === 0 ||
+      viewportHeight <= 0 ||
+      firstRenderMeasuredConversationRef.current === conversationId
+    ) {
+      if (messages.length > 0) {
+        setBottomSettlePhase("waiting-for-measurement", {
+          messageCount: messages.length,
+          rowCount: threadRows.length,
+          viewportHeight,
+        });
+      }
+      return;
+    }
+
+    firstRenderMeasuredConversationRef.current = conversationId;
+    setBottomSettlePhase("waiting-for-measurement", {
+      messageCount: messages.length,
+      rowCount: threadRows.length,
+      viewportHeight,
+    });
+    measureChatPerformance(
+      "conversation-open-first-render",
+      "conversation-open-start",
+      conversationId,
+      {
+        messageCount: messages.length,
+        rowCount: threadRows.length,
+        viewportHeight,
+      },
+    );
   }, [
     conversationId,
-    outerRef,
-    resolveScrollBehavior,
-    scrollViewportToBottom,
-    scrollToIndex,
-    scrollToOffset,
+    effectiveIsInitialLoading,
+    messages.length,
+    rtkMessages.hasLoaded,
+    setBottomSettlePhase,
     threadRows.length,
+    viewportHeight,
   ]);
 
-  const requestScrollCommand = React.useCallback(
-    (command: ScrollCommand): boolean => {
-      const pendingCommand = pendingScrollCommandRef.current;
-      const nextCommand: PendingScrollCommand = {
-        ...command,
-        priority: resolveScrollCommandPriority(command.reason),
-        requestedAt: Date.now(),
-      };
-      logScrollTrace("scroll_command_requested", {
-        conversationId,
-        ...nextCommand,
-        pendingReason: pendingCommand?.reason ?? null,
-        pendingPriority: pendingCommand?.priority ?? null,
-        currentScrollTop: outerRef.current?.scrollTop ?? 0,
-        clientHeight: outerRef.current?.clientHeight ?? 0,
-        scrollHeight: outerRef.current?.scrollHeight ?? 0,
-        distanceFromBottom: outerRef.current
-          ? getDistanceFromBottom(outerRef.current)
-          : null,
-      });
+  React.useEffect(() => {
+    if (previousPerfConversationIdRef.current !== conversationId) {
+      previousPerfConversationIdRef.current = conversationId;
+      previousMessagesForPerfRef.current = messages;
+      return;
+    }
 
-      const decision = shouldAcceptScrollCommand({
-        nextCommand: command,
-        pendingCommand,
-        isPinnedToBottom: isPinnedToBottomRef.current,
-      });
-      if (!decision.accepted) {
-        logScrollTrace("scroll_command_rejected", {
+    const previousMessages = previousMessagesForPerfRef.current;
+    if (previousMessages.length > 0 && messages.length > previousMessages.length) {
+      const previousFirstKey = previousMessages[0]
+        ? getMessageStableKey(previousMessages[0])
+        : null;
+      const nextFirstKey = messages[0] ? getMessageStableKey(messages[0]) : null;
+      const prependedCount = messages.length - previousMessages.length;
+      const previousTail = previousMessages[previousMessages.length - 1];
+      const tailStillInPlace =
+        Boolean(previousTail) &&
+        messages[previousMessages.length - 1] === previousTail;
+
+      if (previousFirstKey && nextFirstKey && previousFirstKey !== nextFirstKey) {
+        measureChatPerformance(
+          "load-older-rendered",
+          "load-older-start",
           conversationId,
-          ...nextCommand,
-          pendingReason: pendingCommand?.reason ?? null,
-          pendingPriority: pendingCommand?.priority ?? null,
-          rejectionReason: decision.reason,
-          isPinnedToBottom: isPinnedToBottomRef.current,
-        });
-        return false;
+          {
+            previousCount: previousMessages.length,
+            nextCount: messages.length,
+            prependedCount,
+          },
+        );
+      } else if (tailStillInPlace) {
+        measureChatPerformance(
+          "append-realtime-message-rendered",
+          "realtime-message-received",
+          conversationId,
+          {
+            previousCount: previousMessages.length,
+            nextCount: messages.length,
+            appendedCount: messages.length - previousMessages.length,
+          },
+        );
       }
+    }
 
-      pendingScrollCommandRef.current = nextCommand;
-      logScrollTrace("scroll_command_accepted", {
+    previousMessagesForPerfRef.current = messages;
+  }, [conversationId, messages]);
+
+  React.useEffect(() => {
+    if (!import.meta.env.DEV || viewportHeight <= 0) {
+      return;
+    }
+
+    const rafId = requestAnimationFrame(() => {
+      const outer = outerRef.current;
+      if (!outer) return;
+
+      logChatPerformance("message-list-dom-node-count", {
         conversationId,
-        ...nextCommand,
-        previousPendingReason: pendingCommand?.reason ?? null,
-        previousPendingPriority: pendingCommand?.priority ?? null,
-        acceptanceReason: decision.reason,
+        messageCount: messages.length,
+        rowCount: threadRows.length,
+        renderedTimelineRows:
+          outer.querySelectorAll("[data-timeline-key]").length,
+        renderedMessageNodes: outer.querySelectorAll("[data-message-id]").length,
+        virtualRows: tanStackVirtualItems.length,
+        overscan: listOverscan,
       });
+    });
 
-      if (scrollCommandRafRef.current !== null) {
-        return true;
+    return () => {
+      cancelAnimationFrame(rafId);
+    };
+  }, [
+    conversationId,
+    listOverscan,
+    messages.length,
+    tanStackVirtualItems.length,
+    threadRows.length,
+    viewportHeight,
+  ]);
+
+  const getVirtualContentHeight = React.useCallback(() => {
+    if (threadRows.length === 0) {
+      return 0;
+    }
+
+    const lastIndex = threadRows.length - 1;
+    return Math.max(
+      tanStackTotalSize,
+      getItemOffset(lastIndex) + getItemSize(lastIndex),
+    );
+  }, [getItemOffset, getItemSize, tanStackTotalSize, threadRows.length]);
+
+  const getBottomScrollTarget = React.useCallback(
+    (element: HTMLElement | null = outerRef.current) => {
+      const viewportSize = element?.clientHeight ?? viewportHeight;
+      if (viewportSize <= 0) {
+        return 0;
       }
 
-      scrollCommandRafRef.current = requestAnimationFrame(flushScrollCommand);
-      return true;
+      const contentHeight = Math.max(
+        getVirtualContentHeight(),
+        element?.scrollHeight ?? 0,
+      );
+      return Math.max(0, Math.ceil(contentHeight - viewportSize));
     },
-    [conversationId, flushScrollCommand],
+    [getVirtualContentHeight, outerRef, viewportHeight],
   );
 
-  const requestScrollToBottom = React.useCallback(
-    (reason: string) => {
-      return requestScrollCommand({ kind: "bottom", reason });
+  const getVirtualDistanceFromBottom = React.useCallback(
+    (element: HTMLElement | null = outerRef.current) => {
+      if (!element) {
+        return 0;
+      }
+
+      return Math.max(0, getBottomScrollTarget(element) - element.scrollTop);
     },
-    [requestScrollCommand],
+    [getBottomScrollTarget, outerRef],
   );
+
+  const buildScrollDebugDetails = React.useCallback(
+    (reason: string, extra?: Record<string, unknown>) => {
+      const outer = outerRef.current;
+      const latestMessage = messages[messages.length - 1];
+      const latestMessageWithSeq = latestMessage as
+        | (Message & { messageSeq?: number })
+        | undefined;
+      const latestSeq =
+        typeof latestMessage?.serverSeq === "number"
+          ? latestMessage.serverSeq
+          : typeof latestMessageWithSeq?.messageSeq === "number"
+            ? latestMessageWithSeq.messageSeq
+            : null;
+
+      return {
+        conversationId,
+        messageCount: messages.length,
+        lastMessageId: latestMessage?.id ?? null,
+        lastSeq: latestSeq,
+        scrollTop: outer?.scrollTop ?? 0,
+        scrollHeight: outer?.scrollHeight ?? 0,
+        clientHeight: outer?.clientHeight ?? 0,
+        distanceToBottom: outer ? getVirtualDistanceFromBottom(outer) : null,
+        virtualItemsCount: tanStackVirtualItems.length,
+        reason,
+        ...(extra ?? {}),
+      };
+    },
+    [
+      conversationId,
+      getVirtualDistanceFromBottom,
+      messages,
+      outerRef,
+      tanStackVirtualItems.length,
+    ],
+  );
+
+  React.useEffect(() => {
+    logScrollTrace(
+      "message_rows_derived",
+      buildScrollDebugDetails("rows-derived", {
+        rowCount: threadRows.length,
+        timelineItemsCount: timelineItems.length,
+      }),
+    );
+  }, [
+    buildScrollDebugDetails,
+    threadRows.length,
+    timelineItems.length,
+  ]);
+
+  React.useEffect(() => {
+    if (viewportHeight <= 0 || messages.length === 0) {
+      return;
+    }
+
+    logScrollTrace(
+      "virtualizer_measured",
+      buildScrollDebugDetails("virtualizer-measured", {
+        rowCount: threadRows.length,
+        totalSize: tanStackTotalSize,
+        viewportHeight,
+      }),
+    );
+  }, [
+    buildScrollDebugDetails,
+    messages.length,
+    tanStackTotalSize,
+    threadRows.length,
+    viewportHeight,
+  ]);
 
   const resolveAnchorTimelineIndex = React.useCallback(
     (messageId: string | null): number => {
-      const messageIndex = messageId ? messageIds.indexOf(messageId) : -1;
-      const resolvedMessageId =
-        messageIndex >= 0 ? messageIds[messageIndex] : (messageIds[0] ?? null);
+      const resolvedMessageId = messageId ?? messages[0]?.id ?? null;
       if (!resolvedMessageId) {
         return -1;
       }
@@ -1142,7 +1226,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         return item.kind === "system" && item.messageId === resolvedMessageId;
       });
     },
-    [messageIds, threadRows],
+    [messages, threadRows],
   );
 
   const captureVisibleAnchor = React.useCallback(() => {
@@ -1172,114 +1256,43 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     };
   }, [findItemAtOffset, getItemOffset, outerRef, threadRows]);
 
-  const restoreAnchor = React.useCallback(
-    (
-      anchor: { messageId: string | null; offsetFromTop: number } | null,
-      reason: string,
-    ) => {
-      if (!anchor) return;
-
-      const anchorIndex = resolveAnchorTimelineIndex(anchor.messageId);
-      if (anchorIndex < 0) return;
-
-      requestScrollCommand({
-        kind: "offset",
-        offset: getItemOffset(anchorIndex) + anchor.offsetFromTop,
-        reason,
-      });
-    },
-    [getItemOffset, requestScrollCommand, resolveAnchorTimelineIndex],
-  );
-
-  const restoreCapturedAnchor = React.useCallback(
-    (reason: string) => {
-      const anchor = prependAnchorRef.current;
-      prependAnchorRef.current = null;
-      restoreAnchor(anchor, reason);
-    },
-    [restoreAnchor],
-  );
-
-  const resolveUnreadAnchorIndex = React.useCallback((): number => {
-    const unreadDividerIndex = threadRows.findIndex((item) => item.kind === "unread");
-    if (unreadDividerIndex >= 0) {
-      return unreadDividerIndex;
-    }
-
-    if (unreadMarker?.firstUnreadMessageId) {
-      return threadRows.findIndex(
-        (item) =>
-          item.kind === "group" &&
-          item.items.some((entry) =>
-            isTargetMessage(entry.message, unreadMarker.firstUnreadMessageId!),
-          ),
-      );
-    }
-
-    if (unreadMarker?.lastReadMessageId) {
-      const lastReadIndex = threadRows.findIndex(
-        (item) =>
-          item.kind === "group" &&
-          item.items.some((entry) =>
-            isTargetMessage(entry.message, unreadMarker.lastReadMessageId!),
-          ),
-      );
-      if (lastReadIndex >= 0) {
-        return Math.min(lastReadIndex + 1, Math.max(0, threadRows.length - 1));
-      }
-    }
-
-    if (!unreadMarker?.lastReadAt) {
-      return -1;
-    }
-
-    const lastReadAtMs = new Date(unreadMarker.lastReadAt).getTime();
-    return threadRows.findIndex(
-      (item) =>
-        item.kind === "group" &&
-        item.items.some(
-          (entry) => new Date(entry.message.createdAt).getTime() > lastReadAtMs,
-        ),
-    );
-  }, [threadRows, unreadMarker]);
-  const unreadAnchorIndex = React.useMemo(
-    () => resolveUnreadAnchorIndex(),
-    [resolveUnreadAnchorIndex],
-  );
-
   const {
     pendingNewMessages,
     isPinnedToBottom,
-    scrollMode,
+    mode: scrollMode,
     firstDetachedUnreadMessageId,
-    handleScroll,
     jumpToLatest,
-    detachAutoFollow,
-    syncScrollStateFromDom,
-    pendingRestoreAnchor,
-    pendingRestoreScrollTop,
-    pendingRestoreVersion,
-  } = useMessageScrollMachine({
+    handleUserScroll,
+    requestOffset,
+    detachForJump,
+    handleMediaResized,
+  } = useChatScrollController({
     conversationId,
     messages,
     currentUserId,
-    preferUnreadAnchor: Boolean(unreadRestoreSignature),
-    hasMore,
-    isLoadingMore,
-    onLoadMore,
-    onBeforeLoadMore: () => {
-      prependAnchorRef.current = captureVisibleAnchor();
-      logScrollTrace("prepend_anchor_captured", {
-        conversationId,
-        anchor: prependAnchorRef.current,
-      });
-    },
-    onAfterPrepend: () => {
-      restoreCapturedAnchor("prepend-history-preserve");
-    },
+    hasUnread: Boolean(
+      unreadRestoreSignature ||
+        unreadMarker?.active ||
+        liveUnreadMarker?.active,
+    ),
+    unreadRestoreSignature,
+    onUnreadRestoreConsumed,
+    isInitialLoading: effectiveIsInitialLoading,
+    hasLoaded: rtkMessages.hasLoaded,
+    isFetchingMessages: rtkMessages.isFetching,
+    hasMoreOlder: effectiveHasMore,
+    isLoadingOlder: effectiveIsLoadingMore,
+    onLoadOlder: effectiveLoadMore,
     outerRef,
-    requestScrollToBottom,
-    captureScrollAnchor: captureVisibleAnchor,
+    itemCount: threadRows.length,
+    virtualItemsCount: tanStackVirtualItems.length,
+    totalSize: tanStackTotalSize,
+    viewportHeight,
+    getItemOffset,
+    resolveMessageIndex: resolveAnchorTimelineIndex,
+    captureVisibleAnchor,
+    scrollToOffset,
+    scrollToIndex,
   });
 
   React.useEffect(() => {
@@ -1315,23 +1328,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       lastSeenUnreadRestoreSignatureRef.current = unreadRestoreSignature ?? null;
     }
 
-    if (!unreadRestoreSignature) {
-      if (appliedUnreadRestoreSignatureRef.current !== null) {
-        logScrollTrace("unread_restore_signature_cleared", {
-          conversationId,
-          signature: appliedUnreadRestoreSignatureRef.current,
-        });
-      }
-      appliedUnreadRestoreSignatureRef.current = null;
-      return;
-    }
-
-    if (appliedUnreadRestoreSignatureRef.current === unreadRestoreSignature) {
-      logScrollTrace("unread_restore_signature_skipped_already_applied", {
-        conversationId,
-        signature: unreadRestoreSignature,
-      });
-    } else {
+    if (unreadRestoreSignature) {
       logScrollTrace("unread_restore_signature_seen", {
         conversationId,
         signature: unreadRestoreSignature,
@@ -1341,32 +1338,38 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
   const showNewMessagesPill = pendingNewMessages > 0;
   const showJumpToBottom =
-    scrollMode === "reading_history" && pendingNewMessages === 0;
+    scrollMode === "settled_reading_history" && pendingNewMessages === 0;
 
   const topOverlayPlacements = React.useMemo(
     () =>
       resolveOverlayPlacements([
         {
           id: "error",
-          visible: Boolean(error && messages.length > 0),
+          visible: Boolean(effectiveError && messages.length > 0),
           priority: 100,
           slot: "top-center",
         },
         {
           id: "loading",
-          visible: isLoadingMore && !isInitialLoading,
+          visible: effectiveIsLoadingMore && !effectiveIsInitialLoading,
           priority: 80,
           slot: "top-center",
         },
         {
           id: "sticky-date",
           visible:
-            !isInitialLoading && messages.length > 0 && Boolean(stickyDate),
+            !effectiveIsInitialLoading && messages.length > 0 && Boolean(stickyDate),
           priority: 30,
           slot: "top-center",
         },
       ]),
-    [error, isInitialLoading, isLoadingMore, messages.length, stickyDate],
+    [
+      effectiveError,
+      effectiveIsInitialLoading,
+      effectiveIsLoadingMore,
+      messages.length,
+      stickyDate,
+    ],
   );
   const bottomOverlayPlacements = React.useMemo(
     () =>
@@ -1401,7 +1404,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
     if (isPinnedToBottom) {
       pendingResizeAnchorRef.current = null;
-      requestScrollToBottom("item-resize-while-pinned");
+      handleMediaResized();
       return;
     }
 
@@ -1412,9 +1415,9 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     }
 
     requestAnimationFrame(() => {
-      restoreAnchor(anchor, "item-resize-preserve");
+      handleMediaResized(anchor);
     });
-  }, [isPinnedToBottom, requestScrollToBottom, restoreAnchor]);
+  }, [handleMediaResized, isPinnedToBottom]);
 
   const handleTimelineItemSizeChange = React.useCallback(
     ({ index, key, delta }: { index: number; key: string; delta: number }) => {
@@ -1491,7 +1494,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const handleScrollUpdate = React.useCallback(
     (scrollOffset: number, scrollUpdateWasRequested: boolean) => {
       if (scrollUpdateWasRequested) return;
-      handleScroll(scrollOffset);
+      handleUserScroll(scrollOffset);
 
       if (stickyDateRafRef.current !== null) {
         cancelAnimationFrame(stickyDateRafRef.current);
@@ -1525,23 +1528,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         stickyDateRafRef.current = null;
       });
     },
-    [findItemAtOffset, handleScroll, threadRows],
-  );
-
-  const handleLegacyListScroll = React.useCallback(
-    ({
-      scrollOffset,
-      scrollUpdateWasRequested,
-    }: {
-      scrollOffset: number;
-      scrollUpdateWasRequested: boolean;
-    }) => {
-      handleScrollUpdate(
-        scrollOffset,
-        scrollUpdateWasRequested || consumeProgrammaticScroll(scrollOffset),
-      );
-    },
-    [consumeProgrammaticScroll, handleScrollUpdate],
+    [findItemAtOffset, handleUserScroll, threadRows],
   );
 
   const handleTanStackScroll = React.useCallback(
@@ -1556,9 +1543,13 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   );
 
   const handleRetry = React.useCallback(() => {
+    if (rtkErrorMessage) {
+      void retryRtkInitialMessages().catch(() => undefined);
+      return;
+    }
     if (!onRetry) return;
     void Promise.resolve(onRetry());
-  }, [onRetry]);
+  }, [onRetry, retryRtkInitialMessages, rtkErrorMessage]);
 
   const handleKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -1572,36 +1563,54 @@ const MessageListComponent: React.FC<MessageListProps> = ({
           break;
         case "Home":
           event.preventDefault();
-          requestScrollCommand({
-            kind: "offset",
-            offset: 0,
-            reason: "keyboard-home",
-          });
+          requestOffset(0, "keyboard-home");
           break;
         case "PageDown":
           event.preventDefault();
-          requestScrollCommand({
-            kind: "offset",
-            offset: outer.scrollTop + Math.round(outer.clientHeight * 0.9),
-            reason: "keyboard-page-down",
-          });
+          requestOffset(
+            outer.scrollTop + Math.round(outer.clientHeight * 0.9),
+            "keyboard-page-down",
+          );
           break;
         case "PageUp":
           event.preventDefault();
-          requestScrollCommand({
-            kind: "offset",
-            offset: Math.max(
+          requestOffset(
+            Math.max(
               0,
               outer.scrollTop - Math.round(outer.clientHeight * 0.9),
             ),
-            reason: "keyboard-page-up",
-          });
+            "keyboard-page-up",
+          );
           break;
         default:
           break;
       }
     },
-    [jumpToLatest, requestScrollCommand],
+    [jumpToLatest, requestOffset],
+  );
+
+  const handleProfilerRender = React.useCallback<React.ProfilerOnRenderCallback>(
+    (
+      id,
+      phase,
+      actualDuration,
+      baseDuration,
+      startTime,
+      commitTime,
+    ) => {
+      logChatPerformance("react-profiler-message-list", {
+        id,
+        phase,
+        conversationId,
+        actualDuration,
+        baseDuration,
+        startTime,
+        commitTime,
+        messageCount: messages.length,
+        rowCount: threadRows.length,
+      });
+    },
+    [conversationId, messages.length, threadRows.length],
   );
 
   const highlightMessage = React.useCallback((messageId: string) => {
@@ -1644,165 +1653,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         itemTop < visibleTop
           ? Math.max(0, itemTop - padding)
           : Math.max(0, itemBottom - outer.clientHeight + padding);
-      requestScrollCommand({
-        kind: "offset",
-        offset: nextOffset,
-        reason,
-      });
+      requestOffset(nextOffset, reason);
       return true;
     },
-    [conversationId, getItemOffset, getItemSize, requestScrollCommand],
+    [conversationId, getItemOffset, getItemSize, requestOffset],
   );
-
-  React.useEffect(() => {
-    if (!pendingRestoreAnchor || viewportHeight <= 0) {
-      return;
-    }
-
-    const anchorIndex = resolveAnchorTimelineIndex(pendingRestoreAnchor.messageId);
-    if (anchorIndex < 0) {
-      return;
-    }
-
-    requestScrollCommand({
-      kind: "offset",
-      offset:
-        getItemOffset(anchorIndex) + pendingRestoreAnchor.offsetFromTop,
-      reason: "conversation-restore-anchor",
-    });
-
-    const rafId = requestAnimationFrame(() => {
-      syncScrollStateFromDom("conversation-restore-anchor-synced");
-    });
-
-    return () => {
-      cancelAnimationFrame(rafId);
-    };
-  }, [
-    getItemOffset,
-    pendingRestoreAnchor,
-    pendingRestoreVersion,
-    requestScrollCommand,
-    resolveAnchorTimelineIndex,
-    syncScrollStateFromDom,
-    viewportHeight,
-  ]);
-
-  React.useEffect(() => {
-    if (pendingRestoreScrollTop === null || viewportHeight <= 0) {
-      return;
-    }
-
-    requestScrollCommand({
-      kind: "offset",
-      offset: pendingRestoreScrollTop,
-      reason: "conversation-restore",
-    });
-
-    const rafId = requestAnimationFrame(() => {
-      syncScrollStateFromDom("conversation-restore-synced");
-    });
-
-    return () => {
-      cancelAnimationFrame(rafId);
-    };
-  }, [
-    pendingRestoreScrollTop,
-    pendingRestoreVersion,
-    requestScrollCommand,
-    syncScrollStateFromDom,
-    viewportHeight,
-  ]);
-
-  React.useEffect(() => {
-    if (initialBottomSettledConversationRef.current === conversationId) {
-      return;
-    }
-    if (isInitialLoading || messages.length === 0 || viewportHeight <= 0) {
-      return;
-    }
-    if (pendingRestoreAnchor || pendingRestoreScrollTop !== null) {
-      return;
-    }
-
-    initialBottomSettledConversationRef.current = conversationId;
-
-    if (unreadRestoreSignature) {
-      appliedUnreadRestoreSignatureRef.current = unreadRestoreSignature;
-      onUnreadRestoreConsumed?.(unreadRestoreSignature);
-    }
-
-    requestScrollToBottom("conversation-change");
-    const settleRafId = requestAnimationFrame(() => {
-      requestScrollToBottom("conversation-change");
-    });
-
-    return () => {
-      cancelAnimationFrame(settleRafId);
-    };
-  }, [
-    conversationId,
-    isInitialLoading,
-    messages.length,
-    onUnreadRestoreConsumed,
-    pendingRestoreAnchor,
-    pendingRestoreScrollTop,
-    requestScrollToBottom,
-    unreadRestoreSignature,
-    viewportHeight,
-  ]);
-
-  React.useEffect(() => {
-    if (!unreadRestoreSignature || viewportHeight <= 0) {
-      return;
-    }
-    if (appliedUnreadRestoreSignatureRef.current === unreadRestoreSignature) {
-      return;
-    }
-    if (pendingRestoreAnchor || pendingRestoreScrollTop !== null) {
-      return;
-    }
-
-    if (unreadAnchorIndex < 0) {
-      return;
-    }
-
-    const accepted = requestScrollCommand({
-      kind: "offset",
-      offset: Math.max(0, getItemOffset(unreadAnchorIndex)),
-      reason: "conversation-restore-unread",
-    });
-    if (!accepted) {
-      return;
-    }
-
-    appliedUnreadRestoreSignatureRef.current = unreadRestoreSignature;
-    logScrollTrace("unread_restore_signature_applied", {
-      conversationId,
-      signature: unreadRestoreSignature,
-      targetIndex: unreadAnchorIndex,
-    });
-    onUnreadRestoreConsumed?.(unreadRestoreSignature);
-
-    const rafId = requestAnimationFrame(() => {
-      syncScrollStateFromDom("conversation-restore-unread-synced");
-    });
-
-    return () => {
-      cancelAnimationFrame(rafId);
-    };
-  }, [
-    getItemOffset,
-    pendingRestoreAnchor,
-    pendingRestoreScrollTop,
-    requestScrollCommand,
-    syncScrollStateFromDom,
-    unreadAnchorIndex,
-    unreadRestoreSignature,
-    onUnreadRestoreConsumed,
-    viewportHeight,
-    conversationId,
-  ]);
 
   React.useLayoutEffect(() => {
     if (viewportHeight <= 0) return;
@@ -1821,9 +1676,9 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
     if (!viewportChanged && !composerChanged) return;
     if (isPinnedToBottom) {
-      requestScrollToBottom("layout-change");
+      handleMediaResized();
     }
-  }, [composerHeight, isPinnedToBottom, requestScrollToBottom, viewportHeight]);
+  }, [composerHeight, handleMediaResized, isPinnedToBottom, viewportHeight]);
 
   React.useEffect(() => {
     if (!jumpToMessageId) return;
@@ -1843,13 +1698,13 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       return;
     }
 
-    detachAutoFollow("jump-to-message");
+    detachForJump("jump-to-message");
     ensureItemVisible(targetIndex, "jump-to-message");
     highlightMessage(jumpToMessageId);
     onJumpHandled?.(jumpToMessageId);
   }, [
     conversationId,
-    detachAutoFollow,
+    detachForJump,
     ensureItemVisible,
     highlightMessage,
     jumpRequestVersion,
@@ -1889,7 +1744,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
   React.useEffect(() => {
     if (
-      isInitialLoading ||
+      effectiveIsInitialLoading ||
       messages.length === 0 ||
       pendingNewMessages > 0 ||
       !isPinnedToBottom
@@ -1902,7 +1757,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       onReachedLatest?.(latestMessage);
     }
   }, [
-    isInitialLoading,
+    effectiveIsInitialLoading,
     isPinnedToBottom,
     messages,
     onReachedLatest,
@@ -1914,14 +1769,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       if (stickyDateRafRef.current !== null) {
         cancelAnimationFrame(stickyDateRafRef.current);
       }
-      if (scrollCommandRafRef.current !== null) {
-        cancelAnimationFrame(scrollCommandRafRef.current);
-      }
       if (timelineSizeChangeRafRef.current !== null) {
         cancelAnimationFrame(timelineSizeChangeRafRef.current);
-      }
-      if (bottomSettleRafRef.current !== null) {
-        cancelAnimationFrame(bottomSettleRafRef.current);
       }
       pendingTimelineSizeChangesRef.current.clear();
       if (highlightTimerRef.current !== null) {
@@ -1931,28 +1780,73 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     [],
   );
 
+  const virtualizedRows =
+    viewportHeight > 0 ? (
+      <div
+        ref={outerRef}
+        onScroll={handleTanStackScroll}
+        className="h-full min-h-0 overflow-auto overscroll-contain"
+      >
+        <div
+          style={{
+            height: tanStackTotalSize,
+            position: "relative",
+            width: "100%",
+          }}
+        >
+          {tanStackVirtualItems.map((virtualItem) => (
+            <TimelineRow
+              key={String(virtualItem.key)}
+              index={virtualItem.index}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: virtualItem.size,
+                transform: `translateY(${Math.round(virtualItem.start)}px)`,
+              }}
+              data={rowData}
+              isScrolling={false}
+            />
+          ))}
+        </div>
+      </div>
+    ) : null;
+
+  const profiledVirtualizedRows = import.meta.env.DEV ? (
+    <React.Profiler
+      id={`MessageList:${conversationId}`}
+      onRender={handleProfilerRender}
+    >
+      {virtualizedRows}
+    </React.Profiler>
+  ) : (
+    virtualizedRows
+  );
+
   return (
     <section className={clsx("relative h-full min-h-0 flex-1", className)}>
-      {isInitialLoading && (
+      {effectiveIsInitialLoading && (
         <div className="chat-background h-full min-h-0 overflow-y-auto px-[var(--chat-lane-padding)] py-4">
           <MessageListSkeleton />
         </div>
       )}
 
-      {!isInitialLoading && (
+      {!effectiveIsInitialLoading && (
         <div
           className="chat-background h-full min-h-0 overflow-hidden pb-2 pt-1"
           role="log"
           aria-live="polite"
           aria-relevant="additions text"
           aria-atomic="false"
-          aria-busy={isLoadingMore}
+          aria-busy={effectiveIsLoadingMore}
           aria-label={t("chat:message.inConversationAria")}
         >
-          {error && messages.length === 0 ? (
+          {effectiveError && messages.length === 0 ? (
             <ErrorState
-              message={error}
-              onRetry={onRetry ? handleRetry : undefined}
+              message={effectiveError}
+              onRetry={handleRetry}
             />
           ) : messages.length === 0 && !historyLoadingState?.isPartial ? (
             <EmptyMessages />
@@ -1970,60 +1864,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
                 "focus-visible:ring-2 focus-visible:ring-focus/30",
               )}
             >
-              {viewportHeight > 0 &&
-                (CHAT_VIRTUALIZER_V2_ENABLED ? (
-                  <div
-                    ref={outerRef}
-                    onScroll={handleTanStackScroll}
-                    className="h-full min-h-0 overflow-auto overscroll-contain"
-                  >
-                    <div
-                      style={{
-                        height: tanStackTotalSize,
-                        position: "relative",
-                        width: "100%",
-                      }}
-                    >
-                      {tanStackVirtualItems.map((virtualItem) => (
-                        <TimelineRow
-                          key={String(virtualItem.key)}
-                          {...({
-                            index: virtualItem.index,
-                            style: {
-                              position: "absolute",
-                              top: 0,
-                              left: 0,
-                              width: "100%",
-                              height: virtualItem.size,
-                              transform: `translateY(${Math.round(virtualItem.start)}px)`,
-                            },
-                            data: rowData,
-                            isScrolling: false,
-                          } as ListChildComponentProps<TimelineRowData>)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <VirtualList
-                    ref={legacyListRef}
-                    outerRef={outerRef}
-                    height={viewportHeight}
-                    width="100%"
-                    itemCount={threadRows.length}
-                    itemSize={getItemSize}
-                    itemData={rowData}
-                    itemKey={(index, data) =>
-                      data.items[index]
-                        ? getTimelineItemKey(data.items[index], index)
-                        : index
-                    }
-                    onScroll={handleLegacyListScroll}
-                    overscanCount={listOverscan}
-                  >
-                    {TimelineRow}
-                  </VirtualList>
-                ))}
+              {profiledVirtualizedRows}
             </div>
           )}
         </div>
@@ -2035,8 +1876,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         stickyDate={stickyDate}
         showStickyDate={Boolean(topOverlayPlacements["sticky-date"]?.visible)}
         showError={Boolean(topOverlayPlacements.error?.visible)}
-        error={error ?? null}
-        canRetry={Boolean(onRetry)}
+        error={effectiveError}
+        canRetry={Boolean(onRetry || rtkErrorMessage)}
         onRetry={handleRetry}
         retryLabel={t("common:actions.retry")}
         showLoadingMore={Boolean(topOverlayPlacements.loading?.visible)}
@@ -2070,15 +1911,9 @@ const areEqualMessageListProps = (
   previousProps.onEdit === nextProps.onEdit &&
   previousProps.onDelete === nextProps.onDelete &&
   previousProps.onInspect === nextProps.onInspect &&
-  previousProps.hasMore === nextProps.hasMore &&
-  previousProps.isLoadingMore === nextProps.isLoadingMore &&
-  previousProps.isInitialLoading === nextProps.isInitialLoading &&
   previousProps.historyLoadingState === nextProps.historyLoadingState &&
-  previousProps.onLoadMore === nextProps.onLoadMore &&
   previousProps.onImageClick === nextProps.onImageClick &&
   previousProps.onFilePreview === nextProps.onFilePreview &&
-  previousProps.error === nextProps.error &&
-  previousProps.onRetry === nextProps.onRetry &&
   previousProps.density === nextProps.density &&
   previousProps.isSelectionMode === nextProps.isSelectionMode &&
   previousProps.selectedMessageIds === nextProps.selectedMessageIds &&

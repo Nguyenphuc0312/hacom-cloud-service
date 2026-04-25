@@ -61,8 +61,17 @@ import {
   needsSelfMessageIdentityResync,
   normalizeMessageRealtimeEvent,
 } from "../features/chat/realtime";
+import type { NormalizedMessageRealtimeEvent } from "../features/chat/realtime/realtimeEventTypes";
 import { dispatchNotificationClick } from "../features/chat/events/chatUiEvents";
 import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
+import {
+  realtimeMessageDeleted,
+  realtimeMessageReceived,
+  realtimeMessageUpdated,
+  realtimeReadCursorUpdated,
+} from "../features/realtime/realtimeMiddleware";
+import { realtimeActions } from "../features/realtime/realtimeSlice";
+import { useAppDispatch } from "../store/hooks";
 import { useSettingsStore } from "../settings/settingsStore";
 import {
   acknowledgeConversationLeft,
@@ -88,6 +97,7 @@ import {
 } from "./useWebSocketConnectionLifecycle";
 import { useNotificationStore } from "../features/notification/state/notificationStore";
 import type { UserSettingsUpdatedPayload } from "@hacom/chat-shared-types/chat";
+import type { Message, TypingStatus } from "../types";
 
 interface UseWebSocketOptions {
   autoConnect?: boolean;
@@ -220,6 +230,39 @@ const getConversationIds = (payload: Record<string, unknown>): string[] => {
   return singleConversationId ? [singleConversationId] : [];
 };
 
+const toRealtimeCacheMessage = (
+  event: NormalizedMessageRealtimeEvent,
+): Message => ({
+  ...(event.messagePayload as unknown as Message),
+  id:
+    asString(event.messagePayload.id) ??
+    asString(event.messagePayload._id) ??
+    asString(event.messagePayload.messageId) ??
+    event.messageId,
+  conversationId: event.conversationId,
+  ...(event.stableId ? { stableId: event.stableId } : {}),
+  ...(event.clientMessageId ? { clientMessageId: event.clientMessageId } : {}),
+  ...(event.localId ? { localId: event.localId } : {}),
+});
+
+const toRealtimeConnectionStatus = (
+  state: ConnectionState,
+): Parameters<typeof realtimeActions.setConnectionStatus>[0] => {
+  switch (state) {
+    case "connected":
+      return "connected";
+    case "connecting":
+    case "authenticating":
+    case "reconnecting":
+      return "connecting";
+    case "error":
+      return "error";
+    case "disconnected":
+    default:
+      return "disconnected";
+  }
+};
+
 export const shouldSkipGroupConversationRefreshForCurrentUser = (
   payload: Record<string, unknown> | null,
   currentUserId: string | null | undefined,
@@ -267,6 +310,7 @@ export const useWebSocket = (
   options: UseWebSocketOptions = {},
 ): UseWebSocketReturn => {
   const { autoConnect = true, onConnect, onDisconnect, onError } = options;
+  const dispatch = useAppDispatch();
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const totalUnreadCount = useChatStore((s) => s.totalUnreadCount);
@@ -349,11 +393,14 @@ export const useWebSocket = (
         ),
       });
       setConnectionState(state);
+      dispatch(
+        realtimeActions.setConnectionStatus(toRealtimeConnectionStatus(state)),
+      );
     });
     return () => {
       unsub();
     };
-  }, []);
+  }, [dispatch]);
 
   useEffect(() => {
     syncDocumentTitleBadge(totalUnreadCount);
@@ -1118,6 +1165,19 @@ export const useWebSocket = (
         hasMessageSeqGap,
       });
 
+      const rtkCacheMessage = toRealtimeCacheMessage(normalizedEvent);
+      dispatch(
+        eventType === "message:new"
+          ? realtimeMessageReceived({
+              conversationId,
+              message: rtkCacheMessage,
+            })
+          : realtimeMessageUpdated({
+              conversationId,
+              message: rtkCacheMessage,
+            }),
+      );
+
       if (eventType === "message:new" && ingestResult.status === "new") {
         maybeNotifyIncomingMessage({
           conversationId,
@@ -1222,6 +1282,12 @@ export const useWebSocket = (
         });
 
         removeMessage(conversationId, messageId);
+        dispatch(
+          realtimeMessageDeleted({
+            conversationId,
+            messageId,
+          }),
+        );
         void scheduleConversationSnapshotRefresh(conversationId, {
           reason: "socket:message:deleted",
         });
@@ -1292,6 +1358,15 @@ export const useWebSocket = (
         lastMessageId,
         asString(payload.userId) ?? asString(payload.senderId) ?? undefined,
         typeof payload.lastReadSeq === "number" ? payload.lastReadSeq : null,
+      );
+      dispatch(
+        realtimeReadCursorUpdated({
+          conversationId,
+          lastReadMessageId: lastMessageId,
+          ...(typeof payload.lastReadSeq === "number"
+            ? { lastReadSeq: payload.lastReadSeq }
+            : {}),
+        }),
       );
     };
 
@@ -1754,8 +1829,7 @@ export const useWebSocket = (
           ? (asString(payload.activity) as "typing" | "recording" | "uploading")
           : "typing";
       const lastEventAt = Date.now();
-
-      setTyping({
+      const typingStatus: TypingStatus = {
         conversationId,
         userId,
         userName,
@@ -1763,7 +1837,10 @@ export const useWebSocket = (
         activity,
         confidence: 1,
         lastEventAt,
-      });
+      };
+
+      setTyping(typingStatus);
+      dispatch(realtimeActions.typingStarted(typingStatus));
 
       scheduleRemoteTypingDecay(conversationId, userId, userName);
     };
@@ -1777,6 +1854,12 @@ export const useWebSocket = (
       if (!conversationId || !userId) return;
 
       clearRemoteTypingTimer(conversationId, userId);
+      dispatch(
+        realtimeActions.typingStopped({
+          conversationId,
+          userId,
+        }),
+      );
       setTyping({
         conversationId,
         userId,
@@ -1851,6 +1934,7 @@ export const useWebSocket = (
     clearConversationSyncFallback,
     clearRemoteTypingTimer,
     clearTyping,
+    dispatch,
     handleReauthRequiredEvent,
     handleUnauthorizedEvent,
     markMessagesReadUpTo,

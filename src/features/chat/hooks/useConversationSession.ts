@@ -10,6 +10,8 @@ import type {
 } from "../../../types";
 import { getConversationByIdUseCase } from "../usecases/getConversationById";
 import { logMessageDebug } from "../../../utils/messageDebug";
+import { markChatPerformance } from "../../../utils/chatPerformance";
+import { CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED } from "../config/experienceFlags";
 
 const INITIAL_CONVERSATION_WINDOW_LIMIT = 40;
 const OLDER_MESSAGES_PAGE_LIMIT = 30;
@@ -236,6 +238,10 @@ export const useConversationSession = ({
         isValidatingRoom,
         hasNewer: hasNewerMessages,
       });
+      markChatPerformance("conversation-open-start", selectedConversationId, {
+        isHydrated: isConversationHydrated,
+        hasNewer: hasNewerMessages,
+      });
       logMessageDebug("ChatPage", "conversation_join_requested", {
         conversationId: selectedConversationId,
         skipInitialDeltaSync: false,
@@ -244,6 +250,13 @@ export const useConversationSession = ({
       joinConversation(selectedConversationId, {
         skipInitialDeltaSync: false,
       });
+
+      if (CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED) {
+        logMessageDebug("ChatPage", "legacy_message_fetch_skipped_rtkq_runtime", {
+          conversationId: selectedConversationId,
+        });
+        return;
+      }
 
       const latestState = useChatStore.getState();
       const latestStage =
@@ -335,6 +348,10 @@ export const useConversationSession = ({
       return;
     }
 
+    markChatPerformance("load-older-start", selectedConversationId, {
+      oldestLoadedMessageId: loadedWindow.oldestLoadedMessageId,
+      oldestLoadedAt: loadedWindow.oldestLoadedAt,
+    });
     await fetchMessages(
       selectedConversationId,
       new Date(loadedWindow.oldestLoadedAt).toISOString(),

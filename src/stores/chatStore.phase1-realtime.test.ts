@@ -296,6 +296,50 @@ describe("chatStore phase-1 realtime flows", () => {
     expect(after.conversationById["room-1"]?.lastMessageStatus).toBe("sent");
   });
 
+  it("keeps selected conversation message selector stable when unrelated message entities change", () => {
+    useChatStore.getState().setConversations([
+      makeConversation({
+        id: "room-1",
+        conversationId: "room-1",
+      }),
+      makeConversation({
+        id: "room-2",
+        conversationId: "room-2",
+      }),
+    ] as never);
+    useChatStore.getState().setMessages("room-1", [
+      makeMessage({ id: "room-1-msg-1" }),
+    ] as never);
+    useChatStore.getState().setMessages("room-2", [
+      makeMessage({
+        id: "room-2-msg-1",
+        conversationId: "room-2",
+      }),
+    ] as never);
+
+    const first = selectConversationMessagesFromState(
+      useChatStore.getState(),
+      "room-1",
+    );
+    const state = useChatStore.getState();
+    const unrelatedMessage = makeMessage({
+      id: "room-2-msg-2",
+      conversationId: "room-2",
+    }) as never;
+    const second = selectConversationMessagesFromState(
+      {
+        ...state,
+        messageById: {
+          ...state.messageById,
+          "room-2-msg-2": unrelatedMessage,
+        },
+      },
+      "room-1",
+    );
+
+    expect(second).toBe(first);
+  });
+
   it("marks normalized message entities as read when applying read receipts up to a boundary", () => {
     useChatStore.getState().setConversations([
       makeConversation({

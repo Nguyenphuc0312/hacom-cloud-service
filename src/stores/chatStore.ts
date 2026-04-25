@@ -21,6 +21,7 @@ import {
   getMessageIdentityKey,
 } from "../utils/messageIdentity";
 import { logMessageDebug } from "../utils/messageDebug";
+import { markChatPerformance } from "../utils/chatPerformance";
 import { createReplySnapshot } from "../utils/messageTimeline";
 import {
   compareConversationsByActivity,
@@ -3532,6 +3533,16 @@ export const useChatStore = create<ChatState>()(
       },
 
       ingestConversationMessageEvent: (conversationId, message, options) => {
+        if (
+          options?.source === "message:new" ||
+          options?.source === "message:updated" ||
+          options?.source === "realtime"
+        ) {
+          markChatPerformance("realtime-message-received", conversationId, {
+            source: options.source,
+          });
+        }
+
         let metadata: {
           status: "new" | "merged" | "ignored";
           canonicalMessage: Message | null;
@@ -4526,10 +4537,15 @@ export const useTotalUnreadCount = () => {
 };
 
 export const selectConversationMessagesFromState = (() => {
-  let lastConversationId: string | null = null;
-  let lastMessageIdsRef: string[] | undefined;
-  let lastMessageByIdRef: ChatState["messageById"] | null = null;
-  let lastResult: Message[] = EMPTY_MESSAGES;
+  const MAX_SELECTOR_CACHE_ENTRIES = 200;
+  const cacheByConversation = new Map<
+    string,
+    {
+      messageIdsRef: string[] | undefined;
+      messagesRef: Message[] | undefined;
+      result: Message[];
+    }
+  >();
 
   return (
     state: Pick<
@@ -4539,20 +4555,20 @@ export const selectConversationMessagesFromState = (() => {
     conversationId: string | null,
   ): Message[] => {
     if (!conversationId) {
-      lastConversationId = null;
-      lastMessageIdsRef = undefined;
-      lastMessageByIdRef = null;
-      lastResult = EMPTY_MESSAGES;
       return EMPTY_MESSAGES;
     }
 
     const messageIds = state.messageIdsByConversation[conversationId];
+    const messagesRef = state.messages[conversationId];
+    const cached = cacheByConversation.get(conversationId);
     if (
-      conversationId === lastConversationId &&
-      messageIds === lastMessageIdsRef &&
-      state.messageById === lastMessageByIdRef
+      cached &&
+      cached.messageIdsRef === messageIds &&
+      cached.messagesRef === messagesRef
     ) {
-      return lastResult;
+      cacheByConversation.delete(conversationId);
+      cacheByConversation.set(conversationId, cached);
+      return cached.result;
     }
 
     const nextResult =
@@ -4560,12 +4576,19 @@ export const selectConversationMessagesFromState = (() => {
         ? messageIds
             .map((messageId) => state.messageById[messageId])
             .filter((message): message is Message => Boolean(message))
-        : (state.messages[conversationId] ?? EMPTY_MESSAGES);
+        : (messagesRef ?? EMPTY_MESSAGES);
 
-    lastConversationId = conversationId;
-    lastMessageIdsRef = messageIds;
-    lastMessageByIdRef = state.messageById;
-    lastResult = nextResult;
+    cacheByConversation.set(conversationId, {
+      messageIdsRef: messageIds,
+      messagesRef,
+      result: nextResult,
+    });
+    if (cacheByConversation.size > MAX_SELECTOR_CACHE_ENTRIES) {
+      const oldestKey = cacheByConversation.keys().next().value;
+      if (oldestKey) {
+        cacheByConversation.delete(oldestKey);
+      }
+    }
 
     return nextResult;
   };

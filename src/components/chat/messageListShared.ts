@@ -93,6 +93,7 @@ export type PendingScrollCommand = ScrollCommand & {
 const HIGH_VALUE_SCROLL_REASONS = new Set([
   "jump-to-latest",
   "jump-to-message",
+  "conversation-change-newer-messages",
   "incoming-message",
   "self-message",
   "prepend-history-preserve",
@@ -104,6 +105,8 @@ export const resolveScrollCommandPriority = (reason: string): number => {
       return 100;
     case "jump-to-message":
       return 95;
+    case "conversation-change-newer-messages":
+      return 92;
     case "incoming-message":
       return 90;
     case "self-message":

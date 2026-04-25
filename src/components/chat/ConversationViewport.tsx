@@ -1,6 +1,5 @@
 import React from "react";
 import type { Attachment, Conversation, Message } from "../../types";
-import { useConversationMessageCount } from "../../stores";
 import { MessageList } from "./MessageList";
 import type { ChatDensity } from "../../stores/uiStore";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
@@ -79,7 +78,6 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
       composerHeight,
       className,
     }: ConversationViewportProps) => {
-      const messageCount = useConversationMessageCount(conversation.id);
       const conversationReadSnapshot = conversation as Conversation & {
         lastReadMessageId?: string;
         lastReadAt?: Date | string;
@@ -138,9 +136,9 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
           onDelete={onDelete}
           onInspect={onInspect}
           hasMore={hasMoreMessages}
-          isLoadingMore={Boolean(isLoadingMessages && messageCount > 0)}
+          isLoadingMore={Boolean(isLoadingMessages)}
           isInitialLoading={Boolean(
-            (isLoadingMessages || !isConversationReady) && messageCount === 0
+            isLoadingMessages || !isConversationReady
           )}
           historyLoadingState={historyLoadingState}
           onLoadMore={onLoadOlderMessages}

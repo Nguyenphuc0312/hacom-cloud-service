@@ -24,6 +24,7 @@ import { UPLOAD_CONFIG } from "../../config";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { InlineNotice, toast } from "../ui";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
+import { recordChatPerformanceMeasure } from "../../utils/chatPerformance";
 
 export interface MentionCandidate {
   id: string;
@@ -41,6 +42,7 @@ export interface MessageInputHandle {
 
 interface MessageInputProps {
   value: string;
+  valueResetKey?: number;
   onChange: (value: string) => void;
   onSend: (
     content?: string,
@@ -226,12 +228,13 @@ const normalizeMentionCandidates = (
   return normalized;
 };
 
-export const MessageInput = React.forwardRef<
+const MessageInputComponent = React.forwardRef<
   MessageInputHandle,
   MessageInputProps
 >(function MessageInput(
   {
-    value,
+    value: externalValue,
+    valueResetKey = 0,
     onChange,
     onSend,
     mode,
@@ -271,15 +274,18 @@ export const MessageInput = React.forwardRef<
     defaultValue: "Tin nhắn đang được gửi",
   });
   const rootRef = React.useRef<HTMLDivElement>(null);
+  const [draftValue, setDraftValue] = React.useState(externalValue);
   const [isDesktopLayout, setIsDesktopLayout] = React.useState(() =>
     isDesktopViewport(),
   );
   const { textareaRef } = useAutoResizeTextarea({
-    value,
+    value: draftValue,
     minRows: 1,
     maxRows: isDesktopLayout ? 5 : 4,
   });
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const renderCountRef = React.useRef(0);
+  const inputSequenceRef = React.useRef(0);
 
   const [showAttachmentMenu, setShowAttachmentMenu] = React.useState(false);
   const [isShareContactOpen, setIsShareContactOpen] = React.useState(false);
@@ -293,6 +299,12 @@ export const MessageInput = React.forwardRef<
   const primarySendLockedRef = React.useRef(false);
 
   const mentionListId = React.useId();
+
+  React.useLayoutEffect(() => {
+    if (import.meta.env.DEV) {
+      renderCountRef.current += 1;
+    }
+  });
 
   const {
     selectedFile,
@@ -374,6 +386,41 @@ export const MessageInput = React.forwardRef<
     setActiveMentionIndex(0);
   }, []);
 
+  React.useEffect(() => {
+    setDraftValue(externalValue);
+    clearMentionState();
+  }, [clearMentionState, externalValue, valueResetKey]);
+
+  const recordInputLatency = React.useCallback(
+    (nextValue: string) => {
+      if (
+        !import.meta.env.DEV ||
+        typeof window === "undefined" ||
+        typeof window.requestAnimationFrame !== "function"
+      ) {
+        return;
+      }
+
+      const startedAt = performance.now();
+      const sequence = inputSequenceRef.current + 1;
+      inputSequenceRef.current = sequence;
+
+      window.requestAnimationFrame(() => {
+        recordChatPerformanceMeasure(
+          "composer_keypress_latency",
+          performance.now() - startedAt,
+          {
+            conversationId: conversationId ?? null,
+            inputSequence: sequence,
+            textLength: nextValue.length,
+            renderCount: renderCountRef.current,
+          },
+        );
+      });
+    },
+    [conversationId],
+  );
+
   const releasePrimarySendLock = React.useCallback(() => {
     const release = () => {
       primarySendLockedRef.current = false;
@@ -385,7 +432,7 @@ export const MessageInput = React.forwardRef<
       return;
     }
 
-    window.setTimeout(release, 0);
+    window.requestAnimationFrame(release);
   }, []);
 
   const updateMentionState = React.useCallback(
@@ -459,12 +506,13 @@ export const MessageInput = React.forwardRef<
   );
 
   const handleSendText = React.useCallback(async () => {
-    const result = await sendTextMessage(value);
+    const result = await sendTextMessage(draftValue);
     if (result === "failed") {
       setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
       return;
     }
 
+    setDraftValue("");
     onChange("");
     clearMentionState();
     stopTypingNow();
@@ -482,7 +530,7 @@ export const MessageInput = React.forwardRef<
     sendTextMessage,
     stopTypingNow,
     t,
-    value,
+    draftValue,
   ]);
 
   const handleSendAttachment = React.useCallback(async () => {
@@ -512,18 +560,19 @@ export const MessageInput = React.forwardRef<
       conversationId,
       hasQueueDrafts,
       hasReadyDrafts,
-      hasText: value.trim().length > 0,
-      contentPreview: value.trim().slice(0, 120),
+      hasText: draftValue.trim().length > 0,
+      contentPreview: draftValue.trim().slice(0, 120),
       selectedFileName: selectedFile?.name,
       disabled,
       submitDisabled,
     });
     try {
       if (hasQueueDrafts && hasReadyDrafts) {
-        const content = value.trim();
+        const content = draftValue.trim();
         // ChatWindow gathers ready attachment metadata; only clear once it
         // confirms the send was accepted into the optimistic/server flow.
         await Promise.resolve(onSend(content || undefined));
+        setDraftValue("");
         onChange("");
         clearMentionState();
         stopTypingNow();
@@ -559,7 +608,7 @@ export const MessageInput = React.forwardRef<
     submitDisabled,
     t,
     uploadDrafts?.length,
-    value,
+    draftValue,
   ]);
 
   const handleInputChange = React.useCallback(
@@ -567,15 +616,17 @@ export const MessageInput = React.forwardRef<
       const nextValue = event.target.value;
       const caret = event.target.selectionStart ?? nextValue.length;
 
+      setDraftValue(nextValue);
       onChange(nextValue);
       updateMentionState(nextValue, caret);
+      recordInputLatency(nextValue);
 
       notifyInput({
         hasText: nextValue.trim().length > 0,
         isFocused: event.target === document.activeElement,
       });
     },
-    [notifyInput, onChange, updateMentionState],
+    [notifyInput, onChange, recordInputLatency, updateMentionState],
   );
 
   const handleMentionSelect = React.useCallback(
@@ -583,11 +634,13 @@ export const MessageInput = React.forwardRef<
       if (!mentionMatch) return;
 
       const insertion = `@${candidate.username} `;
-      const nextValue = `${value.slice(0, mentionMatch.start)}${insertion}${value.slice(mentionMatch.end)}`;
+      const nextValue = `${draftValue.slice(0, mentionMatch.start)}${insertion}${draftValue.slice(mentionMatch.end)}`;
       const nextCaret = mentionMatch.start + insertion.length;
 
+      setDraftValue(nextValue);
       onChange(nextValue);
       clearMentionState();
+      recordInputLatency(nextValue);
 
       requestAnimationFrame(() => {
         const textarea = textareaRef.current;
@@ -597,7 +650,14 @@ export const MessageInput = React.forwardRef<
         textarea.setSelectionRange(nextCaret, nextCaret);
       });
     },
-    [clearMentionState, mentionMatch, onChange, textareaRef, value],
+    [
+      clearMentionState,
+      draftValue,
+      mentionMatch,
+      onChange,
+      recordInputLatency,
+      textareaRef,
+    ],
   );
 
   const handleRemoveSelectedFile = React.useCallback(() => {
@@ -611,7 +671,7 @@ export const MessageInput = React.forwardRef<
     void handleSendAttachment();
   }, [handleSendAttachment]);
 
-  const hasText = value.trim().length > 0;
+  const hasText = draftValue.trim().length > 0;
   const hasQueueDrafts = (uploadDrafts?.length ?? 0) > 0;
   const isSubmitBusy = isUploading || isSending || isPrimarySendLocked;
   const canSend = hasQueueDrafts
@@ -1061,13 +1121,13 @@ export const MessageInput = React.forwardRef<
             <textarea
               ref={textareaRef}
               data-testid="chat-composer-input"
-              value={value}
+              value={draftValue}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               onSelect={(event) => {
                 const caret =
-                  event.currentTarget.selectionStart ?? value.length;
-                updateMentionState(value, caret);
+                  event.currentTarget.selectionStart ?? draftValue.length;
+                updateMentionState(draftValue, caret);
               }}
               onBlur={() => {
                 setIsComposerFocused(false);
@@ -1167,5 +1227,10 @@ export const MessageInput = React.forwardRef<
     </div>
   );
 });
+
+MessageInputComponent.displayName = "MessageInput";
+
+export const MessageInput = React.memo(MessageInputComponent);
+MessageInput.displayName = "MessageInput";
 
 export default MessageInput;

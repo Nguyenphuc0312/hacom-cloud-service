@@ -149,14 +149,22 @@ export interface SendMessageResult {
   messageId: string;
 }
 
-export interface Message extends Omit<SharedMessage, "id" | "status"> {
+export interface Message
+  extends Omit<
+    SharedMessage,
+    | "id"
+    | "status"
+    | "serverTs"
+    | "updatedAt"
+    | "lastSendAttemptAt"
+  > {
   id: string;
   localId?: string;
   stableId?: string;
   clientMessageId?: string;
   version?: number;
   serverSeq?: number;
-  serverTs?: Date;
+  serverTs?: Date | string;
   localOrder?: number;
   transportStatus?:
     | "draft"
@@ -169,8 +177,8 @@ export interface Message extends Omit<SharedMessage, "id" | "status"> {
   errorCode?: string;
   errorMessage?: string;
   sendAttempts?: number;
-  lastSendAttemptAt?: Date;
-  updatedAt?: Date;
+  lastSendAttemptAt?: Date | string;
+  updatedAt?: Date | string;
   status: SharedMessageStatus | "uploading";
 }
 

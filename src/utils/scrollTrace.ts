@@ -1,4 +1,4 @@
-import { logMessageDebug } from "./messageDebug";
+import { isMessageDebugEnabled, logMessageDebug } from "./messageDebug";
 
 const getScrollTraceStack = (): string | undefined => {
   const stack = new Error().stack;
@@ -15,10 +15,24 @@ export const logScrollTrace = (
   event: string,
   details?: Record<string, unknown>,
 ): void => {
-  logMessageDebug("chatScroll", event, {
-    ...details,
-    stack: getScrollTraceStack(),
-  });
+  const envScrollDebugEnabled =
+    import.meta.env.DEV && import.meta.env.VITE_CHAT_SCROLL_DEBUG === "true";
+  const shouldLog = envScrollDebugEnabled || isMessageDebugEnabled();
+  if (!shouldLog) {
+    return;
+  }
+
+  logMessageDebug(
+    "chatScroll",
+    event,
+    {
+      ...details,
+      stack: getScrollTraceStack(),
+    },
+    {
+      alwaysOn: true,
+    },
+  );
 };
 
 export default logScrollTrace;

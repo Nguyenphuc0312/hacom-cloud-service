@@ -34,10 +34,7 @@ import type { PreviewTarget } from "../hooks/useFilePreview";
 import { getPreviewType } from "../utils/formatFileSize";
 import { UserStatus } from "../types";
 import { isDirectConversation } from "../lib/conversationAdapter";
-import {
-  resolveConversationId,
-  warnConversationIdentityMismatch,
-} from "../lib/conversationIdentity";
+import { resolveConversationId } from "../lib/conversationIdentity";
 import { getOtherParticipant } from "../utils/messageHelpers";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 import {
@@ -287,10 +284,6 @@ export const ChatPage: React.FC = () => {
   useEffect(() => {
     const storeSelectedConversationId =
       useChatStore.getState().selectedConversationId;
-    warnConversationIdentityMismatch("ChatPage.route_sync", {
-      routeConversationId,
-      activeConversationId: storeSelectedConversationId,
-    });
     if (storeSelectedConversationId !== routeConversationId) {
       if (shouldTraceRenderLoop) {
         logMessageDebug("ChatPage", "selected_conversation_sync", {

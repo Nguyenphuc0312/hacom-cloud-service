@@ -140,6 +140,13 @@ const areConversationTimelineItemsEqual = (
   }
 
   if (previousItem.kind === "system" && nextItem.kind === "system") {
+    if (
+      previousItem.messageId === nextItem.messageId &&
+      previousItem.message === nextItem.message
+    ) {
+      return true;
+    }
+
     return (
       previousItem.messageId === nextItem.messageId &&
       getMessageLayoutSignature(previousItem.message) ===
@@ -148,7 +155,7 @@ const areConversationTimelineItemsEqual = (
   }
 
   if (previousItem.kind === "message" && nextItem.kind === "message") {
-    return (
+    const layoutFlagsEqual =
       previousItem.messageId === nextItem.messageId &&
       previousItem.isOwn === nextItem.isOwn &&
       previousItem.mergeLevel === nextItem.mergeLevel &&
@@ -162,7 +169,14 @@ const areConversationTimelineItemsEqual = (
       previousItem.conversationType === nextItem.conversationType &&
       previousItem.semanticFamily === nextItem.semanticFamily &&
       previousItem.clusterBreakBefore === nextItem.clusterBreakBefore &&
-      previousItem.clusterBreakAfter === nextItem.clusterBreakAfter &&
+      previousItem.clusterBreakAfter === nextItem.clusterBreakAfter;
+
+    if (layoutFlagsEqual && previousItem.message === nextItem.message) {
+      return true;
+    }
+
+    return (
+      layoutFlagsEqual &&
       getMessageLayoutSignature(previousItem.message) ===
         getMessageLayoutSignature(nextItem.message)
     );

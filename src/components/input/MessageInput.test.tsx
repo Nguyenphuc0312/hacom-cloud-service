@@ -52,6 +52,66 @@ const renderComposer = (
 };
 
 describe("MessageInput send flow", () => {
+  it("keeps keystrokes local when the parent does not echo value changes", () => {
+    const onChange = vi.fn();
+    const onSend = vi.fn();
+
+    render(
+      <MessageInput
+        value=""
+        onChange={onChange}
+        onSend={onSend}
+        mode="normal"
+        conversationId="room-1"
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("chat-composer-input"), {
+      target: { value: "fast typing" },
+    });
+
+    expect(screen.getByTestId("chat-composer-input")).toHaveValue(
+      "fast typing",
+    );
+    expect(onChange).toHaveBeenCalledWith("fast typing");
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("resets the local draft when parent sends a new seed key", () => {
+    const onChange = vi.fn();
+    const onSend = vi.fn();
+    const { rerender } = render(
+      <MessageInput
+        value="old draft"
+        valueResetKey={0}
+        onChange={onChange}
+        onSend={onSend}
+        mode="normal"
+        conversationId="room-1"
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("chat-composer-input"), {
+      target: { value: "local edit" },
+    });
+    expect(screen.getByTestId("chat-composer-input")).toHaveValue(
+      "local edit",
+    );
+
+    rerender(
+      <MessageInput
+        value=""
+        valueResetKey={1}
+        onChange={onChange}
+        onSend={onSend}
+        mode="normal"
+        conversationId="room-1"
+      />,
+    );
+
+    expect(screen.getByTestId("chat-composer-input")).toHaveValue("");
+  });
+
   it("keeps the draft when send is rejected before optimistic accept", async () => {
     const onSend = vi.fn(() => {
       throw new Error("blocked");

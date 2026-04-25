@@ -41,6 +41,7 @@ import {
 import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { logScrollTrace } from "../../utils/scrollTrace";
+import { logChatPerformance } from "../../utils/chatPerformance";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { getMessageByIdUseCase } from "../../features/chat/usecases/getMessageById";
 import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
@@ -81,6 +82,8 @@ const matchesMessageIdentity = (message: Message, targetId: string): boolean =>
   message.localId === targetId ||
   message.stableId === targetId ||
   message.clientMessageId === targetId;
+
+const DRAFT_PERSIST_DEBOUNCE_MS = 450;
 
 interface ChatWindowProps {
   layoutState: ChatLayoutState;
@@ -193,15 +196,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const sendRestriction = useChatStore(
     (state) => state.sendRestrictionsByConversation[conversation.id],
   );
-  const persistedDraft = useChatUiStore(
-    (state) => state.composerDraftByConversation[conversation.id] ?? "",
-  );
   const setComposerDraft = useChatUiStore((state) => state.setComposerDraft);
   const clearComposerDraft = useChatUiStore(
     (state) => state.clearComposerDraft,
   );
+  const readPersistedDraft = React.useCallback(
+    (conversationId: string) =>
+      useChatUiStore.getState().composerDraftByConversation[conversationId] ??
+      "",
+    [],
+  );
 
-  const [inputValue, setInputValue] = React.useState(() => persistedDraft);
+  const [composerSeed, setComposerSeed] = React.useState(() =>
+    readPersistedDraft(conversation.id),
+  );
+  const [composerSeedVersion, setComposerSeedVersion] = React.useState(0);
   const [inputMode, setInputMode] = React.useState<InputMode>("normal");
   const [replyToMessage, setReplyToMessage] = React.useState<
     Message | undefined
@@ -209,8 +218,93 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [editingMessage, setEditingMessage] = React.useState<
     Message | undefined
   >(undefined);
-  const draftBeforeEditRef = React.useRef<string>("");
+  const draftBeforeEditRef = React.useRef<string>(composerSeed);
+  const inputValueRef = React.useRef(composerSeed);
+  const inputModeRef = React.useRef<InputMode>("normal");
+  const pendingDraftPersistRef = React.useRef<{
+    conversationId: string;
+    value: string;
+  } | null>(null);
+  const draftPersistTimerRef = React.useRef<number | null>(null);
   const previousConversationIdRef = React.useRef(conversation.id);
+  const renderCountRef = React.useRef(0);
+
+  const replaceComposerSeed = React.useCallback((nextValue: string) => {
+    inputValueRef.current = nextValue;
+    setComposerSeed(nextValue);
+    setComposerSeedVersion((version) => version + 1);
+  }, []);
+
+  const clearPendingDraftPersist = React.useCallback(() => {
+    if (draftPersistTimerRef.current !== null) {
+      window.clearTimeout(draftPersistTimerRef.current);
+      draftPersistTimerRef.current = null;
+    }
+    pendingDraftPersistRef.current = null;
+  }, []);
+
+  const persistDraft = React.useCallback(
+    (conversationId: string, value: string) => {
+      if (value.trim().length === 0) {
+        clearComposerDraft(conversationId);
+        return;
+      }
+
+      setComposerDraft(conversationId, value);
+    },
+    [clearComposerDraft, setComposerDraft],
+  );
+
+  const flushPendingDraftPersist = React.useCallback(() => {
+    if (draftPersistTimerRef.current !== null) {
+      window.clearTimeout(draftPersistTimerRef.current);
+      draftPersistTimerRef.current = null;
+    }
+
+    const pending = pendingDraftPersistRef.current;
+    pendingDraftPersistRef.current = null;
+    if (!pending) {
+      return;
+    }
+
+    persistDraft(pending.conversationId, pending.value);
+  }, [persistDraft]);
+
+  const scheduleDraftPersist = React.useCallback(
+    (conversationId: string, value: string) => {
+      pendingDraftPersistRef.current = { conversationId, value };
+
+      if (typeof window === "undefined") {
+        flushPendingDraftPersist();
+        return;
+      }
+
+      if (draftPersistTimerRef.current !== null) {
+        window.clearTimeout(draftPersistTimerRef.current);
+      }
+
+      draftPersistTimerRef.current = window.setTimeout(() => {
+        draftPersistTimerRef.current = null;
+        const pending = pendingDraftPersistRef.current;
+        pendingDraftPersistRef.current = null;
+        if (pending) {
+          persistDraft(pending.conversationId, pending.value);
+        }
+      }, DRAFT_PERSIST_DEBOUNCE_MS);
+    },
+    [flushPendingDraftPersist, persistDraft],
+  );
+
+  React.useEffect(() => {
+    inputModeRef.current = inputMode;
+  }, [inputMode]);
+
+  React.useEffect(
+    () => () => {
+      flushPendingDraftPersist();
+    },
+    [flushPendingDraftPersist],
+  );
 
   const handleReply = React.useCallback((message: Message) => {
     setReplyToMessage(message);
@@ -227,20 +321,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const handleCancelEdit = React.useCallback(() => {
     setEditingMessage(undefined);
-    setInputValue(draftBeforeEditRef.current);
+    replaceComposerSeed(draftBeforeEditRef.current);
     if (!replyToMessage) {
       setInputMode("normal");
     }
-  }, [replyToMessage]);
+  }, [replyToMessage, replaceComposerSeed]);
 
   const handleInputChange = React.useCallback(
     (nextValue: string) => {
-      setInputValue(nextValue);
-      if (inputMode !== "edit") {
-        setComposerDraft(conversation.id, nextValue);
+      inputValueRef.current = nextValue;
+      if (inputModeRef.current !== "edit") {
+        scheduleDraftPersist(conversation.id, nextValue);
       }
     },
-    [conversation.id, inputMode, setComposerDraft],
+    [conversation.id, scheduleDraftPersist],
   );
 
   const handleReact = React.useCallback(
@@ -252,12 +346,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   );
 
   const handleEdit = React.useCallback((message: Message) => {
-    draftBeforeEditRef.current = inputValue;
+    flushPendingDraftPersist();
+    draftBeforeEditRef.current = inputValueRef.current;
     setReplyToMessage(undefined);
     setEditingMessage(message);
-    setInputValue(message.content || "");
+    replaceComposerSeed(message.content || "");
     setInputMode("edit");
-  }, [inputValue]);
+  }, [flushPendingDraftPersist, replaceComposerSeed]);
 
   const handleDelete = React.useCallback(
     (messageId: string) => {
@@ -282,14 +377,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           nextContent === (editingMessage.content || "").trim()
         ) {
           setEditingMessage(undefined);
-          setInputValue(draftBeforeEditRef.current);
+          replaceComposerSeed(draftBeforeEditRef.current);
           setInputMode(replyToMessage ? "reply" : "normal");
           return;
         }
 
         return Promise.resolve(onEditMessage(editingMessage.id, nextContent))
           .then(() => {
-            setInputValue(draftBeforeEditRef.current);
+            replaceComposerSeed(draftBeforeEditRef.current);
             setReplyToMessage(undefined);
             setEditingMessage(undefined);
             setInputMode("normal");
@@ -347,7 +442,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         );
         const sendPromise = Promise.resolve(sendResult);
 
-        setInputValue("");
+        inputValueRef.current = "";
+        replaceComposerSeed("");
+        clearPendingDraftPersist();
         clearComposerDraft(conversation.id);
         setReplyToMessage(undefined);
         setEditingMessage(undefined);
@@ -387,10 +484,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     [
       conversation.id,
       clearComposerDraft,
+      clearPendingDraftPersist,
       editingMessage,
       inputMode,
       onEditMessage,
       onSendMessage,
+      replaceComposerSeed,
       replyToMessage,
       uploadQueue,
     ],
@@ -502,6 +601,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     () => Math.max(12, composerHeight + viewportMetrics.keyboardInset + 12),
     [composerHeight, viewportMetrics.keyboardInset],
   );
+
+  React.useEffect(() => {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+
+    renderCountRef.current += 1;
+    logChatPerformance("chat-window-render-count", {
+      conversationId: conversation.id,
+      renderCount: renderCountRef.current,
+      inputMode,
+      overlayMode,
+      isMessageSelectionMode,
+      composerHeight,
+      keyboardInset: viewportMetrics.keyboardInset,
+    });
+  });
 
   React.useEffect(() => {
     if (!isSlowModeBlocked) {
@@ -701,13 +817,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       return;
     }
 
+    flushPendingDraftPersist();
     previousConversationIdRef.current = conversation.id;
-    draftBeforeEditRef.current = persistedDraft;
-    setInputValue(persistedDraft);
+    const nextDraft = readPersistedDraft(conversation.id);
+    draftBeforeEditRef.current = nextDraft;
+    replaceComposerSeed(nextDraft);
     setReplyToMessage(undefined);
     setEditingMessage(undefined);
     setInputMode("normal");
-  }, [conversation.id, persistedDraft]);
+  }, [
+    conversation.id,
+    flushPendingDraftPersist,
+    readPersistedDraft,
+    replaceComposerSeed,
+  ]);
 
   const mentionCandidates = React.useMemo<MentionCandidate[]>(() => {
     const participants = Array.isArray(conversation.participants)
@@ -940,7 +1063,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           }}
         >
           <MessageInput
-            value={inputValue}
+            value={composerSeed}
+            valueResetKey={composerSeedVersion}
             onChange={handleInputChange}
             onSend={handleSend}
             mode={inputMode}

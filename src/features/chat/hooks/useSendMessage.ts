@@ -5,6 +5,8 @@ import { toast } from "../../../components/ui";
 import { UPLOAD_CONFIG } from "../../../config";
 import { extractApiError, unwrapApiSuccess } from "../../../lib/apiContract";
 import { useChatStore, useGroupStore } from "../../../stores";
+import { selectConversationMessagesFromState } from "../../../stores/chatStore";
+import { useAppDispatch } from "../../../store/hooks";
 import type {
   Attachment,
   Message,
@@ -12,6 +14,10 @@ import type {
 } from "../../../types";
 import { FileType, MessageType as MessageTypeEnum } from "../../../types";
 import { logMessageDebug } from "../../../utils/messageDebug";
+import {
+  realtimeMessageReceived,
+  realtimeMessageUpdated,
+} from "../../realtime/realtimeMiddleware";
 import { chatApi } from "../api/chatApi";
 
 export type AttachmentPickerMode = "photo" | "document";
@@ -111,6 +117,44 @@ const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
       typeof (value as PromiseLike<unknown>).then === "function",
   );
 
+const getMessageBridgeKey = (message: Message): string =>
+  message.clientMessageId || message.stableId || message.localId || message.id;
+
+const findOptimisticMessage = (
+  beforeMessages: readonly Message[],
+  afterMessages: readonly Message[],
+): Message | null => {
+  const beforeKeys = new Set(beforeMessages.map(getMessageBridgeKey));
+  return (
+    afterMessages.find((message) => !beforeKeys.has(getMessageBridgeKey(message))) ??
+    null
+  );
+};
+
+const findCurrentMessageForBridge = (
+  messages: readonly Message[],
+  optimisticMessage: Message | null,
+): Message | null => {
+  if (!optimisticMessage) return null;
+  const optimisticKeys = new Set([
+    optimisticMessage.id,
+    optimisticMessage.localId,
+    optimisticMessage.clientMessageId,
+    optimisticMessage.stableId,
+  ].filter((value): value is string => typeof value === "string" && value.length > 0));
+
+  return (
+    messages.find((message) =>
+      [
+        message.id,
+        message.localId,
+        message.clientMessageId,
+        message.stableId,
+      ].some((value) => typeof value === "string" && optimisticKeys.has(value)),
+    ) ?? null
+  );
+};
+
 export const useSendMessage = ({
   selectedConversationId = null,
   conversationId,
@@ -120,6 +164,7 @@ export const useSendMessage = ({
   source = "ChatPage",
 }: UseSendMessageOptions): UseSendMessageResult => {
   const { t } = useTranslation();
+  const dispatch = useAppDispatch();
   const resolvedConversationId = conversationId ?? selectedConversationId;
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
@@ -254,7 +299,11 @@ export const useSendMessage = ({
       };
 
       try {
-        return Promise.resolve(
+        const beforeMessages = selectConversationMessagesFromState(
+          useChatStore.getState(),
+          selectedConversationId,
+        );
+        const sendPromise = Promise.resolve(
           storeSendMessage(
             selectedConversationId,
             content,
@@ -263,7 +312,60 @@ export const useSendMessage = ({
             replyTo?.id,
             replyTo,
           ),
-        ).catch(handleSendError);
+        );
+        const afterMessages = selectConversationMessagesFromState(
+          useChatStore.getState(),
+          selectedConversationId,
+        );
+        const optimisticMessage = findOptimisticMessage(
+          beforeMessages,
+          afterMessages,
+        );
+
+        if (optimisticMessage) {
+          dispatch(
+            realtimeMessageReceived({
+              conversationId: selectedConversationId,
+              message: optimisticMessage,
+            }),
+          );
+        }
+
+        void sendPromise
+          .then(() => {
+            const currentMessage = findCurrentMessageForBridge(
+              selectConversationMessagesFromState(
+                useChatStore.getState(),
+                selectedConversationId,
+              ),
+              optimisticMessage,
+            );
+            if (!currentMessage) return;
+            dispatch(
+              realtimeMessageUpdated({
+                conversationId: selectedConversationId,
+                message: currentMessage,
+              }),
+            );
+          })
+          .catch(() => {
+            const currentMessage = findCurrentMessageForBridge(
+              selectConversationMessagesFromState(
+                useChatStore.getState(),
+                selectedConversationId,
+              ),
+              optimisticMessage,
+            );
+            if (!currentMessage) return;
+            dispatch(
+              realtimeMessageUpdated({
+                conversationId: selectedConversationId,
+                message: currentMessage,
+              }),
+            );
+          });
+
+        return sendPromise.catch(handleSendError);
       } catch (error) {
         return handleSendError(error);
       }
@@ -272,6 +374,7 @@ export const useSendMessage = ({
       isConversationReady,
       onSend,
       selectedConversationId,
+      dispatch,
       setSlowModeCooldown,
       source,
       storeSendMessage,
