@@ -1,13 +1,22 @@
 import React from "react";
 import clsx from "clsx";
-import { PaperAirplaneIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
+import { PaperAirplaneIcon } from "@heroicons/react/24/outline";
+
+export type SendButtonState =
+  | "idle"
+  | "ready-to-send"
+  | "uploading"
+  | "disabled"
+  | "slow-mode"
+  | "offline";
 
 interface SendButtonProps {
   disabled: boolean;
   isBusy?: boolean;
-  state?: "idle" | "ready" | "sending" | "disabled";
+  state?: SendButtonState;
   onClick: () => void;
   ariaLabel: string;
+  "data-testid"?: string;
   className?: string;
 }
 
@@ -17,12 +26,13 @@ export const SendButton: React.FC<SendButtonProps> = ({
   state,
   onClick,
   ariaLabel,
+  "data-testid": dataTestId,
   className,
 }) => {
   const resolvedState = disabled
     ? "disabled"
     : isBusy
-      ? "sending"
+      ? "uploading"
       : state || "idle";
 
   return (
@@ -31,30 +41,32 @@ export const SendButton: React.FC<SendButtonProps> = ({
       onClick={onClick}
       disabled={disabled}
       className={clsx(
-        "inline-flex h-12 w-12 items-center justify-center rounded-full border transition-micro",
+        "chat-composer-send inline-flex h-10 w-10 items-center justify-center rounded-full border transition-micro",
         resolvedState === "disabled" &&
-          "cursor-not-allowed border-transparent bg-[hsl(var(--color-chat-pill))] text-text-disabled shadow-none",
+          "cursor-not-allowed border-border/60 bg-[hsl(var(--color-chat-pill))] text-text-disabled shadow-none opacity-72",
         resolvedState === "idle" &&
-          "border-transparent bg-[hsl(var(--color-chat-pill))] text-text-muted shadow-elev1",
-        resolvedState === "ready" &&
-          "border-transparent bg-primary text-text-inverse shadow-elev2 hover:-translate-y-0.5 hover:bg-primary-hover hover:shadow-elev3",
-        resolvedState === "sending" &&
-          "border-primary/15 bg-primary/12 text-primary shadow-elev1",
+          "border-border/55 bg-[hsl(var(--color-chat-pill))] text-text-muted shadow-none hover:bg-surface-hover/80 hover:text-text-primary",
+        resolvedState === "ready-to-send" &&
+          "border-primary/12 bg-[hsl(var(--chat-active-surface)/0.9)] text-text-inverse shadow-none hover:bg-primary-hover",
+        resolvedState === "uploading" &&
+          "border-primary/18 bg-primary/12 text-primary shadow-none",
+        resolvedState === "slow-mode" &&
+          "border-warning/30 bg-warning/10 text-warning shadow-none",
+        resolvedState === "offline" &&
+          "border-danger/25 bg-danger/10 text-danger shadow-none",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
         className,
       )}
       aria-label={ariaLabel}
-    >
-      {isBusy ? (
-        <ArrowPathIcon className="h-5 w-5 animate-spin" />
-      ) : (
-        <PaperAirplaneIcon
-          className={clsx(
-            "h-5 w-5 transition-transform duration-150",
-            resolvedState === "ready" && "translate-x-px -translate-y-px",
-          )}
-        />
-      )}
+      data-testid={dataTestId}
+      >
+      <PaperAirplaneIcon
+        className={clsx(
+          "h-[18px] w-[18px] transition-transform duration-150",
+          resolvedState === "ready-to-send" && "translate-x-px -translate-y-px",
+          isBusy && "opacity-85",
+        )}
+      />
     </button>
   );
 };

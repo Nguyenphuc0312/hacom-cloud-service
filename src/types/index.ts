@@ -8,47 +8,48 @@ export type {
   UserSummary,
   UserProfile,
   UserPresence,
-  MessageSummary,
-  Attachment,
-  Reaction,
-  ForwardInfo,
-  MessageMetadata,
-  Room,
-  RoomSettings,
-  RoomSummary,
-  RoomMember,
-  Conversation,
-  ConversationDetail,
-  TypingUser,
-} from "@hacom/chat-shared-types";
-
-// Re-export shared enums
-export {
-  UserStatus,
-  MessageType,
-  MessageStatus,
-  ConversationType,
-  RoomType,
-  RoomMemberRole,
-  FileType,
-  EventType,
-} from "@hacom/chat-shared-types";
-
-// Re-export shared DTOs
-export type {
-  SendMessageDto,
-  EditMessageDto,
-  GetMessagesDto,
-  MessagesListResponseDto,
-  CreateRoomDto,
-  UpdateRoomDto,
   LoginDto,
   RegisterDto,
   AuthResponseDto,
   SearchUsersDto,
   UpdateUserDto,
   UpdateUserStatusDto,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/auth";
+
+export type {
+  MessageSummary,
+  Attachment,
+  Reaction,
+  ForwardInfo,
+  MessageMetadata,
+  SendMessageDto,
+  EditMessageDto,
+  GetMessagesDto,
+  MessagesListResponseDto,
+} from "@hacom/chat-shared-types/chat";
+
+export type {
+  Room,
+  RoomSettings,
+  RoomSummary,
+  RoomMember,
+  CreateRoomDto,
+  UpdateRoomDto,
+} from "@hacom/chat-shared-types/compat";
+
+// Re-export shared enums
+export { UserStatus } from "@hacom/chat-shared-types/core";
+export {
+  MessageType,
+  MessageStatus,
+  ConversationType,
+  FileType,
+} from "@hacom/chat-shared-types/chat";
+export {
+  RoomType,
+  RoomMemberRole,
+  EventType,
+} from "@hacom/chat-shared-types/compat";
 
 // Re-export shared API utility types
 export type {
@@ -61,7 +62,7 @@ export type {
   CursorMeta,
   PaginationParams,
   PaginatedResponse,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/core";
 
 // Re-export shared WebSocket payload types
 export type {
@@ -69,9 +70,54 @@ export type {
   MessageUpdateEvent,
   MessageDeletedEvent,
   MessageReactionEvent,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/ws";
 
-import type { Conversation, User } from "@hacom/chat-shared-types";
+import type {
+  Conversation as SharedConversation,
+  ConversationDetail as SharedConversationDetail,
+  Message as SharedMessage,
+  TypingUser as SharedTypingUser,
+} from "@hacom/chat-shared-types/chat";
+import { MessageStatus as SharedMessageStatus } from "@hacom/chat-shared-types/chat";
+import type { User, UserSummary as SharedUserSummary } from "@hacom/chat-shared-types/auth";
+
+export type TypingUser = SharedTypingUser;
+
+export type Conversation = Omit<
+  SharedConversation,
+  "lastReadAt" | "lastReadMessageId"
+> & {
+  currentUserRole?: "owner" | "admin" | "member" | null;
+  allowMemberMessaging?: boolean;
+  canCurrentUserSend?: boolean;
+  createdBy?: string;
+  createdAt?: Date | string;
+  lastMessageAt?: Date | string | null;
+  lastActivityAt?: Date | string | null;
+  displayName?: string;
+  displayAvatar?: string | null;
+  otherUser?: SharedUserSummary | null;
+  directKey?: string | null;
+  currentUserId?: string;
+  updatedAt: Date;
+  joinedAt?: Date;
+  lastReadAt?: Date | string | null;
+  lastReadMessageId?: string | null;
+  firstUnreadMessageId?: string | null;
+  firstUnreadMessageAt?: Date | string | null;
+  lastMessageSortAt?: Date | string | null;
+  lastMessageId?: string | null;
+  lastMessageStatus?: "pending" | "sent" | "failed" | null;
+  membershipState?: "active" | "left" | "removed" | "banned" | "deleted";
+  summaryVersion?: number;
+  typingUsers?: TypingUser[];
+};
+
+export type ConversationDetail = Omit<
+  SharedConversationDetail,
+  keyof Conversation
+> &
+  Conversation;
 
 export type MessageSendState =
   | "queued"
@@ -87,6 +133,8 @@ export type MessageFailureReason =
   | "timeout"
   | "permission"
   | "slow_mode"
+  | "backend_4xx"
+  | "backend_5xx"
   | "server"
   | "unknown";
 
@@ -97,20 +145,26 @@ export interface SendRestriction {
 }
 
 export interface SendMessageResult {
-  disposition: "queued" | "sent";
+  disposition: "optimistic" | "queued" | "sent";
   messageId: string;
 }
 
-export interface Message extends Omit<
-  import("@hacom/chat-shared-types").Message,
-  "id" | "status"
-> {
+export interface Message
+  extends Omit<
+    SharedMessage,
+    | "id"
+    | "status"
+    | "serverTs"
+    | "updatedAt"
+    | "lastSendAttemptAt"
+  > {
   id: string;
   localId?: string;
   stableId?: string;
   clientMessageId?: string;
+  version?: number;
   serverSeq?: number;
-  serverTs?: Date;
+  serverTs?: Date | string;
   localOrder?: number;
   transportStatus?:
     | "draft"
@@ -120,9 +174,12 @@ export interface Message extends Omit<
   sendState?: MessageSendState;
   queuedReason?: MessageQueueReason;
   failureReason?: MessageFailureReason;
+  errorCode?: string;
+  errorMessage?: string;
   sendAttempts?: number;
-  lastSendAttemptAt?: Date;
-  status: import("@hacom/chat-shared-types").MessageStatus | "uploading";
+  lastSendAttemptAt?: Date | string;
+  updatedAt?: Date | string;
+  status: SharedMessageStatus | "uploading";
 }
 
 export interface TypingStatus {
@@ -221,7 +278,7 @@ export interface MessageInputProps {
 }
 
 export interface LoginFormData {
-  email: string;
+  loginIdentifier: string;
   password: string;
   rememberMe: boolean;
 }

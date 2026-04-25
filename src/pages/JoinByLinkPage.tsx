@@ -1,10 +1,12 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeftIcon, LinkIcon } from "@heroicons/react/24/outline";
+import { LinkIcon } from "@heroicons/react/24/outline";
 import { Button, toast } from "../components/ui";
+import { AppPage, AppPageBody, AppPageHeader } from "../components/layout/AppPage";
 import { groupApi } from "../services/api";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
+import { resolveConversationId } from "../lib/conversationIdentity";
 import { ROUTE_PATHS } from "../router/paths";
 
 type JoinStatus = "idle" | "joining" | "joined" | "pending" | "failed";
@@ -31,13 +33,13 @@ export const JoinByLinkPage: React.FC = () => {
 
     try {
       const response = await groupApi.joinByLink(token);
-      const payload = unwrapApiSuccess(response) as {
-        conversationId?: string;
-        roomId?: string;
-        status?: "joined" | "pending";
-      };
+      const payload = unwrapApiSuccess(response) as Record<string, unknown>;
 
-      setConversationId(payload.conversationId ?? payload.roomId ?? null);
+      setConversationId(
+        resolveConversationId(payload, {
+          source: "JoinByLinkPage.handleJoin",
+        }),
+      );
       if (payload.status === "pending") {
         setStatus("pending");
         return;
@@ -62,82 +64,90 @@ export const JoinByLinkPage: React.FC = () => {
     navigate(ROUTE_PATHS.CHAT);
   }, [conversationId, navigate]);
 
+  const statusBody =
+    status === "pending"
+      ? t("group:joinByLink.pending", {
+          defaultValue: "Your join request is pending admin approval.",
+        })
+      : status === "joined"
+        ? t("group:joinByLink.joinedDescription", {
+            defaultValue: "You can start chatting in this group now.",
+          })
+        : t("group:joinByLink.description", {
+            defaultValue:
+              "Use this invite link to join the group. Access depends on group settings.",
+          });
+
   return (
-    <div className="flex h-full flex-col bg-background">
-      <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-surface px-4 py-3">
-        <button
-          type="button"
-          onClick={() => navigate(ROUTE_PATHS.CHAT)}
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
-          aria-label={t("common:actions.back", { defaultValue: "Back" })}
-        >
-          <ArrowLeftIcon className="h-5 w-5" />
-        </button>
-        <h1 className="text-lg font-semibold text-text-primary">
-          {t("group:joinByLink.title", { defaultValue: "Join group" })}
-        </h1>
-      </header>
+    <AppPage layout="narrow">
+      <AppPageHeader
+        title={t("group:joinByLink.title", { defaultValue: "Join group" })}
+        subtitle={t("group:joinByLink.description", {
+          defaultValue:
+            "Use this invite link to join the group. Access depends on group settings.",
+        })}
+        onBack={() => navigate(ROUTE_PATHS.CHAT)}
+        backLabel={t("common:actions.back", { defaultValue: "Back" })}
+      />
 
-      <main className="mx-auto flex w-full max-w-md flex-1 items-center px-4 py-8">
-        <div className="w-full rounded-2xl border border-border bg-surface-raised p-6">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-full bg-primary/10 p-2 text-primary">
-              <LinkIcon className="h-5 w-5" />
+      <AppPageBody className="items-center justify-center">
+        <div className="w-full max-w-lg">
+          <div className="app-page-panel space-y-5 p-6 sm:p-7">
+            <div className="app-page-subtle flex items-center gap-3 rounded-xl px-4 py-3">
+              <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <LinkIcon className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-text-primary">
+                  {t("group:joinByLink.inviteLink", {
+                    defaultValue: "Invite link",
+                  })}
+                </p>
+                <p className="truncate text-xs text-text-muted">
+                  {tokenPreview || "-"}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-text-primary">
-                {t("group:joinByLink.inviteLink", { defaultValue: "Invite link" })}
-              </p>
-              <p className="text-xs text-text-muted">{tokenPreview || "-"}</p>
-            </div>
-          </div>
 
-          {status === "pending" ? (
             <div className="space-y-3">
-              <p className="text-sm text-text-secondary">
-                {t("group:joinByLink.pending", {
-                  defaultValue: "Your join request is pending admin approval.",
-                })}
+              <p className="text-sm leading-6 text-text-secondary">
+                {statusBody}
               </p>
-              <Button type="button" className="w-full" onClick={openChat}>
-                {t("group:joinByLink.backToChat", {
-                  defaultValue: "Back to chat",
-                })}
-              </Button>
-            </div>
-          ) : status === "joined" ? (
-            <div className="space-y-3">
-              <p className="text-sm text-text-secondary">
-                {t("group:joinByLink.joinedDescription", {
-                  defaultValue: "You can start chatting in this group now.",
-                })}
-              </p>
-              <Button type="button" className="w-full" onClick={openChat}>
-                {t("group:joinByLink.openGroup", { defaultValue: "Open group" })}
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-text-secondary">
-                {t("group:joinByLink.description", {
-                  defaultValue:
-                    "Use this invite link to join the group. Access depends on group settings.",
-                })}
-              </p>
-              {errorText && <p className="text-sm text-danger">{errorText}</p>}
+
+              {errorText ? (
+                <div className="rounded-xl border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger">
+                  {errorText}
+                </div>
+              ) : null}
+
               <Button
                 type="button"
                 className="w-full"
                 isLoading={status === "joining"}
-                onClick={() => void handleJoin()}
+                variant={status === "joined" || status === "pending" ? "secondary" : "primary"}
+                onClick={
+                  status === "joined" || status === "pending"
+                    ? openChat
+                    : () => void handleJoin()
+                }
               >
-                {t("group:joinByLink.cta", { defaultValue: "Join now" })}
+                {status === "pending"
+                  ? t("group:joinByLink.backToChat", {
+                      defaultValue: "Back to chat",
+                    })
+                  : status === "joined"
+                    ? t("group:joinByLink.openGroup", {
+                        defaultValue: "Open group",
+                      })
+                    : t("group:joinByLink.cta", {
+                        defaultValue: "Join now",
+                      })}
               </Button>
             </div>
-          )}
+          </div>
         </div>
-      </main>
-    </div>
+      </AppPageBody>
+    </AppPage>
   );
 };
 

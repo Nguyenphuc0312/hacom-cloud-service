@@ -13,7 +13,7 @@
  * - Edge-case: deleted, scanning, blocked, large files
  */
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
@@ -26,6 +26,8 @@ import {
 } from "@heroicons/react/24/outline";
 import type { Attachment } from "../../types";
 import { useAttachmentDownloadUrl } from "../../hooks";
+import { resolvePublicResourceUrl } from "../../config";
+import { useInViewport } from "../../hooks/useInViewport";
 import {
   formatFileSize,
   getFileExtension,
@@ -63,7 +65,10 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
 }) => {
   const { t } = useTranslation();
 
-  const previewType = getPreviewType(attachment.mimeType);
+  const previewType = getPreviewType(
+    attachment.mimeType,
+    attachment.fileName,
+  );
   const iconType = getFileIconType(attachment.mimeType, attachment.fileName);
   const extension = getFileExtension(attachment.fileName || "file");
   const size = formatFileSize(attachment.fileSize);
@@ -75,6 +80,8 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   const isImage = previewType === "image";
   const isVideo = previewType === "video";
   const showThumbnail = (isImage || isVideo) && fileStatus === "ready";
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const isVisible = useInViewport(rootRef, { rootMargin: "240px 0px" });
   const thumbnailWidth = attachment.width ? Math.min(attachment.width, 280) : 200;
   const thumbnailAspectRatio =
     attachment.width && attachment.height
@@ -87,11 +94,31 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
     attachment,
   );
 
-  // Thumbnail URL: use thumbnail if available, otherwise auto-resolve for images
-  const { url: thumbnailUrl, isLoading: isThumbLoading } =
+  const directThumbnailUrl = useMemo(
+    () =>
+      resolvePublicResourceUrl(attachment.thumbnailUrl, {
+        context: "image",
+        allowBlob: true,
+        allowDataImage: attachment.mimeType?.startsWith("image/") === true,
+      }) ?? undefined,
+    [attachment.mimeType, attachment.thumbnailUrl],
+  );
+
+  // Thumbnail URL: use thumbnail if available, otherwise resolve on-demand only
+  const { url: resolvedThumbnailUrl, isLoading: isThumbLoading, resolveUrl: resolveThumbnailUrl } =
     useAttachmentDownloadUrl(conversationId, attachment, {
-      autoResolve: isImage,
+      autoResolve: false,
     });
+  const thumbnailUrl = directThumbnailUrl || resolvedThumbnailUrl;
+  const shouldResolveThumbnail = isImage && !directThumbnailUrl;
+
+  useEffect(() => {
+    if (!isVisible || !shouldResolveThumbnail || thumbnailUrl) {
+      return;
+    }
+
+    void resolveThumbnailUrl();
+  }, [isVisible, resolveThumbnailUrl, shouldResolveThumbnail, thumbnailUrl]);
 
   // Derive thumbnail state keyed to URL, automatically resets on URL change
   const thumbStateKey = thumbnailUrl ?? "";
@@ -224,6 +251,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   if (showThumbnail && isImage) {
     return (
       <div
+        ref={rootRef}
         className={clsx(
           "group/file relative overflow-hidden rounded-lg",
           className,
@@ -315,6 +343,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   if (showThumbnail && isVideo) {
     return (
       <div
+        ref={rootRef}
         className={clsx(
           "group/file relative overflow-hidden rounded-lg",
           className,

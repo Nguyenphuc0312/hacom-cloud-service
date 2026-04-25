@@ -13,7 +13,7 @@ import {
   ChatBubbleLeftRightIcon,
   EnvelopeIcon,
 } from "@heroicons/react/24/outline";
-import { ErrorCode } from "@hacom/chat-shared-types";
+import { ErrorCode } from "@hacom/chat-shared-types/core";
 import { Button, PageSpinner, toast } from "../components/ui";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import { authApi } from "../services/api";

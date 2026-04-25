@@ -25,20 +25,20 @@
       "joinRequests": "Join requests"
     },
     "addMember": "Add member",
-    "searchMemberPlaceholder": "Search members...",
-    "noSearchResult": "No matching result",
+    "addMemberEligibilityHint": "Only eligible contacts can be added to this group.",
+    "searchMemberPlaceholder": "Search by name or username",
+    "searchHint": "Search by name or username.",
+    "noSearchResult": "No matching results",
     "noMembers": "No members",
     "youSuffix": "(You)",
     "removeMemberConfirm": "Are you sure you want to remove {{name}} from this group?",
     "roles": {
       "owner": "Owner",
       "admin": "Admin",
-      "moderator": "Moderator",
-      "member": "Member",
-      "guest": "Guest"
+      "member": "Member"
     },
     "actions": {
-      "makeAdmin": "Set as admin",
+      "makeAdmin": "Make admin",
       "removeAdmin": "Remove admin",
       "removeMember": "Remove member"
     },
@@ -48,6 +48,7 @@
     "comingSoon": "Coming soon",
     "reportGroup": "Report group",
     "leaveGroup": "Leave group",
+    "leaveBlockedOwner": "Transfer ownership before leaving this group.",
     "leaveConfirm": "Are you sure you want to leave this group?",
     "invite": {
       "invalidUsageLimit": "Usage limit must be greater than 0",
@@ -72,7 +73,7 @@
       "rejected": "Join request rejected",
       "resolveFailed": "Unable to resolve join request",
       "noPermission": "Only admins can resolve join requests.",
-      "empty": "No pending join requests."
+      "empty": "No join requests."
     }
   },
   "newChatModal": {
@@ -81,13 +82,25 @@
     "descriptionGroup": "Select members to create a group",
     "directMessage": "Direct message",
     "createGroup": "Create group",
-    "searchPlaceholder": "Search by name or username...",
-    "groupNamePlaceholder": "Enter group name...",
-    "searchMinChars": "Type at least {{count}} characters to search",
-    "createGroupButton": "Create group ({{count}} users)"
-  },
+    "addFriend": "Add friend",
+    "friendRequired": "You need to be friends before starting this chat.",
+    "friendsOnly": "Friends only",
+    "groupEligibilityHint": "Only eligible contacts can be selected for this group.",
+    "requestSent": "Request sent",
+    "sending": "Sending...",
+    "friendRequestSent": "Friend request sent.",
+    "friendRequestFailed": "Unable to send friend request.",
+      "searchPlaceholder": "Search by name or username...",
+      "groupNamePlaceholder": "Enter group name...",
+      "searchMinChars": "Type at least {{count}} characters to search",
+      "createGroupButton": "Create group ({{count}} users)",
+      "selectMember": "Select contact",
+      "unselectMember": "Remove contact"
+    },
   "editProfileModal": {
     "title": "Edit profile",
+    "fullDescription": "Update the details people use to recognise you across the app.",
+    "quickDescription": "Make a quick change to the details people see most often.",
     "changeAvatarHint": "Click to change avatar",
     "firstName": "First name",
     "lastName": "Last name",
@@ -95,9 +108,65 @@
     "bio": "Bio",
     "bioPlaceholder": "Write a few lines about yourself...",
     "bioHint": "Up to {{count}} characters",
+    "discardTitle": "Discard changes?",
+    "discardDescription": "Your unsaved edits will be lost.",
     "cancel": "Cancel",
     "save": "Save changes",
     "phonePlaceholder": "+84 912 345 678"
+  },
+  "settings": {
+    "title": "Profile settings",
+    "description": "Review the identity details shown across the product and open a focused editor when you need to update them.",
+    "summaryBadge": "Profile overview",
+    "summaryTitle": "Profile summary",
+    "mediaTitle": "Visual identity",
+    "avatar": "Avatar",
+    "background": "Background",
+    "backgroundPreview": "Background preview",
+    "noBackground": "No background image",
+    "chooseAvatar": "Choose avatar",
+    "chooseBackground": "Choose background",
+    "displayName": "Display name",
+    "displayNamePlaceholder": "Enter display name",
+    "displayNameHint": "Display name is an optional presentation override. HR-linked accounts still default to the canonical full name in most surfaces.",
+    "username": "Username",
+    "usernamePlaceholder": "username",
+    "bio": "Bio",
+    "bioHint": "Keep it short and recognisable. {{count}} / 500 characters.",
+    "phoneHint": "Use an international format so your contact info stays consistent.",
+    "phoneEmpty": "No phone number saved",
+    "identityFallback": "No profile details yet",
+    "personalIdentityTitle": "Personal details",
+    "personalIdentityDescription": "Update the basic account details teammates use to identify you.",
+    "readOnlyTitle": "HR source fields (read-only)",
+    "departmentName": "Department",
+    "unitCode": "Unit code",
+    "employeeCode": "Employee code",
+    "hrLegalName": "HR legal name",
+    "corporateEmail": "Corporate email",
+    "jobTitle": "Title",
+    "enterpriseInfoHint": "These details come from your HR directory and stay read-only here.",
+    "unsaved": "Unsaved changes",
+    "synced": "Synced",
+    "refreshing": "Refreshing profile data…",
+    "saveHint": "Save to apply your latest profile details everywhere instantly.",
+    "save": "Save profile",
+    "saved": "Profile updated.",
+    "saveFailed": "Unable to update profile.",
+    "avatarUnsupported": "Avatar can only be updated with JPG, PNG, WEBP, or GIF files.",
+    "avatarEditableHint": "Use a square image for the clearest avatar across chats.",
+    "backgroundUnsupported": "Background image supports JPG, PNG, WEBP, or GIF files.",
+    "backgroundEditableHint": "A wide image works best for your profile background.",
+    "uploadUnavailable": "Uploads are temporarily unavailable. Try again in a moment.",
+    "upload": {
+      "unsupportedType": "Only JPG, PNG, WEBP, or GIF images are supported.",
+      "exceedsSize": "Image exceeds {{maxMb}}MB limit."
+    },
+    "validation": {
+      "displayNameMax": "Display name must not exceed 120 characters.",
+      "bioMax": "Bio must not exceed {{count}} characters.",
+      "phoneInvalid": "Use a valid international phone number."
+    }
   },
   "imagePreview": {
     "defaultAlt": "Image preview",
@@ -127,5 +196,7 @@
     "roleUpdateFailed": "Unable to update member role",
     "leftGroup": "Left group",
     "leaveGroupFailed": "Unable to leave group right now"
-  }
+  },
+  "title": "Profile",
+  "pageTitle": "Profile"
 }

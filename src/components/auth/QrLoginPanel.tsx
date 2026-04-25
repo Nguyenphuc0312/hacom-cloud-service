@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import clsx from "clsx";
 import QRCode from "qrcode";
 import { useTranslation } from "react-i18next";
@@ -12,7 +18,7 @@ import {
 import {
   QrLoginSessionStatus,
   type LoginResponse,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/auth";
 import { Button } from "../ui";
 import { extractApiError } from "../../lib/apiContract";
 import { qrLoginService } from "../../services/qrLoginService";
@@ -117,11 +123,14 @@ const normalizeLoginResponseForStore = (
   refreshToken: payload.refreshToken,
   user: {
     id: payload.user.id,
-    username:
-      payload.user.username ||
-      payload.user.displayName ||
-      payload.user.email ||
-      payload.user.id,
+    username: payload.user.username || payload.user.id,
+    displayName: payload.user.displayName,
+    fullNameFromHR: (payload.user as { fullNameFromHR?: string })
+      .fullNameFromHR,
+    full_name_from_hr: (payload.user as { full_name_from_hr?: string })
+      .full_name_from_hr,
+    employeeCode: (payload.user as { employeeCode?: string }).employeeCode,
+    employee_code: (payload.user as { employee_code?: string }).employee_code,
     email: payload.user.email,
     firstName: payload.user.firstName,
     lastName: payload.user.lastName,
@@ -146,6 +155,10 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
   const [countdown, setCountdown] = useState("00:00");
   const [error, setError] = useState<string | null>(null);
   const exchangeStartedRef = useRef<string | null>(null);
+  const panelSessionId = panelState?.sessionId ?? null;
+  const panelWebSecret = panelState?.webSecret ?? null;
+  const panelStatus = panelState?.status ?? null;
+  const panelExpiresAt = panelState?.expiresAt ?? null;
 
   const statusCopy = useMemo(() => {
     const status = panelState?.status ?? QrLoginSessionStatus.PENDING;
@@ -163,7 +176,7 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
     panelState?.status === QrLoginSessionStatus.PENDING ||
     panelState?.status === QrLoginSessionStatus.SCANNED;
 
-  const refreshSession = async (): Promise<void> => {
+  const refreshSession = useCallback(async (): Promise<void> => {
     setError(null);
     setIsRefreshing(true);
     exchangeStartedRef.current = null;
@@ -194,37 +207,42 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
       setIsBootstrapping(false);
       setIsRefreshing(false);
     }
-  };
+  }, [t]);
 
   useEffect(() => {
     void refreshSession();
-  }, []);
+  }, [refreshSession]);
 
   useEffect(() => {
-    if (!panelState) {
+    if (!panelExpiresAt) {
       return;
     }
 
-    setCountdown(formatCountdown(panelState.expiresAt));
+    setCountdown(formatCountdown(panelExpiresAt));
     const timer = window.setInterval(() => {
-      setCountdown(formatCountdown(panelState.expiresAt));
+      setCountdown(formatCountdown(panelExpiresAt));
     }, 1000);
 
     return () => {
       window.clearInterval(timer);
     };
-  }, [panelState?.expiresAt]);
+  }, [panelExpiresAt]);
 
   useEffect(() => {
-    if (!panelState || !ACTIVE_POLLING_STATUSES.has(panelState.status)) {
+    if (
+      !panelSessionId ||
+      !panelWebSecret ||
+      !panelStatus ||
+      !ACTIVE_POLLING_STATUSES.has(panelStatus)
+    ) {
       return;
     }
 
     const poll = async () => {
       try {
         const status = await qrLoginService.getStatus(
-          panelState.sessionId,
-          panelState.webSecret,
+          panelSessionId,
+          panelWebSecret,
         );
 
         setPanelState((current) => {
@@ -253,26 +271,30 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
     return () => {
       window.clearInterval(interval);
     };
-  }, [panelState?.sessionId, panelState?.status, panelState?.webSecret]);
+  }, [panelSessionId, panelStatus, panelWebSecret, t]);
 
   useEffect(() => {
-    if (!panelState || panelState.status !== QrLoginSessionStatus.APPROVED) {
+    if (
+      panelStatus !== QrLoginSessionStatus.APPROVED ||
+      !panelSessionId ||
+      !panelWebSecret
+    ) {
       return;
     }
 
-    if (exchangeStartedRef.current === panelState.sessionId) {
+    if (exchangeStartedRef.current === panelSessionId) {
       return;
     }
 
-    exchangeStartedRef.current = panelState.sessionId;
+    exchangeStartedRef.current = panelSessionId;
     setIsExchanging(true);
     setError(null);
 
     void (async () => {
       try {
         const loginResponse = await qrLoginService.exchange(
-          panelState.sessionId,
-          panelState.webSecret,
+          panelSessionId,
+          panelWebSecret,
         );
 
         applyLoginResponse(
@@ -280,7 +302,7 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
           rememberMe,
         );
         setPanelState((current) =>
-          current && current.sessionId === panelState.sessionId
+          current && current.sessionId === panelSessionId
             ? { ...current, status: QrLoginSessionStatus.EXCHANGED }
             : current,
         );
@@ -293,7 +315,15 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
         setIsExchanging(false);
       }
     })();
-  }, [applyLoginResponse, onSuccess, panelState, rememberMe, t]);
+  }, [
+    applyLoginResponse,
+    onSuccess,
+    panelSessionId,
+    panelStatus,
+    panelWebSecret,
+    rememberMe,
+    t,
+  ]);
 
   return (
     <section className="panel-section rounded-xl bg-surface px-4 py-4 sm:px-5 sm:py-5">

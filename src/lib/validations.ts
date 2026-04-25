@@ -20,10 +20,11 @@ const i18nKey = (key: string, params?: Record<string, unknown>) =>
  * Schema đăng nhập
  */
 export const loginSchema = z.object({
-  email: z
+  loginIdentifier: z
     .string()
-    .min(1, i18nKey("validation:auth.emailRequired"))
-    .email(i18nKey("validation:auth.emailInvalid")),
+    .trim()
+    .min(1, i18nKey("validation:auth.loginIdentifierRequired"))
+    .max(255, i18nKey("validation:auth.loginIdentifierMax")),
   password: z
     .string()
     .min(1, i18nKey("validation:auth.passwordRequired"))

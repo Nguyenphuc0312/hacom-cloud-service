@@ -5,7 +5,7 @@ import type {
   FriendshipCapabilitiesDto,
   FriendshipRelationDto,
   FriendshipStatus,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/chat";
 import { friendshipApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import type { User } from "./authStore";
@@ -13,6 +13,7 @@ import type {
   FriendshipRealtimeDetail,
   FriendshipResyncReason,
 } from "../features/chat/realtime/friendshipRealtime";
+import { logger } from "../utils/logger";
 
 export type FriendshipStatusType = FriendshipRelationDto["status"];
 
@@ -543,7 +544,7 @@ const logFriendshipMetric = (
   event: string,
   payload: Record<string, unknown>,
 ): void => {
-  console.info(`[friendship-metric] ${event}`, payload);
+  logger.info("friendship-metric", event, payload, { debugOnly: true });
 };
 
 export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({

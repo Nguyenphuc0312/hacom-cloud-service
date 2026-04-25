@@ -1,18 +1,10 @@
-﻿import React, { useMemo } from "react";
+import React, { useMemo } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import {
-  AtSymbolIcon,
-  BookmarkIcon,
-  SpeakerXMarkIcon,
-} from "@heroicons/react/24/solid";
-import { UserGroupIcon, UserIcon } from "@heroicons/react/24/outline";
 import { Avatar } from "../../common/Avatar";
-import { Badge } from "../../common/Badge";
-import type { Conversation, UserSummary } from "../../../types";
-import { isDirectConversation } from "../../../lib/conversationAdapter";
-import { formatRelativeTime } from "../../../utils/formatTime";
-import { hasConversationMention } from "../../../utils/conversationRanking";
+import { GroupAvatar } from "../../common/GroupAvatar";
+import { useChatStore, usePresenceStore } from "../../../stores";
+import type { Conversation, UserStatus, UserSummary } from "../../../types";
 import {
   getConversationAvatar,
   getConversationDisplayName,
@@ -20,145 +12,238 @@ import {
   getMessagePreviewState,
   getOtherParticipant,
   getUserDisplayName,
+  truncateTextWithEllipsis,
 } from "../../../utils/messageHelpers";
+import { hasConversationMention } from "../../../utils/conversationRanking";
+import { formatRelativeTime } from "../../../utils/formatTime";
+import { isDirectConversation } from "../../../lib/conversationAdapter";
+import i18n from "../../../i18n";
+import type { ChatLayoutState } from "../../../utils/densityPolicy";
 
-interface RoomItemProps {
-  conversation: Conversation;
+interface RoomItemContainerProps {
+  conversationId: string;
+  layoutState: ChatLayoutState;
   currentUser: UserSummary;
-  collapsed: boolean;
   isActive: boolean;
   isKeyboardActive: boolean;
   onSelect: (conversationId: string) => void;
 }
 
-const BaseRoomItem: React.FC<RoomItemProps> = ({
+interface RoomItemViewProps {
+  conversation: Conversation;
+  layoutState: ChatLayoutState;
+  currentUserId: string;
+  displayName: string;
+  previewText: string;
+  previewState: ReturnType<typeof getMessagePreviewState>;
+  timeLabel: string;
+  unreadCount: number;
+  unreadLabel: string;
+  hasUnreadMention: boolean;
+  avatarSrc?: string;
+  avatarStatus?: UserStatus;
+  isDirect: boolean;
+  isActive: boolean;
+  isKeyboardActive: boolean;
+  onSelect: (conversationId: string) => void;
+}
+
+type RoomItemVisualState =
+  | "default"
+  | "hover"
+  | "active"
+  | "unread"
+  | "muted"
+  | "mention";
+
+interface RoomItemStateStyles {
+  container: string;
+  title: string;
+  preview: string;
+  time: string;
+  timeBadge: string;
+  unreadBadge: string;
+}
+
+const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
+  default: {
+    container: "bg-transparent",
+    title: "text-text-primary",
+    preview: "text-text-muted",
+    time: "text-text-muted",
+    timeBadge: "bg-transparent text-text-muted",
+    unreadBadge:
+      "bg-[hsl(var(--chat-badge-bg))] text-text-inverse",
+  },
+  hover: {
+    container:
+      "hover:bg-surface-hover/70 data-[keyboard-active=true]:bg-surface-hover/70",
+    title:
+      "group-hover:text-text-primary group-data-[keyboard-active=true]:text-text-primary",
+    preview:
+      "group-hover:text-text-secondary group-data-[keyboard-active=true]:text-text-secondary",
+    time:
+      "group-hover:text-text-secondary group-data-[keyboard-active=true]:text-text-secondary",
+    timeBadge:
+      "group-hover:bg-surface-overlay/95 group-hover:text-text-secondary group-data-[keyboard-active=true]:bg-surface-overlay/95 group-data-[keyboard-active=true]:text-text-secondary",
+    unreadBadge: "",
+  },
+  active: {
+    container: "bg-[hsl(var(--chat-active-surface)/0.12)]",
+    title: "text-text-primary",
+    preview: "text-text-secondary",
+    time: "text-text-secondary",
+    timeBadge:
+      "bg-[hsl(var(--chat-active-surface)/0.1)] text-text-secondary",
+    unreadBadge:
+      "bg-[hsl(var(--chat-badge-bg))] text-text-inverse",
+  },
+  unread: {
+    container: "bg-[hsl(var(--chat-active-surface)/0.08)]",
+    title: "text-text-primary",
+    preview: "text-text-secondary",
+    time: "text-text-secondary",
+    timeBadge:
+      "bg-[hsl(var(--chat-badge-bg)/0.12)] text-text-secondary",
+    unreadBadge:
+      "bg-[hsl(var(--chat-badge-bg))] text-text-inverse",
+  },
+  muted: {
+    container: "bg-transparent",
+    title: "text-text-primary",
+    preview: "text-text-muted/90",
+    time: "text-text-muted",
+    timeBadge: "bg-surface-overlay/70 text-text-muted",
+    unreadBadge: "bg-text-muted text-text-inverse",
+  },
+  mention: {
+    container: "bg-danger/9",
+    title: "text-text-primary",
+    preview: "text-text-secondary",
+    time: "text-danger",
+    timeBadge: "bg-danger/12 text-danger",
+    unreadBadge: "bg-danger text-text-inverse",
+  },
+};
+
+const resolveRoomItemVisualState = ({
+  isActive,
+  hasUnreadMention,
+  unreadCount,
+  isMuted,
+}: {
+  isActive: boolean;
+  hasUnreadMention: boolean;
+  unreadCount: number;
+  isMuted: boolean;
+}): RoomItemVisualState => {
+  if (isActive) {
+    return "active";
+  }
+
+  if (hasUnreadMention) {
+    return "mention";
+  }
+
+  if (unreadCount > 0) {
+    return "unread";
+  }
+
+  if (isMuted) {
+    return "muted";
+  }
+
+  return "default";
+};
+
+const resolvePresenceStatus = (
+  presenceState: string | undefined,
+  fallbackStatus: string | undefined,
+): UserStatus | undefined => {
+  const nextStatus = presenceState || fallbackStatus;
+  if (
+    nextStatus === "online" ||
+    nextStatus === "offline" ||
+    nextStatus === "away" ||
+    nextStatus === "idle" ||
+    nextStatus === "dnd" ||
+    nextStatus === "busy" ||
+    nextStatus === "invisible"
+  ) {
+    return nextStatus as UserStatus;
+  }
+
+  return undefined;
+};
+
+const buildPreviewText = (
+  conversation: Conversation,
+  currentUser: Pick<UserSummary, "id" | "displayName" | "username">,
+): string => {
+  const lastMessage = conversation.lastMessage;
+  if (!lastMessage) return "";
+
+  const messagePreview = getMessagePreview(lastMessage, currentUser.id, 240);
+  if (!messagePreview) return "";
+
+  if (lastMessage.type === "system" || isDirectConversation(conversation)) {
+    return truncateTextWithEllipsis(messagePreview, 52);
+  }
+
+  const directPartner = getOtherParticipant(conversation, currentUser.id);
+  const senderParticipant = (conversation.participants || []).find(
+    (participant) => participant.id === lastMessage.senderId,
+  );
+
+  const senderLabel =
+    lastMessage.senderId === currentUser.id
+      ? i18n.t("chat:message.you")
+      : getUserDisplayName(senderParticipant) ||
+        getUserDisplayName(directPartner) ||
+        lastMessage.senderName?.trim() ||
+        i18n.t("common:labels.conversation");
+
+  return truncateTextWithEllipsis(`${senderLabel}: ${messagePreview}`, 52);
+};
+
+const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
   conversation,
-  currentUser,
-  collapsed,
+  layoutState,
+  currentUserId,
+  displayName,
+  previewText,
+  previewState,
+  timeLabel,
+  unreadCount,
+  unreadLabel,
+  hasUnreadMention,
+  avatarSrc,
+  avatarStatus,
+  isDirect,
   isActive,
   isKeyboardActive,
   onSelect,
 }) => {
   const { t } = useTranslation();
-  const fallbackConversationName = t("common:labels.conversation");
-
-  const directPartner = useMemo(
-    () => getOtherParticipant(conversation, currentUser.id),
-    [conversation, currentUser.id],
-  );
-  const displayName = useMemo(
-    () =>
-      getConversationDisplayName(conversation, currentUser.id) ||
-      fallbackConversationName,
-    [conversation, currentUser, fallbackConversationName],
-  );
-  const previewText = useMemo(() => {
-    const lastMessage = conversation.lastMessage;
-    if (!lastMessage) return "";
-
-    const messagePreview = getMessagePreview(lastMessage, currentUser.id, 44);
-    if (!messagePreview) return "";
-
-    const senderParticipant = (conversation.participants || []).find(
-      (participant) => participant.id === lastMessage.senderId,
-    );
-
-    const senderLabel =
-      lastMessage.senderId === currentUser.id
-        ? t("chat:message.you")
-        : getUserDisplayName(senderParticipant) ||
-          getUserDisplayName(directPartner) ||
-          lastMessage.senderName?.trim() ||
-          t("common:labels.conversation");
-
-    return `${senderLabel}: ${messagePreview}`;
-  }, [
-    conversation.lastMessage,
-    conversation.participants,
-    currentUser.id,
-    directPartner,
-    t,
-  ]);
-  const previewState = useMemo(
-    () => getMessagePreviewState(conversation.lastMessage, currentUser.id),
-    [conversation.lastMessage, currentUser.id],
-  );
-  const timeLabel = useMemo(() => {
-    if (!conversation.lastMessage?.createdAt) return "";
-    return formatRelativeTime(new Date(conversation.lastMessage.createdAt));
-  }, [conversation.lastMessage]);
-
-  const unreadCount = conversation.unreadCount || 0;
-  const unreadMention = hasConversationMention(conversation, currentUser);
-  const isDirect = isDirectConversation(conversation);
-  const conversationTypeLabel = isDirect
-    ? t("sidebar:room.type.direct")
-    : t("sidebar:room.type.group");
-  const participantCountLabel =
-    !isDirect && (conversation.participants?.length ?? 0) > 0
-      ? t("chat:header.members", {
-          count: conversation.participants?.length ?? 0,
-        })
-      : "";
-
-  const avatarSrc = getConversationAvatar(conversation, currentUser.id);
-  const avatarStatus = isDirect ? directPartner?.status : undefined;
-
-  if (collapsed) {
-    return (
-      <button
-        type="button"
-        onClick={() => onSelect(conversation.id)}
-        role="option"
-        aria-selected={isActive}
-        className={clsx(
-          "group relative mx-2 my-1 flex h-room-item w-room-item items-center justify-center rounded-lg",
-          "transition-micro",
-          "hover:bg-surface-hover",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-          isActive && "bg-primary/14 text-primary ring-1 ring-primary/45",
-          !isActive &&
-            isKeyboardActive &&
-            "bg-surface-overlay ring-1 ring-border",
-        )}
-        aria-label={displayName}
-        title={displayName}
-      >
-        <Avatar
-          src={avatarSrc}
-          alt={displayName}
-          size="md"
-          status={avatarStatus}
-          showStatus={isDirect}
-        />
-
-        {unreadCount > 0 && (
-          <span className="absolute right-2 top-2">
-            <Badge
-              count={unreadCount}
-              size="sm"
-              variant={unreadMention ? "danger" : "primary"}
-              className="min-w-5 text-caption"
-            />
-          </span>
-        )}
-
-        <span
-          className={clsx(
-            "absolute bottom-1.5 right-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full border border-border/70 bg-surface-raised text-text-muted",
-            isActive && "text-primary",
-          )}
-          aria-label={conversationTypeLabel}
-        >
-          {isDirect ? (
-            <UserIcon className="h-2.5 w-2.5" />
-          ) : (
-            <UserGroupIcon className="h-2.5 w-2.5" />
-          )}
-        </span>
-      </button>
-    );
-  }
+  const isDense = layoutState !== "normal";
+  const visualState = resolveRoomItemVisualState({
+    isActive,
+    hasUnreadMention,
+    unreadCount,
+    isMuted: Boolean(conversation.isMuted),
+  });
+  const visualStyles = ROOM_ITEM_STATE_MAP[visualState];
+  const hoverStyles = !isActive ? ROOM_ITEM_STATE_MAP.hover : null;
+  const shouldEmphasizeUnreadPreview =
+    visualState === "unread" || visualState === "mention";
+  const previewToneClass =
+    previewState === "failed" ? "text-danger" : visualStyles.preview;
+  const timeBadgeClasses =
+    timeLabel.length > 0 && (visualState === "active" || shouldEmphasizeUnreadPreview)
+      ? visualStyles.timeBadge
+      : visualState === "muted"
+        ? visualStyles.timeBadge
+        : "bg-transparent";
 
   return (
     <button
@@ -166,150 +251,232 @@ const BaseRoomItem: React.FC<RoomItemProps> = ({
       onClick={() => onSelect(conversation.id)}
       role="option"
       aria-selected={isActive}
+      data-room-state={visualState}
+      data-keyboard-active={isKeyboardActive}
       className={clsx(
-        "relative mx-2 my-0.5 flex h-room-item w-[calc(100%-var(--space-4))] items-center rounded-lg px-2.5",
-        "transition-micro",
-        "hover:bg-surface-hover",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-        isActive && "bg-primary/12 ring-1 ring-primary/35",
-        !isActive &&
-          isKeyboardActive &&
-          "bg-surface-overlay ring-1 ring-border",
+        "group relative mx-1 flex h-[var(--size-room-item)] w-[calc(100%-0.5rem)] items-center text-left",
+        "transition-micro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+        isDense ? "rounded-md px-2" : "rounded-lg px-2.5",
+        visualStyles.container,
+        hoverStyles?.container,
       )}
       aria-label={displayName}
     >
-      {(isActive || unreadCount > 0) && (
-        <span
-          className={clsx(
-            "absolute left-1 top-1/2 h-9 -translate-y-1/2 rounded-full",
-            isActive ? "w-1 bg-primary" : "w-0.5 bg-primary/60",
-          )}
-          aria-hidden="true"
-        />
-      )}
+      <div
+        className={clsx(
+          "grid w-full grid-cols-[auto,1fr,auto] items-center",
+          isDense ? "gap-2" : "gap-2.5",
+        )}
+      >
+        {isDirect ? (
+          <Avatar
+            src={avatarSrc}
+            alt={displayName}
+            size="sm"
+            status={avatarStatus}
+            showStatus
+          />
+        ) : (
+          <GroupAvatar
+            conversation={conversation}
+            currentUserId={currentUserId}
+            size="sm"
+          />
+        )}
 
-      <div className="grid w-full grid-cols-[auto,1fr,auto] items-center gap-2.5">
-        <Avatar
-          src={avatarSrc}
-          alt={displayName}
-          size="md"
-          status={avatarStatus}
-          showStatus={isDirect}
-        />
-
-        <div className="min-w-0">
-          <div className="mb-0.5 flex items-center gap-1">
-            <p
-              className={clsx(
-                "truncate text-body-sm leading-5 text-text-primary",
-                unreadCount > 0 && "font-semibold",
-              )}
-            >
-              {displayName}
-            </p>
-
-            <span
-              className={clsx(
-                "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
-                isDirect
-                  ? "border-primary/25 bg-primary/10 text-primary"
-                  : "border-border bg-surface-overlay text-text-secondary",
-              )}
-            >
-              {isDirect ? (
-                <UserIcon className="mr-1 h-3 w-3" aria-hidden="true" />
-              ) : (
-                <UserGroupIcon className="mr-1 h-3 w-3" aria-hidden="true" />
-              )}
-              {conversationTypeLabel}
-            </span>
-
-            {conversation.isMuted && (
-              <SpeakerXMarkIcon
-                className="h-4 w-4 shrink-0 text-text-muted"
-                aria-hidden="true"
-              />
+        <div className="min-w-0 text-left">
+          <p
+            className={clsx(
+              "truncate text-left font-medium",
+              isDense
+                ? "text-[13px] leading-[1.05rem]"
+                : "text-[14px] leading-[1.1rem]",
+              visualStyles.title,
+              hoverStyles?.title,
             )}
-            {conversation.isPinned && (
-              <BookmarkIcon
-                className="h-4 w-4 shrink-0 text-text-muted"
-                aria-hidden="true"
-              />
-            )}
-            {unreadMention && (
-              <AtSymbolIcon
-                className="h-4 w-4 shrink-0 text-danger"
-                aria-label={t("sidebar:room.mentioned")}
-              />
-            )}
-          </div>
+          >
+            {displayName}
+          </p>
 
           <p
             className={clsx(
-              "truncate text-caption leading-4 text-start",
-              previewState === "failed"
-                ? "font-medium text-danger"
-                : previewState
-                  ? "font-medium text-warning"
-                  : unreadCount > 0
-                    ? "font-medium text-text-secondary"
-                    : "text-text-muted",
+              "mt-0.5 truncate pr-1 text-left",
+              isDense
+                ? "text-[11px] leading-[0.95rem]"
+                : "text-[12px] leading-[1rem]",
+              hoverStyles?.preview,
+              previewToneClass,
             )}
+            style={{
+              fontWeight:
+                previewState === "failed" || shouldEmphasizeUnreadPreview
+                  ? "var(--chat-unread-preview-weight)"
+                  : "400",
+            }}
           >
             {previewText || t("sidebar:room.noMessagesYet")}
           </p>
-          {!isDirect && participantCountLabel && (
-            <p className="mt-0.5 truncate text-[11px] text-text-muted">
-              {participantCountLabel}
-            </p>
-          )}
         </div>
 
-        <div className="flex h-full min-w-room-meta flex-col items-end justify-between py-1">
+        <div
+          className={clsx(
+            "flex h-full min-w-room-meta flex-col items-end justify-center",
+            isDense ? "gap-1" : "gap-1.5",
+          )}
+        >
           <span
             className={clsx(
-              "text-caption tabular-nums",
-              unreadCount > 0
-                ? "font-semibold text-primary"
-                : "text-text-muted",
+              "inline-flex items-center rounded-full font-medium tabular-nums",
+              isDense
+                ? "min-h-4 px-1 py-0 text-[10px]"
+                : "min-h-4 px-1 py-0 text-[11px]",
+              visualStyles.time,
+              timeBadgeClasses,
+              hoverStyles?.time,
+              hoverStyles?.timeBadge,
             )}
           >
             {timeLabel}
           </span>
 
           {unreadCount > 0 ? (
-            <Badge
-              count={unreadCount}
-              size="sm"
-              variant={
-                unreadMention
-                  ? "danger"
-                  : conversation.isMuted
-                    ? "muted"
-                    : "primary"
-              }
-              className="min-w-5 px-1.5 text-caption shadow-xs"
-            />
-          ) : (
-            <span className="h-4" aria-hidden="true" />
-          )}
+            <span
+              className={clsx(
+                "sidebar-unread-badge inline-flex items-center justify-center rounded-full font-semibold leading-none",
+                isDense
+                  ? "min-h-4 min-w-4 px-1 text-[10px]"
+                  : "min-h-[18px] min-w-[18px] px-1.5 text-[10px]",
+                visualStyles.unreadBadge,
+              )}
+            >
+              {unreadLabel}
+            </span>
+          ) : null}
         </div>
       </div>
     </button>
   );
 };
 
-export const RoomItem = React.memo(
-  BaseRoomItem,
+const RoomItemView = React.memo(
+  RoomItemViewComponent,
   (prev, next) =>
     prev.conversation === next.conversation &&
-    prev.currentUser.id === next.currentUser.id &&
-    prev.currentUser.username === next.currentUser.username &&
-    prev.currentUser.displayName === next.currentUser.displayName &&
-    prev.collapsed === next.collapsed &&
+    prev.layoutState === next.layoutState &&
+    prev.currentUserId === next.currentUserId &&
+    prev.displayName === next.displayName &&
+    prev.previewText === next.previewText &&
+    prev.previewState === next.previewState &&
+    prev.timeLabel === next.timeLabel &&
+    prev.unreadCount === next.unreadCount &&
+    prev.unreadLabel === next.unreadLabel &&
+    prev.hasUnreadMention === next.hasUnreadMention &&
+    prev.avatarSrc === next.avatarSrc &&
+    prev.avatarStatus === next.avatarStatus &&
+    prev.isDirect === next.isDirect &&
     prev.isActive === next.isActive &&
     prev.isKeyboardActive === next.isKeyboardActive &&
     prev.onSelect === next.onSelect,
 );
 
-export default RoomItem;
+export const RoomItemContainer = React.memo(
+  ({
+    conversationId,
+    layoutState,
+    currentUser,
+    isActive,
+    isKeyboardActive,
+    onSelect,
+  }: RoomItemContainerProps) => {
+    const conversation = useChatStore(
+      useMemo(
+        () => (state) => state.conversationById[conversationId] ?? null,
+        [conversationId],
+      ),
+    );
+    const directPartnerId = useMemo(
+      () => (conversation ? getOtherParticipant(conversation, currentUser.id)?.id ?? null : null),
+      [conversation, currentUser.id],
+    );
+    const presenceState = usePresenceStore(
+      useMemo(
+        () => (state) =>
+          directPartnerId ? state.presenceMap[directPartnerId]?.state : undefined,
+        [directPartnerId],
+      ),
+    );
+
+    const viewModel = useMemo(() => {
+      if (!conversation) {
+        return null;
+      }
+
+      const displayName =
+        getConversationDisplayName(conversation, currentUser.id) ||
+        i18n.t("common:labels.conversation");
+      const previewState = getMessagePreviewState(
+        conversation.lastMessage,
+        currentUser.id,
+      );
+      const referenceTime =
+        conversation.lastMessageSortAt ||
+        conversation.lastMessageAt ||
+        conversation.lastMessage?.createdAt;
+      const unreadCount = Math.max(0, conversation.unreadCount || 0);
+      const isDirect = isDirectConversation(conversation);
+
+      return {
+        conversation,
+        displayName,
+        previewText: buildPreviewText(conversation, currentUser),
+        previewState,
+        timeLabel: referenceTime
+          ? formatRelativeTime(new Date(referenceTime))
+          : "",
+        unreadCount,
+        unreadLabel: unreadCount > 99 ? "99+" : String(unreadCount),
+        hasUnreadMention: hasConversationMention(conversation, currentUser),
+        avatarSrc: getConversationAvatar(conversation, currentUser.id),
+        avatarStatus: resolvePresenceStatus(
+          presenceState,
+          conversation.otherUser?.status,
+        ),
+        isDirect,
+      };
+    }, [conversation, currentUser, presenceState]);
+
+    if (!viewModel) {
+      return null;
+    }
+
+    return (
+      <RoomItemView
+        conversation={viewModel.conversation}
+        layoutState={layoutState}
+        currentUserId={currentUser.id}
+        displayName={viewModel.displayName}
+        previewText={viewModel.previewText}
+        previewState={viewModel.previewState}
+        timeLabel={viewModel.timeLabel}
+        unreadCount={viewModel.unreadCount}
+        unreadLabel={viewModel.unreadLabel}
+        hasUnreadMention={viewModel.hasUnreadMention}
+        avatarSrc={viewModel.avatarSrc}
+        avatarStatus={viewModel.avatarStatus}
+        isDirect={viewModel.isDirect}
+        isActive={isActive}
+        isKeyboardActive={isKeyboardActive}
+        onSelect={onSelect}
+      />
+    );
+  },
+  (prev, next) =>
+    prev.conversationId === next.conversationId &&
+    prev.layoutState === next.layoutState &&
+    prev.currentUser === next.currentUser &&
+    prev.isActive === next.isActive &&
+    prev.isKeyboardActive === next.isKeyboardActive &&
+    prev.onSelect === next.onSelect,
+);
+
+export default RoomItemContainer;

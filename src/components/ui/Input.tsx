@@ -89,18 +89,17 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             type={inputType}
             disabled={disabled}
             className={clsx(
-              "w-full rounded-lg border bg-surface px-4 py-2.5",
+              "input-surface w-full px-4",
               "text-body-sm text-text-primary placeholder:text-text-muted",
-              "transition-all duration-200",
-              "focus:outline-none focus:ring-2 focus:ring-offset-0",
+              "focus:outline-none",
               !error &&
                 !isValid &&
-                "border-border focus:border-primary focus:ring-focus/20",
+                "border-border",
               error &&
-                "border-danger pr-10 focus:border-danger focus:ring-danger/20",
+                "border-danger pr-10 focus:border-danger focus:ring-danger/16",
               isValid &&
                 !error &&
-                "border-success pr-10 focus:border-success focus:ring-success/20",
+                "border-success pr-10 focus:border-success focus:ring-success/16",
               disabled &&
                 "cursor-not-allowed border-disabled-border bg-disabled-bg text-text-disabled opacity-70",
               leftIcon && "pl-11",
@@ -119,7 +118,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="text-text-muted transition-colors hover:text-text-secondary focus:outline-none"
+                className="rounded text-text-muted transition-colors hover:text-text-secondary focus:outline-none"
                 tabIndex={-1}
               >
                 {showPassword ? (
@@ -212,12 +211,11 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           id={textareaId}
           disabled={disabled}
           className={clsx(
-            "w-full resize-none rounded-lg border bg-surface px-4 py-2.5",
+            "w-full resize-none rounded-md border border-border bg-surface px-4 py-3",
             "text-body-sm text-text-primary placeholder:text-text-muted",
             "transition-all duration-200",
-            "focus:outline-none focus:ring-2 focus:ring-offset-0",
-            !error && "border-border focus:border-primary focus:ring-focus/20",
-            error && "border-danger focus:border-danger focus:ring-danger/20",
+            "focus:border-primary focus:outline-none focus:ring-2 focus:ring-focus/12 focus:ring-offset-0",
+            error && "border-danger focus:border-danger focus:ring-danger/16",
             disabled &&
               "cursor-not-allowed border-disabled-border bg-disabled-bg text-text-disabled opacity-70",
             className,

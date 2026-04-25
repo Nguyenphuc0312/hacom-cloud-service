@@ -14,7 +14,7 @@ import {
 } from "@heroicons/react/24/outline";
 import type { MessageActionId } from "../../utils/messageActionPolicy";
 
-type MessageActionsMode = "rail" | "sheet";
+type MessageActionsMode = "rail" | "inline" | "sheet";
 
 interface MessageActionsProps {
   mode: MessageActionsMode;
@@ -102,7 +102,36 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
             key={action.id}
             type="button"
             onClick={() => onAction(action.id)}
+            data-testid={`message-action-${action.id}`}
             className="rounded-full p-2 text-text-secondary transition-fast hover:bg-white/6 hover:text-text-primary"
+            aria-label={action.label}
+            title={action.label}
+          >
+            <action.icon className="h-4 w-4" />
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  if (mode === "inline") {
+    return (
+      <div
+        className={clsx(
+          "inline-flex items-center gap-0.5 rounded-lg border border-border/70 bg-[hsl(var(--chat-panel-bg))/0.96] p-1 shadow-xs backdrop-blur-sm",
+          className,
+        )}
+      >
+        {descriptors.map((action) => (
+          <button
+            key={action.id}
+            type="button"
+            onClick={() => onAction(action.id)}
+            data-testid={`message-action-${action.id}`}
+            className={clsx(
+              "inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary",
+              action.danger && "hover:bg-danger/10 hover:text-danger",
+            )}
             aria-label={action.label}
             title={action.label}
           >
@@ -155,6 +184,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
               key={action.id}
               type="button"
               onClick={() => onAction(action.id)}
+              data-testid={`message-action-${action.id}`}
               className={clsx(
                 baseButtonClass,
                 "w-full text-left",

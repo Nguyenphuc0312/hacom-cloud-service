@@ -38,20 +38,35 @@
       "retry": "Retry",
       "failedRetry": "Failed to send. Click to retry",
       "failedInline": "Failed to send",
-      "pendingInline": "Syncing"
+      "pendingInline": "Sending",
+      "networkError": "No network connection. Please retry.",
+      "timeoutError": "Message timed out. Please retry.",
+      "backend4xxError": "Message was rejected. Please retry.",
+      "backend5xxError": "Server is busy. Please try again.",
+      "slowModeError": "Slow mode is active. Please wait and retry.",
+      "unknownError": "Could not send message."
     },
     "actions": {
       "react": "React",
       "reply": "Reply",
       "forward": "Forward",
       "copy": "Copy",
+      "copyDetails": "Copy details",
+      "inspect": "Inspect message",
       "edit": "Edit",
       "delete": "Delete"
     },
+    "structuredBlock": "Structured content",
+    "expandLong": "Show more",
+    "collapseLong": "Show less",
+    "editedAtNoHistory": "Edited at {{time}}",
+    "editedNoHistory": "Edited",
     "newLabel": "New messages ({{count}})",
     "newAria": "New messages",
     "inConversationAria": "Messages in conversation",
     "loadMore": "Loading...",
+    "loadingHistory": "Loading conversation history...",
+    "loadingMoreHistory": "Loading more history",
     "senderYou": "You:"
   },
   "composer": {
@@ -70,12 +85,14 @@
     "sendMessage": "Send message",
     "sending": "Sending message",
     "sentAnnouncement": "Message sent",
+    "optimisticAnnouncement": "Message pending server confirmation",
     "queuedAnnouncement": "Message queued",
     "failedAnnouncement": "Message failed to send",
-    "reconnectingHint": "Reconnecting. New messages will be queued.",
-    "offlineHint": "Offline. Messages will send automatically when connection returns.",
+    "reconnectingHint": "Reconnecting. You can keep sending while messages are being confirmed.",
+    "offlineHint": "Offline. Messages may fail and can be retried.",
     "permissionDenied": "You can no longer send messages in this conversation.",
     "blockedConversation": "You cannot send messages in this conversation.",
+    "readonlyGroup": "Only group admins can send messages right now.",
     "recordVoice": "Record voice message",
     "uploading": "Uploading...",
     "cancelUpload": "Cancel",
@@ -103,6 +120,7 @@
   "selection": {
     "enter": "Select messages",
     "toolbar": "Selection actions",
+    "selectMessage": "Select message",
     "selected": "{{count}} selected",
     "selected_one": "{{count}} selected",
     "selected_other": "{{count}} selected"
@@ -117,6 +135,9 @@
     "resultCount_one": "{{count}} result",
     "resultCount_other": "{{count}} results"
   },
+  "conversation": {
+    "untitled": "Untitled conversation"
+  },
   "contactShare": {
     "title": "Share contact",
     "description": "Share your card or send someone from your contacts.",
@@ -130,6 +151,7 @@
     "noResults": "No contacts found",
     "shareAction": "Share",
     "viewProfile": "View profile",
+    "invalidProfile": "This contact card cannot start a chat.",
     "sent": "Contact shared",
     "failed": "Unable to share contact"
   },
@@ -148,6 +170,8 @@
     "previous": "Previous file",
     "next": "Next file",
     "instructions": "Use arrow keys to navigate files",
+    "openInNewTab": "Open in new tab",
+    "audioNotSupported": "Your browser does not support audio playback.",
     "blocked": "File blocked by security policy",
     "deleted": "File no longer available",
     "scanning": "Scanning file",

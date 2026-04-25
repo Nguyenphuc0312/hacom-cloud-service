@@ -6,6 +6,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { messageApi } from "../services/api";
 import { extractApiError } from "../lib/apiContract";
+import { resolveConversationId } from "../lib/conversationIdentity";
 import type { Message } from "../types";
 
 interface UsePinnedMessagesReturn {
@@ -52,12 +53,10 @@ export const usePinnedMessages = (
     if (!conversationId || typeof window === "undefined") return;
 
     const handler = (event: Event) => {
-      const custom = event as CustomEvent<{
-        conversationId?: string;
-        roomId?: string;
-      }>;
-      const updatedConversationId =
-        custom.detail?.conversationId ?? custom.detail?.roomId;
+      const custom = event as CustomEvent<Record<string, unknown> | undefined>;
+      const updatedConversationId = resolveConversationId(custom.detail, {
+        source: "usePinnedMessages.group:pin:updated",
+      });
       if (updatedConversationId === conversationId) {
         void fetchPinned();
       }

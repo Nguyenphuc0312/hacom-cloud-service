@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { UserSettingsUpdatedPayload } from "@hacom/chat-shared-types";
+import type { UserSettingsUpdatedPayload } from "@hacom/chat-shared-types/chat";
 import { defaultSettings } from "./defaults";
 import type { SettingsSchema } from "./types";
 
@@ -119,5 +119,25 @@ describe("settingsStore realtime convergence", () => {
     const state = useSettingsStore.getState();
     expect(state.version).toBe(21);
     expect(state.privacy.showOnlineStatus).toBe(true);
+  });
+
+  it("ignores deprecated allowStrangersMessage local patches", () => {
+    resetSettingsStore();
+    useSettingsStore.setState({
+      privacy: {
+        ...useSettingsStore.getState().privacy,
+        allowStrangersMessage: false,
+      },
+    });
+
+    useSettingsStore.getState().updateSettings({
+      privacy: { allowStrangersMessage: true },
+    });
+
+    vi.advanceTimersByTime(2000);
+
+    const state = useSettingsStore.getState();
+    expect(state.privacy.allowStrangersMessage).toBe(false);
+    expect(syncSettingsToServerMock).not.toHaveBeenCalled();
   });
 });

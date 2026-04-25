@@ -3,7 +3,7 @@
  * Manages raw WebSocket connection and real-time chat events.
  */
 
-import { useEffect, useCallback, useRef, useState } from "react";
+import { useEffect, useCallback, useMemo, useRef, useState } from "react";
 import {
   authenticateSocket,
   initSocket,
@@ -17,9 +17,14 @@ import {
 import { AUTH_CONFIG } from "../config";
 import { resetAuthFailureState } from "../lib/axios";
 import { unwrapApiSuccess } from "../lib/apiContract";
+import {
+  resolveConversationId,
+  resolveConversationIds,
+} from "../lib/conversationIdentity";
 import { useAuthStore, useChatStore, useGroupStore } from "../stores";
 import { useFriendshipStore } from "../stores/friendshipStore";
 import { getAccessToken } from "../services/tokenService";
+import { conversationApi } from "../services/api";
 import {
   ensureFreshAccessToken,
   refreshAccessTokenShared,
@@ -31,8 +36,16 @@ import {
   notifyRoomInline,
   notifySidebarState,
 } from "../utils/notificationRouter";
+import {
+  broadcastUnreadSnapshot,
+  emitBrowserNotification,
+  isDocumentVisibleAndFocused,
+  subscribeUnreadSnapshotBroadcast,
+  syncAppBadge,
+  syncDocumentTitleBadge,
+} from "../utils/realtimeNotifications";
 import { logMessageDebug } from "../utils/messageDebug";
-import { buildMessageCorrelationKey } from "../utils/messageIdentity";
+import { normalizeConversation } from "../lib/conversationAdapter";
 import {
   registerChatEvents,
   registerConnectionEvents,
@@ -42,8 +55,52 @@ import {
   registerPresenceEvents,
   registerSyncEvents,
   toFriendshipRealtimeDetail,
+  createChatRealtimeAdapter,
+  hasMessageSequenceGap,
+  needsSelfMessageIdentityResync,
+  normalizeMessageRealtimeEvent,
 } from "../features/chat/realtime";
+import type { NormalizedMessageRealtimeEvent } from "../features/chat/realtime/realtimeEventTypes";
+import { chatApi } from "../features/api/chatApi";
+import { findMessageIdentityIndex } from "../features/chat/domain/messageIdentity";
+import { dispatchNotificationClick } from "../features/chat/events/chatUiEvents";
 import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
+import {
+  realtimeMessageDeleted,
+  realtimeMessageReactionChanged,
+  realtimeMessageReceived,
+  realtimeMessageUpdated,
+  realtimeReadCursorUpdated,
+} from "../features/realtime/realtimeMiddleware";
+import { realtimeActions } from "../features/realtime/realtimeSlice";
+import { store } from "../store";
+import { useAppDispatch } from "../store/hooks";
+import { useSettingsStore } from "../settings/settingsStore";
+import {
+  acknowledgeConversationLeft,
+  createConversationSyncCoordinatorState,
+  drainPendingConversationSync,
+  drainPendingConversationSyncForResyncRequired,
+  registerConversationJoinIntent,
+  removeConversationSyncTracking,
+  type PendingConversationSyncStrategy,
+} from "./useWebSocketConversationCoordinator";
+import {
+  createWebSocketResyncCoordinator,
+  createWebSocketResyncCoordinatorState,
+} from "./useWebSocketResyncCoordinator";
+import {
+  createWebSocketAuthCoordinator,
+  createWebSocketAuthCoordinatorState,
+} from "./useWebSocketAuthCoordinator";
+import {
+  createWebSocketConnectionLifecycle,
+  createWebSocketConnectionLifecycleState,
+  normalizeDisconnectEvent,
+} from "./useWebSocketConnectionLifecycle";
+import { useNotificationStore } from "../features/notification/state/notificationStore";
+import type { UserSettingsUpdatedPayload } from "@hacom/chat-shared-types/chat";
+import type { Message, TypingStatus } from "../types";
 
 interface UseWebSocketOptions {
   autoConnect?: boolean;
@@ -58,14 +115,18 @@ interface UseWebSocketReturn {
   connect: () => void;
   disconnect: () => void;
   emit: (event: string, data: unknown) => void;
-  joinRoom: (
-    roomId: string,
+  joinConversation: (
+    conversationId: string,
     options?: { skipInitialDeltaSync?: boolean },
   ) => void;
-  leaveRoom: (roomId: string) => void;
-  sendMessage: (roomId: string, content: string, type?: string) => void;
-  sendTyping: (roomId: string) => void;
-  stopTyping: (roomId: string) => void;
+  leaveConversation: (conversationId: string) => void;
+  sendMessage: (
+    conversationId: string,
+    content: string,
+    type?: string,
+  ) => void;
+  sendTyping: (conversationId: string) => void;
+  stopTyping: (conversationId: string) => void;
 }
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
@@ -76,120 +137,119 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
 const asString = (value: unknown): string | null =>
   typeof value === "string" && value.trim().length > 0 ? value : null;
 
-const getConversationId = (payload: Record<string, unknown>): string | null => {
-  return (
-    asString(payload.conversationId) ??
-    asString(payload.roomId) ??
-    asString(payload.room_id) ??
-    asString(payload.room) ??
-    asString(asRecord(payload.message)?.conversationId) ??
-    asString(asRecord(payload.message)?.roomId) ??
-    asString(asRecord(payload.message)?.room_id) ??
-    null
-  );
-};
-
-const getMessagePayload = (
-  payload: Record<string, unknown>,
-): Record<string, unknown> | null => {
-  const nested = asRecord(payload.message);
-  if (nested) return nested;
-  if (
-    asString(payload.id) ||
-    asString(payload._id) ||
-    asString(payload.messageId)
-  ) {
-    return payload;
-  }
-  return null;
-};
-
-const toCursorValue = (value: unknown): string | undefined => {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return value.toISOString();
-  }
-
-  if (typeof value === "string" || typeof value === "number") {
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toISOString();
+const getLatestServerSeq = (messages: Array<{ serverSeq?: number }>): number | null => {
+  let latest: number | null = null;
+  messages.forEach((message) => {
+    if (typeof message.serverSeq !== "number" || !Number.isFinite(message.serverSeq)) {
+      return;
     }
-  }
+    latest = latest === null ? message.serverSeq : Math.max(latest, message.serverSeq);
+  });
+  return latest;
+};
 
-  return undefined;
+const getConversationId = (payload: Record<string, unknown>): string | null => {
+  return resolveConversationId(payload, {
+    source: "useWebSocket.payload",
+    nestedKeys: ["message"],
+  });
 };
 
 const getConversationIds = (payload: Record<string, unknown>): string[] => {
-  const candidates = [payload.conversationIds, payload.roomIds, payload.rooms];
-
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate)) {
-      return candidate
-        .map((item) => asString(item))
-        .filter((item): item is string => typeof item === "string");
-    }
+  const normalizedConversationIds = resolveConversationIds(payload, {
+    source: "useWebSocket.payloadCollection",
+  });
+  if (normalizedConversationIds.length > 0) {
+    return normalizedConversationIds;
   }
 
   const singleConversationId = getConversationId(payload);
   return singleConversationId ? [singleConversationId] : [];
 };
 
-type MessageCursor = {
-  at: string;
-  id: string;
+const toRealtimeCacheMessage = (
+  event: NormalizedMessageRealtimeEvent,
+): Message => ({
+  ...(event.messagePayload as unknown as Message),
+  id:
+    asString(event.messagePayload.id) ??
+    asString(event.messagePayload._id) ??
+    asString(event.messagePayload.messageId) ??
+    event.messageId,
+  conversationId: event.conversationId,
+  ...(event.stableId ? { stableId: event.stableId } : {}),
+  ...(event.clientMessageId ? { clientMessageId: event.clientMessageId } : {}),
+  ...(event.localId ? { localId: event.localId } : {}),
+});
+
+const getConversationMessageCache = (conversationId: string) =>
+  chatApi.endpoints.getMessages.select({ conversationId })(store.getState())
+    .data?.messages ?? [];
+
+const hasMessageInRtkCache = (
+  conversationId: string,
+  message: Message,
+): boolean =>
+  findMessageIdentityIndex(getConversationMessageCache(conversationId), message) >=
+  0;
+
+const toRealtimeConnectionStatus = (
+  state: ConnectionState,
+): Parameters<typeof realtimeActions.setConnectionStatus>[0] => {
+  switch (state) {
+    case "connected":
+      return "connected";
+    case "connecting":
+    case "authenticating":
+    case "reconnecting":
+      return "connecting";
+    case "error":
+      return "error";
+    case "disconnected":
+    default:
+      return "disconnected";
+  }
 };
 
-export type PendingRoomSyncStrategy = "skip" | "initial-sync" | "reconnect";
+export const shouldSkipGroupConversationRefreshForCurrentUser = (
+  payload: Record<string, unknown> | null,
+  currentUserId: string | null | undefined,
+): boolean => {
+  if (!payload || !currentUserId) {
+    return false;
+  }
 
-type DrainedPendingRoomSync = {
-  roomId: string;
-  strategy: PendingRoomSyncStrategy;
+  const targetUserId =
+    asString(payload.userId) ?? asString(payload.targetUserId);
+  return targetUserId === currentUserId;
 };
 
-export const drainPendingRoomSync = (
-  pendingMap: Map<string, PendingRoomSyncStrategy>,
-  joinedRooms: Set<string>,
-  targetRoomIds: string[],
-): DrainedPendingRoomSync[] => {
-  const roomIdsToDrain =
-    targetRoomIds.length > 0
-      ? targetRoomIds.filter((roomId) => joinedRooms.has(roomId))
-      : Array.from(pendingMap.keys());
+export const shouldUseDeltaConversationRefresh = ({
+  conversationId,
+  selectedConversationId,
+  joinedConversationIds,
+}: {
+  conversationId: string | null | undefined;
+  selectedConversationId: string | null | undefined;
+  joinedConversationIds: ReadonlySet<string>;
+}): boolean =>
+  Boolean(
+    conversationId &&
+      (selectedConversationId === conversationId ||
+        joinedConversationIds.has(conversationId)),
+  );
 
-  const drained: DrainedPendingRoomSync[] = [];
-  roomIdsToDrain.forEach((roomId) => {
-    const strategy = pendingMap.get(roomId) ?? "initial-sync";
-    pendingMap.delete(roomId);
-    drained.push({ roomId, strategy });
-  });
-
-  return drained;
+export {
+  drainPendingConversationSync,
+  drainPendingConversationSyncForResyncRequired,
 };
-
-export const drainPendingRoomSyncForResyncRequired = (
-  pendingMap: Map<string, PendingRoomSyncStrategy>,
-  joinedRooms: Set<string>,
-): DrainedPendingRoomSync[] => {
-  return Array.from(joinedRooms).map((roomId) => {
-    const pending = pendingMap.get(roomId);
-    pendingMap.delete(roomId);
-
-    return {
-      roomId,
-      strategy:
-        pending === "initial-sync" || pending === "reconnect"
-          ? pending
-          : "reconnect",
-    };
-  });
-};
+export type { PendingConversationSyncStrategy };
 
 const REMOTE_TYPING_DECAY_INTERVAL_MS = 320;
 const REMOTE_TYPING_HALF_LIFE_MS = 1400;
 const REMOTE_TYPING_VISIBLE_THRESHOLD = 0.12;
-const ROOM_JOIN_ACK_TIMEOUT_MS = 2_000;
-const ROOM_JOIN_RETRY_DELAY_MAX_MS = 8_000;
-const ROOM_SYNC_FALLBACK_TIMEOUT_MS = 2_500;
+const CONVERSATION_JOIN_ACK_TIMEOUT_MS = 2_000;
+const CONVERSATION_JOIN_RETRY_DELAY_MAX_MS = 8_000;
 
 const computeTypingConfidence = (lastEventAt: number, now: number): number =>
   Math.exp(-(now - lastEventAt) / REMOTE_TYPING_HALF_LIFE_MS);
@@ -198,15 +258,28 @@ export const useWebSocket = (
   options: UseWebSocketOptions = {},
 ): UseWebSocketReturn => {
   const { autoConnect = true, onConnect, onDisconnect, onError } = options;
+  const dispatch = useAppDispatch();
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const totalUnreadCount = useChatStore((s) => s.totalUnreadCount);
+  const conversations = useChatStore((s) => s.conversations);
 
-  const addMessage = useChatStore((s) => s.addMessage);
-  const removeMessage = useChatStore((s) => s.removeMessage);
+  const applyConversationParticipantSummary = useChatStore(
+    (s) => s.applyConversationParticipantSummary,
+  );
+  const upsertConversationSummary = useChatStore(
+    (s) => s.upsertConversationSummary,
+  );
+  const applyUnreadSummary = useChatStore((s) => s.applyUnreadSummary);
+  const refreshUnreadSummarySnapshotAction = useChatStore(
+    (s) => s.refreshUnreadSummarySnapshot,
+  );
   const setTyping = useChatStore((s) => s.setTyping);
   const clearTyping = useChatStore((s) => s.clearTyping);
+  const clearConversationTypingStatuses = useChatStore(
+    (s) => s.clearConversationTypingStatuses,
+  );
   const fetchMessages = useChatStore((s) => s.fetchMessages);
-  const markMessagesReadUpTo = useChatStore((s) => s.markMessagesReadUpTo);
   const updateConversation = useChatStore((s) => s.updateConversation);
   const removeConversation = useChatStore((s) => s.removeConversation);
   const selectConversation = useChatStore((s) => s.selectConversation);
@@ -220,60 +293,135 @@ export const useWebSocket = (
   const markJoinRequestResolved = useGroupStore(
     (s) => s.markJoinRequestResolved,
   );
+  const bumpMemberListVersion = useGroupStore((s) => s.bumpMemberListVersion);
 
   const [connectionState, setConnectionState] = useState<ConnectionState>(() =>
     initSocket().getConnectionState(),
   );
 
-  const joinedRoomsRef = useRef<Set<string>>(new Set());
-  const subscribedRoomsRef = useRef<Set<string>>(new Set());
-  const pendingRoomSyncRef = useRef<Map<string, PendingRoomSyncStrategy>>(
-    new Map(),
+  const conversationSyncStateRef = useRef(
+    createConversationSyncCoordinatorState(),
   );
-  const roomJoinRetryTimersRef = useRef<
+  const conversationJoinRetryTimersRef = useRef<
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
-  const roomSyncFallbackTimersRef = useRef<
-    Map<string, ReturnType<typeof setTimeout>>
-  >(new Map());
-  const roomJoinRetryAttemptsRef = useRef<Map<string, number>>(new Map());
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chatRealtimeAdapterRef = useRef(createChatRealtimeAdapter());
+  const suppressUnreadBroadcastRef = useRef(false);
   const emitQueueRef = useRef<Array<{ event: string; data: unknown }>>([]);
-  const hasConnectedOnceRef = useRef(false);
-  const shouldResyncOnConnectRef = useRef(false);
-  const roomResyncInFlightRef = useRef<Map<string, Promise<void>>>(new Map());
-  const conversationRefreshInFlightRef = useRef<Map<string, Promise<void>>>(
-    new Map(),
+  const resyncCoordinatorStateRef = useRef(
+    createWebSocketResyncCoordinatorState(),
   );
+  const authCoordinatorStateRef = useRef(
+    createWebSocketAuthCoordinatorState(),
+  );
+  const connectionLifecycleStateRef = useRef(
+    createWebSocketConnectionLifecycleState(),
+  );
+  const connectionLifecycleRef = useRef<ReturnType<
+    typeof createWebSocketConnectionLifecycle
+  > | null>(null);
   const remoteTypingTimersRef = useRef<
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
   const unsubscribersRef = useRef<Array<() => void>>([]);
-  const wsRecoveryPromiseRef = useRef<Promise<void> | null>(null);
-  const wsReauthFailureHandledRef = useRef(false);
 
   useEffect(() => {
     const socket = initSocket();
     const unsub = socket.onStateChange((state) => {
       logMessageDebug("useWebSocket", "connection_state_changed", {
         state,
-        joinedRooms: Array.from(joinedRoomsRef.current),
+        joinedConversationIds: Array.from(
+          conversationSyncStateRef.current.joinedConversationIds,
+        ),
       });
       setConnectionState(state);
+      dispatch(
+        realtimeActions.setConnectionStatus(toRealtimeConnectionStatus(state)),
+      );
     });
     return () => {
       unsub();
     };
-  }, []);
+  }, [dispatch]);
 
   useEffect(() => {
-    return subscribeToAuthRefreshEvents((event) => {
-      if (event.type === "token_refreshed") {
-        wsReauthFailureHandledRef.current = false;
-        resetAuthFailureState();
-      }
+    syncDocumentTitleBadge(totalUnreadCount);
+    void syncAppBadge(totalUnreadCount);
+  }, [totalUnreadCount]);
+
+  useEffect(() => {
+    if (suppressUnreadBroadcastRef.current) {
+      suppressUnreadBroadcastRef.current = false;
+      return;
+    }
+
+    const syncedAtMs = Date.now();
+    broadcastUnreadSnapshot({
+      totalUnreadCount,
+      conversations: (Array.isArray(conversations) ? conversations : []).map(
+        (conversation) => ({
+          conversationId: conversation.id,
+          unreadCount: conversation.unreadCount ?? 0,
+          lastReadMessageId: conversation.lastReadMessageId ?? null,
+          lastReadAt:
+            typeof conversation.lastReadAt === "string"
+              ? conversation.lastReadAt
+              : conversation.lastReadAt instanceof Date
+                ? conversation.lastReadAt.toISOString()
+                : null,
+        }),
+      ),
+      source: "socket",
+      syncedAtMs,
     });
+  }, [conversations, totalUnreadCount]);
+
+  useEffect(() => {
+    return subscribeUnreadSnapshotBroadcast((snapshot) => {
+      suppressUnreadBroadcastRef.current = true;
+      logMessageDebug("useWebSocket", "cross_tab_unread_snapshot_received", {
+        totalUnreadCount: snapshot.totalUnreadCount,
+        conversationCount: snapshot.conversations.length,
+        syncedAtMs: snapshot.syncedAtMs,
+        source: snapshot.source,
+      });
+      applyUnreadSummary(
+        {
+          totalUnreadCount: snapshot.totalUnreadCount,
+          conversations: snapshot.conversations,
+        },
+        {
+          requestedAtMs: snapshot.syncedAtMs,
+          appliedAtMs: snapshot.syncedAtMs,
+          source: "cross_tab",
+        },
+      );
+    });
+  }, [applyUnreadSummary]);
+
+  const getNotificationPreferences = useCallback(() => {
+    return useSettingsStore.getState().notifications;
   }, []);
+
+  const shouldProcessRealtimeEvent = useCallback(
+    (eventKey: string, details?: Record<string, unknown>): boolean => {
+      if (!eventKey) {
+        return true;
+      }
+
+      if (!chatRealtimeAdapterRef.current.shouldProcessEvent(eventKey)) {
+        logMessageDebug("useWebSocket", "duplicate_realtime_event_suppressed", {
+          eventKey,
+          ...details,
+        });
+        return false;
+      }
+
+      return true;
+    },
+    [],
+  );
 
   const clearRemoteTypingTimer = useCallback(
     (conversationId: string, userId: string) => {
@@ -292,32 +440,45 @@ export const useWebSocket = (
     remoteTypingTimersRef.current.clear();
   }, []);
 
-  const clearRoomJoinRetry = useCallback((roomId: string) => {
-    const timer = roomJoinRetryTimersRef.current.get(roomId);
+  const clearConversationJoinRetry = useCallback((conversationId: string) => {
+    const timer = conversationJoinRetryTimersRef.current.get(conversationId);
     if (timer) {
       clearTimeout(timer);
-      roomJoinRetryTimersRef.current.delete(roomId);
+      conversationJoinRetryTimersRef.current.delete(conversationId);
     }
   }, []);
 
-  const clearAllRoomJoinRetries = useCallback(() => {
-    roomJoinRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
-    roomJoinRetryTimersRef.current.clear();
-    roomJoinRetryAttemptsRef.current.clear();
+  const clearAllConversationJoinRetries = useCallback(() => {
+    conversationJoinRetryTimersRef.current.forEach((timer) =>
+      clearTimeout(timer),
+    );
+    conversationJoinRetryTimersRef.current.clear();
+    conversationSyncStateRef.current.joinRetryAttempts.clear();
   }, []);
 
-  const clearRoomSyncFallback = useCallback((roomId: string) => {
-    const timer = roomSyncFallbackTimersRef.current.get(roomId);
-    if (timer) {
-      clearTimeout(timer);
-      roomSyncFallbackTimersRef.current.delete(roomId);
+  const clearActiveTypingTimeout = useCallback(() => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
     }
   }, []);
 
-  const clearAllRoomSyncFallbacks = useCallback(() => {
-    roomSyncFallbackTimersRef.current.forEach((timer) => clearTimeout(timer));
-    roomSyncFallbackTimersRef.current.clear();
-  }, []);
+  const clearRemoteTypingTimersForConversation = useCallback(
+    (conversationId: string) => {
+      Array.from(remoteTypingTimersRef.current.keys()).forEach((key) => {
+        if (!key.startsWith(`${conversationId}:`)) {
+          return;
+        }
+
+        const timer = remoteTypingTimersRef.current.get(key);
+        if (timer) {
+          clearTimeout(timer);
+        }
+        remoteTypingTimersRef.current.delete(key);
+      });
+    },
+    [],
+  );
 
   const scheduleRemoteTypingDecay = useCallback(
     (conversationId: string, userId: string, userName: string) => {
@@ -365,75 +526,41 @@ export const useWebSocket = (
     [clearRemoteTypingTimer, clearTyping, setTyping],
   );
 
-  const handleWsRefreshFailure = useCallback(
-    async (reason: string, error: unknown) => {
-      if (!wsReauthFailureHandledRef.current) {
-        wsReauthFailureHandledRef.current = true;
-        notifyGlobalToast({
-          level: "error",
-          message: "Session expired. Please login again.",
-          dedupeKey: "auth:session-expired",
-          cooldownMs: 30000,
-        });
-        await useAuthStore.getState().handleAuthFailure("refresh_failed");
-      }
-
-      const message = error instanceof Error ? error.message : "refresh_failed";
-      onError?.(
-        new Error(`WebSocket auth recovery failed (${reason}): ${message}`),
-      );
-    },
+  const authCoordinator = useMemo(
+    () =>
+      createWebSocketAuthCoordinator({
+        state: authCoordinatorStateRef.current,
+        tokenRefreshThreshold: AUTH_CONFIG.TOKEN_REFRESH_THRESHOLD,
+        onError,
+        notifySessionExpired: () => {
+          notifyGlobalToast({
+            level: "error",
+            message: "Session expired. Please login again.",
+            dedupeKey: "auth:session-expired",
+            cooldownMs: 30000,
+          });
+        },
+        handleAuthFailure: () =>
+          useAuthStore.getState().handleAuthFailure("refresh_failed"),
+        resetAuthFailureState,
+        refreshAccessTokenShared,
+        getAccessToken,
+        isTokenExpiringSoon,
+        authenticateSocket,
+        updateSocketAuth,
+        subscribeToAuthRefreshEvents,
+      }),
     [onError],
   );
+  const {
+    subscribeToRefreshEvents,
+    handleConnectFailure,
+    recoverSocketAuth,
+    handleUnauthorizedEvent,
+    handleReauthRequiredEvent,
+  } = authCoordinator;
 
-  const recoverSocketAuth = useCallback(
-    async (
-      trigger: "ws_reauth_required" | "ws_unauthorized" | "ws_close_4401",
-      reason: string,
-      mode: "reauth" | "reconnect" = "reconnect",
-    ) => {
-      if (!wsRecoveryPromiseRef.current) {
-        wsRecoveryPromiseRef.current = (async () => {
-          try {
-            let accessToken: string;
-
-            if (mode === "reauth") {
-              const currentAccessToken = getAccessToken();
-              if (!currentAccessToken) {
-                throw new Error("Missing access token");
-              }
-
-              if (
-                isTokenExpiringSoon(
-                  currentAccessToken,
-                  AUTH_CONFIG.TOKEN_REFRESH_THRESHOLD,
-                )
-              ) {
-                accessToken = await refreshAccessTokenShared(trigger);
-                updateSocketAuth(accessToken);
-              } else {
-                accessToken = currentAccessToken;
-                authenticateSocket(accessToken);
-              }
-            } else {
-              accessToken = await refreshAccessTokenShared(trigger);
-              updateSocketAuth(accessToken);
-            }
-
-            resetAuthFailureState();
-            wsReauthFailureHandledRef.current = false;
-          } catch (error) {
-            await handleWsRefreshFailure(reason, error);
-          }
-        })().finally(() => {
-          wsRecoveryPromiseRef.current = null;
-        });
-      }
-
-      return wsRecoveryPromiseRef.current;
-    },
-    [handleWsRefreshFailure],
-  );
+  useEffect(() => subscribeToRefreshEvents(), [subscribeToRefreshEvents]);
 
   const flushEmitQueue = useCallback(() => {
     const socket = getSocket();
@@ -478,211 +605,299 @@ export const useWebSocket = (
     socket.send(event, data);
   }, []);
 
-  const emitJoinRoom = useCallback(
-    (roomId: string) => {
-      logMessageDebug("useWebSocket", "room_join_requested", {
-        roomId,
+  const emitJoinConversation = useCallback(
+    (conversationId: string) => {
+      logMessageDebug("useWebSocket", "conversation_join_requested", {
+        conversationId,
         connectionState: getSocket()?.getConnectionState() ?? "unknown",
       });
       emit(WebSocketEvents.CONVERSATION_JOIN, {
-        roomId,
-        conversationId: roomId,
+        conversationId,
       });
     },
     [emit],
   );
+  const refreshUnreadSummarySnapshot = useCallback(async (): Promise<void> => {
+    await refreshUnreadSummarySnapshotAction();
+  }, [refreshUnreadSummarySnapshotAction]);
 
-  const resyncRoom = useCallback(
-    async (
-      roomId: string,
-      options?: { reason?: "initial-sync" | "reconnect" | "room-refresh" },
-    ) => {
-      const chatState = useChatStore.getState();
-      if (
-        options?.reason === "initial-sync" &&
-        chatState.messagesHydratedByConversation[roomId] &&
-        chatState.hasNewerMessagesByConversation[roomId] === false
-      ) {
-        logMessageDebug("useWebSocket", "delta_sync_blocked_known_latest", {
-          roomId,
-          reason: options?.reason,
-          hydrated: chatState.messagesHydratedByConversation[roomId],
-          hasNext: chatState.hasNewerMessagesByConversation[roomId],
-        });
+  const resyncCoordinator = useMemo(
+    () =>
+      createWebSocketResyncCoordinator({
+        state: resyncCoordinatorStateRef.current,
+        conversationSyncState: conversationSyncStateRef.current,
+        getChatState: () => useChatStore.getState(),
+        fetchMessages,
+        fetchConversations,
+        fetchConversationSummary: (conversationId) =>
+          getConversationByIdUseCase(conversationId),
+        fetchConversationPage: (page, limit, options) =>
+          conversationApi.getConversations(page, limit, options),
+        upsertConversationSummary,
+        refreshUnreadSummarySnapshot,
+        triggerFriendshipResync: (reason) =>
+          useFriendshipStore.getState().triggerResync(reason),
+        syncUserSettings: () => useSettingsStore.getState().syncFromServer(),
+        clearConversationJoinRetry,
+      }),
+    [
+      clearConversationJoinRetry,
+      fetchConversations,
+      fetchMessages,
+      refreshUnreadSummarySnapshot,
+      upsertConversationSummary,
+    ],
+  );
+  const {
+    clearConversationSyncFallback,
+    scheduleConversationResync,
+    scheduleConversationSnapshotRefresh,
+    reconcileConversationAuthoritative,
+    maybeReconcileGap,
+    handleSocketConnected: handleSocketConnectedResync,
+    handleSocketDisconnected: handleSocketDisconnectedResync,
+    handleConversationJoinedAck,
+    handleConversationResynced,
+    handleResyncRequired,
+    resyncClientState,
+    reset: resetResyncCoordinator,
+  } = resyncCoordinator;
+
+  const maybeNotifyIncomingMessage = useCallback(
+    (input: {
+      conversationId: string;
+      messageId: string;
+      senderId: string | null;
+      senderName: string | null;
+      content: string;
+      mentions: string[];
+      kind?: "message" | "mention" | "group_activity" | "system";
+      eventId?: string | null;
+    }) => {
+      const currentUserId = useAuthStore.getState().user?.id ?? null;
+      if (!currentUserId || !input.senderId || input.senderId === currentUserId) {
         return;
       }
 
-      const resolveLatestCursor = (): MessageCursor | undefined => {
-        const roomMessages = useChatStore.getState().messages[roomId] || [];
-        for (let index = roomMessages.length - 1; index >= 0; index -= 1) {
-          const candidate = roomMessages[index];
-          const candidateId = candidate?.id;
-          const candidateAt = toCursorValue(candidate?.createdAt);
-          if (
-            typeof candidateId === "string" &&
-            !candidateId.startsWith("temp-") &&
-            typeof candidateAt === "string"
-          ) {
-            return {
-              at: candidateAt,
-              id: candidateId,
-            };
-          }
-        }
-        return undefined;
-      };
+      const notificationSettings = getNotificationPreferences();
+      if (!notificationSettings.enabled) {
+        return;
+      }
 
-      let afterCursor = resolveLatestCursor();
+      const conversation = useChatStore
+        .getState()
+        .conversations.find((item) => item.id === input.conversationId);
+      const hasMention = input.mentions.includes(currentUserId);
+      const isMuted = Boolean(conversation?.isMuted);
+      if (isMuted && !hasMention) {
+        return;
+      }
 
-      if (!afterCursor) return;
-      logMessageDebug("useWebSocket", "delta_sync_started", {
-        roomId,
-        reason: options?.reason,
-        afterCursor,
+      const isActiveConversation =
+        useChatStore.getState().selectedConversationId === input.conversationId;
+      const visibleAndFocused = isDocumentVisibleAndFocused();
+      const conversationLabel =
+        conversation?.displayName ||
+        conversation?.name ||
+        input.senderName ||
+        "Conversation";
+      const notificationKind =
+        input.kind === "system"
+          ? "system"
+          : hasMention
+            ? "mention"
+            : input.kind || "message";
+
+      useNotificationStore.getState().upsertNotification({
+        id:
+          input.eventId ||
+          `message:${input.conversationId}:${input.messageId}:${notificationKind}`,
+        kind: notificationKind,
+        title: conversationLabel,
+        body:
+          input.content ||
+          (notificationKind === "system"
+            ? "System activity"
+            : "Sent an attachment"),
+        createdAt: new Date().toISOString(),
+        conversationId: input.conversationId,
+        messageId: input.messageId,
+        actorId: input.senderId,
+        isRead: false,
       });
 
-      // Fetch missed messages in pages to avoid dropping backlog on long disconnects.
-      for (let attempts = 0; attempts < 10; attempts += 1) {
-        const result = await fetchMessages(roomId, undefined, afterCursor.at, {
-          afterId: afterCursor.id,
-          syncReason: options?.reason,
-        });
-        logMessageDebug("useWebSocket", "delta_sync_page_completed", {
-          roomId,
-          reason: options?.reason,
-          attempt: attempts,
-          afterCursor,
-          result,
-        });
-
-        if (!result.loaded || !result.hasMore) {
-          break;
-        }
-
-        const nextCursor = resolveLatestCursor();
-        if (
-          !nextCursor ||
-          (nextCursor.at === afterCursor.at && nextCursor.id === afterCursor.id)
-        ) {
-          break;
-        }
-
-        afterCursor = nextCursor;
+      if (isActiveConversation && visibleAndFocused && !hasMention) {
+        return;
       }
-    },
-    [fetchMessages],
-  );
+      const preview = notificationSettings.messagePreview
+        ? input.content || "Sent an attachment"
+        : hasMention
+          ? "You were mentioned."
+          : "New message";
+      const notificationId =
+        input.eventId ||
+        `message:${input.conversationId}:${input.messageId}:${hasMention ? "mention" : "new"}`;
+      const toastMessage = hasMention
+        ? `${input.senderName || "Someone"} mentioned you in ${conversationLabel}`
+        : `${input.senderName || conversationLabel}: ${preview}`;
 
-  const scheduleRoomResync = useCallback(
-    (
-      roomId: string,
-      options?: { reason?: "initial-sync" | "reconnect" | "room-refresh" },
-    ) => {
-      const chatState = useChatStore.getState();
-      const willBlockAsKnownLatest =
-        options?.reason === "initial-sync" &&
-        chatState.messagesHydratedByConversation[roomId] &&
-        chatState.hasNewerMessagesByConversation[roomId] === false;
-      if (willBlockAsKnownLatest) {
-        logMessageDebug("useWebSocket", "delta_sync_schedule_skipped", {
-          roomId,
-          reason: options?.reason,
-        });
-        return Promise.resolve();
-      }
-
-      const inFlight = roomResyncInFlightRef.current.get(roomId);
-      if (inFlight) {
-        return inFlight;
-      }
-
-      const request = resyncRoom(roomId, options).finally(() => {
-        roomResyncInFlightRef.current.delete(roomId);
+      notifyGlobalToast({
+        level: "info",
+        message: toastMessage,
+        dedupeKey: notificationId,
+        cooldownMs: 20_000,
       });
-      roomResyncInFlightRef.current.set(roomId, request);
-      logMessageDebug("useWebSocket", "delta_sync_scheduled", {
-        roomId,
-        reason: options?.reason,
-      });
-      return request;
-    },
-    [resyncRoom],
-  );
 
-  const refreshConversationSnapshot = useCallback(
-    (conversationId: string): Promise<void> => {
-      const inFlight =
-        conversationRefreshInFlightRef.current.get(conversationId);
-      if (inFlight) {
-        return inFlight;
-      }
-
-      const request = getConversationByIdUseCase(conversationId)
-        .then((response) => {
-          updateConversation(conversationId, unwrapApiSuccess(response));
-        })
-        .catch(async () => {
-          await fetchConversations().catch(() => {
-            // no-op: best effort authoritative refresh
-          });
-        })
-        .finally(() => {
-          conversationRefreshInFlightRef.current.delete(conversationId);
-        });
-
-      conversationRefreshInFlightRef.current.set(conversationId, request);
-      return request;
-    },
-    [fetchConversations, updateConversation],
-  );
-
-  const reconcileConversationAuthoritative = useCallback(
-    (
-      roomId: string,
-      reason: "skip" | "initial-sync" | "reconnect" | "room-refresh",
-    ): Promise<void> => {
-      if (reason === "skip") {
-        return refreshConversationSnapshot(roomId).catch(() => {
-          // no-op: best effort authoritative refresh
+      if (!visibleAndFocused) {
+        emitBrowserNotification({
+          id: notificationId,
+          tag: `conversation:${input.conversationId}`,
+          title: hasMention
+            ? `${conversationLabel} · Mention`
+            : conversationLabel,
+          body: preview,
+          silent: !notificationSettings.sound,
+          onClick: () => {
+            dispatchNotificationClick({
+              conversationId: input.conversationId,
+              messageId: input.messageId,
+            });
+          },
         });
       }
-
-      return Promise.allSettled([
-        scheduleRoomResync(roomId, { reason }),
-        refreshConversationSnapshot(roomId),
-      ]).then(() => {
-        // no-op: best effort authoritative reconcile
-      });
     },
-    [refreshConversationSnapshot, scheduleRoomResync],
+    [getNotificationPreferences],
   );
 
-  const requestRoomJoin = useCallback(
-    (
-      roomId: string,
+  const maybeNotifyMembershipEvent = useCallback(
+    (conversationId: string, membershipState: string, reason: string | null) => {
+      const conversation = useChatStore
+        .getState()
+        .conversations.find((item) => item.id === conversationId);
+      const conversationLabel =
+        conversation?.displayName || conversation?.name || "Group";
+      const notificationId = `membership:${conversationId}:${membershipState}:${reason ?? "unknown"}`;
+      const message =
+        membershipState === "active" && reason === "added"
+          ? `You were added to ${conversationLabel}.`
+          : membershipState === "active" && reason === "restored"
+            ? `You can access ${conversationLabel} again.`
+            : `Membership changed for ${conversationLabel}.`;
+
+      const notificationSettings = getNotificationPreferences();
+      useNotificationStore.getState().upsertNotification({
+        id: notificationId,
+        kind: "group_activity",
+        title: conversationLabel,
+        body: message,
+        createdAt: new Date().toISOString(),
+        conversationId,
+        isRead: false,
+      });
+
+      if (!notificationSettings.enabled) {
+        return;
+      }
+
+      notifyGlobalToast({
+        level: "info",
+        message,
+        dedupeKey: notificationId,
+        cooldownMs: 20_000,
+      });
+
+      if (!isDocumentVisibleAndFocused()) {
+        emitBrowserNotification({
+          id: notificationId,
+          title: conversationLabel,
+          body: message,
+          silent: !notificationSettings.sound,
+        });
+      }
+    },
+    [getNotificationPreferences],
+  );
+
+  const maybeNotifyGroupUpdate = useCallback(
+    (conversationId: string, body: string, notificationSuffix: string) => {
+      const conversation = useChatStore
+        .getState()
+        .conversations.find((item) => item.id === conversationId);
+      const conversationLabel =
+        conversation?.displayName || conversation?.name || "Group";
+      const notificationId = `group:${conversationId}:${notificationSuffix}`;
+
+      useNotificationStore.getState().upsertNotification({
+        id: notificationId,
+        kind: "group_activity",
+        title: conversationLabel,
+        body,
+        createdAt: new Date().toISOString(),
+        conversationId,
+        isRead: false,
+      });
+
+      const notificationSettings = getNotificationPreferences();
+      if (!notificationSettings.enabled) {
+        return;
+      }
+
+      notifyGlobalToast({
+        level: "info",
+        message: `${conversationLabel}: ${body}`,
+        dedupeKey: notificationId,
+        cooldownMs: 15_000,
+      });
+
+      if (!isDocumentVisibleAndFocused()) {
+        emitBrowserNotification({
+          id: notificationId,
+          title: conversationLabel,
+          body,
+          silent: !notificationSettings.sound,
+        });
+      }
+    },
+    [getNotificationPreferences],
+  );
+
+  const requestConversationJoin = useCallback(
+    function requestConversationJoinImpl(
+      conversationId: string,
       options?: {
         reason?: "initial" | "reconnect" | "retry";
       },
-    ) => {
-      if (!roomId || !joinedRoomsRef.current.has(roomId)) {
+    ) {
+      if (
+        !conversationId ||
+        !conversationSyncStateRef.current.joinedConversationIds.has(
+          conversationId,
+        )
+      ) {
         return;
       }
 
-      emitJoinRoom(roomId);
-      clearRoomJoinRetry(roomId);
+      emitJoinConversation(conversationId);
+      clearConversationJoinRetry(conversationId);
 
-      const attempt = roomJoinRetryAttemptsRef.current.get(roomId) ?? 0;
+      const attempt =
+        conversationSyncStateRef.current.joinRetryAttempts.get(conversationId) ??
+        0;
       const retryDelay = Math.min(
-        ROOM_JOIN_ACK_TIMEOUT_MS * Math.max(attempt + 1, 1),
-        ROOM_JOIN_RETRY_DELAY_MAX_MS,
+        CONVERSATION_JOIN_ACK_TIMEOUT_MS * Math.max(attempt + 1, 1),
+        CONVERSATION_JOIN_RETRY_DELAY_MAX_MS,
       );
 
       const retryTimer = setTimeout(() => {
-        roomJoinRetryTimersRef.current.delete(roomId);
+        conversationJoinRetryTimersRef.current.delete(conversationId);
 
         if (
-          !joinedRoomsRef.current.has(roomId) ||
-          subscribedRoomsRef.current.has(roomId)
+          !conversationSyncStateRef.current.joinedConversationIds.has(
+            conversationId,
+          ) ||
+          conversationSyncStateRef.current.subscribedConversationIds.has(
+            conversationId,
+          )
         ) {
           return;
         }
@@ -691,9 +906,9 @@ export const useWebSocket = (
         if (connectionState !== "connected") {
           logMessageDebug(
             "useWebSocket",
-            "room_join_retry_waiting_connection",
+            "conversation_join_retry_waiting_connection",
             {
-              roomId,
+              conversationId,
               reason: options?.reason,
               connectionState,
             },
@@ -702,25 +917,36 @@ export const useWebSocket = (
         }
 
         const nextAttempt = attempt + 1;
-        roomJoinRetryAttemptsRef.current.set(roomId, nextAttempt);
+        conversationSyncStateRef.current.joinRetryAttempts.set(
+          conversationId,
+          nextAttempt,
+        );
 
-        logMessageDebug("useWebSocket", "room_join_ack_timeout", {
-          roomId,
+        logMessageDebug("useWebSocket", "conversation_join_ack_timeout", {
+          conversationId,
           reason: options?.reason,
           attempt: nextAttempt,
           retryDelay,
         });
 
-        if (useChatStore.getState().selectedConversationId === roomId) {
-          void scheduleRoomResync(roomId, { reason: "room-refresh" });
+        if (
+          useChatStore.getState().selectedConversationId === conversationId
+        ) {
+          void scheduleConversationResync(conversationId, {
+            reason: "conversation-refresh",
+          });
         }
 
-        requestRoomJoin(roomId, { reason: "retry" });
+        requestConversationJoinImpl(conversationId, { reason: "retry" });
       }, retryDelay);
 
-      roomJoinRetryTimersRef.current.set(roomId, retryTimer);
+      conversationJoinRetryTimersRef.current.set(conversationId, retryTimer);
     },
-    [clearRoomJoinRetry, emitJoinRoom, scheduleRoomResync],
+    [
+      clearConversationJoinRetry,
+      emitJoinConversation,
+      scheduleConversationResync,
+    ],
   );
 
   const setupSocket = useCallback(() => {
@@ -734,64 +960,13 @@ export const useWebSocket = (
     unsubscribersRef.current = [];
 
     const handleConnect = () => {
-      logMessageDebug("useWebSocket", "socket_connected", {
-        shouldResync: shouldResyncOnConnectRef.current,
-        joinedRooms: Array.from(joinedRoomsRef.current),
-      });
-      onConnect?.();
-
-      const shouldResync = shouldResyncOnConnectRef.current;
-      shouldResyncOnConnectRef.current = false;
-
-      if (shouldResync) {
-        void fetchConversations().catch(() => {
-          // no-op: best effort sidebar resync
-        });
-        useFriendshipStore.getState().triggerResync("socket_reconnect");
-      }
-
-      joinedRoomsRef.current.forEach((roomId) => {
-        clearRoomSyncFallback(roomId);
-        subscribedRoomsRef.current.delete(roomId);
-        roomJoinRetryAttemptsRef.current.set(roomId, 0);
-        pendingRoomSyncRef.current.set(
-          roomId,
-          shouldResync ? "reconnect" : "skip",
-        );
-        requestRoomJoin(roomId, {
-          reason: shouldResync ? "reconnect" : "initial",
-        });
-      });
-
-      hasConnectedOnceRef.current = true;
-
-      flushEmitQueue();
-      logMessageDebug("useWebSocket", "offline_queue_flush_requested", {
-        reason: "socket_connected",
-        joinedRooms: Array.from(joinedRoomsRef.current),
-      });
-      void flushQueuedMessages();
+      connectionLifecycleRef.current?.handleSocketConnected();
     };
 
     const handleDisconnect = (data: unknown) => {
-      const payload = asRecord(data);
-      const code =
-        typeof payload?.code === "number"
-          ? payload.code
-          : Number(asString(payload?.code) ?? "0");
-      const reason =
-        asString(payload?.reason) ??
-        (Number.isFinite(code) && code > 0 ? String(code) : "disconnected");
-      if (hasConnectedOnceRef.current) {
-        shouldResyncOnConnectRef.current = true;
-      }
-      subscribedRoomsRef.current.clear();
-      clearAllRoomSyncFallbacks();
-      clearAllRoomJoinRetries();
-      if (code === 4401) {
-        void recoverSocketAuth("ws_close_4401", "close_4401");
-      }
-      onDisconnect?.(reason);
+      connectionLifecycleRef.current?.handleSocketDisconnected(
+        normalizeDisconnectEvent(asRecord(data)),
+      );
     };
 
     const handleConnectError = (data: unknown) => {
@@ -810,18 +985,13 @@ export const useWebSocket = (
       const payload = asRecord(data);
       const message = asString(payload?.message) ?? "WebSocket unauthorized";
       const code = asString(payload?.code) ?? "AUTH_UNAUTHORIZED";
-      void recoverSocketAuth("ws_unauthorized", code);
-      onError?.(new Error(message));
+      void handleUnauthorizedEvent({ code, message });
     };
 
     const handleAuthReauthRequired = (data: unknown) => {
       const reason =
         asString(asRecord(data)?.reason) ?? "reauthentication required";
-      void recoverSocketAuth(
-        "ws_reauth_required",
-        reason,
-        reason === "authenticate_required" ? "reauth" : "reconnect",
-      );
+      void handleReauthRequiredEvent({ reason });
     };
 
     const unsubscribeConnectionEvents = registerConnectionEvents(socket, {
@@ -838,83 +1008,183 @@ export const useWebSocket = (
       data: unknown,
       eventType: "message:new" | "message:updated",
     ) => {
-      const payload = asRecord(data);
-      if (!payload) return;
+      const normalizedEvent = normalizeMessageRealtimeEvent(data, eventType);
+      if (!normalizedEvent) return;
 
-      const conversationId = getConversationId(payload);
-      const messagePayload = getMessagePayload(payload);
-      const messageId = messagePayload
-        ? (asString(messagePayload.id) ??
-          asString(messagePayload._id) ??
-          asString(messagePayload.messageId) ??
-          asString(messagePayload.stableId) ??
-          asString(messagePayload.localId) ??
-          asString(messagePayload.tempId))
-        : null;
-      if (!conversationId || !messagePayload || !messageId) return;
-
-      const tempId =
-        asString(payload.tempId) ??
-        asString(messagePayload.tempId) ??
-        asString(payload.clientMessageId) ??
-        asString(messagePayload.clientMessageId);
-      const clientMessageId =
-        asString(payload.clientMessageId) ??
-        asString(messagePayload.clientMessageId) ??
-        tempId ??
-        undefined;
-      const localId =
-        asString(messagePayload.localId) ??
-        asString(payload.localId) ??
-        tempId ??
-        undefined;
-      const stableId =
-        asString(messagePayload.stableId) ?? localId ?? messageId;
-      const correlationKey = buildMessageCorrelationKey({
+      const {
+        payload,
         conversationId,
+        messagePayload,
+        messageId,
+        tempId,
         clientMessageId,
-        tempId: tempId ?? undefined,
         localId,
-      });
+        stableId,
+        senderId,
+        incomingSeq,
+        eventId,
+        correlationKey,
+      } = normalizedEvent;
+      if (
+        !shouldProcessRealtimeEvent(eventId, {
+          eventType,
+          conversationId,
+          messageId,
+        })
+      ) {
+        return;
+      }
       logMessageDebug("useWebSocket", `socket_${eventType}_received`, {
         conversationId,
-        eventId: asString(payload.eventId) ?? asString(messagePayload.eventId),
+        eventId,
         correlationKey,
         messageId,
         tempId,
         localId,
         clientMessageId,
         stableId,
+        incomingSeq,
       });
-      addMessage(conversationId, {
-        ...(messagePayload as unknown as Parameters<typeof addMessage>[1]),
-        ...(stableId ? { stableId } : {}),
-        ...(clientMessageId ? { clientMessageId } : {}),
-        ...(localId ? { localId } : {}),
+      logMessageDebug("useWebSocket", "realtime.client.event_received", {
+        requestId:
+          asString(payload.requestId) ?? asString(messagePayload.requestId),
+        conversationId,
+        messageId,
+        actorUserId: senderId ?? null,
+        peerUserId: null,
+        socketId: null,
+        eventType,
+        roomKey: conversationId,
+        eventId,
+        correlationKey,
+      });
+      const chatState = useChatStore.getState();
+      const rtkCacheMessage = toRealtimeCacheMessage(normalizedEvent);
+      const hadMessageBeforeRtkPatch = hasMessageInRtkCache(
+        conversationId,
+        rtkCacheMessage,
+      );
+      const latestKnownSeq = getLatestServerSeq(
+        getConversationMessageCache(conversationId),
+      );
+      const hasMessageSeqGap = hasMessageSequenceGap({
+        event: normalizedEvent,
+        latestKnownSeq,
+      });
+      const currentUserId = useAuthStore.getState().user?.id;
+      const isActiveConversation =
+        chatState.selectedConversationId === conversationId;
+      const visibleAndFocused = isDocumentVisibleAndFocused();
+      const isAmbiguousSelfReconcile = needsSelfMessageIdentityResync({
+        event: normalizedEvent,
+        currentUserId,
+      });
+      const shouldIncrementUnread = Boolean(
+        eventType === "message:new" &&
+          senderId &&
+          currentUserId &&
+          senderId !== currentUserId &&
+          (!isActiveConversation || !visibleAndFocused),
+      );
+      logMessageDebug("useWebSocket", "realtime.client.state_updated", {
+        requestId:
+          asString(payload.requestId) ?? asString(messagePayload.requestId),
+        conversationId,
+        messageId,
+        actorUserId: senderId ?? null,
+        peerUserId: null,
+        socketId: null,
+        eventType,
+        roomKey: conversationId,
+        eventId,
+        stateTransition: hadMessageBeforeRtkPatch ? "merged" : "new",
+        incrementUnread: shouldIncrementUnread,
+        latestKnownSeq,
+        incomingSeq,
+        hasMessageSeqGap,
       });
 
-      const chatState = useChatStore.getState();
-      const currentUserId = useAuthStore.getState().user?.id;
-      const senderId =
-        asString(messagePayload.senderId) ?? asString(payload.senderId);
+      dispatch(
+        eventType === "message:new"
+          ? realtimeMessageReceived({
+              conversationId,
+              message: rtkCacheMessage,
+            })
+          : realtimeMessageUpdated({
+              conversationId,
+              message: rtkCacheMessage,
+            }),
+      );
+
+      if (eventType === "message:new" && !hadMessageBeforeRtkPatch) {
+        maybeNotifyIncomingMessage({
+          conversationId,
+          messageId,
+          senderId: senderId ?? null,
+          senderName:
+            asString(messagePayload.senderName) ?? asString(payload.senderName),
+          content:
+            typeof messagePayload.content === "string" ? messagePayload.content : "",
+          mentions: Array.isArray(messagePayload.mentions)
+            ? messagePayload.mentions.filter(
+                (item): item is string => typeof item === "string",
+              )
+            : [],
+          kind:
+            asString(messagePayload.type) === "system" ? "system" : "message",
+          eventId,
+        });
+      }
+
+      if (isAmbiguousSelfReconcile) {
+        logMessageDebug("useWebSocket", "socket_message_missing_reconcile_alias", {
+          conversationId,
+          eventId,
+          messageId,
+          senderId,
+          stableId,
+        });
+        const shouldUseDeltaRefresh = shouldUseDeltaConversationRefresh({
+          conversationId,
+          selectedConversationId: chatState.selectedConversationId,
+          joinedConversationIds:
+            conversationSyncStateRef.current.joinedConversationIds,
+        });
+        if (shouldUseDeltaRefresh) {
+          void reconcileConversationAuthoritative(
+            conversationId,
+            "conversation-refresh",
+          );
+        } else {
+          void scheduleConversationSnapshotRefresh(conversationId, {
+            delayMs: 0,
+            reason: "socket:self-reconcile",
+          });
+        }
+      }
+
+      if (hasMessageSeqGap) {
+        logMessageDebug("useWebSocket", "socket_message_seq_gap_detected", {
+          conversationId,
+          eventId,
+          messageId,
+          latestKnownSeq,
+          incomingSeq,
+        });
+        maybeReconcileGap(conversationId, "message_seq_gap");
+      }
 
       if (
-        chatState.selectedConversationId === conversationId &&
-        senderId &&
-        currentUserId &&
-        senderId !== currentUserId
-      ) {
-        void chatState.markAsRead(conversationId).catch(() => {
-          // no-op: best effort read receipt
-        });
-      } else if (
         eventType !== "message:new" ||
+        hadMessageBeforeRtkPatch ||
         (chatState.selectedConversationId !== conversationId &&
           senderId &&
           currentUserId &&
           senderId !== currentUserId)
       ) {
-        void refreshConversationSnapshot(conversationId);
+        void scheduleConversationSnapshotRefresh(conversationId, {
+          reason: `socket:${eventType}`,
+        });
       }
     };
 
@@ -948,69 +1218,122 @@ export const useWebSocket = (
           messageId,
         });
 
-        removeMessage(conversationId, messageId);
-        void refreshConversationSnapshot(conversationId);
+        dispatch(
+          realtimeMessageDeleted({
+            conversationId,
+            messageId,
+          }),
+        );
+        void scheduleConversationSnapshotRefresh(conversationId, {
+          reason: "socket:message:deleted",
+        });
+      },
+      onReactionAdded: (data: unknown) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+
+        const messagePayload = asRecord(payload.message);
+        const reactionPayload = asRecord(payload.reaction);
+        const conversationId = getConversationId(payload);
+        const messageId =
+          asString(payload.messageId) ??
+          asString(payload.id) ??
+          asString(payload._id) ??
+          asString(messagePayload?.id) ??
+          asString(messagePayload?.messageId);
+        const emoji =
+          asString(payload.emoji) ?? asString(reactionPayload?.emoji);
+        const userId =
+          asString(payload.userId) ??
+          asString(payload.senderId) ??
+          asString(reactionPayload?.userId) ??
+          asString(reactionPayload?.senderId);
+
+        if (!conversationId || !messageId || !emoji) return;
+
+        dispatch(
+          realtimeMessageReactionChanged({
+            conversationId,
+            messageId,
+            emoji,
+            ...(userId ? { userId } : {}),
+            action: "add",
+          }),
+        );
+      },
+      onReactionRemoved: (data: unknown) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+
+        const messagePayload = asRecord(payload.message);
+        const reactionPayload = asRecord(payload.reaction);
+        const conversationId = getConversationId(payload);
+        const messageId =
+          asString(payload.messageId) ??
+          asString(payload.id) ??
+          asString(payload._id) ??
+          asString(messagePayload?.id) ??
+          asString(messagePayload?.messageId);
+        const emoji =
+          asString(payload.emoji) ?? asString(reactionPayload?.emoji);
+        const userId =
+          asString(payload.userId) ??
+          asString(payload.senderId) ??
+          asString(reactionPayload?.userId) ??
+          asString(reactionPayload?.senderId);
+
+        if (!conversationId || !messageId || !emoji) return;
+
+        dispatch(
+          realtimeMessageReactionChanged({
+            conversationId,
+            messageId,
+            emoji,
+            ...(userId ? { userId } : {}),
+            action: "remove",
+          }),
+        );
+      },
+      onConversationParticipantUpdated: (data: unknown) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+
+        const conversationId = getConversationId(payload);
+        const participant =
+          asRecord(payload.participant) ?? asRecord(payload.user) ?? null;
+        if (!conversationId || !participant) {
+          return;
+        }
+
+        applyConversationParticipantSummary(conversationId, participant);
       },
     });
     unsubscribersRef.current.push(unsubscribeChatEvents);
 
-    const handleRoomJoined = (data: unknown) => {
+    const handleConversationJoined = (data: unknown) => {
       const payload = asRecord(data);
       if (!payload) return;
-      const roomId = getConversationId(payload);
-      if (!roomId) return;
+      const conversationId = getConversationId(payload);
+      if (!conversationId) return;
 
-      subscribedRoomsRef.current.add(roomId);
-      roomJoinRetryAttemptsRef.current.delete(roomId);
-      clearRoomJoinRetry(roomId);
-
-      logMessageDebug("useWebSocket", "room_joined", {
-        roomId,
-        connectionState: getSocket()?.getConnectionState() ?? "unknown",
-        pendingSyncStrategy: pendingRoomSyncRef.current.get(roomId) ?? null,
-      });
-
-      const syncStrategy = pendingRoomSyncRef.current.get(roomId);
-      if (!syncStrategy) {
-        return;
-      }
-
-      clearRoomSyncFallback(roomId);
-      const fallbackTimer = setTimeout(() => {
-        roomSyncFallbackTimersRef.current.delete(roomId);
-
-        const stillPending = pendingRoomSyncRef.current.get(roomId);
-        if (!stillPending) {
-          return;
-        }
-
-        pendingRoomSyncRef.current.delete(roomId);
-        logMessageDebug("useWebSocket", "room_sync_fallback_applied", {
-          roomId,
-          strategy: stillPending,
-        });
-
-        const fallbackReason =
-          stillPending === "skip" ? "room-refresh" : stillPending;
-        void reconcileConversationAuthoritative(roomId, fallbackReason);
-      }, ROOM_SYNC_FALLBACK_TIMEOUT_MS);
-
-      roomSyncFallbackTimersRef.current.set(roomId, fallbackTimer);
+      handleConversationJoinedAck(conversationId);
     };
 
-    const handleRoomLeft = (data: unknown) => {
+    const handleConversationLeft = (data: unknown) => {
       const payload = asRecord(data);
       if (!payload) return;
-      const roomId = getConversationId(payload);
-      if (!roomId) return;
+      const conversationId = getConversationId(payload);
+      if (!conversationId) return;
 
-      subscribedRoomsRef.current.delete(roomId);
-      roomJoinRetryAttemptsRef.current.delete(roomId);
-      clearRoomJoinRetry(roomId);
-      clearRoomSyncFallback(roomId);
+      acknowledgeConversationLeft(
+        conversationSyncStateRef.current,
+        conversationId,
+      );
+      clearConversationJoinRetry(conversationId);
+      clearConversationSyncFallback(conversationId);
 
-      logMessageDebug("useWebSocket", "room_left_acknowledged", {
-        roomId,
+      logMessageDebug("useWebSocket", "conversation_left_acknowledged", {
+        conversationId,
       });
     };
 
@@ -1028,14 +1351,103 @@ export const useWebSocket = (
       logMessageDebug("useWebSocket", "socket_message_read_received", {
         conversationId,
         lastMessageId,
+        lastReadSeq:
+          typeof payload.lastReadSeq === "number" ? payload.lastReadSeq : null,
       });
 
-      markMessagesReadUpTo(
-        conversationId,
-        lastMessageId,
-        asString(payload.senderId) ?? asString(payload.userId) ?? undefined,
+      const readerId =
+        asString(payload.userId) ?? asString(payload.senderId) ?? undefined;
+      const currentUserId = useAuthStore.getState().user?.id;
+      dispatch(
+        realtimeReadCursorUpdated({
+          conversationId,
+          lastReadMessageId: lastMessageId,
+          ...(currentUserId ? { currentUserId } : {}),
+          ...(readerId ? { readerId } : {}),
+          ...(typeof payload.lastReadSeq === "number"
+            ? { lastReadSeq: payload.lastReadSeq }
+            : {}),
+        }),
       );
-      void refreshConversationSnapshot(conversationId);
+    };
+
+    const handleConversationSummaryUpdated = (data: unknown) => {
+      const normalized = normalizeConversation(data);
+      if (!normalized) {
+        return;
+      }
+
+      const summaryResult = upsertConversationSummary(normalized);
+      if (!summaryResult.applied) {
+        logMessageDebug("useWebSocket", "conversation_summary_ignored", {
+          conversationId: normalized.id,
+          reason: summaryResult.reason,
+          previousVersion: summaryResult.previousVersion,
+          nextVersion: summaryResult.nextVersion,
+        });
+        return;
+      }
+      if (summaryResult.gapDetected) {
+        logMessageDebug("useWebSocket", "conversation_summary_gap_detected", {
+          conversationId: normalized.id,
+          previousVersion: summaryResult.previousVersion,
+          nextVersion: summaryResult.nextVersion,
+        });
+        maybeReconcileGap(normalized.id, "summary_version_gap");
+      }
+      notifySidebarState("conversation:summary:updated", {
+        source: "socket",
+        conversationId: normalized.id,
+      });
+    };
+
+    const handleConversationMembershipUpdated = (data: unknown) => {
+      const payload = asRecord(data);
+      if (!payload) return;
+
+      const conversationId = getConversationId(payload);
+      const membershipState = asString(payload.membershipState);
+      const summary = payload.summary;
+      const reason = asString(payload.reason);
+
+      if (!conversationId || !membershipState) {
+        return;
+      }
+
+      if (membershipState === "active" && summary) {
+        const normalized = normalizeConversation(summary);
+        if (normalized) {
+          const summaryResult = upsertConversationSummary(normalized);
+          if (summaryResult.gapDetected) {
+            maybeReconcileGap(conversationId, "membership_summary_gap");
+          }
+        }
+        if (reason === "added" || reason === "restored") {
+          maybeNotifyMembershipEvent(conversationId, membershipState, reason);
+        }
+        notifySidebarState("conversation:membership:updated", {
+          source: "socket",
+          conversationId,
+          membershipState,
+        });
+        return;
+      }
+
+      removeConversationSyncTracking(
+        conversationSyncStateRef.current,
+        conversationId,
+      );
+      clearConversationJoinRetry(conversationId);
+      clearConversationSyncFallback(conversationId);
+      removeConversation(conversationId);
+      if (useChatStore.getState().selectedConversationId === conversationId) {
+        selectConversation(null);
+      }
+      notifySidebarState("conversation:membership:updated", {
+        source: "socket",
+        conversationId,
+        membershipState,
+      });
     };
 
     const handleMemberUpdated = (data: unknown) => {
@@ -1061,13 +1473,10 @@ export const useWebSocket = (
       const conversationId = getConversationId(payload);
       if (!conversationId) return;
 
-      const currentUserId = useAuthStore.getState().user?.id ?? null;
-      const deletedBy = asString(payload.deletedBy) ?? asString(payload.userId);
-      if (deletedBy && currentUserId && deletedBy !== currentUserId) {
-        return;
-      }
-
-      joinedRoomsRef.current.delete(conversationId);
+      removeConversationSyncTracking(
+        conversationSyncStateRef.current,
+        conversationId,
+      );
       removeConversation(conversationId);
       if (useChatStore.getState().selectedConversationId === conversationId) {
         selectConversation(null);
@@ -1075,10 +1484,10 @@ export const useWebSocket = (
     };
 
     const unsubscribeConversationEvents = registerConversationEvents(socket, {
-      onRoomJoined: handleRoomJoined,
-      onConversationJoined: handleRoomJoined,
-      onRoomLeft: handleRoomLeft,
-      onConversationLeft: handleRoomLeft,
+      onConversationJoined: handleConversationJoined,
+      onConversationLeft: handleConversationLeft,
+      onConversationSummaryUpdated: handleConversationSummaryUpdated,
+      onConversationMembershipUpdated: handleConversationMembershipUpdated,
       onMessageRead: handleReadReceipt,
       onMemberUpdated: handleMemberUpdated,
       onConversationDeleted: handleConversationDeleted,
@@ -1123,31 +1532,65 @@ export const useWebSocket = (
     });
     unsubscribersRef.current.push(unsubscribeFriendshipEvents);
 
-    const refreshGroupRoom = (data: unknown) => {
+    const refreshGroupRoom = (
+      data: unknown,
+      options?: { skipIfCurrentUserIsTarget?: boolean; bumpMembers?: boolean },
+    ) => {
       const payload = asRecord(data);
       const conversationId = payload ? getConversationId(payload) : null;
-      if (conversationId) {
-        void scheduleRoomResync(conversationId, { reason: "room-refresh" });
+      const currentUserId = useAuthStore.getState().user?.id ?? null;
+      if (
+        conversationId &&
+        options?.bumpMembers
+      ) {
+        bumpMemberListVersion(conversationId);
+      }
+      if (
+        conversationId &&
+        !(options?.skipIfCurrentUserIsTarget &&
+          shouldSkipGroupConversationRefreshForCurrentUser(
+            payload,
+            currentUserId,
+          ))
+      ) {
+        const shouldUseDeltaRefresh = shouldUseDeltaConversationRefresh({
+          conversationId,
+          selectedConversationId: useChatStore.getState().selectedConversationId,
+          joinedConversationIds:
+            conversationSyncStateRef.current.joinedConversationIds,
+        });
+
+        if (shouldUseDeltaRefresh) {
+          void reconcileConversationAuthoritative(
+            conversationId,
+            "conversation-refresh",
+          );
+        } else {
+          void scheduleConversationSnapshotRefresh(conversationId, {
+            delayMs: 0,
+            reason: "group:conversation-refresh",
+          });
+        }
       }
     };
 
     const handleGroupInviteUser = (data: unknown) => {
       const payload = asRecord(data);
-      const roomId = payload ? getConversationId(payload) : null;
+      const conversationId = payload ? getConversationId(payload) : null;
       notifySidebarState("group:invite:updated", {
         source: "socket",
-        roomId,
+        conversationId,
       });
     };
 
     const handleGroupInviteLinkCreated = (data: unknown) => {
       const payload = asRecord(data);
-      const roomId = payload ? getConversationId(payload) : null;
+      const conversationId = payload ? getConversationId(payload) : null;
       const inviteLinkId = asString(payload?.inviteLinkId);
-      if (roomId && inviteLinkId) {
-        upsertInviteLink(roomId, {
+      if (conversationId && inviteLinkId) {
+        upsertInviteLink(conversationId, {
           id: inviteLinkId,
-          roomId,
+          conversationId,
           createdAt:
             typeof payload?.occurredAt === "string"
               ? payload.occurredAt
@@ -1156,22 +1599,22 @@ export const useWebSocket = (
       }
       notifySidebarState("group:invite:updated", {
         source: "socket",
-        roomId,
+        conversationId,
       });
     };
 
     const handleGroupInviteUpdated = (data: unknown) => {
       const payload = asRecord(data);
-      const roomId = payload ? getConversationId(payload) : null;
+      const conversationId = payload ? getConversationId(payload) : null;
       notifySidebarState("group:invite:updated", {
         source: "socket",
-        roomId,
+        conversationId,
       });
     };
 
     const handleGroupJoinRequestNew = (data: unknown) => {
       const payload = asRecord(data);
-      const roomId = payload ? getConversationId(payload) : null;
+      const conversationId = payload ? getConversationId(payload) : null;
       const requestId =
         asString(payload?.requestId) ??
         asString(payload?.id) ??
@@ -1180,10 +1623,10 @@ export const useWebSocket = (
         asString(payload?.userId) ??
         asString(payload?.requesterId) ??
         asString(asRecord(payload?.request)?.userId);
-      if (roomId && requestId && userId) {
-        upsertJoinRequest(roomId, {
+      if (conversationId && requestId && userId) {
+        upsertJoinRequest(conversationId, {
           id: requestId,
-          roomId,
+          conversationId,
           userId,
           status: "pending",
           note:
@@ -1198,29 +1641,29 @@ export const useWebSocket = (
       }
       notifySidebarState("group:join-request:updated", {
         source: "socket",
-        roomId,
+        conversationId,
         requestId,
       });
     };
 
     const handleGroupJoinRequestResolved = (data: unknown) => {
       const payload = asRecord(data);
-      const roomId = payload ? getConversationId(payload) : null;
+      const conversationId = payload ? getConversationId(payload) : null;
       const requestId =
         asString(payload?.requestId) ??
         asString(payload?.id) ??
         asString(asRecord(payload?.request)?.id);
       const status = asString(payload?.status);
       if (
-        roomId &&
+        conversationId &&
         requestId &&
         (status === "approved" || status === "rejected")
       ) {
-        markJoinRequestResolved(roomId, requestId, status);
+        markJoinRequestResolved(conversationId, requestId, status);
       }
       notifySidebarState("group:join-request:updated", {
         source: "socket",
-        roomId,
+        conversationId,
         requestId,
         status,
       });
@@ -1228,11 +1671,11 @@ export const useWebSocket = (
 
     const handleGroupPinUpdated = (data: unknown) => {
       const payload = asRecord(data);
-      const roomId = payload ? getConversationId(payload) : null;
-      if (roomId && typeof window !== "undefined") {
+      const conversationId = payload ? getConversationId(payload) : null;
+      if (conversationId && typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("group:pin:updated", {
-            detail: { conversationId: roomId, roomId },
+            detail: { conversationId },
           }),
         );
       }
@@ -1241,21 +1684,34 @@ export const useWebSocket = (
 
     const handleGroupSlowModeTriggered = (data: unknown) => {
       const payload = asRecord(data);
-      const roomId = payload ? getConversationId(payload) : null;
+      const conversationId = payload ? getConversationId(payload) : null;
       const retryAfterSeconds =
         typeof payload?.retryAfterSeconds === "number"
           ? payload.retryAfterSeconds
           : 0;
-      if (roomId && retryAfterSeconds > 0) {
-        setSlowModeCooldown(roomId, retryAfterSeconds);
+      if (conversationId && retryAfterSeconds > 0) {
+        setSlowModeCooldown(conversationId, retryAfterSeconds);
       }
       if (retryAfterSeconds > 0) {
         notifyRoomInline("chat:restriction:updated", {
-          conversationId: roomId,
+          conversationId,
           type: "slow_mode",
           retryAfterSeconds,
         });
       }
+    };
+
+    const handleGroupSettingsUpdated = (data: unknown) => {
+      const payload = asRecord(data);
+      const conversationId = payload ? getConversationId(payload) : null;
+      if (conversationId) {
+        maybeNotifyGroupUpdate(
+          conversationId,
+          "Group settings changed.",
+          `settings:${asString(payload?.eventId) ?? Date.now()}`,
+        );
+      }
+      refreshGroupRoom(data);
     };
 
     const handlePermissionChanged = (data: unknown) => {
@@ -1322,11 +1778,26 @@ export const useWebSocket = (
       onGroupInviteUser: handleGroupInviteUser,
       onGroupInviteLinkCreated: handleGroupInviteLinkCreated,
       onGroupInviteUpdated: handleGroupInviteUpdated,
-      onGroupMemberJoined: refreshGroupRoom,
-      onGroupMemberLeft: refreshGroupRoom,
-      onGroupMemberUpdated: refreshGroupRoom,
-      onGroupMemberBanned: refreshGroupRoom,
-      onGroupSettingsUpdated: refreshGroupRoom,
+      onGroupMemberJoined: (data) =>
+        refreshGroupRoom(data, { bumpMembers: true }),
+      onGroupMemberLeft: (data) =>
+        refreshGroupRoom(data, {
+          skipIfCurrentUserIsTarget: true,
+          bumpMembers: true,
+        }),
+      onGroupMemberRemoved: (data) =>
+        refreshGroupRoom(data, {
+          skipIfCurrentUserIsTarget: true,
+          bumpMembers: true,
+        }),
+      onGroupMemberUpdated: (data) =>
+        refreshGroupRoom(data, { bumpMembers: true }),
+      onGroupMemberBanned: (data) =>
+        refreshGroupRoom(data, {
+          skipIfCurrentUserIsTarget: true,
+          bumpMembers: true,
+        }),
+      onGroupSettingsUpdated: handleGroupSettingsUpdated,
       onGroupJoinRequestNew: handleGroupJoinRequestNew,
       onGroupJoinRequestResolved: handleGroupJoinRequestResolved,
       onGroupPinUpdated: handleGroupPinUpdated,
@@ -1359,8 +1830,7 @@ export const useWebSocket = (
           ? (asString(payload.activity) as "typing" | "recording" | "uploading")
           : "typing";
       const lastEventAt = Date.now();
-
-      setTyping({
+      const typingStatus: TypingStatus = {
         conversationId,
         userId,
         userName,
@@ -1368,7 +1838,10 @@ export const useWebSocket = (
         activity,
         confidence: 1,
         lastEventAt,
-      });
+      };
+
+      setTyping(typingStatus);
+      dispatch(realtimeActions.typingStarted(typingStatus));
 
       scheduleRemoteTypingDecay(conversationId, userId, userName);
     };
@@ -1382,6 +1855,12 @@ export const useWebSocket = (
       if (!conversationId || !userId) return;
 
       clearRemoteTypingTimer(conversationId, userId);
+      dispatch(
+        realtimeActions.typingStopped({
+          conversationId,
+          userId,
+        }),
+      );
       setTyping({
         conversationId,
         userId,
@@ -1404,92 +1883,20 @@ export const useWebSocket = (
     });
     unsubscribersRef.current.push(unsubscribePresenceEvents);
 
-    const handleConversationResynced = (data: unknown) => {
+    const handleConversationResyncedEvent = (data: unknown) => {
       const payload = asRecord(data);
       const targetRoomIds = payload !== null ? getConversationIds(payload) : [];
-      logMessageDebug("useWebSocket", "conversation_resynced_received", {
-        targetRoomIds,
-      });
-      const drainedRooms = drainPendingRoomSync(
-        pendingRoomSyncRef.current,
-        joinedRoomsRef.current,
-        targetRoomIds,
-      );
-
-      drainedRooms.forEach(({ roomId, strategy }) => {
-        clearRoomSyncFallback(roomId);
-        logMessageDebug("useWebSocket", "conversation_resynced_applied", {
-          roomId,
-          strategy,
-          targetRoomIds,
-        });
-
-        void reconcileConversationAuthoritative(roomId, strategy);
-      });
+      handleConversationResynced(targetRoomIds);
     };
 
-    const handleResyncRequired = (data: unknown) => {
+    const handleResyncRequiredEvent = (data: unknown) => {
       const payload = asRecord(data);
       const scopes = Array.isArray(payload?.scopes)
         ? payload.scopes
             .map((scope) => asString(scope))
-            .filter((scope): scope is string => typeof scope === "string")
+          .filter((scope): scope is string => typeof scope === "string")
         : [];
-
-      logMessageDebug("useWebSocket", "resync_required_received", {
-        scopes,
-        source: asString(payload?.source),
-        reason: asString(payload?.reason),
-      });
-
-      if (
-        scopes.length === 0 ||
-        scopes.some((scope) =>
-          [
-            "rooms",
-            "conversations",
-            "groups",
-            "user_scoped",
-            "permissions",
-          ].includes(scope),
-        )
-      ) {
-        void fetchConversations().catch(() => {
-          // no-op: best effort sidebar refresh
-        });
-      }
-
-      if (
-        scopes.length === 0 ||
-        scopes.some((scope) =>
-          ["rooms", "conversations", "groups"].includes(scope),
-        )
-      ) {
-        const drainedRooms = drainPendingRoomSyncForResyncRequired(
-          pendingRoomSyncRef.current,
-          joinedRoomsRef.current,
-        );
-
-        drainedRooms.forEach(({ roomId, strategy }) => {
-          clearRoomSyncFallback(roomId);
-          void reconcileConversationAuthoritative(roomId, strategy);
-        });
-      }
-
-      if (
-        scopes.length === 0 ||
-        scopes.some((scope) =>
-          ["friendships", "permissions", "user_scoped"].includes(scope),
-        )
-      ) {
-        useFriendshipStore.getState().triggerResync("socket_reconnect");
-      }
-
-      if (scopes.length === 0 || scopes.includes("user_settings")) {
-        void import("../settings/settingsStore").then(({ useSettingsStore }) =>
-          useSettingsStore.getState().syncFromServer(),
-        );
-      }
+      handleResyncRequired(scopes);
     };
 
     // Settings update from another device / admin
@@ -1503,19 +1910,16 @@ export const useWebSocket = (
       const settings = asRecord(payload.settings);
       if (version === null || !settings) return;
 
-      // Import dynamically to avoid circular deps at module init time
-      import("../settings/settingsStore").then(({ useSettingsStore }) => {
-        useSettingsStore
-          .getState()
-          .applyRemoteUpdate(
-            payload as unknown as import("@hacom/chat-shared-types").UserSettingsUpdatedPayload,
+      useSettingsStore
+        .getState()
+        .applyRemoteUpdate(
+          payload as unknown as UserSettingsUpdatedPayload,
           );
-      });
-    };
+      };
 
     const unsubscribeSyncEvents = registerSyncEvents(socket, {
-      onConversationResynced: handleConversationResynced,
-      onResyncRequired: handleResyncRequired,
+      onConversationResynced: handleConversationResyncedEvent,
+      onResyncRequired: handleResyncRequiredEvent,
       onUserSettingsUpdated: handleUserSettingsUpdated,
     });
     unsubscribersRef.current.push(unsubscribeSyncEvents);
@@ -1527,138 +1931,162 @@ export const useWebSocket = (
 
     return socket;
   }, [
-    addMessage,
-    clearAllRoomJoinRetries,
-    clearAllRoomSyncFallbacks,
-    clearRoomJoinRetry,
-    clearRoomSyncFallback,
+    clearConversationJoinRetry,
+    clearConversationSyncFallback,
     clearRemoteTypingTimer,
     clearTyping,
-    flushEmitQueue,
-    markMessagesReadUpTo,
-    onConnect,
-    onDisconnect,
+    dispatch,
+    handleReauthRequiredEvent,
+    handleUnauthorizedEvent,
     onError,
     removeConversation,
-    recoverSocketAuth,
-    fetchConversations,
-    removeMessage,
-    requestRoomJoin,
-    flushQueuedMessages,
-    refreshConversationSnapshot,
+    handleConversationJoinedAck,
+    handleConversationResynced,
+    handleResyncRequired,
     reconcileConversationAuthoritative,
+    maybeNotifyGroupUpdate,
+    maybeNotifyIncomingMessage,
+    maybeNotifyMembershipEvent,
+    maybeReconcileGap,
+    applyConversationParticipantSummary,
+    scheduleConversationSnapshotRefresh,
     scheduleRemoteTypingDecay,
-    scheduleRoomResync,
     selectConversation,
     setSendRestriction,
     clearSendRestriction,
     setTyping,
     setSlowModeCooldown,
+    bumpMemberListVersion,
     upsertJoinRequest,
+    upsertConversationSummary,
     markJoinRequestResolved,
+    shouldProcessRealtimeEvent,
     upsertInviteLink,
     updateConversation,
   ]);
 
+  const connectionLifecycle = useMemo(
+    () =>
+      createWebSocketConnectionLifecycle({
+        state: connectionLifecycleStateRef.current,
+        onConnect,
+        onDisconnect,
+        ensureFreshAccessToken,
+        setupSocket,
+        connectSocket,
+        disconnectSocket,
+        handleConnectFailure,
+        getReconnectPlan: () => handleSocketConnectedResync(),
+        requestConversationJoin,
+        flushEmitQueue,
+        flushQueuedMessages,
+        getConnectionState: () => getSocket()?.getConnectionState() ?? "unknown",
+        getJoinedConversationIds: () =>
+          Array.from(conversationSyncStateRef.current.joinedConversationIds),
+        getQueuedEmitCount: () => emitQueueRef.current.length,
+        clearActiveTypingTimeout,
+        clearAllRemoteTypingTimers,
+        clearAllConversationJoinRetries,
+        handleSocketDisconnectedResync,
+        resetResyncCoordinator,
+        resetConversationSyncState: () => {
+          conversationSyncStateRef.current.joinedConversationIds.clear();
+          conversationSyncStateRef.current.subscribedConversationIds.clear();
+          conversationSyncStateRef.current.pendingConversationSync.clear();
+        },
+        clearEmitQueue: () => {
+          emitQueueRef.current = [];
+        },
+        recoverSocketAuth: (trigger, reason) =>
+          recoverSocketAuth(trigger, reason),
+        resyncClientState,
+        log: (event, details) => {
+          logMessageDebug("useWebSocket", event, details);
+        },
+      }),
+    [
+      clearActiveTypingTimeout,
+      clearAllConversationJoinRetries,
+      clearAllRemoteTypingTimers,
+      flushEmitQueue,
+      flushQueuedMessages,
+      handleConnectFailure,
+      handleSocketConnectedResync,
+      handleSocketDisconnectedResync,
+      onConnect,
+      onDisconnect,
+      recoverSocketAuth,
+      resyncClientState,
+      requestConversationJoin,
+      resetResyncCoordinator,
+      setupSocket,
+    ],
+  );
+  const {
+    connect: connectLifecycle,
+    disconnect: disconnectLifecycle,
+    handleBrowserOnline,
+    handleResume,
+  } = connectionLifecycle;
+
+  useEffect(() => {
+    connectionLifecycleRef.current = connectionLifecycle;
+  }, [connectionLifecycle]);
+
   const connect = useCallback(() => {
-    void (async () => {
-      try {
-        logMessageDebug("useWebSocket", "connect_requested", {
-          connectionState: getSocket()?.getConnectionState() ?? "unknown",
-        });
-        await ensureFreshAccessToken("ws_connect");
-        logMessageDebug("useWebSocket", "connect_token_ready", {
-          connectionState: getSocket()?.getConnectionState() ?? "unknown",
-        });
-        setupSocket();
-        connectSocket();
-      } catch (error) {
-        await handleWsRefreshFailure("ws_connect", error);
-      }
-    })();
-  }, [handleWsRefreshFailure, setupSocket]);
+    void connectLifecycle();
+  }, [connectLifecycle]);
 
   const disconnect = useCallback(() => {
-    logMessageDebug("useWebSocket", "disconnect_requested", {
-      joinedRooms: Array.from(joinedRoomsRef.current),
-      queuedEmitCount: emitQueueRef.current.length,
-    });
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = null;
-    }
+    disconnectLifecycle();
+  }, [disconnectLifecycle]);
 
-    clearAllRemoteTypingTimers();
-    clearAllRoomJoinRetries();
-    clearAllRoomSyncFallbacks();
-    joinedRoomsRef.current.clear();
-    subscribedRoomsRef.current.clear();
-    pendingRoomSyncRef.current.clear();
-    roomResyncInFlightRef.current.clear();
-    emitQueueRef.current = [];
-    disconnectSocket();
-  }, [
-    clearAllRemoteTypingTimers,
-    clearAllRoomJoinRetries,
-    clearAllRoomSyncFallbacks,
-  ]);
-
-  const joinRoom = useCallback(
-    (roomId: string, options?: { skipInitialDeltaSync?: boolean }) => {
-      if (!roomId) return;
-      joinedRoomsRef.current.add(roomId);
-      subscribedRoomsRef.current.delete(roomId);
-      roomJoinRetryAttemptsRef.current.set(roomId, 0);
-      pendingRoomSyncRef.current.set(
-        roomId,
-        options?.skipInitialDeltaSync ? "skip" : "initial-sync",
+  const joinConversation = useCallback(
+    (conversationId: string, options?: { skipInitialDeltaSync?: boolean }) => {
+      if (!conversationId) return;
+      const strategy = registerConversationJoinIntent(
+        conversationSyncStateRef.current,
+        conversationId,
+        options,
       );
-      logMessageDebug("useWebSocket", "join_room_state_registered", {
-        roomId,
-        strategy: options?.skipInitialDeltaSync ? "skip" : "initial-sync",
+      logMessageDebug("useWebSocket", "join_conversation_state_registered", {
+        conversationId,
+        strategy,
       });
-      requestRoomJoin(roomId, { reason: "initial" });
+      requestConversationJoin(conversationId, { reason: "initial" });
     },
-    [requestRoomJoin],
+    [requestConversationJoin],
   );
 
-  const leaveRoom = useCallback(
-    (roomId: string) => {
-      if (!roomId) return;
+  const leaveConversation = useCallback(
+    (conversationId: string) => {
+      if (!conversationId) return;
 
       emit(WebSocketEvents.CONVERSATION_LEAVE, {
-        roomId,
-        conversationId: roomId,
+        conversationId,
       });
-      joinedRoomsRef.current.delete(roomId);
-      subscribedRoomsRef.current.delete(roomId);
-      pendingRoomSyncRef.current.delete(roomId);
-      roomJoinRetryAttemptsRef.current.delete(roomId);
-      clearRoomJoinRetry(roomId);
-      clearRoomSyncFallback(roomId);
-
-      const typingStatuses = useChatStore
-        .getState()
-        .typingStatuses.filter((item) => item.conversationId === roomId);
-      typingStatuses.forEach((item) => {
-        clearRemoteTypingTimer(roomId, item.userId);
-        clearTyping(roomId, item.userId);
-      });
+      removeConversationSyncTracking(
+        conversationSyncStateRef.current,
+        conversationId,
+      );
+      clearConversationJoinRetry(conversationId);
+      clearConversationSyncFallback(conversationId);
+      clearRemoteTypingTimersForConversation(conversationId);
+      clearConversationTypingStatuses(conversationId);
     },
     [
-      clearRemoteTypingTimer,
-      clearRoomJoinRetry,
-      clearRoomSyncFallback,
-      clearTyping,
+      clearConversationTypingStatuses,
+      clearConversationJoinRetry,
+      clearConversationSyncFallback,
+      clearRemoteTypingTimersForConversation,
       emit,
     ],
   );
 
   const sendMessage = useCallback(
-    (roomId: string, content: string, type: string = "text") => {
+    (conversationId: string, content: string, type: string = "text") => {
       emit(WebSocketEvents.MESSAGE_SEND, {
-        roomId,
-        conversationId: roomId,
+        conversationId,
         content,
         type,
       });
@@ -1667,41 +2095,33 @@ export const useWebSocket = (
   );
 
   const sendTyping = useCallback(
-    (roomId: string) => {
+    (conversationId: string) => {
       emit(WebSocketEvents.TYPING_START, {
-        roomId,
-        conversationId: roomId,
+        conversationId,
         isTyping: true,
       });
 
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
+      clearActiveTypingTimeout();
       typingTimeoutRef.current = setTimeout(() => {
         emit(WebSocketEvents.TYPING_STOP, {
-          roomId,
-          conversationId: roomId,
+          conversationId,
           isTyping: false,
         });
       }, 3000);
     },
-    [emit],
+    [clearActiveTypingTimeout, emit],
   );
 
   const stopTyping = useCallback(
-    (roomId: string) => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = null;
-      }
+    (conversationId: string) => {
+      clearActiveTypingTimeout();
 
       emit(WebSocketEvents.TYPING_STOP, {
-        roomId,
-        conversationId: roomId,
+        conversationId,
         isTyping: false,
       });
     },
-    [emit],
+    [clearActiveTypingTimeout, emit],
   );
 
   useEffect(() => {
@@ -1709,19 +2129,66 @@ export const useWebSocket = (
       return;
     }
 
-    const handleOnline = () => {
-      logMessageDebug("useWebSocket", "offline_queue_flush_requested", {
-        reason: "browser_online",
-        connectionState: getSocket()?.getConnectionState() ?? "unknown",
-      });
-      void flushQueuedMessages();
+    let lastResumeHandledAt = 0;
+    const shouldHandleResume = () => {
+      const now = Date.now();
+      if (now - lastResumeHandledAt < 1200) {
+        return false;
+      }
+
+      lastResumeHandledAt = now;
+      return true;
     };
 
-    window.addEventListener("online", handleOnline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
+    const handleOnlineEvent = () => {
+      if (!shouldHandleResume()) {
+        return;
+      }
+      handleBrowserOnline();
     };
-  }, [flushQueuedMessages]);
+
+    const handleVisibilityChange = () => {
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "visible" &&
+        shouldHandleResume()
+      ) {
+        handleResume("visibility_resume");
+      }
+    };
+
+    const handlePageShow = () => {
+      if (!shouldHandleResume()) {
+        return;
+      }
+      handleResume("pageshow");
+    };
+
+    const handleFocus = () => {
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState !== "hidden" &&
+        shouldHandleResume()
+      ) {
+        handleResume("focus");
+      }
+    };
+
+    window.addEventListener("online", handleOnlineEvent);
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("online", handleOnlineEvent);
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange,
+      );
+    };
+  }, [handleBrowserOnline, handleResume]);
 
   useEffect(() => {
     if (!autoConnect) {
@@ -1739,7 +2206,12 @@ export const useWebSocket = (
       unsubscribersRef.current = [];
       disconnect();
     };
-  }, [autoConnect, connect, disconnect, isAuthenticated]);
+  }, [
+    autoConnect,
+    connect,
+    disconnect,
+    isAuthenticated,
+  ]);
 
   return {
     isConnected: connectionState === "connected",
@@ -1747,8 +2219,8 @@ export const useWebSocket = (
     connect,
     disconnect,
     emit,
-    joinRoom,
-    leaveRoom,
+    joinConversation,
+    leaveConversation,
     sendMessage,
     sendTyping,
     stopTyping,

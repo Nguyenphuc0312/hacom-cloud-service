@@ -2,6 +2,8 @@
   "auth": {
     "emailRequired": "Email không được để trống",
     "emailInvalid": "Email không hợp lệ",
+    "loginIdentifierRequired": "Email hoặc mã nhân viên không được để trống",
+    "loginIdentifierMax": "Email hoặc mã nhân viên không được vượt quá 255 ký tự",
     "passwordRequired": "Mật khẩu không được để trống",
     "passwordMin": "Mật khẩu phải có ít nhất {{count}} ký tự",
     "passwordMax": "Mật khẩu không được quá {{count}} ký tự",

@@ -4,6 +4,8 @@
   "tabs": {
     "friends": "Friends",
     "requests": "Requests",
+    "received": "Received",
+    "sent": "Sent",
     "discover": "Discover",
     "blocked": "Blocked",
     "search": "Search",
@@ -63,7 +65,9 @@
     "unavailable": "Unavailable"
   },
   "sentRequests": {
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "emptyReceived": "No received requests",
+    "emptySent": "No sent requests"
   },
   "qr": {
     "unknownUser": "Unknown user",

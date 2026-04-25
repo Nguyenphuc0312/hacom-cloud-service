@@ -22,6 +22,28 @@ const asBoolean = (value: unknown, fallback = false): boolean =>
 const asNumber = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) ? value : undefined;
 
+const asNullableDateValue = (
+  value: unknown,
+  fallback?: Date,
+): Date | undefined => {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value;
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+
+  return fallback;
+};
+
 const toDate = (value: unknown, fallback: Date): Date => {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return value;
@@ -56,11 +78,18 @@ const normalizeUserSummary = (value: unknown): UserSummary | null => {
 
   const username =
     asString(source.username) ??
+    asString(source.employeeCode) ??
+    asString(source.employee_code) ??
     asString(source.userName) ??
     asString(source.nickname) ??
     id;
   const displayName =
     asString(source.displayName) ??
+    asString(source.display_name) ??
+    asString(source.fullNameFromHR) ??
+    asString(source.full_name_from_hr) ??
+    asString(source.employeeCode) ??
+    asString(source.employee_code) ??
     asString(source.fullName) ??
     asString(source.name) ??
     username;
@@ -133,8 +162,18 @@ const normalizeLastMessage = (
     "unknown-user";
   const senderName =
     asString(raw.senderName) ??
+    asString(raw.displayName) ??
+    asString(raw.display_name) ??
+    asString(raw.fullNameFromHR) ??
+    asString(raw.full_name_from_hr) ??
+    asString(raw.employeeCode) ??
+    asString(raw.employee_code) ??
     asString(raw.username) ??
     asString(sender?.displayName) ??
+    asString(sender?.fullNameFromHR) ??
+    asString(sender?.full_name_from_hr) ??
+    asString(sender?.employeeCode) ??
+    asString(sender?.employee_code) ??
     asString(sender?.username) ??
     "Unknown user";
   const type = asString(raw.type) ?? MessageType.TEXT;
@@ -156,6 +195,45 @@ const normalizeLastMessage = (
       ? { status: asString(raw.status) }
       : {}),
   } as MessageSummary;
+};
+
+const normalizeLastMessageStatus = (
+  source: UnknownRecord,
+  lastMessage?: MessageSummary,
+): "pending" | "sent" | "failed" | null => {
+  const explicitStatus = asString(source.lastMessageStatus)?.toLowerCase();
+  if (
+    explicitStatus === "pending" ||
+    explicitStatus === "sent" ||
+    explicitStatus === "failed"
+  ) {
+    return explicitStatus;
+  }
+
+  const messageRecord = lastMessage && isRecord(lastMessage)
+    ? (lastMessage as unknown as UnknownRecord)
+    : null;
+  const sendState = asString(messageRecord?.sendState)?.toLowerCase();
+  const status = asString(messageRecord?.status)?.toLowerCase();
+
+  if (
+    sendState === "sending" ||
+    sendState === "queued" ||
+    sendState === "retrying" ||
+    status === MessageStatus.SENDING
+  ) {
+    return "pending";
+  }
+
+  if (sendState === "failed" || status === MessageStatus.FAILED) {
+    return "failed";
+  }
+
+  if (lastMessage) {
+    return "sent";
+  }
+
+  return null;
 };
 
 const toParticipantsCount = (
@@ -287,10 +365,29 @@ export const normalizeConversation = (
   const participantCount = toParticipantsCount(participants, payload);
   const normalizedType = normalizeRoomType(payload.type, participantCount);
   const lastMessage = normalizeLastMessage(payload);
+  const lastMessageId =
+    asString(payload.lastMessageId) ??
+    asString(payload.last_message_id) ??
+    lastMessage?.id ??
+    null;
+  const lastReadSeq = asNumber(payload.lastReadSeq) ?? 0;
   const updatedAt = toDate(
-    payload.updatedAt ?? payload.lastMessageAt ?? payload.createdAt,
+    payload.lastActivityAt ??
+      payload.updatedAt ??
+      payload.lastMessageAt ??
+      payload.createdAt,
     new Date(),
   );
+  const lastMessageSortAt =
+    asNullableDateValue(
+      payload.lastMessageSortAt ??
+        payload.last_message_sort_at ??
+        payload.lastMessageAt ??
+        lastMessage?.createdAt ??
+        payload.lastActivityAt ??
+        payload.updatedAt,
+      updatedAt,
+    ) ?? updatedAt;
   const conversationName = asNullableString(payload.name);
   const displayName =
     asString(payload.displayName) ??
@@ -341,6 +438,14 @@ export const normalizeConversation = (
     ...(payload.lastMessageAt
       ? { lastMessageAt: toDate(payload.lastMessageAt, updatedAt) }
       : {}),
+    ...(lastMessageSortAt ? { lastMessageSortAt } : {}),
+    ...(lastMessageId ? { lastMessageId } : { lastMessageId: null }),
+    ...(normalizeLastMessageStatus(payload, lastMessage) !== null
+      ? { lastMessageStatus: normalizeLastMessageStatus(payload, lastMessage) }
+      : {}),
+    ...(payload.lastActivityAt
+      ? { lastActivityAt: toDate(payload.lastActivityAt, updatedAt) }
+      : {}),
     ...(asString(payload.directKey)
       ? { directKey: asString(payload.directKey) }
       : {}),
@@ -350,8 +455,43 @@ export const normalizeConversation = (
     ...(payload.lastReadAt
       ? { lastReadAt: toDate(payload.lastReadAt, updatedAt) }
       : {}),
+    ...(lastReadSeq >= 0 ? { lastReadSeq } : {}),
     ...(asString(payload.lastReadMessageId)
       ? { lastReadMessageId: asString(payload.lastReadMessageId) }
+      : {}),
+    ...(asString(payload.peerUserId)
+      ? { peerUserId: asString(payload.peerUserId) }
+      : otherUser
+        ? { peerUserId: otherUser.id }
+        : {}),
+    ...(asString(payload.firstUnreadMessageId)
+      ? { firstUnreadMessageId: asString(payload.firstUnreadMessageId) }
+      : {}),
+    ...(payload.firstUnreadMessageAt
+      ? { firstUnreadMessageAt: toDate(payload.firstUnreadMessageAt, updatedAt) }
+      : {}),
+    ...(asString(payload.membershipState)
+      ? {
+          membershipState: asString(payload.membershipState) as NonNullable<
+            Conversation["membershipState"]
+          >,
+        }
+      : {}),
+    ...(asString(payload.currentUserRole)
+      ? {
+          currentUserRole: asString(payload.currentUserRole) as NonNullable<
+            Conversation["currentUserRole"]
+          >,
+        }
+      : {}),
+    ...(typeof payload.allowMemberMessaging === "boolean"
+      ? { allowMemberMessaging: payload.allowMemberMessaging }
+      : {}),
+    ...(typeof payload.canCurrentUserSend === "boolean"
+      ? { canCurrentUserSend: payload.canCurrentUserSend }
+      : {}),
+    ...(asNumber(payload.summaryVersion) !== undefined
+      ? { summaryVersion: asNumber(payload.summaryVersion) }
       : {}),
   };
 

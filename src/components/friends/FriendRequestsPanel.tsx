@@ -24,6 +24,7 @@ import {
   type FriendRequest as FriendshipRequest,
 } from "../../hooks/useFriendship";
 import { extractApiError } from "../../lib/apiContract";
+import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 
 type Tab = "received" | "sent";
 
@@ -41,12 +42,13 @@ const getUserDisplayName = (
     return "?";
   }
 
-  const fullName = [user.firstName, user.lastName]
-    .filter((value): value is string => Boolean(value && value.trim()))
-    .join(" ")
-    .trim();
-
-  return fullName || user.username || user.id;
+  return (
+    resolveUserDisplayName(user, {
+      allowLegacyFallback: true,
+    }) ||
+    user.username ||
+    user.id
+  );
 };
 
 export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({

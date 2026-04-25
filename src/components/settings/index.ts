@@ -4,7 +4,14 @@
 
 export { ToggleSwitch } from "./ToggleSwitch";
 export { RadioGroup } from "./RadioGroup";
+export { SettingsContent } from "./SettingsContent";
+export { SettingsDangerZone } from "./SettingsDangerZone";
+export { SettingsFieldGroup } from "./SettingsFieldGroup";
+export { SettingsPageShell } from "./SettingsPageShell";
+export { SettingsProfileSummary } from "./SettingsProfileSummary";
 export { SettingsSection } from "./SettingsSection";
+export { SettingsSidebar } from "./SettingsSidebar";
+export type { SettingsSidebarItem } from "./SettingsSidebar";
 export { ColorPicker } from "./ColorPicker";
 export { ThemePreview } from "./ThemePreview";
 export { AppearanceSection } from "./AppearanceSection";

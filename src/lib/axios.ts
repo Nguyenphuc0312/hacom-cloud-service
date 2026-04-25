@@ -5,12 +5,17 @@
 
 import axios, { AxiosError, AxiosHeaders } from "axios";
 import type { AxiosInstance, InternalAxiosRequestConfig } from "axios";
+import {
+  PUBLIC_CHAT_CONTRACT_HEADER,
+  PUBLIC_CHAT_CONTRACT_VERSION,
+} from "@hacom/chat-shared-types/runtime";
 import { API_BASE_URL, AUTH_BASE_URL, USE_AUTH_SERVICE } from "../config";
 import {
   authBaseUrl,
   buildAuthEndpoint,
   normalizeAuthRequestPath,
 } from "./authPath";
+import { warnLegacyRoomsRequest } from "./conversationIdentity";
 import i18n from "../i18n";
 import {
   clearTokens,
@@ -20,6 +25,7 @@ import {
 } from "../services/tokenService";
 import { updateSocketAuth } from "./socket";
 import { refreshAccessTokenShared } from "../services/authRefreshCoordinator";
+import { logger } from "../utils/logger";
 
 type AuthFailureReason = "missing_refresh_token" | "refresh_failed";
 type AuthFailureHandler = (reason: AuthFailureReason) => void | Promise<void>;
@@ -38,8 +44,8 @@ const PUBLIC_ENDPOINT_PATTERNS = [
   /\/auth\/reset-password$/i,
   /\/users\/check-username(?:\/|$)/i,
 ];
-const API_CONTRACT_HEADER = "X-Api-Contract";
-const API_CONTRACT_VERSION = "2";
+const API_CONTRACT_HEADER = PUBLIC_CHAT_CONTRACT_HEADER;
+const API_CONTRACT_VERSION = PUBLIC_CHAT_CONTRACT_VERSION;
 
 const toOrigin = (baseUrl: string): string | null => {
   try {
@@ -162,7 +168,7 @@ const refreshAccessToken = async (): Promise<string> => {
     const refreshEndpoint = buildAuthEndpoint("/refresh");
     if (import.meta.env.DEV && !refreshEndpointLogged) {
       refreshEndpointLogged = true;
-      console.info("[auth-refresh]", {
+      logger.info("auth-refresh", "endpoint_resolved", {
         USE_AUTH_SERVICE,
         refreshEndpoint,
       });
@@ -264,11 +270,23 @@ apiClient.interceptors.request.use(
     }
 
     if (!shouldAttachAuth) {
+      if (
+        typeof config.url === "string" &&
+        /\/rooms(?:\/|$)/i.test(config.url.split("?")[0] ?? "")
+      ) {
+        warnLegacyRoomsRequest(config.url);
+      }
       setAuthHeader(config, null);
       return config;
     }
 
     const accessToken = getAccessToken();
+    if (
+      typeof config.url === "string" &&
+      /\/rooms(?:\/|$)/i.test(config.url.split("?")[0] ?? "")
+    ) {
+      warnLegacyRoomsRequest(config.url);
+    }
     setAuthHeader(config, accessToken);
     return config;
   },

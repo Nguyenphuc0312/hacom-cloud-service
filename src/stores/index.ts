@@ -3,13 +3,19 @@
  */
 
 export { useAuthStore } from "./authStore";
-export type { User } from "./authStore";
+export type { LoginResult, User } from "./authStore";
 
 export {
   useChatStore,
   useSelectedConversation,
   useCurrentMessages,
   useMessagesByConversation,
+  useConversationMessageIds,
+  useConversationMessageCount,
+  useMessageEntity,
+  useConversationCount,
+  useHasConversation,
+  useAdjacentConversationIds,
   useCurrentTypingStatus,
   useFilteredConversations,
   useTotalUnreadCount,

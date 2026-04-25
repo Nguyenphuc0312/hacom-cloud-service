@@ -10,6 +10,8 @@ import type { Conversation, Message } from "../types";
 export type {
   ClusterBreakReason,
   MessageTimelineItem,
+  TimelineMergeLevel,
+  TimelineSpacingToken,
   TimelineItem,
   UnreadTimelineMarker,
 } from "../utils/timelinePlanner";
@@ -24,6 +26,54 @@ interface UseMessageGroupingParams {
   unreadMarker?: UnreadTimelineMarker | null;
 }
 
+interface GroupingSnapshot {
+  messages: Message[];
+  items: TimelineItem[];
+  currentUserId: string;
+  conversationType: Conversation["type"];
+  groupingThresholdMs: number;
+  unreadMarker?: UnreadTimelineMarker | null;
+}
+
+interface GroupingCache {
+  keyMap: Map<string, TimelineItem>;
+  snapshot: GroupingSnapshot | null;
+}
+
+export const isAppendOnlyUpdate = (
+  prev: Message[],
+  next: Message[],
+): boolean => {
+  if (next.length <= prev.length) {
+    return false;
+  }
+
+  for (let i = 0; i < prev.length; i += 1) {
+    if (prev[i] !== next[i]) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
+const findTimelineItemEndIndexForMessage = (
+  items: TimelineItem[],
+  message: Message,
+): number => {
+  for (let i = 0; i < items.length; i += 1) {
+    const item = items[i];
+    if (
+      (item.kind === "message" || item.kind === "system") &&
+      item.message === message
+    ) {
+      return i + 1;
+    }
+  }
+
+  return 0;
+};
+
 export const useMessageGrouping = ({
   messages,
   currentUserId,
@@ -31,18 +81,80 @@ export const useMessageGrouping = ({
   groupingThresholdMs = DEFAULT_GROUPING_THRESHOLD_MS,
   unreadMarker,
 }: UseMessageGroupingParams): TimelineItem[] => {
-  const prevKeyMapRef = React.useRef<Map<string, TimelineItem>>(new Map());
+  const [cache, setCache] = React.useState<GroupingCache>(() => ({
+    keyMap: new Map(),
+    snapshot: null,
+  }));
 
-  return React.useMemo(() => {
-    const items = buildTimelineItems({
-      messages,
-      currentUserId,
-      conversationType,
-      groupingThresholdMs,
-      unreadMarker,
-    });
+  const computed = React.useMemo(() => {
+    const prevSnapshot = cache.snapshot;
+    const hasCurrentSnapshot = Boolean(
+      prevSnapshot &&
+        prevSnapshot.messages === messages &&
+        prevSnapshot.currentUserId === currentUserId &&
+        prevSnapshot.conversationType === conversationType &&
+        prevSnapshot.groupingThresholdMs === groupingThresholdMs &&
+        prevSnapshot.unreadMarker === unreadMarker,
+    );
+    if (hasCurrentSnapshot && prevSnapshot) {
+      return {
+        items: prevSnapshot.items,
+        nextCache: cache,
+      };
+    }
 
-    const prevKeyMap = prevKeyMapRef.current;
+    const canIncrementallyAppend = Boolean(
+      prevSnapshot &&
+        prevSnapshot.currentUserId === currentUserId &&
+        prevSnapshot.conversationType === conversationType &&
+        prevSnapshot.groupingThresholdMs === groupingThresholdMs &&
+        prevSnapshot.unreadMarker === unreadMarker &&
+        isAppendOnlyUpdate(prevSnapshot.messages, messages),
+    );
+
+    const items = canIncrementallyAppend
+      ? (() => {
+          const prevMessages = prevSnapshot!.messages;
+          const prevItems = prevSnapshot!.items;
+          const recomputeFromIndex = Math.max(0, prevMessages.length - 1);
+          const contextIndex = recomputeFromIndex - 1;
+          const planningStartIndex = Math.max(0, contextIndex);
+          const preservedPrefix =
+            contextIndex >= 0
+              ? prevItems.slice(
+                  0,
+                  findTimelineItemEndIndexForMessage(
+                    prevItems,
+                    prevMessages[contextIndex],
+                  ),
+                )
+              : [];
+          const rebuiltTail = buildTimelineItems({
+            messages: messages.slice(planningStartIndex),
+            currentUserId,
+            conversationType,
+            groupingThresholdMs,
+            unreadMarker,
+          });
+          const rebuiltTailStart =
+            contextIndex >= 0
+              ? findTimelineItemEndIndexForMessage(
+                  rebuiltTail,
+                  messages[contextIndex],
+                )
+              : 0;
+
+          return preservedPrefix.concat(rebuiltTail.slice(rebuiltTailStart));
+        })()
+      : buildTimelineItems({
+          messages,
+          currentUserId,
+          conversationType,
+          groupingThresholdMs,
+          unreadMarker,
+        });
+
+    const prevKeyMap = cache.keyMap;
     const nextKeyMap = new Map<string, TimelineItem>();
 
     for (let i = 0; i < items.length; i += 1) {
@@ -54,15 +166,55 @@ export const useMessageGrouping = ({
       nextKeyMap.set(items[i].key, items[i]);
     }
 
-    prevKeyMapRef.current = nextKeyMap;
-    return items;
+    return {
+      items,
+      nextCache: {
+        keyMap: nextKeyMap,
+        snapshot: {
+          messages,
+          items,
+          currentUserId,
+          conversationType,
+          groupingThresholdMs,
+          unreadMarker,
+        },
+      },
+    };
   }, [
+    cache,
     conversationType,
     currentUserId,
     groupingThresholdMs,
     messages,
     unreadMarker,
   ]);
+
+  React.useEffect(() => {
+    setCache((current) => {
+      const currentSnapshot = current.snapshot;
+      if (
+        currentSnapshot &&
+        currentSnapshot.messages === messages &&
+        currentSnapshot.currentUserId === currentUserId &&
+        currentSnapshot.conversationType === conversationType &&
+        currentSnapshot.groupingThresholdMs === groupingThresholdMs &&
+        currentSnapshot.unreadMarker === unreadMarker
+      ) {
+        return current;
+      }
+
+      return computed.nextCache;
+    });
+  }, [
+    computed.nextCache,
+    conversationType,
+    currentUserId,
+    groupingThresholdMs,
+    messages,
+    unreadMarker,
+  ]);
+
+  return computed.items;
 };
 
 export default useMessageGrouping;

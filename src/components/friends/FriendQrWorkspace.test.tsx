@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { FriendshipCapabilitiesDto } from "@hacom/chat-shared-types";
+import type { FriendshipCapabilitiesDto } from "@hacom/chat-shared-types/chat";
 import { FriendQrWorkspace } from "./FriendQrWorkspace";
 
 const qrcodeToDataUrlMock = vi.fn(async (value: string, options?: unknown) => {

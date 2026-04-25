@@ -11,6 +11,7 @@ interface GroupEventHandlers {
   onGroupInviteUpdated?: RealtimeEventHandler;
   onGroupMemberJoined?: RealtimeEventHandler;
   onGroupMemberLeft?: RealtimeEventHandler;
+  onGroupMemberRemoved?: RealtimeEventHandler;
   onGroupMemberUpdated?: RealtimeEventHandler;
   onGroupMemberBanned?: RealtimeEventHandler;
   onGroupSettingsUpdated?: RealtimeEventHandler;
@@ -52,6 +53,7 @@ export const registerGroupEvents = (
   register(WebSocketEvents.GROUP_INVITE_UPDATED, handlers.onGroupInviteUpdated);
   register(WebSocketEvents.GROUP_MEMBER_JOINED, handlers.onGroupMemberJoined);
   register(WebSocketEvents.GROUP_MEMBER_LEFT, handlers.onGroupMemberLeft);
+  register(WebSocketEvents.GROUP_MEMBER_REMOVED, handlers.onGroupMemberRemoved);
   register(WebSocketEvents.GROUP_MEMBER_UPDATED, handlers.onGroupMemberUpdated);
   register(WebSocketEvents.GROUP_MEMBER_BANNED, handlers.onGroupMemberBanned);
   register(

@@ -5,7 +5,6 @@
 export { useAuth } from "./useAuth";
 export { useLogout } from "./useLogout";
 export { useWebSocket } from "./useWebSocket";
-export { useMessages } from "./useMessages";
 export { useConversations } from "./useConversations";
 export { useAutoScrollToBottom } from "./useAutoScrollToBottom";
 export { useMessageGrouping } from "./useMessageGrouping";
@@ -27,6 +26,7 @@ export { usePinnedMessages } from "./usePinnedMessages";
 export { useFriendship } from "./useFriendship";
 export { usePresence } from "./usePresence";
 export { useComposerAvailability } from "./useComposerAvailability";
+export { useMobileViewportMetrics } from "./useMobileViewportMetrics";
 export { useResendCooldown } from "./useResendCooldown";
 export { useOtpInput } from "./useOtpInput";
 export { useEmailVerificationChallenge } from "./useEmailVerificationChallenge";

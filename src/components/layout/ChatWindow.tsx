@@ -2,19 +2,24 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { ChatHeader } from "../chat/ChatHeader";
-import { MessageList } from "../chat/MessageList";
+import { ConversationViewport } from "../chat/ConversationViewport";
 import { SelectionToolbar } from "../chat/SelectionToolbar";
+import { MessageInspectDrawer } from "../chat/thread/MessageInspectDrawer";
 import { DropOverlay } from "../input/DropOverlay";
 import { MessageInput } from "../input/MessageInput";
-import { SearchPanel } from "../chat/SearchPanel";
-import { PinnedMessagesPanel } from "../chat/PinnedMessagesPanel";
 import { ConversationLane } from "./ConversationLane";
 import type { MentionCandidate } from "../input/MessageInput";
-import { toast } from "../ui";
-import { useChatStore, useGroupStore, useUIStore } from "../../stores";
+import { Spinner, toast } from "../ui";
+import {
+  useChatStore,
+  useGroupStore,
+  useMessageEntity,
+  useUIStore,
+} from "../../stores";
 import {
   useComposerAvailability,
   useDropZone,
+  useMobileViewportMetrics,
   useUploadQueue,
   usePresence,
 } from "../../hooks";
@@ -28,14 +33,26 @@ import type {
 } from "../../types";
 import { MessageType } from "../../types";
 import type { UploadedFileMeta } from "../../types/attachmentDraft";
-import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
+import { extractApiError } from "../../lib/apiContract";
 import type { ConnectionState } from "../../hooks/useWebSocket";
-import { resolveChatDensity } from "../../utils/densityPolicy";
+import {
+  resolveChatLayoutProfile,
+} from "../../utils/densityPolicy";
 import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { logScrollTrace } from "../../utils/scrollTrace";
-import { getMessageByIdUseCase } from "../../features/chat/usecases/getMessageById";
+import { logChatPerformance } from "../../utils/chatPerformance";
+import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
+import { useChatUiStore } from "../../features/chat/state";
+import { useMessageJumpTargetRTK } from "../../features/chat/hooks/useMessageJumpTargetRTK";
+import { selectConversationMessagesFromState } from "../../stores/chatStore";
+import type { ChatLayoutState } from "../../utils/densityPolicy";
+
+const SearchPanel = React.lazy(() => import("../chat/SearchPanel"));
+const PinnedMessagesPanel = React.lazy(
+  () => import("../chat/PinnedMessagesPanel"),
+);
 
 // ── Convert upload queue metadata to Attachment ─────────────────────
 
@@ -60,15 +77,11 @@ function metaToAttachment(meta: UploadedFileMeta): Attachment {
   } as Attachment;
 }
 
-const matchesMessageIdentity = (message: Message, targetId: string): boolean =>
-  message.id === targetId ||
-  message.localId === targetId ||
-  message.stableId === targetId ||
-  message.clientMessageId === targetId;
+const DRAFT_PERSIST_DEBOUNCE_MS = 450;
 
 interface ChatWindowProps {
+  layoutState: ChatLayoutState;
   conversation: Conversation;
-  messages: Message[];
   currentUser: UserSummary;
   typingStatus?: TypingStatus;
   onSendMessage: (
@@ -85,6 +98,16 @@ interface ChatWindowProps {
   onTyping?: (isTyping: boolean) => void;
   hasMoreMessages?: boolean;
   isLoadingMessages?: boolean;
+  historyLoadingState?: {
+    stage:
+      | "empty"
+      | "partial_unread_bootstrap"
+      | "partial_prefetch"
+      | "authoritative_initial_window"
+      | "paginating_older"
+      | "live_realtime";
+    isPartial: boolean;
+  } | null;
   onLoadOlderMessages?: () => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
@@ -93,6 +116,9 @@ interface ChatWindowProps {
   onReachedLatestMessage?: (message: Message) => void;
   connectionState?: ConnectionState;
   isConversationReady?: boolean;
+  externalJumpToMessageId?: string | null;
+  externalJumpRequestVersion?: number;
+  onExternalJumpHandled?: (messageId: string) => void;
   className?: string;
 }
 
@@ -115,9 +141,15 @@ const getEphemeralNoticeClassName = (kind: EphemeralNotice["kind"]): string => {
   }
 };
 
+const OverlayPanelFallback: React.FC = () => (
+  <div className="flex h-full items-center justify-center px-6">
+    <Spinner size="md" />
+  </div>
+);
+
 export const ChatWindow: React.FC<ChatWindowProps> = ({
+  layoutState,
   conversation,
-  messages,
   currentUser,
   typingStatus,
   onSendMessage,
@@ -129,6 +161,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onTyping,
   hasMoreMessages,
   isLoadingMessages,
+  historyLoadingState,
   onLoadOlderMessages,
   onImageClick,
   onFilePreview,
@@ -137,27 +170,40 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onReachedLatestMessage,
   connectionState = "connected",
   isConversationReady = true,
+  externalJumpToMessageId = null,
+  externalJumpRequestVersion = 0,
+  onExternalJumpHandled,
   className,
 }) => {
   const { t } = useTranslation();
-  const chatDensity = useUIStore((s) => s.chatDensity);
   const isMessageSelectionMode = useUIStore((s) => s.isMessageSelectionMode);
   const selectedMessageIds = useUIStore((s) => s.selectedMessageIds);
   const enterSelectionMode = useUIStore((s) => s.enterSelectionMode);
   const exitSelectionMode = useUIStore((s) => s.exitSelectionMode);
   const toggleMessageSelection = useUIStore((s) => s.toggleMessageSelection);
   const slowModeUntil = useGroupStore(
-    (state) => state.slowModeUntilByRoom[conversation.id] || 0,
+    (state) => state.slowModeUntilByConversation[conversation.id] || 0,
   );
   const clearSlowModeCooldown = useGroupStore((s) => s.clearSlowModeCooldown);
-  const addMessage = useChatStore((s) => s.addMessage);
-  const fetchMessages = useChatStore((s) => s.fetchMessages);
+  const { ensureMessageLoaded } = useMessageJumpTargetRTK(conversation.id);
   const sendRestriction = useChatStore(
     (state) => state.sendRestrictionsByConversation[conversation.id],
   );
-  const [isSendingMessage, setIsSendingMessage] = React.useState(false);
+  const setComposerDraft = useChatUiStore((state) => state.setComposerDraft);
+  const clearComposerDraft = useChatUiStore(
+    (state) => state.clearComposerDraft,
+  );
+  const readPersistedDraft = React.useCallback(
+    (conversationId: string) =>
+      useChatUiStore.getState().composerDraftByConversation[conversationId] ??
+      "",
+    [],
+  );
 
-  const [inputValue, setInputValue] = React.useState("");
+  const [composerSeed, setComposerSeed] = React.useState(() =>
+    readPersistedDraft(conversation.id),
+  );
+  const [composerSeedVersion, setComposerSeedVersion] = React.useState(0);
   const [inputMode, setInputMode] = React.useState<InputMode>("normal");
   const [replyToMessage, setReplyToMessage] = React.useState<
     Message | undefined
@@ -165,6 +211,94 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [editingMessage, setEditingMessage] = React.useState<
     Message | undefined
   >(undefined);
+  const draftBeforeEditRef = React.useRef<string>(composerSeed);
+  const inputValueRef = React.useRef(composerSeed);
+  const inputModeRef = React.useRef<InputMode>("normal");
+  const pendingDraftPersistRef = React.useRef<{
+    conversationId: string;
+    value: string;
+  } | null>(null);
+  const draftPersistTimerRef = React.useRef<number | null>(null);
+  const previousConversationIdRef = React.useRef(conversation.id);
+  const navigationRequestSeqRef = React.useRef(0);
+  const renderCountRef = React.useRef(0);
+
+  const replaceComposerSeed = React.useCallback((nextValue: string) => {
+    inputValueRef.current = nextValue;
+    setComposerSeed(nextValue);
+    setComposerSeedVersion((version) => version + 1);
+  }, []);
+
+  const clearPendingDraftPersist = React.useCallback(() => {
+    if (draftPersistTimerRef.current !== null) {
+      window.clearTimeout(draftPersistTimerRef.current);
+      draftPersistTimerRef.current = null;
+    }
+    pendingDraftPersistRef.current = null;
+  }, []);
+
+  const persistDraft = React.useCallback(
+    (conversationId: string, value: string) => {
+      if (value.trim().length === 0) {
+        clearComposerDraft(conversationId);
+        return;
+      }
+
+      setComposerDraft(conversationId, value);
+    },
+    [clearComposerDraft, setComposerDraft],
+  );
+
+  const flushPendingDraftPersist = React.useCallback(() => {
+    if (draftPersistTimerRef.current !== null) {
+      window.clearTimeout(draftPersistTimerRef.current);
+      draftPersistTimerRef.current = null;
+    }
+
+    const pending = pendingDraftPersistRef.current;
+    pendingDraftPersistRef.current = null;
+    if (!pending) {
+      return;
+    }
+
+    persistDraft(pending.conversationId, pending.value);
+  }, [persistDraft]);
+
+  const scheduleDraftPersist = React.useCallback(
+    (conversationId: string, value: string) => {
+      pendingDraftPersistRef.current = { conversationId, value };
+
+      if (typeof window === "undefined") {
+        flushPendingDraftPersist();
+        return;
+      }
+
+      if (draftPersistTimerRef.current !== null) {
+        window.clearTimeout(draftPersistTimerRef.current);
+      }
+
+      draftPersistTimerRef.current = window.setTimeout(() => {
+        draftPersistTimerRef.current = null;
+        const pending = pendingDraftPersistRef.current;
+        pendingDraftPersistRef.current = null;
+        if (pending) {
+          persistDraft(pending.conversationId, pending.value);
+        }
+      }, DRAFT_PERSIST_DEBOUNCE_MS);
+    },
+    [flushPendingDraftPersist, persistDraft],
+  );
+
+  React.useEffect(() => {
+    inputModeRef.current = inputMode;
+  }, [inputMode]);
+
+  React.useEffect(
+    () => () => {
+      flushPendingDraftPersist();
+    },
+    [flushPendingDraftPersist],
+  );
 
   const handleReply = React.useCallback((message: Message) => {
     setReplyToMessage(message);
@@ -181,14 +315,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const handleCancelEdit = React.useCallback(() => {
     setEditingMessage(undefined);
+    replaceComposerSeed(draftBeforeEditRef.current);
     if (!replyToMessage) {
       setInputMode("normal");
     }
-  }, [replyToMessage]);
+  }, [replyToMessage, replaceComposerSeed]);
 
-  const handleInputChange = React.useCallback((nextValue: string) => {
-    setInputValue(nextValue);
-  }, []);
+  const handleInputChange = React.useCallback(
+    (nextValue: string) => {
+      inputValueRef.current = nextValue;
+      if (inputModeRef.current !== "edit") {
+        scheduleDraftPersist(conversation.id, nextValue);
+      }
+    },
+    [conversation.id, scheduleDraftPersist],
+  );
 
   const handleReact = React.useCallback(
     (messageId: string, emoji: string) => {
@@ -199,11 +340,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   );
 
   const handleEdit = React.useCallback((message: Message) => {
+    flushPendingDraftPersist();
+    draftBeforeEditRef.current = inputValueRef.current;
     setReplyToMessage(undefined);
     setEditingMessage(message);
-    setInputValue(message.content || "");
+    replaceComposerSeed(message.content || "");
     setInputMode("edit");
-  }, []);
+  }, [flushPendingDraftPersist, replaceComposerSeed]);
 
   const handleDelete = React.useCallback(
     (messageId: string) => {
@@ -220,14 +363,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   usePresence({ conversationId: conversation.id });
 
   const handleSend = React.useCallback(
-    async (content?: string, fileMeta?: unknown, type?: string) => {
-      if (isSendingMessage) {
-        logMessageDebug("ChatWindow", "send_ignored_in_flight", {
-          conversationId: conversation.id,
-        });
-        return;
-      }
-
+    (content?: string, fileMeta?: unknown, type?: string) => {
       if (inputMode === "edit" && editingMessage && onEditMessage) {
         const nextContent = (content || "").trim();
         if (
@@ -235,16 +371,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           nextContent === (editingMessage.content || "").trim()
         ) {
           setEditingMessage(undefined);
+          replaceComposerSeed(draftBeforeEditRef.current);
           setInputMode(replyToMessage ? "reply" : "normal");
           return;
         }
 
-        await Promise.resolve(onEditMessage(editingMessage.id, nextContent));
-        setInputValue("");
-        setReplyToMessage(undefined);
-        setEditingMessage(undefined);
-        setInputMode("normal");
-        return;
+        return Promise.resolve(onEditMessage(editingMessage.id, nextContent))
+          .then(() => {
+            replaceComposerSeed(draftBeforeEditRef.current);
+            setReplyToMessage(undefined);
+            setEditingMessage(undefined);
+            setInputMode("normal");
+            return { disposition: "sent" as const };
+          });
       }
 
       // ── Build attachments from upload queue + legacy single file ──
@@ -288,20 +427,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         attachmentCount: allAttachments.length,
         replyToId: replyToMessage?.id,
       });
-
-      setIsSendingMessage(true);
-
       try {
-        const result = await Promise.resolve(
-          onSendMessage(
-            outgoingContent,
-            replyToMessage,
-            attachmentArg,
-            messageType,
-          ),
+        const sendResult = onSendMessage(
+          outgoingContent,
+          replyToMessage,
+          attachmentArg,
+          messageType,
         );
+        const sendPromise = Promise.resolve(sendResult);
 
-        setInputValue("");
+        inputValueRef.current = "";
+        replaceComposerSeed("");
+        clearPendingDraftPersist();
+        clearComposerDraft(conversation.id);
         setReplyToMessage(undefined);
         setEditingMessage(undefined);
         setInputMode("normal");
@@ -310,13 +448,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           uploadQueue.clearAll();
         }
 
-        logMessageDebug("ChatWindow", "send_resolved", {
-          conversationId: conversation.id,
-          disposition:
-            (result as { disposition?: string } | undefined)?.disposition ??
-            "unknown",
-        });
-        return result;
+        void sendPromise
+          .then((result) => {
+            logMessageDebug("ChatWindow", "send_resolved", {
+              conversationId: conversation.id,
+              disposition:
+                (result as { disposition?: string } | undefined)?.disposition ??
+                "unknown",
+            });
+          })
+          .catch((error) => {
+            logMessageDebug("ChatWindow", "send_rejected", {
+              conversationId: conversation.id,
+              errorMessage:
+                error instanceof Error ? error.message : "unknown_error",
+            });
+          });
+
+        return { disposition: "acceptedOptimistic" as const };
       } catch (error) {
         logMessageDebug("ChatWindow", "send_rejected", {
           conversationId: conversation.id,
@@ -324,17 +473,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             error instanceof Error ? error.message : "unknown_error",
         });
         throw error;
-      } finally {
-        setIsSendingMessage(false);
       }
     },
     [
       conversation.id,
+      clearComposerDraft,
+      clearPendingDraftPersist,
       editingMessage,
-      isSendingMessage,
       inputMode,
       onEditMessage,
       onSendMessage,
+      replaceComposerSeed,
       replyToMessage,
       uploadQueue,
     ],
@@ -342,45 +491,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Search & pinned panel state
   const [overlayMode, setOverlayMode] = React.useState<
-    "search" | "pinned" | null
+    "search" | "pinned" | "inspect" | null
   >(null);
+  const [inspectMessageId, setInspectMessageId] = React.useState<string | null>(
+    null,
+  );
   const [jumpTargetMessageId, setJumpTargetMessageId] = React.useState<
     string | null
   >(null);
   const [jumpRequestVersion, setJumpRequestVersion] = React.useState(0);
-  const [unreadMarker, setUnreadMarker] = React.useState<{
-    lastReadMessageId?: string;
-    lastReadAt?: Date | string;
-    active?: boolean;
-  } | null>(null);
   const [clockTick, setClockTick] = React.useState(() => Date.now());
   const [ephemeralNotice, setEphemeralNotice] =
     React.useState<EphemeralNotice | null>(null);
   const [composerHeight, setComposerHeight] = React.useState(0);
-  const [viewportMetrics, setViewportMetrics] = React.useState(() => ({
-    width: typeof window !== "undefined" ? window.innerWidth : 1280,
-    height: typeof window !== "undefined" ? window.innerHeight : 900,
-  }));
+  const viewportMetrics = useMobileViewportMetrics();
   const previousConnectionStateRef =
     React.useRef<ConnectionState>(connectionState);
   const ephemeralNoticeTimerRef = React.useRef<number | null>(null);
-
-  const resolvedDensity = React.useMemo(
-    () =>
-      resolveChatDensity({
-        preference: chatDensity,
-        viewportWidth: viewportMetrics.width,
-        viewportHeight: viewportMetrics.height,
-        messages,
-        conversationType: conversation.type,
-      }),
-    [
-      chatDensity,
-      conversation.type,
-      messages,
-      viewportMetrics.height,
-      viewportMetrics.width,
-    ],
+  const inspectedMessage = useMessageEntity(inspectMessageId);
+  const resolvedDensity = "comfortable" as const;
+  const layoutProfile = React.useMemo(
+    () => resolveChatLayoutProfile(viewportMetrics.width, layoutState),
+    [layoutState, viewportMetrics.width],
   );
 
   const bottomOverlayPlacements = React.useMemo(
@@ -460,9 +592,26 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   });
 
   const bottomFloatingOffset = React.useMemo(
-    () => Math.max(12, composerHeight + 12),
-    [composerHeight],
+    () => Math.max(12, composerHeight + viewportMetrics.keyboardInset + 12),
+    [composerHeight, viewportMetrics.keyboardInset],
   );
+
+  React.useEffect(() => {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+
+    renderCountRef.current += 1;
+    logChatPerformance("chat-window-render-count", {
+      conversationId: conversation.id,
+      renderCount: renderCountRef.current,
+      inputMode,
+      overlayMode,
+      isMessageSelectionMode,
+      composerHeight,
+      keyboardInset: viewportMetrics.keyboardInset,
+    });
+  });
 
   React.useEffect(() => {
     if (!isSlowModeBlocked) {
@@ -494,6 +643,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setOverlayMode((prev) => (prev === "pinned" ? null : "pinned"));
   }, []);
 
+  const handleInspectMessage = React.useCallback((message: Message) => {
+    setInspectMessageId(message.id);
+    setOverlayMode("inspect");
+  }, []);
+
   const handleJumpHandled = React.useCallback((messageId: string) => {
     setJumpTargetMessageId((current) =>
       current === messageId ? null : current,
@@ -502,7 +656,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const handleReachedLatest = React.useCallback(
     (message: Message) => {
-      setUnreadMarker((current) => (current?.active ? null : current));
       onReachedLatestMessage?.(message);
     },
     [onReachedLatestMessage],
@@ -521,42 +674,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     [conversation.id],
   );
 
-  const ensureMessageLoaded = React.useCallback(
-    async (messageId: string, fallbackMessage?: Message) => {
-      const existingMessage = messages.find((message) =>
-        matchesMessageIdentity(message, messageId),
-      );
-      if (existingMessage) {
-        return existingMessage;
-      }
-
-      let targetMessage = fallbackMessage;
-      if (!targetMessage) {
-        const response = await getMessageByIdUseCase(messageId);
-        targetMessage = unwrapApiSuccess(response) as Message;
-      }
-
-      addMessage(conversation.id, targetMessage);
-      const cursor = new Date(targetMessage.createdAt).toISOString();
-      await Promise.allSettled([
-        fetchMessages(conversation.id, cursor, undefined, {
-          beforeId: targetMessage.id,
-          limit: 24,
-        }),
-        fetchMessages(conversation.id, undefined, cursor, {
-          afterId: targetMessage.id,
-          limit: 24,
-        }),
-      ]);
-
-      return targetMessage;
-    },
-    [addMessage, conversation.id, fetchMessages, messages],
-  );
-
   const handleJumpToMessage = React.useCallback(
     async (message: Message) => {
-      await ensureMessageLoaded(message.id, message);
+      const requestSeq = (navigationRequestSeqRef.current += 1);
+      const result = await ensureMessageLoaded(message.id, message);
+      if (result.stale || navigationRequestSeqRef.current !== requestSeq) {
+        return;
+      }
       queueJumpToMessage(message.id);
     },
     [ensureMessageLoaded, queueJumpToMessage],
@@ -564,8 +688,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const handleNavigateToMessage = React.useCallback(
     async (messageId: string) => {
+      const requestSeq = (navigationRequestSeqRef.current += 1);
       try {
-        await ensureMessageLoaded(messageId);
+        const result = await ensureMessageLoaded(messageId);
+        if (result.stale || navigationRequestSeqRef.current !== requestSeq) {
+          logScrollTrace("jump_request_ignored_stale", {
+            conversationId: conversation.id,
+            messageId,
+          });
+          return;
+        }
         queueJumpToMessage(messageId);
       } catch (error) {
         const apiError = extractApiError(error);
@@ -585,34 +717,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     [conversation.id, ensureMessageLoaded, queueJumpToMessage, t],
   );
 
-  const conversationReadSnapshot = conversation as Conversation & {
-    lastReadMessageId?: string;
-    lastReadAt?: Date | string;
-  };
-  const lastReadMessageId = conversationReadSnapshot.lastReadMessageId;
-  const lastReadAt = conversationReadSnapshot.lastReadAt;
+  React.useEffect(() => {
+    if (!externalJumpToMessageId) return;
+
+    void handleNavigateToMessage(externalJumpToMessageId).finally(() => {
+      onExternalJumpHandled?.(externalJumpToMessageId);
+    });
+  }, [
+    externalJumpRequestVersion,
+    externalJumpToMessageId,
+    handleNavigateToMessage,
+    onExternalJumpHandled,
+  ]);
 
   // Close panels when switching conversations
   React.useEffect(() => {
     setOverlayMode(null);
-    if (
-      (conversation.unreadCount ?? 0) > 0 &&
-      (lastReadMessageId || lastReadAt)
-    ) {
-      setUnreadMarker({
-        lastReadMessageId,
-        lastReadAt,
-        active: true,
-      });
-    } else {
-      setUnreadMarker(null);
-    }
-  }, [
-    conversation.id,
-    conversation.unreadCount,
-    lastReadAt,
-    lastReadMessageId,
-  ]);
+    setInspectMessageId(null);
+  }, [conversation.id]);
 
   React.useEffect(() => {
     const previousState = previousConnectionStateRef.current;
@@ -630,9 +752,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     } else if (connectionState === "disconnected") {
       setEphemeralNotice({
         kind: "error",
-        message: t("chat:toast.connectionOffline", {
-          defaultValue: "Mat ket noi. Dang cho dong bo lai.",
-        }),
+        message: t("chat:toast.connectionOffline"),
       });
     } else if (
       connectionState === "connected" &&
@@ -640,9 +760,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     ) {
       setEphemeralNotice({
         kind: "success",
-        message: t("chat:toast.connectionRestored", {
-          defaultValue: "Da ket noi lai",
-        }),
+        message: t("chat:toast.connectionRestored"),
       });
       ephemeralNoticeTimerRef.current = window.setTimeout(() => {
         setEphemeralNotice((current) =>
@@ -667,21 +785,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   );
 
   React.useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (previousConversationIdRef.current === conversation.id) {
+      return;
+    }
 
-    const handleResize = () => {
-      setViewportMetrics({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, []);
+    navigationRequestSeqRef.current += 1;
+    flushPendingDraftPersist();
+    previousConversationIdRef.current = conversation.id;
+    const nextDraft = readPersistedDraft(conversation.id);
+    draftBeforeEditRef.current = nextDraft;
+    replaceComposerSeed(nextDraft);
+    setReplyToMessage(undefined);
+    setEditingMessage(undefined);
+    setInputMode("normal");
+  }, [
+    conversation.id,
+    flushPendingDraftPersist,
+    readPersistedDraft,
+    replaceComposerSeed,
+  ]);
 
   const mentionCandidates = React.useMemo<MentionCandidate[]>(() => {
     const participants = Array.isArray(conversation.participants)
@@ -690,14 +812,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
     return participants
       .filter((participant) => participant.id !== currentUser.id)
-      .map((participant) => ({
-        id: participant.id,
-        username:
-          participant.username?.trim() ||
-          participant.displayName?.trim() ||
-          participant.id,
-        displayName: participant.displayName?.trim() || undefined,
-      }));
+      .map((participant) => {
+        const participantRecord = participant as unknown as Record<
+          string,
+          unknown
+        >;
+        const employeeCode =
+          (typeof participantRecord.employeeCode === "string" &&
+            participantRecord.employeeCode.trim()) ||
+          (typeof participantRecord.employee_code === "string" &&
+            participantRecord.employee_code.trim()) ||
+          "";
+
+        return {
+          id: participant.id,
+          username:
+            participant.username?.trim() || employeeCode || participant.id,
+          displayName:
+            resolveUserDisplayName(participant, {
+              allowLegacyFallback: false,
+            }) || undefined,
+        };
+      });
   }, [conversation.participants, currentUser.id]);
 
   const handleShareContact = React.useCallback(
@@ -746,91 +882,29 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [onDeleteMessage, selectedMessageIds, exitSelectionMode]);
 
   const handleSelectionCopy = React.useCallback(() => {
-    const selectedMsgs = messages
-      .filter((m) => selectedMessageIds.has(m.id))
+    const selectedMsgs = selectConversationMessagesFromState(
+      useChatStore.getState(),
+      conversation.id,
+    )
+      .filter((message) => selectedMessageIds.has(message.id))
       .map((m) => m.content)
       .join("\n");
     void navigator.clipboard.writeText(selectedMsgs);
     toast.success(t("chat:message.actions.copy", { defaultValue: "Copied" }));
     exitSelectionMode();
-  }, [messages, selectedMessageIds, exitSelectionMode, t]);
+  }, [conversation.id, selectedMessageIds, exitSelectionMode, t]);
 
   const currentUsername = currentUser.username;
-
-  const messageListNode = React.useMemo(
-    () => (
-      <MessageList
-        messages={messages}
-        conversationId={conversation.id}
-        conversationType={conversation.type}
-        currentUserId={currentUser.id}
-        onReply={handleReply}
-        onReact={handleReact}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        hasMore={hasMoreMessages}
-        isLoadingMore={Boolean(isLoadingMessages && messages.length > 0)}
-        isInitialLoading={Boolean(
-          (isLoadingMessages || !isConversationReady) && messages.length === 0,
-        )}
-        onLoadMore={onLoadOlderMessages}
-        onImageClick={onImageClick}
-        onFilePreview={onFilePreview}
-        error={messageError}
-        onRetry={onRetryMessages}
-        density={resolvedDensity}
-        isSelectionMode={isMessageSelectionMode}
-        selectedMessageIds={selectedMessageIds}
-        onToggleSelect={toggleMessageSelection}
-        onNavigateToMessage={handleNavigateToMessage}
-        currentUsername={currentUsername}
-        unreadMarker={unreadMarker}
-        onReachedLatest={handleReachedLatest}
-        jumpToMessageId={jumpTargetMessageId}
-        jumpRequestVersion={jumpRequestVersion}
-        onJumpHandled={handleJumpHandled}
-        composerHeight={composerHeight}
-        className="flex-1 min-h-0"
-      />
-    ),
-    [
-      conversation.id,
-      conversation.type,
-      currentUser.id,
-      handleReact,
-      handleReply,
-      handleEdit,
-      handleDelete,
-      hasMoreMessages,
-      isLoadingMessages,
-      messageError,
-      messages,
-      onImageClick,
-      onFilePreview,
-      onLoadOlderMessages,
-      onRetryMessages,
-      resolvedDensity,
-      handleJumpHandled,
-      handleNavigateToMessage,
-      handleReachedLatest,
-      composerHeight,
-      isMessageSelectionMode,
-      jumpRequestVersion,
-      jumpTargetMessageId,
-      selectedMessageIds,
-      toggleMessageSelection,
-      currentUsername,
-      unreadMarker,
-    ],
-  );
 
   return (
     <section
       key={conversation.id}
       className={clsx(
-        "chat-background relative flex h-full min-h-0 flex-col overflow-hidden animate-content-fade",
+        "chat-background chat-shell relative flex h-full min-h-0 flex-col overflow-hidden animate-content-fade",
         className,
       )}
+      data-chat-layout-profile={layoutProfile}
+      data-chat-layout-state={layoutState}
       {...dropZoneProps}
     >
       {/* Drag-and-drop overlay */}
@@ -854,27 +928,65 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             onClick={() => setOverlayMode(null)}
             aria-label={t("common:actions.close")}
           />
-          <div className="pointer-events-auto absolute inset-y-0 right-0 w-full max-w-[min(24rem,100%)] border-l border-border bg-surface shadow-elev3 animate-slide-up-fade">
-            {overlayMode === "search" ? (
-              <SearchPanel
-                conversationId={conversation.id}
-                onSelectMessage={handleJumpToMessage}
-                onClose={() => setOverlayMode(null)}
-                className="h-full"
-              />
-            ) : (
-              <PinnedMessagesPanel
-                conversationId={conversation.id}
-                onClose={() => setOverlayMode(null)}
-                onJumpToMessage={handleJumpToMessage}
-                className="h-full"
-              />
-            )}
+          <div className="pointer-events-auto absolute inset-y-0 right-0 w-full max-w-[min(24rem,100%)] border-l border-border/60 bg-[hsl(var(--chat-panel-bg))] shadow-elev3 animate-slide-up-fade">
+            <React.Suspense fallback={<OverlayPanelFallback />}>
+              {overlayMode === "search" ? (
+                <SearchPanel
+                  conversationId={conversation.id}
+                  onSelectMessage={handleJumpToMessage}
+                  onClose={() => setOverlayMode(null)}
+                  className="h-full"
+                />
+              ) : overlayMode === "inspect" ? (
+                <MessageInspectDrawer
+                  message={inspectedMessage ?? null}
+                  onClose={() => setOverlayMode(null)}
+                  className="h-full"
+                />
+              ) : (
+                <PinnedMessagesPanel
+                  conversationId={conversation.id}
+                  onClose={() => setOverlayMode(null)}
+                  onJumpToMessage={handleJumpToMessage}
+                  className="h-full"
+                />
+              )}
+            </React.Suspense>
           </div>
         </div>
       )}
 
-      {messageListNode}
+      <ConversationViewport
+        layoutState={layoutState}
+        conversation={conversation}
+        currentUserId={currentUser.id}
+        onReply={handleReply}
+        onReact={handleReact}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onInspect={handleInspectMessage}
+        hasMoreMessages={hasMoreMessages}
+        isLoadingMessages={isLoadingMessages}
+        isConversationReady={isConversationReady}
+        onLoadOlderMessages={onLoadOlderMessages}
+        onImageClick={onImageClick}
+        onFilePreview={onFilePreview}
+        messageError={messageError}
+        onRetryMessages={onRetryMessages}
+        density={resolvedDensity}
+        isSelectionMode={isMessageSelectionMode}
+        selectedMessageIds={selectedMessageIds}
+        onToggleSelect={toggleMessageSelection}
+        onNavigateToMessage={handleNavigateToMessage}
+        currentUsername={currentUsername}
+        onReachedLatest={handleReachedLatest}
+        jumpToMessageId={jumpTargetMessageId}
+        jumpRequestVersion={jumpRequestVersion}
+        onJumpHandled={handleJumpHandled}
+        composerHeight={composerHeight}
+        historyLoadingState={historyLoadingState}
+        className="flex-1 min-h-0"
+      />
 
       {ephemeralNotice &&
         bottomOverlayPlacements["ephemeral-notice"]?.visible && (
@@ -914,9 +1026,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {/* Message input - hidden during selection mode */}
       {!isMessageSelectionMode && (
-        <div className="sticky bottom-0 z-sticky">
+        <div
+          className="sticky z-sticky"
+          style={{
+            bottom:
+              viewportMetrics.keyboardInset > 0
+                ? `${viewportMetrics.keyboardInset}px`
+                : "0px",
+          }}
+        >
           <MessageInput
-            value={inputValue}
+            value={composerSeed}
+            valueResetKey={composerSeedVersion}
             onChange={handleInputChange}
             onSend={handleSend}
             mode={inputMode}
@@ -932,7 +1053,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             sendOnEnter
             disabled={!composerAvailability.canType}
             submitDisabled={!composerAvailability.canSubmit}
-            submitInFlight={isSendingMessage}
             attachmentsDisabled={!composerAvailability.canAttach}
             disabledReason={composerAvailability.statusMessage}
             disabledReasonTone={composerAvailability.statusTone}

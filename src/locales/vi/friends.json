@@ -4,6 +4,8 @@
   "tabs": {
     "friends": "Bạn bè",
     "requests": "Yêu cầu",
+    "received": "Đã nhận",
+    "sent": "Đã gửi",
     "discover": "Khám phá",
     "blocked": "Đã chặn",
     "search": "Tìm kiếm",
@@ -63,7 +65,9 @@
     "unavailable": "Không khả dụng"
   },
   "sentRequests": {
-    "cancel": "Hủy"
+    "cancel": "Hủy",
+    "emptyReceived": "Chưa có lời mời đã nhận",
+    "emptySent": "Chưa có lời mời đã gửi"
   },
   "qr": {
     "unknownUser": "Người dùng không xác định",

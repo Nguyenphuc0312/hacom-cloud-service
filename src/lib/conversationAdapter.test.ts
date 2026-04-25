@@ -115,4 +115,50 @@ describe("normalizeConversation", () => {
     expect(direct?.type).toBe("direct");
     expect(group?.type).toBe("group");
   });
+
+  it("normalize canonical summary fields from backend", () => {
+    const conversation = normalizeConversation({
+      id: "conv-1",
+      conversationId: "conv-1",
+      type: "group",
+      name: "Realtime",
+      unreadCount: 4,
+      membershipState: "active",
+      currentUserRole: "member",
+      allowMemberMessaging: false,
+      canCurrentUserSend: false,
+      memberCount: 3,
+      summaryVersion: 12,
+      lastActivityAt: "2026-04-13T08:30:00.000Z",
+      lastReadAt: "2026-04-13T08:00:00.000Z",
+      lastReadMessageId: "msg-9",
+      firstUnreadMessageId: "msg-10",
+      firstUnreadMessageAt: "2026-04-13T08:30:00.000Z",
+      lastMessage: {
+        id: "msg-10",
+        conversationId: "conv-1",
+        senderId: "u2",
+        senderName: "U2",
+        content: "hello latest",
+        type: "text",
+        createdAt: "2026-04-13T08:30:00.000Z",
+      },
+      updatedAt: "2026-04-13T08:30:00.000Z",
+    });
+
+    expect(conversation?.unreadCount).toBe(4);
+    expect(conversation?.membershipState).toBe("active");
+    expect(conversation?.currentUserRole).toBe("member");
+    expect(conversation?.allowMemberMessaging).toBe(false);
+    expect(conversation?.canCurrentUserSend).toBe(false);
+    expect(conversation?.summaryVersion).toBe(12);
+    expect(conversation?.lastReadMessageId).toBe("msg-9");
+    expect(conversation?.firstUnreadMessageId).toBe("msg-10");
+    expect(conversation?.lastMessage?.id).toBe("msg-10");
+    expect(conversation?.lastMessageId).toBe("msg-10");
+    expect(conversation?.lastMessageSortAt).toEqual(
+      new Date("2026-04-13T08:30:00.000Z"),
+    );
+    expect(conversation?.lastMessageStatus).toBe("sent");
+  });
 });

@@ -14,6 +14,7 @@ import {
   updateAccessToken,
 } from "./tokenService";
 import { getJwtExpirationMs, isTokenExpiringSoon } from "../utils/jwtHelpers";
+import { logger } from "../utils/logger";
 
 type RefreshPayload = {
   accessToken?: string;
@@ -57,7 +58,7 @@ const emitRefreshEvent = (event: AuthRefreshEvent): void => {
     try {
       listener(event);
     } catch (error) {
-      console.error("Auth refresh listener failed:", error);
+      logger.error("auth-refresh", "listener_failed", error);
     }
   });
 };

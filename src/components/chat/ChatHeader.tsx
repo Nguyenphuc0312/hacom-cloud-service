@@ -12,10 +12,10 @@ import {
   VideoCameraIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../common/Avatar";
+import { GroupAvatar } from "../common/GroupAvatar";
 import { TypingIndicator } from "../common/TypingIndicator";
-import { DensityToggle } from "./DensityToggle";
 import { ConversationLane } from "../layout/ConversationLane";
-import { useUIStore, usePresenceStore } from "../../stores";
+import { usePresenceStore } from "../../stores";
 import { UserStatus } from "../../types";
 import type { Conversation, TypingStatus } from "../../types";
 import {
@@ -50,9 +50,9 @@ interface HeaderAction {
 }
 
 const iconButtonClass = clsx(
-  "inline-flex h-9 w-9 items-center justify-center rounded-lg border border-transparent",
+  "chat-header-action inline-flex h-[var(--control-height-md)] w-[var(--control-height-md)] items-center justify-center rounded-md border border-transparent",
   "text-text-muted transition-micro",
-  "hover:border-border hover:bg-surface-hover hover:text-text-primary",
+  "hover:bg-surface-hover/80 hover:text-text-primary",
   "active:scale-[0.98] active:bg-surface-active",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
 );
@@ -71,8 +71,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
-  const chatDensity = useUIStore((s) => s.chatDensity);
-  const setChatDensity = useUIStore((s) => s.setChatDensity);
   const otherUser = getOtherParticipant(conversation, currentUserId);
   const normalizedType = normalizeRoomType(
     conversation.type,
@@ -151,32 +149,17 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const displayName =
     getConversationDisplayName(conversation, currentUserId) ||
     t("common:labels.conversation");
-  const conversationTypeLabel =
-    normalizedType === "group"
-      ? t("sidebar:room.type.group")
-      : normalizedType === "channel"
-        ? t("sidebar:tabs.channels")
-        : t("sidebar:room.type.direct");
   const avatarSrc = getConversationAvatar(conversation, currentUserId);
 
   const menuActions = React.useMemo<HeaderAction[]>(() => {
     const nextActions: HeaderAction[] = [];
 
-    if (onCallClick) {
+    if (onSearchClick) {
       nextActions.push({
-        id: "voice-call",
-        label: t("chat:header.voiceCall"),
-        icon: PhoneIcon,
-        onClick: onCallClick,
-      });
-    }
-
-    if (onVideoCallClick) {
-      nextActions.push({
-        id: "video-call",
-        label: t("chat:header.videoCall"),
-        icon: VideoCameraIcon,
-        onClick: onVideoCallClick,
+        id: "search",
+        label: t("chat:header.searchInChat"),
+        icon: MagnifyingGlassIcon,
+        onClick: onSearchClick,
       });
     }
 
@@ -198,19 +181,37 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       });
     }
 
+    if (onCallClick) {
+      nextActions.push({
+        id: "voice-call",
+        label: t("chat:header.voiceCall"),
+        icon: PhoneIcon,
+        onClick: onCallClick,
+      });
+    }
+
+    if (onVideoCallClick) {
+      nextActions.push({
+        id: "video-call",
+        label: t("chat:header.videoCall"),
+        icon: VideoCameraIcon,
+        onClick: onVideoCallClick,
+      });
+    }
+
     return nextActions;
-  }, [onCallClick, onPinnedClick, onSelectionMode, onVideoCallClick, t]);
+  }, [onCallClick, onPinnedClick, onSearchClick, onSelectionMode, onVideoCallClick, t]);
 
   return (
     <header
       className={clsx(
-        "sticky top-0 z-sticky border-b border-border/70 py-1.5 backdrop-blur",
+        "chat-header sticky top-0 z-sticky border-b border-border/55",
         className,
       )}
-      style={{ backgroundColor: "hsl(var(--color-chat-canvas) / 0.92)" }}
+      style={{ backgroundColor: "hsl(var(--chat-panel-bg) / 0.94)" }}
     >
       <ConversationLane>
-        <div className="flex min-h-10 items-center gap-2">
+        <div className="chat-header-row flex min-h-[var(--app-header-height)] items-center gap-2">
           {onBack && (
             <button
               type="button"
@@ -226,36 +227,42 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             type="button"
             onClick={onInfoClick}
             className={clsx(
-              "shrink-0 rounded-full",
+              "chat-header-avatar-button inline-flex h-[var(--control-height-md)] w-[var(--control-height-md)] shrink-0 items-center justify-center rounded-full",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             )}
             aria-label={t("chat:header.viewInfo")}
           >
-            <Avatar
-              src={avatarSrc}
-              alt={displayName}
-              size="md"
-              status={liveStatus}
-              showStatus={isDirect}
-            />
+            {isDirect ? (
+              <Avatar
+                src={avatarSrc}
+                alt={displayName}
+                size="md"
+                status={liveStatus}
+                showStatus={isDirect}
+                className="chat-header-avatar"
+              />
+            ) : (
+              <GroupAvatar
+                conversation={conversation}
+                currentUserId={currentUserId}
+                size="md"
+                alt={displayName}
+                className="chat-header-avatar"
+              />
+            )}
           </button>
 
           <button
             type="button"
             onClick={onInfoClick}
             className={clsx(
-              "min-w-0 flex-1 text-left",
+              "min-w-0 flex-1 rounded-md px-2 py-1 text-left transition-fast hover:bg-surface-hover/40",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
             )}
           >
-            <div className="flex min-w-0 items-center gap-2">
-              <h2 className="truncate text-body-sm font-semibold text-text-primary sm:text-body">
-                {displayName}
-              </h2>
-              <span className="hidden shrink-0 rounded-full border border-border bg-surface-overlay px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-text-muted sm:inline-flex">
-                {conversationTypeLabel}
-              </span>
-            </div>
+            <h2 className="chat-header-title truncate text-[15px] font-medium leading-5 text-text-primary">
+              {displayName}
+            </h2>
 
             {isTyping ? (
               <TypingIndicator
@@ -266,7 +273,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             ) : (
               <p
                 className={clsx(
-                  "truncate text-caption",
+                  "chat-header-subtitle truncate text-[12px] leading-4",
                   isOnline ? "text-text-secondary" : "text-text-muted",
                 )}
               >
@@ -275,56 +282,37 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             )}
           </button>
 
-          <div className="relative ml-1">
-            <div className="flex items-center gap-0.5 rounded-xl border border-border/80 bg-surface/90 p-1 shadow-xs">
-              {onSearchClick && (
-                <button
-                  type="button"
-                  onClick={onSearchClick}
-                  className={iconButtonClass}
-                  aria-label={t("chat:header.searchInChat")}
-                >
-                  <MagnifyingGlassIcon className="h-5 w-5" />
-                </button>
-              )}
+          <div className="relative ml-1 flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={onInfoClick}
+              className={iconButtonClass}
+              aria-label={t("chat:header.toggleInfoPanel")}
+            >
+              <InformationCircleIcon className="h-[18px] w-[18px]" />
+            </button>
 
-              <button
-                type="button"
-                onClick={onInfoClick}
-                className={iconButtonClass}
-                aria-label={t("chat:header.toggleInfoPanel")}
-              >
-                <InformationCircleIcon className="h-5 w-5" />
-              </button>
-
-              <button
-                ref={menuButtonRef}
-                type="button"
-                onClick={() => setIsMenuOpen((value) => !value)}
-                className={iconButtonClass}
-                aria-label={t("chat:header.moreActions")}
-                aria-haspopup="menu"
-                aria-expanded={isMenuOpen}
-              >
-                <EllipsisHorizontalIcon className="h-5 w-5" />
-              </button>
-            </div>
+            <button
+              ref={menuButtonRef}
+              type="button"
+              onClick={() => setIsMenuOpen((value) => !value)}
+              className={iconButtonClass}
+              aria-label={t("chat:header.moreActions")}
+              aria-haspopup="menu"
+              aria-expanded={isMenuOpen}
+            >
+              <EllipsisHorizontalIcon className="h-[18px] w-[18px]" />
+            </button>
 
             {isMenuOpen && (
               <div
                 ref={menuRef}
                 className={clsx(
-                  "absolute right-0 top-full z-dropdown mt-2 min-w-52 overflow-hidden rounded-xl border border-border bg-surface-raised p-1.5 shadow-elev2",
+                  "absolute right-0 top-full z-dropdown mt-2 min-w-52 overflow-hidden rounded-[1rem] border border-border/80 bg-surface-raised p-1.5 shadow-elev2",
                   "animate-slide-up-fade",
                 )}
                 role="menu"
               >
-                <div className="px-2 py-1.5">
-                  <DensityToggle
-                    density={chatDensity}
-                    onChange={setChatDensity}
-                  />
-                </div>
                 {menuActions.map((action) => {
                   const Icon = action.icon;
                   return (

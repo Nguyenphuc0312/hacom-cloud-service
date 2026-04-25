@@ -29,8 +29,9 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
     <label
       htmlFor={id}
       className={clsx(
-        "flex cursor-pointer items-center justify-between gap-4 rounded-lg px-1 py-3",
+        "flex cursor-pointer items-center justify-between gap-4 rounded-[1rem] px-3 py-3",
         "transition-colors duration-150",
+        !disabled && "hover:bg-surface-overlay/72",
         disabled && "cursor-not-allowed opacity-60",
         className,
       )}
@@ -55,16 +56,16 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
         disabled={disabled}
         onClick={() => !disabled && onChange(!checked)}
         className={clsx(
-          "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full",
-          "transition-colors duration-200 ease-in-out",
+          "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full",
+          "transition-all duration-200 ease-in-out",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
-          checked ? "bg-primary" : "bg-border-strong/50",
+          checked ? "bg-primary shadow-xs" : "bg-border-strong/55",
           disabled && "pointer-events-none",
         )}
       >
         <span
           className={clsx(
-            "inline-block h-4 w-4 rounded-full bg-white shadow-sm",
+            "inline-block h-5 w-5 rounded-full bg-white shadow-sm",
             "transition-transform duration-200 ease-in-out",
             checked ? "translate-x-6" : "translate-x-1",
           )}

@@ -97,8 +97,8 @@ const getActionCandidates = ({
   if (canCopyMessage(message)) {
     candidates.push({
       id: "copy",
-      score: failed ? 72 : 58,
-      railEligible: !isOwn || failed,
+      score: failed ? 76 : 72,
+      railEligible: true,
       menuEligible: true,
     });
   }
@@ -142,7 +142,7 @@ export const resolveMessageActions = (
     };
   }
 
-  const railSlots = input.isCoarsePointer ? 0 : 2;
+  const railSlots = input.isCoarsePointer ? 1 : 3;
   const railCandidates = candidates
     .filter((candidate) => candidate.railEligible)
     .slice(0, railSlots);

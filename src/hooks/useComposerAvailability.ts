@@ -78,6 +78,19 @@ export const useComposerAvailability = ({
       };
     }
 
+    if (conversation.canCurrentUserSend === false) {
+      return {
+        mode: "restricted",
+        canType: false,
+        canAttach: false,
+        canSubmit: false,
+        statusTone: "warn",
+        statusMessage: t("chat:composer.readonlyGroup", {
+          defaultValue: "Only group admins can send messages right now.",
+        }),
+      };
+    }
+
     if (sendRestriction) {
       const isSlowModeRestriction = sendRestriction.kind === "slow_mode";
       return {
@@ -112,7 +125,7 @@ export const useComposerAvailability = ({
         canSubmit: true,
         statusTone: "error",
         statusMessage: t("chat:composer.offlineHint", {
-          defaultValue: "Offline. Messages will be queued until the network returns.",
+          defaultValue: "Offline. Messages may fail and can be retried.",
         }),
       };
     }
@@ -126,7 +139,7 @@ export const useComposerAvailability = ({
         statusTone: "warn",
         statusMessage: t("chat:composer.reconnectingHint", {
           defaultValue:
-            "Realtime is reconnecting. Sending still works.",
+            "Reconnecting. You can keep sending while messages are being confirmed.",
         }),
       };
     }
@@ -142,6 +155,7 @@ export const useComposerAvailability = ({
   }, [
     connectionState,
     conversation.isBlocked,
+    conversation.canCurrentUserSend,
     isConversationReady,
     sendRestriction,
     slowModeRemainingSeconds,

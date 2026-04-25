@@ -17,7 +17,7 @@ export const MessageRow: React.FC<MessageRowProps> = ({
   return (
     <div
       className={clsx(
-        "flex items-start gap-1.5",
+        "chat-message-row flex items-start gap-1.5",
         isOwn ? "flex-row-reverse justify-start" : "justify-start",
         className,
       )}

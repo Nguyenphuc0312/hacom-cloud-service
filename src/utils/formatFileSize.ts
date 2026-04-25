@@ -26,6 +26,52 @@ export function getFileExtension(fileName: string): string {
   return parts.length > 1 ? parts.pop()?.toUpperCase() || "" : "";
 }
 
+const IMAGE_EXTENSIONS = new Set([
+  "jpg",
+  "jpeg",
+  "png",
+  "gif",
+  "webp",
+  "svg",
+  "bmp",
+  "heic",
+  "heif",
+  "avif",
+]);
+
+const VIDEO_EXTENSIONS = new Set([
+  "mp4",
+  "mov",
+  "webm",
+  "mkv",
+  "avi",
+  "m4v",
+]);
+
+const AUDIO_EXTENSIONS = new Set([
+  "mp3",
+  "wav",
+  "ogg",
+  "m4a",
+  "aac",
+  "flac",
+]);
+
+const PDF_EXTENSIONS = new Set(["pdf"]);
+
+const resolveExtensionPreviewType = (
+  fileName: string | undefined,
+): PreviewType => {
+  if (!fileName) return "unsupported";
+
+  const extension = getFileExtension(fileName).toLowerCase();
+  if (IMAGE_EXTENSIONS.has(extension)) return "image";
+  if (VIDEO_EXTENSIONS.has(extension)) return "video";
+  if (AUDIO_EXTENSIONS.has(extension)) return "audio";
+  if (PDF_EXTENSIONS.has(extension)) return "pdf";
+  return "unsupported";
+};
+
 /**
  * Get file type category from mime type
  */
@@ -121,25 +167,35 @@ export function getFileIcon(fileName: string): string {
 /**
  * Check if file type is previewable
  */
-export function isPreviewable(mimeType: string): boolean {
-  return (
-    mimeType.startsWith("image/") ||
-    mimeType.startsWith("video/") ||
-    mimeType === "application/pdf"
-  );
+export function isPreviewable(
+  mimeType: string | undefined,
+  fileName?: string,
+): boolean {
+  return getPreviewType(mimeType, fileName) !== "unsupported";
 }
 
 /**
  * Determine the preview type for a given MIME type
  */
-export type PreviewType = "image" | "video" | "pdf" | "unsupported";
+export type PreviewType =
+  | "image"
+  | "video"
+  | "audio"
+  | "pdf"
+  | "unsupported";
 
-export function getPreviewType(mimeType: string | undefined): PreviewType {
-  if (!mimeType) return "unsupported";
-  if (mimeType.startsWith("image/")) return "image";
-  if (mimeType.startsWith("video/")) return "video";
-  if (mimeType === "application/pdf") return "pdf";
-  return "unsupported";
+export function getPreviewType(
+  mimeType: string | undefined,
+  fileName?: string,
+): PreviewType {
+  if (mimeType) {
+    if (mimeType.startsWith("image/")) return "image";
+    if (mimeType.startsWith("video/")) return "video";
+    if (mimeType.startsWith("audio/")) return "audio";
+    if (mimeType === "application/pdf") return "pdf";
+  }
+
+  return resolveExtensionPreviewType(fileName);
 }
 
 /**

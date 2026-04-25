@@ -12,6 +12,7 @@ import {
   SETTINGS_VERSION,
   defaultSettings,
 } from "./defaults";
+import { logger } from "../utils/logger";
 
 // ============================================
 // READ
@@ -49,7 +50,7 @@ export const saveSettings = (settings: SettingsSchema): void => {
   try {
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
   } catch (e) {
-    console.warn("[settings/persistence] Unable to save settings", e);
+    logger.warn("settings", "persist_failed", e);
   }
 };
 

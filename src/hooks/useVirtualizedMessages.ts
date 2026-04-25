@@ -1,14 +1,27 @@
 import React from "react";
 import type { VariableSizeList as VirtualList } from "react-window";
+import type {
+  ConversationVirtualizerAlign,
+  ConversationVirtualizerMeasurementResult,
+  ConversationVirtualizerOffsetMatch,
+  ConversationVirtualizerScrollBehavior,
+} from "./virtualizerContract";
 import { logMessageDebug } from "../utils/messageDebug";
+
+const ITEM_SIZE_CHANGE_THRESHOLD = 2;
+const PROGRAMMATIC_SCROLL_MATCH_THRESHOLD_PX = 12;
+const PROGRAMMATIC_SCROLL_TTL_MS = 450;
 
 interface UseVirtualizedMessagesParams<Item, ListData> {
   items: Item[];
   viewportRef: React.RefObject<HTMLDivElement | null>;
   observeViewport?: boolean;
   debugLabel?: string;
+  enabled?: boolean;
   estimateItemSize: (item: Item) => number;
   getItemKey: (item: Item, index: number) => string;
+  getMeasurementKey?: (item: Item, index: number) => string;
+  shouldResetAfterSizeChange?: (item: Item, index: number) => boolean;
   listRef?: React.MutableRefObject<VirtualList<ListData> | null>;
   outerRef?: React.MutableRefObject<HTMLDivElement | null>;
 }
@@ -19,30 +32,58 @@ interface UseVirtualizedMessagesResult<ListData> {
   viewportHeight: number;
   getItemSize: (index: number) => number;
   getItemOffset: (index: number) => number;
-  findItemAtOffset: (scrollOffset: number) => {
-    index: number;
-    offsetWithinItem: number;
-  } | null;
+  findItemAtOffset: (
+    scrollOffset: number,
+  ) => ConversationVirtualizerOffsetMatch | null;
   setItemSize: (
     index: number,
     size: number,
-  ) => {
-    changed: boolean;
-    previousSize: number;
-    nextSize: number;
-    delta: number;
-  };
+  ) => ConversationVirtualizerMeasurementResult;
   clearMeasuredSizes: () => void;
+  resetMeasurements: () => void;
+  scrollToOffset: (
+    offset: number,
+    behavior?: ConversationVirtualizerScrollBehavior,
+  ) => void;
+  scrollToIndex: (
+    index: number,
+    align?: ConversationVirtualizerAlign,
+    behavior?: ConversationVirtualizerScrollBehavior,
+  ) => void;
+  measureIndex: (index: number) => void;
+  consumeProgrammaticScroll: (scrollOffset: number) => boolean;
   measureVersion: number;
 }
+
+const resolveAlignedOffset = (
+  itemTop: number,
+  itemSize: number,
+  viewportHeight: number,
+  align: ConversationVirtualizerAlign,
+): number => {
+  switch (align) {
+    case "end":
+      return Math.max(0, itemTop + itemSize - viewportHeight);
+    case "center":
+      return Math.max(0, itemTop - Math.max(0, viewportHeight - itemSize) / 2);
+    case "start":
+      return Math.max(0, itemTop);
+    case "auto":
+    default:
+      return Math.max(0, itemTop);
+  }
+};
 
 export const useVirtualizedMessages = <Item, ListData>({
   items,
   viewportRef,
   observeViewport = true,
   debugLabel,
+  enabled = true,
   estimateItemSize,
   getItemKey,
+  getMeasurementKey,
+  shouldResetAfterSizeChange,
   listRef: providedListRef,
   outerRef: providedOuterRef,
 }: UseVirtualizedMessagesParams<
@@ -61,10 +102,34 @@ export const useVirtualizedMessages = <Item, ListData>({
   const prefixSumDirtyFromRef = React.useRef<number>(0);
   const pendingResetForceRef = React.useRef(false);
   const resetAfterIndexRafRef = React.useRef<number | null>(null);
+  const pendingSizeUpdatesRef = React.useRef<
+    Map<
+      string,
+      {
+        index: number;
+        key: string;
+        size: number;
+      }
+    >
+  >(new Map());
+  const flushPendingSizeUpdatesRafRef = React.useRef<number | null>(null);
+  const pendingProgrammaticScrollRef = React.useRef<{
+    offset: number;
+    expiresAt: number;
+    behavior: ConversationVirtualizerScrollBehavior;
+  } | null>(null);
   const [viewportHeight, setViewportHeight] = React.useState(0);
+  const resolveMeasurementKey = React.useCallback(
+    (item: Item, index: number) =>
+      getMeasurementKey?.(item, index) ?? getItemKey(item, index),
+    [getItemKey, getMeasurementKey],
+  );
 
   const scheduleResetAfterIndex = React.useCallback(
     (index: number, shouldForceUpdate = false) => {
+      if (!enabled) {
+        return;
+      }
       pendingResetIndexRef.current =
         pendingResetIndexRef.current === null
           ? index
@@ -88,8 +153,49 @@ export const useVirtualizedMessages = <Item, ListData>({
         listRef.current?.resetAfterIndex(nextIndex, shouldForce);
       });
     },
-    [listRef],
+    [enabled, listRef],
   );
+
+  const flushPendingSizeUpdates = React.useCallback(() => {
+    flushPendingSizeUpdatesRafRef.current = null;
+
+    if (pendingSizeUpdatesRef.current.size === 0) {
+      return;
+    }
+
+    let minChangedIndex: number | null = null;
+    pendingSizeUpdatesRef.current.forEach(({ index, key, size }) => {
+      sizeMapRef.current.set(key, size);
+      prefixSumDirtyFromRef.current = Math.min(
+        prefixSumDirtyFromRef.current,
+        index + 1,
+      );
+      const item = items[index];
+      if (
+        item &&
+        (typeof shouldResetAfterSizeChange !== "function" ||
+          shouldResetAfterSizeChange(item, index))
+      ) {
+        minChangedIndex =
+          minChangedIndex === null ? index : Math.min(minChangedIndex, index);
+      }
+    });
+    pendingSizeUpdatesRef.current.clear();
+
+    if (minChangedIndex !== null) {
+      listRef.current?.resetAfterIndex(minChangedIndex, false);
+    }
+  }, [items, listRef, shouldResetAfterSizeChange]);
+
+  const schedulePendingSizeFlush = React.useCallback(() => {
+    if (flushPendingSizeUpdatesRafRef.current !== null) {
+      return;
+    }
+
+    flushPendingSizeUpdatesRafRef.current = window.requestAnimationFrame(
+      flushPendingSizeUpdates,
+    );
+  }, [flushPendingSizeUpdates]);
 
   const setItemSize = React.useCallback(
     (index: number, size: number) => {
@@ -103,31 +209,41 @@ export const useVirtualizedMessages = <Item, ListData>({
         };
       }
 
-      const key = getItemKey(item, index);
-      const current = sizeMapRef.current.get(key);
-      if (current === size || Math.abs((current || 0) - size) <= 1) {
+      const key = resolveMeasurementKey(item, index);
+      const pendingUpdate = pendingSizeUpdatesRef.current.get(key);
+      const previousSize =
+        pendingUpdate?.size ??
+        sizeMapRef.current.get(key) ??
+        estimateItemSize(item);
+      const delta = size - previousSize;
+
+      if (
+        previousSize === size ||
+        Math.abs(delta) <= ITEM_SIZE_CHANGE_THRESHOLD
+      ) {
         return {
           changed: false,
-          previousSize: current ?? size,
+          previousSize,
           nextSize: size,
           delta: 0,
         };
       }
 
-      sizeMapRef.current.set(key, size);
-      scheduleResetAfterIndex(index);
-      prefixSumDirtyFromRef.current = Math.min(
-        prefixSumDirtyFromRef.current,
-        index + 1,
-      );
+      pendingSizeUpdatesRef.current.set(key, {
+        index,
+        key,
+        size,
+      });
+      schedulePendingSizeFlush();
+
       return {
         changed: true,
-        previousSize: current ?? estimateItemSize(item),
+        previousSize,
         nextSize: size,
-        delta: size - (current ?? estimateItemSize(item)),
+        delta,
       };
     },
-    [estimateItemSize, getItemKey, items, scheduleResetAfterIndex],
+    [estimateItemSize, items, resolveMeasurementKey, schedulePendingSizeFlush],
   );
 
   const getItemSize = React.useCallback(
@@ -135,10 +251,10 @@ export const useVirtualizedMessages = <Item, ListData>({
       const item = items[index];
       if (!item) return 0;
 
-      const key = getItemKey(item, index);
+      const key = resolveMeasurementKey(item, index);
       return sizeMapRef.current.get(key) ?? estimateItemSize(item);
     },
-    [estimateItemSize, getItemKey, items],
+    [estimateItemSize, items, resolveMeasurementKey],
   );
 
   // Lazily builds (or partially rebuilds) the prefix-sum array.
@@ -162,7 +278,7 @@ export const useVirtualizedMessages = <Item, ListData>({
         arr[i] = arr[i - 1];
         continue;
       }
-      const key = getItemKey(item, i - 1);
+      const key = resolveMeasurementKey(item, i - 1);
       const measured = sizeMapRef.current.get(key);
       const size = measured !== undefined ? measured : estimateItemSize(item);
       arr[i] = arr[i - 1] + Math.max(1, Math.ceil(size));
@@ -170,7 +286,7 @@ export const useVirtualizedMessages = <Item, ListData>({
 
     prefixSumDirtyFromRef.current = n + 1; // clean
     return arr;
-  }, [estimateItemSize, getItemKey, items]);
+  }, [estimateItemSize, items, resolveMeasurementKey]);
 
   // O(1): direct prefix-sum lookup after lazy rebuild.
   const getItemOffset = React.useCallback(
@@ -210,11 +326,16 @@ export const useVirtualizedMessages = <Item, ListData>({
   );
   const clearMeasuredSizes = React.useCallback(() => {
     sizeMapRef.current = new Map();
+    pendingSizeUpdatesRef.current.clear();
     prefixSumRef.current = [];
     prefixSumDirtyFromRef.current = 0;
     if (resetAfterIndexRafRef.current !== null) {
       window.cancelAnimationFrame(resetAfterIndexRafRef.current);
       resetAfterIndexRafRef.current = null;
+    }
+    if (flushPendingSizeUpdatesRafRef.current !== null) {
+      window.cancelAnimationFrame(flushPendingSizeUpdatesRafRef.current);
+      flushPendingSizeUpdatesRafRef.current = null;
     }
     pendingResetIndexRef.current = null;
     pendingResetForceRef.current = false;
@@ -222,7 +343,7 @@ export const useVirtualizedMessages = <Item, ListData>({
   }, [listRef]);
 
   React.useEffect(() => {
-    const nextKeys = new Set(items.map(getItemKey));
+    const nextKeys = new Set(items.map(resolveMeasurementKey));
     let removedAny = false;
     sizeMapRef.current.forEach((_, key) => {
       if (nextKeys.has(key)) return;
@@ -233,18 +354,21 @@ export const useVirtualizedMessages = <Item, ListData>({
       prefixSumDirtyFromRef.current = 0;
       scheduleResetAfterIndex(0, false);
     }
-  }, [getItemKey, items, scheduleResetAfterIndex]);
+  }, [items, resolveMeasurementKey, scheduleResetAfterIndex]);
 
   React.useEffect(() => {
     return () => {
       if (resetAfterIndexRafRef.current !== null) {
         window.cancelAnimationFrame(resetAfterIndexRafRef.current);
       }
+      if (flushPendingSizeUpdatesRafRef.current !== null) {
+        window.cancelAnimationFrame(flushPendingSizeUpdatesRafRef.current);
+      }
     };
   }, []);
 
   React.useLayoutEffect(() => {
-    if (!observeViewport) {
+    if (!enabled || !observeViewport) {
       setViewportHeight((previous) => (previous === 0 ? previous : 0));
       return;
     }
@@ -292,7 +416,116 @@ export const useVirtualizedMessages = <Item, ListData>({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [debugLabel, items.length, observeViewport, viewportRef]);
+  }, [debugLabel, enabled, items.length, observeViewport, viewportRef]);
+
+  const scheduleProgrammaticScroll = React.useCallback(
+    (
+      offset: number,
+      behavior: ConversationVirtualizerScrollBehavior = "auto",
+    ) => {
+      pendingProgrammaticScrollRef.current = {
+        offset: Math.max(0, offset),
+        expiresAt: Date.now() + PROGRAMMATIC_SCROLL_TTL_MS,
+        behavior,
+      };
+    },
+    [],
+  );
+
+  const scrollToOffset = React.useCallback(
+    (
+      offset: number,
+      behavior: ConversationVirtualizerScrollBehavior = "auto",
+    ) => {
+      if (!enabled) {
+        return;
+      }
+      const nextOffset = Math.max(0, offset);
+      scheduleProgrammaticScroll(nextOffset, behavior);
+      const outer = outerRef.current;
+      if (outer) {
+        outer.scrollTo({
+          top: nextOffset,
+          behavior,
+        });
+        return;
+      }
+      listRef.current?.scrollTo(nextOffset);
+    },
+    [enabled, listRef, outerRef, scheduleProgrammaticScroll],
+  );
+
+  const scrollToIndex = React.useCallback(
+    (
+      index: number,
+      align: ConversationVirtualizerAlign = "auto",
+      behavior: ConversationVirtualizerScrollBehavior = "auto",
+    ) => {
+      if (!enabled) {
+        return;
+      }
+
+      const outer = outerRef.current;
+      const targetOffset = resolveAlignedOffset(
+        getItemOffset(index),
+        getItemSize(index),
+        outer?.clientHeight ?? viewportHeight ?? 0,
+        align,
+      );
+      scheduleProgrammaticScroll(targetOffset, behavior);
+
+      if (outer) {
+        outer.scrollTo({
+          top: targetOffset,
+          behavior,
+        });
+        return;
+      }
+      listRef.current?.scrollToItem(index, align);
+    },
+    [
+      enabled,
+      getItemOffset,
+      getItemSize,
+      listRef,
+      outerRef,
+      scheduleProgrammaticScroll,
+      viewportHeight,
+    ],
+  );
+
+  const measureIndex = React.useCallback(
+    (index: number) => {
+      if (!enabled) {
+        return;
+      }
+      listRef.current?.resetAfterIndex(index, false);
+    },
+    [enabled, listRef],
+  );
+
+  const consumeProgrammaticScroll = React.useCallback((scrollOffset: number) => {
+    const pending = pendingProgrammaticScrollRef.current;
+    if (!pending) {
+      return false;
+    }
+
+    if (Date.now() > pending.expiresAt) {
+      pendingProgrammaticScrollRef.current = null;
+      return false;
+    }
+
+    const reachedTarget =
+      Math.abs(scrollOffset - pending.offset) <=
+      PROGRAMMATIC_SCROLL_MATCH_THRESHOLD_PX;
+
+    if (reachedTarget) {
+      pendingProgrammaticScrollRef.current = null;
+      return true;
+    }
+
+    return pending.behavior === "smooth";
+  }, []);
 
   return {
     listRef,
@@ -303,6 +536,11 @@ export const useVirtualizedMessages = <Item, ListData>({
     findItemAtOffset,
     setItemSize,
     clearMeasuredSizes,
+    resetMeasurements: clearMeasuredSizes,
+    scrollToOffset,
+    scrollToIndex,
+    measureIndex,
+    consumeProgrammaticScroll,
     measureVersion: viewportHeight,
   };
 };

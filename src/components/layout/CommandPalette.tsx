@@ -21,6 +21,7 @@ import {
   getMessagePreview,
   getOtherParticipant,
 } from "../../utils/messageHelpers";
+import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { useAuthStore, useChatStore, useFriendshipStore } from "../../stores";
 import type { Conversation } from "../../types";
 
@@ -216,11 +217,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       if (!friend.id || friend.id === currentUserId) {
         return;
       }
-
-      const fullName = [friend.firstName, friend.lastName]
-        .map((value) => value?.trim() ?? "")
-        .filter(Boolean)
-        .join(" ");
+      const fullName = resolveUserDisplayName(friend, {
+        allowLegacyFallback: true,
+      });
 
       users.set(friend.id, {
         id: friend.id,
@@ -243,7 +242,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         users.set(participant.id, {
           id: participant.id,
           label:
-            existing?.label || participant.displayName || participant.username,
+            existing?.label ||
+            resolveUserDisplayName(participant, {
+              allowLegacyFallback: true,
+            }) ||
+            participant.username,
           username: existing?.username || participant.username,
         });
       });
@@ -253,7 +256,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         const existing = users.get(other.id);
         users.set(other.id, {
           id: other.id,
-          label: existing?.label || other.displayName || other.username,
+          label:
+            existing?.label ||
+            resolveUserDisplayName(other, {
+              allowLegacyFallback: true,
+            }) ||
+            other.username,
           username: existing?.username || other.username,
         });
       }

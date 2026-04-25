@@ -2,10 +2,8 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
-  ArrowPathIcon,
   ChatBubbleLeftIcon,
   DocumentIcon,
-  ExclamationCircleIcon,
   PhotoIcon,
   SpeakerWaveIcon,
 } from "@heroicons/react/24/outline";
@@ -26,16 +24,24 @@ import {
   isPendingMessage,
 } from "../../../utils/messageTimeline";
 import { logScrollTrace } from "../../../utils/scrollTrace";
+import { resolveUserDisplayName } from "../../../features/chat/identity/resolveUserDisplayName";
 import { MessageBodyRenderer } from "./MessageBodyRenderer";
 import { MessageMeta } from "./MessageMeta";
 import { MessageRow } from "./MessageRow";
 import { MessageSurface } from "./MessageSurface";
+import type { TimelineMergeLevel } from "../../../hooks/useMessageGrouping";
+import type { ChatDensity } from "../../../stores/uiStore";
+import { getTimelineDensityContract } from "../timelineDensity";
+import type { LongMessageRenderMode } from "../../../utils/longMessagePolicy";
 
 interface MessageClusterProps {
   message: Message;
   isOwn: boolean;
+  mergeLevel?: TimelineMergeLevel;
   showAvatar: boolean;
   showSenderName?: boolean;
+  showMeta?: boolean;
+  showStatus?: boolean;
   isGroupStart?: boolean;
   isGroupEnd?: boolean;
   conversationType: Conversation["type"];
@@ -46,8 +52,13 @@ interface MessageClusterProps {
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
   isSelectionMode?: boolean;
+  density?: ChatDensity;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
+  textRenderMode?: LongMessageRenderMode;
+  isCollapsibleText?: boolean;
+  onToggleTextExpand?: () => void;
+  shouldAnimateInsert?: boolean;
   className?: string;
 }
 
@@ -72,72 +83,14 @@ const isCoarsePointer = (): boolean =>
   typeof window.matchMedia === "function" &&
   window.matchMedia("(pointer: coarse)").matches;
 
-const MessageDeliveryState: React.FC<{
-  message: Message;
-  isOwn: boolean;
-  onRetry: () => void;
-}> = ({ message, isOwn, onRetry }) => {
-  const { t } = useTranslation();
-  const failed = isFailedMessage(message);
-  const pending = isPendingMessage(message);
-
-  if (!isOwn || (!failed && !pending)) {
-    return null;
-  }
-
-  const label =
-    message.status === "uploading"
-      ? t("chat:message.status.uploading")
-      : message.sendState === "queued"
-        ? t("chat:message.status.queued", {
-            defaultValue: "Queued",
-          })
-        : message.sendState === "retrying"
-          ? t("chat:message.status.retrying", {
-              defaultValue: "Retrying",
-            })
-      : failed
-        ? t("chat:message.status.failedInline", {
-            defaultValue: "Chua gui duoc",
-          })
-        : t("chat:message.status.sending");
-
-  return (
-    <div
-      className={clsx(
-        "mt-1.5 inline-flex max-w-full items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-medium shadow-xs backdrop-blur-sm",
-        isOwn ? "self-end" : "self-start",
-        failed
-          ? "border-danger/20 bg-danger/10 text-danger"
-          : "border-white/8 bg-[hsl(var(--color-chat-pill)/0.9)] text-text-secondary",
-      )}
-    >
-      {failed ? (
-        <ExclamationCircleIcon className="h-3.5 w-3.5 shrink-0" />
-      ) : message.sendState === "queued" ? (
-        <ChatBubbleLeftIcon className="h-3.5 w-3.5 shrink-0" />
-      ) : (
-        <ArrowPathIcon className="h-3.5 w-3.5 shrink-0 animate-spin" />
-      )}
-      <span className="truncate">{label}</span>
-      {failed && (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-danger transition-micro hover:bg-danger/10"
-        >
-          {t("chat:message.status.retry", { defaultValue: "Thu lai" })}
-        </button>
-      )}
-    </div>
-  );
-};
-
 export const MessageCluster: React.FC<MessageClusterProps> = ({
   message,
   isOwn,
+  mergeLevel = "not-merged",
   showAvatar,
   showSenderName = false,
+  showMeta = true,
+  showStatus = false,
   isGroupStart = true,
   isGroupEnd = true,
   conversationType,
@@ -148,11 +101,17 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   onImageClick,
   onFilePreview,
   isSelectionMode = false,
+  density,
   onNavigateToMessage,
   currentUsername,
+  textRenderMode = "expanded",
+  isCollapsibleText = false,
+  onToggleTextExpand,
+  shouldAnimateInsert = false,
   className,
 }) => {
   const { t } = useTranslation();
+  const contract = getTimelineDensityContract(density);
   const resendMessage = useChatStore((s) => s.resendMessage);
   const [isRailVisible, setIsRailVisible] = React.useState(false);
   const [isActionsOpen, setIsActionsOpen] = React.useState(false);
@@ -166,8 +125,31 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   const coarsePointer = isCoarsePointer();
   const threadCountValue = (() => {
     const candidate = message as unknown as { threadCount?: unknown };
-    return typeof candidate.threadCount === "number" ? candidate.threadCount : 0;
+    return typeof candidate.threadCount === "number"
+      ? candidate.threadCount
+      : 0;
   })();
+  const senderDisplayName = resolveUserDisplayName({
+    displayName: message.senderName,
+    username: message.senderId,
+  });
+  const replySenderDisplayName = message.replyToMessage
+    ? resolveUserDisplayName({
+        displayName: message.replyToMessage.senderName,
+        username: message.replyToMessage.senderId,
+      })
+    : null;
+  const forwardedFromName = message.forwardedFrom
+    ? resolveUserDisplayName({
+        displayName:
+          (message.forwardedFrom as { displayName?: string | null })
+            .displayName || message.forwardedFrom.username,
+        username: message.forwardedFrom.username,
+        employeeCode: (
+          message.forwardedFrom as { employeeCode?: string | null }
+        ).employeeCode,
+      })
+    : null;
   const replyTargetMessageId = message.replyTo || message.replyToMessage?.id;
 
   const clearLongPressTimer = React.useCallback(() => {
@@ -248,21 +230,14 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
         canDelete: Boolean(onDelete),
         canRetry: isFailedMessage(message),
       }),
-    [
-      coarsePointer,
-      isOwn,
-      isSelectionMode,
-      message,
-      onDelete,
-      onEdit,
-    ],
+    [coarsePointer, isOwn, isSelectionMode, message, onDelete, onEdit],
   );
 
   const handleAction = React.useCallback(
     (actionId: MessageActionId) => {
       switch (actionId) {
         case "react":
-          onReact(message.id, "👍");
+          onReact(message.id, "\u{1F44D}");
           if (isActionsOpen) closeActions();
           break;
         case "reply":
@@ -387,16 +362,17 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
       >
         <div
           className={clsx(
-            "flex w-full min-w-0 items-end gap-1.5",
+            "chat-message-cluster-row flex w-full min-w-0 items-end",
+            contract.cluster.rowGap,
             isOwn ? "justify-end" : "justify-start",
           )}
         >
           {isGroupConversation && !isOwn && (
-            <div className="w-9 shrink-0 self-end">
+            <div className="chat-message-avatar-slot w-9 shrink-0 self-end">
               {showAvatar ? (
                 <Avatar
                   src={message.senderAvatar}
-                  alt={message.senderName}
+                  alt={senderDisplayName}
                   size="sm"
                 />
               ) : null}
@@ -408,11 +384,12 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
               "min-w-0",
               isOwn ? "items-end" : "items-start",
               "flex max-w-[var(--chat-bubble-max)] flex-col",
+              shouldAnimateInsert && "motion-message-insert",
             )}
           >
             {isGroupConversation && !isOwn && showSenderName && (
-              <span className="mb-1 px-1 text-[11px] font-semibold text-primary/90">
-                {message.senderName}
+              <span className={contract.cluster.senderLabel}>
+                {senderDisplayName}
               </span>
             )}
 
@@ -422,25 +399,26 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                 onClick={handleReplyPreviewClick}
                 disabled={!replyTargetMessageId || isSelectionMode}
                 className={clsx(
-                  "mb-1 flex w-full items-center gap-2 rounded-2xl border-l-2 px-3 py-2 text-left text-xs transition-colors",
+                  "flex w-full items-center border-l-2 text-left transition-colors",
+                  contract.cluster.replyPreview,
                   replyTargetMessageId && !isSelectionMode
                     ? "cursor-pointer hover:bg-black/5"
                     : "cursor-default",
                   isOwn
-                    ? "border-text-inverse/40 bg-text-inverse/10 text-text-inverse/78"
-                    : "border-primary/55 bg-white/5 text-text-secondary",
+                    ? "border-text-inverse/35 bg-text-inverse/8 text-text-inverse/75"
+                    : "border-primary/45 bg-surface-hover/55 text-text-secondary",
                 )}
               >
                 <ReplyTypeIcon
                   type={message.replyToMessage.type}
                   className={clsx(
                     "h-3.5 w-3.5 shrink-0",
-                    isOwn ? "text-text-inverse/65" : "text-text-muted",
+                    isOwn ? "text-text-inverse/60" : "text-text-muted",
                   )}
                 />
                 <div className="min-w-0">
                   <span className="font-semibold">
-                    {message.replyToMessage.senderName}
+                    {replySenderDisplayName}
                   </span>
                   <p className="mt-0.5 truncate leading-snug opacity-90">
                     {message.replyToMessage.isDeleted
@@ -464,14 +442,15 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                 isOwn={isOwn}
                 isGroupStart={isGroupStart}
                 isGroupEnd={isGroupEnd}
-                hasReplyPreview={Boolean(message.replyToMessage)}
+                mergeLevel={mergeLevel}
                 hasError={isFailedMessage(message)}
+                isPending={isPendingMessage(message)}
               >
                 {message.forwardedFrom && (
                   <div
                     className={clsx(
-                      "mb-2 flex items-center gap-1 text-xs",
-                      isOwn ? "text-text-inverse/90" : "text-text-secondary",
+                      contract.cluster.forwardedBadge,
+                      isOwn ? "text-text-inverse/82" : "text-text-secondary",
                     )}
                   >
                     <svg
@@ -482,7 +461,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                       <path d="M12 2l9 9h-6v4H9v-4H3l9-9zm0 18h10v2H2v-2h10z" />
                     </svg>
                     {t("chat:message.forwardedFrom", {
-                      name: message.forwardedFrom.username,
+                      name: forwardedFromName,
                     })}
                   </div>
                 )}
@@ -491,28 +470,31 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                   message={message}
                   isOwn={isOwn}
                   currentUsername={currentUsername}
+                  textRenderMode={textRenderMode}
+                  isCollapsibleText={isCollapsibleText}
+                  onToggleTextExpand={onToggleTextExpand}
                   onImageClick={onImageClick}
                   onFilePreview={onFilePreview}
                 />
               </MessageSurface>
             </div>
 
-            <MessageMeta
-              message={message}
-              isOwn={isOwn}
-              showStatus={isOwn && isGroupEnd}
-            />
-
-            {isOwn && isGroupEnd && (
-              <MessageDeliveryState
+            {showMeta && (
+              <MessageMeta
                 message={message}
                 isOwn={isOwn}
-                onRetry={handleRetry}
+                showStatus={showStatus}
+                density={density}
               />
             )}
 
             {(message.reactions?.length ?? 0) > 0 && (
-              <div className={clsx("mt-1", isOwn ? "self-end" : "self-start")}>
+              <div
+                className={clsx(
+                  contract.cluster.reactionOffset,
+                  isOwn ? "self-end" : "self-start",
+                )}
+              >
                 <ReactionBar
                   reactions={message.reactions}
                   onReact={(emoji) => onReact(message.id, emoji)}
@@ -521,7 +503,11 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
             )}
 
             {threadCountValue > 0 && (
-              <ThreadIndicator threadCount={threadCountValue} isOwn={isOwn} />
+              <ThreadIndicator
+                threadCount={threadCountValue}
+                isOwn={isOwn}
+                className={contract.cluster.threadOffset}
+              />
             )}
           </div>
         </div>

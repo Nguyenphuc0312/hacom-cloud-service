@@ -7,13 +7,21 @@ import { ImageMessage } from "../../message/ImageMessage";
 import { FileMessageCard } from "../../message/FileMessageCard";
 import { VoiceMessage } from "../../message/VoiceMessage";
 import { LinkPreviewCard } from "../../message/LinkPreviewCard";
+import { toast } from "../../ui";
+import { dispatchContactProfileView } from "../../../features/chat/events/chatUiEvents";
 import type { Attachment, Message } from "../../../types";
 import { MessageType } from "../../../types";
+import type { LongMessageRenderMode } from "../../../utils/longMessagePolicy";
+import { isUuid } from "../../../utils/isUuid";
+import { logger } from "../../../utils/logger";
 
 interface MessageBodyRendererProps {
   message: Message;
   isOwn: boolean;
   currentUsername?: string;
+  textRenderMode?: LongMessageRenderMode;
+  isCollapsibleText?: boolean;
+  onToggleTextExpand?: () => void;
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
 }
@@ -79,8 +87,13 @@ const extractContactPayload = (message: Message): ContactPayloadView | null => {
 const ContactCard: React.FC<{
   payload: ContactPayloadView;
   isOwn: boolean;
-}> = ({ payload, isOwn }) => {
+  messageId: string;
+  conversationId?: string;
+}> = ({ payload, isOwn, messageId, conversationId }) => {
   const { t } = useTranslation();
+  const hasDispatchableContactUserId = Boolean(
+    payload.contactUserId && isUuid(payload.contactUserId),
+  );
 
   return (
     <div
@@ -119,12 +132,23 @@ const ContactCard: React.FC<{
         <button
           type="button"
           onClick={() => {
-            if (typeof window === "undefined") return;
-            window.dispatchEvent(
-              new CustomEvent("chat:contact:view-profile", {
-                detail: { userId: payload.contactUserId },
-              }),
-            );
+            logger.debug("direct_dm", "source_trace", {
+              source: "MessageBodyRenderer.contactCard",
+              messageId,
+              conversationId,
+              contactUserId: payload.contactUserId,
+            });
+
+            if (!hasDispatchableContactUserId) {
+              toast.error(
+                t("chat:contactShare.invalidProfile", {
+                  defaultValue: "This contact card cannot start a chat.",
+                }),
+              );
+              return;
+            }
+
+            dispatchContactProfileView({ userId: payload.contactUserId });
           }}
           className={clsx(
             "text-xs font-medium underline-offset-2 hover:underline",
@@ -144,6 +168,9 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
   message,
   isOwn,
   currentUsername,
+  textRenderMode = "expanded",
+  isCollapsibleText = false,
+  onToggleTextExpand,
   onImageClick,
   onFilePreview,
 }) => {
@@ -171,6 +198,9 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                 content={message.content}
                 isOwn={isOwn}
                 currentUsername={currentUsername}
+                renderMode={textRenderMode}
+                isCollapsible={isCollapsibleText}
+                onToggleExpand={onToggleTextExpand}
               />
             )}
         </div>
@@ -193,6 +223,9 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                 content={message.content}
                 isOwn={isOwn}
                 currentUsername={currentUsername}
+                renderMode={textRenderMode}
+                isCollapsible={isCollapsibleText}
+                onToggleExpand={onToggleTextExpand}
               />
             )}
         </div>
@@ -214,18 +247,29 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                 content={message.content}
                 isOwn={isOwn}
                 currentUsername={currentUsername}
+                renderMode={textRenderMode}
+                isCollapsible={isCollapsibleText}
+                onToggleExpand={onToggleTextExpand}
               />
             )}
         </div>
       );
     case MessageType.CONTACT:
       return contactPayload ? (
-        <ContactCard payload={contactPayload} isOwn={isOwn} />
+        <ContactCard
+          payload={contactPayload}
+          isOwn={isOwn}
+          messageId={message.id}
+          conversationId={message.conversationId}
+        />
       ) : (
         <TextMessage
           content={message.content}
           isOwn={isOwn}
           currentUsername={currentUsername}
+          renderMode={textRenderMode}
+          isCollapsible={isCollapsibleText}
+          onToggleExpand={onToggleTextExpand}
         />
       );
     case MessageType.TEXT:
@@ -237,6 +281,9 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
             content={message.content}
             isOwn={isOwn}
             currentUsername={currentUsername}
+            renderMode={textRenderMode}
+            isCollapsible={isCollapsibleText}
+            onToggleExpand={onToggleTextExpand}
           />
           {firstUrl ? <LinkPreviewCard url={firstUrl} isOwn={isOwn} /> : null}
         </div>

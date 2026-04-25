@@ -12,7 +12,8 @@ import {
   ChatBubbleLeftRightIcon,
   NoSymbolIcon,
 } from "@heroicons/react/24/outline";
-import type { FriendshipRelationDto } from "@hacom/chat-shared-types";
+import { ErrorCode } from "@hacom/chat-shared-types/core";
+import type { FriendshipRelationDto } from "@hacom/chat-shared-types/chat";
 import { Avatar } from "../common/Avatar";
 import { Button, ConfirmDialog, Input, Modal, Spinner, toast } from "../ui";
 import { useAuthStore } from "../../stores";
@@ -74,6 +75,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
 
   const {
     getRelationshipState,
+    refreshDirectory,
     sendFriendRequest,
     acceptFriendRequest,
     rejectFriendRequest,
@@ -430,7 +432,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
         setIsProfileActionLoading(null);
       }
     },
-    [],
+    [t],
   );
 
   const handleOpenMessage = React.useCallback(async () => {
@@ -450,11 +452,14 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
       setIsProfileOpen(false);
     } catch (error) {
       const apiError = extractApiError(error);
+      if (apiError.code === ErrorCode.DIRECT_CHAT_TARGET_UNAVAILABLE) {
+        void refreshDirectory();
+      }
       toast.error(apiError.message || t("friends:qr.errorOpenConversation"));
     } finally {
       setIsProfileActionLoading(null);
     }
-  }, [navigate, resolvedProfile?.id, t]);
+  }, [navigate, refreshDirectory, resolvedProfile?.id, t]);
 
   const renderProfileActions = () => {
     if (!relationship || !resolvedProfile) {

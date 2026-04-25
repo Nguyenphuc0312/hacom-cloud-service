@@ -10,8 +10,9 @@ import {
   normalizeRoomType,
 } from "../lib/conversationAdapter";
 import { isSameDay } from "./formatTime";
-import { rankConversations } from "./conversationRanking";
+import { sortConversationsByActivity } from "./conversationRanking";
 import i18n from "../i18n";
+import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
 
 const isDirectType = (conversationType: unknown): boolean => {
   const normalized = normalizeRoomType(conversationType);
@@ -26,23 +27,12 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
 const asTrimmedString = (value: unknown): string =>
   typeof value === "string" ? value.trim() : "";
 
-const looksLikeTechnicalIdentifier = (value: string): boolean => {
-  if (!value) return false;
-
-  // Most employee/user codes are compact, no-space identifiers with digits/separators.
-  if (/\s/.test(value)) return false;
-
-  const hasDigit = /\d/.test(value);
-  const hasSeparator = /[_-]/.test(value);
-  const isVeryShort = value.length <= 2;
-
-  return !isVeryShort && (hasDigit || hasSeparator);
-};
-
 interface DisplayNameOptions {
   conversationTitle?: string;
   allowTechnicalFallback?: boolean;
 }
+
+const GROUP_NAME_FALLBACK_MEMBER_COUNT = 2;
 
 export type MessagePreviewState =
   | "queued"
@@ -236,43 +226,21 @@ export function getUserDisplayName(
   }
 
   const userRecord = asRecord(user);
-
-  const displayName = asTrimmedString(user.displayName);
-  const fullName =
-    asTrimmedString(userRecord?.fullName) ||
-    asTrimmedString(
-      [
-        asTrimmedString(userRecord?.firstName),
-        asTrimmedString(userRecord?.lastName),
-      ]
-        .filter(Boolean)
-        .join(" "),
-    );
-  const genericName = asTrimmedString(userRecord?.name);
+  const primaryName = resolveUserDisplayName(
+    {
+      ...(userRecord || {}),
+      displayName: user.displayName,
+      username: user.username,
+      id: user.id,
+    },
+    {
+      allowLegacyFallback: false,
+    },
+  );
   const conversationTitle = asTrimmedString(options.conversationTitle);
 
-  const employeeCode =
-    asTrimmedString(userRecord?.employeeCode) ||
-    asTrimmedString(userRecord?.staffCode) ||
-    asTrimmedString(userRecord?.code);
-  const username = asTrimmedString(user.username);
-  const id = asTrimmedString(user.id);
-
-  const preferredDisplayName =
-    displayName && !looksLikeTechnicalIdentifier(displayName)
-      ? displayName
-      : "";
-
-  if (preferredDisplayName) {
-    return preferredDisplayName;
-  }
-
-  if (fullName) {
-    return fullName;
-  }
-
-  if (genericName) {
-    return genericName;
+  if (primaryName) {
+    return primaryName;
   }
 
   if (conversationTitle) {
@@ -283,23 +251,99 @@ export function getUserDisplayName(
     return "";
   }
 
-  if (displayName) {
-    return displayName;
+  return resolveUserDisplayName(
+    {
+      ...(userRecord || {}),
+      displayName: user.displayName,
+      username: user.username,
+      id: user.id,
+    },
+    {
+      allowLegacyFallback: true,
+    },
+  );
+}
+
+const collectRepresentativeGroupParticipants = (
+  conversation: Conversation,
+  currentUserId: string,
+): UserSummary[] => {
+  const participants = Array.isArray(conversation.participants)
+    ? conversation.participants
+    : [];
+  const seen = new Set<string>();
+  const ranked = participants
+    .filter((participant): participant is UserSummary => {
+      if (!participant?.id || seen.has(participant.id)) {
+        return false;
+      }
+      seen.add(participant.id);
+      return true;
+    })
+    .map((participant, index) => {
+      const displayName = getUserDisplayName(participant, {
+        allowTechnicalFallback: false,
+      });
+      const isCurrentUser = participant.id === currentUserId;
+      const hasAvatar =
+        typeof participant.avatar === "string" && participant.avatar.trim().length > 0;
+
+      return {
+        participant,
+        index,
+        score:
+          (isCurrentUser ? 0 : 8) +
+          (hasAvatar ? 4 : 0) +
+          (displayName ? 2 : 0) +
+          (participant.username ? 1 : 0),
+      };
+    })
+    .sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+      return left.index - right.index;
+    })
+    .map((entry) => entry.participant);
+
+  const nonCurrent = ranked.filter((participant) => participant.id !== currentUserId);
+  return nonCurrent.length > 0 ? nonCurrent : ranked;
+};
+
+export function getRepresentativeGroupParticipants(
+  conversation: Conversation,
+  currentUserId: string,
+  maxParticipants: number = 4,
+): UserSummary[] {
+  const representatives = collectRepresentativeGroupParticipants(
+    conversation,
+    currentUserId,
+  );
+
+  if (!Number.isFinite(maxParticipants) || maxParticipants <= 0) {
+    return representatives;
   }
 
-  if (employeeCode) {
-    return employeeCode;
+  return representatives.slice(0, Math.floor(maxParticipants));
+}
+
+export function truncateTextWithEllipsis(
+  text: string,
+  maxLength: number,
+): string {
+  if (!Number.isFinite(maxLength) || maxLength <= 0) {
+    return "";
   }
 
-  if (username) {
-    return username;
+  if (text.length <= maxLength) {
+    return text;
   }
 
-  if (id) {
-    return id;
+  if (maxLength <= 3) {
+    return text.slice(0, maxLength);
   }
 
-  return "";
+  return `${text.slice(0, maxLength - 3)}...`;
 }
 
 /**
@@ -318,17 +362,40 @@ export function getConversationDisplayName(
       return conversationTitle;
     }
 
-    const participantFallback = (conversation.participants || [])
+    const representativeParticipants = collectRepresentativeGroupParticipants(
+      conversation,
+      currentUserId,
+    );
+    const visibleNames = representativeParticipants
       .map((participant) =>
         getUserDisplayName(participant, {
           allowTechnicalFallback: false,
         }),
       )
-      .filter(Boolean)
-      .slice(0, 2)
-      .join(", ");
+      .filter(Boolean);
+    const shownNames = visibleNames.slice(0, GROUP_NAME_FALLBACK_MEMBER_COUNT);
+    const includesCurrentUser = (conversation.participants || []).some(
+      (participant) => participant.id === currentUserId,
+    );
+    const expectedOtherCount =
+      typeof conversation.participantCount === "number"
+        ? Math.max(0, conversation.participantCount - (includesCurrentUser ? 1 : 0))
+        : 0;
+    const totalFallbackMembers = Math.max(
+      visibleNames.length,
+      expectedOtherCount,
+    );
+    const remainingMembers = Math.max(0, totalFallbackMembers - shownNames.length);
 
-    return participantFallback || i18n.t("common:labels.group");
+    if (shownNames.length === 0) {
+      return i18n.t("common:labels.group");
+    }
+
+    if (remainingMembers > 0) {
+      return `${shownNames.join(", ")} +${remainingMembers}`;
+    }
+
+    return shownNames.join(", ");
   }
 
   const otherParticipant = getOtherParticipant(conversation, currentUserId);
@@ -409,7 +476,8 @@ export function sortConversations(
     activeConversationId?: string | null;
   },
 ): Conversation[] {
-  return rankConversations(conversations, options);
+  void options;
+  return sortConversationsByActivity(conversations);
 }
 
 /**
@@ -443,17 +511,6 @@ export function filterConversations(
 export function isOnlyEmoji(text: string): boolean {
   const emojiRegex = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+$/u;
   return emojiRegex.test(text.trim()) && text.trim().length <= 12;
-}
-
-/**
- * Parse message content for links.
- */
-export function parseLinks(text: string): string {
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  return text.replace(
-    urlRegex,
-    '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-primary hover:text-primary-hover hover:underline">$1</a>',
-  );
 }
 
 /**

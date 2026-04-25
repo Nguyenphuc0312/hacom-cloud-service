@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { ErrorCode } from "@hacom/chat-shared-types/core";
 import {
-  ArrowLeftIcon,
   MagnifyingGlassIcon,
   NoSymbolIcon,
   UserGroupIcon,
@@ -12,7 +12,15 @@ import {
 import { Avatar } from "../components/common/Avatar";
 import { FriendQrWorkspace } from "../components/friends";
 import { UserProfile } from "../components/info/UserProfile";
-import { Button, Input, Spinner, toast } from "../components/ui";
+import {
+  Button,
+  Input,
+  SegmentedControl,
+  Spinner,
+  StateBlock,
+  toast,
+} from "../components/ui";
+import { AppPage, AppPageBody, AppPageHeader } from "../components/layout/AppPage";
 import { useAuthStore, usePresenceStore } from "../stores";
 import { useDebounce } from "../hooks/useDebounce";
 import { useFriendship } from "../hooks/useFriendship";
@@ -35,6 +43,10 @@ interface ContactUser {
   status?: UserStatus;
   bio?: string;
   phone?: string;
+  employeeCode?: string;
+  departmentName?: string;
+  unitCode?: string;
+  title?: string;
   createdAt?: string;
 }
 
@@ -90,6 +102,10 @@ const toContactUser = (value: {
   status?: unknown;
   bio?: string;
   phone?: string;
+  employeeCode?: string;
+  departmentName?: string;
+  unitCode?: string;
+  title?: string;
   createdAt?: string;
 }): ContactUser => ({
   id: value.id,
@@ -101,8 +117,23 @@ const toContactUser = (value: {
   status: normalizeStatus(value.status),
   bio: value.bio,
   phone: value.phone,
+  employeeCode: value.employeeCode,
+  departmentName: value.departmentName,
+  unitCode: value.unitCode,
+  title: value.title,
   createdAt: value.createdAt,
 });
+
+const buildSearchContextSubtitle = (user: ContactUser): string | undefined => {
+  const parts = [
+    user.username ? `@${user.username}` : null,
+    user.employeeCode ?? null,
+    user.departmentName ?? null,
+    user.unitCode ?? user.title ?? null,
+  ].filter(Boolean);
+
+  return parts.length > 0 ? parts.join(" / ") : undefined;
+};
 
 const normalizeSearchResults = (payload: unknown): ContactUser[] => {
   const rows = extractArray<Record<string, unknown>>(payload);
@@ -130,6 +161,27 @@ const normalizeSearchResults = (payload: unknown): ContactUser[] => {
           (typeof row.avatarUrl === "string" && row.avatarUrl) ||
           (typeof row.avatar === "string" ? row.avatar : undefined),
         status: normalizeStatus(row.status),
+        employeeCode:
+          typeof row.employeeCode === "string"
+            ? row.employeeCode
+            : typeof row.employee_code === "string"
+              ? row.employee_code
+              : typeof row.employeeId === "string"
+                ? row.employeeId
+                : undefined,
+        departmentName:
+          typeof row.departmentName === "string"
+            ? row.departmentName
+            : typeof row.department_name === "string"
+              ? row.department_name
+              : undefined,
+        unitCode:
+          typeof row.unitCode === "string"
+            ? row.unitCode
+            : typeof row.unit_code === "string"
+              ? row.unit_code
+              : undefined,
+        title: typeof row.title === "string" ? row.title : undefined,
       });
     })
     .filter((item): item is ContactUser => Boolean(item));
@@ -189,9 +241,9 @@ const ContactRow: React.FC<ContactRowProps> = ({
       type="button"
       onClick={onClick}
       className={clsx(
-        "flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-all",
+        "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-micro",
         selected
-          ? "bg-primary/10 ring-1 ring-primary/15"
+          ? "bg-[hsl(var(--chat-active-surface)/0.14)] ring-1 ring-[hsl(var(--chat-active-surface)/0.2)]"
           : "hover:bg-surface-overlay/80",
       )}
     >
@@ -342,6 +394,9 @@ export const FriendsPage: React.FC = () => {
         }
       } catch (error) {
         const apiError = extractApiError(error);
+        if (apiError.code === ErrorCode.DIRECT_CHAT_TARGET_UNAVAILABLE) {
+          void refreshDirectory();
+        }
         toast.error(
           apiError.message || t("error:chat.startConversationFailed"),
         );
@@ -349,7 +404,7 @@ export const FriendsPage: React.FC = () => {
         setActingKey(null);
       }
     },
-    [navigate, t],
+    [navigate, refreshDirectory, t],
   );
 
   const handleRelationshipAction = useCallback(
@@ -561,15 +616,12 @@ export const FriendsPage: React.FC = () => {
 
     if (friendItems.length === 0) {
       return (
-        <div className="rounded-3xl border border-dashed border-border px-6 py-10 text-center">
-          <UserGroupIcon className="mx-auto h-10 w-10 text-text-muted/60" />
-          <p className="mt-4 text-base font-medium text-text-primary">
-            {t("friends:empty.friendsTitle")}
-          </p>
-          <p className="mt-2 text-sm text-text-secondary">
-            {t("friends:empty.friendsBody")}
-          </p>
-        </div>
+        <StateBlock
+          icon={<UserGroupIcon className="h-6 w-6" />}
+          title={t("friends:empty.friendsTitle")}
+          description={t("friends:empty.friendsBody")}
+          className="border-dashed shadow-none"
+        />
       );
     }
 
@@ -593,44 +645,24 @@ export const FriendsPage: React.FC = () => {
 
   const renderRequestsTab = () => (
     <div className="space-y-4">
-      <div className="flex rounded-2xl bg-surface-overlay p-1">
-        {(
-          [
-            {
-              id: "incoming",
-              label: t("friends:requests.incoming"),
-              count: incomingRequests.length,
-            },
-            {
-              id: "sent",
-              label: t("friends:requests.sent"),
-              count: sentRequests.length,
-            },
-          ] as const
-        ).map((tab) => {
-          const active = tab.id === requestTab;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setRequestTab(tab.id)}
-              className={clsx(
-                "flex flex-1 items-center justify-center gap-2 rounded-[18px] px-3 py-2 text-sm font-medium transition-colors",
-                active
-                  ? "bg-surface text-text-primary shadow-xs"
-                  : "text-text-secondary hover:text-text-primary",
-              )}
-            >
-              <span>{tab.label}</span>
-              {tab.count > 0 ? (
-                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
-                  {tab.count}
-                </span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
+      <SegmentedControl
+        value={requestTab}
+        onChange={(next) => setRequestTab(next as RequestTabKey)}
+        options={[
+          {
+            id: "incoming",
+            label: t("friends:requests.incoming"),
+            count: incomingRequests.length,
+          },
+          {
+            id: "sent",
+            label: t("friends:requests.sent"),
+            count: sentRequests.length,
+          },
+        ]}
+        ariaLabel={t("friends:tabs.requests")}
+        size="sm"
+      />
 
       {((requestTab === "incoming" && isIncomingLoading) ||
         (requestTab === "sent" && isSentLoading)) &&
@@ -639,18 +671,21 @@ export const FriendsPage: React.FC = () => {
           <Spinner size="sm" />
         </div>
       ) : requestItems.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-border px-6 py-10 text-center">
-          <p className="text-base font-medium text-text-primary">
-            {requestTab === "incoming"
+        <StateBlock
+          variant="empty"
+          icon={<UserPlusIcon className="h-6 w-6" />}
+          title={
+            requestTab === "incoming"
               ? t("friends:empty.requestsIncomingTitle")
-              : t("friends:empty.requestsSentTitle")}
-          </p>
-          <p className="mt-2 text-sm text-text-secondary">
-            {requestTab === "incoming"
+              : t("friends:empty.requestsSentTitle")
+          }
+          description={
+            requestTab === "incoming"
               ? t("friends:empty.requestsIncomingBody")
-              : t("friends:empty.requestsSentBody")}
-          </p>
-        </div>
+              : t("friends:empty.requestsSentBody")
+          }
+          className="border-dashed shadow-none"
+        />
       ) : (
         <div className="space-y-1">
           {requestItems.map((request) => {
@@ -688,42 +723,33 @@ export const FriendsPage: React.FC = () => {
 
   const renderDiscoverTab = () => (
     <div className="space-y-4">
-      <Input
-        type="text"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder={t("friends:searchPlaceholder")}
-        leftIcon={<MagnifyingGlassIcon className="h-5 w-5" />}
-      />
-
       {isSearching ? (
         <div className="flex justify-center py-10">
           <Spinner size="sm" />
         </div>
       ) : debouncedQuery.trim().length < 2 ? (
-        <div className="rounded-3xl border border-dashed border-border px-6 py-10 text-center">
-          <p className="text-base font-medium text-text-primary">
-            {t("friends:discoverHintTitle")}
-          </p>
-          <p className="mt-2 text-sm text-text-secondary">
-            {t("friends:searchHint")}
-          </p>
-        </div>
+        <StateBlock
+          variant="search-empty"
+          icon={<MagnifyingGlassIcon className="h-6 w-6" />}
+          title={t("friends:discoverHintTitle")}
+          description={t("friends:searchHint")}
+          className="border-dashed shadow-none"
+        />
       ) : searchResults.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-border px-6 py-10 text-center">
-          <p className="text-base font-medium text-text-primary">
-            {t("friends:noSearchResult")}
-          </p>
-          <p className="mt-2 text-sm text-text-secondary">
-            {t("friends:discoverHintBody")}
-          </p>
-        </div>
+        <StateBlock
+          variant="search-empty"
+          icon={<MagnifyingGlassIcon className="h-6 w-6" />}
+          title={t("friends:noSearchResult")}
+          description={t("friends:discoverHintBody")}
+          className="border-dashed shadow-none"
+        />
       ) : (
         <div className="space-y-1">
           {searchResults.map((user) => (
             <ContactRow
               key={user.id}
               user={user}
+              subtitle={buildSearchContextSubtitle(user)}
               selected={previewTarget?.userId === user.id}
               onClick={() => setPreviewTarget(profileFromSummary(user))}
               action={renderRelationshipAction(user)}
@@ -745,15 +771,12 @@ export const FriendsPage: React.FC = () => {
 
     if (blockedItems.length === 0) {
       return (
-        <div className="rounded-3xl border border-dashed border-border px-6 py-10 text-center">
-          <NoSymbolIcon className="mx-auto h-10 w-10 text-text-muted/60" />
-          <p className="mt-4 text-base font-medium text-text-primary">
-            {t("friends:empty.blockedTitle")}
-          </p>
-          <p className="mt-2 text-sm text-text-secondary">
-            {t("friends:empty.blockedBody")}
-          </p>
-        </div>
+        <StateBlock
+          icon={<NoSymbolIcon className="h-6 w-6" />}
+          title={t("friends:empty.blockedTitle")}
+          description={t("friends:empty.blockedBody")}
+          className="border-dashed shadow-none"
+        />
       );
     }
 
@@ -777,96 +800,127 @@ export const FriendsPage: React.FC = () => {
   );
 
   return (
-    <div className="flex h-full min-h-0 bg-background">
-      <section className="flex min-w-0 flex-1 flex-col border-r border-border/70 bg-background">
-        <header className="sticky top-0 z-10 border-b border-border/70 bg-surface/95 px-4 py-3 backdrop-blur">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => navigate(ROUTE_PATHS.CHAT)}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
-              aria-label={t("common:actions.back")}
-            >
-              <ArrowLeftIcon className="h-5 w-5" />
-            </button>
+    <AppPage layout="workspace">
+      <AppPageHeader
+        title={t("friends:title")}
+        subtitle={t("friends:subtitle")}
+        onBack={() => navigate(ROUTE_PATHS.CHAT)}
+        backLabel={t("common:actions.back")}
+        badge={
+          pendingCount > 0 ? (
+            <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary">
+              {t("friends:requests.incoming")} {pendingCount}
+            </span>
+          ) : null
+        }
+        actions={
+          isDirectoryLoading ? (
+            <div className="inline-flex h-[var(--control-height-md)] w-[var(--control-height-md)] items-center justify-center rounded-md border border-border/60 bg-surface">
+              <Spinner size="xs" />
+            </div>
+          ) : null
+        }
+      />
 
-            <div className="min-w-0">
-              <h1 className="text-lg font-semibold text-text-primary">
-                {t("friends:title")}
-              </h1>
-              <p className="text-xs text-text-secondary">
-                {t("friends:subtitle")}
-              </p>
+      <AppPageBody>
+        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(22rem,27rem),minmax(0,1fr)]">
+          <section className="app-page-panel flex min-h-0 flex-col overflow-hidden">
+            <div className="border-b border-border/60 p-4">
+              <SegmentedControl
+                value={activeTab}
+                onChange={(next) => setActiveTab(next as TabKey)}
+                options={tabs.map((tab) => ({
+                  id: tab.id,
+                  label: tab.label,
+                  count: tab.count,
+                }))}
+                ariaLabel={t("friends:title")}
+                size="sm"
+              />
+
+              {activeTab === "discover" ? (
+                <div className="mt-3">
+                  <Input
+                    type="text"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder={t("friends:searchPlaceholder")}
+                    leftIcon={<MagnifyingGlassIcon className="h-5 w-5" />}
+                  />
+                </div>
+              ) : null}
             </div>
 
-            {isDirectoryLoading ? (
-              <div className="ml-auto">
-                <Spinner size="xs" />
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              {activeTab === "friends" && renderFriendsTab()}
+              {activeTab === "requests" && renderRequestsTab()}
+              {activeTab === "discover" && renderDiscoverTab()}
+              {activeTab === "blocked" && renderBlockedTab()}
+              {activeTab === "qr" && (
+                <>
+                  <div className="hidden lg:block">
+                    <StateBlock
+                      icon={<UserGroupIcon className="h-6 w-6" />}
+                      title={t("friends:tabs.qr")}
+                      description={t("friends:previewBody")}
+                      className="min-h-[12rem] border-dashed shadow-none"
+                    />
+                  </div>
+                  <div className="lg:hidden">{renderQrTab()}</div>
+                </>
+              )}
+            </div>
+          </section>
+
+          <aside className="hidden min-h-0 flex-col overflow-hidden lg:flex">
+            <div className="app-page-panel flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="border-b border-border/60 px-5 py-4">
+                <h2 className="text-base font-semibold text-text-primary">
+                  {activeTab === "qr"
+                    ? t("friends:tabs.qr")
+                    : previewTarget
+                      ? toDisplayName(previewTarget.initialUser)
+                      : t("friends:previewTitle")}
+                </h2>
+                <p className="mt-1 text-sm text-text-secondary">
+                  {activeTab === "qr"
+                    ? t("friends:subtitle")
+                    : t("friends:previewBody")}
+                </p>
               </div>
-            ) : null}
-          </div>
 
-          <div className="mt-4 flex rounded-[20px] bg-surface-overlay p-1">
-            {tabs.map((tab) => {
-              const active = tab.id === activeTab;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={clsx(
-                    "flex flex-1 items-center justify-center gap-2 rounded-[16px] px-3 py-2 text-sm font-medium transition-colors",
-                    active
-                      ? "bg-surface text-text-primary shadow-xs"
-                      : "text-text-secondary hover:text-text-primary",
-                  )}
-                >
-                  <span>{tab.label}</span>
-                  {typeof tab.count === "number" && tab.count > 0 ? (
-                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
-                      {tab.count}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-        </header>
-
-        <main className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
-          {activeTab === "friends" && renderFriendsTab()}
-          {activeTab === "requests" && renderRequestsTab()}
-          {activeTab === "discover" && renderDiscoverTab()}
-          {activeTab === "blocked" && renderBlockedTab()}
-          {activeTab === "qr" && renderQrTab()}
-        </main>
-      </section>
-
-      <aside className="hidden w-[clamp(22rem,34vw,26rem)] flex-col bg-surface lg:flex">
-        {previewTarget ? (
-          <UserProfile
-            userId={previewTarget.userId}
-            currentUserId={currentUserId ?? ""}
-            initialUser={previewTarget.initialUser}
-            onClose={() => setPreviewTarget(null)}
-            onStartConversation={handleMessage}
-          />
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center px-8 text-center">
-            <UserGroupIcon className="h-12 w-12 text-text-muted/50" />
-            <p className="mt-4 text-base font-medium text-text-primary">
-              {t("friends:previewTitle")}
-            </p>
-            <p className="mt-2 text-sm text-text-secondary">
-              {t("friends:previewBody")}
-            </p>
-          </div>
-        )}
-      </aside>
+              <div className="min-h-0 flex-1 overflow-hidden">
+                {activeTab === "qr" ? (
+                  <div className="h-full overflow-y-auto p-4">
+                    {renderQrTab()}
+                  </div>
+                ) : previewTarget ? (
+                  <UserProfile
+                    userId={previewTarget.userId}
+                    currentUserId={currentUserId ?? ""}
+                    initialUser={previewTarget.initialUser}
+                    onClose={() => setPreviewTarget(null)}
+                    onStartConversation={handleMessage}
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center p-6">
+                    <StateBlock
+                      icon={<UserGroupIcon className="h-6 w-6" />}
+                      title={t("friends:previewTitle")}
+                      description={t("friends:previewBody")}
+                      className="w-full border-dashed shadow-none"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </aside>
+        </div>
+      </AppPageBody>
 
       {previewTarget ? (
         <>
-          <div className="fixed inset-y-0 right-0 z-40 w-full max-w-full border-l border-border bg-surface sm:max-w-[min(26rem,94vw)] lg:hidden">
+          <div className="fixed inset-y-0 right-0 z-40 w-full max-w-full bg-[hsl(var(--chat-panel-bg))] sm:max-w-[min(26rem,94vw)] lg:hidden">
             <UserProfile
               userId={previewTarget.userId}
               currentUserId={currentUserId ?? ""}
@@ -883,7 +937,7 @@ export const FriendsPage: React.FC = () => {
           />
         </>
       ) : null}
-    </div>
+    </AppPage>
   );
 };
 

@@ -16,108 +16,104 @@ import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Sidebar } from "../components/layout/Sidebar";
 import { ChatWindow } from "../components/layout/ChatWindow";
-import { UserProfile } from "../components/info/UserProfile";
-import { GroupInfo } from "../components/info/GroupInfo";
 import { ErrorState, NoChatSelected, Spinner } from "../components/ui";
-import {
-  NewChatModal,
-  ImagePreviewModal,
-  FilePreviewModal,
-} from "../components/modals";
 import { toast } from "../components/ui";
 import {
   useAuthStore,
   useChatStore,
   useSelectedConversation,
-  useCurrentMessages,
   useCurrentTypingStatus,
+  useConversationCount,
+  useFriendshipStore,
 } from "../stores";
 import { useWebSocket } from "../hooks";
-import type { Attachment, Message, UserSummary } from "../types";
+import type { Attachment, UserSummary } from "../types";
 import { useFilePreview } from "../hooks/useFilePreview";
 import type { PreviewTarget } from "../hooks/useFilePreview";
 import { getPreviewType } from "../utils/formatFileSize";
-import { rankConversations } from "../utils/conversationRanking";
 import { UserStatus } from "../types";
 import { isDirectConversation } from "../lib/conversationAdapter";
+import { resolveConversationId } from "../lib/conversationIdentity";
 import { getOtherParticipant } from "../utils/messageHelpers";
+import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
+import {
+  listenForContactProfileView,
+  listenForNotificationClick,
+} from "../features/chat/events/chatUiEvents";
 import { logMessageDebug } from "../utils/messageDebug";
-import { ErrorCode } from "@hacom/chat-shared-types";
+import { logger } from "../utils/logger";
+import { ErrorCode } from "@hacom/chat-shared-types/core";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
-import { conversationApi } from "../services/api";
-import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
-import { createPrivateConversationUseCase } from "../features/chat/usecases/createPrivateConversation";
-import { createGroupConversationUseCase } from "../features/chat/usecases/createGroupConversation";
-import { deleteConversationUseCase } from "../features/chat/usecases/deleteConversation";
-import { addReactionUseCase } from "../features/chat/usecases/addReaction";
-import { removeReactionUseCase } from "../features/chat/usecases/removeReaction";
-import { editMessageUseCase } from "../features/chat/usecases/editMessage";
-import { deleteMessageUseCase } from "../features/chat/usecases/deleteMessage";
+import {
+  chatApi as rtkChatApi,
+  useAddReactionMutation,
+  useDeleteMessageMutation,
+  useEditMessageMutation,
+  useRemoveReactionMutation,
+} from "../features/api/chatApi";
 import { useSendMessage } from "../features/chat/hooks/useSendMessage";
+import { useConversationSession } from "../features/chat/hooks/useConversationSession";
+import { useConversationValidation } from "../features/chat/hooks/useConversationValidation";
 import {
   CHAT_OPEN_NEW_CHAT_EVENT,
   consumeOpenNewChatIntent,
 } from "../lib/commandPalette";
+import { chatApi } from "../features/chat/api";
+import { store } from "../store";
+import { selectConversationMessagesFromState } from "../stores/chatStore";
+import type { ChatLayoutState } from "../utils/densityPolicy";
+import { isUuid } from "../utils/isUuid";
 
-type IdleCallbackDeadline = {
-  didTimeout: boolean;
-  timeRemaining: () => number;
-};
+const UserProfile = React.lazy(() => import("../components/info/UserProfile"));
+const GroupInfo = React.lazy(() => import("../components/info/GroupInfo"));
+const NewChatModal = React.lazy(
+  () => import("../components/modals/NewChatModal"),
+);
+const ImagePreviewModal = React.lazy(
+  () => import("../components/modals/ImagePreviewModal"),
+);
+const FilePreviewModal = React.lazy(
+  () => import("../components/modals/FilePreviewModal"),
+);
 
-interface ProfilePanelTarget {
-  userId: string;
-  initialUser?: {
-    id: string;
-    username?: string;
-    displayName?: string;
-    firstName?: string;
-    lastName?: string;
-    avatar?: string;
-    status?: UserStatus;
-  } | null;
-}
-
-interface ConversationValidationError {
-  conversationId: string;
-  message: string;
-}
-
-type WindowWithIdleCallback = Window & {
-  requestIdleCallback?: (
-    callback: (deadline: IdleCallbackDeadline) => void,
-    options?: { timeout?: number },
-  ) => number;
-  cancelIdleCallback?: (handle: number) => void;
-};
-
-const scheduleIdleTask = (task: () => void): (() => void) => {
-  if (typeof window === "undefined") return () => {};
-
-  const idleWindow = window as WindowWithIdleCallback;
-  if (typeof idleWindow.requestIdleCallback === "function") {
-    const handle = idleWindow.requestIdleCallback(
-      (deadline) => {
-        if (deadline.didTimeout || deadline.timeRemaining() > 4) {
-          task();
-          return;
-        }
-        window.setTimeout(task, 0);
-      },
-      { timeout: 1200 },
-    );
-
-    return () => {
-      idleWindow.cancelIdleCallback?.(handle);
-    };
-  }
-
-  const timeoutId = window.setTimeout(task, 240);
-  return () => {
-    window.clearTimeout(timeoutId);
-  };
-};
+type InfoPanelMode = "conversation" | "self-profile";
 
 const CONVERSATIONS_PAGE_SIZE = 100;
+
+const DeferredPanelFallback: React.FC = () => (
+  <div className="flex h-full items-center justify-center px-6">
+    <Spinner size="md" />
+  </div>
+);
+
+const DeferredModalFallback: React.FC = () => (
+  <div className="fixed inset-0 z-[70] flex items-center justify-center bg-text-primary/40 backdrop-blur-sm">
+    <div className="rounded-2xl border border-border/80 bg-surface/95 p-4 shadow-elev3">
+      <Spinner size="md" />
+    </div>
+  </div>
+);
+
+const INFO_PANEL_EXIT_DURATION_MS = 240;
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+const loadConversationMutationUseCases = () =>
+  import("../features/chat/usecases/createPrivateConversation").then(
+    async ({ createPrivateConversationUseCase }) => {
+      const [{ createGroupConversationUseCase }, { deleteConversationUseCase }] =
+        await Promise.all([
+          import("../features/chat/usecases/createGroupConversation"),
+          import("../features/chat/usecases/deleteConversation"),
+        ]);
+
+      return {
+        createPrivateConversationUseCase,
+        createGroupConversationUseCase,
+        deleteConversationUseCase,
+      };
+    },
+  );
 
 export const ChatPage: React.FC = () => {
   const { t } = useTranslation();
@@ -144,9 +140,6 @@ export const ChatPage: React.FC = () => {
     addConversation,
     updateConversation,
     removeConversation,
-    updateStoreMessage,
-    removeStoreMessage,
-    conversations,
     isLoadingConversations,
     hasFetchedConversationsOnce,
     conversationsError,
@@ -160,9 +153,6 @@ export const ChatPage: React.FC = () => {
       addConversation: state.addConversation,
       updateConversation: state.updateConversation,
       removeConversation: state.removeConversation,
-      updateStoreMessage: state.updateMessage,
-      removeStoreMessage: state.removeMessage,
-      conversations: state.conversations,
       isLoadingConversations: state.isLoadingConversations,
       hasFetchedConversationsOnce: state.hasFetchedConversationsOnce,
       conversationsError: state.conversationsError,
@@ -174,41 +164,35 @@ export const ChatPage: React.FC = () => {
 
   // Per-conversation derived selectors — only re-render when THIS
   // conversation's values change, not when other conversations load.
-  const currentHasMore = useChatStore((state) =>
-    selectedConversationId
-      ? (state.hasMoreMessages[selectedConversationId] ?? true)
-      : false,
-  );
-  const currentIsLoading = useChatStore((state) =>
-    selectedConversationId
-      ? Boolean(state.isLoadingMessagesByConversation[selectedConversationId])
-      : false,
-  );
-  const currentMessageError = useChatStore((state) =>
-    selectedConversationId
-      ? (state.messageErrors[selectedConversationId] ?? null)
-      : null,
-  );
+
 
   // Selectors
   const selectedConversation = useSelectedConversation();
-  const conversationMessages = useCurrentMessages();
   const typingStatus = useCurrentTypingStatus();
-  const isSelectedConversationHydrated = useChatStore((state) =>
-    selectedConversationId
-      ? Boolean(state.messagesHydratedByConversation[selectedConversationId])
-      : false,
+  const conversationCount = useConversationCount();
+  const refreshFriendshipDirectory = useFriendshipStore(
+    (state) => state.refreshDirectory,
   );
   // WebSocket
-  const { connectionState, sendTyping, stopTyping, joinRoom, leaveRoom } =
+  const {
+    connectionState,
+    sendTyping,
+    stopTyping,
+    joinConversation,
+    leaveConversation,
+  } =
     useWebSocket();
 
   // Local state
   const [isInfoPanelOpen, setIsInfoPanelOpen] = useState(false);
-  const [profilePanelTarget, setProfilePanelTarget] =
-    useState<ProfilePanelTarget | null>(null);
+  const [infoPanelMode, setInfoPanelMode] = useState<InfoPanelMode | null>(
+    null,
+  );
   const [isMobileMenuOpen, setIsMobileMenuOpen] =
     useState(!routeConversationId);
+  const [viewportWidth, setViewportWidth] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth : 1440,
+  );
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const filePreview = useFilePreview();
@@ -218,21 +202,33 @@ export const ChatPage: React.FC = () => {
   const [hasMoreConversations, setHasMoreConversations] = useState(true);
   const conversationsPageRef = useRef(1);
   const roomCreationLockRef = useRef(false);
-  const [isValidatingRoom, setIsValidatingRoom] = useState(false);
-  const [lastValidatedConversationId, setLastValidatedConversationId] =
+  const [externalJumpTargetMessageId, setExternalJumpTargetMessageId] =
     useState<string | null>(null);
-  const [conversationValidationError, setConversationValidationError] =
-    useState<ConversationValidationError | null>(null);
-  const [validationRetryToken, setValidationRetryToken] = useState(0);
-  const directInfoHydratedRef = useRef<Set<string>>(new Set());
-  const lastReadSyncKeyRef = useRef<string | null>(null);
+  const [externalJumpRequestVersion, setExternalJumpRequestVersion] =
+    useState(0);
   const renderCountRef = useRef(0);
-  const validatingConversationIdRef = useRef<string | null>(null);
+  const mobileSidebarRef = useRef<HTMLDivElement | null>(null);
+  const chatPaneRef = useRef<HTMLDivElement | null>(null);
+  const focusBeforeMobileSidebarRef = useRef<HTMLElement | null>(null);
+  const previousMobileSidebarVisibleRef = useRef(false);
 
   const conversationAccessDeniedMessage = t(
     "error:chat.conversationAccessDenied",
   );
   const conversationOpenFailedMessage = t("error:chat.conversationOpenFailed");
+  const {
+    isValidatingRoom,
+    lastValidatedConversationId,
+    conversationValidationError,
+    handleRetryConversationValidation,
+  } = useConversationValidation({
+    routeConversationId,
+    addConversation,
+    updateConversation,
+    conversationAccessDeniedMessage,
+    conversationOpenFailedMessage,
+    shouldTraceRenderLoop,
+  });
 
   useEffect(() => {
     if (!shouldTraceRenderLoop) {
@@ -288,7 +284,7 @@ export const ChatPage: React.FC = () => {
             id: user.id,
             username: user.username,
             displayName:
-              `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
+              resolveUserDisplayName(user, { allowLegacyFallback: true }) ||
               user.username,
             avatar: user.avatar,
             status: user.status as UserStatus,
@@ -307,166 +303,36 @@ export const ChatPage: React.FC = () => {
       ? getOtherParticipant(selectedConversation, currentUserSummary.id)
       : null;
 
-  // Validate room in URL then sync to store.
-  useEffect(() => {
-    let isCancelled = false;
-
-    if (!conversationId) {
-      if (validatingConversationIdRef.current) {
-        validatingConversationIdRef.current = null;
-      }
-      setLastValidatedConversationId((previous) =>
-        previous === null ? previous : null,
-      );
-      setConversationValidationError(null);
-      setIsValidatingRoom(false);
-      return;
-    }
-
-    const chatState = useChatStore.getState();
-    const hasConversationInStore = chatState.conversations.some(
-      (conversation) => conversation.id === conversationId,
-    );
-
-    if (
-      lastValidatedConversationId === conversationId &&
-      hasConversationInStore
-    ) {
-      if (shouldTraceRenderLoop) {
-        logMessageDebug("ChatPage", "conversation_validation_skipped_cached", {
-          conversationId,
-        });
-      }
-      return;
-    }
-
-    if (validatingConversationIdRef.current === conversationId) {
-      if (shouldTraceRenderLoop) {
-        logMessageDebug(
-          "ChatPage",
-          "conversation_validation_skipped_in_flight",
-          {
-            conversationId,
-          },
-        );
-      }
-      return;
-    }
-
-    validatingConversationIdRef.current = conversationId;
-
-    const validateConversation = async () => {
-      setIsValidatingRoom(true);
-      setConversationValidationError((previous) =>
-        previous?.conversationId === conversationId ? null : previous,
-      );
-      if (shouldTraceRenderLoop) {
-        logMessageDebug("ChatPage", "conversation_validation_requested", {
-          conversationId,
-        });
-      }
-      try {
-        const response = await getConversationByIdUseCase(conversationId);
-        const room = unwrapApiSuccess(response);
-        if (isCancelled) return;
-
-        const existingRoom = useChatStore
-          .getState()
-          .conversations.find(
-            (conversation) => conversation.id === conversationId,
-          );
-
-        const shouldUpdateExistingRoom = Boolean(
-          existingRoom &&
-          (existingRoom.updatedAt !== room.updatedAt ||
-            existingRoom.unreadCount !== room.unreadCount ||
-            existingRoom.lastMessage?.id !== room.lastMessage?.id ||
-            existingRoom.displayName !== room.displayName ||
-            existingRoom.name !== room.name ||
-            existingRoom.avatar !== room.avatar ||
-            existingRoom.participants?.length !== room.participants?.length),
-        );
-
-        if (!existingRoom) {
-          addConversation(room);
-        } else if (shouldUpdateExistingRoom) {
-          updateConversation(conversationId, room);
-        }
-
-        setLastValidatedConversationId((previous) =>
-          previous === conversationId ? previous : conversationId,
-        );
-        setConversationValidationError(null);
-        if (shouldTraceRenderLoop) {
-          logMessageDebug("ChatPage", "conversation_validation_succeeded", {
-            conversationId,
-            roomInserted: !existingRoom,
-            roomUpdated: shouldUpdateExistingRoom,
-          });
-        }
-      } catch (error: unknown) {
-        if (isCancelled) return;
-
-        const apiError = extractApiError(error);
-        const code = String(apiError.code || "").toUpperCase();
-        const roomInvalidCodes = new Set([
-          "NOT_FOUND",
-          "ROOM_NOT_FOUND",
-          "FORBIDDEN",
-          "ROOM_ACCESS_DENIED",
-        ]);
-
-        if (roomInvalidCodes.has(code)) {
-          setConversationValidationError(null);
-          toast.error(conversationAccessDeniedMessage);
-          navigate("/chat", { replace: true });
-        } else {
-          const message = apiError.message || conversationOpenFailedMessage;
-          setConversationValidationError({
-            conversationId,
-            message,
-          });
-          toast.error(message);
-        }
-
-        setLastValidatedConversationId((previous) =>
-          previous === null ? previous : null,
-        );
-        if (shouldTraceRenderLoop) {
-          logMessageDebug("ChatPage", "conversation_validation_failed", {
-            conversationId,
-            code,
-            message: apiError.message,
-          });
-        }
-      } finally {
-        if (
-          !isCancelled &&
-          validatingConversationIdRef.current === conversationId
-        ) {
-          validatingConversationIdRef.current = null;
-          setIsValidatingRoom(false);
-        }
-      }
-    };
-
-    void validateConversation();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [
-    addConversation,
-    conversationAccessDeniedMessage,
-    conversationId,
-    conversationOpenFailedMessage,
+  const {
+    currentHasMore: sessionCurrentHasMore,
+    currentIsLoading: sessionCurrentIsLoading,
+    currentMessageError: sessionCurrentMessageError,
+    currentHistoryStage: sessionCurrentHistoryStage,
+    isHistoryPartial: sessionIsHistoryPartial,
+    isConversationHistoryReady: sessionIsConversationHistoryReady,
+    isConversationReady: sessionIsConversationReady,
+    handleLoadOlderMessages: sessionHandleLoadOlderMessages,
+    handleRetryMessages: sessionHandleRetryMessages,
+    handleReachedLatestMessage: sessionHandleReachedLatestMessage,
+    handleTyping: sessionHandleTyping,
+  } = useConversationSession({
+    routeConversationId,
+    selectedConversationId,
+    selectedConversation,
+    isSelectedDirectConversation,
+    otherUser: otherUser ?? null,
+    connectionState,
+    isValidatingRoom,
     lastValidatedConversationId,
-    navigate,
-    shouldTraceRenderLoop,
+    messageCount: 0,
+    fetchMessages,
+    markAsRead,
+    joinConversation,
+    leaveConversation,
+    stopTyping,
+    sendTyping,
     updateConversation,
-    validationRetryToken,
-  ]);
-
+  });
   // Load conversations on mount
   useEffect(() => {
     void (async () => {
@@ -485,7 +351,7 @@ export const ChatPage: React.FC = () => {
     setIsLoadingMoreConversations(true);
     try {
       const nextPage = conversationsPageRef.current + 1;
-      const response = await conversationApi.getConversations(
+      const response = await chatApi.conversation.getConversations(
         nextPage,
         CONVERSATIONS_PAGE_SIZE,
       );
@@ -496,9 +362,7 @@ export const ChatPage: React.FC = () => {
         return;
       }
 
-      const existing = useChatStore.getState().conversations;
-      const merged = [...existing, ...fetched];
-      useChatStore.getState().setConversations(merged);
+      useChatStore.getState().mergeConversationPage(fetched);
       conversationsPageRef.current = nextPage;
       setHasMoreConversations(fetched.length >= CONVERSATIONS_PAGE_SIZE);
     } catch (error) {
@@ -508,60 +372,6 @@ export const ChatPage: React.FC = () => {
       setIsLoadingMoreConversations(false);
     }
   }, [hasMoreConversations, isLoadingMoreConversations, t]);
-
-  // Load messages when conversation changes & join/leave rooms
-  useEffect(() => {
-    if (!selectedConversationId || isValidatingRoom) {
-      return;
-    }
-
-    void (async () => {
-      const chatState = useChatStore.getState();
-      const isConversationHydrated =
-        chatState.messagesHydratedByConversation[selectedConversationId] ===
-        true;
-      const hasNewerMessages =
-        chatState.hasNewerMessagesByConversation[selectedConversationId] ??
-        false;
-
-      logMessageDebug("ChatPage", "conversation_open_started", {
-        conversationId: selectedConversationId,
-        isHydrated: isConversationHydrated,
-        isValidatingRoom,
-        hasNewer: hasNewerMessages,
-      });
-      logMessageDebug("ChatPage", "room_join_requested", {
-        conversationId: selectedConversationId,
-        skipInitialDeltaSync: false,
-        reason: "conversation_open",
-      });
-      joinRoom(selectedConversationId, { skipInitialDeltaSync: false });
-
-      if (!isConversationHydrated) {
-        const initialFetchResult = await fetchMessages(selectedConversationId);
-        logMessageDebug("ChatPage", "initial_fetch_completed", {
-          conversationId: selectedConversationId,
-          result: initialFetchResult,
-        });
-      }
-    })();
-
-    return () => {
-      stopTyping(selectedConversationId);
-      leaveRoom(selectedConversationId);
-    };
-  }, [
-    selectedConversationId,
-    isValidatingRoom,
-    fetchMessages,
-    joinRoom,
-    leaveRoom,
-    stopTyping,
-  ]);
-
-  useEffect(() => {
-    lastReadSyncKeyRef.current = null;
-  }, [selectedConversationId]);
 
   // Handle select conversation
   const handleSelectConversation = useCallback(
@@ -575,151 +385,30 @@ export const ChatPage: React.FC = () => {
     [navigate, routeConversationId],
   );
 
-  const isCurrentRouteValidated = conversationId
-    ? lastValidatedConversationId === conversationId
-    : true;
-  const isConversationHistoryReady = isSelectedConversationHydrated;
-  const isConversationReady = Boolean(
-    selectedConversationId &&
-    selectedConversation &&
-    isCurrentRouteValidated &&
-    !isValidatingRoom,
-  );
-  const websocketReady = connectionState === "connected";
-
-  const handleSendMessage = useSendMessage({
+  const { sendMessage: handleSendMessage } = useSendMessage({
     selectedConversationId,
-    hasSelectedConversation: Boolean(selectedConversation),
-    isCurrentRouteValidated,
-    isValidatingRoom,
+    isConversationReady: sessionIsConversationReady,
     source: "ChatPage",
   });
-
-  const handleLoadOlderMessages = useCallback(async () => {
-    if (!selectedConversationId) return;
-
-    // Read from store directly to avoid depending on conversationMessages,
-    // hasMoreMessages, and isLoadingMessagesByConversation — prevents
-    // callback recreation on every incoming message.
-    const storeState = useChatStore.getState();
-    if (storeState.isLoadingMessagesByConversation[selectedConversationId]) {
-      return;
-    }
-    if (!storeState.hasMoreMessages[selectedConversationId]) return;
-
-    const storeMessages = storeState.messages[selectedConversationId] || [];
-    const oldestMessage = storeMessages.find(
-      (message) => !message.id.startsWith("temp-"),
-    );
-    if (!oldestMessage) return;
-
-    await fetchMessages(
-      selectedConversationId,
-      new Date(oldestMessage.createdAt).toISOString(),
-      undefined,
-      { beforeId: oldestMessage.id },
-    );
-  }, [selectedConversationId, fetchMessages]);
-
-  const handleRetryMessages = useCallback(async () => {
-    if (!selectedConversationId) return;
-    const storeState = useChatStore.getState();
-    if (storeState.isLoadingMessagesByConversation[selectedConversationId])
-      return;
-    await fetchMessages(selectedConversationId, undefined, undefined, {
-      force: true,
-    });
-  }, [fetchMessages, selectedConversationId]);
-
-  const handleReachedLatestMessage = useCallback(
-    (message: Message) => {
-      if (!selectedConversationId) return;
-
-      const conversation = useChatStore
-        .getState()
-        .conversations.find((item) => item.id === selectedConversationId);
-      if (!conversation) return;
-      if ((conversation.unreadCount ?? 0) <= 0) {
-        return;
-      }
-
-      const latestKey = `${selectedConversationId}:${message.id}`;
-      if (lastReadSyncKeyRef.current === latestKey) {
-        return;
-      }
-
-      lastReadSyncKeyRef.current = latestKey;
-      void markAsRead(selectedConversationId).catch(() => {
-        if (lastReadSyncKeyRef.current === latestKey) {
-          lastReadSyncKeyRef.current = null;
-        }
-      });
-    },
-    [markAsRead, selectedConversationId],
-  );
-
-  useEffect(() => {
-    if (!selectedConversationId || isValidatingRoom) return;
-
-    const orderedConversations = rankConversations(
-      Array.isArray(conversations) ? conversations : [],
-      {
-        currentUserId: currentUserSummary?.id,
-        currentUsername: currentUserSummary?.username,
-        currentDisplayName: currentUserSummary?.displayName,
-        activeConversationId: selectedConversationId,
-      },
-    );
-    const currentIndex = orderedConversations.findIndex(
-      (conversation) => conversation.id === selectedConversationId,
-    );
-    if (currentIndex < 0) return;
-
-    const candidateRoomIds = [
-      orderedConversations[currentIndex - 1]?.id,
-      orderedConversations[currentIndex + 1]?.id,
-    ].filter((id): id is string => typeof id === "string" && id.length > 0);
-    if (candidateRoomIds.length === 0) return;
-
-    let isCancelled = false;
-    const cancelScheduledTask = scheduleIdleTask(() => {
-      void (async () => {
-        for (const candidateRoomId of candidateRoomIds) {
-          if (isCancelled) return;
-          const state = useChatStore.getState();
-          if (state.messagesHydratedByConversation[candidateRoomId]) continue;
-          if (state.isLoadingMessagesByConversation[candidateRoomId]) continue;
-          await state.fetchMessages(candidateRoomId, undefined, undefined, {
-            limit: 20,
-          });
-        }
-      })();
-    });
-
-    return () => {
-      isCancelled = true;
-      cancelScheduledTask();
-    };
-  }, [
-    conversations,
-    currentUserSummary?.displayName,
-    currentUserSummary?.id,
-    currentUserSummary?.username,
-    isValidatingRoom,
-    selectedConversationId,
-  ]);
+  const [editMessageMutation] = useEditMessageMutation();
+  const [deleteMessageMutation] = useDeleteMessageMutation();
+  const [addReactionMutation] = useAddReactionMutation();
+  const [removeReactionMutation] = useRemoveReactionMutation();
 
   const handleReactMessage = useCallback(
     async (messageId: string, emoji: string) => {
       if (!selectedConversationId || !currentUserSummary) return;
 
-      // Read directly from store to avoid depending on conversationMessages
-      // (prevents callback recreation on every incoming message)
-      const storeState = useChatStore.getState();
-      const storeMessages = storeState.messages[selectedConversationId] || [];
-      const targetMessage = storeMessages.find(
-        (message) => message.id === messageId || message.localId === messageId,
-      );
+      const targetMessage = rtkChatApi.endpoints.getMessages
+        .select({ conversationId: selectedConversationId })(store.getState())
+        .data?.messages.find((message) =>
+          [
+            message.id,
+            message.localId,
+            message.stableId,
+            message.clientMessageId,
+          ].some((value) => value === messageId),
+        );
       if (!targetMessage) return;
 
       const existingReaction = targetMessage.reactions?.find(
@@ -729,58 +418,30 @@ export const ChatPage: React.FC = () => {
         existingReaction?.userIds?.includes(currentUserSummary.id),
       );
 
-      // Optimistic update — apply immediately for snappy UX
-      const optimisticReactions = hasReacted
-        ? (targetMessage.reactions || [])
-            .map((r) =>
-              r.emoji === emoji
-                ? {
-                    ...r,
-                    userIds: r.userIds.filter(
-                      (id) => id !== currentUserSummary.id,
-                    ),
-                    count: r.count - 1,
-                  }
-                : r,
-            )
-            .filter((r) => r.count > 0)
-        : [
-            ...(targetMessage.reactions || []).filter((r) => r.emoji !== emoji),
-            {
-              emoji,
-              userIds: [
-                ...(existingReaction?.userIds || []),
-                currentUserSummary.id,
-              ],
-              count: (existingReaction?.count || 0) + 1,
-            },
-          ];
-
-      updateStoreMessage(selectedConversationId, messageId, {
-        reactions: optimisticReactions,
-      });
-
+      // RTKQ mutation owns the optimistic timeline patch and rollback.
       try {
-        const response = hasReacted
-          ? await removeReactionUseCase({ messageId, emoji })
-          : await addReactionUseCase({ messageId, emoji });
-        const updatedMessage = unwrapApiSuccess(response);
-
-        updateStoreMessage(selectedConversationId, messageId, {
-          reactions: Array.isArray(updatedMessage.reactions)
-            ? updatedMessage.reactions
-            : [],
-        });
+        const mutationInput = {
+          conversationId: selectedConversationId,
+          messageId,
+          emoji,
+          userId: currentUserSummary.id,
+        };
+        await (hasReacted
+          ? removeReactionMutation(mutationInput)
+          : addReactionMutation(mutationInput)
+        ).unwrap();
       } catch (error) {
-        // Rollback to pre-optimistic state
-        updateStoreMessage(selectedConversationId, messageId, {
-          reactions: targetMessage.reactions,
-        });
         const apiError = extractApiError(error);
         toast.error(apiError.message || t("error:generic.requestFailed"));
       }
     },
-    [currentUserSummary, selectedConversationId, t, updateStoreMessage],
+    [
+      addReactionMutation,
+      currentUserSummary,
+      removeReactionMutation,
+      selectedConversationId,
+      t,
+    ],
   );
 
   const handleEditMessage = useCallback(
@@ -788,21 +449,18 @@ export const ChatPage: React.FC = () => {
       if (!selectedConversationId) return;
 
       try {
-        const response = await editMessageUseCase({ messageId, content });
-        const updatedMessage = unwrapApiSuccess(response);
-
-        updateStoreMessage(selectedConversationId, messageId, {
-          content: updatedMessage.content || content,
-          isEdited: true,
-          editedAt: updatedMessage.editedAt || new Date(),
-        });
+        await editMessageMutation({
+          conversationId: selectedConversationId,
+          messageId,
+          content,
+        }).unwrap();
         toast.success(t("chat:toast.messageEdited"));
       } catch (error) {
         const apiError = extractApiError(error);
         toast.error(apiError.message || t("chat:toast.editFailed"));
       }
     },
-    [selectedConversationId, t, updateStoreMessage],
+    [editMessageMutation, selectedConversationId, t],
   );
 
   const handleDeleteMessage = useCallback(
@@ -810,70 +468,60 @@ export const ChatPage: React.FC = () => {
       if (!selectedConversationId) return;
 
       try {
-        await deleteMessageUseCase(messageId);
-        removeStoreMessage(selectedConversationId, messageId);
+        await deleteMessageMutation({
+          conversationId: selectedConversationId,
+          messageId,
+        }).unwrap();
         toast.success(t("chat:toast.messageDeleted"));
       } catch (error) {
         const apiError = extractApiError(error);
         toast.error(apiError.message || t("chat:toast.deleteFailed"));
       }
     },
-    [removeStoreMessage, selectedConversationId, t],
-  );
-
-  // Handle typing
-  const handleTyping = useCallback(
-    (isTyping: boolean) => {
-      if (selectedConversationId) {
-        if (isTyping) {
-          sendTyping(selectedConversationId);
-        } else {
-          stopTyping(selectedConversationId);
-        }
-      }
-    },
-    [selectedConversationId, sendTyping, stopTyping],
+    [deleteMessageMutation, selectedConversationId, t],
   );
 
   const closeInfoPanel = useCallback(() => {
     setIsInfoPanelOpen(false);
-    setProfilePanelTarget(null);
   }, []);
 
-  const openUserProfile = useCallback((target: ProfilePanelTarget) => {
-    setProfilePanelTarget(target);
+  const openSelfProfile = useCallback(() => {
+    setInfoPanelMode("self-profile");
+    setIsInfoPanelOpen(true);
+  }, []);
+
+  const openConversationInfoPanel = useCallback(() => {
+    setInfoPanelMode("conversation");
     setIsInfoPanelOpen(true);
   }, []);
 
   // Handle toggle info panel
   const handleToggleInfoPanel = useCallback(() => {
-    if (isInfoPanelOpen) {
+    if (isInfoPanelOpen && infoPanelMode === "conversation") {
       closeInfoPanel();
       return;
     }
 
-    if (isSelectedDirectConversation && otherUser) {
-      openUserProfile({
-        userId: otherUser.id,
-        initialUser: {
-          id: otherUser.id,
-          username: otherUser.username,
-          displayName: otherUser.displayName,
-          avatar: otherUser.avatar,
-          status: otherUser.status,
-        },
-      });
+    openConversationInfoPanel();
+  }, [
+    closeInfoPanel,
+    infoPanelMode,
+    isInfoPanelOpen,
+    openConversationInfoPanel,
+  ]);
+
+  useEffect(() => {
+    if (infoPanelMode !== "conversation") {
       return;
     }
 
-    setProfilePanelTarget(null);
-    setIsInfoPanelOpen(true);
+    if (!routeConversationId) {
+      closeInfoPanel();
+    }
   }, [
     closeInfoPanel,
-    isInfoPanelOpen,
-    isSelectedDirectConversation,
-    openUserProfile,
-    otherUser,
+    infoPanelMode,
+    routeConversationId,
   ]);
 
   const handleDeleteConversation = useCallback(async () => {
@@ -881,6 +529,8 @@ export const ChatPage: React.FC = () => {
     if (!window.confirm(t("profile:userProfile.deleteConversation"))) return;
 
     try {
+      const { deleteConversationUseCase } =
+        await loadConversationMutationUseCases();
       await deleteConversationUseCase(selectedConversation.id);
       removeConversation(selectedConversation.id);
       closeInfoPanel();
@@ -906,9 +556,37 @@ export const ChatPage: React.FC = () => {
     navigate("/chat");
   }, [navigate]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
   // Handle new chat
   const handleStartChat = useCallback(
     async (userId: string) => {
+      logger.debug("direct_dm", "source_trace", {
+        source: "ChatPage.handleStartChat",
+        userId,
+      });
+
+      if (!isUuid(typeof userId === "string" ? userId.trim() : "")) {
+        toast.error(
+          t("chat:contactShare.invalidProfile", {
+            defaultValue: "This contact card cannot start a chat.",
+          }),
+        );
+        return;
+      }
+
       if (isCreatingRoom) {
         return;
       }
@@ -919,19 +597,23 @@ export const ChatPage: React.FC = () => {
       roomCreationLockRef.current = true;
       setIsCreatingRoom(true);
       try {
+        const { createPrivateConversationUseCase } =
+          await loadConversationMutationUseCases();
         const response = await createPrivateConversationUseCase(userId);
         const payload = unwrapApiSuccess(response);
-        const conversationId = payload.id;
+        const conversationId = resolveConversationId(payload, {
+          source: "ChatPage.handleStartChat.createPrivateConversation",
+          includeEntityId: true,
+        });
         if (!conversationId) {
-          throw new Error(t("error:chat.roomIdMissing"));
+          throw new Error(t("error:chat.conversationIdMissing"));
         }
 
         // Refresh list to get full conversation shape (participants, display fields...)
         fetchConversations().catch((error) => {
-          console.warn(
-            "Refresh conversations after creating direct conversation failed:",
+          logger.warn("conversation", "refresh_after_direct_create_failed", {
             error,
-          );
+          });
         });
         selectConversation(conversationId);
         navigate(`/chat/${conversationId}`);
@@ -941,12 +623,9 @@ export const ChatPage: React.FC = () => {
           apiError.details && typeof apiError.details === "object"
             ? (apiError.details as Record<string, unknown>)
             : null;
-        const existingConversationId =
-          details && typeof details.conversationId === "string"
-            ? details.conversationId
-            : details && typeof details.roomId === "string"
-              ? details.roomId
-              : null;
+        const existingConversationId = resolveConversationId(details, {
+          source: "ChatPage.handleStartChat.errorDetails",
+        });
 
         if (
           existingConversationId &&
@@ -954,17 +633,22 @@ export const ChatPage: React.FC = () => {
             apiError.code === ErrorCode.ROOM_ALREADY_EXISTS)
         ) {
           fetchConversations().catch((refreshError) => {
-            console.warn(
-              "Refresh conversations after conflict conversation lookup failed:",
+            logger.warn("conversation", "refresh_after_conflict_failed", {
               refreshError,
-            );
+            });
           });
           selectConversation(existingConversationId);
           navigate(`/chat/${existingConversationId}`);
           return;
         }
 
-        console.error("Create direct conversation failed:", apiError);
+        logger.error("conversation", "create_direct_failed", apiError);
+        if (apiError.code === ErrorCode.DIRECT_CHAT_TARGET_UNAVAILABLE) {
+          void refreshFriendshipDirectory({
+            reason: "explicit_refresh",
+            includeFullSnapshot: true,
+          });
+        }
         toast.error(
           apiError.message || t("error:chat.startConversationFailed"),
         );
@@ -973,22 +657,20 @@ export const ChatPage: React.FC = () => {
         setIsCreatingRoom(false);
       }
     },
-    [fetchConversations, isCreatingRoom, navigate, selectConversation, t],
+    [
+      fetchConversations,
+      isCreatingRoom,
+      navigate,
+      refreshFriendshipDirectory,
+      selectConversation,
+      t,
+    ],
   );
 
   const handleOpenCurrentUserProfile = useCallback(() => {
     if (!currentUserSummary) return;
-    openUserProfile({
-      userId: currentUserSummary.id,
-      initialUser: {
-        id: currentUserSummary.id,
-        username: currentUserSummary.username,
-        displayName: currentUserSummary.displayName,
-        avatar: currentUserSummary.avatar,
-        status: currentUserSummary.status,
-      },
-    });
-  }, [currentUserSummary, openUserProfile]);
+    openSelfProfile();
+  }, [currentUserSummary, openSelfProfile]);
 
   const handleCreateGroup = useCallback(
     async (payload: { name: string; memberIds: string[] }) => {
@@ -1002,38 +684,31 @@ export const ChatPage: React.FC = () => {
       roomCreationLockRef.current = true;
       setIsCreatingRoom(true);
       try {
+        const { createGroupConversationUseCase } =
+          await loadConversationMutationUseCases();
         const response = await createGroupConversationUseCase({
           name: payload.name,
           memberIds: payload.memberIds,
         });
         const conversationPayload = unwrapApiSuccess(response);
-        const conversationId = conversationPayload.id;
+        const conversationId = resolveConversationId(conversationPayload, {
+          source: "ChatPage.handleCreateGroup.createGroupConversation",
+          includeEntityId: true,
+        });
         if (!conversationId) {
-          throw new Error(t("error:chat.roomIdMissing"));
+          throw new Error(t("error:chat.conversationIdMissing"));
         }
 
         fetchConversations().catch((error) => {
-          console.warn(
-            "Refresh conversations after creating group conversation failed:",
+          logger.warn("conversation", "refresh_after_group_create_failed", {
             error,
-          );
+          });
         });
         selectConversation(conversationId);
         navigate(`/chat/${conversationId}`);
-        const conversationPayloadRecord = conversationPayload as unknown as {
-          invitedMemberIds?: unknown[];
-        };
-        const invited = Array.isArray(
-          conversationPayloadRecord.invitedMemberIds,
-        )
-          ? conversationPayloadRecord.invitedMemberIds.length
-          : 0;
-        if (invited > 0) {
-          toast.info(`${invited} member invite(s) are pending acceptance`);
-        }
       } catch (error) {
         const apiError = extractApiError(error);
-        console.error("Create group conversation failed:", apiError);
+        logger.error("conversation", "create_group_failed", apiError);
         toast.error(apiError.message || t("error:chat.createGroupFailed"));
       } finally {
         roomCreationLockRef.current = false;
@@ -1067,97 +742,169 @@ export const ChatPage: React.FC = () => {
   }, []);
 
   const showSidebarOnMobile = !routeConversationId || isMobileMenuOpen;
+  const isMobileSidebarHidden = viewportWidth < 1024 && !showSidebarOnMobile;
   const shouldRenderInfoContent =
-    isInfoPanelOpen || Boolean(profilePanelTarget);
-  const showConversationSkeleton =
-    (!hasFetchedConversationsOnce && conversations.length === 0) ||
-    (isLoadingConversations && conversations.length === 0);
+    isInfoPanelOpen &&
+    (infoPanelMode === "self-profile" ||
+      (infoPanelMode === "conversation" && Boolean(routeConversationId)));
+  const isDockedInfoPanelViewport = viewportWidth >= 1280;
+  const chatLayoutState = useMemo<ChatLayoutState>(() => {
+    if (viewportWidth < 1024) {
+      return "mobile";
+    }
+
+    return shouldRenderInfoContent && isDockedInfoPanelViewport
+      ? "with-panel"
+      : "normal";
+  }, [isDockedInfoPanelViewport, shouldRenderInfoContent, viewportWidth]);
+  const chatWindowLayoutState = useMemo<ChatLayoutState>(() => {
+    if (viewportWidth < 1024) {
+      return "mobile";
+    }
+
+    return "normal";
+  }, [viewportWidth]);
+  const sidebarLayoutState = useMemo<ChatLayoutState>(() => {
+    if (viewportWidth < 1024) {
+      return "mobile";
+    }
+
+    return "normal";
+  }, [viewportWidth]);
 
   useEffect(() => {
-    if (!selectedConversationId) return;
+    const sidebar = mobileSidebarRef.current;
+    if (!sidebar) return;
 
-    logMessageDebug("ChatPage", "conversation_readiness_changed", {
-      conversationId: selectedConversationId,
-      isValidatingRoom,
-      isHydrated: isConversationHistoryReady,
-      isHistoryReady: isConversationHistoryReady,
-      isCurrentRouteValidated,
-      isReady: isConversationReady,
-      isSendReady: isConversationReady,
-      websocketReady,
-      messageCount: conversationMessages.length,
-      connectionState,
-    });
-  }, [
-    connectionState,
-    conversationMessages.length,
-    isCurrentRouteValidated,
-    isConversationReady,
-    isConversationHistoryReady,
-    isValidatingRoom,
-    lastValidatedConversationId,
-    selectedConversationId,
-    websocketReady,
-  ]);
+    if (isMobileSidebarHidden) {
+      sidebar.setAttribute("inert", "");
+    } else {
+      sidebar.removeAttribute("inert");
+    }
+  }, [isMobileSidebarHidden]);
 
   useEffect(() => {
-    if (!selectedConversationId || !isSelectedDirectConversation || otherUser) {
+    if (viewportWidth >= 1024) {
+      previousMobileSidebarVisibleRef.current = false;
       return;
     }
 
-    if (directInfoHydratedRef.current.has(selectedConversationId)) {
-      return;
-    }
-    directInfoHydratedRef.current.add(selectedConversationId);
+    const wasVisible = previousMobileSidebarVisibleRef.current;
 
-    let isCancelled = false;
-    void getConversationByIdUseCase(selectedConversationId)
-      .then((response) => {
-        if (isCancelled) return;
-        const conversation = unwrapApiSuccess(response);
-        updateConversation(selectedConversationId, conversation);
-      })
-      .catch(() => {
-        // no-op: fallback UI keeps skeleton and retries on next navigation
+    if (showSidebarOnMobile && !wasVisible) {
+      const activeElement = document.activeElement;
+      focusBeforeMobileSidebarRef.current =
+        activeElement instanceof HTMLElement ? activeElement : null;
+
+      window.requestAnimationFrame(() => {
+        const focusTarget =
+          mobileSidebarRef.current?.querySelector<HTMLElement>(
+            FOCUSABLE_SELECTOR,
+          );
+        focusTarget?.focus();
       });
+    }
+
+    if (!showSidebarOnMobile && wasVisible) {
+      window.requestAnimationFrame(() => {
+        const previous = focusBeforeMobileSidebarRef.current;
+        if (previous && document.contains(previous)) {
+          previous.focus();
+          return;
+        }
+        chatPaneRef.current?.focus();
+      });
+    }
+
+    previousMobileSidebarVisibleRef.current = showSidebarOnMobile;
+  }, [showSidebarOnMobile, viewportWidth]);
+
+  const showConversationSkeleton =
+    (!hasFetchedConversationsOnce && conversationCount === 0) ||
+    (isLoadingConversations && conversationCount === 0);
+
+  useEffect(() => {
+    if (isInfoPanelOpen || infoPanelMode === null) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setInfoPanelMode(null);
+    }, INFO_PANEL_EXIT_DURATION_MS);
 
     return () => {
-      isCancelled = true;
+      window.clearTimeout(timeoutId);
     };
-  }, [
-    isSelectedDirectConversation,
-    otherUser,
-    selectedConversationId,
-    updateConversation,
-  ]);
+  }, [infoPanelMode, isInfoPanelOpen]);
+
+  const handleOpenFilePreview = useCallback(
+    (attachment: Attachment) => {
+      if (!selectedConversation) {
+        return;
+      }
+
+      const target: PreviewTarget = {
+        attachment,
+        conversationId: selectedConversation.id,
+        previewType: getPreviewType(
+          attachment.mimeType,
+          attachment.fileName,
+        ),
+      };
+      const gallery = selectConversationMessagesFromState(
+        useChatStore.getState(),
+        selectedConversation.id,
+      )
+        .flatMap((message) =>
+          (message.attachments ?? []).map((candidate) => ({
+            attachment: candidate,
+            conversationId: selectedConversation.id,
+            messageId: message.id,
+            previewType: getPreviewType(
+              candidate.mimeType,
+              candidate.fileName,
+            ),
+          })),
+        )
+        .filter((candidate) => candidate.previewType !== "unsupported");
+      filePreview.open(target, gallery.length > 0 ? gallery : undefined);
+    },
+    [filePreview, selectedConversation],
+  );
+
+  const handleExternalJumpHandled = useCallback((messageId: string) => {
+    setExternalJumpTargetMessageId((current) =>
+      current === messageId ? null : current,
+    );
+  }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const handler = (event: Event) => {
-      const customEvent = event as CustomEvent<{ userId?: string }>;
-      const userId = customEvent.detail?.userId;
+    return listenForContactProfileView(({ userId }) => {
       if (!userId) return;
 
       void handleStartChat(userId).then(() => {
-        openUserProfile({
-          userId,
-          initialUser: { id: userId },
-        });
+        openConversationInfoPanel();
       });
-    };
+    });
+  }, [handleStartChat, openConversationInfoPanel]);
 
-    window.addEventListener(
-      "chat:contact:view-profile",
-      handler as EventListener,
+  useEffect(() => {
+    return listenForNotificationClick(
+      ({ conversationId: nextConversationId, messageId: nextMessageId }) => {
+        if (!nextConversationId) return;
+
+        setIsMobileMenuOpen(false);
+        if (nextMessageId) {
+          setExternalJumpTargetMessageId(nextMessageId);
+          setExternalJumpRequestVersion((current) => current + 1);
+        }
+
+        if (routeConversationId !== nextConversationId) {
+          navigate(`/chat/${nextConversationId}`);
+        }
+      },
     );
-    return () => {
-      window.removeEventListener(
-        "chat:contact:view-profile",
-        handler as EventListener,
-      );
-    };
-  }, [handleStartChat, openUserProfile]);
+  }, [navigate, routeConversationId]);
 
   const handleRetryBootstrap = useCallback(() => {
     void refreshUser().then(() => {
@@ -1167,20 +914,10 @@ export const ChatPage: React.FC = () => {
     });
   }, [fetchConversations, refreshUser]);
 
-  const handleRetryConversationValidation = useCallback(() => {
-    if (!routeConversationId) {
-      return;
-    }
-
-    setConversationValidationError(null);
-    setLastValidatedConversationId(null);
-    setValidationRetryToken((current) => current + 1);
-  }, [routeConversationId]);
-
   if (!currentUserSummary) {
     if (!isAuthInitialized || isAuthLoading) {
       return (
-        <div className="flex h-[100dvh] items-center justify-center bg-[hsl(var(--color-chat-canvas))] px-6">
+        <div className="flex h-full items-center justify-center bg-[hsl(var(--color-chat-canvas))] px-6">
           <div className="w-full max-w-xl space-y-5 rounded-2xl border border-border/80 bg-surface/90 p-6 shadow-elev1">
             <div className="flex items-center gap-3">
               <Spinner size="md" />
@@ -1201,7 +938,7 @@ export const ChatPage: React.FC = () => {
     }
 
     return (
-      <div className="flex h-[100dvh] items-center justify-center bg-[hsl(var(--color-chat-canvas))] px-6">
+      <div className="flex h-full items-center justify-center bg-[hsl(var(--color-chat-canvas))] px-6">
         <ErrorState
           title={t("error:auth.profileMissing", {
             defaultValue: "Unable to load profile",
@@ -1217,19 +954,25 @@ export const ChatPage: React.FC = () => {
   }
 
   return (
-    <div className="relative flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-[hsl(var(--color-chat-canvas))]">
+    <div
+      className="chat-page-shell relative flex h-full min-h-0 overflow-hidden bg-[hsl(var(--color-chat-canvas))]"
+      data-chat-layout-state={chatLayoutState}
+    >
       {/* Sidebar */}
       <div
+        ref={mobileSidebarRef}
         className={clsx(
-          "absolute inset-y-0 left-0 z-30 w-full max-w-full transition-transform duration-300 sm:max-w-[min(24rem,92vw)] lg:relative lg:z-0 lg:w-auto lg:max-w-none lg:flex-shrink-0",
+          "absolute inset-y-0 left-0 z-30 w-full max-w-full transition-transform duration-300 sm:max-w-[min(23rem,94vw)] lg:relative lg:z-0 lg:max-w-none lg:flex-shrink-0 lg:transition-[width]",
+          "lg:border-r lg:border-border/60",
+          "lg:w-[var(--app-sidebar-width)]",
           showSidebarOnMobile
             ? "translate-x-0"
             : "-translate-x-full lg:translate-x-0",
         )}
-        aria-hidden={!showSidebarOnMobile}
+        aria-hidden={isMobileSidebarHidden}
       >
         <Sidebar
-          conversations={conversations}
+          layoutState={sidebarLayoutState}
           currentUser={currentUserSummary}
           selectedId={routeConversationId}
           isLoadingConversations={isLoadingConversations}
@@ -1256,15 +999,17 @@ export const ChatPage: React.FC = () => {
 
       {/* Chat window */}
       <div
+        ref={chatPaneRef}
+        tabIndex={-1}
         className={clsx(
-          "relative z-10 flex min-w-0 flex-1 flex-col",
+          "relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden bg-[hsl(var(--chat-panel-bg))]",
           !selectedConversation && "hidden lg:flex",
         )}
       >
         {selectedConversation ? (
           <ChatWindow
+            layoutState={chatWindowLayoutState}
             conversation={selectedConversation}
-            messages={conversationMessages}
             currentUser={currentUserSummary}
             typingStatus={typingStatus || undefined}
             onSendMessage={handleSendMessage}
@@ -1273,39 +1018,30 @@ export const ChatPage: React.FC = () => {
             onDeleteMessage={handleDeleteMessage}
             onToggleInfoPanel={handleToggleInfoPanel}
             onBack={handleBack}
-            onTyping={handleTyping}
-            hasMoreMessages={currentHasMore}
-            isLoadingMessages={currentIsLoading || !isConversationHistoryReady}
-            onLoadOlderMessages={handleLoadOlderMessages}
+            onTyping={sessionHandleTyping}
+            hasMoreMessages={sessionCurrentHasMore}
+            isLoadingMessages={
+              sessionCurrentIsLoading || !sessionIsConversationHistoryReady
+            }
+            historyLoadingState={
+              sessionIsHistoryPartial
+                ? {
+                    stage: sessionCurrentHistoryStage,
+                    isPartial: sessionIsHistoryPartial,
+                  }
+                : null
+            }
+            onLoadOlderMessages={sessionHandleLoadOlderMessages}
             onImageClick={setImagePreview}
-            onFilePreview={(attachment: Attachment) => {
-              const previewType = getPreviewType(attachment.mimeType);
-              const target: PreviewTarget = {
-                attachment,
-                conversationId: selectedConversation.id,
-                previewType,
-              };
-              // Build gallery from all previewable attachments in current messages
-              const gallery: PreviewTarget[] = conversationMessages
-                .flatMap((msg) =>
-                  (msg.attachments ?? []).map((att) => ({
-                    attachment: att,
-                    conversationId: selectedConversation.id,
-                    messageId: msg.id,
-                    previewType: getPreviewType(att.mimeType),
-                  })),
-                )
-                .filter((t) => t.previewType !== "unsupported");
-              filePreview.open(
-                target,
-                gallery.length > 0 ? gallery : undefined,
-              );
-            }}
-            messageError={currentMessageError}
-            onRetryMessages={handleRetryMessages}
-            onReachedLatestMessage={handleReachedLatestMessage}
+            onFilePreview={handleOpenFilePreview}
+            messageError={sessionCurrentMessageError}
+            onRetryMessages={sessionHandleRetryMessages}
+            onReachedLatestMessage={sessionHandleReachedLatestMessage}
             connectionState={connectionState}
-            isConversationReady={isConversationReady}
+            isConversationReady={sessionIsConversationReady}
+            externalJumpToMessageId={externalJumpTargetMessageId}
+            externalJumpRequestVersion={externalJumpRequestVersion}
+            onExternalJumpHandled={handleExternalJumpHandled}
           />
         ) : routeConversationId &&
           conversationValidationError?.conversationId ===
@@ -1325,63 +1061,83 @@ export const ChatPage: React.FC = () => {
       </div>
 
       {/* Info panel */}
-      {(selectedConversation || profilePanelTarget) && (
+      {(infoPanelMode === "self-profile" ||
+        (infoPanelMode === "conversation" && Boolean(routeConversationId)) ||
+        Boolean(selectedConversation)) && (
         <div
           className={clsx(
-            "fixed inset-y-0 right-0 z-40 w-full max-w-full border-l border-border bg-surface transition-transform duration-300 sm:max-w-[min(26rem,94vw)] lg:relative lg:z-0 lg:w-[clamp(20rem,28vw,24rem)] lg:max-w-none",
-            isInfoPanelOpen ? "translate-x-0" : "translate-x-full lg:hidden",
+            "fixed inset-y-0 right-0 z-40 w-full max-w-full transform-gpu transition-transform duration-300 ease-out sm:max-w-[min(26rem,94vw)] xl:relative xl:z-0 xl:max-w-none xl:flex-shrink-0 xl:overflow-hidden xl:bg-transparent xl:transition-[width,border-color] xl:duration-300",
+            isInfoPanelOpen
+              ? "translate-x-0 xl:w-[var(--app-inspector-width)] xl:border-l xl:border-border/60"
+              : "translate-x-full xl:w-0 xl:border-l xl:border-border/0",
           )}
-          style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}
+          aria-hidden={!isInfoPanelOpen}
         >
-          {shouldRenderInfoContent ? (
-            profilePanelTarget ? (
-              <UserProfile
-                userId={profilePanelTarget.userId}
-                currentUserId={currentUserSummary.id}
-                initialUser={profilePanelTarget.initialUser ?? null}
-                onClose={closeInfoPanel}
-                onDeleteConversation={
-                  selectedConversation &&
-                  isSelectedDirectConversation &&
-                  otherUser?.id === profilePanelTarget.userId
-                    ? handleDeleteConversation
-                    : undefined
-                }
-                onStartConversation={handleStartChat}
-              />
-            ) : isSelectedDirectConversation ? (
-              otherUser ? (
-                <UserProfile
-                  userId={otherUser.id}
+          <div
+            className={clsx(
+              "h-full w-full transform-gpu bg-surface transition-[transform,opacity] duration-300 ease-out xl:absolute xl:inset-y-0 xl:right-0 xl:w-[var(--app-inspector-width)]",
+              isInfoPanelOpen
+                ? "translate-x-0 opacity-100"
+                : "pointer-events-none translate-x-4 opacity-0 xl:translate-x-6",
+            )}
+            style={{ backgroundColor: "hsl(var(--color-sidebar-surface))" }}
+          >
+            {infoPanelMode !== null ? (
+              <React.Suspense fallback={<DeferredPanelFallback />}>
+                {infoPanelMode === "self-profile" ? (
+                  <UserProfile
+                    key={`self-profile:${currentUserSummary.id}`}
+                    userId={currentUserSummary.id}
+                    currentUserId={currentUserSummary.id}
+                    initialUser={{
+                      id: currentUserSummary.id,
+                      username: currentUserSummary.username,
+                      displayName: currentUserSummary.displayName,
+                      avatar: currentUserSummary.avatar,
+                      status: currentUserSummary.status,
+                    }}
+                    onClose={closeInfoPanel}
+                    onStartConversation={handleStartChat}
+                  />
+                ) : infoPanelMode === "conversation" && !selectedConversation ? (
+                  <DeferredPanelFallback />
+                ) : isSelectedDirectConversation ? (
+                  otherUser ? (
+                  <UserProfile
+                    key={`conversation-profile:${selectedConversation?.id ?? "unknown"}:${otherUser.id}`}
+                    userId={otherUser.id}
+                    currentUserId={currentUserSummary.id}
+                    conversationContext="direct"
+                    initialUser={{
+                      id: otherUser.id,
+                      username: otherUser.username,
+                      displayName: otherUser.displayName,
+                      avatar: otherUser.avatar,
+                      status: otherUser.status,
+                    }}
+                    onClose={closeInfoPanel}
+                    onDeleteConversation={handleDeleteConversation}
+                    onStartConversation={handleStartChat}
+                  />
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+                    <Spinner size="md" />
+                    <p className="text-sm text-text-muted">
+                      {t("common:loading.default")}
+                    </p>
+                  </div>
+                )
+              ) : selectedConversation ? (
+                <GroupInfo
+                  conversation={selectedConversation}
                   currentUserId={currentUserSummary.id}
-                  initialUser={{
-                    id: otherUser.id,
-                    username: otherUser.username,
-                    displayName: otherUser.displayName,
-                    avatar: otherUser.avatar,
-                    status: otherUser.status,
-                  }}
                   onClose={closeInfoPanel}
                   onDeleteConversation={handleDeleteConversation}
-                  onStartConversation={handleStartChat}
                 />
-              ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-                  <Spinner size="md" />
-                  <p className="text-sm text-text-muted">
-                    {t("common:loading.default")}
-                  </p>
-                </div>
-              )
-            ) : selectedConversation ? (
-              <GroupInfo
-                conversation={selectedConversation}
-                currentUserId={currentUserSummary.id}
-                onClose={closeInfoPanel}
-                onDeleteConversation={handleDeleteConversation}
-              />
-            ) : null
+              ) : null}
+            </React.Suspense>
           ) : null}
+          </div>
         </div>
       )}
 
@@ -1389,7 +1145,7 @@ export const ChatPage: React.FC = () => {
       {isInfoPanelOpen && (
         <button
           type="button"
-          className="fixed inset-0 z-30 bg-text-primary/50 lg:hidden"
+          className="fixed inset-0 z-30 bg-text-primary/50 xl:hidden"
           onClick={closeInfoPanel}
           onKeyDown={(e) => {
             if (e.key === "Escape") closeInfoPanel();
@@ -1399,39 +1155,49 @@ export const ChatPage: React.FC = () => {
       )}
 
       {/* New Chat Modal */}
-      <NewChatModal
-        isOpen={isNewChatModalOpen}
-        onClose={() => setIsNewChatModalOpen(false)}
-        onStartChat={handleStartChat}
-        onCreateGroup={handleCreateGroup}
-        isSubmitting={isCreatingRoom}
-      />
+      {isNewChatModalOpen && (
+        <React.Suspense fallback={<DeferredModalFallback />}>
+          <NewChatModal
+            isOpen={isNewChatModalOpen}
+            onClose={() => setIsNewChatModalOpen(false)}
+            onStartChat={handleStartChat}
+            onCreateGroup={handleCreateGroup}
+            isSubmitting={isCreatingRoom}
+          />
+        </React.Suspense>
+      )}
 
       {/* Image Preview Modal */}
       {imagePreview && (
-        <ImagePreviewModal
-          isOpen={!!imagePreview}
-          onClose={() => setImagePreview(null)}
-          imageUrl={imagePreview}
-        />
+        <React.Suspense fallback={<DeferredModalFallback />}>
+          <ImagePreviewModal
+            isOpen={!!imagePreview}
+            onClose={() => setImagePreview(null)}
+            imageUrl={imagePreview}
+          />
+        </React.Suspense>
       )}
 
       {/* File Preview Modal */}
-      <FilePreviewModal
-        isOpen={filePreview.isOpen}
-        onClose={filePreview.close}
-        current={filePreview.current}
-        currentIndex={filePreview.currentIndex}
-        totalItems={filePreview.totalItems}
-        secureUrl={filePreview.secureUrl}
-        isLoadingUrl={filePreview.isLoadingUrl}
-        urlError={filePreview.urlError}
-        hasPrev={filePreview.hasPrev}
-        hasNext={filePreview.hasNext}
-        onPrev={filePreview.prev}
-        onNext={filePreview.next}
-        onRefreshUrl={filePreview.refreshUrl}
-      />
+      {(filePreview.isOpen || filePreview.current) && (
+        <React.Suspense fallback={<DeferredModalFallback />}>
+          <FilePreviewModal
+            isOpen={filePreview.isOpen}
+            onClose={filePreview.close}
+            current={filePreview.current}
+            currentIndex={filePreview.currentIndex}
+            totalItems={filePreview.totalItems}
+            secureUrl={filePreview.secureUrl}
+            isLoadingUrl={filePreview.isLoadingUrl}
+            urlError={filePreview.urlError}
+            hasPrev={filePreview.hasPrev}
+            hasNext={filePreview.hasNext}
+            onPrev={filePreview.prev}
+            onNext={filePreview.next}
+            onRefreshUrl={filePreview.refreshUrl}
+          />
+        </React.Suspense>
+      )}
     </div>
   );
 };

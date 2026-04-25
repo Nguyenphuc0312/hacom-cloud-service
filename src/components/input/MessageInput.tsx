@@ -2,35 +2,37 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
-  AtSymbolIcon,
-  EllipsisHorizontalCircleIcon,
+  EllipsisHorizontalIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { EmojiButton } from "./EmojiButton";
 import { AttachmentMenu } from "./AttachmentMenu";
 import { AttachmentPreview } from "./AttachmentPreview";
 import { AttachmentTray } from "./AttachmentTray";
-import { SendButton } from "./SendButton";
+import { SendButton, type SendButtonState } from "./SendButton";
 import { ShareContactModal } from "../modals/ShareContactModal";
 import { ConversationLane } from "../layout/ConversationLane";
 import {
   useAutoResizeTextarea,
-  useSendMessage,
   useTypingIndicator,
 } from "../../hooks";
+import { useSendMessage } from "../../features/chat/hooks/useSendMessage";
 import type { ComposerMode } from "../../hooks/useComposerAvailability";
-import type { AttachmentPickerMode } from "../../hooks/useSendMessage";
+import type { AttachmentPickerMode } from "../../features/chat/hooks/useSendMessage";
 import type { InputMode, Message } from "../../types";
 import type { AttachmentDraft } from "../../types/attachmentDraft";
 import { UPLOAD_CONFIG } from "../../config";
-import { emitCommandPaletteOpen } from "../../lib/commandPalette";
 import { logMessageDebug } from "../../utils/messageDebug";
-import { toast } from "../ui";
+import { InlineNotice, toast } from "../ui";
+import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
+import { recordChatPerformanceMeasure } from "../../utils/chatPerformance";
 
 export interface MentionCandidate {
   id: string;
   username: string;
   displayName?: string;
+  fullName?: string | null;
+  fullNameFromHR?: string | null;
+  full_name_from_hr?: string | null;
 }
 
 /** Imperative handle for MessageInput — allows parent to programmatically add files */
@@ -40,6 +42,7 @@ export interface MessageInputHandle {
 
 interface MessageInputProps {
   value: string;
+  valueResetKey?: number;
   onChange: (value: string) => void;
   onSend: (
     content?: string,
@@ -57,7 +60,6 @@ interface MessageInputProps {
   sendOnEnter?: boolean;
   disabled?: boolean;
   submitDisabled?: boolean;
-  submitInFlight?: boolean;
   attachmentsDisabled?: boolean;
   className?: string;
   onLayoutHeightChange?: (nextHeight: number) => void;
@@ -84,6 +86,72 @@ interface MentionMatch {
   end: number;
   query: string;
 }
+
+type ComposerVisualState =
+  | "idle"
+  | "focus"
+  | "ready-to-send"
+  | "uploading"
+  | "disabled"
+  | "slow-mode"
+  | "offline";
+
+interface ComposerVisualStyles {
+  shell: string;
+  attachmentButton: string;
+  attachmentDivider: string;
+}
+
+const COMPOSER_VISUAL_STATE_MAP: Record<
+  ComposerVisualState,
+  ComposerVisualStyles
+> = {
+  idle: {
+    shell:
+      "border-border/45 bg-[hsl(var(--chat-panel-bg))] shadow-none",
+    attachmentButton:
+      "text-text-muted hover:bg-surface-hover hover:text-text-primary",
+    attachmentDivider: "border-transparent",
+  },
+  focus: {
+    shell:
+      "border-primary/26 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-primary/12",
+    attachmentButton:
+      "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
+    attachmentDivider: "border-border/40",
+  },
+  "ready-to-send": {
+    shell:
+      "border-primary/22 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-primary/10",
+    attachmentButton:
+      "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
+    attachmentDivider: "border-border/35",
+  },
+  uploading: {
+    shell:
+      "border-primary/20 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-primary/10",
+    attachmentButton:
+      "text-primary hover:bg-primary/8 hover:text-primary-hover",
+    attachmentDivider: "border-border/35",
+  },
+  disabled: {
+    shell: "border-transparent bg-disabled-bg shadow-none",
+    attachmentButton: "text-text-disabled",
+    attachmentDivider: "border-transparent",
+  },
+  "slow-mode": {
+    shell:
+      "border-warning/35 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-warning/10",
+    attachmentButton: "text-warning hover:bg-warning/10 hover:text-warning",
+    attachmentDivider: "border-warning/18",
+  },
+  offline: {
+    shell:
+      "border-danger/28 bg-[hsl(var(--chat-panel-bg))] shadow-none ring-1 ring-danger/10",
+    attachmentButton: "text-danger hover:bg-danger/10 hover:text-danger",
+    attachmentDivider: "border-danger/18",
+  },
+};
 
 const isDesktopViewport = (): boolean => {
   if (
@@ -160,12 +228,13 @@ const normalizeMentionCandidates = (
   return normalized;
 };
 
-export const MessageInput = React.forwardRef<
+const MessageInputComponent = React.forwardRef<
   MessageInputHandle,
   MessageInputProps
 >(function MessageInput(
   {
-    value,
+    value: externalValue,
+    valueResetKey = 0,
     onChange,
     onSend,
     mode,
@@ -179,7 +248,6 @@ export const MessageInput = React.forwardRef<
     sendOnEnter = true,
     disabled = false,
     submitDisabled = false,
-    submitInFlight = false,
     attachmentsDisabled = false,
     className,
     onLayoutHeightChange,
@@ -202,16 +270,22 @@ export const MessageInput = React.forwardRef<
   ref,
 ) {
   const { t } = useTranslation();
+  const optimisticAnnouncement = t("chat:composer.optimisticAnnouncement", {
+    defaultValue: "Tin nhắn đang được gửi",
+  });
   const rootRef = React.useRef<HTMLDivElement>(null);
+  const [draftValue, setDraftValue] = React.useState(externalValue);
   const [isDesktopLayout, setIsDesktopLayout] = React.useState(() =>
     isDesktopViewport(),
   );
   const { textareaRef } = useAutoResizeTextarea({
-    value,
+    value: draftValue,
     minRows: 1,
-    maxRows: isDesktopLayout ? 6 : 4,
+    maxRows: isDesktopLayout ? 5 : 4,
   });
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const renderCountRef = React.useRef(0);
+  const inputSequenceRef = React.useRef(0);
 
   const [showAttachmentMenu, setShowAttachmentMenu] = React.useState(false);
   const [isShareContactOpen, setIsShareContactOpen] = React.useState(false);
@@ -221,8 +295,16 @@ export const MessageInput = React.forwardRef<
   );
   const [activeMentionIndex, setActiveMentionIndex] = React.useState(0);
   const [liveRegionMessage, setLiveRegionMessage] = React.useState("");
+  const [isPrimarySendLocked, setIsPrimarySendLocked] = React.useState(false);
+  const primarySendLockedRef = React.useRef(false);
 
   const mentionListId = React.useId();
+
+  React.useLayoutEffect(() => {
+    if (import.meta.env.DEV) {
+      renderCountRef.current += 1;
+    }
+  });
 
   const {
     selectedFile,
@@ -304,6 +386,55 @@ export const MessageInput = React.forwardRef<
     setActiveMentionIndex(0);
   }, []);
 
+  React.useEffect(() => {
+    setDraftValue(externalValue);
+    clearMentionState();
+  }, [clearMentionState, externalValue, valueResetKey]);
+
+  const recordInputLatency = React.useCallback(
+    (nextValue: string) => {
+      if (
+        !import.meta.env.DEV ||
+        typeof window === "undefined" ||
+        typeof window.requestAnimationFrame !== "function"
+      ) {
+        return;
+      }
+
+      const startedAt = performance.now();
+      const sequence = inputSequenceRef.current + 1;
+      inputSequenceRef.current = sequence;
+
+      window.requestAnimationFrame(() => {
+        recordChatPerformanceMeasure(
+          "composer_keypress_latency",
+          performance.now() - startedAt,
+          {
+            conversationId: conversationId ?? null,
+            inputSequence: sequence,
+            textLength: nextValue.length,
+            renderCount: renderCountRef.current,
+          },
+        );
+      });
+    },
+    [conversationId],
+  );
+
+  const releasePrimarySendLock = React.useCallback(() => {
+    const release = () => {
+      primarySendLockedRef.current = false;
+      setIsPrimarySendLocked(false);
+    };
+
+    if (typeof window === "undefined") {
+      release();
+      return;
+    }
+
+    window.requestAnimationFrame(release);
+  }, []);
+
   const updateMentionState = React.useCallback(
     (nextText: string, caret: number) => {
       const nextMatch = buildMentionMatch(nextText, caret);
@@ -374,54 +505,33 @@ export const MessageInput = React.forwardRef<
     ],
   );
 
-  const handleInsertMentionTrigger = React.useCallback(() => {
-    if (disabled || isUploading || isSending || submitInFlight) return;
-
-    const textarea = textareaRef.current;
-    if (!textarea) {
-      onChange(`${value}@`);
-      return;
-    }
-
-    const start = textarea.selectionStart ?? value.length;
-    const end = textarea.selectionEnd ?? value.length;
-    const nextValue = `${value.slice(0, start)}@${value.slice(end)}`;
-    const nextCaret = start + 1;
-
-    onChange(nextValue);
-
-    requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(nextCaret, nextCaret);
-      updateMentionState(nextValue, nextCaret);
-    });
-  }, [
-    disabled,
-    isSending,
-    isUploading,
-    onChange,
-    submitInFlight,
-    textareaRef,
-    updateMentionState,
-    value,
-  ]);
-
   const handleSendText = React.useCallback(async () => {
-    const result = await sendTextMessage(value);
+    const result = await sendTextMessage(draftValue);
     if (result === "failed") {
       setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
       return;
     }
 
+    setDraftValue("");
     onChange("");
     clearMentionState();
     stopTypingNow();
     setLiveRegionMessage(
       result === "queued"
         ? t("chat:composer.queuedAnnouncement")
-        : t("chat:composer.sentAnnouncement"),
+        : result === "optimistic"
+          ? optimisticAnnouncement
+          : t("chat:composer.sentAnnouncement"),
     );
-  }, [clearMentionState, onChange, sendTextMessage, stopTypingNow, t, value]);
+  }, [
+    clearMentionState,
+    onChange,
+    optimisticAnnouncement,
+    sendTextMessage,
+    stopTypingNow,
+    t,
+    draftValue,
+  ]);
 
   const handleSendAttachment = React.useCallback(async () => {
     const result = await sendAttachmentMessage();
@@ -430,14 +540,19 @@ export const MessageInput = React.forwardRef<
         ? t("chat:composer.failedAnnouncement")
         : result === "queued"
           ? t("chat:composer.queuedAnnouncement")
+          : result === "optimistic"
+            ? optimisticAnnouncement
           : t("chat:composer.sentAnnouncement"),
     );
-  }, [sendAttachmentMessage, t]);
+  }, [optimisticAnnouncement, sendAttachmentMessage, t]);
 
   const handlePrimarySend = React.useCallback(async () => {
-    if (submitInFlight) {
+    if (primarySendLockedRef.current) {
       return;
     }
+
+    primarySendLockedRef.current = true;
+    setIsPrimarySendLocked(true);
 
     // Multi-file queue path: send text (attachments handled by ChatWindow)
     const hasQueueDrafts = (uploadDrafts?.length ?? 0) > 0;
@@ -445,40 +560,38 @@ export const MessageInput = React.forwardRef<
       conversationId,
       hasQueueDrafts,
       hasReadyDrafts,
-      hasText: value.trim().length > 0,
-      contentPreview: value.trim().slice(0, 120),
+      hasText: draftValue.trim().length > 0,
+      contentPreview: draftValue.trim().slice(0, 120),
       selectedFileName: selectedFile?.name,
       disabled,
       submitDisabled,
-      submitInFlight,
     });
-    if (hasQueueDrafts && hasReadyDrafts) {
-      const content = value.trim();
-      // Call onSend — ChatWindow.handleSend gathers ready metas
-      try {
-        const result = await onSend(content || undefined);
+    try {
+      if (hasQueueDrafts && hasReadyDrafts) {
+        const content = draftValue.trim();
+        // ChatWindow gathers ready attachment metadata; only clear once it
+        // confirms the send was accepted into the optimistic/server flow.
+        await Promise.resolve(onSend(content || undefined));
+        setDraftValue("");
         onChange("");
         clearMentionState();
         stopTypingNow();
-        setLiveRegionMessage(
-          (result as { disposition?: string } | undefined)?.disposition ===
-            "queued"
-            ? t("chat:composer.queuedAnnouncement")
-            : t("chat:composer.sentAnnouncement"),
-        );
-      } catch {
-        setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
+        setLiveRegionMessage(optimisticAnnouncement);
+        return;
       }
-      return;
-    }
 
-    // Legacy single-file path
-    if (selectedFile) {
-      await handleSendAttachment();
-      return;
-    }
+      // Legacy single-file path
+      if (selectedFile) {
+        await handleSendAttachment();
+        return;
+      }
 
-    await handleSendText();
+      await handleSendText();
+    } catch {
+      setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
+    } finally {
+      releasePrimarySendLock();
+    }
   }, [
     clearMentionState,
     conversationId,
@@ -486,15 +599,16 @@ export const MessageInput = React.forwardRef<
     handleSendAttachment,
     handleSendText,
     hasReadyDrafts,
+    optimisticAnnouncement,
     onChange,
     onSend,
+    releasePrimarySendLock,
     selectedFile,
     stopTypingNow,
     submitDisabled,
-    submitInFlight,
     t,
     uploadDrafts?.length,
-    value,
+    draftValue,
   ]);
 
   const handleInputChange = React.useCallback(
@@ -502,15 +616,17 @@ export const MessageInput = React.forwardRef<
       const nextValue = event.target.value;
       const caret = event.target.selectionStart ?? nextValue.length;
 
+      setDraftValue(nextValue);
       onChange(nextValue);
       updateMentionState(nextValue, caret);
+      recordInputLatency(nextValue);
 
       notifyInput({
         hasText: nextValue.trim().length > 0,
         isFocused: event.target === document.activeElement,
       });
     },
-    [notifyInput, onChange, updateMentionState],
+    [notifyInput, onChange, recordInputLatency, updateMentionState],
   );
 
   const handleMentionSelect = React.useCallback(
@@ -518,11 +634,13 @@ export const MessageInput = React.forwardRef<
       if (!mentionMatch) return;
 
       const insertion = `@${candidate.username} `;
-      const nextValue = `${value.slice(0, mentionMatch.start)}${insertion}${value.slice(mentionMatch.end)}`;
+      const nextValue = `${draftValue.slice(0, mentionMatch.start)}${insertion}${draftValue.slice(mentionMatch.end)}`;
       const nextCaret = mentionMatch.start + insertion.length;
 
+      setDraftValue(nextValue);
       onChange(nextValue);
       clearMentionState();
+      recordInputLatency(nextValue);
 
       requestAnimationFrame(() => {
         const textarea = textareaRef.current;
@@ -532,7 +650,14 @@ export const MessageInput = React.forwardRef<
         textarea.setSelectionRange(nextCaret, nextCaret);
       });
     },
-    [clearMentionState, mentionMatch, onChange, textareaRef, value],
+    [
+      clearMentionState,
+      draftValue,
+      mentionMatch,
+      onChange,
+      recordInputLatency,
+      textareaRef,
+    ],
   );
 
   const handleRemoveSelectedFile = React.useCallback(() => {
@@ -546,9 +671,9 @@ export const MessageInput = React.forwardRef<
     void handleSendAttachment();
   }, [handleSendAttachment]);
 
-  const hasText = value.trim().length > 0;
+  const hasText = draftValue.trim().length > 0;
   const hasQueueDrafts = (uploadDrafts?.length ?? 0) > 0;
-  const isSubmitBusy = isUploading || isSending || submitInFlight;
+  const isSubmitBusy = isUploading || isSending || isPrimarySendLocked;
   const canSend = hasQueueDrafts
     ? !submitDisabled &&
       !isSubmitBusy &&
@@ -557,25 +682,35 @@ export const MessageInput = React.forwardRef<
     : selectedFile
       ? !submitDisabled && !isSubmitBusy && composerMode === "online"
       : !submitDisabled && !isSubmitBusy && hasText;
-  const disableToolbar = disabled || isSubmitBusy;
   const disableAttachmentActions = attachmentsDisabled || isSubmitBusy;
-  const sendButtonLabel = isSubmitBusy
-    ? t("chat:composer.sending")
-    : t("chat:composer.sendMessage");
-  const openShortcut =
-    typeof navigator !== "undefined" &&
-    /Mac|iPhone|iPad/.test(navigator.platform)
-      ? "Cmd K"
-      : "Ctrl K";
-  const composerVisualState = disabled
+  const sendButtonLabel = t("chat:composer.sendMessage");
+  const composerVisualState: ComposerVisualState = disabled
     ? "disabled"
-    : isSubmitBusy
-      ? "sending"
-      : canSend
-        ? "ready"
-        : isComposerFocused
-          ? "focused"
-          : "idle";
+    : isSubmitBusy || hasUploadingDrafts
+      ? "uploading"
+      : composerMode === "offline"
+        ? "offline"
+        : composerMode === "slow_mode"
+          ? "slow-mode"
+          : canSend
+            ? "ready-to-send"
+            : isComposerFocused
+              ? "focus"
+              : "idle";
+  const composerVisualStyles = COMPOSER_VISUAL_STATE_MAP[composerVisualState];
+  const sendButtonState: SendButtonState = !canSend
+    ? composerMode === "offline" && !disabled
+      ? "offline"
+      : composerMode === "slow_mode" && !disabled
+        ? "slow-mode"
+        : "disabled"
+    : isSubmitBusy || hasUploadingDrafts
+      ? "uploading"
+      : composerMode === "offline"
+        ? "offline"
+        : composerMode === "slow_mode"
+          ? "slow-mode"
+          : "ready-to-send";
 
   const handleKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -788,7 +923,7 @@ export const MessageInput = React.forwardRef<
     <div
       ref={rootRef}
       className={clsx(
-        "bg-transparent pb-[max(env(safe-area-inset-bottom),10px)] pt-1",
+        "chat-composer-root border-t border-border/55 bg-[hsl(var(--chat-panel-bg))/0.96] pb-[max(env(safe-area-inset-bottom),10px)] pt-2 backdrop-blur",
         className,
       )}
     >
@@ -803,19 +938,17 @@ export const MessageInput = React.forwardRef<
         </p>
 
         {disabledReason && (
-          <div
-            className={clsx(
-              "mb-2 rounded-full px-4 py-1.5 text-xs",
-              disabledReasonTone === "error" &&
-                "border border-danger/25 bg-danger/10 text-danger",
-              disabledReasonTone === "info" &&
-                "border border-primary/20 bg-primary/10 text-primary",
-              disabledReasonTone === "warn" &&
-                "border border-warning/25 bg-warning/10 text-warning",
-            )}
-          >
-            {disabledReason}
-          </div>
+          <InlineNotice
+            tone={
+              disabledReasonTone === "error"
+                ? "error"
+                : disabledReasonTone === "info"
+                  ? "info"
+                  : "warning"
+            }
+            message={disabledReason}
+            className="mb-2"
+          />
         )}
 
         <input
@@ -829,9 +962,9 @@ export const MessageInput = React.forwardRef<
         />
 
         {mode === "reply" && replyToMessage && (
-          <div className="mb-2 flex items-center justify-between rounded-xl border border-border bg-surface px-3 py-2 shadow-xs animate-slide-up-fade">
+          <div className="mb-2 flex items-center justify-between rounded-[0.95rem] border border-border/70 bg-surface px-3 py-2 animate-slide-up-fade">
             <div className="flex min-w-0 items-center gap-2">
-              <div className="h-8 w-1 rounded-full bg-primary" />
+              <div className="h-7 w-1 rounded-full bg-primary" />
               <div className="min-w-0">
                 <p className="text-xs font-medium text-primary">
                   {t("chat:composer.replyingTo", {
@@ -858,9 +991,9 @@ export const MessageInput = React.forwardRef<
         )}
 
         {mode === "edit" && editingMessage && (
-          <div className="mb-2 flex items-center justify-between rounded-xl border border-warning/35 bg-warning/15 px-3 py-2 shadow-xs animate-slide-up-fade">
+          <div className="mb-2 flex items-center justify-between rounded-[0.95rem] border border-warning/30 bg-warning/10 px-3 py-2 animate-slide-up-fade">
             <div className="flex min-w-0 items-center gap-2">
-              <div className="h-8 w-1 rounded-full bg-warning" />
+              <div className="h-7 w-1 rounded-full bg-warning" />
               <div className="min-w-0">
                 <p className="text-xs font-medium text-warning">
                   {t("chat:composer.editing")}
@@ -922,27 +1055,10 @@ export const MessageInput = React.forwardRef<
           <div
             data-composer-state={composerVisualState}
             className={clsx(
-              "relative flex min-w-0 flex-1 items-end rounded-2xl border px-2 py-1.5 transition-micro",
-              composerVisualState === "disabled" &&
-                "border-disabled-border bg-disabled-bg shadow-none",
-              composerVisualState === "sending" &&
-                "border-primary/30 bg-surface shadow-elev2",
-              composerVisualState === "ready" &&
-                "border-primary/30 bg-surface shadow-elev2",
-              composerVisualState === "focused" &&
-                "border-border-focus bg-surface shadow-elev2",
-              composerVisualState === "idle" &&
-                "border-border bg-surface shadow-elev1",
+              "chat-composer-shell relative flex min-w-0 flex-1 items-end rounded-xl border px-3 py-2 transition-micro",
+              composerVisualStyles.shell,
             )}
           >
-            <EmojiButton
-              value={value}
-              onChange={onChange}
-              textareaRef={textareaRef}
-              disabled={disableToolbar}
-              className="shrink-0 [&>button]:h-10 [&>button]:w-10"
-            />
-
             {showMentionPanel && (
               <div
                 id={mentionListId}
@@ -960,6 +1076,10 @@ export const MessageInput = React.forwardRef<
                 ) : (
                   mentionSuggestions.map((candidate, index) => {
                     const isActive = index === activeMentionIndex;
+                    const mentionLabel =
+                      resolveUserDisplayName(candidate, {
+                        allowLegacyFallback: true,
+                      }) || candidate.username;
                     return (
                       <button
                         key={`${candidate.id}:${candidate.username}`}
@@ -980,13 +1100,17 @@ export const MessageInput = React.forwardRef<
                         }}
                       >
                         <span className="truncate text-sm font-medium">
+                          {mentionLabel}
+                        </span>
+                        <span className="truncate text-xs text-text-muted">
                           @{candidate.username}
                         </span>
-                        {candidate.displayName && (
-                          <span className="truncate text-xs text-text-muted">
-                            {candidate.displayName}
-                          </span>
-                        )}
+                        {candidate.displayName &&
+                          candidate.displayName !== mentionLabel && (
+                            <span className="truncate text-xs text-text-muted">
+                              {candidate.displayName}
+                            </span>
+                          )}
                       </button>
                     );
                   })
@@ -996,13 +1120,14 @@ export const MessageInput = React.forwardRef<
 
             <textarea
               ref={textareaRef}
-              value={value}
+              data-testid="chat-composer-input"
+              value={draftValue}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               onSelect={(event) => {
                 const caret =
-                  event.currentTarget.selectionStart ?? value.length;
-                updateMentionState(value, caret);
+                  event.currentTarget.selectionStart ?? draftValue.length;
+                updateMentionState(draftValue, caret);
               }}
               onBlur={() => {
                 setIsComposerFocused(false);
@@ -1024,47 +1149,37 @@ export const MessageInput = React.forwardRef<
                   : undefined
               }
               className={clsx(
-                "w-full min-h-10 flex-1 resize-none bg-transparent px-2 py-2",
+                "chat-composer-textarea w-full min-h-[var(--control-height-md)] flex-1 resize-none bg-transparent px-1 py-1.5",
                 "text-sm text-text-primary placeholder:text-text-muted",
                 "transition-colors focus:outline-none",
                 disabled && "cursor-not-allowed opacity-70",
               )}
             />
 
-            <div className="flex shrink-0 items-end gap-1">
-              <button
-                type="button"
-                onClick={handleInsertMentionTrigger}
-                className={clsx(
-                  "hidden h-10 w-10 items-center justify-center rounded-full transition-colors md:inline-flex",
-                  "text-text-muted hover:bg-surface-hover hover:text-text-primary",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-                  disableToolbar && "cursor-not-allowed opacity-50",
-                )}
-                aria-label={t("chat:composer.mentionTrigger")}
-                disabled={disableToolbar}
-              >
-                <AtSymbolIcon className="h-5 w-5" />
-              </button>
-
+            <div
+              className={clsx(
+                "chat-composer-action-group ml-1 flex shrink-0 items-end gap-1 border-l pl-2",
+                composerVisualStyles.attachmentDivider,
+              )}
+            >
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setShowAttachmentMenu((previous) => !previous)}
                   className={clsx(
-                    "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
+                    "chat-composer-attachment inline-flex h-[var(--control-height-md)] w-[var(--control-height-md)] items-center justify-center rounded-md transition-colors",
                     showAttachmentMenu
                       ? "bg-surface-active text-text-primary"
-                      : "text-text-muted hover:bg-surface-hover hover:text-text-primary",
+                      : composerVisualStyles.attachmentButton,
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                     disableAttachmentActions && "cursor-not-allowed opacity-50",
                   )}
-                  aria-label={t("chat:composer.attachFile")}
+                  aria-label={t("chat:header.moreActions")}
                   aria-haspopup="menu"
                   aria-expanded={showAttachmentMenu}
                   disabled={disableAttachmentActions}
                 >
-                  <EllipsisHorizontalCircleIcon className="h-5 w-5" />
+                  <EllipsisHorizontalIcon className="h-[18px] w-[18px]" />
                 </button>
 
                 {showAttachmentMenu && (
@@ -1085,8 +1200,9 @@ export const MessageInput = React.forwardRef<
 
           <SendButton
             disabled={!canSend}
+            state={sendButtonState}
             isBusy={isSubmitBusy}
-            state={!canSend ? "disabled" : isSubmitBusy ? "sending" : "ready"}
+            data-testid="chat-send-button"
             onClick={() => {
               logMessageDebug("MessageInput", "submit_triggered", {
                 conversationId,
@@ -1095,24 +1211,8 @@ export const MessageInput = React.forwardRef<
               void handlePrimarySend();
             }}
             ariaLabel={sendButtonLabel}
-            className="mb-0.5 shrink-0"
+            className="shrink-0"
           />
-        </div>
-
-        <div className="mt-1 flex items-center justify-between px-1 text-caption text-text-muted">
-          <span>
-            {sendOnEnter
-              ? t("chat:composer.shortcutHint")
-              : t("chat:composer.shortcutHintManual")}
-          </span>
-
-          <button
-            type="button"
-            onClick={emitCommandPaletteOpen}
-            className="rounded-md border border-border bg-surface px-2 py-0.5 text-caption transition-micro hover:bg-surface-hover hover:text-text-secondary"
-          >
-            {openShortcut}
-          </button>
         </div>
 
         {onShareContact && currentUserId && (
@@ -1127,5 +1227,10 @@ export const MessageInput = React.forwardRef<
     </div>
   );
 });
+
+MessageInputComponent.displayName = "MessageInput";
+
+export const MessageInput = React.memo(MessageInputComponent);
+MessageInput.displayName = "MessageInput";
 
 export default MessageInput;

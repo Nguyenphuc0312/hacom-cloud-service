@@ -1,31 +1,51 @@
 import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { ChevronDownIcon } from "@heroicons/react/24/solid";
-import {
-  VariableSizeList as VirtualList,
-  type ListChildComponentProps,
-  type ListOnScrollProps,
-} from "react-window";
 import { MessageItem } from "./MessageItem";
+import { MessageListOverlays } from "./MessageListOverlays";
+import { MessageGroup } from "./thread/MessageGroup";
 import { EmptyMessages, ErrorState, MessageListSkeleton } from "../ui";
-import { ConversationLane } from "../layout/ConversationLane";
-import { useAutoScrollToBottom } from "../../hooks/useAutoScrollToBottom";
 import {
-  useMessageGrouping,
-  type TimelineItem,
   type UnreadTimelineMarker,
 } from "../../hooks/useMessageGrouping";
-import { useVirtualizedMessages } from "../../hooks/useVirtualizedMessages";
+import { useTanStackVirtualizedMessages } from "../../hooks/useTanStackVirtualizedMessages";
 import type { Conversation, Message, Attachment } from "../../types";
 import type { ChatDensity } from "../../stores/uiStore";
-import { formatDateDivider } from "../../utils/formatTime";
-import { isFailedMessage, isPendingMessage } from "../../utils/messageTimeline";
+import {
+  getMessageStableKey,
+  isFailedMessage,
+  isPendingMessage,
+} from "../../utils/messageTimeline";
+import {
+  isTargetMessage,
+  resolveTimelineMessageRenderState,
+  type RenderableTimelineItem,
+  type TimelineMessageRenderState,
+} from "./messageListShared";
 import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 import { logScrollTrace } from "../../utils/scrollTrace";
+import { useChatScrollController } from "./useChatScrollController";
+import {
+  useConversationTimelineRows,
+} from "../../features/chat/hooks/useConversationTimelineRows";
+import {
+  type ConversationThreadRow,
+  useConversationThreadRows,
+} from "../../features/chat/hooks/useConversationThreadRows";
+import { useConversationMessagesRTK } from "../../features/chat/hooks/useConversationMessagesRTK";
+import type { ChatLayoutState } from "../../utils/densityPolicy";
+import {
+  logChatPerformance,
+  measureChatPerformance,
+} from "../../utils/chatPerformance";
+import {
+  DEFAULT_TEXT_CHARS_PER_LINE,
+  estimateTextLineCount,
+  hasInlineUrl,
+  LONG_MESSAGE_COLLAPSE_ESTIMATED_LINE_THRESHOLD,
+} from "../../utils/longMessagePolicy";
 
 interface MessageListProps {
-  messages: Message[];
   conversationId: string;
   conversationType: Conversation["type"];
   currentUserId: string;
@@ -33,21 +53,35 @@ interface MessageListProps {
   onReact: (messageId: string, emoji: string) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (messageId: string) => void | Promise<void>;
+  onInspect?: (message: Message) => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
   isInitialLoading?: boolean;
+  historyLoadingState?: {
+    stage:
+      | "empty"
+      | "partial_unread_bootstrap"
+      | "partial_prefetch"
+      | "authoritative_initial_window"
+      | "paginating_older"
+      | "live_realtime";
+    isPartial: boolean;
+  } | null;
   onLoadMore?: () => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
   error?: string | null;
   onRetry?: () => void | Promise<void>;
   density?: ChatDensity;
+  layoutState: ChatLayoutState;
   isSelectionMode?: boolean;
   selectedMessageIds?: Set<string>;
   onToggleSelect?: (messageId: string) => void;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
   unreadMarker?: UnreadTimelineMarker | null;
+  unreadRestoreSignature?: string | null;
+  onUnreadRestoreConsumed?: (signature: string) => void;
   onReachedLatest?: (latestMessage: Message) => void;
   jumpToMessageId?: string | null;
   jumpRequestVersion?: number;
@@ -57,11 +91,12 @@ interface MessageListProps {
 }
 
 interface TimelineRowData {
-  items: TimelineItem[];
+  items: ConversationThreadRow[];
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
   onEdit?: (message: Message) => void | Promise<void>;
   onDelete?: (messageId: string) => void | Promise<void>;
+  onInspect?: (message: Message) => void;
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
   setItemSize: (
@@ -79,6 +114,9 @@ interface TimelineRowData {
   onToggleSelect?: (messageId: string) => void;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
+  expandedLongMessageIds: Set<string>;
+  onToggleLongMessageExpand: (messageId: string) => void;
+  insertedMessageKeys: Set<string>;
   highlightedMessageId: string | null;
   onItemSizeChange: (payload: {
     index: number;
@@ -87,9 +125,91 @@ interface TimelineRowData {
   }) => void;
 }
 
+interface TimelineRowRenderProps<Data> {
+  index: number;
+  style: React.CSSProperties;
+  data: Data;
+  isScrolling?: boolean;
+}
+
+const EMPTY_SELECTED_MESSAGE_IDS = new Set<string>();
+const EMPTY_INSERTED_MESSAGE_KEYS = new Set<string>();
+const ITEM_SIZE_CHANGE_THRESHOLD = 2;
+
+type BottomSettlePhase =
+  | "idle"
+  | "loading-initial"
+  | "waiting-for-measurement"
+  | "scrolling-to-bottom"
+  | "settled";
+
+const isThreadRowMessageLike = (
+  item: ConversationThreadRow | undefined,
+): item is Extract<ConversationThreadRow, { kind: "group" | "system" }> =>
+  Boolean(item && (item.kind === "group" || item.kind === "system"));
+
+const isImageTimelineItem = (
+  item: RenderableTimelineItem | undefined,
+): item is Extract<RenderableTimelineItem, { kind: "group" }> =>
+  Boolean(
+    item &&
+      item.kind === "group" &&
+      item.items.some((entry) => entry.message.type === "image"),
+  );
+
+const getImageTimelinePlaceholderMinHeight = (
+  item: RenderableTimelineItem | undefined,
+): number | null => {
+  if (!isImageTimelineItem(item)) {
+    return null;
+  }
+
+  const attachments = item.items.flatMap((entry) =>
+    Array.isArray(entry.message.attachments) ? entry.message.attachments : [],
+  );
+  const mediaHeight = attachments.reduce((total, attachment, index) => {
+    const mediaWidth = attachment.width ? Math.min(attachment.width, 300) : 240;
+    const mediaRatio =
+      attachment.width && attachment.height
+        ? attachment.height / attachment.width
+        : 3 / 4;
+    const nextHeight = Math.max(160, Math.round(mediaWidth * mediaRatio));
+    return total + nextHeight + (index > 0 ? 8 : 0);
+  }, 0);
+
+  const captionHeight = item.items.some((entry) => entry.message.content?.trim())
+    ? 28
+    : 0;
+  return Math.max(180, mediaHeight + captionHeight + 12);
+};
+
+const shouldAnimateInsertedMessage = (
+  item: RenderableTimelineItem | undefined,
+  insertedMessageKeys: Set<string>,
+): boolean => {
+  if (!item || item.kind !== "message") {
+    if (item?.kind !== "group") {
+      return false;
+    }
+
+    return item.items.some(
+      (entry) =>
+        entry.isOwn &&
+        isPendingMessage(entry.message) &&
+        insertedMessageKeys.has(getMessageStableKey(entry.message)),
+    );
+  }
+
+  return Boolean(
+    item.isOwn &&
+      isPendingMessage(item.message) &&
+      insertedMessageKeys.has(getMessageStableKey(item.message)),
+  );
+};
+
 const areEqualTimelineRowProps = (
-  previousProps: ListChildComponentProps<TimelineRowData>,
-  nextProps: ListChildComponentProps<TimelineRowData>,
+  previousProps: TimelineRowRenderProps<TimelineRowData>,
+  nextProps: TimelineRowRenderProps<TimelineRowData>,
 ): boolean => {
   if (previousProps.index !== nextProps.index) {
     return false;
@@ -99,7 +219,8 @@ const areEqualTimelineRowProps = (
     previousProps.style.top !== nextProps.style.top ||
     previousProps.style.height !== nextProps.style.height ||
     previousProps.style.width !== nextProps.style.width ||
-    previousProps.style.left !== nextProps.style.left
+    previousProps.style.left !== nextProps.style.left ||
+    previousProps.style.transform !== nextProps.style.transform
   ) {
     return false;
   }
@@ -111,35 +232,83 @@ const areEqualTimelineRowProps = (
   }
 
   const previousMessageId =
-    previousItem?.kind === "message" ? previousItem.message.id : null;
+    previousItem?.kind === "group"
+      ? previousItem.anchorMessageId
+      : previousItem?.kind === "system"
+        ? previousItem.messageId
+      : null;
   const nextMessageId =
-    nextItem?.kind === "message" ? nextItem.message.id : null;
+    nextItem?.kind === "group"
+      ? nextItem.anchorMessageId
+      : nextItem?.kind === "system"
+        ? nextItem.messageId
+      : null;
   if (previousMessageId !== nextMessageId) {
     return false;
   }
 
-  const previousSelected = previousMessageId
-    ? previousProps.data.selectedMessageIds.has(previousMessageId)
-    : false;
-  const nextSelected = nextMessageId
-    ? nextProps.data.selectedMessageIds.has(nextMessageId)
-    : false;
+  const previousSelected =
+    previousItem?.kind === "group"
+      ? previousItem.messageIds.some((messageId) =>
+          previousProps.data.selectedMessageIds.has(messageId),
+        )
+      : previousMessageId
+        ? previousProps.data.selectedMessageIds.has(previousMessageId)
+        : false;
+  const nextSelected =
+    nextItem?.kind === "group"
+      ? nextItem.messageIds.some((messageId) =>
+          nextProps.data.selectedMessageIds.has(messageId),
+        )
+      : nextMessageId
+        ? nextProps.data.selectedMessageIds.has(nextMessageId)
+        : false;
   if (previousSelected !== nextSelected) {
     return false;
   }
 
+  const previousShouldAnimateInsert = shouldAnimateInsertedMessage(
+    previousItem,
+    previousProps.data.insertedMessageKeys,
+  );
+  const nextShouldAnimateInsert = shouldAnimateInsertedMessage(
+    nextItem,
+    nextProps.data.insertedMessageKeys,
+  );
+  if (previousShouldAnimateInsert !== nextShouldAnimateInsert) {
+    return false;
+  }
+
   const previousHighlighted =
-    previousItem?.kind === "message" &&
-    isTargetMessage(
-      previousItem.message,
-      previousProps.data.highlightedMessageId,
-    );
+    previousItem?.kind === "group"
+      ? previousItem.items.some((entry) =>
+          isTargetMessage(entry.message, previousProps.data.highlightedMessageId),
+        )
+      : false;
   const nextHighlighted =
-    nextItem?.kind === "message" &&
-    isTargetMessage(nextItem.message, nextProps.data.highlightedMessageId);
+    nextItem?.kind === "group"
+      ? nextItem.items.some((entry) =>
+          isTargetMessage(entry.message, nextProps.data.highlightedMessageId),
+        )
+      : false;
+  const previousRenderState = previousItem
+    ? resolveTimelineMessageRenderState(
+        previousItem,
+        previousProps.data.expandedLongMessageIds,
+      )
+    : null;
+  const nextRenderState = nextItem
+    ? resolveTimelineMessageRenderState(
+        nextItem,
+        nextProps.data.expandedLongMessageIds,
+      )
+    : null;
 
   return (
     previousHighlighted === nextHighlighted &&
+    previousRenderState?.renderMode === nextRenderState?.renderMode &&
+    previousRenderState?.measurementMode === nextRenderState?.measurementMode &&
+    previousRenderState?.isCollapsible === nextRenderState?.isCollapsible &&
     previousProps.data.density === nextProps.data.density &&
     previousProps.data.isSelectionMode === nextProps.data.isSelectionMode &&
     previousProps.data.currentUsername === nextProps.data.currentUsername &&
@@ -147,112 +316,141 @@ const areEqualTimelineRowProps = (
     previousProps.data.onReact === nextProps.data.onReact &&
     previousProps.data.onEdit === nextProps.data.onEdit &&
     previousProps.data.onDelete === nextProps.data.onDelete &&
+    previousProps.data.onInspect === nextProps.data.onInspect &&
     previousProps.data.onImageClick === nextProps.data.onImageClick &&
     previousProps.data.onFilePreview === nextProps.data.onFilePreview &&
     previousProps.data.onToggleSelect === nextProps.data.onToggleSelect &&
     previousProps.data.onNavigateToMessage ===
       nextProps.data.onNavigateToMessage &&
+    previousProps.data.onToggleLongMessageExpand ===
+      nextProps.data.onToggleLongMessageExpand &&
     previousProps.data.setItemSize === nextProps.data.setItemSize &&
     previousProps.data.onItemSizeChange === nextProps.data.onItemSizeChange
   );
 };
 
-const hasInlineUrl = (content?: string): boolean =>
-  typeof content === "string" && /https?:\/\/[^\s]+/i.test(content);
-
-const shouldObserveTimelineItemResize = (item: TimelineItem): boolean => {
-  if (item.kind !== "message") {
+const shouldObserveTimelineItemResize = (
+  item: RenderableTimelineItem,
+  renderState: TimelineMessageRenderState,
+): boolean => {
+  if (item.kind !== "group") {
     return false;
   }
 
-  const message = item.message;
-  if (
-    message.type === "image" ||
-    message.type === "file" ||
-    message.type === "voice"
-  ) {
-    return true;
+  if (renderState.measurementMode !== "dynamic") {
+    return false;
   }
 
-  return Boolean(
-    message.replyToMessage ||
-    message.forwardedFrom ||
-    (message.reactions?.length ?? 0) > 0 ||
-    (message.attachments?.length ?? 0) > 0 ||
-    isFailedMessage(message) ||
-    isPendingMessage(message) ||
-    hasInlineUrl(message.content),
-  );
+  return item.items.some(({ message }) => {
+    if (
+      message.type === "image" ||
+      message.type === "file" ||
+      message.type === "voice"
+    ) {
+      return true;
+    }
+
+    return Boolean(
+      message.replyToMessage ||
+      message.forwardedFrom ||
+      (message.reactions?.length ?? 0) > 0 ||
+      (message.attachments?.length ?? 0) > 0 ||
+      hasInlineUrl(message.content),
+    );
+  });
 };
 
 const estimateTimelineItemHeight = (
-  item: TimelineItem,
+  item: RenderableTimelineItem,
   density: ChatDensity,
+  layoutState: ChatLayoutState,
 ): number => {
   if (item.kind === "date") return 64;
   if (item.kind === "system") return 68;
   if (item.kind === "unread") return 48;
+  if (item.kind !== "group") return 72;
 
-  const message = item.message;
   const densityOffset =
     density === "compact" ? -8 : density === "expanded" ? 14 : 0;
-  let baseHeight = item.isGroupEnd ? 76 + densityOffset : 62 + densityOffset;
+  const layoutOffset =
+    layoutState === "with-panel" ? -6 : layoutState === "mobile" ? -4 : 0;
+  let baseHeight = 26 + densityOffset + layoutOffset;
 
-  if (message.replyToMessage) baseHeight += 52;
-  if (message.forwardedFrom) baseHeight += 22;
-  if ((message.reactions?.length ?? 0) > 0) baseHeight += 32;
-  if (!item.isOwn && item.showSenderName) baseHeight += 20;
-  if (isFailedMessage(message) || isPendingMessage(message)) baseHeight += 28;
-
-  switch (message.type) {
-    case "image":
-      baseHeight += 240;
-      if (message.content?.trim()) baseHeight += 28;
-      break;
-    case "file":
-      baseHeight += 96;
-      break;
-    case "voice":
-      baseHeight += 82;
-      break;
-    default: {
-      const textLength = message.content?.length ?? 0;
-      const approximateLines = Math.max(1, Math.ceil(textLength / 34));
-      baseHeight += approximateLines * 18;
-      if (hasInlineUrl(message.content)) {
-        baseHeight += 58;
-      }
-      break;
-    }
+  if (!item.isOwn && item.showSenderName) {
+    baseHeight += 16;
   }
 
-  return baseHeight;
-};
-
-const isTargetMessage = (
-  message: Message,
-  targetId: string | null,
-): boolean => {
-  if (!targetId) return false;
   return (
-    message.id === targetId ||
-    message.localId === targetId ||
-    message.stableId === targetId ||
-    message.clientMessageId === targetId
+    baseHeight +
+    item.items.reduce((total, entry) => {
+      const message = entry.message;
+      const messageRenderState = resolveTimelineMessageRenderState(
+        entry,
+        new Set<string>(),
+      );
+      let nextHeight = entry.showMeta ? 36 : 16;
+
+      if (message.replyToMessage) nextHeight += 48;
+      if (message.forwardedFrom) nextHeight += 18;
+      if ((message.reactions?.length ?? 0) > 0) nextHeight += 28;
+      if (isFailedMessage(message) || isPendingMessage(message)) nextHeight += 8;
+
+      switch (message.type) {
+        case "image":
+          nextHeight += 240;
+          if (message.content?.trim()) nextHeight += 28;
+          break;
+        case "file":
+          nextHeight += 112;
+          break;
+        case "voice":
+          nextHeight += 92;
+          break;
+        default: {
+          const approximateLines = Math.max(
+            1,
+            estimateTextLineCount(message.content, DEFAULT_TEXT_CHARS_PER_LINE),
+          );
+          const visibleLines =
+            messageRenderState.renderMode === "collapsed"
+              ? Math.min(
+                  approximateLines,
+                  LONG_MESSAGE_COLLAPSE_ESTIMATED_LINE_THRESHOLD,
+                )
+              : approximateLines;
+          nextHeight += visibleLines * (layoutState === "normal" ? 18 : 17);
+          if (
+            messageRenderState.renderMode === "collapsed" &&
+            messageRenderState.isCollapsible
+          ) {
+            nextHeight += 32;
+          }
+          if (hasInlineUrl(message.content)) {
+            nextHeight += 48;
+          }
+          break;
+        }
+      }
+
+      return total + nextHeight + 4;
+    }, 0)
   );
 };
 
-const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
+const TimelineRow: React.FC<TimelineRowRenderProps<TimelineRowData>> =
   React.memo(({ index, style, data }) => {
     const item = data.items[index];
     const rowRef = React.useRef<HTMLDivElement>(null);
     const { onItemSizeChange, setItemSize } = data;
     const hasCommittedInitialMeasurementRef = React.useRef(false);
     const measuredItemKeyRef = React.useRef<string | null>(null);
+    const renderState = item
+      ? resolveTimelineMessageRenderState(item, data.expandedLongMessageIds)
+      : null;
 
     React.useLayoutEffect(() => {
       const node = rowRef.current;
-      if (!node || !item) return;
+      if (!node || !item || !renderState) return;
       const currentItemKey = item.key || `${item.kind}-${index}`;
 
       if (measuredItemKeyRef.current !== currentItemKey) {
@@ -260,45 +458,132 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
         hasCommittedInitialMeasurementRef.current = false;
       }
 
-      const measure = () => {
-        const nextSize = Math.ceil(node.getBoundingClientRect().height);
-        const measurement = setItemSize(index, nextSize);
-        if (!hasCommittedInitialMeasurementRef.current) {
-          hasCommittedInitialMeasurementRef.current = true;
+      if (renderState.measurementMode === "static") {
+        return;
+      }
+
+      let measureRafId: number | null = null;
+      const scheduleMeasure = () => {
+        if (measureRafId !== null) {
           return;
         }
 
-        if (measurement.changed && Math.abs(measurement.delta) > 1) {
-          onItemSizeChange({
-            index,
-            key: currentItemKey,
-            delta: measurement.delta,
-          });
-        }
+        measureRafId = requestAnimationFrame(() => {
+          measureRafId = null;
+          const currentNode = rowRef.current;
+          if (!currentNode) return;
+
+          const nextSize = Math.ceil(currentNode.getBoundingClientRect().height);
+          const measurement = setItemSize(index, nextSize);
+          if (!hasCommittedInitialMeasurementRef.current) {
+            hasCommittedInitialMeasurementRef.current = true;
+            return;
+          }
+
+          if (
+            measurement.changed &&
+            Math.abs(measurement.delta) > ITEM_SIZE_CHANGE_THRESHOLD
+          ) {
+            onItemSizeChange({
+              index,
+              key: currentItemKey,
+              delta: measurement.delta,
+            });
+          }
+        });
       };
 
-      measure();
+      const cancelScheduledMeasure = () => {
+        if (measureRafId === null) {
+          return;
+        }
+
+        cancelAnimationFrame(measureRafId);
+        measureRafId = null;
+      };
+
+      scheduleMeasure();
+
+      if (isImageTimelineItem(item)) {
+        const pendingImages = Array.from(
+          node.querySelectorAll<HTMLImageElement>("img"),
+        ).filter((image) => !image.complete);
+        const placeholderMinHeight =
+          getImageTimelinePlaceholderMinHeight(item);
+
+        if (pendingImages.length > 0 && placeholderMinHeight !== null) {
+          node.style.minHeight = `${placeholderMinHeight}px`;
+        } else {
+          node.style.minHeight = "";
+        }
+
+        const handleImageSettled = () => {
+          if (
+            Array.from(node.querySelectorAll<HTMLImageElement>("img")).every(
+              (image) => image.complete,
+            )
+          ) {
+            node.style.minHeight = "";
+          }
+          scheduleMeasure();
+        };
+
+        pendingImages.forEach((image) => {
+          image.addEventListener("load", handleImageSettled);
+          image.addEventListener("error", handleImageSettled);
+        });
+
+        return () => {
+          cancelScheduledMeasure();
+          node.style.minHeight = "";
+          pendingImages.forEach((image) => {
+            image.removeEventListener("load", handleImageSettled);
+            image.removeEventListener("error", handleImageSettled);
+          });
+        };
+      }
+
+      const measure = () => {
+        scheduleMeasure();
+      };
 
       if (
         typeof ResizeObserver === "undefined" ||
-        !shouldObserveTimelineItemResize(item)
+        !shouldObserveTimelineItemResize(item, renderState)
       ) {
-        const rafId = requestAnimationFrame(measure);
-        return () => cancelAnimationFrame(rafId);
+        return () => {
+          cancelScheduledMeasure();
+        };
       }
 
       const resizeObserver = new ResizeObserver(measure);
       resizeObserver.observe(node);
-      return () => resizeObserver.disconnect();
-    }, [index, item, onItemSizeChange, setItemSize]);
+      return () => {
+        resizeObserver.disconnect();
+        cancelScheduledMeasure();
+      };
+    }, [index, item, onItemSizeChange, renderState, setItemSize]);
 
     if (!item) return null;
 
-    const messageId = item.kind === "message" ? item.message.id : undefined;
+    const messageId =
+      item.kind === "group"
+        ? item.anchorMessageId
+        : item.kind === "system"
+          ? item.messageId
+        : undefined;
     const timelineKey = item.key || `${item.kind}-${index}`;
     const isHighlighted =
-      item.kind === "message" &&
-      isTargetMessage(item.message, data.highlightedMessageId);
+      item.kind === "group"
+        ? item.items.some((entry) =>
+            isTargetMessage(entry.message, data.highlightedMessageId),
+          )
+        : item.kind === "system" &&
+          isTargetMessage(item.message, data.highlightedMessageId);
+    const shouldAnimateInsert = shouldAnimateInsertedMessage(
+      item,
+      data.insertedMessageKeys,
+    );
 
     return (
       <div style={style}>
@@ -315,23 +600,47 @@ const TimelineRow: React.FC<ListChildComponentProps<TimelineRowData>> =
                   "rounded-2xl bg-warning/14 ring-2 ring-warning/35 transition-colors duration-300",
               )}
             >
-              <MessageItem
-                item={item}
-                onReply={data.onReply}
-                onReact={data.onReact}
-                onEdit={data.onEdit}
-                onDelete={data.onDelete}
-                onImageClick={data.onImageClick}
-                onFilePreview={data.onFilePreview}
-                density={data.density}
-                isSelectionMode={data.isSelectionMode}
-                isSelected={
-                  messageId ? data.selectedMessageIds.has(messageId) : false
-                }
-                onToggleSelect={data.onToggleSelect}
-                onNavigateToMessage={data.onNavigateToMessage}
-                currentUsername={data.currentUsername}
-              />
+              {item.kind === "group" ? (
+                <MessageGroup
+                  row={item}
+                  onReply={data.onReply}
+                  onReact={data.onReact}
+                  onInspect={data.onInspect}
+                  onEdit={data.onEdit}
+                  onDelete={data.onDelete}
+                  onImageClick={data.onImageClick}
+                  onFilePreview={data.onFilePreview}
+                  density={data.density}
+                  isSelectionMode={data.isSelectionMode}
+                  selectedMessageIds={data.selectedMessageIds}
+                  onToggleSelect={data.onToggleSelect}
+                  onNavigateToMessage={data.onNavigateToMessage}
+                  currentUsername={data.currentUsername}
+                  expandedLongMessageIds={data.expandedLongMessageIds}
+                  onToggleLongMessageExpand={data.onToggleLongMessageExpand}
+                  insertedMessageKeys={data.insertedMessageKeys}
+                  highlightedMessageId={data.highlightedMessageId}
+                />
+              ) : (
+                <MessageItem
+                  item={item}
+                  onReply={data.onReply}
+                  onReact={data.onReact}
+                  onEdit={data.onEdit}
+                  onDelete={data.onDelete}
+                  onImageClick={data.onImageClick}
+                  onFilePreview={data.onFilePreview}
+                  density={data.density}
+                  isSelectionMode={data.isSelectionMode}
+                  isSelected={false}
+                  onToggleSelect={data.onToggleSelect}
+                  onNavigateToMessage={data.onNavigateToMessage}
+                  currentUsername={data.currentUsername}
+                  textRenderMode="expanded"
+                  isCollapsibleText={false}
+                  shouldAnimateInsert={shouldAnimateInsert}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -346,19 +655,7 @@ const toDayKey = (date: Date | null): string => {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 };
 
-type ScrollCommand =
-  | {
-      kind: "bottom";
-      reason: string;
-    }
-  | {
-      kind: "offset";
-      offset: number;
-      reason: string;
-    };
-
 const MessageListComponent: React.FC<MessageListProps> = ({
-  messages,
   conversationId,
   conversationType,
   currentUserId,
@@ -366,21 +663,26 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   onReact,
   onEdit,
   onDelete,
+  onInspect,
   hasMore = false,
   isLoadingMore = false,
   isInitialLoading = false,
+  historyLoadingState,
   onLoadMore,
   onImageClick,
   onFilePreview,
   error,
   onRetry,
   density = "comfortable",
+  layoutState,
   isSelectionMode = false,
-  selectedMessageIds = new Set<string>(),
+  selectedMessageIds = EMPTY_SELECTED_MESSAGE_IDS,
   onToggleSelect,
   onNavigateToMessage,
   currentUsername,
   unreadMarker,
+  unreadRestoreSignature,
+  onUnreadRestoreConsumed,
   onReachedLatest,
   jumpToMessageId,
   jumpRequestVersion = 0,
@@ -388,45 +690,185 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   composerHeight = 0,
   className,
 }) => {
+  const rtkMessages = useConversationMessagesRTK(conversationId);
+  const messages = rtkMessages.messages;
+  const rtkErrorMessage = rtkMessages.errorMessage;
+  const retryRtkInitialMessages = rtkMessages.retryInitial;
+  const hasRtkRuntimeWindow =
+    rtkMessages.hasLoaded ||
+    rtkMessages.isFetching ||
+    messages.length > 0 ||
+    Boolean(rtkErrorMessage);
+  const effectiveHasMore = hasRtkRuntimeWindow
+    ? rtkMessages.hasMoreOlder
+    : hasMore;
+  const effectiveIsLoadingMore =
+    rtkMessages.isLoadingOlder ||
+    (!hasRtkRuntimeWindow && Boolean(isLoadingMore));
+  const effectiveIsInitialLoading =
+    rtkMessages.isInitialLoading ||
+    (!hasRtkRuntimeWindow && messages.length === 0 && Boolean(isInitialLoading));
+  const effectiveError = rtkErrorMessage ?? error ?? null;
+  const effectiveLoadMore = hasRtkRuntimeWindow
+    ? rtkMessages.loadOlder
+    : onLoadMore;
   const { t } = useTranslation();
   const viewportRef = React.useRef<HTMLDivElement | null>(null);
-  const listRef = React.useRef<VirtualList<TimelineRowData> | null>(null);
   const outerRef = React.useRef<HTMLDivElement | null>(null);
   const stickyDateRafRef = React.useRef<number | null>(null);
   const highlightTimerRef = React.useRef<number | null>(null);
-  const scrollCommandRafRef = React.useRef<number | null>(null);
-  const pendingScrollCommandRef = React.useRef<ScrollCommand | null>(null);
-  const prependAnchorRef = React.useRef<{
-    itemKey: string | null;
-    offsetWithinItem: number;
+  const lastSeenUnreadRestoreSignatureRef = React.useRef<string | null>(null);
+  const pendingResizeAnchorRef = React.useRef<{
+    messageId: string | null;
+    offsetFromTop: number;
   } | null>(null);
-  const preserveScrollDeltaRafRef = React.useRef<number | null>(null);
-  const pendingPreserveScrollDeltaRef = React.useRef(0);
+  const bottomSettlePhaseRef = React.useRef<BottomSettlePhase>("idle");
+  const timelineSizeChangeRafRef = React.useRef<number | null>(null);
+  const pendingTimelineSizeChangesRef = React.useRef<
+    Map<string, { index: number; delta: number }>
+  >(new Map());
+  const isPinnedToBottomRef = React.useRef(true);
+  const previousMessagesForInsertRef = React.useRef<Message[]>([]);
+  const previousMessagesForPerfRef = React.useRef<Message[]>([]);
+  const previousPerfConversationIdRef = React.useRef<string | null>(null);
+  const lastResetConversationRef = React.useRef<string | null>(null);
+  const firstRenderMeasuredConversationRef = React.useRef<string | null>(null);
   const lastLayoutRef = React.useRef({
     viewportHeight: 0,
     composerHeight,
   });
-  const timelineItemCountRef = React.useRef(0);
   const [stickyDate, setStickyDate] = React.useState<Date | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = React.useState<
     string | null
   >(null);
+  const [contentWidthBucket, setContentWidthBucket] = React.useState(0);
+  const [expandedLongMessageIds, setExpandedLongMessageIds] = React.useState<
+    Set<string>
+  >(() => new Set());
+  const [insertedMessageKeys, setInsertedMessageKeys] = React.useState<
+    Set<string>
+  >(EMPTY_INSERTED_MESSAGE_KEYS);
+  const [liveUnreadMarker, setLiveUnreadMarker] =
+    React.useState<UnreadTimelineMarker | null>(unreadMarker ?? null);
   const getTimelineItemKey = React.useCallback(
-    (item: TimelineItem, index: number) => item.key || `${item.kind}-${index}`,
+    (item: ConversationThreadRow, index: number) =>
+      item.key || `${item.kind}-${index}`,
     [],
   );
-  const timelineItems = useMessageGrouping({
+  const setBottomSettlePhase = React.useCallback(
+    (phase: BottomSettlePhase, details?: Record<string, unknown>) => {
+      if (bottomSettlePhaseRef.current === phase) {
+        return;
+      }
+
+      bottomSettlePhaseRef.current = phase;
+      logScrollTrace("bottom_settle_phase_changed", {
+        conversationId,
+        phase,
+        ...(details ?? {}),
+      });
+    },
+    [conversationId],
+  );
+  const timelineItems = useConversationTimelineRows({
     messages,
     currentUserId,
     conversationType,
-    unreadMarker,
+    unreadMarker: liveUnreadMarker,
   });
-  timelineItemCountRef.current = timelineItems.length;
+  const threadRows = useConversationThreadRows(timelineItems);
+  React.useEffect(() => {
+    const previousMessages = previousMessagesForInsertRef.current;
+    if (
+      previousMessages.length === 0 ||
+      messages.length <= previousMessages.length
+    ) {
+      setInsertedMessageKeys(EMPTY_INSERTED_MESSAGE_KEYS);
+      previousMessagesForInsertRef.current = messages;
+      return;
+    }
+
+    const previousTail = previousMessages[previousMessages.length - 1];
+    if (
+      !previousTail ||
+      messages[previousMessages.length - 1] !== previousTail
+    ) {
+      setInsertedMessageKeys(EMPTY_INSERTED_MESSAGE_KEYS);
+      previousMessagesForInsertRef.current = messages;
+      return;
+    }
+
+    const insertedKeys = new Set<string>();
+    for (let index = previousMessages.length; index < messages.length; index += 1) {
+      const message = messages[index];
+      if (message) {
+        insertedKeys.add(getMessageStableKey(message));
+      }
+    }
+
+    setInsertedMessageKeys(
+      insertedKeys.size > 0 ? insertedKeys : EMPTY_INSERTED_MESSAGE_KEYS,
+    );
+    previousMessagesForInsertRef.current = messages;
+  }, [messages]);
+
+  React.useEffect(() => {
+    setExpandedLongMessageIds(new Set());
+  }, [conversationId]);
+
+  const toggleLongMessageExpand = React.useCallback((messageId: string) => {
+    setExpandedLongMessageIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(messageId)) {
+        next.delete(messageId);
+      } else {
+        next.add(messageId);
+      }
+      return next;
+    });
+  }, []);
 
   const estimateItemSize = React.useCallback(
-    (item: TimelineItem) => estimateTimelineItemHeight(item, density),
-    [density],
+    (item: ConversationThreadRow) =>
+      estimateTimelineItemHeight(
+        item,
+        density,
+        layoutState,
+      ),
+    [density, layoutState],
   );
+  const getTimelineMeasurementKey = React.useCallback(
+    (item: ConversationThreadRow, index: number) => {
+      const renderState = resolveTimelineMessageRenderState(
+        item,
+        expandedLongMessageIds,
+      );
+      return [
+        getTimelineItemKey(item, index),
+        density ?? "comfortable",
+        contentWidthBucket,
+        renderState.measurementMode,
+      ].join(":");
+    },
+    [contentWidthBucket, density, expandedLongMessageIds, getTimelineItemKey],
+  );
+  const listOverscan = effectiveIsLoadingMore && !effectiveIsInitialLoading ? 20 : 10;
+
+  const tanStackVirtualizer = useTanStackVirtualizedMessages({
+    items: threadRows,
+    viewportRef,
+    outerRef,
+    observeViewport: !effectiveIsInitialLoading && messages.length > 0,
+    enabled: !effectiveIsInitialLoading && messages.length > 0,
+    debugLabel: conversationId,
+    overscan: listOverscan,
+    estimateItemSize,
+    getItemKey: getTimelineItemKey,
+    getMeasurementKey: getTimelineMeasurementKey,
+    shouldResetAfterSizeChange: (item) =>
+      resolveTimelineMessageRenderState(item, expandedLongMessageIds)
+        .measurementMode === "dynamic",
+  });
 
   const {
     viewportHeight,
@@ -434,171 +876,500 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     getItemOffset,
     findItemAtOffset,
     setItemSize,
-    clearMeasuredSizes,
-  } = useVirtualizedMessages<TimelineItem, TimelineRowData>({
-    items: timelineItems,
-    viewportRef,
-    observeViewport: !isInitialLoading && messages.length > 0,
-    debugLabel: conversationId,
-    estimateItemSize,
-    getItemKey: getTimelineItemKey,
-    listRef,
-    outerRef,
-  });
+    resetMeasurements,
+    scrollToOffset,
+    scrollToIndex,
+    consumeProgrammaticScroll,
+  } = tanStackVirtualizer;
+  const tanStackVirtualItems = tanStackVirtualizer.virtualItems;
+  const tanStackTotalSize = tanStackVirtualizer.totalSize;
+
+  React.useLayoutEffect(() => {
+    const viewportElement = viewportRef.current;
+    if (!viewportElement) {
+      return;
+    }
+
+    const measureWidthBucket = () => {
+      const width = Math.max(
+        0,
+        viewportElement.clientWidth ||
+          Math.round(viewportElement.getBoundingClientRect().width),
+      );
+      const nextBucket = Math.max(1, Math.round(width / 32));
+      setContentWidthBucket((previous) =>
+        previous === nextBucket ? previous : nextBucket,
+      );
+    };
+
+    measureWidthBucket();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measureWidthBucket);
+      return () => {
+        window.removeEventListener("resize", measureWidthBucket);
+      };
+    }
+
+    const resizeObserver = new ResizeObserver(measureWidthBucket);
+    resizeObserver.observe(viewportElement);
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [conversationId, viewportRef]);
 
   React.useEffect(() => {
-    clearMeasuredSizes();
-  }, [clearMeasuredSizes, conversationId]);
+    resetMeasurements();
+  }, [
+    conversationId,
+    contentWidthBucket,
+    density,
+    expandedLongMessageIds,
+    layoutState,
+    resetMeasurements,
+  ]);
 
-  const flushScrollCommand = React.useCallback(() => {
-    scrollCommandRafRef.current = null;
-    const command = pendingScrollCommandRef.current;
-    pendingScrollCommandRef.current = null;
-    if (!command) return;
+  React.useEffect(() => {
+    if (lastResetConversationRef.current === conversationId) {
+      return;
+    }
 
-    const itemCount = timelineItemCountRef.current;
-    if (command.kind === "bottom" && itemCount === 0) {
-      logScrollTrace("scroll_command_skipped", {
-        conversationId,
-        ...command,
+    lastResetConversationRef.current = conversationId;
+    if (timelineSizeChangeRafRef.current !== null) {
+      cancelAnimationFrame(timelineSizeChangeRafRef.current);
+      timelineSizeChangeRafRef.current = null;
+    }
+    pendingResizeAnchorRef.current = null;
+    pendingTimelineSizeChangesRef.current.clear();
+    logScrollTrace("conversation_open_start", {
+      conversationId,
+      messageCount: messages.length,
+      lastMessageId: messages[messages.length - 1]?.id ?? null,
+      lastSeq: messages[messages.length - 1]?.serverSeq ?? null,
+      scrollTop: outerRef.current?.scrollTop ?? 0,
+      scrollHeight: outerRef.current?.scrollHeight ?? 0,
+      clientHeight: outerRef.current?.clientHeight ?? 0,
+      distanceToBottom: null,
+      virtualItemsCount: tanStackVirtualItems.length,
+      reason: "conversation-change",
+      source: "MessageList",
+    });
+    setBottomSettlePhase("loading-initial", {
+      messageCount: messages.length,
+    });
+    firstRenderMeasuredConversationRef.current = null;
+    previousMessagesForInsertRef.current = messages;
+    previousMessagesForPerfRef.current = messages;
+    previousPerfConversationIdRef.current = conversationId;
+  }, [conversationId, messages, setBottomSettlePhase, tanStackVirtualItems.length]);
+
+  React.useEffect(() => {
+    if (effectiveIsInitialLoading) {
+      setBottomSettlePhase("loading-initial", {
+        messageCount: messages.length,
       });
       return;
     }
 
-    logScrollTrace("scroll_command_flush", {
+    if (messages.length === 0 && rtkMessages.hasLoaded) {
+      setBottomSettlePhase("settled", {
+        messageCount: 0,
+      });
+      return;
+    }
+
+    if (
+      messages.length === 0 ||
+      threadRows.length === 0 ||
+      viewportHeight <= 0 ||
+      firstRenderMeasuredConversationRef.current === conversationId
+    ) {
+      if (messages.length > 0) {
+        setBottomSettlePhase("waiting-for-measurement", {
+          messageCount: messages.length,
+          rowCount: threadRows.length,
+          viewportHeight,
+        });
+      }
+      return;
+    }
+
+    firstRenderMeasuredConversationRef.current = conversationId;
+    setBottomSettlePhase("waiting-for-measurement", {
+      messageCount: messages.length,
+      rowCount: threadRows.length,
+      viewportHeight,
+    });
+    measureChatPerformance(
+      "conversation-open-first-render",
+      "conversation-open-start",
       conversationId,
-      ...command,
-      currentScrollTop: outerRef.current?.scrollTop ?? 0,
+      {
+        messageCount: messages.length,
+        rowCount: threadRows.length,
+        viewportHeight,
+      },
+    );
+  }, [
+    conversationId,
+    effectiveIsInitialLoading,
+    messages.length,
+    rtkMessages.hasLoaded,
+    setBottomSettlePhase,
+    threadRows.length,
+    viewportHeight,
+  ]);
+
+  React.useEffect(() => {
+    if (previousPerfConversationIdRef.current !== conversationId) {
+      previousPerfConversationIdRef.current = conversationId;
+      previousMessagesForPerfRef.current = messages;
+      return;
+    }
+
+    const previousMessages = previousMessagesForPerfRef.current;
+    if (previousMessages.length > 0 && messages.length > previousMessages.length) {
+      const previousFirstKey = previousMessages[0]
+        ? getMessageStableKey(previousMessages[0])
+        : null;
+      const nextFirstKey = messages[0] ? getMessageStableKey(messages[0]) : null;
+      const prependedCount = messages.length - previousMessages.length;
+      const previousTail = previousMessages[previousMessages.length - 1];
+      const tailStillInPlace =
+        Boolean(previousTail) &&
+        messages[previousMessages.length - 1] === previousTail;
+
+      if (previousFirstKey && nextFirstKey && previousFirstKey !== nextFirstKey) {
+        measureChatPerformance(
+          "load-older-rendered",
+          "load-older-start",
+          conversationId,
+          {
+            previousCount: previousMessages.length,
+            nextCount: messages.length,
+            prependedCount,
+          },
+        );
+      } else if (tailStillInPlace) {
+        measureChatPerformance(
+          "append-realtime-message-rendered",
+          "realtime-message-received",
+          conversationId,
+          {
+            previousCount: previousMessages.length,
+            nextCount: messages.length,
+            appendedCount: messages.length - previousMessages.length,
+          },
+        );
+      }
+    }
+
+    previousMessagesForPerfRef.current = messages;
+  }, [conversationId, messages]);
+
+  React.useEffect(() => {
+    if (!import.meta.env.DEV || viewportHeight <= 0) {
+      return;
+    }
+
+    const rafId = requestAnimationFrame(() => {
+      const outer = outerRef.current;
+      if (!outer) return;
+
+      logChatPerformance("message-list-dom-node-count", {
+        conversationId,
+        messageCount: messages.length,
+        rowCount: threadRows.length,
+        renderedTimelineRows:
+          outer.querySelectorAll("[data-timeline-key]").length,
+        renderedMessageNodes: outer.querySelectorAll("[data-message-id]").length,
+        virtualRows: tanStackVirtualItems.length,
+        overscan: listOverscan,
+      });
     });
 
-    switch (command.kind) {
-      case "bottom":
-        listRef.current?.scrollToItem(itemCount - 1, "end");
-        break;
-      case "offset":
-        listRef.current?.scrollTo(Math.max(0, command.offset));
-        break;
+    return () => {
+      cancelAnimationFrame(rafId);
+    };
+  }, [
+    conversationId,
+    listOverscan,
+    messages.length,
+    tanStackVirtualItems.length,
+    threadRows.length,
+    viewportHeight,
+  ]);
+
+  const getVirtualContentHeight = React.useCallback(() => {
+    if (threadRows.length === 0) {
+      return 0;
     }
-  }, [conversationId]);
 
-  const requestScrollCommand = React.useCallback(
-    (command: ScrollCommand) => {
-      pendingScrollCommandRef.current = command;
-      logScrollTrace("scroll_command_requested", {
-        conversationId,
-        ...command,
-        currentScrollTop: outerRef.current?.scrollTop ?? 0,
-      });
+    const lastIndex = threadRows.length - 1;
+    return Math.max(
+      tanStackTotalSize,
+      getItemOffset(lastIndex) + getItemSize(lastIndex),
+    );
+  }, [getItemOffset, getItemSize, tanStackTotalSize, threadRows.length]);
 
-      if (scrollCommandRafRef.current !== null) {
-        return;
+  const getBottomScrollTarget = React.useCallback(
+    (element: HTMLElement | null = outerRef.current) => {
+      const viewportSize = element?.clientHeight ?? viewportHeight;
+      if (viewportSize <= 0) {
+        return 0;
       }
 
-      scrollCommandRafRef.current = requestAnimationFrame(flushScrollCommand);
+      const contentHeight = Math.max(
+        getVirtualContentHeight(),
+        element?.scrollHeight ?? 0,
+      );
+      return Math.max(0, Math.ceil(contentHeight - viewportSize));
     },
-    [conversationId, flushScrollCommand],
+    [getVirtualContentHeight, outerRef, viewportHeight],
   );
 
-  const requestScrollToBottom = React.useCallback(
-    (reason: string) => {
-      requestScrollCommand({ kind: "bottom", reason });
+  const getVirtualDistanceFromBottom = React.useCallback(
+    (element: HTMLElement | null = outerRef.current) => {
+      if (!element) {
+        return 0;
+      }
+
+      return Math.max(0, getBottomScrollTarget(element) - element.scrollTop);
     },
-    [requestScrollCommand],
+    [getBottomScrollTarget, outerRef],
+  );
+
+  const buildScrollDebugDetails = React.useCallback(
+    (reason: string, extra?: Record<string, unknown>) => {
+      const outer = outerRef.current;
+      const latestMessage = messages[messages.length - 1];
+      const latestMessageWithSeq = latestMessage as
+        | (Message & { messageSeq?: number })
+        | undefined;
+      const latestSeq =
+        typeof latestMessage?.serverSeq === "number"
+          ? latestMessage.serverSeq
+          : typeof latestMessageWithSeq?.messageSeq === "number"
+            ? latestMessageWithSeq.messageSeq
+            : null;
+
+      return {
+        conversationId,
+        messageCount: messages.length,
+        lastMessageId: latestMessage?.id ?? null,
+        lastSeq: latestSeq,
+        scrollTop: outer?.scrollTop ?? 0,
+        scrollHeight: outer?.scrollHeight ?? 0,
+        clientHeight: outer?.clientHeight ?? 0,
+        distanceToBottom: outer ? getVirtualDistanceFromBottom(outer) : null,
+        virtualItemsCount: tanStackVirtualItems.length,
+        reason,
+        ...(extra ?? {}),
+      };
+    },
+    [
+      conversationId,
+      getVirtualDistanceFromBottom,
+      messages,
+      outerRef,
+      tanStackVirtualItems.length,
+    ],
+  );
+
+  React.useEffect(() => {
+    logScrollTrace(
+      "message_rows_derived",
+      buildScrollDebugDetails("rows-derived", {
+        rowCount: threadRows.length,
+        timelineItemsCount: timelineItems.length,
+      }),
+    );
+  }, [
+    buildScrollDebugDetails,
+    threadRows.length,
+    timelineItems.length,
+  ]);
+
+  React.useEffect(() => {
+    if (viewportHeight <= 0 || messages.length === 0) {
+      return;
+    }
+
+    logScrollTrace(
+      "virtualizer_measured",
+      buildScrollDebugDetails("virtualizer-measured", {
+        rowCount: threadRows.length,
+        totalSize: tanStackTotalSize,
+        viewportHeight,
+      }),
+    );
+  }, [
+    buildScrollDebugDetails,
+    messages.length,
+    tanStackTotalSize,
+    threadRows.length,
+    viewportHeight,
+  ]);
+
+  const resolveAnchorTimelineIndex = React.useCallback(
+    (messageId: string | null): number => {
+      const resolvedMessageId = messageId ?? messages[0]?.id ?? null;
+      if (!resolvedMessageId) {
+        return -1;
+      }
+
+      return threadRows.findIndex((item) => {
+        if (item.kind === "group") {
+          return item.messageIds.includes(resolvedMessageId);
+        }
+
+        return item.kind === "system" && item.messageId === resolvedMessageId;
+      });
+    },
+    [messages, threadRows],
   );
 
   const captureVisibleAnchor = React.useCallback(() => {
     const outer = outerRef.current;
-    if (!outer || timelineItems.length === 0) return null;
+    if (!outer || threadRows.length === 0) return null;
 
     const visibleItem = findItemAtOffset(outer.scrollTop);
     if (!visibleItem) return null;
 
-    const item = timelineItems[visibleItem.index];
+    const anchorIndex = threadRows.findIndex(
+      (item, index) =>
+        index >= visibleItem.index &&
+        isThreadRowMessageLike(item),
+    );
+    if (anchorIndex < 0) {
+      return null;
+    }
+
+    const item = threadRows[anchorIndex];
+    if (!item || !isThreadRowMessageLike(item)) {
+      return null;
+    }
+
     return {
-      itemKey: item ? getTimelineItemKey(item, visibleItem.index) : null,
-      offsetWithinItem: visibleItem.offsetWithinItem,
+      messageId: item.kind === "group" ? item.anchorMessageId : item.messageId,
+      offsetFromTop: outer.scrollTop - getItemOffset(anchorIndex),
     };
-  }, [findItemAtOffset, getTimelineItemKey, timelineItems]);
-
-  const restoreCapturedAnchor = React.useCallback(
-    (reason: string) => {
-      const anchor = prependAnchorRef.current;
-      prependAnchorRef.current = null;
-      if (!anchor) return;
-
-      const anchorIndex = anchor.itemKey
-        ? timelineItems.findIndex(
-            (item, index) => getTimelineItemKey(item, index) === anchor.itemKey,
-          )
-        : -1;
-      if (anchorIndex < 0) return;
-
-      requestScrollCommand({
-        kind: "offset",
-        offset: getItemOffset(anchorIndex) + anchor.offsetWithinItem,
-        reason,
-      });
-    },
-    [getItemOffset, getTimelineItemKey, requestScrollCommand, timelineItems],
-  );
+  }, [findItemAtOffset, getItemOffset, outerRef, threadRows]);
 
   const {
     pendingNewMessages,
     isPinnedToBottom,
-    handleScroll,
+    mode: scrollMode,
+    firstDetachedUnreadMessageId,
     jumpToLatest,
-    detachAutoFollow,
-    syncScrollStateFromDom,
-    pendingRestoreScrollTop,
-    pendingRestoreVersion,
-  } = useAutoScrollToBottom({
+    handleUserScroll,
+    requestOffset,
+    detachForJump,
+    handleMediaResized,
+  } = useChatScrollController({
     conversationId,
     messages,
     currentUserId,
-    hasMore,
-    isLoadingMore,
-    onLoadMore,
-    onBeforeLoadMore: () => {
-      prependAnchorRef.current = captureVisibleAnchor();
-      logScrollTrace("prepend_anchor_captured", {
-        conversationId,
-        anchor: prependAnchorRef.current,
-      });
-    },
-    onAfterPrepend: () => {
-      restoreCapturedAnchor("prepend-restore");
-    },
+    hasUnread: Boolean(
+      unreadRestoreSignature ||
+        unreadMarker?.active ||
+        liveUnreadMarker?.active,
+    ),
+    unreadRestoreSignature,
+    onUnreadRestoreConsumed,
+    isInitialLoading: effectiveIsInitialLoading,
+    hasLoaded: rtkMessages.hasLoaded,
+    isFetchingMessages: rtkMessages.isFetching,
+    hasMoreOlder: effectiveHasMore,
+    isLoadingOlder: effectiveIsLoadingMore,
+    onLoadOlder: effectiveLoadMore,
     outerRef,
-    requestScrollToBottom,
+    itemCount: threadRows.length,
+    virtualItemsCount: tanStackVirtualItems.length,
+    totalSize: tanStackTotalSize,
+    viewportHeight,
+    getItemOffset,
+    resolveMessageIndex: resolveAnchorTimelineIndex,
+    captureVisibleAnchor,
+    scrollToOffset,
+    scrollToIndex,
   });
 
+  React.useEffect(() => {
+    isPinnedToBottomRef.current = isPinnedToBottom;
+  }, [isPinnedToBottom]);
+
+  React.useEffect(() => {
+    if (unreadMarker?.active) {
+      setLiveUnreadMarker(unreadMarker);
+      return;
+    }
+
+    if (firstDetachedUnreadMessageId) {
+      setLiveUnreadMarker({
+        firstUnreadMessageId: firstDetachedUnreadMessageId,
+        active: true,
+      });
+      return;
+    }
+
+    setLiveUnreadMarker(unreadMarker ?? null);
+  }, [conversationId, firstDetachedUnreadMessageId, unreadMarker, unreadRestoreSignature]);
+
+  React.useEffect(() => {
+    if (lastSeenUnreadRestoreSignatureRef.current !== unreadRestoreSignature) {
+      if (lastSeenUnreadRestoreSignatureRef.current) {
+        logScrollTrace("unread_restore_signature_cleared", {
+          conversationId,
+          signature: lastSeenUnreadRestoreSignatureRef.current,
+          nextSignature: unreadRestoreSignature ?? null,
+        });
+      }
+      lastSeenUnreadRestoreSignatureRef.current = unreadRestoreSignature ?? null;
+    }
+
+    if (unreadRestoreSignature) {
+      logScrollTrace("unread_restore_signature_seen", {
+        conversationId,
+        signature: unreadRestoreSignature,
+      });
+    }
+  }, [conversationId, unreadRestoreSignature]);
+
   const showNewMessagesPill = pendingNewMessages > 0;
-  const showJumpToBottom = !isPinnedToBottom && pendingNewMessages === 0;
+  const showJumpToBottom =
+    scrollMode === "settled_reading_history" && pendingNewMessages === 0;
 
   const topOverlayPlacements = React.useMemo(
     () =>
       resolveOverlayPlacements([
         {
           id: "error",
-          visible: Boolean(error && messages.length > 0),
+          visible: Boolean(effectiveError && messages.length > 0),
           priority: 100,
           slot: "top-center",
         },
         {
           id: "loading",
-          visible: isLoadingMore && !isInitialLoading,
+          visible: effectiveIsLoadingMore && !effectiveIsInitialLoading,
           priority: 80,
           slot: "top-center",
         },
         {
           id: "sticky-date",
           visible:
-            !isInitialLoading && messages.length > 0 && Boolean(stickyDate),
+            !effectiveIsInitialLoading && messages.length > 0 && Boolean(stickyDate),
           priority: 30,
           slot: "top-center",
         },
       ]),
-    [error, isInitialLoading, isLoadingMore, messages.length, stickyDate],
+    [
+      effectiveError,
+      effectiveIsInitialLoading,
+      effectiveIsLoadingMore,
+      messages.length,
+      stickyDate,
+    ],
   );
   const bottomOverlayPlacements = React.useMemo(
     () =>
@@ -623,63 +1394,64 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     [composerHeight],
   );
 
+  const flushTimelineItemSizeChanges = React.useCallback(() => {
+    timelineSizeChangeRafRef.current = null;
+    if (pendingTimelineSizeChangesRef.current.size === 0) {
+      return;
+    }
+
+    pendingTimelineSizeChangesRef.current.clear();
+
+    if (isPinnedToBottom) {
+      pendingResizeAnchorRef.current = null;
+      handleMediaResized();
+      return;
+    }
+
+    const anchor = pendingResizeAnchorRef.current;
+    pendingResizeAnchorRef.current = null;
+    if (!anchor) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      handleMediaResized(anchor);
+    });
+  }, [handleMediaResized, isPinnedToBottom]);
+
   const handleTimelineItemSizeChange = React.useCallback(
-    ({ index, delta }: { index: number; key: string; delta: number }) => {
-      if (Math.abs(delta) <= 1) return;
-
-      if (isPinnedToBottom) {
-        requestScrollToBottom("item-resize-while-pinned");
+    ({ index, key, delta }: { index: number; key: string; delta: number }) => {
+      if (Math.abs(delta) <= ITEM_SIZE_CHANGE_THRESHOLD) {
         return;
       }
 
-      const outer = outerRef.current;
-      if (!outer) return;
-
-      const visibleItem = findItemAtOffset(outer.scrollTop);
-      const anchorIndex = visibleItem?.index ?? 0;
-      if (index > anchorIndex) return;
-
-      pendingPreserveScrollDeltaRef.current += delta;
-      logScrollTrace("scroll_preserve_delta_queued", {
-        conversationId,
+      if (!isPinnedToBottomRef.current && !pendingResizeAnchorRef.current) {
+        pendingResizeAnchorRef.current = captureVisibleAnchor();
+      }
+      pendingTimelineSizeChangesRef.current.set(key, {
         index,
-        delta,
-        accumulatedDelta: pendingPreserveScrollDeltaRef.current,
+        delta:
+          (pendingTimelineSizeChangesRef.current.get(key)?.delta ?? 0) + delta,
       });
-
-      if (preserveScrollDeltaRafRef.current !== null) {
+      if (timelineSizeChangeRafRef.current !== null) {
         return;
       }
 
-      preserveScrollDeltaRafRef.current = requestAnimationFrame(() => {
-        preserveScrollDeltaRafRef.current = null;
-        const nextDelta = pendingPreserveScrollDeltaRef.current;
-        pendingPreserveScrollDeltaRef.current = 0;
-        if (nextDelta === 0) return;
-
-        requestScrollCommand({
-          kind: "offset",
-          offset: (outerRef.current?.scrollTop ?? 0) + nextDelta,
-          reason: "item-resize-preserve",
-        });
-      });
+      timelineSizeChangeRafRef.current = requestAnimationFrame(
+        flushTimelineItemSizeChanges,
+      );
     },
-    [
-      conversationId,
-      findItemAtOffset,
-      isPinnedToBottom,
-      requestScrollCommand,
-      requestScrollToBottom,
-    ],
+    [captureVisibleAnchor, flushTimelineItemSizeChanges],
   );
 
   const rowData = React.useMemo<TimelineRowData>(
     () => ({
-      items: timelineItems,
+      items: threadRows,
       onReply,
       onReact,
       onEdit,
       onDelete,
+      onInspect,
       onImageClick,
       onFilePreview,
       setItemSize,
@@ -689,33 +1461,40 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       onToggleSelect,
       onNavigateToMessage,
       currentUsername,
+      expandedLongMessageIds,
+      onToggleLongMessageExpand: toggleLongMessageExpand,
+      insertedMessageKeys,
       highlightedMessageId,
       onItemSizeChange: handleTimelineItemSizeChange,
     }),
     [
       currentUsername,
       density,
+      expandedLongMessageIds,
       handleTimelineItemSizeChange,
       highlightedMessageId,
+      insertedMessageKeys,
       isSelectionMode,
       onDelete,
       onEdit,
+      onInspect,
       onFilePreview,
       onImageClick,
       onNavigateToMessage,
       onReact,
       onReply,
+      toggleLongMessageExpand,
       onToggleSelect,
       selectedMessageIds,
       setItemSize,
-      timelineItems,
+      threadRows,
     ],
   );
 
-  const handleListScroll = React.useCallback(
-    ({ scrollOffset, scrollUpdateWasRequested }: ListOnScrollProps) => {
+  const handleScrollUpdate = React.useCallback(
+    (scrollOffset: number, scrollUpdateWasRequested: boolean) => {
       if (scrollUpdateWasRequested) return;
-      handleScroll(scrollOffset);
+      handleUserScroll(scrollOffset);
 
       if (stickyDateRafRef.current !== null) {
         cancelAnimationFrame(stickyDateRafRef.current);
@@ -725,13 +1504,17 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
         let nextStickyDate: Date | null = null;
         for (let index = targetIndex; index >= 0; index -= 1) {
-          const item = timelineItems[index];
+          const item = threadRows[index];
           if (!item) continue;
           if (item.kind === "date") {
             nextStickyDate = item.date;
             break;
           }
-          if (item.kind === "message" || item.kind === "system") {
+          if (item.kind === "group") {
+            nextStickyDate = item.startedAt;
+            break;
+          }
+          if (item.kind === "system") {
             nextStickyDate = new Date(item.message.createdAt);
             break;
           }
@@ -745,13 +1528,28 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         stickyDateRafRef.current = null;
       });
     },
-    [findItemAtOffset, handleScroll, timelineItems],
+    [findItemAtOffset, handleUserScroll, threadRows],
+  );
+
+  const handleTanStackScroll = React.useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      const scrollOffset = event.currentTarget.scrollTop;
+      handleScrollUpdate(
+        scrollOffset,
+        consumeProgrammaticScroll(scrollOffset),
+      );
+    },
+    [consumeProgrammaticScroll, handleScrollUpdate],
   );
 
   const handleRetry = React.useCallback(() => {
+    if (rtkErrorMessage) {
+      void retryRtkInitialMessages().catch(() => undefined);
+      return;
+    }
     if (!onRetry) return;
     void Promise.resolve(onRetry());
-  }, [onRetry]);
+  }, [onRetry, retryRtkInitialMessages, rtkErrorMessage]);
 
   const handleKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -765,36 +1563,54 @@ const MessageListComponent: React.FC<MessageListProps> = ({
           break;
         case "Home":
           event.preventDefault();
-          requestScrollCommand({
-            kind: "offset",
-            offset: 0,
-            reason: "keyboard-home",
-          });
+          requestOffset(0, "keyboard-home");
           break;
         case "PageDown":
           event.preventDefault();
-          requestScrollCommand({
-            kind: "offset",
-            offset: outer.scrollTop + Math.round(outer.clientHeight * 0.9),
-            reason: "keyboard-page-down",
-          });
+          requestOffset(
+            outer.scrollTop + Math.round(outer.clientHeight * 0.9),
+            "keyboard-page-down",
+          );
           break;
         case "PageUp":
           event.preventDefault();
-          requestScrollCommand({
-            kind: "offset",
-            offset: Math.max(
+          requestOffset(
+            Math.max(
               0,
               outer.scrollTop - Math.round(outer.clientHeight * 0.9),
             ),
-            reason: "keyboard-page-up",
-          });
+            "keyboard-page-up",
+          );
           break;
         default:
           break;
       }
     },
-    [jumpToLatest, requestScrollCommand],
+    [jumpToLatest, requestOffset],
+  );
+
+  const handleProfilerRender = React.useCallback<React.ProfilerOnRenderCallback>(
+    (
+      id,
+      phase,
+      actualDuration,
+      baseDuration,
+      startTime,
+      commitTime,
+    ) => {
+      logChatPerformance("react-profiler-message-list", {
+        id,
+        phase,
+        conversationId,
+        actualDuration,
+        baseDuration,
+        startTime,
+        commitTime,
+        messageCount: messages.length,
+        rowCount: threadRows.length,
+      });
+    },
+    [conversationId, messages.length, threadRows.length],
   );
 
   const highlightMessage = React.useCallback((messageId: string) => {
@@ -837,41 +1653,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         itemTop < visibleTop
           ? Math.max(0, itemTop - padding)
           : Math.max(0, itemBottom - outer.clientHeight + padding);
-      requestScrollCommand({
-        kind: "offset",
-        offset: nextOffset,
-        reason,
-      });
+      requestOffset(nextOffset, reason);
       return true;
     },
-    [conversationId, getItemOffset, getItemSize, requestScrollCommand],
+    [conversationId, getItemOffset, getItemSize, requestOffset],
   );
-
-  React.useEffect(() => {
-    if (pendingRestoreScrollTop === null || viewportHeight <= 0) {
-      return;
-    }
-
-    requestScrollCommand({
-      kind: "offset",
-      offset: pendingRestoreScrollTop,
-      reason: "conversation-restore",
-    });
-
-    const rafId = requestAnimationFrame(() => {
-      syncScrollStateFromDom("conversation-restore-synced");
-    });
-
-    return () => {
-      cancelAnimationFrame(rafId);
-    };
-  }, [
-    pendingRestoreScrollTop,
-    pendingRestoreVersion,
-    requestScrollCommand,
-    syncScrollStateFromDom,
-    viewportHeight,
-  ]);
 
   React.useLayoutEffect(() => {
     if (viewportHeight <= 0) return;
@@ -890,17 +1676,19 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
     if (!viewportChanged && !composerChanged) return;
     if (isPinnedToBottom) {
-      requestScrollToBottom("layout-change");
+      handleMediaResized();
     }
-  }, [composerHeight, isPinnedToBottom, requestScrollToBottom, viewportHeight]);
+  }, [composerHeight, handleMediaResized, isPinnedToBottom, viewportHeight]);
 
   React.useEffect(() => {
     if (!jumpToMessageId) return;
 
-    const targetIndex = timelineItems.findIndex(
+    const targetIndex = threadRows.findIndex(
       (item) =>
-        item.kind === "message" &&
-        isTargetMessage(item.message, jumpToMessageId),
+        item.kind === "group" &&
+        item.items.some((entry) =>
+          isTargetMessage(entry.message, jumpToMessageId),
+        ),
     );
     if (targetIndex < 0) {
       logScrollTrace("jump_target_waiting_for_render", {
@@ -910,23 +1698,23 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       return;
     }
 
-    detachAutoFollow("jump-to-message");
+    detachForJump("jump-to-message");
     ensureItemVisible(targetIndex, "jump-to-message");
     highlightMessage(jumpToMessageId);
     onJumpHandled?.(jumpToMessageId);
   }, [
     conversationId,
-    detachAutoFollow,
+    detachForJump,
     ensureItemVisible,
     highlightMessage,
     jumpRequestVersion,
     jumpToMessageId,
     onJumpHandled,
-    timelineItems,
+    threadRows,
   ]);
 
   React.useEffect(() => {
-    if (timelineItems.length === 0) {
+    if (threadRows.length === 0) {
       setStickyDate(null);
       return;
     }
@@ -935,24 +1723,28 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     const targetIndex = findItemAtOffset(scrollTop)?.index ?? 0;
 
     for (let index = targetIndex; index >= 0; index -= 1) {
-      const item = timelineItems[index];
+      const item = threadRows[index];
       if (!item) continue;
       if (item.kind === "date") {
         setStickyDate(item.date);
         return;
       }
-      if (item.kind === "message" || item.kind === "system") {
+      if (item.kind === "group") {
+        setStickyDate(item.startedAt);
+        return;
+      }
+      if (item.kind === "system") {
         setStickyDate(new Date(item.message.createdAt));
         return;
       }
     }
 
     setStickyDate(null);
-  }, [conversationId, findItemAtOffset, timelineItems]);
+  }, [conversationId, findItemAtOffset, threadRows]);
 
   React.useEffect(() => {
     if (
-      isInitialLoading ||
+      effectiveIsInitialLoading ||
       messages.length === 0 ||
       pendingNewMessages > 0 ||
       !isPinnedToBottom
@@ -965,7 +1757,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       onReachedLatest?.(latestMessage);
     }
   }, [
-    isInitialLoading,
+    effectiveIsInitialLoading,
     isPinnedToBottom,
     messages,
     onReachedLatest,
@@ -977,12 +1769,10 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       if (stickyDateRafRef.current !== null) {
         cancelAnimationFrame(stickyDateRafRef.current);
       }
-      if (scrollCommandRafRef.current !== null) {
-        cancelAnimationFrame(scrollCommandRafRef.current);
+      if (timelineSizeChangeRafRef.current !== null) {
+        cancelAnimationFrame(timelineSizeChangeRafRef.current);
       }
-      if (preserveScrollDeltaRafRef.current !== null) {
-        cancelAnimationFrame(preserveScrollDeltaRafRef.current);
-      }
+      pendingTimelineSizeChangesRef.current.clear();
       if (highlightTimerRef.current !== null) {
         window.clearTimeout(highlightTimerRef.current);
       }
@@ -990,31 +1780,80 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     [],
   );
 
+  const virtualizedRows =
+    viewportHeight > 0 ? (
+      <div
+        ref={outerRef}
+        onScroll={handleTanStackScroll}
+        className="h-full min-h-0 overflow-auto overscroll-contain"
+      >
+        <div
+          style={{
+            height: tanStackTotalSize,
+            position: "relative",
+            width: "100%",
+          }}
+        >
+          {tanStackVirtualItems.map((virtualItem) => (
+            <TimelineRow
+              key={String(virtualItem.key)}
+              index={virtualItem.index}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: virtualItem.size,
+                transform: `translateY(${Math.round(virtualItem.start)}px)`,
+              }}
+              data={rowData}
+              isScrolling={false}
+            />
+          ))}
+        </div>
+      </div>
+    ) : null;
+
+  const profiledVirtualizedRows = import.meta.env.DEV ? (
+    <React.Profiler
+      id={`MessageList:${conversationId}`}
+      onRender={handleProfilerRender}
+    >
+      {virtualizedRows}
+    </React.Profiler>
+  ) : (
+    virtualizedRows
+  );
+
   return (
     <section className={clsx("relative h-full min-h-0 flex-1", className)}>
-      {isInitialLoading && (
+      {effectiveIsInitialLoading && (
         <div className="chat-background h-full min-h-0 overflow-y-auto px-[var(--chat-lane-padding)] py-4">
           <MessageListSkeleton />
         </div>
       )}
 
-      {!isInitialLoading && (
+      {!effectiveIsInitialLoading && (
         <div
           className="chat-background h-full min-h-0 overflow-hidden pb-2 pt-1"
           role="log"
           aria-live="polite"
           aria-relevant="additions text"
           aria-atomic="false"
-          aria-busy={isLoadingMore}
+          aria-busy={effectiveIsLoadingMore}
           aria-label={t("chat:message.inConversationAria")}
         >
-          {error && messages.length === 0 ? (
+          {effectiveError && messages.length === 0 ? (
             <ErrorState
-              message={error}
-              onRetry={onRetry ? handleRetry : undefined}
+              message={effectiveError}
+              onRetry={handleRetry}
             />
-          ) : messages.length === 0 ? (
+          ) : messages.length === 0 && !historyLoadingState?.isPartial ? (
             <EmptyMessages />
+          ) : messages.length === 0 ? (
+            <div className="flex h-full items-center justify-center px-6 text-sm text-text-secondary">
+              {t("chat:message.loadingHistory")}
+            </div>
           ) : (
             <div
               ref={viewportRef}
@@ -1025,129 +1864,37 @@ const MessageListComponent: React.FC<MessageListProps> = ({
                 "focus-visible:ring-2 focus-visible:ring-focus/30",
               )}
             >
-              {viewportHeight > 0 && (
-                <VirtualList
-                  ref={listRef}
-                  outerRef={outerRef}
-                  height={viewportHeight}
-                  width="100%"
-                  itemCount={timelineItems.length}
-                  itemSize={getItemSize}
-                  itemData={rowData}
-                  itemKey={(index, data) =>
-                    data.items[index]
-                      ? getTimelineItemKey(data.items[index], index)
-                      : index
-                  }
-                  onScroll={handleListScroll}
-                  overscanCount={isLoadingMore && !isInitialLoading ? 20 : 8}
-                >
-                  {TimelineRow}
-                </VirtualList>
-              )}
+              {profiledVirtualizedRows}
             </div>
           )}
         </div>
       )}
 
-      {!isInitialLoading &&
-        messages.length > 0 &&
-        stickyDate &&
-        topOverlayPlacements["sticky-date"]?.visible && (
-          <div className="pointer-events-none absolute left-1/2 top-3 z-[5] -translate-x-1/2">
-            <div
-              className="rounded-full border px-3.5 py-1 text-[11px] font-medium text-text-secondary shadow-xs backdrop-blur"
-              style={{
-                backgroundColor: "hsl(var(--color-chat-pill) / 0.94)",
-                borderColor: "hsl(var(--color-chat-pill-border) / 0.7)",
-              }}
-            >
-              {formatDateDivider(stickyDate)}
-            </div>
-          </div>
+      <MessageListOverlays
+        hasMessages={messages.length > 0}
+        historyLoadingState={historyLoadingState}
+        stickyDate={stickyDate}
+        showStickyDate={Boolean(topOverlayPlacements["sticky-date"]?.visible)}
+        showError={Boolean(topOverlayPlacements.error?.visible)}
+        error={effectiveError}
+        canRetry={Boolean(onRetry || rtkErrorMessage)}
+        onRetry={handleRetry}
+        retryLabel={t("common:actions.retry")}
+        showLoadingMore={Boolean(topOverlayPlacements.loading?.visible)}
+        loadMoreLabel={t("chat:message.loadMore")}
+        showJumpToBottom={Boolean(
+          bottomOverlayPlacements["jump-latest"]?.visible,
         )}
-
-      {error && messages.length > 0 && topOverlayPlacements.error?.visible && (
-        <div className="pointer-events-none absolute inset-x-[var(--chat-lane-padding)] top-2 z-sticky flex justify-center">
-          <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-danger/25 bg-surface/95 px-3 py-1 shadow-xs backdrop-blur">
-            <span className="truncate text-xs text-danger">{error}</span>
-            {onRetry && (
-              <button
-                type="button"
-                onClick={handleRetry}
-                className="rounded-full px-2 py-0.5 text-xs font-medium text-primary transition-micro hover:bg-surface-overlay active:scale-95"
-              >
-                {t("common:actions.retry")}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {isLoadingMore &&
-        !isInitialLoading &&
-        topOverlayPlacements.loading?.visible && (
-          <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full border border-border bg-surface/90 px-4 py-1.5 text-xs text-text-secondary shadow-xs animate-slide-up-fade">
-            {t("chat:message.loadMore")}
-          </div>
-        )}
-
-      {bottomOverlayPlacements["jump-latest"]?.visible && (
-        <div
-          className="pointer-events-none absolute inset-x-0 z-sticky"
-          style={{
-            bottom: `calc(env(safe-area-inset-bottom) + ${floatingBottomOffset}px)`,
-          }}
-        >
-          <ConversationLane>
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={jumpToLatest}
-                className={clsx(
-                  "pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/8 bg-[hsl(var(--color-chat-pill))] shadow-elev2",
-                  "transition-micro hover:bg-white/10 hover:shadow-elev3 hover:-translate-y-0.5",
-                  "active:scale-95",
-                  "animate-slide-up-fade",
-                )}
-                aria-label={t("chat:message.jumpToLatest")}
-              >
-                <ChevronDownIcon className="h-5 w-5 text-text-secondary" />
-              </button>
-            </div>
-          </ConversationLane>
-        </div>
-      )}
-
-      {bottomOverlayPlacements["new-pill"]?.visible && (
-        <div
-          className="pointer-events-none absolute inset-x-0 z-sticky"
-          style={{
-            bottom: `calc(env(safe-area-inset-bottom) + ${floatingBottomOffset}px)`,
-          }}
-        >
-          <ConversationLane>
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={jumpToLatest}
-                className={clsx(
-                  "pointer-events-auto flex min-h-10 items-center justify-center gap-2 rounded-full border border-white/8 bg-[hsl(var(--color-chat-pill))] px-3 shadow-elev2",
-                  "transition-micro hover:bg-white/10 hover:shadow-elev3 hover:-translate-y-0.5",
-                  "active:scale-95",
-                  "animate-slide-up-fade",
-                )}
-                aria-label={t("chat:message.newAria")}
-              >
-                <ChevronDownIcon className="h-5 w-5 text-text-secondary" />
-                <span className="text-xs font-medium text-text-primary">
-                  {t("chat:message.newLabel", { count: pendingNewMessages })}
-                </span>
-              </button>
-            </div>
-          </ConversationLane>
-        </div>
-      )}
+        showNewMessagesPill={Boolean(bottomOverlayPlacements["new-pill"]?.visible)}
+        pendingNewMessages={pendingNewMessages}
+        onJumpToLatest={jumpToLatest}
+        jumpToLatestLabel={t("chat:message.jumpToLatest")}
+        newMessagesAriaLabel={t("chat:message.newAria")}
+        newMessagesLabel={t("chat:message.newLabel", {
+          count: pendingNewMessages,
+        })}
+        floatingBottomOffset={floatingBottomOffset}
+      />
     </section>
   );
 };
@@ -1156,7 +1903,6 @@ const areEqualMessageListProps = (
   previousProps: MessageListProps,
   nextProps: MessageListProps,
 ): boolean =>
-  previousProps.messages === nextProps.messages &&
   previousProps.conversationId === nextProps.conversationId &&
   previousProps.conversationType === nextProps.conversationType &&
   previousProps.currentUserId === nextProps.currentUserId &&
@@ -1164,14 +1910,10 @@ const areEqualMessageListProps = (
   previousProps.onReact === nextProps.onReact &&
   previousProps.onEdit === nextProps.onEdit &&
   previousProps.onDelete === nextProps.onDelete &&
-  previousProps.hasMore === nextProps.hasMore &&
-  previousProps.isLoadingMore === nextProps.isLoadingMore &&
-  previousProps.isInitialLoading === nextProps.isInitialLoading &&
-  previousProps.onLoadMore === nextProps.onLoadMore &&
+  previousProps.onInspect === nextProps.onInspect &&
+  previousProps.historyLoadingState === nextProps.historyLoadingState &&
   previousProps.onImageClick === nextProps.onImageClick &&
   previousProps.onFilePreview === nextProps.onFilePreview &&
-  previousProps.error === nextProps.error &&
-  previousProps.onRetry === nextProps.onRetry &&
   previousProps.density === nextProps.density &&
   previousProps.isSelectionMode === nextProps.isSelectionMode &&
   previousProps.selectedMessageIds === nextProps.selectedMessageIds &&
@@ -1179,6 +1921,8 @@ const areEqualMessageListProps = (
   previousProps.onNavigateToMessage === nextProps.onNavigateToMessage &&
   previousProps.currentUsername === nextProps.currentUsername &&
   previousProps.unreadMarker === nextProps.unreadMarker &&
+  previousProps.unreadRestoreSignature === nextProps.unreadRestoreSignature &&
+  previousProps.onUnreadRestoreConsumed === nextProps.onUnreadRestoreConsumed &&
   previousProps.onReachedLatest === nextProps.onReachedLatest &&
   previousProps.jumpToMessageId === nextProps.jumpToMessageId &&
   previousProps.jumpRequestVersion === nextProps.jumpRequestVersion &&

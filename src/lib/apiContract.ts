@@ -4,7 +4,7 @@ import {
   ErrorCode,
   type ApiFailure,
   type ApiResponse,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/core";
 
 interface ApiContractErrorOptions {
   statusCode: number;
@@ -82,9 +82,35 @@ const fromFailurePayload = (payload: unknown): ApiContractError | null => {
   });
 };
 
+const fromPlainApiError = (payload: unknown): ApiContractError | null => {
+  if (!isRecord(payload) || typeof payload.message !== "string") {
+    return null;
+  }
+
+  const statusCode =
+    typeof payload.statusCode === "number" ? payload.statusCode : null;
+  const code = isKnownErrorCode(payload.code) ? payload.code : null;
+  if (!statusCode && !code) {
+    return null;
+  }
+
+  return new ApiContractError(payload.message, {
+    statusCode: statusCode ?? 500,
+    code: code ?? ErrorCode.INTERNAL_ERROR,
+    details: payload.details,
+    requestId:
+      typeof payload.requestId === "string" ? payload.requestId : undefined,
+  });
+};
+
 export const extractApiError = (error: unknown): ApiContractError => {
   if (error instanceof ApiContractError) {
     return error;
+  }
+
+  const plainApiError = fromPlainApiError(error);
+  if (plainApiError) {
+    return plainApiError;
   }
 
   if (axios.isAxiosError(error)) {
@@ -94,12 +120,37 @@ export const extractApiError = (error: unknown): ApiContractError => {
       return fromPayload;
     }
 
-    const fallbackMessage = axiosError.message || "Request failed";
     const statusCode = axiosError.response?.status ?? 500;
+    const retryAfterHeader = axiosError.response?.headers?.["retry-after"];
+    const retryAfterSeconds =
+      typeof retryAfterHeader === "string"
+        ? Number.parseInt(retryAfterHeader, 10)
+        : Array.isArray(retryAfterHeader) && typeof retryAfterHeader[0] === "string"
+          ? Number.parseInt(retryAfterHeader[0], 10)
+          : null;
+    const fallbackMessage =
+      statusCode === 429
+        ? "Bạn đang thao tác quá nhanh. Vui lòng thử lại sau."
+        : axiosError.message || "Request failed";
+    const code =
+      statusCode === 401
+        ? ErrorCode.UNAUTHORIZED
+        : statusCode === 429
+          ? ErrorCode.RATE_LIMITED
+          : ErrorCode.INTERNAL_ERROR;
 
     return new ApiContractError(fallbackMessage, {
       statusCode,
-      code: statusCode === 401 ? ErrorCode.UNAUTHORIZED : ErrorCode.INTERNAL_ERROR,
+      code,
+      details:
+        statusCode === 429
+          ? {
+              retryAfterSeconds:
+                Number.isFinite(retryAfterSeconds) && retryAfterSeconds !== null
+                  ? retryAfterSeconds
+                  : undefined,
+            }
+          : undefined,
     });
   }
 

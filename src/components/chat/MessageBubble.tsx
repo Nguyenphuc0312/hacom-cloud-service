@@ -2,12 +2,17 @@ import React from "react";
 import type { Conversation, Message, Attachment } from "../../types";
 import type { ChatDensity } from "../../stores/uiStore";
 import { MessageCluster } from "./message-layout/MessageCluster";
+import type { TimelineMergeLevel } from "../../hooks/useMessageGrouping";
+import type { LongMessageRenderMode } from "../../utils/longMessagePolicy";
 
 interface MessageBubbleProps {
   message: Message;
   isOwn: boolean;
+  mergeLevel?: TimelineMergeLevel;
   showAvatar: boolean;
   showSenderName?: boolean;
+  showMeta?: boolean;
+  showStatus?: boolean;
   isGroupStart?: boolean;
   isGroupEnd?: boolean;
   conversationType: Conversation["type"];
@@ -21,6 +26,10 @@ interface MessageBubbleProps {
   density?: ChatDensity;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
+  textRenderMode?: LongMessageRenderMode;
+  isCollapsibleText?: boolean;
+  onToggleTextExpand?: () => void;
+  shouldAnimateInsert?: boolean;
   className?: string;
 }
 

@@ -38,20 +38,35 @@
       "retry": "Gửi lại",
       "failedRetry": "Gửi thất bại. Bấm để gửi lại",
       "failedInline": "Không gửi được",
-      "pendingInline": "Đang đồng bộ"
+      "pendingInline": "Đang gửi",
+      "networkError": "Mất kết nối mạng. Vui lòng thử lại.",
+      "timeoutError": "Gửi tin nhắn quá thời gian. Vui lòng thử lại.",
+      "backend4xxError": "Tin nhắn bị từ chối. Vui lòng thử lại.",
+      "backend5xxError": "Máy chủ đang bận. Vui lòng thử lại sau.",
+      "slowModeError": "Đang bật chế độ chậm. Vui lòng đợi rồi thử lại.",
+      "unknownError": "Không thể gửi tin nhắn."
     },
     "actions": {
       "react": "Thả cảm xúc",
       "reply": "Trả lời",
       "forward": "Chuyển tiếp",
       "copy": "Sao chép",
+      "copyDetails": "Sao chép chi tiết",
+      "inspect": "Xem chi tiết",
       "edit": "Chỉnh sửa",
       "delete": "Xóa"
     },
+    "structuredBlock": "Nội dung có cấu trúc",
+    "expandLong": "Xem thêm",
+    "collapseLong": "Thu gọn",
+    "editedAtNoHistory": "Đã chỉnh sửa lúc {{time}}",
+    "editedNoHistory": "Đã chỉnh sửa",
     "newLabel": "Tin nhắn mới ({{count}})",
     "newAria": "Tin nhắn mới",
     "inConversationAria": "Tin nhắn trong cuộc trò chuyện",
     "loadMore": "Đang tải...",
+    "loadingHistory": "Đang tải lịch sử trò chuyện...",
+    "loadingMoreHistory": "Đang tải thêm lịch sử",
     "senderYou": "Bạn:"
   },
   "composer": {
@@ -70,12 +85,14 @@
     "sendMessage": "Gửi tin nhắn",
     "sending": "Đang gửi tin nhắn",
     "sentAnnouncement": "Đã gửi tin nhắn",
+    "optimisticAnnouncement": "Tin nhắn đang chờ máy chủ xác nhận",
     "queuedAnnouncement": "Tin nhắn đã được xếp hàng đợi",
     "failedAnnouncement": "Gửi tin nhắn thất bại",
-    "reconnectingHint": "Đang kết nối lại. Tin nhắn mới sẽ được xếp hàng đợi.",
-    "offlineHint": "Bạn đang offline. Tin nhắn sẽ tự gửi khi kết nối trở lại.",
+    "reconnectingHint": "Đang kết nối lại. Bạn vẫn có thể tiếp tục gửi trong lúc hệ thống xác nhận.",
+    "offlineHint": "Bạn đang offline. Tin nhắn có thể thất bại và cần gửi lại.",
     "permissionDenied": "Bạn không còn quyền gửi tin nhắn trong cuộc trò chuyện này.",
     "blockedConversation": "Bạn không thể gửi tin nhắn trong cuộc trò chuyện này.",
+    "readonlyGroup": "Hiện chỉ quản trị viên nhóm mới có thể gửi tin nhắn.",
     "recordVoice": "Ghi âm",
     "uploading": "Đang tải lên...",
     "cancelUpload": "Hủy",
@@ -103,6 +120,7 @@
   "selection": {
     "enter": "Chọn tin nhắn",
     "toolbar": "Thao tác chọn",
+    "selectMessage": "Chọn tin nhắn",
     "selected": "Đã chọn {{count}}",
     "selected_one": "Đã chọn {{count}}",
     "selected_other": "Đã chọn {{count}}"
@@ -117,6 +135,9 @@
     "resultCount_one": "{{count}} kết quả",
     "resultCount_other": "{{count}} kết quả"
   },
+  "conversation": {
+    "untitled": "Cuộc trò chuyện chưa đặt tên"
+  },
   "contactShare": {
     "title": "Chia sẻ liên hệ",
     "description": "Chia sẻ danh thiếp của bạn hoặc gửi một người trong danh bạ.",
@@ -130,6 +151,7 @@
     "noResults": "Không tìm thấy liên hệ",
     "shareAction": "Chia sẻ",
     "viewProfile": "Xem hồ sơ",
+    "invalidProfile": "Danh thiếp này không thể bắt đầu cuộc trò chuyện.",
     "sent": "Đã chia sẻ liên hệ",
     "failed": "Không thể chia sẻ liên hệ"
   },
@@ -148,6 +170,8 @@
     "previous": "Tệp trước",
     "next": "Tệp tiếp theo",
     "instructions": "Dùng phím mũi tên để chuyển tệp",
+    "openInNewTab": "Mở trong tab mới",
+    "audioNotSupported": "Trình duyệt của bạn không hỗ trợ phát âm thanh.",
     "blocked": "Tệp bị chặn bởi chính sách bảo mật",
     "deleted": "Tệp không còn tồn tại",
     "scanning": "Đang quét tệp",

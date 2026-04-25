@@ -3,7 +3,7 @@
  * Reusable button with semantic design tokens.
  */
 
-import React from "react";
+import React, { forwardRef } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { Spinner } from "./Spinner";
@@ -26,7 +26,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses = {
   primary:
-    "border border-primary bg-primary text-text-inverse shadow-xs hover:bg-primary-hover active:bg-primary-active focus:ring-focus/25",
+    "border border-primary bg-primary text-text-inverse hover:bg-primary-hover active:bg-primary-active focus:ring-focus/25",
   secondary:
     "border border-border bg-surface-overlay text-text-primary hover:bg-surface-hover active:bg-surface-active focus:ring-focus/20",
   outline:
@@ -34,17 +34,17 @@ const variantClasses = {
   ghost:
     "border border-transparent bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary active:bg-surface-active focus:ring-focus/20",
   danger:
-    "border border-danger bg-danger text-text-inverse shadow-xs hover:bg-danger-hover active:bg-danger-hover focus:ring-danger/30",
+    "border border-danger bg-danger text-text-inverse hover:bg-danger-hover active:bg-danger-hover focus:ring-danger/30",
   destructive:
-    "border border-danger bg-danger text-text-inverse shadow-xs hover:bg-danger-hover active:bg-danger-hover focus:ring-danger/30",
+    "border border-danger bg-danger text-text-inverse hover:bg-danger-hover active:bg-danger-hover focus:ring-danger/30",
   link: "h-auto p-0 text-primary hover:text-primary/80 hover:underline",
 };
 
 const sizeClasses = {
-  xs: "rounded-sm px-2 py-1 text-caption",
-  sm: "rounded-md px-3 py-2 text-body-sm",
-  md: "rounded-md px-4 py-2 text-body-sm",
-  lg: "rounded-lg px-5 py-3 text-body",
+  xs: "min-h-8 rounded-sm px-2.5 text-caption",
+  sm: "min-h-[var(--control-height-sm)] rounded-md px-3 text-body-sm",
+  md: "min-h-[var(--control-height-md)] rounded-md px-4 text-body-sm",
+  lg: "min-h-[var(--control-height-lg)] rounded-lg px-5 text-body",
 };
 
 const iconSizeClasses = {
@@ -54,75 +54,77 @@ const iconSizeClasses = {
   lg: "h-5 w-5",
 };
 
-export const Button: React.FC<ButtonProps> = ({
-  children,
-  variant = "primary",
-  size = "md",
-  isLoading = false,
-  leftIcon,
-  rightIcon,
-  fullWidth = false,
-  disabled,
-  className,
-  ...props
-}) => {
-  const { t } = useTranslation();
-  const isDisabled = disabled || isLoading;
-  const resolvedVariant = variant === "danger" ? "destructive" : variant;
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  (
+    {
+      children,
+      variant = "primary",
+      size = "md",
+      isLoading = false,
+      leftIcon,
+      rightIcon,
+      fullWidth = false,
+      disabled,
+      className,
+      ...props
+    },
+    ref,
+  ) => {
+    const { t } = useTranslation();
+    const isDisabled = disabled || isLoading;
+    const resolvedVariant = variant === "danger" ? "destructive" : variant;
 
-  return (
-    <button
-      disabled={isDisabled}
-      className={clsx(
-        "inline-flex min-h-10 items-center justify-center gap-2 font-medium",
-        "transition-micro",
-        "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface",
-        "disabled:cursor-not-allowed disabled:border-disabled-border disabled:bg-disabled-bg disabled:text-text-disabled disabled:opacity-65",
-        !isDisabled &&
-          resolvedVariant === "primary" &&
-          "hover:shadow-sm hover:-translate-y-px",
-        !isDisabled &&
-          resolvedVariant === "destructive" &&
-          "hover:shadow-sm hover:-translate-y-px",
-        resolvedVariant !== "link" && variantClasses[resolvedVariant],
-        resolvedVariant !== "link" && sizeClasses[size],
-        variant === "link" && variantClasses.link,
-        fullWidth && "w-full",
-        !isDisabled && resolvedVariant !== "link" && "active:scale-[0.98]",
-        className,
-      )}
-      {...props}
-    >
-      {isLoading ? (
-        <>
-          <Spinner
-            size={size === "lg" ? "sm" : "xs"}
-            variant={
-              resolvedVariant === "primary" || resolvedVariant === "destructive"
-                ? "inverse"
-                : "neutral"
-            }
-          />
-          <span>{t("common:loading.processing")}</span>
-        </>
-      ) : (
-        <>
-          {leftIcon && (
-            <span className={clsx("shrink-0", iconSizeClasses[size])}>
-              {leftIcon}
-            </span>
-          )}
-          {children}
-          {rightIcon && (
-            <span className={clsx("shrink-0", iconSizeClasses[size])}>
-              {rightIcon}
-            </span>
-          )}
-        </>
-      )}
-    </button>
-  );
-};
+    return (
+      <button
+        ref={ref}
+        disabled={isDisabled}
+        className={clsx(
+          "inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium",
+          "transition-micro",
+          "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface",
+          "disabled:cursor-not-allowed disabled:border-disabled-border disabled:bg-disabled-bg disabled:text-text-disabled disabled:opacity-65",
+          resolvedVariant !== "link" && variantClasses[resolvedVariant],
+          resolvedVariant !== "link" && sizeClasses[size],
+          variant === "link" && variantClasses.link,
+          fullWidth && "w-full",
+          !isDisabled && resolvedVariant !== "link" && "active:scale-[0.98]",
+          className,
+        )}
+        {...props}
+      >
+        {isLoading ? (
+          <>
+            <Spinner
+              size={size === "lg" ? "sm" : "xs"}
+              variant={
+                resolvedVariant === "primary" || resolvedVariant === "destructive"
+                  ? "inverse"
+                  : "neutral"
+              }
+            />
+            <span>{t("common:loading.processing")}</span>
+          </>
+        ) : (
+          <>
+            {leftIcon && (
+              <span className={clsx("shrink-0", iconSizeClasses[size])}>
+                {leftIcon}
+              </span>
+            )}
+            {children}
+            {rightIcon && (
+              <span className={clsx("shrink-0", iconSizeClasses[size])}>
+                {rightIcon}
+              </span>
+            )}
+          </>
+        )}
+      </button>
+    );
+  },
+);
+
+Button.displayName = "Button";
 
 interface IconButtonProps extends Omit<ButtonProps, "leftIcon" | "rightIcon"> {
   icon: React.ReactNode;
@@ -137,10 +139,10 @@ export const IconButton: React.FC<IconButtonProps> = ({
   ...props
 }) => {
   const iconButtonSizes = {
-    xs: "h-6 w-6",
-    sm: "h-8 w-8",
-    md: "h-10 w-10 rounded-md",
-    lg: "h-12 w-12",
+    xs: "h-8 w-8 rounded-sm",
+    sm: "h-[var(--control-height-sm)] w-[var(--control-height-sm)] rounded-md",
+    md: "h-[var(--control-height-md)] w-[var(--control-height-md)] rounded-md",
+    lg: "h-[var(--control-height-lg)] w-[var(--control-height-lg)] rounded-lg",
   };
 
   return (

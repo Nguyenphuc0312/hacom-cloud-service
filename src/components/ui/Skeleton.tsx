@@ -59,20 +59,23 @@ export const Skeleton: React.FC<SkeletonProps> = ({
  */
 export const ConversationSkeleton: React.FC = () => {
   return (
-    <div className="flex items-center gap-3 px-4 py-3">
+    <div className="mx-2 my-1 flex items-center gap-3 rounded-[1.25rem] px-3 py-3">
       {/* Avatar */}
-      <Skeleton className="w-12 h-12 flex-shrink-0" rounded="full" />
+      <Skeleton className="h-10 w-10 flex-shrink-0" rounded="full" />
 
       {/* Content */}
-      <div className="flex-1 min-w-0 space-y-2">
+      <div className="min-w-0 flex-1 space-y-2">
         {/* Name */}
-        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-4 w-2/3" />
         {/* Message preview */}
-        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-3 w-5/6" />
       </div>
 
       {/* Time */}
-      <Skeleton className="w-10 h-3 flex-shrink-0" />
+      <div className="flex flex-col items-end gap-2">
+        <Skeleton className="h-3 w-10 flex-shrink-0" />
+        <Skeleton className="h-5 w-5 flex-shrink-0" rounded="full" />
+      </div>
     </div>
   );
 };
@@ -84,7 +87,7 @@ export const ConversationListSkeleton: React.FC<{ count?: number }> = ({
   count = 6,
 }) => {
   return (
-    <div className="divide-y divide-border">
+    <div>
       {Array.from({ length: count }).map((_, i) => (
         <ConversationSkeleton key={i} />
       ))}

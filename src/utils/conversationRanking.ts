@@ -144,33 +144,36 @@ const hasConversationFailedSend = (conversation: Conversation): boolean => {
   return sendState === "failed" || status === "failed";
 };
 
-const getConversationActivityTimestamp = (conversation: Conversation): number => {
+export const getConversationActivityTimestamp = (
+  conversation: Conversation,
+): number => {
   const record = getConversationExtendedRecord(conversation);
-  return Math.max(
-    toTimestamp(conversation.updatedAt),
-    toTimestamp(conversation.lastMessage?.createdAt),
-    toTimestamp(record?.lastMessageAt),
-    toTimestamp(record?.draftUpdatedAt),
-  );
+  const canonicalTimestamp =
+    toTimestamp(record?.lastMessageSortAt) ||
+    toTimestamp(conversation.lastMessageSortAt) ||
+    toTimestamp(record?.lastMessageAt) ||
+    toTimestamp(conversation.lastMessageAt) ||
+    toTimestamp(conversation.lastMessage?.createdAt) ||
+    toTimestamp(record?.lastActivityAt) ||
+    toTimestamp(conversation.lastActivityAt);
+
+  if (canonicalTimestamp > 0) {
+    return canonicalTimestamp;
+  }
+
+  return toTimestamp(conversation.updatedAt);
 };
 
-const getUnreadScore = (count: number): number => {
-  if (count <= 0) return 0;
-  return Math.round(Math.log2(count + 1) * 20);
-};
-
-const getRecencyScore = (activityTimestamp: number): number => {
-  if (activityTimestamp <= 0) return 0;
-  const ageMinutes = Math.max(
-    0,
-    (Date.now() - activityTimestamp) / (60 * 1000),
+export const getConversationSortIdentity = (
+  conversation: Conversation,
+): string => {
+  const record = getConversationExtendedRecord(conversation);
+  return (
+    asString(record?.lastMessageId) ??
+    asString(conversation.lastMessageId) ??
+    asString(conversation.lastMessage?.id) ??
+    conversation.id
   );
-  if (ageMinutes <= 5) return 60;
-  if (ageMinutes <= 30) return 48;
-  if (ageMinutes <= 120) return 34;
-  if (ageMinutes <= 1440) return 18;
-  if (ageMinutes <= 10080) return 8;
-  return 0;
 };
 
 export const getConversationRankBreakdown = (
@@ -184,22 +187,22 @@ export const getConversationRankBreakdown = (
         displayName: context.currentDisplayName || "",
       }
     : null;
-  const mention = hasConversationMention(conversation, currentUser) ? 100 : 0;
-  const failed = hasConversationFailedSend(conversation) ? 70 : 0;
-  const draft = hasConversationDraft(conversation) ? 40 : 0;
-  const unread = getUnreadScore(conversation.unreadCount || 0);
+  const mention = hasConversationMention(conversation, currentUser) ? 1 : 0;
+  const failed = hasConversationFailedSend(conversation) ? 1 : 0;
+  const draft = hasConversationDraft(conversation) ? 1 : 0;
+  const unread = Math.max(0, conversation.unreadCount || 0);
   const active =
     context.activeConversationId &&
     context.activeConversationId === conversation.id
-      ? 25
+      ? 1
       : 0;
-  const recency = getRecencyScore(getConversationActivityTimestamp(conversation));
-  const mutedPenalty = conversation.isMuted ? 35 : 0;
-  const bucket = conversation.isArchived ? 2 : conversation.isPinned ? 0 : 1;
+  const recency = getConversationActivityTimestamp(conversation);
+  const mutedPenalty = conversation.isMuted ? 1 : 0;
+  const bucket = 0;
 
   return {
     bucket,
-    score: mention + failed + draft + unread + active + recency - mutedPenalty,
+    score: recency,
     mention,
     failed,
     draft,
@@ -214,25 +217,34 @@ export const rankConversations = (
   conversations: Conversation[] | null | undefined,
   context: ConversationRankContext = {},
 ): Conversation[] => {
+  void context;
+  return sortConversationsByActivity(conversations);
+};
+
+export const sortConversationsByActivity = (
+  conversations: Conversation[] | null | undefined,
+): Conversation[] => {
   if (!Array.isArray(conversations)) return [];
 
-  return [...conversations].sort((a, b) => {
-    const aRank = getConversationRankBreakdown(a, context);
-    const bRank = getConversationRankBreakdown(b, context);
+  return [...conversations].sort(compareConversationsByActivity);
+};
 
-    if (aRank.bucket !== bRank.bucket) {
-      return aRank.bucket - bRank.bucket;
-    }
-    if (aRank.score !== bRank.score) {
-      return bRank.score - aRank.score;
-    }
+export const compareConversationsByActivity = (
+  a: Conversation,
+  b: Conversation,
+): number => {
+  const aActivity = getConversationActivityTimestamp(a);
+  const bActivity = getConversationActivityTimestamp(b);
 
-    const aActivity = getConversationActivityTimestamp(a);
-    const bActivity = getConversationActivityTimestamp(b);
-    if (aActivity !== bActivity) {
-      return bActivity - aActivity;
-    }
+  if (aActivity !== bActivity) {
+    return bActivity - aActivity;
+  }
 
-    return a.id.localeCompare(b.id);
-  });
+  const aLastMessageId = getConversationSortIdentity(a);
+  const bLastMessageId = getConversationSortIdentity(b);
+  if (aLastMessageId !== bLastMessageId) {
+    return bLastMessageId.localeCompare(aLastMessageId);
+  }
+
+  return a.id.localeCompare(b.id);
 };

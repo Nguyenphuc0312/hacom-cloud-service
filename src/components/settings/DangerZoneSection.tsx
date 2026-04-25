@@ -1,26 +1,28 @@
 /**
- * @fileoverview Danger Zone Section
- *
- * Account deletion with confirmation dialog requiring password.
- * Follows existing SettingsSection pattern.
+ * @fileoverview Danger zone settings section.
  */
 
-import React, { useState, useCallback } from "react";
-import { useTranslation } from "react-i18next";
+import React, { useCallback, useState } from "react";
 import {
   ExclamationTriangleIcon,
-  TrashIcon,
   LockClosedIcon,
+  TrashIcon,
 } from "@heroicons/react/24/outline";
+import { useTranslation } from "react-i18next";
+import { SettingsDangerZone } from "./SettingsDangerZone";
 import { SettingsSection } from "./SettingsSection";
 import { Button, Input, toast } from "../ui";
-import { userApi } from "../../services/api";
 import { extractApiError } from "../../lib/apiContract";
+import { userApi } from "../../services/api";
 import { useAuthStore } from "../../stores";
 
-export const DangerZoneSection: React.FC = () => {
+interface DangerZoneSectionProps {
+  id?: string;
+}
+
+export const DangerZoneSection: React.FC<DangerZoneSectionProps> = ({ id }) => {
   const { t } = useTranslation("settings");
-  const logout = useAuthStore((s) => s.logout);
+  const logout = useAuthStore((state) => state.logout);
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [password, setPassword] = useState("");
@@ -39,8 +41,8 @@ export const DangerZoneSection: React.FC = () => {
       await userApi.deleteAccount(password, "DELETE");
       toast.success(t("dangerZone.deleteSuccess"));
       logout();
-    } catch (err) {
-      const apiError = extractApiError(err);
+    } catch (reason) {
+      const apiError = extractApiError(reason);
       if (apiError.statusCode === 401 || apiError.statusCode === 422) {
         setError(t("dangerZone.wrongPassword"));
       } else {
@@ -49,7 +51,7 @@ export const DangerZoneSection: React.FC = () => {
     } finally {
       setIsDeleting(false);
     }
-  }, [password, logout, t]);
+  }, [logout, password, t]);
 
   const handleCancel = useCallback(() => {
     setShowConfirm(false);
@@ -59,81 +61,80 @@ export const DangerZoneSection: React.FC = () => {
 
   return (
     <SettingsSection
-      icon={<ExclamationTriangleIcon className="h-5 w-5" />}
+      id={id}
       title={t("dangerZone.title")}
       description={t("dangerZone.description")}
-      className="border-danger/30"
     >
-      {!showConfirm ? (
-        <div className="flex items-center justify-between py-2">
-          <div>
-            <p className="text-sm font-medium text-text-primary">
-              {t("dangerZone.deleteAccount")}
+      <SettingsDangerZone
+        title={t("dangerZone.deleteAccount")}
+        description={t("dangerZone.deleteWarning")}
+      >
+        {!showConfirm ? (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-text-secondary">
+              {t("dangerZone.confirmDescription")}
             </p>
-            <p className="mt-0.5 text-xs text-text-muted">
-              {t("dangerZone.deleteWarning")}
-            </p>
-          </div>
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={() => setShowConfirm(true)}
-          >
-            <TrashIcon className="mr-1.5 h-4 w-4" />
-            {t("dangerZone.deleteButton")}
-          </Button>
-        </div>
-      ) : (
-        <div className="space-y-4 rounded-xl border border-danger/20 bg-danger/5 p-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-danger/15">
-              <ExclamationTriangleIcon className="h-5 w-5 text-danger" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-danger">
-                {t("dangerZone.confirmTitle")}
-              </p>
-              <p className="mt-1 text-xs text-text-muted">
-                {t("dangerZone.confirmDescription")}
-              </p>
-            </div>
-          </div>
-
-          <Input
-            type="password"
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              setError(null);
-            }}
-            placeholder={t("dangerZone.passwordPlaceholder")}
-            leftIcon={<LockClosedIcon className="h-4 w-4" />}
-            error={error || undefined}
-            disabled={isDeleting}
-            autoComplete="current-password"
-          />
-
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCancel}
-              disabled={isDeleting}
-            >
-              {t("dangerZone.cancel")}
-            </Button>
             <Button
               variant="danger"
               size="sm"
-              isLoading={isDeleting}
-              disabled={isDeleting || !password.trim()}
-              onClick={handleDelete}
+              onClick={() => setShowConfirm(true)}
             >
-              {t("dangerZone.confirmDelete")}
+              <TrashIcon className="mr-1.5 h-4 w-4" />
+              {t("dangerZone.deleteButton")}
             </Button>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="space-y-4 rounded-xl border border-danger/20 bg-[hsl(var(--color-surface))/0.86] p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-danger/15">
+                <ExclamationTriangleIcon className="h-5 w-5 text-danger" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-danger">
+                  {t("dangerZone.confirmTitle")}
+                </p>
+                <p className="mt-1 text-sm text-text-secondary">
+                  {t("dangerZone.confirmDescription")}
+                </p>
+              </div>
+            </div>
+
+            <Input
+              type="password"
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setError(null);
+              }}
+              placeholder={t("dangerZone.passwordPlaceholder")}
+              leftIcon={<LockClosedIcon className="h-4 w-4" />}
+              error={error || undefined}
+              disabled={isDeleting}
+              autoComplete="current-password"
+            />
+
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCancel}
+                disabled={isDeleting}
+              >
+                {t("dangerZone.cancel")}
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                isLoading={isDeleting}
+                disabled={isDeleting || !password.trim()}
+                onClick={handleDelete}
+              >
+                {t("dangerZone.confirmDelete")}
+              </Button>
+            </div>
+          </div>
+        )}
+      </SettingsDangerZone>
     </SettingsSection>
   );
 };

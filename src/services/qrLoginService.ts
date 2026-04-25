@@ -1,9 +1,9 @@
 import type {
-  ApiResponse,
   CreateQrLoginSessionResponseDto,
   LoginResponse,
   QrLoginSessionStatusResponseDto,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/auth";
+import type { ApiResponse } from "@hacom/chat-shared-types/core";
 import { authClient } from "../lib/axios";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import { AUTH_ENDPOINTS } from "../lib/authEndpoints";

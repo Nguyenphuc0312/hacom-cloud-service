@@ -1,45 +1,59 @@
 /**
- * @fileoverview Privacy Settings sub-section
+ * @fileoverview Privacy settings section.
  */
 
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { SettingsFieldGroup } from "./SettingsFieldGroup";
 import { SettingsSection } from "./SettingsSection";
 import { ToggleSwitch } from "./ToggleSwitch";
 import { useSettingsSection, useUpdateSettings } from "../../settings";
 
-export const PrivacySection: React.FC = () => {
+interface PrivacySectionProps {
+  id?: string;
+}
+
+export const PrivacySection: React.FC<PrivacySectionProps> = ({ id }) => {
   const { t } = useTranslation("settings");
   const privacy = useSettingsSection("privacy");
   const update = useUpdateSettings();
 
   return (
     <SettingsSection
-      icon={<ShieldCheckIcon className="h-5 w-5" />}
+      id={id}
       title={t("privacy.title")}
       description={t("privacy.description")}
     >
-      <ToggleSwitch
-        label={t("privacy.showOnlineStatus")}
-        description={t("privacy.showOnlineStatusDesc")}
-        checked={privacy.showOnlineStatus}
-        onChange={(v) => update({ privacy: { showOnlineStatus: v } })}
-      />
-
-      <ToggleSwitch
-        label={t("privacy.readReceipts")}
-        description={t("privacy.readReceiptsDesc")}
-        checked={privacy.readReceipts}
-        onChange={(v) => update({ privacy: { readReceipts: v } })}
-      />
-
-      <ToggleSwitch
-        label={t("privacy.allowStrangers")}
-        description={t("privacy.allowStrangersDesc")}
-        checked={privacy.allowStrangersMessage}
-        onChange={(v) => update({ privacy: { allowStrangersMessage: v } })}
-      />
+      <SettingsFieldGroup contentClassName="divide-y divide-border/60">
+        <ToggleSwitch
+          label={t("privacy.showOnlineStatus")}
+          description={t("privacy.showOnlineStatusProjectedDesc", {
+            defaultValue:
+              "Managed by your shared chat privacy policy. Turn off to hide when you are online.",
+          })}
+          checked={privacy.showOnlineStatus}
+          onChange={(value) => update({ privacy: { showOnlineStatus: value } })}
+          className="rounded-none px-0 py-4"
+        />
+        <ToggleSwitch
+          label={t("privacy.readReceipts")}
+          description={t("privacy.readReceiptsDesc")}
+          checked={privacy.readReceipts}
+          onChange={(value) => update({ privacy: { readReceipts: value } })}
+          className="rounded-none px-0 py-4"
+        />
+        <ToggleSwitch
+          label={t("privacy.allowStrangers")}
+          description={t("privacy.allowStrangersDeprecatedDesc", {
+            defaultValue:
+              "Deprecated compatibility field. Direct messages now require friendship.",
+          })}
+          checked={privacy.allowStrangersMessage}
+          onChange={() => {}}
+          disabled
+          className="rounded-none px-0 py-4"
+        />
+      </SettingsFieldGroup>
     </SettingsSection>
   );
 };

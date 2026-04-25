@@ -1,100 +1,68 @@
-﻿import React from "react";
+import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
-import { emitCommandPaletteOpen } from "../../../lib/commandPalette";
+import type { ChatLayoutState } from "../../../utils/densityPolicy";
 
 interface SidebarSearchProps {
+  layoutState: ChatLayoutState;
   value: string;
-  collapsed: boolean;
   onChange: (value: string) => void;
-  onSearchUsers?: (query: string) => void;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
 }
 
 export const SidebarSearch: React.FC<SidebarSearchProps> = ({
+  layoutState,
   value,
-  collapsed,
   onChange,
-  onSearchUsers,
+  inputRef,
 }) => {
   const { t } = useTranslation();
-  const openShortcut =
-    typeof navigator !== "undefined" &&
-    /Mac|iPhone|iPad/.test(navigator.platform)
-      ? "Cmd K"
-      : "Ctrl K";
-
-  if (collapsed) {
-    return (
-      <div className="px-3 pb-2">
-        <div className="flex h-10 items-center justify-center rounded-xl border border-border/70 bg-surface-overlay text-text-muted">
-          <MagnifyingGlassIcon className="h-5 w-5" aria-hidden="true" />
-        </div>
-      </div>
-    );
-  }
+  const isDense = layoutState !== "normal";
 
   return (
-    <div className="px-3 pb-2">
+    <div className={clsx(isDense ? "px-3 pb-2 pt-2" : "px-4 pb-3 pt-2.5")}>
       <label className="relative block">
         <MagnifyingGlassIcon
-          className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-muted"
+          className={clsx(
+            "pointer-events-none absolute top-1/2 -translate-y-1/2 text-text-muted",
+            isDense ? "left-3 h-4 w-4" : "left-3.5 h-[18px] w-[18px]",
+          )}
           aria-hidden="true"
         />
 
         <input
+          ref={inputRef}
           type="text"
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter") return;
-            const query = value.trim();
-            if (!query || !onSearchUsers) return;
-            onSearchUsers(query);
-          }}
-          placeholder={t("sidebar:search.placeholder")}
+          placeholder={t("sidebar:search.placeholder", {
+            defaultValue: "Search conversations",
+          })}
           className={clsx(
-            "h-11 w-full rounded-xl border border-border bg-surface-overlay pl-11 text-body-sm",
-            value.trim().length > 0 ? "pr-10" : "pr-[88px]",
-            "text-text-primary placeholder:text-text-muted",
-            "transition-micro focus:border-border-focus focus:bg-surface focus:outline-none focus:ring-2 focus:ring-focus/20",
+            "input-surface w-full text-text-primary placeholder:text-text-muted",
+            isDense
+              ? "pl-9 pr-8 text-[13px]"
+              : "pl-10 pr-9 text-[13px]",
+            "focus:bg-surface focus:outline-none",
           )}
           aria-label={t("sidebar:search.aria")}
         />
 
-        {value.trim().length > 0 ? (
+        {value.trim().length > 0 && (
           <button
             type="button"
             onClick={() => onChange("")}
-            className="absolute right-3 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-text-muted transition-micro hover:bg-surface-hover hover:text-text-primary"
+            className={clsx(
+              "absolute top-1/2 inline-flex -translate-y-1/2 items-center justify-center rounded-full text-text-muted transition-micro hover:bg-surface-hover hover:text-text-primary",
+              isDense ? "right-2 h-6 w-6" : "right-2.5 h-6 w-6",
+            )}
             aria-label={t("sidebar:search.clearAria")}
           >
-            <XMarkIcon className="h-4 w-4" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={emitCommandPaletteOpen}
-            className="absolute right-3 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-caption text-text-muted transition-micro hover:bg-surface-hover hover:text-text-secondary"
-            aria-label={t("common:actions.search", {
-              defaultValue: "Open command palette",
-            })}
-          >
-            <span className="font-medium">{openShortcut}</span>
+            <XMarkIcon className="h-3.5 w-3.5" />
           </button>
         )}
       </label>
-
-      {onSearchUsers && value.trim().length >= 2 && (
-        <button
-          type="button"
-          onClick={() => onSearchUsers(value.trim())}
-          className="mt-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-left text-caption font-medium text-text-secondary transition-micro hover:bg-surface-hover hover:text-text-primary"
-        >
-          {t("friends:tabs.search", { defaultValue: "Search users" })}:{" "}
-          <span className="font-semibold">{value.trim()}</span>
-        </button>
-      )}
     </div>
   );
 };

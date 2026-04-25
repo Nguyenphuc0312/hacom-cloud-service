@@ -1,26 +1,29 @@
 /**
- * @fileoverview Language Settings sub-section
- * Allows users to pick Vietnamese, English, or System default.
+ * @fileoverview Language settings section.
  */
 
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { LanguageIcon } from "@heroicons/react/24/outline";
-import { SettingsSection } from "./SettingsSection";
 import { RadioGroup } from "./RadioGroup";
+import { SettingsFieldGroup } from "./SettingsFieldGroup";
+import { SettingsSection } from "./SettingsSection";
 import { useSettingsStore } from "../../settings/settingsStore";
 import type { LanguageCode } from "../../settings/types";
 
-export const LanguageSection: React.FC = () => {
-  const { t } = useTranslation("settings");
-  const language = useSettingsStore((s) => s.language);
-  const updateSettings = useSettingsStore((s) => s.updateSettings);
+interface LanguageSectionProps {
+  id?: string;
+}
 
-  const languageOptions: {
+export const LanguageSection: React.FC<LanguageSectionProps> = ({ id }) => {
+  const { t } = useTranslation("settings");
+  const language = useSettingsStore((state) => state.language);
+  const updateSettings = useSettingsStore((state) => state.updateSettings);
+
+  const languageOptions: Array<{
     value: LanguageCode;
     label: string;
     description?: string;
-  }[] = [
+  }> = [
     {
       value: "vi",
       label: t("language.vi"),
@@ -38,17 +41,20 @@ export const LanguageSection: React.FC = () => {
 
   return (
     <SettingsSection
-      icon={<LanguageIcon className="h-5 w-5" />}
+      id={id}
       title={t("language.title")}
       description={t("language.description")}
     >
-      <RadioGroup
-        label={t("language.label")}
-        options={languageOptions}
-        value={language}
-        onChange={(v) => updateSettings({ language: v })}
-        variant="cards"
-      />
+      <SettingsFieldGroup>
+        <RadioGroup
+          label={t("language.label")}
+          options={languageOptions}
+          value={language}
+          onChange={(value) => updateSettings({ language: value })}
+          variant="list"
+          className="py-0"
+        />
+      </SettingsFieldGroup>
     </SettingsSection>
   );
 };

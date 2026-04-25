@@ -12,7 +12,9 @@
     "missingRefreshToken": "Không tìm thấy refresh token",
     "refreshMissingToken": "Phản hồi refresh không có access token",
     "loginTokenMissing": "Phản hồi đăng nhập không có access token",
-    "registerTokenMissing": "Phản hồi đăng ký không có access token"
+    "registerTokenMissing": "Phản hồi đăng ký không có access token",
+    "profileMissing": "Không thể tải hồ sơ của bạn.",
+    "profileRetryHint": "Hãy làm mới hồ sơ hoặc đăng nhập lại."
   },
   "chat": {
     "conversationAccessDenied": "Không thể truy cập cuộc trò chuyện này",
@@ -22,7 +24,7 @@
     "createGroupFailed": "Không thể tạo nhóm mới",
     "fetchConversationsFailed": "Không thể tải danh sách hội thoại",
     "fetchMessagesFailed": "Không thể tải tin nhắn",
-    "roomIdMissing": "Không nhận được mã phòng",
+    "conversationIdMissing": "Không nhận được mã hội thoại",
     "invalidSendResponse": "Phản hồi gửi tin nhắn không hợp lệ",
     "invalidResendResponse": "Phản hồi gửi lại tin nhắn không hợp lệ"
   },
@@ -36,6 +38,7 @@
     "tooLarge": "Tệp quá lớn",
     "tooManyFiles": "Tối đa {{max}} tệp",
     "fileTooLargeNamed": "{{name}} quá lớn",
+    "unsupportedTypeNamed": "{{name}} có định dạng tệp không được hỗ trợ",
     "totalSizeTooLarge": "Tổng dung lượng tệp vượt giới hạn"
   }
 }

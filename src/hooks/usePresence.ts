@@ -4,9 +4,9 @@
  * Integrates with the WebSocket and presenceStore.
  */
 
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useMemo, useRef } from "react";
 import { initSocket } from "../lib/socket";
-import { WsEventNames } from "@hacom/chat-shared-types";
+import { WsEventNames } from "@hacom/chat-shared-types/ws";
 import {
   usePresenceStore,
   type UserPresenceInfo,
@@ -21,10 +21,6 @@ interface UsePresenceOptions {
   userIds?: string[];
   /** Conversation ID (server resolves members) */
   conversationId?: string;
-  /**
-   * @deprecated Use conversationId.
-   */
-  roomId?: string;
   /** Auto-subscribe on mount (default true) */
   enabled?: boolean;
 }
@@ -76,7 +72,23 @@ export function usePresence(
   options: UsePresenceOptions = {},
 ): UsePresenceReturn {
   const { userIds, enabled = true } = options;
-  const conversationId = options.conversationId ?? options.roomId;
+  const conversationId = options.conversationId;
+  const userIdsKey = Array.isArray(userIds)
+    ? Array.from(
+        new Set(
+          userIds.filter(
+            (userId): userId is string =>
+              typeof userId === "string" && userId.trim().length > 0,
+          ),
+        ),
+      )
+        .sort()
+        .join(",")
+    : "";
+  const normalizedUserIds = useMemo(
+    () => (userIdsKey ? userIdsKey.split(",") : []),
+    [userIdsKey],
+  );
 
   const setPresence = usePresenceStore((s) => s.setPresence);
   const setPresenceBatch = usePresenceStore((s) => s.setPresenceBatch);
@@ -92,16 +104,17 @@ export function usePresence(
     if (!socket.isConnected()) return;
 
     const payload: Record<string, unknown> = {};
-    if (userIds && userIds.length > 0) payload.userIds = userIds;
+    if (normalizedUserIds.length > 0) {
+      payload.userIds = normalizedUserIds;
+    }
     if (conversationId) {
       payload.conversationId = conversationId;
-      payload.roomId = conversationId;
     }
-    if (!payload.userIds && !payload.roomId) return;
+    if (!payload.userIds && !payload.conversationId) return;
 
     socket.send("presence:subscribe", payload);
     subscribedRef.current = true;
-  }, [conversationId, userIds]);
+  }, [conversationId, normalizedUserIds]);
 
   const unsubscribe = useCallback(() => {
     if (!subscribedRef.current) return;
@@ -110,15 +123,16 @@ export function usePresence(
     if (!socket.isConnected()) return;
 
     const payload: Record<string, unknown> = {};
-    if (userIds && userIds.length > 0) payload.userIds = userIds;
+    if (normalizedUserIds.length > 0) {
+      payload.userIds = normalizedUserIds;
+    }
     if (conversationId) {
       payload.conversationId = conversationId;
-      payload.roomId = conversationId;
     }
 
     socket.send("presence:unsubscribe", payload);
     subscribedRef.current = false;
-  }, [conversationId, userIds]);
+  }, [conversationId, normalizedUserIds]);
 
   // Listen for presence events
   useEffect(() => {

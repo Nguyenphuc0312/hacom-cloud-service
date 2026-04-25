@@ -5,22 +5,27 @@
 
 import apiClient, { authClient } from "../lib/axios";
 import axios from "axios";
+import { ErrorCode, type ApiResponse } from "@hacom/chat-shared-types/core";
 import type {
-  ApiResponse,
-  CompleteUploadResponse,
-  CreateMessageResponse,
-  FriendshipCapabilitiesDto,
-  FriendshipPendingCountDto,
-  FriendshipStatusResponseDto,
-  FriendshipWriteResponseDto,
-  FriendshipRelationDto,
-  GetDownloadUrlResponse,
   LoginResponse,
   RefreshTokenResponse,
   RegisterResponseDto,
+} from "@hacom/chat-shared-types/auth";
+import type {
+  CompleteUploadResponse,
+  CreateDirectConversationDto,
+  CreateMessageResponse,
+  FriendshipCapabilitiesDto,
+  FriendshipPendingCountDto,
+  FriendshipRelationDto,
+  FriendshipStatusResponseDto,
+  FriendshipWriteResponseDto,
+  GetDownloadUrlResponse,
+  ConversationReadStateDto,
   RoomMessagesResponse,
+  UnreadFeedResponseDto,
   UploadSignedUrlResponse,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/chat";
 import type { User } from "../stores/authStore";
 import type { Attachment, Conversation, Message } from "../types";
 import { RoomMemberRole } from "../types";
@@ -28,9 +33,56 @@ import {
   normalizeConversation,
   normalizeConversationsPayload,
 } from "../lib/conversationAdapter";
-import { unwrapApiSuccess } from "../lib/apiContract";
+import { ApiContractError, unwrapApiSuccess } from "../lib/apiContract";
 import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 import { getCsrfToken, isRefreshTokenCookieMode } from "./tokenService";
+import { isUuid } from "../utils/isUuid";
+import { logger } from "../utils/logger";
+
+const DIRECT_DM_TRACE_PREFIX = "direct_dm.request_trace";
+const DIRECT_DM_PATH = "/conversations/direct";
+
+const buildDirectDmTraceRequestId = (): string => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `direct-dm:${crypto.randomUUID()}`;
+  }
+
+  return `direct-dm:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+};
+
+export const buildCreateDirectConversationPayload = (
+  userId: string,
+): CreateDirectConversationDto => {
+  const peerUserId = typeof userId === "string" ? userId.trim() : "";
+
+  if (!peerUserId) {
+    throw new ApiContractError("peerUserId is required", {
+      statusCode: 422,
+      code: ErrorCode.VALIDATION_ERROR,
+      details: [
+        {
+          field: "peerUserId",
+          message: "peerUserId is required",
+        },
+      ],
+    });
+  }
+
+  if (!isUuid(peerUserId)) {
+    throw new ApiContractError("peerUserId must be a valid UUID", {
+      statusCode: 422,
+      code: ErrorCode.VALIDATION_ERROR,
+      details: [
+        {
+          field: "peerUserId",
+          message: "peerUserId must be a valid UUID",
+        },
+      ],
+    });
+  }
+
+  return { peerUserId };
+};
 
 type EmailOtpChallengePurpose = "signup";
 
@@ -67,34 +119,31 @@ export interface ConfirmEmailOtpChallengeResponse {
   alreadyVerified?: boolean;
 }
 
+export interface ActivationOtpResponse {
+  sent: boolean;
+  maskedEmail?: string | null;
+  resendAvailableAt?: string | null;
+  nextAction?: "VERIFY_OTP" | "SET_PASSWORD";
+}
+
+export interface ActivationVerifyResponse {
+  user?: User;
+  accessToken?: string;
+  refreshToken?: string;
+  tokens?: {
+    accessToken?: string;
+    refreshToken?: string;
+  };
+  nextAction?: "VERIFY_OTP" | "SET_PASSWORD";
+  requiresPasswordSetup?: boolean;
+  verificationProof?: string | null;
+}
+
 const canonicalConversationPath = (conversationId: string): string =>
   `/conversations/${conversationId}`;
 
-const legacyConversationPath = (conversationId: string): string =>
-  `/rooms/${conversationId}`;
-
 const canonicalConversationMessagesPath = (conversationId: string): string =>
   `${canonicalConversationPath(conversationId)}/messages`;
-
-const legacyConversationMessagesPath = (conversationId: string): string =>
-  `${legacyConversationPath(conversationId)}/messages`;
-
-const isNotFoundError = (error: unknown): boolean =>
-  axios.isAxiosError(error) && error.response?.status === 404;
-
-const withLegacyConversationFallback = async <T>(
-  canonicalRequest: () => Promise<T>,
-  legacyRequest: () => Promise<T>,
-): Promise<T> => {
-  try {
-    return await canonicalRequest();
-  } catch (error) {
-    if (isNotFoundError(error)) {
-      return legacyRequest();
-    }
-    throw error;
-  }
-};
 
 const normalizeUnreadCountPayload = (
   payload: unknown,
@@ -112,6 +161,25 @@ const normalizeUnreadCountPayload = (
   }
 
   return { unreadCount: 0 };
+};
+
+const normalizeConversationReadState = (
+  payload: unknown,
+): ConversationReadStateDto => {
+  const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+  const asFiniteNumber = (value: unknown): number | null =>
+    typeof value === "number" && Number.isFinite(value) ? value : null;
+  const asStringValue = (value: unknown): string | null =>
+    typeof value === "string" && value.trim().length > 0 ? value : null;
+
+  return {
+    unreadCount: asFiniteNumber(record.unreadCount) ?? 0,
+    lastReadSeq: asFiniteNumber(record.lastReadSeq) ?? 0,
+    lastReadMessageId: asStringValue(record.lastReadMessageId),
+    lastReadAt: asStringValue(record.lastReadAt),
+    firstUnreadMessageId: asStringValue(record.firstUnreadMessageId),
+    firstUnreadMessageAt: asStringValue(record.firstUnreadMessageAt),
+  };
 };
 
 const normalizePinnedMessagesPayload = (
@@ -143,6 +211,35 @@ export const authApi = {
       AUTH_ENDPOINTS.login,
       { email, password },
     );
+    return response.data;
+  },
+
+  requestActivationOtp: async (data: { activationTicket: string }) => {
+    const response = await authClient.post<ApiResponse<ActivationOtpResponse>>(
+      AUTH_ENDPOINTS.activationRequest,
+      data,
+    );
+    return response.data;
+  },
+
+  resendActivationOtp: async (data: { activationTicket: string }) => {
+    const response = await authClient.post<ApiResponse<ActivationOtpResponse>>(
+      AUTH_ENDPOINTS.activationResend,
+      data,
+    );
+    return response.data;
+  },
+
+  verifyActivationOtp: async (data: {
+    activationTicket: string;
+    otp?: string;
+    password?: string;
+    confirmPassword?: string;
+    verificationProof?: string;
+  }) => {
+    const response = await authClient.post<
+      ApiResponse<ActivationVerifyResponse>
+    >(AUTH_ENDPOINTS.activationVerify, data);
     return response.data;
   },
 
@@ -257,6 +354,27 @@ export const userApi = {
     return response.data;
   },
 
+  patchProfile: async (data: Partial<User>) => {
+    try {
+      const response = await apiClient.patch<ApiResponse<User>>(
+        "/users/profile",
+        data,
+      );
+      return response.data;
+    } catch (error) {
+      if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+        throw error;
+      }
+
+      // Backward-compatible fallback for legacy profile update contract.
+      const response = await apiClient.put<ApiResponse<User>>(
+        "/users/profile",
+        data,
+      );
+      return response.data;
+    }
+  },
+
   updateAvatar: async (file: File) => {
     const formData = new FormData();
     formData.append("avatar", file);
@@ -275,9 +393,15 @@ export const userApi = {
     return response.data;
   },
 
-  searchUsers: async (query: string, page = 1, limit = 20) => {
+  searchUsers: async (
+    query: string,
+    page = 1,
+    limit = 20,
+    options?: { signal?: AbortSignal },
+  ) => {
     const response = await apiClient.get<ApiResponse<User[]>>(
       `/users/search?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`,
+      { signal: options?.signal },
     );
     return response.data;
   },
@@ -348,6 +472,7 @@ export const conversationApi = {
         conversations: Array<{
           conversationId: string;
           unreadCount: number;
+          lastReadSeq: number;
           lastReadMessageId: string | null;
           lastReadAt: string | null;
         }>;
@@ -382,10 +507,28 @@ export const conversationApi = {
   },
 
   createPrivateConversation: async (userId: string) => {
+    const requestId = buildDirectDmTraceRequestId();
+    const payload = buildCreateDirectConversationPayload(userId);
+
+    logger.debug("direct_dm", DIRECT_DM_TRACE_PREFIX, {
+      requestId,
+      method: "POST",
+      url: DIRECT_DM_PATH,
+      rawInputUserId: userId,
+      payload,
+      diagnostics:
+        typeof window !== "undefined"
+          ? window.__CHAT_WEB_DIAGNOSTICS__
+          : undefined,
+    });
+
     const response = await apiClient.post<ApiResponse<unknown>>(
-      "/conversations/direct",
+      DIRECT_DM_PATH,
+      payload,
       {
-        userId,
+        headers: {
+          "X-Request-Id": requestId,
+        },
       },
     );
 
@@ -408,12 +551,13 @@ export const conversationApi = {
     description?: string;
   }) => {
     const response = await apiClient.post<ApiResponse<unknown>>(
-      "/conversations/group",
+      "/groups",
       {
-        name: data.name,
+        type: "basic_group",
+        title: data.name,
         memberIds: data.memberIds,
         description: data.description,
-        avatar: data.avatar,
+        avatarUrl: data.avatar,
       },
     );
 
@@ -433,17 +577,9 @@ export const conversationApi = {
     conversationId: string,
     data: Partial<Conversation>,
   ) => {
-    const response = await withLegacyConversationFallback(
-      () =>
-        apiClient.patch<ApiResponse<Conversation>>(
-          canonicalConversationPath(conversationId),
-          data,
-        ),
-      () =>
-        apiClient.patch<ApiResponse<Conversation>>(
-          legacyConversationPath(conversationId),
-          data,
-        ),
+    const response = await apiClient.patch<ApiResponse<Conversation>>(
+      canonicalConversationPath(conversationId),
+      data,
     );
     return response.data;
   },
@@ -455,17 +591,9 @@ export const conversationApi = {
   addMembers: async (conversationId: string, memberIds: string[]) => {
     // Backend expects a single userId per request, so add sequentially.
     for (const userId of memberIds) {
-      await withLegacyConversationFallback(
-        () =>
-          apiClient.post<ApiResponse<unknown>>(
-            `${canonicalConversationPath(conversationId)}/members`,
-            { userId },
-          ),
-        () =>
-          apiClient.post<ApiResponse<unknown>>(
-            `${legacyConversationPath(conversationId)}/members`,
-            { userId },
-          ),
+      await apiClient.post<ApiResponse<unknown>>(
+        `${canonicalConversationPath(conversationId)}/members`,
+        { userId },
       );
     }
 
@@ -474,96 +602,49 @@ export const conversationApi = {
   },
 
   inviteToGroup: async (conversationId: string, inviteeId: string) => {
-    const response = await withLegacyConversationFallback(
-      () =>
-        apiClient.post<ApiResponse<unknown>>(
-          `${canonicalConversationPath(conversationId)}/invites`,
-          { inviteeId },
-        ),
-      () =>
-        apiClient.post<ApiResponse<unknown>>(
-          `${legacyConversationPath(conversationId)}/invites`,
-          { inviteeId },
-        ),
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      `${canonicalConversationPath(conversationId)}/invites`,
+      { inviteeId },
     );
     return response.data;
   },
 
   acceptGroupInvite: async (conversationId: string, inviteId: string) => {
-    const response = await withLegacyConversationFallback(
-      () =>
-        apiClient.post<ApiResponse<unknown>>(
-          `${canonicalConversationPath(conversationId)}/invites/${inviteId}/accept`,
-        ),
-      () =>
-        apiClient.post<ApiResponse<unknown>>(
-          `${legacyConversationPath(conversationId)}/invites/${inviteId}/accept`,
-        ),
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      `${canonicalConversationPath(conversationId)}/invites/${inviteId}/accept`,
     );
     return response.data;
   },
 
   declineGroupInvite: async (conversationId: string, inviteId: string) => {
-    const response = await withLegacyConversationFallback(
-      () =>
-        apiClient.post<ApiResponse<unknown>>(
-          `${canonicalConversationPath(conversationId)}/invites/${inviteId}/decline`,
-        ),
-      () =>
-        apiClient.post<ApiResponse<unknown>>(
-          `${legacyConversationPath(conversationId)}/invites/${inviteId}/decline`,
-        ),
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      `${canonicalConversationPath(conversationId)}/invites/${inviteId}/decline`,
     );
     return response.data;
   },
 
   removeMember: async (conversationId: string, userId: string) => {
-    await withLegacyConversationFallback(
-      () =>
-        apiClient.delete(
-          `${canonicalConversationPath(conversationId)}/members/${userId}`,
-        ),
-      () =>
-        apiClient.delete(
-          `${legacyConversationPath(conversationId)}/members/${userId}`,
-        ),
+    await apiClient.delete(
+      `${canonicalConversationPath(conversationId)}/members/${userId}`,
     );
   },
 
   removeMembers: async (conversationId: string, memberIds: string[]) => {
     // Backend expects path param, so we remove one by one
     for (const userId of memberIds) {
-      await withLegacyConversationFallback(
-        () =>
-          apiClient.delete(
-            `${canonicalConversationPath(conversationId)}/members/${userId}`,
-          ),
-        () =>
-          apiClient.delete(
-            `${legacyConversationPath(conversationId)}/members/${userId}`,
-          ),
+      await apiClient.delete(
+        `${canonicalConversationPath(conversationId)}/members/${userId}`,
       );
     }
   },
 
   leaveConversation: async (conversationId: string) => {
-    await withLegacyConversationFallback(
-      () =>
-        apiClient.post(`${canonicalConversationPath(conversationId)}/leave`),
-      () => apiClient.post(`${legacyConversationPath(conversationId)}/leave`),
-    );
+    await apiClient.post(`${canonicalConversationPath(conversationId)}/leave`);
   },
 
   getMembers: async (conversationId: string, page = 1, limit = 100) => {
-    const response = await withLegacyConversationFallback(
-      () =>
-        apiClient.get<ApiResponse<unknown>>(
-          `${canonicalConversationPath(conversationId)}/members?page=${page}&limit=${limit}`,
-        ),
-      () =>
-        apiClient.get<ApiResponse<unknown>>(
-          `${legacyConversationPath(conversationId)}/members?page=${page}&limit=${limit}`,
-        ),
+    const response = await apiClient.get<ApiResponse<unknown>>(
+      `${canonicalConversationPath(conversationId)}/members?page=${page}&limit=${limit}`,
     );
     return response.data;
   },
@@ -571,54 +652,63 @@ export const conversationApi = {
   updateMemberRole: async (
     conversationId: string,
     userId: string,
-    role: RoomMemberRole | "owner",
+    role: RoomMemberRole.ADMIN | RoomMemberRole.MEMBER | "owner",
   ) => {
-    const response = await withLegacyConversationFallback(
-      () =>
-        apiClient.patch<ApiResponse<unknown>>(
-          `${canonicalConversationPath(conversationId)}/members/${userId}/role`,
-          { role },
-        ),
-      () =>
-        apiClient.patch<ApiResponse<unknown>>(
-          `${legacyConversationPath(conversationId)}/members/${userId}/role`,
-          { role },
-        ),
+    const response = await apiClient.patch<ApiResponse<unknown>>(
+      `${canonicalConversationPath(conversationId)}/members/${userId}/role`,
+      { role },
     );
     return response.data;
   },
 
-  markAsRead: async (conversationId: string) => {
-    await withLegacyConversationFallback(
-      () =>
-        apiClient.post(
-          `${canonicalConversationMessagesPath(conversationId)}/read`,
-        ),
-      () =>
-        apiClient.post(
-          `${legacyConversationMessagesPath(conversationId)}/read`,
-        ),
+  markAsRead: async (
+    conversationId: string,
+    lastVisibleMessageId?: string,
+  ) => {
+    const payload = lastVisibleMessageId
+      ? {
+          lastVisibleMessageId,
+        }
+      : undefined;
+    await apiClient.post(
+      `${canonicalConversationMessagesPath(conversationId)}/read`,
+      payload,
     );
   },
 
   getUnreadCount: async (conversationId: string) => {
-    const response = await withLegacyConversationFallback(
-      () =>
-        apiClient.get<ApiResponse<unknown>>(
-          `${canonicalConversationMessagesPath(conversationId)}/unread`,
-        ),
-      () =>
-        apiClient.get<ApiResponse<unknown>>(
-          `${legacyConversationMessagesPath(conversationId)}/unread`,
-        ),
-    );
+      const response = await apiClient.get<ApiResponse<unknown>>(
+        `${canonicalConversationMessagesPath(conversationId)}/unread`,
+      );
+    const payload = unwrapApiSuccess(response.data);
 
-    return {
-      ...response.data,
-      data: normalizeUnreadCountPayload(response.data.data),
-    };
-  },
-};
+      return {
+        ...response.data,
+        data: normalizeUnreadCountPayload(payload),
+      };
+    },
+
+    getUnreadFeed: async (conversationId: string, limit = 20) => {
+      const response = await apiClient.get<ApiResponse<UnreadFeedResponseDto>>(
+        `${canonicalConversationMessagesPath(conversationId)}/unread-feed?limit=${limit}`,
+      );
+      const payload = unwrapApiSuccess(response.data) as unknown as Record<string, unknown>;
+      const rawMessages = Array.isArray(payload.messages) ? payload.messages : [];
+
+      return {
+        ...response.data,
+        data: {
+          messages: rawMessages as unknown as Message[],
+          readState: normalizeConversationReadState(payload.readState),
+          limit:
+            typeof payload.limit === "number" && Number.isFinite(payload.limit)
+              ? payload.limit
+              : limit,
+          hasMore: payload.hasMore === true,
+        },
+      };
+    },
+  };
 
 // ============================================
 // GROUP API (Telegram-like)
@@ -626,16 +716,10 @@ export const conversationApi = {
 
 export const groupApi = {
   createGroup: async (payload: {
-    type: "basic_group" | "supergroup" | "channel";
+    type: "basic_group";
     title: string;
     description?: string;
     avatarUrl?: string;
-    isPublic?: boolean;
-    username?: string;
-    joinApprovalRequired?: boolean;
-    historyVisibleToNewMembers?: boolean;
-    slowModeSeconds?: number;
-    defaultPermissions?: Record<string, boolean>;
     memberIds?: string[];
   }) => {
     const response = await apiClient.post<ApiResponse<unknown>>(
@@ -729,7 +813,7 @@ export const groupApi = {
   updateMemberRole: async (
     groupId: string,
     userId: string,
-    role: "owner" | "admin" | "moderator" | "member" | "restricted" | "banned",
+    role: "admin" | "member",
   ) => {
     const response = await apiClient.patch<ApiResponse<unknown>>(
       `/groups/${groupId}/members/${userId}/role`,
@@ -808,22 +892,19 @@ export const groupApi = {
 export const messageApi = {
   getMessages: async (
     conversationId: string,
-    pageOrOptions:
-      | number
-      | {
-          page?: number;
-          limit?: number;
-          before?: string;
-          after?: string;
-          beforeId?: string;
-          afterId?: string;
-        } = 1,
-    limit = 50,
+    options: {
+      limit?: number;
+      /** @deprecated Legacy timestamp hint. Do not send as public HTTP contract. */
+      before?: string;
+      /** @deprecated Legacy timestamp hint. Do not send as public HTTP contract. */
+      after?: string;
+      beforeId?: string;
+      afterId?: string;
+      beforeSeq?: number;
+      afterSeq?: number;
+      signal?: AbortSignal;
+    } = {},
   ) => {
-    const options =
-      typeof pageOrOptions === "number"
-        ? { page: pageOrOptions, limit }
-        : pageOrOptions;
     const query = new URLSearchParams({
       limit: String(
         typeof options.limit === "number" && Number.isFinite(options.limit)
@@ -832,30 +913,20 @@ export const messageApi = {
       ),
     });
 
-    if (options.before) query.set("before", options.before);
-    if (options.after) query.set("after", options.after);
     if (options.beforeId) query.set("beforeId", options.beforeId);
     if (options.afterId) query.set("afterId", options.afterId);
-    if (!options.before && !options.after) {
-      query.set(
-        "page",
-        String(
-          typeof options.page === "number" && Number.isFinite(options.page)
-            ? Math.max(1, Math.floor(options.page))
-            : 1,
-        ),
-      );
+    if (typeof options.beforeSeq === "number" && Number.isFinite(options.beforeSeq)) {
+      query.set("beforeSeq", String(Math.floor(options.beforeSeq)));
+    }
+    if (typeof options.afterSeq === "number" && Number.isFinite(options.afterSeq)) {
+      query.set("afterSeq", String(Math.floor(options.afterSeq)));
     }
 
-    const response = await withLegacyConversationFallback(
-      () =>
-        apiClient.get<ApiResponse<RoomMessagesResponse>>(
-          `${canonicalConversationMessagesPath(conversationId)}?${query.toString()}`,
-        ),
-      () =>
-        apiClient.get<ApiResponse<RoomMessagesResponse>>(
-          `${legacyConversationMessagesPath(conversationId)}?${query.toString()}`,
-        ),
+    const response = await apiClient.get<ApiResponse<RoomMessagesResponse>>(
+      `${canonicalConversationMessagesPath(conversationId)}?${query.toString()}`,
+      {
+        signal: options.signal,
+      },
     );
     return response.data;
   },
@@ -888,37 +959,19 @@ export const messageApi = {
       }>;
     },
   ) => {
-    const response = await withLegacyConversationFallback(
-      () =>
-        apiClient.post<ApiResponse<CreateMessageResponse>>(
-          canonicalConversationMessagesPath(conversationId),
-          {
-            content: data.content,
-            type: data.type || "text",
-            senderName: data.senderName,
-            senderAvatar: data.senderAvatar,
-            replyTo: data.replyToId,
-            clientMessageId: data.clientMessageId,
-            tempId: data.tempId,
-            localId: data.localId,
-            attachments: data.attachments,
-          },
-        ),
-      () =>
-        apiClient.post<ApiResponse<CreateMessageResponse>>(
-          legacyConversationMessagesPath(conversationId),
-          {
-            content: data.content,
-            type: data.type || "text",
-            senderName: data.senderName,
-            senderAvatar: data.senderAvatar,
-            replyTo: data.replyToId,
-            clientMessageId: data.clientMessageId,
-            tempId: data.tempId,
-            localId: data.localId,
-            attachments: data.attachments,
-          },
-        ),
+    const response = await apiClient.post<ApiResponse<CreateMessageResponse>>(
+      canonicalConversationMessagesPath(conversationId),
+      {
+        content: data.content,
+        type: data.type || "text",
+        senderName: data.senderName,
+        senderAvatar: data.senderAvatar,
+        replyTo: data.replyToId,
+        clientMessageId: data.clientMessageId,
+        tempId: data.tempId,
+        localId: data.localId,
+        attachments: data.attachments,
+      },
     );
     return response.data;
   },
@@ -968,18 +1021,16 @@ export const messageApi = {
   searchMessages: async (params: {
     q: string;
     conversationId?: string;
-    /**
-     * @deprecated Use conversationId.
-     */
-    roomId?: string;
     type?: string;
     page?: number;
     limit?: number;
+    signal?: AbortSignal;
   }) => {
     const query = new URLSearchParams();
     query.set("q", params.q);
-    const conversationId = params.conversationId ?? params.roomId;
-    if (conversationId) query.set("roomId", conversationId);
+    if (params.conversationId) {
+      query.set("conversationId", params.conversationId);
+    }
     if (params.type) query.set("type", params.type);
     if (params.page) query.set("page", String(params.page));
     if (params.limit) query.set("limit", String(params.limit));
@@ -990,7 +1041,9 @@ export const messageApi = {
         page: number;
         limit: number;
       }>
-    >(`/messages/search?${query.toString()}`);
+    >(`/messages/search?${query.toString()}`, {
+      signal: params.signal,
+    });
     return response.data;
   },
 
@@ -1002,20 +1055,14 @@ export const messageApi = {
   },
 
   getPinnedMessages: async (conversationId: string) => {
-    const response = await withLegacyConversationFallback(
-      () =>
-        apiClient.get<ApiResponse<unknown>>(
-          `${canonicalConversationMessagesPath(conversationId)}/pinned`,
-        ),
-      () =>
-        apiClient.get<ApiResponse<unknown>>(
-          `${legacyConversationMessagesPath(conversationId)}/pinned`,
-        ),
+    const response = await apiClient.get<ApiResponse<unknown>>(
+      `${canonicalConversationMessagesPath(conversationId)}/pinned`,
     );
+    const payload = unwrapApiSuccess(response.data);
 
     return {
       ...response.data,
-      data: normalizePinnedMessagesPayload(response.data.data),
+      data: normalizePinnedMessagesPayload(payload),
     };
   },
 };
@@ -1054,10 +1101,18 @@ export const fileApi = {
     conversationId: string;
     objectKey?: string;
     attachmentId?: string;
+    signal?: AbortSignal;
   }) => {
     const response = await apiClient.get<ApiResponse<GetDownloadUrlResponse>>(
       "/files/download-url",
-      { params },
+      {
+        params: {
+          conversationId: params.conversationId,
+          ...(params.objectKey ? { objectKey: params.objectKey } : {}),
+          ...(params.attachmentId ? { attachmentId: params.attachmentId } : {}),
+        },
+        signal: params.signal,
+      },
     );
     return response.data;
   },
@@ -1130,15 +1185,13 @@ export const fileApi = {
 export const contactApi = {
   shareContact: async (payload: {
     contactUserId: string;
-    conversationId?: string;
-    roomId?: string;
+    conversationId: string;
   }) => {
-    const conversationId = payload.conversationId ?? payload.roomId;
     const response = await apiClient.post<ApiResponse<unknown>>(
       "/contacts/share",
       {
         contactUserId: payload.contactUserId,
-        roomId: conversationId,
+        conversationId: payload.conversationId,
       },
     );
     return response.data;

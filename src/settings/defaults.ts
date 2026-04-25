@@ -8,7 +8,7 @@
 import {
   DEFAULT_SETTINGS,
   SETTINGS_SCHEMA_VERSION,
-} from "@hacom/chat-shared-types";
+} from "@hacom/chat-shared-types/runtime";
 import type { SettingsSchema } from "./types";
 
 /** Current schema version – increment on breaking changes */

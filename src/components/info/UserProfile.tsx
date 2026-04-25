@@ -30,7 +30,13 @@ type ProfileUser = Partial<UserSummary> & {
   bio?: string;
   phone?: string;
   createdAt?: string;
+  fullNameFromHR?: string;
+  full_name_from_hr?: string;
+  employeeCode?: string;
+  employee_code?: string;
 };
+
+type UserProfileConversationContext = "standalone" | "direct" | "group";
 
 interface UserProfileProps {
   userId: string;
@@ -39,6 +45,7 @@ interface UserProfileProps {
   onClose: () => void;
   onStartConversation?: (userId: string) => void | Promise<void>;
   onDeleteConversation?: () => void | Promise<void>;
+  conversationContext?: UserProfileConversationContext;
   className?: string;
 }
 
@@ -102,7 +109,7 @@ const badgeToneByRelationship: Record<string, string> = {
 };
 
 const statCardClass =
-  "rounded-lg border border-border/80 bg-surface px-3 py-2.5 transition-colors";
+  "app-page-subtle rounded-lg px-3 py-2.5 transition-colors";
 
 export const UserProfile: React.FC<UserProfileProps> = ({
   userId,
@@ -111,16 +118,25 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   onClose,
   onStartConversation,
   onDeleteConversation,
+  conversationContext = "standalone",
   className,
 }) => {
   const { t } = useTranslation(["profile", "common", "friends"]);
   const authUser = useAuthStore((state) => state.user);
+  const resolvedInitialUser = React.useMemo(
+    () =>
+      initialUser && initialUser.id === userId
+        ? initialUser
+        : null,
+    [initialUser, userId],
+  );
   const [user, setUser] = React.useState<ProfileUser | null>(
-    initialUser && initialUser.id ? initialUser : null,
+    resolvedInitialUser,
   );
   const [isLoading, setIsLoading] = React.useState(false);
   const [isEditOpen, setIsEditOpen] = React.useState(false);
   const [actingKey, setActingKey] = React.useState<string | null>(null);
+  const editButtonRef = React.useRef<HTMLButtonElement | null>(null);
 
   const {
     refreshDirectory,
@@ -148,13 +164,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   React.useEffect(() => {
     if (isSelf && authUser) {
       setUser({
+        ...(authUser as Partial<ProfileUser>),
         id: authUser.id,
         username: authUser.username,
         firstName: authUser.firstName,
         lastName: authUser.lastName,
-        displayName:
-          `${authUser.firstName || ""} ${authUser.lastName || ""}`.trim() ||
-          authUser.username,
+        displayName: authUser.displayName,
         avatar: authUser.avatar,
         bio: authUser.bio,
         phone: authUser.phone,
@@ -164,18 +179,15 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       return;
     }
 
-    setUser((current) =>
-      current?.id === initialUser?.id && initialUser
-        ? { ...current, ...initialUser }
-        : (initialUser ?? current),
-    );
-  }, [authUser, initialUser, isSelf]);
+    setUser(resolvedInitialUser);
+  }, [authUser, isSelf, resolvedInitialUser]);
 
   React.useEffect(() => {
     let isMounted = true;
 
     const loadUser = async () => {
       if (!userId || isSelf) return;
+      setUser(resolvedInitialUser);
       setIsLoading(true);
       try {
         const response = await getUserByIdUseCase(userId);
@@ -183,13 +195,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         if (!isMounted) return;
 
         setUser({
+          ...(payload as Partial<ProfileUser>),
           id: payload.id,
           username: payload.username,
           firstName: payload.firstName,
           lastName: payload.lastName,
-          displayName:
-            `${payload.firstName || ""} ${payload.lastName || ""}`.trim() ||
-            payload.username,
+          displayName: payload.displayName,
           avatar: payload.avatar,
           bio: payload.bio,
           phone: payload.phone,
@@ -198,7 +209,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         });
       } catch {
         if (!isMounted) return;
-        setUser((current) => current ?? initialUser ?? null);
+        setUser((current) => current ?? resolvedInitialUser ?? null);
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -211,7 +222,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [initialUser, isSelf, userId]);
+  }, [isSelf, resolvedInitialUser, userId]);
 
   React.useEffect(() => {
     void refreshDirectory();
@@ -230,6 +241,11 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
   const presenceLabel = formatPresenceLabel(effectiveStatus, lastSeenAt, t);
   const relationshipLabel = formatRelationshipLabel(relationship.kind, t);
+  const shouldShowMessageAction =
+    !isSelf &&
+    Boolean(onStartConversation) &&
+    capabilities.canMessage &&
+    conversationContext !== "direct";
 
   const handleAsyncAction = React.useCallback(
     async (
@@ -275,6 +291,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       return (
         <div className="flex gap-2">
           <Button
+            ref={editButtonRef}
             type="button"
             fullWidth
             leftIcon={<PencilSquareIcon className="h-4 w-4" />}
@@ -287,9 +304,51 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     }
 
     if (relationship.kind === "friend") {
+      const secondaryActions = [
+        capabilities.canUnfriend ? (
+          <Button
+            key="unfriend"
+            type="button"
+            variant="secondary"
+            size="sm"
+            isLoading={actingKey === "unfriend"}
+            onClick={() =>
+              void handleAsyncAction(
+                "unfriend",
+                () => removeFriend(relationship.friendshipId),
+                t("friends:unfriendSuccess"),
+                t("friends:actionFailed"),
+              )
+            }
+          >
+            {t("friends:unfriend")}
+          </Button>
+        ) : null,
+        capabilities.canBlock ? (
+          <Button
+            key="block"
+            type="button"
+            variant="secondary"
+            size="sm"
+            leftIcon={<NoSymbolIcon className="h-4 w-4" />}
+            isLoading={actingKey === "block"}
+            onClick={() =>
+              void handleAsyncAction(
+                "block",
+                () => blockUser(userId),
+                t("friends:blockSuccess"),
+                t("friends:actionFailed"),
+              )
+            }
+          >
+            {t("profile:userProfile.blockUser")}
+          </Button>
+        ) : null,
+      ].filter(Boolean);
+
       return (
-        <div className="flex gap-2">
-          {capabilities.canMessage ? (
+        <div className="space-y-2">
+          {shouldShowMessageAction ? (
             <Button
               type="button"
               fullWidth
@@ -300,40 +359,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               {t("friends:message")}
             </Button>
           ) : null}
-          {capabilities.canUnfriend ? (
-            <Button
-              type="button"
-              variant="secondary"
-              isLoading={actingKey === "unfriend"}
-              onClick={() =>
-                void handleAsyncAction(
-                  "unfriend",
-                  () => removeFriend(relationship.friendshipId),
-                  t("friends:unfriendSuccess"),
-                  t("friends:actionFailed"),
-                )
-              }
-            >
-              {t("friends:unfriend")}
-            </Button>
-          ) : null}
-          {capabilities.canBlock ? (
-            <Button
-              type="button"
-              variant="secondary"
-              leftIcon={<NoSymbolIcon className="h-4 w-4" />}
-              isLoading={actingKey === "block"}
-              onClick={() =>
-                void handleAsyncAction(
-                  "block",
-                  () => blockUser(userId),
-                  t("friends:blockSuccess"),
-                  t("friends:actionFailed"),
-                )
-              }
-            >
-              {t("profile:userProfile.blockUser")}
-            </Button>
+          {secondaryActions.length > 0 ? (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {secondaryActions}
+            </div>
           ) : null}
         </div>
       );
@@ -341,7 +370,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
     if (relationship.kind === "incoming_request") {
       return (
-        <div className="flex gap-2">
+        <div className="space-y-2">
           {capabilities.canAccept ? (
             <Button
               type="button"
@@ -363,6 +392,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             <Button
               type="button"
               variant="secondary"
+              fullWidth
               isLoading={actingKey === "decline"}
               onClick={() =>
                 void handleAsyncAction(
@@ -382,14 +412,15 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
     if (relationship.kind === "outgoing_request") {
       return (
-        <div className="flex gap-2">
-          <Button type="button" fullWidth variant="secondary" disabled>
+        <div className="space-y-2">
+          <div className="rounded-lg border border-border/70 bg-surface-overlay px-3 py-2 text-sm text-text-secondary">
             {t("friends:relationship.outgoing")}
-          </Button>
+          </div>
           {capabilities.canCancel ? (
             <Button
               type="button"
-              variant="ghost"
+              fullWidth
+              variant="secondary"
               isLoading={actingKey === "cancel"}
               onClick={() =>
                 void handleAsyncAction(
@@ -409,7 +440,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
     if (relationship.kind === "blocked") {
       return (
-        <div className="flex gap-2">
+        <div className="space-y-2">
           {capabilities.canUnblock ? (
             <Button
               type="button"
@@ -433,7 +464,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     }
 
     return (
-      <div className="flex gap-2">
+      <div className="space-y-2">
         {capabilities.canSendRequest ? (
           <Button
             type="button"
@@ -455,6 +486,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         {capabilities.canBlock ? (
           <Button
             type="button"
+            fullWidth
             variant="secondary"
             leftIcon={<NoSymbolIcon className="h-4 w-4" />}
             isLoading={actingKey === "block"}
@@ -476,17 +508,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
   return (
     <>
-      <div className={clsx("flex h-full flex-col bg-surface", className)}>
-        <div className="flex items-center justify-between border-b border-border/80 px-4 py-2.5">
+      <div className={clsx("flex h-full flex-col bg-[hsl(var(--chat-panel-bg))]", className)}>
+        <div className="app-page-header flex items-center justify-between px-4 py-2.5">
           <div>
             <h3 className="text-title-sm text-text-primary">
               {isSelf
                 ? t("friends:relationship.self")
                 : t("profile:userProfile.title")}
             </h3>
-            <p className="text-caption text-text-muted">
-              {t("friends:profileHint")}
-            </p>
           </div>
 
           <button
@@ -506,7 +535,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             </div>
           ) : (
             <div className="space-y-4 px-4 py-4">
-              <PanelSection className="rounded-2xl bg-surface px-4 py-4 shadow-xs">
+              <PanelSection className="rounded-2xl border-transparent bg-[hsl(var(--chat-panel-bg))] px-4 py-4 shadow-none">
                 <div className="flex flex-col items-start gap-3 sm:items-center sm:text-center">
                   <Avatar
                     src={user?.avatar}
@@ -596,24 +625,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 </section>
               )}
 
-              {!isSelf &&
-              onStartConversation &&
-              relationship.kind === "friend" ? (
-                <PanelSection className="rounded-lg bg-surface px-4 py-3">
-                  <div className="flex items-start gap-3">
-                    <ChatBubbleLeftRightIcon className="mt-0.5 h-5 w-5 text-text-muted" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-text-primary">
-                        {t("friends:startChatTitle")}
-                      </p>
-                      <p className="mt-1 text-sm text-text-secondary">
-                        {t("friends:startChatHint")}
-                      </p>
-                    </div>
-                  </div>
-                </PanelSection>
-              ) : null}
-
               {onDeleteConversation ? (
                 <section className="border-t border-border/80 pt-2">
                   <button
@@ -639,6 +650,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         <EditProfileModal
           isOpen={isEditOpen}
           onClose={() => setIsEditOpen(false)}
+          restoreFocusRef={editButtonRef}
         />
       )}
     </>

@@ -5,6 +5,7 @@
  */
 
 import { create } from "zustand";
+import { registerStoreResetter } from "./storeResetRegistry";
 
 // ============================================
 // Types
@@ -94,3 +95,7 @@ export const usePresenceStore = create<PresenceStoreState>((set, get) => ({
 
   clearAll: () => set({ presenceMap: {} }),
 }));
+
+registerStoreResetter("presence", () => {
+  usePresenceStore.getState().clearAll();
+});

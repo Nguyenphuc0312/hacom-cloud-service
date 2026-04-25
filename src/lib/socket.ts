@@ -16,7 +16,7 @@ import {
   getAccessToken as getStoredAccessToken,
   updateAccessToken,
 } from "../services/tokenService";
-import { WsEventNames } from "@hacom/chat-shared-types";
+import { WsEventNames } from "@hacom/chat-shared-types/ws";
 import {
   getJwtExpirationMs,
   isJwtLike,
@@ -24,6 +24,7 @@ import {
   isTokenExpiringSoon,
   normalizeToken,
 } from "../utils/jwtHelpers";
+import { logger } from "../utils/logger";
 
 const QUERY_TOKEN_BY_ENV = WEBSOCKET_AUTH_CONFIG.USE_QUERY_TOKEN;
 const AUTO_QUERY_TOKEN_FALLBACK_ENABLED =
@@ -186,7 +187,7 @@ class WebSocketManager {
    */
   // connect(): void {
   //   if (this.socket?.readyState === WebSocket.OPEN) {
-  //     console.log("WebSocket already connected");
+  //     logger.debug("socket", "already_connected");
   //     return;
   //   }
   //   if (this.socket?.readyState === WebSocket.CONNECTING) {
@@ -196,7 +197,7 @@ class WebSocketManager {
   //   const token = this.getAccessToken();
 
   //   if (!token) {
-  //     console.error("No access token available");
+  //     logger.warn("socket", "missing_access_token");
   //     this.setConnectionState("error");
   //     return;
   //   }
@@ -211,7 +212,7 @@ class WebSocketManager {
   //     this.socket = new WebSocket(wsUrl);
   //     this.setupSocketHandlers();
   //   } catch (error) {
-  //     console.error("Failed to create WebSocket:", error);
+  //     logger.error("socket", "create_failed", error);
   //     this.setConnectionState("error");
   //     this.scheduleReconnect();
   //   }
@@ -219,7 +220,7 @@ class WebSocketManager {
 
   connect(): void {
     if (this.socket?.readyState === WebSocket.OPEN) {
-      console.log("WebSocket already connected");
+      logger.debug("socket", "already_connected");
       return;
     }
     if (this.socket?.readyState === WebSocket.CONNECTING) {
@@ -229,7 +230,7 @@ class WebSocketManager {
     const rawToken = this.getAccessToken();
 
     if (!isJwtLike(rawToken)) {
-      console.error("WS: invalid/missing token, skip connect:", rawToken);
+      logger.warn("socket", "connect_skipped_invalid_token");
       this.setConnectionState("error");
       // optional: scheduleReconnect() chỉ khi token hợp lệ
       return;
@@ -237,7 +238,7 @@ class WebSocketManager {
 
     const token = normalizeToken(rawToken);
     if (!isJwtLike(token)) {
-      console.error("WS: token normalized but still invalid:", token);
+      logger.warn("socket", "connect_skipped_invalid_normalized_token");
       this.setConnectionState("error");
       return;
     }
@@ -258,15 +259,15 @@ class WebSocketManager {
 
     const wsUrl = this.buildWebSocketUrl(token);
     const useQueryToken = wsUrl.includes("token=");
-    console.log(
-      `WebSocket connecting (${useQueryToken ? "query-token" : "post-open-auth"})`,
-    );
+    logger.info("socket", "connecting", {
+      authMode: useQueryToken ? "query-token" : "post-open-auth",
+    });
 
     try {
       this.socket = new WebSocket(wsUrl);
       this.setupSocketHandlers();
     } catch (error) {
-      console.error("Failed to create WebSocket:", error);
+      logger.error("socket", "create_failed", error);
       this.setConnectionState("error");
       this.scheduleReconnect();
     }
@@ -282,7 +283,7 @@ class WebSocketManager {
     this.socket.onopen = () => {
       hasOpened = true;
       this.queryTokenFallbackAttempted = false;
-      console.log("WebSocket connected");
+      logger.info("socket", "connected");
       const rawToken = this.getAccessToken();
       if (!isJwtLike(rawToken)) {
         this.setConnectionState("error");
@@ -299,7 +300,10 @@ class WebSocketManager {
       const wasManualDisconnect = this.isManualDisconnect;
       this.isManualDisconnect = false;
 
-      console.log("WebSocket disconnected:", event.code, event.reason);
+      logger.info("socket", "disconnected", {
+        code: event.code,
+        reason: event.reason,
+      });
       this.socket = null;
       this.setConnectionState("disconnected");
       this.stopPingInterval();
@@ -319,9 +323,9 @@ class WebSocketManager {
       if (shouldTryQueryTokenFallback) {
         this.queryTokenFallbackAttempted = true;
         this.queryTokenFallbackEnabled = true;
-        console.warn(
-          "WebSocket handshake closed before onopen, retrying with query-token auth",
-        );
+        logger.warn("socket", "retry_query_token_fallback", {
+          code: event.code,
+        });
         this.connect();
         return;
       }
@@ -337,7 +341,7 @@ class WebSocketManager {
     };
 
     this.socket.onerror = (error) => {
-      console.error("WebSocket error:", error);
+      logger.error("socket", "transport_error", error);
       this.setConnectionState("error");
       this.emit("connect_error", { error });
     };
@@ -345,7 +349,11 @@ class WebSocketManager {
     this.socket.onmessage = (event) => {
       const messages = this.parseIncomingMessages(event.data);
       if (messages.length === 0) {
-        console.error("Failed to parse WebSocket message:", event.data);
+        logger.warn("socket", "parse_failed", {
+          rawType: typeof event.data,
+          rawLength:
+            typeof event.data === "string" ? event.data.length : undefined,
+        });
         return;
       }
       messages.forEach((message) => this.handleMessage(message));
@@ -362,15 +370,38 @@ class WebSocketManager {
     if (!type) return;
 
     const payload = Object.prototype.hasOwnProperty.call(message, "data")
-      ? message.data
+      ? (() => {
+          const rawData = message.data;
+          if (rawData && typeof rawData === "object") {
+            return {
+              ...(rawData as Record<string, unknown>),
+              ...(typeof message.eventId === "string" &&
+              !Object.prototype.hasOwnProperty.call(rawData, "eventId")
+                ? { eventId: message.eventId }
+                : {}),
+              ...(typeof message.correlationId === "string" &&
+              !Object.prototype.hasOwnProperty.call(rawData, "correlationId")
+                ? { correlationId: message.correlationId }
+                : {}),
+            };
+          }
+          return rawData;
+        })()
       : Object.fromEntries(
           Object.entries(message).filter(
             ([key]) => key !== "type" && key !== "event",
           ),
         );
 
-    // Log for debugging
-    console.debug("WebSocket received:", type, payload);
+    logger.debug(
+      "socket",
+      "message_received",
+      {
+        type,
+        payload,
+      },
+      { debugOnly: true },
+    );
 
     if (type === WsEventNames.AUTH_AUTHENTICATED) {
       this.queryTokenFallbackEnabled = false;
@@ -449,7 +480,9 @@ class WebSocketManager {
    */
   private scheduleReconnect(): void {
     if (this.reconnectAttempts >= WEBSOCKET_CONFIG.RECONNECT_ATTEMPTS) {
-      console.error("Max reconnect attempts reached");
+      logger.error("socket", "max_reconnect_attempts_reached", {
+        reconnectAttempts: this.reconnectAttempts,
+      });
       this.setConnectionState("error");
       this.emit("reconnect_failed", {});
       return;
@@ -465,9 +498,11 @@ class WebSocketManager {
       WEBSOCKET_CONFIG.RECONNECT_DELAY_MAX,
     );
 
-    console.log(
-      `Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${WEBSOCKET_CONFIG.RECONNECT_ATTEMPTS})`,
-    );
+    logger.info("socket", "reconnecting", {
+      delay,
+      attempt: this.reconnectAttempts,
+      maxAttempts: WEBSOCKET_CONFIG.RECONNECT_ATTEMPTS,
+    });
 
     this.emit("reconnect_attempt", { attempt: this.reconnectAttempts });
 
@@ -531,7 +566,7 @@ class WebSocketManager {
    */
   send(type: string, data: unknown): boolean {
     if (!this.isConnected()) {
-      console.warn("Cannot send message, WebSocket not connected");
+      logger.warn("socket", "send_skipped_not_connected", { type });
       return false;
     }
 
@@ -543,7 +578,7 @@ class WebSocketManager {
       this.socket!.send(JSON.stringify(message));
       return true;
     } catch (error) {
-      console.error("Failed to send message:", error);
+      logger.error("socket", "send_failed", { type, error });
       return false;
     }
   }
@@ -584,7 +619,10 @@ class WebSocketManager {
         try {
           handler(data);
         } catch (error) {
-          console.error(`Error in event handler for ${eventType}:`, error);
+          logger.error("socket", "event_handler_failed", {
+            eventType,
+            error,
+          });
         }
       });
     }
@@ -690,6 +728,7 @@ export const WebSocketEvents = {
   MESSAGE_SEND: "message:send",
   CONVERSATION_JOIN: WsEventNames.CONVERSATION_JOIN,
   CONVERSATION_LEAVE: WsEventNames.CONVERSATION_LEAVE,
+  // Deprecated transport aliases kept for inbound/outbound compat only.
   ROOM_JOIN: "room:join",
   ROOM_LEAVE: "room:leave",
   TYPING_START: WsEventNames.TYPING_START,
@@ -716,6 +755,7 @@ export const WebSocketEvents = {
   GROUP_INVITE_UPDATED: WsEventNames.GROUP_INVITE_UPDATED,
   GROUP_MEMBER_JOINED: WsEventNames.GROUP_MEMBER_JOINED,
   GROUP_MEMBER_LEFT: WsEventNames.GROUP_MEMBER_LEFT,
+  GROUP_MEMBER_REMOVED: "group:member:removed",
   GROUP_MEMBER_UPDATED: WsEventNames.GROUP_MEMBER_UPDATED,
   GROUP_MEMBER_BANNED: WsEventNames.GROUP_MEMBER_BANNED,
   GROUP_SETTINGS_UPDATED: WsEventNames.GROUP_SETTINGS_UPDATED,
@@ -732,7 +772,11 @@ export const WebSocketEvents = {
   CONVERSATION_JOINED: WsEventNames.CONVERSATION_JOINED,
   CONVERSATION_LEFT: WsEventNames.CONVERSATION_LEFT,
   CONVERSATION_RESYNCED: WsEventNames.CONVERSATION_RESYNCED,
+  CONVERSATION_SUMMARY_UPDATED: "conversation:summary:updated",
+  CONVERSATION_MEMBERSHIP_UPDATED: "conversation:membership:updated",
+  CONVERSATION_PARTICIPANT_UPDATED: "conversation:participant:updated",
   RESYNC_REQUIRED: WsEventNames.RESYNC_REQUIRED,
+  // Deprecated transport aliases kept for inbound compat only.
   ROOM_JOINED: "room:joined",
   ROOM_LEFT: "room:left",
   ERROR: "error",

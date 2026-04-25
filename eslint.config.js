@@ -38,4 +38,22 @@ export default defineConfig([
       ],
     },
   },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/hooks/useMessages.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/hooks/useMessages"],
+              message:
+                "useMessages is deprecated. Use feature-level chat session/send hooks instead.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);

@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { fileApi } from "../services/api";
+import { chatApi } from "../features/chat/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import { UPLOAD_CONFIG } from "../config";
 import type {
@@ -200,7 +200,7 @@ export function useUploadQueue({
 
       try {
         // Step 1: Request presigned upload URL
-        const signedResponse = await fileApi.requestUploadUrl({
+        const signedResponse = await chatApi.file.requestUploadUrl({
           conversationId: cid,
           fileName: draft.file.name,
           mimeType: draft.file.type || "application/octet-stream",
@@ -228,7 +228,7 @@ export function useUploadQueue({
           // Auto retry on 403 (expired presigned URL)
           const status = (uploadErr as { status?: number }).status;
           if (status === 403) {
-            const retryResponse = await fileApi.requestUploadUrl({
+            const retryResponse = await chatApi.file.requestUploadUrl({
               conversationId: cid,
               fileName: draft.file.name,
               mimeType,
@@ -262,13 +262,13 @@ export function useUploadQueue({
         }
 
         // Step 3: Complete upload
-        const completeResponse = await fileApi.completeUpload({
+        const completeResponse = await chatApi.file.completeUpload({
           uploadId: signed.uploadId,
           conversationId: cid,
           objectKey: signed.objectKey,
         });
         const completed = unwrapApiSuccess(completeResponse);
-        const attachment = fileApi.toAttachment(completed);
+        const attachment = chatApi.file.toAttachment(completed);
 
         const meta: UploadedFileMeta = {
           fileId: attachment.id,

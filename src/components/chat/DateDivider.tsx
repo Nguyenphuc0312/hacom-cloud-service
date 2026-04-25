@@ -1,24 +1,35 @@
 import React from "react";
 import clsx from "clsx";
 import { formatDateDivider } from "../../utils/formatTime";
+import type { ChatDensity } from "../../stores/uiStore";
+import { getTimelineDensityContract } from "./timelineDensity";
 
 interface DateDividerProps {
   date: Date;
+  density?: ChatDensity;
   className?: string;
 }
 
 export const DateDivider: React.FC<DateDividerProps> = ({
   date,
+  density,
   className,
 }) => {
+  const contract = getTimelineDensityContract(density);
+
   return (
-    <div className={clsx("my-6 flex items-center justify-center", className)}>
+    <div
+      className={clsx(
+        "flex items-center justify-center",
+        contract.dateDivider.outer,
+        className,
+      )}
+    >
       <span
-        className="rounded-full border px-3.5 py-1 text-[11px] font-medium tracking-[0.01em] text-text-secondary backdrop-blur"
-        style={{
-          backgroundColor: "hsl(var(--color-chat-pill) / 0.94)",
-          borderColor: "hsl(var(--color-chat-pill-border) / 0.7)",
-        }}
+        className={clsx(
+          "rounded-full border border-border/55 bg-[hsl(var(--chat-panel-bg))/0.92] text-text-muted/92 backdrop-blur",
+          contract.dateDivider.pill,
+        )}
       >
         {formatDateDivider(date)}
       </span>

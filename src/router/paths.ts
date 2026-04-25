@@ -4,6 +4,7 @@
 export const ROUTE_PATHS = {
   ROOT: "/",
   LOGIN: "/login",
+  ACTIVATION: "/activation",
   REGISTER: "/register",
   VERIFY_EMAIL: "/verify-email",
   FORGOT_PASSWORD: "/forgot-password",

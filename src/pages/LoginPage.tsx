@@ -10,6 +10,8 @@ import { PasswordLoginForm } from "../components/auth/PasswordLoginForm";
 import { loginSchema } from "../lib/validations";
 import type { LoginFormData } from "../lib/validations";
 import { useAuthStore } from "../stores";
+import { ROUTE_PATHS } from "../router/paths";
+import { LockedOrDisabledState } from "../features/activation/components/LockedOrDisabledState";
 
 export const LoginPage: React.FC = () => {
   const { t } = useTranslation("auth");
@@ -18,19 +20,45 @@ export const LoginPage: React.FC = () => {
   const [authMethod, setAuthMethod] = React.useState<"password" | "qr">(
     "password",
   );
-  const { login, isLoading, isAuthenticated, error, clearError } =
-    useAuthStore();
+  const {
+    login,
+    isLoading,
+    isAuthenticated,
+    authStatus,
+    activationContext,
+    lockedAccount,
+    error,
+    clearError,
+    setLockedAccount,
+    setAuthStatus,
+  } = useAuthStore();
 
   useEffect(() => {
     if (isAuthenticated) {
       const from = (location.state as { from?: string })?.from ?? "/chat";
       navigate(from, { replace: true });
+      return;
     }
-  }, [isAuthenticated, navigate, location]);
+
+    if (authStatus === "activation_required" && activationContext) {
+      navigate(ROUTE_PATHS.ACTIVATION, {
+        replace: true,
+        state: {
+          from: (location.state as { from?: string } | null)?.from,
+        },
+      });
+    }
+  }, [activationContext, authStatus, isAuthenticated, location, navigate]);
 
   useEffect(() => {
-    clearError();
-  }, [clearError]);
+    if (
+      authStatus === "anonymous" ||
+      authStatus === "idle" ||
+      authStatus === "activation_required"
+    ) {
+      clearError();
+    }
+  }, [authStatus, clearError]);
 
   const {
     register,
@@ -40,25 +68,55 @@ export const LoginPage: React.FC = () => {
     watch,
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", password: "", rememberMe: false },
+    defaultValues: { loginIdentifier: "", password: "", rememberMe: false },
   });
 
   useEffect(() => {
     if (authMethod === "password") {
-      setFocus("email");
+      setFocus("loginIdentifier");
     }
   }, [authMethod, setFocus]);
 
   const rememberMe = watch("rememberMe");
+  const submitLockRef = React.useRef(false);
 
   const onSubmit = async (data: LoginFormData) => {
+    if (submitLockRef.current || isLoading) {
+      return;
+    }
+
+    submitLockRef.current = true;
+
     try {
-      await login(data);
-      toast.success(t("auth:toast.loginSuccess"));
-      const from = (location.state as { from?: string })?.from ?? "/chat";
-      navigate(from, { replace: true });
+      const result = await login(data);
+      if (result === "authenticated") {
+        toast.success(t("auth:toast.loginSuccess"));
+        const from = (location.state as { from?: string })?.from ?? "/chat";
+        navigate(from, { replace: true });
+        return;
+      }
+
+      if (result === "activation_required") {
+        toast.info(t("auth:activation.required.redirecting"));
+        navigate(ROUTE_PATHS.ACTIVATION, {
+          replace: true,
+          state: {
+            from: (location.state as { from?: string } | null)?.from,
+          },
+        });
+        return;
+      }
+
+      if (result === "locked" || result === "disabled") {
+        const latestError = useAuthStore.getState().error;
+        toast.error(
+          latestError || error || t("auth:activation.locked.defaultMessage"),
+        );
+      }
     } catch (err) {
       toast.error((err as Error).message ?? t("auth:toast.loginFailed"));
+    } finally {
+      submitLockRef.current = false;
     }
   };
 
@@ -105,15 +163,34 @@ export const LoginPage: React.FC = () => {
         </div>
 
         {authMethod === "password" && (
-          <PasswordLoginForm
-            register={register}
-            errors={errors}
-            isLoading={isLoading}
-            isSubmitting={isSubmitting}
-            authError={error}
-            onSubmit={handleSubmit(onSubmit)}
-            showSocialLogin={false}
-          />
+          <div className="space-y-4">
+            {(authStatus === "locked" || authStatus === "disabled") &&
+            lockedAccount ? (
+              <LockedOrDisabledState
+                status={lockedAccount.status}
+                message={lockedAccount.message || error}
+                onReset={() => {
+                  setLockedAccount(null);
+                  setAuthStatus("anonymous");
+                  clearError();
+                }}
+              />
+            ) : null}
+
+            <PasswordLoginForm
+              register={register}
+              errors={errors}
+              isLoading={isLoading}
+              isSubmitting={isSubmitting}
+              authError={
+                authStatus === "locked" || authStatus === "disabled"
+                  ? null
+                  : error
+              }
+              onSubmit={handleSubmit(onSubmit)}
+              showSocialLogin={false}
+            />
+          </div>
         )}
 
         {authMethod === "qr" && (

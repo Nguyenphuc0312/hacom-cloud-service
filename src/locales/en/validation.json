@@ -2,6 +2,8 @@
   "auth": {
     "emailRequired": "Email is required",
     "emailInvalid": "Invalid email",
+    "loginIdentifierRequired": "Email or employee code is required",
+    "loginIdentifierMax": "Email or employee code must not exceed 255 characters",
     "passwordRequired": "Password is required",
     "passwordMin": "Password must be at least {{count}} characters",
     "passwordMax": "Password must not exceed {{count}} characters",

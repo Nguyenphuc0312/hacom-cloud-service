@@ -4,10 +4,7 @@ import {
   XMarkIcon,
   PencilIcon,
   CheckIcon,
-  BellIcon,
-  PhotoIcon,
   UserPlusIcon,
-  ExclamationTriangleIcon,
   ArrowRightOnRectangleIcon,
   MagnifyingGlassIcon,
   TrashIcon,
@@ -18,25 +15,32 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "../common/Avatar";
+import { UserSearchResultItem } from "../common/UserSearchResultItem";
 import { Input, Spinner, TabTrigger, toast } from "../ui";
 import type { Conversation, UserSummary } from "../../types";
 import { RoomMemberRole, UserStatus } from "../../types";
-import { useDebounce } from "../../hooks";
 import { useChatStore, useGroupStore } from "../../stores";
 import type { InviteLinkItem, JoinRequestItem } from "../../stores/groupStore";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
-import { getConversationMembersUseCase } from "../../features/chat/usecases/getConversationMembers";
+import { resolveConversationId } from "../../lib/conversationIdentity";
+import { chatApi } from "../../features/chat/api/chatApi";
 import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
-import { searchUsersUseCase } from "../../features/chat/usecases/searchUsers";
-import { addConversationMembersUseCase } from "../../features/chat/usecases/addConversationMembers";
-import { updateConversationUseCase } from "../../features/chat/usecases/updateConversation";
-import { updateConversationMemberRoleUseCase } from "../../features/chat/usecases/updateConversationMemberRole";
-import { removeConversationMemberUseCase } from "../../features/chat/usecases/removeConversationMember";
-import { leaveConversationUseCase } from "../../features/chat/usecases/leaveConversation";
+import {
+  buildUserSearchSecondaryText,
+  isGroupMemberEligible,
+  useChatUserSearch,
+} from "../../features/chat/hooks/useChatUserSearch";
+import {
+  canAddGroupMembers,
+  canDeleteConversationForSelf,
+  canLeaveGroup,
+  canRemoveGroupMember,
+  canRenameGroup,
+  canToggleAdminRole,
+} from "../../features/chat/permissions/groupPermissions";
 import { createGroupInviteLinkUseCase } from "../../features/chat/usecases/createGroupInviteLink";
 import { revokeGroupInviteLinkUseCase } from "../../features/chat/usecases/revokeGroupInviteLink";
 import { resolveGroupJoinRequestUseCase } from "../../features/chat/usecases/resolveGroupJoinRequest";
-import { groupApi } from "../../services/api";
 import { getUserDisplayName } from "../../utils/messageHelpers";
 
 interface GroupInfoProps {
@@ -47,12 +51,21 @@ interface GroupInfoProps {
   className?: string;
 }
 
-type GroupMemberRole = RoomMemberRole;
+type GroupMemberRole =
+  | RoomMemberRole.OWNER
+  | RoomMemberRole.ADMIN
+  | RoomMemberRole.MEMBER;
+const EMPTY_INVITE_LINKS: InviteLinkItem[] = [];
+const EMPTY_JOIN_REQUESTS: JoinRequestItem[] = [];
 
 interface GroupMember {
   id: string;
   username: string;
   displayName?: string;
+  fullNameFromHR?: string;
+  full_name_from_hr?: string;
+  employeeCode?: string;
+  employee_code?: string;
   avatar?: string;
   status?: UserSummary["status"];
   role: GroupMemberRole;
@@ -61,13 +74,14 @@ interface GroupMember {
 const ROLE_PRIORITY: Record<GroupMemberRole, number> = {
   [RoomMemberRole.OWNER]: 0,
   [RoomMemberRole.ADMIN]: 1,
-  [RoomMemberRole.MODERATOR]: 2,
-  [RoomMemberRole.MEMBER]: 3,
-  [RoomMemberRole.RESTRICTED]: 4,
-  [RoomMemberRole.BANNED]: 5,
+  [RoomMemberRole.MEMBER]: 2,
 };
 
-const VALID_ROLES = new Set<string>(Object.values(RoomMemberRole));
+const VALID_ROLES = new Set<string>([
+  RoomMemberRole.OWNER,
+  RoomMemberRole.ADMIN,
+  RoomMemberRole.MEMBER,
+]);
 const VALID_STATUSES = new Set<string>(Object.values(UserStatus));
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -131,6 +145,26 @@ const normalizeMember = (raw: unknown): GroupMember | null => {
       asString(raw.displayName) ??
       asString(user?.displayName) ??
       asString(raw.nickname),
+    fullNameFromHR:
+      asString(raw.fullNameFromHR) ??
+      asString(raw.full_name_from_hr) ??
+      asString(user?.fullNameFromHR) ??
+      asString(user?.full_name_from_hr),
+    full_name_from_hr:
+      asString(raw.full_name_from_hr) ??
+      asString(user?.full_name_from_hr) ??
+      asString(raw.fullNameFromHR) ??
+      asString(user?.fullNameFromHR),
+    employeeCode:
+      asString(raw.employeeCode) ??
+      asString(raw.employee_code) ??
+      asString(user?.employeeCode) ??
+      asString(user?.employee_code),
+    employee_code:
+      asString(raw.employee_code) ??
+      asString(user?.employee_code) ??
+      asString(raw.employeeCode) ??
+      asString(user?.employeeCode),
     avatar: asString(raw.avatar) ?? asString(user?.avatar),
     status: asStatus(raw.status) ?? asStatus(user?.status),
     role,
@@ -184,8 +218,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   className,
 }) => {
   const { t } = useTranslation(["profile", "common"]);
-  const unavailableActionClass = "cursor-not-allowed opacity-60";
-  const unavailableActionTitle = t("profile:groupInfo.unavailableAction");
+  const blockedOwnerLeaveTitle = t("profile:groupInfo.leaveBlockedOwner", {
+    defaultValue: "Transfer ownership before leaving this group.",
+  });
 
   const participants = React.useMemo(
     () =>
@@ -195,12 +230,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<
-    "members" | "media" | "files" | "inviteLinks" | "joinRequests"
+    "members" | "inviteLinks" | "joinRequests"
   >("members");
   const [showAddMember, setShowAddMember] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<UserSummary[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [membersByUserId, setMembersByUserId] = useState<
@@ -219,15 +252,19 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     null,
   );
 
-  const debouncedQuery = useDebounce(searchQuery, 300);
   const updateConversation = useChatStore((state) => state.updateConversation);
   const removeConversation = useChatStore((state) => state.removeConversation);
   const loadMembersFailedMessage = t("profile:toast.loadMembersFailed");
   const inviteLinks = useGroupStore(
-    (state) => state.inviteLinksByRoom[conversation.id] || [],
+    (state) =>
+      state.inviteLinksByConversation[conversation.id] ?? EMPTY_INVITE_LINKS,
   );
   const joinRequests = useGroupStore(
-    (state) => state.joinRequestsByRoom[conversation.id] || [],
+    (state) =>
+      state.joinRequestsByConversation[conversation.id] ?? EMPTY_JOIN_REQUESTS,
+  );
+  const memberListVersion = useGroupStore(
+    (state) => state.memberListVersionByConversation[conversation.id] || 0,
   );
   const upsertInviteLink = useGroupStore((state) => state.upsertInviteLink);
   const setInviteLinks = useGroupStore((state) => state.setInviteLinks);
@@ -282,25 +319,50 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     });
   }, [createdBy, membersByUserId, participants]);
 
+  const activeOwnerCount = React.useMemo(
+    () =>
+      members.filter((member) => member.role === RoomMemberRole.OWNER).length ||
+      (createdBy ? 1 : 0),
+    [createdBy, members],
+  );
+  const {
+    results: searchResults,
+    isLoading: isSearching,
+    errorMessage: searchErrorMessage,
+    debouncedQuery,
+  } = useChatUserSearch(searchQuery, {
+    enabled: showAddMember,
+    limit: 10,
+    excludeUserIds: [
+      currentUserId,
+      ...members.map((member) => member.id),
+      ...participants.map((participant) => participant.id),
+    ],
+  });
+
   const currentUserRole =
     membersByUserId[currentUserId]?.role ||
     (currentUserId === createdBy
       ? RoomMemberRole.OWNER
       : RoomMemberRole.MEMBER);
-  const isAdmin =
-    currentUserRole === RoomMemberRole.OWNER ||
-    currentUserRole === RoomMemberRole.ADMIN;
-  const canManageRoles = currentUserRole === RoomMemberRole.OWNER;
+  const isAdmin = canRenameGroup(currentUserRole);
+  const canAddMembers = canAddGroupMembers(currentUserRole);
+  const canDeleteConversation = canDeleteConversationForSelf();
+  const canLeaveCurrentGroup = canLeaveGroup(currentUserRole, activeOwnerCount);
+  const participantCount =
+    conversation.participantCount ??
+    (members.length > 0 ? members.length : participants.length);
 
   const canRemoveMember = useCallback(
     (member: GroupMember) => {
-      if (!isAdmin) return false;
-      if (member.id === currentUserId) return false;
-      if (member.role === RoomMemberRole.OWNER) return false;
-      if (currentUserRole === RoomMemberRole.OWNER) return true;
-      return member.role !== RoomMemberRole.ADMIN;
+      return canRemoveGroupMember({
+        actorRole: currentUserRole,
+        actorUserId: currentUserId,
+        targetRole: member.role,
+        targetUserId: member.id,
+      });
     },
-    [currentUserId, currentUserRole, isAdmin],
+    [currentUserId, currentUserRole],
   );
 
   const roleLabel = useCallback(
@@ -329,11 +391,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const fetchMembers = useCallback(async () => {
     setIsLoadingMembers(true);
     try {
-      const response = await getConversationMembersUseCase(
-        conversation.id,
-        1,
-        200,
-      );
+      const response = await chatApi.group.getMembers(conversation.id, 1, 200);
       const payload = unwrapApiSuccess(response);
       const rows = extractMemberRows(payload);
       const nextMembers = rows
@@ -361,6 +419,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     updateConversation(conversation.id, refreshedConversation);
   }, [conversation.id, updateConversation]);
 
+  const refreshGroupState = useCallback(async () => {
+    await Promise.all([refreshConversation(), fetchMembers()]);
+  }, [fetchMembers, refreshConversation]);
+
   React.useEffect(() => {
     setGroupNameDraft(conversation.name || "");
     setIsRenamingGroup(false);
@@ -369,7 +431,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   React.useEffect(() => {
     void fetchMembers();
-  }, [fetchMembers]);
+  }, [fetchMembers, memberListVersion]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -385,8 +447,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     const hydrateRealtimeState = async () => {
       try {
         const [inviteLinksResponse, joinRequestsResponse] = await Promise.all([
-          groupApi.getInviteLinks(conversation.id),
-          groupApi.getJoinRequests(conversation.id),
+          chatApi.group.getInviteLinks(conversation.id),
+          chatApi.group.getJoinRequests(conversation.id),
         ]);
 
         if (cancelled) return;
@@ -404,10 +466,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
               items.push({
                 id: item.id,
-                roomId:
-                  asString(item.roomId) ??
-                  asString(item.conversationId) ??
-                  conversation.id,
+                conversationId:
+                  resolveConversationId(item, {
+                    source: "GroupInfo.inviteLinks",
+                  }) ?? conversation.id,
                 name: asString(item.name),
                 inviteUrl: asString(item.inviteUrl),
                 token: asString(item.token),
@@ -447,10 +509,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
               items.push({
                 id: item.id,
-                roomId:
-                  asString(item.roomId) ??
-                  asString(item.conversationId) ??
-                  conversation.id,
+                conversationId:
+                  resolveConversationId(item, {
+                    source: "GroupInfo.joinRequests",
+                  }) ?? conversation.id,
                 userId: asString(item.userId) ?? "",
                 status,
                 note: asString(item.note),
@@ -484,46 +546,13 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     setJoinRequests,
   ]);
 
-  const searchUsers = useCallback(
-    async (query: string) => {
-      if (!query.trim() || query.length < 2) {
-        setSearchResults((previous) => (previous.length === 0 ? previous : []));
-        return;
-      }
-
-      setIsSearching(true);
-      try {
-        const response = await searchUsersUseCase(query, 1, 10);
-        const memberIds = new Set(members.map((member) => member.id));
-        const users = unwrapApiSuccess(response).filter(
-          (user) => !memberIds.has(user.id) && user.id !== currentUserId,
-        );
-        setSearchResults(users as unknown as UserSummary[]);
-      } catch {
-        setSearchResults((previous) => (previous.length === 0 ? previous : []));
-      } finally {
-        setIsSearching(false);
-      }
-    },
-    [members, currentUserId],
-  );
-
-  React.useEffect(() => {
-    void searchUsers(debouncedQuery);
-  }, [debouncedQuery, searchUsers]);
-
   const handleAddMember = useCallback(
     async (userId: string) => {
       setIsSubmitting(true);
       try {
-        const response = await addConversationMembersUseCase(conversation.id, [
-          userId,
-        ]);
-        const updatedConversation = unwrapApiSuccess(response);
-        updateConversation(conversation.id, updatedConversation);
-        void fetchMembers();
+        await chatApi.group.addMember(conversation.id, userId);
+        await refreshGroupState();
         setSearchQuery("");
-        setSearchResults([]);
         setShowAddMember(false);
         toast.success(t("profile:toast.memberAdded"));
       } catch (error) {
@@ -533,7 +562,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         setIsSubmitting(false);
       }
     },
-    [conversation.id, fetchMembers, t, updateConversation],
+    [conversation.id, refreshGroupState, t],
   );
 
   const handleRenameGroup = useCallback(async () => {
@@ -551,8 +580,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
     setIsSubmitting(true);
     try {
-      await updateConversationUseCase(conversation.id, { name: nextName });
-      await refreshConversation();
+      await chatApi.group.updateSettings(conversation.id, { title: nextName });
+      await refreshGroupState();
       setIsRenamingGroup(false);
       toast.success(t("profile:toast.groupRenamed"));
     } catch (error) {
@@ -565,15 +594,22 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     conversation.id,
     conversation.name,
     groupNameDraft,
-    refreshConversation,
+    refreshGroupState,
     t,
   ]);
 
   const handleToggleMemberRole = useCallback(
     async (member: GroupMember) => {
-      if (!canManageRoles) return;
-      if (member.id === currentUserId) return;
-      if (member.role === RoomMemberRole.OWNER) return;
+      if (
+        !canToggleAdminRole({
+          actorRole: currentUserRole,
+          actorUserId: currentUserId,
+          targetRole: member.role,
+          targetUserId: member.id,
+        })
+      ) {
+        return;
+      }
 
       const nextRole =
         member.role === RoomMemberRole.ADMIN
@@ -582,12 +618,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
       setActingMemberId(member.id);
       try {
-        await updateConversationMemberRoleUseCase(
-          conversation.id,
-          member.id,
-          nextRole,
-        );
-        await fetchMembers();
+        await chatApi.group.updateMemberRole(conversation.id, member.id, nextRole);
+        await refreshGroupState();
         toast.success(
           nextRole === RoomMemberRole.ADMIN
             ? t("profile:toast.memberPromoted")
@@ -600,7 +632,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         setActingMemberId(null);
       }
     },
-    [canManageRoles, conversation.id, currentUserId, fetchMembers, t],
+    [conversation.id, currentUserId, currentUserRole, refreshGroupState, t],
   );
 
   const handleRemoveMember = useCallback(
@@ -618,8 +650,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
       setActingMemberId(member.id);
       try {
-        await removeConversationMemberUseCase(conversation.id, member.id);
-        await Promise.all([refreshConversation(), fetchMembers()]);
+        await chatApi.group.removeMember(conversation.id, member.id);
+        await refreshGroupState();
         toast.success(t("profile:toast.memberRemoved"));
       } catch (error) {
         const apiError = extractApiError(error);
@@ -628,26 +660,42 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         setActingMemberId(null);
       }
     },
-    [canRemoveMember, conversation.id, fetchMembers, refreshConversation, t],
+    [canRemoveMember, conversation.id, refreshGroupState, t],
   );
 
   const handleLeaveGroup = useCallback(async () => {
+    if (!canLeaveCurrentGroup) {
+      toast.error(
+        t("profile:groupInfo.leaveBlockedOwner", {
+          defaultValue: "Transfer ownership before leaving this group.",
+        }),
+      );
+      return;
+    }
+
     if (!window.confirm(t("profile:groupInfo.leaveConfirm"))) return;
 
     setIsSubmitting(true);
     try {
-      await leaveConversationUseCase(conversation.id);
+      await chatApi.group.leaveGroup(conversation.id);
       removeConversation(conversation.id);
       toast.success(t("profile:toast.leftGroup"));
       onClose();
       navigate("/chat");
     } catch (error) {
-      toast.error(t("profile:toast.leaveGroupFailed"));
-      console.log(error);
+      const apiError = extractApiError(error);
+      toast.error(apiError.message || t("profile:toast.leaveGroupFailed"));
     } finally {
       setIsSubmitting(false);
     }
-  }, [conversation.id, navigate, onClose, removeConversation, t]);
+  }, [
+    canLeaveCurrentGroup,
+    conversation.id,
+    navigate,
+    onClose,
+    removeConversation,
+    t,
+  ]);
 
   const tabs = [
     { id: "members", label: t("profile:groupInfo.tabs.members") },
@@ -659,8 +707,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       id: "joinRequests",
       label: t("profile:groupInfo.tabs.joinRequests"),
     },
-    { id: "media", label: t("profile:groupInfo.tabs.media") },
-    { id: "files", label: t("profile:groupInfo.tabs.files") },
   ] as const;
 
   const handleCreateInviteLink = useCallback(async () => {
@@ -695,7 +741,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
       upsertInviteLink(conversation.id, {
         id,
-        roomId: conversation.id,
+        conversationId: conversation.id,
         name: typeof payload.name === "string" ? payload.name : undefined,
         inviteUrl:
           typeof payload.inviteUrl === "string" ? payload.inviteUrl : undefined,
@@ -825,8 +871,8 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
   return (
     <div className={clsx("flex h-full flex-col bg-surface", className)}>
-      <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-        <h3 className="text-title-sm text-text-primary">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <h3 className="text-sm font-semibold text-text-primary">
           {t("profile:groupInfo.title")}
         </h3>
         <button
@@ -840,337 +886,295 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="flex flex-col items-center px-4 py-4">
-          <Avatar src={conversation.avatar} alt={conversation.name} size="xl" />
-
-          <div className="mt-3 text-center">
-            <h2 className="flex items-center justify-center gap-2 text-title text-text-primary">
-              {isRenamingGroup
-                ? t("profile:groupInfo.renameGroup")
-                : conversation.name || t("common:labels.group")}
-            </h2>
-
-            {isRenamingGroup ? (
-              <div className="mt-3 w-full min-w-64 space-y-2">
-                <Input
-                  type="text"
-                  value={groupNameDraft}
-                  onChange={(event) => setGroupNameDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void handleRenameGroup();
-                    }
-                    if (event.key === "Escape") {
-                      setIsRenamingGroup(false);
-                      setGroupNameDraft(conversation.name || "");
-                    }
-                  }}
-                  placeholder={t("profile:groupInfo.renamePlaceholder")}
-                  disabled={isSubmitting}
-                />
-                <div className="flex items-center justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsRenamingGroup(false);
-                      setGroupNameDraft(conversation.name || "");
-                    }}
-                    className="rounded-md border border-border px-3 py-1.5 text-body-sm text-text-muted hover:bg-surface-hover"
-                  >
-                    {t("common:actions.cancel")}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => void handleRenameGroup()}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-body-sm text-text-inverse hover:opacity-90 disabled:opacity-60"
-                  >
-                    <CheckIcon className="w-4 h-4" />
-                    {t("common:actions.save")}
-                  </button>
+        <div className="px-4 py-4">
+          <div className="flex items-start gap-3">
+            <Avatar src={conversation.avatar} alt={conversation.name} size="lg" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="truncate text-base font-semibold text-text-primary">
+                    {isRenamingGroup
+                      ? t("profile:groupInfo.renameGroup")
+                      : conversation.name || t("common:labels.group")}
+                  </h2>
+                  <p className="mt-1 text-sm text-text-muted">
+                    {t("profile:groupInfo.membersCount", {
+                      count: participantCount,
+                    })}
+                  </p>
                 </div>
-              </div>
-            ) : (
-              <div className="mt-1 flex items-center justify-center gap-2">
-                <p className="text-body-sm text-text-muted">
-                  {t("profile:groupInfo.membersCount", {
-                    count:
-                      conversation.participantCount ??
-                      (members.length > 0
-                        ? members.length
-                        : participants.length),
-                  })}
-                </p>
-                {isAdmin && (
+                {isAdmin && !isRenamingGroup && (
                   <button
                     type="button"
                     onClick={() => setIsRenamingGroup(true)}
                     disabled={isSubmitting}
-                    className="rounded-md p-1 hover:bg-surface-overlay"
+                    className="rounded-md p-2 hover:bg-surface-overlay"
                     aria-label={t("profile:groupInfo.renameGroup")}
                   >
-                    <PencilIcon className="w-4 h-4 text-text-muted" />
+                    <PencilIcon className="h-4 w-4 text-text-muted" />
                   </button>
                 )}
               </div>
-            )}
-          </div>
-        </div>
 
-        <div className="mx-4 h-px bg-border" />
-
-        <div className="py-2">
-          <div className="flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-4">
-              <BellIcon className="w-5 h-5 text-text-muted" />
-              <div>
-                <span className="text-sm text-text-primary">
-                  {t("profile:groupInfo.notifications")}
-                </span>
-                <p className="text-xs text-text-muted">
-                  {t("profile:groupInfo.comingSoon")}
-                </p>
-              </div>
+              {isRenamingGroup ? (
+                <div className="mt-3 max-w-sm space-y-2">
+                  <Input
+                    type="text"
+                    value={groupNameDraft}
+                    onChange={(event) => setGroupNameDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void handleRenameGroup();
+                      }
+                      if (event.key === "Escape") {
+                        setIsRenamingGroup(false);
+                        setGroupNameDraft(conversation.name || "");
+                      }
+                    }}
+                    placeholder={t("profile:groupInfo.renamePlaceholder")}
+                    disabled={isSubmitting}
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRenamingGroup(false);
+                        setGroupNameDraft(conversation.name || "");
+                      }}
+                      className="rounded-md border border-border px-3 py-1.5 text-body-sm text-text-muted hover:bg-surface-hover"
+                    >
+                      {t("common:actions.cancel")}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => void handleRenameGroup()}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-body-sm text-text-inverse hover:opacity-90 disabled:opacity-60"
+                    >
+                      <CheckIcon className="w-4 h-4" />
+                      {t("common:actions.save")}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
-            <button
-              type="button"
-              disabled
-              title={unavailableActionTitle}
-              className={clsx(
-                "w-10 h-6 rounded-full relative bg-border-strong",
-                unavailableActionClass,
-              )}
-              aria-disabled="true"
-              aria-label={unavailableActionTitle}
-            >
-              <div className="absolute top-1 left-1 w-4 h-4 bg-surface rounded-full shadow" />
-            </button>
           </div>
-        </div>
 
-        <div className="mx-4 h-px bg-border" />
-
-        <div className="flex border-b border-border px-1">
-          {tabs.map((tab) => (
-            <TabTrigger
-              key={tab.id}
-              active={activeTab === tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className="flex-1"
-            >
-              {tab.label}
-            </TabTrigger>
-          ))}
-        </div>
-
-        <div className="py-2">
-          {activeTab === "members" && (
-            <>
-              {isAdmin && (
+          {(canAddMembers || isAdmin || joinRequests.length > 0) && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {canAddMembers && (
                 <button
                   type="button"
                   disabled={isSubmitting}
-                  onClick={() => setShowAddMember((prev) => !prev)}
-                  className="flex w-full items-center gap-4 px-4 py-2.5 text-primary transition-micro hover:bg-surface-hover"
+                  onClick={() => {
+                    setActiveTab("members");
+                    setShowAddMember((prev) => !prev);
+                  }}
+                  className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-hover"
                 >
-                  <UserPlusIcon className="w-5 h-5" />
-                  <span className="text-sm font-medium">
-                    {t("profile:groupInfo.addMember")}
-                  </span>
+                  <UserPlusIcon className="h-4 w-4" />
+                  {t("profile:groupInfo.addMember")}
                 </button>
               )}
-
-              {showAddMember && (
-                <div className="space-y-2 px-4 pb-3">
-                  <Input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={t("profile:groupInfo.searchMemberPlaceholder")}
-                    leftIcon={<MagnifyingGlassIcon className="w-5 h-5" />}
-                    disabled={isSubmitting}
-                  />
-                  <div className="max-h-44 overflow-y-auto rounded-lg border border-border">
-                    {isSearching ? (
-                      <div className="py-4 flex justify-center">
-                        <Spinner size="md" />
-                      </div>
-                    ) : searchResults.length === 0 ? (
-                      <p className="px-3 py-3 text-sm text-text-muted">
-                        {t("profile:groupInfo.noSearchResult")}
-                      </p>
-                    ) : (
-                      searchResults.map((user) => (
-                        <button
-                          key={user.id}
-                          type="button"
-                          onClick={() => void handleAddMember(user.id)}
-                          disabled={isSubmitting}
-                          className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-surface-hover"
-                        >
-                          <Avatar
-                            src={user.avatar}
-                            alt={resolveMemberName(user) || user.id}
-                            size="sm"
-                            status={user.status}
-                            showStatus
-                          />
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-text-primary truncate">
-                              {resolveMemberName(user) || user.id}
-                            </p>
-                            <p className="text-xs text-text-muted truncate">
-                              @{user.username}
-                            </p>
-                          </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab("inviteLinks");
+                    setShowCreateInviteForm((prev) => !prev);
+                  }}
+                  className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-hover"
+                >
+                  <LinkIcon className="h-4 w-4" />
+                  {t("profile:groupInfo.invite.create")}
+                </button>
               )}
+            </div>
+          )}
+        </div>
 
-              {isLoadingMembers ? (
-                <div className="py-4 flex justify-center">
-                  <Spinner size="md" />
-                </div>
-              ) : members.length === 0 ? (
-                <p className="px-4 py-3 text-sm text-text-muted">
-                  {t("profile:groupInfo.noMembers")}
-                </p>
-              ) : (
-                members.map((member) => {
-                  const isMemberActionRunning =
-                    isSubmitting || actingMemberId === member.id;
-                  const canToggleRole =
-                    canManageRoles &&
-                    member.id !== currentUserId &&
-                    member.role !== RoomMemberRole.OWNER;
+        <div className="border-t border-border">
+          <div className="flex gap-1 px-3 py-2">
+            {tabs.map((tab) => (
+              <TabTrigger
+                key={tab.id}
+                active={activeTab === tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className="min-w-0 flex-1"
+              >
+                {tab.label}
+              </TabTrigger>
+            ))}
+          </div>
+        </div>
+        <div className="border-t border-border">
+          <div className="py-1">
+            {activeTab === "members" && (
+              <>
+                {showAddMember && (
+                  <div className="space-y-2 px-4 pb-3">
+                    <Input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder={t("profile:groupInfo.searchMemberPlaceholder")}
+                      leftIcon={<MagnifyingGlassIcon className="w-5 h-5" />}
+                      disabled={isSubmitting}
+                    />
+                    <div className="max-h-44 overflow-y-auto rounded-lg border border-border">
+                      {isSearching ? (
+                        <div className="flex justify-center py-4">
+                          <Spinner size="md" />
+                        </div>
+                      ) : searchErrorMessage ? (
+                        <p className="px-3 py-3 text-sm text-danger">
+                          {searchErrorMessage}
+                        </p>
+                      ) : debouncedQuery.trim().length >= 2 &&
+                        searchResults.length === 0 ? (
+                        <p className="px-3 py-3 text-sm text-text-muted">
+                          {t("profile:groupInfo.noSearchResult")}
+                        </p>
+                      ) : searchResults.length === 0 ? (
+                        <p className="px-3 py-3 text-sm text-text-muted">
+                          {t("profile:groupInfo.searchHint", {
+                            defaultValue: "Search by name or username.",
+                          })}
+                        </p>
+                      ) : (
+                        searchResults.map((user) => (
+                          <UserSearchResultItem
+                            key={user.id}
+                            avatarUrl={user.avatarUrl}
+                            avatarAlt={user.displayName || user.id}
+                            status={user.status ?? null}
+                            primaryText={user.displayName || user.id}
+                            secondaryText={buildUserSearchSecondaryText(user)}
+                            disabled={isSubmitting || !isGroupMemberEligible(user)}
+                            onSelect={() => void handleAddMember(user.id)}
+                            trailing={
+                              isGroupMemberEligible(user) ? (
+                                <span className="rounded-lg bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                                  {t("common:actions.add")}
+                                </span>
+                              ) : (
+                                <span className="rounded-lg bg-surface-overlay px-2 py-1 text-xs text-text-muted">
+                                  {t("profile:newChatModal.friendsOnly", {
+                                    defaultValue: "Friends only",
+                                  })}
+                                </span>
+                              )
+                            }
+                          />
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
 
-                  return (
-                    <div
-                      key={member.id}
-                      className="flex items-start gap-3 px-4 py-2.5 transition-micro hover:bg-surface-hover"
-                    >
-                      <Avatar
-                        src={member.avatar}
-                        alt={resolveMemberName(member) || member.id}
-                        size="md"
-                        status={member.status}
-                        showStatus
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-text-primary truncate">
-                          {resolveMemberName(member) || member.id}
-                          {member.id === currentUserId && (
-                            <span className="ml-2 text-xs text-text-muted">
-                              {t("profile:groupInfo.youSuffix")}
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-xs text-text-muted truncate">
-                          @{member.username}
-                        </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <span
-                            className={clsx(
-                              "rounded-full px-2 py-0.5 text-caption",
-                              roleBadgeClass(member.role),
+                {isLoadingMembers ? (
+                  <div className="flex justify-center py-4">
+                    <Spinner size="md" />
+                  </div>
+                ) : members.length === 0 ? (
+                  <p className="px-4 py-3 text-sm text-text-muted">
+                    {t("profile:groupInfo.noMembers")}
+                  </p>
+                ) : (
+                  members.map((member) => {
+                    const isMemberActionRunning =
+                      isSubmitting || actingMemberId === member.id;
+                    const canToggleRole = canToggleAdminRole({
+                      actorRole: currentUserRole,
+                      actorUserId: currentUserId,
+                      targetRole: member.role,
+                      targetUserId: member.id,
+                    });
+
+                    return (
+                      <div
+                        key={member.id}
+                        className="flex items-start gap-3 px-4 py-3 transition-micro hover:bg-surface-hover"
+                      >
+                        <Avatar
+                          src={member.avatar}
+                          alt={resolveMemberName(member) || member.id}
+                          size="md"
+                          status={member.status}
+                          showStatus
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="truncate text-sm font-medium text-text-primary">
+                              {resolveMemberName(member) || member.id}
+                            </p>
+                            {member.id === currentUserId && (
+                              <span className="text-xs text-text-muted">
+                                {t("profile:groupInfo.youSuffix")}
+                              </span>
                             )}
-                          >
-                            {roleLabel(member.role)}
-                          </span>
-
-                          {canToggleRole && (
-                            <button
-                              type="button"
-                              disabled={isMemberActionRunning}
-                              onClick={() =>
-                                void handleToggleMemberRole(member)
-                              }
-                              className="text-xs px-2 py-0.5 rounded border border-border text-text-secondary hover:bg-surface-overlay disabled:opacity-60"
+                            <span
+                              className={clsx(
+                                "rounded-full px-2 py-0.5 text-caption",
+                                roleBadgeClass(member.role),
+                              )}
                             >
-                              {member.role === RoomMemberRole.ADMIN
-                                ? t("profile:groupInfo.actions.removeAdmin")
-                                : t("profile:groupInfo.actions.makeAdmin")}
-                            </button>
-                          )}
+                              {roleLabel(member.role)}
+                            </span>
+                          </div>
+                          <p className="mt-1 truncate text-xs text-text-muted">
+                            @{member.username}
+                          </p>
+                          {(canToggleRole || canRemoveMember(member)) && (
+                            <div className="mt-2 flex flex-wrap items-center gap-3">
+                              {canToggleRole && (
+                                <button
+                                  type="button"
+                                  disabled={isMemberActionRunning}
+                                  onClick={() => void handleToggleMemberRole(member)}
+                                  className="text-xs text-text-secondary underline-offset-2 hover:text-text-primary hover:underline disabled:opacity-60"
+                                >
+                                  {member.role === RoomMemberRole.ADMIN
+                                    ? t("profile:groupInfo.actions.removeAdmin")
+                                    : t("profile:groupInfo.actions.makeAdmin")}
+                                </button>
+                              )}
 
-                          {canRemoveMember(member) && (
-                            <button
-                              type="button"
-                              disabled={isMemberActionRunning}
-                              onClick={() => void handleRemoveMember(member)}
-                              className="text-xs px-2 py-0.5 rounded border border-danger/40 text-danger hover:bg-danger/10 disabled:opacity-60"
-                            >
-                              {t("profile:groupInfo.actions.removeMember")}
-                            </button>
-                          )}
+                              {canRemoveMember(member) && (
+                                <button
+                                  type="button"
+                                  disabled={isMemberActionRunning}
+                                  onClick={() => void handleRemoveMember(member)}
+                                  className="text-xs text-danger underline-offset-2 hover:underline disabled:opacity-60"
+                                >
+                                  {t("profile:groupInfo.actions.removeMember")}
+                                </button>
+                              )}
 
-                          {actingMemberId === member.id && (
-                            <Spinner size="sm" className="ml-1" />
+                              {actingMemberId === member.id && (
+                                <Spinner size="sm" className="ml-1" />
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
-                    </div>
-                  );
-                })
-              )}
-            </>
-          )}
-
-          {activeTab === "media" && (
-            <div className="p-4">
-              <div className="grid grid-cols-3 gap-1">
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div
-                    key={i}
-                    className="flex aspect-square items-center justify-center rounded-lg bg-surface-overlay"
-                  >
-                    <PhotoIcon className="w-8 h-8 text-border-strong" />
-                  </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                disabled
-                title={unavailableActionTitle}
-                className={clsx(
-                  "w-full mt-4 py-2 text-sm text-primary font-medium rounded-lg",
-                  unavailableActionClass,
+                    );
+                  })
                 )}
-              >
-                {t("profile:groupInfo.viewAllMedia")}
-              </button>
-            </div>
-          )}
+              </>
+            )}
 
-          {activeTab === "files" && (
-            <div className="p-4 text-center text-text-muted text-sm">
-              {t("profile:groupInfo.noSharedFiles")}
-            </div>
-          )}
-
-          {activeTab === "inviteLinks" && (
-            <div className="space-y-3 p-4">
+            {activeTab === "inviteLinks" && (
+            <div className="p-4">
               {!isAdmin ? (
                 <p className="text-sm text-text-muted">
                   {t("profile:groupInfo.invite.noPermission")}
                 </p>
               ) : (
                 <div className="space-y-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateInviteForm((prev) => !prev)}
-                    className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-text-secondary hover:bg-surface-hover"
-                  >
-                    <LinkIcon className="h-4 w-4" />
-                    {t("profile:groupInfo.invite.create")}
-                  </button>
-
                   {showCreateInviteForm && (
-                    <div className="space-y-2 rounded-xl border border-border bg-surface-raised p-3">
+                    <div className="space-y-2 rounded-lg border border-border p-3">
                       <Input
                         type="text"
                         value={inviteNameDraft}
@@ -1234,44 +1238,42 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                       {t("profile:groupInfo.invite.empty")}
                     </p>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="divide-y divide-border rounded-lg border border-border">
                       {inviteLinks.map((link) => {
                         const shareValue = link.inviteUrl || link.token || "";
                         const isRevoked = Boolean(link.revokedAt);
                         return (
                           <div
                             key={link.id}
-                            className="rounded-xl border border-border bg-surface-raised p-3"
+                            className="flex items-start justify-between gap-3 px-3 py-3"
                           >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <p className="truncate text-sm font-medium text-text-primary">
                                   {link.name ||
                                     t("profile:groupInfo.invite.unnamed")}
                                 </p>
-                                <p className="mt-1 truncate text-xs text-text-muted">
-                                  {link.inviteUrl ||
-                                    link.tokenPreview ||
-                                    link.id}
-                                </p>
-                                <p className="mt-1 text-xs text-text-muted">
-                                  {t("profile:groupInfo.invite.usage", {
-                                    count: link.usageCount || 0,
-                                    limit:
-                                      typeof link.usageLimit === "number"
-                                        ? link.usageLimit
-                                        : "unlimited",
-                                  })}
-                                </p>
+                                {isRevoked && (
+                                  <span className="rounded-full bg-danger/10 px-2 py-0.5 text-xs text-danger">
+                                    {t("profile:groupInfo.invite.revokedLabel")}
+                                  </span>
+                                )}
                               </div>
-                              {isRevoked && (
-                                <span className="rounded-full bg-danger/10 px-2 py-0.5 text-xs text-danger">
-                                  {t("profile:groupInfo.invite.revokedLabel")}
-                                </span>
-                              )}
+                              <p className="mt-1 truncate text-xs text-text-muted">
+                                {link.inviteUrl || link.tokenPreview || link.id}
+                              </p>
+                              <p className="mt-1 text-xs text-text-muted">
+                                {t("profile:groupInfo.invite.usage", {
+                                  count: link.usageCount || 0,
+                                  limit:
+                                    typeof link.usageLimit === "number"
+                                      ? link.usageLimit
+                                      : "unlimited",
+                                })}
+                              </p>
                             </div>
 
-                            <div className="mt-3 flex items-center gap-2">
+                            <div className="flex shrink-0 items-center gap-2">
                               <button
                                 type="button"
                                 disabled={!shareValue}
@@ -1310,7 +1312,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           )}
 
           {activeTab === "joinRequests" && (
-            <div className="space-y-2 p-4">
+            <div className="p-4">
               {!isAdmin ? (
                 <p className="text-sm text-text-muted">
                   {t("profile:groupInfo.joinRequests.noPermission")}
@@ -1320,113 +1322,112 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   {t("profile:groupInfo.joinRequests.empty")}
                 </p>
               ) : (
-                joinRequests.map((request) => {
-                  const user =
-                    membersByUserId[request.userId] ||
-                    members.find((member) => member.id === request.userId);
-                  const displayName = resolveMemberName(user) || request.userId;
+                <div className="divide-y divide-border rounded-lg border border-border">
+                  {joinRequests.map((request) => {
+                    const user =
+                      membersByUserId[request.userId] ||
+                      members.find((member) => member.id === request.userId);
+                    const displayName =
+                      resolveMemberName(user) || request.userId;
 
-                  return (
-                    <div
-                      key={request.id}
-                      className="rounded-xl border border-border bg-surface-raised p-3"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Avatar
-                          src={user?.avatar}
-                          alt={displayName}
-                          size="md"
-                          status={user?.status}
-                          showStatus
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-text-primary">
-                            {displayName}
-                          </p>
-                          <p className="truncate text-xs text-text-muted">
-                            @{user?.username || request.userId}
-                          </p>
-                          {request.note && (
-                            <p className="mt-1 text-xs text-text-secondary">
-                              {request.note}
+                    return (
+                      <div
+                        key={request.id}
+                        className="flex items-start justify-between gap-3 px-3 py-3"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <Avatar
+                            src={user?.avatar}
+                            alt={displayName}
+                            size="md"
+                            status={user?.status}
+                            showStatus
+                          />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-text-primary">
+                              {displayName}
                             </p>
-                          )}
+                            <p className="truncate text-xs text-text-muted">
+                              @{user?.username || request.userId}
+                            </p>
+                            {request.note && (
+                              <p className="mt-1 truncate text-xs text-text-secondary">
+                                {request.note}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex shrink-0 items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={resolvingRequestId === request.id}
+                            onClick={() =>
+                              void handleResolveJoinRequest(
+                                request.id,
+                                "approved",
+                              )
+                            }
+                            className="rounded-md bg-primary px-3 py-1.5 text-xs text-text-inverse hover:opacity-90 disabled:opacity-60"
+                          >
+                            {t("common:actions.approve")}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={resolvingRequestId === request.id}
+                            onClick={() =>
+                              void handleResolveJoinRequest(
+                                request.id,
+                                "rejected",
+                              )
+                            }
+                            className="rounded-md border border-danger/40 px-3 py-1.5 text-xs text-danger hover:bg-danger/10 disabled:opacity-60"
+                          >
+                            {t("common:actions.reject")}
+                          </button>
                         </div>
                       </div>
-
-                      <div className="mt-3 flex items-center gap-2">
-                        <button
-                          type="button"
-                          disabled={resolvingRequestId === request.id}
-                          onClick={() =>
-                            void handleResolveJoinRequest(
-                              request.id,
-                              "approved",
-                            )
-                          }
-                          className="rounded-md bg-primary px-3 py-1.5 text-xs text-text-inverse hover:opacity-90 disabled:opacity-60"
-                        >
-                          {t("common:actions.approve")}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={resolvingRequestId === request.id}
-                          onClick={() =>
-                            void handleResolveJoinRequest(
-                              request.id,
-                              "rejected",
-                            )
-                          }
-                          className="rounded-md border border-danger/40 px-3 py-1.5 text-xs text-danger hover:bg-danger/10 disabled:opacity-60"
-                        >
-                          {t("common:actions.reject")}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
+                    );
+                  })}
+                </div>
               )}
             </div>
           )}
+        </div>
         </div>
 
         <div className="h-px bg-border mx-4" />
 
         <div className="py-2">
-          <button
-            type="button"
-            disabled={isSubmitting}
-            onClick={() => {
-              void onDeleteConversation?.();
-            }}
-            className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-danger"
-          >
-            <TrashIcon className="w-5 h-5" />
-            <span className="text-sm">
-              {t("profile:userProfile.deleteConversation")}
-            </span>
-          </button>
+          {canDeleteConversation ? (
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => {
+                void onDeleteConversation?.();
+              }}
+              className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-danger"
+            >
+              <TrashIcon className="w-5 h-5" />
+              <span className="text-sm">
+                {t("profile:userProfile.deleteConversation")}
+              </span>
+            </button>
+          ) : null}
 
           <button
             type="button"
-            disabled
-            title={unavailableActionTitle}
-            className={clsx(
-              "w-full flex items-center gap-4 px-4 py-3 text-danger",
-              unavailableActionClass,
-            )}
-          >
-            <ExclamationTriangleIcon className="w-5 h-5" />
-            <span className="text-sm">
-              {t("profile:groupInfo.reportGroup")}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !canLeaveCurrentGroup}
+            title={
+              canLeaveCurrentGroup ? undefined : blockedOwnerLeaveTitle
+            }
             onClick={() => void handleLeaveGroup()}
-            className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-danger"
+            className={clsx(
+              "w-full flex items-center gap-4 px-4 py-3 text-danger transition-colors",
+              canLeaveCurrentGroup
+                ? "hover:bg-danger/10"
+                : "cursor-not-allowed opacity-60",
+            )}
           >
             <ArrowRightOnRectangleIcon className="w-5 h-5" />
             <span className="text-sm">{t("profile:groupInfo.leaveGroup")}</span>

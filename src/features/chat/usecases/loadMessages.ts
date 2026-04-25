@@ -9,7 +9,7 @@ interface LoadMessagesInput {
     limit?: number;
     beforeId?: string;
     afterId?: string;
-    syncReason?: "initial-sync" | "reconnect" | "room-refresh";
+    syncReason?: "initial-sync" | "reconnect" | "conversation-refresh";
   };
 }
 

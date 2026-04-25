@@ -1,6 +1,9 @@
 ﻿/**
  * @fileoverview useMessages hook
  * Custom hook quan ly messages trong mot conversation
+ *
+ * @deprecated Legacy compatibility hook. Do not import in production code.
+ * Prefer feature-level chat session/send hooks instead.
  */
 
 import { useEffect, useCallback, useRef } from "react";
@@ -70,6 +73,11 @@ export const useMessages = ({
       ? (state.hasNewerMessagesByConversation[conversationId] ?? false)
       : false,
   );
+  const messageWindow = useChatStore((state) =>
+    conversationId
+      ? state.messageWindowByConversation[conversationId]
+      : undefined,
+  );
   const isLoadingByConversation = useChatStore(
     (state) => state.isLoadingMessagesByConversation,
   );
@@ -80,8 +88,8 @@ export const useMessages = ({
   const clearError = useChatStore((state) => state.clearError);
 
   const {
-    joinRoom,
-    leaveRoom,
+    joinConversation,
+    leaveConversation,
     sendTyping: wsSendTyping,
     stopTyping: wsStopTyping,
     emit,
@@ -97,7 +105,7 @@ export const useMessages = ({
         previousConversationRef.current &&
         previousConversationRef.current !== conversationId
       ) {
-        leaveRoom(previousConversationRef.current);
+        leaveConversation(previousConversationRef.current);
       }
 
       previousConversationRef.current = conversationId;
@@ -111,7 +119,7 @@ export const useMessages = ({
         }
 
         if (!cancelled) {
-          joinRoom(conversationId, { skipInitialDeltaSync });
+          joinConversation(conversationId, { skipInitialDeltaSync });
         }
       })();
     }
@@ -119,13 +127,13 @@ export const useMessages = ({
     return () => {
       cancelled = true;
       if (conversationId) {
-        leaveRoom(conversationId);
+        leaveConversation(conversationId);
       }
     };
   }, [
     conversationId,
-    joinRoom,
-    leaveRoom,
+    joinConversation,
+    leaveConversation,
     autoLoad,
     fetchMessages,
     hasNewerMessages,
@@ -145,15 +153,12 @@ export const useMessages = ({
       hasMore &&
       !isLoadingByConversation[conversationId]
     ) {
-      const oldestMessage = messages.find(
-        (message) => !message.id.startsWith("temp-"),
-      );
-      if (oldestMessage) {
+      if (messageWindow?.oldestLoadedMessageId && messageWindow.oldestLoadedAt) {
         await fetchMessages(
           conversationId,
-          new Date(oldestMessage.createdAt).toISOString(),
+          new Date(messageWindow.oldestLoadedAt).toISOString(),
           undefined,
-          { beforeId: oldestMessage.id },
+          { beforeId: messageWindow.oldestLoadedMessageId },
         );
       }
     }
@@ -161,7 +166,7 @@ export const useMessages = ({
     conversationId,
     hasMore,
     isLoadingByConversation,
-    messages,
+    messageWindow,
     fetchMessages,
   ]);
 

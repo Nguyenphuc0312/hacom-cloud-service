@@ -13,13 +13,15 @@
  */
 
 import apiClient from "../lib/axios";
+import type { ApiResponse } from "@hacom/chat-shared-types/core";
 import type {
-  ApiResponse,
-  SettingsResponseDto,
   SettingsPatchDto,
-} from "@hacom/chat-shared-types";
+  SettingsResponseDto,
+} from "@hacom/chat-shared-types/chat";
 import type { SettingsSchema } from "./types";
 import { getAccessToken } from "../services/tokenService";
+import { triggerSettingsConflictSync } from "./settingsSyncBridge";
+import { logger } from "../utils/logger";
 
 // ============================================
 // FETCH FROM SERVER
@@ -58,6 +60,8 @@ export const fetchSettingsFromServer =
 
 /**
  * Push local settings to backend using SettingsPatchDto format.
+ * Deprecated compatibility-only privacy fields are stripped here so the
+ * frontend does not recreate local-truth semantics for auth-owned policy.
  * Includes current `version` for optimistic locking.
  *
  * On 409 Conflict → refetch and let the store re-merge.
@@ -69,12 +73,21 @@ export const syncSettingsToServer = async (
   if (!token) return; // not logged in
 
   try {
+    const privacyPatch = {
+      ...(settings.privacy.showOnlineStatus !== undefined
+        ? { showOnlineStatus: settings.privacy.showOnlineStatus }
+        : {}),
+      ...(settings.privacy.readReceipts !== undefined
+        ? { readReceipts: settings.privacy.readReceipts }
+        : {}),
+    };
+
     const patchBody: SettingsPatchDto = {
       version: settings.version,
       language: settings.language,
       appearance: settings.appearance,
       notifications: settings.notifications,
-      privacy: settings.privacy,
+      ...(Object.keys(privacyPatch).length > 0 ? { privacy: privacyPatch } : {}),
       chat: settings.chat,
     };
 
@@ -88,12 +101,8 @@ export const syncSettingsToServer = async (
 
     // 409 = version conflict → refetch server state, store will re-merge
     if (status === 409) {
-      console.warn(
-        "[sync] Settings version conflict (409). Refetching from server…",
-      );
-      // Dynamically import to avoid circular dependency
-      const { useSettingsStore } = await import("./settingsStore");
-      void useSettingsStore.getState().syncFromServer();
+      logger.warn("settings", "version_conflict_refetching", { status });
+      void triggerSettingsConflictSync();
       return;
     }
 

@@ -12,7 +12,9 @@
     "missingRefreshToken": "Missing refresh token",
     "refreshMissingToken": "Refresh response is missing access token",
     "loginTokenMissing": "Login response is missing access token",
-    "registerTokenMissing": "Registration response is missing access token"
+    "registerTokenMissing": "Registration response is missing access token",
+    "profileMissing": "We could not load your profile.",
+    "profileRetryHint": "Try refreshing your profile or sign in again."
   },
   "chat": {
     "conversationAccessDenied": "Unable to access this conversation",
@@ -22,7 +24,7 @@
     "createGroupFailed": "Unable to create new group",
     "fetchConversationsFailed": "Unable to load conversations",
     "fetchMessagesFailed": "Unable to load messages",
-    "roomIdMissing": "Missing room id",
+    "conversationIdMissing": "Missing conversation id",
     "invalidSendResponse": "Invalid send message response",
     "invalidResendResponse": "Invalid resend message response"
   },
@@ -36,6 +38,7 @@
     "tooLarge": "File too large",
     "tooManyFiles": "Maximum {{max}} files allowed",
     "fileTooLargeNamed": "{{name}} is too large",
+    "unsupportedTypeNamed": "{{name}} has an unsupported file type",
     "totalSizeTooLarge": "Total file size limit exceeded"
   }
 }
