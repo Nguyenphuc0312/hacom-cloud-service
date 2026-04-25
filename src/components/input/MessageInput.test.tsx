@@ -237,4 +237,28 @@ describe("MessageInput send flow", () => {
     expect(onSend).not.toHaveBeenCalled();
     expect(screen.getByTestId("chat-composer-input")).toHaveValue("");
   });
+
+  it("surfaces long-paste guidance for very large payloads without sending", async () => {
+    const onSend = vi.fn();
+
+    renderComposer(onSend, { initialValue: "" });
+    const input = screen.getByTestId("chat-composer-input");
+
+    fireEvent.paste(input, {
+      clipboardData: {
+        getData: () => "x".repeat(100_000),
+      },
+    });
+    fireEvent.change(input, {
+      target: { value: "x".repeat(100_000) },
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Tin nhắn vượt giới hạn 20.000 ký tự."),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("chat-send-button")).toBeDisabled();
+    expect(onSend).not.toHaveBeenCalled();
+  });
 });
