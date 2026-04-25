@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
@@ -46,7 +46,7 @@ export const RegisterPage: React.FC = () => {
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     formState: { errors, isSubmitting },
     setFocus,
   } = useForm<RegisterFormData>({
@@ -60,7 +60,7 @@ export const RegisterPage: React.FC = () => {
     mode: "onChange",
   });
 
-  const password = watch("password");
+  const password = useWatch({ control, name: "password" }) ?? "";
 
   useEffect(() => {
     setFocus("email");

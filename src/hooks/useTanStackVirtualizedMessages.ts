@@ -116,6 +116,7 @@ export const useTanStackVirtualizedMessages = <Item,>({
     behavior: ConversationVirtualizerScrollBehavior;
   } | null>(null);
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual intentionally returns imperative methods; this hook keeps them local and does not pass them into memoized children.
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: items.length,
     enabled,

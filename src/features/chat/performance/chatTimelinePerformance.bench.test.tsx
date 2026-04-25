@@ -1,5 +1,5 @@
 import { renderHook } from "@testing-library/react";
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { RoomType, type Message } from "../../../types";
 import { useConversationTimelineRows } from "../hooks/useConversationTimelineRows";
 import { useConversationThreadRows } from "../hooks/useConversationThreadRows";
@@ -56,6 +56,7 @@ const measure = <T,>(name: string, fn: () => T): { name: string; durationMs: num
 describe("chat timeline performance benchmark", () => {
   it("records baseline timeline derivation costs", () => {
     const results: Array<Record<string, number | string>> = [];
+    const durations = new Map<string, number>();
 
     const open100 = measure("open_100", () =>
       renderHook(({ messages }) => useBenchmarkPipeline(messages), {
@@ -68,6 +69,7 @@ describe("chat timeline performance benchmark", () => {
       timelineRows: open100.value.result.current.timelineItems.length,
       threadRows: open100.value.result.current.threadRows.length,
     });
+    durations.set(open100.name, open100.durationMs);
     open100.value.unmount();
 
     const messages10k = makeMessages(10_000);
@@ -82,6 +84,21 @@ describe("chat timeline performance benchmark", () => {
       timelineRows: open10k.value.result.current.timelineItems.length,
       threadRows: open10k.value.result.current.threadRows.length,
     });
+    durations.set(open10k.name, open10k.durationMs);
+
+    const open50k = measure("open_50k", () =>
+      renderHook(({ messages }) => useBenchmarkPipeline(messages), {
+        initialProps: { messages: makeMessages(50_000) },
+      }),
+    );
+    results.push({
+      scenario: open50k.name,
+      durationMs: open50k.durationMs,
+      timelineRows: open50k.value.result.current.timelineItems.length,
+      threadRows: open50k.value.result.current.threadRows.length,
+    });
+    durations.set(open50k.name, open50k.durationMs);
+    open50k.value.unmount();
 
     const append1 = [...messages10k, makeMessage(10_000)];
     const append1Measure = measure("append_1", () => {
@@ -94,6 +111,7 @@ describe("chat timeline performance benchmark", () => {
       timelineRows: append1Measure.value.timelineItems.length,
       threadRows: append1Measure.value.threadRows.length,
     });
+    durations.set(append1Measure.name, append1Measure.durationMs);
 
     const append10 = [
       ...append1,
@@ -109,6 +127,7 @@ describe("chat timeline performance benchmark", () => {
       timelineRows: append10Measure.value.timelineItems.length,
       threadRows: append10Measure.value.threadRows.length,
     });
+    durations.set(append10Measure.name, append10Measure.durationMs);
 
     const older50 = [...makeMessages(50, -50), ...append10];
     const older50Measure = measure("load_older_50", () => {
@@ -121,6 +140,7 @@ describe("chat timeline performance benchmark", () => {
       timelineRows: older50Measure.value.timelineItems.length,
       threadRows: older50Measure.value.threadRows.length,
     });
+    durations.set(older50Measure.name, older50Measure.durationMs);
 
     const sameMessagesRerender = measure("same_messages_rerender_keypress_proxy", () => {
       open10k.value.rerender({ messages: older50 });
@@ -132,6 +152,7 @@ describe("chat timeline performance benchmark", () => {
       timelineRows: sameMessagesRerender.value.timelineItems.length,
       threadRows: sameMessagesRerender.value.threadRows.length,
     });
+    durations.set(sameMessagesRerender.name, sameMessagesRerender.durationMs);
 
     const memoryStart =
       typeof process !== "undefined" ? process.memoryUsage().heapUsed : 0;
@@ -154,5 +175,13 @@ describe("chat timeline performance benchmark", () => {
     open10k.value.unmount();
 
     console.table(results);
+
+    expect(durations.get("open_100")).toBeLessThanOrEqual(1_000);
+    expect(durations.get("open_10k")).toBeLessThanOrEqual(1_000);
+    expect(durations.get("open_50k")).toBeLessThanOrEqual(2_500);
+    expect(durations.get("append_1")).toBeLessThanOrEqual(100);
+    expect(durations.get("append_10_burst")).toBeLessThanOrEqual(250);
+    expect(durations.get("load_older_50")).toBeLessThanOrEqual(300);
+    expect(durations.get("same_messages_rerender_keypress_proxy")).toBeLessThanOrEqual(32);
   }, 30_000);
 });

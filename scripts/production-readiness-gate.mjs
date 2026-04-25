@@ -170,6 +170,20 @@ for (const legacyWrite of [
   }
 }
 
+const configPath = join(root, "src/config/index.ts");
+const configText = readFileSync(configPath, "utf8");
+if (!configText.includes("SAFE_DATA_IMAGE_URL_REGEX")) {
+  fail("Resource URL policy must keep an explicit safe data-image allowlist");
+}
+
+if (/image\/(?:svg|xml)|svg\+xml|text\/html/i.test(configText)) {
+  fail("Resource URL policy must not allow svg/html data URLs");
+}
+
+if (!/allowDataImage\s*===\s*true/.test(configText)) {
+  fail("Data image URLs must require explicit allowDataImage opt-in");
+}
+
 if (failures.length > 0) {
   console.error("Production readiness gate failed:");
   failures.forEach((failure) => console.error(`- ${failure}`));

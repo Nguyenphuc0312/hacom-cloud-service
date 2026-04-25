@@ -1786,6 +1786,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       <div
         ref={outerRef}
         onScroll={handleTanStackScroll}
+        data-testid="message-list-scroll"
         className="h-full min-h-0 overflow-auto overscroll-contain"
       >
         <div
@@ -1858,6 +1859,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
           ) : (
             <div
               ref={viewportRef}
+              data-testid="message-list-viewport"
               tabIndex={0}
               onKeyDown={handleKeyDown}
               className={clsx(

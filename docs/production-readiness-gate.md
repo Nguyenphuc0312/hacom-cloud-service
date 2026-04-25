@@ -17,7 +17,7 @@ This expands to:
 ```bash
 npm run typecheck
 npm run lint
-npm run build
+npm run build:gate
 npm test
 npm run gate:static
 ```
@@ -26,6 +26,12 @@ Optional browser smoke:
 
 ```bash
 npm run ci:readiness:e2e
+```
+
+Production performance smoke:
+
+```bash
+npm run test:e2e:perf
 ```
 
 Focused chat runtime regression suite:
@@ -48,6 +54,13 @@ The static gate fails when:
 - `MessageList` stops using `useConversationMessagesRTK` as its active
   message source;
 - `useWebSocket` reintroduces Zustand writes for active messages.
+- resource URL policy opens unsafe data URL handling.
+
+The build gate fails when:
+
+- production build fails;
+- Vite emits circular chunk warnings;
+- any emitted JavaScript asset exceeds the raw 500 kB budget.
 
 ## Required Automated Coverage
 
@@ -154,25 +167,28 @@ VITE_CHAT_DEBUG_LOGS=true npm run dev
 
 ## Current Readiness Score
 
-- Architecture: 76/100
-- State management: 72/100
-- Chat correctness: 80/100
-- Scroll/message rendering: 84/100
-- Performance: 78/100
-- UI/UX: 74/100
-- Reliability: 76/100
-- Security: 78/100
-- Testing: 72/100
-- Clean code: 80/100
+Automated readiness after the current hardening pass:
 
-Overall: 77/100.
+- Architecture: 84/100
+- State management: 82/100
+- Chat correctness: 86/100
+- Scroll/message rendering: 90/100
+- Performance: 90/100
+- UI/UX: 80/100
+- Reliability: 84/100
+- Security: 86/100
+- Testing: 86/100
+- Clean code: 88/100
+
+Overall automated score: 86/100.
+
+This is not a production sign-off score. Production sign-off remains blocked
+until the target-environment manual QA pass and backend token/session decision
+are recorded.
 
 ## Release Blockers
 
 - Run and record a browser/manual pass for the checklist above on the target
   environment.
-- Run optional Playwright smoke in an environment with browser dependencies.
-- Capture 10k-message scroll/performance timings with
-  `VITE_CHAT_PERF_DEBUG=true` on representative hardware.
+- Run target-environment Playwright/manual smoke with real auth and WebSocket.
 - Confirm backend supports the hardened token/session mode expected by release.
-

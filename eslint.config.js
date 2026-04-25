@@ -19,6 +19,9 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      "react-hooks/incompatible-library": "error",
+    },
   },
   {
     files: [

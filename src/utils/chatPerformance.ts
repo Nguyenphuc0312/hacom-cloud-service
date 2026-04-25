@@ -26,10 +26,7 @@ const isPerfQueryFlagEnabled = (): boolean => {
 
 export const isChatPerformanceEnabled = (): boolean => {
   if (typeof window === "undefined") return false;
-  return (
-    import.meta.env.DEV &&
-    (isPerfEnvFlagEnabled() || isPerfQueryFlagEnabled())
-  );
+  return isPerfEnvFlagEnabled() || (import.meta.env.DEV && isPerfQueryFlagEnabled());
 };
 
 const shouldConsoleLogChatPerformance = (): boolean => {
