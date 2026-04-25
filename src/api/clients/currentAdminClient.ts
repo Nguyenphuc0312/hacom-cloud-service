@@ -1,4 +1,5 @@
 import { adminAxiosInstance } from '@/api/axios';
+import type { ApiRequestConfig } from '@/api/axios';
 import { unwrapApiEnvelope } from '@/api/envelope';
 import type { CurrentAdmin } from '@/api/types';
 
@@ -7,8 +8,8 @@ interface CurrentAdminPayload {
 }
 
 export const currentAdminClient = {
-  async getCurrentAdmin(): Promise<CurrentAdmin> {
-    const response = await adminAxiosInstance.get('/me');
+  async getCurrentAdmin(config?: ApiRequestConfig): Promise<CurrentAdmin> {
+    const response = await adminAxiosInstance.get('/me', config);
     const data = unwrapApiEnvelope<CurrentAdminPayload>(response);
     return data.admin;
   },

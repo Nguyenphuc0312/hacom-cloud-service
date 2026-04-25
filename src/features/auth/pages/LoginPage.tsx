@@ -4,8 +4,8 @@ import { useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 
-import { accessClient, authClient } from '@/api/clients';
-import { getErrorMessage } from '@/api/error';
+import { authClient, currentAdminClient } from '@/api/clients';
+import { getAdminLoginErrorMessage, getErrorMessage } from '@/api/error';
 import { useAuthStore } from '@/store/authStore';
 
 const { Title, Text } = Typography;
@@ -22,10 +22,9 @@ export const LoginPage = () => {
   const location = useLocation();
   const accessToken = useAuthStore((state) => state.accessToken);
   const setAuth = useAuthStore((state) => state.setAuth);
-  const setUser = useAuthStore((state) => state.setUser);
-  const setAccess = useAuthStore((state) => state.setAccess);
   const clearAuth = useAuthStore((state) => state.clearAuth);
   const [qrCode, setQrCode] = useState('');
+  const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
 
   const from = useMemo(() => {
     const state = location.state as { from?: { pathname?: string } } | null;
@@ -35,35 +34,35 @@ export const LoginPage = () => {
   const loginMutation = useMutation({
     mutationFn: authClient.login,
     onSuccess: async (data) => {
-      setAuth({ accessToken: data.accessToken, user: data.user ?? null });
-
       try {
-        const access = await accessClient.getCurrentStatus();
-        setAccess(access);
+        const admin = await currentAdminClient.getCurrentAdmin({
+          skipAuthRedirect: true,
+          headers: {
+            Authorization: `Bearer ${data.accessToken}`,
+          },
+        });
 
-        if (access.status !== 'approved') {
-          navigate('/access', { replace: true });
-          return;
-        }
-
-        if (!data.user) {
-          const me = await authClient.me();
-          setUser(me);
-        }
-
+        setAuth({ accessToken: data.accessToken, user: admin });
+        setAdminLoginError(null);
         message.success('Đăng nhập thành công.');
         navigate(from, { replace: true });
       } catch (error) {
         clearAuth();
-        message.error(getErrorMessage(error));
+        const errorMessage = getAdminLoginErrorMessage(error);
+        setAdminLoginError(errorMessage);
+        message.error(errorMessage);
       }
     },
     onError: (error) => {
-      message.error(getErrorMessage(error));
+      const errorMessage = getErrorMessage(error);
+      setAdminLoginError(errorMessage);
+      message.error(errorMessage);
     },
   });
 
   const onFinish = (values: LoginFormValues) => {
+    setAdminLoginError(null);
+
     const parsed = loginSchema.safeParse(values);
     if (!parsed.success) {
       message.error(parsed.error.issues[0]?.message ?? 'Dữ liệu không hợp lệ.');
@@ -76,6 +75,9 @@ export const LoginPage = () => {
   if (accessToken) {
     return <Navigate to="/" replace />;
   }
+
+  const formErrorMessage =
+    adminLoginError ?? (loginMutation.isError ? getErrorMessage(loginMutation.error) : null);
 
   return (
     <div className="login-page">
@@ -119,11 +121,11 @@ export const LoginPage = () => {
                     <Input.Password size="large" autoComplete="current-password" />
                   </Form.Item>
 
-                  {loginMutation.isError ? (
+                  {formErrorMessage ? (
                     <Alert
                       type="error"
                       showIcon
-                      message={getErrorMessage(loginMutation.error)}
+                      message={formErrorMessage}
                       style={{ marginBottom: 12 }}
                     />
                   ) : null}

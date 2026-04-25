@@ -15,6 +15,13 @@ const CODE_MESSAGE_MAP: Record<string, string> = {
   ACCESS_IP_REJECTED: 'IP hien tai da bi tu choi.',
   ACCESS_IP_REVOKED: 'Quyen truy cap cua IP hien tai da bi thu hoi.',
   ACCESS_IP_EXPIRED: 'Phe duyet cho IP hien tai da het han.',
+  ALLOWLIST_EMAIL_DENIED: 'Email nay khong duoc phep truy cap admin panel.',
+  RBAC_PERMISSION_DENIED: 'Tai khoan khong co quyen quan tri.',
+  ADMIN_ACCESS_DENIED: 'Ban khong co quyen truy cap admin panel.',
+  ADMIN_AUTH_REQUIRED: 'Phien dang nhap khong hop le hoac da het han.',
+  ADMIN_AUTH_TOKEN_INVALID: 'Phien dang nhap khong hop le hoac da het han.',
+  ADMIN_CANONICAL_PERMISSIONS_MISSING:
+    'Phien dang nhap chua co quyen admin hop le. Vui long dang nhap lai.',
   CLIENT_IP_UNRESOLVED: 'Khong the xac dinh IP client thuc te.',
   USER_NOT_FOUND: 'Khong tim thay nguoi dung.',
   DUPLICATE_EMPLOYEE_CODE: 'Ma nhan vien da ton tai.',
@@ -36,6 +43,20 @@ const STATUS_MESSAGE_MAP: Record<number, string> = {
   409: 'Du lieu bi xung dot.',
   422: 'Du lieu khong thoa dieu kien xac thuc.',
   500: 'He thong dang ban. Vui long thu lai sau.',
+};
+
+const ADMIN_LOGIN_MESSAGE_MAP: Record<string, string> = {
+  ACCESS_IP_PENDING:
+    'IP của bạn đang chờ quản trị viên phê duyệt để truy cập admin panel.',
+  ACCESS_IP_REJECTED: 'IP của bạn đã bị từ chối truy cập admin panel.',
+  ACCESS_IP_REVOKED: 'Quyền truy cập admin panel của IP này đã bị thu hồi.',
+  ACCESS_IP_EXPIRED: 'Phê duyệt truy cập admin panel của IP này đã hết hạn.',
+  ALLOWLIST_EMAIL_DENIED: 'Email này không được phép truy cập admin panel.',
+  RBAC_PERMISSION_DENIED: 'Tài khoản của bạn không có quyền quản trị.',
+  ADMIN_ACCESS_DENIED: 'Bạn không có quyền truy cập admin panel.',
+  ADMIN_AUTH_REQUIRED: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
+  ADMIN_AUTH_TOKEN_INVALID: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
+  UNAUTHORIZED: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
 };
 
 const extractReasonCode = (body: ApiErrorBody | undefined): string | undefined => {
@@ -95,4 +116,22 @@ export const getErrorMessage = (
   }
 
   return fallback;
+};
+
+export const getAdminLoginErrorMessage = (error: unknown): string => {
+  const code = getApiErrorCode(error);
+  if (code && ADMIN_LOGIN_MESSAGE_MAP[code]) {
+    return ADMIN_LOGIN_MESSAGE_MAP[code];
+  }
+
+  const status = getApiErrorStatus(error);
+  if (status === 403) {
+    return 'Bạn không có quyền truy cập admin panel.';
+  }
+
+  if (status === 401) {
+    return 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.';
+  }
+
+  return 'Không thể xác minh quyền truy cập admin. Vui lòng thử lại.';
 };
