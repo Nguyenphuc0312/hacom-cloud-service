@@ -92,6 +92,7 @@ const renderLoginPage = () => {
       <MemoryRouter initialEntries={['/login']}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/access" element={<div>Access Pending</div>} />
           <Route path="/" element={<div>Dashboard</div>} />
         </Routes>
       </MemoryRouter>
@@ -126,6 +127,7 @@ describe('LoginPage admin preflight', () => {
     getCurrentAdminMock.mockReset();
     vi.mocked(message.success).mockReset();
     vi.mocked(message.error).mockReset();
+    vi.mocked(message.info).mockReset();
   });
 
   it('stores token and enters dashboard only after /admin/me passes', async () => {
@@ -165,18 +167,20 @@ describe('LoginPage admin preflight', () => {
     expect(message.error).toHaveBeenCalledWith(expectedMessage);
   });
 
-  it('clears token and shows pending IP reason when admin IP is not approved', async () => {
+  it('keeps admin token and sends pending IP admins to the access screen', async () => {
     loginMock.mockResolvedValue({ accessToken: 'pending-ip-token' });
-    getCurrentAdminMock.mockRejectedValue(buildAxiosError(403, 'ACCESS_IP_PENDING'));
+    getCurrentAdminMock.mockRejectedValue(
+      buildAxiosError(403, 'ADMIN_PERMISSION_DENIED', 'ADMIN_ACCESS_IP_NOT_APPROVED'),
+    );
 
     const { container } = renderLoginPage();
     await submitLogin(container);
 
     const expectedMessage =
       'IP của bạn đang chờ quản trị viên phê duyệt để truy cập admin panel.';
-    expect(await screen.findByText(expectedMessage)).toBeInTheDocument();
-    expect(useAuthStore.getState().accessToken).toBeNull();
-    expect(message.error).toHaveBeenCalledWith(expectedMessage);
+    expect(await screen.findByText('Access Pending')).toBeInTheDocument();
+    expect(useAuthStore.getState().accessToken).toBe('pending-ip-token');
+    expect(message.info).toHaveBeenCalledWith(expectedMessage);
   });
 
   it('clears token and shows inactive admin account reason from upstream details', async () => {

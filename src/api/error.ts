@@ -15,6 +15,7 @@ const CODE_MESSAGE_MAP: Record<string, string> = {
   ACCESS_IP_REJECTED: 'IP hien tai da bi tu choi.',
   ACCESS_IP_REVOKED: 'Quyen truy cap cua IP hien tai da bi thu hoi.',
   ACCESS_IP_EXPIRED: 'Phe duyet cho IP hien tai da het han.',
+  ADMIN_ACCESS_IP_NOT_APPROVED: 'IP hien tai dang cho phe duyet.',
   ALLOWLIST_EMAIL_DENIED: 'Email nay khong duoc phep truy cap admin panel.',
   RBAC_PERMISSION_DENIED: 'Tai khoan khong co quyen quan tri.',
   ADMIN_ACCESS_DENIED: 'Ban khong co quyen truy cap admin panel.',
@@ -54,6 +55,8 @@ const ADMIN_LOGIN_MESSAGE_MAP: Record<string, string> = {
   ACCESS_IP_REJECTED: 'IP của bạn đã bị từ chối truy cập admin panel.',
   ACCESS_IP_REVOKED: 'Quyền truy cập admin panel của IP này đã bị thu hồi.',
   ACCESS_IP_EXPIRED: 'Phê duyệt truy cập admin panel của IP này đã hết hạn.',
+  ADMIN_ACCESS_IP_NOT_APPROVED:
+    'IP của bạn đang chờ quản trị viên phê duyệt để truy cập admin panel.',
   ALLOWLIST_EMAIL_DENIED: 'Email này không được phép truy cập admin panel.',
   RBAC_PERMISSION_DENIED: 'Tài khoản của bạn không có quyền quản trị.',
   ADMIN_ACCESS_DENIED: 'Bạn không có quyền truy cập admin panel.',
@@ -86,13 +89,24 @@ const extractReasonCode = (body: ApiErrorBody | undefined): string | undefined =
   return typeof upstreamReason === 'string' ? upstreamReason : undefined;
 };
 
+const extractUpstreamCode = (body: ApiErrorBody | undefined): string | undefined => {
+  const details = body?.error?.details ?? body?.details;
+
+  if (!details || typeof details !== 'object') {
+    return undefined;
+  }
+
+  const upstreamCode = (details as { upstreamCode?: unknown }).upstreamCode;
+  return typeof upstreamCode === 'string' ? upstreamCode : undefined;
+};
+
 export const getApiErrorCode = (error: unknown): string | undefined => {
   if (!(error instanceof AxiosError)) {
     return undefined;
   }
 
   const body = error.response?.data as ApiErrorBody | undefined;
-  return extractReasonCode(body) ?? body?.error?.code ?? body?.code;
+  return extractReasonCode(body) ?? extractUpstreamCode(body) ?? body?.error?.code ?? body?.code;
 };
 
 export const getApiErrorStatus = (error: unknown): number | undefined => {
@@ -110,7 +124,7 @@ export const getErrorMessage = (
   if (error instanceof AxiosError) {
     const body = error.response?.data as ApiErrorBody | undefined;
 
-    const code = extractReasonCode(body) ?? body?.error?.code ?? body?.code;
+    const code = extractReasonCode(body) ?? extractUpstreamCode(body) ?? body?.error?.code ?? body?.code;
     const message = body?.error?.message ?? body?.message;
 
     if (code && CODE_MESSAGE_MAP[code]) {
@@ -150,4 +164,9 @@ export const getAdminLoginErrorMessage = (error: unknown): string => {
   }
 
   return 'Không thể xác minh quyền truy cập admin. Vui lòng thử lại.';
+};
+
+export const isAdminAccessIpPendingError = (error: unknown): boolean => {
+  const code = getApiErrorCode(error);
+  return code === 'ADMIN_ACCESS_IP_NOT_APPROVED' || code === 'ACCESS_IP_PENDING';
 };

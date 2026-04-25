@@ -5,7 +5,11 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 
 import { authClient, currentAdminClient } from '@/api/clients';
-import { getAdminLoginErrorMessage, getErrorMessage } from '@/api/error';
+import {
+  getAdminLoginErrorMessage,
+  getErrorMessage,
+  isAdminAccessIpPendingError,
+} from '@/api/error';
 import { useAuthStore } from '@/store/authStore';
 
 const { Title, Text } = Typography;
@@ -47,6 +51,14 @@ export const LoginPage = () => {
         message.success('Đăng nhập thành công.');
         navigate(from, { replace: true });
       } catch (error) {
+        if (isAdminAccessIpPendingError(error)) {
+          setAuth({ accessToken: data.accessToken, user: data.user ?? null });
+          setAdminLoginError(null);
+          message.info(getAdminLoginErrorMessage(error));
+          navigate('/access', { replace: true });
+          return;
+        }
+
         clearAuth();
         const errorMessage = getAdminLoginErrorMessage(error);
         setAdminLoginError(errorMessage);
