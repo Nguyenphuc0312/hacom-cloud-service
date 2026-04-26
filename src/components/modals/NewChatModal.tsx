@@ -9,7 +9,15 @@ import {
 } from "@heroicons/react/24/outline";
 
 import { UserSearchResultItem } from "../common/UserSearchResultItem";
-import { Modal, Input, Button, Spinner, EmptySearchResults, toast } from "../ui";
+import {
+  Modal,
+  Input,
+  Button,
+  DirectorySkeleton,
+  EmptySearchResults,
+  SkeletonCircle,
+  toast,
+} from "../ui";
 import { extractApiError } from "../../lib/apiContract";
 import {
   buildUserSearchSecondaryText,
@@ -303,9 +311,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
 
         <div className="-mx-4 min-h-[18rem] max-h-[22rem] overflow-y-auto px-4 sm:-mx-5 sm:px-5">
           {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Spinner size="lg" />
-            </div>
+            <DirectorySkeleton count={5} />
           ) : searchQuery.length > 0 && searchQuery.trim().length < 2 ? (
             <p className="py-8 text-center text-sm text-text-muted">
               {t("profile:newChatModal.searchMinChars", { count: 2 })}
@@ -392,11 +398,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                           </span>
                         )
                       ) : isPending ? (
-                        <Spinner
-                          size="sm"
-                          variant="primary"
-                          className="shrink-0"
-                        />
+                        <SkeletonCircle size={18} />
                       ) : !canStartDirect ? (
                         user.friendshipStatus === "pending" ? (
                           <span className="rounded-lg bg-surface-overlay px-2 py-1 text-xs text-text-muted">

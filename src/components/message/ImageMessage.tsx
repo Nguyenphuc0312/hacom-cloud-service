@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { Attachment } from "../../types";
 import { useAttachmentDownloadUrl } from "../../hooks";
 import { useInViewport } from "../../hooks/useInViewport";
+import { Skeleton } from "../ui";
 
 interface ImageMessageProps {
   conversationId: string;
@@ -94,7 +95,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
           style={{ width: mediaWidth, maxWidth: "100%", aspectRatio }}
         >
           {(!isLoaded || isLoading || !hasDisplayUrl) && !isError && (
-            <div className="absolute inset-0 animate-pulse bg-surface-overlay" />
+            <Skeleton className="absolute inset-0" rounded="lg" />
           )}
 
           {isError && (

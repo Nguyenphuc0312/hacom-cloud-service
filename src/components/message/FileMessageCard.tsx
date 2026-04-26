@@ -37,6 +37,7 @@ import {
 } from "../../utils/formatFileSize";
 import type { PreviewType } from "../../utils/formatFileSize";
 import { FileTypeIcon } from "./FileTypeIcon";
+import { Skeleton, SkeletonCircle } from "../ui";
 
 // ── Status types for edge cases ──────────────────────────────────────
 
@@ -222,7 +223,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
         )}
       >
         <div className="flex h-10 w-10 shrink-0 items-center justify-center">
-          <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <SkeletonCircle size={20} />
         </div>
         <div className="min-w-0 flex-1">
           <p
@@ -267,7 +268,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           }}
         >
           {(!thumbLoaded || isThumbLoading) && !thumbError && (
-            <div className="absolute inset-0 animate-pulse bg-surface-overlay" />
+            <Skeleton className="absolute inset-0" rounded="lg" />
           )}
 
           {thumbError && (

@@ -16,7 +16,14 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "../common/Avatar";
 import { UserSearchResultItem } from "../common/UserSearchResultItem";
-import { ConfirmDialog, Input, Spinner, TabTrigger, toast } from "../ui";
+import {
+  ConfirmDialog,
+  DirectorySkeleton,
+  Input,
+  SkeletonCircle,
+  TabTrigger,
+  toast,
+} from "../ui";
 import type { Conversation, UserSummary } from "../../types";
 import { RoomMemberRole, UserStatus } from "../../types";
 import { useChatStore, useGroupStore } from "../../stores";
@@ -1057,9 +1064,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     />
                     <div className="max-h-44 overflow-y-auto rounded-lg border border-border">
                       {isSearching ? (
-                        <div className="flex justify-center py-4">
-                          <Spinner size="md" />
-                        </div>
+                        <DirectorySkeleton count={3} />
                       ) : searchErrorMessage ? (
                         <p className="px-3 py-3 text-sm text-danger">
                           {searchErrorMessage}
@@ -1107,9 +1112,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 )}
 
                 {isLoadingMembers ? (
-                  <div className="flex justify-center py-4">
-                    <Spinner size="md" />
-                  </div>
+                  <DirectorySkeleton count={5} />
                 ) : members.length === 0 ? (
                   <p className="px-4 py-3 text-sm text-text-muted">
                     {t("profile:groupInfo.noMembers")}
@@ -1186,7 +1189,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                               )}
 
                               {actingMemberId === member.id && (
-                                <Spinner size="sm" className="ml-1" />
+                                <SkeletonCircle size={14} className="ml-1" />
                               )}
                             </div>
                           )}

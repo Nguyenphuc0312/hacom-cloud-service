@@ -11,7 +11,7 @@ import { ConversationLane } from "./ConversationLane";
 import { AudioCallDialog } from "../../features/chat/components/AudioCallDialog";
 import { VideoCallView } from "../../features/chat/components/VideoCallView";
 import type { MentionCandidate } from "../input/MessageInput";
-import { Spinner, toast } from "../ui";
+import { NotificationListSkeleton, toast } from "../ui";
 import {
   useChatStore,
   useGroupStore,
@@ -146,8 +146,8 @@ const getEphemeralNoticeClassName = (kind: EphemeralNotice["kind"]): string => {
 };
 
 const OverlayPanelFallback: React.FC = () => (
-  <div className="flex h-full items-center justify-center px-6">
-    <Spinner size="md" />
+  <div className="h-full px-1 py-2" aria-busy="true">
+    <NotificationListSkeleton count={5} />
   </div>
 );
 

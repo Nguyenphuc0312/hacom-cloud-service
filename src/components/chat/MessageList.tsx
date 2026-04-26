@@ -1897,8 +1897,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
           ) : messages.length === 0 && !historyLoadingState?.isPartial ? (
             <EmptyMessages />
           ) : messages.length === 0 ? (
-            <div className="flex h-full items-center justify-center px-6 text-sm text-text-secondary">
-              {t("chat:message.loadingHistory")}
+            <div
+              className="h-full min-h-0 overflow-y-auto px-[var(--chat-lane-padding)] py-4"
+              aria-busy="true"
+            >
+              <MessageListSkeleton count={6} />
             </div>
           ) : (
             <div

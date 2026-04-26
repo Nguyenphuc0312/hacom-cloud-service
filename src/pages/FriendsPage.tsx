@@ -14,9 +14,10 @@ import { FriendQrWorkspace } from "../components/friends";
 import { UserProfile } from "../components/info/UserProfile";
 import {
   Button,
+  DirectorySkeleton,
   Input,
   SegmentedControl,
-  Spinner,
+  SkeletonCircle,
   StateBlock,
   toast,
 } from "../components/ui";
@@ -608,9 +609,7 @@ export const FriendsPage: React.FC = () => {
   const renderFriendsTab = () => {
     if (isFriendsLoading && friendItems.length === 0) {
       return (
-        <div className="flex justify-center py-10">
-          <Spinner size="sm" />
-        </div>
+        <DirectorySkeleton count={6} />
       );
     }
 
@@ -667,9 +666,7 @@ export const FriendsPage: React.FC = () => {
       {((requestTab === "incoming" && isIncomingLoading) ||
         (requestTab === "sent" && isSentLoading)) &&
       requestItems.length === 0 ? (
-        <div className="flex justify-center py-10">
-          <Spinner size="sm" />
-        </div>
+        <DirectorySkeleton count={4} />
       ) : requestItems.length === 0 ? (
         <StateBlock
           variant="empty"
@@ -724,9 +721,7 @@ export const FriendsPage: React.FC = () => {
   const renderDiscoverTab = () => (
     <div className="space-y-4">
       {isSearching ? (
-        <div className="flex justify-center py-10">
-          <Spinner size="sm" />
-        </div>
+        <DirectorySkeleton count={4} />
       ) : debouncedQuery.trim().length < 2 ? (
         <StateBlock
           variant="search-empty"
@@ -763,9 +758,7 @@ export const FriendsPage: React.FC = () => {
   const renderBlockedTab = () => {
     if (isBlockedLoading && blockedUsers.length === 0) {
       return (
-        <div className="flex justify-center py-10">
-          <Spinner size="sm" />
-        </div>
+        <DirectorySkeleton count={5} />
       );
     }
 
@@ -816,7 +809,7 @@ export const FriendsPage: React.FC = () => {
         actions={
           isDirectoryLoading ? (
             <div className="inline-flex h-[var(--control-height-md)] w-[var(--control-height-md)] items-center justify-center rounded-md border border-border/60 bg-surface">
-              <Spinner size="xs" />
+              <SkeletonCircle size={16} />
             </div>
           ) : null
         }

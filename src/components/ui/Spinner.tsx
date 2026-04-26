@@ -6,6 +6,7 @@
 import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
+import { PageSkeleton, Skeleton } from "./Skeleton";
 
 interface SpinnerProps {
   size?: "xs" | "sm" | "md" | "lg" | "xl";
@@ -48,21 +49,7 @@ export const Spinner: React.FC<SpinnerProps> = ({
   );
 };
 
-export const PageSpinner: React.FC<{ message?: string }> = ({ message }) => {
-  const { t } = useTranslation();
-  const displayMessage = message ?? t("common:loading.default");
-
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-surface/80 backdrop-blur-sm">
-      <Spinner size="xl" />
-      {displayMessage && (
-        <p className="mt-4 animate-pulse text-sm text-text-secondary">
-          {displayMessage}
-        </p>
-      )}
-    </div>
-  );
-};
+export const PageSpinner: React.FC<{ message?: string }> = () => <PageSkeleton />;
 
 export const LoadingText: React.FC<{ text?: string; className?: string }> = ({
   text,
@@ -72,9 +59,13 @@ export const LoadingText: React.FC<{ text?: string; className?: string }> = ({
   const displayText = text ?? t("common:loading.default");
 
   return (
-    <div className={clsx("flex items-center gap-2 text-text-muted", className)}>
-      <Spinner size="sm" variant="neutral" />
-      <span className="text-sm">{displayText}</span>
+    <div
+      className={clsx("flex items-center gap-2", className)}
+      aria-busy="true"
+      aria-label={displayText}
+      role="status"
+    >
+      <Skeleton className="h-3 w-28" rounded="full" />
     </div>
   );
 };

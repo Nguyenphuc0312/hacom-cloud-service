@@ -8,7 +8,7 @@ import React, {
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { ConfirmDialog, SegmentedControl, Spinner } from "../ui";
+import { ConfirmDialog, SegmentedControl, SkeletonButton } from "../ui";
 import { useLogout, usePresence } from "../../hooks";
 import { useChatStore } from "../../stores";
 import type { UserSummary } from "../../types";
@@ -155,9 +155,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           />
 
           {isLoadingConversations && conversationIds.length > 0 && (
-            <div className="mt-1.5 inline-flex items-center gap-2 px-1 text-caption text-text-muted">
-              <Spinner size="sm" />
-              <span>{t("common:loading.default")}</span>
+            <div
+              className="mt-2 flex items-center gap-2 px-1"
+              aria-busy="true"
+              aria-label={t("common:loading.default")}
+              role="status"
+            >
+              <SkeletonButton width={128} height={12} />
             </div>
           )}
         </div>

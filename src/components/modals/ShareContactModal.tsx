@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { MagnifyingGlassIcon, UserIcon } from "@heroicons/react/24/outline";
-import { Modal, Input, Button, Spinner } from "../ui";
+import { Modal, Input, Button, DirectorySkeleton } from "../ui";
 import { Avatar } from "../common/Avatar";
 import { useDebounce } from "../../hooks/useDebounce";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
@@ -249,9 +249,7 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
             />
 
             {isLoading ? (
-              <div className="flex justify-center py-6">
-                <Spinner size="sm" />
-              </div>
+              <DirectorySkeleton count={4} />
             ) : errorText ? (
               <p className="text-sm text-danger">{errorText}</p>
             ) : results.length === 0 ? (

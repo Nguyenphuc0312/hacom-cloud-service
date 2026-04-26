@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import {
   ArrowLeftIcon,
-  ArrowPathIcon,
   BellIcon,
   Cog6ToothIcon,
   GlobeAltIcon,
@@ -26,7 +25,7 @@ import {
   type SettingsSidebarItem,
 } from "../components/settings";
 import { AppPageHeader } from "../components/layout/AppPage";
-import { InlineNotice } from "../components/ui";
+import { InlineNotice, Skeleton } from "../components/ui";
 import { ProfileSettingsSection } from "../features/profile/components/ProfileSettingsSection";
 import { ROUTE_PATHS } from "../router/paths";
 import { useSettings } from "../settings";
@@ -350,16 +349,14 @@ export const SettingsPage: React.FC = () => {
           }
           meta={
             <div className="app-page-subtle inline-flex min-h-[var(--control-height-md)] items-center gap-1.5 rounded-full px-3 text-xs text-text-secondary">
-              {isSyncing ? (
-                <ArrowPathIcon className="h-4 w-4 animate-spin" />
-              ) : (
+              {isSyncing ? null : (
                 <Cog6ToothIcon className="h-4 w-4" />
               )}
-              <span>
-                {isSyncing
-                  ? t("common:loading.syncing")
-                  : t("common:status.idle")}
-              </span>
+              {isSyncing ? (
+                <Skeleton className="h-3 w-20" rounded="full" />
+              ) : (
+                <span>{t("common:status.idle")}</span>
+              )}
             </div>
           }
           actions={

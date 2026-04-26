@@ -12,7 +12,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../common/Avatar";
-import { Button, PanelSection, Spinner, toast } from "../ui";
+import { Button, PanelSection, ProfileSkeleton, toast } from "../ui";
 import { EditProfileModal } from "../modals/EditProfileModal";
 import { useAuthStore, usePresenceStore } from "../../stores";
 import { useFriendship } from "../../hooks/useFriendship";
@@ -530,9 +530,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
         <div className="flex-1 overflow-y-auto">
           {isLoading && !user ? (
-            <div className="flex h-full items-center justify-center">
-              <Spinner size="md" />
-            </div>
+            <ProfileSkeleton />
           ) : (
             <div className="space-y-4 px-4 py-4">
               <PanelSection className="rounded-2xl border-transparent bg-[hsl(var(--chat-panel-bg))] px-4 py-4 shadow-none">

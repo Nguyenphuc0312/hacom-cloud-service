@@ -15,7 +15,15 @@ import {
 import { ErrorCode } from "@hacom/chat-shared-types/core";
 import type { FriendshipRelationDto } from "@hacom/chat-shared-types/chat";
 import { Avatar } from "../common/Avatar";
-import { Button, ConfirmDialog, Input, Modal, Spinner, toast } from "../ui";
+import {
+  Button,
+  ConfirmDialog,
+  Input,
+  Modal,
+  Skeleton,
+  SkeletonCircle,
+  toast,
+} from "../ui";
 import { useAuthStore } from "../../stores";
 import { useFriendshipStore } from "../../stores/friendshipStore";
 import { useFriendship } from "../../hooks/useFriendship";
@@ -687,7 +695,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
               </p>
             </div>
           </div>
-          {isMyQrLoading ? <Spinner size="xs" /> : null}
+          {isMyQrLoading ? <SkeletonCircle size={16} /> : null}
         </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[15rem_1fr]">
@@ -699,8 +707,13 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
                 className="h-full w-full rounded-lg"
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-sm text-text-secondary">
-                {t("auth:qrLogin.creating")}
+              <div
+                className="h-full w-full space-y-3 p-4"
+                aria-busy="true"
+                aria-label={t("auth:qrLogin.creating")}
+                role="status"
+              >
+                <Skeleton className="h-full w-full" rounded="lg" />
               </div>
             )}
           </div>

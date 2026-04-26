@@ -13,7 +13,7 @@ import {
   ArrowTopRightOnSquareIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../common/Avatar";
-import { Spinner } from "../ui";
+import { NotificationListSkeleton } from "../ui";
 import { usePinnedMessages } from "../../hooks/usePinnedMessages";
 import { formatRelativeTime } from "../../utils/formatTime";
 import type { Message } from "../../types";
@@ -69,9 +69,7 @@ export const PinnedMessagesPanel: React.FC<PinnedMessagesPanelProps> = ({
       <div className="min-h-0 flex-1 overflow-y-auto">
         {/* Loading */}
         {isLoading && (
-          <div className="flex items-center justify-center py-6">
-            <Spinner size="sm" />
-          </div>
+          <NotificationListSkeleton count={4} />
         )}
 
         {/* Error */}

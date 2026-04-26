@@ -17,7 +17,15 @@ import { useShallow } from "zustand/react/shallow";
 import { Sidebar } from "../components/layout/Sidebar";
 import { ChatWindow } from "../components/layout/ChatWindow";
 import { AppShell, ModuleSidebar } from "../shared/layout";
-import { ConfirmDialog, ErrorState, NoChatSelected, Spinner } from "../components/ui";
+import {
+  ConfirmDialog,
+  ErrorState,
+  NoChatSelected,
+  NotificationListSkeleton,
+  PageSkeleton,
+  ProfileSkeleton,
+  Skeleton,
+} from "../components/ui";
 import { toast } from "../components/ui";
 import {
   useAuthStore,
@@ -81,15 +89,23 @@ type InfoPanelMode = "conversation" | "self-profile";
 const CONVERSATIONS_PAGE_SIZE = 100;
 
 const DeferredPanelFallback: React.FC = () => (
-  <div className="flex h-full items-center justify-center px-6">
-    <Spinner size="md" />
+  <div className="h-full px-1 py-2" aria-busy="true">
+    <NotificationListSkeleton count={5} />
   </div>
 );
 
 const DeferredModalFallback: React.FC = () => (
   <div className="fixed inset-0 z-[70] flex items-center justify-center bg-text-primary/40 backdrop-blur-sm">
-    <div className="rounded-2xl border border-border/80 bg-surface/95 p-4 shadow-elev3">
-      <Spinner size="md" />
+    <div
+      className="w-[min(30rem,calc(100vw-2rem))] rounded-2xl border border-border/80 bg-surface/95 p-4 shadow-elev3"
+      aria-busy="true"
+    >
+      <Skeleton className="h-6 w-40" rounded="sm" />
+      <div className="mt-4 space-y-3">
+        <Skeleton className="h-10 w-full" rounded="md" />
+        <Skeleton className="h-10 w-full" rounded="md" />
+        <Skeleton className="h-10 w-2/3" rounded="md" />
+      </div>
     </div>
   </div>
 );
@@ -867,25 +883,7 @@ export const ChatPage: React.FC = () => {
 
   if (!currentUserSummary) {
     if (!isAuthInitialized || isAuthLoading) {
-      return (
-        <div className="flex h-full items-center justify-center bg-[hsl(var(--color-chat-canvas))] px-6">
-          <div className="w-full max-w-xl space-y-5 rounded-2xl border border-border/80 bg-surface/90 p-6 shadow-elev1">
-            <div className="flex items-center gap-3">
-              <Spinner size="md" />
-              <p className="text-sm font-medium text-text-secondary">
-                {t("common:loading.checkingAuth", {
-                  defaultValue: "Checking your session...",
-                })}
-              </p>
-            </div>
-            <div className="space-y-3">
-              <div className="h-3 w-1/2 animate-pulse rounded-full bg-surface-overlay" />
-              <div className="h-3 w-full animate-pulse rounded-full bg-surface-overlay" />
-              <div className="h-3 w-4/5 animate-pulse rounded-full bg-surface-overlay" />
-            </div>
-          </div>
-        </div>
-      );
+      return <PageSkeleton />;
     }
 
     return (
@@ -1057,12 +1055,7 @@ export const ChatPage: React.FC = () => {
                     onStartConversation={handleStartChat}
                   />
                 ) : (
-                  <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-                    <Spinner size="md" />
-                    <p className="text-sm text-text-muted">
-                      {t("common:loading.default")}
-                    </p>
-                  </div>
+                  <ProfileSkeleton />
                 )
               ) : selectedConversation ? (
                 <GroupInfo

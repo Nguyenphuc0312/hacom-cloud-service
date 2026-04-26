@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { ChevronDownIcon } from "@heroicons/react/24/solid";
 import { ConversationLane } from "../layout/ConversationLane";
+import { Skeleton } from "../ui";
 import { formatDateDivider } from "../../utils/formatTime";
 
 interface MessageListOverlaysProps {
@@ -95,15 +96,25 @@ export const MessageListOverlays = React.memo(
         )}
 
         {showLoadingMore && (
-          <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full border border-border bg-surface/90 px-4 py-1.5 text-xs text-text-secondary shadow-xs animate-slide-up-fade">
-            {loadMoreLabel}
+          <div
+            className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-full border border-border bg-surface/90 px-4 py-2 shadow-xs animate-slide-up-fade"
+            aria-busy="true"
+            aria-label={loadMoreLabel}
+            role="status"
+          >
+            <Skeleton className="h-3 w-28" rounded="full" />
           </div>
         )}
 
         {hasMessages && historyLoadingState?.isPartial && (
           <div className="pointer-events-none absolute inset-x-[var(--chat-lane-padding)] top-11 z-[4] flex justify-center">
-            <div className="rounded-full border border-primary/20 bg-surface/95 px-3 py-1 text-xs text-text-secondary shadow-xs backdrop-blur">
-              {t("chat:message.loadingMoreHistory")}
+            <div
+              className="rounded-full border border-primary/20 bg-surface/95 px-3 py-2 shadow-xs backdrop-blur"
+              aria-busy="true"
+              aria-label={t("chat:message.loadingMoreHistory")}
+              role="status"
+            >
+              <Skeleton className="h-3 w-32" rounded="full" />
             </div>
           </div>
         )}

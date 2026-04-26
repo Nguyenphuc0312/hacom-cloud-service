@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 import { SettingsFieldGroup } from "./SettingsFieldGroup";
 import { SettingsSection } from "./SettingsSection";
 import { Avatar } from "../common/Avatar";
-import { Button, Spinner, toast } from "../ui";
+import { Button, DirectorySkeleton, toast } from "../ui";
 import { useFriendship } from "../../hooks/useFriendship";
 
 interface BlockedUsersSectionProps {
@@ -49,9 +49,7 @@ export const BlockedUsersSection: React.FC<BlockedUsersSectionProps> = ({
     >
       <SettingsFieldGroup>
         {isLoading ? (
-          <div className="flex items-center justify-center py-6">
-            <Spinner size="sm" />
-          </div>
+          <DirectorySkeleton count={3} />
         ) : blockedUsers.length === 0 ? (
           <div className="py-6 text-center">
             <NoSymbolIcon className="mx-auto h-8 w-8 text-text-muted/50" />

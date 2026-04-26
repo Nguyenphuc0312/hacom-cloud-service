@@ -13,7 +13,7 @@ import {
   MagnifyingGlassIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { Spinner } from "../ui";
+import { NotificationListSkeleton, Skeleton } from "../ui";
 import { Avatar } from "../common/Avatar";
 import { useMessageSearch } from "../../hooks/useMessageSearch";
 import { formatRelativeTime } from "../../utils/formatTime";
@@ -242,12 +242,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
       >
         {/* Loading state */}
         {isLoading && results.length === 0 && (
-          <div className="flex flex-col items-center gap-3 py-12">
-            <Spinner size="md" />
-            <p className="text-sm text-text-muted">
-              {t("common:loading.default")}
-            </p>
-          </div>
+          <NotificationListSkeleton count={5} />
         )}
 
         {/* Error state */}
@@ -343,8 +338,13 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
 
         {/* Loading more indicator */}
         {isLoading && results.length > 0 && (
-          <div className="flex justify-center py-3">
-            <Spinner size="sm" />
+          <div
+            className="flex justify-center py-3"
+            aria-busy="true"
+            aria-label={t("common:loading.default")}
+            role="status"
+          >
+            <Skeleton className="h-3 w-28" rounded="full" />
           </div>
         )}
       </div>
