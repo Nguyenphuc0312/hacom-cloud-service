@@ -32,6 +32,7 @@ interface ChatHeaderProps {
   conversation: Conversation;
   currentUserId: string;
   typingStatus?: TypingStatus;
+  typingStatuses?: TypingStatus[];
   onBack?: () => void;
   onInfoClick: () => void;
   onCallClick?: () => void;
@@ -61,6 +62,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   conversation,
   currentUserId,
   typingStatus,
+  typingStatuses,
   onBack,
   onInfoClick,
   onCallClick,
@@ -87,7 +89,18 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       : UserStatus.OFFLINE
     : otherUser?.status;
   const isOnline = liveStatus === UserStatus.ONLINE;
-  const isTyping = Boolean(typingStatus?.isTyping);
+  const activeTypingStatuses = React.useMemo(() => {
+    const statuses =
+      typingStatuses && typingStatuses.length > 0
+        ? typingStatuses
+        : typingStatus
+          ? [typingStatus]
+          : [];
+
+    return statuses.filter((status) => status.isTyping);
+  }, [typingStatus, typingStatuses]);
+  const primaryTypingStatus = activeTypingStatuses[0] ?? typingStatus;
+  const isTyping = activeTypingStatuses.length > 0;
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement | null>(null);
   const menuButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -265,9 +278,12 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
             {isTyping ? (
               <TypingIndicator
-                userName={typingStatus?.userName}
-                activity={typingStatus?.activity}
-                confidence={typingStatus?.confidence}
+                userName={primaryTypingStatus?.userName}
+                userNames={activeTypingStatuses.map(
+                  (status) => status.userName,
+                )}
+                activity={primaryTypingStatus?.activity}
+                confidence={primaryTypingStatus?.confidence}
               />
             ) : (
               <p

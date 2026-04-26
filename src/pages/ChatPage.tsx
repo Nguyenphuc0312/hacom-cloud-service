@@ -32,6 +32,7 @@ import {
   useChatStore,
   useSelectedConversation,
   useCurrentTypingStatus,
+  useCurrentTypingStatuses,
   useConversationCount,
   useFriendshipStore,
 } from "../stores";
@@ -183,6 +184,7 @@ export const ChatPage: React.FC = () => {
   // Selectors
   const selectedConversation = useSelectedConversation();
   const typingStatus = useCurrentTypingStatus();
+  const typingStatuses = useCurrentTypingStatuses();
   const conversationCount = useConversationCount();
   const refreshFriendshipDirectory = useFriendshipStore(
     (state) => state.refreshDirectory,
@@ -947,6 +949,7 @@ export const ChatPage: React.FC = () => {
             conversation={selectedConversation}
             currentUser={currentUserSummary}
             typingStatus={typingStatus || undefined}
+            typingStatuses={typingStatuses}
             onSendMessage={handleSendMessage}
             onReactMessage={handleReactMessage}
             onEditMessage={handleEditMessage}

@@ -16,7 +16,7 @@ import {
   getAccessToken as getStoredAccessToken,
   updateAccessToken,
 } from "../services/tokenService";
-import { WsEventNames } from "@hacom/chat-shared-types/ws";
+import { RealtimeEventNames, WsEventNames } from "@hacom/chat-shared-types/ws";
 import {
   getJwtExpirationMs,
   isJwtLike,
@@ -731,6 +731,8 @@ export const WebSocketEvents = {
   // Deprecated transport aliases kept for inbound/outbound compat only.
   ROOM_JOIN: "room:join",
   ROOM_LEAVE: "room:leave",
+  CONVERSATION_TYPING_STARTED: RealtimeEventNames.CONVERSATION_TYPING_STARTED,
+  CONVERSATION_TYPING_STOPPED: RealtimeEventNames.CONVERSATION_TYPING_STOPPED,
   TYPING_START: WsEventNames.TYPING_START,
   TYPING_STOP: WsEventNames.TYPING_STOP,
 

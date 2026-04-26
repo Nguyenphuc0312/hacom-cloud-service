@@ -7,7 +7,7 @@ interface RegisteredHandler {
 }
 
 describe("registerPresenceEvents", () => {
-  it("registers only canonical presence and typing events", () => {
+  it("registers canonical and legacy typing events", () => {
     const registered: RegisteredHandler[] = [];
 
     const socket = {
@@ -29,6 +29,8 @@ describe("registerPresenceEvents", () => {
       expect.arrayContaining([
         "typing:start",
         "typing:stop",
+        "conversation.typing.started",
+        "conversation.typing.stopped",
         "presence:update",
       ]),
     );
@@ -38,6 +40,6 @@ describe("registerPresenceEvents", () => {
 
     unsubscribe();
 
-    expect(socket.off).toHaveBeenCalledTimes(3);
+    expect(socket.off).toHaveBeenCalledTimes(5);
   });
 });

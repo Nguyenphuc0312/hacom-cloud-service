@@ -190,6 +190,9 @@ export interface TypingStatus {
   activity?: "typing" | "recording" | "uploading" | "online";
   confidence?: number;
   lastEventAt?: number;
+  expiresAt?: string;
+  deviceId?: string;
+  deviceType?: "web" | "mobile" | "desktop";
 }
 
 export interface Location {

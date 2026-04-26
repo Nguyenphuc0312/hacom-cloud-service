@@ -23,7 +23,7 @@ export const useTypingIndicator = ({
   enabled = true,
   onTyping,
   startDelayMs = 250,
-  stopDelayMs = 2000,
+  stopDelayMs = 1500,
   heartbeatIntervalMs = 1500,
 }: UseTypingIndicatorOptions): UseTypingIndicatorResult => {
   const startTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -107,6 +107,23 @@ export const useTypingIndicator = ({
 
   const notifyBlur = React.useCallback(() => {
     stopTypingNow();
+  }, [stopTypingNow]);
+
+  React.useEffect(() => {
+    if (typeof document === "undefined") {
+      return undefined;
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        stopTypingNow();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [stopTypingNow]);
 
   React.useEffect(() => {

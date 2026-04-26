@@ -570,6 +570,7 @@ const MessageInputComponent = React.forwardRef<
 
   const handleSendAttachment = React.useCallback(async () => {
     const result = await sendAttachmentMessage();
+    stopTypingNow();
     setLiveRegionMessage(
       result === "failed"
         ? t("chat:composer.failedAnnouncement")
@@ -579,7 +580,7 @@ const MessageInputComponent = React.forwardRef<
             ? optimisticAnnouncement
           : t("chat:composer.sentAnnouncement"),
     );
-  }, [optimisticAnnouncement, sendAttachmentMessage, t]);
+  }, [optimisticAnnouncement, sendAttachmentMessage, stopTypingNow, t]);
 
   const handlePrimarySend = React.useCallback(async () => {
     if (primarySendLockedRef.current) {

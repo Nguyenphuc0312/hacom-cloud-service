@@ -68,3 +68,26 @@ export const selectCurrentTypingStatusFromState = ({
       })[0] ?? null
   );
 };
+
+export const selectCurrentTypingStatusesFromState = ({
+  selectedConversationId,
+  typingStatuses,
+}: {
+  selectedConversationId: string | null;
+  typingStatuses: TypingStatus[];
+}): TypingStatus[] => {
+  if (!selectedConversationId) return [];
+
+  return typingStatuses
+    .filter(
+      (typing) =>
+        typing.conversationId === selectedConversationId && typing.isTyping,
+    )
+    .sort((a, b) => {
+      const priorityDiff =
+        (TYPING_ACTIVITY_PRIORITY[b.activity || "typing"] ?? 1) -
+        (TYPING_ACTIVITY_PRIORITY[a.activity || "typing"] ?? 1);
+      if (priorityDiff !== 0) return priorityDiff;
+      return (b.confidence ?? 0) - (a.confidence ?? 0);
+    });
+};

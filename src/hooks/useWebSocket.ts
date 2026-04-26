@@ -245,14 +245,22 @@ export {
 };
 export type { PendingConversationSyncStrategy };
 
-const REMOTE_TYPING_DECAY_INTERVAL_MS = 320;
-const REMOTE_TYPING_HALF_LIFE_MS = 1400;
-const REMOTE_TYPING_VISIBLE_THRESHOLD = 0.12;
+const REMOTE_TYPING_TTL_MS = 5_000;
 const CONVERSATION_JOIN_ACK_TIMEOUT_MS = 2_000;
 const CONVERSATION_JOIN_RETRY_DELAY_MAX_MS = 8_000;
 
-const computeTypingConfidence = (lastEventAt: number, now: number): number =>
-  Math.exp(-(now - lastEventAt) / REMOTE_TYPING_HALF_LIFE_MS);
+const parseTypingExpiryMs = (expiresAt: string | null): number => {
+  const parsed = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+  if (Number.isFinite(parsed) && parsed > Date.now()) {
+    return parsed;
+  }
+  return Date.now() + REMOTE_TYPING_TTL_MS;
+};
+
+const normalizeDeviceType = (
+  value: string | null,
+): "web" | "mobile" | "desktop" =>
+  value === "mobile" || value === "desktop" ? value : "web";
 
 export const useWebSocket = (
   options: UseWebSocketOptions = {},
@@ -324,6 +332,7 @@ export const useWebSocket = (
   const remoteTypingTimersRef = useRef<
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
+  const processedTypingEventIdsRef = useRef<Set<string>>(new Set());
   const unsubscribersRef = useRef<Array<() => void>>([]);
 
   useEffect(() => {
@@ -480,51 +489,37 @@ export const useWebSocket = (
     [],
   );
 
-  const scheduleRemoteTypingDecay = useCallback(
-    (conversationId: string, userId: string, userName: string) => {
+  const scheduleRemoteTypingExpiry = useCallback(
+    (conversationId: string, userId: string, expiresAt: string | null) => {
       const key = `${conversationId}:${userId}`;
       clearRemoteTypingTimer(conversationId, userId);
 
-      const tick = () => {
-        const current = useChatStore
-          .getState()
-          .typingStatuses.find(
-            (item) =>
-              item.conversationId === conversationId && item.userId === userId,
-          );
-        const lastEventAt = current?.lastEventAt;
-        if (!lastEventAt) {
-          clearTyping(conversationId, userId);
-          remoteTypingTimersRef.current.delete(key);
-          return;
-        }
-
-        const confidence = computeTypingConfidence(lastEventAt, Date.now());
-        if (confidence < REMOTE_TYPING_VISIBLE_THRESHOLD) {
-          clearTyping(conversationId, userId);
-          remoteTypingTimersRef.current.delete(key);
-          return;
-        }
-
-        setTyping({
-          conversationId,
-          userId,
-          userName: current?.userName || userName,
-          isTyping: true,
-          activity: current?.activity || "typing",
-          confidence,
-          lastEventAt,
-        });
-
-        const timer = setTimeout(tick, REMOTE_TYPING_DECAY_INTERVAL_MS);
-        remoteTypingTimersRef.current.set(key, timer);
-      };
-
-      const timer = setTimeout(tick, REMOTE_TYPING_DECAY_INTERVAL_MS);
+      const delayMs = Math.max(0, parseTypingExpiryMs(expiresAt) - Date.now());
+      const timer = setTimeout(() => {
+        clearTyping(conversationId, userId);
+        remoteTypingTimersRef.current.delete(key);
+      }, delayMs);
       remoteTypingTimersRef.current.set(key, timer);
     },
-    [clearRemoteTypingTimer, clearTyping, setTyping],
+    [clearRemoteTypingTimer, clearTyping],
   );
+
+  const shouldProcessTypingEvent = useCallback((eventId: string | null) => {
+    if (!eventId) return true;
+
+    const processed = processedTypingEventIdsRef.current;
+    if (processed.has(eventId)) {
+      return false;
+    }
+
+    processed.add(eventId);
+    if (processed.size > 200) {
+      const oldest = processed.values().next().value;
+      if (oldest) processed.delete(oldest);
+    }
+
+    return true;
+  }, []);
 
   const authCoordinator = useMemo(
     () =>
@@ -1808,6 +1803,7 @@ export const useWebSocket = (
     const handleTypingStart = (data: unknown) => {
       const payload = asRecord(data);
       if (!payload) return;
+      if (!shouldProcessTypingEvent(asString(payload.eventId))) return;
 
       const conversationId = getConversationId(payload);
       const userId = asString(payload.senderId) ?? asString(payload.userId);
@@ -1817,11 +1813,15 @@ export const useWebSocket = (
       if (currentUserId && userId === currentUserId) return;
 
       const userName =
+        asString(payload.displayName) ??
         asString(payload.senderName) ??
         asString(payload.userName) ??
         asString(payload.username) ??
         asString(payload.user_name) ??
         "";
+      const expiresAt =
+        asString(payload.expiresAt) ??
+        new Date(Date.now() + REMOTE_TYPING_TTL_MS).toISOString();
       const activity =
         asString(payload.activity) === "recording" ||
         asString(payload.activity) === "uploading" ||
@@ -1837,21 +1837,28 @@ export const useWebSocket = (
         activity,
         confidence: 1,
         lastEventAt,
+        expiresAt,
+        deviceId: asString(payload.deviceId) ?? undefined,
+        deviceType: normalizeDeviceType(asString(payload.deviceType)),
       };
 
       setTyping(typingStatus);
       dispatch(realtimeActions.typingStarted(typingStatus));
 
-      scheduleRemoteTypingDecay(conversationId, userId, userName);
+      scheduleRemoteTypingExpiry(conversationId, userId, expiresAt);
     };
 
     const handleTypingStop = (data: unknown) => {
       const payload = asRecord(data);
       if (!payload) return;
+      if (!shouldProcessTypingEvent(asString(payload.eventId))) return;
 
       const conversationId = getConversationId(payload);
       const userId = asString(payload.senderId) ?? asString(payload.userId);
       if (!conversationId || !userId) return;
+
+      const currentUserId = useAuthStore.getState().user?.id;
+      if (currentUserId && userId === currentUserId) return;
 
       clearRemoteTypingTimer(conversationId, userId);
       dispatch(
@@ -1864,14 +1871,18 @@ export const useWebSocket = (
         conversationId,
         userId,
         userName:
+          asString(payload.displayName) ??
           asString(payload.senderName) ??
           asString(payload.userName) ??
           asString(payload.username) ??
+          asString(payload.user_name) ??
           "",
         isTyping: false,
         activity: "online",
         confidence: 0,
         lastEventAt: Date.now(),
+        deviceId: asString(payload.deviceId) ?? undefined,
+        deviceType: normalizeDeviceType(asString(payload.deviceType)),
       });
       clearTyping(conversationId, userId);
     };
@@ -1949,7 +1960,8 @@ export const useWebSocket = (
     maybeReconcileGap,
     applyConversationParticipantSummary,
     scheduleConversationSnapshotRefresh,
-    scheduleRemoteTypingDecay,
+    scheduleRemoteTypingExpiry,
+    shouldProcessTypingEvent,
     selectConversation,
     setSendRestriction,
     clearSendRestriction,
@@ -2095,16 +2107,18 @@ export const useWebSocket = (
 
   const sendTyping = useCallback(
     (conversationId: string) => {
-      emit(WebSocketEvents.TYPING_START, {
+      emit(WebSocketEvents.CONVERSATION_TYPING_STARTED, {
+        type: WebSocketEvents.CONVERSATION_TYPING_STARTED,
         conversationId,
-        isTyping: true,
+        deviceType: "web",
       });
 
       clearActiveTypingTimeout();
       typingTimeoutRef.current = setTimeout(() => {
-        emit(WebSocketEvents.TYPING_STOP, {
+        emit(WebSocketEvents.CONVERSATION_TYPING_STOPPED, {
+          type: WebSocketEvents.CONVERSATION_TYPING_STOPPED,
           conversationId,
-          isTyping: false,
+          deviceType: "web",
         });
       }, 3000);
     },
@@ -2115,9 +2129,10 @@ export const useWebSocket = (
     (conversationId: string) => {
       clearActiveTypingTimeout();
 
-      emit(WebSocketEvents.TYPING_STOP, {
+      emit(WebSocketEvents.CONVERSATION_TYPING_STOPPED, {
+        type: WebSocketEvents.CONVERSATION_TYPING_STOPPED,
         conversationId,
-        isTyping: false,
+        deviceType: "web",
       });
     },
     [clearActiveTypingTimeout, emit],

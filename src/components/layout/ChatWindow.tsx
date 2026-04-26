@@ -88,6 +88,7 @@ interface ChatWindowProps {
   conversation: Conversation;
   currentUser: UserSummary;
   typingStatus?: TypingStatus;
+  typingStatuses?: TypingStatus[];
   onSendMessage: (
     content: string,
     replyTo?: Message,
@@ -156,6 +157,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   conversation,
   currentUser,
   typingStatus,
+  typingStatuses,
   onSendMessage,
   onReactMessage,
   onEditMessage,
@@ -933,6 +935,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         conversation={conversation}
         currentUserId={currentUser.id}
         typingStatus={typingStatus}
+        typingStatuses={typingStatuses}
         onBack={onBack}
         onInfoClick={onToggleInfoPanel}
         onSearchClick={handleSearchClick}

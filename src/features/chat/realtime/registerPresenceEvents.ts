@@ -36,6 +36,8 @@ export const registerPresenceEvents = (
 
   register(WebSocketEvents.TYPING_START, handlers.onTypingStart);
   register(WebSocketEvents.TYPING_STOP, handlers.onTypingStop);
+  register(WebSocketEvents.CONVERSATION_TYPING_STARTED, handlers.onTypingStart);
+  register(WebSocketEvents.CONVERSATION_TYPING_STOPPED, handlers.onTypingStop);
   register(WebSocketEvents.PRESENCE_UPDATE, handlers.onPresenceChanged);
 
   return () => {

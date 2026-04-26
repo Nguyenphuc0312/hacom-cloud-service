@@ -40,6 +40,7 @@ import {
   removeConversationTypingStatuses,
   removeTypingStatus,
   selectCurrentTypingStatusFromState,
+  selectCurrentTypingStatusesFromState,
   upsertTypingStatus,
 } from "./chatStoreTyping";
 import type {
@@ -4488,6 +4489,10 @@ export const useSelectedConversation = () => {
 
 export const useCurrentTypingStatus = () => {
   return useChatStore(selectCurrentTypingStatusFromState);
+};
+
+export const useCurrentTypingStatuses = () => {
+  return useChatStore(selectCurrentTypingStatusesFromState);
 };
 
 export const useFilteredConversations = () => {
