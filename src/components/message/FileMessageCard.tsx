@@ -421,10 +421,10 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   return (
     <div
       className={clsx(
-        "group/file flex min-w-0 max-w-full items-center gap-3 rounded-lg p-3 transition-colors",
+        "group/file flex min-w-0 w-[min(22rem,100%)] items-center gap-3 rounded-lg border p-3 transition-colors",
         isOwn
-          ? "bg-surface/20 hover:bg-surface/25"
-          : "bg-surface-overlay hover:bg-surface-hover",
+          ? "border-white/20 bg-surface/16 hover:bg-surface/22"
+          : "border-border/70 bg-surface hover:bg-surface-hover",
         className,
       )}
     >

@@ -5,9 +5,9 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { RadioGroup } from "./RadioGroup";
-import { SettingsFieldGroup } from "./SettingsFieldGroup";
+import { SettingsCard } from "./SettingsCard";
 import { SettingsSection } from "./SettingsSection";
-import { ToggleSwitch } from "./ToggleSwitch";
+import { SettingsToggle } from "./SettingsToggle";
 import { useSettingsSection, useUpdateSettings } from "../../settings";
 import type { EnterKeyAction } from "../../settings/types";
 
@@ -43,17 +43,17 @@ export const ChatSection: React.FC<ChatSectionProps> = ({ id }) => {
       title={t("chat.title")}
       description={t("chat.description")}
     >
-      <SettingsFieldGroup>
-        <ToggleSwitch
+      <SettingsCard bodyClassName="divide-y divide-border">
+        <SettingsToggle
           label={t("chat.autoScroll")}
           description={t("chat.autoScrollDesc")}
           checked={chat.autoScrollOnNewMessage}
           onChange={(value) =>
             update({ chat: { autoScrollOnNewMessage: value } })
           }
-          className="rounded-none px-0 py-0"
+          className="px-0 py-0"
         />
-        <div className="border-t border-border/60 pt-4">
+        <div className="pt-4">
           <RadioGroup
             label={t("chat.enterKeyLabel")}
             options={enterKeyOptions}
@@ -63,16 +63,16 @@ export const ChatSection: React.FC<ChatSectionProps> = ({ id }) => {
             className="py-0"
           />
         </div>
-        <div className="border-t border-border/60 pt-4">
-          <ToggleSwitch
+        <div className="pt-4">
+          <SettingsToggle
             label={t("chat.saveSearchHistory")}
             description={t("chat.saveSearchHistoryDesc")}
             checked={chat.saveSearchHistory}
             onChange={(value) => update({ chat: { saveSearchHistory: value } })}
-            className="rounded-none px-0 py-0"
+            className="px-0 py-0"
           />
         </div>
-      </SettingsFieldGroup>
+      </SettingsCard>
     </SettingsSection>
   );
 };

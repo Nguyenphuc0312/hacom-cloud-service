@@ -81,7 +81,7 @@
     "mentionTrigger": "Nhắc người dùng",
     "mentionList": "Gợi ý người dùng",
     "noMentionResults": "Không tìm thấy người dùng phù hợp",
-    "placeholder": "Nhập một tin nhắn...",
+    "placeholder": "Nhập tin nhắn...",
     "messageInput": "Ô nhập tin nhắn",
     "sendMessage": "Gửi tin nhắn",
     "sending": "Đang gửi tin nhắn",
@@ -220,7 +220,7 @@
       "location": "Vị trí",
       "contact": "Liên hệ",
       "audio": "Âm thanh",
-      "poll": "Khảo sát"
+      "poll": "Bình chọn"
     },
     "menu": {
       "searchPlaceholder": "Tìm emoji...",

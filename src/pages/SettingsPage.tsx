@@ -13,6 +13,9 @@ import {
   ChatBubbleLeftRightIcon,
   Cog6ToothIcon,
   ExclamationTriangleIcon,
+  GlobeAltIcon,
+  LifebuoyIcon,
+  NoSymbolIcon,
   PaintBrushIcon,
   ShieldCheckIcon,
   UserCircleIcon,
@@ -22,6 +25,7 @@ import {
   BlockedUsersSection,
   ChatSection,
   DangerZoneSection,
+  HelpSection,
   LanguageSection,
   NotificationSection,
   PrivacySection,
@@ -29,6 +33,7 @@ import {
   SettingsContent,
   SettingsPageShell,
   SettingsSidebar,
+  type SettingsSidebarGroup,
   type SettingsSidebarItem,
 } from "../components/settings";
 import { AppPageHeader } from "../components/layout/AppPage";
@@ -47,7 +52,10 @@ const NAV_TARGETS = {
   appearance: "settings-appearance",
   privacy: "settings-privacy",
   chatData: "settings-chat",
+  language: "settings-language",
   securityDevices: "settings-security",
+  blockedUsers: "settings-blocked-users",
+  help: "settings-help",
   danger: "settings-danger",
 } as const;
 
@@ -59,9 +67,10 @@ const SECTION_TO_NAV: Record<string, SettingsNavId> = {
   "settings-appearance": "appearance",
   "settings-privacy": "privacy",
   "settings-chat": "chatData",
-  "settings-language": "chatData",
+  "settings-language": "language",
   "settings-security": "securityDevices",
-  "settings-blocked-users": "securityDevices",
+  "settings-blocked-users": "blockedUsers",
+  "settings-help": "help",
   "settings-danger": "danger",
 };
 
@@ -290,25 +299,37 @@ export const SettingsPage: React.FC = () => {
     {
       navId: "profile",
       id: "profile",
-      label: t("profile:pageTitle", { defaultValue: "Profile" }),
+      label: t("profile:pageTitle", { defaultValue: "Hồ sơ cá nhân" }),
+      description: t("settings:profile.description", {
+        defaultValue: "Thông tin hiển thị và liên hệ.",
+      }),
       icon: <UserCircleIcon className="h-4 w-4" />,
     },
     {
       navId: "notifications",
       id: "notifications",
       label: t("settings:notifications.title"),
+      description: t("settings:notifications.navDescription", {
+        defaultValue: "Tin nhắn, âm thanh, xem trước.",
+      }),
       icon: <BellIcon className="h-4 w-4" />,
     },
     {
       navId: "appearance",
       id: "appearance",
       label: t("settings:appearance.title"),
+      description: t("settings:appearance.navDescription", {
+        defaultValue: "Chủ đề, cỡ chữ, mật độ.",
+      }),
       icon: <PaintBrushIcon className="h-4 w-4" />,
     },
     {
       navId: "privacy",
       id: "privacy",
       label: t("settings:privacy.title"),
+      description: t("settings:privacy.navDescription", {
+        defaultValue: "Trạng thái, đã đọc, tìm kiếm.",
+      }),
       icon: <ShieldCheckIcon className="h-4 w-4" />,
     },
     {
@@ -320,6 +341,15 @@ export const SettingsPage: React.FC = () => {
       icon: <ChatBubbleLeftRightIcon className="h-4 w-4" />,
     },
     {
+      navId: "language",
+      id: "language",
+      label: t("settings:language.title"),
+      description: t("settings:language.navDescription", {
+        defaultValue: "Ngôn ngữ và định dạng hiển thị.",
+      }),
+      icon: <GlobeAltIcon className="h-4 w-4" />,
+    },
+    {
       navId: "securityDevices",
       id: "securityDevices",
       label: t("settings:securityDevices.title", {
@@ -328,10 +358,62 @@ export const SettingsPage: React.FC = () => {
       icon: <ShieldCheckIcon className="h-4 w-4" />,
     },
     {
+      navId: "blockedUsers",
+      id: "blockedUsers",
+      label: t("settings:blockedUsers.title"),
+      description: t("settings:blockedUsers.navDescription", {
+        defaultValue: "Danh sách người dùng đã chặn.",
+      }),
+      icon: <NoSymbolIcon className="h-4 w-4" />,
+    },
+    {
+      navId: "help",
+      id: "help",
+      label: t("settings:help.title", { defaultValue: "Hỗ trợ" }),
+      description: t("settings:help.navDescription", {
+        defaultValue: "Trợ giúp, báo lỗi, chính sách.",
+      }),
+      icon: <LifebuoyIcon className="h-4 w-4" />,
+    },
+    {
       navId: "danger",
       id: "danger",
       label: t("settings:dangerZone.title"),
       icon: <ExclamationTriangleIcon className="h-4 w-4" />,
+    },
+  ];
+
+  const navGroups: SettingsSidebarGroup[] = [
+    {
+      id: "account",
+      label: "Tài khoản",
+      items: navItems.filter((item) => item.navId === "profile"),
+    },
+    {
+      id: "messages",
+      label: "Tin nhắn & Thông báo",
+      items: navItems.filter((item) =>
+        ["notifications", "chatData"].includes(item.navId),
+      ),
+    },
+    {
+      id: "privacy-security",
+      label: "Quyền riêng tư & Bảo mật",
+      items: navItems.filter((item) =>
+        ["privacy", "securityDevices", "blockedUsers"].includes(item.navId),
+      ),
+    },
+    {
+      id: "appearance",
+      label: "Giao diện",
+      items: navItems.filter((item) =>
+        ["appearance", "language"].includes(item.navId),
+      ),
+    },
+    {
+      id: "support",
+      label: "Hỗ trợ",
+      items: navItems.filter((item) => ["help", "danger"].includes(item.navId)),
     },
   ];
 
@@ -414,6 +496,7 @@ export const SettingsPage: React.FC = () => {
       <LanguageSection id="settings-language" />
       <SecuritySection id="settings-security" />
       <BlockedUsersSection id="settings-blocked-users" />
+      <HelpSection id="settings-help" />
       <DangerZoneSection id="settings-danger" />
       {renderSettingsFooter()}
     </>
@@ -453,6 +536,12 @@ export const SettingsPage: React.FC = () => {
         return (
           <>
             <ChatSection id="settings-chat" />
+            {renderSettingsFooter()}
+          </>
+        );
+      case "language":
+        return (
+          <>
             <LanguageSection id="settings-language" />
             {renderSettingsFooter()}
           </>
@@ -461,7 +550,20 @@ export const SettingsPage: React.FC = () => {
         return (
           <>
             <SecuritySection id="settings-security" />
+            {renderSettingsFooter()}
+          </>
+        );
+      case "blockedUsers":
+        return (
+          <>
             <BlockedUsersSection id="settings-blocked-users" />
+            {renderSettingsFooter()}
+          </>
+        );
+      case "help":
+        return (
+          <>
+            <HelpSection id="settings-help" />
             {renderSettingsFooter()}
           </>
         );
@@ -512,6 +614,7 @@ export const SettingsPage: React.FC = () => {
     <SettingsContent ref={contentRef} notice={syncNotice}>
       <SettingsSidebar
         items={navItems}
+        groups={navGroups}
         activeItemId={activeNavId}
         onSelect={(id) => handleSelectNav(id as SettingsNavId)}
         ariaLabel={t("settings:pageTitle")}
@@ -573,6 +676,7 @@ export const SettingsPage: React.FC = () => {
         !isMobile ? (
           <SettingsSidebar
             items={navItems}
+            groups={navGroups}
             activeItemId={activeNavId}
             onSelect={(id) => handleSelectNav(id as SettingsNavId)}
             heading={t("settings:pageTitle")}

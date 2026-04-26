@@ -3,10 +3,17 @@
  */
 
 import React from "react";
+import {
+  BellAlertIcon,
+  ChatBubbleLeftRightIcon,
+  SpeakerWaveIcon,
+} from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
-import { SettingsFieldGroup } from "./SettingsFieldGroup";
+import { SettingsCard } from "./SettingsCard";
+import { SettingsRow } from "./SettingsRow";
 import { SettingsSection } from "./SettingsSection";
-import { ToggleSwitch } from "./ToggleSwitch";
+import { SettingsToggle } from "./SettingsToggle";
+import { toast } from "../ui";
 import { useSettingsSection, useUpdateSettings } from "../../settings";
 
 interface NotificationSectionProps {
@@ -19,6 +26,13 @@ export const NotificationSection: React.FC<NotificationSectionProps> = ({
   const { t } = useTranslation("settings");
   const notifications = useSettingsSection("notifications");
   const update = useUpdateSettings();
+  const updateNotification = (
+    patch: Partial<typeof notifications>,
+    successMessage: string,
+  ) => {
+    update({ notifications: patch });
+    toast.success(successMessage);
+  };
 
   return (
     <SettingsSection
@@ -26,33 +40,67 @@ export const NotificationSection: React.FC<NotificationSectionProps> = ({
       title={t("notifications.title")}
       description={t("notifications.description")}
     >
-      <SettingsFieldGroup contentClassName="divide-y divide-border/60">
-        <ToggleSwitch
+      <SettingsCard bodyClassName="divide-y divide-border">
+        <SettingsRow
+          icon={<ChatBubbleLeftRightIcon className="h-4 w-4" />}
           label={t("notifications.enabled")}
           description={t("notifications.enabledDesc")}
-          checked={notifications.enabled}
-          onChange={(value) => update({ notifications: { enabled: value } })}
-          className="rounded-none px-0 py-4"
+          control={
+            <SettingsToggle
+              label={t("notifications.enabled")}
+              checked={notifications.enabled}
+              onChange={(value) =>
+                updateNotification(
+                  { enabled: value },
+                  t("notifications.saved", {
+                    defaultValue: "Đã cập nhật thông báo.",
+                  }),
+                )
+              }
+            />
+          }
         />
-        <ToggleSwitch
+        <SettingsRow
+          icon={<SpeakerWaveIcon className="h-4 w-4" />}
           label={t("notifications.sound")}
           description={t("notifications.soundDesc")}
-          checked={notifications.sound}
-          onChange={(value) => update({ notifications: { sound: value } })}
-          disabled={!notifications.enabled}
-          className="rounded-none px-0 py-4"
+          control={
+            <SettingsToggle
+              label={t("notifications.sound")}
+              checked={notifications.sound}
+              onChange={(value) =>
+                updateNotification(
+                  { sound: value },
+                  t("notifications.saved", {
+                    defaultValue: "Đã cập nhật thông báo.",
+                  }),
+                )
+              }
+              disabled={!notifications.enabled}
+            />
+          }
         />
-        <ToggleSwitch
+        <SettingsRow
+          icon={<BellAlertIcon className="h-4 w-4" />}
           label={t("notifications.messagePreview")}
           description={t("notifications.messagePreviewDesc")}
-          checked={notifications.messagePreview}
-          onChange={(value) =>
-            update({ notifications: { messagePreview: value } })
+          control={
+            <SettingsToggle
+              label={t("notifications.messagePreview")}
+              checked={notifications.messagePreview}
+              onChange={(value) =>
+                updateNotification(
+                  { messagePreview: value },
+                  t("notifications.saved", {
+                    defaultValue: "Đã cập nhật thông báo.",
+                  }),
+                )
+              }
+              disabled={!notifications.enabled}
+            />
           }
-          disabled={!notifications.enabled}
-          className="rounded-none px-0 py-4"
         />
-      </SettingsFieldGroup>
+      </SettingsCard>
     </SettingsSection>
   );
 };

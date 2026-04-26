@@ -89,7 +89,7 @@ const ROOM_ITEM_STATE_MAP: Record<RoomItemVisualState, RoomItemStateStyles> = {
     unreadBadge: "",
   },
   active: {
-    container: "bg-[hsl(var(--chat-active-surface)/0.08)]",
+    container: "bg-[hsl(var(--chat-active-surface)/0.1)]",
     title: "text-text-primary",
     preview: "text-text-secondary",
     time: "text-text-secondary",
@@ -266,7 +266,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
         <span
           className={clsx(
             "absolute left-0 top-2 bottom-2 w-1 rounded-full",
-            visualState === "mention"
+        visualState === "mention"
               ? "bg-danger"
               : "bg-[hsl(var(--chat-active-surface))]",
           )}
@@ -283,7 +283,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
           <Avatar
             src={avatarSrc}
             alt={displayName}
-            size="sm"
+            size="md"
             status={avatarStatus}
             showStatus
           />
@@ -291,7 +291,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
           <GroupAvatar
             conversation={conversation}
             currentUserId={currentUserId}
-            size="sm"
+            size="md"
           />
         )}
 
@@ -305,20 +305,25 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
               visualStyles.title,
               hoverStyles?.title,
             )}
+            title={displayName}
           >
             {displayName}
           </p>
 
           <p
             className={clsx(
-              "mt-0.5 truncate pr-1 text-left",
+              "mt-0.5 overflow-hidden pr-1 text-left",
               isDense
                 ? "text-[11px] leading-[0.95rem]"
                 : "text-[12px] leading-[1rem]",
               hoverStyles?.preview,
               previewToneClass,
             )}
+            title={previewText || t("sidebar:room.noMessagesYet")}
             style={{
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
               fontWeight:
                 previewState === "failed" || shouldEmphasizeUnreadPreview
                   ? "var(--chat-unread-preview-weight)"

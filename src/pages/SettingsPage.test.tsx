@@ -135,7 +135,7 @@ describe("SettingsPage", () => {
 
     expect(screen.getByText("common:actions.back")).toBeInTheDocument();
     expect(screen.getByText("chat-section")).toBeInTheDocument();
-    expect(screen.getByText("language-section")).toBeInTheDocument();
+    expect(screen.queryByText("language-section")).not.toBeInTheDocument();
     expect(screen.queryByText("profile-section")).not.toBeInTheDocument();
   });
 });

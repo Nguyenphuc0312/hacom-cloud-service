@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Sidebar } from "../components/layout/Sidebar";
 import { ChatWindow } from "../components/layout/ChatWindow";
+import { AppShell, ModuleSidebar } from "../shared/layout";
 import { ConfirmDialog, ErrorState, NoChatSelected, Spinner } from "../components/ui";
 import { toast } from "../components/ui";
 import {
@@ -94,8 +95,6 @@ const DeferredModalFallback: React.FC = () => (
 );
 
 const INFO_PANEL_EXIT_DURATION_MS = 240;
-const FOCUSABLE_SELECTOR =
-  'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 const loadConversationMutationUseCases = () =>
   import("../features/chat/usecases/createPrivateConversation").then(
@@ -187,8 +186,6 @@ export const ChatPage: React.FC = () => {
   const [infoPanelMode, setInfoPanelMode] = useState<InfoPanelMode | null>(
     null,
   );
-  const [isMobileMenuOpen, setIsMobileMenuOpen] =
-    useState(!routeConversationId);
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth : 1440,
   );
@@ -209,10 +206,7 @@ export const ChatPage: React.FC = () => {
   const [externalJumpRequestVersion, setExternalJumpRequestVersion] =
     useState(0);
   const renderCountRef = useRef(0);
-  const mobileSidebarRef = useRef<HTMLDivElement | null>(null);
   const chatPaneRef = useRef<HTMLDivElement | null>(null);
-  const focusBeforeMobileSidebarRef = useRef<HTMLElement | null>(null);
-  const previousMobileSidebarVisibleRef = useRef(false);
 
   const conversationAccessDeniedMessage = t(
     "error:chat.conversationAccessDenied",
@@ -378,7 +372,6 @@ export const ChatPage: React.FC = () => {
   // Handle select conversation
   const handleSelectConversation = useCallback(
     (id: string) => {
-      setIsMobileMenuOpen(false);
       if (id === routeConversationId) {
         return;
       }
@@ -561,7 +554,6 @@ export const ChatPage: React.FC = () => {
 
   // Handle back (mobile)
   const handleBack = useCallback(() => {
-    setIsMobileMenuOpen(true);
     navigate("/chat");
   }, [navigate]);
 
@@ -750,8 +742,6 @@ export const ChatPage: React.FC = () => {
     };
   }, []);
 
-  const showSidebarOnMobile = !routeConversationId || isMobileMenuOpen;
-  const isMobileSidebarHidden = viewportWidth < 1024 && !showSidebarOnMobile;
   const shouldRenderInfoContent =
     isInfoPanelOpen &&
     (infoPanelMode === "self-profile" ||
@@ -780,53 +770,6 @@ export const ChatPage: React.FC = () => {
 
     return "normal";
   }, [viewportWidth]);
-
-  useEffect(() => {
-    const sidebar = mobileSidebarRef.current;
-    if (!sidebar) return;
-
-    if (isMobileSidebarHidden) {
-      sidebar.setAttribute("inert", "");
-    } else {
-      sidebar.removeAttribute("inert");
-    }
-  }, [isMobileSidebarHidden]);
-
-  useEffect(() => {
-    if (viewportWidth >= 1024) {
-      previousMobileSidebarVisibleRef.current = false;
-      return;
-    }
-
-    const wasVisible = previousMobileSidebarVisibleRef.current;
-
-    if (showSidebarOnMobile && !wasVisible) {
-      const activeElement = document.activeElement;
-      focusBeforeMobileSidebarRef.current =
-        activeElement instanceof HTMLElement ? activeElement : null;
-
-      window.requestAnimationFrame(() => {
-        const focusTarget =
-          mobileSidebarRef.current?.querySelector<HTMLElement>(
-            FOCUSABLE_SELECTOR,
-          );
-        focusTarget?.focus();
-      });
-    }
-
-    if (!showSidebarOnMobile && wasVisible) {
-      window.requestAnimationFrame(() => {
-        const previous = focusBeforeMobileSidebarRef.current;
-        if (previous && document.contains(previous)) {
-          previous.focus();
-          return;
-        }
-        chatPaneRef.current?.focus();
-      });
-    }
-
-    previousMobileSidebarVisibleRef.current = showSidebarOnMobile;
-  }, [showSidebarOnMobile, viewportWidth]);
 
   const showConversationSkeleton =
     (!hasFetchedConversationsOnce && conversationCount === 0) ||
@@ -902,7 +845,6 @@ export const ChatPage: React.FC = () => {
       ({ conversationId: nextConversationId, messageId: nextMessageId }) => {
         if (!nextConversationId) return;
 
-        setIsMobileMenuOpen(false);
         if (nextMessageId) {
           setExternalJumpTargetMessageId(nextMessageId);
           setExternalJumpRequestVersion((current) => current + 1);
@@ -963,48 +905,34 @@ export const ChatPage: React.FC = () => {
   }
 
   return (
-    <div
-      className="chat-page-shell relative flex h-full min-h-0 overflow-hidden bg-[hsl(var(--color-chat-canvas))]"
+    <AppShell
+      className="chat-page-shell"
       data-chat-layout-state={chatLayoutState}
+      moduleSidebar={
+        <ModuleSidebar
+          className="chat-page-module-sidebar"
+          contentClassName="min-h-0"
+        >
+          <div className="h-full min-h-0 w-full">
+            <Sidebar
+              layoutState={sidebarLayoutState}
+              currentUser={currentUserSummary}
+              selectedId={routeConversationId}
+              isLoadingConversations={isLoadingConversations}
+              isLoadingMoreConversations={isLoadingMoreConversations}
+              hasMoreConversations={hasMoreConversations}
+              showConversationSkeleton={showConversationSkeleton}
+              conversationsError={conversationsError}
+              onSelectConversation={handleSelectConversation}
+              onRetryConversations={fetchConversations}
+              onLoadMoreConversations={handleLoadMoreConversations}
+              onNewChat={handleOpenNewChat}
+              onCurrentUserClick={handleOpenCurrentUserProfile}
+            />
+          </div>
+        </ModuleSidebar>
+      }
     >
-      {/* Sidebar */}
-      <div
-        ref={mobileSidebarRef}
-        className={clsx(
-          "absolute inset-y-0 left-0 z-30 w-full max-w-full transition-transform duration-300 sm:max-w-[min(23rem,94vw)] lg:relative lg:z-0 lg:max-w-none lg:flex-shrink-0 lg:transition-[width]",
-          "lg:border-r lg:border-border/60",
-          "lg:w-[var(--app-sidebar-width)]",
-          showSidebarOnMobile
-            ? "translate-x-0"
-            : "-translate-x-full lg:translate-x-0",
-        )}
-        aria-hidden={isMobileSidebarHidden}
-      >
-        <Sidebar
-          layoutState={sidebarLayoutState}
-          currentUser={currentUserSummary}
-          selectedId={routeConversationId}
-          isLoadingConversations={isLoadingConversations}
-          isLoadingMoreConversations={isLoadingMoreConversations}
-          hasMoreConversations={hasMoreConversations}
-          showConversationSkeleton={showConversationSkeleton}
-          conversationsError={conversationsError}
-          onSelectConversation={handleSelectConversation}
-          onRetryConversations={fetchConversations}
-          onLoadMoreConversations={handleLoadMoreConversations}
-          onNewChat={handleOpenNewChat}
-          onCurrentUserClick={handleOpenCurrentUserProfile}
-        />
-      </div>
-
-      {showSidebarOnMobile && routeConversationId && (
-        <button
-          type="button"
-          className="fixed inset-0 z-20 bg-text-primary/40 lg:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
-          aria-label={t("common:actions.close")}
-        />
-      )}
 
       {/* Chat window */}
       <div
@@ -1231,7 +1159,7 @@ export const ChatPage: React.FC = () => {
         isLoading={isDeletingConversation}
         variant="danger"
       />
-    </div>
+    </AppShell>
   );
 };
 

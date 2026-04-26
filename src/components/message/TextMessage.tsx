@@ -183,7 +183,10 @@ export const TextMessage: React.FC<TextMessageProps> = ({
             "chat-message-text max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere]",
             onlyEmoji
               ? "leading-tight text-3xl"
-              : "text-[14px] leading-[21px] text-text-primary",
+              : clsx(
+                  "text-[14px] leading-[21px]",
+                  isOwn ? "text-text-inverse" : "text-text-primary",
+                ),
             className,
           )}
         >
@@ -199,7 +202,7 @@ export const TextMessage: React.FC<TextMessageProps> = ({
                   className={clsx(
                     "underline decoration-border-strong underline-offset-2 transition-colors",
                     isOwn
-                      ? "text-text-primary hover:text-secondary"
+                      ? "text-text-inverse hover:text-text-inverse/85"
                       : "text-primary hover:text-secondary",
                   )}
                 >
@@ -223,7 +226,7 @@ export const TextMessage: React.FC<TextMessageProps> = ({
           onClick={onToggleExpand}
           className={clsx(
             "text-xs font-semibold underline-offset-2 hover:underline",
-            isOwn ? "text-text-primary" : "text-primary",
+            isOwn ? "text-text-inverse" : "text-primary",
           )}
         >
           {renderMode === "collapsed"

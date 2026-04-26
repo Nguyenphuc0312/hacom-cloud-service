@@ -63,6 +63,11 @@ export const Avatar: React.FC<AvatarProps> = ({
   const safeAlt = normalizedAlt || t("common:labels.user");
   const safeSrc =
     typeof src === "string" && src.trim().length > 0 ? src.trim() : undefined;
+  const [imageFailed, setImageFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setImageFailed(false);
+  }, [safeSrc]);
 
   const initials =
     safeAlt
@@ -72,6 +77,7 @@ export const Avatar: React.FC<AvatarProps> = ({
       .join("")
       .toUpperCase()
       .slice(0, 2) || "?";
+  const shouldRenderImage = Boolean(safeSrc) && !imageFailed;
 
   return (
     <div
@@ -80,10 +86,11 @@ export const Avatar: React.FC<AvatarProps> = ({
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
     >
-      {safeSrc ? (
+      {shouldRenderImage ? (
         <img
           src={safeSrc}
           alt={safeAlt}
+          onError={() => setImageFailed(true)}
           className={clsx(
             sizeClasses[size],
             "rounded-full object-cover ring-2 ring-surface",

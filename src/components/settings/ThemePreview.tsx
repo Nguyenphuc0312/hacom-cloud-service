@@ -30,7 +30,7 @@ export const ThemePreview: React.FC<ThemePreviewProps> = ({
   density,
   className,
 }) => {
-  const { t } = useTranslation("settings");
+  const { t } = useTranslation(["settings", "common"]);
   const bubblePadding = DENSITY_MAP[density];
   const bubbleFont = FONT_SIZE_MAP[fontSize];
 

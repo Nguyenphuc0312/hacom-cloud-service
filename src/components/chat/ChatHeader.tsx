@@ -205,10 +205,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   return (
     <header
       className={clsx(
-        "chat-header sticky top-0 z-sticky border-b border-border/55",
+        "chat-header sticky top-0 z-sticky border-b border-border/70 bg-surface",
         className,
       )}
-      style={{ backgroundColor: "hsl(var(--chat-panel-bg) / 0.94)" }}
     >
       <ConversationLane>
         <div className="chat-header-row flex min-h-[var(--app-header-height)] items-center gap-2">
@@ -283,6 +282,39 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           </button>
 
           <div className="relative ml-1 flex items-center gap-0.5">
+            {onSearchClick && (
+              <button
+                type="button"
+                onClick={onSearchClick}
+                className={iconButtonClass}
+                aria-label={t("chat:header.searchInChat")}
+              >
+                <MagnifyingGlassIcon className="h-[18px] w-[18px]" />
+              </button>
+            )}
+
+            {onCallClick && (
+              <button
+                type="button"
+                onClick={onCallClick}
+                className={iconButtonClass}
+                aria-label={t("chat:header.voiceCall")}
+              >
+                <PhoneIcon className="h-[18px] w-[18px]" />
+              </button>
+            )}
+
+            {onVideoCallClick && (
+              <button
+                type="button"
+                onClick={onVideoCallClick}
+                className={iconButtonClass}
+                aria-label={t("chat:header.videoCall")}
+              >
+                <VideoCameraIcon className="h-[18px] w-[18px]" />
+              </button>
+            )}
+
             <button
               type="button"
               onClick={onInfoClick}

@@ -19,7 +19,7 @@ export const SettingsFieldGroup: React.FC<SettingsFieldGroupProps> = ({
   return (
     <div
       className={clsx(
-        "rounded-2xl border border-border/70 bg-[hsl(var(--color-surface))/0.92] p-4 shadow-[0_1px_2px_hsl(var(--color-background)/0.04)] sm:p-5",
+        "rounded-2xl border border-border bg-surface p-4 shadow-[0_1px_2px_rgb(15_23_42_/_0.06)] sm:p-5",
         className,
       )}
     >
@@ -29,7 +29,7 @@ export const SettingsFieldGroup: React.FC<SettingsFieldGroupProps> = ({
             <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
           ) : null}
           {description ? (
-            <p className="mt-1 text-sm leading-6 text-text-muted">
+            <p className="mt-1 text-sm leading-6 text-text-secondary">
               {description}
             </p>
           ) : null}

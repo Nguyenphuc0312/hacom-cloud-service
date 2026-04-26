@@ -66,8 +66,8 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
       id: "poll",
       label: t("chat:attachment.types.poll"),
       icon: ChartBarIcon,
-      color: "bg-danger/15 text-danger",
-      enabled: false,
+      color: "bg-primary/15 text-primary",
+      enabled: true,
     },
   ];
 

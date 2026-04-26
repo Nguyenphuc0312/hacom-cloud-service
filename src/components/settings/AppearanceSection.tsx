@@ -11,8 +11,9 @@ import {
 } from "@heroicons/react/24/outline";
 import { ColorPicker } from "./ColorPicker";
 import { RadioGroup } from "./RadioGroup";
-import { SettingsFieldGroup } from "./SettingsFieldGroup";
+import { SettingsCard } from "./SettingsCard";
 import { SettingsSection } from "./SettingsSection";
+import { ThemePreview } from "./ThemePreview";
 import { useSettingsSection, useUpdateSettings } from "../../settings";
 import type {
   AccentColor,
@@ -97,51 +98,68 @@ export const AppearanceSection: React.FC<AppearanceSectionProps> = ({ id }) => {
       title={t("appearance.title")}
       description={t("appearance.description")}
     >
-      <SettingsFieldGroup>
-        <RadioGroup
-          label={t("appearance.themeLabel")}
-          options={themeOptions}
-          value={appearance.theme}
-          onChange={(value) => update({ appearance: { theme: value } })}
-          variant="list"
-          className="py-0"
-        />
-        <div className="border-t border-border/60 pt-4">
-          <ColorPicker
-            label={t("appearance.accentLabel")}
-            description={t("appearance.accentDesc")}
-            value={appearance.accentColor}
-            onChange={(value: AccentColor) =>
-              update({ appearance: { accentColor: value } })
-            }
-            className="py-0"
-          />
-        </div>
-      </SettingsFieldGroup>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr),320px]">
+        <div className="space-y-4">
+          <SettingsCard>
+            <RadioGroup
+              label={t("appearance.themeLabel")}
+              options={themeOptions}
+              value={appearance.theme}
+              onChange={(value) => update({ appearance: { theme: value } })}
+              variant="cards"
+              className="py-0"
+            />
+            <div className="mt-5 border-t border-border pt-4">
+              <ColorPicker
+                label={t("appearance.accentLabel")}
+                description={t("appearance.accentDesc")}
+                value={appearance.accentColor}
+                onChange={(value: AccentColor) =>
+                  update({ appearance: { accentColor: value } })
+                }
+                className="py-0"
+              />
+            </div>
+          </SettingsCard>
 
-      <SettingsFieldGroup>
-        <RadioGroup
-          label={t("appearance.fontSizeLabel")}
-          description={t("appearance.fontSizeDesc")}
-          options={fontSizeOptions}
-          value={appearance.fontSize}
-          onChange={(value) => update({ appearance: { fontSize: value } })}
-          variant="list"
-          className="py-0"
-        />
-        <div className="border-t border-border/60 pt-4">
-          <RadioGroup
-            label={t("appearance.densityLabel")}
-            options={densityOptions}
-            value={appearance.displayDensity}
-            onChange={(value) =>
-              update({ appearance: { displayDensity: value } })
-            }
-            variant="list"
-            className="py-0"
-          />
+          <SettingsCard>
+            <RadioGroup
+              label={t("appearance.fontSizeLabel")}
+              description={t("appearance.fontSizeDesc")}
+              options={fontSizeOptions}
+              value={appearance.fontSize}
+              onChange={(value) => update({ appearance: { fontSize: value } })}
+              variant="list"
+              className="py-0"
+            />
+            <div className="mt-5 border-t border-border pt-4">
+              <RadioGroup
+                label={t("appearance.densityLabel")}
+                options={densityOptions}
+                value={appearance.displayDensity}
+                onChange={(value) =>
+                  update({ appearance: { displayDensity: value } })
+                }
+                variant="list"
+                className="py-0"
+              />
+            </div>
+          </SettingsCard>
         </div>
-      </SettingsFieldGroup>
+
+        <SettingsCard
+          title={t("appearance.preview")}
+          description={t("appearance.previewDesc", {
+            defaultValue: "Xem trước bong bóng tin nhắn theo lựa chọn hiện tại.",
+          })}
+          className="h-max"
+        >
+          <ThemePreview
+            fontSize={appearance.fontSize}
+            density={appearance.displayDensity}
+          />
+        </SettingsCard>
+      </div>
     </SettingsSection>
   );
 };

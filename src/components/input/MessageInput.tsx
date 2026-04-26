@@ -2,15 +2,20 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
-  EllipsisHorizontalIcon,
+  PaperClipIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { AttachmentMenu } from "./AttachmentMenu";
 import { AttachmentPreview } from "./AttachmentPreview";
 import { AttachmentTray } from "./AttachmentTray";
+import { EmojiButton } from "./EmojiButton";
 import { SendButton, type SendButtonState } from "./SendButton";
 import { ShareContactModal } from "../modals/ShareContactModal";
 import { ConversationLane } from "../layout/ConversationLane";
+import {
+  PollCreateDialog,
+  type PollCreatePayload,
+} from "../../features/chat/components/PollCreateDialog";
 import {
   useAutoResizeTextarea,
   useTypingIndicator,
@@ -297,6 +302,7 @@ const MessageInputComponent = React.forwardRef<
 
   const [showAttachmentMenu, setShowAttachmentMenu] = React.useState(false);
   const [isShareContactOpen, setIsShareContactOpen] = React.useState(false);
+  const [isPollDialogOpen, setIsPollDialogOpen] = React.useState(false);
   const [isComposerFocused, setIsComposerFocused] = React.useState(false);
   const [mentionMatch, setMentionMatch] = React.useState<MentionMatch | null>(
     null,
@@ -504,6 +510,8 @@ const MessageInputComponent = React.forwardRef<
         } else {
           toast.info(t("common:toast.featureInDevelopment"));
         }
+      } else if (type === "poll") {
+        setIsPollDialogOpen(true);
       } else {
         toast.info(t("common:toast.featureInDevelopment"));
       }
@@ -671,6 +679,21 @@ const MessageInputComponent = React.forwardRef<
     [notifyInput, onChange, recordInputLatency, updateMentionState],
   );
 
+  const handleEmojiChange = React.useCallback(
+    (nextValue: string) => {
+      setDraftValue(nextValue);
+      onChange(nextValue);
+      updateMentionState(nextValue, nextValue.length);
+      recordInputLatency(nextValue);
+
+      notifyInput({
+        hasText: nextValue.trim().length > 0,
+        isFocused: true,
+      });
+    },
+    [notifyInput, onChange, recordInputLatency, updateMentionState],
+  );
+
   const handleSendAsTextFile = React.useCallback(() => {
     if (!onAddFiles || draftValue.length === 0) {
       return;
@@ -696,6 +719,23 @@ const MessageInputComponent = React.forwardRef<
       }),
     );
   }, [clearMentionState, draftValue, onAddFiles, onChange, stopTypingNow, t]);
+
+  const handleCreatePoll = React.useCallback(
+    (payload: PollCreatePayload) => {
+      toast.info(
+        t("common:toast.featureInDevelopment", {
+          defaultValue: "Tính năng đang được phát triển",
+        }),
+      );
+      logMessageDebug("MessageInput", "poll_create_demo_submitted", {
+        conversationId,
+        optionCount: payload.options.length,
+        allowMultiple: payload.allowMultiple,
+        anonymous: payload.anonymous,
+      });
+    },
+    [conversationId, t],
+  );
 
   const handleMentionSelect = React.useCallback(
     (candidate: MentionCandidate) => {
@@ -1245,6 +1285,12 @@ const MessageInputComponent = React.forwardRef<
                 composerVisualStyles.attachmentDivider,
               )}
             >
+              <EmojiButton
+                value={draftValue}
+                onChange={handleEmojiChange}
+                textareaRef={textareaRef}
+                disabled={disabled}
+              />
               <div className="relative">
                 <button
                   type="button"
@@ -1257,12 +1303,12 @@ const MessageInputComponent = React.forwardRef<
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                     disableAttachmentActions && "cursor-not-allowed opacity-50",
                   )}
-                  aria-label={t("chat:header.moreActions")}
+                  aria-label={t("chat:composer.attachFile")}
                   aria-haspopup="menu"
                   aria-expanded={showAttachmentMenu}
                   disabled={disableAttachmentActions}
                 >
-                  <EllipsisHorizontalIcon className="h-[18px] w-[18px]" />
+                  <PaperClipIcon className="h-[18px] w-[18px]" />
                 </button>
 
                 {showAttachmentMenu && (
@@ -1297,6 +1343,10 @@ const MessageInputComponent = React.forwardRef<
             className="shrink-0"
           />
         </div>
+
+        <p className="mt-1 px-1 text-[11px] leading-4 text-text-muted">
+          Nhấn Enter để gửi, Shift + Enter để xuống dòng
+        </p>
 
         {(messageValidation.showCounter ||
           messageValidation.isOverSoftLimit ||
@@ -1383,6 +1433,12 @@ const MessageInputComponent = React.forwardRef<
             onShare={onShareContact}
           />
         )}
+
+        <PollCreateDialog
+          isOpen={isPollDialogOpen}
+          onClose={() => setIsPollDialogOpen(false)}
+          onSubmit={handleCreatePoll}
+        />
       </ConversationLane>
     </div>
   );
