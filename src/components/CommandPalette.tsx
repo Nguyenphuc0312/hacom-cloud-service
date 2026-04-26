@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import { AppIcon } from '@/components/AppIcon';
 import type { CommandCategory } from '@/app/layout/navigationConfig';
 
-const CATEGORY_ORDER: CommandCategory[] = ['Navigate', 'Quick Actions', 'Operations', 'Settings'];
+const CATEGORY_ORDER: CommandCategory[] = ['Điều hướng', 'Thao tác nhanh', 'Vận hành', 'Cài đặt'];
 
 export interface CommandPaletteItem {
   id: string;
@@ -182,7 +182,7 @@ export const CommandPalette = ({ open, onClose, items }: CommandPaletteProps) =>
       </div>
 
       {groupedItems.length > 0 ? (
-        <div className="command-palette-results" role="listbox" aria-label="Admin commands">
+        <div className="command-palette-results" role="listbox" aria-label="Lệnh admin">
           {groupedItems.map((group) => (
             <section key={group.category} className="command-palette-group" aria-label={group.category}>
               <Typography.Text className="command-palette-group-title">{group.category}</Typography.Text>

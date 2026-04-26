@@ -25,9 +25,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ mobile = false, id }
     <aside
       id={id}
       className={`ds-admin-sidebar ${mobile ? 'is-mobile' : ''}`}
-      aria-label="Primary navigation"
+      aria-label="Điều hướng chính"
     >
-      <div className="ds-admin-sidebar-logo" aria-label="Admin Operations Panel">
+      <div className="ds-admin-sidebar-logo" aria-label="Panel vận hành admin">
         <span className="ds-sidebar-brand-mark">
           <AppIcon name="shield" size={18} strokeWidth={2.1} aria-hidden />
         </span>
@@ -37,7 +37,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ mobile = false, id }
         </span>
       </div>
 
-      <nav className="ds-admin-sidebar-nav" role="navigation" aria-label="Main navigation">
+      <nav className="ds-admin-sidebar-nav" role="navigation" aria-label="Điều hướng chính">
         <div className="ds-sidebar-nav-list">
           {sections.map((section) => (
             <SidebarNavSection
@@ -52,7 +52,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ mobile = false, id }
 
       <div className="ds-admin-sidebar-footer">
         <div className="ds-sidebar-footer-meta">
-          <strong>{user?.username?.trim() || user?.email || 'Admin workspace'}</strong>
+          <strong>{user?.username?.trim() || user?.email || 'Không gian admin'}</strong>
           <span>{roleLabel}</span>
           <span className="ds-sidebar-footer-environment">{appConfig.environmentLabel}</span>
         </div>

@@ -169,7 +169,7 @@ export const MonitoringOverviewPage = () => {
             changeLabel={
               healthyServiceRate === null ? 'Chưa có dữ liệu' : formatPercent(healthyServiceRate, 0)
             }
-            trendCaption="tỷ lệ service healthy"
+            trendCaption="tỷ lệ dịch vụ khỏe"
             tone={services.down > 0 ? 'danger' : services.degraded > 0 ? 'warning' : 'success'}
           />
         </div>
@@ -188,7 +188,7 @@ export const MonitoringOverviewPage = () => {
                 <strong>{formatOptional(overview.realtimeHealth.wsToApiP95Ms, formatMs)}</strong>
               </div>
               <div className="ds-detail-list-item">
-                <span>Partial failures</span>
+                <span>Lỗi một phần</span>
                 <strong>
                   {formatOptional(overview.systemOverview.partialFailuresPerMinute, (value) =>
                     formatRate(value, '/min'),
@@ -202,13 +202,13 @@ export const MonitoringOverviewPage = () => {
                 </strong>
               </div>
               <div className="ds-detail-list-item">
-                <span>Projection missing</span>
+                <span>Thiếu projection</span>
                 <strong>
                   {formatOptional(overview.messageCorrectness.projectionMissingCurrent, formatNumber)}
                 </strong>
               </div>
               <div className="ds-detail-list-item">
-                <span>Orphan records</span>
+                <span>Bản ghi mồ côi</span>
                 <strong>
                   {formatOptional(overview.messageCorrectness.orphanMongoCurrent, formatNumber)}
                 </strong>
@@ -274,14 +274,14 @@ export const MonitoringOverviewPage = () => {
             <div className="ds-monitoring-inline-meta">
               <span className="ds-shell-chip ds-shell-chip--ghost">
                 {problematicServices.length > 0
-                  ? `${problematicServices.length} service cần chú ý`
-                  : 'Không có service suy giảm'}
+                  ? `${problematicServices.length} dịch vụ cần chú ý`
+                  : 'Không có dịch vụ suy giảm'}
               </span>
               <span className="ds-shell-chip ds-shell-chip--ghost">
                 Nguồn Prometheus: {overview.sources.prometheus.status}
               </span>
               <span className="ds-shell-chip ds-shell-chip--ghost">
-                Service health: {overview.sources.serviceHealth.status}
+                Sức khỏe dịch vụ: {overview.sources.serviceHealth.status}
               </span>
             </div>
           </SurfaceCard>

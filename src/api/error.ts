@@ -3,66 +3,66 @@ import { AxiosError } from 'axios';
 import type { ApiErrorBody } from './types';
 
 const CODE_MESSAGE_MAP: Record<string, string> = {
-  INVALID_CREDENTIALS: 'Email hoac mat khau khong dung.',
-  FORBIDDEN: 'Tai khoan khong co quyen truy cap.',
-  DB_SCHEMA_NOT_READY: 'He thong dang cap nhat du lieu nen. Vui long thu lai sau it phut.',
-  DB_UNAVAILABLE: 'Khong ket noi duoc co so du lieu. Vui long thu lai sau.',
-  AUTH_UPSTREAM_UNREACHABLE:
-    'Dich vu xac thuc admin dang tam thoi gian doan. Vui long thu lai.',
+  INVALID_CREDENTIALS: 'Email hoặc mật khẩu không đúng.',
+  FORBIDDEN: 'Tài khoản không có quyền truy cập.',
+  DB_SCHEMA_NOT_READY: 'Hệ thống đang cập nhật dữ liệu nền. Vui lòng thử lại sau ít phút.',
+  DB_UNAVAILABLE: 'Không kết nối được cơ sở dữ liệu. Vui lòng thử lại sau.',
+  AUTH_UPSTREAM_UNREACHABLE: 'Dịch vụ xác thực admin đang tạm thời gián đoạn. Vui lòng thử lại.',
   AUTH_UPSTREAM_ENDPOINT_NOT_FOUND:
-    'Dich vu xac thuc admin chua san sang endpoint noi bo can thiet.',
-  ACCESS_IP_PENDING: 'IP hien tai dang cho phe duyet.',
-  ACCESS_IP_REJECTED: 'IP hien tai da bi tu choi.',
-  ACCESS_IP_REVOKED: 'Quyen truy cap cua IP hien tai da bi thu hoi.',
-  ACCESS_IP_EXPIRED: 'Phe duyet cho IP hien tai da het han.',
-  ADMIN_ACCESS_IP_NOT_APPROVED: 'IP hien tai dang cho phe duyet.',
-  ALLOWLIST_EMAIL_DENIED: 'Email nay khong duoc phep truy cap admin panel.',
-  RBAC_PERMISSION_DENIED: 'Tai khoan khong co quyen quan tri.',
-  ADMIN_ACCESS_DENIED: 'Ban khong co quyen truy cap admin panel.',
-  ADMIN_PERMISSION_DENIED: 'Ban khong co quyen truy cap admin panel.',
-  ADMIN_AUTH_REQUIRED: 'Phien dang nhap khong hop le hoac da het han.',
-  ADMIN_AUTH_TOKEN_INVALID: 'Phien dang nhap khong hop le hoac da het han.',
+    'Dịch vụ xác thực admin chưa sẵn sàng endpoint nội bộ cần thiết.',
+  ACCESS_IP_PENDING: 'IP hiện tại đang chờ phê duyệt.',
+  ACCESS_IP_REJECTED: 'IP hiện tại đã bị từ chối.',
+  ACCESS_IP_REVOKED: 'Quyền truy cập của IP hiện tại đã bị thu hồi.',
+  ACCESS_IP_EXPIRED: 'Phê duyệt cho IP hiện tại đã hết hạn.',
+  ADMIN_ACCESS_IP_NOT_APPROVED: 'IP hiện tại đang chờ phê duyệt.',
+  ALLOWLIST_EMAIL_DENIED: 'Email này không được phép truy cập admin panel.',
+  RBAC_PERMISSION_DENIED: 'Tài khoản không có quyền quản trị.',
+  ADMIN_ACCESS_DENIED: 'Bạn không có quyền truy cập admin panel.',
+  ADMIN_PERMISSION_DENIED: 'Bạn không có quyền truy cập admin panel.',
+  ADMIN_AUTH_REQUIRED: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
+  ADMIN_AUTH_TOKEN_INVALID: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
   ADMIN_ACCOUNT_NOT_ACTIVE:
-    'Tai khoan admin chua active. Vui long lien he quan tri vien de kich hoat.',
+    'Tài khoản admin chưa hoạt động. Vui lòng liên hệ quản trị viên để kích hoạt.',
   ADMIN_CANONICAL_PERMISSIONS_MISSING:
-    'Phien dang nhap chua co quyen admin hop le. Vui long dang nhap lai.',
-  CLIENT_IP_UNRESOLVED: 'Khong the xac dinh IP client thuc te.',
-  USER_NOT_FOUND: 'Khong tim thay nguoi dung.',
-  DUPLICATE_EMPLOYEE_CODE: 'Ma nhan vien da ton tai.',
-  ACCOUNT_ALREADY_PROVISIONED: 'Nhan su nay da duoc cap tai khoan.',
-  HR_EMPLOYEE_NOT_FOUND: 'Khong tim thay ho so nhan su.',
+    'Phiên đăng nhập chưa có quyền admin hợp lệ. Vui lòng đăng nhập lại.',
+  CLIENT_IP_UNRESOLVED: 'Không thể xác định IP client thực tế.',
+  USER_NOT_FOUND: 'Không tìm thấy người dùng.',
+  DUPLICATE_EMPLOYEE_CODE: 'Mã nhân viên đã tồn tại.',
+  ACCOUNT_ALREADY_PROVISIONED: 'Nhân sự này đã được cấp tài khoản.',
+  HR_EMPLOYEE_NOT_FOUND: 'Không tìm thấy hồ sơ nhân sự.',
   HR_EMPLOYEE_LINKED_TO_USER:
-    'Khong the xoa vi nhan su da lien ket voi tai khoan nguoi dung.',
-  HR_EMPLOYEE_ALREADY_INACTIVE: 'Nhan su da o trang thai ngung hoat dong.',
-  HR_EMPLOYEE_INVALID_INPUT: 'Du lieu nhan su khong hop le.',
+    'Không thể xóa vì nhân sự đã liên kết với tài khoản người dùng.',
+  HR_EMPLOYEE_ALREADY_INACTIVE: 'Nhân sự đã ở trạng thái ngừng hoạt động.',
+  HR_EMPLOYEE_INVALID_INPUT: 'Dữ liệu nhân sự không hợp lệ.',
   UPSTREAM_ENDPOINT_MISSING:
-    'Backend chua ho tro endpoint noi bo can thiet cho chuc nang nay.',
+    'Backend chưa hỗ trợ endpoint nội bộ cần thiết cho chức năng này.',
 };
 
 const STATUS_MESSAGE_MAP: Record<number, string> = {
-  400: 'Du lieu gui len khong hop le.',
-  401: 'Phien dang nhap da het han. Vui long dang nhap lai.',
-  403: 'Ban khong co quyen thuc hien hanh dong nay.',
-  404: 'Khong tim thay tai nguyen.',
-  409: 'Du lieu bi xung dot.',
-  422: 'Du lieu khong thoa dieu kien xac thuc.',
-  500: 'He thong dang ban. Vui long thu lai sau.',
+  400: 'Dữ liệu gửi lên không hợp lệ.',
+  401: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+  403: 'Bạn không có quyền thực hiện hành động này.',
+  404: 'Không tìm thấy tài nguyên.',
+  409: 'Dữ liệu bị xung đột.',
+  422: 'Dữ liệu không thỏa điều kiện xác thực.',
+  429: 'Bạn thao tác quá nhanh. Vui lòng thử lại sau.',
+  500: 'Hệ thống đang bận. Vui lòng thử lại sau.',
 };
 
 const ADMIN_LOGIN_MESSAGE_MAP: Record<string, string> = {
   ACCESS_IP_PENDING:
-    'IP của bạn đang chờ quản trị viên phê duyệt để truy cập admin panel.',
+    'IP của bạn đang chờ quản trị viên phê duyệt trước khi truy cập admin panel.',
   ACCESS_IP_REJECTED: 'IP của bạn đã bị từ chối truy cập admin panel.',
   ACCESS_IP_REVOKED: 'Quyền truy cập admin panel của IP này đã bị thu hồi.',
   ACCESS_IP_EXPIRED: 'Phê duyệt truy cập admin panel của IP này đã hết hạn.',
   ADMIN_ACCESS_IP_NOT_APPROVED:
-    'IP của bạn đang chờ quản trị viên phê duyệt để truy cập admin panel.',
+    'IP của bạn đang chờ quản trị viên phê duyệt trước khi truy cập admin panel.',
   ALLOWLIST_EMAIL_DENIED: 'Email này không được phép truy cập admin panel.',
   RBAC_PERMISSION_DENIED: 'Tài khoản của bạn không có quyền quản trị.',
   ADMIN_ACCESS_DENIED: 'Bạn không có quyền truy cập admin panel.',
   ADMIN_PERMISSION_DENIED: 'Bạn không có quyền truy cập admin panel.',
   ADMIN_ACCOUNT_NOT_ACTIVE:
-    'Tài khoản admin của bạn chưa active. Vui lòng liên hệ quản trị viên để kích hoạt.',
+    'Tài khoản admin của bạn chưa hoạt động. Vui lòng liên hệ quản trị viên để kích hoạt.',
   ADMIN_AUTH_REQUIRED: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
   ADMIN_AUTH_TOKEN_INVALID: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
   UNAUTHORIZED: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
@@ -119,7 +119,7 @@ export const getApiErrorStatus = (error: unknown): number | undefined => {
 
 export const getErrorMessage = (
   error: unknown,
-  fallback = 'Da co loi xay ra.',
+  fallback = 'Đã có lỗi xảy ra.',
 ): string => {
   if (error instanceof AxiosError) {
     const body = error.response?.data as ApiErrorBody | undefined;

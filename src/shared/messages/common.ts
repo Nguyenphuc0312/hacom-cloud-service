@@ -1,5 +1,3 @@
-// Shared product copy for reusable UI states and primitives.
-
 export const commonMessages = {
   actions: {
     close: 'Đóng',
@@ -7,7 +5,7 @@ export const commonMessages = {
     confirm: 'Xác nhận',
     save: 'Lưu',
     delete: 'Xóa',
-    edit: 'Chỉnh sửa',
+    edit: 'Sửa',
     add: 'Thêm',
     update: 'Cập nhật',
     search: 'Tìm kiếm',
@@ -19,21 +17,21 @@ export const commonMessages = {
     filter: 'Bộ lọc',
     clear: 'Xóa',
     back: 'Quay lại',
-    next: 'Tiếp',
+    next: 'Tiếp theo',
     submit: 'Gửi',
   },
   table: {
-    empty: 'Chưa có dữ liệu',
+    empty: 'Không có dữ liệu',
     loading: 'Đang tải dữ liệu...',
     page: 'Trang',
     of: 'trên',
     rowsPerPage: 'Số dòng mỗi trang',
     total: 'Tổng',
-    noResult: 'Không tìm thấy kết quả phù hợp',
+    noResult: 'Không có kết quả phù hợp',
   },
   form: {
     required: 'Trường này là bắt buộc',
-    invalidEmail: 'Nhập địa chỉ email hợp lệ',
+    invalidEmail: 'Nhập email hợp lệ',
     invalidFormat: 'Định dạng không hợp lệ',
     fileInvalid: 'Tệp không hợp lệ',
     tooLarge: 'Tệp vượt quá giới hạn dung lượng',
@@ -47,18 +45,18 @@ export const commonMessages = {
     confirmContent: 'Bạn có chắc muốn tiếp tục không?',
     close: 'Đóng',
     cancel: 'Hủy',
-    ok: 'Đồng ý',
+    ok: 'OK',
   },
   state: {
     loading: 'Đang tải...',
     error: 'Đã xảy ra lỗi',
-    empty: 'Chưa có dữ liệu',
-    noData: 'Chưa có dữ liệu',
+    empty: 'Không có dữ liệu',
+    noData: 'Không có dữ liệu',
     tryAgain: 'Vui lòng thử lại sau',
   },
   pagination: {
     previous: 'Trước',
-    next: 'Sau',
+    next: 'Tiếp theo',
     page: 'Trang',
     of: 'trên',
   },

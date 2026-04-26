@@ -56,9 +56,9 @@ export const DashboardPage = () => {
   };
 
   const pageHeader = {
-    eyebrow: 'Dashboard',
-    title: 'System Overview',
-    description: 'Monitor users, access control, realtime health, and system activity.',
+    eyebrow: 'Tổng quan',
+    title: 'Tổng quan hệ thống',
+    description: 'Theo dõi người dùng, truy cập, realtime và hoạt động hệ thống.',
   };
 
   const isInitialLoading =
@@ -104,12 +104,12 @@ export const DashboardPage = () => {
         <ErrorState
           title={
             monitoringStatus === 403
-              ? 'You do not have permission to view telemetry'
-              : 'Unable to load system overview'
+              ? 'Bạn không có quyền xem telemetry'
+              : 'Không thể tải tổng quan hệ thống'
           }
           description={getErrorMessage(
             monitoringQuery.error ?? serviceHealthQuery.error,
-            'The overview datasource is temporarily unavailable.',
+            'Nguồn dữ liệu tổng quan tạm thời không khả dụng.',
           )}
           onRetry={refetchDashboard}
         />
@@ -128,52 +128,52 @@ export const DashboardPage = () => {
   const metrics = [
     {
       id: 'total-users',
-      label: 'Total Users',
+      label: 'Tổng người dùng',
       value: formatNumber(totalUsers),
-      meta: 'Admin users API',
+      meta: 'Từ API người dùng admin',
       tone: 'default' as const,
       route: '/users',
     },
     {
       id: 'active-users',
-      label: 'Active Users',
+      label: 'Người dùng hoạt động',
       value: formatNumber(activeUsers),
-      meta: `${formatPercent(activationRate * 100, 0)} of total accounts`,
+      meta: `${formatPercent(activationRate * 100, 0)} tổng tài khoản`,
       tone: pendingUsers > 0 ? ('warning' as const) : ('success' as const),
       route: '/users',
     },
     {
       id: 'pending-access',
-      label: 'Pending Admin Access',
+      label: 'Truy cập chờ duyệt',
       value: pendingAdminAccess === null ? '-' : formatNumber(pendingAdminAccess),
-      meta: 'IP approval queue',
+      meta: 'Hàng đợi duyệt IP',
       tone: (pendingAdminAccess ?? 0) > 0 ? ('warning' as const) : ('success' as const),
       route: '/access-requests',
     },
     {
       id: 'realtime-connections',
-      label: 'Realtime Connections',
+      label: 'Kết nối realtime',
       value: formatNumber(overview?.systemOverview.activeConnections),
       meta:
         trafficTrend.delta === null
-          ? 'No trend data'
+          ? 'Chưa có dữ liệu xu hướng'
           : `Delta ${trafficTrend.delta >= 0 ? '+' : ''}${formatNumber(trafficTrend.delta)}`,
       tone: 'default' as const,
       route: '/monitoring',
     },
     {
       id: 'failed-logins',
-      label: 'Failed Logins',
+      label: 'Đăng nhập lỗi',
       value: '-',
-      meta: 'No metrics available yet',
+      meta: 'Chưa có metric',
       tone: 'default' as const,
       route: '/audit',
     },
     {
       id: 'api-errors',
-      label: 'API Errors',
+      label: 'Lỗi API',
       value: apiErrorRate === null ? '-' : formatRate(apiErrorRate, '/min'),
-      meta: 'Partial failure rate',
+      meta: 'Tỷ lệ lỗi một phần',
       tone: (apiErrorRate ?? 0) > 0 ? ('danger' as const) : ('success' as const),
       route: '/monitoring',
     },
@@ -206,7 +206,7 @@ export const DashboardPage = () => {
               }
               onClick={refetchDashboard}
             >
-              Refresh
+              Làm mới
             </Button>
             {overview?.generatedAt ? (
               <span className="ds-page-toolbar-meta">{formatDateTime(overview.generatedAt)}</span>
@@ -217,11 +217,11 @@ export const DashboardPage = () => {
     >
       {!hasOverviewData ? (
         <div className="ds-ops-panel">
-          <EmptyState description="No operational data is available yet." />
+          <EmptyState description="Chưa có dữ liệu vận hành." />
         </div>
       ) : (
         <div className="ds-ops-overview">
-          <section className="ds-ops-summary-grid" aria-label="Key operating metrics">
+          <section className="ds-ops-summary-grid" aria-label="Chỉ số vận hành chính">
             {metrics.map((metric) => (
               <button
                 key={metric.id}
@@ -239,34 +239,34 @@ export const DashboardPage = () => {
 
           <div className="ds-ops-grid ds-ops-grid--two-column">
             <DashboardCard
-              title="Service Health"
-              meta="Live summary from the service health API."
-              action={<Button type="link" onClick={() => navigate('/services/health')}>Open</Button>}
+              title="Sức khỏe dịch vụ"
+              meta="Tóm tắt trực tiếp từ API service health."
+              action={<Button type="link" onClick={() => navigate('/services/health')}>Mở</Button>}
             >
               <dl className="ds-ops-fact-list">
                 <div>
-                  <dt>Healthy</dt>
+                  <dt>Khỏe</dt>
                   <dd>{servicesSummary ? `${servicesSummary.up}/${servicesTotal}` : '-'}</dd>
                 </div>
                 <div>
-                  <dt>Degraded</dt>
+                  <dt>Suy giảm</dt>
                   <dd>{servicesSummary?.degraded ?? '-'}</dd>
                 </div>
                 <div>
-                  <dt>Down</dt>
+                  <dt>Ngừng</dt>
                   <dd>{servicesSummary?.down ?? '-'}</dd>
                 </div>
                 <div>
-                  <dt>Checked At</dt>
+                  <dt>Kiểm tra lúc</dt>
                   <dd>{serviceHealth?.checkedAt ? formatDateTime(serviceHealth.checkedAt) : '-'}</dd>
                 </div>
               </dl>
             </DashboardCard>
 
             <DashboardCard
-              title="Metrics Availability"
-              meta="Charts are only rendered when a real metrics datasource is connected."
-              action={<Button type="link" onClick={() => navigate('/monitoring')}>Open</Button>}
+              title="Tình trạng metric"
+              meta="Chỉ hiển thị biểu đồ khi có nguồn metric thật."
+              action={<Button type="link" onClick={() => navigate('/monitoring')}>Mở</Button>}
             >
               <dl className="ds-ops-fact-list">
                 <div>
@@ -276,7 +276,7 @@ export const DashboardPage = () => {
                   </dd>
                 </div>
                 <div>
-                  <dt>Capacity Baseline</dt>
+                  <dt>Nền tải</dt>
                   <dd>
                     <StatusBadge
                       status={
@@ -288,11 +288,11 @@ export const DashboardPage = () => {
                   </dd>
                 </div>
                 <div>
-                  <dt>Message Volume</dt>
+                  <dt>Lưu lượng tin nhắn</dt>
                   <dd>
                     {overview?.systemOverview.messagesPerSecond === null ||
                     overview?.systemOverview.messagesPerSecond === undefined
-                      ? 'No metrics available yet'
+                      ? 'Chưa có metric'
                       : formatRate(overview.systemOverview.messagesPerSecond, '/sec')}
                   </dd>
                 </div>
@@ -301,9 +301,9 @@ export const DashboardPage = () => {
           </div>
 
           <DashboardCard
-            title="Recent Operational Activity"
-            meta="Incidents, alerts, and recent changes for follow-up."
-            action={<Button type="link" onClick={() => navigate('/audit')}>Open Audit Logs</Button>}
+            title="Hoạt động vận hành gần đây"
+            meta="Incident, cảnh báo và thay đổi cần theo dõi."
+            action={<Button type="link" onClick={() => navigate('/audit')}>Mở audit</Button>}
           >
             <div className="ds-ops-activity-list">
               {activityTimeline.slice(0, 6).length > 0 ? (
@@ -324,20 +324,20 @@ export const DashboardPage = () => {
                   </button>
                 ))
               ) : (
-                <EmptyState description="No recent activity is available yet." compact />
+                <EmptyState description="Chưa có hoạt động gần đây." compact />
               )}
             </div>
           </DashboardCard>
 
-          <DashboardCard title="Operator Queue" meta="Items that need an admin decision.">
+          <DashboardCard title="Hàng đợi xử lý" meta="Mục cần admin ra quyết định.">
             <div className="ds-ops-list">
               {[
                 ...(pendingUsers > 0
                   ? [
                       {
                         id: 'pending-users',
-                        title: `${pendingUsers} accounts pending verification`,
-                        description: 'Review account state before enabling access.',
+                        title: `${pendingUsers} tài khoản chờ xác minh`,
+                        description: 'Rà soát trạng thái trước khi bật truy cập.',
                         route: '/users',
                         status: 'warning',
                       },
@@ -370,7 +370,7 @@ export const DashboardPage = () => {
                 </button>
               ))}
               {pendingUsers === 0 && insights.length === 0 ? (
-                <EmptyState description="No queue items require action." compact />
+                <EmptyState description="Không có mục nào cần xử lý." compact />
               ) : null}
             </div>
           </DashboardCard>

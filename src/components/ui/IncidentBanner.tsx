@@ -26,7 +26,11 @@ export const IncidentBanner = ({
     <div className="ds-incident-banner-main">
       <div className="ds-incident-banner-copy">
         <span className="ds-incident-banner-eyebrow">
-          {tone === 'danger' ? 'Critical issue' : tone === 'warning' ? 'Active issue' : 'Operational note'}
+          {tone === 'danger'
+            ? 'Sự cố nghiêm trọng'
+            : tone === 'warning'
+              ? 'Sự cố đang diễn ra'
+              : 'Ghi chú vận hành'}
         </span>
         <h3 className="ds-incident-banner-title">{title}</h3>
         {description ? <p className="ds-incident-banner-description">{description}</p> : null}

@@ -200,7 +200,7 @@ export const HrEmployeeDetailDrawer = ({
           <SurfaceCard
             eyebrow="Hành động"
             title="Tác vụ nhanh"
-            description="Edit sâu nên đi qua luồng chỉnh sửa riêng; drawer không mang thêm wizard hoặc helper text dài."
+            description="Chỉnh sửa sâu nên đi qua luồng riêng; drawer không mang thêm wizard hoặc helper text dài."
           >
             <div className="ds-settings-action-bar">
               <span className="ds-settings-action-copy">

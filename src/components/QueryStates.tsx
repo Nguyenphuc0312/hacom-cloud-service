@@ -95,7 +95,8 @@ export const QueryStateView = ({
         status="403"
         title={title ?? 'Bạn không có quyền truy cập'}
         subTitle={
-          description ?? 'Vai trò hiện tại của bạn không được phép thực hiện thao tác này trong trang quản trị.'
+          description ??
+          'Vai trò hiện tại của bạn không được phép thực hiện thao tác này trong trang quản trị.'
         }
       />
     );
@@ -107,7 +108,9 @@ export const QueryStateView = ({
         type="info"
         showIcon
         message={title ?? 'Tính năng này hiện đang bị tắt'}
-        description={description ?? 'Các thao tác ghi đang bị tắt theo cấu hình phát hành hiện tại.'}
+        description={
+          description ?? 'Các thao tác ghi đang bị tắt theo cấu hình phát hành hiện tại.'
+        }
       />
     );
   }

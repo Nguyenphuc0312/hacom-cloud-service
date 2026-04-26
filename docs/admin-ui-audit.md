@@ -28,16 +28,16 @@ Date: 2026-04-26
 - `/monitoring`: `src/features/monitoring/pages/MonitoringOverviewPage.tsx`.
 - `/services/health`: `src/features/services/pages/ServicesPage.tsx`.
 - `/settings/:section`: `src/features/settings/pages/SettingsPage.tsx`.
-- `*`: previously redirected to `/`; now uses `src/features/errors/NotFoundPage.tsx`.
+- `*`: `src/features/errors/NotFoundPage.tsx`.
 
-## Existing Layout Components
+## Layout Components
 
 - Shell: `src/app/layout/AdminShell.tsx`, `AdminSidebar.tsx`, `AdminTopbar.tsx`, `AppLayout.tsx`.
 - Sidebar items: `SidebarNavSection.tsx`, `SidebarNavItem.tsx`, `navigationConfig.tsx`.
 - Topbar: `TopbarSearch.tsx`, `TopbarActions.tsx`, `CommandPalette.tsx`.
 - Page wrappers: `src/components/PageShell.tsx`, `PageHeader.tsx`, `PageContainer.tsx`.
 
-## Existing Table / Card / Form Components
+## Table / Card / Form Components
 
 - Tables: `src/components/AdminTable.tsx`, `DataTableShell.tsx`, `DataTableToolbar.tsx`, `src/components/ui/DataTable.tsx`, `TablePagination.tsx`.
 - Cards: `Card.tsx`, `StatCard.tsx`, `SummaryCard.tsx`, `WidgetCard.tsx`, `SurfaceCard.tsx`.
@@ -45,27 +45,46 @@ Date: 2026-04-26
 - Feedback: `QueryStates.tsx`, `ui/EmptyState.tsx`, `ui/ErrorState.tsx`, `FeatureDisabledNotice.tsx`.
 - Overlays/actions: `AppDrawer.tsx`, `DetailPanel.tsx`, `ConfirmDialog.tsx`, `RowActionsDropdown.tsx`, `JsonDiffDrawer.tsx`.
 
+## Verified Claims
+
+| Claim | Result | Code evidence |
+| --- | --- | --- |
+| Fake admin chat data removed | Verified | `src/api/clients/conversationsClient.ts` calls `adminAxiosInstance`; `src/features/conversations/pages/ConversationsPage.tsx` renders API state and no local sample transcripts. |
+| Table overflow contained | Verified | `src/components/AdminTable.tsx` and `src/components/ui/DataTable.tsx` set horizontal scroll; `src/styles/classic-admin.css` contains table shell overflow and truncation rules. |
+| Access decisions require confirm | Verified | `src/features/access/pages/AccessRequestsPage.tsx` row actions open detail; approve/reject/revoke are confirmed from the drawer. |
+| Sidebar IA is domain-based | Verified | `src/app/layout/navigationConfig.tsx` groups Dashboard, Identity, Chat System, Access Control, Operations using existing routes only. |
+| Dashboard is System Overview | Verified | `src/features/dashboard/pages/DashboardPage.tsx` uses `System Overview` and avoids fake metrics for unavailable data. |
+| Users table has operational columns | Verified | `src/features/users/pages/UsersPage.tsx` contains User, Employee Code, Email, Department, Role, Status, HR Linked, Updated At, Actions. |
+| Logs and audit show Request ID | Verified | `src/features/system-logs/pages/SystemLogsPage.tsx` and `src/features/audit/pages/AuditLogPage.tsx` include Request ID columns and detail panels for raw payloads. |
+| 404 is a real page | Verified | `src/app/router.tsx` maps `*` to `NotFoundPage`; `NotFoundPage` includes Back and Go Dashboard actions. |
+| Theme uses warm light + restrained purple | Verified with follow-up | `src/styles/tokens.css` and `src/theme/tokens.ts` own the palette; `src/styles/classic-admin.css` now neutralizes older page gradients at the final layer. |
+
 ## Findings
 
 | Priority | Group | Files | Impact | Fix |
 | --- | --- | --- | --- | --- |
-| P0 | Fake admin chat data | `src/api/clients/conversationsClient.ts`, `src/features/conversations/pages/ConversationsPage.tsx` | The page showed local sample conversations as if they were backend truth. This violated the no-fake-data rule. | Removed local sample data, routed through `adminAxiosInstance`, and refactored the page into an honest admin table/error state. |
-| P0 | Table overflow risk | `src/components/AdminTable.tsx`, `src/components/ui/DataTable.tsx`, `src/styles/classic-admin.css` | Wide columns could make page-level horizontal overflow feel unstable. | Kept `scroll.x`, added table shell overflow containment, and standardized row height/text truncation. |
-| P0 | Access actions lacked enough confirm surface | `src/features/access/pages/AccessRequestsPage.tsx` | Approve/reject/revoke were exposed from row actions too directly for security-sensitive operations. | Row actions now only open detail; dangerous decisions are confirmed in the drawer. |
-| P1 | Sidebar IA was not aligned to product domains | `src/app/layout/navigationConfig.tsx` | Identity, chat, access, and operations were mixed, making daily operation harder. | Rebuilt IA into Dashboard, Identity, Chat System, Access Control, Operations using only existing routes. |
-| P1 | Dashboard copy and metrics did not match the target plan | `src/features/dashboard/pages/DashboardPage.tsx` | The page read as a generic ops page and did not clearly identify missing metrics. | Refactored to `System Overview`, real KPI cards, real service health, and empty text for unavailable metrics. |
-| P1 | Users table missed required operational columns | `src/features/users/pages/UsersPage.tsx` | Admins could not scan HR link, role gap, updated time, and account status in one stable table. | Added User, Employee Code, Email, Department, Role, Status, HR Linked, Updated At, Actions columns without extra API calls. |
-| P1 | Logs table did not expose request IDs in the row | `src/features/system-logs/pages/SystemLogsPage.tsx`, `src/features/audit/pages/AuditLogPage.tsx` | Operators had to open detail for basic correlation. | Added Request ID columns and kept long JSON/log payloads in detail panels. |
-| P1 | 404 route redirected silently | `src/app/router.tsx` | Bad URLs hid navigation mistakes and did not look like production admin. | Added a real 404 page with Back and Go Dashboard actions. |
-| P1 | Tokens were not the requested warm light + restrained purple direction | `src/styles/tokens.css`, `src/theme/tokens.ts` | The previous visual system leaned blue and had multiple legacy gradients. | Added the requested semantic tokens and aligned Ant theme primary color to restrained purple. |
-| P2 | Mixed English/Vietnamese legacy copy | Multiple pages, especially `AccessPendingPage.tsx`, older settings/services components | Copy consistency is not complete across every page. | Main refactored pages use concise operational English; remaining legacy pages are listed as follow-up. |
-| P2 | HR page was heavier than the new table standard | `src/features/hr-employees/pages/HREmployeesPage.tsx` | It had the right data but carried long toolbar/table copy and mojibake labels. | Refactored to the shared table/header/filter style while preserving the HR import, detail drawer, and provisioning logic. |
-| P2 | Legacy CSS layers overlap | `src/styles/global.css`, `foundation.css`, `production.css`, `classic-admin.css` | Multiple generations of styles make final visual ownership harder to reason about. | Added overrides in the last-loaded `classic-admin.css`; deeper cleanup should be incremental. |
+| P0 | Fake admin chat data | `src/api/clients/conversationsClient.ts`, `src/features/conversations/pages/ConversationsPage.tsx` | Fake conversations violated backend truth ownership. | Verified removed; backend absence now surfaces honest error/empty states. |
+| P0 | Table overflow risk | `src/components/AdminTable.tsx`, `src/components/ui/DataTable.tsx`, `src/styles/classic-admin.css` | Wide tables could create app-level horizontal scroll. | Verified contained; table shells own overflow and cells truncate/clamp. |
+| P0 | Sensitive access actions | `src/features/access/pages/AccessRequestsPage.tsx` | Row-level approve/reject/revoke was too direct for security-sensitive operations. | Verified fixed; dangerous decisions require drawer confirm with loading/error handling. |
+| P1 | Sidebar IA | `src/app/layout/navigationConfig.tsx` | Mixed domains made daily operation harder. | Verified fixed with product-domain sections and no empty routes. |
+| P1 | Dashboard metrics | `src/features/dashboard/pages/DashboardPage.tsx` | Generic dashboard copy and unavailable metrics could mislead operators. | Verified fixed; no fake chart/metric for missing endpoints. |
+| P1 | User Management table | `src/features/users/pages/UsersPage.tsx` | Admins needed one scan-friendly account/HR/status table. | Verified fixed without extra row-level API calls. |
+| P1 | Logs correlation | `src/features/system-logs/pages/SystemLogsPage.tsx`, `src/features/audit/pages/AuditLogPage.tsx` | Request IDs were not visible enough for operations. | Verified fixed; long JSON/logs stay in detail views. |
+| P1 | 404 behavior | `src/app/router.tsx`, `src/features/errors/NotFoundPage.tsx` | Silent redirect hid bad URLs. | Verified fixed. |
+| P2 | Mixed legacy copy | `src/app/layout/*`, `src/components/*`, `LoginPage`, `AccessPendingPage`, `MonitoringOverviewPage`, `ServicesPage`, `SettingsPage` | Mojibake and mixed Vietnamese/English made the panel feel unfinished. | Fixed for shell, main pages, error/access copy, badges, command palette, and shared states. |
+| P2 | HR page weight | `src/features/hr-employees/pages/HREmployeesPage.tsx`, `ProvisionAccountButton.tsx` | The HR page had table/action value but uneven copy and provisioning labels. | Kept backend logic and workflows, normalized page/header/table/actions to the shared admin style. |
+| P2 | CSS layer overlap | `src/styles/global.css`, `foundation.css`, `production.css`, `classic-admin.css`, `tokens.css` | Older gradients/shadows could still leak into production pages. | `tokens.css` remains source of truth; final `classic-admin.css` overrides core admin surfaces. |
 
-## Most AI-Slop-Like Areas Before Refactor
+## Remaining Issues
 
-- `ConversationsPage.tsx`: local hardcoded context and transcript-like UI made the admin route feel like a demo.
-- `DashboardPage.tsx`: too much explanatory copy and not enough direct product dashboard framing.
-- `AccessRequestsPage.tsx`: row-level decisions were too quick for a security-sensitive surface.
-- `SystemLogsPage.tsx`: ASCII copy and missing request ID column reduced operator polish.
-- Older CSS stack: several visual layers still existed from earlier refactors.
+- Some low-traffic feature-local components outside the main route pass still contain older Vietnamese copy, especially deeper HR import wizard copy and authority-management text.
+- Ant Design 6 deprecation warnings remain in tests for `Spin.tip`, `Drawer.width`, `Card.bordered`, `Space.direction`, `Alert.message`, and old Tooltip props.
+- `HREmployeesPage` still carries a full import wizard by design; a later pass can split import/provision flows further without changing backend contracts.
+
+## Most AI-Slop-Like Areas Addressed
+
+- Conversations no longer renders fake local samples.
+- Dashboard now reads as a real operations overview instead of a generic demo dashboard.
+- Access requests use confirmed drawer actions for dangerous decisions.
+- Core tables use contained scroll and compact cells.
+- Shell/topbar/sidebar copy is concise and operational.

@@ -132,7 +132,7 @@ export const ServicesPage = () => {
     <PageShell
       eyebrow="Hệ thống"
       title="Trạng thái dịch vụ"
-      description="Page này chỉ giữ một nhiệm vụ: rà soát service health. Mọi tóm tắt phụ được nén về thanh meta."
+      description="Trang này chỉ giữ một nhiệm vụ: rà soát sức khỏe dịch vụ. Mọi tóm tắt phụ được nén về thanh meta."
       headerExtra={
         <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
           <Button
@@ -148,7 +148,7 @@ export const ServicesPage = () => {
       }
     >
       <DataTableShell
-        title="Dependency status"
+        title="Trạng thái phụ thuộc"
         meta="Bảng là trọng tâm. Chỉ giữ trạng thái, độ trễ và metadata phát hành đủ để điều tra."
         toolbar={
           <DataTableToolbar>

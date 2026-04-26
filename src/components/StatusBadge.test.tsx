@@ -6,7 +6,7 @@ describe('resolveStatusBadgeConfig', () => {
   it('maps provisioning and activation states to stable badge text', () => {
     expect(resolveStatusBadgeConfig('PROVISIONED')).toEqual({
       color: 'green',
-      text: 'Đã cấp',
+      text: 'Đã cấp tài khoản',
     });
 
     expect(resolveStatusBadgeConfig('LOCKED')).toEqual({
@@ -16,24 +16,24 @@ describe('resolveStatusBadgeConfig', () => {
 
     expect(resolveStatusBadgeConfig('NOT_PROVISIONED')).toEqual({
       color: 'default',
-      text: 'Chưa cấp',
+      text: 'Chưa cấp tài khoản',
     });
 
     expect(resolveStatusBadgeConfig('READY_FOR_PROVISION')).toEqual({
       color: 'gold',
-      text: 'Sẵn sàng cấp',
+      text: 'Sẵn sàng cấp tài khoản',
     });
   });
 
   it('falls back safely for unknown or missing states', () => {
     expect(resolveStatusBadgeConfig(undefined)).toEqual({
       color: 'default',
-      text: 'Không xác định',
+      text: 'Không rõ',
     });
 
     expect(resolveStatusBadgeConfig('backend_future_state')).toEqual({
       color: 'default',
-      text: 'Không xác định',
+      text: 'Không rõ',
       rawStatus: 'BACKEND_FUTURE_STATE',
     });
   });

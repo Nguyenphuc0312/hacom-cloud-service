@@ -92,7 +92,7 @@ const renderLoginPage = () => {
       <MemoryRouter initialEntries={['/login']}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/access" element={<div>Access Pending</div>} />
+          <Route path="/access" element={<div>Đang chờ duyệt truy cập</div>} />
           <Route path="/" element={<div>Dashboard</div>} />
         </Routes>
       </MemoryRouter>
@@ -177,8 +177,8 @@ describe('LoginPage admin preflight', () => {
     await submitLogin(container);
 
     const expectedMessage =
-      'IP của bạn đang chờ quản trị viên phê duyệt để truy cập admin panel.';
-    expect(await screen.findByText('Access Pending')).toBeInTheDocument();
+      'IP của bạn đang chờ quản trị viên phê duyệt trước khi truy cập admin panel.';
+    expect(await screen.findByText('Đang chờ duyệt truy cập')).toBeInTheDocument();
     expect(useAuthStore.getState().accessToken).toBe('pending-ip-token');
     expect(message.info).toHaveBeenCalledWith(expectedMessage);
   });
@@ -193,7 +193,7 @@ describe('LoginPage admin preflight', () => {
     await submitLogin(container);
 
     const expectedMessage =
-      'Tài khoản admin của bạn chưa active. Vui lòng liên hệ quản trị viên để kích hoạt.';
+      'Tài khoản admin của bạn chưa hoạt động. Vui lòng liên hệ quản trị viên để kích hoạt.';
     expect(await screen.findByText(expectedMessage)).toBeInTheDocument();
     expect(useAuthStore.getState().accessToken).toBeNull();
     expect(message.error).toHaveBeenCalledWith(expectedMessage);

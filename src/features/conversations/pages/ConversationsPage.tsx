@@ -27,10 +27,10 @@ const MESSAGE_QUERY = { limit: 200 } as const;
 type ConversationStatusFilter = 'all' | ConversationStatus;
 
 const STATUS_OPTIONS = [
-  { label: 'All statuses', value: 'all' },
-  { label: 'Open', value: 'open' },
-  { label: 'Pending', value: 'pending' },
-  { label: 'Resolved', value: 'resolved' },
+  { label: 'Tất cả trạng thái', value: 'all' },
+  { label: 'Đang mở', value: 'open' },
+  { label: 'Chờ xử lý', value: 'pending' },
+  { label: 'Đã xử lý', value: 'resolved' },
 ] as const;
 
 const shouldClampMessage = (message: ConversationMessage) =>
@@ -85,7 +85,7 @@ export const ConversationsPage = () => {
       );
     },
     onError: (error) => {
-      message.error(getErrorMessage(error, 'Unable to mark conversation as read.'));
+      message.error(getErrorMessage(error, 'Không thể đánh dấu hội thoại đã đọc.'));
     },
   });
 
@@ -116,7 +116,7 @@ export const ConversationsPage = () => {
   const columns = useMemo<ColumnsType<ConversationSummary>>(
     () => [
       {
-        title: 'Conversation',
+        title: 'Hội thoại',
         key: 'conversation',
         width: 280,
         fixed: 'left',
@@ -129,37 +129,37 @@ export const ConversationsPage = () => {
         ),
       },
       {
-        title: 'Type',
+        title: 'Loại',
         key: 'type',
         width: 120,
-        render: () => <MetaCell primary="-" secondary="Not returned" />,
+        render: () => <MetaCell primary="-" secondary="API chưa trả về" />,
       },
       {
-        title: 'Members',
+        title: 'Thành viên',
         key: 'members',
         width: 220,
         render: (_, record) => <MetaCell primary={record.participantName} />,
       },
       {
-        title: 'Last Message At',
+        title: 'Tin nhắn cuối',
         dataIndex: 'lastMessageAt',
         width: 170,
         render: (value: string) => <DateTimeCell value={value} />,
       },
       {
-        title: 'Status',
+        title: 'Trạng thái',
         dataIndex: 'status',
         width: 130,
         render: (value: ConversationStatus) => <StatusBadge status={value} />,
       },
       {
-        title: 'Created At',
+        title: 'Tạo lúc',
         key: 'createdAt',
         width: 150,
-        render: () => <MetaCell primary="-" secondary="Not returned" />,
+        render: () => <MetaCell primary="-" secondary="API chưa trả về" />,
       },
       {
-        title: 'Actions',
+        title: 'Thao tác',
         key: 'actions',
         width: 84,
         fixed: 'right',
@@ -168,7 +168,7 @@ export const ConversationsPage = () => {
             actions={[
               {
                 key: 'detail',
-                label: 'Open messages',
+                label: 'Mở tin nhắn',
                 icon: <AppIcon name="eye" size={14} aria-hidden />,
                 onClick: () => selectConversation(record.id),
               },
@@ -183,13 +183,13 @@ export const ConversationsPage = () => {
   const messageColumns = useMemo<ColumnsType<ConversationMessage>>(
     () => [
       {
-        title: 'Time',
+        title: 'Thời gian',
         dataIndex: 'sentAt',
         width: 160,
         render: (value: string) => <DateTimeCell value={value} />,
       },
       {
-        title: 'Sender',
+        title: 'Người gửi',
         dataIndex: 'authorName',
         width: 180,
         render: (value: string, record) => (
@@ -197,13 +197,13 @@ export const ConversationsPage = () => {
         ),
       },
       {
-        title: 'Conversation',
+        title: 'Hội thoại',
         dataIndex: 'conversationId',
         width: 180,
         ellipsis: true,
       },
       {
-        title: 'Preview',
+        title: 'Xem trước',
         key: 'preview',
         width: 360,
         ellipsis: true,
@@ -215,13 +215,13 @@ export const ConversationsPage = () => {
         ),
       },
       {
-        title: 'Status',
+        title: 'Trạng thái',
         key: 'status',
         width: 120,
         render: () => <StatusBadge status="available" />,
       },
       {
-        title: 'Message Seq',
+        title: 'Thứ tự tin',
         key: 'messageSeq',
         width: 140,
         render: (_, record) => <MetaCell primary={record.id} />,
@@ -231,15 +231,15 @@ export const ConversationsPage = () => {
   );
 
   const pageHeader = {
-    eyebrow: 'Chat System',
-    title: 'Conversations',
-    description: 'Inspect conversation and message records in an admin table layout.',
+    eyebrow: 'Hệ thống chat',
+    title: 'Hội thoại',
+    description: 'Kiểm tra hội thoại và tin nhắn theo dạng bảng quản trị.',
   };
 
   if (conversationsQuery.isPending && !conversationsQuery.data) {
     return (
       <PageShell {...pageHeader}>
-        <QueryStateView kind="loading" title="Loading conversations..." />
+        <QueryStateView kind="loading" title="Đang tải hội thoại..." />
       </PageShell>
     );
   }
@@ -251,7 +251,7 @@ export const ConversationsPage = () => {
           kind="error"
           description={getErrorMessage(
             conversationsQuery.error,
-            'Conversation admin API is not available yet.',
+            'API quản trị hội thoại chưa khả dụng.',
           )}
           onRetry={() => {
             void conversationsQuery.refetch();
@@ -272,7 +272,7 @@ export const ConversationsPage = () => {
             void conversationsQuery.refetch();
           }}
         >
-          Refresh
+          Làm mới
         </Button>
       }
     >
@@ -282,7 +282,7 @@ export const ConversationsPage = () => {
             <Input
               allowClear
               value={search}
-              placeholder="Search participant or preview"
+              placeholder="Tìm thành viên hoặc nội dung xem trước"
               onChange={(event) => setSearch(event.target.value)}
             />
           </div>
@@ -295,15 +295,15 @@ export const ConversationsPage = () => {
           </div>
         </div>
         <div className="ds-filter-toolbar-meta">
-          <span>{filteredConversations.length} conversations</span>
-          <span>Conversation details open in the side panel</span>
+          <span>{filteredConversations.length} hội thoại</span>
+          <span>Chi tiết hội thoại mở trong panel bên</span>
         </div>
       </FilterBar>
 
       <div className="ds-page-with-detail">
         <DataTableShell
-          title="Conversations"
-          meta="No consumer-chat UI here; this is an operator table for scanning records."
+          title="Hội thoại"
+          meta="Đây là bảng vận hành để quét bản ghi, không phải UI chat người dùng."
         >
           <DataTable
             rowKey="id"
@@ -312,7 +312,7 @@ export const ConversationsPage = () => {
             loading={conversationsQuery.isFetching && !conversationsQuery.isPending}
             dataSource={filteredConversations}
             emptyNode={
-              <EmptyState description="No conversations were returned for the current filters." />
+              <EmptyState description="Không có hội thoại khớp bộ lọc hiện tại." />
             }
             pagination={{ pageSize: 10, hideOnSinglePage: true }}
             onRow={(record) => ({
@@ -324,7 +324,7 @@ export const ConversationsPage = () => {
 
         <DetailPanel
           open={Boolean(selectedConversationId)}
-          title={selectedConversation?.participantName ?? 'Messages'}
+          title={selectedConversation?.participantName ?? 'Tin nhắn'}
           onClose={() => {
             setSearchParams((current) => {
               const next = new URLSearchParams(current);
@@ -332,18 +332,18 @@ export const ConversationsPage = () => {
               return next;
             });
           }}
-          width={520}
+          width={840}
           className="ds-ops-detail-panel"
         >
           {!selectedConversationId ? (
-            <EmptyState description="Select a conversation to inspect messages." compact />
+            <EmptyState description="Chọn một hội thoại để xem tin nhắn." compact />
           ) : messagesQuery.isPending && !messagesQuery.data ? (
-            <QueryStateView kind="loading" compact title="Loading messages..." />
+            <QueryStateView kind="loading" compact title="Đang tải tin nhắn..." />
           ) : messagesQuery.isError ? (
             <QueryStateView
               kind="error"
               compact
-              description={getErrorMessage(messagesQuery.error, 'Unable to load messages.')}
+              description={getErrorMessage(messagesQuery.error, 'Không thể tải tin nhắn.')}
               onRetry={() => {
                 void messagesQuery.refetch();
               }}
@@ -366,16 +366,16 @@ export const ConversationsPage = () => {
                       disabled={markReadMutation.isPending}
                       onClick={() => void markReadMutation.mutateAsync(selectedConversation.id)}
                     >
-                      Mark Read
+                      Đánh dấu đã đọc
                     </Button>
                     <Button
                       size="small"
                       onClick={() => {
                         void navigator.clipboard.writeText(selectedConversation.id);
-                        message.success('Conversation ID copied.');
+                        message.success('Đã sao chép ID hội thoại.');
                       }}
                     >
-                      Copy ID
+                      Sao chép ID
                     </Button>
                   </div>
                 </section>
@@ -387,7 +387,7 @@ export const ConversationsPage = () => {
                 minHeight={320}
                 dataSource={messagesQuery.data ?? []}
                 pagination={false}
-                emptyNode={<EmptyState description="No messages were returned." compact />}
+                emptyNode={<EmptyState description="Không có tin nhắn được trả về." compact />}
               />
             </div>
           )}

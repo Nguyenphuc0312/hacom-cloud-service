@@ -63,7 +63,7 @@ describe('SystemLogsPage', () => {
 
     renderWithQuery();
 
-    expect(screen.getByText('Loading system logs...')).toBeInTheDocument();
+    expect(screen.getByText('Đang tải nhật ký hệ thống...')).toBeInTheDocument();
   });
 
   it('renders the error state when the API fails', async () => {
@@ -79,7 +79,7 @@ describe('SystemLogsPage', () => {
 
     renderWithQuery();
 
-    expect(await screen.findByText('No records')).toBeInTheDocument();
+    expect(await screen.findByText('Chưa có bản ghi')).toBeInTheDocument();
   });
 
   it('renders logs and opens the detail panel', async () => {
@@ -139,7 +139,7 @@ describe('SystemLogsPage', () => {
       limit: 200,
     });
 
-    fireEvent.change(screen.getByPlaceholderText('Search message, request ID, trace ID'), {
+    fireEvent.change(screen.getByPlaceholderText('Tìm thông điệp, request ID, trace ID'), {
       target: { value: 'trace-1' },
     });
 
@@ -181,7 +181,7 @@ describe('SystemLogsPage', () => {
     const [levelSelect, serviceSelect, rangeSelect] = screen.getAllByRole('combobox');
 
     fireEvent.mouseDown(levelSelect);
-    fireEvent.click((await screen.findAllByText('Warning')).at(-1)!);
+    fireEvent.click((await screen.findAllByText('Cảnh báo')).at(-1)!);
 
     await waitFor(() => {
       expect(listMock).toHaveBeenLastCalledWith({
@@ -207,7 +207,7 @@ describe('SystemLogsPage', () => {
     });
 
     fireEvent.mouseDown(rangeSelect);
-    fireEvent.click((await screen.findAllByText('24 hours')).at(-1)!);
+    fireEvent.click((await screen.findAllByText('24 giờ')).at(-1)!);
 
     await waitFor(() => {
       expect(listMock).toHaveBeenLastCalledWith({

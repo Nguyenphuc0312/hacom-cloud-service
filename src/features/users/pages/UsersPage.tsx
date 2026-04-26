@@ -36,27 +36,27 @@ import { formatDateTime } from '@/utils/date';
 import { canManageUsers } from '@/utils/role';
 
 const accountStatusOptions = [
-  { label: 'All statuses', value: 'all' },
-  { label: 'Active', value: 'ACTIVE' },
-  { label: 'Pending verification', value: 'PENDING_VERIFICATION' },
-  { label: 'Disabled', value: 'DISABLED' },
+  { label: 'Tất cả trạng thái', value: 'all' },
+  { label: 'Hoạt động', value: 'ACTIVE' },
+  { label: 'Chờ xác minh', value: 'PENDING_VERIFICATION' },
+  { label: 'Đã vô hiệu', value: 'DISABLED' },
 ];
 
 const presenceOptions: Array<{ label: string; value: 'all' | UserPresenceStatus }> = [
-  { label: 'All presence', value: 'all' },
+  { label: 'Tất cả hiện diện', value: 'all' },
   { label: 'Online', value: 'online' },
   { label: 'Offline', value: 'offline' },
-  { label: 'Away', value: 'away' },
-  { label: 'Do not disturb', value: 'dnd' },
+  { label: 'Vắng mặt', value: 'away' },
+  { label: 'Không làm phiền', value: 'dnd' },
 ];
 
 const activityOptions = [
-  { label: 'All activity', value: 'all' },
-  { label: 'Only active', value: 'active' },
-  { label: 'Only inactive', value: 'inactive' },
+  { label: 'Tất cả hoạt động', value: 'all' },
+  { label: 'Chỉ đang hoạt động', value: 'active' },
+  { label: 'Chỉ ngừng hoạt động', value: 'inactive' },
 ];
 
-const readOnlyFallback = 'The current account has read-only access.';
+const readOnlyFallback = 'Tài khoản hiện tại chỉ có quyền xem.';
 
 export const UsersPage = () => {
   const queryClient = useQueryClient();
@@ -110,10 +110,10 @@ export const UsersPage = () => {
     onSuccess: (_data, variables) => {
       message.success(
         variables.action === 'lock'
-          ? 'Account locked.'
+          ? 'Đã khóa tài khoản.'
           : variables.action === 'unlock'
-            ? 'Account unlocked.'
-            : 'Sessions revoked.',
+            ? 'Đã mở khóa tài khoản.'
+            : 'Đã thu hồi phiên đăng nhập.',
       );
 
       const nextAccountStatus =
@@ -153,7 +153,7 @@ export const UsersPage = () => {
   const columns = useMemo<ColumnsType<UserListItem>>(
     () => [
       {
-        title: 'User',
+        title: 'Người dùng',
         key: 'user',
         width: 260,
         fixed: 'left',
@@ -166,7 +166,7 @@ export const UsersPage = () => {
         ),
       },
       {
-        title: 'Employee Code',
+        title: 'Mã nhân viên',
         dataIndex: 'employeeId',
         width: 150,
         render: (value: string | null) => <MetaCell primary={value ?? '-'} />,
@@ -179,39 +179,39 @@ export const UsersPage = () => {
         render: (value: string) => <MetaCell primary={value} />,
       },
       {
-        title: 'Department',
+        title: 'Phòng ban',
         key: 'department',
         width: 180,
-        render: () => <MetaCell primary="-" secondary="Not returned by list API" />,
+        render: () => <MetaCell primary="-" secondary="API danh sách chưa trả về" />,
       },
       {
-        title: 'Role',
+        title: 'Vai trò',
         key: 'role',
         width: 140,
-        render: () => <MetaCell primary="-" secondary="Authority API" />,
+        render: () => <MetaCell primary="-" secondary="API phân quyền" />,
       },
       {
-        title: 'Status',
+        title: 'Trạng thái',
         dataIndex: 'accountStatus',
         width: 150,
         render: (value: string | null) => <StatusBadge status={value} />,
       },
       {
-        title: 'HR Linked',
+        title: 'Liên kết HR',
         dataIndex: 'employeeId',
         width: 130,
         render: (value: string | null) =>
-          value ? <Tag color="green">Linked</Tag> : <Tag color="default">Unlinked</Tag>,
+          value ? <Tag color="green">Đã liên kết</Tag> : <Tag color="default">Chưa liên kết</Tag>,
       },
       {
-        title: 'Updated At',
+        title: 'Cập nhật lúc',
         dataIndex: 'updatedAt',
         width: 170,
         sorter: true,
         render: (value: string | null) => <DateTimeCell value={value} />,
       },
       {
-        title: 'Actions',
+        title: 'Thao tác',
         key: 'actions',
         width: 84,
         fixed: 'right',
@@ -220,7 +220,7 @@ export const UsersPage = () => {
             actions={[
               {
                 key: 'detail',
-                label: 'Open detail',
+                label: 'Xem chi tiết',
                 icon: <AppIcon name="eye" size={14} aria-hidden />,
                 onClick: () => setSelectedUserId(record.id),
               },
@@ -298,12 +298,12 @@ export const UsersPage = () => {
     }
 
     if (!isAdminWriteActionsEnabled) {
-      message.info('Write actions are disabled by release configuration.');
+      message.info('Thao tác ghi đang bị tắt theo cấu hình release.');
       return;
     }
 
     if (!canManageUsers(currentRole)) {
-      message.warning('Your current role cannot perform write actions.');
+      message.warning('Vai trò hiện tại không được phép thực hiện thao tác ghi.');
       return;
     }
 
@@ -315,15 +315,15 @@ export const UsersPage = () => {
   };
 
   const pageHeader = {
-    eyebrow: 'Identity',
-    title: 'User Management',
-    description: 'Manage accounts, HR-linked identities, roles, and account status.',
+    eyebrow: 'Danh tính',
+    title: 'Quản lý người dùng',
+    description: 'Quản lý tài khoản, danh tính HR, vai trò và trạng thái.',
   };
 
   if (usersQuery.isPending && !usersQuery.data) {
     return (
       <PageShell {...pageHeader}>
-        <QueryStateView kind="loading" title="Loading users..." />
+        <QueryStateView kind="loading" title="Đang tải người dùng..." />
       </PageShell>
     );
   }
@@ -333,7 +333,7 @@ export const UsersPage = () => {
       <PageShell {...pageHeader}>
         <QueryStateView
           kind="error"
-          description="Unable to load users."
+          description="Không thể tải danh sách người dùng."
           onRetry={() => {
             void usersQuery.refetch();
           }}
@@ -357,14 +357,14 @@ export const UsersPage = () => {
               void usersQuery.refetch();
             }}
           >
-            Refresh
+            Làm mới
           </Button>
         </div>
       }
     >
       {!isAdminWriteActionsEnabled || !canManageUsers(currentRole) ? (
         <FeatureDisabledNotice
-          description={!isAdminWriteActionsEnabled ? 'Write actions are disabled.' : readOnlyFallback}
+          description={!isAdminWriteActionsEnabled ? 'Thao tác ghi đang bị tắt.' : readOnlyFallback}
         />
       ) : null}
 
@@ -378,7 +378,7 @@ export const UsersPage = () => {
               initialValues={{ accountStatus: 'all', status: 'all', active: 'all' }}
             >
               <Form.Item name="keyword" className="ds-toolbar-field ds-toolbar-field--lg">
-                <Input allowClear placeholder="Search name, email, employee code..." />
+                <Input allowClear placeholder="Tìm tên, email, mã nhân viên..." />
               </Form.Item>
               <Form.Item name="accountStatus" className="ds-toolbar-field ds-toolbar-field--md">
                 <Select options={accountStatusOptions} />
@@ -392,26 +392,26 @@ export const UsersPage = () => {
               <Form.Item className="ds-toolbar-field ds-toolbar-actions">
                 <Space>
                   <Button type="primary" onClick={applyFilters}>
-                    Apply
+                    Áp dụng
                   </Button>
-                  <Button onClick={resetFilters}>Reset</Button>
+                  <Button onClick={resetFilters}>Đặt lại</Button>
                 </Space>
               </Form.Item>
             </Form>
             <div className="ds-filter-toolbar-meta">
-              <span>{data?.pagination.total ?? 0} users</span>
-              <span>{activeFilterCount > 0 ? `${activeFilterCount} active filters` : 'No filters'}</span>
+              <span>{data?.pagination.total ?? 0} người dùng</span>
+              <span>{activeFilterCount > 0 ? `${activeFilterCount} bộ lọc đang bật` : 'Chưa lọc'}</span>
             </div>
           </FilterBar>
 
-          <DataTableShell title="Users" meta="Bounded, paginated account list from the admin API.">
+          <DataTableShell title="Người dùng" meta="Danh sách tài khoản có phân trang từ admin API.">
             <DataTable
               rowKey="id"
               columns={columns}
               minHeight={420}
               loading={usersQuery.isFetching && !usersQuery.isPending}
               dataSource={data?.items ?? []}
-              emptyNode={<EmptyState description="No users match the current filters." />}
+              emptyNode={<EmptyState description="Không có người dùng khớp bộ lọc hiện tại." />}
               onRow={(record) => ({
                 onClick: () => setSelectedUserId(record.id),
                 style: { cursor: 'pointer' },
@@ -429,9 +429,9 @@ export const UsersPage = () => {
 
         <DetailPanel
           open={Boolean(selectedUserId)}
-          title={selectedUser?.username ?? selectedUser?.email ?? 'User detail'}
+          title={selectedUser?.username ?? selectedUser?.email ?? 'Chi tiết người dùng'}
           onClose={() => setSelectedUserId(null)}
-          width={400}
+          width={720}
           className="ds-ops-detail-panel"
         >
           {selectedUserQuery.isPending && !selectedUser ? (
@@ -440,7 +440,7 @@ export const UsersPage = () => {
             <QueryStateView
               kind="error"
               compact
-              description="Unable to load user detail."
+              description="Không thể tải chi tiết người dùng."
               onRetry={() => {
                 void selectedUserQuery.refetch();
               }}
@@ -459,46 +459,46 @@ export const UsersPage = () => {
               </section>
 
               <section className="ds-ops-detail-section">
-                <h3>Status</h3>
+                <h3>Trạng thái</h3>
                 <dl className="ds-ops-fact-list">
                   <div>
-                    <dt>Presence</dt>
+                    <dt>Hiện diện</dt>
                     <dd>
                       <StatusBadge status={selectedUser.status ?? 'offline'} />
                     </dd>
                   </div>
                   <div>
-                    <dt>Last Seen</dt>
+                    <dt>Lần cuối online</dt>
                     <dd>{selectedUser.lastSeen ? formatDateTime(selectedUser.lastSeen) : '-'}</dd>
                   </div>
                   <div>
-                    <dt>Active Sessions</dt>
+                    <dt>Phiên đang hoạt động</dt>
                     <dd>{selectedUser.activeSessionCount ?? '-'}</dd>
                   </div>
                   <div>
-                    <dt>Devices</dt>
+                    <dt>Thiết bị</dt>
                     <dd>{selectedUser.deviceCount ?? '-'}</dd>
                   </div>
                 </dl>
               </section>
 
               <section className="ds-ops-detail-section">
-                <h3>Identity</h3>
+                <h3>Danh tính</h3>
                 <dl className="ds-ops-fact-list">
                   <div>
-                    <dt>Employee Code</dt>
+                    <dt>Mã nhân viên</dt>
                     <dd>{selectedUser.employeeId ?? '-'}</dd>
                   </div>
                   <div>
-                    <dt>Department</dt>
+                    <dt>Phòng ban</dt>
                     <dd>{selectedUser.orgUnit ?? '-'}</dd>
                   </div>
                   <div>
-                    <dt>Position</dt>
+                    <dt>Chức danh</dt>
                     <dd>{selectedUser.title ?? '-'}</dd>
                   </div>
                   <div>
-                    <dt>Email Verified</dt>
+                    <dt>Email đã xác minh</dt>
                     <dd>{selectedUser.emailVerifiedAt ? formatDateTime(selectedUser.emailVerifiedAt) : '-'}</dd>
                   </div>
                   <div>
@@ -515,13 +515,13 @@ export const UsersPage = () => {
               </section>
 
               <section className="ds-ops-detail-section">
-                <h3>Actions</h3>
+                <h3>Thao tác</h3>
                 <div className="ds-admin-inline-actions">
                   <Popconfirm
-                    title="Lock this account?"
-                    description="The user will be disabled according to the backend account policy."
-                    okText="Lock"
-                    cancelText="Cancel"
+                    title="Khóa tài khoản này?"
+                    description="Người dùng sẽ bị vô hiệu theo chính sách tài khoản phía backend."
+                    okText="Khóa"
+                    cancelText="Hủy"
                     onConfirm={() => void handleUserAction('lock')}
                     disabled={!canWriteUserActions || selectedUser.accountStatus === 'DISABLED'}
                   >
@@ -531,15 +531,15 @@ export const UsersPage = () => {
                       disabled={!canWriteUserActions || selectedUser.accountStatus === 'DISABLED'}
                       loading={actionMutation.isPending}
                     >
-                      Lock
+                      Khóa
                     </Button>
                   </Popconfirm>
 
                   <Popconfirm
-                    title="Unlock this account?"
-                    description="The account will return to active state if backend policy allows it."
-                    okText="Unlock"
-                    cancelText="Cancel"
+                    title="Mở khóa tài khoản này?"
+                    description="Tài khoản sẽ trở lại trạng thái hoạt động nếu backend cho phép."
+                    okText="Mở khóa"
+                    cancelText="Hủy"
                     onConfirm={() => void handleUserAction('unlock')}
                     disabled={!canWriteUserActions || selectedUser.accountStatus !== 'DISABLED'}
                   >
@@ -548,15 +548,15 @@ export const UsersPage = () => {
                       disabled={!canWriteUserActions || selectedUser.accountStatus !== 'DISABLED'}
                       loading={actionMutation.isPending}
                     >
-                      Unlock
+                      Mở khóa
                     </Button>
                   </Popconfirm>
 
                   <Popconfirm
-                    title="Revoke all sessions?"
-                    description="All active sessions for this account will be signed out."
-                    okText="Revoke"
-                    cancelText="Cancel"
+                    title="Thu hồi tất cả phiên?"
+                    description="Mọi phiên đang hoạt động của tài khoản này sẽ bị đăng xuất."
+                    okText="Thu hồi"
+                    cancelText="Hủy"
                     onConfirm={() => void handleUserAction('revoke')}
                     disabled={!canWriteUserActions}
                   >
@@ -565,14 +565,14 @@ export const UsersPage = () => {
                       disabled={!canWriteUserActions}
                       loading={actionMutation.isPending}
                     >
-                      Revoke Sessions
+                      Thu hồi phiên
                     </Button>
                   </Popconfirm>
                 </div>
               </section>
             </div>
           ) : (
-            <EmptyState description="Select a user to inspect details." />
+            <EmptyState description="Chọn một người dùng để xem chi tiết." />
           )}
         </DetailPanel>
       </div>

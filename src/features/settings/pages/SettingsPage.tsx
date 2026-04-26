@@ -48,7 +48,7 @@ const SYSTEM_SURFACES = [
   },
   {
     id: 'write-actions',
-    label: 'Admin write actions',
+    label: 'Thao tác ghi admin',
     value: isAdminWriteActionsEnabled ? 'Đang bật' : 'Đang tắt',
     meta: 'Guardrail cho thao tác ghi như khóa tài khoản, publish cấu hình hoặc rollback.',
   },
@@ -100,20 +100,20 @@ export const SettingsPage = () => {
 
         <SurfaceCard
           eyebrow="Mặc định vận hành"
-          title="Operational defaults"
+          title="Mặc định vận hành"
           description="Khu này chỉ hiển thị những tham số ảnh hưởng trực tiếp tới hành vi hệ thống hoặc kiểm toán."
         >
           <div className="ds-ops-fact-list">
             <div>
-              <dt>Refresh mode</dt>
-              <dd>{appConfig.liveUpdatesMode === 'live' ? 'Realtime stream' : 'Polling interval'}</dd>
+              <dt>Chế độ làm mới</dt>
+              <dd>{appConfig.liveUpdatesMode === 'live' ? 'Realtime stream' : 'Polling định kỳ'}</dd>
             </div>
             <div>
-              <dt>Live endpoint</dt>
+              <dt>Endpoint realtime</dt>
               <dd>{appConfig.liveUpdatesUrl ?? 'Chưa cấu hình'}</dd>
             </div>
             <div>
-              <dt>Write safety</dt>
+              <dt>An toàn thao tác ghi</dt>
               <dd>{isAdminWriteActionsEnabled ? 'Operator được phép ghi' : 'Panel đang ở chế độ hạn chế'}</dd>
             </div>
           </div>
@@ -133,10 +133,10 @@ export const SettingsPage = () => {
         </div>
       }
     >
-      <section className="ds-settings-layout" aria-label="System settings">
+      <section className="ds-settings-layout" aria-label="Cài đặt hệ thống">
         <aside className="ds-settings-nav" aria-label="Điều hướng cấu hình">
           <div className="ds-settings-nav-header">
-            <span className="ds-settings-nav-eyebrow">Configuration</span>
+            <span className="ds-settings-nav-eyebrow">Cấu hình</span>
             <strong>{currentSection.label}</strong>
             <p>{currentSection.description}</p>
           </div>

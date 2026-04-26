@@ -2,8 +2,8 @@ import { Alert, Button, Card, Descriptions, Space, Typography, message } from 'a
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { useAccessStatus } from '@/app/useAccessStatus';
 import { accessClient } from '@/api/clients';
+import { useAccessStatus } from '@/app/useAccessStatus';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useAuthStore } from '@/store/authStore';
 
@@ -47,9 +47,9 @@ export const AccessPendingPage = () => {
     try {
       await accessClient.requestCurrentIp();
       await refresh();
-      message.success('Yêu cầu đã được gửi lại.');
+      message.success('Đã gửi lại yêu cầu truy cập.');
     } catch (error) {
-      message.error(error instanceof Error ? error.message : 'Không thể gửi lại yêu cầu.');
+      message.error(error instanceof Error ? error.message : 'Không thể gửi lại yêu cầu truy cập.');
     }
   };
 
@@ -64,11 +64,10 @@ export const AccessPendingPage = () => {
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <div>
             <Title level={3} style={{ marginBottom: 8 }}>
-              Bạn chưa được cấp quyền truy cập
+              Truy cập admin đang chờ duyệt
             </Title>
             <Text type="secondary">
-              Tài khoản đã đăng nhập thành công nhưng IP hiện tại chưa nằm trong danh sách được phê
-              duyệt.
+              Tài khoản đã đăng nhập nhưng IP hiện tại chưa được duyệt vào admin console.
             </Text>
           </div>
 
@@ -78,7 +77,9 @@ export const AccessPendingPage = () => {
               <Descriptions.Item label="Trạng thái">
                 <StatusBadge status={access.status} />
               </Descriptions.Item>
-              <Descriptions.Item label="Ghi nhận lúc">{access.firstSeenAt ?? 'Chưa có'}</Descriptions.Item>
+              <Descriptions.Item label="Ghi nhận lần đầu">
+                {access.firstSeenAt ?? 'Chưa ghi nhận'}
+              </Descriptions.Item>
               <Descriptions.Item label="Ghi chú">{access.note ?? access.reason ?? 'Không có'}</Descriptions.Item>
             </Descriptions>
           ) : null}
@@ -95,7 +96,7 @@ export const AccessPendingPage = () => {
               type="info"
               showIcon
               message="Đang chờ phê duyệt"
-              description="Hãy làm mới trạng thái sau khi quản trị viên duyệt IP hiện tại."
+              description="Làm mới sau khi quản trị viên phê duyệt IP hiện tại."
             />
           )}
 
@@ -112,17 +113,17 @@ export const AccessPendingPage = () => {
             ) : null}
             <Button
               onClick={() =>
-                message.info('Liên hệ quản trị viên qua kênh hỗ trợ nội bộ để duyệt IP hiện tại.')
+                message.info('Hãy liên hệ quản trị viên qua kênh hỗ trợ nội bộ.')
               }
             >
-              Liên hệ quản trị viên
+              Liên hệ admin
             </Button>
             <Button danger onClick={handleLogout}>
               Đăng xuất
             </Button>
           </Space>
 
-          <Text type="secondary">Nếu cần gấp, liên hệ quản trị viên qua kênh hỗ trợ nội bộ.</Text>
+          <Text type="secondary">Dùng kênh hỗ trợ nội bộ nếu cần xử lý gấp quyền truy cập này.</Text>
         </Space>
       </Card>
     </div>

@@ -50,36 +50,36 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
         })),
       {
         id: 'quick-open-users',
-        label: 'Open Users',
-        description: 'Open account management for search and operator actions.',
-        category: 'Quick Actions' as const,
+        label: 'Mở người dùng',
+        description: 'Mở quản lý tài khoản để tìm kiếm và thao tác vận hành.',
+        category: 'Thao tác nhanh' as const,
         icon: <AppIcon name="users" size={16} aria-hidden />,
         keywords: ['users', 'accounts', 'admin'],
         onSelect: () => navigate('/users'),
       },
       {
         id: 'quick-open-email-templates',
-        label: 'Open Email Templates',
-        description: 'Open system email templates.',
-        category: 'Quick Actions' as const,
+        label: 'Mở mẫu email',
+        description: 'Mở mẫu email hệ thống.',
+        category: 'Thao tác nhanh' as const,
         icon: <AppIcon name="fileStack" size={16} aria-hidden />,
         keywords: ['broadcast', 'announcement', 'message'],
         onSelect: () => navigate('/settings/email-templates'),
       },
       {
         id: 'quick-open-conversations',
-        label: 'Open Conversations',
-        description: 'Inspect admin-facing conversation records.',
-        category: 'Navigate' as const,
+        label: 'Mở hội thoại',
+        description: 'Kiểm tra bản ghi hội thoại phục vụ admin.',
+        category: 'Điều hướng' as const,
         icon: <AppIcon name="messages" size={16} aria-hidden />,
         keywords: ['chat', 'conversation', 'support'],
         onSelect: () => navigate('/conversations'),
       },
       {
         id: 'quick-open-hr',
-        label: 'Open HR Employees',
-        description: 'Review HR records and linked accounts.',
-        category: 'Quick Actions' as const,
+        label: 'Mở nhân sự HR',
+        description: 'Rà soát hồ sơ HR và tài khoản liên kết.',
+        category: 'Thao tác nhanh' as const,
         icon: <AppIcon name="hr" size={16} aria-hidden />,
         keywords: ['hr', 'employees', 'directory'],
         onSelect: () => navigate('/hr-employees'),
@@ -95,11 +95,11 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
 
   const sidebarToggleLabel = mobile
     ? mobileNavOpen
-      ? 'Close navigation'
-      : 'Open navigation'
+      ? 'Đóng điều hướng'
+      : 'Mở điều hướng'
     : sidebarCollapsed
-      ? 'Expand navigation'
-      : 'Collapse navigation';
+      ? 'Mở rộng điều hướng'
+      : 'Thu gọn điều hướng';
 
   return (
     <>
@@ -130,8 +130,8 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
             user={user}
             environmentLabel={appConfig.environmentLabel}
             systemTone={isAuthServiceUnavailable ? 'degraded' : 'healthy'}
-            onOpenNotifications={() => message.info('Notification center is not connected yet.')}
-            onOpenProfile={() => message.info('Profile panel is not available yet.')}
+            onOpenNotifications={() => message.info('Trung tâm thông báo chưa được kết nối.')}
+            onOpenProfile={() => message.info('Panel hồ sơ chưa khả dụng.')}
             onOpenSettings={() => navigate('/settings/system')}
             onLogout={handleLogout}
           />

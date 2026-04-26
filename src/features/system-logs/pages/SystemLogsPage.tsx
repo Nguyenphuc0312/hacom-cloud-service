@@ -26,18 +26,18 @@ const LOG_FETCH_LIMIT = 200;
 const KEYWORD_DEBOUNCE_MS = 250;
 
 const LEVEL_OPTIONS = [
-  { label: 'All levels', value: 'all' },
-  { label: 'Error', value: 'error' },
-  { label: 'Warning', value: 'warning' },
+  { label: 'Tất cả cấp độ', value: 'all' },
+  { label: 'Lỗi', value: 'error' },
+  { label: 'Cảnh báo', value: 'warning' },
   { label: 'Info', value: 'info' },
-  { label: 'Success', value: 'success' },
+  { label: 'Thành công', value: 'success' },
 ] as const;
 
 const TIME_RANGE_OPTIONS = [
-  { label: '15 minutes', value: '15m' },
-  { label: '1 hour', value: '1h' },
-  { label: '24 hours', value: '24h' },
-  { label: 'All', value: 'all' },
+  { label: '15 phút', value: '15m' },
+  { label: '1 giờ', value: '1h' },
+  { label: '24 giờ', value: '24h' },
+  { label: 'Tất cả', value: 'all' },
 ] as const;
 
 const renderOptionalValue = (value: string | null) => value ?? '-';
@@ -90,7 +90,7 @@ export const SystemLogsPage = () => {
 
   const serviceOptions = useMemo(
     () => [
-      { label: 'All services', value: 'all' },
+      { label: 'Tất cả dịch vụ', value: 'all' },
       ...Array.from(
         new Set(
           logs
@@ -116,32 +116,32 @@ export const SystemLogsPage = () => {
     }
 
     await navigator.clipboard.writeText(value);
-    message.success('Copied reference value.');
+    message.success('Đã sao chép giá trị tham chiếu.');
   };
 
   const columns = useMemo<ColumnsType<SystemLogItem>>(
     () => [
       {
-        title: 'Time',
+        title: 'Thời gian',
         dataIndex: 'timestamp',
         width: 160,
         render: (value: string) => <DateTimeCell value={value} />,
       },
       {
-        title: 'Level',
+        title: 'Cấp độ',
         dataIndex: 'level',
         width: 120,
         render: (value: SystemLogLevel) => <StatusBadge status={value} />,
       },
       {
-        title: 'Service',
+        title: 'Dịch vụ',
         dataIndex: 'service',
         width: 180,
         ellipsis: true,
         render: (value: string) => <Typography.Text code>{value}</Typography.Text>,
       },
       {
-        title: 'Message',
+        title: 'Thông điệp',
         key: 'message',
         width: 420,
         ellipsis: true,
@@ -154,7 +154,7 @@ export const SystemLogsPage = () => {
         ellipsis: true,
         render: (value: string | null) =>
           value ? (
-            <AppTooltip title="Click to copy request ID">
+            <AppTooltip title="Bấm để sao chép request ID">
               <button type="button" className="ds-inline-copy" onClick={() => void copyValue(value)}>
                 {value}
               </button>
@@ -164,13 +164,13 @@ export const SystemLogsPage = () => {
           ),
       },
       {
-        title: 'User/IP',
+        title: 'Người dùng/IP',
         dataIndex: 'host',
         width: 160,
         render: (value: string | null) => renderOptionalValue(value),
       },
       {
-        title: 'Actions',
+        title: 'Thao tác',
         key: 'actions',
         width: 84,
         fixed: 'right',
@@ -179,7 +179,7 @@ export const SystemLogsPage = () => {
             actions={[
               {
                 key: 'detail',
-                label: 'Open detail',
+                label: 'Xem chi tiết',
                 icon: <AppIcon name="eye" size={14} aria-hidden />,
                 onClick: () => setSelectedLogId(record.id),
               },
@@ -200,15 +200,15 @@ export const SystemLogsPage = () => {
   };
 
   const pageHeader = {
-    eyebrow: 'Operations',
-    title: 'System Logs',
-    description: 'Track administrative actions, access decisions, and system events.',
+    eyebrow: 'Vận hành',
+    title: 'Nhật ký hệ thống',
+    description: 'Theo dõi log runtime theo dịch vụ, cấp độ và mã đối chiếu.',
   };
 
   if (query.isPending && !query.data) {
     return (
       <PageShell {...pageHeader}>
-        <QueryStateView kind="loading" title="Loading system logs..." />
+        <QueryStateView kind="loading" title="Đang tải nhật ký hệ thống..." />
       </PageShell>
     );
   }
@@ -218,7 +218,7 @@ export const SystemLogsPage = () => {
       <PageShell {...pageHeader}>
         <QueryStateView
           kind="error"
-          description={getErrorMessage(query.error, 'Unable to load system logs.')}
+          description={getErrorMessage(query.error, 'Không thể tải nhật ký hệ thống.')}
           onRetry={() => {
             void query.refetch();
           }}
@@ -239,7 +239,7 @@ export const SystemLogsPage = () => {
               void query.refetch();
             }}
           >
-            Refresh
+            Làm mới
           </Button>
         </div>
       }
@@ -251,15 +251,15 @@ export const SystemLogsPage = () => {
               <div className="ds-toolbar-field ds-toolbar-field--lg">
                 <Input
                   allowClear
-                  aria-label="System log keyword filter"
+                  aria-label="Lọc từ khóa nhật ký hệ thống"
                   value={keyword}
-                  placeholder="Search message, request ID, trace ID"
+                  placeholder="Tìm thông điệp, request ID, trace ID"
                   onChange={(event) => setKeyword(event.target.value)}
                 />
               </div>
               <div className="ds-toolbar-field ds-toolbar-field--sm">
                 <Select
-                  aria-label="System log level filter"
+                  aria-label="Lọc cấp độ nhật ký hệ thống"
                   value={level}
                   options={LEVEL_OPTIONS as unknown as { label: string; value: string }[]}
                   onChange={(value) => setLevel(value as 'all' | SystemLogLevel)}
@@ -267,7 +267,7 @@ export const SystemLogsPage = () => {
               </div>
               <div className="ds-toolbar-field ds-toolbar-field--md">
                 <Select
-                  aria-label="System log service filter"
+                  aria-label="Lọc dịch vụ nhật ký hệ thống"
                   value={service}
                   options={serviceOptions}
                   onChange={setService}
@@ -275,29 +275,29 @@ export const SystemLogsPage = () => {
               </div>
               <div className="ds-toolbar-field ds-toolbar-field--sm">
                 <Select
-                  aria-label="System log range filter"
+                  aria-label="Lọc khoảng thời gian nhật ký hệ thống"
                   value={timeRange}
                   options={TIME_RANGE_OPTIONS as unknown as { label: string; value: string }[]}
                   onChange={(value) => setTimeRange(value as SystemLogRange)}
                 />
               </div>
               <div className="ds-toolbar-field ds-toolbar-actions">
-                <Button onClick={handleReset}>Reset</Button>
+                <Button onClick={handleReset}>Đặt lại</Button>
               </div>
             </div>
             <div className="ds-filter-toolbar-meta">
-              <span>{logs.length} records</span>
-              <span>{activeFilterCount > 0 ? `${activeFilterCount} active filters` : 'No filters'}</span>
+              <span>{logs.length} bản ghi</span>
+              <span>{activeFilterCount > 0 ? `${activeFilterCount} bộ lọc đang bật` : 'Chưa lọc'}</span>
               <span>
-                Synced:{' '}
+                Đồng bộ:{' '}
                 {query.dataUpdatedAt ? formatDateTime(new Date(query.dataUpdatedAt).toISOString()) : '-'}
               </span>
             </div>
           </FilterBar>
 
           <DataTableShell
-            title="Runtime Events"
-            meta="Long messages and JSON payloads are available in the detail panel, not in table rows."
+            title="Sự kiện runtime"
+            meta="Thông điệp dài và JSON payload nằm trong panel chi tiết, không nằm trong dòng bảng."
           >
             <DataTable
               rowKey="id"
@@ -305,7 +305,7 @@ export const SystemLogsPage = () => {
               minHeight={420}
               loading={query.isFetching && !query.isPending}
               dataSource={logs}
-              emptyNode={<EmptyState title="No records" description="No logs match the current filters." compact />}
+              emptyNode={<EmptyState title="Chưa có bản ghi" description="Không có log khớp bộ lọc hiện tại." compact />}
               pagination={{ pageSize: 8, hideOnSinglePage: true }}
               onRow={(record) => ({
                 onClick: () => setSelectedLogId(record.id),
@@ -317,9 +317,9 @@ export const SystemLogsPage = () => {
 
         <DetailPanel
           open={Boolean(selectedLog)}
-          title={selectedLog ? `${selectedLog.service} / ${selectedLog.level}` : 'Log Detail'}
+          title={selectedLog ? `${selectedLog.service} / ${selectedLog.level}` : 'Chi tiết log'}
           onClose={() => setSelectedLogId(null)}
-          width={420}
+          width={760}
           className="ds-ops-detail-panel"
         >
           {selectedLog ? (
@@ -335,18 +335,18 @@ export const SystemLogsPage = () => {
               </section>
 
               <section className="ds-ops-detail-section">
-                <h3>Context</h3>
+                <h3>Ngữ cảnh</h3>
                 <dl className="ds-ops-fact-list">
                   <div>
-                    <dt>Time</dt>
+                    <dt>Thời gian</dt>
                     <dd>{formatDateTime(selectedLog.timestamp)}</dd>
                   </div>
                   <div>
-                    <dt>Service</dt>
+                    <dt>Dịch vụ</dt>
                     <dd>{selectedLog.service}</dd>
                   </div>
                   <div>
-                    <dt>Source</dt>
+                    <dt>Nguồn</dt>
                     <dd>{renderOptionalValue(selectedLog.source)}</dd>
                   </div>
                   <div>
@@ -357,7 +357,7 @@ export const SystemLogsPage = () => {
               </section>
 
               <section className="ds-ops-detail-section">
-                <h3>Correlation</h3>
+                <h3>Đối chiếu</h3>
                 <div className="ds-ops-inline-list">
                   <Button size="small" disabled={!selectedLog.requestId} onClick={() => void copyValue(selectedLog.requestId)}>
                     <AppIcon name="copy" size={12} />
@@ -375,7 +375,7 @@ export const SystemLogsPage = () => {
               </section>
 
               <section className="ds-ops-detail-section">
-                <h3>Message</h3>
+                <h3>Thông điệp</h3>
                 <div className="ds-ops-code-block">
                   <pre>{selectedLog.message}</pre>
                 </div>
@@ -389,7 +389,7 @@ export const SystemLogsPage = () => {
               </section>
             </div>
           ) : (
-            <EmptyState title="No log selected" description="Select a record to inspect correlation and payload details." compact />
+            <EmptyState title="Chưa chọn log" description="Chọn một bản ghi để xem mã đối chiếu và payload." compact />
           )}
         </DetailPanel>
       </div>

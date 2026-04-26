@@ -255,7 +255,7 @@
 
 .ds-page-with-detail {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: var(--space-4);
 }
@@ -280,6 +280,15 @@
   border-radius: var(--radius-lg);
   background: var(--gradient-card);
   box-shadow: var(--shadow-sm);
+}
+
+.ds-detail-modal .ant-modal-body {
+  max-height: min(72vh, 720px);
+  overflow: auto;
+}
+
+.ds-detail-modal-body {
+  min-width: 0;
 }
 
 .ds-detail-panel-header {

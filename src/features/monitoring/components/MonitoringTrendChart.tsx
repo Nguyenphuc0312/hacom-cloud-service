@@ -29,7 +29,7 @@ export const MonitoringTrendChart = ({
         description={
           availability === 'unavailable'
             ? 'Metric unavailable for the selected window.'
-            : 'No metric data in the selected window.'
+            : 'Chưa có dữ liệu metric trong khoảng thời gian đã chọn.'
         }
       />
     );

@@ -15,8 +15,8 @@ import { useAuthStore } from '@/store/authStore';
 const { Title, Text } = Typography;
 
 const loginSchema = z.object({
-  email: z.string().email('Email không hợp lệ.'),
-  password: z.string().min(1, 'Vui lòng nhập mật khẩu.'),
+  email: z.string().email('Nhập email hợp lệ.'),
+  password: z.string().min(1, 'Nhập mật khẩu.'),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -77,7 +77,7 @@ export const LoginPage = () => {
 
     const parsed = loginSchema.safeParse(values);
     if (!parsed.success) {
-      message.error(parsed.error.issues[0]?.message ?? 'Dữ liệu không hợp lệ.');
+      message.error(parsed.error.issues[0]?.message ?? 'Dữ liệu đăng nhập không hợp lệ.');
       return;
     }
 
@@ -96,11 +96,9 @@ export const LoginPage = () => {
       <Card className="login-card" bordered={false}>
         <Space direction="vertical" size={8} style={{ width: '100%' }}>
           <Title level={3} style={{ marginBottom: 0 }}>
-            Bảng điều hành Chat Admin
+            Bảng quản trị chat
           </Title>
-          <Text type="secondary">
-            Đăng nhập để quản trị người dùng, hạ tầng dịch vụ và cấu hình hệ thống.
-          </Text>
+          <Text type="secondary">Đăng nhập để quản lý người dùng, dịch vụ và cấu hình hệ thống.</Text>
         </Space>
 
         <Tabs
@@ -120,7 +118,7 @@ export const LoginPage = () => {
                   <Form.Item
                     label="Email"
                     name="email"
-                    rules={[{ required: true, message: 'Vui lòng nhập email.' }]}
+                    rules={[{ required: true, message: 'Nhập email.' }]}
                   >
                     <Input placeholder="admin@company.com" size="large" autoComplete="email" />
                   </Form.Item>
@@ -128,7 +126,7 @@ export const LoginPage = () => {
                   <Form.Item
                     label="Mật khẩu"
                     name="password"
-                    rules={[{ required: true, message: 'Vui lòng nhập mật khẩu.' }]}
+                    rules={[{ required: true, message: 'Nhập mật khẩu.' }]}
                   >
                     <Input.Password size="large" autoComplete="current-password" />
                   </Form.Item>
@@ -163,16 +161,16 @@ export const LoginPage = () => {
                     type="info"
                     showIcon
                     message="Đăng nhập QR"
-                    description="Dùng app nội bộ để quét QR hoặc dán mã pairing để đăng nhập nhanh không cần nhập mật khẩu."
+                    description="Quét mã QR từ ứng dụng nội bộ hoặc dán mã ghép nối."
                   />
-                  <div className="login-qr-placeholder" aria-label="Vùng chờ đăng nhập QR">
+                  <div className="login-qr-placeholder" aria-label="Khu vực chờ đăng nhập QR">
                     <Text strong>Phiên QR</Text>
-                    <Text type="secondary">Quét QR bằng ứng dụng mobile admin</Text>
+                    <Text type="secondary">Quét bằng ứng dụng admin trên di động</Text>
                   </div>
                   <Input
                     value={qrCode}
                     onChange={(event) => setQrCode(event.target.value)}
-                    placeholder="Dán mã pairing từ ứng dụng mobile"
+                    placeholder="Dán mã ghép nối từ ứng dụng di động"
                     size="large"
                   />
                   <Button
@@ -181,15 +179,13 @@ export const LoginPage = () => {
                     size="large"
                     onClick={() => {
                       if (!qrCode.trim()) {
-                        message.warning('Vui lòng nhập mã pairing QR.');
+                        message.warning('Nhập mã ghép nối QR.');
                         return;
                       }
-                      message.info(
-                        'Đăng nhập QR sẽ được bật khi auth-service phát hành endpoint tương ứng.',
-                      );
+                      message.info('Đăng nhập QR sẽ bật khi auth-service cung cấp endpoint.');
                     }}
                   >
-                    Xác thực QR
+                    Xác minh QR
                   </Button>
                 </Space>
               ),

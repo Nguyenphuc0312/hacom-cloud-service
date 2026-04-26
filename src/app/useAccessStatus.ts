@@ -48,7 +48,9 @@ export const useAccessStatus = () => {
   return {
     access: access ?? query.data ?? null,
     isLoading: Boolean(accessToken) && (query.isLoading || query.isFetching) && !access,
-    errorMessage: query.error ? getErrorMessage(query.error, 'Unable to resolve access status') : undefined,
+    errorMessage: query.error
+      ? getErrorMessage(query.error, 'Không thể xác định trạng thái truy cập.')
+      : undefined,
     refresh: () => query.refetch(),
   };
 };
