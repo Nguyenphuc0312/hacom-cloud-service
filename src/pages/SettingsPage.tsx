@@ -1,8 +1,4 @@
-/**
- * @fileoverview Settings page with a dedicated settings shell.
- */
-
-import React, { useEffect, useRef, useState } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
@@ -10,21 +6,15 @@ import {
   ArrowLeftIcon,
   ArrowPathIcon,
   BellIcon,
-  ChatBubbleLeftRightIcon,
   Cog6ToothIcon,
-  ExclamationTriangleIcon,
   GlobeAltIcon,
   LifebuoyIcon,
-  NoSymbolIcon,
   PaintBrushIcon,
   ShieldCheckIcon,
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
 import {
   AppearanceSection,
-  BlockedUsersSection,
-  ChatSection,
-  DangerZoneSection,
   HelpSection,
   LanguageSection,
   NotificationSection,
@@ -33,7 +23,6 @@ import {
   SettingsContent,
   SettingsPageShell,
   SettingsSidebar,
-  type SettingsSidebarGroup,
   type SettingsSidebarItem,
 } from "../components/settings";
 import { AppPageHeader } from "../components/layout/AppPage";
@@ -46,66 +35,40 @@ import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDis
 
 const MOBILE_MEDIA_QUERY = "(max-width: 767px)";
 
-const NAV_TARGETS = {
+const SETTINGS_TARGETS = {
   profile: "settings-profile",
   notifications: "settings-notifications",
-  appearance: "settings-appearance",
   privacy: "settings-privacy",
-  chatData: "settings-chat",
+  security: "settings-security",
+  appearance: "settings-appearance",
   language: "settings-language",
-  securityDevices: "settings-security",
-  blockedUsers: "settings-blocked-users",
   help: "settings-help",
-  danger: "settings-danger",
 } as const;
 
-type SettingsNavId = keyof typeof NAV_TARGETS;
+type SettingsNavId = keyof typeof SETTINGS_TARGETS | "logout";
 
-const SECTION_TO_NAV: Record<string, SettingsNavId> = {
-  "settings-profile": "profile",
-  "settings-notifications": "notifications",
-  "settings-appearance": "appearance",
-  "settings-privacy": "privacy",
-  "settings-chat": "chatData",
-  "settings-language": "language",
-  "settings-security": "securityDevices",
-  "settings-blocked-users": "blockedUsers",
-  "settings-help": "help",
-  "settings-danger": "danger",
-};
-
-const OBSERVED_SECTION_IDS = Object.keys(SECTION_TO_NAV);
 const DEFAULT_NAV_ID: SettingsNavId = "profile";
 
-const readHashTargetId = () => {
+const readHashTargetId = (): SettingsNavId | null => {
   if (typeof window === "undefined") {
     return null;
   }
 
   const hash = window.location.hash.replace(/^#/, "").trim();
-  return hash || null;
+  const match = Object.entries(SETTINGS_TARGETS).find(([, target]) => target === hash);
+  return match ? (match[0] as SettingsNavId) : null;
 };
 
-const resolveNavIdFromTarget = (
-  targetId: string | null,
-): SettingsNavId | null => {
-  if (!targetId) {
-    return null;
-  }
-
-  return SECTION_TO_NAV[targetId] ?? null;
-};
-
-const replaceHash = (targetId: string | null) => {
+const replaceHash = (navId: SettingsNavId | null) => {
   if (typeof window === "undefined") {
     return;
   }
 
-  const nextHash = targetId ? `#${targetId}` : "";
+  const target = navId && navId !== "logout" ? SETTINGS_TARGETS[navId] : null;
   window.history.replaceState(
     null,
     "",
-    `${window.location.pathname}${window.location.search}${nextHash}`,
+    `${window.location.pathname}${window.location.search}${target ? `#${target}` : ""}`,
   );
 };
 
@@ -122,39 +85,39 @@ export const SettingsPage: React.FC = () => {
   } = useSettings();
   const currentUser = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const logout = useAuthStore((state) => state.logout);
 
-  const [isMobile, setIsMobile] = useState(() => {
+  const [isMobile, setIsMobile] = React.useState(() => {
     if (typeof window === "undefined") {
       return false;
     }
 
     return window.matchMedia(MOBILE_MEDIA_QUERY).matches;
   });
-  const [activeNavId, setActiveNavId] = useState<SettingsNavId>(() => {
-    return resolveNavIdFromTarget(readHashTargetId()) ?? DEFAULT_NAV_ID;
-  });
+  const [activeNavId, setActiveNavId] = React.useState<SettingsNavId>(
+    () => readHashTargetId() ?? DEFAULT_NAV_ID,
+  );
   const [selectedMobileNavId, setSelectedMobileNavId] =
-    useState<SettingsNavId | null>(() => {
+    React.useState<SettingsNavId | null>(() => {
       if (
         typeof window !== "undefined" &&
         window.matchMedia(MOBILE_MEDIA_QUERY).matches
       ) {
-        return resolveNavIdFromTarget(readHashTargetId());
+        return readHashTargetId();
       }
 
       return null;
     });
+  const contentRef = React.useRef<HTMLDivElement | null>(null);
 
-  const contentRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
+  React.useEffect(() => {
     if (isAuthenticated) {
       void syncFromServer();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (
       typeof window === "undefined" ||
       typeof window.matchMedia !== "function"
@@ -178,115 +141,6 @@ export const SettingsPage: React.FC = () => {
     return () => mediaQuery.removeListener(handleChange);
   }, []);
 
-  useEffect(() => {
-    const navFromHash = resolveNavIdFromTarget(readHashTargetId());
-    if (!navFromHash) {
-      return;
-    }
-
-    setActiveNavId(navFromHash);
-    if (isMobile) {
-      setSelectedMobileNavId(navFromHash);
-    }
-  }, [isMobile]);
-
-  useEffect(() => {
-    if (isMobile) {
-      return;
-    }
-
-    const navFromHash = resolveNavIdFromTarget(readHashTargetId());
-    if (!navFromHash) {
-      return;
-    }
-
-    const frame = window.requestAnimationFrame(() => {
-      scrollToNavItem(navFromHash, "auto");
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [isMobile]);
-
-  useEffect(() => {
-    if (
-      !contentRef.current ||
-      isMobile ||
-      typeof IntersectionObserver === "undefined"
-    ) {
-      return undefined;
-    }
-
-    const root = contentRef.current;
-    const visibleEntries = new Map<string, IntersectionObserverEntry>();
-
-    const resolveMostVisibleNav = () => {
-      const nextEntry = Array.from(visibleEntries.values()).sort(
-        (left, right) => {
-          if (right.intersectionRatio !== left.intersectionRatio) {
-            return right.intersectionRatio - left.intersectionRatio;
-          }
-
-          return left.boundingClientRect.top - right.boundingClientRect.top;
-        },
-      )[0];
-
-      const nextNavId = nextEntry
-        ? SECTION_TO_NAV[(nextEntry.target as HTMLElement).id]
-        : null;
-
-      if (nextNavId) {
-        setActiveNavId(nextNavId);
-      }
-    };
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          const entryId = (entry.target as HTMLElement).id;
-          if (!entryId) {
-            return;
-          }
-
-          if (entry.isIntersecting) {
-            visibleEntries.set(entryId, entry);
-          } else {
-            visibleEntries.delete(entryId);
-          }
-        });
-
-        resolveMostVisibleNav();
-      },
-      {
-        root,
-        rootMargin: "-14% 0px -55% 0px",
-        threshold: [0.2, 0.45, 0.7],
-      },
-    );
-
-    OBSERVED_SECTION_IDS.forEach((sectionId) => {
-      const element = document.getElementById(sectionId);
-      if (element && root.contains(element)) {
-        observer.observe(element);
-      }
-    });
-
-    return () => observer.disconnect();
-  }, [isMobile]);
-
-  useEffect(() => {
-    if (isMobile || !selectedMobileNavId) {
-      return;
-    }
-
-    const root = contentRef.current;
-    const targetId = NAV_TARGETS[selectedMobileNavId];
-    const element = root?.querySelector<HTMLElement>(`#${targetId}`);
-    if (element) {
-      element.scrollIntoView({ behavior: "auto", block: "start" });
-    }
-    setSelectedMobileNavId(null);
-  }, [isMobile, selectedMobileNavId]);
-
   const formatTimestamp = (value: string | null) => {
     if (!value) {
       return t("common:status.unknown");
@@ -299,121 +153,56 @@ export const SettingsPage: React.FC = () => {
     {
       navId: "profile",
       id: "profile",
-      label: t("profile:pageTitle", { defaultValue: "Hồ sơ cá nhân" }),
-      description: t("settings:profile.description", {
-        defaultValue: "Thông tin hiển thị và liên hệ.",
-      }),
+      label: t("settings:navigation.profile", { defaultValue: "Hồ sơ" }),
       icon: <UserCircleIcon className="h-4 w-4" />,
     },
     {
       navId: "notifications",
       id: "notifications",
-      label: t("settings:notifications.title"),
-      description: t("settings:notifications.navDescription", {
-        defaultValue: "Tin nhắn, âm thanh, xem trước.",
+      label: t("settings:navigation.notifications", {
+        defaultValue: "Thông báo",
       }),
       icon: <BellIcon className="h-4 w-4" />,
     },
     {
+      navId: "privacy",
+      id: "privacy",
+      label: t("settings:navigation.privacy", {
+        defaultValue: "Quyền riêng tư",
+      }),
+      icon: <ShieldCheckIcon className="h-4 w-4" />,
+    },
+    {
+      navId: "security",
+      id: "security",
+      label: t("settings:navigation.security", { defaultValue: "Bảo mật" }),
+      icon: <ShieldCheckIcon className="h-4 w-4" />,
+    },
+    {
       navId: "appearance",
       id: "appearance",
-      label: t("settings:appearance.title"),
-      description: t("settings:appearance.navDescription", {
-        defaultValue: "Chủ đề, cỡ chữ, mật độ.",
+      label: t("settings:navigation.appearance", {
+        defaultValue: "Giao diện",
       }),
       icon: <PaintBrushIcon className="h-4 w-4" />,
     },
     {
-      navId: "privacy",
-      id: "privacy",
-      label: t("settings:privacy.title"),
-      description: t("settings:privacy.navDescription", {
-        defaultValue: "Trạng thái, đã đọc, tìm kiếm.",
-      }),
-      icon: <ShieldCheckIcon className="h-4 w-4" />,
-    },
-    {
-      navId: "chatData",
-      id: "chatData",
-      label: t("settings:chatData.title", {
-        defaultValue: "Chat & data",
-      }),
-      icon: <ChatBubbleLeftRightIcon className="h-4 w-4" />,
-    },
-    {
       navId: "language",
       id: "language",
-      label: t("settings:language.title"),
-      description: t("settings:language.navDescription", {
-        defaultValue: "Ngôn ngữ và định dạng hiển thị.",
-      }),
+      label: t("settings:navigation.language", { defaultValue: "Ngôn ngữ" }),
       icon: <GlobeAltIcon className="h-4 w-4" />,
-    },
-    {
-      navId: "securityDevices",
-      id: "securityDevices",
-      label: t("settings:securityDevices.title", {
-        defaultValue: "Security & devices",
-      }),
-      icon: <ShieldCheckIcon className="h-4 w-4" />,
-    },
-    {
-      navId: "blockedUsers",
-      id: "blockedUsers",
-      label: t("settings:blockedUsers.title"),
-      description: t("settings:blockedUsers.navDescription", {
-        defaultValue: "Danh sách người dùng đã chặn.",
-      }),
-      icon: <NoSymbolIcon className="h-4 w-4" />,
     },
     {
       navId: "help",
       id: "help",
-      label: t("settings:help.title", { defaultValue: "Hỗ trợ" }),
-      description: t("settings:help.navDescription", {
-        defaultValue: "Trợ giúp, báo lỗi, chính sách.",
-      }),
+      label: t("settings:navigation.help", { defaultValue: "Trợ giúp" }),
       icon: <LifebuoyIcon className="h-4 w-4" />,
     },
     {
-      navId: "danger",
-      id: "danger",
-      label: t("settings:dangerZone.title"),
-      icon: <ExclamationTriangleIcon className="h-4 w-4" />,
-    },
-  ];
-
-  const navGroups: SettingsSidebarGroup[] = [
-    {
-      id: "account",
-      label: "Tài khoản",
-      items: navItems.filter((item) => item.navId === "profile"),
-    },
-    {
-      id: "messages",
-      label: "Tin nhắn & Thông báo",
-      items: navItems.filter((item) =>
-        ["notifications", "chatData"].includes(item.navId),
-      ),
-    },
-    {
-      id: "privacy-security",
-      label: "Quyền riêng tư & Bảo mật",
-      items: navItems.filter((item) =>
-        ["privacy", "securityDevices", "blockedUsers"].includes(item.navId),
-      ),
-    },
-    {
-      id: "appearance",
-      label: "Giao diện",
-      items: navItems.filter((item) =>
-        ["appearance", "language"].includes(item.navId),
-      ),
-    },
-    {
-      id: "support",
-      label: "Hỗ trợ",
-      items: navItems.filter((item) => ["help", "danger"].includes(item.navId)),
+      navId: "logout",
+      id: "logout",
+      label: t("settings:navigation.logout", { defaultValue: "Đăng xuất" }),
+      icon: <ArrowLeftIcon className="h-4 w-4" />,
     },
   ];
 
@@ -421,26 +210,21 @@ export const SettingsPage: React.FC = () => {
     void syncFromServer();
   };
 
-  const scrollToNavItem = (navId: SettingsNavId, behavior: ScrollBehavior) => {
-    const root = contentRef.current;
-    const targetId = NAV_TARGETS[navId];
-    const element = root?.querySelector<HTMLElement>(`#${targetId}`);
-    if (element) {
-      element.scrollIntoView({ behavior, block: "start" });
-      setActiveNavId(navId);
-      replaceHash(targetId);
-    }
-  };
-
   const handleSelectNav = (navId: SettingsNavId) => {
-    if (isMobile) {
-      setActiveNavId(navId);
-      setSelectedMobileNavId(navId);
-      replaceHash(NAV_TARGETS[navId]);
+    if (navId === "logout") {
+      logout();
+      navigate(ROUTE_PATHS.LOGIN, { replace: true });
       return;
     }
 
-    scrollToNavItem(navId, "smooth");
+    setActiveNavId(navId);
+    replaceHash(navId);
+
+    if (isMobile) {
+      setSelectedMobileNavId(navId);
+    } else {
+      contentRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
 
   const handleMobileBack = () => {
@@ -472,7 +256,7 @@ export const SettingsPage: React.FC = () => {
   ) : undefined;
 
   const renderSettingsFooter = () => (
-    <div className="border-t border-border/60 pt-5 text-sm text-text-muted">
+    <div className="border-t border-border pt-5 text-sm text-text-secondary">
       <p>{t("settings:version", { version: 2 })}</p>
       <p className="mt-1">
         {t("common:status.lastSynced", {
@@ -486,96 +270,24 @@ export const SettingsPage: React.FC = () => {
     </div>
   );
 
-  const renderDesktopSections = () => (
-    <>
-      <ProfileSettingsSection id="settings-profile" />
-      <NotificationSection id="settings-notifications" />
-      <AppearanceSection id="settings-appearance" />
-      <PrivacySection id="settings-privacy" />
-      <ChatSection id="settings-chat" />
-      <LanguageSection id="settings-language" />
-      <SecuritySection id="settings-security" />
-      <BlockedUsersSection id="settings-blocked-users" />
-      <HelpSection id="settings-help" />
-      <DangerZoneSection id="settings-danger" />
-      {renderSettingsFooter()}
-    </>
-  );
-
-  const renderMobileDetail = (navId: SettingsNavId | null) => {
+  const renderSection = (navId: SettingsNavId | null) => {
     switch (navId) {
       case "profile":
-        return (
-          <>
-            <ProfileSettingsSection id="settings-profile" />
-            {renderSettingsFooter()}
-          </>
-        );
+        return <ProfileSettingsSection id="settings-profile" />;
       case "notifications":
-        return (
-          <>
-            <NotificationSection id="settings-notifications" />
-            {renderSettingsFooter()}
-          </>
-        );
-      case "appearance":
-        return (
-          <>
-            <AppearanceSection id="settings-appearance" />
-            {renderSettingsFooter()}
-          </>
-        );
+        return <NotificationSection id="settings-notifications" />;
       case "privacy":
-        return (
-          <>
-            <PrivacySection id="settings-privacy" />
-            {renderSettingsFooter()}
-          </>
-        );
-      case "chatData":
-        return (
-          <>
-            <ChatSection id="settings-chat" />
-            {renderSettingsFooter()}
-          </>
-        );
+        return <PrivacySection id="settings-privacy" />;
+      case "security":
+        return <SecuritySection id="settings-security" />;
+      case "appearance":
+        return <AppearanceSection id="settings-appearance" />;
       case "language":
-        return (
-          <>
-            <LanguageSection id="settings-language" />
-            {renderSettingsFooter()}
-          </>
-        );
-      case "securityDevices":
-        return (
-          <>
-            <SecuritySection id="settings-security" />
-            {renderSettingsFooter()}
-          </>
-        );
-      case "blockedUsers":
-        return (
-          <>
-            <BlockedUsersSection id="settings-blocked-users" />
-            {renderSettingsFooter()}
-          </>
-        );
+        return <LanguageSection id="settings-language" />;
       case "help":
-        return (
-          <>
-            <HelpSection id="settings-help" />
-            {renderSettingsFooter()}
-          </>
-        );
-      case "danger":
-        return (
-          <>
-            <DangerZoneSection id="settings-danger" />
-            {renderSettingsFooter()}
-          </>
-        );
+        return <HelpSection id="settings-help" />;
       default:
-        return renderSettingsFooter();
+        return <ProfileSettingsSection id="settings-profile" />;
     }
   };
 
@@ -584,7 +296,7 @@ export const SettingsPage: React.FC = () => {
       ref={contentRef}
       notice={syncNotice}
       header={
-        <div className="border-b border-border/60 pb-4">
+        <div className="border-b border-border pb-4">
           <button
             type="button"
             onClick={handleMobileBack}
@@ -594,27 +306,20 @@ export const SettingsPage: React.FC = () => {
             {t("common:actions.back")}
           </button>
           {currentMobileItem ? (
-            <div className="mt-3">
-              <p className="text-sm font-semibold text-text-primary">
-                {currentMobileItem.label}
-              </p>
-              {currentMobileItem.description ? (
-                <p className="mt-1 text-sm text-text-secondary">
-                  {currentMobileItem.description}
-                </p>
-              ) : null}
-            </div>
+            <p className="mt-3 text-base font-semibold text-text-primary">
+              {currentMobileItem.label}
+            </p>
           ) : null}
         </div>
       }
     >
-      {renderMobileDetail(selectedMobileNavId)}
+      {renderSection(selectedMobileNavId)}
+      {renderSettingsFooter()}
     </SettingsContent>
   ) : (
     <SettingsContent ref={contentRef} notice={syncNotice}>
       <SettingsSidebar
         items={navItems}
-        groups={navGroups}
         activeItemId={activeNavId}
         onSelect={(id) => handleSelectNav(id as SettingsNavId)}
         ariaLabel={t("settings:pageTitle")}
@@ -644,7 +349,7 @@ export const SettingsPage: React.FC = () => {
             ) : null
           }
           meta={
-            <div className="app-page-subtle inline-flex min-h-[var(--control-height-md)] items-center gap-1.5 rounded-full px-3 text-xs text-text-muted">
+            <div className="app-page-subtle inline-flex min-h-[var(--control-height-md)] items-center gap-1.5 rounded-full px-3 text-xs text-text-secondary">
               {isSyncing ? (
                 <ArrowPathIcon className="h-4 w-4 animate-spin" />
               ) : (
@@ -676,13 +381,9 @@ export const SettingsPage: React.FC = () => {
         !isMobile ? (
           <SettingsSidebar
             items={navItems}
-            groups={navGroups}
             activeItemId={activeNavId}
             onSelect={(id) => handleSelectNav(id as SettingsNavId)}
             heading={t("settings:pageTitle")}
-            meta={t("common:status.lastSynced", {
-              time: formatTimestamp(lastSyncedAt),
-            })}
             ariaLabel={t("settings:pageTitle")}
           />
         ) : undefined
@@ -692,7 +393,8 @@ export const SettingsPage: React.FC = () => {
         mobileContent
       ) : (
         <SettingsContent ref={contentRef} notice={syncNotice}>
-          {renderDesktopSections()}
+          {renderSection(activeNavId)}
+          {renderSettingsFooter()}
         </SettingsContent>
       )}
     </SettingsPageShell>

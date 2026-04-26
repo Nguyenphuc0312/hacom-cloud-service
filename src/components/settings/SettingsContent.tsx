@@ -34,8 +34,8 @@ export const SettingsContent = React.forwardRef<HTMLDivElement, SettingsContentP
       >
         <div
           className={clsx(
-            "mx-auto flex min-h-full w-full flex-col gap-6 px-4 py-5 sm:px-6 sm:py-6 lg:px-8",
-            constrained && "max-w-[1040px]",
+            "flex min-h-full w-full flex-col gap-6 px-4 py-5 sm:px-6 sm:py-6 lg:px-8",
+            constrained && "max-w-[840px]",
             bodyClassName,
           )}
         >

@@ -80,7 +80,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
           defaultValue: "Cập nhật mật khẩu đăng nhập Hacom Chat.",
         })}
       >
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="max-w-[480px] space-y-4">
           <Input
             {...register("currentPassword")}
             type="password"
@@ -121,7 +121,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
             autoComplete="new-password"
           />
 
-          <div className="flex justify-end pt-2">
+          <div className="flex justify-start pt-2">
             <Button
               type="submit"
               size="sm"

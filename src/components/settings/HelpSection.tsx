@@ -1,9 +1,4 @@
 import React from "react";
-import {
-  BugAntIcon,
-  DocumentTextIcon,
-  LifebuoyIcon,
-} from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 import { SettingsCard } from "./SettingsCard";
 import { SettingsRow } from "./SettingsRow";
@@ -26,21 +21,18 @@ export const HelpSection: React.FC<HelpSectionProps> = ({ id }) => {
     >
       <SettingsCard bodyClassName="divide-y divide-border">
         <SettingsRow
-          icon={<LifebuoyIcon className="h-4 w-4" />}
           label={t("help.center", { defaultValue: "Trung tâm trợ giúp" })}
           description={t("help.centerDesc", {
             defaultValue: "Xem hướng dẫn sử dụng Hacom Chat.",
           })}
         />
         <SettingsRow
-          icon={<BugAntIcon className="h-4 w-4" />}
           label={t("help.reportIssue", { defaultValue: "Báo lỗi" })}
           description={t("help.reportIssueDesc", {
             defaultValue: "Gửi thông tin lỗi cho đội vận hành nội bộ.",
           })}
         />
         <SettingsRow
-          icon={<DocumentTextIcon className="h-4 w-4" />}
           label={t("help.policy", { defaultValue: "Chính sách nội bộ" })}
           description={t("help.policyDesc", {
             defaultValue: "Quy định sử dụng nền tảng liên lạc của Hacom.",

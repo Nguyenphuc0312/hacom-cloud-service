@@ -3,6 +3,18 @@
   "description": "Điều chỉnh các tùy chọn của bạn",
   "resetAll": "Đặt lại mặc định",
   "version": "Cài đặt v{{version}}",
+  "searchPlaceholder": "Tìm cài đặt",
+  "emptySearch": "Không tìm thấy cài đặt phù hợp.",
+  "navigation": {
+    "profile": "Hồ sơ",
+    "notifications": "Thông báo",
+    "privacy": "Quyền riêng tư",
+    "security": "Bảo mật",
+    "appearance": "Giao diện",
+    "language": "Ngôn ngữ",
+    "help": "Trợ giúp",
+    "logout": "Đăng xuất"
+  },
   "profile": {
     "description": "Thông tin hiển thị, liên hệ và dữ liệu doanh nghiệp."
   },
@@ -16,7 +28,7 @@
   },
   "appearance": {
     "title": "Giao diện",
-    "description": "Tùy chỉnh chủ đề, màu sắc, cỡ chữ và mật độ hiển thị.",
+    "description": "Tùy chỉnh chủ đề, cỡ chữ và mật độ hiển thị.",
     "navDescription": "Chủ đề, cỡ chữ, mật độ.",
     "themeLabel": "Chủ đề",
     "themeLight": "Sáng",
@@ -109,7 +121,7 @@
     "wrongPassword": "Mật khẩu hiện tại không đúng.",
     "changeFailed": "Không thể đổi mật khẩu.",
     "devicesTitle": "Thiết bị đang đăng nhập",
-    "devicesDesc": "Danh sách phiên đăng nhập từ API chưa khả dụng, hiện hiển thị thiết bị hiện tại.",
+    "devicesDesc": "Quản lý các phiên đăng nhập của bạn.",
     "currentDevice": "Thiết bị hiện tại",
     "currentDeviceBadge": "Đang sử dụng"
   },

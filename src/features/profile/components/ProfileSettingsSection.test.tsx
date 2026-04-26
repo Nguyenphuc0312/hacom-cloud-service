@@ -93,8 +93,8 @@ describe("ProfileSettingsSection", () => {
     render(<ProfileSettingsSection />);
 
     expect(screen.getByText("Current Name")).toBeInTheDocument();
-    expect(screen.getAllByText("user@company.test")).toHaveLength(2);
-    expect(screen.getByText("Engineering")).toBeInTheDocument();
+    expect(screen.getByText("user@company.test")).toBeInTheDocument();
+    expect(screen.getAllByText("Engineering")).toHaveLength(2);
     expect(
       screen.getByRole("button", { name: "profile:editProfileModal.title" }),
     ).toBeInTheDocument();

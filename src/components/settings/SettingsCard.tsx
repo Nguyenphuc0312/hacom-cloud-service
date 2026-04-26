@@ -21,7 +21,7 @@ export const SettingsCard: React.FC<SettingsCardProps> = ({
   return (
     <div
       className={clsx(
-        "overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgb(15_23_42_/_0.06)]",
+        "overflow-hidden rounded-xl border border-border bg-surface",
         className,
       )}
       {...props}

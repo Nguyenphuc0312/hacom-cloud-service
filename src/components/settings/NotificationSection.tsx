@@ -3,11 +3,6 @@
  */
 
 import React from "react";
-import {
-  BellAlertIcon,
-  ChatBubbleLeftRightIcon,
-  SpeakerWaveIcon,
-} from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 import { SettingsCard } from "./SettingsCard";
 import { SettingsRow } from "./SettingsRow";
@@ -42,7 +37,6 @@ export const NotificationSection: React.FC<NotificationSectionProps> = ({
     >
       <SettingsCard bodyClassName="divide-y divide-border">
         <SettingsRow
-          icon={<ChatBubbleLeftRightIcon className="h-4 w-4" />}
           label={t("notifications.enabled")}
           description={t("notifications.enabledDesc")}
           control={
@@ -61,7 +55,6 @@ export const NotificationSection: React.FC<NotificationSectionProps> = ({
           }
         />
         <SettingsRow
-          icon={<SpeakerWaveIcon className="h-4 w-4" />}
           label={t("notifications.sound")}
           description={t("notifications.soundDesc")}
           control={
@@ -81,7 +74,6 @@ export const NotificationSection: React.FC<NotificationSectionProps> = ({
           }
         />
         <SettingsRow
-          icon={<BellAlertIcon className="h-4 w-4" />}
           label={t("notifications.messagePreview")}
           description={t("notifications.messagePreviewDesc")}
           control={

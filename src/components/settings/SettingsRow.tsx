@@ -21,7 +21,7 @@ export const SettingsRow: React.FC<SettingsRowProps> = ({
   return (
     <div
       className={clsx(
-        "flex min-w-0 items-center gap-3 px-0 py-4 first:pt-0 last:pb-0",
+        "flex min-w-0 items-center gap-3 px-0 py-3.5 first:pt-0 last:pb-0",
         className,
       )}
     >

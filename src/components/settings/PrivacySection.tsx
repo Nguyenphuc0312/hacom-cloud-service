@@ -3,11 +3,6 @@
  */
 
 import React from "react";
-import {
-  CheckBadgeIcon,
-  EyeIcon,
-  UserPlusIcon,
-} from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 import { SettingsCard } from "./SettingsCard";
 import { SettingsRow } from "./SettingsRow";
@@ -40,7 +35,6 @@ export const PrivacySection: React.FC<PrivacySectionProps> = ({ id }) => {
     >
       <SettingsCard bodyClassName="divide-y divide-border">
         <SettingsRow
-          icon={<EyeIcon className="h-4 w-4" />}
           label={t("privacy.showOnlineStatus")}
           description={t("privacy.showOnlineStatusProjectedDesc", {
             defaultValue:
@@ -62,7 +56,6 @@ export const PrivacySection: React.FC<PrivacySectionProps> = ({ id }) => {
           }
         />
         <SettingsRow
-          icon={<CheckBadgeIcon className="h-4 w-4" />}
           label={t("privacy.readReceipts")}
           description={t("privacy.readReceiptsDesc")}
           control={
@@ -81,7 +74,6 @@ export const PrivacySection: React.FC<PrivacySectionProps> = ({ id }) => {
           }
         />
         <SettingsRow
-          icon={<UserPlusIcon className="h-4 w-4" />}
           label={t("privacy.allowStrangers")}
           description={t("privacy.allowStrangersDeprecatedDesc", {
             defaultValue:
