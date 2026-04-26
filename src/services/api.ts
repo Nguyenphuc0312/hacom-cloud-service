@@ -663,13 +663,25 @@ export const conversationApi = {
 
   markAsRead: async (
     conversationId: string,
-    lastVisibleMessageId?: string,
+    input?: string | { lastVisibleMessageId?: string; lastReadSeq?: number },
   ) => {
-    const payload = lastVisibleMessageId
-      ? {
-          lastVisibleMessageId,
-        }
-      : undefined;
+    const payload =
+      typeof input === "string"
+        ? { lastVisibleMessageId: input }
+        : input &&
+            (input.lastVisibleMessageId ||
+              (typeof input.lastReadSeq === "number" &&
+                Number.isFinite(input.lastReadSeq)))
+          ? {
+              ...(input.lastVisibleMessageId
+                ? { lastVisibleMessageId: input.lastVisibleMessageId }
+                : {}),
+              ...(typeof input.lastReadSeq === "number" &&
+              Number.isFinite(input.lastReadSeq)
+                ? { lastReadSeq: input.lastReadSeq }
+                : {}),
+            }
+          : undefined;
     await apiClient.post(
       `${canonicalConversationMessagesPath(conversationId)}/read`,
       payload,

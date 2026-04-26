@@ -619,7 +619,10 @@ export const chatApi = createApi({
         try {
           await conversationApi.markAsRead(
             input.conversationId,
-            input.lastVisibleMessageId,
+            {
+              lastVisibleMessageId: input.lastVisibleMessageId,
+              lastReadSeq: input.lastReadSeq,
+            },
           );
           return { data: undefined };
         } catch (error) {

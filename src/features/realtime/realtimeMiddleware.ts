@@ -202,14 +202,17 @@ export const realtimeMiddleware: Middleware<
     }
 
     if (realtimeReadCursorUpdated.match(action)) {
-      if (action.payload.lastReadMessageId) {
+      if (
+        action.payload.lastReadMessageId ||
+        typeof action.payload.lastReadSeq === "number"
+      ) {
         storeApi.dispatch(
           chatApi.util.updateQueryData(
             "getMessages",
             getMessageQueryArg(action.payload.conversationId),
             (draft) => {
               patchReadCursorInCache(draft, {
-                lastReadMessageId: action.payload.lastReadMessageId!,
+                lastReadMessageId: action.payload.lastReadMessageId,
                 lastReadSeq: action.payload.lastReadSeq,
                 currentUserId: action.payload.currentUserId,
                 readerId: action.payload.readerId,

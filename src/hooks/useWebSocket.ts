@@ -1347,12 +1347,13 @@ export const useWebSocket = (
         asString(payload.messageId) ??
         asString(payload.id) ??
         asString(payload._id);
-      if (!conversationId || !lastMessageId) return;
+      const lastReadSeq =
+        typeof payload.lastReadSeq === "number" ? payload.lastReadSeq : null;
+      if (!conversationId || (!lastMessageId && lastReadSeq === null)) return;
       logMessageDebug("useWebSocket", "socket_message_read_received", {
         conversationId,
         lastMessageId,
-        lastReadSeq:
-          typeof payload.lastReadSeq === "number" ? payload.lastReadSeq : null,
+        lastReadSeq,
       });
 
       const readerId =
@@ -1361,12 +1362,10 @@ export const useWebSocket = (
       dispatch(
         realtimeReadCursorUpdated({
           conversationId,
-          lastReadMessageId: lastMessageId,
+          ...(lastMessageId ? { lastReadMessageId: lastMessageId } : {}),
           ...(currentUserId ? { currentUserId } : {}),
           ...(readerId ? { readerId } : {}),
-          ...(typeof payload.lastReadSeq === "number"
-            ? { lastReadSeq: payload.lastReadSeq }
-            : {}),
+          ...(lastReadSeq !== null ? { lastReadSeq } : {}),
         }),
       );
     };

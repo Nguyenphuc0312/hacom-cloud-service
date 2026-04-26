@@ -375,7 +375,7 @@ export const patchMessageReactionInCache = (
 export const patchReadCursorInCache = (
   cache: ConversationMessagesCache,
   input: {
-    lastReadMessageId: string;
+    lastReadMessageId?: string;
     lastReadSeq?: number;
     currentUserId?: string;
     readerId?: string;
@@ -384,12 +384,14 @@ export const patchReadCursorInCache = (
   if (!input.currentUserId) return;
   if (input.readerId && input.readerId === input.currentUserId) return;
 
-  const boundaryIndex = findMessageIdentityIndex(cache.messages, {
-    id: input.lastReadMessageId,
-    localId: input.lastReadMessageId,
-    stableId: input.lastReadMessageId,
-    clientMessageId: input.lastReadMessageId,
-  });
+  const boundaryIndex = input.lastReadMessageId
+    ? findMessageIdentityIndex(cache.messages, {
+        id: input.lastReadMessageId,
+        localId: input.lastReadMessageId,
+        stableId: input.lastReadMessageId,
+        clientMessageId: input.lastReadMessageId,
+      })
+    : -1;
   const readAt = new Date().toISOString() as unknown as Date;
   const messagesToPatch = cache.messages.filter((message, index) => {
     if (message.senderId !== input.currentUserId) return false;
@@ -408,12 +410,14 @@ export const patchReadCursorInCache = (
     if (boundaryIndex < 0) {
       return (
         withinSeqBoundary ||
-        messagesShareIdentity(message, {
-          id: input.lastReadMessageId,
-          localId: input.lastReadMessageId,
-          stableId: input.lastReadMessageId,
-          clientMessageId: input.lastReadMessageId,
-        })
+        (input.lastReadMessageId
+          ? messagesShareIdentity(message, {
+              id: input.lastReadMessageId,
+              localId: input.lastReadMessageId,
+              stableId: input.lastReadMessageId,
+              clientMessageId: input.lastReadMessageId,
+            })
+          : false)
       );
     }
 

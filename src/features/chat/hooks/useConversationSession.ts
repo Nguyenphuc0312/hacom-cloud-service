@@ -418,6 +418,8 @@ export const useConversationSession = ({
       }
 
       lastVisibleReadAnchorKeyRef.current = latestKey;
+      // TODO(realtime-phase2): pass message.serverSeq as lastReadSeq once the
+      // Zustand mark-read path accepts cursor payloads end-to-end.
       void markAsRead(selectedConversationId, message.id).catch(() => {
         if (lastVisibleReadAnchorKeyRef.current === latestKey) {
           lastVisibleReadAnchorKeyRef.current = null;
