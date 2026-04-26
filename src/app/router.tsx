@@ -74,6 +74,11 @@ const AuthorityPage = lazy(() =>
     default: module.AuthorityPage,
   })),
 );
+const NotFoundPage = lazy(() =>
+  import('@/features/errors/NotFoundPage').then((module) => ({
+    default: module.NotFoundPage,
+  })),
+);
 
 const withSuspense = (element: ReactNode) => (
   <Suspense fallback={<QueryStateView kind="loading" title="Đang tải trang..." />}>
@@ -174,7 +179,7 @@ const routes = [
       },
       {
         path: '*',
-        element: <Navigate to="/" replace />,
+        element: withSuspense(<NotFoundPage />),
       },
     ],
   },

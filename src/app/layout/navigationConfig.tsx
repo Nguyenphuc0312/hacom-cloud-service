@@ -13,10 +13,10 @@ export interface NavItem {
 
 export type SidebarSectionKey =
   | 'overview'
-  | 'identity-access'
-  | 'operations'
-  | 'system'
-  | 'configuration';
+  | 'identity'
+  | 'chat-system'
+  | 'access-control'
+  | 'operations';
 
 export interface SidebarSection {
   key: SidebarSectionKey;
@@ -25,131 +25,111 @@ export interface SidebarSection {
 }
 
 export const SIDEBAR_SECTIONS: SidebarSection[] = [
-  {
-    key: 'overview',
-    label: 'Tổng quan',
-    iconKey: 'dashboard',
-  },
-  {
-    key: 'identity-access',
-    label: 'Danh tính và truy cập',
-    iconKey: 'users',
-  },
-  {
-    key: 'operations',
-    label: 'Vận hành',
-    iconKey: 'fileText',
-  },
-  {
-    key: 'system',
-    label: 'Hệ thống',
-    iconKey: 'activity',
-  },
-  {
-    key: 'configuration',
-    label: 'Cấu hình',
-    iconKey: 'settings',
-  },
+  { key: 'overview', label: 'Dashboard', iconKey: 'dashboard' },
+  { key: 'identity', label: 'Identity', iconKey: 'users' },
+  { key: 'chat-system', label: 'Chat System', iconKey: 'messages' },
+  { key: 'access-control', label: 'Access Control', iconKey: 'shield' },
+  { key: 'operations', label: 'Operations', iconKey: 'settings' },
 ];
 
 export const navItems: NavItem[] = [
   {
     key: 'dashboard',
-    label: 'Dashboard',
+    label: 'System Overview',
     iconKey: 'dashboard',
     section: 'overview',
     route: '/',
   },
   {
     key: 'users',
-    label: 'Tài khoản',
+    label: 'Users',
     iconKey: 'users',
-    section: 'identity-access',
+    section: 'identity',
     route: '/users',
   },
   {
-    key: 'access-requests',
-    label: 'Yêu cầu truy cập',
-    iconKey: 'access',
-    section: 'identity-access',
-    route: '/access-requests',
+    key: 'hr-employees',
+    label: 'HR Employees',
+    iconKey: 'hr',
+    section: 'identity',
+    route: '/hr-employees',
   },
   {
     key: 'authority',
-    label: 'Quyền và vai trò',
+    label: 'Roles',
     iconKey: 'shield',
-    section: 'identity-access',
+    section: 'identity',
     route: '/authority',
     roles: ['super_admin'],
   },
   {
-    key: 'hr-employees',
-    label: 'Nhân sự',
-    iconKey: 'hr',
-    section: 'identity-access',
-    route: '/hr-employees',
-  },
-  {
     key: 'conversations',
-    label: 'Hội thoại',
+    label: 'Conversations',
     iconKey: 'messages',
-    section: 'operations',
+    section: 'chat-system',
     route: '/conversations',
   },
   {
+    key: 'access-requests',
+    label: 'Admin Access',
+    iconKey: 'access',
+    section: 'access-control',
+    route: '/access-requests',
+  },
+  {
+    key: 'audit',
+    label: 'Audit Logs',
+    iconKey: 'history',
+    section: 'access-control',
+    route: '/audit',
+  },
+  {
     key: 'logs',
-    label: 'Nhật ký hệ thống',
+    label: 'System Logs',
     iconKey: 'fileText',
     section: 'operations',
     route: '/logs',
   },
   {
-    key: 'audit',
-    label: 'Audit trail',
-    iconKey: 'history',
-    section: 'operations',
-    route: '/audit',
-  },
-  {
     key: 'monitoring-overview',
-    label: 'Giám sát runtime',
+    label: 'Health Check',
     iconKey: 'activity',
-    section: 'system',
+    section: 'operations',
     route: '/monitoring',
   },
   {
     key: 'services',
-    label: 'Trạng thái dịch vụ',
+    label: 'Services',
     iconKey: 'server',
-    section: 'system',
+    section: 'operations',
     route: '/services/health',
   },
   {
     key: 'settings',
-    label: 'Thiết lập',
+    label: 'Settings',
     iconKey: 'settings',
-    section: 'configuration',
+    section: 'operations',
     route: '/settings',
     children: [
       {
         key: 'settings-smtp',
         label: 'SMTP',
         iconKey: 'mail',
-        section: 'configuration',
+        section: 'operations',
         route: '/settings/smtp',
       },
       {
         key: 'settings-email-templates',
-        label: 'Mẫu email',
+        label: 'Email Templates',
         iconKey: 'fileStack',
-        section: 'configuration',
+        section: 'operations',
         route: '/settings/email-templates',
       },
       {
         key: 'settings-system',
-        label: 'Thiết lập hệ thống',
+        label: 'System Settings',
         iconKey: 'sliders',
-        section: 'configuration',
+        section: 'operations',
         route: '/settings/system',
       },
     ],
@@ -157,21 +137,21 @@ export const navItems: NavItem[] = [
 ];
 
 export const breadcrumbNameMap: Record<string, string> = {
-  '/': 'Dashboard',
-  '/authority': 'Quyền và vai trò',
-  '/users': 'Tài khoản',
-  '/hr-employees': 'Nhân sự',
-  '/access-requests': 'Yêu cầu truy cập',
-  '/conversations': 'Hội thoại',
-  '/logs': 'Nhật ký hệ thống',
-  '/audit': 'Audit trail',
-  '/monitoring': 'Giám sát runtime',
-  '/services': 'Trạng thái dịch vụ',
-  '/services/health': 'Sức khỏe dịch vụ',
-  '/settings': 'Thiết lập',
+  '/': 'System Overview',
+  '/authority': 'Roles',
+  '/users': 'Users',
+  '/hr-employees': 'HR Employees',
+  '/access-requests': 'Admin Access',
+  '/conversations': 'Conversations',
+  '/logs': 'System Logs',
+  '/audit': 'Audit Logs',
+  '/monitoring': 'Health Check',
+  '/services': 'Services',
+  '/services/health': 'Services',
+  '/settings': 'Settings',
   '/settings/smtp': 'SMTP',
-  '/settings/email-templates': 'Mẫu email',
-  '/settings/system': 'Thiết lập hệ thống',
+  '/settings/email-templates': 'Email Templates',
+  '/settings/system': 'System Settings',
 };
 
 const flattenNavItems = (items: NavItem[]): NavItem[] =>
@@ -200,11 +180,11 @@ export const resolveNavigationContext = (pathname: string) => {
       label:
         breadcrumbNameMap[route] ??
         (route.startsWith('/users/')
-          ? 'Chi tiết tài khoản'
+          ? 'User Detail'
           : route.startsWith('/services/')
-            ? 'Chi tiết dịch vụ'
+            ? 'Service Detail'
             : route.startsWith('/settings/')
-              ? 'Chi tiết cấu hình'
+              ? 'Settings Detail'
               : null),
     }))
     .filter((entry): entry is { route: string; label: string } => Boolean(entry.label));
@@ -212,8 +192,8 @@ export const resolveNavigationContext = (pathname: string) => {
   return {
     item,
     section,
-    title: item?.label ?? 'Dashboard',
-    sectionLabel: section?.label ?? 'Tổng quan',
+    title: item?.label ?? 'System Overview',
+    sectionLabel: section?.label ?? 'Dashboard',
     breadcrumbs,
   };
 };
@@ -236,7 +216,7 @@ export const pickSelectedMenuKey = (pathname: string): string => {
   return 'dashboard';
 };
 
-export type CommandCategory = 'Điều hướng' | 'Tác vụ nhanh' | 'Hệ thống' | 'Cấu hình';
+export type CommandCategory = 'Navigate' | 'Quick Actions' | 'Operations' | 'Settings';
 
 export interface CommandRouteItem {
   id: string;
@@ -253,118 +233,118 @@ export interface CommandRouteItem {
 export const commandRouteItems: CommandRouteItem[] = [
   {
     id: 'go-dashboard',
-    label: 'Dashboard',
-    description: 'Tình trạng hệ thống và hạng mục cần xử lý',
-    category: 'Điều hướng',
+    label: 'System Overview',
+    description: 'Monitor users, access control, realtime health, and system activity.',
+    category: 'Navigate',
     iconKey: 'dashboard',
     keywords: ['home', 'overview', 'dashboard'],
     route: '/',
   },
   {
     id: 'go-users',
-    label: 'Tài khoản',
-    description: 'Tra cứu tài khoản admin và trạng thái truy cập',
-    category: 'Điều hướng',
+    label: 'Users',
+    description: 'Manage accounts, HR-linked identities, roles, and account status.',
+    category: 'Navigate',
     iconKey: 'users',
     keywords: ['users', 'accounts', 'admins'],
     route: '/users',
   },
   {
-    id: 'go-access-requests',
-    label: 'Yêu cầu truy cập',
-    description: 'Duyệt các yêu cầu IP và quyền truy cập',
-    category: 'Điều hướng',
-    iconKey: 'access',
-    keywords: ['ip', 'access', 'requests', 'approval', 'review'],
-    route: '/access-requests',
+    id: 'go-hr-employees',
+    label: 'HR Employees',
+    description: 'Review employee records synced from HR and linked user accounts.',
+    category: 'Navigate',
+    iconKey: 'hr',
+    keywords: ['hr', 'employees', 'people'],
+    route: '/hr-employees',
   },
   {
     id: 'go-authority',
-    label: 'Quyền và vai trò',
-    description: 'Quản trị vai trò chuẩn và phạm vi truy cập',
-    category: 'Điều hướng',
+    label: 'Roles',
+    description: 'Review admin roles and permission overrides.',
+    category: 'Navigate',
     iconKey: 'shield',
     keywords: ['authority', 'admin', 'permissions', 'roles'],
     route: '/authority',
     roles: ['super_admin'],
   },
   {
-    id: 'go-hr-employees',
-    label: 'Nhân sự',
-    description: 'Đối chiếu hồ sơ nhân sự và cấp tài khoản',
-    category: 'Điều hướng',
-    iconKey: 'hr',
-    keywords: ['hr', 'employees', 'people'],
-    route: '/hr-employees',
+    id: 'go-access-requests',
+    label: 'Admin Access',
+    description: 'Review IP approvals, access requests, and admin console access state.',
+    category: 'Navigate',
+    iconKey: 'access',
+    keywords: ['ip', 'access', 'requests', 'approval', 'review'],
+    route: '/access-requests',
   },
   {
     id: 'go-conversations',
-    label: 'Hội thoại',
-    description: 'Đọc lịch sử chat, kiểm tra user context và xử lý moderation',
-    category: 'Điều hướng',
+    label: 'Conversations',
+    description: 'Inspect admin-facing conversation records when the backend contract is available.',
+    category: 'Navigate',
     iconKey: 'messages',
     keywords: ['chat', 'conversation', 'messages', 'support'],
     route: '/conversations',
   },
   {
     id: 'go-logs',
-    label: 'Nhật ký hệ thống',
-    description: 'Tra cứu log runtime theo service, level và correlation',
-    category: 'Điều hướng',
+    label: 'System Logs',
+    description: 'Query runtime logs by service, level, and correlation identifiers.',
+    category: 'Operations',
     iconKey: 'fileText',
     keywords: ['logs', 'system', 'runtime', 'trace'],
     route: '/logs',
   },
   {
     id: 'go-audit',
-    label: 'Audit trail',
-    description: 'Theo dõi actor, action, target và thay đổi quản trị',
-    category: 'Điều hướng',
+    label: 'Audit Logs',
+    description: 'Track administrative actions, access decisions, and system events.',
+    category: 'Operations',
     iconKey: 'history',
     keywords: ['audit', 'events', 'history'],
     route: '/audit',
   },
   {
     id: 'go-monitoring-overview',
-    label: 'Giám sát runtime',
-    description: 'Theo dõi telemetry, freshness và tình trạng runtime',
-    category: 'Hệ thống',
+    label: 'Health Check',
+    description: 'Monitor telemetry, freshness, and runtime health.',
+    category: 'Operations',
     iconKey: 'activity',
     keywords: ['monitoring', 'realtime', 'correctness', 'overview'],
     route: '/monitoring',
   },
   {
     id: 'go-service-health',
-    label: 'Trạng thái dịch vụ',
-    description: 'Kiểm tra trạng thái phụ thuộc, độ trễ và build đang chạy',
-    category: 'Hệ thống',
+    label: 'Services',
+    description: 'Inspect dependency health, latency, version, and running build.',
+    category: 'Operations',
     iconKey: 'server',
     keywords: ['health', 'monitoring', 'status', 'services'],
     route: '/services/health',
   },
   {
     id: 'go-smtp-settings',
-    label: 'Cấu hình SMTP',
-    description: 'Thiết lập gửi mail và xác thực',
-    category: 'Cấu hình',
+    label: 'SMTP',
+    description: 'Configure mail transport and verification settings.',
+    category: 'Settings',
     iconKey: 'mail',
     keywords: ['smtp', 'mail', 'settings'],
     route: '/settings/smtp',
   },
   {
     id: 'go-email-templates',
-    label: 'Mẫu email',
-    description: 'Quản lý nội dung email hệ thống',
-    category: 'Cấu hình',
+    label: 'Email Templates',
+    description: 'Manage system email template content.',
+    category: 'Settings',
     iconKey: 'fileStack',
     keywords: ['email', 'templates', 'content'],
     route: '/settings/email-templates',
   },
   {
     id: 'go-system-settings',
-    label: 'Thiết lập hệ thống',
-    description: 'Xem môi trường, chế độ cập nhật và guardrail vận hành',
-    category: 'Cấu hình',
+    label: 'System Settings',
+    description: 'Review environment, release mode, and operational guardrails.',
+    category: 'Settings',
     iconKey: 'sliders',
     keywords: ['settings', 'system', 'environment', 'ops'],
     route: '/settings/system',

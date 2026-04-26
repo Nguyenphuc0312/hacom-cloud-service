@@ -3,27 +3,30 @@ import { Button, Input, Select, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 
-import { getErrorMessage } from '@/api/error';
 import { systemLogsClient } from '@/api/clients';
+import { getErrorMessage } from '@/api/error';
 import { queryKeys } from '@/api/queryKeys';
 import type { SystemLogItem, SystemLogLevel, SystemLogQuery, SystemLogRange } from '@/api/types';
 import { AppIcon } from '@/components/AppIcon';
 import { AppTooltip } from '@/components/AppTooltip';
 import { DataTableShell } from '@/components/DataTableShell';
+import { DateTimeCell } from '@/components/DateTimeCell';
 import { DetailPanel } from '@/components/DetailPanel';
 import { FilterBar } from '@/components/FilterBar';
+import { MetaCell } from '@/components/MetaCell';
 import { PageShell } from '@/components/PageShell';
 import { QueryStateView } from '@/components/QueryStates';
+import { RowActionsDropdown } from '@/components/RowActionsDropdown';
 import { StatusBadge } from '@/components/StatusBadge';
 import { DataTable } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { formatDateTime, formatRelativeTime } from '@/utils/date';
+import { formatDateTime } from '@/utils/date';
 
 const LOG_FETCH_LIMIT = 200;
 const KEYWORD_DEBOUNCE_MS = 250;
 
 const LEVEL_OPTIONS = [
-  { label: 'Moi level', value: 'all' },
+  { label: 'All levels', value: 'all' },
   { label: 'Error', value: 'error' },
   { label: 'Warning', value: 'warning' },
   { label: 'Info', value: 'info' },
@@ -31,10 +34,10 @@ const LEVEL_OPTIONS = [
 ] as const;
 
 const TIME_RANGE_OPTIONS = [
-  { label: '15 phut', value: '15m' },
-  { label: '1 gio', value: '1h' },
-  { label: '24 gio', value: '24h' },
-  { label: 'Tat ca', value: 'all' },
+  { label: '15 minutes', value: '15m' },
+  { label: '1 hour', value: '1h' },
+  { label: '24 hours', value: '24h' },
+  { label: 'All', value: 'all' },
 ] as const;
 
 const renderOptionalValue = (value: string | null) => value ?? '-';
@@ -78,22 +81,16 @@ export const SystemLogsPage = () => {
   const logs = useMemo(() => query.data?.items ?? [], [query.data?.items]);
 
   useEffect(() => {
-    if (!selectedLogId) {
-      return;
-    }
-
-    if (!logs.some((item) => item.id === selectedLogId)) {
+    if (selectedLogId && !logs.some((item) => item.id === selectedLogId)) {
       setSelectedLogId(null);
     }
   }, [logs, selectedLogId]);
 
-  const selectedLog = selectedLogId
-    ? logs.find((entry) => entry.id === selectedLogId) ?? null
-    : null;
+  const selectedLog = selectedLogId ? logs.find((entry) => entry.id === selectedLogId) ?? null : null;
 
   const serviceOptions = useMemo(
     () => [
-      { label: 'Moi service', value: 'all' },
+      { label: 'All services', value: 'all' },
       ...Array.from(
         new Set(
           logs
@@ -101,10 +98,7 @@ export const SystemLogsPage = () => {
             .filter(Boolean)
             .concat(service !== 'all' ? [service] : []),
         ),
-      ).map((value) => ({
-        label: value,
-        value,
-      })),
+      ).map((value) => ({ label: value, value })),
     ],
     [logs, service],
   );
@@ -116,17 +110,22 @@ export const SystemLogsPage = () => {
     timeRange !== '1h' ? timeRange : null,
   ].filter(Boolean).length;
 
+  const copyValue = async (value: string | null) => {
+    if (!value) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(value);
+    message.success('Copied reference value.');
+  };
+
   const columns = useMemo<ColumnsType<SystemLogItem>>(
     () => [
       {
-        title: 'Thoi gian',
+        title: 'Time',
         dataIndex: 'timestamp',
-        width: 168,
-        render: (value: string) => (
-          <AppTooltip title={formatDateTime(value)}>
-            <span>{formatRelativeTime(value)}</span>
-          </AppTooltip>
-        ),
+        width: 160,
+        render: (value: string) => <DateTimeCell value={value} />,
       },
       {
         title: 'Level',
@@ -138,23 +137,55 @@ export const SystemLogsPage = () => {
         title: 'Service',
         dataIndex: 'service',
         width: 180,
+        ellipsis: true,
         render: (value: string) => <Typography.Text code>{value}</Typography.Text>,
       },
       {
         title: 'Message',
         key: 'message',
-        render: (_, record) => (
-          <div className="ds-table-primary-cell">
-            <strong>{record.summary}</strong>
-            <span>{record.message}</span>
-          </div>
-        ),
+        width: 420,
+        ellipsis: true,
+        render: (_, record) => <MetaCell primary={record.summary} secondary={record.message} />,
       },
       {
-        title: 'Host',
+        title: 'Request ID',
+        dataIndex: 'requestId',
+        width: 180,
+        ellipsis: true,
+        render: (value: string | null) =>
+          value ? (
+            <AppTooltip title="Click to copy request ID">
+              <button type="button" className="ds-inline-copy" onClick={() => void copyValue(value)}>
+                {value}
+              </button>
+            </AppTooltip>
+          ) : (
+            '-'
+          ),
+      },
+      {
+        title: 'User/IP',
         dataIndex: 'host',
         width: 160,
         render: (value: string | null) => renderOptionalValue(value),
+      },
+      {
+        title: 'Actions',
+        key: 'actions',
+        width: 84,
+        fixed: 'right',
+        render: (_, record) => (
+          <RowActionsDropdown
+            actions={[
+              {
+                key: 'detail',
+                label: 'Open detail',
+                icon: <AppIcon name="eye" size={14} aria-hidden />,
+                onClick: () => setSelectedLogId(record.id),
+              },
+            ]}
+          />
+        ),
       },
     ],
     [],
@@ -168,26 +199,16 @@ export const SystemLogsPage = () => {
     setSelectedLogId(null);
   };
 
-  const copyValue = async (value: string | null) => {
-    if (!value) {
-      return;
-    }
-
-    await navigator.clipboard.writeText(value);
-    message.success('Da copy gia tri tham chieu.');
-  };
-
   const pageHeader = {
-    eyebrow: 'Van hanh',
-    title: 'Nhat ky he thong',
-    description:
-      'Triage runtime logs theo level, service va correlation. Khong co du lieu mock hay fallback ngoai datasource van hanh.',
+    eyebrow: 'Operations',
+    title: 'System Logs',
+    description: 'Track administrative actions, access decisions, and system events.',
   };
 
   if (query.isPending && !query.data) {
     return (
       <PageShell {...pageHeader}>
-        <QueryStateView kind="loading" title="Dang tai nhat ky he thong..." />
+        <QueryStateView kind="loading" title="Loading system logs..." />
       </PageShell>
     );
   }
@@ -197,7 +218,7 @@ export const SystemLogsPage = () => {
       <PageShell {...pageHeader}>
         <QueryStateView
           kind="error"
-          description={getErrorMessage(query.error, 'Khong the tai nhat ky he thong.')}
+          description={getErrorMessage(query.error, 'Unable to load system logs.')}
           onRetry={() => {
             void query.refetch();
           }}
@@ -218,7 +239,7 @@ export const SystemLogsPage = () => {
               void query.refetch();
             }}
           >
-            Lam moi
+            Refresh
           </Button>
         </div>
       }
@@ -232,7 +253,7 @@ export const SystemLogsPage = () => {
                   allowClear
                   aria-label="System log keyword filter"
                   value={keyword}
-                  placeholder="Tim message, request ID, trace ID"
+                  placeholder="Search message, request ID, trace ID"
                   onChange={(event) => setKeyword(event.target.value)}
                 />
               </div>
@@ -261,24 +282,22 @@ export const SystemLogsPage = () => {
                 />
               </div>
               <div className="ds-toolbar-field ds-toolbar-actions">
-                <Button onClick={handleReset}>Dat lai</Button>
+                <Button onClick={handleReset}>Reset</Button>
               </div>
             </div>
             <div className="ds-filter-toolbar-meta">
-              <span>{logs.length} ban ghi</span>
-              <span>{activeFilterCount > 0 ? `${activeFilterCount} bo loc` : 'Khong co bo loc'}</span>
+              <span>{logs.length} records</span>
+              <span>{activeFilterCount > 0 ? `${activeFilterCount} active filters` : 'No filters'}</span>
               <span>
-                Dong bo gan nhat:{' '}
-                {query.dataUpdatedAt
-                  ? formatDateTime(new Date(query.dataUpdatedAt).toISOString())
-                  : '-'}
+                Synced:{' '}
+                {query.dataUpdatedAt ? formatDateTime(new Date(query.dataUpdatedAt).toISOString()) : '-'}
               </span>
             </div>
           </FilterBar>
 
           <DataTableShell
-            title="Runtime events"
-            meta="Danh sach chinh chi giu level, service, message va host. Correlation va payload di vao inspector."
+            title="Runtime Events"
+            meta="Long messages and JSON payloads are available in the detail panel, not in table rows."
           >
             <DataTable
               rowKey="id"
@@ -286,13 +305,7 @@ export const SystemLogsPage = () => {
               minHeight={420}
               loading={query.isFetching && !query.isPending}
               dataSource={logs}
-              emptyNode={
-                <EmptyState
-                  title="Chua co ban ghi"
-                  description="Khong co log nao khop voi bo loc hien tai."
-                  compact
-                />
-              }
+              emptyNode={<EmptyState title="No records" description="No logs match the current filters." compact />}
               pagination={{ pageSize: 8, hideOnSinglePage: true }}
               onRow={(record) => ({
                 onClick: () => setSelectedLogId(record.id),
@@ -304,7 +317,7 @@ export const SystemLogsPage = () => {
 
         <DetailPanel
           open={Boolean(selectedLog)}
-          title={selectedLog ? `${selectedLog.service} · ${selectedLog.level}` : 'Chi tiet log'}
+          title={selectedLog ? `${selectedLog.service} / ${selectedLog.level}` : 'Log Detail'}
           onClose={() => setSelectedLogId(null)}
           width={420}
           className="ds-ops-detail-panel"
@@ -322,10 +335,10 @@ export const SystemLogsPage = () => {
               </section>
 
               <section className="ds-ops-detail-section">
-                <h3>Ngu canh</h3>
+                <h3>Context</h3>
                 <dl className="ds-ops-fact-list">
                   <div>
-                    <dt>Thoi gian</dt>
+                    <dt>Time</dt>
                     <dd>{formatDateTime(selectedLog.timestamp)}</dd>
                   </div>
                   <div>
@@ -333,7 +346,7 @@ export const SystemLogsPage = () => {
                     <dd>{selectedLog.service}</dd>
                   </div>
                   <div>
-                    <dt>Nguon</dt>
+                    <dt>Source</dt>
                     <dd>{renderOptionalValue(selectedLog.source)}</dd>
                   </div>
                   <div>
@@ -346,51 +359,19 @@ export const SystemLogsPage = () => {
               <section className="ds-ops-detail-section">
                 <h3>Correlation</h3>
                 <div className="ds-ops-inline-list">
-                  <Button
-                    size="small"
-                    disabled={!selectedLog.requestId}
-                    onClick={() => {
-                      void copyValue(selectedLog.requestId);
-                    }}
-                  >
+                  <Button size="small" disabled={!selectedLog.requestId} onClick={() => void copyValue(selectedLog.requestId)}>
                     <AppIcon name="copy" size={12} />
                     Request ID
                   </Button>
-                  <Button
-                    size="small"
-                    disabled={!selectedLog.traceId}
-                    onClick={() => {
-                      void copyValue(selectedLog.traceId);
-                    }}
-                  >
+                  <Button size="small" disabled={!selectedLog.traceId} onClick={() => void copyValue(selectedLog.traceId)}>
                     <AppIcon name="copy" size={12} />
                     Trace ID
                   </Button>
-                  <Button
-                    size="small"
-                    disabled={!selectedLog.spanId}
-                    onClick={() => {
-                      void copyValue(selectedLog.spanId);
-                    }}
-                  >
+                  <Button size="small" disabled={!selectedLog.spanId} onClick={() => void copyValue(selectedLog.spanId)}>
                     <AppIcon name="copy" size={12} />
                     Span ID
                   </Button>
                 </div>
-                <dl className="ds-ops-fact-list">
-                  <div>
-                    <dt>Request ID</dt>
-                    <dd>{renderOptionalValue(selectedLog.requestId)}</dd>
-                  </div>
-                  <div>
-                    <dt>Trace ID</dt>
-                    <dd>{renderOptionalValue(selectedLog.traceId)}</dd>
-                  </div>
-                  <div>
-                    <dt>Span ID</dt>
-                    <dd>{renderOptionalValue(selectedLog.spanId)}</dd>
-                  </div>
-                </dl>
               </section>
 
               <section className="ds-ops-detail-section">
@@ -408,11 +389,7 @@ export const SystemLogsPage = () => {
               </section>
             </div>
           ) : (
-            <EmptyState
-              title="Chua chon log"
-              description="Chon mot ban ghi de xem correlation va payload chi tiet."
-              compact
-            />
+            <EmptyState title="No log selected" description="Select a record to inspect correlation and payload details." compact />
           )}
         </DetailPanel>
       </div>

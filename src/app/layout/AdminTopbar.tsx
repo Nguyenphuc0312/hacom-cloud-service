@@ -33,7 +33,6 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
   const currentRole = useAuthStore((state) => state.user?.role);
   const { user, isAuthServiceUnavailable } = useCurrentUser();
   const { isOpen, openPalette, closePalette } = useCommandPalette();
-
   const currentPage = resolveNavigationContext(location.pathname);
 
   const paletteItems = useMemo(
@@ -51,36 +50,36 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
         })),
       {
         id: 'quick-open-users',
-        label: 'Mở quản trị tài khoản',
-        description: 'Đi tới danh sách tài khoản để tra cứu hoặc thao tác',
-        category: 'Tác vụ nhanh' as const,
+        label: 'Open Users',
+        description: 'Open account management for search and operator actions.',
+        category: 'Quick Actions' as const,
         icon: <AppIcon name="users" size={16} aria-hidden />,
         keywords: ['users', 'accounts', 'admin'],
         onSelect: () => navigate('/users'),
       },
       {
         id: 'quick-open-email-templates',
-        label: 'Mở mẫu email',
-        description: 'Đi tới khu mẫu email để chuẩn bị thông báo',
-        category: 'Tác vụ nhanh' as const,
+        label: 'Open Email Templates',
+        description: 'Open system email templates.',
+        category: 'Quick Actions' as const,
         icon: <AppIcon name="fileStack" size={16} aria-hidden />,
         keywords: ['broadcast', 'announcement', 'message'],
         onSelect: () => navigate('/settings/email-templates'),
       },
       {
         id: 'quick-open-conversations',
-        label: 'Mở tra cứu hội thoại',
-        description: 'Đọc lịch sử chat và xử lý moderation',
-        category: 'Điều hướng' as const,
+        label: 'Open Conversations',
+        description: 'Inspect admin-facing conversation records.',
+        category: 'Navigate' as const,
         icon: <AppIcon name="messages" size={16} aria-hidden />,
         keywords: ['chat', 'conversation', 'support'],
         onSelect: () => navigate('/conversations'),
       },
       {
         id: 'quick-open-hr',
-        label: 'Mở nhân sự',
-        description: 'Đi tới hồ sơ nhân sự để đối chiếu và cấp tài khoản',
-        category: 'Tác vụ nhanh' as const,
+        label: 'Open HR Employees',
+        description: 'Review HR records and linked accounts.',
+        category: 'Quick Actions' as const,
         icon: <AppIcon name="hr" size={16} aria-hidden />,
         keywords: ['hr', 'employees', 'directory'],
         onSelect: () => navigate('/hr-employees'),
@@ -96,11 +95,11 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
 
   const sidebarToggleLabel = mobile
     ? mobileNavOpen
-      ? 'Đóng điều hướng'
-      : 'Mở điều hướng'
+      ? 'Close navigation'
+      : 'Open navigation'
     : sidebarCollapsed
-      ? 'Mở rộng điều hướng'
-      : 'Thu gọn điều hướng';
+      ? 'Expand navigation'
+      : 'Collapse navigation';
 
   return (
     <>
@@ -117,7 +116,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
             <AppIcon name="menu" size={18} aria-hidden />
           </button>
           <div className="ds-topbar-title-block">
-            <span className="ds-topbar-eyebrow">{currentPage.sectionLabel || 'Không gian làm việc'}</span>
+            <span className="ds-topbar-eyebrow">{currentPage.sectionLabel}</span>
             <strong className="ds-topbar-page-title">{currentPage.title}</strong>
           </div>
         </div>
@@ -131,8 +130,8 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
             user={user}
             environmentLabel={appConfig.environmentLabel}
             systemTone={isAuthServiceUnavailable ? 'degraded' : 'healthy'}
-            onOpenNotifications={() => message.info('Trung tâm thông báo chưa được kết nối.')}
-            onOpenProfile={() => message.info('Khu hồ sơ hiện chưa khả dụng.')}
+            onOpenNotifications={() => message.info('Notification center is not connected yet.')}
+            onOpenProfile={() => message.info('Profile panel is not available yet.')}
             onOpenSettings={() => navigate('/settings/system')}
             onLogout={handleLogout}
           />

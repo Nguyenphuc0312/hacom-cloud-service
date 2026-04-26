@@ -598,3 +598,233 @@ body {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* --- Admin production redesign overrides --- */
+.ds-admin-shell {
+  background: var(--app-bg);
+}
+
+.ds-admin-sidebar {
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  max-width: var(--sidebar-width);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+
+.ds-admin-topbar,
+.ds-filter-bar,
+.ds-table-shell,
+.ds-detail-panel,
+.ds-dashboard-card,
+.ds-stat-card,
+.ds-surface-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.ds-admin-topbar {
+  border-radius: 14px;
+}
+
+.ds-page-container {
+  padding: 24px;
+}
+
+.ds-page-header-title,
+.ds-page-header-title .ant-typography {
+  font-size: 20px;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.ds-page-header-description {
+  max-width: 760px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ds-page-toolbar,
+.ds-page-toolbar-group,
+.ds-table-toolbar,
+.ds-toolbar-form {
+  min-height: 40px;
+}
+
+.ds-table-shell {
+  overflow: hidden;
+}
+
+.ds-table-shell-body,
+.admin-table {
+  min-width: 0;
+  overflow: auto hidden;
+}
+
+.ant-table-thead > tr > th {
+  height: 40px;
+  background: var(--surface-muted) !important;
+  color: var(--text-secondary);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ant-table-tbody > tr > td {
+  height: 48px;
+  padding: 10px 14px;
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.ds-table-primary-cell strong,
+.ds-table-primary-cell span,
+.ds-meta-cell strong,
+.ds-meta-cell small,
+.ds-avatar-cell-copy strong,
+.ds-avatar-cell-copy small {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-avatar-cell {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ds-avatar-cell-mark {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ds-avatar-cell-copy,
+.ds-meta-cell {
+  min-width: 0;
+}
+
+.ds-avatar-cell-copy strong,
+.ds-meta-cell strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ds-avatar-cell-copy small,
+.ds-meta-cell small,
+.ds-muted-cell,
+.ds-date-time-cell {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.ds-inline-copy {
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-inline-copy:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand) 34%, transparent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.ds-dashboard-card {
+  min-width: 0;
+  padding: 16px;
+}
+
+.ds-dashboard-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ds-dashboard-card-copy h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.ds-dashboard-card-copy p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.ds-dashboard-card-body {
+  min-width: 0;
+}
+
+.ds-table-skeleton,
+.ds-card-skeleton {
+  display: grid;
+  gap: 10px;
+}
+
+.ds-table-skeleton span,
+.ds-card-skeleton span {
+  display: block;
+  height: 36px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--surface-muted), var(--surface-subtle), var(--surface-muted));
+  background-size: 240% 100%;
+  animation: ds-skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ds-skeleton-pulse {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .ds-page-container {
+    padding: 16px 12px 20px;
+  }
+
+  .ds-filter-bar,
+  .ds-table-shell-header,
+  .ds-dashboard-card-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ds-toolbar-field,
+  .ds-toolbar-field--sm,
+  .ds-toolbar-field--md,
+  .ds-toolbar-field--lg,
+  .ds-toolbar-field--range {
+    min-width: 100%;
+  }
+}

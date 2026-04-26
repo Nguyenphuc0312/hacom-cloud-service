@@ -1,83 +1,47 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Empty, Input, Select, message } from 'antd';
-import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Button, Input, Select, message } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
+import { getErrorMessage } from '@/api/error';
 import { conversationsClient } from '@/api/clients';
 import { queryKeys } from '@/api/queryKeys';
-import type { ConversationMessage, ConversationSummary } from '@/api/types';
-import { AppTooltip } from '@/components/AppTooltip';
+import type { ConversationMessage, ConversationStatus, ConversationSummary } from '@/api/types';
 import { AppIcon } from '@/components/AppIcon';
-import { IconActionButton } from '@/components/IconActionButton';
+import { AvatarCell } from '@/components/AvatarCell';
+import { DataTableShell } from '@/components/DataTableShell';
+import { DateTimeCell } from '@/components/DateTimeCell';
+import { DetailPanel } from '@/components/DetailPanel';
+import { FilterBar } from '@/components/FilterBar';
+import { MetaCell } from '@/components/MetaCell';
 import { PageShell } from '@/components/PageShell';
 import { QueryStateView } from '@/components/QueryStates';
+import { RowActionsDropdown } from '@/components/RowActionsDropdown';
 import { StatusBadge } from '@/components/StatusBadge';
-import { formatDateTime, formatRelativeTime } from '@/utils/date';
+import { DataTable } from '@/components/ui/DataTable';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const MESSAGE_QUERY = { limit: 200 } as const;
 
-type ConversationStatusFilter = 'all' | 'open' | 'pending' | 'resolved';
-
-interface ConversationInspectorContext {
-  accountLabel: string;
-  service: string;
-  queue: string;
-  moderationState: string;
-  risk: 'healthy' | 'warning' | 'error';
-  notes: string;
-}
+type ConversationStatusFilter = 'all' | ConversationStatus;
 
 const STATUS_OPTIONS = [
-  { label: 'Mọi trạng thái', value: 'all' },
+  { label: 'All statuses', value: 'all' },
   { label: 'Open', value: 'open' },
   { label: 'Pending', value: 'pending' },
   { label: 'Resolved', value: 'resolved' },
 ] as const;
 
-const INSPECTOR_CONTEXT: Record<string, ConversationInspectorContext> = {
-  'c-1001': {
-    accountLabel: 'Nguyễn Thu Hà · ACC-2041',
-    service: 'after-sales',
-    queue: 'manual warranty review',
-    moderationState: 'clean',
-    risk: 'warning',
-    notes: 'Conversation gắn với ticket bảo hành pending lâu hơn baseline. Ưu tiên đối chiếu audit và worker logs.',
-  },
-  'c-1002': {
-    accountLabel: 'Lê Minh Khoa · ACC-1842',
-    service: 'developer support',
-    queue: 'manual payload review',
-    moderationState: 'manual_review',
-    risk: 'error',
-    notes: 'Có payload kỹ thuật và attachment lỗi schema. Cần đối chiếu log enrichment trước khi đóng.',
-  },
-  'c-1003': {
-    accountLabel: 'Trần Gia Hân · ACC-7710',
-    service: 'access support',
-    queue: 'resolved queue',
-    moderationState: 'clean',
-    risk: 'healthy',
-    notes: 'Hội thoại đã xử lý xong; dùng làm tham chiếu nếu cần xác nhận luồng hỗ trợ đã đóng.',
-  },
-};
-
 const shouldClampMessage = (message: ConversationMessage) =>
-  message.kind !== 'text' || message.body.length > 320 || message.body.split('\n').length > 6;
-
-const buildConversationLabel = (conversation: ConversationSummary) => {
-  const context = INSPECTOR_CONTEXT[conversation.id];
-  return context ? `${conversation.participantName} · ${context.service}` : conversation.participantName;
-};
+  message.kind !== 'text' || message.body.length > 180 || message.body.split('\n').length > 2;
 
 export const ConversationsPage = () => {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedConversationId = searchParams.get('conversationId');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ConversationStatusFilter>('all');
-  const [expandedMessages, setExpandedMessages] = useState<Record<string, boolean>>({});
-  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search.trim());
 
   const conversationsQuery = useQuery({
@@ -95,27 +59,12 @@ export const ConversationsPage = () => {
   );
 
   const selectedConversation = useMemo(
-    () => (conversationsQuery.data ?? []).find((conversation) => conversation.id === selectedConversationId) ?? null,
+    () =>
+      (conversationsQuery.data ?? []).find(
+        (conversation) => conversation.id === selectedConversationId,
+      ) ?? null,
     [conversationsQuery.data, selectedConversationId],
   );
-
-  useEffect(() => {
-    if (!filteredConversations.length) {
-      return;
-    }
-
-    if (selectedConversationId && filteredConversations.some((conversation) => conversation.id === selectedConversationId)) {
-      return;
-    }
-
-    startTransition(() => {
-      setSearchParams((current) => {
-        const next = new URLSearchParams(current);
-        next.set('conversationId', filteredConversations[0]?.id ?? '');
-        return next;
-      });
-    });
-  }, [filteredConversations, selectedConversationId, setSearchParams]);
 
   const messagesQuery = useQuery({
     queryKey: queryKeys.conversationMessages(selectedConversationId ?? '', MESSAGE_QUERY),
@@ -123,9 +72,6 @@ export const ConversationsPage = () => {
     enabled: Boolean(selectedConversationId),
     placeholderData: keepPreviousData,
   });
-
-  const messages = messagesQuery.data ?? [];
-  const selectedContext = selectedConversation ? INSPECTOR_CONTEXT[selectedConversation.id] : null;
 
   const markReadMutation = useMutation({
     mutationFn: (conversationId: string) => conversationsClient.markRead(conversationId),
@@ -138,17 +84,26 @@ export const ConversationsPage = () => {
           ) ?? current,
       );
     },
+    onError: (error) => {
+      message.error(getErrorMessage(error, 'Unable to mark conversation as read.'));
+    },
   });
 
   useEffect(() => {
-    if (!selectedConversation || selectedConversation.unreadCount === 0 || markReadMutation.isPending) {
+    if (!selectedConversationId || filteredConversations.some((item) => item.id === selectedConversationId)) {
       return;
     }
 
-    void markReadMutation.mutateAsync(selectedConversation.id);
-  }, [markReadMutation, selectedConversation]);
+    startTransition(() => {
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.delete('conversationId');
+        return next;
+      });
+    });
+  }, [filteredConversations, selectedConversationId, setSearchParams]);
 
-  const handleConversationSelect = (conversationId: string) => {
+  const selectConversation = useCallback((conversationId: string) => {
     startTransition(() => {
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
@@ -156,45 +111,148 @@ export const ConversationsPage = () => {
         return next;
       });
     });
-  };
+  }, [setSearchParams]);
 
-  const toggleExpanded = (messageId: string) => {
-    setExpandedMessages((current) => ({
-      ...current,
-      [messageId]: !current[messageId],
-    }));
-  };
+  const columns = useMemo<ColumnsType<ConversationSummary>>(
+    () => [
+      {
+        title: 'Conversation',
+        key: 'conversation',
+        width: 280,
+        fixed: 'left',
+        render: (_, record) => (
+          <AvatarCell
+            name={record.participantName}
+            description={record.preview}
+            code={record.participantAvatar}
+          />
+        ),
+      },
+      {
+        title: 'Type',
+        key: 'type',
+        width: 120,
+        render: () => <MetaCell primary="-" secondary="Not returned" />,
+      },
+      {
+        title: 'Members',
+        key: 'members',
+        width: 220,
+        render: (_, record) => <MetaCell primary={record.participantName} />,
+      },
+      {
+        title: 'Last Message At',
+        dataIndex: 'lastMessageAt',
+        width: 170,
+        render: (value: string) => <DateTimeCell value={value} />,
+      },
+      {
+        title: 'Status',
+        dataIndex: 'status',
+        width: 130,
+        render: (value: ConversationStatus) => <StatusBadge status={value} />,
+      },
+      {
+        title: 'Created At',
+        key: 'createdAt',
+        width: 150,
+        render: () => <MetaCell primary="-" secondary="Not returned" />,
+      },
+      {
+        title: 'Actions',
+        key: 'actions',
+        width: 84,
+        fixed: 'right',
+        render: (_, record) => (
+          <RowActionsDropdown
+            actions={[
+              {
+                key: 'detail',
+                label: 'Open messages',
+                icon: <AppIcon name="eye" size={14} aria-hidden />,
+                onClick: () => selectConversation(record.id),
+              },
+            ]}
+          />
+        ),
+      },
+    ],
+    [selectConversation],
+  );
 
-  const copyMessageBody = async (message: ConversationMessage) => {
-    await navigator.clipboard.writeText(message.body);
-    setCopiedMessageId(message.id);
-    window.setTimeout(() => {
-      setCopiedMessageId((current) => (current === message.id ? null : current));
-    }, 1500);
+  const messageColumns = useMemo<ColumnsType<ConversationMessage>>(
+    () => [
+      {
+        title: 'Time',
+        dataIndex: 'sentAt',
+        width: 160,
+        render: (value: string) => <DateTimeCell value={value} />,
+      },
+      {
+        title: 'Sender',
+        dataIndex: 'authorName',
+        width: 180,
+        render: (value: string, record) => (
+          <MetaCell primary={value} secondary={record.authorType} />
+        ),
+      },
+      {
+        title: 'Conversation',
+        dataIndex: 'conversationId',
+        width: 180,
+        ellipsis: true,
+      },
+      {
+        title: 'Preview',
+        key: 'preview',
+        width: 360,
+        ellipsis: true,
+        render: (_, record) => (
+          <MetaCell
+            primary={shouldClampMessage(record) ? `${record.body.slice(0, 160)}...` : record.body}
+            secondary={record.kind}
+          />
+        ),
+      },
+      {
+        title: 'Status',
+        key: 'status',
+        width: 120,
+        render: () => <StatusBadge status="available" />,
+      },
+      {
+        title: 'Message Seq',
+        key: 'messageSeq',
+        width: 140,
+        render: (_, record) => <MetaCell primary={record.id} />,
+      },
+    ],
+    [],
+  );
+
+  const pageHeader = {
+    eyebrow: 'Chat System',
+    title: 'Conversations',
+    description: 'Inspect conversation and message records in an admin table layout.',
   };
 
   if (conversationsQuery.isPending && !conversationsQuery.data) {
     return (
-      <PageShell
-        eyebrow="Vận hành"
-        title="Tra cứu hội thoại"
-        description="Module này phục vụ điều tra và moderation; chat chỉ là transcript để tham chiếu."
-      >
-        <QueryStateView kind="loading" title="Đang tải danh sách hội thoại..." />
+      <PageShell {...pageHeader}>
+        <QueryStateView kind="loading" title="Loading conversations..." />
       </PageShell>
     );
   }
 
   if (conversationsQuery.isError && !conversationsQuery.data) {
     return (
-      <PageShell
-        eyebrow="Vận hành"
-        title="Tra cứu hội thoại"
-        description="Module này phục vụ điều tra và moderation; chat chỉ là transcript để tham chiếu."
-      >
+      <PageShell {...pageHeader}>
         <QueryStateView
           kind="error"
-          description="Không thể tải danh sách hội thoại."
+          description={getErrorMessage(
+            conversationsQuery.error,
+            'Conversation admin API is not available yet.',
+          )}
           onRetry={() => {
             void conversationsQuery.refetch();
           }}
@@ -205,240 +263,136 @@ export const ConversationsPage = () => {
 
   return (
     <PageShell
-      eyebrow="Vận hành"
-      title="Tra cứu hội thoại"
-      description="Inspection-first workspace cho transcript, account context và thao tác moderation nội bộ."
+      {...pageHeader}
+      headerExtra={
+        <Button
+          icon={<AppIcon name="refresh" size={14} />}
+          loading={conversationsQuery.isFetching}
+          onClick={() => {
+            void conversationsQuery.refetch();
+          }}
+        >
+          Refresh
+        </Button>
+      }
     >
-      <section className="ds-conversation-layout" aria-label="Conversation inspection workspace">
-        <aside className="ds-conversation-sidebar">
-          <div className="ds-conversation-sidebar-header">
+      <FilterBar>
+        <div className="ds-toolbar-form">
+          <div className="ds-toolbar-field ds-toolbar-field--lg">
             <Input
               allowClear
               value={search}
-              placeholder="Tìm theo user, preview hoặc queue"
+              placeholder="Search participant or preview"
               onChange={(event) => setSearch(event.target.value)}
             />
+          </div>
+          <div className="ds-toolbar-field ds-toolbar-field--md">
             <Select
               value={statusFilter}
               options={STATUS_OPTIONS as unknown as { label: string; value: string }[]}
               onChange={(value) => setStatusFilter(value as ConversationStatusFilter)}
             />
-            <span className="ds-conversation-sidebar-meta">
-              {filteredConversations.length} hội thoại hiển thị
-            </span>
           </div>
+        </div>
+        <div className="ds-filter-toolbar-meta">
+          <span>{filteredConversations.length} conversations</span>
+          <span>Conversation details open in the side panel</span>
+        </div>
+      </FilterBar>
 
-          <div className="ds-conversation-sidebar-list" role="list" aria-label="Danh sách hội thoại">
-            {filteredConversations.map((conversation) => {
-              const active = conversation.id === selectedConversationId;
-
-              return (
-                <button
-                  key={conversation.id}
-                  type="button"
-                  className={`ds-conversation-list-item ${active ? 'is-active' : ''}`}
-                  onClick={() => handleConversationSelect(conversation.id)}
-                >
-                  <div className="ds-conversation-list-main">
-                    <div className="ds-conversation-list-topline">
-                      <strong>{buildConversationLabel(conversation)}</strong>
-                      <AppTooltip title={formatDateTime(conversation.lastMessageAt)}>
-                        <time dateTime={conversation.lastMessageAt}>
-                          {formatRelativeTime(conversation.lastMessageAt)}
-                        </time>
-                      </AppTooltip>
-                    </div>
-                    <span className="ds-conversation-list-preview">{conversation.preview}</span>
-                  </div>
-
-                  <div className="ds-conversation-list-side">
-                    <StatusBadge status={conversation.status} />
-                    {conversation.unreadCount > 0 ? (
-                      <span className="ds-conversation-unread-count">{conversation.unreadCount}</span>
-                    ) : null}
-                  </div>
-                </button>
-              );
+      <div className="ds-page-with-detail">
+        <DataTableShell
+          title="Conversations"
+          meta="No consumer-chat UI here; this is an operator table for scanning records."
+        >
+          <DataTable
+            rowKey="id"
+            columns={columns}
+            minHeight={420}
+            loading={conversationsQuery.isFetching && !conversationsQuery.isPending}
+            dataSource={filteredConversations}
+            emptyNode={
+              <EmptyState description="No conversations were returned for the current filters." />
+            }
+            pagination={{ pageSize: 10, hideOnSinglePage: true }}
+            onRow={(record) => ({
+              onClick: () => selectConversation(record.id),
+              style: { cursor: 'pointer' },
             })}
+          />
+        </DataTableShell>
 
-            {filteredConversations.length === 0 ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không tìm thấy hội thoại phù hợp." />
-            ) : null}
-          </div>
-        </aside>
-
-        <section className="ds-conversation-transcript">
-          {selectedConversation ? (
-            <>
-              <header className="ds-conversation-header">
-                <div className="ds-conversation-header-copy">
-                  <span className="ds-conversation-header-eyebrow">Conversation inspection</span>
-                  <strong>{selectedConversation.participantName}</strong>
-                  <p>{selectedContext?.notes ?? selectedConversation.preview}</p>
-                </div>
-
-                <div className="ds-conversation-header-actions">
-                  <StatusBadge status={selectedConversation.status} />
-                  <StatusBadge status={selectedConversation.presence} />
-                  <IconActionButton
-                    icon={<AppIcon name="check" size={14} />}
-                    tooltip="Đánh dấu đã đọc"
-                    onClick={() => {
-                      void markReadMutation.mutateAsync(selectedConversation.id);
-                    }}
-                  />
-                  <Button onClick={() => navigate('/users')}>Mở tài khoản</Button>
-                  <Button onClick={() => navigate('/audit')}>Mở audit</Button>
-                </div>
-              </header>
-
-              {messagesQuery.isError && !messages.length ? (
-                <div className="ds-conversation-empty">
-                  <QueryStateView
-                    kind="error"
-                    compact
-                    description="Không thể tải transcript của hội thoại này."
-                    onRetry={() => {
-                      void messagesQuery.refetch();
-                    }}
-                  />
-                </div>
-              ) : (
-                <div className="ds-conversation-stream">
-                  {messages.map((message) => {
-                    const expanded = expandedMessages[message.id] ?? false;
-                    const clamp = shouldClampMessage(message) && !expanded;
-
-                    return (
-                      <article
-                        key={message.id}
-                        className={`ds-conversation-event type-${message.authorType}`}
-                      >
-                        <div className="ds-conversation-event-meta">
-                          <strong>{message.authorName}</strong>
-                          <span>{message.kind.toUpperCase()}</span>
-                          <AppTooltip title={formatDateTime(message.sentAt)}>
-                            <time dateTime={message.sentAt}>{formatRelativeTime(message.sentAt)}</time>
-                          </AppTooltip>
-                        </div>
-
-                        <div className="ds-conversation-event-body">
-                          {message.kind === 'text' ? (
-                            <div className={`ds-conversation-event-text ${clamp ? 'is-clamped' : ''}`}>
-                              {message.body}
-                            </div>
-                          ) : (
-                            <div className="ds-conversation-event-code">
-                              <div className="ds-conversation-event-code-bar">
-                                <span>{message.kind.toUpperCase()}</span>
-                                <IconActionButton
-                                  icon={
-                                    copiedMessageId === message.id ? (
-                                      <AppIcon name="check" size={14} />
-                                    ) : (
-                                      <AppIcon name="copy" size={14} />
-                                    )
-                                  }
-                                  tooltip={copiedMessageId === message.id ? 'Đã copy' : 'Copy'}
-                                  onClick={() => {
-                                    void copyMessageBody(message);
-                                  }}
-                                />
-                              </div>
-                              <pre className={clamp ? 'is-collapsed' : ''}>
-                                <code>{message.body}</code>
-                              </pre>
-                            </div>
-                          )}
-
-                          {shouldClampMessage(message) ? (
-                            <button
-                              type="button"
-                              className="ds-conversation-expand"
-                              onClick={() => toggleExpanded(message.id)}
-                            >
-                              {expanded ? 'Thu gọn' : 'Xem thêm'}
-                            </button>
-                          ) : null}
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              )}
-            </>
+        <DetailPanel
+          open={Boolean(selectedConversationId)}
+          title={selectedConversation?.participantName ?? 'Messages'}
+          onClose={() => {
+            setSearchParams((current) => {
+              const next = new URLSearchParams(current);
+              next.delete('conversationId');
+              return next;
+            });
+          }}
+          width={520}
+          className="ds-ops-detail-panel"
+        >
+          {!selectedConversationId ? (
+            <EmptyState description="Select a conversation to inspect messages." compact />
+          ) : messagesQuery.isPending && !messagesQuery.data ? (
+            <QueryStateView kind="loading" compact title="Loading messages..." />
+          ) : messagesQuery.isError ? (
+            <QueryStateView
+              kind="error"
+              compact
+              description={getErrorMessage(messagesQuery.error, 'Unable to load messages.')}
+              onRetry={() => {
+                void messagesQuery.refetch();
+              }}
+            />
           ) : (
-            <div className="ds-conversation-empty">
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chọn một hội thoại để bắt đầu tra cứu." />
+            <div className="ds-ops-detail-stack">
+              {selectedConversation ? (
+                <section className="ds-ops-detail-section">
+                  <div className="ds-ops-detail-header">
+                    <AvatarCell
+                      name={selectedConversation.participantName}
+                      description={selectedConversation.preview}
+                      code={selectedConversation.participantAvatar}
+                    />
+                    <StatusBadge status={selectedConversation.status} />
+                  </div>
+                  <div className="ds-admin-inline-actions">
+                    <Button
+                      size="small"
+                      disabled={markReadMutation.isPending}
+                      onClick={() => void markReadMutation.mutateAsync(selectedConversation.id)}
+                    >
+                      Mark Read
+                    </Button>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(selectedConversation.id);
+                        message.success('Conversation ID copied.');
+                      }}
+                    >
+                      Copy ID
+                    </Button>
+                  </div>
+                </section>
+              ) : null}
+
+              <DataTable
+                rowKey="id"
+                columns={messageColumns}
+                minHeight={320}
+                dataSource={messagesQuery.data ?? []}
+                pagination={false}
+                emptyNode={<EmptyState description="No messages were returned." compact />}
+              />
             </div>
           )}
-        </section>
-
-        <aside className="ds-conversation-inspector">
-          {selectedConversation ? (
-            <>
-              <section className="ds-conversation-inspector-section">
-                <span className="ds-conversation-inspector-label">Account</span>
-                <strong>{selectedContext?.accountLabel ?? 'Chưa liên kết'}</strong>
-                <p>{selectedConversation.id}</p>
-              </section>
-
-              <section className="ds-conversation-inspector-section">
-                <span className="ds-conversation-inspector-label">Operational context</span>
-                <dl className="ds-ops-fact-list">
-                  <div>
-                    <dt>Queue</dt>
-                    <dd>{selectedContext?.queue ?? '-'}</dd>
-                  </div>
-                  <div>
-                    <dt>Service</dt>
-                    <dd>{selectedContext?.service ?? '-'}</dd>
-                  </div>
-                  <div>
-                    <dt>Moderation</dt>
-                    <dd>{selectedContext?.moderationState ?? '-'}</dd>
-                  </div>
-                  <div>
-                    <dt>Last update</dt>
-                    <dd>{formatDateTime(selectedConversation.lastMessageAt)}</dd>
-                  </div>
-                </dl>
-              </section>
-
-              <section className="ds-conversation-inspector-section">
-                <span className="ds-conversation-inspector-label">Risk</span>
-                <StatusBadge status={selectedContext?.risk ?? 'unknown'} />
-                <p>{selectedContext?.notes ?? 'Không có ghi chú vận hành.'}</p>
-              </section>
-
-              <section className="ds-conversation-inspector-section">
-                <span className="ds-conversation-inspector-label">Actions</span>
-                <div className="ds-ops-inline-list">
-                  <Button size="small" onClick={() => navigate('/logs')}>
-                    Mở system logs
-                  </Button>
-                  <Button size="small" onClick={() => navigate('/audit')}>
-                    Mở audit trail
-                  </Button>
-                  <Button
-                    size="small"
-                    onClick={() => {
-                      void navigator.clipboard.writeText(selectedConversation.id);
-                      message.success('Đã copy conversation ID.');
-                    }}
-                  >
-                    Copy ID
-                  </Button>
-                </div>
-              </section>
-            </>
-          ) : (
-            <div className="ds-conversation-empty">
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Inspector hiển thị theo hội thoại đã chọn." />
-            </div>
-          )}
-        </aside>
-      </section>
+        </DetailPanel>
+      </div>
     </PageShell>
   );
 };

@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Form, Input, Select, Space, message } from 'antd';
+import { keepPreviousData, useQueries, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button, Form, Input, Popconfirm, Select, Space, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useMemo, useState } from 'react';
 
@@ -11,11 +11,15 @@ import { AppDrawer } from '@/components/AppDrawer';
 import { AppIcon } from '@/components/AppIcon';
 import { DataTableShell } from '@/components/DataTableShell';
 import { DataTableToolbar } from '@/components/DataTableToolbar';
+import { DateTimeCell } from '@/components/DateTimeCell';
 import { FilterBar } from '@/components/FilterBar';
+import { MetaCell } from '@/components/MetaCell';
+import { PageShell } from '@/components/PageShell';
 import { QueryStateView } from '@/components/QueryStates';
 import { RowActionsDropdown } from '@/components/RowActionsDropdown';
+import { SourceBadge } from '@/components/SourceBadge';
+import { StatCard } from '@/components/StatCard';
 import { StatusBadge } from '@/components/StatusBadge';
-import { PageShell } from '@/components/PageShell';
 import { DataTable } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SurfaceCard } from '@/components/ui/SurfaceCard';
@@ -24,44 +28,29 @@ import { formatDateTime } from '@/utils/date';
 type AccessAction = 'approve' | 'reject' | 'revoke';
 
 const statusOptions = [
-  { label: 'Ưu tiên chờ duyệt', value: 'pending' },
-  { label: 'Đã duyệt', value: 'approved' },
-  { label: 'Đã từ chối', value: 'rejected' },
-  { label: 'Đã thu hồi', value: 'revoked' },
-  { label: 'Hết hạn', value: 'expired' },
+  { label: 'Pending', value: 'pending' },
+  { label: 'Approved', value: 'approved' },
+  { label: 'Rejected', value: 'rejected' },
+  { label: 'Revoked', value: 'revoked' },
+  { label: 'Expired', value: 'expired' },
 ];
 
 const actionLabels: Record<AccessAction, string> = {
-  approve: 'Duyệt yêu cầu',
-  reject: 'Từ chối yêu cầu',
-  revoke: 'Thu hồi truy cập',
+  approve: 'Approve',
+  reject: 'Reject',
+  revoke: 'Revoke',
 };
 
 const actionSuccessMessages: Record<AccessAction, string> = {
-  approve: 'Đã duyệt yêu cầu.',
-  reject: 'Đã từ chối yêu cầu.',
-  revoke: 'Đã thu hồi truy cập.',
+  approve: 'Access request approved.',
+  reject: 'Access request rejected.',
+  revoke: 'Access request revoked.',
 };
 
 const actionFallbackReasons: Record<AccessAction, string> = {
   approve: 'approved_from_admin_panel',
   reject: 'rejected_from_admin_panel',
   revoke: 'revoked_from_admin_panel',
-};
-
-const renderRiskChips = (record: Pick<AccessRequestListItem, 'risk'>) => {
-  if (!record.risk.sharedIp && !record.risk.expiringSoon) {
-    return <span className="ds-shell-chip ds-shell-chip--ghost">Không có cờ rủi ro</span>;
-  }
-
-  return (
-    <div className="ds-admin-chip-list">
-      {record.risk.sharedIp ? <span className="ds-shell-chip ds-shell-chip--warning">IP dùng chung</span> : null}
-      {record.risk.expiringSoon ? (
-        <span className="ds-shell-chip ds-shell-chip--warning">Sắp hết hạn</span>
-      ) : null}
-    </div>
-  );
 };
 
 const isActionAvailable = (status: AccessRequestListItem['status'], action: AccessAction) => {
@@ -72,7 +61,7 @@ const isActionAvailable = (status: AccessRequestListItem['status'], action: Acce
 
 const renderLinkedUsers = (request: AccessRequestDetail) => {
   if (request.linkedUsers.length === 0) {
-    return <EmptyState description="Không có tài khoản liên quan nào được trả về cho IP này." />;
+    return <EmptyState description="No linked users were returned for this IP." compact />;
   }
 
   return (
@@ -85,7 +74,7 @@ const renderLinkedUsers = (request: AccessRequestDetail) => {
       ))}
       {request.linkedUsers.length > 5 ? (
         <div className="ds-detail-list-item">
-          <span>Tài khoản còn lại</span>
+          <span>Other users</span>
           <strong>+{request.linkedUsers.length - 5}</strong>
         </div>
       ) : null}
@@ -109,6 +98,14 @@ export const AccessRequestsPage = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionReason, setActionReason] = useState('');
 
+  const summaryQueries = useQueries({
+    queries: ['approved', 'pending', 'rejected', 'expired'].map((status) => ({
+      queryKey: queryKeys.accessIpRequests(`summary-${status}`),
+      queryFn: () => accessClient.listRequests({ page: 1, limit: 1, status }),
+      placeholderData: keepPreviousData,
+    })),
+  });
+
   const listQuery = useQuery({
     queryKey: queryKeys.accessIpRequests(JSON.stringify(filters)),
     queryFn: () =>
@@ -119,6 +116,7 @@ export const AccessRequestsPage = () => {
         ip: filters.keyword,
         email: filters.keyword,
       }),
+    placeholderData: keepPreviousData,
   });
 
   const detailQuery = useQuery({
@@ -160,91 +158,83 @@ export const AccessRequestsPage = () => {
     },
   });
 
-  const activeFilterCount = [filters.status, filters.keyword].filter(Boolean).length;
-
   const columns = useMemo<ColumnsType<AccessRequestListItem>>(
     () => [
       {
-        title: 'Yêu cầu',
-        key: 'request',
-        render: (_, record) => (
-          <div className="ds-table-primary-cell">
-            <strong>{record.normalizedIp}</strong>
-            <span>
-              Phạm vi: {record.scope} · Nguồn: {record.source}
-            </span>
-          </div>
-        ),
+        title: 'IP Address',
+        dataIndex: 'ipAddress',
+        width: 170,
+        fixed: 'left',
+        render: (value: string) => <MetaCell primary={value} />,
       },
       {
-        title: 'Trạng thái',
+        title: 'Normalized IP',
+        dataIndex: 'normalizedIp',
+        width: 170,
+        render: (value: string) => <MetaCell primary={value} />,
+      },
+      {
+        title: 'Scope',
+        dataIndex: 'scope',
+        width: 130,
+      },
+      {
+        title: 'Status',
         dataIndex: 'status',
-        width: 140,
+        width: 130,
         render: (value: AccessRequestListItem['status']) => <StatusBadge status={value} />,
       },
       {
-        title: 'Người dùng liên quan',
-        dataIndex: 'requestUserCount',
+        title: 'Source',
+        dataIndex: 'source',
         width: 140,
+        render: (value: AccessRequestListItem['source']) => <SourceBadge source={value} />,
       },
       {
-        title: 'Lần thấy gần nhất',
+        title: 'Matched Rule',
+        key: 'matchedRule',
+        width: 220,
+        ellipsis: true,
+        render: (_, record) => <MetaCell primary={record.reason ?? record.note ?? '-'} />,
+      },
+      {
+        title: 'First Seen',
+        dataIndex: 'firstSeenAt',
+        width: 170,
+        render: (value: string) => <DateTimeCell value={value} />,
+      },
+      {
+        title: 'Last Seen',
         dataIndex: 'lastSeenAt',
-        width: 180,
-        render: (value: string) => formatDateTime(value),
+        width: 170,
+        render: (value: string) => <DateTimeCell value={value} />,
       },
       {
-        title: 'Hết hạn',
+        title: 'Expires At',
         dataIndex: 'expiresAt',
-        width: 180,
-        render: (value: string | null) => (value ? formatDateTime(value) : '-'),
+        width: 170,
+        render: (value: string | null) => <DateTimeCell value={value} />,
       },
       {
-        title: 'Rủi ro',
-        key: 'risk',
-        render: (_, record) => renderRiskChips(record),
-      },
-      {
-        title: '',
+        title: 'Actions',
         key: 'actions',
-        width: 72,
+        width: 84,
+        fixed: 'right',
         render: (_, record) => (
           <RowActionsDropdown
             actions={[
               {
                 key: 'detail',
-                label: 'Mở duyệt nhanh',
+                label: 'Open detail',
+                icon: <AppIcon name="eye" size={14} aria-hidden />,
                 onClick: () => setSelectedId(record.id),
-              },
-              {
-                key: 'approve',
-                label: actionLabels.approve,
-                disabled:
-                  actionMutation.isPending || !isActionAvailable(record.status, 'approve'),
-                onClick: () => actionMutation.mutate({ action: 'approve', id: record.id }),
-              },
-              {
-                key: 'reject',
-                label: actionLabels.reject,
-                danger: true,
-                disabled:
-                  actionMutation.isPending || !isActionAvailable(record.status, 'reject'),
-                onClick: () => actionMutation.mutate({ action: 'reject', id: record.id }),
-              },
-              {
-                key: 'revoke',
-                label: actionLabels.revoke,
-                danger: true,
-                disabled:
-                  actionMutation.isPending || !isActionAvailable(record.status, 'revoke'),
-                onClick: () => actionMutation.mutate({ action: 'revoke', id: record.id }),
               },
             ]}
           />
         ),
       },
     ],
-    [actionMutation],
+    [],
   );
 
   const applyFilters = () => {
@@ -272,27 +262,34 @@ export const AccessRequestsPage = () => {
   };
 
   const selectedRequest = detailQuery.data;
+  const activeFilterCount = [filters.status, filters.keyword].filter(Boolean).length;
+  const summary = {
+    approved: summaryQueries[0].data?.pagination.total ?? '-',
+    pending: summaryQueries[1].data?.pagination.total ?? '-',
+    rejected: summaryQueries[2].data?.pagination.total ?? '-',
+    expired: summaryQueries[3].data?.pagination.total ?? '-',
+  };
+
+  const pageHeader = {
+    eyebrow: 'Access Control',
+    title: 'Admin Access Control',
+    description: 'Review IP approvals, access requests, and admin console access state.',
+  };
 
   if (listQuery.isLoading && !listQuery.data) {
     return (
-      <PageShell
-        title="Yêu cầu truy cập IP"
-        description="Hàng đợi duyệt nhanh cho các IP cần quyết định thủ công."
-      >
-        <QueryStateView kind="loading" title="Đang tải yêu cầu truy cập IP..." />
+      <PageShell {...pageHeader}>
+        <QueryStateView kind="loading" title="Loading access requests..." />
       </PageShell>
     );
   }
 
-  if (listQuery.isError) {
+  if (listQuery.isError && !listQuery.data) {
     return (
-      <PageShell
-        title="Yêu cầu truy cập IP"
-        description="Hàng đợi duyệt nhanh cho các IP cần quyết định thủ công."
-      >
+      <PageShell {...pageHeader}>
         <QueryStateView
           kind="error"
-          description="Không thể tải yêu cầu truy cập IP."
+          description="Unable to load admin access requests."
           onRetry={() => {
             void listQuery.refetch();
           }}
@@ -304,8 +301,7 @@ export const AccessRequestsPage = () => {
   return (
     <>
       <PageShell
-        title="Yêu cầu truy cập IP"
-        description="Page này chỉ làm một việc: xếp hàng, sàng lọc và quyết định truy cập IP."
+        {...pageHeader}
         headerExtra={
           <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
             <Button
@@ -315,11 +311,18 @@ export const AccessRequestsPage = () => {
                 void listQuery.refetch();
               }}
             >
-              Làm mới
+              Refresh
             </Button>
           </div>
         }
       >
+        <section className="ds-ops-summary-grid" aria-label="Access request summary">
+          <StatCard title="Approved" value={summary.approved} meta="Approved IP access" />
+          <StatCard title="Pending" value={summary.pending} meta="Needs operator review" />
+          <StatCard title="Rejected" value={summary.rejected} meta="Rejected requests" />
+          <StatCard title="Expiring Soon" value={summary.expired} meta="Expired or expiring queue" />
+        </section>
+
         <FilterBar>
           <Form
             form={form}
@@ -327,53 +330,34 @@ export const AccessRequestsPage = () => {
             className="ds-toolbar-form"
             initialValues={{ status: filters.status }}
           >
-            <Form.Item
-              label="Trạng thái"
-              name="status"
-              className="ds-toolbar-field ds-toolbar-field--md"
-            >
-              <Select allowClear options={statusOptions} placeholder="Tất cả trạng thái" />
+            <Form.Item label="Status" name="status" className="ds-toolbar-field ds-toolbar-field--md">
+              <Select allowClear options={statusOptions} placeholder="All statuses" />
             </Form.Item>
-            <Form.Item
-              label="Tìm kiếm"
-              name="keyword"
-              className="ds-toolbar-field ds-toolbar-field--lg"
-            >
-              <Input allowClear placeholder="IP hoặc email người dùng" />
+            <Form.Item label="Search" name="keyword" className="ds-toolbar-field ds-toolbar-field--lg">
+              <Input allowClear placeholder="IP address or user email" />
             </Form.Item>
             <Form.Item className="ds-toolbar-field ds-toolbar-actions">
               <Space>
                 <Button type="primary" onClick={applyFilters}>
-                  Áp dụng bộ lọc
+                  Apply
                 </Button>
-                <Button onClick={resetFilters}>Đặt lại</Button>
+                <Button onClick={resetFilters}>Reset</Button>
               </Space>
             </Form.Item>
           </Form>
           <div className="ds-filter-toolbar-meta">
-            <span>{listQuery.data?.pagination.total ?? 0} yêu cầu phù hợp</span>
-            <span>
-              {activeFilterCount > 0
-                ? `${activeFilterCount} bộ lọc đang hoạt động`
-                : 'Không có bộ lọc đang hoạt động'}
-            </span>
-            <span>
-              Đồng bộ:{' '}
-              {listQuery.dataUpdatedAt
-                ? formatDateTime(new Date(listQuery.dataUpdatedAt).toISOString())
-                : '-'}
-            </span>
+            <span>{listQuery.data?.pagination.total ?? 0} matching requests</span>
+            <span>{activeFilterCount > 0 ? `${activeFilterCount} active filters` : 'No filters'}</span>
           </div>
         </FilterBar>
 
         <DataTableShell
-          title="Hàng đợi phê duyệt"
-          meta="Bảng là trọng tâm. Drawer chỉ giữ ngữ cảnh đủ để quyết định nhanh, không mang theo lịch sử dài."
+          title="IP Approval Queue"
+          meta="Raw access details stay in the drawer so long values do not break table scanning."
           toolbar={
             <DataTableToolbar>
               <span className="ds-toolbar-summary">
-                Trang {listQuery.data?.pagination.page ?? 1} /{' '}
-                {listQuery.data?.pagination.totalPages ?? 1}
+                Page {listQuery.data?.pagination.page ?? 1} / {listQuery.data?.pagination.totalPages ?? 1}
               </span>
             </DataTableToolbar>
           }
@@ -381,9 +365,10 @@ export const AccessRequestsPage = () => {
           <DataTable
             rowKey="id"
             columns={columns}
-            minHeight={360}
+            minHeight={420}
             dataSource={listQuery.data?.items ?? []}
-            emptyNode={<EmptyState description="Không có yêu cầu truy cập nào khớp với bộ lọc hiện tại." />}
+            loading={listQuery.isFetching && !listQuery.isLoading}
+            emptyNode={<EmptyState description="No access requests match the current filters." />}
             onRow={(record) => ({
               onClick: () => setSelectedId(record.id),
               onKeyDown: (event) => {
@@ -414,47 +399,48 @@ export const AccessRequestsPage = () => {
           setSelectedId(null);
           setActionReason('');
         }}
-        title="Duyệt truy cập IP"
+        title="Access Request Detail"
         width={620}
       >
         {!selectedId ? (
-          <EmptyState description="Chọn một yêu cầu để duyệt nhanh." />
+          <EmptyState description="Select a request to inspect." />
         ) : detailQuery.isLoading && !selectedRequest ? (
-          <QueryStateView kind="loading" compact title="Đang tải chi tiết yêu cầu..." />
+          <QueryStateView kind="loading" compact title="Loading access detail..." />
         ) : detailQuery.isError ? (
           <QueryStateView
             kind="error"
             compact
-            description="Không thể tải chi tiết yêu cầu."
+            description="Unable to load access detail."
             onRetry={() => {
               void detailQuery.refetch();
             }}
           />
         ) : !selectedRequest ? (
-          <EmptyState description="Chi tiết yêu cầu hiện không khả dụng." />
+          <EmptyState description="Access detail is not available." />
         ) : (
           <div className="ds-settings-stack">
             <SurfaceCard
-              eyebrow="Ngữ cảnh duyệt"
+              eyebrow="Review Context"
               title={selectedRequest.normalizedIp}
-              description="Giữ đủ nhận diện, rủi ro và footprint trước khi ra quyết định."
               status={<StatusBadge status={selectedRequest.status} />}
             >
               <div className="ds-detail-list">
                 <div className="ds-detail-list-item">
-                  <span>Phạm vi</span>
+                  <span>Scope</span>
                   <strong>{selectedRequest.scope}</strong>
                 </div>
                 <div className="ds-detail-list-item">
-                  <span>Nguồn</span>
-                  <strong>{selectedRequest.source}</strong>
+                  <span>Source</span>
+                  <strong>
+                    <SourceBadge source={selectedRequest.source} />
+                  </strong>
                 </div>
                 <div className="ds-detail-list-item">
-                  <span>IP gốc</span>
+                  <span>IP Address</span>
                   <strong>{selectedRequest.ipAddress}</strong>
                 </div>
                 <div className="ds-detail-list-item">
-                  <span>Lần yêu cầu gần nhất</span>
+                  <span>Last Requested</span>
                   <strong>
                     {selectedRequest.lastRequestedAt
                       ? formatDateTime(selectedRequest.lastRequestedAt)
@@ -462,80 +448,83 @@ export const AccessRequestsPage = () => {
                   </strong>
                 </div>
                 <div className="ds-detail-list-item">
-                  <span>Lần thấy gần nhất</span>
+                  <span>Last Seen</span>
                   <strong>{formatDateTime(selectedRequest.lastSeenAt)}</strong>
                 </div>
                 <div className="ds-detail-list-item">
-                  <span>Hết hạn</span>
+                  <span>Expires At</span>
                   <strong>
                     {selectedRequest.expiresAt ? formatDateTime(selectedRequest.expiresAt) : '-'}
                   </strong>
                 </div>
                 <div className="ds-detail-list-item">
-                  <span>Rủi ro</span>
-                  <strong>{renderRiskChips(selectedRequest)}</strong>
-                </div>
-                <div className="ds-detail-list-item">
-                  <span>User agent</span>
+                  <span>User Agent</span>
                   <strong>{selectedRequest.lastUserAgent ?? '-'}</strong>
                 </div>
               </div>
             </SurfaceCard>
 
-            <SurfaceCard
-              eyebrow="Footprint"
-              title="Tài khoản liên quan"
-              description="Chỉ giữ footprint ngắn để quyết định nhanh; lịch sử sâu không ở drawer này."
-            >
+            <SurfaceCard eyebrow="Footprint" title="Linked Users">
               {renderLinkedUsers(selectedRequest)}
             </SurfaceCard>
 
-            <SurfaceCard
-              eyebrow="Quyết định"
-              title="Duyệt, từ chối hoặc thu hồi"
-              description="Ghi lý do ngắn gọn để audit sau này đọc được quyết định."
-            >
+            <SurfaceCard eyebrow="Decision" title="Approve, reject, or revoke">
               <Input.TextArea
                 rows={3}
                 value={actionReason}
-                placeholder="Lý do cho quyết định này"
+                placeholder="Reason for this decision"
                 onChange={(event) => setActionReason(event.target.value)}
               />
               <div className="ds-settings-action-bar">
                 <span className="ds-settings-action-copy">
-                  Chỉ giữ thao tác quyết định trong drawer. Điều tra sâu nên đi qua audit hoặc page chuyên trách.
+                  Dangerous access decisions require confirmation and are audited by the backend.
                 </span>
                 <Space wrap>
-                  <Button
-                    type="primary"
+                  <Popconfirm
+                    title="Approve this access request?"
+                    okText="Approve"
+                    cancelText="Cancel"
+                    onConfirm={() => actionMutation.mutate({ action: 'approve', id: selectedRequest.id })}
                     disabled={!isActionAvailable(selectedRequest.status, 'approve')}
-                    loading={
-                      actionMutation.isPending && actionMutation.variables?.action === 'approve'
-                    }
-                    onClick={() => actionMutation.mutate({ action: 'approve', id: selectedRequest.id })}
                   >
-                    Duyệt
-                  </Button>
-                  <Button
-                    danger
+                    <Button
+                      type="primary"
+                      disabled={!isActionAvailable(selectedRequest.status, 'approve')}
+                      loading={actionMutation.isPending && actionMutation.variables?.action === 'approve'}
+                    >
+                      {actionLabels.approve}
+                    </Button>
+                  </Popconfirm>
+                  <Popconfirm
+                    title="Reject this access request?"
+                    okText="Reject"
+                    cancelText="Cancel"
+                    onConfirm={() => actionMutation.mutate({ action: 'reject', id: selectedRequest.id })}
                     disabled={!isActionAvailable(selectedRequest.status, 'reject')}
-                    loading={
-                      actionMutation.isPending && actionMutation.variables?.action === 'reject'
-                    }
-                    onClick={() => actionMutation.mutate({ action: 'reject', id: selectedRequest.id })}
                   >
-                    Từ chối
-                  </Button>
-                  <Button
-                    danger
+                    <Button
+                      danger
+                      disabled={!isActionAvailable(selectedRequest.status, 'reject')}
+                      loading={actionMutation.isPending && actionMutation.variables?.action === 'reject'}
+                    >
+                      {actionLabels.reject}
+                    </Button>
+                  </Popconfirm>
+                  <Popconfirm
+                    title="Revoke this access request?"
+                    okText="Revoke"
+                    cancelText="Cancel"
+                    onConfirm={() => actionMutation.mutate({ action: 'revoke', id: selectedRequest.id })}
                     disabled={!isActionAvailable(selectedRequest.status, 'revoke')}
-                    loading={
-                      actionMutation.isPending && actionMutation.variables?.action === 'revoke'
-                    }
-                    onClick={() => actionMutation.mutate({ action: 'revoke', id: selectedRequest.id })}
                   >
-                    Thu hồi
-                  </Button>
+                    <Button
+                      danger
+                      disabled={!isActionAvailable(selectedRequest.status, 'revoke')}
+                      loading={actionMutation.isPending && actionMutation.variables?.action === 'revoke'}
+                    >
+                      {actionLabels.revoke}
+                    </Button>
+                  </Popconfirm>
                 </Space>
               </div>
             </SurfaceCard>

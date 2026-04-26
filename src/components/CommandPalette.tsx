@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import { AppIcon } from '@/components/AppIcon';
 import type { CommandCategory } from '@/app/layout/navigationConfig';
 
-const CATEGORY_ORDER: CommandCategory[] = ['Điều hướng', 'Tác vụ nhanh', 'Hệ thống', 'Cấu hình'];
+const CATEGORY_ORDER: CommandCategory[] = ['Navigate', 'Quick Actions', 'Operations', 'Settings'];
 
 export interface CommandPaletteItem {
   id: string;

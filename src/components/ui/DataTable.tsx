@@ -21,7 +21,7 @@ export function DataTable<T extends object>({
       virtual
       loadingSkeletonRows={loadingSkeletonRows}
       minHeight={minHeight}
-      scroll={scroll ?? { x: 'max-content', y: 560 }}
+      scroll={scroll ?? { x: 1120, y: 560 }}
       {...props}
     />
   );

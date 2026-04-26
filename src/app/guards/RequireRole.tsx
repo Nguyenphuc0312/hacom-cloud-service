@@ -1,9 +1,9 @@
-import { Result } from 'antd';
 import type { ReactNode } from 'react';
 
-import { LoadingState } from '@/components/QueryStates';
 import { useCurrentUser } from '@/app/useCurrentUser';
 import type { Role } from '@/api/types';
+import { PermissionDeniedState } from '@/components/PermissionDeniedState';
+import { LoadingState } from '@/components/QueryStates';
 import { hasMinimumRole, hasSomeRole } from '@/utils/role';
 
 interface RequireRoleProps {
@@ -16,7 +16,7 @@ export const RequireRole = ({ children, minimumRole, roles }: RequireRoleProps) 
   const { user, isLoading } = useCurrentUser();
 
   if (isLoading) {
-    return <LoadingState tip="Đang kiểm tra quyền truy cập..." />;
+    return <LoadingState tip="Checking access..." />;
   }
 
   const allowed = minimumRole
@@ -26,13 +26,7 @@ export const RequireRole = ({ children, minimumRole, roles }: RequireRoleProps) 
       : true;
 
   if (!allowed) {
-    return (
-      <Result
-        status="403"
-        title="403"
-        subTitle="Bạn không có quyền truy cập trang này."
-      />
-    );
+    return <PermissionDeniedState />;
   }
 
   return children;

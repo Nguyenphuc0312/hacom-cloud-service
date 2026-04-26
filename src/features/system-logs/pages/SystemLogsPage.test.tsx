@@ -63,7 +63,7 @@ describe('SystemLogsPage', () => {
 
     renderWithQuery();
 
-    expect(screen.getByText('Dang tai nhat ky he thong...')).toBeInTheDocument();
+    expect(screen.getByText('Loading system logs...')).toBeInTheDocument();
   });
 
   it('renders the error state when the API fails', async () => {
@@ -79,7 +79,7 @@ describe('SystemLogsPage', () => {
 
     renderWithQuery();
 
-    expect(await screen.findByText('Chua co ban ghi')).toBeInTheDocument();
+    expect(await screen.findByText('No records')).toBeInTheDocument();
   });
 
   it('renders logs and opens the detail panel', async () => {
@@ -91,7 +91,13 @@ describe('SystemLogsPage', () => {
     fireEvent.click(summaries[0]!);
 
     expect((await screen.findAllByText('Request ID')).length).toBeGreaterThan(0);
-    expect(screen.getByText('trace-1')).toBeInTheDocument();
+    expect(screen.getByText('Trace ID')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Trace ID/i }));
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('trace-1');
+    });
   });
 
   it('disables copy buttons when correlation IDs are missing', async () => {
@@ -133,7 +139,7 @@ describe('SystemLogsPage', () => {
       limit: 200,
     });
 
-    fireEvent.change(screen.getByPlaceholderText('Tim message, request ID, trace ID'), {
+    fireEvent.change(screen.getByPlaceholderText('Search message, request ID, trace ID'), {
       target: { value: 'trace-1' },
     });
 
@@ -201,7 +207,7 @@ describe('SystemLogsPage', () => {
     });
 
     fireEvent.mouseDown(rangeSelect);
-    fireEvent.click((await screen.findAllByText('24 gio')).at(-1)!);
+    fireEvent.click((await screen.findAllByText('24 hours')).at(-1)!);
 
     await waitFor(() => {
       expect(listMock).toHaveBeenLastCalledWith({

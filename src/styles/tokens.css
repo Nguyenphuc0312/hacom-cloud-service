@@ -85,6 +85,32 @@
   --transition-fast: 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
   --transition-base: 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
   --transition-slow: 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Production admin design tokens */
+  --app-bg: #e9e7e4;
+  --surface: #ffffff;
+  --surface-muted: #f7f7f8;
+  --surface-subtle: #fbfbfc;
+  --border: #e8e8ec;
+  --border-strong-token: #d8d8df;
+  --text-primary-token: #111827;
+  --text-secondary-token: #6b7280;
+  --text-muted-token: #9ca3af;
+  --brand: #6f4cf6;
+  --brand-hover: #5b3ee6;
+  --brand-soft: #eee9ff;
+  --success-token: #15803d;
+  --success-soft-token: #e8f7ee;
+  --warning-token: #d97706;
+  --warning-soft-token: #fff4df;
+  --danger-token: #dc2626;
+  --danger-soft-token: #feecec;
+  --info-token: #2563eb;
+  --info-soft-token: #eaf1ff;
+  --radius-card: 16px;
+  --radius-control: 10px;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 :root,
@@ -92,36 +118,36 @@
   color-scheme: light;
 
   /* Semantic colors */
-  --color-bg: #f5f6f8;
-  --color-bg-canvas: #eef1f4;
-  --color-card: #ffffff;
-  --color-card-muted: #f8f9fb;
-  --color-card-elevated: #ffffff;
+  --color-bg: var(--app-bg);
+  --color-bg-canvas: #efeeec;
+  --color-card: var(--surface);
+  --color-card-muted: var(--surface-muted);
+  --color-card-elevated: var(--surface);
   --color-sidebar: rgba(255, 255, 255, 0.98);
   --color-topbar: rgba(255, 255, 255, 0.96);
-  --color-text-primary: #111827;
+  --color-text-primary: var(--text-primary-token);
   --color-text-secondary: #374151;
-  --color-text-tertiary: #6b7280;
+  --color-text-tertiary: var(--text-secondary-token);
   --color-text-inverse: #f8fbff;
-  --color-border: #d7dde5;
-  --color-border-subtle: #e6eaf0;
-  --color-border-strong: #c5ced8;
+  --color-border: var(--border-strong-token);
+  --color-border-subtle: var(--border);
+  --color-border-strong: var(--border-strong-token);
   --color-border-interactive: #aeb8c4;
-  --color-accent: #2754c5;
-  --color-accent-strong: #1f46a7;
-  --color-accent-soft: rgba(39, 84, 197, 0.1);
-  --color-success: var(--color-green-500);
-  --color-success-soft: rgba(19, 155, 109, 0.12);
-  --color-warning: var(--color-amber-500);
-  --color-warning-soft: rgba(213, 139, 36, 0.14);
-  --color-danger: var(--color-red-500);
-  --color-danger-soft: rgba(223, 91, 87, 0.14);
-  --color-info: var(--color-cyan-500);
-  --color-info-soft: rgba(42, 159, 214, 0.12);
+  --color-accent: var(--brand);
+  --color-accent-strong: var(--brand-hover);
+  --color-accent-soft: var(--brand-soft);
+  --color-success: var(--success-token);
+  --color-success-soft: var(--success-soft-token);
+  --color-warning: var(--warning-token);
+  --color-warning-soft: var(--warning-soft-token);
+  --color-danger: var(--danger-token);
+  --color-danger-soft: var(--danger-soft-token);
+  --color-info: var(--info-token);
+  --color-info-soft: var(--info-soft-token);
   --color-overlay: rgba(8, 15, 28, 0.52);
 
   /* Theme gradients */
-  --gradient-page: linear-gradient(180deg, #f7f8fa 0%, var(--color-bg) 100%);
+  --gradient-page: linear-gradient(180deg, var(--app-bg) 0%, #efeeec 100%);
   --gradient-shell: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.98) 100%);
   --gradient-card: linear-gradient(180deg, #ffffff 0%, #ffffff 100%);
   --gradient-card-success:
@@ -146,9 +172,9 @@
   /* Shadows and focus */
   --focus-ring: 0 0 0 3px rgba(39, 84, 197, 0.14);
   --shadow-xs: 0 1px 1px rgba(15, 23, 42, 0.03);
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
-  --shadow-md: 0 8px 20px rgba(15, 23, 42, 0.06);
-  --shadow-lg: 0 18px 40px rgba(15, 23, 42, 0.08);
+  --shadow-sm: var(--shadow-card);
+  --shadow-md: 0 8px 18px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 18px 36px rgba(15, 23, 42, 0.07);
 
   /* Compatibility aliases */
   --bg-page: var(--color-bg);
