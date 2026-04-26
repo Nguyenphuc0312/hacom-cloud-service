@@ -6,9 +6,16 @@ type UnreadSummary = {
   conversations: Array<{
     conversationId: string;
     unreadCount: number;
+    lastReadSeq?: number | null;
     lastReadMessageId: string | null;
     lastReadAt: string | null;
   }>;
+};
+
+export type MarkAsReadInput = {
+  lastVisibleMessageId?: string;
+  lastReadSeq?: number;
+  messageId?: string;
 };
 
 type ApplyUnreadSummaryOptions = {
@@ -24,18 +31,63 @@ type UnreadStateSlice = {
 };
 
 type SetState<TState extends UnreadStateSlice> = (
-  partial:
-    | Partial<TState>
-    | ((state: TState) => Partial<TState>),
+  partial: Partial<TState> | ((state: TState) => Partial<TState>),
 ) => void;
 
 type GetState<TState extends UnreadStateSlice> = () => TState;
 
 type MarkAsReadRequest = {
   promise: Promise<void>;
-  anchorId: string;
-  queuedAnchorId?: string;
+  input: MarkAsReadInput;
+  queuedInput?: MarkAsReadInput;
 };
+
+type MarkReadResponseData = {
+  conversationId?: string;
+  userId?: string;
+  previousLastReadSeq?: number | null;
+  lastReadSeq?: number | null;
+  lastReadMessageId?: string | null;
+  lastReadAt?: string | null;
+  unreadCount?: number | null;
+};
+
+const toPositiveSeq = (value: unknown): number | null =>
+  typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : null;
+
+const normalizeMarkAsReadInput = (
+  input?: string | MarkAsReadInput,
+): MarkAsReadInput | null => {
+  if (typeof input === "string") {
+    return input.trim().length > 0 ? { lastVisibleMessageId: input } : null;
+  }
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+  const lastVisibleMessageId =
+    typeof input.lastVisibleMessageId === "string" &&
+    input.lastVisibleMessageId.trim().length > 0
+      ? input.lastVisibleMessageId
+      : undefined;
+  const messageId =
+    typeof input.messageId === "string" && input.messageId.trim().length > 0
+      ? input.messageId
+      : undefined;
+  const lastReadSeq = toPositiveSeq(input.lastReadSeq) ?? undefined;
+
+  return lastVisibleMessageId || messageId || lastReadSeq
+    ? {
+        ...(lastVisibleMessageId ? { lastVisibleMessageId } : {}),
+        ...(messageId ? { messageId } : {}),
+        ...(lastReadSeq ? { lastReadSeq } : {}),
+      }
+    : null;
+};
+
+const getInputAnchorId = (input: MarkAsReadInput): string | undefined =>
+  input.lastVisibleMessageId ?? input.messageId;
 
 export const createChatUnreadController = <TState extends UnreadStateSlice>({
   set,
@@ -54,7 +106,7 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
   emptyMessages: Message[];
   markConversationAsRead: (
     conversationId: string,
-    anchorId: string,
+    input: MarkAsReadInput,
   ) => Promise<unknown>;
   getUnreadSummary: () => Promise<unknown>;
   compareAnchorIdsInConversation: (
@@ -62,39 +114,52 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
     leftAnchorId: string,
     rightAnchorId: string,
   ) => number;
-  normalizeConversation: (conversation: Partial<Conversation>) => Conversation | null;
+  normalizeConversation: (
+    conversation: Partial<Conversation>,
+  ) => Conversation | null;
   buildConversationCollectionState: (
     conversations: Conversation[],
   ) => Partial<TState>;
   getConversationCursorTimestamp: (conversation: Conversation) => number;
   updateConversationReadProgress: (
     conversation: Conversation,
-    lastReadMessageId: string,
+    lastReadMessageId?: string | null,
     readAt?: Date | string | null,
+    lastReadSeq?: number | null,
   ) => Conversation;
 }) => {
   const markAsReadInFlight = new Map<string, MarkAsReadRequest>();
 
   const applyOptimisticConversationRead = (
     conversationId: string,
-    lastReadMessageId: string,
+    input: MarkAsReadInput,
     options?: {
       readAt?: Date | string | null;
     },
   ) => {
-    if (!conversationId || !lastReadMessageId) return;
+    if (!conversationId) return;
+    const lastReadMessageId = getInputAnchorId(input);
+    const lastReadSeq = toPositiveSeq(input.lastReadSeq);
+    if (!lastReadMessageId && lastReadSeq === null) return;
 
     set((state) => {
       const currentMessages = state.messages[conversationId] || emptyMessages;
-      const conversations = (Array.isArray(state.conversations)
-        ? state.conversations
-        : []
+      const conversations = (
+        Array.isArray(state.conversations) ? state.conversations : []
       ).map((conversation) => {
         if (conversation.id !== conversationId) {
           return conversation;
         }
 
         if (
+          lastReadSeq !== null &&
+          (conversation.lastReadSeq ?? 0) >= lastReadSeq
+        ) {
+          return conversation;
+        }
+
+        if (
+          lastReadMessageId &&
           conversation.lastReadMessageId &&
           compareAnchorIdsInConversation(
             currentMessages,
@@ -109,7 +174,49 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
           conversation,
           lastReadMessageId,
           options?.readAt,
+          lastReadSeq,
         );
+      });
+
+      return {
+        conversations,
+        ...buildConversationCollectionState(conversations),
+      };
+    });
+  };
+
+  const applyServerConversationRead = (response: MarkReadResponseData) => {
+    if (!response.conversationId) return;
+
+    set((state) => {
+      const conversations = (
+        Array.isArray(state.conversations) ? state.conversations : []
+      ).map((conversation) => {
+        if (conversation.id !== response.conversationId) {
+          return conversation;
+        }
+
+        const nextConversation = updateConversationReadProgress(
+          conversation,
+          response.lastReadMessageId,
+          response.lastReadAt,
+          response.lastReadSeq,
+        );
+
+        return normalizeConversation({
+          ...nextConversation,
+          unreadCount:
+            typeof response.unreadCount === "number"
+              ? response.unreadCount
+              : nextConversation.unreadCount,
+          ...(typeof response.unreadCount === "number" &&
+          response.unreadCount <= 0
+            ? {
+                firstUnreadMessageId: null,
+                firstUnreadMessageAt: null,
+              }
+            : {}),
+        }) as Conversation;
       });
 
       return {
@@ -121,9 +228,16 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
 
   const markAsRead = async (
     conversationId: string,
-    lastVisibleMessageId?: string,
+    input?: string | MarkAsReadInput,
   ): Promise<void> => {
-    if (!lastVisibleMessageId || lastVisibleMessageId.startsWith("temp-")) {
+    const normalizedInput = normalizeMarkAsReadInput(input);
+    if (!normalizedInput) {
+      return Promise.resolve();
+    }
+    const anchorId = getInputAnchorId(normalizedInput);
+    const lastReadSeq = toPositiveSeq(normalizedInput.lastReadSeq);
+
+    if (anchorId?.startsWith("temp-") && lastReadSeq === null) {
       return Promise.resolve();
     }
 
@@ -131,11 +245,18 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
       (conversation) => conversation.id === conversationId,
     );
     if (
+      lastReadSeq !== null &&
+      (currentConversation?.lastReadSeq ?? 0) >= lastReadSeq
+    ) {
+      return Promise.resolve();
+    }
+    if (
+      anchorId &&
       currentConversation?.lastReadMessageId &&
       compareAnchorIdsInConversation(
         get().messages[conversationId] || emptyMessages,
         currentConversation.lastReadMessageId,
-        lastVisibleMessageId,
+        anchorId,
       ) >= 0
     ) {
       return Promise.resolve();
@@ -143,41 +264,64 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
 
     const existingRequest = markAsReadInFlight.get(conversationId);
     if (existingRequest) {
-      const compareQueuedAnchor = compareAnchorIdsInConversation(
-        get().messages[conversationId] || emptyMessages,
-        existingRequest.queuedAnchorId ?? existingRequest.anchorId,
-        lastVisibleMessageId,
-      );
-      if (compareQueuedAnchor < 0) {
-        existingRequest.queuedAnchorId = lastVisibleMessageId;
+      const queuedInput = existingRequest.queuedInput ?? existingRequest.input;
+      const queuedSeq = toPositiveSeq(queuedInput.lastReadSeq);
+      const incomingSeq = toPositiveSeq(normalizedInput.lastReadSeq);
+      const queuedAnchorId = getInputAnchorId(queuedInput);
+
+      const shouldQueueBySeq =
+        incomingSeq !== null && (queuedSeq === null || incomingSeq > queuedSeq);
+      const shouldQueueByAnchor =
+        !shouldQueueBySeq &&
+        anchorId &&
+        queuedAnchorId &&
+        compareAnchorIdsInConversation(
+          get().messages[conversationId] || emptyMessages,
+          queuedAnchorId,
+          anchorId,
+        ) < 0;
+
+      if (
+        shouldQueueBySeq ||
+        shouldQueueByAnchor ||
+        (!queuedAnchorId && anchorId)
+      ) {
+        existingRequest.queuedInput = normalizedInput;
       }
       return existingRequest.promise;
     }
 
-    const runMarkAsRead = async (anchorId: string): Promise<void> => {
-      applyOptimisticConversationRead(conversationId, anchorId);
-      const request = markConversationAsRead(conversationId, anchorId).then(
-        () => undefined,
+    const runMarkAsRead = async (
+      requestInput: MarkAsReadInput,
+    ): Promise<void> => {
+      applyOptimisticConversationRead(conversationId, requestInput);
+      const request = markConversationAsRead(conversationId, requestInput).then(
+        (response) => {
+          if (response && typeof response === "object") {
+            applyServerConversationRead(response as MarkReadResponseData);
+          }
+          return undefined;
+        },
       );
       markAsReadInFlight.set(conversationId, {
         promise: request,
-        anchorId,
+        input: requestInput,
       });
 
       try {
         await request;
       } finally {
         const pending = markAsReadInFlight.get(conversationId);
-        const queuedAnchorId = pending?.queuedAnchorId;
+        const queuedInput = pending?.queuedInput;
         markAsReadInFlight.delete(conversationId);
 
-        if (queuedAnchorId && queuedAnchorId !== anchorId) {
-          await runMarkAsRead(queuedAnchorId);
+        if (queuedInput && queuedInput !== requestInput) {
+          await runMarkAsRead(queuedInput);
         }
       }
     };
 
-    return runMarkAsRead(lastVisibleMessageId);
+    return runMarkAsRead(normalizedInput);
   };
 
   const applyUnreadSummary = (
@@ -199,9 +343,8 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
         : Date.now();
 
     set((state) => {
-      const conversations = (Array.isArray(state.conversations)
-        ? state.conversations
-        : []
+      const conversations = (
+        Array.isArray(state.conversations) ? state.conversations : []
       ).map((conversation) => {
         const unreadSnapshot = summaryByConversationId.get(conversation.id);
         const summaryWasUpdatedAfterRequest =
@@ -223,6 +366,9 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
         return normalizeConversation({
           ...conversation,
           unreadCount: unreadSnapshot.unreadCount,
+          ...(typeof unreadSnapshot.lastReadSeq === "number"
+            ? { lastReadSeq: unreadSnapshot.lastReadSeq }
+            : {}),
           lastReadMessageId: unreadSnapshot.lastReadMessageId,
           lastReadAt: unreadSnapshot.lastReadAt,
           ...(unreadSnapshot.unreadCount > 0

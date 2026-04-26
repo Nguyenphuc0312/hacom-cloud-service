@@ -110,123 +110,117 @@ export const realtimeMiddleware: Middleware<
   object,
   RealtimeMiddlewareState,
   RealtimeDispatch
-> =
-  (storeApi) => (next) => (action) => {
-    const result = next(action);
+> = (storeApi) => (next) => (action) => {
+  const result = next(action);
 
-    if (realtimeMessageReceived.match(action)) {
-      const patch = storeApi.dispatch(
-        chatApi.util.updateQueryData(
+  if (realtimeMessageReceived.match(action)) {
+    const patch = storeApi.dispatch(
+      chatApi.util.updateQueryData(
+        "getMessages",
+        getMessageQueryArg(action.payload.conversationId),
+        (draft) => {
+          upsertMessageInCache(draft, action.payload.message);
+        },
+      ),
+    );
+    if (
+      patch.patches.length === 0 &&
+      shouldSeedMissingMessageCache(action.payload.message)
+    ) {
+      storeApi.dispatch(
+        chatApi.util.upsertQueryData(
           "getMessages",
           getMessageQueryArg(action.payload.conversationId),
-          (draft) => {
-            upsertMessageInCache(draft, action.payload.message);
-          },
+          buildConversationMessagesCache(action.payload.conversationId, [
+            action.payload.message,
+          ]),
         ),
       );
-      if (
-        patch.patches.length === 0 &&
-        shouldSeedMissingMessageCache(action.payload.message)
-      ) {
-        storeApi.dispatch(
-          chatApi.util.upsertQueryData(
-            "getMessages",
-            getMessageQueryArg(action.payload.conversationId),
-            buildConversationMessagesCache(action.payload.conversationId, [
-              action.payload.message,
-            ]),
-          ),
-        );
-      }
     }
+  }
 
-    if (realtimeMessageUpdated.match(action)) {
-      const patch = storeApi.dispatch(
-        chatApi.util.updateQueryData(
+  if (realtimeMessageUpdated.match(action)) {
+    const patch = storeApi.dispatch(
+      chatApi.util.updateQueryData(
+        "getMessages",
+        getMessageQueryArg(action.payload.conversationId),
+        (draft) => {
+          upsertMessageInCache(draft, action.payload.message);
+        },
+      ),
+    );
+    if (
+      patch.patches.length === 0 &&
+      shouldSeedMissingMessageCache(action.payload.message)
+    ) {
+      storeApi.dispatch(
+        chatApi.util.upsertQueryData(
           "getMessages",
           getMessageQueryArg(action.payload.conversationId),
-          (draft) => {
-            upsertMessageInCache(draft, action.payload.message);
-          },
+          buildConversationMessagesCache(action.payload.conversationId, [
+            action.payload.message,
+          ]),
         ),
       );
-      if (
-        patch.patches.length === 0 &&
-        shouldSeedMissingMessageCache(action.payload.message)
-      ) {
-        storeApi.dispatch(
-          chatApi.util.upsertQueryData(
-            "getMessages",
-            getMessageQueryArg(action.payload.conversationId),
-            buildConversationMessagesCache(action.payload.conversationId, [
-              action.payload.message,
-            ]),
-          ),
-        );
-      }
     }
+  }
 
-    if (realtimeMessageDeleted.match(action)) {
+  if (realtimeMessageDeleted.match(action)) {
+    storeApi.dispatch(
+      chatApi.util.updateQueryData(
+        "getMessages",
+        getMessageQueryArg(action.payload.conversationId),
+        (draft) => {
+          patchMessageInCache(draft, action.payload.messageId, {
+            isDeleted: true,
+            content: "",
+          });
+        },
+      ),
+    );
+  }
+
+  if (realtimeMessageReactionChanged.match(action)) {
+    storeApi.dispatch(
+      chatApi.util.updateQueryData(
+        "getMessages",
+        getMessageQueryArg(action.payload.conversationId),
+        (draft) => {
+          patchMessageReactionInCache(
+            draft,
+            {
+              messageId: action.payload.messageId,
+              emoji: action.payload.emoji,
+              userId: action.payload.userId,
+            },
+            action.payload.action,
+          );
+        },
+      ),
+    );
+  }
+
+  if (realtimeReadCursorUpdated.match(action)) {
+    if (
+      action.payload.lastReadMessageId ||
+      typeof action.payload.lastReadSeq === "number"
+    ) {
       storeApi.dispatch(
         chatApi.util.updateQueryData(
           "getMessages",
           getMessageQueryArg(action.payload.conversationId),
           (draft) => {
-            patchMessageInCache(draft, action.payload.messageId, {
-              isDeleted: true,
-              content: "",
+            patchReadCursorInCache(draft, {
+              lastReadMessageId: action.payload.lastReadMessageId,
+              lastReadSeq: action.payload.lastReadSeq,
+              currentUserId: action.payload.currentUserId,
+              readerId: action.payload.readerId,
             });
           },
         ),
       );
     }
+  }
 
-    if (realtimeMessageReactionChanged.match(action)) {
-      storeApi.dispatch(
-        chatApi.util.updateQueryData(
-          "getMessages",
-          getMessageQueryArg(action.payload.conversationId),
-          (draft) => {
-            patchMessageReactionInCache(
-              draft,
-              {
-                messageId: action.payload.messageId,
-                emoji: action.payload.emoji,
-                userId: action.payload.userId,
-              },
-              action.payload.action,
-            );
-          },
-        ),
-      );
-    }
-
-    if (realtimeReadCursorUpdated.match(action)) {
-      if (
-        action.payload.lastReadMessageId ||
-        typeof action.payload.lastReadSeq === "number"
-      ) {
-        storeApi.dispatch(
-          chatApi.util.updateQueryData(
-            "getMessages",
-            getMessageQueryArg(action.payload.conversationId),
-            (draft) => {
-              patchReadCursorInCache(draft, {
-                lastReadMessageId: action.payload.lastReadMessageId,
-                lastReadSeq: action.payload.lastReadSeq,
-                currentUserId: action.payload.currentUserId,
-                readerId: action.payload.readerId,
-              });
-            },
-          ),
-        );
-      }
-      storeApi.dispatch(
-        chatApi.util.invalidateTags([
-          { type: "Unread", id: action.payload.conversationId },
-        ]),
-      );
-    }
-
-    return result;
-  };
+  return result;
+};

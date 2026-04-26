@@ -120,11 +120,7 @@ interface UseWebSocketReturn {
     options?: { skipInitialDeltaSync?: boolean },
   ) => void;
   leaveConversation: (conversationId: string) => void;
-  sendMessage: (
-    conversationId: string,
-    content: string,
-    type?: string,
-  ) => void;
+  sendMessage: (conversationId: string, content: string, type?: string) => void;
   sendTyping: (conversationId: string) => void;
   stopTyping: (conversationId: string) => void;
 }
@@ -137,13 +133,19 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
 const asString = (value: unknown): string | null =>
   typeof value === "string" && value.trim().length > 0 ? value : null;
 
-const getLatestServerSeq = (messages: Array<{ serverSeq?: number }>): number | null => {
+const getLatestServerSeq = (
+  messages: Array<{ serverSeq?: number }>,
+): number | null => {
   let latest: number | null = null;
   messages.forEach((message) => {
-    if (typeof message.serverSeq !== "number" || !Number.isFinite(message.serverSeq)) {
+    if (
+      typeof message.serverSeq !== "number" ||
+      !Number.isFinite(message.serverSeq)
+    ) {
       return;
     }
-    latest = latest === null ? message.serverSeq : Math.max(latest, message.serverSeq);
+    latest =
+      latest === null ? message.serverSeq : Math.max(latest, message.serverSeq);
   });
   return latest;
 };
@@ -190,8 +192,10 @@ const hasMessageInRtkCache = (
   conversationId: string,
   message: Message,
 ): boolean =>
-  findMessageIdentityIndex(getConversationMessageCache(conversationId), message) >=
-  0;
+  findMessageIdentityIndex(
+    getConversationMessageCache(conversationId),
+    message,
+  ) >= 0;
 
 const toRealtimeConnectionStatus = (
   state: ConnectionState,
@@ -235,8 +239,8 @@ export const shouldUseDeltaConversationRefresh = ({
 }): boolean =>
   Boolean(
     conversationId &&
-      (selectedConversationId === conversationId ||
-        joinedConversationIds.has(conversationId)),
+    (selectedConversationId === conversationId ||
+      joinedConversationIds.has(conversationId)),
   );
 
 export {
@@ -320,9 +324,7 @@ export const useWebSocket = (
   const resyncCoordinatorStateRef = useRef(
     createWebSocketResyncCoordinatorState(),
   );
-  const authCoordinatorStateRef = useRef(
-    createWebSocketAuthCoordinatorState(),
-  );
+  const authCoordinatorStateRef = useRef(createWebSocketAuthCoordinatorState());
   const connectionLifecycleStateRef = useRef(
     createWebSocketConnectionLifecycleState(),
   );
@@ -670,7 +672,11 @@ export const useWebSocket = (
       eventId?: string | null;
     }) => {
       const currentUserId = useAuthStore.getState().user?.id ?? null;
-      if (!currentUserId || !input.senderId || input.senderId === currentUserId) {
+      if (
+        !currentUserId ||
+        !input.senderId ||
+        input.senderId === currentUserId
+      ) {
         return;
       }
 
@@ -765,7 +771,11 @@ export const useWebSocket = (
   );
 
   const maybeNotifyMembershipEvent = useCallback(
-    (conversationId: string, membershipState: string, reason: string | null) => {
+    (
+      conversationId: string,
+      membershipState: string,
+      reason: string | null,
+    ) => {
       const conversation = useChatStore
         .getState()
         .conversations.find((item) => item.id === conversationId);
@@ -876,8 +886,9 @@ export const useWebSocket = (
       clearConversationJoinRetry(conversationId);
 
       const attempt =
-        conversationSyncStateRef.current.joinRetryAttempts.get(conversationId) ??
-        0;
+        conversationSyncStateRef.current.joinRetryAttempts.get(
+          conversationId,
+        ) ?? 0;
       const retryDelay = Math.min(
         CONVERSATION_JOIN_ACK_TIMEOUT_MS * Math.max(attempt + 1, 1),
         CONVERSATION_JOIN_RETRY_DELAY_MAX_MS,
@@ -924,9 +935,7 @@ export const useWebSocket = (
           retryDelay,
         });
 
-        if (
-          useChatStore.getState().selectedConversationId === conversationId
-        ) {
+        if (useChatStore.getState().selectedConversationId === conversationId) {
           void scheduleConversationResync(conversationId, {
             reason: "conversation-refresh",
           });
@@ -1076,10 +1085,10 @@ export const useWebSocket = (
       });
       const shouldIncrementUnread = Boolean(
         eventType === "message:new" &&
-          senderId &&
-          currentUserId &&
-          senderId !== currentUserId &&
-          (!isActiveConversation || !visibleAndFocused),
+        senderId &&
+        currentUserId &&
+        senderId !== currentUserId &&
+        (!isActiveConversation || !visibleAndFocused),
       );
       logMessageDebug("useWebSocket", "realtime.client.state_updated", {
         requestId:
@@ -1119,7 +1128,9 @@ export const useWebSocket = (
           senderName:
             asString(messagePayload.senderName) ?? asString(payload.senderName),
           content:
-            typeof messagePayload.content === "string" ? messagePayload.content : "",
+            typeof messagePayload.content === "string"
+              ? messagePayload.content
+              : "",
           mentions: Array.isArray(messagePayload.mentions)
             ? messagePayload.mentions.filter(
                 (item): item is string => typeof item === "string",
@@ -1132,13 +1143,17 @@ export const useWebSocket = (
       }
 
       if (isAmbiguousSelfReconcile) {
-        logMessageDebug("useWebSocket", "socket_message_missing_reconcile_alias", {
-          conversationId,
-          eventId,
-          messageId,
-          senderId,
-          stableId,
-        });
+        logMessageDebug(
+          "useWebSocket",
+          "socket_message_missing_reconcile_alias",
+          {
+            conversationId,
+            eventId,
+            messageId,
+            senderId,
+            stableId,
+          },
+        );
         const shouldUseDeltaRefresh = shouldUseDeltaConversationRefresh({
           conversationId,
           selectedConversationId: chatState.selectedConversationId,
@@ -1338,6 +1353,7 @@ export const useWebSocket = (
 
       const conversationId = getConversationId(payload);
       const lastMessageId =
+        asString(payload.lastReadMessageId) ??
         asString(payload.lastMessageId) ??
         asString(payload.messageId) ??
         asString(payload.id) ??
@@ -1352,8 +1368,19 @@ export const useWebSocket = (
       });
 
       const readerId =
-        asString(payload.userId) ?? asString(payload.senderId) ?? undefined;
+        asString(payload.actorUserId) ??
+        asString(payload.userId) ??
+        asString(payload.senderId) ??
+        undefined;
       const currentUserId = useAuthStore.getState().user?.id;
+      useChatStore
+        .getState()
+        .markMessagesReadUpTo(
+          conversationId,
+          lastMessageId ?? "",
+          readerId,
+          lastReadSeq,
+        );
       dispatch(
         realtimeReadCursorUpdated({
           conversationId,
@@ -1533,23 +1560,23 @@ export const useWebSocket = (
       const payload = asRecord(data);
       const conversationId = payload ? getConversationId(payload) : null;
       const currentUserId = useAuthStore.getState().user?.id ?? null;
-      if (
-        conversationId &&
-        options?.bumpMembers
-      ) {
+      if (conversationId && options?.bumpMembers) {
         bumpMemberListVersion(conversationId);
       }
       if (
         conversationId &&
-        !(options?.skipIfCurrentUserIsTarget &&
+        !(
+          options?.skipIfCurrentUserIsTarget &&
           shouldSkipGroupConversationRefreshForCurrentUser(
             payload,
             currentUserId,
-          ))
+          )
+        )
       ) {
         const shouldUseDeltaRefresh = shouldUseDeltaConversationRefresh({
           conversationId,
-          selectedConversationId: useChatStore.getState().selectedConversationId,
+          selectedConversationId:
+            useChatStore.getState().selectedConversationId,
           joinedConversationIds:
             conversationSyncStateRef.current.joinedConversationIds,
         });
@@ -1904,7 +1931,7 @@ export const useWebSocket = (
       const scopes = Array.isArray(payload?.scopes)
         ? payload.scopes
             .map((scope) => asString(scope))
-          .filter((scope): scope is string => typeof scope === "string")
+            .filter((scope): scope is string => typeof scope === "string")
         : [];
       handleResyncRequired(scopes);
     };
@@ -1922,10 +1949,8 @@ export const useWebSocket = (
 
       useSettingsStore
         .getState()
-        .applyRemoteUpdate(
-          payload as unknown as UserSettingsUpdatedPayload,
-          );
-      };
+        .applyRemoteUpdate(payload as unknown as UserSettingsUpdatedPayload);
+    };
 
     const unsubscribeSyncEvents = registerSyncEvents(socket, {
       onConversationResynced: handleConversationResyncedEvent,
@@ -1991,7 +2016,8 @@ export const useWebSocket = (
         requestConversationJoin,
         flushEmitQueue,
         flushQueuedMessages,
-        getConnectionState: () => getSocket()?.getConnectionState() ?? "unknown",
+        getConnectionState: () =>
+          getSocket()?.getConnectionState() ?? "unknown",
         getJoinedConversationIds: () =>
           Array.from(conversationSyncStateRef.current.joinedConversationIds),
         getQueuedEmitCount: () => emitQueueRef.current.length,
@@ -2197,10 +2223,7 @@ export const useWebSocket = (
       window.removeEventListener("online", handleOnlineEvent);
       window.removeEventListener("pageshow", handlePageShow);
       window.removeEventListener("focus", handleFocus);
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibilityChange,
-      );
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [handleBrowserOnline, handleResume]);
 
@@ -2220,12 +2243,7 @@ export const useWebSocket = (
       unsubscribersRef.current = [];
       disconnect();
     };
-  }, [
-    autoConnect,
-    connect,
-    disconnect,
-    isAuthenticated,
-  ]);
+  }, [autoConnect, connect, disconnect, isAuthenticated]);
 
   return {
     isConnected: connectionState === "connected",

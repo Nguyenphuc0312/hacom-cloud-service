@@ -142,7 +142,7 @@ export const mergeMessageRecords = (
             incoming.status === MessageStatus.READ ||
             !isTempMessageId(incoming.id)
           ? "sent"
-          : incoming.sendState ?? current.sendState,
+          : (incoming.sendState ?? current.sendState),
   };
 
   if (merged.sendState === "sent") {
@@ -168,10 +168,7 @@ export const mergeMessageLists = (
       continue;
     }
 
-    merged[existingIndex] = mergeMessageRecords(
-      merged[existingIndex],
-      message,
-    );
+    merged[existingIndex] = mergeMessageRecords(merged[existingIndex], message);
   }
 
   return sortMessagesByCanonicalOrder(merged);
@@ -397,10 +394,18 @@ export const patchReadCursorInCache = (
     if (message.senderId !== input.currentUserId) return false;
     if (message.status === MessageStatus.READ) return false;
 
+    const messageRecord = message as {
+      messageSeq?: unknown;
+      serverSeq?: unknown;
+    };
     const messageSeq =
-      typeof message.serverSeq === "number" && Number.isFinite(message.serverSeq)
-        ? message.serverSeq
-        : null;
+      typeof messageRecord.messageSeq === "number" &&
+      Number.isFinite(messageRecord.messageSeq)
+        ? messageRecord.messageSeq
+        : typeof messageRecord.serverSeq === "number" &&
+            Number.isFinite(messageRecord.serverSeq)
+          ? messageRecord.serverSeq
+          : null;
     const withinSeqBoundary =
       typeof input.lastReadSeq === "number" &&
       Number.isFinite(input.lastReadSeq) &&
@@ -445,8 +450,7 @@ export const markMessageFailedInCache = (
 ): void => {
   const failureMessage =
     typeof failure === "string" ? failure : failure?.message;
-  const failureCode =
-    typeof failure === "string" ? undefined : failure?.code;
+  const failureCode = typeof failure === "string" ? undefined : failure?.code;
   const failureStatusCode =
     typeof failure === "string" ? undefined : failure?.statusCode;
   const failureReason =

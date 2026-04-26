@@ -3,11 +3,7 @@ import { useAdjacentConversationIds, useChatStore } from "../../../stores";
 import type { HistoryQueryType } from "../../../stores/chatStore";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
 import type { ConnectionState } from "../../../lib/socket";
-import type {
-  Conversation,
-  Message,
-  UserSummary,
-} from "../../../types";
+import type { Conversation, Message, UserSummary } from "../../../types";
 import { getConversationByIdUseCase } from "../usecases/getConversationById";
 import { logMessageDebug } from "../../../utils/messageDebug";
 import { markChatPerformance } from "../../../utils/chatPerformance";
@@ -57,6 +53,25 @@ const scheduleIdleTask = (task: () => void): (() => void) => {
   };
 };
 
+const getMessageReadSeq = (message: Message): number | null => {
+  const record = message as unknown as {
+    messageSeq?: unknown;
+    serverSeq?: unknown;
+    seq?: unknown;
+  };
+  const candidates = [record.messageSeq, record.serverSeq, record.seq];
+  for (const candidate of candidates) {
+    if (
+      typeof candidate === "number" &&
+      Number.isInteger(candidate) &&
+      candidate > 0
+    ) {
+      return candidate;
+    }
+  }
+  return null;
+};
+
 interface UseConversationSessionOptions {
   routeConversationId: string | null;
   selectedConversationId: string | null;
@@ -85,7 +100,7 @@ interface UseConversationSessionOptions {
   ) => Promise<unknown>;
   markAsRead: (
     conversationId: string,
-    lastVisibleMessageId?: string,
+    input?: string | { lastVisibleMessageId?: string; lastReadSeq?: number },
   ) => Promise<void>;
   joinConversation: (
     conversationId: string,
@@ -143,61 +158,67 @@ export const useConversationSession = ({
     CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED
       ? false
       : selectedConversationId
-      ? (state.hasMoreMessages[selectedConversationId] ?? true)
-      : false,
+        ? (state.hasMoreMessages[selectedConversationId] ?? true)
+        : false,
   );
   const currentIsLoading = useChatStore((state) =>
     CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED
       ? false
       : selectedConversationId
-      ? Boolean(state.isLoadingMessagesByConversation[selectedConversationId])
-      : false,
+        ? Boolean(state.isLoadingMessagesByConversation[selectedConversationId])
+        : false,
   );
   const currentMessageError = useChatStore((state) =>
     CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED
       ? null
       : selectedConversationId
-      ? (state.messageErrors[selectedConversationId] ?? null)
-      : null,
+        ? (state.messageErrors[selectedConversationId] ?? null)
+        : null,
   );
   const isSelectedConversationHydrated = useChatStore((state) =>
     CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED
       ? Boolean(selectedConversationId)
       : selectedConversationId
-      ? Boolean(state.messagesHydratedByConversation[selectedConversationId])
-      : false,
+        ? Boolean(state.messagesHydratedByConversation[selectedConversationId])
+        : false,
   );
   const currentHistoryStage = useChatStore((state) =>
     CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED
       ? "live_realtime"
       : selectedConversationId
-      ? (state.historyStageByConversation[selectedConversationId] ?? "empty")
-      : "empty",
+        ? (state.historyStageByConversation[selectedConversationId] ?? "empty")
+        : "empty",
   );
   const hasAuthoritativeHistory = useChatStore((state) =>
     CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED
       ? Boolean(selectedConversationId)
       : selectedConversationId
-      ? Boolean(
-          state.hasAuthoritativeHistoryByConversation[selectedConversationId],
-        )
-      : false,
+        ? Boolean(
+            state.hasAuthoritativeHistoryByConversation[selectedConversationId],
+          )
+        : false,
   );
   const [previousConversationId, nextConversationId] =
     useAdjacentConversationIds(selectedConversationId);
   const lastVisibleReadAnchorKeyRef = useRef<string | null>(null);
   const directInfoHydratedRef = useRef<Set<string>>(new Set());
   const hasConversationCachedForRoute = useChatStore((state) =>
-    routeConversationId ? Boolean(state.conversationById[routeConversationId]) : false,
+    routeConversationId
+      ? Boolean(state.conversationById[routeConversationId])
+      : false,
   );
 
   const canBootstrapConversationFromCache = useMemo(
     () =>
       Boolean(
         hasConversationCachedForRoute &&
-          routeConversationId === selectedConversationId,
+        routeConversationId === selectedConversationId,
       ),
-    [hasConversationCachedForRoute, routeConversationId, selectedConversationId],
+    [
+      hasConversationCachedForRoute,
+      routeConversationId,
+      selectedConversationId,
+    ],
   );
 
   const isCurrentRouteValidated = useMemo(
@@ -217,9 +238,7 @@ export const useConversationSession = ({
     currentHistoryStage === "partial_prefetch";
   const isConversationHistoryReady = hasAuthoritativeHistory;
   const isConversationReady = Boolean(
-    selectedConversationId &&
-      selectedConversation &&
-      isCurrentRouteValidated,
+    selectedConversationId && selectedConversation && isCurrentRouteValidated,
   );
   const websocketReady = connectionState === "connected";
   const selectedUnreadCount = selectedConversation?.unreadCount ?? 0;
@@ -264,18 +283,24 @@ export const useConversationSession = ({
       });
 
       if (CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED) {
-        logMessageDebug("ChatPage", "legacy_message_fetch_skipped_rtkq_runtime", {
-          conversationId: selectedConversationId,
-        });
+        logMessageDebug(
+          "ChatPage",
+          "legacy_message_fetch_skipped_rtkq_runtime",
+          {
+            conversationId: selectedConversationId,
+          },
+        );
         return;
       }
 
       const latestState = useChatStore.getState();
       const latestStage =
-        latestState.historyStageByConversation[selectedConversationId] ?? "empty";
+        latestState.historyStageByConversation[selectedConversationId] ??
+        "empty";
       const latestHasAuthoritativeHistory =
-        latestState.hasAuthoritativeHistoryByConversation[selectedConversationId] ===
-        true;
+        latestState.hasAuthoritativeHistoryByConversation[
+          selectedConversationId
+        ] === true;
 
       if (
         !latestHasAuthoritativeHistory &&
@@ -315,13 +340,18 @@ export const useConversationSession = ({
             selectedConversationIdAtDispatch: selectedConversationId,
           },
         );
-        logMessageDebug("ChatPage", "initial_fetch_completed", {
-          conversationId: selectedConversationId,
-          result: initialFetchResult,
-        }, {
-          alwaysOn: true,
-          level: "info",
-        });
+        logMessageDebug(
+          "ChatPage",
+          "initial_fetch_completed",
+          {
+            conversationId: selectedConversationId,
+            result: initialFetchResult,
+          },
+          {
+            alwaysOn: true,
+            level: "info",
+          },
+        );
       }
     })();
 
@@ -405,22 +435,29 @@ export const useConversationSession = ({
       const conversation =
         useChatStore.getState().conversationById[selectedConversationId];
       if (!conversation) return;
+      const lastReadSeq = getMessageReadSeq(message);
       const alreadyReadUpToLatest =
-        conversation.lastReadMessageId === message.id &&
-        (conversation.unreadCount ?? 0) <= 0;
+        (lastReadSeq !== null &&
+          (conversation.lastReadSeq ?? 0) >= lastReadSeq) ||
+        (conversation.lastReadMessageId === message.id &&
+          (conversation.unreadCount ?? 0) <= 0);
       if (alreadyReadUpToLatest) {
         return;
       }
 
-      const latestKey = `${selectedConversationId}:${message.id}`;
+      const latestKey = `${selectedConversationId}:${message.id}:${
+        lastReadSeq ?? "no-seq"
+      }`;
       if (lastVisibleReadAnchorKeyRef.current === latestKey) {
         return;
       }
 
       lastVisibleReadAnchorKeyRef.current = latestKey;
-      // TODO(realtime-phase2): pass message.serverSeq as lastReadSeq once the
-      // Zustand mark-read path accepts cursor payloads end-to-end.
-      void markAsRead(selectedConversationId, message.id).catch(() => {
+      const markReadInput =
+        lastReadSeq !== null
+          ? { lastVisibleMessageId: message.id, lastReadSeq }
+          : message.id;
+      void markAsRead(selectedConversationId, markReadInput).catch(() => {
         if (lastVisibleReadAnchorKeyRef.current === latestKey) {
           lastVisibleReadAnchorKeyRef.current = null;
         }
@@ -440,9 +477,10 @@ export const useConversationSession = ({
       return;
     }
 
-    const candidateRoomIds = [previousConversationId, nextConversationId].filter(
-      (id): id is string => typeof id === "string" && id.length > 0,
-    );
+    const candidateRoomIds = [
+      previousConversationId,
+      nextConversationId,
+    ].filter((id): id is string => typeof id === "string" && id.length > 0);
     if (candidateRoomIds.length === 0) return;
 
     let isCancelled = false;

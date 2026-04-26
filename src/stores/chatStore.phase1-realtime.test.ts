@@ -289,7 +289,9 @@ describe("chatStore phase-1 realtime flows", () => {
     });
 
     const after = useChatStore.getState();
-    expect(after.messageIdsByConversation).toBe(previousMessageIdsByConversation);
+    expect(after.messageIdsByConversation).toBe(
+      previousMessageIdsByConversation,
+    );
     expect(after.messageAliasIndexByConversation).toBe(previousAliasIndex);
     expect(after.messageWindowByConversation).toBe(previousWindow);
     expect(after.messages["room-1"]?.[0]?.sendState).toBe("sent");
@@ -307,9 +309,9 @@ describe("chatStore phase-1 realtime flows", () => {
         conversationId: "room-2",
       }),
     ] as never);
-    useChatStore.getState().setMessages("room-1", [
-      makeMessage({ id: "room-1-msg-1" }),
-    ] as never);
+    useChatStore
+      .getState()
+      .setMessages("room-1", [makeMessage({ id: "room-1-msg-1" })] as never);
     useChatStore.getState().setMessages("room-2", [
       makeMessage({
         id: "room-2-msg-1",
@@ -366,7 +368,10 @@ describe("chatStore phase-1 realtime flows", () => {
     useChatStore.getState().markMessagesReadUpTo("room-1", "msg-2", "user-b");
 
     const state = useChatStore.getState();
-    const selectedMessages = selectConversationMessagesFromState(state, "room-1");
+    const selectedMessages = selectConversationMessagesFromState(
+      state,
+      "room-1",
+    );
     expect(selectedMessages.map((message) => message.status)).toEqual([
       MessageStatus.READ,
       MessageStatus.READ,
@@ -541,12 +546,14 @@ describe("chatStore phase-1 realtime flows", () => {
       },
     });
 
-    await useChatStore.getState().fetchMessages("room-1", undefined, undefined, {
-      limit: 20,
-      queryType: "prefetch",
-      source: "prefetch_adjacent",
-      selectedConversationIdAtDispatch: "room-2",
-    });
+    await useChatStore
+      .getState()
+      .fetchMessages("room-1", undefined, undefined, {
+        limit: 20,
+        queryType: "prefetch",
+        source: "prefetch_adjacent",
+        selectedConversationIdAtDispatch: "room-2",
+      });
 
     const state = useChatStore.getState();
     expect(state.historyStageByConversation["room-1"]).toBe("partial_prefetch");
@@ -603,12 +610,14 @@ describe("chatStore phase-1 realtime flows", () => {
       },
     });
 
-    await useChatStore.getState().fetchMessages("room-1", undefined, undefined, {
-      force: true,
-      queryType: "authoritative_open",
-      source: "initial_fetch",
-      selectedConversationIdAtDispatch: "room-1",
-    });
+    await useChatStore
+      .getState()
+      .fetchMessages("room-1", undefined, undefined, {
+        force: true,
+        queryType: "authoritative_open",
+        source: "initial_fetch",
+        selectedConversationIdAtDispatch: "room-1",
+      });
 
     const state = useChatStore.getState();
     expect(state.historyStageByConversation["room-1"]).toBe(
@@ -616,10 +625,9 @@ describe("chatStore phase-1 realtime flows", () => {
     );
     expect(state.hasAuthoritativeHistoryByConversation["room-1"]).toBe(true);
     expect(state.messagesHydratedByConversation["room-1"]).toBe(true);
-    expect((state.messages["room-1"] || []).map((message) => message.id)).toEqual([
-      "msg-read-1",
-      "msg-unread-1",
-    ]);
+    expect(
+      (state.messages["room-1"] || []).map((message) => message.id),
+    ).toEqual(["msg-read-1", "msg-unread-1"]);
   });
 
   it("ignores authoritative open response when room selection changed before commit", async () => {
@@ -647,17 +655,14 @@ describe("chatStore phase-1 realtime flows", () => {
     }>();
     getMessagesMock.mockReturnValueOnce(deferred.promise);
 
-    const request = useChatStore.getState().fetchMessages(
-      "room-1",
-      undefined,
-      undefined,
-      {
+    const request = useChatStore
+      .getState()
+      .fetchMessages("room-1", undefined, undefined, {
         force: true,
         queryType: "authoritative_open",
         source: "initial_fetch",
         selectedConversationIdAtDispatch: "room-1",
-      },
-    );
+      });
 
     useChatStore.getState().selectConversation("room-2");
     deferred.resolve({
@@ -700,10 +705,7 @@ describe("chatStore phase-1 realtime flows", () => {
     const firstRequestAborted = vi.fn();
     getMessagesMock
       .mockImplementationOnce(
-        (
-          _conversationId: string,
-          options?: { signal?: AbortSignal },
-        ) =>
+        (_conversationId: string, options?: { signal?: AbortSignal }) =>
           new Promise((_, reject) => {
             options?.signal?.addEventListener(
               "abort",
@@ -741,30 +743,24 @@ describe("chatStore phase-1 realtime flows", () => {
         },
       });
 
-    const firstRequest = useChatStore.getState().fetchMessages(
-      "room-1",
-      undefined,
-      undefined,
-      {
+    const firstRequest = useChatStore
+      .getState()
+      .fetchMessages("room-1", undefined, undefined, {
         force: true,
         queryType: "authoritative_open",
         source: "initial_fetch",
         selectedConversationIdAtDispatch: "room-1",
-      },
-    );
+      });
 
     useChatStore.getState().selectConversation("room-2");
-    const secondRequest = useChatStore.getState().fetchMessages(
-      "room-2",
-      undefined,
-      undefined,
-      {
+    const secondRequest = useChatStore
+      .getState()
+      .fetchMessages("room-2", undefined, undefined, {
         force: true,
         queryType: "authoritative_open",
         source: "initial_fetch",
         selectedConversationIdAtDispatch: "room-2",
-      },
-    );
+      });
 
     await expect(firstRequest).resolves.toEqual(
       expect.objectContaining({
@@ -780,10 +776,16 @@ describe("chatStore phase-1 realtime flows", () => {
     );
 
     expect(firstRequestAborted).toHaveBeenCalledTimes(1);
-    expect((useChatStore.getState().messages["room-1"] ?? []).map((message) => message.id)).toEqual([]);
-    expect((useChatStore.getState().messages["room-2"] ?? []).map((message) => message.id)).toEqual([
-      "msg-room-2",
-    ]);
+    expect(
+      (useChatStore.getState().messages["room-1"] ?? []).map(
+        (message) => message.id,
+      ),
+    ).toEqual([]);
+    expect(
+      (useChatStore.getState().messages["room-2"] ?? []).map(
+        (message) => message.id,
+      ),
+    ).toEqual(["msg-room-2"]);
   });
 
   it("preserves websocket delta that lands while initial snapshot is still in flight", async () => {
@@ -937,22 +939,18 @@ describe("chatStore phase-1 realtime flows", () => {
     const secondPromise = useChatStore.getState().markAsRead("room-1", "msg-2");
 
     expect(conversationMarkAsReadMock).toHaveBeenCalledTimes(1);
-    expect(conversationMarkAsReadMock).toHaveBeenNthCalledWith(
-      1,
-      "room-1",
-      "msg-1",
-    );
+    expect(conversationMarkAsReadMock).toHaveBeenNthCalledWith(1, "room-1", {
+      lastVisibleMessageId: "msg-1",
+    });
 
     firstRequest.resolve();
     await Promise.resolve();
     await Promise.resolve();
 
     expect(conversationMarkAsReadMock).toHaveBeenCalledTimes(2);
-    expect(conversationMarkAsReadMock).toHaveBeenNthCalledWith(
-      2,
-      "room-1",
-      "msg-2",
-    );
+    expect(conversationMarkAsReadMock).toHaveBeenNthCalledWith(2, "room-1", {
+      lastVisibleMessageId: "msg-2",
+    });
 
     secondRequest.resolve();
     await firstPromise;
@@ -1711,9 +1709,11 @@ describe("chatStore phase-1 realtime flows", () => {
       }),
     );
 
-    await useChatStore.getState().fetchMessages("room-1", undefined, undefined, {
-      force: true,
-    });
+    await useChatStore
+      .getState()
+      .fetchMessages("room-1", undefined, undefined, {
+        force: true,
+      });
 
     const messages = getRoomMessages();
     const conversation = useChatStore
@@ -1785,7 +1785,9 @@ describe("chatStore phase-1 realtime flows", () => {
     const conversation = useChatStore
       .getState()
       .conversations.find((item) => item.id === "room-1");
-    const renamedMessage = messages.find((message) => message.id === "msg-sender-old");
+    const renamedMessage = messages.find(
+      (message) => message.id === "msg-sender-old",
+    );
     const replyMessage = messages.find((message) => message.id === "msg-reply");
 
     expect(renamedMessage?.senderName).toBe("Bob Renamed");
@@ -1998,7 +2000,9 @@ describe("chatStore phase-1 realtime flows", () => {
       "room-other",
     ]);
     expect(
-      conversations.filter((conversation) => conversation.id === "room-overlap"),
+      conversations.filter(
+        (conversation) => conversation.id === "room-overlap",
+      ),
     ).toHaveLength(1);
     expect(overlap?.summaryVersion).toBe(5);
     expect(overlap?.unreadCount).toBe(4);
@@ -2026,9 +2030,10 @@ describe("chatStore phase-1 realtime flows", () => {
       }),
     ] as never);
 
-    expect(
-      useChatStore.getState().orderedConversationIds,
-    ).toEqual(["room-page-1", "room-page-2"]);
+    expect(useChatStore.getState().orderedConversationIds).toEqual([
+      "room-page-1",
+      "room-page-2",
+    ]);
   });
 
   it("preserves rooms from later pages when conversation list refresh reloads page 1", async () => {
@@ -2121,7 +2126,9 @@ describe("chatStore phase-1 realtime flows", () => {
       }),
     ] as never);
 
-    expect(useChatStore.getState().messageWindowByConversation["room-1"]).toEqual({
+    expect(
+      useChatStore.getState().messageWindowByConversation["room-1"],
+    ).toEqual({
       oldestLoadedMessageId: "msg-older",
       oldestLoadedAt: "2026-04-10T09:05:00.000Z",
       newestLoadedMessageId: "msg-newer",
@@ -2203,7 +2210,9 @@ describe("chatStore phase-1 realtime flows", () => {
       .sendMessage("room-1", "ok", MessageType.TEXT);
 
     const optimisticMessages = getRoomMessages();
-    expect(optimisticMessages.filter((message) => message.content === "ok")).toHaveLength(2);
+    expect(
+      optimisticMessages.filter((message) => message.content === "ok"),
+    ).toHaveLength(2);
 
     const [firstOptimistic, secondOptimistic] = optimisticMessages;
     firstDeferred.resolve(
@@ -2232,7 +2241,9 @@ describe("chatStore phase-1 realtime flows", () => {
     await Promise.all([firstPromise, secondPromise]);
 
     const reconciled = getRoomMessages();
-    expect(reconciled.filter((message) => message.content === "ok")).toHaveLength(2);
+    expect(
+      reconciled.filter((message) => message.content === "ok"),
+    ).toHaveLength(2);
     expect(reconciled.map((message) => message.id)).toEqual([
       "server-same-1",
       "server-same-2",
