@@ -437,6 +437,67 @@ export const patchReadCursorInCache = (
   }
 };
 
+export const patchDeliveredReceiptInCache = (
+  cache: ConversationMessagesCache,
+  input: {
+    messageId: string;
+    messageSeq?: number;
+    currentUserId?: string;
+    deliveredAt?: string;
+  },
+): void => {
+  if (!input.currentUserId) return;
+
+  const matchingIndex = findMessageIdentityIndex(cache.messages, {
+    id: input.messageId,
+    localId: input.messageId,
+    stableId: input.messageId,
+    clientMessageId: input.messageId,
+  });
+  const message =
+    matchingIndex >= 0
+      ? cache.messages[matchingIndex]
+      : cache.messages.find((candidate) => {
+          const candidateRecord = candidate as unknown as {
+            messageSeq?: number;
+          };
+          const candidateSeq =
+            typeof candidateRecord.messageSeq === "number" &&
+            Number.isFinite(candidateRecord.messageSeq)
+              ? candidateRecord.messageSeq
+              : typeof candidate.serverSeq === "number" &&
+                  Number.isFinite(candidate.serverSeq)
+                ? candidate.serverSeq
+                : null;
+          return (
+            typeof input.messageSeq === "number" &&
+            candidateSeq === input.messageSeq &&
+            candidate.senderId === input.currentUserId
+          );
+        });
+
+  if (!message) return;
+  if (message.senderId !== input.currentUserId) return;
+  if (message.status === MessageStatus.READ) return;
+  if (message.status === MessageStatus.FAILED || message.sendState === "failed") return;
+  if (
+    message.status === MessageStatus.SENDING ||
+    message.sendState === "sending" ||
+    message.sendState === "queued" ||
+    message.sendState === "retrying"
+  ) {
+    return;
+  }
+
+  patchMessageInCache(cache, message.id, {
+    status: MessageStatus.DELIVERED,
+    sendState: "sent",
+    ...(input.deliveredAt
+      ? { deliveredAt: input.deliveredAt as unknown as Date }
+      : {}),
+  });
+};
+
 export const markMessageFailedInCache = (
   cache: ConversationMessagesCache,
   clientMessageId: string,

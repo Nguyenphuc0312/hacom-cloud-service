@@ -726,6 +726,7 @@ export const WebSocketEvents = {
   // Client → Server
   AUTH_AUTHENTICATE: WsEventNames.AUTH_AUTHENTICATE,
   MESSAGE_SEND: "message:send",
+  MESSAGE_DELIVERY_ACK: RealtimeEventNames.MESSAGE_DELIVERY_ACK,
   CONVERSATION_JOIN: WsEventNames.CONVERSATION_JOIN,
   CONVERSATION_LEAVE: WsEventNames.CONVERSATION_LEAVE,
   // Deprecated transport aliases kept for inbound/outbound compat only.
@@ -743,6 +744,7 @@ export const WebSocketEvents = {
   MESSAGE_NEW: WsEventNames.MESSAGE_NEW,
   MESSAGE_UPDATED: WsEventNames.MESSAGE_UPDATED,
   MESSAGE_DELETED: WsEventNames.MESSAGE_DELETED,
+  MESSAGE_DELIVERED: RealtimeEventNames.MESSAGE_DELIVERED,
   CONVERSATION_READ_ADVANCED: RealtimeEventNames.CONVERSATION_READ_ADVANCED,
   MESSAGE_READ: WsEventNames.MESSAGE_READ,
   MEMBER_UPDATED: WsEventNames.MEMBER_UPDATED,

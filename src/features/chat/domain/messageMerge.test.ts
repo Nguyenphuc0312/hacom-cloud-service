@@ -3,6 +3,7 @@ import { MessageStatus, MessageType, type Message } from "../../../types";
 import {
   buildConversationMessagesCache,
   mergeIncomingMessagesPage,
+  patchDeliveredReceiptInCache,
   upsertMessageInCache,
 } from "./messageMerge";
 
@@ -115,6 +116,46 @@ describe("messageMerge domain helpers", () => {
     expect(next.messages[1]).toMatchObject({
       clientMessageId: "client-1",
       sendState: "sending",
+    });
+  });
+
+  it("patches delivered receipt without downgrading read messages", () => {
+    const cache = buildConversationMessagesCache("room-1", [
+      message({
+        id: "m-1",
+        senderId: "me",
+        serverSeq: 1,
+        status: MessageStatus.SENT,
+        sendState: "sent",
+      }),
+      message({
+        id: "m-2",
+        senderId: "me",
+        serverSeq: 2,
+        status: MessageStatus.READ,
+        sendState: "sent",
+      }),
+    ]);
+
+    patchDeliveredReceiptInCache(cache, {
+      messageId: "m-1",
+      currentUserId: "me",
+      deliveredAt: "2026-04-21T09:59:00.000Z",
+    });
+    patchDeliveredReceiptInCache(cache, {
+      messageId: "m-2",
+      currentUserId: "me",
+      deliveredAt: "2026-04-21T09:59:00.000Z",
+    });
+
+    expect(cache.messages[0]).toMatchObject({
+      id: "m-1",
+      status: MessageStatus.DELIVERED,
+      sendState: "sent",
+    });
+    expect(cache.messages[1]).toMatchObject({
+      id: "m-2",
+      status: MessageStatus.READ,
     });
   });
 });

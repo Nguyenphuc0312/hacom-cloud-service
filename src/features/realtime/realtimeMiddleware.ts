@@ -9,6 +9,7 @@ import { chatApi } from "../api/chatApi";
 import {
   buildConversationMessagesCache,
   patchMessageReactionInCache,
+  patchDeliveredReceiptInCache,
   patchMessageInCache,
   patchReadCursorInCache,
   upsertMessageInCache,
@@ -32,6 +33,15 @@ export interface RealtimeReadCursorPayload {
   lastReadSeq?: number;
   currentUserId?: string;
   readerId?: string;
+}
+
+export interface RealtimeMessageDeliveredPayload {
+  conversationId: string;
+  messageId: string;
+  messageSeq?: number;
+  currentUserId?: string;
+  recipientUserId?: string;
+  deliveredAt?: string;
 }
 
 export interface RealtimeMessageReactionPayload {
@@ -61,6 +71,8 @@ export const realtimeMessageDeleted =
   createAction<RealtimeMessageDeletedPayload>("realtime/messageDeleted");
 export const realtimeReadCursorUpdated =
   createAction<RealtimeReadCursorPayload>("realtime/readCursorUpdated");
+export const realtimeMessageDelivered =
+  createAction<RealtimeMessageDeliveredPayload>("realtime/messageDelivered");
 export const realtimeMessageReactionChanged =
   createAction<RealtimeMessageReactionPayload>(
     "realtime/messageReactionChanged",
@@ -220,6 +232,23 @@ export const realtimeMiddleware: Middleware<
         ),
       );
     }
+  }
+
+  if (realtimeMessageDelivered.match(action)) {
+    storeApi.dispatch(
+      chatApi.util.updateQueryData(
+        "getMessages",
+        getMessageQueryArg(action.payload.conversationId),
+        (draft) => {
+          patchDeliveredReceiptInCache(draft, {
+            messageId: action.payload.messageId,
+            messageSeq: action.payload.messageSeq,
+            currentUserId: action.payload.currentUserId,
+            deliveredAt: action.payload.deliveredAt,
+          });
+        },
+      ),
+    );
   }
 
   return result;

@@ -61,12 +61,14 @@ import {
   normalizeMessageRealtimeEvent,
 } from "../features/chat/realtime";
 import type { NormalizedMessageRealtimeEvent } from "../features/chat/realtime/realtimeEventTypes";
+import { MessageStatus } from "../types";
 import { chatApi } from "../features/api/chatApi";
 import { findMessageIdentityIndex } from "../features/chat/domain/messageIdentity";
 import { dispatchNotificationClick } from "../features/chat/events/chatUiEvents";
 import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
 import {
   realtimeMessageDeleted,
+  realtimeMessageDelivered,
   realtimeMessageReactionChanged,
   realtimeMessageReceived,
   realtimeMessageUpdated,
@@ -266,6 +268,29 @@ const normalizeDeviceType = (
 ): "web" | "mobile" | "desktop" =>
   value === "mobile" || value === "desktop" ? value : "web";
 
+const DELIVERY_ACK_DEVICE_ID_STORAGE_KEY = "chat:web:deliveryAckDeviceId";
+
+const getDeliveryAckDeviceId = (): string => {
+  if (typeof window === "undefined") {
+    return "web-ssr";
+  }
+  try {
+    const existing = window.sessionStorage.getItem(
+      DELIVERY_ACK_DEVICE_ID_STORAGE_KEY,
+    );
+    if (existing) return existing;
+    const generated =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const deviceId = `web:${generated}`;
+    window.sessionStorage.setItem(DELIVERY_ACK_DEVICE_ID_STORAGE_KEY, deviceId);
+    return deviceId;
+  } catch {
+    return `web:${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+};
+
 export const useWebSocket = (
   options: UseWebSocketOptions = {},
 ): UseWebSocketReturn => {
@@ -321,6 +346,8 @@ export const useWebSocket = (
   const chatRealtimeAdapterRef = useRef(createChatRealtimeAdapter());
   const suppressUnreadBroadcastRef = useRef(false);
   const emitQueueRef = useRef<Array<{ event: string; data: unknown }>>([]);
+  const deliveryAckDeviceIdRef = useRef(getDeliveryAckDeviceId());
+  const ackedDeliveryMessagesRef = useRef<Set<string>>(new Set());
   const resyncCoordinatorStateRef = useRef(
     createWebSocketResyncCoordinatorState(),
   );
@@ -998,6 +1025,35 @@ export const useWebSocket = (
       void handleReauthRequiredEvent({ reason });
     };
 
+    const sendDeliveryAckForMessage = (
+      event: NormalizedMessageRealtimeEvent,
+    ) => {
+      const currentUserId = useAuthStore.getState().user?.id;
+      if (!currentUserId || !event.senderId || event.senderId === currentUserId) {
+        return;
+      }
+      if (!event.messageId || event.incomingSeq === null) {
+        return;
+      }
+
+      const deviceId = deliveryAckDeviceIdRef.current;
+      const ackKey = `${event.conversationId}:${event.messageId}:${deviceId}`;
+      if (ackedDeliveryMessagesRef.current.has(ackKey)) {
+        return;
+      }
+      ackedDeliveryMessagesRef.current.add(ackKey);
+
+      emit(WebSocketEvents.MESSAGE_DELIVERY_ACK, {
+        type: WebSocketEvents.MESSAGE_DELIVERY_ACK,
+        conversationId: event.conversationId,
+        messageId: event.messageId,
+        messageSeq: event.incomingSeq,
+        deviceId,
+        deviceType: "web",
+        receivedAt: new Date().toISOString(),
+      });
+    };
+
     const unsubscribeConnectionEvents = registerConnectionEvents(socket, {
       onConnect: handleConnect,
       onDisconnect: handleDisconnect,
@@ -1120,6 +1176,10 @@ export const useWebSocket = (
             }),
       );
 
+      if (eventType === "message:new") {
+        sendDeliveryAckForMessage(normalizedEvent);
+      }
+
       if (eventType === "message:new" && !hadMessageBeforeRtkPatch) {
         maybeNotifyIncomingMessage({
           conversationId,
@@ -1237,6 +1297,84 @@ export const useWebSocket = (
         void scheduleConversationSnapshotRefresh(conversationId, {
           reason: "socket:message:deleted",
         });
+      },
+      onMessageDelivered: (data: unknown) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+
+        const conversationId = getConversationId(payload);
+        const messageId =
+          asString(payload.messageId) ??
+          asString(payload.id) ??
+          asString(payload._id);
+        const messageSeq =
+          typeof payload.messageSeq === "number" &&
+          Number.isFinite(payload.messageSeq)
+            ? payload.messageSeq
+            : null;
+        const currentUserId = useAuthStore.getState().user?.id;
+        const senderUserId = asString(payload.senderUserId);
+        if (
+          !conversationId ||
+          !messageId ||
+          !currentUserId ||
+          (senderUserId && senderUserId !== currentUserId)
+        ) {
+          return;
+        }
+
+        const deliveredAt = asString(payload.deliveredAt) ?? undefined;
+        const currentMessages =
+          useChatStore.getState().messages[conversationId] ?? [];
+        const currentMessage = currentMessages.find((message) => {
+          const messageRecord = message as unknown as { messageSeq?: number };
+          const seq =
+            typeof messageRecord.messageSeq === "number" &&
+            Number.isFinite(messageRecord.messageSeq)
+              ? messageRecord.messageSeq
+              : typeof message.serverSeq === "number" &&
+                  Number.isFinite(message.serverSeq)
+                ? message.serverSeq
+                : null;
+          return (
+            message.id === messageId ||
+            message.stableId === messageId ||
+            message.localId === messageId ||
+            message.clientMessageId === messageId ||
+            (messageSeq !== null &&
+              seq === messageSeq &&
+              message.senderId === currentUserId)
+          );
+        });
+
+        if (
+          currentMessage &&
+          currentMessage.senderId === currentUserId &&
+          currentMessage.status !== MessageStatus.READ &&
+          currentMessage.status !== MessageStatus.FAILED &&
+          currentMessage.status !== MessageStatus.SENDING &&
+          currentMessage.sendState !== "failed" &&
+          currentMessage.sendState !== "sending" &&
+          currentMessage.sendState !== "queued" &&
+          currentMessage.sendState !== "retrying"
+        ) {
+          useChatStore.getState().updateMessage(conversationId, currentMessage.id, {
+            status: MessageStatus.DELIVERED,
+            sendState: "sent",
+            ...(deliveredAt ? { deliveredAt: deliveredAt as unknown as Date } : {}),
+          });
+        }
+
+        dispatch(
+          realtimeMessageDelivered({
+            conversationId,
+            messageId,
+            ...(messageSeq !== null ? { messageSeq } : {}),
+            currentUserId,
+            recipientUserId: asString(payload.recipientUserId) ?? undefined,
+            deliveredAt,
+          }),
+        );
       },
       onReactionAdded: (data: unknown) => {
         const payload = asRecord(data);
@@ -1971,6 +2109,7 @@ export const useWebSocket = (
     clearRemoteTypingTimer,
     clearTyping,
     dispatch,
+    emit,
     handleReauthRequiredEvent,
     handleUnauthorizedEvent,
     onError,
