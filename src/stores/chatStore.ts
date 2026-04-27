@@ -330,6 +330,7 @@ const initialState = {
 };
 
 const EMPTY_MESSAGES: Message[] = [];
+const EMPTY_MESSAGE_IDS: string[] = [];
 
 const roomMessageFetchInFlight = new Map<string, number>();
 const initialFetchSeqByConversation = new Map<string, number>();
@@ -4624,49 +4625,51 @@ export const useCurrentTypingStatus = () => {
 };
 
 export const useCurrentTypingStatuses = () => {
-  return useChatStore(selectCurrentTypingStatusesFromState);
+  return useChatStore(useShallow(selectCurrentTypingStatusesFromState));
 };
 
 export const useFilteredConversations = () => {
   const activeFilter = useChatSidebarStore((state) => state.filter);
   const searchQuery = useChatSidebarStore((state) => state.searchQuery);
 
-  return useChatStore((state) => {
-    let filtered = state.orderedConversationIds
-      .map((conversationId) => state.conversationById[conversationId])
-      .filter((conversation): conversation is Conversation =>
-        Boolean(conversation),
-      );
-
-    switch (activeFilter) {
-      case "unread":
-        filtered = filtered.filter(
-          (conversation) => conversation.unreadCount > 0,
+  return useChatStore(
+    useShallow((state) => {
+      let filtered = state.orderedConversationIds
+        .map((conversationId) => state.conversationById[conversationId])
+        .filter((conversation): conversation is Conversation =>
+          Boolean(conversation),
         );
-        break;
-      case "groups":
+
+      switch (activeFilter) {
+        case "unread":
+          filtered = filtered.filter(
+            (conversation) => conversation.unreadCount > 0,
+          );
+          break;
+        case "groups":
+          filtered = filtered.filter(
+            (conversation) =>
+              normalizeRoomType(
+                conversation.type,
+                conversation.participants?.length,
+              ) === "group",
+          );
+          break;
+      }
+
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
         filtered = filtered.filter(
           (conversation) =>
-            normalizeRoomType(
-              conversation.type,
-              conversation.participants?.length,
-            ) === "group",
+            conversation.name?.toLowerCase().includes(query) ||
+            conversation.displayName?.toLowerCase().includes(query) ||
+            conversation.lastMessage?.content?.toLowerCase().includes(query),
         );
-        break;
-    }
+      }
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (conversation) =>
-          conversation.name?.toLowerCase().includes(query) ||
-          conversation.displayName?.toLowerCase().includes(query) ||
-          conversation.lastMessage?.content?.toLowerCase().includes(query),
-      );
-    }
-
-    return filtered;
-  });
+      return filtered;
+    }),
+  );
 };
 
 export const useTotalUnreadCount = () => {
@@ -4736,10 +4739,10 @@ export const selectConversationMessageIdsFromState = (
   conversationId: string | null,
 ): string[] => {
   if (!conversationId) {
-    return [];
+    return EMPTY_MESSAGE_IDS;
   }
 
-  return state.messageIdsByConversation[conversationId] ?? [];
+  return state.messageIdsByConversation[conversationId] ?? EMPTY_MESSAGE_IDS;
 };
 
 export const selectMessageEntityFromState = (

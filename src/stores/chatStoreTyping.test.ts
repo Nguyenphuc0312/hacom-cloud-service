@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { useChatStore } from "./chatStore";
+import { renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useChatStore, useCurrentTypingStatuses } from "./chatStore";
 import {
   selectCurrentTypingStatusFromState,
   selectCurrentTypingStatusesFromState,
@@ -130,5 +131,29 @@ describe("chatStore typing capability", () => {
       "user-b",
       "user-a",
     ]);
+  });
+
+  it("keeps the current typing statuses hook snapshot stable when no one is typing", () => {
+    useChatStore.setState({
+      selectedConversationId: "room-1",
+      typingStatuses: [],
+    });
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    try {
+      const { result, rerender } = renderHook(() => useCurrentTypingStatuses());
+      const firstSnapshot = result.current;
+
+      rerender();
+
+      expect(result.current).toBe(firstSnapshot);
+      expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining("getSnapshot should be cached"),
+      );
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 });
