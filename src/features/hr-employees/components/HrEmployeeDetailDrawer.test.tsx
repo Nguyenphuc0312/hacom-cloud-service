@@ -35,7 +35,7 @@ describe('HrEmployeeDetailDrawer', () => {
     getByIdMock.mockReset();
   });
 
-  it('renders HR, account, and profile sections from detail data', async () => {
+  it('renders HR, account, and action sections from detail data', async () => {
     getByIdMock.mockResolvedValue({
       id: 'hr-1',
       employeeCode: 'EMP001',
@@ -64,14 +64,15 @@ describe('HrEmployeeDetailDrawer', () => {
     renderWithQuery(<HrEmployeeDetailDrawer employeeId="hr-1" open canWrite onClose={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('HR Source Data')).toBeInTheDocument();
+      expect(screen.getByText('Hồ sơ HR')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Account Data')).toBeInTheDocument();
-    expect(screen.getByText('Profile Data')).toBeInTheDocument();
-    expect(screen.getAllByText('Provision account').length).toBeGreaterThan(0);
+    expect(screen.getByText('Liên kết tài khoản')).toBeInTheDocument();
+    expect(screen.getByText('Tác vụ nhanh')).toBeInTheDocument();
+    expect(screen.getByText('Trạng thái cấp tài khoản')).toBeInTheDocument();
+    expect(screen.queryByText('Cấp tài khoản')).not.toBeInTheDocument();
     expect(
-      screen.getByText('Profile and account fields are rendered defensively.'),
+      screen.getByText('Drawer này chỉ để inspect nhanh và cấp tài khoản khi đủ điều kiện.'),
     ).toBeInTheDocument();
   });
 
@@ -114,10 +115,10 @@ describe('HrEmployeeDetailDrawer', () => {
     renderWithQuery(<HrEmployeeDetailDrawer employeeId="hr-1" open canWrite onClose={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('HR Source Data')).toBeInTheDocument();
+      expect(screen.getByText('Hồ sơ HR')).toBeInTheDocument();
     });
 
-    const refreshButton = screen.getByRole('button', { name: /Refresh/i });
+    const refreshButton = screen.getByRole('button', { name: /Làm mới/i });
     fireEvent.click(refreshButton);
     fireEvent.click(refreshButton);
 

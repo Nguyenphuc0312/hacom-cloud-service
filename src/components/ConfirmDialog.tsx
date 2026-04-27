@@ -32,11 +32,18 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     title={title}
     onCancel={onCancel}
     footer={[
-      <button key="cancel" className="ds-btn ds-btn--ghost" onClick={onCancel} disabled={loading}>
+      <button
+        key="cancel"
+        type="button"
+        className="ds-btn ds-btn--ghost"
+        onClick={onCancel}
+        disabled={loading}
+      >
         {cancelText}
       </button>,
       <button
         key="ok"
+        type="button"
         className={clsx('ds-btn', danger ? 'ds-btn--danger' : 'ds-btn--primary')}
         onClick={onConfirm}
         disabled={loading}
@@ -45,11 +52,10 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       </button>,
     ]}
     className={clsx('ds-confirm-modal', className)}
-    closeIcon={<span className="ds-modal-close">×</span>}
     centered
     destroyOnClose
     maskClosable={false}
   >
-    {description && <div className="ds-confirm-desc">{description}</div>}
+    {description ? <div className="ds-confirm-desc">{description}</div> : null}
   </Modal>
 );

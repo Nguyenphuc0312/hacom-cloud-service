@@ -2,8 +2,9 @@ import { Alert, Button, Card, Descriptions, Space, Typography, message } from 'a
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { useAccessStatus } from '@/app/useAccessStatus';
 import { accessClient } from '@/api/clients';
+import { useAccessStatus } from '@/app/useAccessStatus';
+import { StatusBadge } from '@/components/StatusBadge';
 import { useAuthStore } from '@/store/authStore';
 
 const { Title, Text } = Typography;
@@ -46,9 +47,9 @@ export const AccessPendingPage = () => {
     try {
       await accessClient.requestCurrentIp();
       await refresh();
-      message.success('Yeu cau da duoc gui lai.');
+      message.success('Đã gửi lại yêu cầu truy cập.');
     } catch (error) {
-      message.error(error instanceof Error ? error.message : 'Khong the gui lai yeu cau.');
+      message.error(error instanceof Error ? error.message : 'Không thể gửi lại yêu cầu truy cập.');
     }
   };
 
@@ -63,20 +64,23 @@ export const AccessPendingPage = () => {
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <div>
             <Title level={3} style={{ marginBottom: 8 }}>
-              Ban chua duoc cap quyen truy cap
+              Truy cập admin đang chờ duyệt
             </Title>
             <Text type="secondary">
-              Tai khoan da dang nhap thanh cong nhung IP hien tai chua nam trong danh sach duoc phe
-              duyet.
+              Tài khoản đã đăng nhập nhưng IP hiện tại chưa được duyệt vào admin console.
             </Text>
           </div>
 
           {access ? (
             <Descriptions bordered size="small" column={1}>
-              <Descriptions.Item label="IP hien tai">{access.normalizedIp ?? 'Khong ro'}</Descriptions.Item>
-              <Descriptions.Item label="Trang thai">{access.status}</Descriptions.Item>
-              <Descriptions.Item label="Ghi nhan luc">{access.firstSeenAt ?? 'Chua co'}</Descriptions.Item>
-              <Descriptions.Item label="Ghi chu">{access.note ?? access.reason ?? 'Khong co'}</Descriptions.Item>
+              <Descriptions.Item label="IP hiện tại">{access.normalizedIp ?? 'Không rõ'}</Descriptions.Item>
+              <Descriptions.Item label="Trạng thái">
+                <StatusBadge status={access.status} />
+              </Descriptions.Item>
+              <Descriptions.Item label="Ghi nhận lần đầu">
+                {access.firstSeenAt ?? 'Chưa ghi nhận'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Ghi chú">{access.note ?? access.reason ?? 'Không có'}</Descriptions.Item>
             </Descriptions>
           ) : null}
 
@@ -84,15 +88,15 @@ export const AccessPendingPage = () => {
             <Alert
               type="warning"
               showIcon
-              message="Yeu cau truy cap da bi tu choi"
-              description={access.reason ?? 'Quan tri vien da tu choi IP nay.'}
+              message="Yêu cầu truy cập đã bị từ chối"
+              description={access.reason ?? 'Quản trị viên đã từ chối IP này.'}
             />
           ) : (
             <Alert
               type="info"
               showIcon
-              message="Dang cho phe duyet"
-              description="Hay lam moi trang thai sau khi quan tri vien approve IP hien tai."
+              message="Đang chờ phê duyệt"
+              description="Làm mới sau khi quản trị viên phê duyệt IP hiện tại."
             />
           )}
 
@@ -100,22 +104,26 @@ export const AccessPendingPage = () => {
 
           <Space wrap>
             <Button onClick={() => refresh()} loading={isLoading}>
-              Lam moi trang thai
+              Làm mới trạng thái
             </Button>
             {access?.canResubmit ? (
               <Button type="primary" onClick={() => void handleResubmit()}>
-                Gui lai yeu cau
+                Gửi lại yêu cầu
               </Button>
             ) : null}
-            <Button onClick={() => message.info('Lien he quan tri vien qua kenh ho tro noi bo de duyet IP hien tai.')}>
-              Lien he quan tri vien
+            <Button
+              onClick={() =>
+                message.info('Hãy liên hệ quản trị viên qua kênh hỗ trợ nội bộ.')
+              }
+            >
+              Liên hệ admin
             </Button>
             <Button danger onClick={handleLogout}>
-              Dang xuat
+              Đăng xuất
             </Button>
           </Space>
 
-          <Text type="secondary">Neu can gap, lien he quan tri vien qua kenh ho tro noi bo.</Text>
+          <Text type="secondary">Dùng kênh hỗ trợ nội bộ nếu cần xử lý gấp quyền truy cập này.</Text>
         </Space>
       </Card>
     </div>

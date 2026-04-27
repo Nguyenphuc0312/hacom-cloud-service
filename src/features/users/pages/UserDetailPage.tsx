@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Modal, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useMemo, useState } from 'react';
@@ -7,8 +7,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { sessionsClient, usersClient } from '@/api/clients';
 import { getErrorMessage } from '@/api/error';
 import { queryKeys } from '@/api/queryKeys';
-import type { UserActionPayload, UserDevice, UserSession } from '@/api/types';
-import { AdminTable } from '@/components/AdminTable';
+import type { UserActionPayload, UserDetail, UserDevice, UserSession } from '@/api/types';
 import { DataTableShell } from '@/components/DataTableShell';
 import { DataTableToolbar } from '@/components/DataTableToolbar';
 import { EmptyState, QueryStateView } from '@/components/QueryStates';
@@ -17,6 +16,7 @@ import { PageShell } from '@/components/PageShell';
 import { FeatureDisabledNotice } from '@/components/FeatureDisabledNotice';
 import { StatusBadge } from '@/components/StatusBadge';
 import { SurfaceCard } from '@/components/ui/SurfaceCard';
+import { DataTable } from '@/components/ui/DataTable';
 import { isAdminWriteActionsEnabled } from '@/config/featureFlags';
 import { useAuthStore } from '@/store/authStore';
 import { formatDateTime } from '@/utils/date';
@@ -42,15 +42,17 @@ export const UserDetailPage = () => {
   });
 
   const sessionsQuery = useQuery({
-    queryKey: queryKeys.userSessions(userId, JSON.stringify({ page: sessionsPage, limit: 10 })),
+    queryKey: queryKeys.userSessions(userId, { page: sessionsPage, limit: 10 }),
     queryFn: () => sessionsClient.listByUserId(userId, { page: sessionsPage, limit: 10 }),
     enabled: Boolean(userId),
+    placeholderData: keepPreviousData,
   });
 
   const devicesQuery = useQuery({
-    queryKey: queryKeys.userDevices(userId, JSON.stringify({ page: devicesPage, limit: 10 })),
+    queryKey: queryKeys.userDevices(userId, { page: devicesPage, limit: 10 }),
     queryFn: () => sessionsClient.listDevicesByUserId(userId, { page: devicesPage, limit: 10 }),
     enabled: Boolean(userId),
+    placeholderData: keepPreviousData,
   });
 
   const actionMutation = useMutation({
@@ -70,19 +72,30 @@ export const UserDetailPage = () => {
     },
     onSuccess: (_data, variables) => {
       if (variables.action === 'lock') {
-        message.success('Account locked.');
+        message.success('Đã khóa tài khoản.');
       } else if (variables.action === 'unlock') {
-        message.success('Account unlocked.');
+        message.success('Đã mở khóa tài khoản.');
       } else {
-        message.success('Sessions revoked.');
+        message.success('Đã thu hồi các phiên.');
+      }
+
+      const nextAccountStatus =
+        variables.action === 'lock'
+          ? 'DISABLED'
+          : variables.action === 'unlock'
+            ? 'ACTIVE'
+            : undefined;
+
+      if (nextAccountStatus) {
+        queryClient.setQueryData<UserDetail>(queryKeys.userDetail(userId), (current) =>
+          current ? { ...current, accountStatus: nextAccountStatus } : current,
+        );
       }
 
       void queryClient.invalidateQueries({ queryKey: queryKeys.userDetail(userId) });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.userSessions(userId, JSON.stringify({ page: sessionsPage, limit: 10 })),
-      });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.usersList('') });
-      void queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.userSessionsRoot });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.usersRoot });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.auditLogsRoot });
     },
     onError: (error) => {
       message.error(getErrorMessage(error));
@@ -91,32 +104,32 @@ export const UserDetailPage = () => {
 
   const confirmAction = (action: 'lock' | 'unlock' | 'revoke') => {
     if (!isAdminWriteActionsEnabled) {
-      message.info('Write actions are disabled by release configuration.');
+      message.info('Các thao tác ghi đang bị tắt theo cấu hình phát hành.');
       return;
     }
 
     if (!canManageUsers(currentRole)) {
-      message.warning('Your current role cannot run user write actions.');
+      message.warning('Vai trò hiện tại của bạn không thể thực hiện thao tác ghi lên người dùng.');
       return;
     }
 
     const titleMap: Record<typeof action, string> = {
-      lock: 'Lock account',
-      unlock: 'Unlock account',
-      revoke: 'Revoke active sessions',
+      lock: 'Khóa tài khoản',
+      unlock: 'Mở khóa tài khoản',
+      revoke: 'Thu hồi phiên đang hoạt động',
     };
 
     const contentMap: Record<typeof action, string> = {
-      lock: 'The account will be locked and active sessions will be invalidated.',
-      unlock: 'The account will be re-enabled.',
-      revoke: 'All active sessions for this user will be revoked immediately.',
+      lock: 'Tài khoản sẽ bị khóa và toàn bộ phiên đang hoạt động sẽ bị vô hiệu hóa.',
+      unlock: 'Tài khoản sẽ được bật lại.',
+      revoke: 'Toàn bộ phiên đang hoạt động của người dùng này sẽ bị thu hồi ngay lập tức.',
     };
 
     Modal.confirm({
       title: titleMap[action],
       content: contentMap[action],
-      okText: 'Confirm',
-      cancelText: 'Cancel',
+      okText: 'Xác nhận',
+      cancelText: 'Hủy',
       onOk: async () => {
         await actionMutation.mutateAsync({ action, payload: { reason: `panel_${action}` } });
       },
@@ -125,21 +138,21 @@ export const UserDetailPage = () => {
 
   const sessionColumns = useMemo<ColumnsType<UserSession>>(
     () => [
-      { title: 'Session ID', dataIndex: 'id', width: 240 },
-      { title: 'Device', dataIndex: 'deviceName', render: (value) => value ?? '-' },
-      { title: 'Platform', dataIndex: 'devicePlatform', render: (value) => value ?? '-' },
+      { title: 'Mã phiên', dataIndex: 'id', width: 240 },
+      { title: 'Thiết bị', dataIndex: 'deviceName', render: (value) => value ?? '-' },
+      { title: 'Nền tảng', dataIndex: 'devicePlatform', render: (value) => value ?? '-' },
       {
-        title: 'State',
+        title: 'Trạng thái',
         dataIndex: 'isRevoked',
         render: (value: boolean) => <StatusBadge status={value ? 'disabled' : 'active'} />,
       },
       {
-        title: 'Last used',
+        title: 'Dùng gần nhất',
         dataIndex: 'lastUsedAt',
         render: (value) => formatOptionalDate(value),
       },
       {
-        title: 'Expires',
+        title: 'Hết hạn',
         dataIndex: 'expiresAt',
         render: (value) => formatOptionalDate(value),
       },
@@ -149,8 +162,8 @@ export const UserDetailPage = () => {
 
   const deviceColumns = useMemo<ColumnsType<UserDevice>>(
     () => [
-      { title: 'Device name', dataIndex: 'deviceName', render: (value) => value ?? '-' },
-      { title: 'Platform', dataIndex: 'platform', render: (value) => value ?? '-' },
+      { title: 'Tên thiết bị', dataIndex: 'deviceName', render: (value) => value ?? '-' },
+      { title: 'Nền tảng', dataIndex: 'platform', render: (value) => value ?? '-' },
       {
         title: 'Push',
         dataIndex: 'pushEnabled',
@@ -159,7 +172,7 @@ export const UserDetailPage = () => {
         ),
       },
       {
-        title: 'Last active',
+        title: 'Hoạt động gần nhất',
         dataIndex: 'lastActiveAt',
         render: (value: string | null) => formatOptionalDate(value),
       },
@@ -169,32 +182,32 @@ export const UserDetailPage = () => {
 
   if (!userId) {
     return (
-      <PageShell title="User Detail" description="A user id is required to load this page.">
-        <QueryStateView kind="error" description="Missing user id." />
+      <PageShell title="Chi tiết người dùng" description="Cần có mã người dùng để tải trang này.">
+        <QueryStateView kind="error" description="Thiếu mã người dùng." />
       </PageShell>
     );
   }
 
-  if (detailQuery.isLoading) {
+  if (detailQuery.isPending && !detailQuery.data) {
     return (
       <PageShell
-        title="User Detail"
-        description="Review identity, verification, sessions, and devices."
+        title="Chi tiết người dùng"
+        description="Trang sâu cho danh tính, phiên và thiết bị. Bảng người dùng chỉ giữ inspect nhanh."
       >
-        <QueryStateView kind="loading" title="Loading user detail..." />
+        <QueryStateView kind="loading" title="Đang tải chi tiết người dùng..." />
       </PageShell>
     );
   }
 
-  if (detailQuery.isError || !detailQuery.data) {
+  if ((detailQuery.isError && !detailQuery.data) || !detailQuery.data) {
     return (
       <PageShell
-        title="User Detail"
-        description="Review identity, verification, sessions, and devices."
+        title="Chi tiết người dùng"
+        description="Trang sâu cho danh tính, phiên và thiết bị. Bảng người dùng chỉ giữ inspect nhanh."
       >
         <QueryStateView
           kind="error"
-          description="Unable to load user detail."
+          description="Không thể tải chi tiết người dùng."
           onRetry={() => {
             void detailQuery.refetch();
           }}
@@ -207,8 +220,8 @@ export const UserDetailPage = () => {
 
   return (
     <PageShell
-      title="User Detail"
-      description="Keep identity and security posture at the top, then move into sessions and devices."
+      title="Chi tiết người dùng"
+      description="Đây là deep admin page. Inspector ở danh sách người dùng chỉ để xem nhanh và thao tác nhanh."
       headerExtra={
         <div className="ds-page-toolbar-stack">
           <div className="ds-page-toolbar-group">
@@ -216,25 +229,25 @@ export const UserDetailPage = () => {
             <span className="ds-shell-chip ds-shell-chip--ghost">{user.id}</span>
           </div>
           <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
-            <Button onClick={() => navigate('/users')}>Back to users</Button>
+            <Button onClick={() => navigate('/users')}>Quay lại danh sách người dùng</Button>
             <RowActionsDropdown
               actions={[
                 {
                   key: 'lock',
-                  label: 'Lock account',
+                  label: 'Khóa tài khoản',
                   danger: true,
                   disabled: !canWriteUserActions || user.accountStatus === 'DISABLED',
                   onClick: () => confirmAction('lock'),
                 },
                 {
                   key: 'unlock',
-                  label: 'Unlock account',
+                  label: 'Mở khóa tài khoản',
                   disabled: !canWriteUserActions || user.accountStatus !== 'DISABLED',
                   onClick: () => confirmAction('unlock'),
                 },
                 {
                   key: 'revoke',
-                  label: 'Revoke sessions',
+                  label: 'Thu hồi phiên',
                   disabled: !canWriteUserActions,
                   onClick: () => confirmAction('revoke'),
                 },
@@ -248,44 +261,17 @@ export const UserDetailPage = () => {
         <FeatureDisabledNotice
           description={
             !isAdminWriteActionsEnabled
-              ? 'Write actions are disabled by release configuration.'
-              : 'Your current role is read-only for lock, unlock, and session revocation.'
+              ? 'Các thao tác ghi đang bị tắt theo cấu hình phát hành.'
+              : 'Vai trò hiện tại của bạn chỉ có quyền đọc với thao tác khóa, mở khóa và thu hồi phiên.'
           }
         />
       )}
 
-      <div className="ds-detail-overview-grid">
-        <div className="ds-summary-tile">
-          <span className="ds-summary-tile-label">Account state</span>
-          <div className="ds-summary-tile-value">
-            <StatusBadge status={user.accountStatus} />
-          </div>
-          <span className="ds-summary-tile-meta">Current access state from auth-service.</span>
-        </div>
-        <div className="ds-summary-tile">
-          <span className="ds-summary-tile-label">Presence</span>
-          <div className="ds-summary-tile-value">
-            <StatusBadge status={user.status ?? 'offline'} />
-          </div>
-          <span className="ds-summary-tile-meta">Latest presence state seen by the panel.</span>
-        </div>
-        <div className="ds-summary-tile">
-          <span className="ds-summary-tile-label">Active sessions</span>
-          <strong className="ds-summary-tile-value">{user.activeSessionCount ?? 0}</strong>
-          <span className="ds-summary-tile-meta">Open browser or device sessions.</span>
-        </div>
-        <div className="ds-summary-tile">
-          <span className="ds-summary-tile-label">Known devices</span>
-          <strong className="ds-summary-tile-value">{user.deviceCount ?? 0}</strong>
-          <span className="ds-summary-tile-meta">Registered device records tied to the account.</span>
-        </div>
-      </div>
-
       <div className="ds-detail-grid">
         <SurfaceCard
-          eyebrow="Identity and organisation"
-          title={user.username ?? 'No username'}
-          description="Core identifiers, ownership fields, and latest activity."
+          eyebrow="Danh tính và tổ chức"
+          title={user.username ?? 'Chưa có username'}
+          description="Khối này giữ hồ sơ chính; thống kê nhanh đã nằm ở inspector ngoài danh sách."
           className="ds-detail-panel"
         >
           <div className="ds-detail-list">
@@ -294,59 +280,63 @@ export const UserDetailPage = () => {
               <strong>{user.email}</strong>
             </div>
             <div className="ds-detail-list-item">
-              <span>Employee ID</span>
+              <span>Mã nhân viên</span>
               <strong>{user.employeeId ?? '-'}</strong>
             </div>
             <div className="ds-detail-list-item">
-              <span>Phone</span>
+              <span>Số điện thoại</span>
               <strong>{user.phone ?? '-'}</strong>
             </div>
             <div className="ds-detail-list-item">
-              <span>Organisation</span>
+              <span>Đơn vị</span>
               <strong>{user.orgUnit ?? '-'}</strong>
             </div>
             <div className="ds-detail-list-item">
-              <span>Title</span>
+              <span>Chức danh</span>
               <strong>{user.title ?? '-'}</strong>
             </div>
             <div className="ds-detail-list-item">
-              <span>Last seen</span>
+              <span>Lần thấy gần nhất</span>
               <strong>{formatOptionalDate(user.lastSeen)}</strong>
             </div>
             <div className="ds-detail-list-item">
-              <span>User ID</span>
+              <span>Mã người dùng</span>
               <code>{user.id}</code>
             </div>
           </div>
         </SurfaceCard>
 
         <SurfaceCard
-          eyebrow="Security and verification"
-          title="Verification posture"
-          description="Verification timestamps, account footprint, and runtime identifiers."
+          eyebrow="Bảo mật và xác minh"
+          title="Tư thế xác minh"
+          description="Giữ những mốc xác minh và tư thế runtime cần cho điều tra sâu."
           className="ds-detail-panel"
         >
           <div className="ds-detail-list">
             <div className="ds-detail-list-item">
-              <span>Account state</span>
-              <strong>{user.accountStatus}</strong>
+              <span>Trạng thái tài khoản</span>
+              <strong>
+                <StatusBadge status={user.accountStatus} />
+              </strong>
             </div>
             <div className="ds-detail-list-item">
-              <span>Presence</span>
-              <strong>{user.status ?? 'offline'}</strong>
+              <span>Hiện diện</span>
+              <strong>
+                <StatusBadge status={user.status ?? 'offline'} />
+              </strong>
             </div>
             <div className="ds-detail-list-item">
-              <span>Email verified</span>
+              <span>Email đã xác minh</span>
               <strong>{formatOptionalDate(user.emailVerifiedAt)}</strong>
             </div>
             <div className="ds-detail-list-item">
-              <span>Phone verified</span>
+              <span>Số điện thoại đã xác minh</span>
               <strong>{formatOptionalDate(user.phoneVerifiedAt)}</strong>
             </div>
             <div className="ds-detail-list-item">
-              <span>Runtime footprint</span>
+              <span>Dấu vết runtime</span>
               <strong>
-                {user.activeSessionCount ?? 0} sessions / {user.deviceCount ?? 0} devices
+                {user.activeSessionCount ?? 0} phiên / {user.deviceCount ?? 0} thiết bị
               </strong>
             </div>
           </div>
@@ -354,28 +344,28 @@ export const UserDetailPage = () => {
       </div>
 
       <DataTableShell
-        title="Sessions"
-        meta="Keep revoked state and expiry visible without forcing operators to open each row."
+        title="Phiên"
+        meta="Giữ trạng thái thu hồi và hạn dùng hiển thị rõ mà không buộc operator mở từng dòng."
         toolbar={
           <DataTableToolbar>
             <span className="ds-toolbar-summary">
               <span className="ds-shell-chip ds-shell-chip--ghost">
-                {sessionsQuery.data?.pagination.total ?? 0} session{(sessionsQuery.data?.pagination.total ?? 0) === 1 ? '' : 's'}
+                {sessionsQuery.data?.pagination.total ?? 0} phiên
               </span>
             </span>
           </DataTableToolbar>
         }
       >
         {sessionsQuery.isError ? (
-          <QueryStateView kind="error" compact description="Unable to load sessions." />
+          <QueryStateView kind="error" compact description="Không thể tải danh sách phiên." />
         ) : (
-          <AdminTable
+          <DataTable
             rowKey="id"
             columns={sessionColumns}
-            loading={sessionsQuery.isLoading}
+            loading={sessionsQuery.isFetching && !sessionsQuery.isPending}
             minHeight={280}
             dataSource={sessionsQuery.data?.items ?? []}
-            emptyNode={<EmptyState description="No sessions found." />}
+            emptyNode={<EmptyState description="Không tìm thấy phiên nào." />}
             pagination={{
               current: sessionsQuery.data?.pagination.page,
               pageSize: sessionsQuery.data?.pagination.limit,
@@ -387,28 +377,28 @@ export const UserDetailPage = () => {
       </DataTableShell>
 
       <DataTableShell
-        title="Devices"
-        meta="Surface push state and last activity for fast operator review."
+        title="Thiết bị"
+        meta="Hiển thị trạng thái push và hoạt động gần nhất để operator xem nhanh."
         toolbar={
           <DataTableToolbar>
             <span className="ds-toolbar-summary">
               <span className="ds-shell-chip ds-shell-chip--ghost">
-                {devicesQuery.data?.pagination.total ?? 0} device{(devicesQuery.data?.pagination.total ?? 0) === 1 ? '' : 's'}
+                {devicesQuery.data?.pagination.total ?? 0} thiết bị
               </span>
             </span>
           </DataTableToolbar>
         }
       >
         {devicesQuery.isError ? (
-          <QueryStateView kind="error" compact description="Unable to load devices." />
+          <QueryStateView kind="error" compact description="Không thể tải danh sách thiết bị." />
         ) : (
-          <AdminTable
+          <DataTable
             rowKey="id"
             columns={deviceColumns}
-            loading={devicesQuery.isLoading}
+            loading={devicesQuery.isFetching && !devicesQuery.isPending}
             minHeight={280}
             dataSource={devicesQuery.data?.items ?? []}
-            emptyNode={<EmptyState description="No devices found." />}
+            emptyNode={<EmptyState description="Không tìm thấy thiết bị nào." />}
             pagination={{
               current: devicesQuery.data?.pagination.page,
               pageSize: devicesQuery.data?.pagination.limit,

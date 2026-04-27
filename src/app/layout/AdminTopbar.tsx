@@ -1,87 +1,105 @@
-import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
 import { App } from 'antd';
 import React, { useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useCurrentUser } from '@/app/useCurrentUser';
-import { appConfig } from '@/config/appConfig';
+import { AppIcon } from '@/components/AppIcon';
 import { CommandPalette } from '@/components/CommandPalette';
+import { appConfig } from '@/config/appConfig';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { useAuthStore } from '@/store/authStore';
+import { hasSomeRole } from '@/utils/role';
 import { TopbarActions } from './TopbarActions';
 import { TopbarSearch } from './TopbarSearch';
 import { commandRouteItems, resolveNavigationContext } from './navigationConfig';
 
 interface AdminTopbarProps {
-  collapsed?: boolean;
+  mobile?: boolean;
+  mobileNavOpen?: boolean;
+  sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
 }
 
 export const AdminTopbar: React.FC<AdminTopbarProps> = ({
-  collapsed = false,
+  mobile = false,
+  mobileNavOpen = false,
+  sidebarCollapsed = false,
   onToggleSidebar,
 }) => {
   const { message } = App.useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const clearAuth = useAuthStore((state) => state.clearAuth);
+  const currentRole = useAuthStore((state) => state.user?.role);
   const { user, isAuthServiceUnavailable } = useCurrentUser();
   const { isOpen, openPalette, closePalette } = useCommandPalette();
-
   const currentPage = resolveNavigationContext(location.pathname);
-  const breadcrumbTrail = currentPage.breadcrumbs
-    .map((entry) => entry.label)
-    .filter((label) => label !== currentPage.title)
-    .join(' / ');
 
   const paletteItems = useMemo(
     () => [
-      ...commandRouteItems.map((item) => ({
-        ...item,
-        onSelect: () => {
-          if (item.route) {
-            navigate(item.route);
-          }
-        },
-      })),
+      ...commandRouteItems
+        .filter((item) => !item.roles || hasSomeRole(currentRole, item.roles))
+        .map((item) => ({
+          ...item,
+          icon: <AppIcon name={item.iconKey} size={16} aria-hidden />,
+          onSelect: () => {
+            if (item.route) {
+              navigate(item.route);
+            }
+          },
+        })),
       {
-        id: 'quick-create-user',
-        label: 'Create User',
-        description: 'Jump to user management and open the create workflow',
-        category: 'Quick Actions' as const,
-        icon: commandRouteItems.find((item) => item.id === 'go-users')?.icon,
-        keywords: ['create', 'user', 'invite', 'admin'],
+        id: 'quick-open-users',
+        label: 'Mở người dùng',
+        description: 'Mở quản lý tài khoản để tìm kiếm và thao tác vận hành.',
+        category: 'Thao tác nhanh' as const,
+        icon: <AppIcon name="users" size={16} aria-hidden />,
+        keywords: ['users', 'accounts', 'admin'],
         onSelect: () => navigate('/users'),
       },
       {
-        id: 'quick-send-broadcast',
-        label: 'Send Broadcast',
-        description: 'Open messaging templates for broadcast preparation',
-        category: 'Quick Actions' as const,
-        icon: commandRouteItems.find((item) => item.id === 'go-email-templates')?.icon,
+        id: 'quick-open-email-templates',
+        label: 'Mở mẫu email',
+        description: 'Mở mẫu email hệ thống.',
+        category: 'Thao tác nhanh' as const,
+        icon: <AppIcon name="fileStack" size={16} aria-hidden />,
         keywords: ['broadcast', 'announcement', 'message'],
-        onSelect: () => navigate('/services/email-templates'),
+        onSelect: () => navigate('/settings/email-templates'),
       },
       {
-        id: 'quick-create-group',
-        label: 'Create Group',
-        description: 'Stage the future group-management workflow from the users workspace',
-        category: 'Quick Actions' as const,
-        icon: commandRouteItems.find((item) => item.id === 'go-users')?.icon,
-        keywords: ['group', 'team', 'segment'],
-        onSelect: () => {
-          message.info('Group creation workflow is not wired yet. Opening users workspace.');
-          navigate('/users');
-        },
+        id: 'quick-open-conversations',
+        label: 'Mở hội thoại',
+        description: 'Kiểm tra bản ghi hội thoại phục vụ admin.',
+        category: 'Điều hướng' as const,
+        icon: <AppIcon name="messages" size={16} aria-hidden />,
+        keywords: ['chat', 'conversation', 'support'],
+        onSelect: () => navigate('/conversations'),
+      },
+      {
+        id: 'quick-open-hr',
+        label: 'Mở nhân sự HR',
+        description: 'Rà soát hồ sơ HR và tài khoản liên kết.',
+        category: 'Thao tác nhanh' as const,
+        icon: <AppIcon name="hr" size={16} aria-hidden />,
+        keywords: ['hr', 'employees', 'directory'],
+        onSelect: () => navigate('/hr-employees'),
       },
     ],
-    [message, navigate],
+    [currentRole, navigate],
   );
 
   const handleLogout = () => {
     clearAuth();
     navigate('/login', { replace: true });
   };
+
+  const sidebarToggleLabel = mobile
+    ? mobileNavOpen
+      ? 'Đóng điều hướng'
+      : 'Mở điều hướng'
+    : sidebarCollapsed
+      ? 'Mở rộng điều hướng'
+      : 'Thu gọn điều hướng';
 
   return (
     <>
@@ -90,15 +108,15 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
           <button
             type="button"
             className="ds-topbar-toggle ds-btn ds-btn--icon"
-            aria-label={collapsed ? 'Open navigation' : 'Collapse navigation'}
-            aria-expanded={!collapsed}
+            aria-label={sidebarToggleLabel}
+            aria-expanded={mobile ? mobileNavOpen : !sidebarCollapsed}
             aria-controls="app-sidebar"
             onClick={onToggleSidebar}
           >
-            {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            <AppIcon name="menu" size={18} aria-hidden />
           </button>
           <div className="ds-topbar-title-block">
-            <span className="ds-topbar-eyebrow">{breadcrumbTrail || 'Workspace'}</span>
+            <span className="ds-topbar-eyebrow">{currentPage.sectionLabel}</span>
             <strong className="ds-topbar-page-title">{currentPage.title}</strong>
           </div>
         </div>
@@ -112,9 +130,9 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
             user={user}
             environmentLabel={appConfig.environmentLabel}
             systemTone={isAuthServiceUnavailable ? 'degraded' : 'healthy'}
-            onOpenNotifications={() => message.info('Notifications center is not wired yet.')}
-            onOpenProfile={() => message.info('Profile panel is not available yet.')}
-            onOpenSettings={() => navigate('/services/smtp')}
+            onOpenNotifications={() => message.info('Trung tâm thông báo chưa được kết nối.')}
+            onOpenProfile={() => message.info('Panel hồ sơ chưa khả dụng.')}
+            onOpenSettings={() => navigate('/settings/system')}
             onLogout={handleLogout}
           />
         </div>

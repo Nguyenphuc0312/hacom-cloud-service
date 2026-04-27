@@ -5,6 +5,8 @@ import 'antd/dist/reset.css';
 import App from '@/App';
 import '@/styles/global.css';
 import '@/styles/foundation.css';
+import '@/styles/production.css';
+import '@/styles/classic-admin.css';
 import { bootstrapTheme } from '@/theme/bootstrap-theme';
 
 bootstrapTheme();

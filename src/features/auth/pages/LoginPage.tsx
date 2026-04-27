@@ -4,15 +4,19 @@ import { useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 
-import { accessClient, authClient } from '@/api/clients';
-import { getErrorMessage } from '@/api/error';
+import { authClient, currentAdminClient } from '@/api/clients';
+import {
+  getAdminLoginErrorMessage,
+  getErrorMessage,
+  isAdminAccessIpPendingError,
+} from '@/api/error';
 import { useAuthStore } from '@/store/authStore';
 
 const { Title, Text } = Typography;
 
 const loginSchema = z.object({
-  email: z.string().email('Email không hợp lệ.'),
-  password: z.string().min(1, 'Vui lòng nhập mật khẩu.'),
+  email: z.string().email('Nhập email hợp lệ.'),
+  password: z.string().min(1, 'Nhập mật khẩu.'),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -22,10 +26,9 @@ export const LoginPage = () => {
   const location = useLocation();
   const accessToken = useAuthStore((state) => state.accessToken);
   const setAuth = useAuthStore((state) => state.setAuth);
-  const setUser = useAuthStore((state) => state.setUser);
-  const setAccess = useAuthStore((state) => state.setAccess);
   const clearAuth = useAuthStore((state) => state.clearAuth);
   const [qrCode, setQrCode] = useState('');
+  const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
 
   const from = useMemo(() => {
     const state = location.state as { from?: { pathname?: string } } | null;
@@ -35,38 +38,46 @@ export const LoginPage = () => {
   const loginMutation = useMutation({
     mutationFn: authClient.login,
     onSuccess: async (data) => {
-      setAuth({ accessToken: data.accessToken, user: data.user ?? null });
-
       try {
-        const access = await accessClient.getCurrentStatus();
-        setAccess(access);
+        const admin = await currentAdminClient.getCurrentAdmin({
+          skipAuthRedirect: true,
+          headers: {
+            Authorization: `Bearer ${data.accessToken}`,
+          },
+        });
 
-        if (access.status !== 'approved') {
+        setAuth({ accessToken: data.accessToken, user: admin });
+        setAdminLoginError(null);
+        message.success('Đăng nhập thành công.');
+        navigate(from, { replace: true });
+      } catch (error) {
+        if (isAdminAccessIpPendingError(error)) {
+          setAuth({ accessToken: data.accessToken, user: data.user ?? null });
+          setAdminLoginError(null);
+          message.info(getAdminLoginErrorMessage(error));
           navigate('/access', { replace: true });
           return;
         }
 
-        if (!data.user) {
-          const me = await authClient.me();
-          setUser(me);
-        }
-
-        message.success('Đăng nhập thành công.');
-        navigate(from, { replace: true });
-      } catch (error) {
         clearAuth();
-        message.error(getErrorMessage(error));
+        const errorMessage = getAdminLoginErrorMessage(error);
+        setAdminLoginError(errorMessage);
+        message.error(errorMessage);
       }
     },
     onError: (error) => {
-      message.error(getErrorMessage(error));
+      const errorMessage = getErrorMessage(error);
+      setAdminLoginError(errorMessage);
+      message.error(errorMessage);
     },
   });
 
   const onFinish = (values: LoginFormValues) => {
+    setAdminLoginError(null);
+
     const parsed = loginSchema.safeParse(values);
     if (!parsed.success) {
-      message.error(parsed.error.issues[0]?.message ?? 'Dữ liệu không hợp lệ.');
+      message.error(parsed.error.issues[0]?.message ?? 'Dữ liệu đăng nhập không hợp lệ.');
       return;
     }
 
@@ -77,16 +88,17 @@ export const LoginPage = () => {
     return <Navigate to="/" replace />;
   }
 
+  const formErrorMessage =
+    adminLoginError ?? (loginMutation.isError ? getErrorMessage(loginMutation.error) : null);
+
   return (
     <div className="login-page">
       <Card className="login-card" bordered={false}>
         <Space direction="vertical" size={8} style={{ width: '100%' }}>
           <Title level={3} style={{ marginBottom: 0 }}>
-            Chat Admin Console
+            Bảng quản trị chat
           </Title>
-          <Text type="secondary">
-            Đăng nhập để quản trị người dùng, hạ tầng dịch vụ và cấu hình hệ thống.
-          </Text>
+          <Text type="secondary">Đăng nhập để quản lý người dùng, dịch vụ và cấu hình hệ thống.</Text>
         </Space>
 
         <Tabs
@@ -95,7 +107,7 @@ export const LoginPage = () => {
           items={[
             {
               key: 'email',
-              label: 'Email & Password',
+              label: 'Email và mật khẩu',
               children: (
                 <Form<LoginFormValues>
                   layout="vertical"
@@ -106,24 +118,24 @@ export const LoginPage = () => {
                   <Form.Item
                     label="Email"
                     name="email"
-                    rules={[{ required: true, message: 'Vui lòng nhập email.' }]}
+                    rules={[{ required: true, message: 'Nhập email.' }]}
                   >
                     <Input placeholder="admin@company.com" size="large" autoComplete="email" />
                   </Form.Item>
 
                   <Form.Item
-                    label="Password"
+                    label="Mật khẩu"
                     name="password"
-                    rules={[{ required: true, message: 'Vui lòng nhập mật khẩu.' }]}
+                    rules={[{ required: true, message: 'Nhập mật khẩu.' }]}
                   >
                     <Input.Password size="large" autoComplete="current-password" />
                   </Form.Item>
 
-                  {loginMutation.isError ? (
+                  {formErrorMessage ? (
                     <Alert
                       type="error"
                       showIcon
-                      message={getErrorMessage(loginMutation.error)}
+                      message={formErrorMessage}
                       style={{ marginBottom: 12 }}
                     />
                   ) : null}
@@ -142,23 +154,23 @@ export const LoginPage = () => {
             },
             {
               key: 'qr',
-              label: 'QR Login',
+              label: 'Đăng nhập QR',
               children: (
                 <Space direction="vertical" size={12} style={{ width: '100%', marginTop: 8 }}>
                   <Alert
                     type="info"
                     showIcon
-                    message="QR login"
-                    description="Dùng app nội bộ để quét QR hoặc dán mã pairing để đăng nhập nhanh không cần nhập mật khẩu."
+                    message="Đăng nhập QR"
+                    description="Quét mã QR từ ứng dụng nội bộ hoặc dán mã ghép nối."
                   />
-                  <div className="login-qr-placeholder" aria-label="QR login placeholder">
-                    <Text strong>QR Session</Text>
-                    <Text type="secondary">Quét QR bằng ứng dụng mobile admin</Text>
+                  <div className="login-qr-placeholder" aria-label="Khu vực chờ đăng nhập QR">
+                    <Text strong>Phiên QR</Text>
+                    <Text type="secondary">Quét bằng ứng dụng admin trên di động</Text>
                   </div>
                   <Input
                     value={qrCode}
                     onChange={(event) => setQrCode(event.target.value)}
-                    placeholder="Dán mã pairing từ ứng dụng mobile"
+                    placeholder="Dán mã ghép nối từ ứng dụng di động"
                     size="large"
                   />
                   <Button
@@ -167,15 +179,13 @@ export const LoginPage = () => {
                     size="large"
                     onClick={() => {
                       if (!qrCode.trim()) {
-                        message.warning('Vui lòng nhập mã pairing QR.');
+                        message.warning('Nhập mã ghép nối QR.');
                         return;
                       }
-                      message.info(
-                        'QR login sẽ được bật khi auth-service phát hành endpoint tương ứng.',
-                      );
+                      message.info('Đăng nhập QR sẽ bật khi auth-service cung cấp endpoint.');
                     }}
                   >
-                    Xác thực QR
+                    Xác minh QR
                   </Button>
                 </Space>
               ),

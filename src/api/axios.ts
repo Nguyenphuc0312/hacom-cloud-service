@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { AxiosInstance } from 'axios';
+import type { AxiosInstance, AxiosRequestConfig } from 'axios';
 
 import { adminApiBaseUrl, authApiBaseUrl } from '@/api/routes';
 import { getAccessToken, useAuthStore } from '@/store/authStore';
@@ -20,6 +20,10 @@ const createJsonClient = (baseURL: string): AxiosInstance =>
 
 export const adminAxiosInstance = createJsonClient(adminApiBaseUrl);
 export const authAxiosInstance = createJsonClient(authApiBaseUrl);
+
+export interface ApiRequestConfig extends AxiosRequestConfig {
+  skipAuthRedirect?: boolean;
+}
 
 const buildRequestId = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -42,7 +46,7 @@ const attachRequestId = (client: AxiosInstance) => {
 const attachAuthHeader = (client: AxiosInstance) => {
   client.interceptors.request.use((config) => {
     const token = getAccessToken();
-    if (token) {
+    if (token && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
@@ -55,11 +59,14 @@ const attachUnauthorizedRedirect = (client: AxiosInstance) => {
     (response) => response,
     (error) => {
       const status = error?.response?.status;
+      const skipAuthRedirect = Boolean(
+        (error?.config as { skipAuthRedirect?: boolean } | undefined)?.skipAuthRedirect,
+      );
       const requestUrl = `${error?.config?.url ?? ''}`;
       const isLoginRequest =
         requestUrl.endsWith('/login') || requestUrl.includes('/auth/login');
 
-      if (status === 401 && !isLoginRequest) {
+      if (status === 401 && !isLoginRequest && !skipAuthRedirect) {
         useAuthStore.getState().clearAuth();
         if (window.location.pathname !== loginPathname) {
           window.location.replace(loginPath);

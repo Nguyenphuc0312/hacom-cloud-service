@@ -12,7 +12,7 @@ interface JsonDiffDrawerProps {
 
 const JsonBlock = ({ data }: { data?: Record<string, unknown> | null }) => {
   if (!data) {
-    return <Empty description="No data" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+    return <Empty description="Chưa có dữ liệu" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
   }
 
   return (
@@ -22,7 +22,7 @@ const JsonBlock = ({ data }: { data?: Record<string, unknown> | null }) => {
 
 export const JsonDiffDrawer = ({
   open,
-  title = 'Change Diff',
+  title = 'So sánh thay đổi',
   before,
   after,
   onClose,
@@ -38,11 +38,11 @@ export const JsonDiffDrawer = ({
     >
       <Space size={16} style={{ width: '100%' }} align="start" className="json-diff-grid">
         <div className="json-panel">
-          <h4>Before</h4>
+          <h4>Trước</h4>
           <JsonBlock data={before} />
         </div>
         <div className="json-panel">
-          <h4>After</h4>
+          <h4>Sau</h4>
           <JsonBlock data={after} />
         </div>
       </Space>

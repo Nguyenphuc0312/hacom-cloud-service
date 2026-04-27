@@ -14,7 +14,7 @@ export const SystemDegradedBanner = ({
   title,
   description,
   onRetry,
-  retryLabel = 'Retry',
+  retryLabel = 'Thử lại',
   retrying = false,
 }: SystemDegradedBannerProps) => {
   if (!visible) {

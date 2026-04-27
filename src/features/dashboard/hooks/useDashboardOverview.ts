@@ -1,7 +1,7 @@
 import { keepPreviousData, useQueries } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
-import { monitoringClient, serviceHealthClient, usersClient } from '@/api/clients';
+import { accessClient, monitoringClient, serviceHealthClient, usersClient } from '@/api/clients';
 import { queryKeys } from '@/api/queryKeys';
 import type { TimeRange } from '@/api/types';
 import { appConfig } from '@/config/appConfig';
@@ -12,6 +12,7 @@ export const useDashboardOverview = (range: TimeRange) => {
     totalUsersQuery,
     activeUsersQuery,
     pendingUsersQuery,
+    pendingAdminAccessQuery,
     monitoringQuery,
     serviceHealthQuery,
   ] = useQueries({
@@ -28,6 +29,11 @@ export const useDashboardOverview = (range: TimeRange) => {
         queryKey: queryKeys.usersList('dashboard-pending-users'),
         queryFn: () =>
           usersClient.list({ page: 1, limit: 1, accountStatus: 'PENDING_VERIFICATION' }),
+      },
+      {
+        queryKey: queryKeys.accessIpRequests('dashboard-pending'),
+        queryFn: () =>
+          accessClient.listRequests({ page: 1, limit: 1, status: 'pending' }),
       },
       {
         queryKey: queryKeys.monitoringOverview(range),
@@ -59,6 +65,7 @@ export const useDashboardOverview = (range: TimeRange) => {
     totalUsersQuery,
     activeUsersQuery,
     pendingUsersQuery,
+    pendingAdminAccessQuery,
     monitoringQuery,
     serviceHealthQuery,
     incidents,

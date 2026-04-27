@@ -13,14 +13,14 @@ interface MonitoringRealtimeSectionProps {
 export const MonitoringRealtimeSection = ({ overview }: MonitoringRealtimeSectionProps) => (
   <section>
     <MonitoringSectionHeader
-      title="Realtime Health"
-      description="Connection load, API hop latency, sender ACK behavior, and recovery pressure."
+      title="Sức khỏe thời gian thực"
+      description="Tải kết nối, độ trễ qua API, hành vi sender ACK và áp lực phục hồi."
       deepLink={overview.links.realtime}
     />
 
     <Row gutter={[16, 16]}>
       <Col xs={24} xl={14}>
-        <WidgetCard title="Connections trend">
+        <WidgetCard title="Xu hướng kết nối">
           <MonitoringTrendChart
             series={overview.realtimeHealth.connectionsTrend}
             availability={overview.dataQuality.realtimeHealth.status}
@@ -28,10 +28,10 @@ export const MonitoringRealtimeSection = ({ overview }: MonitoringRealtimeSectio
         </WidgetCard>
       </Col>
       <Col xs={24} xl={10}>
-        <WidgetCard title="Realtime summary">
+        <WidgetCard title="Tóm tắt thời gian thực">
           <div className="monitoring-summary-list">
             <div className="monitoring-summary-list-item">
-              <span>WS to API p95</span>
+              <span>WS tới API p95</span>
               <strong>
                 {formatMetricValue(
                   formatMs(overview.realtimeHealth.wsToApiP95Ms),
@@ -49,7 +49,7 @@ export const MonitoringRealtimeSection = ({ overview }: MonitoringRealtimeSectio
               </strong>
             </div>
             <div className="monitoring-summary-list-item">
-              <span>Delivery failures</span>
+              <span>Lỗi gửi tin</span>
               <strong>
                 {formatMetricValue(
                   formatRate(overview.realtimeHealth.deliveryFailuresPerMinute, '/min'),
@@ -58,7 +58,7 @@ export const MonitoringRealtimeSection = ({ overview }: MonitoringRealtimeSectio
               </strong>
             </div>
             <div className="monitoring-summary-list-item">
-              <span>Resync required</span>
+              <span>Cần resync</span>
               <strong>
                 {formatMetricValue(
                   formatRate(overview.realtimeHealth.resyncsPerMinute, '/min'),
@@ -72,14 +72,14 @@ export const MonitoringRealtimeSection = ({ overview }: MonitoringRealtimeSectio
             <Alert
               type="warning"
               showIcon
-              message="Delivery failures detected"
-              description="Open the detailed realtime dashboard if this stays non-zero for more than a few refresh cycles."
+              message="Phát hiện lỗi gửi tin"
+              description="Hãy mở dashboard thời gian thực chi tiết nếu chỉ số này tiếp tục khác 0 sau vài chu kỳ làm mới."
             />
           ) : null}
         </WidgetCard>
       </Col>
       <Col xs={24} xl={12}>
-        <WidgetCard title="Latency trend">
+        <WidgetCard title="Xu hướng độ trễ">
           <MonitoringTrendChart
             series={overview.realtimeHealth.latencyTrend}
             availability={overview.dataQuality.realtimeHealth.status}
@@ -88,7 +88,7 @@ export const MonitoringRealtimeSection = ({ overview }: MonitoringRealtimeSectio
         </WidgetCard>
       </Col>
       <Col xs={24} xl={12}>
-        <WidgetCard title="Delivery and recovery trend">
+        <WidgetCard title="Xu hướng lỗi gửi và phục hồi">
           <MonitoringTrendChart
             series={overview.realtimeHealth.reliabilityTrend}
             availability={overview.dataQuality.realtimeHealth.status}

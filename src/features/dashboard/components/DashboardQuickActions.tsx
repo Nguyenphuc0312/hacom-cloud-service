@@ -1,6 +1,6 @@
-import { NotificationOutlined, TeamOutlined, UserAddOutlined } from '@ant-design/icons';
 import type { ReactNode } from 'react';
 
+import { AppIcon } from '@/components/AppIcon';
 import { SurfaceCard } from '@/components/ui/SurfaceCard';
 
 interface DashboardQuickAction {
@@ -25,32 +25,32 @@ export const DashboardQuickActions = ({
   const actions: DashboardQuickAction[] = [
     {
       id: 'create-user',
-      label: 'Create user',
-      description: 'Invite and provision a new admin account.',
+      label: 'Tạo người dùng',
+      description: 'Mời và cấp tài khoản quản trị mới.',
       onSelect: onCreateUser,
-      icon: <UserAddOutlined />,
+      icon: <AppIcon name="user" size={16} />,
     },
     {
       id: 'send-broadcast',
-      label: 'Send broadcast',
-      description: 'Prepare an outbound notification or announcement.',
+      label: 'Gửi broadcast',
+      description: 'Chuẩn bị thông báo hoặc bản tin gửi ra ngoài.',
       onSelect: onSendBroadcast,
-      icon: <NotificationOutlined />,
+      icon: <AppIcon name="bell" size={16} />,
     },
     {
       id: 'create-group',
-      label: 'Create group',
-      description: 'Set up a new operator cohort or permission slice.',
+      label: 'Tạo nhóm',
+      description: 'Thiết lập nhóm vận hành hoặc tập quyền mới.',
       onSelect: onCreateGroup,
-      icon: <TeamOutlined />,
+      icon: <AppIcon name="users" size={16} />,
     },
   ];
 
   return (
     <SurfaceCard
-      eyebrow="Quick actions"
-      title="Next actions"
-      description="Use the dashboard as a routing hub, not as a second monitoring screen."
+      eyebrow="Tác vụ nhanh"
+      title="Việc cần làm"
+      description="Dùng dashboard như điểm điều phối thao tác, không phải màn giám sát thứ hai."
       className="ds-dashboard-quick-actions"
     >
       <div className="ds-dashboard-quick-actions-list">

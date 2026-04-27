@@ -1,15 +1,9 @@
-import {
-  DownOutlined,
-  LockOutlined,
-  LogoutOutlined,
-  SettingOutlined,
-  UserOutlined,
-} from '@ant-design/icons';
 import { Avatar, Button, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import { useMemo } from 'react';
 
 import type { CurrentAdmin } from '@/api/types';
+import { AppIcon } from '@/components/AppIcon';
 import { toDisplayRole } from '@/utils/role';
 
 interface HeaderUserMenuProps {
@@ -22,7 +16,11 @@ interface HeaderUserMenuProps {
 
 const normalizeDisplayName = (user: CurrentAdmin | null): string => {
   const fallback = user?.email?.split('@')[0] ?? 'Admin';
-  const source = user?.username?.trim() || fallback;
+  const source =
+    user?.fullName?.trim() ||
+    user?.displayName?.trim() ||
+    user?.username?.trim() ||
+    fallback;
   return source.length > 16 ? `${source.slice(0, 15)}...` : source;
 };
 
@@ -35,34 +33,36 @@ export const HeaderUserMenu = ({
 }: HeaderUserMenuProps) => {
   const displayName = normalizeDisplayName(user);
   const roleLabel = toDisplayRole(user?.role).replace('_', ' ');
-  const avatarText = (user?.username ?? user?.email ?? 'A').charAt(0).toUpperCase();
+  const avatarText = (user?.fullName ?? user?.displayName ?? user?.username ?? user?.email ?? 'A')
+    .charAt(0)
+    .toUpperCase();
 
   const menuItems = useMemo<NonNullable<MenuProps['items']>>(
     () => [
       {
         key: 'profile',
-        icon: <UserOutlined />,
-        label: 'My Profile',
+        icon: <AppIcon name="user" size={14} />,
+        label: 'Hồ sơ của tôi',
         onClick: onOpenProfile,
       },
       {
         key: 'settings',
-        icon: <SettingOutlined />,
-        label: 'Settings',
+        icon: <AppIcon name="settings" size={14} />,
+        label: 'Cài đặt',
         onClick: onOpenSettings,
       },
       {
         key: 'change-password',
-        icon: <LockOutlined />,
-        label: 'Change password',
+        icon: <AppIcon name="lock" size={14} />,
+        label: 'Đổi mật khẩu',
         disabled: !onChangePassword,
         onClick: onChangePassword,
       },
       { type: 'divider' },
       {
         key: 'logout',
-        icon: <LogoutOutlined />,
-        label: 'Logout',
+        icon: <AppIcon name="logout" size={14} />,
+        label: 'Đăng xuất',
         danger: true,
         onClick: onLogout,
       },
@@ -77,7 +77,7 @@ export const HeaderUserMenu = ({
       overlayClassName="header-user-dropdown"
       menu={{ items: menuItems }}
     >
-      <Button className="header-user-menu-trigger" aria-label="Open user menu">
+      <Button className="header-user-menu-trigger" aria-label="Mở menu người dùng">
         <Avatar size={30} className="header-user-avatar">
           {avatarText}
         </Avatar>
@@ -85,7 +85,7 @@ export const HeaderUserMenu = ({
           <span className="header-user-menu-name">{displayName}</span>
           <span className="header-user-menu-role">{roleLabel}</span>
         </span>
-        <DownOutlined className="header-user-menu-caret" />
+        <AppIcon name="chevronDown" size={14} className="header-user-menu-caret" />
       </Button>
     </Dropdown>
   );

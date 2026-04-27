@@ -1,12 +1,12 @@
-import { SearchOutlined } from '@ant-design/icons';
 import { Input, Modal, Typography } from 'antd';
 import type { InputRef } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { AppIcon } from '@/components/AppIcon';
 import type { CommandCategory } from '@/app/layout/navigationConfig';
 
-const CATEGORY_ORDER: CommandCategory[] = ['Navigation', 'Quick Actions', 'System', 'Settings'];
+const CATEGORY_ORDER: CommandCategory[] = ['Điều hướng', 'Thao tác nhanh', 'Vận hành', 'Cài đặt'];
 
 export interface CommandPaletteItem {
   id: string;
@@ -148,8 +148,8 @@ export const CommandPalette = ({ open, onClose, items }: CommandPaletteProps) =>
           ref={inputRef}
           value={query}
           className="command-palette-input"
-          prefix={<SearchOutlined />}
-          placeholder="Search pages, settings..."
+          prefix={<AppIcon name="search" size={15} aria-hidden />}
+          placeholder="Tìm trang, cài đặt..."
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown') {
@@ -177,21 +177,15 @@ export const CommandPalette = ({ open, onClose, items }: CommandPaletteProps) =>
               onClose();
             }
           }}
-          aria-label="Command palette search"
+          aria-label="Tìm trong bảng lệnh nhanh"
         />
       </div>
 
       {groupedItems.length > 0 ? (
-        <div className="command-palette-results" role="listbox" aria-label="Admin commands">
+        <div className="command-palette-results" role="listbox" aria-label="Lệnh admin">
           {groupedItems.map((group) => (
-            <section
-              key={group.category}
-              className="command-palette-group"
-              aria-label={group.category}
-            >
-              <Typography.Text className="command-palette-group-title">
-                {group.category}
-              </Typography.Text>
+            <section key={group.category} className="command-palette-group" aria-label={group.category}>
+              <Typography.Text className="command-palette-group-title">{group.category}</Typography.Text>
               {group.items.map((item) => {
                 const isActive = item.id === activeItemId;
 
@@ -202,13 +196,11 @@ export const CommandPalette = ({ open, onClose, items }: CommandPaletteProps) =>
                     role="option"
                     disabled={item.disabled}
                     aria-selected={isActive}
-                    className={'command-palette-item ' + (isActive ? 'is-active' : '')}
+                    className={`command-palette-item ${isActive ? 'is-active' : ''}`}
                     onMouseEnter={() => !item.disabled && setActiveItemId(item.id)}
                     onClick={() => handleSelect(item)}
                   >
-                    {item.icon ? (
-                      <span className="command-palette-item-icon">{item.icon}</span>
-                    ) : null}
+                    {item.icon ? <span className="command-palette-item-icon">{item.icon}</span> : null}
                     <span className="command-palette-item-main">
                       <span className="command-palette-item-label">{item.label}</span>
                       {item.description ? (
@@ -222,11 +214,11 @@ export const CommandPalette = ({ open, onClose, items }: CommandPaletteProps) =>
           ))}
         </div>
       ) : (
-        <div className="command-palette-empty">No matching command found</div>
+        <div className="command-palette-empty">Không tìm thấy lệnh phù hợp</div>
       )}
 
       <div className="command-palette-footer">
-        Use Up/Down to move, Enter to select, Esc to close
+        Dùng mũi tên lên/xuống để di chuyển, Enter để chọn, Esc để đóng
       </div>
     </Modal>
   );

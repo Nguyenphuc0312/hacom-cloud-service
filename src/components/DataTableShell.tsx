@@ -22,24 +22,24 @@ export const DataTableShell: React.FC<DataTableShellProps> = ({
   children,
   className,
 }) => {
-  const ariaLabel = typeof title === 'string' ? title : 'Data table';
+  const ariaLabel = typeof title === 'string' ? title : 'Bảng dữ liệu';
 
   return (
-    <div
+    <section
       className={clsx('ds-table-shell', className)}
       role="region"
       aria-label={ariaLabel}
       aria-busy={loading ? 'true' : 'false'}
     >
-      {(title || toolbar || meta) && (
+      {(title || toolbar || meta) ? (
         <div className="ds-table-shell-header">
-          <div style={{ flex: 1 }}>
-            {title && <div className="ds-table-shell-title">{title}</div>}
-            {meta && <div className="ds-table-shell-meta">{meta}</div>}
+          <div className="ds-table-shell-copy">
+            {title ? <div className="ds-table-shell-title">{title}</div> : null}
+            {meta ? <div className="ds-table-shell-meta">{meta}</div> : null}
           </div>
-          {toolbar && <div className="ds-table-shell-toolbar">{toolbar}</div>}
+          {toolbar ? <div className="ds-table-shell-toolbar">{toolbar}</div> : null}
         </div>
-      )}
+      ) : null}
 
       <div className="ds-table-shell-body">
         {loading ? (
@@ -51,12 +51,12 @@ export const DataTableShell: React.FC<DataTableShellProps> = ({
         ) : children ? (
           children
         ) : (
-          emptyState || <div className="ds-table-empty-state">No data</div>
+          emptyState || <div className="ds-table-empty-state">Chưa có dữ liệu</div>
         )}
       </div>
 
-      {footer && <div className="ds-table-shell-footer">{footer}</div>}
-    </div>
+      {footer ? <div className="ds-table-shell-footer">{footer}</div> : null}
+    </section>
   );
 };
 

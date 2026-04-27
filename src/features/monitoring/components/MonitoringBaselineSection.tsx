@@ -26,8 +26,8 @@ export const MonitoringBaselineSection = ({ overview }: MonitoringBaselineSectio
   return (
     <section>
       <MonitoringSectionHeader
-        title="Baseline Context"
-        description="Current load with measured operator context, so raw numbers stay understandable without opening Grafana."
+        title="Ngữ cảnh baseline"
+        description="Đặt tải hiện tại vào ngữ cảnh đo đạc để operator hiểu số liệu thô mà không cần mở Grafana ngay."
         deepLink={overview.links.capacityBaseline}
       />
 
@@ -35,7 +35,7 @@ export const MonitoringBaselineSection = ({ overview }: MonitoringBaselineSectio
         <Col xs={24} xl={10}>
           <WidgetCard className={`monitoring-baseline-hero monitoring-baseline-hero--${riskTone}`}>
             <div className="monitoring-baseline-hero-body">
-              <Text className="dashboard-hero-eyebrow">Current zone</Text>
+              <Text className="dashboard-hero-eyebrow">Vùng hiện tại</Text>
               <div className="monitoring-baseline-hero-row">
                 <Typography.Title level={3} style={{ margin: 0 }}>
                   {getRiskStateLabel(baseline.currentRiskState)}
@@ -44,12 +44,12 @@ export const MonitoringBaselineSection = ({ overview }: MonitoringBaselineSectio
               </div>
               <Text className="dashboard-hero-subtitle">
                 {baseline.currentRiskState === 'comfortable'
-                  ? 'Current live load is within the tested comfortable zone.'
+                  ? 'Tải realtime hiện nằm trong vùng an toàn đã được đo kiểm.'
                   : baseline.currentRiskState === 'warning'
-                    ? 'Current live load is above the comfortable zone and should be watched closely.'
+                    ? 'Tải realtime hiện đã vượt vùng an toàn và cần được theo dõi sát.'
                     : baseline.currentRiskState === 'near-breaking'
-                      ? 'Current live load is at or above the tested warning line.'
-                      : 'Baseline is pending. Current load is visible but not yet classified.'}
+                      ? 'Tải realtime hiện đang chạm hoặc vượt ngưỡng cảnh báo đã đo kiểm.'
+                      : 'Baseline vẫn đang chờ hoàn tất. Đã thấy tải hiện tại nhưng chưa phân loại được mức rủi ro.'}
               </Text>
               <Space size={8} wrap className="dashboard-hero-badges">
                 <StatusBadge status={overview.freshness === 'live' ? 'live' : overview.freshness} />
@@ -58,15 +58,15 @@ export const MonitoringBaselineSection = ({ overview }: MonitoringBaselineSectio
             </div>
             <div className="monitoring-summary-list">
               <div className="monitoring-summary-list-item">
-                <span>Current active WS</span>
+                <span>Kết nối WS hiện tại</span>
                 <strong>{formatNumber(overview.systemOverview.activeConnections)}</strong>
               </div>
               <div className="monitoring-summary-list-item">
-                <span>Current msg/sec</span>
+                <span>Tin nhắn/giây hiện tại</span>
                 <strong>{formatRate(overview.systemOverview.messagesPerSecond, '/s')}</strong>
               </div>
               <div className="monitoring-summary-list-item">
-                <span>Baseline generated</span>
+                <span>Baseline tạo lúc</span>
                 <strong>{formatDateTime(baseline.generatedAt ?? undefined)}</strong>
               </div>
             </div>
@@ -74,8 +74,8 @@ export const MonitoringBaselineSection = ({ overview }: MonitoringBaselineSectio
               <Alert
                 type="info"
                 showIcon
-                message="Measured baseline pending"
-                description="Run the Phase 5B capture/export workflow to classify current load against tested ranges."
+                message="Đang chờ baseline đo kiểm"
+                description="Hãy chạy workflow capture/export Phase 5B để phân loại tải hiện tại theo các ngưỡng đã đo."
               />
             ) : null}
           </WidgetCard>
@@ -85,42 +85,42 @@ export const MonitoringBaselineSection = ({ overview }: MonitoringBaselineSectio
           <Row gutter={[16, 16]}>
             <Col xs={24} sm={12} xl={8}>
               <StatCard
-                title="Tested comfortable WS"
+                title="WS an toàn đã đo"
                 value={formatNumber(baseline.testedComfortableWs)}
-                meta="Measured active websocket occupancy"
+                meta="Mức chiếm dụng websocket hoạt động đã đo"
               />
             </Col>
             <Col xs={24} sm={12} xl={8}>
               <StatCard
-                title="Current WS ratio"
+                title="Tỷ lệ WS hiện tại"
                 value={formatRatioValue(baseline.currentWsLoadRatio)}
                 meta={describeRatioState(baseline.currentWsLoadRatio)}
               />
             </Col>
             <Col xs={24} sm={12} xl={8}>
               <StatCard
-                title="Tested warning WS"
+                title="WS cảnh báo đã đo"
                 value={formatNumber(baseline.testedWarningWs)}
-                meta="Watch this line before operator action escalates"
+                meta="Theo dõi ngưỡng này trước khi cần leo thang vận hành"
               />
             </Col>
             <Col xs={24} sm={12} xl={8}>
               <StatCard
-                title="Tested comfortable msg/sec"
+                title="Tin nhắn/giây an toàn đã đo"
                 value={formatRate(baseline.testedComfortableMsgRate, '/s')}
-                meta="Measured sustained write throughput"
+                meta="Thông lượng ghi duy trì đã đo"
               />
             </Col>
             <Col xs={24} sm={12} xl={8}>
               <StatCard
-                title="Current msg ratio"
+                title="Tỷ lệ tin nhắn hiện tại"
                 value={formatRatioValue(baseline.currentMsgLoadRatio)}
                 meta={describeRatioState(baseline.currentMsgLoadRatio)}
               />
             </Col>
             <Col xs={24} sm={12} xl={8}>
               <StatCard
-                title="Current latency vs baseline"
+                title="Độ trễ hiện tại so với baseline"
                 value={formatRatioValue(baseline.currentLatencyVsBaseline)}
                 meta={describeRatioState(baseline.currentLatencyVsBaseline)}
               />
@@ -129,17 +129,17 @@ export const MonitoringBaselineSection = ({ overview }: MonitoringBaselineSectio
         </Col>
 
         <Col xs={24}>
-          <WidgetCard title="Measured ranges">
+          <WidgetCard title="Các ngưỡng đã đo">
             <div className="monitoring-baseline-grid">
               <div className="monitoring-baseline-grid-item">
-                <span>WS comfortable / warning / near-breaking</span>
+                <span>WS an toàn / cảnh báo / cận gãy</span>
                 <strong>
                   {formatNumber(baseline.testedComfortableWs)} / {formatNumber(baseline.testedWarningWs)} /{' '}
                   {formatNumber(baseline.testedNearBreakingWs)}
                 </strong>
               </div>
               <div className="monitoring-baseline-grid-item">
-                <span>Msg/sec comfortable / warning / near-breaking</span>
+                <span>Tin nhắn/giây an toàn / cảnh báo / cận gãy</span>
                 <strong>
                   {formatRate(baseline.testedComfortableMsgRate, '/s')} /{' '}
                   {formatRate(baseline.testedWarningMsgRate, '/s')} /{' '}

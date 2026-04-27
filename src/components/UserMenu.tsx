@@ -1,9 +1,9 @@
-import { DownOutlined, LogoutOutlined, SettingOutlined, UserOutlined } from '@ant-design/icons';
 import { Avatar, Button, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import { memo, useMemo } from 'react';
 
 import type { CurrentAdmin } from '@/api/types';
+import { AppIcon } from '@/components/AppIcon';
 import { toDisplayRole } from '@/utils/role';
 
 interface UserMenuProps {
@@ -20,7 +20,7 @@ const normalizeUsername = (user: CurrentAdmin | null): string => {
 };
 
 const normalizeRoleLabel = (user: CurrentAdmin | null): string => {
-  return toDisplayRole(user?.role).replace('_', ' ').toUpperCase();
+  return toDisplayRole(user?.role);
 };
 
 export const UserMenu = memo(({ user, onOpenProfile, onOpenSettings, onLogout }: UserMenuProps) => {
@@ -43,21 +43,21 @@ export const UserMenu = memo(({ user, onOpenProfile, onOpenSettings, onLogout }:
       { type: 'divider' },
       {
         key: 'profile',
-        icon: <UserOutlined />,
-        label: 'Profile',
+        icon: <AppIcon name="user" size={15} aria-hidden />,
+        label: 'Hồ sơ',
         onClick: onOpenProfile,
       },
       {
         key: 'settings',
-        icon: <SettingOutlined />,
-        label: 'Settings',
+        icon: <AppIcon name="settings" size={15} aria-hidden />,
+        label: 'Thiết lập',
         onClick: onOpenSettings,
       },
       { type: 'divider' },
       {
         key: 'logout',
-        icon: <LogoutOutlined />,
-        label: 'Logout',
+        icon: <AppIcon name="logout" size={15} aria-hidden />,
+        label: 'Đăng xuất',
         danger: true,
         onClick: onLogout,
       },
@@ -72,14 +72,14 @@ export const UserMenu = memo(({ user, onOpenProfile, onOpenSettings, onLogout }:
       overlayClassName="user-menu-dropdown"
       menu={{ items: menuItems }}
     >
-      <Button className="user-menu-trigger" aria-label="Open user menu">
+      <Button className="user-menu-trigger" aria-label="Mở menu người dùng">
         <Avatar size={30} className="user-menu-avatar">
           {avatarText}
         </Avatar>
         <span className="user-menu-name" aria-hidden>
           {username}
         </span>
-        <DownOutlined className="user-menu-caret" />
+        <AppIcon name="chevronDown" size={14} className="user-menu-caret" aria-hidden />
       </Button>
     </Dropdown>
   );

@@ -77,18 +77,18 @@ export const EmailTemplatesCard = () => {
       return emailTemplatesClient.upsertDraft(payload.code, body);
     },
     onSuccess: async (_, variables) => {
-      message.success(`Draft saved for ${variables.code}.`);
+      message.success(`Đã lưu bản nháp cho ${variables.code}.`);
       await refresh();
     },
     onError: (error) => {
-      message.error(error instanceof Error ? error.message : 'Unable to save the draft.');
+      message.error(error instanceof Error ? error.message : 'Không thể lưu bản nháp.');
     },
   });
 
   const publishMutation = useMutation({
     mutationFn: (code: string) => emailTemplatesClient.publish(code),
     onSuccess: async () => {
-      message.success('Template published.');
+      message.success('Đã xuất bản mẫu.');
       await refresh();
     },
   });
@@ -97,7 +97,7 @@ export const EmailTemplatesCard = () => {
     mutationFn: ({ code, version }: { code: string; version: number }) =>
       emailTemplatesClient.rollback(code, { version }),
     onSuccess: async () => {
-      message.success('Template rolled back.');
+      message.success('Đã rollback mẫu.');
       await refresh();
     },
   });
@@ -108,7 +108,7 @@ export const EmailTemplatesCard = () => {
         sampleData: toJsonOrUndefined(payload.sampleData),
       }),
     onError: (error) => {
-      message.error(error instanceof Error ? error.message : 'Preview failed.');
+      message.error(error instanceof Error ? error.message : 'Xem trước thất bại.');
     },
   });
 
@@ -158,11 +158,11 @@ export const EmailTemplatesCard = () => {
   const columns = useMemo<ColumnsType<EmailTemplateRecord>>(
     () => [
       {
-        title: 'Code',
+        title: 'Mã',
         dataIndex: 'code',
       },
       {
-        title: 'Draft',
+        title: 'Bản nháp',
         render: (_, record) =>
           record.draft ? (
             <Space size={8}>
@@ -174,7 +174,7 @@ export const EmailTemplatesCard = () => {
           ),
       },
       {
-        title: 'Published',
+        title: 'Đã xuất bản',
         render: (_, record) =>
           record.published ? (
             <Space size={8}>
@@ -186,23 +186,23 @@ export const EmailTemplatesCard = () => {
           ),
       },
       {
-        title: 'Selection',
+        title: 'Lựa chọn',
         render: (_, record) =>
-          record.code === activeCode ? <span className="ds-shell-chip">Editing</span> : '-',
+          record.code === activeCode ? <span className="ds-shell-chip">Đang sửa</span> : '-',
       },
     ],
     [activeCode],
   );
 
   if (listQuery.isLoading) {
-    return <QueryStateView kind="loading" title="Loading email templates..." />;
+    return <QueryStateView kind="loading" title="Đang tải mẫu email..." />;
   }
 
   if (listQuery.isError) {
     return (
       <QueryStateView
         kind="error"
-        description="Unable to load email templates."
+        description="Không thể tải mẫu email."
         onRetry={() => {
           void listQuery.refetch();
         }}
@@ -218,14 +218,14 @@ export const EmailTemplatesCard = () => {
   const handlePreview = async () => {
     const payload = await form.validateFields();
     const preview = await previewMutation.mutateAsync(payload);
-    message.success('Preview generated.');
+    message.success('Đã tạo bản xem trước.');
 
     const content = [preview.subject, preview.text ?? '', preview.html ?? '']
       .filter(Boolean)
       .join('\n\n-----\n\n');
 
     Modal.info({
-      title: `Preview ${preview.code} v${preview.version}`,
+      title: `Xem trước ${preview.code} v${preview.version}`,
       width: 860,
       content: <Input.TextArea value={content} autoSize={{ minRows: 10, maxRows: 20 }} readOnly />,
     });
@@ -238,7 +238,7 @@ export const EmailTemplatesCard = () => {
   const handleRollback = async () => {
     const version = selectedTemplate?.published?.version;
     if (!version) {
-      message.warning('There is no published version to roll back to.');
+      message.warning('Không có phiên bản đã xuất bản nào để rollback.');
       return;
     }
 
@@ -248,8 +248,8 @@ export const EmailTemplatesCard = () => {
   return (
     <div className="ds-settings-stack">
       <DataTableShell
-        title="Template registry"
-        meta="Keep draft and published versions visible before the operator opens the editor."
+        title="Danh mục mẫu"
+        meta="Giữ bản nháp và phiên bản đã xuất bản hiển thị rõ trước khi operator mở trình sửa."
         toolbar={
           <DataTableToolbar>
             <Button
@@ -257,7 +257,7 @@ export const EmailTemplatesCard = () => {
                 void refresh();
               }}
             >
-              Refresh registry
+              Làm mới danh mục
             </Button>
           </DataTableToolbar>
         }
@@ -267,7 +267,7 @@ export const EmailTemplatesCard = () => {
           columns={columns}
           minHeight={220}
           dataSource={listQuery.data?.items ?? []}
-          emptyNode={<EmptyState description="No email templates are registered yet." />}
+          emptyNode={<EmptyState description="Chưa có mẫu email nào được đăng ký." />}
           pagination={false}
           onRow={(record) => ({
             onClick: () => {
@@ -280,9 +280,9 @@ export const EmailTemplatesCard = () => {
       </DataTableShell>
 
       <SurfaceCard
-        eyebrow="Template editor"
+        eyebrow="Trình sửa mẫu"
         title={activeCode}
-        description="Runtime uses only published templates. Drafts, preview, publish, and rollback stay in one editor flow so operators do not switch context."
+        description="Runtime chỉ dùng mẫu đã xuất bản. Bản nháp, xem trước, xuất bản và rollback được giữ trong cùng một luồng để operator không phải đổi ngữ cảnh."
         status={
           selectedTemplate ? (
             <div className="ds-page-toolbar-group">
@@ -295,34 +295,34 @@ export const EmailTemplatesCard = () => {
         <Form form={form} layout="vertical">
           <div className="ds-settings-form-grid">
             <FormSection
-              title="Template identity"
-              description="Choose the template code first, then load the current draft or published source into the editor."
+              title="Danh tính mẫu"
+              description="Chọn mã mẫu trước, sau đó nạp bản nháp hoặc bản đã xuất bản hiện tại vào trình sửa."
             >
               <Row gutter={16}>
                 <Col xs={24} md={8}>
-                  <Form.Item name="code" label="Template code" rules={[{ required: true }]}>
+                  <Form.Item name="code" label="Mã mẫu" rules={[{ required: true }]}>
                     <Select
                       options={TEMPLATE_CODE_OPTIONS}
                       onChange={(value) => setActiveCode(value)}
-                      placeholder="Select template code"
+                      placeholder="Chọn mã mẫu"
                     />
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={8}>
-                  <Form.Item name="name" label="Template name" rules={[{ required: true }]}>
+                  <Form.Item name="name" label="Tên mẫu" rules={[{ required: true }]}>
                     <Input placeholder="Email OTP" />
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={8}>
-                  <Form.Item name="description" label="Description">
-                    <Input placeholder="Template used for email OTP verification" />
+                  <Form.Item name="description" label="Mô tả">
+                    <Input placeholder="Mẫu dùng cho xác minh OTP qua email" />
                   </Form.Item>
                 </Col>
               </Row>
 
               <Form.Item
                 name="subjectTemplate"
-                label="Subject template"
+                label="Mẫu tiêu đề"
                 rules={[{ required: true }]}
               >
                 <Input placeholder="Your OTP code is {{otp}}" />
@@ -330,12 +330,12 @@ export const EmailTemplatesCard = () => {
             </FormSection>
 
             <FormSection
-              title="Message body"
-              description="Keep HTML and text variants side by side so operators can review both before preview and publish."
+              title="Nội dung tin"
+              description="Giữ biến thể HTML và text cạnh nhau để operator có thể rà soát cả hai trước khi xem trước và xuất bản."
             >
               <Row gutter={16}>
                 <Col xs={24} lg={12}>
-                  <Form.Item name="htmlTemplate" label="HTML template">
+                  <Form.Item name="htmlTemplate" label="Mẫu HTML">
                     <Input.TextArea
                       rows={8}
                       placeholder="<p>Hello {{displayName}}, OTP: <b>{{otp}}</b></p>"
@@ -343,7 +343,7 @@ export const EmailTemplatesCard = () => {
                   </Form.Item>
                 </Col>
                 <Col xs={24} lg={12}>
-                  <Form.Item name="textTemplate" label="Text template">
+                  <Form.Item name="textTemplate" label="Mẫu text">
                     <Input.TextArea
                       rows={8}
                       placeholder="Hello {{displayName}}, your OTP is {{otp}}"
@@ -354,12 +354,12 @@ export const EmailTemplatesCard = () => {
             </FormSection>
 
             <FormSection
-              title="Schema and sample data"
-              description="Sample data powers preview. Schema documents the variables that the runtime expects."
+              title="Schema và dữ liệu mẫu"
+              description="Dữ liệu mẫu phục vụ xem trước. Schema mô tả các biến mà runtime mong đợi."
             >
               <Row gutter={16}>
                 <Col xs={24} lg={12}>
-                  <Form.Item name="variablesSchema" label="Variables schema (JSON)">
+                  <Form.Item name="variablesSchema" label="Schema biến (JSON)">
                     <Input.TextArea
                       rows={6}
                       placeholder='{"otp":{"required":true},"displayName":{"required":false}}'
@@ -367,7 +367,7 @@ export const EmailTemplatesCard = () => {
                   </Form.Item>
                 </Col>
                 <Col xs={24} lg={12}>
-                  <Form.Item name="sampleData" label="Sample data (JSON)">
+                  <Form.Item name="sampleData" label="Dữ liệu mẫu (JSON)">
                     <Input.TextArea rows={6} placeholder='{"otp":"123456","displayName":"Nguyen"}' />
                   </Form.Item>
                 </Col>
@@ -377,23 +377,23 @@ export const EmailTemplatesCard = () => {
 
           <div className="ds-settings-action-bar">
             <div className="ds-settings-action-copy">
-              Drafts are safe to edit and preview. Publish only when the content is ready for runtime. Rollback creates a new version from the last published source of truth.
+              Bản nháp an toàn để chỉnh sửa và xem trước. Chỉ xuất bản khi nội dung đã sẵn sàng cho runtime. Hoàn tác sẽ tạo phiên bản mới từ nguồn đã xuất bản gần nhất.
             </div>
             <Space wrap>
               <Button onClick={() => onLoadTemplate()} disabled={!selectedTemplate}>
-                Load current
+                Nạp hiện tại
               </Button>
               <Button type="primary" onClick={handleSaveDraft} loading={upsertMutation.isPending}>
-                Save draft
+                Lưu bản nháp
               </Button>
               <Button onClick={handlePreview} loading={previewMutation.isPending}>
-                Preview
+                Xem trước
               </Button>
               <Button onClick={handlePublish} loading={publishMutation.isPending}>
-                Publish
+                Xuất bản
               </Button>
               <Button danger onClick={handleRollback} loading={rollbackMutation.isPending}>
-                Rollback
+                Hoàn tác phiên bản
               </Button>
             </Space>
           </div>

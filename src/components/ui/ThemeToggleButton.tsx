@@ -13,7 +13,7 @@ export const ThemeToggleButton = ({ compact = false }: ThemeToggleButtonProps) =
     <button
       type="button"
       className={clsx('ds-theme-toggle', compact && 'is-compact')}
-      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      aria-label={isDark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
       aria-pressed={isDark}
       onClick={toggleTheme}
     >
@@ -22,7 +22,7 @@ export const ThemeToggleButton = ({ compact = false }: ThemeToggleButtonProps) =
         <span className="ds-theme-toggle-icon ds-theme-toggle-icon-dark">🌙</span>
         <span className="ds-theme-toggle-thumb" />
       </span>
-      {!compact ? <span className="ds-theme-toggle-label">{isDark ? 'Dark' : 'Light'}</span> : null}
+      {!compact ? <span className="ds-theme-toggle-label">{isDark ? 'Tối' : 'Sáng'}</span> : null}
     </button>
   );
 };

@@ -1,7 +1,9 @@
 import React from 'react';
 import { Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
-import { MoreOutlined } from '@ant-design/icons';
+
+import { AppIcon } from '@/components/AppIcon';
+import { AppTooltip } from '@/components/AppTooltip';
 
 interface RowActionsDropdownProps {
   actions: Array<{
@@ -24,15 +26,19 @@ export const RowActionsDropdown: React.FC<RowActionsDropdownProps> = ({ actions 
   }));
 
   const onMenuClick: MenuProps['onClick'] = ({ key }) => {
-    const act = actions.find((a) => a.key === key);
-    if (act && act.onClick) act.onClick();
+    const act = actions.find((action) => action.key === key);
+    if (act?.onClick) {
+      act.onClick();
+    }
   };
 
   return (
     <Dropdown menu={{ items, onClick: onMenuClick }} trigger={['click']} placement="bottomRight">
-      <button className="ds-table-row-action-btn" aria-label="Hành động">
-        <MoreOutlined />
-      </button>
+      <AppTooltip title="Tác vụ">
+        <button type="button" className="ds-table-row-action-btn" aria-label="Tác vụ dòng">
+          <AppIcon name="more" size={16} aria-hidden />
+        </button>
+      </AppTooltip>
     </Dropdown>
   );
 };

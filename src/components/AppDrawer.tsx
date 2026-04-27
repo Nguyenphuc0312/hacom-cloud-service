@@ -28,7 +28,6 @@ export const AppDrawer: React.FC<AppDrawerProps> = ({
     footer={footer}
     width={width}
     className={clsx('ds-app-drawer', className)}
-    closeIcon={<span className="ds-modal-close">×</span>}
     destroyOnClose
     maskClosable={false}
     placement="right"

@@ -1,53 +1,39 @@
-import type { ReactNode } from 'react';
-
+import { AppIcon } from '@/components/AppIcon';
+import type { AppIconKey } from '@/components/AppIcon';
 import type { NavItem as NavItemType } from './navigationConfig';
 import { SidebarNavItem } from './SidebarNavItem';
 
 interface SidebarNavSectionProps {
   label: string;
-  description?: string;
-  itemCount?: number;
   items: NavItemType[];
-  icon?: ReactNode;
-  collapsed?: boolean;
+  iconKey?: AppIconKey;
 }
 
-export const SidebarNavSection = ({
-  label,
-  description,
-  itemCount,
-  items,
-  icon,
-  collapsed = false,
-}: SidebarNavSectionProps) => (
+export const SidebarNavSection = ({ label, items, iconKey }: SidebarNavSectionProps) => (
   <div className="ds-sidebar-section">
-    <div className="ds-sidebar-section-label" title={collapsed ? label : undefined}>
+    <div className="ds-sidebar-section-label">
       <span className="ds-sidebar-section-label-main">
-        {icon && <span className="ds-sidebar-section-icon">{icon}</span>}
-        {!collapsed && <span>{label}</span>}
+        {iconKey ? (
+          <span className="ds-sidebar-section-icon">
+            <AppIcon name={iconKey} size={14} aria-hidden />
+          </span>
+        ) : null}
+        <span>{label}</span>
       </span>
-      {!collapsed && (
-        <span className="ds-sidebar-section-meta">
-          {description ? <span>{description}</span> : null}
-          {typeof itemCount === 'number' ? (
-            <span className="ds-sidebar-section-count">{itemCount}</span>
-          ) : null}
-        </span>
-      )}
     </div>
 
     <div className="ds-sidebar-section-list">
       {items.map((item) => (
-        <span key={item.key}>
-          <SidebarNavItem item={item} collapsed={collapsed} />
-          {item.children && item.children.length > 0 && (
+        <div key={item.key}>
+          <SidebarNavItem item={item} />
+          {item.children && item.children.length > 0 ? (
             <div className="ds-sidebar-submenu">
               {item.children.map((child) => (
-                <SidebarNavItem key={child.key} item={child} isSubmenu collapsed={collapsed} />
+                <SidebarNavItem key={child.key} item={child} isSubmenu />
               ))}
             </div>
-          )}
-        </span>
+          ) : null}
+        </div>
       ))}
     </div>
   </div>

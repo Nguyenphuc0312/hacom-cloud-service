@@ -27,7 +27,7 @@ export const MonitoringSectionHeader = ({
       {secondaryAction}
       {deepLink ? (
         <Button type="default" href={deepLink} target="_blank" rel="noreferrer">
-          Open detailed dashboard
+          Mở dashboard chi tiết
         </Button>
       ) : null}
     </Space>

@@ -1,5 +1,6 @@
 import { Alert, Button, Empty, Result, Skeleton, Space, Spin, Typography } from 'antd';
 import type { ReactNode } from 'react';
+
 import { commonMessages } from '../shared/messages/common';
 
 interface LoadingStateProps {
@@ -56,7 +57,7 @@ export const QueryStateView = ({
   title,
   description,
   onRetry,
-  retryLabel = 'Thử lại',
+  retryLabel = commonMessages.actions.retry,
   retrying = false,
   compact = false,
 }: QueryStateViewProps) => {
@@ -64,12 +65,12 @@ export const QueryStateView = ({
     return compact ? (
       <Skeleton active paragraph={{ rows: 3 }} />
     ) : (
-      <LoadingState tip={title ?? 'Đang tải dữ liệu...'} />
+      <LoadingState tip={title ?? commonMessages.table.loading} />
     );
   }
 
   if (kind === 'empty') {
-    return <EmptyState description={description ?? 'Không có dữ liệu phù hợp.'} />;
+    return <EmptyState description={description ?? 'Không tìm thấy dữ liệu phù hợp.'} />;
   }
 
   if (kind === 'error') {
@@ -92,8 +93,11 @@ export const QueryStateView = ({
     return (
       <Result
         status="403"
-        title={title ?? 'Không đủ quyền truy cập'}
-        subTitle={description ?? 'Role hiện tại không có quyền thực hiện thao tác này.'}
+        title={title ?? 'Bạn không có quyền truy cập'}
+        subTitle={
+          description ??
+          'Vai trò hiện tại của bạn không được phép thực hiện thao tác này trong trang quản trị.'
+        }
       />
     );
   }
@@ -103,8 +107,10 @@ export const QueryStateView = ({
       <Alert
         type="info"
         showIcon
-        message={title ?? 'Tính năng đang tạm khóa'}
-        description={description ?? 'Write actions hiện bị tắt bởi cấu hình release.'}
+        message={title ?? 'Tính năng này hiện đang bị tắt'}
+        description={
+          description ?? 'Các thao tác ghi đang bị tắt theo cấu hình phát hành hiện tại.'
+        }
       />
     );
   }
@@ -114,11 +120,12 @@ export const QueryStateView = ({
       <Alert
         type="warning"
         showIcon
-        message={title ?? 'Hệ thống đang degraded'}
+        message={title ?? 'Một số hệ thống phụ thuộc đang suy giảm'}
         description={
           <Space direction="vertical" size={8}>
             <Typography.Text>
-              {description ?? 'Một số upstream đang không ổn định. Dữ liệu có thể thiếu hoặc chậm.'}
+              {description ??
+                'Một hoặc nhiều dịch vụ phụ thuộc đang không ổn định. Dữ liệu có thể chậm hoặc chưa đầy đủ.'}
             </Typography.Text>
             {onRetry ? (
               <Button size="small" onClick={onRetry} loading={retrying}>
@@ -135,9 +142,10 @@ export const QueryStateView = ({
     <Alert
       type="warning"
       showIcon
-      message={title ?? 'Dữ liệu có thể chưa mới nhất'}
+      message={title ?? 'Dữ liệu này có thể đã cũ'}
       description={
-        description ?? 'Đây là dữ liệu stale và sẽ được đồng bộ lại ở lần fetch tiếp theo.'
+        description ??
+        'Lần làm mới gần nhất chưa hoàn tất. Ảnh chụp mới hơn sẽ xuất hiện ở lần tải thành công tiếp theo.'
       }
     />
   );

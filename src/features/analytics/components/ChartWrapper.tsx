@@ -1,8 +1,8 @@
-import { ReloadOutlined } from '@ant-design/icons';
 import { Button, Skeleton } from 'antd';
 import { Suspense, lazy } from 'react';
 import type { ReactNode } from 'react';
 
+import { AppIcon } from '@/components/AppIcon';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { SurfaceCard } from '@/components/ui/SurfaceCard';
@@ -63,10 +63,8 @@ export const ChartWrapper = ({
     if (state === 'permission') {
       return (
         <EmptyState
-          title={stateTitle ?? 'Restricted data'}
-          description={
-            stateDescription ?? 'Your current role does not have access to this dataset.'
-          }
+          title={stateTitle ?? 'Dữ liệu bị giới hạn'}
+          description={stateDescription ?? 'Vai trò hiện tại của bạn không có quyền xem tập dữ liệu này.'}
           compact
         />
       );
@@ -107,8 +105,8 @@ export const ChartWrapper = ({
       actions={
         actions ??
         (onRetry ? (
-          <Button icon={<ReloadOutlined />} onClick={onRetry}>
-            Refresh
+          <Button icon={<AppIcon name="refresh" size={14} />} onClick={onRetry}>
+            Làm mới
           </Button>
         ) : undefined)
       }

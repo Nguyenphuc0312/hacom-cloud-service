@@ -1,7 +1,8 @@
-import { ReloadOutlined } from '@ant-design/icons';
 import { Button } from 'antd';
 import type { ReactNode } from 'react';
 import clsx from 'clsx';
+
+import { AppIcon } from '@/components/AppIcon';
 
 interface ErrorStateProps {
   title?: string;
@@ -13,8 +14,8 @@ interface ErrorStateProps {
 }
 
 export const ErrorState = ({
-  title = 'Unable to load this section',
-  description = 'The latest data could not be retrieved from the backend.',
+  title = 'Không thể tải khu vực này',
+  description = 'Không thể lấy dữ liệu mới nhất từ hệ thống phía sau.',
   compact = false,
   className,
   action,
@@ -28,8 +29,8 @@ export const ErrorState = ({
     {action ? (
       <div className="ds-error-state-action">{action}</div>
     ) : onRetry ? (
-      <Button icon={<ReloadOutlined />} onClick={onRetry}>
-        Retry
+      <Button icon={<AppIcon name="refresh" size={14} />} onClick={onRetry}>
+        Thử lại
       </Button>
     ) : null}
   </div>

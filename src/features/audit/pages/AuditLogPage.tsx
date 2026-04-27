@@ -1,6 +1,5 @@
-import { ReloadOutlined } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
-import { Button, DatePicker, Form, Input, Space, Typography } from 'antd';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { Button, DatePicker, Form, Input, Space } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import { useMemo, useState } from 'react';
@@ -8,18 +7,35 @@ import { useMemo, useState } from 'react';
 import { auditClient } from '@/api/clients';
 import { queryKeys } from '@/api/queryKeys';
 import type { AuditEntry, AuditQuery } from '@/api/types';
-import { AdminTable } from '@/components/AdminTable';
+import { AppIcon } from '@/components/AppIcon';
 import { DataTableShell } from '@/components/DataTableShell';
-import { DataTableToolbar } from '@/components/DataTableToolbar';
+import { DateTimeCell } from '@/components/DateTimeCell';
+import { DetailPanel } from '@/components/DetailPanel';
 import { FilterBar } from '@/components/FilterBar';
-import { EmptyState, QueryStateView } from '@/components/QueryStates';
+import { JsonDiffDrawer } from '@/components/JsonDiffDrawer';
+import { MetaCell } from '@/components/MetaCell';
 import { PageShell } from '@/components/PageShell';
+import { QueryStateView } from '@/components/QueryStates';
+import { RowActionsDropdown } from '@/components/RowActionsDropdown';
 import { StatusBadge } from '@/components/StatusBadge';
+import { DataTable } from '@/components/ui/DataTable';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { formatDateTime } from '@/utils/date';
 
 const getActiveFilterCount = (filters: AuditQuery) =>
   [filters.action, filters.actorEmail, filters.entityType, filters.source, filters.from, filters.to]
-    .filter(Boolean).length;
+    .filter(Boolean)
+    .length;
+
+const readMetaValue = (metadata: unknown, key: string): string | null => {
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  const record = metadata as Record<string, unknown>;
+  const value = record[key];
+  return typeof value === 'string' && value.trim() ? value : null;
+};
 
 export const AuditLogPage = () => {
   const [form] = Form.useForm();
@@ -27,91 +43,81 @@ export const AuditLogPage = () => {
     page: 1,
     limit: 20,
   });
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [diffOpen, setDiffOpen] = useState(false);
 
   const query = useQuery({
-    queryKey: queryKeys.auditLogs(JSON.stringify(filters)),
+    queryKey: queryKeys.auditLogs(filters),
     queryFn: () => auditClient.list(filters),
+    placeholderData: keepPreviousData,
   });
 
-  const readMetaValue = (metadata: unknown, key: string): string | null => {
-    if (!metadata || typeof metadata !== 'object') {
-      return null;
-    }
-
-    const record = metadata as Record<string, unknown>;
-    const value = record[key];
-    return typeof value === 'string' && value.trim() ? value : null;
-  };
+  const selectedEntry = selectedEntryId
+    ? query.data?.items.find((entry) => entry.id === selectedEntryId) ?? null
+    : null;
 
   const columns = useMemo<ColumnsType<AuditEntry>>(
     () => [
       {
-        title: 'Time',
+        title: 'Thời gian',
         dataIndex: 'time',
-        width: 188,
-        render: (value: string) => formatDateTime(value),
+        width: 160,
+        render: (value: string) => <DateTimeCell value={value} />,
       },
       {
-        title: 'Actor',
-        dataIndex: 'actorEmail',
-        render: (value: string | null) =>
-          value ? <Typography.Text strong>{value}</Typography.Text> : '-',
-      },
-      {
-        title: 'Action',
-        dataIndex: 'action',
-        render: (value: string) => <Typography.Text>{value}</Typography.Text>,
-      },
-      {
-        title: 'Entity',
-        key: 'entity',
-        render: (_, record) => {
-          const type = record.entityType ?? '-';
-          const id = record.entityId ?? '-';
-
-          return (
-            <Space direction="vertical" size={0}>
-              <Typography.Text strong>{type}</Typography.Text>
-              <Typography.Text type="secondary">{id}</Typography.Text>
-            </Space>
-          );
-        },
-      },
-      {
-        title: 'Source',
-        dataIndex: 'source',
-        render: (value: string | null) => (
-          <Typography.Text type="secondary">{value ?? '-'}</Typography.Text>
+        title: 'Cấp độ',
+        key: 'level',
+        width: 120,
+        render: (_, record) => (
+          <StatusBadge status={readMetaValue(record.metadata, 'level') ?? 'info'} />
         ),
       },
       {
-        title: 'IP',
-        dataIndex: 'ipAddress',
-        render: (value: string | null | undefined) =>
-          value ? <Typography.Text code>{value}</Typography.Text> : '-',
+        title: 'Dịch vụ',
+        dataIndex: 'source',
+        width: 160,
+        render: (value: string | null) => <MetaCell primary={value ?? 'admin'} />,
+      },
+      {
+        title: 'Thông điệp',
+        key: 'message',
+        width: 360,
+        ellipsis: true,
+        render: (_, record) => (
+          <MetaCell
+            primary={record.action}
+            secondary={`${record.entityType ?? 'đối tượng'} / ${record.entityId ?? '-'}`}
+          />
+        ),
       },
       {
         title: 'Request ID',
         key: 'requestId',
-        render: (_, record) => {
-          const requestId = readMetaValue(record.metadata, 'requestId');
-
-          return requestId ? (
-            <Typography.Text code ellipsis style={{ maxWidth: 180 }}>
-              {requestId}
-            </Typography.Text>
-          ) : (
-            '-'
-          );
-        },
+        width: 180,
+        ellipsis: true,
+        render: (_, record) => <MetaCell primary={readMetaValue(record.metadata, 'requestId') ?? '-'} />,
       },
       {
-        title: 'Result',
-        key: 'actionResult',
+        title: 'Người dùng/IP',
+        key: 'userIp',
+        width: 220,
+        render: (_, record) => <MetaCell primary={record.actorEmail ?? 'Hệ thống'} secondary={record.ipAddress ?? '-'} />,
+      },
+      {
+        title: 'Thao tác',
+        key: 'detail',
+        width: 84,
+        fixed: 'right',
         render: (_, record) => (
-          <StatusBadge
-            status={readMetaValue(record.metadata, 'actionResult') ?? (record.action ? 'success' : '-')}
-            mode="tag"
+          <RowActionsDropdown
+            actions={[
+              {
+                key: 'detail',
+                label: 'Xem chi tiết',
+                icon: <AppIcon name="eye" size={14} aria-hidden />,
+                onClick: () => setSelectedEntryId(record.id),
+              },
+            ]}
           />
         ),
       },
@@ -145,28 +151,26 @@ export const AuditLogPage = () => {
     setFilters({ page: 1, limit: 20 });
   };
 
-  const activeFilterCount = getActiveFilterCount(filters);
+  const pageHeader = {
+    eyebrow: 'Kiểm soát truy cập',
+    title: 'Nhật ký audit',
+    description: 'Theo dõi thao tác quản trị, quyết định truy cập và sự kiện hệ thống.',
+  };
 
-  if (query.isLoading) {
+  if (query.isPending && !query.data) {
     return (
-      <PageShell
-        title="Audit Logs"
-        description="Trace admin actions, request correlation, and outcome signals."
-      >
-        <QueryStateView kind="loading" title="Loading audit logs..." />
+      <PageShell {...pageHeader}>
+        <QueryStateView kind="loading" title="Đang tải nhật ký audit..." />
       </PageShell>
     );
   }
 
-  if (query.isError) {
+  if (query.isError && !query.data) {
     return (
-      <PageShell
-        title="Audit Logs"
-        description="Trace admin actions, request correlation, and outcome signals."
-      >
+      <PageShell {...pageHeader}>
         <QueryStateView
           kind="error"
-          description="Unable to load audit logs."
+          description="Không thể tải nhật ký audit."
           onRetry={() => {
             void query.refetch();
           }}
@@ -176,93 +180,168 @@ export const AuditLogPage = () => {
   }
 
   const data = query.data;
+  const activeFilterCount = getActiveFilterCount(filters);
 
   return (
     <PageShell
-      title="Audit Logs"
-      description="Search the event stream by actor, action, entity, source, and time range."
+      {...pageHeader}
       headerExtra={
         <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
           <Button
-            icon={<ReloadOutlined />}
+            icon={<AppIcon name="refresh" size={16} aria-hidden />}
             loading={query.isFetching}
             onClick={() => {
               void query.refetch();
             }}
           >
-            Refresh
+            Làm mới
           </Button>
         </div>
       }
     >
-      <FilterBar>
-        <Form form={form} layout="inline" className="ds-toolbar-form">
-          <Form.Item name="action" className="ds-toolbar-field ds-toolbar-field--sm">
-            <Input allowClear placeholder="Action" />
-          </Form.Item>
-          <Form.Item name="actorEmail" className="ds-toolbar-field ds-toolbar-field--lg">
-            <Input allowClear placeholder="Actor email" />
-          </Form.Item>
-          <Form.Item name="entityType" className="ds-toolbar-field ds-toolbar-field--sm">
-            <Input allowClear placeholder="Entity type" />
-          </Form.Item>
-          <Form.Item name="source" className="ds-toolbar-field ds-toolbar-field--sm">
-            <Input allowClear placeholder="Source" />
-          </Form.Item>
-          <Form.Item name="range" className="ds-toolbar-field ds-toolbar-field--range">
-            <DatePicker.RangePicker showTime />
-          </Form.Item>
-          <Form.Item className="ds-toolbar-field ds-toolbar-actions">
-            <Space>
-              <Button type="primary" onClick={applyFilters}>
-                Apply filters
-              </Button>
-              <Button onClick={resetFilters}>Reset</Button>
-            </Space>
-          </Form.Item>
-        </Form>
-        <div className="ds-filter-toolbar-meta">
-          <span>
-            {data?.pagination.total ?? 0} matched event{(data?.pagination.total ?? 0) === 1 ? '' : 's'}
-          </span>
-          <span>
-            {activeFilterCount > 0
-              ? `${activeFilterCount} active filter${activeFilterCount === 1 ? '' : 's'}`
-              : 'No active filters'}
-          </span>
-          <span>
-            Last sync:{' '}
-            {query.dataUpdatedAt ? formatDateTime(new Date(query.dataUpdatedAt).toISOString()) : '-'}
-          </span>
-        </div>
-      </FilterBar>
+      <div className="ds-page-with-detail">
+        <div className="ds-page-main-stack">
+          <FilterBar>
+            <Form form={form} layout="inline" className="ds-toolbar-form">
+              <Form.Item name="action" className="ds-toolbar-field ds-toolbar-field--sm">
+                <Input allowClear placeholder="Tìm hành động" />
+              </Form.Item>
+              <Form.Item name="actorEmail" className="ds-toolbar-field ds-toolbar-field--lg">
+                <Input allowClear placeholder="Email người thao tác" />
+              </Form.Item>
+              <Form.Item name="source" className="ds-toolbar-field ds-toolbar-field--sm">
+                <Input allowClear placeholder="Dịch vụ" />
+              </Form.Item>
+              <Form.Item name="entityType" className="ds-toolbar-field ds-toolbar-field--sm">
+                <Input allowClear placeholder="Loại đối tượng" />
+              </Form.Item>
+              <Form.Item name="range" className="ds-toolbar-field ds-toolbar-field--range">
+                <DatePicker.RangePicker showTime />
+              </Form.Item>
+              <Form.Item className="ds-toolbar-field ds-toolbar-actions">
+                <Space>
+                  <Button type="primary" onClick={applyFilters}>
+                    Áp dụng
+                  </Button>
+                  <Button onClick={resetFilters}>Đặt lại</Button>
+                </Space>
+              </Form.Item>
+            </Form>
+            <div className="ds-filter-toolbar-meta">
+              <span>{data?.pagination.total ?? 0} sự kiện</span>
+              <span>{activeFilterCount > 0 ? `${activeFilterCount} bộ lọc đang bật` : 'Chưa lọc'}</span>
+              <span>
+                Đồng bộ:{' '}
+                {query.dataUpdatedAt ? formatDateTime(new Date(query.dataUpdatedAt).toISOString()) : '-'}
+              </span>
+            </div>
+          </FilterBar>
 
-      <DataTableShell
-        title="Audit records"
-        meta="Primary surface for investigation and correlation."
-        toolbar={
-          <DataTableToolbar>
-            <span className="ds-toolbar-summary">Page {data?.pagination.page ?? 1}</span>
-          </DataTableToolbar>
-        }
-      >
-        <AdminTable
-          rowKey="id"
-          columns={columns}
-          minHeight={360}
-          dataSource={data?.items ?? []}
-          emptyNode={<EmptyState description="No audit records matched the current query." />}
-          pagination={{
-            current: data?.pagination.page,
-            pageSize: data?.pagination.limit,
-            total: data?.pagination.total,
-            showSizeChanger: true,
-            onChange: (page, pageSize) => {
-              setFilters((prev) => ({ ...prev, page, limit: pageSize }));
-            },
-          }}
+          <DataTableShell
+            title="Sự kiện quản trị"
+            meta="Metadata dài và payload trước/sau chỉ hiển thị trong panel chi tiết."
+          >
+            <DataTable
+              rowKey="id"
+              columns={columns}
+              minHeight={420}
+              loading={query.isFetching && !query.isPending}
+              dataSource={data?.items ?? []}
+              emptyNode={<EmptyState description="Không có bản ghi audit khớp bộ lọc hiện tại." />}
+              onRow={(record) => ({
+                onClick: () => setSelectedEntryId(record.id),
+                style: { cursor: 'pointer' },
+              })}
+              pagination={{
+                current: data?.pagination.page,
+                pageSize: data?.pagination.limit,
+                total: data?.pagination.total,
+                showSizeChanger: true,
+                onChange: (page, pageSize) => {
+                  setFilters((prev) => ({ ...prev, page, limit: pageSize }));
+                },
+              }}
+            />
+          </DataTableShell>
+        </div>
+
+        <DetailPanel
+          open={Boolean(selectedEntry)}
+          title={selectedEntry?.action ?? 'Chi tiết audit'}
+          onClose={() => setSelectedEntryId(null)}
+          width={760}
+          className="ds-ops-detail-panel"
+        >
+          {selectedEntry ? (
+            <div className="ds-ops-detail-stack">
+              <section className="ds-ops-detail-section">
+                <div className="ds-ops-detail-header">
+                  <div>
+                    <strong>{selectedEntry.actorEmail ?? 'Tác nhân hệ thống'}</strong>
+                    <p>{selectedEntry.entityType ?? 'Đối tượng không rõ'}</p>
+                  </div>
+                  <StatusBadge status={readMetaValue(selectedEntry.metadata, 'actionResult') ?? 'info'} />
+                </div>
+              </section>
+
+              <section className="ds-ops-detail-section">
+                <h3>Tóm tắt</h3>
+                <dl className="ds-ops-fact-list">
+                  <div>
+                    <dt>Hành động</dt>
+                    <dd>{selectedEntry.action}</dd>
+                  </div>
+                  <div>
+                    <dt>Đối tượng</dt>
+                    <dd>{selectedEntry.entityId ?? '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>Dịch vụ</dt>
+                    <dd>{selectedEntry.source ?? '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>Thời gian</dt>
+                    <dd>{formatDateTime(selectedEntry.time)}</dd>
+                  </div>
+                  <div>
+                    <dt>Request ID</dt>
+                    <dd>{readMetaValue(selectedEntry.metadata, 'requestId') ?? '-'}</dd>
+                  </div>
+                </dl>
+              </section>
+
+              <section className="ds-ops-detail-section">
+                <h3>Metadata</h3>
+                <div className="ds-ops-code-block">
+                  <pre>{JSON.stringify(selectedEntry.metadata ?? {}, null, 2)}</pre>
+                </div>
+              </section>
+
+              <section className="ds-ops-detail-section">
+                <h3>Thay đổi</h3>
+                <div className="ds-admin-inline-actions">
+                  <Button
+                    disabled={!selectedEntry.before && !selectedEntry.after}
+                    onClick={() => setDiffOpen(true)}
+                  >
+                    Mở trước/sau
+                  </Button>
+                </div>
+              </section>
+            </div>
+          ) : (
+            <EmptyState description="Chọn một bản ghi để xem metadata và thay đổi." />
+          )}
+        </DetailPanel>
+
+        <JsonDiffDrawer
+          open={diffOpen}
+          title={selectedEntry ? `Trước/sau / ${selectedEntry.action}` : 'Trước/sau'}
+          before={selectedEntry?.before}
+          after={selectedEntry?.after}
+          onClose={() => setDiffOpen(false)}
         />
-      </DataTableShell>
+      </div>
     </PageShell>
   );
 };

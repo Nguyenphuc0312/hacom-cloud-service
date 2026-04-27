@@ -4,6 +4,11 @@ export interface CurrentAdmin {
   id: string;
   email: string;
   username?: string;
+  displayName?: string | null;
+  fullName?: string | null;
+  employeeCode?: string | null;
+  hrLinked?: boolean;
+  accountType?: 'employee' | 'exception' | 'bot';
   status?: string;
   isVerified?: boolean;
   role?: Role;
@@ -12,7 +17,8 @@ export interface CurrentAdmin {
 }
 
 export interface LoginRequest {
-  email: string;
+  email?: string;
+  loginIdentifier?: string;
   password: string;
 }
 

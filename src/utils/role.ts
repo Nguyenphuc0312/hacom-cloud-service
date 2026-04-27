@@ -41,5 +41,8 @@ export const canManageHrEmployees = (currentRole: Role | undefined): boolean => 
 
 export const toDisplayRole = (currentRole: Role | undefined): string => {
   const normalizedRole = normalizeRole(currentRole);
-  return normalizedRole ?? 'viewer';
+  if (normalizedRole === 'super_admin') return 'Quản trị cấp cao';
+  if (normalizedRole === 'operator') return 'Điều hành';
+  if (normalizedRole === 'hr_admin') return 'Quản trị nhân sự';
+  return 'Người xem';
 };

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Modal } from 'antd';
 import clsx from 'clsx';
 
 interface DetailPanelProps {
@@ -15,19 +16,19 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
   title,
   onClose,
   children,
-  width = 420,
+  width = 640,
   className,
-}) => {
-  if (!open) return null;
-  return (
-    <aside className={clsx('ds-detail-panel', className)} style={{ width }}>
-      <div className="ds-detail-panel-header">
-        <span className="ds-detail-panel-title">{title}</span>
-        <button className="ds-detail-panel-close" onClick={onClose} aria-label="Đóng">
-          ×
-        </button>
-      </div>
-      <div className="ds-detail-panel-body">{children}</div>
-    </aside>
-  );
-};
+}) => (
+  <Modal
+    open={open}
+    title={title}
+    onCancel={onClose}
+    footer={null}
+    width={width}
+    className={clsx('ds-detail-modal', className)}
+    destroyOnHidden
+    mask={{ closable: true }}
+  >
+    <div className="ds-detail-modal-body">{children}</div>
+  </Modal>
+);

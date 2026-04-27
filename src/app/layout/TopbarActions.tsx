@@ -1,9 +1,9 @@
 import React from 'react';
-import { BellOutlined } from '@ant-design/icons';
 
-import type { CurrentAdmin } from '@/api/types';
+import { AppIcon } from '@/components/AppIcon';
+import { IconActionButton } from '@/components/IconActionButton';
 import { UserMenu } from '@/components/UserMenu';
-import { ThemeToggleButton } from '@/components/ui/ThemeToggleButton';
+import type { CurrentAdmin } from '@/api/types';
 
 interface TopbarActionsProps {
   user: CurrentAdmin | null;
@@ -31,18 +31,14 @@ export const TopbarActions: React.FC<TopbarActionsProps> = ({
         <span
           className={`ds-shell-chip ${systemTone === 'healthy' ? 'ds-shell-chip--success' : 'ds-shell-chip--warning'}`}
         >
-          {systemTone === 'healthy' ? 'Healthy' : 'Degraded'}
+          {systemTone === 'healthy' ? 'Ổn định' : 'Suy giảm'}
         </span>
       </div>
-      <ThemeToggleButton compact />
-      <button
-        type="button"
-        className="ds-btn ds-btn--icon"
-        aria-label="Notifications"
+      <IconActionButton
+        icon={<AppIcon name="bell" size={16} aria-hidden />}
+        tooltip="Thông báo"
         onClick={onOpenNotifications}
-      >
-        <BellOutlined />
-      </button>
+      />
       <UserMenu
         user={user}
         onOpenProfile={onOpenProfile}

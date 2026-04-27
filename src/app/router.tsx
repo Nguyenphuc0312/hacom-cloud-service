@@ -2,8 +2,8 @@ import { lazy, Suspense } from 'react';
 import type { ReactNode } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
-import { RequireAuth } from '@/app/guards/RequireAuth';
 import { RequireApprovedAccess } from '@/app/guards/RequireApprovedAccess';
+import { RequireAuth } from '@/app/guards/RequireAuth';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { AppLayout } from '@/app/layout/AppLayout';
 import { QueryStateView } from '@/components/QueryStates';
@@ -34,14 +34,29 @@ const AuditLogPage = lazy(() =>
     default: module.AuditLogPage,
   })),
 );
+const SystemLogsPage = lazy(() =>
+  import('@/features/system-logs/pages/SystemLogsPage').then((module) => ({
+    default: module.SystemLogsPage,
+  })),
+);
 const ServicesPage = lazy(() =>
   import('@/features/services/pages/ServicesPage').then((module) => ({
     default: module.ServicesPage,
   })),
 );
+const SettingsPage = lazy(() =>
+  import('@/features/settings/pages/SettingsPage').then((module) => ({
+    default: module.SettingsPage,
+  })),
+);
 const MonitoringOverviewPage = lazy(() =>
   import('@/features/monitoring/pages/MonitoringOverviewPage').then((module) => ({
     default: module.MonitoringOverviewPage,
+  })),
+);
+const ConversationsPage = lazy(() =>
+  import('@/features/conversations/pages/ConversationsPage').then((module) => ({
+    default: module.ConversationsPage,
   })),
 );
 const AccessPendingPage = lazy(() =>
@@ -57,6 +72,11 @@ const AccessRequestsPage = lazy(() =>
 const AuthorityPage = lazy(() =>
   import('@/features/authority/pages/AuthorityPage').then((module) => ({
     default: module.AuthorityPage,
+  })),
+);
+const NotFoundPage = lazy(() =>
+  import('@/features/errors/NotFoundPage').then((module) => ({
+    default: module.NotFoundPage,
   })),
 );
 
@@ -98,12 +118,36 @@ const routes = [
         element: <Navigate to="/services/health" replace />,
       },
       {
-        path: 'services/:section',
+        path: 'services/health',
         element: withSuspense(<ServicesPage />),
+      },
+      {
+        path: 'services/smtp',
+        element: <Navigate to="/settings/smtp" replace />,
+      },
+      {
+        path: 'services/email-templates',
+        element: <Navigate to="/settings/email-templates" replace />,
+      },
+      {
+        path: 'settings',
+        element: <Navigate to="/settings/smtp" replace />,
+      },
+      {
+        path: 'settings/:section',
+        element: withSuspense(<SettingsPage />),
       },
       {
         path: 'monitoring',
         element: withSuspense(<MonitoringOverviewPage />),
+      },
+      {
+        path: 'conversations',
+        element: withSuspense(<ConversationsPage />),
+      },
+      {
+        path: 'logs',
+        element: withSuspense(<SystemLogsPage />),
       },
       {
         path: 'users',
@@ -135,7 +179,7 @@ const routes = [
       },
       {
         path: '*',
-        element: <Navigate to="/" replace />,
+        element: withSuspense(<NotFoundPage />),
       },
     ],
   },

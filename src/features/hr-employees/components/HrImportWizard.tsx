@@ -13,12 +13,12 @@ import {
   message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { InboxOutlined, UploadOutlined } from '@ant-design/icons';
 import React from 'react';
 
 import { hrEmployeesClient } from '@/api/clients';
 import { getErrorMessage } from '@/api/error';
 import type { HrImportPreviewRow, HrImportValidationResult } from '@/api/types';
+import { AppIcon } from '@/components/AppIcon';
 import { useAuthStore } from '@/store/authStore';
 import {
   useCommitHrImportMutation,
@@ -36,29 +36,29 @@ const fileToBase64 = async (file: File): Promise<string> =>
     reader.onload = () => {
       const result = reader.result;
       if (typeof result !== 'string') {
-        reject(new Error('Unable to read selected file.'));
+        reject(new Error('Không thể đọc tệp đã chọn.'));
         return;
       }
 
       resolve(result.split(',').pop() || '');
     };
-    reader.onerror = () => reject(new Error('Unable to read selected file.'));
+    reader.onerror = () => reject(new Error('Không thể đọc tệp đã chọn.'));
     reader.readAsDataURL(file);
   });
 
 const previewColumns: ColumnsType<HrImportPreviewRow> = [
-  { title: 'Row', dataIndex: 'rowNumber', width: 72 },
-  { title: 'Employee code', dataIndex: 'employeeCode', render: (value) => value || '-' },
-  { title: 'Full name', dataIndex: 'fullName', render: (value) => value || '-' },
+  { title: 'Dòng', dataIndex: 'rowNumber', width: 72 },
+  { title: 'Mã nhân viên', dataIndex: 'employeeCode', render: (value) => value || '-' },
+  { title: 'Họ tên', dataIndex: 'fullName', render: (value) => value || '-' },
   { title: 'Email', dataIndex: 'email', render: (value) => value || '-' },
   {
-    title: 'Department',
+    title: 'Phòng ban',
     dataIndex: 'departmentName',
     render: (value) => value || '-',
   },
-  { title: 'Unit code', dataIndex: 'unitCode', render: (value) => value || '-' },
+  { title: 'Mã đơn vị', dataIndex: 'unitCode', render: (value) => value || '-' },
   {
-    title: 'Errors',
+    title: 'Lỗi',
     dataIndex: 'errors',
     render: (value: string[]) =>
       value.length > 0 ? (
@@ -151,12 +151,12 @@ export const HrImportWizard = ({ open, onClose, onCommitted }: HrImportWizardPro
 
   const handleValidate = React.useCallback(async () => {
     if (!file) {
-      message.warning('Select a file before validation.');
+      message.warning('Hãy chọn tệp trước khi kiểm tra.');
       return;
     }
 
     if (!isAcceptedFileName(file.name)) {
-      message.error('Only .csv, .xlsx, and .xls files are supported.');
+      message.error('Chỉ hỗ trợ tệp .csv, .xlsx và .xls.');
       return;
     }
 
@@ -176,7 +176,7 @@ export const HrImportWizard = ({ open, onClose, onCommitted }: HrImportWizardPro
         actorRole: currentAdmin?.role,
       });
       setValidation(result);
-      message.success('Validation completed.');
+      message.success('Đã hoàn tất kiểm tra.');
     } catch (error) {
       const errorMessage = getErrorMessage(error);
       setActionError(errorMessage);
@@ -196,7 +196,7 @@ export const HrImportWizard = ({ open, onClose, onCommitted }: HrImportWizardPro
 
   const handleCommit = React.useCallback(async () => {
     if (!validation?.batchId) {
-      message.warning('Validate the import before committing.');
+      message.warning('Hãy kiểm tra import trước khi commit.');
       return;
     }
 
@@ -225,7 +225,7 @@ export const HrImportWizard = ({ open, onClose, onCommitted }: HrImportWizardPro
       };
       setCommitResult(normalizedCommitResult);
       await Promise.resolve(onCommitted?.(normalizedCommitResult));
-      message.success('Import committed successfully.');
+      message.success('Đã commit import thành công.');
     } catch (error) {
       const errorMessage = getErrorMessage(error);
       setActionError(errorMessage);
@@ -282,7 +282,7 @@ export const HrImportWizard = ({ open, onClose, onCommitted }: HrImportWizardPro
     <Modal
       open={open}
       onCancel={handleClose}
-      title="HR import wizard"
+      title="Trình hướng dẫn import HR"
       footer={null}
       width={1120}
       destroyOnHidden
@@ -290,77 +290,81 @@ export const HrImportWizard = ({ open, onClose, onCommitted }: HrImportWizardPro
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
         <Steps
           current={currentStep}
-          items={[{ title: 'Upload' }, { title: 'Validate preview' }, { title: 'Commit result' }]}
+          items={[{ title: 'Tải lên' }, { title: 'Kiểm tra xem trước' }, { title: 'Kết quả commit' }]}
         />
 
         {actionError ? (
           <Alert
             type="error"
             showIcon
-            message="Action failed"
+            message="Thao tác thất bại"
             description={actionError}
             closable
             onClose={() => setActionError(null)}
           />
         ) : null}
 
-        <Card title="Step 1: Upload file" size="small">
+        <Card title="Bước 1: Tải tệp lên" size="small">
           <Space direction="vertical" size={12} style={{ width: '100%' }}>
             <Upload.Dragger
               beforeUpload={(nextFile) => {
                 handleFileChange(nextFile as File);
                 return false;
               }}
+              onChange={({ fileList }) => {
+                const nextFile = fileList[0]?.originFileObj as File | undefined;
+                handleFileChange(nextFile ?? null);
+              }}
               maxCount={1}
               showUploadList={false}
               accept={ACCEPTED_EXTENSIONS.join(',')}
             >
               <p className="ant-upload-drag-icon">
-                <InboxOutlined />
+                <AppIcon name="inbox" size={24} />
               </p>
-              <p className="ant-upload-text">Drop the HR import file here or click to select.</p>
-              <p className="ant-upload-hint">Accepted formats: .csv, .xlsx, .xls</p>
+              <p className="ant-upload-text">Thả tệp import HR vào đây hoặc bấm để chọn.</p>
+              <p className="ant-upload-hint">Định dạng chấp nhận: .csv, .xlsx, .xls</p>
             </Upload.Dragger>
 
             {file ? (
               <Alert
                 type="info"
                 showIcon
-                message={`Selected file: ${file.name}`}
-                description="Changing the file resets validation preview and commit state."
+                message={`Tệp đã chọn: ${file.name}`}
+                description="Đổi tệp sẽ đặt lại phần xem trước kiểm tra và trạng thái commit."
               />
             ) : null}
 
             <Space>
               <Button
                 type="primary"
-                icon={<UploadOutlined />}
+                icon={<AppIcon name="upload" size={14} />}
                 loading={validateMutation.isPending}
                 disabled={!file || validateMutation.isPending || commitMutation.isPending}
                 onClick={() => void handleValidate()}
               >
-                Validate preview
+                Kiểm tra xem trước
               </Button>
-              <Button onClick={resetState}>Reset</Button>
+              <Button onClick={resetState}>Đặt lại</Button>
             </Space>
           </Space>
         </Card>
 
         {validation ? (
-          <Card title="Step 2: Validate preview" size="small">
+          <Card title="Bước 2: Kiểm tra xem trước" size="small">
             <Space direction="vertical" size={16} style={{ width: '100%' }}>
               <Space wrap size={16}>
-                <Statistic title="Total rows" value={validation.summary.totalRows} />
-                <Statistic title="Valid rows" value={validation.summary.validRows} />
-                <Statistic title="Invalid rows" value={validation.summary.invalidRows} />
-                <Statistic title="Warnings" value={validation.summary.warningCount} />
+                <Statistic title="Tổng số dòng" value={validation.summary.totalRows} />
+                <Statistic title="Dòng hợp lệ" value={validation.summary.validRows} />
+                <Statistic title="Dòng không hợp lệ" value={validation.summary.invalidRows} />
+                <Statistic title="Cảnh báo" value={validation.summary.warningCount} />
               </Space>
 
               {validation.errors.length > 0 ? (
                 <Alert
                   type="error"
                   showIcon
-                  message="Validation errors found"
+                  message="Phát hiện lỗi kiểm tra"
                   description={validation.errors.join(' | ')}
                 />
               ) : null}
@@ -369,7 +373,7 @@ export const HrImportWizard = ({ open, onClose, onCommitted }: HrImportWizardPro
                 <Alert
                   type="warning"
                   showIcon
-                  message="Validation warnings"
+                  message="Cảnh báo kiểm tra"
                   description={validation.warnings.join(' | ')}
                 />
               ) : null}
@@ -386,8 +390,8 @@ export const HrImportWizard = ({ open, onClose, onCommitted }: HrImportWizardPro
                 <Alert
                   type="warning"
                   showIcon
-                  message="No preview rows returned"
-                  description="Validation completed but backend returned an empty preview."
+                  message="Không có dòng xem trước nào được trả về"
+                  description="Việc kiểm tra đã hoàn tất nhưng backend trả về phần xem trước rỗng."
                 />
               ) : null}
 
@@ -400,15 +404,15 @@ export const HrImportWizard = ({ open, onClose, onCommitted }: HrImportWizardPro
                   }
                   onClick={() => void handleCommit()}
                 >
-                  Commit import
+                  Thực thi import
                 </Button>
-                <Button onClick={() => handleFileChange(file)}>Change file</Button>
+                <Button onClick={() => handleFileChange(file)}>Đổi tệp</Button>
                 <Button
                   onClick={() => void handleDownloadReport()}
                   loading={reportDownloading}
                   disabled={validateMutation.isPending || commitMutation.isPending}
                 >
-                  Download report
+                  Tải báo cáo
                 </Button>
               </Space>
             </Space>
@@ -416,33 +420,33 @@ export const HrImportWizard = ({ open, onClose, onCommitted }: HrImportWizardPro
         ) : null}
 
         {commitResult ? (
-          <Card title="Step 3: Commit result" size="small">
+          <Card title="Bước 3: Kết quả commit" size="small">
             <Space direction="vertical" size={16} style={{ width: '100%' }}>
               <Descriptions
                 bordered
                 size="small"
                 column={2}
                 items={[
-                  { key: 'inserted', label: 'Inserted', children: commitResult.inserted },
-                  { key: 'updated', label: 'Updated', children: commitResult.updated },
-                  { key: 'skipped', label: 'Skipped', children: commitResult.skipped },
-                  { key: 'failed', label: 'Failed', children: commitResult.failed },
+                  { key: 'inserted', label: 'Đã thêm', children: commitResult.inserted },
+                  { key: 'updated', label: 'Đã cập nhật', children: commitResult.updated },
+                  { key: 'skipped', label: 'Đã bỏ qua', children: commitResult.skipped },
+                  { key: 'failed', label: 'Thất bại', children: commitResult.failed },
                 ]}
               />
 
               <Alert
                 type="info"
                 showIcon
-                message="Commit result is normalized defensively"
-                description="If backend only returns aggregate counters in this environment, inserted/failed are derived from importedRows/invalidRowCount while updated and skipped default to 0."
+                message="Kết quả commit được chuẩn hóa theo cơ chế phòng thủ"
+                description="Nếu backend trong môi trường này chỉ trả về bộ đếm tổng hợp, inserted/failed sẽ được suy ra từ importedRows/invalidRowCount, còn updated và skipped mặc định bằng 0."
               />
 
               <Space>
                 <Button onClick={() => void handleDownloadReport()} loading={reportDownloading}>
-                  Download report
+                  Tải báo cáo
                 </Button>
                 <Button type="primary" onClick={handleClose}>
-                  Close
+                  Đóng
                 </Button>
               </Space>
             </Space>

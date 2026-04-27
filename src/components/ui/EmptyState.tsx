@@ -11,8 +11,8 @@ interface EmptyStateProps {
 }
 
 export const EmptyState = ({
-  title = 'No data available',
-  description = 'Try changing filters or wait for the next refresh window.',
+  title = 'Chưa có dữ liệu',
+  description = 'Hãy thử đổi bộ lọc hoặc chờ đợt làm mới tiếp theo.',
   action,
   icon,
   compact = false,
