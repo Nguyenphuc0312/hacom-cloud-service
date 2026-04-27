@@ -2,7 +2,7 @@
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { commonEmojis } from "../../data/mockData";
+import { commonEmojis } from "../../constants/emojis";
 
 interface EmojiPickerProps {
   onSelect: (emoji: string) => void;
