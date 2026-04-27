@@ -15,7 +15,6 @@ import type {
 } from '@/api/types';
 import { AppIcon } from '@/components/AppIcon';
 import { DataTableShell } from '@/components/DataTableShell';
-import { DataTableToolbar } from '@/components/DataTableToolbar';
 import { DateTimeCell } from '@/components/DateTimeCell';
 import { FeatureDisabledNotice } from '@/components/FeatureDisabledNotice';
 import { FilterBar } from '@/components/FilterBar';
@@ -437,11 +436,17 @@ export const HREmployeesPage = () => {
             <Select options={statusOptions} aria-label="Lọc trạng thái nhân sự" />
           </Form.Item>
           <Form.Item className="ds-toolbar-field ds-toolbar-actions">
-            <Space>
+            <Space wrap>
               <Button type="primary" onClick={applyFilters}>
                 Áp dụng
               </Button>
               <Button onClick={resetFilters}>Đặt lại</Button>
+              <Button disabled={!canWriteHrActions} onClick={() => setImportOpen(true)}>
+                Import file HR
+              </Button>
+              <Button disabled={!canWriteHrActions} onClick={openCreate}>
+                Tạo thủ công
+              </Button>
             </Space>
           </Form.Item>
         </Form>
@@ -464,18 +469,7 @@ export const HREmployeesPage = () => {
 
       <DataTableShell
         title="Hồ sơ nhân sự"
-        meta="Hồ sơ HR từ backend với trạng thái liên kết và cấp tài khoản gọn."
-        toolbar={
-          <DataTableToolbar>
-            <span className="ds-toolbar-summary">Đang hiển thị {data?.items.length ?? 0} dòng</span>
-            <Button size="small" disabled={!canWriteHrActions} onClick={() => setImportOpen(true)}>
-              Import file HR
-            </Button>
-            <Button size="small" disabled={!canWriteHrActions} onClick={openCreate}>
-              Tạo thủ công
-            </Button>
-          </DataTableToolbar>
-        }
+        meta={`Đang hiển thị ${data?.items.length ?? 0} dòng từ backend HR.`}
       >
         <DataTable
           rowKey="id"

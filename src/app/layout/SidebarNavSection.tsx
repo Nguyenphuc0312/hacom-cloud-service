@@ -24,7 +24,7 @@ export const SidebarNavSection = ({ label, items, iconKey }: SidebarNavSectionPr
 
     <div className="ds-sidebar-section-list">
       {items.map((item) => (
-        <div key={item.key}>
+        <div key={item.key} className={item.children?.length ? 'ds-sidebar-item-group' : undefined}>
           <SidebarNavItem item={item} />
           {item.children && item.children.length > 0 ? (
             <div className="ds-sidebar-submenu">

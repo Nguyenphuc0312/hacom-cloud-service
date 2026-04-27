@@ -14,15 +14,9 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { formatDateTime } from '@/utils/date';
 import { formatNumber, formatPercent, formatRate } from '@/utils/formatters';
 import { getFreshnessLabel, riskStateToStatus } from '@/features/monitoring/monitoringView';
+import { DashboardHighchartsPanel } from '../components/DashboardHighchartsPanel';
 import { useDashboardOverview } from '../hooks/useDashboardOverview';
 import { buildActivityTimeline, buildInsights, summarizeTrend } from '../utils/dashboardView';
-
-const toneToStatus = (tone: 'default' | 'success' | 'warning' | 'danger') => {
-  if (tone === 'danger') return 'down';
-  if (tone === 'warning') return 'warning';
-  if (tone === 'success') return 'healthy';
-  return 'unknown';
-};
 
 export const DashboardPage = () => {
   const navigate = useNavigate();
@@ -133,6 +127,7 @@ export const DashboardPage = () => {
       meta: 'Từ API người dùng admin',
       tone: 'default' as const,
       route: '/users',
+      icon: 'users' as const,
     },
     {
       id: 'active-users',
@@ -141,6 +136,7 @@ export const DashboardPage = () => {
       meta: `${formatPercent(activationRate * 100, 0)} tổng tài khoản`,
       tone: pendingUsers > 0 ? ('warning' as const) : ('success' as const),
       route: '/users',
+      icon: 'check' as const,
     },
     {
       id: 'pending-access',
@@ -149,6 +145,7 @@ export const DashboardPage = () => {
       meta: 'Hàng đợi duyệt IP',
       tone: (pendingAdminAccess ?? 0) > 0 ? ('warning' as const) : ('success' as const),
       route: '/access-requests',
+      icon: 'access' as const,
     },
     {
       id: 'realtime-connections',
@@ -160,14 +157,7 @@ export const DashboardPage = () => {
           : `Delta ${trafficTrend.delta >= 0 ? '+' : ''}${formatNumber(trafficTrend.delta)}`,
       tone: 'default' as const,
       route: '/monitoring',
-    },
-    {
-      id: 'failed-logins',
-      label: 'Đăng nhập lỗi',
-      value: '-',
-      meta: 'Chưa có metric',
-      tone: 'default' as const,
-      route: '/audit',
+      icon: 'activity' as const,
     },
     {
       id: 'api-errors',
@@ -176,6 +166,7 @@ export const DashboardPage = () => {
       meta: 'Tỷ lệ lỗi một phần',
       tone: (apiErrorRate ?? 0) > 0 ? ('danger' as const) : ('success' as const),
       route: '/monitoring',
+      icon: 'warning' as const,
     },
   ];
 
@@ -220,94 +211,138 @@ export const DashboardPage = () => {
           <EmptyState description="Chưa có dữ liệu vận hành." />
         </div>
       ) : (
-        <div className="ds-ops-overview">
-          <section className="ds-ops-summary-grid" aria-label="Chỉ số vận hành chính">
+        <div className="ds-figma-dashboard">
+          <section className="ds-figma-summary-grid" aria-label="Chỉ số vận hành chính">
             {metrics.map((metric) => (
               <button
                 key={metric.id}
                 type="button"
-                className="ds-ops-summary-item"
+                className={`ds-figma-summary-card tone-${metric.tone}`}
                 onClick={() => navigate(metric.route)}
               >
-                <span className="ds-ops-summary-label">{metric.label}</span>
-                <strong className="ds-ops-summary-value">{metric.value}</strong>
-                <span className="ds-ops-summary-meta">{metric.meta}</span>
-                <StatusBadge status={toneToStatus(metric.tone)} />
+                <span className="ds-figma-summary-icon" aria-hidden>
+                  <AppIcon name={metric.icon} size={34} strokeWidth={1.6} />
+                </span>
+                <span className="ds-figma-summary-label">{metric.label}</span>
+                <strong className="ds-figma-summary-value">{metric.value}</strong>
+                <span className="ds-figma-summary-meta">{metric.meta}</span>
               </button>
             ))}
           </section>
 
-          <div className="ds-ops-grid ds-ops-grid--two-column">
+          <div className="ds-figma-main-grid">
             <DashboardCard
               title="Sức khỏe dịch vụ"
-              meta="Tóm tắt trực tiếp từ API service health."
               action={<Button type="link" onClick={() => navigate('/services/health')}>Mở</Button>}
+              className="ds-figma-card ds-figma-health-card"
             >
-              <dl className="ds-ops-fact-list">
-                <div>
-                  <dt>Khỏe</dt>
-                  <dd>{servicesSummary ? `${servicesSummary.up}/${servicesTotal}` : '-'}</dd>
+              <div className="ds-figma-health-visual">
+                <DashboardHighchartsPanel type="health" summary={servicesSummary} />
+                <div className="ds-figma-health-center" aria-hidden>
+                  <strong>
+                    {servicesTotal > 0
+                      ? formatPercent(((servicesSummary?.up ?? 0) / servicesTotal) * 100, 0)
+                      : '-'}
+                  </strong>
+                  <span>Khỏe mạnh</span>
                 </div>
-                <div>
-                  <dt>Suy giảm</dt>
-                  <dd>{servicesSummary?.degraded ?? '-'}</dd>
-                </div>
-                <div>
-                  <dt>Ngừng</dt>
-                  <dd>{servicesSummary?.down ?? '-'}</dd>
-                </div>
-                <div>
-                  <dt>Kiểm tra lúc</dt>
-                  <dd>{serviceHealth?.checkedAt ? formatDateTime(serviceHealth.checkedAt) : '-'}</dd>
-                </div>
-              </dl>
+              </div>
             </DashboardCard>
 
             <DashboardCard
-              title="Tình trạng metric"
-              meta="Chỉ hiển thị biểu đồ khi có nguồn metric thật."
+              title="Tổng quan lưu lượng"
               action={<Button type="link" onClick={() => navigate('/monitoring')}>Mở</Button>}
+              className="ds-figma-card ds-figma-traffic-card"
             >
-              <dl className="ds-ops-fact-list">
-                <div>
-                  <dt>Telemetry</dt>
-                  <dd>
-                    <StatusBadge status={overview ? getFreshnessLabel(overview.freshness) : 'unknown'} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>Nền tải</dt>
-                  <dd>
+              <DashboardHighchartsPanel
+                type="traffic"
+                series={overview?.realtimeHealth.connectionsTrend}
+              />
+            </DashboardCard>
+          </div>
+
+          <div className="ds-figma-bottom-grid">
+            <DashboardCard
+              title="Trạng thái Dịch vụ"
+              action={<Button type="link" onClick={() => navigate('/services/health')}>Mở</Button>}
+              className="ds-figma-card"
+            >
+              <div className="ds-figma-service-list">
+                {(serviceHealth?.items ?? []).slice(0, 4).map((service) => (
+                  <button
+                    key={service.name}
+                    type="button"
+                    className="ds-figma-service-row"
+                    onClick={() => navigate('/services/health')}
+                  >
+                    <span>{service.name}</span>
                     <StatusBadge
                       status={
-                        overview
-                          ? riskStateToStatus(overview.capacityBaseline.currentRiskState)
-                          : 'unknown'
+                        service.status === 'up'
+                          ? 'healthy'
+                          : service.status === 'degraded'
+                            ? 'warning'
+                            : service.status === 'down'
+                              ? 'down'
+                              : 'unknown'
                       }
                     />
-                  </dd>
-                </div>
-                <div>
-                  <dt>Lưu lượng tin nhắn</dt>
-                  <dd>
-                    {overview?.systemOverview.messagesPerSecond === null ||
-                    overview?.systemOverview.messagesPerSecond === undefined
-                      ? 'Chưa có metric'
-                      : formatRate(overview.systemOverview.messagesPerSecond, '/sec')}
-                  </dd>
-                </div>
-              </dl>
+                  </button>
+                ))}
+                {!serviceHealth?.items?.length ? (
+                  <div className="ds-figma-service-row is-static">
+                    <span>Telemetry</span>
+                    <StatusBadge status={overview ? getFreshnessLabel(overview.freshness) : 'unknown'} />
+                  </div>
+                ) : null}
+              </div>
+            </DashboardCard>
+
+            <DashboardCard
+              title="Tỷ lệ Lỗi API"
+              action={<Button type="link" onClick={() => navigate('/monitoring')}>Mở</Button>}
+              className="ds-figma-card ds-figma-api-card"
+            >
+              <div className="ds-figma-api-state">
+                <strong>{apiErrorRate === null ? '-' : formatRate(apiErrorRate, '/phút')}</strong>
+                <span className={(apiErrorRate ?? 0) > 0 ? 'is-warning' : 'is-ok'}>
+                  <AppIcon name={(apiErrorRate ?? 0) > 0 ? 'warning' : 'check'} size={14} aria-hidden />
+                  {(apiErrorRate ?? 0) > 0
+                    ? 'Có lỗi cần kiểm tra'
+                    : 'Hệ thống hoạt động ổn định'}
+                </span>
+                <dl>
+                  <div>
+                    <dt>Telemetry</dt>
+                    <dd>
+                      <StatusBadge status={overview ? getFreshnessLabel(overview.freshness) : 'unknown'} />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Nền tải</dt>
+                    <dd>
+                      <StatusBadge
+                        status={
+                          overview
+                            ? riskStateToStatus(overview.capacityBaseline.currentRiskState)
+                            : 'unknown'
+                        }
+                      />
+                    </dd>
+                  </div>
+                </dl>
+              </div>
             </DashboardCard>
           </div>
 
           <DashboardCard
             title="Hoạt động vận hành gần đây"
-            meta="Incident, cảnh báo và thay đổi cần theo dõi."
             action={<Button type="link" onClick={() => navigate('/audit')}>Mở audit</Button>}
+            className="ds-figma-card"
           >
             <div className="ds-ops-activity-list">
-              {activityTimeline.slice(0, 6).length > 0 ? (
-                activityTimeline.slice(0, 6).map((item) => (
+              {activityTimeline.slice(0, 4).length > 0 ? (
+                activityTimeline.slice(0, 4).map((item) => (
                   <button
                     key={item.id}
                     type="button"
@@ -329,7 +364,7 @@ export const DashboardPage = () => {
             </div>
           </DashboardCard>
 
-          <DashboardCard title="Hàng đợi xử lý" meta="Mục cần admin ra quyết định.">
+          <DashboardCard title="Hàng đợi xử lý" className="ds-figma-card">
             <div className="ds-ops-list">
               {[
                 ...(pendingUsers > 0

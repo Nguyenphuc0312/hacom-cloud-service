@@ -74,6 +74,11 @@ const AuthorityPage = lazy(() =>
     default: module.AuthorityPage,
   })),
 );
+const ProfilePage = lazy(() =>
+  import('@/features/profile/pages/ProfilePage').then((module) => ({
+    default: module.ProfilePage,
+  })),
+);
 const NotFoundPage = lazy(() =>
   import('@/features/errors/NotFoundPage').then((module) => ({
     default: module.NotFoundPage,
@@ -176,6 +181,10 @@ const routes = [
       {
         path: 'access-requests',
         element: withSuspense(<AccessRequestsPage />),
+      },
+      {
+        path: 'profile',
+        element: withSuspense(<ProfilePage />),
       },
       {
         path: '*',

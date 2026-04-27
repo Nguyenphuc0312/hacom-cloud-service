@@ -131,7 +131,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
             environmentLabel={appConfig.environmentLabel}
             systemTone={isAuthServiceUnavailable ? 'degraded' : 'healthy'}
             onOpenNotifications={() => message.info('Trung tâm thông báo chưa được kết nối.')}
-            onOpenProfile={() => message.info('Panel hồ sơ chưa khả dụng.')}
+            onOpenProfile={() => navigate('/profile')}
             onOpenSettings={() => navigate('/settings/system')}
             onLogout={handleLogout}
           />

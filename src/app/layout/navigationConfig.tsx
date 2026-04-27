@@ -152,12 +152,26 @@ export const breadcrumbNameMap: Record<string, string> = {
   '/settings/smtp': 'SMTP',
   '/settings/email-templates': 'Mẫu email',
   '/settings/system': 'Cài đặt hệ thống',
+  '/profile': 'Hồ sơ cá nhân',
 };
 
 const flattenNavItems = (items: NavItem[]): NavItem[] =>
   items.flatMap((item) => [item, ...(item.children ? flattenNavItems(item.children) : [])]);
 
 export const resolveNavigationContext = (pathname: string) => {
+  if (pathname.startsWith('/profile')) {
+    return {
+      item: null,
+      section: null,
+      title: 'Hồ sơ cá nhân',
+      sectionLabel: 'Tài khoản',
+      breadcrumbs: [
+        { route: '/', label: 'Tổng quan hệ thống' },
+        { route: '/profile', label: 'Hồ sơ cá nhân' },
+      ],
+    };
+  }
+
   const item =
     flattenNavItems(navItems)
       .sort((left, right) => right.route.length - left.route.length)
@@ -213,6 +227,7 @@ export const pickSelectedMenuKey = (pathname: string): string => {
   if (pathname.startsWith('/settings/system')) return 'settings-system';
   if (pathname.startsWith('/settings/smtp')) return 'settings-smtp';
   if (pathname.startsWith('/settings')) return 'settings';
+  if (pathname.startsWith('/profile')) return 'profile';
   return 'dashboard';
 };
 
