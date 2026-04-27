@@ -360,10 +360,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     (currentUserId === createdBy
       ? RoomMemberRole.OWNER
       : RoomMemberRole.MEMBER);
-  const isAdmin = canRenameGroup(currentUserRole);
-  const canAddMembers = canAddGroupMembers(currentUserRole);
+  const groupCapabilities = conversation.permissions ?? null;
+  const isAdmin = canRenameGroup(currentUserRole, groupCapabilities);
+  const canAddMembers = canAddGroupMembers(currentUserRole, groupCapabilities);
   const canDeleteConversation = canDeleteConversationForSelf();
-  const canLeaveCurrentGroup = canLeaveGroup(currentUserRole, activeOwnerCount);
+  const canLeaveCurrentGroup = canLeaveGroup(
+    currentUserRole,
+    activeOwnerCount,
+    groupCapabilities,
+  );
   const participantCount =
     conversation.participantCount ??
     (members.length > 0 ? members.length : participants.length);
@@ -375,9 +380,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         actorUserId: currentUserId,
         targetRole: member.role,
         targetUserId: member.id,
+        capabilities: groupCapabilities,
       });
     },
-    [currentUserId, currentUserRole],
+    [currentUserId, currentUserRole, groupCapabilities],
   );
 
   const roleLabel = useCallback(
@@ -621,6 +627,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           actorUserId: currentUserId,
           targetRole: member.role,
           targetUserId: member.id,
+          capabilities: groupCapabilities,
         })
       ) {
         return;
@@ -647,7 +654,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         setActingMemberId(null);
       }
     },
-    [conversation.id, currentUserId, currentUserRole, refreshGroupState, t],
+    [conversation.id, currentUserId, currentUserRole, groupCapabilities, refreshGroupState, t],
   );
 
   const handleRemoveMember = useCallback(
@@ -1126,6 +1133,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                       actorUserId: currentUserId,
                       targetRole: member.role,
                       targetUserId: member.id,
+                      capabilities: groupCapabilities,
                     });
 
                     return (

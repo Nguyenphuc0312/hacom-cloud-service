@@ -77,4 +77,25 @@ describe("groupPermissions", () => {
     expect(canLeaveGroup(RoomMemberRole.MEMBER, 1)).toBe(true);
     expect(canDeleteConversationForSelf()).toBe(true);
   });
+
+  it("prefers server capability payload over local role fallback", () => {
+    expect(
+      canRenameGroup(RoomMemberRole.ADMIN, { canEditGroupProfile: false }),
+    ).toBe(false);
+    expect(
+      canAddGroupMembers(RoomMemberRole.MEMBER, { canAddMember: true }),
+    ).toBe(true);
+    expect(
+      canLeaveGroup(RoomMemberRole.OWNER, 2, { canLeaveGroup: false }),
+    ).toBe(false);
+    expect(
+      canToggleAdminRole({
+        actorRole: RoomMemberRole.OWNER,
+        actorUserId: "owner-1",
+        targetRole: RoomMemberRole.MEMBER,
+        targetUserId: "member-1",
+        capabilities: { canPromoteMember: false },
+      }),
+    ).toBe(false);
+  });
 });
