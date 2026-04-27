@@ -178,6 +178,12 @@ describe("useSendMessage", () => {
         type: MessageType.TEXT,
       }),
     );
+    expect(sendMessageApiMock.mock.calls[0]?.[1]).not.toHaveProperty(
+      "senderName",
+    );
+    expect(sendMessageApiMock.mock.calls[0]?.[1]).not.toHaveProperty(
+      "senderAvatar",
+    );
 
     await act(async () => {
       await Promise.resolve();

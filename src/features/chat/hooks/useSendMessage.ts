@@ -299,7 +299,7 @@ export const useSendMessage = ({
             currentUser?.displayName ||
             currentUser?.effectiveDisplayName ||
             currentUser?.username,
-          senderAvatar: currentUser?.avatar,
+          senderAvatar: currentUser?.avatar || undefined,
           attachments: toSendMessageAttachments(fileMeta),
         })
           .unwrap()

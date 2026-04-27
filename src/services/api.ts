@@ -998,8 +998,6 @@ export const messageApi = {
       {
         content: data.content,
         type: data.type || "text",
-        senderName: data.senderName,
-        senderAvatar: data.senderAvatar,
         replyTo: data.replyToId,
         clientMessageId: data.clientMessageId,
         tempId: data.tempId,

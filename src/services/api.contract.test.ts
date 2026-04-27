@@ -262,4 +262,44 @@ describe("api contract", () => {
       expect.objectContaining({ signal: abortController.signal }),
     );
   });
+
+  it("sendMessage omits client-supplied sender identity hints from the API payload", async () => {
+    apiClientMock.post.mockResolvedValue({
+      data: {
+        success: true,
+        data: { id: "msg-1" },
+      },
+    });
+
+    const legacyRuntimePayload = {
+      content: "ok",
+      type: "text",
+      clientMessageId: "ede5548c-eb2d-43d4-883e-17540dfb659b",
+      tempId: "temp-ede5548c-eb2d-43d4-883e-17540dfb659b",
+      localId: "temp-ede5548c-eb2d-43d4-883e-17540dfb659b",
+      senderName: "Nguyễn Văn Long",
+      senderAvatar: null,
+    } as unknown as Parameters<typeof messageApi.sendMessage>[1];
+
+    await messageApi.sendMessage("conv-12", legacyRuntimePayload);
+
+    expect(apiClientMock.post).toHaveBeenCalledWith(
+      "/conversations/conv-12/messages",
+      {
+        content: "ok",
+        type: "text",
+        replyTo: undefined,
+        clientMessageId: "ede5548c-eb2d-43d4-883e-17540dfb659b",
+        tempId: "temp-ede5548c-eb2d-43d4-883e-17540dfb659b",
+        localId: "temp-ede5548c-eb2d-43d4-883e-17540dfb659b",
+        attachments: undefined,
+      },
+    );
+    expect(apiClientMock.post.mock.calls[0]?.[1]).not.toHaveProperty(
+      "senderName",
+    );
+    expect(apiClientMock.post.mock.calls[0]?.[1]).not.toHaveProperty(
+      "senderAvatar",
+    );
+  });
 });

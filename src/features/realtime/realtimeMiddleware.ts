@@ -15,6 +15,7 @@ import {
   upsertMessageInCache,
 } from "../chat/domain/messageMerge";
 import { normalizeMessageForReduxCache } from "../chat/domain/serializableMessage";
+import { useChatStore } from "../../stores";
 
 export interface RealtimeMessagePayload {
   conversationId: string;
@@ -80,12 +81,16 @@ export const realtimeMessageReactionChanged =
 
 const getMessageQueryArg = (conversationId: string) => ({ conversationId });
 
-const shouldSeedMissingMessageCache = (message: Message): boolean =>
+const shouldSeedMissingMessageCache = (
+  conversationId: string,
+  message: Message,
+): boolean =>
   message.transportStatus === "optimistic" ||
   message.sendState === "sending" ||
   message.sendState === "queued" ||
   message.sendState === "retrying" ||
-  message.sendState === "failed";
+  message.sendState === "failed" ||
+  useChatStore.getState().selectedConversationId === conversationId;
 
 export const normalizeRealtimeMessageEvent = (
   payload: unknown,
@@ -137,7 +142,10 @@ export const realtimeMiddleware: Middleware<
     );
     if (
       patch.patches.length === 0 &&
-      shouldSeedMissingMessageCache(action.payload.message)
+      shouldSeedMissingMessageCache(
+        action.payload.conversationId,
+        action.payload.message,
+      )
     ) {
       storeApi.dispatch(
         chatApi.util.upsertQueryData(
@@ -163,7 +171,10 @@ export const realtimeMiddleware: Middleware<
     );
     if (
       patch.patches.length === 0 &&
-      shouldSeedMissingMessageCache(action.payload.message)
+      shouldSeedMissingMessageCache(
+        action.payload.conversationId,
+        action.payload.message,
+      )
     ) {
       storeApi.dispatch(
         chatApi.util.upsertQueryData(

@@ -402,6 +402,15 @@ class WebSocketManager {
       },
       { debugOnly: true },
     );
+    logger.debug(
+      "socket",
+      "event_received",
+      {
+        eventName: type,
+        data: payload,
+      },
+      { debugOnly: true },
+    );
 
     if (type === WsEventNames.AUTH_AUTHENTICATED) {
       this.queryTokenFallbackEnabled = false;

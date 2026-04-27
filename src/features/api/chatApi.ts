@@ -398,8 +398,6 @@ export const chatApi = createApi({
             content: input.content,
             type: input.type,
             replyToId: input.replyToId,
-            senderName: input.senderName,
-            senderAvatar: input.senderAvatar,
             clientMessageId: input.clientMessageId,
             tempId: input.localId,
             localId: input.localId,
