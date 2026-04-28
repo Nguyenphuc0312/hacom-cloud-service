@@ -1,0 +1,40 @@
+/* From src/styles/global/global.css */
+.app-header-grid {
+  height: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(300px, 520px) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+/* From src/styles/global/global.css */
+.app-header-zone {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* From src/styles/global/global.css */
+.app-header-zone-left {
+  justify-content: flex-start;
+}
+
+/* From src/styles/global/global.css */
+.app-header-zone-center {
+  justify-content: center;
+}
+
+/* From src/styles/global/global.css */
+.app-header-zone-right {
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* From src/styles/global/global.css */
+.app-header-status .ant-tag {
+  margin-inline-end: 0;
+  border-radius: 999px;
+  padding-inline: 9px;
+  font-size: 11px;
+  line-height: 20px;
+}

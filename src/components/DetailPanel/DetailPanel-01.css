@@ -1,0 +1,415 @@
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-detail-panel {
+  top: calc(var(--topbar-height) + var(--space-5));
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-detail-panel-header {
+  padding: var(--space-4);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-detail-panel-title {
+  font-size: var(--font-lg);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-detail-panel-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-detail-panel-body {
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-ops-fact-list > div {
+  grid-template-columns: 120px minmax(0, 1fr);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-ops-fact-list dt {
+  color: var(--text-caption);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-ops-fact-list dd {
+  color: var(--text-primary);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-ops-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-ops-summary-item,
+.ds-summary-tile {
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-ops-summary-item:hover {
+  border-color: var(--border-strong);
+  background: #fcfcfd;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-ops-summary-value,
+.ds-summary-tile-value {
+  font-size: 28px;
+  font-weight: var(--font-semibold);
+  letter-spacing: -0.04em;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-detail-overview-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-detail-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 100%;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-detail-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-detail-list-item {
+  display: grid;
+  gap: 4px;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-detail-list-item:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-detail-list-item span {
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-detail-list-item strong,
+.ds-detail-list-item a {
+  color: var(--text-primary);
+  font-size: var(--font-md);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-detail-list-item code {
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--color-card-muted);
+  color: var(--text-secondary);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-detail-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* From src/styles/production/production.css */
+.ds-detail-panel {
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-5));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+  max-height: calc(100vh - var(--topbar-height) - var(--space-8));
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--gradient-card);
+  box-shadow: var(--shadow-sm);
+}
+
+/* From src/styles/production/production.css */
+.ds-detail-modal .ant-modal-body {
+  max-height: min(72vh, 720px);
+  overflow: auto;
+}
+
+/* From src/styles/production/production.css */
+.ds-detail-modal-body {
+  min-width: 0;
+}
+
+/* From src/styles/production/production.css */
+.ds-detail-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* From src/styles/production/production.css */
+.ds-detail-panel-title {
+  color: var(--text-heading);
+  font-size: var(--font-lg);
+  font-weight: var(--font-semibold);
+  letter-spacing: -0.02em;
+}
+
+/* From src/styles/production/production.css */
+.ds-detail-panel-close {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+}
+
+/* From src/styles/production/production.css */
+.ds-detail-panel-close:hover {
+  background: var(--bg-sunken);
+  color: var(--text-primary);
+}
+
+/* From src/styles/production/production.css */
+.ds-detail-panel-body {
+  overflow: auto;
+  padding: 0 var(--space-5) var(--space-5);
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-detail-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-detail-section:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-detail-section h3 {
+  margin: 0;
+  color: var(--text-heading);
+  font-size: var(--font-md);
+  font-weight: var(--font-semibold);
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-detail-header strong {
+  display: block;
+  color: var(--text-primary);
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-detail-header p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-fact-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-fact-list > div {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-fact-list > div:last-child {
+  border-bottom: 0;
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-fact-list dt {
+  color: var(--text-caption);
+  font-size: 11px;
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-fact-list dd {
+  margin: 0;
+  color: var(--text-primary);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-inline-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-code-block {
+  overflow: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: var(--color-card-muted);
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-code-block pre {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-overview,
+.ds-service-health-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-skeleton {
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--color-card-muted) 74%, transparent) 0%, var(--color-card) 50%, color-mix(in srgb, var(--color-card-muted) 74%, transparent) 100%);
+  background-size: 200% 100%;
+  animation: ds-ops-shimmer 1.6s linear infinite;
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-skeleton--alert {
+  grid-column: 1 / -1;
+  min-height: 112px;
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-skeleton--metric {
+  min-height: 126px;
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-skeleton--panel {
+  min-height: 220px;
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-alert-strip {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--gradient-card);
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-alert-strip.tone-warning {
+  border-color: color-mix(in srgb, var(--brand-warning) 24%, transparent);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-warning-soft) 70%, var(--color-card) 30%) 0%,
+      var(--color-card) 100%
+    );
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-alert-strip.tone-danger {
+  border-color: color-mix(in srgb, var(--brand-danger) 24%, transparent);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-danger-soft) 70%, var(--color-card) 30%) 0%,
+      var(--color-card) 100%
+    );
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-alert-strip.tone-success {
+  border-color: color-mix(in srgb, var(--brand-success) 24%, transparent);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-success-soft) 70%, var(--color-card) 30%) 0%,
+      var(--color-card) 100%
+    );
+}
+
+/* From src/styles/production/production.css */
+.ds-ops-alert-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-width: 68ch;
+}

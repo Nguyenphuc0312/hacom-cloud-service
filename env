@@ -1,0 +1,21 @@
+# ============================================
+# APP
+# ============================================
+VITE_APP_BASE_PATH=/
+VITE_APP_ENV=DEV
+VITE_DASHBOARD_REFETCH_INTERVAL_MS=15000
+VITE_ADMIN_WRITE_ACTIONS_ENABLED=false
+VITE_LIVE_UPDATES_URL=wss://hacom-chat.fitora.id.vn/ws
+VITE_WS_URL=wss://hacom-chat.fitora.id.vn/ws
+
+VITE_ADMIN_API_BASE_URL=https://admin-hacom-chat.fitora.id.vn/api/v1/admin
+VITE_AUTH_BASE_URL=https://admin-hacom-chat.fitora.id.vn/api/v1/auth
+
+VITE_ADMIN_API_ROOT=https://admin-hacom-chat.fitora.id.vn/api/v1/admin
+
+# ============================================
+# DEV PROXY (Vite only)
+# ============================================
+# Used only by npm run dev with local auth/admin services.
+# VITE_DEV_ADMIN_PROXY_TARGET=http://localhost:3201
+# VITE_DEV_AUTH_PROXY_TARGET=http://localhost:3101

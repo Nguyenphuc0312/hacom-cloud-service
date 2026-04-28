@@ -1,0 +1,414 @@
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-filter-toolbar,
+.ds-filter-bar {
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-toolbar-form {
+  gap: var(--space-2);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-filter-toolbar-meta {
+  padding-top: 6px;
+  font-size: 12px;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-table-shell-header {
+  align-items: center;
+  padding: 10px 16px;
+  background: var(--color-card);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-table-shell-title {
+  font-size: var(--font-lg);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-table-shell-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-table-shell .ant-table-wrapper,
+.ds-table-shell .ant-spin-nested-loading,
+.ds-table-shell .ant-spin-container {
+  min-width: 0;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-page-with-detail {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-page-toolbar,
+.ds-page-toolbar-group,
+.ds-table-toolbar,
+.ds-toolbar-form {
+  min-height: 36px;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-table-shell {
+  overflow: hidden;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-table-shell-body,
+.admin-table {
+  min-width: 0;
+  overflow: auto hidden;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-table-primary-cell strong,
+.ds-table-primary-cell span,
+.ds-meta-cell strong,
+.ds-meta-cell small,
+.ds-avatar-cell-copy strong,
+.ds-avatar-cell-copy small {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-table-skeleton,
+.ds-card-skeleton {
+  display: grid;
+  gap: 10px;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-table-skeleton span,
+.ds-card-skeleton span {
+  display: block;
+  height: 36px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--surface-muted), var(--surface-subtle), var(--surface-muted));
+  background-size: 240% 100%;
+  animation: ds-skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-toolbar,
+.ds-filter-bar {
+  align-items: center;
+  padding: 10px 12px;
+  border-color: var(--figma-border-soft);
+  border-radius: 12px;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-bar .ant-form,
+.ds-toolbar-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-bar .ds-toolbar-form:has(> :nth-child(3):last-child),
+.ds-filter-bar .ant-form:has(> :nth-child(3):last-child) {
+  display: flex;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-bar .ds-toolbar-form:has(> :nth-child(2):last-child),
+.ds-filter-bar .ant-form:has(> :nth-child(2):last-child) {
+  display: flex;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-toolbar-field {
+  min-width: 0;
+  width: 100%;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-toolbar-field--sm,
+.ds-toolbar-field--md,
+.ds-toolbar-field--lg {
+  min-width: 0;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-toolbar-actions {
+  justify-self: end;
+  margin-left: 0 !important;
+  width: auto;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-toolbar-actions .ant-space {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px !important;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-toolbar-actions .ant-btn {
+  width: auto;
+  min-width: 88px;
+  flex: 0 0 auto;
+  padding-inline: 12px;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-bar > .ant-input,
+.ds-filter-bar .ds-toolbar-field > .ant-input {
+  border: 1px solid #d8e0ea !important;
+  background: #fff !important;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02) !important;
+  line-height: 30px !important;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-bar > .ant-input:hover,
+.ds-filter-bar .ds-toolbar-field > .ant-input:hover {
+  border-color: #b8c4d4 !important;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-bar > .ant-input:focus,
+.ds-filter-bar .ds-toolbar-field > .ant-input:focus {
+  border-color: #7c5cff !important;
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.12) !important;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-table-toolbar {
+  align-items: center;
+  gap: 12px;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-table-toolbar .ant-btn-sm {
+  height: 40px;
+  min-height: 40px;
+  min-width: 132px;
+  padding-inline: 16px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-table-row-action-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #64748b;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-table-row-action-btn:hover,
+.ds-table-row-action-btn:focus-visible {
+  border-color: #d8e0ea;
+  background: #f8fafc;
+  color: #334155;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-table-shell {
+  overflow: hidden;
+  border-radius: 0 !important;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-table-shell,
+.ds-table-shell-body,
+.ds-table-shell .ant-table-wrapper,
+.ds-table-shell .ant-spin-nested-loading,
+.ds-table-shell .ant-spin-container,
+.ant-table-wrapper .ant-table,
+.ant-table-wrapper .ant-table-container,
+.ant-table-wrapper table,
+.ant-table-thead > tr > th,
+.ant-table-tbody > tr > td {
+  border-radius: 0 !important;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-table-shell-header {
+  min-height: 42px;
+  padding: 10px 16px;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-table-shell-toolbar:empty {
+  display: none;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-toolbar-meta {
+  padding-top: 6px;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-surface-card,
+.ds-section-card,
+.ds-card,
+.ds-form-section,
+.ds-table-shell,
+.ds-widget-card,
+.ds-stat-card,
+.ds-summary-card,
+.ds-chart-card,
+.ds-activity-card,
+.ds-quick-action-card,
+.ant-card,
+.ant-modal .ant-modal-content,
+.ant-drawer .ant-drawer-content {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, #ffffff 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-filter-toolbar,
+.ds-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 251, 253, 0.98) 100%);
+  box-shadow: var(--shadow-xs);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-toolbar-lead {
+  min-width: 220px;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-toolbar-eyebrow {
+  color: var(--text-caption);
+  font-size: 11px;
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-toolbar-title {
+  color: var(--text-heading);
+  font-size: var(--font-lg);
+  font-weight: var(--font-semibold);
+  letter-spacing: -0.02em;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-toolbar-description {
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  line-height: 1.55;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-toolbar-form {
+  flex: 1 1 640px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-toolbar-field {
+  margin: 0 !important;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-toolbar-field .ant-input,
+.ds-toolbar-field .ant-select,
+.ds-toolbar-field .ant-picker {
+  width: 100%;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-toolbar-field--sm {
+  min-width: 152px;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-toolbar-field--md {
+  min-width: 188px;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-toolbar-field--lg {
+  min-width: 240px;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-toolbar-field--range {
+  min-width: 300px;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-toolbar-actions {
+  margin-left: auto !important;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-toolbar-actions .ant-space {
+  gap: var(--space-2) !important;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-toolbar-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-table-shell {
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-table-shell-header {
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  background:
+    linear-gradient(180deg, rgba(248, 251, 253, 0.98) 0%, rgba(255, 255, 255, 0.96) 100%);
+}

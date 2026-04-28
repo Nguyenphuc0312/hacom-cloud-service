@@ -1,0 +1,418 @@
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-admin-sidebar {
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-card);
+  border-right: 1px solid var(--border-subtle);
+  box-shadow: none;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-admin-sidebar-logo {
+  min-height: 48px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+  box-shadow: none;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  box-shadow: none;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-brand-copy strong {
+  font-size: var(--font-md);
+  font-weight: var(--font-semibold);
+  letter-spacing: -0.01em;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-brand-copy small {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-section {
+  margin-bottom: var(--space-4);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-section-label {
+  padding: 0 var(--space-3) var(--space-2);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-section-label-main {
+  gap: var(--space-2);
+  color: var(--text-caption);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-section-icon {
+  color: var(--text-caption);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-section-list,
+.ds-sidebar-nav-list {
+  gap: 2px;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-item {
+  min-height: 40px;
+  gap: var(--space-3);
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-item:hover {
+  background: var(--color-card-muted);
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-item.is-active {
+  background: var(--color-accent-soft);
+  border-color: color-mix(in srgb, var(--color-accent) 16%, transparent);
+  box-shadow: none;
+  color: var(--color-accent);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-item.is-submenu {
+  min-height: 36px;
+  padding-left: 16px;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-item-marker {
+  width: 3px;
+  margin-block: 7px;
+  border-radius: var(--radius-full);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-item-icon {
+  width: 16px;
+  min-width: 16px;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-item-label {
+  font-size: var(--font-md);
+  font-weight: var(--font-medium);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-submenu {
+  margin-left: 0;
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--border-subtle);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-admin-sidebar-footer {
+  margin-top: auto;
+  padding-top: var(--space-3);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-footer-meta {
+  gap: 2px;
+  padding: var(--space-3) 0 0;
+  border-top: 1px solid var(--border-subtle);
+  background: transparent;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-footer-meta strong {
+  font-size: var(--font-sm);
+  font-weight: var(--font-medium);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-sidebar-footer-environment {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: var(--space-2);
+  padding: 0 8px;
+  min-height: 22px;
+  border-radius: 999px;
+  background: var(--color-card-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-admin-shell.is-collapsed .ds-sidebar-brand-copy,
+.ds-admin-shell.is-collapsed .ds-sidebar-section-label span:last-child,
+.ds-admin-shell.is-collapsed .ds-sidebar-item-content,
+.ds-admin-shell.is-collapsed .ds-sidebar-footer-meta {
+  display: none;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-admin-shell.is-collapsed .ds-admin-sidebar {
+  padding-inline: 12px;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-admin-shell.is-collapsed .ds-admin-sidebar-logo,
+.ds-admin-shell.is-collapsed .ds-sidebar-item,
+.ds-admin-shell.is-collapsed .ds-sidebar-section-label {
+  justify-content: center;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-admin-shell.is-collapsed .ds-sidebar-submenu {
+  display: none;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-admin-shell.is-collapsed .ds-sidebar-item {
+  padding: 0;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-admin-sidebar {
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  max-width: var(--sidebar-width);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-admin-sidebar {
+  width: var(--figma-sidebar-width);
+  min-width: var(--figma-sidebar-width);
+  max-width: var(--figma-sidebar-width);
+  flex: 0 0 var(--figma-sidebar-width);
+  border-right: 1px solid var(--figma-border);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 16px 0 42px rgba(15, 23, 42, 0.04);
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-admin-sidebar-logo {
+  min-height: 82px;
+  padding: 20px 22px;
+  border-bottom: 1px solid #eef3f8;
+  background: #fff;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-brand-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--figma-green);
+  color: #06281f;
+  font-weight: 800;
+  box-shadow: 0 10px 24px rgba(16, 185, 129, 0.24);
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-brand-mark svg {
+  display: none;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-brand-mark::before {
+  content: 'EA';
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-brand-copy strong {
+  color: var(--figma-text);
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-brand-copy small {
+  color: #68758c;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-admin-sidebar-nav {
+  padding: 18px 16px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-nav-list {
+  display: grid;
+  gap: 16px;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-section {
+  display: grid;
+  gap: 8px;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-section-label {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  color: #8a96a8;
+  text-transform: uppercase;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-section-label-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-section-label-main > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-section-icon {
+  display: inline-flex;
+  color: #94a3b8;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-section-list {
+  display: grid;
+  gap: 4px;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-item-group {
+  display: grid;
+  gap: 3px;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-item {
+  min-height: 46px;
+  gap: 14px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  color: #64748b;
+  font-weight: 700;
+  padding: 0 12px;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-item-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  color: #64748b;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-item-label {
+  color: inherit;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-item-marker {
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-item:hover,
+.ds-sidebar-item.is-active {
+  background: #f0fbf7;
+  border-color: #ccefe2;
+  color: #059669;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-item:hover .ds-sidebar-item-icon,
+.ds-sidebar-item.is-active .ds-sidebar-item-icon {
+  background: #dff8ec;
+  color: #059669;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-item.is-active .ds-sidebar-item-marker {
+  background: var(--figma-green);
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-submenu {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  margin: 2px 0 4px 20px;
+  padding-left: 17px;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-submenu::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: 1px;
+  background: #dbe5ef;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-item.is-submenu {
+  min-height: 38px;
+  padding: 0 10px;
+  border-radius: 12px;
+  font-weight: 700;
+  color: #728096;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-item.is-submenu .ds-sidebar-item-icon {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 8px;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-sidebar-item.is-submenu .ds-sidebar-item-marker {
+  left: -15px;
+  width: 7px;
+  height: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+}

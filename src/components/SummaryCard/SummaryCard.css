@@ -1,0 +1,66 @@
+/* From src/styles/foundation/foundation.css */
+.ds-summary-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 132px;
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: 18px;
+  background: var(--gradient-card);
+  box-shadow: var(--shadow-xs);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-summary-tile-label {
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-summary-tile-value {
+  color: var(--text-primary);
+  font-family: var(--font-family-display);
+  font-size: clamp(24px, 3vw, 30px);
+  font-weight: var(--font-bold);
+  letter-spacing: -0.04em;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-summary-tile-meta {
+  margin-top: auto;
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  line-height: 1.55;
+}
+
+/* From src/styles/global/global.css */
+/* SummaryCard */
+.ds-summary-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+/* From src/styles/global/global.css */
+.ds-summary-card-title {
+  font-size: var(--font-md);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+/* From src/styles/global/global.css */
+.ds-summary-card-icon {
+  font-size: 20px;
+  color: var(--brand-primary);
+}
+
+/* From src/styles/global/global.css */
+.ds-summary-card-body {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}

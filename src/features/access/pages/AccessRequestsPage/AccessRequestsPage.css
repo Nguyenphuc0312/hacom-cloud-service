@@ -1,0 +1,49 @@
+.access-requests-page-filter {
+  padding: 6px 8px;
+}
+
+.access-requests-page-filter .ds-toolbar-form {
+  display: grid !important;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(280px, 1.2fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.access-requests-page-filter .ds-toolbar-field {
+  min-width: 0;
+  width: 100%;
+}
+
+.access-requests-page-filter .ds-toolbar-actions {
+  justify-self: end;
+  width: auto;
+}
+
+.access-requests-page-filter .ant-form-item-label {
+  display: none;
+}
+
+.access-requests-page-filter .ant-btn {
+  min-width: 82px;
+}
+
+.access-requests-page-filter .ds-filter-toolbar-meta {
+  padding-top: 6px;
+}
+
+@media (max-width: 900px) {
+  .access-requests-page-filter .ds-toolbar-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .access-requests-page-filter .ds-toolbar-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .access-requests-page-filter .ds-toolbar-form {
+    grid-template-columns: 1fr;
+  }
+}

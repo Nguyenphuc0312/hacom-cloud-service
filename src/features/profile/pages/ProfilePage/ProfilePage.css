@@ -1,0 +1,145 @@
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-profile-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
+  gap: var(--figma-dashboard-gap);
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-profile-identity-card {
+  grid-row: span 2;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-profile-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-profile-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #10b981 0%, #3154ff 100%);
+  color: #fff;
+  font-size: 24px;
+  font-weight: 850;
+  box-shadow: 0 18px 36px rgba(49, 84, 255, 0.18);
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-profile-hero-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-profile-eyebrow {
+  color: #718096;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-profile-hero-copy strong {
+  color: var(--figma-text);
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-profile-hero-copy span:last-child {
+  overflow: hidden;
+  color: #64748b;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-profile-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #eef3f8;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-profile-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-profile-detail-grid > div {
+  display: grid;
+  gap: 6px;
+  padding: 14px 0;
+  border-bottom: 1px solid #eef3f8;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-profile-detail-grid > div:nth-child(odd) {
+  padding-right: 18px;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-profile-detail-grid > div:nth-child(even) {
+  padding-left: 18px;
+  border-left: 1px solid #eef3f8;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-profile-detail-grid dt {
+  color: #718096;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-profile-detail-grid dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--figma-text);
+  font-weight: 750;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-profile-detail-grid--compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-profile-permission-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-profile-permission-list span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid #d8e0ea;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 750;
+}

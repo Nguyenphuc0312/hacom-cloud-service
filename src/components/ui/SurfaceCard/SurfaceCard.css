@@ -1,0 +1,88 @@
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-ui-surface-card-header {
+  border-bottom: 1px solid #eef3f8;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-ui-surface-card-description,
+.ds-stat-card-title,
+.ds-stat-card-meta {
+  color: var(--figma-muted);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-ui-surface-card {
+  padding: var(--space-5);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-ui-surface-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-ui-surface-card-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-ui-surface-card-eyebrow {
+  color: var(--text-caption);
+  font-size: 11px;
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-ui-surface-card-title {
+  margin: 0;
+  color: var(--text-heading);
+  font-family: var(--font-family-display);
+  font-size: 20px;
+  font-weight: var(--font-semibold);
+  letter-spacing: -0.03em;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-ui-surface-card-description {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  line-height: 1.6;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-ui-surface-card-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-ui-surface-card-status,
+.ds-ui-surface-card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-ui-surface-card-body {
+  min-width: 0;
+}
+
+/* From src/styles/foundation/foundation.css */
+/* From src/styles/foundation/foundation.css */
+.ds-detail-panel .ds-ui-surface-card-body {
+  padding-top: 0;
+}
