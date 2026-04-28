@@ -120,7 +120,6 @@ export const SmtpSettingsCard = () => {
       <SurfaceCard
         eyebrow="Trạng thái runtime"
         title="Triển khai SMTP"
-        description="Giữ cấu hình đang chạy và bản nháp hiển thị cạnh nhau để operator không phải đoán phiên bản nào thực sự đang gửi email."
         status={<StatusBadge status={active ? 'active' : draft ? 'pending' : 'unknown'} />}
       >
         <div className="ds-settings-summary-grid">
@@ -164,13 +163,13 @@ export const SmtpSettingsCard = () => {
 
           <div className="ds-settings-summary-card">
             <div className="ds-settings-summary-head">
-              <span className="ds-settings-summary-title">Luồng phát hành</span>
+              <span className="ds-settings-summary-title">Phát hành</span>
               <StatusBadge status="info" />
             </div>
             <div className="ds-settings-summary-meta">
-              <span>1. Lưu bản nháp.</span>
-              <span>2. Kiểm tra bản nháp với máy chủ đích.</span>
-              <span>3. Chỉ kích hoạt sau khi kết nối thành công.</span>
+              <span>Lưu nháp</span>
+              <span>Kiểm tra</span>
+              <span>Kích hoạt</span>
             </div>
           </div>
         </div>
@@ -179,7 +178,6 @@ export const SmtpSettingsCard = () => {
       <SurfaceCard
         eyebrow="Cấu hình"
         title="Hồ sơ kết nối"
-        description="Tách thông tin transport khỏi danh tính người gửi để dễ rà soát trước khi kích hoạt."
       >
         <Form
           form={form}
@@ -190,7 +188,6 @@ export const SmtpSettingsCard = () => {
           <div className="ds-settings-form-grid">
             <FormSection
               title="Transport"
-              description="Host, port và thông tin xác thực dùng để kết nối tới máy chủ mail."
             >
               <Row gutter={16}>
                 <Col xs={24} md={12}>
@@ -242,7 +239,6 @@ export const SmtpSettingsCard = () => {
 
             <FormSection
               title="Danh tính người gửi"
-              description="Các giá trị này quyết định danh tính email gửi đi mà người nhận nhìn thấy."
             >
               <Row gutter={16}>
                 <Col xs={24} md={12}>
@@ -276,9 +272,6 @@ export const SmtpSettingsCard = () => {
           </div>
 
           <div className="ds-settings-action-bar">
-            <div className="ds-settings-action-copy">
-              Hãy lưu bản nháp trước, kiểm tra bằng chính thông số transport ở trên, rồi mới kích hoạt. Tắt cấu hình đang chạy là thao tác phá hủy và chỉ nên dùng khi thật cần.
-            </div>
             <Space wrap>
               <Button type="primary" htmlType="submit" loading={saveDraftMutation.isPending}>
                 Lưu bản nháp

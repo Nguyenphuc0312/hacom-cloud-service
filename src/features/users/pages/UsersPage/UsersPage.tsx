@@ -147,7 +147,6 @@ export const UsersPage = () => {
         title: 'Người dùng',
         key: 'user',
         width: 260,
-        fixed: 'left',
         render: (_, record) => (
           <AvatarCell
             name={record.username ?? record.email}
@@ -204,8 +203,8 @@ export const UsersPage = () => {
       {
         title: 'Thao tác',
         key: 'actions',
-        width: 84,
-        fixed: 'right',
+        width: 92,
+        align: 'center',
         render: (_, record) => (
           <RowActionsDropdown
             actions={[
@@ -276,7 +275,7 @@ export const UsersPage = () => {
 
     setParams((prev) => ({
       ...prev,
-      page: pagination.current ?? prev.page,
+      page: pagination.pageSize !== prev.limit ? 1 : (pagination.current ?? prev.page),
       limit: pagination.pageSize ?? prev.limit,
       sortBy: sortField ?? prev.sortBy,
       sortOrder: sortField ? sortOrder : prev.sortOrder,
@@ -353,7 +352,7 @@ export const UsersPage = () => {
         </div>
       }
     >
-      <div className="ds-page-with-detail">
+      <div className="ds-page-with-detail users-page">
         <div className="ds-page-main-stack">
           <FilterBar className="users-page-filter">
             <Form
@@ -389,11 +388,12 @@ export const UsersPage = () => {
             </div>
           </FilterBar>
 
-          <DataTableShell title="Người dùng" meta="Danh sách tài khoản có phân trang từ admin API.">
+          <DataTableShell>
             <DataTable
               rowKey="id"
               columns={columns}
-              minHeight={420}
+              minHeight={560}
+              scroll={{ x: 1360, y: 'calc(100vh - 326px)' }}
               loading={usersQuery.isFetching && !usersQuery.isPending}
               dataSource={data?.items ?? []}
               emptyNode={<EmptyState description="Không có người dùng khớp bộ lọc hiện tại." />}
@@ -405,7 +405,6 @@ export const UsersPage = () => {
                 current: data?.pagination.page,
                 pageSize: data?.pagination.limit,
                 total: data?.pagination.total,
-                showSizeChanger: true,
               }}
               onChange={handleTableChange}
             />

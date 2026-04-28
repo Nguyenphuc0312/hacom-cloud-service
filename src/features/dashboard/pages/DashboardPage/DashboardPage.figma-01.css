@@ -311,6 +311,17 @@ body,
   width: 100%;
 }
 
+.ds-figma-chart-panel {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 12px;
+}
+
+.ds-figma-chart-panel--health {
+  justify-items: center;
+}
+
 .ds-figma-chart--health {
   height: 250px;
 }
@@ -330,6 +341,34 @@ body,
 .ds-figma-chart .highcharts-axis,
 .ds-figma-chart .highcharts-grid-line {
   display: none;
+}
+
+.ds-figma-chart-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  width: 100%;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.ds-figma-chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.ds-figma-chart-legend-item > span {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.12);
 }
 
 .ds-figma-service-list {
@@ -412,4 +451,62 @@ body,
 
 .ds-figma-api-state dd {
   margin: 0;
+}
+
+.ds-figma-card .ds-ops-list,
+.ds-figma-card .ds-ops-activity-list {
+  display: grid;
+  gap: 10px;
+}
+
+.ds-figma-card .ds-ops-list-row,
+.ds-figma-card .ds-ops-activity-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 72px;
+  padding: 14px 16px;
+  border: 1px solid #edf2f7;
+  border-radius: 10px;
+  background: #fbfdff;
+  color: #334155;
+  text-align: left;
+  box-shadow: none;
+}
+
+.ds-figma-card .ds-ops-list-row:hover,
+.ds-figma-card .ds-ops-activity-row:hover,
+.ds-figma-card .ds-ops-activity-row.is-highlighted {
+  border-color: #d9e4f2;
+  background: #ffffff;
+}
+
+.ds-figma-card .ds-ops-list-row > div,
+.ds-figma-card .ds-ops-activity-main {
+  min-width: 0;
+}
+
+.ds-figma-card .ds-ops-list-row strong,
+.ds-figma-card .ds-ops-activity-main strong {
+  display: block;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.ds-figma-card .ds-ops-list-row p,
+.ds-figma-card .ds-ops-activity-main p {
+  margin: 5px 0 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ds-figma-card .ds-ops-activity-side {
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
 }

@@ -26,6 +26,21 @@
   border-radius: 14px !important;
 }
 
+.login-card .ant-input-affix-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.login-card .ant-input-affix-wrapper .ant-input {
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 /* From src/styles/figma-dashboard/figma-dashboard.css */
 .login-card .ant-tabs-tab {
   min-height: 44px;

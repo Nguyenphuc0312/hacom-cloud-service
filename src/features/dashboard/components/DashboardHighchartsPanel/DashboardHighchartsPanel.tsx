@@ -152,14 +152,43 @@ const getTrafficOptions = (series?: MonitoringSeries[]): HighchartsOptionsType =
 
 export const DashboardHighchartsPanel = ({ type, summary, series }: DashboardHighchartsPanelProps) => {
   const options = type === 'health' ? getHealthOptions(summary) : getTrafficOptions(series);
+  const total = Math.max(summary?.total ?? 0, 0);
+  const healthLegend = [
+    { label: 'Khỏe', value: summary?.up ?? 0, color: '#10b981' },
+    { label: 'Suy giảm', value: summary?.degraded ?? 0, color: '#f59e0b' },
+    { label: 'Ngừng', value: summary?.down ?? 0, color: '#ef4444' },
+    {
+      label: 'Không rõ',
+      value: Math.max(total - (summary?.up ?? 0) - (summary?.degraded ?? 0) - (summary?.down ?? 0), 0),
+      color: '#cbd5e1',
+    },
+  ].filter((item) => item.value > 0 || total === 0);
+  const trafficLabel = series?.find((item) => item.points.length > 0)?.label ?? 'Kết nối realtime';
 
   return (
-    <Chart
-      highcharts={Highcharts as unknown as typeof BaseHighcharts}
-      options={options}
-      containerProps={{
-        className: `ds-figma-chart ds-figma-chart--${type}`,
-      }}
-    />
+    <div className={`ds-figma-chart-panel ds-figma-chart-panel--${type}`}>
+      <Chart
+        highcharts={Highcharts as unknown as typeof BaseHighcharts}
+        options={options}
+        containerProps={{
+          className: `ds-figma-chart ds-figma-chart--${type}`,
+        }}
+      />
+      <div className="ds-figma-chart-legend" aria-label="Chú thích biểu đồ">
+        {type === 'health'
+          ? healthLegend.map((item) => (
+              <span key={item.label} className="ds-figma-chart-legend-item">
+                <span style={{ backgroundColor: item.color }} aria-hidden />
+                {item.label}: {item.value}
+              </span>
+            ))
+          : (
+              <span className="ds-figma-chart-legend-item">
+                <span style={{ backgroundColor: '#10b981' }} aria-hidden />
+                {trafficLabel}
+              </span>
+            )}
+      </div>
+    </div>
   );
 };

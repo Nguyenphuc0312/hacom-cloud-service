@@ -428,6 +428,47 @@
   border-radius: 18px;
 }
 
+/* Compact enterprise topbar */
+.ds-admin-topbar {
+  height: 50px !important;
+  min-height: 50px !important;
+  margin: 0 !important;
+  padding: 0 18px !important;
+  grid-template-columns: minmax(200px, 0.55fr) minmax(320px, 0.9fr) auto !important;
+  gap: 14px !important;
+  border: 0 !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  border-radius: 0 !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.ds-admin-topbar-left,
+.ds-admin-topbar-center,
+.ds-admin-topbar-right {
+  min-height: 50px !important;
+}
+
+.ds-topbar-page-title {
+  color: #334155 !important;
+  font-size: 13px !important;
+  font-weight: 760 !important;
+}
+
+.ds-topbar-search {
+  height: 32px !important;
+  min-height: 32px !important;
+  width: min(360px, 100%) !important;
+  border-radius: 9px !important;
+  background: #f8fafc !important;
+}
+
+.ds-icon-action-button,
+.user-menu-trigger {
+  height: 32px !important;
+  min-height: 32px !important;
+}
+
 /* From src/styles/production/production.css */
 .ds-topbar-title-block {
   gap: 4px;

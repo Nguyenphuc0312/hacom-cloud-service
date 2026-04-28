@@ -1,12 +1,28 @@
+.users-page {
+  gap: 12px;
+  width: 100%;
+  padding-inline: 0;
+  background: #ffffff;
+}
+
+.users-page .ds-page-main-stack {
+  gap: 10px;
+  width: 100%;
+}
+
 .users-page-filter {
-  padding: 6px 8px;
+  padding: 9px 10px 7px !important;
+  border: 1px solid #e8edf4 !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
 }
 
 .users-page-filter .ds-toolbar-form {
   display: grid !important;
-  grid-template-columns: minmax(240px, 1.3fr) minmax(150px, 0.75fr) minmax(140px, 0.65fr) minmax(140px, 0.65fr) auto;
+  grid-template-columns: minmax(260px, 1.45fr) minmax(150px, 0.7fr) minmax(150px, 0.7fr) minmax(150px, 0.7fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   width: 100%;
 }
 
@@ -29,7 +45,99 @@
 }
 
 .users-page-filter .ds-filter-toolbar-meta {
-  padding-top: 6px;
+  padding-top: 7px !important;
+  border-top: 1px solid #eef2f7;
+  font-size: 12px;
+}
+
+.users-page-filter + .ds-table-shell {
+  margin-top: 8px;
+}
+
+.users-page .ds-table-shell {
+  width: 100%;
+  margin-bottom: 0;
+  overflow: hidden;
+  border: 1px solid #e8edf4 !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+}
+
+.users-page .ds-table-shell-body {
+  min-height: calc(100vh - 278px);
+  background: #ffffff !important;
+}
+
+.users-page .admin-table {
+  width: 100%;
+  min-height: calc(100vh - 278px) !important;
+  overflow: auto;
+  background: #ffffff !important;
+}
+
+.users-page .ant-table-wrapper,
+.users-page .ant-spin-nested-loading,
+.users-page .ant-spin-container,
+.users-page .ant-table,
+.users-page .ant-table-container,
+.users-page .ant-table-content,
+.users-page .ant-table-body {
+  background: #ffffff !important;
+}
+
+.users-page .ant-table table {
+  min-width: 100%;
+  background: #ffffff !important;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.users-page .ant-table-thead > tr > th {
+  height: 38px;
+  padding: 0 16px !important;
+  background: #f8fafc !important;
+  border-bottom: 1px solid #e5eaf1 !important;
+  color: #475569 !important;
+  font-size: 12px !important;
+  font-weight: 780 !important;
+  text-transform: none !important;
+  white-space: nowrap;
+}
+
+.users-page .ant-table-tbody > tr > td {
+  height: 52px;
+  padding: 6px 16px !important;
+  background: #ffffff !important;
+  border-bottom: 1px solid #eef2f7 !important;
+  color: #111827;
+}
+
+.users-page .ant-table-tbody > tr:hover > td,
+.users-page .ant-table-cell-row-hover {
+  background: #f8fafc !important;
+}
+
+.users-page .ant-table-cell::before,
+.users-page .ant-table-cell-fix-left-last::after,
+.users-page .ant-table-cell-fix-right-first::after {
+  display: none !important;
+}
+
+.users-page .ds-avatar-cell {
+  gap: 10px;
+}
+
+.users-page .ds-meta-cell small,
+.users-page .ds-avatar-cell-copy small {
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+.users-page .ant-table-pagination {
+  margin: 0 !important;
+  padding: 8px 14px !important;
+  border-top: 1px solid #eef2f7;
+  background: #ffffff;
 }
 
 @media (max-width: 1180px) {

@@ -1,14 +1,15 @@
-import { Alert, Button, Card, Descriptions, Space, Typography, message } from 'antd';
+import { Alert, Button, Space, message } from 'antd';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { accessClient } from '@/api/clients/accessClient/accessClient';
 import { useAccessStatus } from '@/app/useAccessStatus/useAccessStatus';
+import { AppIcon } from '@/components/AppIcon/AppIcon';
 import { StatusBadge } from '@/components/StatusBadge/StatusBadge';
 import { useAuthStore } from '@/store/authStore/authStore';
+import { formatDateTime } from '@/utils/date/date';
 
-import '../../../auth/pages/LoginPage/LoginPage.css';
-const { Title, Text } = Typography;
+import './AccessPendingPage.css';
 
 export const AccessPendingPage = () => {
   const navigate = useNavigate();
@@ -59,51 +60,69 @@ export const AccessPendingPage = () => {
     navigate('/login', { replace: true });
   };
 
+  const firstSeenLabel = access?.firstSeenAt ? formatDateTime(access.firstSeenAt) : 'Chưa ghi nhận';
+  const noteLabel = access?.note ?? access?.reason ?? 'Không có';
+
   return (
-    <div className="login-page">
-      <Card className="login-card" bordered={false}>
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
-          <div>
-            <Title level={3} style={{ marginBottom: 8 }}>
-              Truy cập admin đang chờ duyệt
-            </Title>
-            <Text type="secondary">
-              Tài khoản đã đăng nhập nhưng IP hiện tại chưa được duyệt vào admin console.
-            </Text>
+    <main className="access-pending-page">
+      <section className="access-pending-card" aria-labelledby="access-pending-title">
+        <div className="access-pending-header">
+          <div className="access-pending-icon" aria-hidden="true">
+            <AppIcon name="shield" size={24} />
           </div>
+          <div className="access-pending-heading">
+            <span className="access-pending-eyebrow">Admin access control</span>
+            <h1 id="access-pending-title">Truy cập admin đang chờ duyệt</h1>
+            <p>Tài khoản đã xác thực, nhưng IP hiện tại chưa được phép vào admin console.</p>
+          </div>
+          {access ? <StatusBadge status={access.status} /> : null}
+        </div>
 
-          {access ? (
-            <Descriptions bordered size="small" column={1}>
-              <Descriptions.Item label="IP hiện tại">{access.normalizedIp ?? 'Không rõ'}</Descriptions.Item>
-              <Descriptions.Item label="Trạng thái">
+        {access ? (
+          <dl className="access-pending-facts">
+            <div className="access-pending-fact access-pending-fact--wide">
+              <dt>IP hiện tại</dt>
+              <dd>{access.normalizedIp ?? 'Không rõ'}</dd>
+            </div>
+            <div className="access-pending-fact">
+              <dt>Trạng thái</dt>
+              <dd>
                 <StatusBadge status={access.status} />
-              </Descriptions.Item>
-              <Descriptions.Item label="Ghi nhận lần đầu">
-                {access.firstSeenAt ?? 'Chưa ghi nhận'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Ghi chú">{access.note ?? access.reason ?? 'Không có'}</Descriptions.Item>
-            </Descriptions>
-          ) : null}
+              </dd>
+            </div>
+            <div className="access-pending-fact">
+              <dt>Ghi nhận lần đầu</dt>
+              <dd>{firstSeenLabel}</dd>
+            </div>
+            <div className="access-pending-fact access-pending-fact--wide">
+              <dt>Ghi chú</dt>
+              <dd>{noteLabel}</dd>
+            </div>
+          </dl>
+        ) : null}
 
-          {access?.status === 'rejected' ? (
-            <Alert
-              type="warning"
-              showIcon
-              message="Yêu cầu truy cập đã bị từ chối"
-              description={access.reason ?? 'Quản trị viên đã từ chối IP này.'}
-            />
-          ) : (
-            <Alert
-              type="info"
-              showIcon
-              message="Đang chờ phê duyệt"
-              description="Làm mới sau khi quản trị viên phê duyệt IP hiện tại."
-            />
-          )}
+        <div className={`access-pending-notice ${access?.status === 'rejected' ? 'is-warning' : ''}`}>
+          <div className="access-pending-notice-icon" aria-hidden="true">
+            <AppIcon name={access?.status === 'rejected' ? 'warning' : 'lock'} size={18} />
+          </div>
+          <div>
+            <strong>
+              {access?.status === 'rejected'
+                ? 'Yêu cầu truy cập đã bị từ chối'
+                : 'Đang chờ quản trị viên phê duyệt'}
+            </strong>
+            <p>
+              {access?.status === 'rejected'
+                ? access.reason ?? 'Quản trị viên đã từ chối IP này.'
+                : 'Sau khi IP được duyệt, hãy làm mới trạng thái để vào console.'}
+            </p>
+          </div>
+        </div>
 
-          {errorMessage ? <Alert type="error" showIcon message={errorMessage} /> : null}
+        {errorMessage ? <Alert type="error" showIcon message={errorMessage} /> : null}
 
-          <Space wrap>
+        <div className="access-pending-actions">
+          <Space wrap size={10}>
             <Button onClick={() => refresh()} loading={isLoading}>
               Làm mới trạng thái
             </Button>
@@ -123,10 +142,12 @@ export const AccessPendingPage = () => {
               Đăng xuất
             </Button>
           </Space>
+        </div>
 
-          <Text type="secondary">Dùng kênh hỗ trợ nội bộ nếu cần xử lý gấp quyền truy cập này.</Text>
-        </Space>
-      </Card>
-    </div>
+        <p className="access-pending-footnote">
+          Dùng kênh hỗ trợ nội bộ nếu cần xử lý gấp quyền truy cập này.
+        </p>
+      </section>
+    </main>
   );
 };
