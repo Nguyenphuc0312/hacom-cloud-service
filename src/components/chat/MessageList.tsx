@@ -729,6 +729,31 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const pendingTimelineSizeChangesRef = React.useRef<
     Map<string, { index: number; delta: number }>
   >(new Map());
+  const lastDomVisibleMessageIdRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!isChatPerformanceEnabled()) return;
+    const latestMessage = messages[messages.length - 1];
+    if (!latestMessage || latestMessage.id === lastDomVisibleMessageIdRef.current) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const selector = `[data-message-id="${CSS.escape(latestMessage.id)}"]`;
+      const visible = Boolean(outerRef.current?.querySelector(selector));
+      if (!visible) return;
+      lastDomVisibleMessageIdRef.current = latestMessage.id;
+      logChatPerformance("fe.dom.message.visible", {
+        conversationId,
+        messageId: latestMessage.id,
+        clientMessageId: latestMessage.clientMessageId ?? null,
+        messageSeq: latestMessage.serverSeq ?? latestMessage.messageSeq ?? null,
+        messageCount: messages.length,
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [conversationId, messages]);
   const isPinnedToBottomRef = React.useRef(true);
   const previousMessagesForInsertRef = React.useRef<Message[]>([]);
   const previousMessagesForPerfRef = React.useRef<Message[]>([]);

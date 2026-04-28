@@ -63,6 +63,7 @@ import {
 import type { NormalizedMessageRealtimeEvent } from "../features/chat/realtime/realtimeEventTypes";
 import { MessageStatus } from "../types";
 import { chatApi } from "../features/api/chatApi";
+import { getMessageSeq } from "../features/chat/domain/messageMerge";
 import { findMessageIdentityIndex } from "../features/chat/domain/messageIdentity";
 import { dispatchNotificationClick } from "../features/chat/events/chatUiEvents";
 import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
@@ -101,6 +102,7 @@ import {
   normalizeDisconnectEvent,
 } from "./useWebSocketConnectionLifecycle";
 import { useNotificationStore } from "../features/notification/state/notificationStore";
+import { markChatPerformance } from "../utils/chatPerformance";
 import type { UserSettingsUpdatedPayload } from "@hacom/chat-shared-types/chat";
 import type { Message, TypingStatus } from "../types";
 
@@ -135,19 +137,14 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
 const asString = (value: unknown): string | null =>
   typeof value === "string" && value.trim().length > 0 ? value : null;
 
-const getLatestServerSeq = (
-  messages: Array<{ serverSeq?: number }>,
-): number | null => {
+const getLatestServerSeq = (messages: unknown[]): number | null => {
   let latest: number | null = null;
   messages.forEach((message) => {
-    if (
-      typeof message.serverSeq !== "number" ||
-      !Number.isFinite(message.serverSeq)
-    ) {
+    const seq = getMessageSeq(message);
+    if (seq === null) {
       return;
     }
-    latest =
-      latest === null ? message.serverSeq : Math.max(latest, message.serverSeq);
+    latest = latest === null ? seq : Math.max(latest, seq);
   });
   return latest;
 };
@@ -1105,6 +1102,14 @@ export const useWebSocket = (
         stableId,
         incomingSeq,
       });
+      if (eventType === "message:new") {
+        markChatPerformance("fe.socket.message.received", conversationId, {
+          eventId,
+          messageId,
+          clientMessageId,
+          messageSeq: incomingSeq,
+        });
+      }
       logMessageDebug("useWebSocket", "realtime.client.event_received", {
         requestId:
           asString(payload.requestId) ?? asString(messagePayload.requestId),

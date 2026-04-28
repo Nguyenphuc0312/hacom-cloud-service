@@ -4,6 +4,7 @@ import {
   useLazyGetMessagesQuery,
   type GetMessagesArgs,
 } from "../../api/chatApi";
+import { getMessageSeq } from "../domain/messageMerge";
 import type { Message } from "../../../types";
 import { markChatPerformance } from "../../../utils/chatPerformance";
 import { logScrollTrace } from "../../../utils/scrollTrace";
@@ -76,10 +77,7 @@ export const useConversationMessagesRTK = (
       conversationId,
       messageCount: query.messages.length,
       lastMessageId: latestMessage?.id ?? null,
-      lastSeq:
-        typeof latestMessage?.serverSeq === "number"
-          ? latestMessage.serverSeq
-          : null,
+      lastSeq: getMessageSeq(latestMessage),
       scrollTop: 0,
       scrollHeight: 0,
       clientHeight: 0,

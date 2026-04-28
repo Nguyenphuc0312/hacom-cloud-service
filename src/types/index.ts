@@ -179,6 +179,7 @@ export interface Message
   clientMessageId?: string;
   version?: number;
   serverSeq?: number;
+  messageSeq?: number;
   serverTs?: Date | string;
   localOrder?: number;
   transportStatus?:

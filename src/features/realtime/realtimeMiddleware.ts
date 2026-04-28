@@ -16,6 +16,7 @@ import {
 } from "../chat/domain/messageMerge";
 import { normalizeMessageForReduxCache } from "../chat/domain/serializableMessage";
 import { useChatStore } from "../../stores";
+import { markChatPerformance } from "../../utils/chatPerformance";
 
 export interface RealtimeMessagePayload {
   conversationId: string;
@@ -131,6 +132,12 @@ export const realtimeMiddleware: Middleware<
   const result = next(action);
 
   if (realtimeMessageReceived.match(action)) {
+    markChatPerformance("fe.cache.patch.start", action.payload.conversationId, {
+      messageId: action.payload.message.id,
+      clientMessageId: action.payload.message.clientMessageId,
+      messageSeq:
+        action.payload.message.serverSeq ?? action.payload.message.messageSeq,
+    });
     const patch = storeApi.dispatch(
       chatApi.util.updateQueryData(
         "getMessages",
@@ -157,6 +164,11 @@ export const realtimeMiddleware: Middleware<
         ),
       );
     }
+    markChatPerformance("fe.cache.patch.done", action.payload.conversationId, {
+      messageId: action.payload.message.id,
+      clientMessageId: action.payload.message.clientMessageId,
+      patchCount: patch.patches.length,
+    });
   }
 
   if (realtimeMessageUpdated.match(action)) {

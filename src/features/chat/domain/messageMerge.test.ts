@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MessageStatus, MessageType, type Message } from "../../../types";
 import {
   buildConversationMessagesCache,
+  getMessageSeq,
   mergeIncomingMessagesPage,
   patchDeliveredReceiptInCache,
   upsertMessageInCache,
@@ -24,6 +25,34 @@ const message = (overrides: Partial<Message>): Message => ({
 });
 
 describe("messageMerge domain helpers", () => {
+  it("getMessageSeq returns serverSeq", () => {
+    expect(getMessageSeq(message({ id: "m-1", serverSeq: 7 }))).toBe(7);
+  });
+
+  it("getMessageSeq returns messageSeq when serverSeq is missing", () => {
+    expect(getMessageSeq(message({ id: "m-1", messageSeq: 8 }))).toBe(8);
+  });
+
+  it("getMessageSeq prefers serverSeq when both exist", () => {
+    expect(getMessageSeq(message({ id: "m-1", serverSeq: 9, messageSeq: 8 }))).toBe(9);
+  });
+
+  it("getMessageSeq returns null for invalid seq", () => {
+    expect(getMessageSeq(null)).toBeNull();
+    expect(getMessageSeq({ serverSeq: "bad" })).toBeNull();
+    expect(getMessageSeq({ messageSeq: "" })).toBeNull();
+  });
+
+  it("sets cache metadata from messageSeq-only payloads", () => {
+    const cache = buildConversationMessagesCache("room-1", [
+      message({ id: "m-1", messageSeq: 1 }),
+      message({ id: "m-2", messageSeq: 2 }),
+    ]);
+
+    expect(cache.oldestLoadedSeq).toBe(1);
+    expect(cache.newestLoadedSeq).toBe(2);
+  });
+
   it("orders messages by serverSeq before createdAt", () => {
     const cache = buildConversationMessagesCache("room-1", [
       message({ id: "m-late", serverSeq: 3, createdAt: new Date("2026-01-01T00:00:00.000Z") }),

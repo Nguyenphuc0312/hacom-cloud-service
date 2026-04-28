@@ -37,10 +37,21 @@ export interface IncomingMessagesPage {
   hasMoreNewer?: boolean;
 }
 
-const getMessageSeq = (message: Message): number | null =>
-  typeof message.serverSeq === "number" && Number.isFinite(message.serverSeq)
-    ? message.serverSeq
-    : null;
+export function getMessageSeq(message: unknown): number | null {
+  if (!message || typeof message !== "object") {
+    return null;
+  }
+
+  const record = message as Record<string, unknown>;
+  const raw = record.serverSeq ?? record.messageSeq ?? record.seq ?? null;
+
+  if (raw === null || raw === undefined || raw === "") {
+    return null;
+  }
+
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
 
 const isLocalPendingMessage = (message: Message): boolean =>
   message.transportStatus === "optimistic" ||

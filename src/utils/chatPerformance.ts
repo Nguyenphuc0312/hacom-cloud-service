@@ -15,7 +15,8 @@ type ChatPerformanceWindow = Window & {
 };
 
 const isPerfEnvFlagEnabled = (): boolean =>
-  import.meta.env.VITE_CHAT_PERF_DEBUG === "true";
+  import.meta.env.VITE_CHAT_PERF_DEBUG === "true" ||
+  import.meta.env.VITE_SOCKET_PERF_DEBUG === "true";
 
 const isPerfQueryFlagEnabled = (): boolean => {
   if (typeof window === "undefined") return false;
