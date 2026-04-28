@@ -1,0 +1,88 @@
+/* From src/styles/foundation/foundation.css */
+.ds-stat-card,
+.ds-widget-card,
+.ds-summary-card,
+.ds-chart-card,
+.ds-activity-card,
+.ds-quick-action-card {
+  gap: var(--space-3);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-stat-card-title,
+.ds-summary-card-title,
+.ds-widget-card-title,
+.ds-chart-card-title,
+.ds-activity-card-title {
+  color: var(--text-secondary);
+  letter-spacing: -0.01em;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-chart-wrapper {
+  min-height: 100%;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-chart-status-copy {
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+  font-weight: var(--font-medium);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-chart-status-copy {
+  color: var(--text-muted);
+}
+
+/* From src/styles/global/global.css */
+/* Dashboard Card System */
+.ds-stat-card,
+.ds-summary-card,
+.ds-widget-card,
+.ds-chart-card,
+.ds-activity-card,
+.ds-quick-action-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* From src/styles/global/global.css */
+/* WidgetCard, ChartCard */
+.ds-widget-card-header,
+.ds-chart-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+/* From src/styles/global/global.css */
+.ds-widget-card-title,
+.ds-chart-card-title {
+  font-size: var(--font-md);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+/* From src/styles/global/global.css */
+.ds-widget-card-actions,
+.ds-chart-card-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* From src/styles/global/global.css */
+.ds-widget-card-body,
+.ds-chart-card-body {
+  min-height: 120px;
+  padding-top: 2px;
+}

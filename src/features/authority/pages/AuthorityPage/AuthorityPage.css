@@ -1,0 +1,39 @@
+.authority-page-filter {
+  padding: 6px 8px;
+}
+
+.authority-page-filter .ds-toolbar-form {
+  display: grid !important;
+  grid-template-columns: minmax(280px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.authority-page-filter .ds-toolbar-field {
+  min-width: 0;
+  width: 100%;
+}
+
+.authority-page-filter .ds-toolbar-actions {
+  justify-self: end;
+  width: auto;
+}
+
+.authority-page-filter .ant-btn {
+  min-width: 96px;
+}
+
+.authority-page-filter .ds-filter-toolbar-meta {
+  padding-top: 6px;
+}
+
+@media (max-width: 760px) {
+  .authority-page-filter .ds-toolbar-form {
+    grid-template-columns: 1fr;
+  }
+
+  .authority-page-filter .ds-toolbar-actions {
+    justify-self: start;
+  }
+}

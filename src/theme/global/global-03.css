@@ -1,0 +1,157 @@
+.dashboard-service-button:hover {
+  background: #eef4fb;
+  transform: translateX(2px);
+}
+
+.dashboard-service-button:focus-visible {
+  outline: 2px solid rgba(29, 78, 216, 0.34);
+}
+
+.dashboard-service-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dashboard-service-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.service-row-focused td {
+  background: #eaf2ff !important;
+}
+
+.ant-card,
+.ant-table-wrapper,
+.filter-bar,
+.data-table-shell,
+.stat-card {
+  border-radius: 12px;
+}
+
+button:focus-visible,
+.ant-btn:focus-visible,
+.ant-input:focus-visible,
+.ant-input-affix-wrapper:focus-visible,
+.ant-select-selector:focus-visible,
+.ant-switch:focus-visible {
+  outline: 2px solid rgba(29, 78, 216, 0.42);
+  outline-offset: 2px;
+}
+
+.nested-card {
+  border-style: dashed;
+}
+
+@media (max-width: 992px) {
+  .app-content {
+    margin: var(--space-2) auto;
+    width: calc(100% - 20px);
+  }
+
+  .dashboard-hero {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .dashboard-hero-metrics {
+    min-width: 0;
+  }
+
+  .app-header {
+    padding: 0 12px;
+  }
+
+  .app-header-grid {
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+  }
+
+  .search-trigger-hint,
+  .app-header-status {
+    display: none;
+  }
+
+  .search-trigger {
+    width: 100%;
+  }
+
+  .user-menu-name {
+    display: none;
+  }
+
+  .user-menu-trigger {
+    padding: 4px;
+  }
+
+  .command-palette-modal {
+    margin: 12px;
+  }
+
+  .command-palette-modal .ant-modal {
+    max-width: calc(100vw - 24px) !important;
+  }
+
+  .json-diff-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .app-sider-footer {
+    display: none;
+  }
+}
+
+@media (max-width: 1200px) {
+  .ds-admin-topbar {
+    margin-inline: var(--space-4);
+  }
+
+  .ds-page-container {
+    padding-inline: var(--space-4);
+  }
+
+  .ds-topbar-profile-copy {
+    display: none;
+  }
+}
+
+@media (max-width: 992px) {
+  .ds-admin-sidebar {
+    position: fixed;
+    transform: translateX(0);
+    transition: transform var(--transition-base);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .ds-admin-shell.is-collapsed .ds-admin-sidebar {
+    transform: translateX(-100%);
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    max-width: var(--sidebar-width);
+  }
+
+  .ds-admin-topbar {
+    margin: var(--space-3);
+  }
+
+  .ds-admin-topbar-center {
+    justify-content: flex-start;
+  }
+
+  .ds-topbar-search {
+    width: 100%;
+  }
+}
+
+@media (max-width: 992px) {
+  .monitoring-service-summary {
+    min-width: 0;
+  }
+
+  .monitoring-baseline-hero-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

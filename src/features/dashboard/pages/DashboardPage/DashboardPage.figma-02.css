@@ -1,0 +1,97 @@
+@media (max-width: 1180px) {
+  .ds-figma-summary-grid {
+    grid-template-columns: repeat(3, minmax(160px, 1fr));
+  }
+
+  .ds-figma-main-grid,
+  .ds-figma-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ds-filter-bar .ant-form,
+  .ds-toolbar-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ds-toolbar-actions {
+    justify-self: start;
+  }
+
+  .ds-profile-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ds-profile-identity-card {
+    grid-row: auto;
+  }
+}
+
+@media (max-width: 991px) {
+  .ds-admin-main {
+    width: 100%;
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+
+  .ds-admin-sidebar {
+    width: min(320px, 88vw);
+    min-width: min(320px, 88vw);
+    max-width: min(320px, 88vw);
+    height: 100dvh;
+  }
+
+  .ds-admin-sidebar-nav {
+    padding-bottom: 96px;
+  }
+
+  .ds-sidebar-section-label {
+    display: flex;
+  }
+
+  .ds-admin-main-content {
+    padding: 18px;
+  }
+
+  .ds-figma-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .ds-figma-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ds-figma-card .ds-dashboard-card-header,
+  .ds-figma-card .ds-dashboard-card-body {
+    padding-inline: 18px;
+  }
+
+  .ds-figma-api-state dl {
+    grid-template-columns: 1fr;
+  }
+
+  .ds-filter-bar .ant-form,
+  .ds-toolbar-form {
+    grid-template-columns: 1fr;
+  }
+
+  .ds-toolbar-actions,
+  .ds-toolbar-actions .ant-space,
+  .ds-toolbar-actions .ant-btn {
+    width: 100%;
+  }
+
+  .ds-profile-detail-grid,
+  .ds-profile-detail-grid--compact {
+    grid-template-columns: 1fr;
+  }
+
+  .ds-profile-detail-grid > div:nth-child(odd),
+  .ds-profile-detail-grid > div:nth-child(even) {
+    padding-right: 0;
+    padding-left: 0;
+    border-left: 0;
+  }
+}

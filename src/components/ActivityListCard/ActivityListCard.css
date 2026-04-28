@@ -1,0 +1,60 @@
+/* From src/styles/global/global.css */
+/* ActivityListCard */
+.ds-activity-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+/* From src/styles/global/global.css */
+.ds-activity-card-title {
+  font-size: var(--font-md);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+/* From src/styles/global/global.css */
+.ds-activity-card-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* From src/styles/global/global.css */
+.ds-activity-card-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* From src/styles/global/global.css */
+.ds-activity-card-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+/* From src/styles/global/global.css */
+.ds-activity-card-item-icon {
+  font-size: 16px;
+  color: var(--brand-primary);
+  margin-top: 2px;
+}
+
+/* From src/styles/global/global.css */
+.ds-activity-card-item-content {
+  flex: 1 1 auto;
+}
+
+/* From src/styles/global/global.css */
+.ds-activity-card-item-meta {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  margin-left: auto;
+}

@@ -1,0 +1,73 @@
+@media (max-width: 991px) {
+  .ds-admin-sidebar-backdrop {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .ds-admin-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    transform: translateX(-100%);
+    transition: transform var(--transition-base);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .ds-admin-shell.is-mobile-nav-open .ds-admin-sidebar {
+    transform: translateX(0);
+  }
+
+  .ds-admin-shell.is-mobile-nav-open .ds-admin-sidebar-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .ds-admin-topbar {
+    grid-template-columns: 1fr;
+  }
+
+  .ds-admin-topbar-center,
+  .ds-admin-topbar-right {
+    justify-content: flex-start;
+  }
+
+  .ds-topbar-status {
+    display: none;
+  }
+
+  .ds-page-header-meta,
+  .ds-page-toolbar-stack {
+    justify-content: flex-start;
+  }
+
+  .ds-ops-alert-strip,
+  .ds-settings-layout,
+  .ds-conversation-layout,
+  .ds-ops-grid--two-column {
+    grid-template-columns: minmax(0, 1fr);
+    flex-direction: column;
+  }
+
+  .ds-conversation-event {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .ds-filter-toolbar-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  .ds-ops-summary-grid,
+  .ds-data-summary-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ds-ops-fact-list > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+}

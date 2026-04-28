@@ -1,0 +1,45 @@
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-avatar-cell {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-avatar-cell-mark {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-avatar-cell-copy,
+.ds-meta-cell {
+  min-width: 0;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-avatar-cell-copy strong,
+.ds-meta-cell strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-avatar-cell-copy small,
+.ds-meta-cell small,
+.ds-muted-cell,
+.ds-date-time-cell {
+  color: var(--text-muted);
+  font-size: 12px;
+}
