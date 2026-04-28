@@ -1,0 +1,77 @@
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.login-card .ant-btn.ant-btn-primary.ant-btn-block {
+  height: 48px !important;
+  min-height: 48px !important;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #7c5cff 0%, #5f3edb 100%);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 850;
+  box-shadow: 0 14px 30px rgba(95, 62, 219, 0.24);
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.login-card .ant-btn.ant-btn-primary.ant-btn-block:hover,
+.login-card .ant-btn.ant-btn-primary.ant-btn-block:focus-visible {
+  background: linear-gradient(135deg, #6f50ef 0%, #5534cf 100%);
+  box-shadow: 0 16px 34px rgba(95, 62, 219, 0.3);
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.login-card .ant-input,
+.login-card .ant-input-affix-wrapper {
+  height: 48px !important;
+  min-height: 48px !important;
+  border-radius: 14px !important;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.login-card .ant-tabs-tab {
+  min-height: 44px;
+}
+
+/* From src/styles/foundation/foundation.css */
+.login-page {
+  background: var(--gradient-page);
+}
+
+/* From src/styles/foundation/foundation.css */
+.login-card,
+.json-panel {
+  background: var(--gradient-card);
+  border-color: var(--border-subtle);
+}
+
+/* From src/styles/global/global.css */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3);
+  background:
+    radial-gradient(circle at 12% 18%, rgba(20, 184, 166, 0.2), transparent 36%),
+    radial-gradient(circle at 88% 18%, rgba(251, 146, 60, 0.16), transparent 34%),
+    linear-gradient(165deg, #f0fdfa 0%, #f8fafc 56%, #fef3c7 100%);
+}
+
+/* From src/styles/global/global.css */
+.login-card {
+  width: min(560px, 100%);
+  border-radius: 16px;
+  box-shadow: 0 10px 26px rgba(2, 6, 23, 0.08);
+}
+
+/* From src/styles/global/global.css */
+.login-qr-placeholder {
+  border: 1px dashed var(--admin-border-strong);
+  border-radius: 12px;
+  min-height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
+  background: linear-gradient(180deg, #f9fbff 0%, #f2f6fb 100%);
+}

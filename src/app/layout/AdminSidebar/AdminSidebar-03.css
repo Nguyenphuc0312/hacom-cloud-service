@@ -1,0 +1,413 @@
+/* From src/styles/foundation/foundation.css */
+.ds-admin-shell.is-collapsed .ds-sidebar-item {
+  justify-content: center;
+  min-height: 48px;
+  padding-inline: 0;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-admin-shell.is-collapsed .ds-sidebar-item-marker,
+.ds-admin-shell.is-collapsed .ds-sidebar-item-content,
+.ds-admin-shell.is-collapsed .ds-sidebar-item-badge,
+.ds-admin-shell.is-collapsed .ds-admin-sidebar-footer {
+  display: none;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-admin-sidebar {
+  background: var(--gradient-sidebar);
+  border-right-color: var(--border-subtle);
+  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--color-border-subtle) 78%, transparent);
+}
+
+/* From src/styles/foundation/foundation.css */
+/* Production simplification overrides */
+.ds-admin-sidebar {
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-admin-sidebar-nav {
+  padding: 0;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-sidebar-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-sidebar-item {
+  min-height: 46px;
+  padding: 0 12px;
+  border-radius: 12px;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-sidebar-item:hover {
+  transform: none;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-sidebar-item-label {
+  font-size: 14px;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-admin-sidebar-footer {
+  padding-top: var(--space-3);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-sidebar-footer-meta {
+  gap: 2px;
+  padding: var(--space-3) 0 0;
+  border-radius: 0;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  background: transparent;
+  box-shadow: none;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-sidebar-footer-environment {
+  margin-top: var(--space-2);
+  color: var(--text-caption) !important;
+  font-size: 12px !important;
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* From src/styles/global/global.css */
+/* Sidebar item states */
+.ds-sidebar-item {
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  min-height: 36px;
+  padding: var(--space-2) var(--space-4);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-item:hover:not(:disabled),
+.ds-sidebar-item:focus-visible {
+  background: var(--bg-elevated);
+  color: var(--brand-primary);
+  outline: 2px solid var(--brand-primary-alpha);
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-item:active {
+  background: var(--bg-elevated);
+  color: var(--brand-primary-dark);
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-item:disabled {
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+
+/* From src/styles/global/global.css */
+/* Focus-visible styles for interactive elements */
+.ds-sidebar-item:focus-visible,
+.ds-btn:focus-visible,
+.ds-topbar-toggle:focus-visible,
+.ds-input:focus-visible,
+.ds-table-row-action-btn:focus-visible,
+.ds-page-header-actions button:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--brand-primary-alpha);
+}
+
+/* From src/styles/global/global.css */
+.ds-admin-sidebar {
+  position: sticky;
+  top: 0;
+  left: 0;
+  width: 260px;
+  min-width: 220px;
+  max-width: 280px;
+  height: 100vh;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+}
+
+/* From src/styles/global/global.css */
+.ds-admin-sidebar-logo {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-lg);
+  font-weight: var(--font-bold);
+  letter-spacing: 0.04em;
+  color: var(--brand-primary);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-surface);
+}
+
+/* From src/styles/global/global.css */
+.ds-admin-sidebar-nav {
+  flex: 1 1 auto;
+  padding: var(--space-4) 0;
+  overflow-y: auto;
+}
+
+/* From src/styles/global/global.css */
+.ds-admin-sidebar-footer {
+  padding: var(--space-4) var(--space-3);
+  border-top: 1px solid var(--border-default);
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* From src/styles/global/global.css */
+/* Sidebar Nav Section & Item */
+.ds-sidebar-section {
+  margin-bottom: var(--space-6);
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-section-label {
+  font-size: var(--font-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0 var(--space-5) var(--space-2) var(--space-5);
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-section-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: var(--font-md);
+  font-weight: var(--font-medium);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-5);
+  height: 40px;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-item:hover {
+  background: var(--bg-elevated);
+  color: var(--brand-primary);
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-item.is-active {
+  background: var(--bg-elevated);
+  color: var(--brand-primary);
+  font-weight: var(--font-bold);
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-item-icon {
+  font-size: 18px;
+  color: inherit;
+  display: flex;
+  align-items: center;
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-item-badge {
+  margin-left: auto;
+  background: var(--state-info);
+  color: #fff;
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  padding: 0 8px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  font-weight: var(--font-semibold);
+}
+
+/* From src/styles/global/global.css */
+/* Collapsed sidebar adjustments */
+.ds-admin-shell.is-collapsed .ds-admin-sidebar {
+  width: 72px;
+  min-width: 72px;
+  max-width: 72px;
+}
+
+/* From src/styles/global/global.css */
+.ds-admin-shell.is-collapsed .ds-admin-sidebar-logo {
+  font-size: 14px;
+  padding: 8px 0;
+}
+
+/* From src/styles/global/global.css */
+.ds-admin-shell.is-collapsed .ds-sidebar-section-label {
+  display: none;
+}
+
+/* From src/styles/global/global.css */
+.ds-admin-shell.is-collapsed .ds-sidebar-section-list {
+  gap: 6px;
+}
+
+/* From src/styles/global/global.css */
+.ds-admin-shell.is-collapsed .ds-sidebar-item {
+  justify-content: center;
+  padding: 0;
+  gap: 0;
+}
+
+/* From src/styles/global/global.css */
+.ds-admin-shell.is-collapsed .ds-sidebar-item-label {
+  display: none;
+}
+
+/* From src/styles/global/global.css */
+.ds-admin-shell.is-collapsed .ds-sidebar-item-badge {
+  display: none;
+}
+
+/* From src/styles/global/global.css */
+.ds-admin-shell.is-collapsed .ds-admin-sidebar-footer {
+  display: none;
+}
+
+/* From src/styles/global/global.css */
+.ds-admin-sidebar {
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  max-width: var(--sidebar-width);
+  padding: var(--space-4) var(--space-3) var(--space-3);
+  background: color-mix(in srgb, var(--bg-surface) 94%, #eef4ff 6%);
+  border-right: 1px solid var(--border-subtle);
+  box-shadow: inset -1px 0 0 rgba(15, 23, 42, 0.02);
+}
+
+/* From src/styles/global/global.css */
+.ds-admin-sidebar-logo {
+  height: auto;
+  justify-content: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-sm);
+  font-weight: var(--font-bold);
+  color: #fff;
+  background: linear-gradient(135deg, var(--brand-primary) 0%, #4f46e5 100%);
+  box-shadow: var(--shadow-sm);
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-brand-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: var(--lh-sm);
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-brand-copy strong {
+  font-size: var(--font-sm);
+  color: var(--text-heading);
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-brand-copy small {
+  font-size: var(--font-xs);
+  color: var(--text-caption);
+  font-weight: var(--font-medium);
+}
+
+/* From src/styles/global/global.css */
+.ds-admin-sidebar-nav {
+  padding: var(--space-3) var(--space-1);
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-section {
+  margin-bottom: var(--space-5);
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-section-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 11px;
+  color: var(--text-caption);
+  padding: 0 var(--space-3) var(--space-2);
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-section-icon {
+  font-size: 12px;
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-item {
+  height: 42px;
+  border-radius: 12px;
+  padding: 0 var(--space-3);
+  font-size: var(--font-sm);
+  color: var(--text-body);
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-item:hover {
+  background: color-mix(in srgb, var(--brand-primary) 6%, #ffffff 94%);
+  color: var(--brand-primary);
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-item.is-active {
+  background: color-mix(in srgb, var(--brand-primary) 12%, #ffffff 88%);
+  color: var(--brand-primary);
+  border: 1px solid color-mix(in srgb, var(--brand-primary) 20%, #ffffff 80%);
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.12);
+}
+
+/* From src/styles/global/global.css */
+.ds-sidebar-item-icon {
+  font-size: 16px;
+}

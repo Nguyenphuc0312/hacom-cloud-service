@@ -1,0 +1,145 @@
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-bar > .ant-input,
+.ds-filter-bar .ant-select-selection-item,
+.ds-filter-bar .ant-select-selection-placeholder {
+  align-items: center;
+  height: 100%;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-bar .ant-input-affix-wrapper {
+  display: flex;
+  align-items: center;
+  border: 1px solid #d8e0ea !important;
+  background: #fff !important;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02);
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-bar .ant-input-affix-wrapper:hover,
+.ds-filter-bar .ant-input-affix-wrapper-focused {
+  border-color: #b8c4d4 !important;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-bar .ant-input-affix-wrapper-focused {
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.12) !important;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-bar .ant-input-affix-wrapper .ant-input {
+  font-weight: 600;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-bar .ant-input-affix-wrapper .ant-input::placeholder,
+.ds-filter-bar > .ant-input::placeholder {
+  color: #9aa7b8;
+  font-weight: 600;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-bar .ant-select-selector,
+.ds-filter-bar .ant-input-affix-wrapper,
+.ds-filter-bar .ant-btn {
+  padding-block: 0 !important;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-bar .ant-select-single .ant-select-selector {
+  padding-inline: 16px 38px !important;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-bar .ant-input-affix-wrapper {
+  padding-inline: 16px 12px !important;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-bar .ant-btn {
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-filter-bar .ant-btn-default {
+  border-color: #d8e0ea;
+  background: #fff;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-filter-bar .ant-form {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-filter-bar .ant-form-inline {
+  row-gap: var(--space-3);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-filter-bar .ant-form-inline .ant-form-item,
+.ds-filter-bar .ant-form-item {
+  margin: 0;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-filter-bar .ant-space {
+  gap: var(--space-2) !important;
+}
+
+/* From src/styles/global/global.css */
+.ds-filter-bar {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.ds-filter-bar .ant-form,
+.ds-filter-bar .ds-toolbar-form {
+  gap: 8px;
+}
+
+.ds-filter-bar .ant-input,
+.ds-filter-bar .ant-input-affix-wrapper,
+.ds-filter-bar .ant-select-single,
+.ds-filter-bar .ant-select-single .ant-select-selector,
+.ds-filter-bar .ant-picker,
+.ds-filter-bar .ant-btn {
+  height: 32px !important;
+  min-height: 32px !important;
+}
+
+.ds-filter-bar .ant-input,
+.ds-filter-bar .ant-input-affix-wrapper,
+.ds-filter-bar .ant-select-single .ant-select-selector,
+.ds-filter-bar .ant-picker,
+.ds-filter-bar .ant-btn {
+  border-radius: 10px !important;
+}
+
+.ds-filter-bar .ant-input-affix-wrapper,
+.ds-filter-bar .ant-select-single .ant-select-selector,
+.ds-filter-bar .ant-picker {
+  padding-inline: 10px !important;
+}
+
+.ds-filter-bar .ant-btn {
+  padding-inline: 12px !important;
+}
+
+.ds-filter-bar .ant-input,
+.ds-filter-bar .ant-input-affix-wrapper input,
+.ds-filter-bar .ant-select-selection-item,
+.ds-filter-bar .ant-select-selection-placeholder {
+  line-height: 30px !important;
+}

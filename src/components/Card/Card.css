@@ -1,0 +1,7 @@
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-card:hover,
+.ds-surface-card:hover,
+.ds-ui-surface-card:hover,
+.ds-stat-card:hover {
+  border-color: #dbe5ef;
+}

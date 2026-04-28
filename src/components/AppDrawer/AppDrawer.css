@@ -1,0 +1,51 @@
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-app-drawer-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-app-drawer-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-app-drawer-footer .ant-space {
+  display: flex;
+  align-items: center;
+  gap: 12px !important;
+}
+
+/* From src/styles/global/global.css */
+.json-diff-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+}
+
+/* From src/styles/global/global.css */
+.json-panel {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px;
+  width: 100%;
+}
+
+/* From src/styles/global/global.css */
+.json-panel h4 {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+/* From src/styles/global/global.css */
+.json-block {
+  margin: 0;
+  max-height: 58vh;
+  overflow: auto;
+  font-size: 12px;
+  font-family: Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
