@@ -101,7 +101,6 @@ export const ServicesPage = () => {
       <PageShell
         eyebrow="Hệ thống"
         title="Trạng thái dịch vụ"
-        description="Workspace để sàng lọc dịch vụ suy giảm và mở rộng điều tra từ bảng chính."
       >
         <QueryStateView kind="loading" title="Đang tải sức khỏe dịch vụ..." />
       </PageShell>
@@ -113,7 +112,6 @@ export const ServicesPage = () => {
       <PageShell
         eyebrow="Hệ thống"
         title="Trạng thái dịch vụ"
-        description="Workspace để sàng lọc dịch vụ suy giảm và mở rộng điều tra từ bảng chính."
       >
         <QueryStateView
           kind="error"
@@ -132,7 +130,6 @@ export const ServicesPage = () => {
     <PageShell
       eyebrow="Hệ thống"
       title="Trạng thái dịch vụ"
-      description="Trang này chỉ giữ một nhiệm vụ: rà soát sức khỏe dịch vụ. Mọi tóm tắt phụ được nén về thanh meta."
       headerExtra={
         <div className="ds-page-toolbar-group ds-page-toolbar-group--secondary">
           <Button
@@ -149,7 +146,6 @@ export const ServicesPage = () => {
     >
       <DataTableShell
         title="Trạng thái phụ thuộc"
-        meta="Bảng là trọng tâm. Chỉ giữ trạng thái, độ trễ và metadata phát hành đủ để điều tra."
         toolbar={
           <DataTableToolbar>
             <span className="ds-toolbar-summary">

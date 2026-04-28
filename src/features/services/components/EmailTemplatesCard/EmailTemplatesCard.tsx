@@ -250,7 +250,6 @@ export const EmailTemplatesCard = () => {
     <div className="ds-settings-stack">
       <DataTableShell
         title="Danh mục mẫu"
-        meta="Giữ bản nháp và phiên bản đã xuất bản hiển thị rõ trước khi operator mở trình sửa."
         toolbar={
           <DataTableToolbar>
             <Button
@@ -266,7 +265,7 @@ export const EmailTemplatesCard = () => {
         <AdminTable
           rowKey="id"
           columns={columns}
-          minHeight={220}
+          minHeight={150}
           dataSource={listQuery.data?.items ?? []}
           emptyNode={<EmptyState description="Chưa có mẫu email nào được đăng ký." />}
           pagination={false}
@@ -283,7 +282,6 @@ export const EmailTemplatesCard = () => {
       <SurfaceCard
         eyebrow="Trình sửa mẫu"
         title={activeCode}
-        description="Runtime chỉ dùng mẫu đã xuất bản. Bản nháp, xem trước, xuất bản và rollback được giữ trong cùng một luồng để operator không phải đổi ngữ cảnh."
         status={
           selectedTemplate ? (
             <div className="ds-page-toolbar-group">
@@ -297,7 +295,6 @@ export const EmailTemplatesCard = () => {
           <div className="ds-settings-form-grid">
             <FormSection
               title="Danh tính mẫu"
-              description="Chọn mã mẫu trước, sau đó nạp bản nháp hoặc bản đã xuất bản hiện tại vào trình sửa."
             >
               <Row gutter={16}>
                 <Col xs={24} md={8}>
@@ -332,7 +329,6 @@ export const EmailTemplatesCard = () => {
 
             <FormSection
               title="Nội dung tin"
-              description="Giữ biến thể HTML và text cạnh nhau để operator có thể rà soát cả hai trước khi xem trước và xuất bản."
             >
               <Row gutter={16}>
                 <Col xs={24} lg={12}>
@@ -356,7 +352,6 @@ export const EmailTemplatesCard = () => {
 
             <FormSection
               title="Schema và dữ liệu mẫu"
-              description="Dữ liệu mẫu phục vụ xem trước. Schema mô tả các biến mà runtime mong đợi."
             >
               <Row gutter={16}>
                 <Col xs={24} lg={12}>
@@ -377,9 +372,6 @@ export const EmailTemplatesCard = () => {
           </div>
 
           <div className="ds-settings-action-bar">
-            <div className="ds-settings-action-copy">
-              Bản nháp an toàn để chỉnh sửa và xem trước. Chỉ xuất bản khi nội dung đã sẵn sàng cho runtime. Hoàn tác sẽ tạo phiên bản mới từ nguồn đã xuất bản gần nhất.
-            </div>
             <Space wrap>
               <Button onClick={() => onLoadTemplate()} disabled={!selectedTemplate}>
                 Nạp hiện tại

@@ -10,6 +10,11 @@
   min-width: 0;
 }
 
+.ds-admin-main-content {
+  width: 100% !important;
+  padding: 0 !important;
+}
+
 
 /* From src/styles/classic-admin/classic-admin.css */
 /* --- Admin production redesign overrides --- */
@@ -270,6 +275,12 @@
   background: transparent;
 }
 
+.ds-admin-shell,
+.ds-admin-main,
+.ds-admin-main-content {
+  background: #ffffff !important;
+}
+
 
 /* From src/styles/global/global.css */
 .ds-admin-main-content {
@@ -294,4 +305,3 @@
 .ds-admin-main-content {
   min-width: 0;
 }
-

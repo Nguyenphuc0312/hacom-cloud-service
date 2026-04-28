@@ -221,8 +221,6 @@ export const AuthorityPage = () => {
         />
 
         <DataTableShell
-          title="Phân công quyền"
-          meta="Dùng danh sách để tìm operator thật nhanh, sau đó mở inspector để chỉnh vai trò hoặc override."
           toolbar={
             <DataTableToolbar>
               <span className="ds-toolbar-summary">

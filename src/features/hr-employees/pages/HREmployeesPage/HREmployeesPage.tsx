@@ -470,10 +470,7 @@ export const HREmployeesPage = () => {
         </div>
       </FilterBar>
 
-      <DataTableShell
-        title="Hồ sơ nhân sự"
-        meta={`Đang hiển thị ${data?.items.length ?? 0} dòng từ backend HR.`}
-      >
+      <DataTableShell>
         <DataTable
           rowKey="id"
           columns={columns}

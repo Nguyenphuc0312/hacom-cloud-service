@@ -118,7 +118,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
           </button>
           <div className="ds-topbar-title-block">
             <span className="ds-topbar-eyebrow">{currentPage.sectionLabel}</span>
-            <strong className="ds-topbar-page-title">{currentPage.title}</strong>
+            <strong className="ds-topbar-page-title">Admin Console</strong>
           </div>
         </div>
 

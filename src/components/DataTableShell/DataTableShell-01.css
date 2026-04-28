@@ -412,3 +412,25 @@
   background:
     linear-gradient(180deg, rgba(248, 251, 253, 0.98) 0%, rgba(255, 255, 255, 0.96) 100%);
 }
+
+.ds-table-shell {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.ds-table-shell-header {
+  padding: 0 0 14px !important;
+  border-bottom: 1px solid #edf2f7 !important;
+  background: transparent !important;
+}
+
+.ds-table-shell-body {
+  background: #ffffff;
+}
+
+.ds-table-shell .ant-table-wrapper .ant-table,
+.ds-table-shell .ant-table-wrapper .ant-table-container {
+  border: 0 !important;
+}

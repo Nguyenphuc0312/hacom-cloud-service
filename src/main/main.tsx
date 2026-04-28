@@ -12,6 +12,7 @@ import '@/theme/foundation/foundation-02.css';
 import '@/theme/production/production-01.css';
 import '@/theme/production/production-02.css';
 import '@/theme/classic-admin/classic-admin.css';
+import '@/theme/responsive/responsive.css';
 import { bootstrapTheme } from '@/theme/bootstrap-theme/bootstrap-theme';
 
 bootstrapTheme();

@@ -143,3 +143,55 @@
 .ds-filter-bar .ant-select-selection-placeholder {
   line-height: 30px !important;
 }
+
+.ds-filter-toolbar,
+.ds-filter-bar {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 0 14px !important;
+  margin-bottom: 8px;
+}
+
+.ds-filter-toolbar-meta {
+  width: 100%;
+  padding-top: 8px !important;
+  border-top: 1px solid #edf2f7;
+  color: #64748b;
+}
+
+.ds-filter-bar .ant-form-item,
+.ds-filter-bar .ant-form-item-control,
+.ds-filter-bar .ant-form-item-control-input,
+.ds-filter-bar .ant-form-item-control-input-content {
+  min-width: 0;
+}
+
+.ds-filter-bar .ant-input,
+.ds-filter-bar .ant-input-affix-wrapper,
+.ds-filter-bar .ant-select-single,
+.ds-filter-bar .ant-select-single .ant-select-selector {
+  width: 100% !important;
+}
+
+.ds-filter-bar .ant-input-affix-wrapper {
+  display: inline-flex !important;
+  align-items: center !important;
+  overflow: hidden;
+}
+
+.ds-filter-bar .ant-input-affix-wrapper .ant-input {
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  line-height: 1.35 !important;
+}
+
+.ds-filter-bar .ant-input {
+  display: flex;
+  align-items: center;
+}
