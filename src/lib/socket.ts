@@ -10,7 +10,6 @@ import {
   AUTH_CONFIG,
   WEBSOCKET_URL,
   WEBSOCKET_CONFIG,
-  WEBSOCKET_AUTH_CONFIG,
 } from "../config";
 import {
   getAccessToken as getStoredAccessToken,
@@ -26,10 +25,6 @@ import {
 } from "../utils/jwtHelpers";
 import { logger } from "../utils/logger";
 
-const QUERY_TOKEN_BY_ENV = WEBSOCKET_AUTH_CONFIG.USE_QUERY_TOKEN;
-const AUTO_QUERY_TOKEN_FALLBACK_ENABLED =
-  WEBSOCKET_AUTH_CONFIG.AUTO_QUERY_TOKEN_FALLBACK;
-
 // ============================================
 // Types
 // ============================================
@@ -40,6 +35,8 @@ export type ConnectionState =
   | "connected"
   | "disconnected"
   | "reconnecting"
+  | "unauthenticated"
+  | "auth_failed"
   | "error";
 
 export interface WebSocketEvent {
@@ -62,8 +59,7 @@ class WebSocketManager {
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private authRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private isManualDisconnect = false;
-  private queryTokenFallbackEnabled = false;
-  private queryTokenFallbackAttempted = false;
+  private nextCloseState: ConnectionState | null = null;
   private eventHandlers: Map<string, Set<EventHandler>> = new Map();
   private connectionState: ConnectionState = "disconnected";
   private stateChangeHandlers: Set<(state: ConnectionState) => void> =
@@ -88,20 +84,11 @@ class WebSocketManager {
     return getStoredAccessToken();
   }
 
-  private buildWebSocketUrl(token: string): string {
+  private buildWebSocketUrl(): string {
     const normalizedBase = WEBSOCKET_URL.replace(/\/+$/, "");
-    const endpoint = normalizedBase.endsWith("/ws")
+    return normalizedBase.endsWith("/ws")
       ? normalizedBase
       : `${normalizedBase}/ws`;
-
-    const useQueryToken = QUERY_TOKEN_BY_ENV || this.queryTokenFallbackEnabled;
-
-    if (!useQueryToken) {
-      return endpoint;
-    }
-
-    const separator = endpoint.includes("?") ? "&" : "?";
-    return `${endpoint}${separator}token=${encodeURIComponent(token)}`;
   }
 
   /**
@@ -110,6 +97,16 @@ class WebSocketManager {
   private setConnectionState(state: ConnectionState): void {
     this.connectionState = state;
     this.stateChangeHandlers.forEach((handler) => handler(state));
+  }
+
+  private closeSocketWithState(state: ConnectionState, reason: string): void {
+    this.nextCloseState = state;
+    this.isManualDisconnect = true;
+    this.stopPingInterval();
+    this.clearAuthRefreshTimer();
+    if (this.socket) {
+      this.socket.close(1000, reason);
+    }
   }
 
   private clearAuthRefreshTimer(): void {
@@ -205,11 +202,9 @@ class WebSocketManager {
   //   this.setConnectionState("connecting");
 
   //   // Build WebSocket URL với token
-  //   // Backend expects: ws://host:port/ws?token=JWT_TOKEN
   //   const wsUrl = `${WEBSOCKET_URL}/ws`;
 
   //   try {
-  //     this.socket = new WebSocket(wsUrl);
   //     this.setupSocketHandlers();
   //   } catch (error) {
   //     logger.error("socket", "create_failed", error);
@@ -231,7 +226,7 @@ class WebSocketManager {
 
     if (!isJwtLike(rawToken)) {
       logger.warn("socket", "connect_skipped_invalid_token");
-      this.setConnectionState("error");
+      this.setConnectionState("unauthenticated");
       // optional: scheduleReconnect() chỉ khi token hợp lệ
       return;
     }
@@ -239,11 +234,12 @@ class WebSocketManager {
     const token = normalizeToken(rawToken);
     if (!isJwtLike(token)) {
       logger.warn("socket", "connect_skipped_invalid_normalized_token");
-      this.setConnectionState("error");
+      this.setConnectionState("unauthenticated");
       return;
     }
 
     if (isTokenExpiringSoon(token, AUTH_CONFIG.TOKEN_REFRESH_THRESHOLD)) {
+      this.setConnectionState("unauthenticated");
       this.emit(WsEventNames.AUTH_REAUTH_REQUIRED, {
         reason: isTokenExpired(token) ? "token_expired" : "token_expiring",
       });
@@ -257,10 +253,9 @@ class WebSocketManager {
       this.reconnectTimer = null;
     }
 
-    const wsUrl = this.buildWebSocketUrl(token);
-    const useQueryToken = wsUrl.includes("token=");
+    const wsUrl = this.buildWebSocketUrl();
     logger.info("socket", "connecting", {
-      authMode: useQueryToken ? "query-token" : "post-open-auth",
+      authMode: "post-open-auth",
     });
 
     try {
@@ -278,20 +273,26 @@ class WebSocketManager {
    */
   private setupSocketHandlers(): void {
     if (!this.socket) return;
-    let hasOpened = false;
 
     this.socket.onopen = () => {
-      hasOpened = true;
-      this.queryTokenFallbackAttempted = false;
       logger.info("socket", "connected");
       const rawToken = this.getAccessToken();
       if (!isJwtLike(rawToken)) {
-        this.setConnectionState("error");
-        this.disconnect();
+        this.setConnectionState("unauthenticated");
+        this.closeSocketWithState("unauthenticated", "missing_access_token");
         return;
       }
 
       const token = normalizeToken(rawToken);
+      if (!isJwtLike(token)) {
+        this.setConnectionState("unauthenticated");
+        this.closeSocketWithState(
+          "unauthenticated",
+          "invalid_access_token_format",
+        );
+        return;
+      }
+
       this.sendAuthenticate(token);
       this.setConnectionState("authenticating");
     };
@@ -299,36 +300,27 @@ class WebSocketManager {
     this.socket.onclose = (event) => {
       const wasManualDisconnect = this.isManualDisconnect;
       this.isManualDisconnect = false;
+      const closeState = this.nextCloseState;
+      this.nextCloseState = null;
 
       logger.info("socket", "disconnected", {
         code: event.code,
         reason: event.reason,
       });
       this.socket = null;
-      this.setConnectionState("disconnected");
       this.stopPingInterval();
       this.clearAuthRefreshTimer();
 
+      if (closeState) {
+        this.setConnectionState(closeState);
+      } else if (event.code === 4401 && !wasManualDisconnect) {
+        this.setConnectionState("auth_failed");
+      } else {
+        this.setConnectionState("disconnected");
+      }
+
       // Trigger custom disconnect event
       this.emit("disconnect", { code: event.code, reason: event.reason });
-
-      const shouldTryQueryTokenFallback =
-        !wasManualDisconnect &&
-        !hasOpened &&
-        event.code === 1006 &&
-        !QUERY_TOKEN_BY_ENV &&
-        AUTO_QUERY_TOKEN_FALLBACK_ENABLED &&
-        !this.queryTokenFallbackAttempted;
-
-      if (shouldTryQueryTokenFallback) {
-        this.queryTokenFallbackAttempted = true;
-        this.queryTokenFallbackEnabled = true;
-        logger.warn("socket", "retry_query_token_fallback", {
-          code: event.code,
-        });
-        this.connect();
-        return;
-      }
 
       // Auto reconnect only for non-manual close
       if (event.code === 4401 && !wasManualDisconnect) {
@@ -413,8 +405,6 @@ class WebSocketManager {
     );
 
     if (type === WsEventNames.AUTH_AUTHENTICATED) {
-      this.queryTokenFallbackEnabled = false;
-      this.queryTokenFallbackAttempted = false;
       this.reconnectAttempts = 0;
       this.setConnectionState("connected");
       this.startPingInterval();
@@ -423,6 +413,11 @@ class WebSocketManager {
         this.scheduleTokenRefresh(accessToken);
       }
       this.emit("connect", {});
+    }
+
+    if (type === WsEventNames.AUTH_UNAUTHORIZED) {
+      this.nextCloseState = "auth_failed";
+      this.setConnectionState("auth_failed");
     }
 
     // Emit to registered handlers
@@ -488,6 +483,16 @@ class WebSocketManager {
    * Schedule reconnect với exponential backoff
    */
   private scheduleReconnect(): void {
+    if (
+      this.connectionState === "unauthenticated" ||
+      this.connectionState === "auth_failed"
+    ) {
+      logger.warn("socket", "reconnect_skipped_terminal_auth_state", {
+        connectionState: this.connectionState,
+      });
+      return;
+    }
+
     if (this.reconnectAttempts >= WEBSOCKET_CONFIG.RECONNECT_ATTEMPTS) {
       logger.error("socket", "max_reconnect_attempts_reached", {
         reconnectAttempts: this.reconnectAttempts,
@@ -553,6 +558,7 @@ class WebSocketManager {
    */
   disconnect(): void {
     this.isManualDisconnect = true;
+    this.nextCloseState = null;
 
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);

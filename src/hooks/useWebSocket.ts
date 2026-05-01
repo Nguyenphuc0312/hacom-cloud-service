@@ -206,8 +206,10 @@ const toRealtimeConnectionStatus = (
     case "authenticating":
     case "reconnecting":
       return "connecting";
+    case "auth_failed":
     case "error":
       return "error";
+    case "unauthenticated":
     case "disconnected":
     default:
       return "disconnected";
