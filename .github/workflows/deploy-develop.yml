@@ -1,4 +1,4 @@
-name: deploy-server-test
+﻿name: deploy-develop
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: deploy-server-test-chat-web-client
+  group: deploy-develop-chat-web-client
   cancel-in-progress: false
 
 jobs:
@@ -101,7 +101,7 @@ jobs:
   deploy:
     needs: quality
     runs-on: ubuntu-latest
-    environment: server-test
+    environment: develop
     env:
       SHARED_TYPES_REPO_TOKEN: ${{ secrets.SHARED_TYPES_REPO_TOKEN }}
       GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME != '' && secrets.GHCR_PULL_USERNAME || github.repository_owner }}
