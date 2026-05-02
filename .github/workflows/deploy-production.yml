@@ -1,8 +1,6 @@
-name: deploy-develop
+name: deploy-production
 
 on:
-  push:
-    branches: [ develop ]
   workflow_dispatch:
 
 permissions:
@@ -10,13 +8,13 @@ permissions:
   packages: write
 
 concurrency:
-  group: deploy-develop-chat-admin-panel
+  group: deploy-production-chat-admin-panel
   cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: develop
+    environment: production
     env:
       GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME != '' &&
         secrets.GHCR_PULL_USERNAME || github.repository_owner }}
@@ -115,7 +113,7 @@ jobs:
             VITE_AUTH_BASE_URL_CLEAN="/api/v1/auth"
           fi
           if [[ -z "${VITE_APP_ENV_CLEAN}" ]]; then
-            VITE_APP_ENV_CLEAN="STAGING"
+            VITE_APP_ENV_CLEAN="PRODUCTION"
           fi
           if [[ -z "${VITE_DASHBOARD_REFETCH_INTERVAL_MS_CLEAN}" ]]; then
             VITE_DASHBOARD_REFETCH_INTERVAL_MS_CLEAN="15000"
