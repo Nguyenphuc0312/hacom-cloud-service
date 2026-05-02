@@ -10,6 +10,16 @@ set -a
 . ./.release.env
 set +a
 
+: "${DEPLOY_ENV:?DEPLOY_ENV is required}"
+case "${DEPLOY_ENV}" in
+  develop|production)
+    ;;
+  *)
+    echo "Invalid DEPLOY_ENV: ${DEPLOY_ENV}" >&2
+    exit 1
+    ;;
+esac
+
 : "${COMPOSE_FILE:?COMPOSE_FILE is required}"
 : "${RUNTIME_SERVICE:?RUNTIME_SERVICE is required}"
 : "${HEALTHCHECK_URL:=http://127.0.0.1/healthz}"

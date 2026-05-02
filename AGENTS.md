@@ -1,4 +1,4 @@
-# AGENTS.md
+﻿# AGENTS.md
 
 ## Scope
 
@@ -225,7 +225,7 @@ Rules:
 - Do not hard-code production domains inside source code.
 - Proxy target changes must be documented.
 - Env/deployment changes must be called out in PRs.
-- Update `.env.example` or `.env.dev.frontend-with-server-test.example` when config changes.
+- Update `.env.example` or `.env.dev.frontend-with-develop.example` when config changes.
 
 ---
 
