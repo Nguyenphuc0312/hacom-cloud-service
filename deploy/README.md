@@ -1,10 +1,10 @@
-# chat-admin-panel deploy bundle
+﻿# chat-admin-panel deploy bundle
 
-This folder contains release-bundle artifacts used by CI/CD for server-test and production deploys.
+This folder contains release-bundle artifacts used by CI/CD for develop and production deploys.
 
 ## Compose files
 
-- deploy/compose/server-test.yml
+- deploy/compose/develop.yml
 - deploy/compose/production.yml
 
 ## Scripts
@@ -31,7 +31,7 @@ location /admin/ {
 }
 ```
 
-## Phase 4 write rollout notes (server-test)
+## Phase 4 write rollout notes (develop)
 
 - Build-time flag `VITE_ADMIN_WRITE_ACTIONS_ENABLED` must be explicitly set to `true` only when backend write paths are verified.
 - Keep this flag aligned with backend runtime toggle `ADMIN_WRITE_ENABLED` in chat-admin-service to avoid UI/backend mismatch.

@@ -1,8 +1,8 @@
-# chat-admin-panel
+﻿# chat-admin-panel
 
 Vite + React admin UI for the chat platform.
 
-Canonical infrastructure orchestration lives in chat-infrastructure/compose/infra/server-test.yml.
+Canonical infrastructure orchestration lives in chat-infrastructure/compose/infra/develop.yml.
 
 ## Runtime
 
@@ -28,16 +28,16 @@ Override with these env vars when needed:
 - `VITE_DEV_ADMIN_PROXY_TARGET`
 - `VITE_DEV_AUTH_PROXY_TARGET`
 
-Runtime envs for hybrid dev and server-test:
+Runtime envs for hybrid dev and develop:
 
 - `VITE_ADMIN_API_ROOT`: canonical admin API root (`/api/v1/admin` or absolute URL)
 - `VITE_ADMIN_API_BASE_URL`: compatibility alias for the same admin root
 - `VITE_AUTH_BASE_URL`: canonical auth root (`/api/v1/auth` or absolute URL)
 
-Run local admin panel with server-test backends:
+Run local admin panel with develop backends:
 
 ```bash
-cp .env.dev.frontend-with-server-test.example .env
+cp .env.dev.frontend-with-develop.example .env
 make dev
 ```
 

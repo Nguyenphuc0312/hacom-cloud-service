@@ -1,4 +1,4 @@
-name: deploy-server-test
+﻿name: deploy-develop
 
 on:
   push:
@@ -10,13 +10,13 @@ permissions:
   packages: write
 
 concurrency:
-  group: deploy-server-test-chat-admin-panel
+  group: deploy-develop-chat-admin-panel
   cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: server-test
+    environment: develop
     env:
       GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME != '' && secrets.GHCR_PULL_USERNAME || github.repository_owner }}
       GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
