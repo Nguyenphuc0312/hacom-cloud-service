@@ -2,7 +2,7 @@
 
 on:
   push:
-    branches: [develop]
+    branches: [ develop ]
   workflow_dispatch:
 
 permissions:
@@ -18,7 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: develop
     env:
-      GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME != '' && secrets.GHCR_PULL_USERNAME || github.repository_owner }}
+      GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME != '' &&
+        secrets.GHCR_PULL_USERNAME || github.repository_owner }}
       GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
 
     steps:
@@ -174,6 +175,16 @@ jobs:
             --push \
             ./chat-admin-panel
 
+      - name: Verify built image contents
+        run: |
+          set -Eeuo pipefail
+          docker run --rm "${IMAGE_REF}" sh -lc '
+            set -e
+            test -f /usr/share/nginx/html/index.html
+            test -d /usr/share/nginx/html/assets
+            find /usr/share/nginx/html/assets -maxdepth 1 -type f \( -name "*.js" -o -name "*.css" \) | grep -q .
+          '
+
       - name: Verify pushed manifest
         run: |
           set -Eeuo pipefail
@@ -231,7 +242,8 @@ jobs:
           EOF
 
       - name: Show remote logs on failure
-        if: ${{ failure() && steps.validate_inputs.outcome == 'success' && steps.deploy_remote.outcome == 'failure' }}
+        if: ${{ failure() && steps.validate_inputs.outcome == 'success' &&
+          steps.deploy_remote.outcome == 'failure' }}
         run: |
           set +e
           if [[ -z "${SERVER_PORT_CLEAN:-}" || -z "${SERVER_USER_CLEAN:-}" || -z "${SERVER_HOST_CLEAN:-}" || -z "${RELEASE_DIR:-}" ]]; then
