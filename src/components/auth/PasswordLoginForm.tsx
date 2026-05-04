@@ -54,10 +54,11 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
         )}
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
+          <label htmlFor="loginIdentifier" className="block text-sm font-medium text-slate-700 mb-1">
             Email hoặc số điện thoại
           </label>
           <input
+            id="loginIdentifier"
             {...register("loginIdentifier")}
             type="text"
             placeholder="Nhập email hoặc số điện thoại"
@@ -70,11 +71,12 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
+          <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1">
             Mật khẩu
           </label>
           <div className="relative">
             <input
+              id="password"
               {...register("password")}
               type={showPassword ? "text" : "password"}
               placeholder="Nhập mật khẩu"

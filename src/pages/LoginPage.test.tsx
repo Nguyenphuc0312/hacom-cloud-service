@@ -83,10 +83,10 @@ describe("LoginPage", () => {
     );
 
     const loginIdentifierInput = screen.getByLabelText(
-      "auth:login.loginIdentifier",
+      /Email hoặc số điện thoại/i,
     ) as HTMLInputElement;
     const passwordInput = screen.getByLabelText(
-      "auth:login.password",
+      /Mật khẩu/i,
     ) as HTMLInputElement;
 
     fireEvent.change(loginIdentifierInput, {
@@ -97,7 +97,7 @@ describe("LoginPage", () => {
     });
 
     const submitButton = screen.getByRole("button", {
-      name: "auth:login.submit",
+      name: /Đăng Nhập/i,
     });
     fireEvent.click(submitButton);
     fireEvent.click(submitButton);
