@@ -1072,6 +1072,83 @@ a:focus-visible {
     padding: 10px 14px;
   }
 
+  .toast-library {
+    min-width: min(360px, calc(100vw - 32px));
+    max-width: min(420px, calc(100vw - 32px));
+    border: 1px solid hsl(var(--color-border)) !important;
+    border-radius: 14px !important;
+    background: hsl(var(--color-surface)) !important;
+    color: hsl(var(--color-text-primary)) !important;
+    box-shadow: 0 18px 42px rgb(15 23 42 / 0.16) !important;
+    padding: 14px 16px !important;
+    font-size: 14px !important;
+    font-weight: 650 !important;
+    line-height: 1.4 !important;
+  }
+
+  .toast-desktop {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) 32px;
+    align-items: center;
+    min-width: min(360px, calc(100vw - 32px));
+    max-width: min(420px, calc(100vw - 32px));
+    min-height: 56px;
+    overflow: hidden;
+    border: 1px solid hsl(var(--color-border));
+    border-left-width: 4px;
+    border-radius: 12px;
+    background: hsl(var(--color-surface));
+    color: hsl(var(--color-text-primary));
+    box-shadow: 0 14px 34px rgb(15 23 42 / 0.16);
+    font-size: 14px;
+    font-weight: 650;
+    line-height: 1.35;
+  }
+
+  .toast-desktop-success {
+    border-left-color: hsl(var(--color-success));
+  }
+
+  .toast-desktop-danger {
+    border-left-color: hsl(var(--color-danger));
+  }
+
+  .toast-desktop-icon {
+    margin-left: 16px;
+    height: 22px;
+    width: 22px;
+  }
+
+  .toast-desktop-success .toast-desktop-icon {
+    color: hsl(var(--color-success));
+  }
+
+  .toast-desktop-danger .toast-desktop-icon {
+    color: hsl(var(--color-danger));
+  }
+
+  .toast-desktop-message {
+    min-width: 0;
+    padding: 0 14px;
+    overflow-wrap: anywhere;
+  }
+
+  .toast-desktop-close {
+    display: flex;
+    align-self: stretch;
+    width: 32px;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: hsl(var(--color-text-muted));
+    transition: color 120ms ease, background-color 120ms ease;
+  }
+
+  .toast-desktop-close:hover {
+    background: hsl(var(--color-surface-hover));
+    color: hsl(var(--color-text-primary));
+  }
+
   .toast-success {
     background: hsl(var(--color-success));
     color: hsl(var(--color-text-inverse));

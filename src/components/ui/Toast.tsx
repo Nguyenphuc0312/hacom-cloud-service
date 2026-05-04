@@ -16,8 +16,8 @@ export const ToastProvider: React.FC = () => {
       gutter={12}
       containerClassName="toast-container"
       toastOptions={{
-        duration: 3000,
-        className: "toast-base",
+        duration: 5500,
+        className: "toast-library",
       }}
     />
   );

@@ -106,7 +106,7 @@ describe("LoginPage", () => {
       expect(loginMock).toHaveBeenCalledTimes(1);
     });
 
-    resolveLogin("authenticated");
+    resolveLogin({ status: "authenticated" });
 
     await waitFor(() => {
       expect(screen.getByText("chat-page")).toBeInTheDocument();

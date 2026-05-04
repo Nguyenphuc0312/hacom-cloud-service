@@ -1,12 +1,10 @@
-/**
- * @fileoverview Auth components exports
- */
-
-export { ProtectedRoute, GuestRoute, ActivationRoute } from "./ProtectedRoute";
-export { QrLoginPanel } from "./QrLoginPanel";
-export { PasswordLoginForm } from "./PasswordLoginForm";
-export { SocialLoginRow } from "./SocialLoginRow";
-export { EmailOtpInput } from "./EmailOtpInput";
-export { VerificationStatusPanel } from "./VerificationStatusPanel";
-export { RequestVerificationCodeForm } from "./RequestVerificationCodeForm";
-export { AuthShell, AuthCard } from "./AuthShell";
+export * from "./AuthShell";
+export * from "./PasswordLoginForm";
+export * from "./QrLoginPanel";
+export * from "./RequestVerificationCodeForm";
+export * from "./EmailOtpInput";
+export * from "./SocialLoginRow";
+export * from "./VerificationStatusPanel";
+export * from "./ProtectedRoute";
+export * from "./AuthLogo";
+export * from "./PasswordStrengthIndicator";

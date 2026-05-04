@@ -1,148 +1,131 @@
-﻿import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { useTranslation } from "react-i18next";
+import { AuthShell, AuthLogo } from "../components/auth";
+import { Button } from "../components/ui";
+import { useAuthStore } from "../stores";
+import { ROUTE_PATHS } from "../router/paths";
+import { toast } from "../components/ui";
+import { authApi } from "../services/api";
 import {
-  EnvelopeIcon,
-  ChatBubbleLeftRightIcon,
-  ArrowLeftIcon,
-  CheckCircleIcon,
-} from "@heroicons/react/24/outline";
-import { AuthCard, AuthShell } from "../components/auth";
-import { Button, Input, toast } from "../components/ui";
-import { forgotPasswordSchema } from "../lib/validations";
-import type { ForgotPasswordFormData } from "../lib/validations";
-import { authClient } from "../lib/axios";
-import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
+  toVietnameseMessage,
+  translateI18nMessage,
+} from "../utils/userMessages";
+
+const requestResetSchema = z.object({
+  identifier: z.string().min(1, "Vui lòng nhập email hoặc số điện thoại"),
+});
+
+type RequestResetFormData = z.infer<typeof requestResetSchema>;
 
 export const ForgotPasswordPage: React.FC = () => {
+  const navigate = useNavigate();
   const { t } = useTranslation();
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const { isLoading, isAuthenticated, error, clearError } = useAuthStore();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate(ROUTE_PATHS.CHAT, { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
+  useEffect(() => {
+    clearError();
+  }, [clearError]);
 
   const {
     register,
     handleSubmit,
-    formState: { errors },
-    setFocus,
-    getValues,
-  } = useForm<ForgotPasswordFormData>({
-    resolver: zodResolver(forgotPasswordSchema),
-    defaultValues: {
-      email: "",
-    },
+    formState: { errors, isSubmitting },
+  } = useForm<RequestResetFormData>({
+    resolver: zodResolver(requestResetSchema),
+    defaultValues: { identifier: "" },
   });
+  const identifierError = translateI18nMessage(errors.identifier?.message, t);
 
-  useEffect(() => {
-    setFocus("email");
-  }, [setFocus]);
-
-  const onSubmit = async (data: ForgotPasswordFormData) => {
-    setIsLoading(true);
-
+  const onSubmit = async (data: RequestResetFormData) => {
     try {
-      await authClient.post(AUTH_ENDPOINTS.forgotPassword, data);
-      setIsSubmitted(true);
-      toast.success(t("auth:toast.forgotPasswordSent"));
-    } catch {
-      setIsSubmitted(true);
-      toast.success(t("auth:toast.forgotPasswordFallback"));
-    } finally {
-      setIsLoading(false);
+      const response = await authApi.forgotPassword(data.identifier);
+      toast.success(
+        toVietnameseMessage(
+          response.message,
+          "Mã OTP đã được gửi đến email/số điện thoại của bạn.",
+        ),
+      );
+      navigate(ROUTE_PATHS.RESET_PASSWORD, {
+        state: {
+          identifier: data.identifier,
+        },
+      });
+    } catch (err) {
+      toast.error(
+        toVietnameseMessage(
+          (err as Error).message,
+          "Không thể gửi yêu cầu đặt lại mật khẩu.",
+        ),
+      );
     }
   };
 
-  if (isSubmitted) {
-    return (
-      <AuthShell maxWidth="md">
-        <AuthCard className="p-8 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-success/15 rounded-full mb-6">
-            <CheckCircleIcon className="w-8 h-8 text-success" />
-          </div>
-
-          <h1 className="text-2xl font-bold text-text-primary mb-2">
-            {t("auth:forgot.successTitle")}
-          </h1>
-          <p className="text-text-muted mb-6">
-            {t("auth:forgot.successDescription")}{" "}
-            <span className="font-medium text-text-primary">
-              {getValues("email")}
-            </span>
-          </p>
-          <p className="mb-6 text-sm text-text-muted">
-            {t("auth:forgot.securityHint")}
-          </p>
-
-          <div className="space-y-4">
-            <p className="text-sm text-text-muted">
-              {t("auth:forgot.successHint")}
-            </p>
-            <Button
-              variant="outline"
-              fullWidth
-              onClick={() => setIsSubmitted(false)}
-            >
-              {t("auth:forgot.tryAnotherEmail")}
-            </Button>
-            <Link to="/login">
-              <Button variant="ghost" fullWidth>
-                <ArrowLeftIcon className="w-4 h-4 mr-2" />
-                {t("auth:forgot.backToLogin")}
-              </Button>
-            </Link>
-          </div>
-        </AuthCard>
-      </AuthShell>
-    );
-  }
+  const isBusy = isLoading || isSubmitting;
 
   return (
-    <AuthShell maxWidth="md">
-      <AuthCard className="p-8">
-        <div className="mb-8 text-center">
-          <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-elev2">
-            <ChatBubbleLeftRightIcon className="w-8 h-8 text-text-inverse" />
-          </div>
-          <h1 className="text-2xl font-bold text-text-primary">
-            {t("auth:forgot.title")}
-          </h1>
-          <p className="text-text-muted mt-2">{t("auth:forgot.subtitle")}</p>
-        </div>
+    <AuthShell maxWidth="sm" className="max-w-md mx-auto my-auto flex flex-col justify-center min-h-[100dvh] p-6 text-slate-800">
+      <div className="w-full max-w-[420px] rounded-2xl bg-white p-7 shadow-lg sm:p-9">
+        <AuthLogo subtitle="Lấy lại mật khẩu" />
+
+        <p className="mb-7 px-2 text-center text-sm leading-6 text-slate-500">
+          Nhập email hoặc số điện thoại để nhận mã OTP khôi phục mật khẩu.
+        </p>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-          <Input
-            {...register("email")}
-            type="email"
-            label={t("auth:login.email")}
-            placeholder={t("auth:placeholders.email")}
-            leftIcon={<EnvelopeIcon className="w-5 h-5" />}
-            error={errors.email?.message}
-            autoComplete="email"
-            disabled={isLoading}
-          />
+          {error && (
+            <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Email hoặc số điện thoại
+            </label>
+            <input
+              {...register("identifier")}
+              type="text"
+              placeholder="Nhập email hoặc số điện thoại"
+              disabled={isBusy}
+              className="w-full h-11 px-3 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
+            />
+            {identifierError && (
+              <p className="mt-1 text-xs text-danger">{identifierError}</p>
+            )}
+          </div>
 
           <Button
             type="submit"
             fullWidth
-            size="lg"
-            isLoading={isLoading}
-            disabled={isLoading}
+            size="md"
+            className="h-11 rounded-lg bg-[#2b7ff6] text-sm font-semibold text-white hover:bg-blue-600"
+            isLoading={isBusy}
+            disabled={isBusy}
           >
-            {t("auth:forgot.submit")}
+            Nhận mã OTP
           </Button>
-        </form>
 
-        <div className="mt-6 text-center">
-          <Link
-            to="/login"
-            className="inline-flex items-center text-sm text-text-muted hover:text-text-secondary"
-          >
-            <ArrowLeftIcon className="w-4 h-4 mr-1" />
-            {t("auth:forgot.backToLogin")}
-          </Link>
-        </div>
-      </AuthCard>
+          <div className="pt-1 text-center">
+            <button
+              type="button"
+              onClick={() => navigate(ROUTE_PATHS.LOGIN)}
+              className="text-[#2b7ff6] font-semibold text-sm hover:text-blue-700 hover:underline transition-colors"
+            >
+              Quay lại đăng nhập
+            </button>
+          </div>
+        </form>
+      </div>
     </AuthShell>
   );
 };
