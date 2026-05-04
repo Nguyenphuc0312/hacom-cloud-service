@@ -61,7 +61,6 @@ import {
   normalizeMessageRealtimeEvent,
 } from "../features/chat/realtime";
 import type { NormalizedMessageRealtimeEvent } from "../features/chat/realtime/realtimeEventTypes";
-import { MessageStatus } from "../types";
 import { chatApi } from "../features/api/chatApi";
 import { getMessageSeq } from "../features/chat/domain/messageMerge";
 import { findMessageIdentityIndex } from "../features/chat/domain/messageIdentity";
@@ -1331,46 +1330,6 @@ export const useWebSocket = (
         }
 
         const deliveredAt = asString(payload.deliveredAt) ?? undefined;
-        const currentMessages =
-          useChatStore.getState().messages[conversationId] ?? [];
-        const currentMessage = currentMessages.find((message) => {
-          const messageRecord = message as unknown as { messageSeq?: number };
-          const seq =
-            typeof messageRecord.messageSeq === "number" &&
-            Number.isFinite(messageRecord.messageSeq)
-              ? messageRecord.messageSeq
-              : typeof message.serverSeq === "number" &&
-                  Number.isFinite(message.serverSeq)
-                ? message.serverSeq
-                : null;
-          return (
-            message.id === messageId ||
-            message.stableId === messageId ||
-            message.localId === messageId ||
-            message.clientMessageId === messageId ||
-            (messageSeq !== null &&
-              seq === messageSeq &&
-              message.senderId === currentUserId)
-          );
-        });
-
-        if (
-          currentMessage &&
-          currentMessage.senderId === currentUserId &&
-          currentMessage.status !== MessageStatus.READ &&
-          currentMessage.status !== MessageStatus.FAILED &&
-          currentMessage.status !== MessageStatus.SENDING &&
-          currentMessage.sendState !== "failed" &&
-          currentMessage.sendState !== "sending" &&
-          currentMessage.sendState !== "queued" &&
-          currentMessage.sendState !== "retrying"
-        ) {
-          useChatStore.getState().updateMessage(conversationId, currentMessage.id, {
-            status: MessageStatus.DELIVERED,
-            sendState: "sent",
-            ...(deliveredAt ? { deliveredAt: deliveredAt as unknown as Date } : {}),
-          });
-        }
 
         dispatch(
           realtimeMessageDelivered({
@@ -1518,14 +1477,6 @@ export const useWebSocket = (
         asString(payload.senderId) ??
         undefined;
       const currentUserId = useAuthStore.getState().user?.id;
-      useChatStore
-        .getState()
-        .markMessagesReadUpTo(
-          conversationId,
-          lastMessageId ?? "",
-          readerId,
-          lastReadSeq,
-        );
       dispatch(
         realtimeReadCursorUpdated({
           conversationId,

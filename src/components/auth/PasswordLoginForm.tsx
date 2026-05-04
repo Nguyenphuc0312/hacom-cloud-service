@@ -1,16 +1,12 @@
-import React from "react";
-import { Link } from "react-router-dom";
-import { useTranslation } from "react-i18next";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { FieldErrors, UseFormRegister } from "react-hook-form";
-import {
-  IdentificationIcon,
-  LockClosedIcon,
-} from "@heroicons/react/24/outline";
-import { Button, Checkbox, Input } from "../ui";
+import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
+import { useTranslation } from "react-i18next";
+import { Button } from "../ui";
 import type { LoginFormData } from "../../lib/validations";
-import { SocialLoginRow, type SocialProvider } from "./SocialLoginRow";
-
-export type { SocialProvider } from "./SocialLoginRow";
+import { PasswordStrengthIndicator } from "./PasswordStrengthIndicator";
+import { translateI18nMessage } from "../../utils/userMessages";
 
 interface PasswordLoginFormProps {
   register: UseFormRegister<LoginFormData>;
@@ -19,8 +15,7 @@ interface PasswordLoginFormProps {
   isSubmitting: boolean;
   authError?: string | null;
   onSubmit: React.FormEventHandler<HTMLFormElement>;
-  showSocialLogin?: boolean;
-  onSocialLogin?: (provider: SocialProvider) => void;
+  passwordValue?: string;
 }
 
 export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
@@ -30,11 +25,17 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
   isSubmitting,
   authError,
   onSubmit,
-  showSocialLogin = false,
-  onSocialLogin,
+  passwordValue = ""
 }) => {
-  const { t } = useTranslation();
   const isBusy = isLoading || isSubmitting;
+  const navigate = useNavigate();
+  const { t } = useTranslation();
+  const [showPassword, setShowPassword] = useState(false);
+  const loginIdentifierError = translateI18nMessage(
+    errors.loginIdentifier?.message,
+    t,
+  );
+  const passwordError = translateI18nMessage(errors.password?.message, t);
 
   return (
     <div
@@ -42,7 +43,7 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
       id="login-panel-password"
       aria-labelledby="login-tab-password"
     >
-      <form onSubmit={onSubmit} noValidate className="space-y-4">
+      <form onSubmit={onSubmit} noValidate className="space-y-5">
         {authError && (
           <div
             role="alert"
@@ -52,75 +53,84 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
           </div>
         )}
 
-        <Input
-          {...register("loginIdentifier")}
-          type="text"
-          label={t("auth:login.loginIdentifier")}
-          placeholder={t("auth:placeholders.loginIdentifier")}
-          leftIcon={<IdentificationIcon className="h-4 w-4" />}
-          error={errors.loginIdentifier?.message}
-          autoComplete="username"
-          inputMode="text"
-          disabled={isBusy}
-          className="h-11 rounded-xl py-0 text-sm"
-        />
-
-        <Input
-          {...register("password")}
-          type="password"
-          label={t("auth:login.password")}
-          placeholder={t("auth:placeholders.password")}
-          leftIcon={<LockClosedIcon className="h-4 w-4" />}
-          error={errors.password?.message}
-          autoComplete="current-password"
-          disabled={isBusy}
-          className="h-11 rounded-xl py-0 text-sm"
-        />
-
-        <div className="flex items-center justify-between gap-3 pt-0.5">
-          <Checkbox
-            {...register("rememberMe")}
-            label={t("auth:login.rememberMe")}
+        <div>
+          <label htmlFor="loginIdentifier" className="block text-sm font-medium text-slate-700 mb-1">
+            Email hoặc số điện thoại
+          </label>
+          <input
+            id="loginIdentifier"
+            {...register("loginIdentifier")}
+            type="text"
+            placeholder="Nhập email hoặc số điện thoại"
             disabled={isBusy}
-            containerClassName="w-auto"
+            className="w-full h-11 px-3 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
           />
-          <Link
-            to="/forgot-password"
-            className="text-sm font-medium text-primary transition-colors hover:text-primary/80"
-          >
-            {t("auth:login.forgotPassword")}
-          </Link>
+          {loginIdentifierError && (
+            <p className="mt-1 text-xs text-danger">{loginIdentifierError}</p>
+          )}
         </div>
+
+        <div>
+          <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1">
+            Mật khẩu
+          </label>
+          <div className="relative">
+            <input
+              id="password"
+              {...register("password")}
+              type={showPassword ? "text" : "password"}
+              placeholder="Nhập mật khẩu"
+              disabled={isBusy}
+              className="w-full h-11 px-3 pr-10 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
+            />
+            <button
+              type="button"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? (
+                <EyeSlashIcon className="h-5 w-5" />
+              ) : (
+                <EyeIcon className="h-5 w-5" />
+              )}
+            </button>
+          </div>
+          {passwordError && (
+            <p className="mt-1 text-xs text-danger">{passwordError}</p>
+          )}
+        </div>
+
+        <PasswordStrengthIndicator password={passwordValue} />
 
         <Button
           type="submit"
           fullWidth
           size="md"
-          className="h-11 rounded-xl text-sm font-semibold"
+          className="h-11 rounded-lg bg-[#2b7ff6] text-sm font-semibold text-white hover:bg-blue-600"
           isLoading={isBusy}
           disabled={isBusy}
           aria-busy={isBusy}
         >
-          {t("auth:login.submit")}
+          Đăng Nhập
         </Button>
+
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            type="button"
+            onClick={() => navigate('/forgot-password')}
+            className="flex-1 h-11 rounded-lg border border-slate-200 bg-slate-50 text-[#2b7ff6] font-semibold text-sm hover:bg-slate-100 transition-colors"
+          >
+            Quên mật khẩu
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/register')}
+            className="flex-1 h-11 rounded-lg bg-[#2b7ff6] hover:bg-blue-600 text-white font-semibold text-sm transition-colors"
+          >
+            Đăng ký
+          </button>
+        </div>
       </form>
-
-      {showSocialLogin && onSocialLogin && (
-        <>
-          <div className="relative my-5">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="bg-surface px-3 text-text-muted">
-                {t("auth:login.orWith")}
-              </span>
-            </div>
-          </div>
-
-          <SocialLoginRow disabled={isBusy} onProviderClick={onSocialLogin} />
-        </>
-      )}
     </div>
   );
 };

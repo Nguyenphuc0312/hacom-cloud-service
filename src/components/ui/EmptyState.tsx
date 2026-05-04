@@ -13,10 +13,8 @@ import {
   InboxIcon,
   ExclamationTriangleIcon,
   DocumentArrowUpIcon,
-  ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
 import { Button } from "./Button";
-import { emitCommandPaletteOpen } from "../../lib/commandPalette";
 import { ROUTE_PATHS } from "../../router/paths";
 
 interface EmptyStateProps {
@@ -173,140 +171,147 @@ interface NoChatSelectedProps {
   onNewChat?: () => void;
 }
 
+const WELCOME_SLIDES = [
+  {
+    src: "/hacom-tower.jpg",
+    alt: "Hacom Tower",
+    title: "Hacom Tower",
+    description: "Dự án căn hộ thương mại tại Khánh Hòa",
+    fit: "cover",
+  },
+  {
+    src: "/hacom-riverside.jpg",
+    alt: "Hacom Riverside",
+    title: "Hacom Riverside",
+    description: "Dự án tại Lào Cai",
+    fit: "cover",
+  },
+  {
+    src: "/hacom-wind.jpg",
+    alt: "Nhà máy điện gió Hòa Bình 5",
+    title: "Điện gió Hòa Bình 5",
+    description: "Năng lượng tái tạo",
+    fit: "cover",
+  },
+  {
+    src: "/hacom-imperial-dalat.jpg",
+    alt: "Khách sạn Imperial Palace Đà Lạt",
+    title: "Imperial Palace Đà Lạt",
+    description: "Khách sạn nghỉ dưỡng",
+    fit: "cover",
+  },
+];
+
 export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
   onNewChat,
 }) => {
   const navigate = useNavigate();
-  const openShortcut =
-    typeof navigator !== "undefined" &&
-    /Mac|iPhone|iPad/.test(navigator.platform)
-      ? "Cmd K"
-      : "Ctrl K";
+  const [activeSlideIndex, setActiveSlideIndex] = React.useState(0);
+  const activeSlide = WELCOME_SLIDES[activeSlideIndex];
+
+  React.useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setActiveSlideIndex((currentIndex) =>
+        currentIndex === WELCOME_SLIDES.length - 1 ? 0 : currentIndex + 1,
+      );
+    }, 3000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   return (
-    <section className="chat-background flex flex-1 overflow-y-auto px-[clamp(16px,2.4vw,40px)] py-[clamp(20px,4vw,56px)] text-text-secondary">
-      <div className="mx-auto grid w-full max-w-[var(--hc-empty-max-width)] items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="rounded-xl border border-border bg-surface p-6 text-left shadow-xs sm:p-7">
-          <div className="flex flex-col gap-5 md:flex-row md:items-start">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <ChatBubbleLeftRightIcon className="h-9 w-9" aria-hidden="true" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-2xl font-semibold leading-8 text-text-primary">
-                Chào mừng đến Hacom Chat
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary">
-                Nền tảng liên lạc nội bộ bảo mật, tốc độ cao dành cho Hacom Holding.
-              </p>
-              <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-border bg-surface-overlay px-3 py-1 text-xs font-medium text-text-muted">
-                <ShieldCheckIcon className="h-4 w-4" aria-hidden="true" />
-                Mã hóa đầu cuối · Chỉ sử dụng nội bộ
-              </p>
-            </div>
+    <section className="chat-background flex flex-1 overflow-y-auto px-[clamp(16px,3vw,48px)] py-[clamp(18px,3.5vw,44px)] text-text-secondary">
+      <div className="mx-auto flex w-full max-w-[860px] flex-col items-center">
+        <figure className="w-full max-w-[520px] overflow-hidden rounded-xl bg-surface shadow-[0_18px_46px_rgba(15,23,42,0.18)]">
+          <div className="relative aspect-[16/8.7] w-full overflow-hidden bg-slate-100">
+            {WELCOME_SLIDES.map((slide, index) => (
+              <img
+                key={slide.src}
+                src={slide.src}
+                alt={slide.alt}
+                className={clsx(
+                  "absolute inset-0 h-full w-full transition-opacity duration-500 ease-out",
+                  slide.fit === "contain" ? "object-contain" : "object-cover",
+                  index === activeSlideIndex ? "opacity-100" : "opacity-0",
+                )}
+                loading={index === 0 ? "eager" : "lazy"}
+              />
+            ))}
           </div>
+          <figcaption className="grid min-h-9 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2">
+            <strong className="min-w-0 truncate text-xs font-bold text-text-primary">
+              {activeSlide.title}
+            </strong>
+            <span className="min-w-0 truncate text-right text-xs font-semibold text-text-muted">
+              {activeSlide.description}
+            </span>
+          </figcaption>
+        </figure>
 
-          <div className="mt-7 grid gap-3 sm:grid-cols-2">
+        <div className="mt-7 text-center">
+          <h2 className="text-[clamp(32px,4vw,44px)] font-extrabold leading-tight text-text-primary">
+            Chào mừng đến với <span className="text-primary">Hacom PC</span>
+          </h2>
+          <p className="mx-auto mt-4 max-w-[720px] text-[17px] font-medium leading-7 text-text-secondary">
+            Nền tảng trò chuyện nội bộ an toàn, tốc độ cao dành cho nhân sự Hacom
+            Holdings. Kết nối, cộng tác và điều phối công việc hiệu quả.
+          </p>
+        </div>
+
+        <div className="mt-8 grid w-full max-w-[720px] gap-4 sm:grid-cols-2">
           <button
             type="button"
             onClick={onNewChat}
-            className="min-h-[132px] rounded-lg border border-border bg-surface-overlay p-4 text-left transition-micro hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
+            className="flex min-h-[112px] gap-4 rounded-lg border border-border bg-surface p-5 text-left shadow-elev1 transition-micro hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
           >
-            <ChatBubbleLeftRightIcon className="mb-3 h-6 w-6 text-primary" />
-            <p className="text-sm font-semibold text-text-primary">
-              Bắt đầu cuộc trò chuyện
-            </p>
-            <p className="mt-1 text-xs leading-5 text-text-muted">
-              Tìm đồng nghiệp hoặc tạo nhóm trao đổi mới.
-            </p>
-          </button>
-            <button
-              type="button"
-              onClick={onNewChat}
-              className="min-h-[132px] rounded-lg border border-border bg-surface-overlay p-4 text-left transition-micro hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
-            >
-              <UserGroupIcon className="mb-3 h-6 w-6 text-primary" />
-              <p className="text-sm font-semibold text-text-primary">
-                Tạo nhóm mới
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600 shadow-sm">
+              <ChatBubbleLeftRightIcon className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-text-primary">
+                Bắt đầu trò chuyện
               </p>
-              <p className="mt-1 text-xs leading-5 text-text-muted">
-                Mở bộ chọn thành viên và đặt tên nhóm theo luồng hiện có.
-              </p>
-            </button>
-            <div className="min-h-[132px] rounded-lg border border-border bg-surface-overlay p-4 text-left">
-              <DocumentArrowUpIcon className="mb-3 h-6 w-6 text-primary" />
-              <p className="text-sm font-semibold text-text-primary">
-                Chia sẻ tệp an toàn
-              </p>
-              <p className="mt-1 text-xs leading-5 text-text-muted">
-                Gửi tài liệu, hình ảnh và nội dung công việc trong cuộc trò chuyện.
+              <p className="mt-2 text-sm font-medium leading-5 text-text-secondary">
+                Tìm kiếm đồng nghiệp để nhắn tin hoặc tạo nhóm chat mới cho đội nhóm
+                của bạn.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={emitCommandPaletteOpen}
-              className="min-h-[132px] rounded-lg border border-border bg-surface-overlay p-4 text-left transition-micro hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
-            >
-              <MagnifyingGlassIcon className="mb-3 h-6 w-6 text-primary" />
-              <p className="text-sm font-semibold text-text-primary">
-                Tìm kiếm nhanh
+          </button>
+
+          <div className="flex min-h-[112px] gap-4 rounded-lg border border-border bg-surface p-5 text-left shadow-elev1">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 shadow-sm">
+              <DocumentArrowUpIcon className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-text-primary">
+                Chia sẻ file an toàn
               </p>
-              <p className="mt-1 text-xs leading-5 text-text-muted">
-                Mở tìm kiếm bằng phím tắt {openShortcut} để chuyển nhanh giữa các mục.
+              <p className="mt-2 text-sm font-medium leading-5 text-text-secondary">
+                Kéo thả tài liệu, bài thuyết trình và hình ảnh trực tiếp vào bất kỳ
+                cửa sổ chat nào.
               </p>
-            </button>
+            </div>
           </div>
         </div>
 
-        <aside className="grid gap-3">
-          <div className="rounded-xl border border-border bg-surface p-5 shadow-xs">
-            <p className="text-sm font-semibold text-text-primary">
-              Hoàn thiện hồ sơ của bạn
+        <div className="mt-4 flex w-full max-w-[720px] items-center justify-between gap-4 rounded-lg border border-border bg-surface px-5 py-4 shadow-elev1">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-text-primary">
+              Hoàn thiện hồ sơ
             </p>
-            <p className="mt-2 text-xs leading-5 text-text-muted">
-              Cập nhật thông tin để đồng nghiệp nhận diện nhanh hơn trong danh bạ và nhóm.
-            </p>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="mt-4 w-full justify-center"
-              onClick={() => navigate(ROUTE_PATHS.SETTINGS)}
-            >
-              Đi tới hồ sơ
-            </Button>
-          </div>
-
-          <div className="rounded-xl border border-border bg-surface p-5 shadow-xs">
-            <p className="text-sm font-semibold text-text-primary">Mẹo nhanh</p>
-            <dl className="mt-3 space-y-3 text-xs leading-5 text-text-muted">
-              <div className="flex items-center justify-between gap-3">
-                <dt>Gửi tin nhắn</dt>
-                <dd className="rounded border border-border bg-surface-overlay px-2 py-0.5 font-medium text-text-secondary">
-                  Enter
-                </dd>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <dt>Xuống dòng</dt>
-                <dd className="rounded border border-border bg-surface-overlay px-2 py-0.5 font-medium text-text-secondary">
-                  Shift Enter
-                </dd>
-              </div>
-            </dl>
-          </div>
-
-          <div className="rounded-xl border border-border bg-surface p-5 shadow-xs">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-text-primary">Trạng thái</p>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2 py-1 text-xs font-medium text-success">
-                <span className="h-2 w-2 rounded-full bg-success" />
-                Online
-              </span>
-            </div>
-            <p className="mt-2 text-xs leading-5 text-text-muted">
-              Chọn một cuộc trò chuyện ở danh sách bên trái để bắt đầu làm việc.
+            <p className="mt-1.5 text-sm font-medium leading-5 text-text-secondary">
+              Cập nhật chức danh, phòng ban và ảnh đại diện chuyên nghiệp để đồng
+              nghiệp dễ nhận diện bạn.
             </p>
           </div>
-        </aside>
+          <button
+            type="button"
+            className="h-10 shrink-0 rounded-lg bg-primary px-5 text-sm font-bold text-white transition-micro hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
+            onClick={() => navigate(ROUTE_PATHS.SETTINGS)}
+          >
+            Mở hồ sơ
+          </button>
+        </div>
       </div>
     </section>
   );

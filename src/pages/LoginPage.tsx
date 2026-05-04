@@ -1,25 +1,23 @@
-﻿import React, { useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import React, { useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
-import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
-import { TabTrigger, toast } from "../components/ui";
-import { AuthCard, AuthShell, QrLoginPanel } from "../components/auth";
+import { AuthShell, QrLoginPanel, AuthLogo } from "../components/auth";
 import { PasswordLoginForm } from "../components/auth/PasswordLoginForm";
 import { loginSchema } from "../lib/validations";
 import type { LoginFormData } from "../lib/validations";
 import { useAuthStore } from "../stores";
 import { ROUTE_PATHS } from "../router/paths";
 import { LockedOrDisabledState } from "../features/activation/components/LockedOrDisabledState";
+import { toast } from "../components/ui";
+import { toVietnameseMessage } from "../utils/userMessages";
 
 export const LoginPage: React.FC = () => {
   const { t } = useTranslation("auth");
   const navigate = useNavigate();
   const location = useLocation();
-  const [authMethod, setAuthMethod] = React.useState<"password" | "qr">(
-    "password",
-  );
+  const [authMethod, setAuthMethod] = React.useState<"password" | "qr">("password");
   const {
     login,
     isLoading,
@@ -81,85 +79,72 @@ export const LoginPage: React.FC = () => {
   const submitLockRef = React.useRef(false);
 
   const onSubmit = async (data: LoginFormData) => {
-    if (submitLockRef.current || isLoading) {
-      return;
-    }
-
+    if (submitLockRef.current || isLoading) return;
     submitLockRef.current = true;
 
     try {
       const result = await login(data);
-      if (result === "authenticated") {
-        toast.success(t("auth:toast.loginSuccess"));
+      if (typeof result === "object" && result.status === "authenticated") {
+        toast.success(
+          toVietnameseMessage(result.message, "Đăng nhập thành công."),
+        );
         const from = (location.state as { from?: string })?.from ?? "/chat";
         navigate(from, { replace: true });
         return;
       }
-
       if (result === "activation_required") {
         toast.info(t("auth:activation.required.redirecting"));
         navigate(ROUTE_PATHS.ACTIVATION, {
           replace: true,
-          state: {
-            from: (location.state as { from?: string } | null)?.from,
-          },
+          state: { from: (location.state as { from?: string } | null)?.from },
         });
         return;
       }
-
       if (result === "locked" || result === "disabled") {
         const latestError = useAuthStore.getState().error;
         toast.error(
-          latestError || error || t("auth:activation.locked.defaultMessage"),
+          toVietnameseMessage(
+            latestError || error || undefined,
+            t("auth:activation.locked.defaultMessage"),
+          ),
         );
       }
     } catch (err) {
-      toast.error((err as Error).message ?? t("auth:toast.loginFailed"));
+      toast.error(
+        toVietnameseMessage((err as Error).message, "Đăng nhập thất bại."),
+      );
     } finally {
       submitLockRef.current = false;
     }
   };
 
   return (
-    <AuthShell maxWidth="md">
-      <AuthCard ariaLabel={t("login.aria.section")}>
-        <header className="mb-6 text-center">
-          <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-text-inverse shadow-sm">
-            <ChatBubbleLeftRightIcon className="h-5 w-5" />
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-text-primary">
-            {t("login.title")}
-          </h1>
-          <p className="mt-1.5 text-sm text-text-muted">
-            {t("login.subtitle")}
-          </p>
-        </header>
+    <AuthShell maxWidth="sm" className="max-w-md mx-auto my-auto flex flex-col justify-center min-h-[100dvh] p-6 text-slate-800">
+      <div className="w-full max-w-[420px] rounded-2xl bg-white p-7 shadow-lg sm:p-9">
+        <AuthLogo subtitle="Đăng nhập để tiếp tục trò chuyện nội bộ" />
 
-        <div
-          role="tablist"
-          aria-label={t("login.methods")}
-          className="mb-5 grid grid-cols-2 rounded-2xl border border-border bg-surface-overlay/70 p-1"
-        >
-          <TabTrigger
-            role="tab"
-            id="login-tab-password"
-            aria-controls="login-panel-password"
-            active={authMethod === "password"}
-            aria-selected={authMethod === "password"}
+        <div className="mb-7 flex border-b border-slate-200">
+          <button
             onClick={() => setAuthMethod("password")}
+            className={`flex-1 pb-3 text-sm font-bold uppercase transition-colors ${
+              authMethod === "password"
+                ? "text-[#1a73e8] border-b-2 border-[#1a73e8]"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
           >
-            {t("login.passwordTab")}
-          </TabTrigger>
-          <TabTrigger
-            role="tab"
-            id="login-tab-qr"
-            aria-controls="login-panel-qr"
-            active={authMethod === "qr"}
-            aria-selected={authMethod === "qr"}
+            TÀI KHOẢN
+          </button>
+          <button
             onClick={() => setAuthMethod("qr")}
+            className={`flex-1 pb-3 text-sm font-bold uppercase transition-colors flex items-center justify-center gap-1.5 ${
+              authMethod === "qr"
+                ? "text-[#1a73e8] border-b-2 border-[#1a73e8]"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
           >
-            {t("login.qrTab")}
-          </TabTrigger>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><path d="M9 14v7x"></path><path d="M6 17h.01"></path><path d="M3 21h3"></path><path d="M3 14h3"></path></svg>
+            QUÉT MÃ QR
+          </button>
         </div>
 
         {authMethod === "password" && (
@@ -182,66 +167,47 @@ export const LoginPage: React.FC = () => {
               errors={errors}
               isLoading={isLoading}
               isSubmitting={isSubmitting}
+              passwordValue={watch("password")}
               authError={
-                authStatus === "locked" || authStatus === "disabled"
-                  ? null
-                  : error
+                authStatus === "locked" || authStatus === "disabled" ? null : error
               }
               onSubmit={handleSubmit(onSubmit)}
-              showSocialLogin={false}
             />
           </div>
         )}
 
         {authMethod === "qr" && (
-          <div
-            role="tabpanel"
-            id="login-panel-qr"
-            aria-labelledby="login-tab-qr"
-            className="space-y-4"
-          >
-            <p className="text-center text-sm text-text-secondary">
-              {t("login.qrHint")}
+          <div className="space-y-4">
+            <p className="text-center text-sm text-slate-500">
+              Mở ứng dụng di động để quét mã
             </p>
             <QrLoginPanel
               rememberMe={rememberMe}
               onSuccess={() => {
-                toast.success(t("toast.loginQrSuccess"));
-                const from =
-                  (location.state as { from?: string })?.from ?? "/chat";
+                toast.success("Đăng nhập bằng QR thành công.");
+                const from = (location.state as { from?: string })?.from ?? "/chat";
                 navigate(from, { replace: true });
               }}
             />
+            <div className="mt-5 flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => navigate('/forgot-password')}
+                className="flex-1 h-11 rounded-lg border border-slate-200 bg-slate-50 text-[#2b7ff6] font-semibold text-sm hover:bg-slate-100 transition-colors"
+              >
+                Quên mật khẩu
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/register')}
+                className="flex-1 h-11 rounded-lg bg-[#2b7ff6] hover:bg-blue-600 text-white font-semibold text-sm transition-colors"
+              >
+                Đăng ký
+              </button>
+            </div>
           </div>
         )}
-
-        <p className="mt-6 text-center text-sm text-text-muted">
-          {t("login.noAccount")}{" "}
-          <Link
-            to="/register"
-            className="font-semibold text-primary hover:text-primary/80 transition-colors"
-          >
-            {t("login.signupNow")}
-          </Link>
-        </p>
-      </AuthCard>
-
-      <p className="mt-4 px-2 text-center text-caption leading-relaxed text-text-muted">
-        {t("login.agreement")}{" "}
-        <Link
-          to="/terms"
-          className="underline hover:text-text-secondary transition-colors"
-        >
-          {t("login.terms")}
-        </Link>{" "}
-        {t("login.agreementAnd")}{" "}
-        <Link
-          to="/privacy"
-          className="underline hover:text-text-secondary transition-colors"
-        >
-          {t("login.privacy")}
-        </Link>
-      </p>
+      </div>
     </AuthShell>
   );
 };

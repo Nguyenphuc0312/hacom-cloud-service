@@ -1,37 +1,26 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import clsx from "clsx";
+import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
-import {
-  EnvelopeIcon,
-  LockClosedIcon,
-  ChatBubbleLeftRightIcon,
-} from "@heroicons/react/24/outline";
-import { AuthCard, AuthShell } from "../components/auth";
-import {
-  Button,
-  Input,
-  Checkbox,
-  toast,
-  PasswordStrength,
-} from "../components/ui";
+import { AuthShell, AuthLogo, PasswordStrengthIndicator } from "../components/auth";
+import { Button, toast } from "../components/ui";
 import { registerSchema } from "../lib/validations";
 import type { RegisterFormData } from "../lib/validations";
 import { useAuthStore } from "../stores";
 import { ROUTE_PATHS } from "../router/paths";
+import {
+  toVietnameseMessage,
+  translateI18nMessage,
+} from "../utils/userMessages";
 
 export const RegisterPage: React.FC = () => {
-  const { t } = useTranslation();
   const navigate = useNavigate();
-  const {
-    register: registerUser,
-    isLoading,
-    isAuthenticated,
-    error,
-    clearError,
-  } = useAuthStore();
+  const { t } = useTranslation();
+  const { register: registerUser, isLoading, isAuthenticated, error, clearError } = useAuthStore();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -48,205 +37,168 @@ export const RegisterPage: React.FC = () => {
     handleSubmit,
     control,
     formState: { errors, isSubmitting },
-    setFocus,
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-      confirmPassword: "",
-      acceptTerms: undefined as unknown as true,
-    },
+    defaultValues: { email: "", password: "", confirmPassword: "", acceptTerms: undefined as unknown as true },
     mode: "onChange",
   });
 
-  const password = useWatch({ control, name: "password" }) ?? "";
-
-  useEffect(() => {
-    setFocus("email");
-  }, [setFocus]);
+  const passwordValue = useWatch({ control, name: "password" }) ?? "";
+  const emailError = translateI18nMessage(errors.email?.message, t);
+  const passwordError = translateI18nMessage(errors.password?.message, t);
+  const confirmPasswordError = translateI18nMessage(
+    errors.confirmPassword?.message,
+    t,
+  );
+  const acceptTermsError = translateI18nMessage(
+    errors.acceptTerms?.message,
+    t,
+  );
 
   const onSubmit = async (data: RegisterFormData) => {
     try {
       const normalizedEmail = data.email.trim().toLowerCase();
-
-      const registerResult = await registerUser({
-        email: normalizedEmail,
-        password: data.password,
-      });
+      const registerResult = await registerUser({ email: normalizedEmail, password: data.password });
 
       if (!registerResult.verificationRequired) {
-        toast.success("Đăng ký thành công.");
+        toast.success(
+          toVietnameseMessage(registerResult.message, "Đăng ký thành công."),
+        );
         navigate(ROUTE_PATHS.LOGIN, { replace: true });
         return;
       }
 
       const verificationEmail = registerResult.email || normalizedEmail;
-      const registerChallengeId = registerResult.challengeId;
-      const verifyQuery = new URLSearchParams({
-        email: verificationEmail,
-        source: "signup",
-      });
-      if (registerChallengeId) {
-        verifyQuery.set("challengeId", registerChallengeId);
-      }
-      if (registerResult.expiresAt) {
-        verifyQuery.set("expiresAt", registerResult.expiresAt);
-      }
+      const verifyQuery = new URLSearchParams({ email: verificationEmail, source: "signup" });
+      if (registerResult.challengeId) verifyQuery.set("challengeId", registerResult.challengeId);
+      if (registerResult.expiresAt) verifyQuery.set("expiresAt", registerResult.expiresAt);
 
-      toast.success(t("auth:toast.registerVerificationRequired"));
+      toast.success(
+        toVietnameseMessage(
+          registerResult.message,
+          "Vui lòng xác thực email để hoàn tất đăng ký.",
+        ),
+      );
       navigate(`${ROUTE_PATHS.VERIFY_EMAIL}?${verifyQuery.toString()}`, {
         replace: true,
-        state: {
-          source: "signup" as const,
-          email: verificationEmail,
-          challengeId: registerChallengeId || null,
-          expiresAt: registerResult.expiresAt,
-        },
+        state: { source: "signup", email: verificationEmail, challengeId: registerResult.challengeId || null, expiresAt: registerResult.expiresAt },
       });
     } catch (err) {
-      toast.error((err as Error).message ?? t("auth:toast.registerFailed"));
+      toast.error(
+        toVietnameseMessage((err as Error).message, "Đăng ký thất bại."),
+      );
     }
   };
 
+  const isBusy = isLoading || isSubmitting;
+
   return (
-    <AuthShell maxWidth="md">
-      <AuthCard
-        ariaLabel={t("auth:register.aria.section")}
-        className="p-5 sm:p-7"
-      >
-        <header className="mb-6 text-center">
-          <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-text-inverse shadow-elev1 sm:h-14 sm:w-14">
-            <ChatBubbleLeftRightIcon className="h-7 w-7 sm:h-8 sm:w-8" />
-          </div>
-          <h1 className="text-title text-text-primary sm:text-2xl">
-            {t("auth:register.title")}
-          </h1>
-          <p className="mt-2 text-body-sm text-text-muted">
-            {t("auth:register.subtitle")}
-          </p>
-        </header>
+    <AuthShell maxWidth="sm" className="max-w-md mx-auto my-auto flex flex-col justify-center min-h-[100dvh] p-6 text-slate-800">
+      <div className="w-full max-w-[420px] rounded-2xl bg-white p-7 shadow-lg sm:p-9">
+        <AuthLogo subtitle="Đăng ký tài khoản" />
 
-        <form
-          onSubmit={handleSubmit(onSubmit)}
-          noValidate
-          className="space-y-4"
-        >
-          <div
-            className={clsx(
-              "transition-all duration-200 overflow-hidden",
-              error ? "max-h-40 opacity-100" : "max-h-0 opacity-0",
-            )}
-            aria-live="polite"
-          >
-            {error ? (
-              <div
-                role="alert"
-                className="animate-shake rounded-lg border border-danger/35 bg-danger/15 p-3 text-body-sm text-danger"
-              >
-                {error}
-              </div>
-            ) : null}
-          </div>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          {error && (
+            <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+              {error}
+            </div>
+          )}
 
-          <Input
-            {...register("email")}
-            type="email"
-            label={t("auth:register.email")}
-            placeholder={t("auth:placeholders.email")}
-            leftIcon={<EnvelopeIcon className="h-5 w-5" />}
-            error={errors.email?.message}
-            autoComplete="email"
-            inputMode="email"
-            disabled={isLoading}
-          />
-
-          <div className="space-y-2">
-            <Input
-              {...register("password")}
-              type="password"
-              label={t("auth:register.password")}
-              placeholder={t("auth:placeholders.password")}
-              leftIcon={<LockClosedIcon className="h-5 w-5" />}
-              error={errors.password?.message}
-              autoComplete="new-password"
-              disabled={isLoading}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+            <input
+              {...register("email")}
+              type="email"
+              placeholder="Nhập email"
+              disabled={isBusy}
+              className="w-full h-11 px-3 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
             />
-            <PasswordStrength password={password ?? ""} />
+            {emailError && <p className="mt-1 text-xs text-danger">{emailError}</p>}
           </div>
 
-          <Input
-            {...register("confirmPassword")}
-            type="password"
-            label={t("auth:register.confirmPassword")}
-            placeholder={t("auth:placeholders.password")}
-            leftIcon={<LockClosedIcon className="h-5 w-5" />}
-            error={errors.confirmPassword?.message}
-            autoComplete="new-password"
-            disabled={isLoading}
-          />
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Mật khẩu</label>
+            <div className="relative">
+              <input
+                {...register("password")}
+                type={showPassword ? "text" : "password"}
+                placeholder="Nhập mật khẩu"
+                disabled={isBusy}
+                className="w-full h-11 px-3 pr-10 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+              </button>
+            </div>
+            {passwordError && <p className="mt-1 text-xs text-danger">{passwordError}</p>}
+          </div>
 
-          <Checkbox
-            {...register("acceptTerms")}
-            label={
-              <span className="text-body-sm leading-snug">
-                {t("auth:register.acceptTermsPrefix")}{" "}
-                <Link
-                  to="/terms"
-                  className="text-primary hover:underline"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {t("auth:register.terms")}
-                </Link>{" "}
-                {t("auth:register.acceptTermsAnd")}{" "}
-                <Link
-                  to="/privacy"
-                  className="text-primary hover:underline"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {t("auth:register.privacy")}
-                </Link>
-              </span>
-            }
-            error={errors.acceptTerms?.message}
-            disabled={isLoading}
-          />
+          <PasswordStrengthIndicator password={passwordValue} />
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Nhập lại mật khẩu</label>
+            <div className="relative">
+              <input
+                {...register("confirmPassword")}
+                type={showConfirmPassword ? "text" : "password"}
+                placeholder="Nhập lại mật khẩu"
+                disabled={isBusy}
+                className="w-full h-11 px-3 pr-10 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                {showConfirmPassword ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+              </button>
+            </div>
+            {confirmPasswordError && (
+              <p className="mt-1 text-xs text-danger">{confirmPasswordError}</p>
+            )}
+          </div>
+
+          <label className="flex cursor-pointer items-start gap-3 pt-1">
+            <input
+              {...register("acceptTerms")}
+              type="checkbox"
+              className="mt-1 w-4 h-4 rounded text-[#2b7ff6] focus:ring-[#2b7ff6] border-slate-300"
+              disabled={isBusy}
+            />
+            <span className="text-xs text-slate-600">
+              Tôi đồng ý với <Link to="/terms" className="text-[#2b7ff6] hover:underline">Điều khoản</Link> và <Link to="/privacy" className="text-[#2b7ff6] hover:underline">Chính sách bảo mật</Link>
+            </span>
+          </label>
+          {acceptTermsError && (
+            <p className="mt-1 text-xs text-danger">{acceptTermsError}</p>
+          )}
 
           <Button
             type="submit"
             fullWidth
-            size="lg"
-            isLoading={isLoading || isSubmitting}
-            disabled={isLoading || isSubmitting}
-            aria-busy={isLoading || isSubmitting}
+            size="md"
+            className="h-11 rounded-lg text-sm font-semibold bg-[#2b7ff6] hover:bg-blue-600 text-white mt-4"
+            isLoading={isBusy}
+            disabled={isBusy}
           >
-            {t("auth:register.submit")}
+            Đăng ký
           </Button>
+          
+          <div className="pt-2 text-center">
+            <button
+              type="button"
+              onClick={() => navigate(ROUTE_PATHS.LOGIN)}
+              className="text-[#2b7ff6] font-semibold text-sm hover:text-blue-700 hover:underline transition-colors"
+            >
+              Quay lại đăng nhập
+            </button>
+          </div>
         </form>
-
-        <p className="mt-6 text-center text-body-sm text-text-muted">
-          {t("auth:register.haveAccount")}{" "}
-          <Link
-            to={ROUTE_PATHS.LOGIN}
-            className="font-semibold text-primary hover:text-primary/80 transition-colors"
-          >
-            {t("auth:register.loginNow")}
-          </Link>
-        </p>
-      </AuthCard>
-
-      <p className="mt-4 px-2 text-center text-caption leading-relaxed text-text-muted">
-        {t("auth:register.footerPrivacyPrefix")}{" "}
-        <Link
-          to="/privacy"
-          className="underline hover:text-text-secondary transition-colors"
-        >
-          {t("auth:register.privacy")}
-        </Link>{" "}
-        {t("auth:register.footerPrivacySuffix")}
-      </p>
+      </div>
     </AuthShell>
   );
 };

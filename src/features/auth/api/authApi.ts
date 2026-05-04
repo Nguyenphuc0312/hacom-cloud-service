@@ -45,6 +45,7 @@ export interface LoginPayload {
 
 export interface NormalizedAuthResponse {
   user: Record<string, unknown>;
+  message?: string;
   accessToken?: string;
   refreshToken?: string;
   tokens?: {
@@ -119,6 +120,7 @@ export const normalizeAuthResponse = (
 
   return {
     user: normalizeUser(record.user),
+    message: asString(record.message) || undefined,
     accessToken,
     refreshToken,
     tokens:
@@ -213,7 +215,11 @@ export const loginAuthApi = {
       },
     );
 
-    return normalizeAuthResponse(unwrapApiSuccess(response.data));
+    const normalized = normalizeAuthResponse(unwrapApiSuccess(response.data));
+    return {
+      ...normalized,
+      message: response.data.message || normalized.message,
+    };
   },
 };
 

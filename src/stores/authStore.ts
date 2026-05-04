@@ -46,6 +46,7 @@ import {
 import { resolveAuthFailure } from "../features/auth/utils/authErrorMapper";
 import { authApi } from "../services/api";
 import { runRegisteredStoreResets } from "./storeResetRegistry";
+import { toVietnameseMessage } from "../utils/userMessages";
 
 export interface User {
   id: string;
@@ -130,10 +131,11 @@ export interface RegisterFlowResult {
   email: string;
   challengeId: string | null;
   expiresAt: string | null;
+  message?: string;
 }
 
 export type LoginResult =
-  | "authenticated"
+  | { status: "authenticated"; message?: string }
   | "activation_required"
   | "locked"
   | "disabled";
@@ -531,7 +533,10 @@ export const useAuthStore = create<AuthState>()(
               password: data.password,
             });
             get().applyLoginResponse(payload, data.rememberMe);
-            return "authenticated";
+            return {
+              status: "authenticated",
+              message: payload.message,
+            };
           } catch (error: unknown) {
             const failure = resolveAuthFailure(error, i18n.t.bind(i18n));
 
@@ -558,14 +563,18 @@ export const useAuthStore = create<AuthState>()(
 
             if (failure.kind === "locked" || failure.kind === "disabled") {
               const lockedStatus = resolveLockedAccountStatus(failure.code);
+              const lockedMessage = toVietnameseMessage(
+                failure.message,
+                i18n.t("auth:activation.locked.defaultMessage"),
+              );
               set({
                 isLoading: false,
-                error: failure.message,
+                error: lockedMessage,
                 authStatus: lockedStatus,
                 lockedAccount: {
                   status: lockedStatus,
                   code: failure.code,
-                  message: failure.message,
+                  message: lockedMessage,
                 },
                 activationContext: null,
                 isAuthenticated: false,
@@ -579,8 +588,10 @@ export const useAuthStore = create<AuthState>()(
               return lockedStatus;
             }
 
-            const errorMessage =
-              failure.message || i18n.t("error:auth.loginFailed");
+            const errorMessage = toVietnameseMessage(
+              failure.message,
+              i18n.t("error:auth.loginFailed"),
+            );
 
             set({
               isLoading: false,
@@ -670,11 +681,14 @@ export const useAuthStore = create<AuthState>()(
               email: pendingEmail,
               challengeId,
               expiresAt,
+              message: response.message,
             };
           } catch (error: unknown) {
             const apiError = extractApiError(error);
-            const errorMessage =
-              apiError.message || i18n.t("error:auth.registerFailed");
+            const errorMessage = toVietnameseMessage(
+              apiError.message,
+              i18n.t("error:auth.registerFailed"),
+            );
             set({
               isLoading: false,
               error: errorMessage,
