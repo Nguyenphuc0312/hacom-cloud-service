@@ -751,19 +751,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       ephemeralNoticeTimerRef.current = null;
     }
 
-    if (connectionState === "reconnecting") {
-      setEphemeralNotice({
-        kind: "warn",
-        message: t("chat:toast.connectionReconnecting"),
-      });
-    } else if (connectionState === "disconnected") {
-      setEphemeralNotice({
-        kind: "error",
-        message: t("chat:toast.connectionOffline"),
-      });
-    } else if (
+    if (
       connectionState === "connected" &&
-      (previousState === "reconnecting" || previousState === "disconnected")
+      (previousState === "reconnecting" ||
+        previousState === "disconnected" ||
+        previousState === "error")
     ) {
       setEphemeralNotice({
         kind: "success",
@@ -775,7 +767,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         );
         ephemeralNoticeTimerRef.current = null;
       }, 2400);
-    } else if (connectionState === "connected") {
+    } else if (
+      connectionState === "connected" ||
+      connectionState === "reconnecting" ||
+      connectionState === "disconnected" ||
+      connectionState === "error"
+    ) {
       setEphemeralNotice(null);
     }
 

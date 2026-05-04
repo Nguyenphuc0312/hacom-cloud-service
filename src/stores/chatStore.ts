@@ -4540,6 +4540,16 @@ export const useChatStore = create<ChatState>()(
           attachmentCount: fileMetaArr?.length ?? 0,
         });
 
+        if (browserOnline === false) {
+          return Promise.resolve(
+            outboxController.queueExistingMessage(
+              conversationId,
+              tempMessage,
+              "offline",
+            ),
+          );
+        }
+
         return outboxController.dispatchExistingMessage(
           conversationId,
           tempMessage,
@@ -4552,6 +4562,14 @@ export const useChatStore = create<ChatState>()(
           get().sendRestrictionsByConversation[conversationId];
         if (activeRestriction) {
           throw new Error(activeRestriction.reason);
+        }
+
+        if (getBrowserOnlineState() === false) {
+          return outboxController.queueExistingMessage(
+            conversationId,
+            message,
+            "manual_retry",
+          );
         }
 
         return outboxController.dispatchExistingMessage(

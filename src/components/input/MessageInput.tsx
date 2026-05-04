@@ -2,7 +2,10 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
+  ExclamationTriangleIcon,
+  InformationCircleIcon,
   PaperClipIcon,
+  XCircleIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { AttachmentMenu } from "./AttachmentMenu";
@@ -52,6 +55,23 @@ export interface MentionCandidate {
 export interface MessageInputHandle {
   addFile: (file: File) => void;
 }
+
+const compactStatusToneClasses = {
+  info: "border-sky-200 bg-sky-50 text-sky-800",
+  warn: "border-amber-200 bg-amber-50 text-amber-900",
+  error: "border-rose-200 bg-rose-50 text-rose-800",
+} as const;
+
+const compactStatusToneIcons = {
+  info: InformationCircleIcon,
+  warn: ExclamationTriangleIcon,
+  error: XCircleIcon,
+} as const;
+
+const shouldRenderCompactStatusBar = (composerMode: ComposerMode): boolean =>
+  composerMode === "reconnecting" ||
+  composerMode === "offline" ||
+  composerMode === "unauthenticated";
 
 interface MessageInputProps {
   value: string;
@@ -821,9 +841,18 @@ const MessageInputComponent = React.forwardRef<
       ? "uploading"
       : composerMode === "offline"
         ? "offline"
-        : composerMode === "slow_mode"
+      : composerMode === "slow_mode"
           ? "slow-mode"
           : "ready-to-send";
+  const resolvedCompactStatusTone =
+    disabledReasonTone === "error"
+      ? "error"
+      : disabledReasonTone === "info"
+        ? "info"
+        : "warn";
+  const showCompactStatusBar =
+    Boolean(disabledReason) && shouldRenderCompactStatusBar(composerMode);
+  const CompactStatusIcon = compactStatusToneIcons[resolvedCompactStatusTone];
 
   const handleKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1050,19 +1079,34 @@ const MessageInputComponent = React.forwardRef<
           {liveRegionMessage}
         </p>
 
-        {disabledReason && (
-          <InlineNotice
-            tone={
-              disabledReasonTone === "error"
-                ? "error"
-                : disabledReasonTone === "info"
-                  ? "info"
-                  : "warning"
-            }
-            message={disabledReason}
-            className="mb-2"
-          />
-        )}
+        {disabledReason &&
+          (showCompactStatusBar ? (
+            <div className="mb-2 flex items-start">
+              <div
+                className={clsx(
+                  "inline-flex max-w-full items-start gap-1.5 rounded-full border px-3 py-1 text-xs font-medium shadow-sm",
+                  compactStatusToneClasses[resolvedCompactStatusTone],
+                )}
+                role="status"
+                aria-live="polite"
+              >
+                <CompactStatusIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span className="min-w-0 leading-5">{disabledReason}</span>
+              </div>
+            </div>
+          ) : (
+            <InlineNotice
+              tone={
+                disabledReasonTone === "error"
+                  ? "error"
+                  : disabledReasonTone === "info"
+                    ? "info"
+                    : "warning"
+              }
+              message={disabledReason}
+              className="mb-2"
+            />
+          ))}
 
         <input
           ref={fileInputRef}
