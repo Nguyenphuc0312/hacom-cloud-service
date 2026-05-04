@@ -1,6 +1,7 @@
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
+import { verifyDistAssets } from "./verify-dist-assets.mjs";
 
 const child = spawn("npm run build", {
   stdio: ["inherit", "pipe", "pipe"],
@@ -57,6 +58,19 @@ child.on("close", (code) => {
     oversizedAssets.forEach((asset) => {
       console.error(`- ${asset.file}: ${asset.sizeKb} kB`);
     });
+    process.exit(1);
+  }
+
+  try {
+    const verification = verifyDistAssets();
+    console.log(
+      `Dist asset verification passed. Checked ${verification.scannedFiles} built file(s).`,
+    );
+  } catch (error) {
+    console.error(error.message);
+    for (const failure of error.failures ?? []) {
+      console.error(`- ${failure}`);
+    }
     process.exit(1);
   }
 });

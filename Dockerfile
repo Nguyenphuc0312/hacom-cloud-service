@@ -15,6 +15,8 @@ RUN npm ci
 FROM deps AS build
 ARG VITE_APP_BASE_PATH=/
 ARG VITE_API_BASE_URL=/api/v1
+ARG VITE_APP_BUILD_SHA=unknown
+ARG VITE_APP_BUILD_TIME=unknown
 # Canonical auth contract for web client bundles.
 ARG VITE_AUTH_BASE_URL=/api/v1/auth
 ARG VITE_USE_AUTH_SERVICE=true
@@ -24,6 +26,8 @@ ARG VITE_WS_AUTO_QUERY_TOKEN_FALLBACK=true
 
 ENV VITE_APP_BASE_PATH=${VITE_APP_BASE_PATH}
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+ENV VITE_APP_BUILD_SHA=${VITE_APP_BUILD_SHA}
+ENV VITE_APP_BUILD_TIME=${VITE_APP_BUILD_TIME}
 ENV VITE_AUTH_BASE_URL=${VITE_AUTH_BASE_URL}
 ENV VITE_USE_AUTH_SERVICE=${VITE_USE_AUTH_SERVICE}
 ENV VITE_WS_URL=${VITE_WS_URL}
@@ -38,7 +42,7 @@ WORKDIR /workspace/chat-shared-types
 RUN npm run build
 
 WORKDIR /workspace/chat-web-client
-RUN npm run build
+RUN npm run build && node scripts/verify-dist-assets.mjs
 
 FROM nginx:1.27-alpine AS production
 COPY chat-web-client/nginx/default.conf.template /etc/nginx/templates/default.conf.template

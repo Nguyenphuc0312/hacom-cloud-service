@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:gate": "node scripts/run-build-gate.mjs",
+    "verify:dist": "node scripts/verify-dist-assets.mjs",
     "typecheck": "tsc -b",
     "test": "vitest run --exclude \"**/*.bench.test.*\"",
     "test:perf:unit": "vitest run src/features/chat/performance/chatTimelinePerformance.bench.test.tsx",
