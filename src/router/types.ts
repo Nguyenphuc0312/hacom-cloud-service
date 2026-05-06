@@ -7,4 +7,5 @@ export interface AppRouteConfig {
   roles?: string[];
   guestOnly?: boolean;
   activationOnly?: boolean;
+  forceChangePasswordOnly?: boolean;
 }

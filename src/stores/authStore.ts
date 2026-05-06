@@ -15,6 +15,7 @@ import {
   getAccessToken,
   getRefreshToken,
   isRefreshTokenCookieMode,
+  parseMustChangePasswordFromToken,
   storeTokens,
 } from "../services/tokenService";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
@@ -84,6 +85,7 @@ export interface User {
   account_state?: string;
   activationStatus?: string;
   activation_status?: string;
+  mustChangePassword?: boolean;
 }
 
 interface AuthResponse {
@@ -200,10 +202,12 @@ const fetchCurrentUser = async (accessToken: string): Promise<User> => {
   const response = await apiClient.get<ApiResponse<User>>("/users/profile", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  return normalizeAuthResponse({
+  const user = normalizeAuthResponse({
     user: unwrapApiSuccess(response.data),
     accessToken,
   }).user as unknown as User;
+  user.mustChangePassword = parseMustChangePasswordFromToken(accessToken);
+  return user;
 };
 
 const normalizeLoginPayload = (payload: unknown): AuthResponse =>
@@ -478,8 +482,11 @@ export const useAuthStore = create<AuthState>()(
           storeTokens(accessToken, refreshToken ?? undefined, rememberMe);
           resetAuthFailureState();
 
+          const mustChangePassword = parseMustChangePasswordFromToken(accessToken);
+          const userWithFlag: User = { ...user, mustChangePassword };
+
           set({
-            user,
+            user: userWithFlag,
             authStatus: "authenticated",
             activationContext: null,
             lockedAccount: null,
