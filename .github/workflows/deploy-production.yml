@@ -1,6 +1,18 @@
 name: deploy-production
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "index.html"
+      - "package.json"
+      - "package-lock.json"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "deploy/**"
+      - ".github/workflows/deploy-production.yml"
   workflow_dispatch:
     inputs:
       image_tag:
