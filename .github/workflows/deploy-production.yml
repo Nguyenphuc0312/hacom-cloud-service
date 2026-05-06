@@ -25,7 +25,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: deploy-production-chat-web-client
+  group: production-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
@@ -33,8 +33,16 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     env:
+      DEPLOY_ENV: ${{ vars.DEPLOY_ENV }}
+      HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL }}
+      SERVICE_NAME: ${{ vars.SERVICE_NAME }}
+      SERVER_APPS_ROOT: ${{ vars.SERVER_APPS_ROOT }}
+      SERVER_HOST: ${{ secrets.SERVER_HOST }}
+      SERVER_PORT: ${{ secrets.SERVER_PORT }}
+      SERVER_USER: ${{ secrets.SERVER_USER }}
+      SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
       SHARED_TYPES_REPO_TOKEN: ${{ secrets.SHARED_TYPES_REPO_TOKEN }}
-      GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME != '' && secrets.GHCR_PULL_USERNAME || github.repository_owner }}
+      GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
       GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
 
     steps:
@@ -57,12 +65,39 @@ jobs:
           path: chat-shared-types
           ref: ${{ vars.SHARED_TYPES_REF || 'main' }}
 
+      - name: Resolve image tag
+        shell: bash
+        env:
+          INPUT_IMAGE_TAG: ${{ github.event.inputs.image_tag || '' }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_IMAGE_TAG}" ]; then
+            echo "IMAGE_TAG=${INPUT_IMAGE_TAG}" >> "$GITHUB_ENV"
+            echo "SKIP_BUILD=true" >> "$GITHUB_ENV"
+          else
+            echo "IMAGE_TAG=${GITHUB_SHA}" >> "$GITHUB_ENV"
+            echo "SKIP_BUILD=false" >> "$GITHUB_ENV"
+          fi
+          echo "IMAGE_REF=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/chat-web-client:${INPUT_IMAGE_TAG:-${GITHUB_SHA}}" >> "$GITHUB_ENV"
+
+      - name: Debug configuration presence
+        shell: bash
+        env:
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          for var in DEPLOY_ENV SERVER_HOST SERVER_PORT SERVER_USER SERVER_SSH_KEY SERVER_SSH_KNOWN_HOSTS GHCR_PULL_USERNAME GHCR_PULL_TOKEN SERVER_APPS_ROOT HEALTHCHECK_URL SERVICE_NAME; do
+            if [ -n "${!var:-}" ]; then
+              echo "${var}=SET"
+            else
+              echo "${var}=MISSING"
+            fi
+          done
+
       - name: Validate deploy inputs
         id: validate_inputs
         env:
-          SERVER_APPS_ROOT: ${{ vars.SERVER_APPS_ROOT }}
           SERVICE_NAME: ${{ vars.SERVICE_NAME }}
-          DEPLOY_ENV: ${{ vars.DEPLOY_ENV }}
           HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL }}
           VITE_APP_BASE_PATH: ${{ vars.VITE_APP_BASE_PATH }}
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
@@ -76,12 +111,8 @@ jobs:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
           SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
-          GHCR_PULL_USERNAME: ${{ env.GHCR_PULL_USERNAME }}
-          GHCR_PULL_TOKEN: ${{ env.GHCR_PULL_TOKEN }}
-          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
-          INPUT_IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
-          set -Eeuo pipefail
+          set -euo pipefail
 
           trim() { printf '%s' "$1" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'; }
           require() {
@@ -90,27 +121,34 @@ jobs:
             printf '%s' "${v}"
           }
 
+          required_vars=(DEPLOY_ENV SERVER_HOST SERVER_PORT SERVER_USER SERVER_SSH_KEY SERVER_SSH_KNOWN_HOSTS GHCR_PULL_USERNAME GHCR_PULL_TOKEN SERVER_APPS_ROOT SERVICE_NAME)
+          for var in "${required_vars[@]}"; do
+            if [ -z "${!var:-}" ]; then
+              echo "Missing required configuration: $var"
+              exit 1
+            fi
+          done
+
           SERVER_APPS_ROOT_CLEAN="$(require "vars.SERVER_APPS_ROOT" "${SERVER_APPS_ROOT}")"
           SERVICE_NAME_CLEAN="$(require "vars.SERVICE_NAME" "${SERVICE_NAME}")"
           DEPLOY_ENV_CLEAN="$(require "vars.DEPLOY_ENV" "${DEPLOY_ENV}")"
           SERVER_PORT_CLEAN="$(require "secrets.SERVER_PORT" "${SERVER_PORT}")"
           SERVER_USER_CLEAN="$(require "secrets.SERVER_USER" "${SERVER_USER}")"
           SERVER_HOST_CLEAN="$(require "secrets.SERVER_HOST" "${SERVER_HOST}")"
-          GHCR_PULL_USERNAME_CLEAN="$(require "GHCR_PULL_USERNAME" "${GHCR_PULL_USERNAME}")"
-          GHCR_PULL_TOKEN_CLEAN="$(require "secrets.GHCR_PULL_TOKEN" "${GHCR_PULL_TOKEN}")"
+          require "secrets.GHCR_PULL_USERNAME" "${GHCR_PULL_USERNAME}" >/dev/null
+          require "secrets.GHCR_PULL_TOKEN" "${GHCR_PULL_TOKEN}" >/dev/null
 
           if [ "${DEPLOY_ENV_CLEAN}" != "production" ]; then
-            echo "::error::vars.DEPLOY_ENV must be 'production'. Got: '${DEPLOY_ENV_CLEAN}'"
+            echo "DEPLOY_ENV must be production"
             exit 1
           fi
 
-          [[ -n "$(trim "${SERVER_SSH_KEY}")" ]] || { echo "::error::SERVER_SSH_KEY is required"; exit 1; }
-          [[ -n "$(trim "${SERVER_SSH_KNOWN_HOSTS}")" ]] || { echo "::error::SERVER_SSH_KNOWN_HOSTS is required"; exit 1; }
+          if ! [[ "${SERVER_PORT_CLEAN}" =~ ^[0-9]+$ ]]; then
+            echo "SERVER_PORT secret must be digits only"
+            exit 1
+          fi
 
-          IMAGE_OWNER="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
-          USE_TAG="${INPUT_IMAGE_TAG:-${GITHUB_SHA}}"
-          IMAGE_REF="ghcr.io/${IMAGE_OWNER}/chat-web-client:${USE_TAG}"
-          RELEASE_DIR="${SERVER_APPS_ROOT_CLEAN}/${SERVICE_NAME_CLEAN}/releases/${USE_TAG}"
+          RELEASE_DIR="${SERVER_APPS_ROOT_CLEAN}/${SERVICE_NAME_CLEAN}/releases/${IMAGE_TAG}"
 
           HEALTHCHECK_URL_CLEAN="$(trim "${HEALTHCHECK_URL}")"; [[ -n "${HEALTHCHECK_URL_CLEAN}" ]] || HEALTHCHECK_URL_CLEAN="http://127.0.0.1/healthz"
           VITE_APP_BASE_PATH_CLEAN="$(trim "${VITE_APP_BASE_PATH}")"; [[ -n "${VITE_APP_BASE_PATH_CLEAN}" ]] || VITE_APP_BASE_PATH_CLEAN="/"
@@ -128,8 +166,6 @@ jobs:
             printf 'SERVER_PORT_CLEAN=%s\n' "${SERVER_PORT_CLEAN}"
             printf 'SERVER_USER_CLEAN=%s\n' "${SERVER_USER_CLEAN}"
             printf 'SERVER_HOST_CLEAN=%s\n' "${SERVER_HOST_CLEAN}"
-            printf 'GHCR_PULL_USERNAME_CLEAN=%s\n' "${GHCR_PULL_USERNAME_CLEAN}"
-            printf 'GHCR_PULL_TOKEN_CLEAN=%s\n' "${GHCR_PULL_TOKEN_CLEAN}"
             printf 'HEALTHCHECK_URL_CLEAN=%s\n' "${HEALTHCHECK_URL_CLEAN}"
             printf 'VITE_APP_BASE_PATH_CLEAN=%s\n' "${VITE_APP_BASE_PATH_CLEAN}"
             printf 'VITE_API_BASE_URL_CLEAN=%s\n' "${VITE_API_BASE_URL_CLEAN}"
@@ -140,7 +176,7 @@ jobs:
             printf 'VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN=%s\n' "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN}"
             printf 'IMAGE_REF=%s\n' "${IMAGE_REF}"
             printf 'RELEASE_DIR=%s\n' "${RELEASE_DIR}"
-            printf 'USE_TAG=%s\n' "${USE_TAG}"
+            printf 'USE_TAG=%s\n' "${IMAGE_TAG}"
           } >> "${GITHUB_ENV}"
 
       - uses: docker/setup-buildx-action@v3
@@ -152,7 +188,7 @@ jobs:
           password: ${{ github.token }}
 
       - name: Build and push runtime image
-        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.image_tag != '') }}
+        if: env.SKIP_BUILD == 'false'
         run: |
           set -Eeuo pipefail
           docker buildx build \
@@ -200,27 +236,33 @@ jobs:
             printf 'HEALTHCHECK_URL=%q\n' "${HEALTHCHECK_URL_CLEAN}"
           } > .release-bundle/.release.env
 
-      - uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SERVER_SSH_KEY }}
+      - name: Set up SSH
+        env:
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${SERVER_SSH_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "${SERVER_SSH_KNOWN_HOSTS}" | tr -d '\r' > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
 
       - name: Configure known_hosts, rsync, deploy
         id: deploy_remote
         run: |
           set -Eeuo pipefail
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SERVER_SSH_KNOWN_HOSTS }}" | tr -d '\r' > ~/.ssh/known_hosts
           PORT="${SERVER_PORT_CLEAN}"
-          ssh -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" \
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" \
             "mkdir -p '${RELEASE_DIR}'"
           rsync -az --delete \
-            -e "ssh -p ${PORT}" \
+            -e "ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes -p ${PORT}" \
             ./chat-web-client/.release-bundle/ \
             "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}:${RELEASE_DIR}/"
-          ssh -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" <<EOF
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" <<EOF
           set -eu
           cd "${RELEASE_DIR}"
-          echo "${GHCR_PULL_TOKEN_CLEAN}" | docker login ghcr.io -u "${GHCR_PULL_USERNAME_CLEAN}" --password-stdin
+          echo "${GHCR_PULL_TOKEN}" | docker login ghcr.io -u "${GHCR_PULL_USERNAME}" --password-stdin
           chmod +x deploy/scripts/deploy.sh deploy/scripts/rollback.sh
           ./deploy/scripts/deploy.sh
           EOF
@@ -230,7 +272,7 @@ jobs:
         run: |
           set +e
           [ -n "${SERVER_PORT_CLEAN:-}" ] || exit 0
-          ssh -p "${SERVER_PORT_CLEAN}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" <<EOF
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes -p "${SERVER_PORT_CLEAN}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" <<EOF
           set +e
           cd "${RELEASE_DIR}" || exit 0
           [ -f ./.release.env ] || exit 0
