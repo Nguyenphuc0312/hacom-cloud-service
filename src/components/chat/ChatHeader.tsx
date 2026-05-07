@@ -32,6 +32,7 @@ interface ChatHeaderProps {
   conversation: Conversation;
   currentUserId: string;
   typingStatus?: TypingStatus;
+  typingStatuses?: TypingStatus[];
   onBack?: () => void;
   onInfoClick: () => void;
   onCallClick?: () => void;
@@ -61,6 +62,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   conversation,
   currentUserId,
   typingStatus,
+  typingStatuses,
   onBack,
   onInfoClick,
   onCallClick,
@@ -87,7 +89,18 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       : UserStatus.OFFLINE
     : otherUser?.status;
   const isOnline = liveStatus === UserStatus.ONLINE;
-  const isTyping = Boolean(typingStatus?.isTyping);
+  const activeTypingStatuses = React.useMemo(() => {
+    const statuses =
+      typingStatuses && typingStatuses.length > 0
+        ? typingStatuses
+        : typingStatus
+          ? [typingStatus]
+          : [];
+
+    return statuses.filter((status) => status.isTyping);
+  }, [typingStatus, typingStatuses]);
+  const primaryTypingStatus = activeTypingStatuses[0] ?? typingStatus;
+  const isTyping = activeTypingStatuses.length > 0;
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement | null>(null);
   const menuButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -205,10 +218,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   return (
     <header
       className={clsx(
-        "chat-header sticky top-0 z-sticky border-b border-border/55",
+        "chat-header sticky top-0 z-sticky border-b border-border/70 bg-surface",
         className,
       )}
-      style={{ backgroundColor: "hsl(var(--chat-panel-bg) / 0.94)" }}
     >
       <ConversationLane>
         <div className="chat-header-row flex min-h-[var(--app-header-height)] items-center gap-2">
@@ -266,9 +278,12 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
             {isTyping ? (
               <TypingIndicator
-                userName={typingStatus?.userName}
-                activity={typingStatus?.activity}
-                confidence={typingStatus?.confidence}
+                userName={primaryTypingStatus?.userName}
+                userNames={activeTypingStatuses.map(
+                  (status) => status.userName,
+                )}
+                activity={primaryTypingStatus?.activity}
+                confidence={primaryTypingStatus?.confidence}
               />
             ) : (
               <p
@@ -283,6 +298,39 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           </button>
 
           <div className="relative ml-1 flex items-center gap-0.5">
+            {onSearchClick && (
+              <button
+                type="button"
+                onClick={onSearchClick}
+                className={iconButtonClass}
+                aria-label={t("chat:header.searchInChat")}
+              >
+                <MagnifyingGlassIcon className="h-[18px] w-[18px]" />
+              </button>
+            )}
+
+            {onCallClick && (
+              <button
+                type="button"
+                onClick={onCallClick}
+                className={iconButtonClass}
+                aria-label={t("chat:header.voiceCall")}
+              >
+                <PhoneIcon className="h-[18px] w-[18px]" />
+              </button>
+            )}
+
+            {onVideoCallClick && (
+              <button
+                type="button"
+                onClick={onVideoCallClick}
+                className={iconButtonClass}
+                aria-label={t("chat:header.videoCall")}
+              >
+                <VideoCameraIcon className="h-[18px] w-[18px]" />
+              </button>
+            )}
+
             <button
               type="button"
               onClick={onInfoClick}

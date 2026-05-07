@@ -5,7 +5,7 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { RadioGroup } from "./RadioGroup";
-import { SettingsFieldGroup } from "./SettingsFieldGroup";
+import { SettingsCard } from "./SettingsCard";
 import { SettingsSection } from "./SettingsSection";
 import { useSettingsStore } from "../../settings/settingsStore";
 import type { LanguageCode } from "../../settings/types";
@@ -45,7 +45,7 @@ export const LanguageSection: React.FC<LanguageSectionProps> = ({ id }) => {
       title={t("language.title")}
       description={t("language.description")}
     >
-      <SettingsFieldGroup>
+      <SettingsCard>
         <RadioGroup
           label={t("language.label")}
           options={languageOptions}
@@ -54,7 +54,7 @@ export const LanguageSection: React.FC<LanguageSectionProps> = ({ id }) => {
           variant="list"
           className="py-0"
         />
-      </SettingsFieldGroup>
+      </SettingsCard>
     </SettingsSection>
   );
 };

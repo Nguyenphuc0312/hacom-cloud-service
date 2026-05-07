@@ -46,6 +46,14 @@ const renderProtectedRouter = (initialPath = "/protected") =>
             </ActivationRoute>
           }
         />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <div>admin-page</div>
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </MemoryRouter>,
   );
@@ -144,5 +152,20 @@ describe("RouteGuards", () => {
     renderProtectedRouter("/activation-flow");
 
     expect(screen.getByText("activation-flow-page")).toBeInTheDocument();
+  });
+
+  it("renders forbidden state instead of silently redirecting role mismatches", () => {
+    useAuthStore.setState({
+      isAuthenticated: true,
+      authStatus: "authenticated",
+      user: { id: "u-1", username: "user-1", role: "member" },
+    });
+
+    renderProtectedRouter("/admin");
+
+    expect(
+      screen.getByRole("heading", { name: "Bạn không có quyền truy cập" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("admin-page")).not.toBeInTheDocument();
   });
 });

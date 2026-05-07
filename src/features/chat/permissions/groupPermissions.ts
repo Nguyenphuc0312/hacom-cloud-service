@@ -1,10 +1,40 @@
 import { RoomMemberRole } from "../../../types";
 
-export const canRenameGroup = (role: RoomMemberRole | null | undefined): boolean =>
-  role === RoomMemberRole.OWNER || role === RoomMemberRole.ADMIN;
+export type GroupCapabilityMatrix = {
+  canEditGroupProfile?: boolean;
+  canAddMember?: boolean;
+  canRemoveMember?: boolean;
+  canPromoteMember?: boolean;
+  canDemoteAdmin?: boolean;
+  canTransferOwner?: boolean;
+  canLeaveGroup?: boolean;
+  canDeleteGroup?: boolean;
+  canPinMessage?: boolean;
+  canInviteExternal?: boolean;
+  canViewHistory?: boolean;
+  canAccessFile?: boolean;
+  canSendMessage?: boolean;
+};
 
-export const canAddGroupMembers = (role: RoomMemberRole | null | undefined): boolean =>
-  role === RoomMemberRole.OWNER || role === RoomMemberRole.ADMIN;
+const fromCapability = (
+  capabilities: GroupCapabilityMatrix | null | undefined,
+  key: keyof GroupCapabilityMatrix,
+): boolean | null =>
+  typeof capabilities?.[key] === "boolean" ? Boolean(capabilities[key]) : null;
+
+export const canRenameGroup = (
+  role: RoomMemberRole | null | undefined,
+  capabilities?: GroupCapabilityMatrix | null,
+): boolean =>
+  fromCapability(capabilities, "canEditGroupProfile") ??
+  (role === RoomMemberRole.OWNER || role === RoomMemberRole.ADMIN);
+
+export const canAddGroupMembers = (
+  role: RoomMemberRole | null | undefined,
+  capabilities?: GroupCapabilityMatrix | null,
+): boolean =>
+  fromCapability(capabilities, "canAddMember") ??
+  (role === RoomMemberRole.OWNER || role === RoomMemberRole.ADMIN);
 
 export const canManageGroupAdmins = (role: RoomMemberRole | null | undefined): boolean =>
   role === RoomMemberRole.OWNER;
@@ -14,8 +44,13 @@ export const canRemoveGroupMember = (input: {
   actorUserId: string;
   targetRole: RoomMemberRole;
   targetUserId: string;
+  capabilities?: GroupCapabilityMatrix | null;
 }): boolean => {
-  const { actorRole, actorUserId, targetRole, targetUserId } = input;
+  const { actorRole, actorUserId, targetRole, targetUserId, capabilities } = input;
+  const capability = fromCapability(capabilities, "canRemoveMember");
+  if (capability === false) {
+    return false;
+  }
   if (
     (actorRole !== RoomMemberRole.OWNER && actorRole !== RoomMemberRole.ADMIN) ||
     actorUserId === targetUserId ||
@@ -36,8 +71,17 @@ export const canToggleAdminRole = (input: {
   actorUserId: string;
   targetRole: RoomMemberRole;
   targetUserId: string;
+  capabilities?: GroupCapabilityMatrix | null;
 }): boolean => {
-  const { actorRole, actorUserId, targetRole, targetUserId } = input;
+  const { actorRole, actorUserId, targetRole, targetUserId, capabilities } = input;
+  const roleCapability =
+    targetRole === RoomMemberRole.ADMIN
+      ? fromCapability(capabilities, "canDemoteAdmin")
+      : fromCapability(capabilities, "canPromoteMember");
+  if (roleCapability === false) {
+    return false;
+  }
+
   return (
     actorRole === RoomMemberRole.OWNER &&
     actorUserId !== targetUserId &&
@@ -48,7 +92,13 @@ export const canToggleAdminRole = (input: {
 export const canLeaveGroup = (
   role: RoomMemberRole | null | undefined,
   activeOwnerCount: number,
+  capabilities?: GroupCapabilityMatrix | null,
 ): boolean => {
+  const capability = fromCapability(capabilities, "canLeaveGroup");
+  if (capability !== null) {
+    return capability;
+  }
+
   if (role !== RoomMemberRole.OWNER) {
     return true;
   }

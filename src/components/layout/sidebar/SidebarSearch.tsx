@@ -37,14 +37,14 @@ export const SidebarSearch: React.FC<SidebarSearchProps> = ({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={t("sidebar:search.placeholder", {
-            defaultValue: "Search conversations",
+            defaultValue: "Tìm cuộc trò chuyện",
           })}
           className={clsx(
             "input-surface w-full text-text-primary placeholder:text-text-muted",
             isDense
               ? "pl-9 pr-8 text-[13px]"
               : "pl-10 pr-9 text-[13px]",
-            "focus:bg-surface focus:outline-none",
+            "focus:border-focus focus:bg-surface focus:outline-none focus:ring-2 focus:ring-focus/20",
           )}
           aria-label={t("sidebar:search.aria")}
         />

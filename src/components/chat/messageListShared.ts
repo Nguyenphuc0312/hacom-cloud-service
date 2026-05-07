@@ -5,7 +5,6 @@ import type {
   ConversationThreadRow,
 } from "../../features/chat/hooks/useConversationThreadRows";
 import {
-  hasInlineUrl,
   isCollapsiblePlainTextMessage,
   isPlainStaticTextMessage,
   type LongMessageRenderMode,
@@ -39,11 +38,7 @@ export const resolveThreadMessageRenderState = (
 
   return {
     renderMode: isExpanded ? "expanded" : isCollapsible ? "collapsed" : "expanded",
-    measurementMode: isStaticPlainText && !hasInlineUrl(message.content)
-      ? "static"
-      : isStaticPlainText && !message.replyToMessage && !message.forwardedFrom
-        ? "static"
-        : "dynamic",
+    measurementMode: isStaticPlainText ? "static" : "dynamic",
     isCollapsible,
   };
 };

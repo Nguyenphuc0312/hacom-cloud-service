@@ -3,26 +3,39 @@
   "description": "Điều chỉnh các tùy chọn của bạn",
   "resetAll": "Đặt lại mặc định",
   "version": "Cài đặt v{{version}}",
+  "searchPlaceholder": "Tìm cài đặt",
+  "emptySearch": "Không tìm thấy cài đặt phù hợp.",
+  "navigation": {
+    "profile": "Hồ sơ",
+    "notifications": "Thông báo",
+    "privacy": "Quyền riêng tư",
+    "security": "Bảo mật",
+    "appearance": "Giao diện",
+    "language": "Ngôn ngữ",
+    "help": "Trợ giúp",
+    "logout": "Đăng xuất"
+  },
   "profile": {
-    "description": "Thông tin nhận diện, liên hệ và dữ liệu doanh nghiệp."
+    "description": "Thông tin hiển thị, liên hệ và dữ liệu doanh nghiệp."
   },
   "chatData": {
     "title": "Trò chuyện & dữ liệu",
-    "description": "Hành vi nhắn tin, ngôn ngữ và các tùy chọn hội thoại cục bộ."
+    "description": "Hành vi nhắn tin, tìm kiếm và các tùy chọn hội thoại cục bộ."
   },
   "securityDevices": {
     "title": "Bảo mật & thiết bị",
-    "description": "Mật khẩu, người dùng đã chặn và quyền truy cập tài khoản."
+    "description": "Mật khẩu, phiên đăng nhập và quyền truy cập tài khoản."
   },
   "appearance": {
     "title": "Giao diện",
-    "description": "Tùy chỉnh giao diện, màu sắc, cỡ chữ và mật độ hiển thị",
-    "themeLabel": "Giao diện",
+    "description": "Tùy chỉnh chủ đề, cỡ chữ và mật độ hiển thị.",
+    "navDescription": "Chủ đề, cỡ chữ, mật độ.",
+    "themeLabel": "Chủ đề",
     "themeLight": "Sáng",
     "themeDark": "Tối",
     "themeSystem": "Theo hệ thống",
     "accentLabel": "Màu chủ đạo",
-    "accentDesc": "Chọn màu chính cho nút và liên kết",
+    "accentDesc": "Chọn màu chính cho nút và liên kết.",
     "accentColors": {
       "blue": "Xanh dương",
       "green": "Xanh lá",
@@ -32,93 +45,116 @@
       "teal": "Xanh ngọc"
     },
     "fontSizeLabel": "Cỡ chữ",
-    "fontSizeDesc": "Áp dụng cho bong bóng tin nhắn",
+    "fontSizeDesc": "Áp dụng cho bong bóng tin nhắn.",
     "fontSmall": "Nhỏ",
-    "fontSmallDesc": "Văn bản nhỏ gọn",
+    "fontSmallDesc": "Văn bản gọn hơn.",
     "fontMedium": "Vừa",
-    "fontMediumDesc": "Kích thước mặc định",
+    "fontMediumDesc": "Kích thước mặc định.",
     "fontLarge": "Lớn",
-    "fontLargeDesc": "Dễ đọc hơn",
+    "fontLargeDesc": "Dễ đọc hơn.",
     "densityLabel": "Mật độ hiển thị",
-    "densityCompact": "Chặt",
-    "densityCompactDesc": "Khoảng cách bong bóng hẹp hơn",
-    "densityComfortable": "Thoải mái",
-    "densityComfortableDesc": "Rộng rãi hơn",
-    "preview": "Xem trước"
+    "densityCompact": "Gọn",
+    "densityCompactDesc": "Khoảng cách hẹp hơn.",
+    "densityComfortable": "Tiêu chuẩn",
+    "densityComfortableDesc": "Khoảng cách thoáng và dễ đọc.",
+    "preview": "Xem trước",
+    "previewDesc": "Xem trước bong bóng tin nhắn theo lựa chọn hiện tại."
   },
   "notifications": {
     "title": "Thông báo",
-    "description": "Quản lý cách bạn nhận thông báo",
+    "description": "Quản lý cách bạn nhận thông báo trong Hacom Chat.",
+    "navDescription": "Tin nhắn, âm thanh, xem trước.",
     "enabled": "Thông báo tin nhắn",
-    "enabledDesc": "Hiện thông báo khi có tin nhắn mới",
-    "sound": "Âm thanh thông báo",
-    "soundDesc": "Phát âm thanh khi có tin nhắn mới",
+    "enabledDesc": "Hiển thị thông báo khi có tin nhắn mới.",
+    "sound": "Âm thanh",
+    "soundDesc": "Phát âm thanh khi có thông báo mới.",
     "messagePreview": "Xem trước tin nhắn",
-    "messagePreviewDesc": "Hiện nội dung tin nhắn trong thông báo"
+    "messagePreviewDesc": "Hiển thị nội dung tin nhắn trong thông báo.",
+    "saved": "Đã cập nhật thông báo."
   },
   "privacy": {
     "title": "Quyền riêng tư",
-    "description": "Quản lý tùy chọn quyền riêng tư",
-    "showOnlineStatus": "Hiện trạng thái trực tuyến",
-    "showOnlineStatusDesc": "Cho phép người khác thấy khi bạn trực tuyến",
+    "description": "Quản lý trạng thái hiển thị và quyền riêng tư khi nhắn tin.",
+    "navDescription": "Trạng thái, đã đọc, tìm kiếm.",
+    "showOnlineStatus": "Hiện trạng thái hoạt động",
+    "showOnlineStatusDesc": "Cho phép người khác thấy khi bạn trực tuyến.",
     "showOnlineStatusProjectedDesc": "Được quản lý bởi chính sách riêng tư dùng chung. Tắt để ẩn trạng thái trực tuyến của bạn.",
     "readReceipts": "Xác nhận đã đọc",
-    "readReceiptsDesc": "Cho người khác biết khi bạn đã đọc tin nhắn",
+    "readReceiptsDesc": "Cho người khác biết khi bạn đã đọc tin nhắn.",
     "allowStrangers": "Cho phép người lạ nhắn tin",
-    "allowStrangersDesc": "Người không có trong danh bạ có thể gửi tin nhắn cho bạn",
-    "allowStrangersDeprecatedDesc": "Trường tương thích cũ. Tin nhắn trực tiếp hiện yêu cầu hai bên là bạn bè."
+    "allowStrangersDesc": "Người không có trong danh bạ có thể gửi tin nhắn cho bạn.",
+    "allowStrangersDeprecatedDesc": "Trường tương thích cũ. Tin nhắn trực tiếp hiện yêu cầu hai bên là bạn bè.",
+    "saved": "Đã cập nhật quyền riêng tư."
   },
   "chat": {
-    "title": "Chat",
-    "description": "Tùy chỉnh hành vi chat",
+    "title": "Tin nhắn",
+    "description": "Tùy chỉnh hành vi khi đọc và gửi tin nhắn.",
     "autoScroll": "Tự cuộn khi có tin mới",
-    "autoScrollDesc": "Tự động cuộn đến tin nhắn mới nhất",
+    "autoScrollDesc": "Tự động cuộn đến tin nhắn mới nhất khi bạn đang ở cuối hội thoại.",
     "enterKeyLabel": "Hành vi phím Enter",
     "enterSend": "Enter để gửi",
-    "enterSendDesc": "Nhấn Enter để gửi, Shift+Enter để xuống dòng",
+    "enterSendDesc": "Nhấn Enter để gửi, Shift + Enter để xuống dòng.",
     "enterNewline": "Enter để xuống dòng",
-    "enterNewlineDesc": "Nhấn Ctrl+Enter để gửi",
+    "enterNewlineDesc": "Nhấn Ctrl + Enter để gửi.",
     "saveSearchHistory": "Lưu lịch sử tìm kiếm",
-    "saveSearchHistoryDesc": "Ghi nhớ lịch sử tìm kiếm gần đây"
+    "saveSearchHistoryDesc": "Ghi nhớ lịch sử tìm kiếm gần đây trên thiết bị này."
   },
   "language": {
     "title": "Ngôn ngữ",
-    "description": "Chọn ngôn ngữ hiển thị",
+    "description": "Chọn ngôn ngữ hiển thị trong ứng dụng.",
+    "navDescription": "Ngôn ngữ và định dạng hiển thị.",
     "label": "Ngôn ngữ hiển thị",
     "vi": "Tiếng Việt",
     "en": "English",
-    "system": "Mặc định hệ thống",
-    "systemDesc": "Sử dụng ngôn ngữ của trình duyệt"
+    "system": "Theo hệ thống",
+    "systemDesc": "Sử dụng ngôn ngữ của trình duyệt."
   },
   "security": {
     "title": "Bảo mật",
-    "description": "Cập nhật mật khẩu để bảo vệ tài khoản",
+    "description": "Cập nhật mật khẩu và kiểm tra thiết bị đăng nhập.",
     "currentPassword": "Mật khẩu hiện tại",
     "newPassword": "Mật khẩu mới",
     "confirmPassword": "Xác nhận mật khẩu mới",
     "changePassword": "Đổi mật khẩu",
-    "changeSuccess": "Đổi mật khẩu thành công",
-    "wrongPassword": "Mật khẩu hiện tại không đúng",
-    "changeFailed": "Không thể đổi mật khẩu"
+    "changePasswordDesc": "Cập nhật mật khẩu đăng nhập Hacom Chat.",
+    "changeSuccess": "Đổi mật khẩu thành công.",
+    "wrongPassword": "Mật khẩu hiện tại không đúng.",
+    "changeFailed": "Không thể đổi mật khẩu.",
+    "devicesTitle": "Thiết bị đang đăng nhập",
+    "devicesDesc": "Quản lý các phiên đăng nhập của bạn.",
+    "currentDevice": "Thiết bị hiện tại",
+    "currentDeviceBadge": "Đang sử dụng"
   },
   "blockedUsers": {
-    "title": "Người dùng đã chặn",
-    "description": "Những người bạn chặn sẽ không thể nhắn tin cho bạn",
-    "empty": "Bạn chưa chặn ai",
+    "title": "Người dùng bị chặn",
+    "description": "Những người bạn chặn sẽ không thể nhắn tin cho bạn.",
+    "navDescription": "Danh sách người dùng đã chặn.",
+    "empty": "Bạn chưa chặn ai.",
     "unblock": "Bỏ chặn",
-    "unblockSuccess": "Đã bỏ chặn {{name}}",
-    "unblockFailed": "Không thể bỏ chặn người dùng"
+    "unblockSuccess": "Đã bỏ chặn {{name}}.",
+    "unblockFailed": "Không thể bỏ chặn người dùng."
+  },
+  "help": {
+    "title": "Hỗ trợ",
+    "description": "Thông tin trợ giúp và kênh phản hồi nội bộ.",
+    "navDescription": "Trợ giúp, báo lỗi, chính sách.",
+    "center": "Trung tâm trợ giúp",
+    "centerDesc": "Xem hướng dẫn sử dụng Hacom Chat.",
+    "reportIssue": "Báo lỗi",
+    "reportIssueDesc": "Gửi thông tin lỗi cho đội vận hành nội bộ.",
+    "policy": "Chính sách nội bộ",
+    "policyDesc": "Quy định sử dụng nền tảng liên lạc của Hacom."
   },
   "dangerZone": {
     "title": "Vùng nguy hiểm",
-    "description": "Các thao tác không thể hoàn tác trên tài khoản",
+    "description": "Các thao tác không thể hoàn tác trên tài khoản.",
     "deleteAccount": "Xóa tài khoản",
     "deleteWarning": "Thao tác này sẽ xóa vĩnh viễn tin nhắn và hồ sơ của bạn.",
     "deleteButton": "Xóa",
-    "passwordRequired": "Vui lòng nhập mật khẩu",
-    "deleteSuccess": "Đã xóa tài khoản",
-    "wrongPassword": "Mật khẩu không đúng",
-    "deleteFailed": "Không thể xóa tài khoản",
+    "passwordRequired": "Vui lòng nhập mật khẩu.",
+    "deleteSuccess": "Đã xóa tài khoản.",
+    "wrongPassword": "Mật khẩu không đúng.",
+    "deleteFailed": "Không thể xóa tài khoản.",
     "confirmTitle": "Xác nhận xóa tài khoản",
     "confirmDescription": "Nhập mật khẩu hiện tại để xóa vĩnh viễn tài khoản của bạn.",
     "passwordPlaceholder": "Nhập mật khẩu hiện tại",
@@ -127,8 +163,8 @@
   },
   "preview": {
     "contact": "Nguyễn Văn A",
-    "received": "Chào bạn! Khỏe không?",
-    "sent": "Mình khỏe, cảm ơn bạn!",
-    "receivedTwo": "Tốt quá! Hẹn gặp nhé"
+    "received": "Chào bạn! Hôm nay nhóm mình họp lúc mấy giờ?",
+    "sent": "14:00 nhé, mình đã gửi lịch trong nhóm.",
+    "receivedTwo": "Cảm ơn bạn."
   }
 }

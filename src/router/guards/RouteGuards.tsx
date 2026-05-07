@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../../stores";
 import { PageSpinner } from "../../components/ui";
+import { ForbiddenPage } from "../../pages/errors";
 import { ROUTE_PATHS } from "../paths";
 import { isBlockedAuthStatus } from "../../features/auth/model/authState";
 
@@ -77,12 +78,19 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
+  if (
+    user?.mustChangePassword === true &&
+    location.pathname !== ROUTE_PATHS.FORCE_CHANGE_PASSWORD
+  ) {
+    return <Navigate to={ROUTE_PATHS.FORCE_CHANGE_PASSWORD} replace />;
+  }
+
   if (allowedRoles?.length) {
     const userRole = user?.role;
     const isAllowed = !!userRole && allowedRoles.includes(userRole);
 
     if (!isAllowed) {
-      return <Navigate to={ROUTE_PATHS.CHAT} replace />;
+      return <ForbiddenPage />;
     }
   }
 
@@ -98,6 +106,7 @@ export const GuestRoute: React.FC<GuardProps> = ({ children }) => {
     initialize,
     authStatus,
     activationContext,
+    user,
   } = useAuthStore();
 
   useEffect(() => {
@@ -115,6 +124,9 @@ export const GuestRoute: React.FC<GuardProps> = ({ children }) => {
   }
 
   if (isAuthenticated || authStatus === "authenticated") {
+    if (user?.mustChangePassword === true) {
+      return <Navigate to={ROUTE_PATHS.FORCE_CHANGE_PASSWORD} replace />;
+    }
     return <Navigate to={ROUTE_PATHS.CHAT} replace />;
   }
 
@@ -166,4 +178,29 @@ export const ActivationRoute: React.FC<GuardProps> = ({ children }) => {
   }
 
   return <Navigate to={ROUTE_PATHS.LOGIN} replace />;
+};
+
+export const ForceChangePasswordRoute: React.FC<GuardProps> = ({ children }) => {
+  const { t } = useTranslation();
+  const { isAuthenticated, isInitialized, initialize, authStatus, user } = useAuthStore();
+
+  useEffect(() => {
+    if (!isInitialized) {
+      void initialize();
+    }
+  }, [isInitialized, initialize]);
+
+  if (!isInitialized || authStatus === "loading") {
+    return <PageSpinner message={t("common:loading.checkingAuth")} />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to={ROUTE_PATHS.LOGIN} replace />;
+  }
+
+  if (user?.mustChangePassword !== true) {
+    return <Navigate to={ROUTE_PATHS.CHAT} replace />;
+  }
+
+  return <>{children}</>;
 };

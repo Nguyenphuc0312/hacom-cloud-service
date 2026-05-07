@@ -122,6 +122,7 @@ export const GroupAvatar: React.FC<GroupAvatarProps> = ({
   className,
   alt,
 }) => {
+  const [imageFailed, setImageFailed] = React.useState(false);
   const label =
     alt ||
     getConversationDisplayName(conversation, currentUserId) ||
@@ -133,7 +134,11 @@ export const GroupAvatar: React.FC<GroupAvatarProps> = ({
     4,
   );
 
-  if (explicitAvatar) {
+  React.useEffect(() => {
+    setImageFailed(false);
+  }, [explicitAvatar]);
+
+  if (explicitAvatar && !imageFailed) {
     return (
       <div
         className={clsx("relative inline-block shrink-0", className)}
@@ -149,6 +154,7 @@ export const GroupAvatar: React.FC<GroupAvatarProps> = ({
             "rounded-full object-cover ring-2 ring-surface",
           )}
           loading="lazy"
+          onError={() => setImageFailed(true)}
         />
       </div>
     );

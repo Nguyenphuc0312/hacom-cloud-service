@@ -8,8 +8,10 @@ import { MessageInspectDrawer } from "../chat/thread/MessageInspectDrawer";
 import { DropOverlay } from "../input/DropOverlay";
 import { MessageInput } from "../input/MessageInput";
 import { ConversationLane } from "./ConversationLane";
+import { AudioCallDialog } from "../../features/chat/components/AudioCallDialog";
+import { VideoCallView } from "../../features/chat/components/VideoCallView";
 import type { MentionCandidate } from "../input/MessageInput";
-import { Spinner, toast } from "../ui";
+import { NotificationListSkeleton, toast } from "../ui";
 import {
   useChatStore,
   useGroupStore,
@@ -43,10 +45,12 @@ import { logMessageDebug } from "../../utils/messageDebug";
 import { logScrollTrace } from "../../utils/scrollTrace";
 import { logChatPerformance } from "../../utils/chatPerformance";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
+import { getConversationDisplayName } from "../../utils/messageHelpers";
 import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
 import { useChatUiStore } from "../../features/chat/state";
 import { useMessageJumpTargetRTK } from "../../features/chat/hooks/useMessageJumpTargetRTK";
-import { selectConversationMessagesFromState } from "../../stores/chatStore";
+import { chatApi as rtkChatApi } from "../../features/api/chatApi";
+import { store } from "../../store";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
 
 const SearchPanel = React.lazy(() => import("../chat/SearchPanel"));
@@ -84,6 +88,7 @@ interface ChatWindowProps {
   conversation: Conversation;
   currentUser: UserSummary;
   typingStatus?: TypingStatus;
+  typingStatuses?: TypingStatus[];
   onSendMessage: (
     content: string,
     replyTo?: Message,
@@ -142,8 +147,8 @@ const getEphemeralNoticeClassName = (kind: EphemeralNotice["kind"]): string => {
 };
 
 const OverlayPanelFallback: React.FC = () => (
-  <div className="flex h-full items-center justify-center px-6">
-    <Spinner size="md" />
+  <div className="h-full px-1 py-2" aria-busy="true">
+    <NotificationListSkeleton count={5} />
   </div>
 );
 
@@ -152,6 +157,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   conversation,
   currentUser,
   typingStatus,
+  typingStatuses,
   onSendMessage,
   onReactMessage,
   onEditMessage,
@@ -503,6 +509,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [clockTick, setClockTick] = React.useState(() => Date.now());
   const [ephemeralNotice, setEphemeralNotice] =
     React.useState<EphemeralNotice | null>(null);
+  const [callMode, setCallMode] = React.useState<"audio" | "video" | null>(null);
   const [composerHeight, setComposerHeight] = React.useState(0);
   const viewportMetrics = useMobileViewportMetrics();
   const previousConnectionStateRef =
@@ -744,19 +751,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       ephemeralNoticeTimerRef.current = null;
     }
 
-    if (connectionState === "reconnecting") {
-      setEphemeralNotice({
-        kind: "warn",
-        message: t("chat:toast.connectionReconnecting"),
-      });
-    } else if (connectionState === "disconnected") {
-      setEphemeralNotice({
-        kind: "error",
-        message: t("chat:toast.connectionOffline"),
-      });
-    } else if (
+    if (
       connectionState === "connected" &&
-      (previousState === "reconnecting" || previousState === "disconnected")
+      (previousState === "reconnecting" ||
+        previousState === "disconnected" ||
+        previousState === "error")
     ) {
       setEphemeralNotice({
         kind: "success",
@@ -768,7 +767,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         );
         ephemeralNoticeTimerRef.current = null;
       }, 2400);
-    } else if (connectionState === "connected") {
+    } else if (
+      connectionState === "connected" ||
+      connectionState === "reconnecting" ||
+      connectionState === "disconnected" ||
+      connectionState === "error"
+    ) {
       setEphemeralNotice(null);
     }
 
@@ -882,12 +886,22 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [onDeleteMessage, selectedMessageIds, exitSelectionMode]);
 
   const handleSelectionCopy = React.useCallback(() => {
-    const selectedMsgs = selectConversationMessagesFromState(
-      useChatStore.getState(),
-      conversation.id,
-    )
-      .filter((message) => selectedMessageIds.has(message.id))
-      .map((m) => m.content)
+    const cachedMessages =
+      rtkChatApi.endpoints.getMessages
+        .select({ conversationId: conversation.id })(store.getState())
+        .data?.messages ?? [];
+
+    const isSelectedMessage = (message: Message) =>
+      [
+        message.id,
+        message.localId,
+        message.stableId,
+        message.clientMessageId,
+      ].some((id) => typeof id === "string" && selectedMessageIds.has(id));
+
+    const selectedMsgs = cachedMessages
+      .filter(isSelectedMessage)
+      .map((message) => message.content)
       .join("\n");
     void navigator.clipboard.writeText(selectedMsgs);
     toast.success(t("chat:message.actions.copy", { defaultValue: "Copied" }));
@@ -895,6 +909,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [conversation.id, selectedMessageIds, exitSelectionMode, t]);
 
   const currentUsername = currentUser.username;
+  const callDisplayName =
+    getConversationDisplayName(conversation, currentUser.id) ||
+    conversation.displayName ||
+    conversation.name ||
+    t("common:labels.conversation");
 
   return (
     <section
@@ -913,10 +932,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         conversation={conversation}
         currentUserId={currentUser.id}
         typingStatus={typingStatus}
+        typingStatuses={typingStatuses}
         onBack={onBack}
         onInfoClick={onToggleInfoPanel}
         onSearchClick={handleSearchClick}
         onPinnedClick={handlePinnedClick}
+        onCallClick={() => setCallMode("audio")}
+        onVideoCallClick={() => setCallMode("video")}
         onSelectionMode={enterSelectionMode}
       />
 
@@ -1070,6 +1092,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           />
         </div>
       )}
+
+      <AudioCallDialog
+        isOpen={callMode === "audio"}
+        name={callDisplayName}
+        statusLabel="Đang gọi..."
+        onClose={() => setCallMode(null)}
+      />
+      <VideoCallView
+        isOpen={callMode === "video"}
+        name={callDisplayName}
+        onClose={() => setCallMode(null)}
+      />
     </section>
   );
 };

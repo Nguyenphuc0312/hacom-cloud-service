@@ -142,12 +142,6 @@ function isAbortError(err: unknown): boolean {
 }
 
 /** Revoke ObjectURL if present */
-function revokePreview(draft: AttachmentDraft): void {
-  if (draft.previewUrl) {
-    URL.revokeObjectURL(draft.previewUrl);
-  }
-}
-
 // ── Hook ────────────────────────────────────────────────────────────
 
 export function useUploadQueue({
@@ -157,11 +151,35 @@ export function useUploadQueue({
   const { t } = useTranslation();
   const [drafts, setDrafts] = useState<AttachmentDraft[]>([]);
   const abortControllers = useRef(new Map<string, AbortController>());
+  const activePreviewUrls = useRef(new Set<string>());
+  const revokedPreviewUrls = useRef(new Set<string>());
   const isProcessing = useRef(false);
 
   // Stable ref to current conversationId for async callbacks
   const conversationIdRef = useRef(conversationId);
   conversationIdRef.current = conversationId;
+
+  const registerPreviewUrl = useCallback((previewUrl: string | undefined) => {
+    if (previewUrl) {
+      activePreviewUrls.current.add(previewUrl);
+    }
+  }, []);
+
+  const revokePreviewUrl = useCallback((previewUrl: string | undefined) => {
+    if (!previewUrl || revokedPreviewUrls.current.has(previewUrl)) {
+      return;
+    }
+
+    URL.revokeObjectURL(previewUrl);
+    revokedPreviewUrls.current.add(previewUrl);
+    activePreviewUrls.current.delete(previewUrl);
+  }, []);
+
+  const revokeAllActivePreviewUrls = useCallback(() => {
+    for (const previewUrl of Array.from(activePreviewUrls.current)) {
+      revokePreviewUrl(previewUrl);
+    }
+  }, [revokePreviewUrl]);
 
   // ─ Update a single draft by localId ─
 
@@ -360,19 +378,37 @@ export function useUploadQueue({
     }
   }, [drafts, concurrency, processQueue]);
 
+  // Revoke ObjectURLs only after their draft is no longer rendered.
+  useEffect(() => {
+    const nextPreviewUrls = new Set(
+      drafts
+        .filter((draft) => draft.status !== "removed")
+        .map((draft) => draft.previewUrl)
+        .filter((previewUrl): previewUrl is string => Boolean(previewUrl)),
+    );
+
+    for (const previewUrl of activePreviewUrls.current) {
+      if (!nextPreviewUrls.has(previewUrl)) {
+        revokePreviewUrl(previewUrl);
+      }
+    }
+
+    for (const previewUrl of nextPreviewUrls) {
+      if (!revokedPreviewUrls.current.has(previewUrl)) {
+        activePreviewUrls.current.add(previewUrl);
+      }
+    }
+  }, [drafts, revokePreviewUrl]);
+
   // ─ Clear drafts on conversation change ─
 
   useEffect(() => {
-    setDrafts((prev) => {
+    setDrafts(() => {
       // Abort all in-progress uploads
       for (const [, controller] of abortControllers.current) {
         controller.abort();
       }
       abortControllers.current.clear();
-      // Revoke all preview URLs
-      for (const d of prev) {
-        revokePreview(d);
-      }
       return [];
     });
   }, [conversationId]);
@@ -386,9 +422,9 @@ export function useUploadQueue({
         controller.abort();
       }
       controllers.clear();
-      // Note: drafts state revocation happens via conversation change or clearAll
+      revokeAllActivePreviewUrls();
     };
-  }, []);
+  }, [revokeAllActivePreviewUrls]);
 
   // ─ Public API ─
 
@@ -469,7 +505,9 @@ export function useUploadQueue({
             continue;
           }
 
-          next = [...next, createAttachmentDraft(file)];
+          const draft = createAttachmentDraft(file);
+          registerPreviewUrl(draft.previewUrl);
+          next = [...next, draft];
           result.acceptedCount += 1;
         }
 
@@ -478,7 +516,7 @@ export function useUploadQueue({
 
       return result;
     },
-    [t],
+    [registerPreviewUrl, t],
   );
 
   const removeDraft = useCallback((localId: string) => {
@@ -489,13 +527,7 @@ export function useUploadQueue({
       abortControllers.current.delete(localId);
     }
 
-    setDrafts((prev) => {
-      const draft = prev.find((d) => d.localId === localId);
-      if (draft) {
-        revokePreview(draft);
-      }
-      return prev.filter((d) => d.localId !== localId);
-    });
+    setDrafts((prev) => prev.filter((d) => d.localId !== localId));
   }, []);
 
   const cancelUpload = useCallback(
@@ -523,12 +555,7 @@ export function useUploadQueue({
     }
     abortControllers.current.clear();
 
-    setDrafts((prev) => {
-      for (const d of prev) {
-        revokePreview(d);
-      }
-      return [];
-    });
+    setDrafts([]);
   }, []);
 
   // ─ Derived state ─

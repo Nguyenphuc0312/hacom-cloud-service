@@ -35,11 +35,15 @@ import { registerStoreResetter } from "./storeResetRegistry";
 import { conversationApi, messageApi } from "../services/api";
 import { useChatSidebarStore } from "../features/chat/state/chatSidebarStore";
 import { createChatOutboxController } from "./chatStoreOutbox";
-import { createChatUnreadController } from "./chatStoreUnread";
+import {
+  createChatUnreadController,
+  type MarkAsReadInput,
+} from "./chatStoreUnread";
 import {
   removeConversationTypingStatuses,
   removeTypingStatus,
   selectCurrentTypingStatusFromState,
+  selectCurrentTypingStatusesFromState,
   upsertTypingStatus,
 } from "./chatStoreTyping";
 import type {
@@ -91,9 +95,7 @@ interface ChatState {
   setConversations: (conversations: Conversation[]) => void;
   mergeConversationPage: (conversations: Conversation[]) => void;
   addConversation: (conversation: Conversation) => void;
-  upsertConversationSummary: (
-    conversation: Conversation,
-  ) => {
+  upsertConversationSummary: (conversation: Conversation) => {
     applied: boolean;
     gapDetected: boolean;
     previousVersion: number;
@@ -109,7 +111,7 @@ interface ChatState {
   selectConversation: (id: string | null) => void;
   markAsRead: (
     conversationId: string,
-    lastVisibleMessageId?: string,
+    input?: string | MarkAsReadInput,
   ) => Promise<void>;
   applyUnreadSummary: (
     summary: {
@@ -117,6 +119,7 @@ interface ChatState {
       conversations: Array<{
         conversationId: string;
         unreadCount: number;
+        lastReadSeq?: number | null;
         lastReadMessageId: string | null;
         lastReadAt: string | null;
       }>;
@@ -152,7 +155,7 @@ interface ChatState {
   };
   applyOptimisticConversationRead: (
     conversationId: string,
-    lastReadMessageId: string,
+    input: MarkAsReadInput,
     options?: {
       readAt?: Date | string | null;
     },
@@ -327,6 +330,7 @@ const initialState = {
 };
 
 const EMPTY_MESSAGES: Message[] = [];
+const EMPTY_MESSAGE_IDS: string[] = [];
 
 const roomMessageFetchInFlight = new Map<string, number>();
 const initialFetchSeqByConversation = new Map<string, number>();
@@ -405,7 +409,9 @@ const buildHistoryScopeKey = (conversationId: string): string | null => {
   );
 };
 
-const isAuthoritativeHistoryStage = (stage: HistoryStage | undefined): boolean =>
+const isAuthoritativeHistoryStage = (
+  stage: HistoryStage | undefined,
+): boolean =>
   stage === "authoritative_initial_window" || stage === "live_realtime";
 
 const resolveHistoryStage = (
@@ -772,7 +778,9 @@ const toDateValue = (value: unknown): number => {
 const toFiniteNumber = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
 
-const toConversationVersion = (conversation: Conversation | null | undefined) =>
+const toConversationVersion = (
+  conversation: Conversation | null | undefined,
+) =>
   typeof conversation?.summaryVersion === "number" &&
   Number.isFinite(conversation.summaryVersion)
     ? conversation.summaryVersion
@@ -810,7 +818,9 @@ const getConversationCursorIdentity = (
   ].join(":");
 };
 
-const computeConversationCursor = (conversations: Conversation[]): string | null => {
+const computeConversationCursor = (
+  conversations: Conversation[],
+): string | null => {
   const leadingConversation = Array.isArray(conversations)
     ? conversations[0]
     : null;
@@ -826,17 +836,21 @@ const computeConversationUpdatedAfterCursor = (
 ): string | null => {
   let latestTimestamp = 0;
 
-  (Array.isArray(conversations) ? conversations : []).forEach((conversation) => {
-    latestTimestamp = Math.max(
-      latestTimestamp,
-      getConversationCursorTimestamp(conversation),
-    );
-  });
+  (Array.isArray(conversations) ? conversations : []).forEach(
+    (conversation) => {
+      latestTimestamp = Math.max(
+        latestTimestamp,
+        getConversationCursorTimestamp(conversation),
+      );
+    },
+  );
 
   return latestTimestamp > 0 ? new Date(latestTimestamp).toISOString() : null;
 };
 
-const computeCanonicalTotalUnreadCount = (conversations: Conversation[]): number =>
+const computeCanonicalTotalUnreadCount = (
+  conversations: Conversation[],
+): number =>
   (Array.isArray(conversations) ? conversations : []).reduce(
     (sum, conversation) => sum + Math.max(0, conversation.unreadCount || 0),
     0,
@@ -936,11 +950,7 @@ const shouldApplyConversationSummary = (
     };
   }
 
-  if (
-    previousVersion > 0 &&
-    nextVersion > 0 &&
-    nextVersion < previousVersion
-  ) {
+  if (previousVersion > 0 && nextVersion > 0 && nextVersion < previousVersion) {
     return {
       apply: false,
       gapDetected: false,
@@ -952,7 +962,11 @@ const shouldApplyConversationSummary = (
 
   const currentTs = getConversationCursorTimestamp(current);
   const incomingTs = getConversationCursorTimestamp(incoming);
-  if (nextVersion === previousVersion && incomingTs > 0 && incomingTs < currentTs) {
+  if (
+    nextVersion === previousVersion &&
+    incomingTs > 0 &&
+    incomingTs < currentTs
+  ) {
     return {
       apply: false,
       gapDetected: false,
@@ -965,7 +979,9 @@ const shouldApplyConversationSummary = (
   return {
     apply: true,
     gapDetected:
-      previousVersion > 0 && nextVersion > 0 && nextVersion > previousVersion + 1,
+      previousVersion > 0 &&
+      nextVersion > 0 &&
+      nextVersion > previousVersion + 1,
     previousVersion,
     nextVersion,
     reason: "updated",
@@ -988,11 +1004,17 @@ const mergeConversationSummary = (
       incoming.lastReadMessageId ?? current.lastReadMessageId ?? undefined,
     lastReadAt: incoming.lastReadAt ?? current.lastReadAt ?? undefined,
     firstUnreadMessageId:
-      incoming.firstUnreadMessageId ?? current.firstUnreadMessageId ?? undefined,
+      incoming.firstUnreadMessageId ??
+      current.firstUnreadMessageId ??
+      undefined,
     firstUnreadMessageAt:
-      incoming.firstUnreadMessageAt ?? current.firstUnreadMessageAt ?? undefined,
+      incoming.firstUnreadMessageAt ??
+      current.firstUnreadMessageAt ??
+      undefined,
     summaryVersion:
-      toConversationVersion(incoming) || toConversationVersion(current) || undefined,
+      toConversationVersion(incoming) ||
+      toConversationVersion(current) ||
+      undefined,
   }) ?? {
     ...current,
     ...incoming,
@@ -1004,25 +1026,30 @@ const mergeConversationCollections = (
 ): Conversation[] => {
   const mergedById = new Map<string, Conversation>();
 
-  (Array.isArray(conversations) ? conversations : []).forEach((conversation) => {
-    const normalized = normalizeConversation(conversation);
-    if (!normalized) {
-      return;
-    }
+  (Array.isArray(conversations) ? conversations : []).forEach(
+    (conversation) => {
+      const normalized = normalizeConversation(conversation);
+      if (!normalized) {
+        return;
+      }
 
-    const existing = mergedById.get(normalized.id);
-    if (!existing) {
-      mergedById.set(normalized.id, normalized);
-      return;
-    }
+      const existing = mergedById.get(normalized.id);
+      if (!existing) {
+        mergedById.set(normalized.id, normalized);
+        return;
+      }
 
-    const decision = shouldApplyConversationSummary(existing, normalized);
-    if (!decision.apply) {
-      return;
-    }
+      const decision = shouldApplyConversationSummary(existing, normalized);
+      if (!decision.apply) {
+        return;
+      }
 
-    mergedById.set(normalized.id, mergeConversationSummary(existing, normalized));
-  });
+      mergedById.set(
+        normalized.id,
+        mergeConversationSummary(existing, normalized),
+      );
+    },
+  );
 
   return sortConversationsByActivity(Array.from(mergedById.values()));
 };
@@ -1090,24 +1117,28 @@ const updateConversationActivitySummary = (
 
 const updateConversationReadProgress = (
   conversation: Conversation,
-  lastReadMessageId: string,
+  lastReadMessageId?: string | null,
   readAt?: Date | string | null,
-): Conversation =>
-  (normalizeConversation({
+  lastReadSeq?: number | null,
+): Conversation => {
+  const nextLastReadSeq =
+    typeof lastReadSeq === "number" && Number.isFinite(lastReadSeq)
+      ? Math.max(conversation.lastReadSeq ?? 0, lastReadSeq)
+      : conversation.lastReadSeq;
+  const updates = {
     ...conversation,
     unreadCount: 0,
-    lastReadMessageId,
+    ...(lastReadMessageId ? { lastReadMessageId } : {}),
+    ...(typeof nextLastReadSeq === "number"
+      ? { lastReadSeq: nextLastReadSeq }
+      : {}),
     lastReadAt: readAt ?? new Date().toISOString(),
     firstUnreadMessageId: null,
     firstUnreadMessageAt: null,
-  }) ?? {
-    ...conversation,
-    unreadCount: 0,
-    lastReadMessageId,
-    lastReadAt: readAt ?? new Date().toISOString(),
-    firstUnreadMessageId: null,
-    firstUnreadMessageAt: null,
-  }) as Conversation;
+  };
+
+  return (normalizeConversation(updates) ?? updates) as Conversation;
+};
 
 const applyConversationReadState = (
   conversation: Conversation,
@@ -1122,33 +1153,45 @@ const applyConversationReadState = (
 ): Conversation =>
   (normalizeConversation({
     ...conversation,
-    unreadCount: Math.max(0, readState.unreadCount ?? conversation.unreadCount ?? 0),
+    unreadCount: Math.max(
+      0,
+      readState.unreadCount ?? conversation.unreadCount ?? 0,
+    ),
     lastReadSeq: readState.lastReadSeq ?? conversation.lastReadSeq ?? 0,
     lastReadMessageId:
-      readState.lastReadMessageId ?? conversation.lastReadMessageId ?? undefined,
+      readState.lastReadMessageId ??
+      conversation.lastReadMessageId ??
+      undefined,
     lastReadAt: readState.lastReadAt ?? conversation.lastReadAt ?? undefined,
     firstUnreadMessageId:
-      readState.firstUnreadMessageId ?? (readState.unreadCount > 0
-        ? conversation.firstUnreadMessageId ?? undefined
+      readState.firstUnreadMessageId ??
+      (readState.unreadCount > 0
+        ? (conversation.firstUnreadMessageId ?? undefined)
         : null),
     firstUnreadMessageAt:
-      readState.firstUnreadMessageAt ?? (readState.unreadCount > 0
-        ? conversation.firstUnreadMessageAt ?? undefined
+      readState.firstUnreadMessageAt ??
+      (readState.unreadCount > 0
+        ? (conversation.firstUnreadMessageAt ?? undefined)
         : null),
   }) ?? {
     ...conversation,
-    unreadCount: Math.max(0, readState.unreadCount ?? conversation.unreadCount ?? 0),
+    unreadCount: Math.max(
+      0,
+      readState.unreadCount ?? conversation.unreadCount ?? 0,
+    ),
     lastReadSeq: readState.lastReadSeq ?? conversation.lastReadSeq ?? 0,
     lastReadMessageId:
       readState.lastReadMessageId ?? conversation.lastReadMessageId ?? null,
     lastReadAt: readState.lastReadAt ?? conversation.lastReadAt ?? null,
     firstUnreadMessageId:
-      readState.firstUnreadMessageId ?? (readState.unreadCount > 0
-        ? conversation.firstUnreadMessageId ?? null
+      readState.firstUnreadMessageId ??
+      (readState.unreadCount > 0
+        ? (conversation.firstUnreadMessageId ?? null)
         : null),
     firstUnreadMessageAt:
-      readState.firstUnreadMessageAt ?? (readState.unreadCount > 0
-        ? conversation.firstUnreadMessageAt ?? null
+      readState.firstUnreadMessageAt ??
+      (readState.unreadCount > 0
+        ? (conversation.firstUnreadMessageAt ?? null)
         : null),
   }) as Conversation;
 
@@ -1165,7 +1208,10 @@ const getMessageAliasCandidates = (
         message.localId,
         message.clientMessageId,
         message.stableId,
-      ].filter((value): value is string => typeof value === "string" && value.length > 0),
+      ].filter(
+        (value): value is string =>
+          typeof value === "string" && value.length > 0,
+      ),
     ),
   );
 
@@ -1471,8 +1517,8 @@ const mergeMessageRecords = (current: Message, incoming: Message): Message => {
     incomingVersion < currentVersion
       ? true
       : currentVersion === incomingVersion &&
-          incomingUpdatedAt > 0 &&
-          incomingUpdatedAt < currentUpdatedAt;
+        incomingUpdatedAt > 0 &&
+        incomingUpdatedAt < currentUpdatedAt;
 
   const merged = preferCurrent
     ? mergeDefinedMessageFields(incoming, current)
@@ -1711,7 +1757,10 @@ const toConversationLastMessageStatus = (
 ): Conversation["lastMessageStatus"] => {
   if (!message) return null;
 
-  if (message.sendState === "failed" || message.status === MessageStatus.FAILED) {
+  if (
+    message.sendState === "failed" ||
+    message.status === MessageStatus.FAILED
+  ) {
     return "failed";
   }
 
@@ -1913,8 +1962,7 @@ const appendMessageWindow = (
     : null;
 
   const nextWindow: ConversationMessageWindow = {
-    oldestLoadedMessageId:
-      currentWindow?.oldestLoadedMessageId ?? message.id,
+    oldestLoadedMessageId: currentWindow?.oldestLoadedMessageId ?? message.id,
     oldestLoadedAt: currentWindow?.oldestLoadedAt ?? nextTimestamp,
     newestLoadedMessageId: message.id,
     newestLoadedAt: nextTimestamp,
@@ -1933,9 +1981,7 @@ const appendMessageWindow = (
 const resolveNewestCanonicalConversationMessage = (
   state: Pick<
     ChatState,
-    | "messages"
-    | "messageById"
-    | "messageWindowByConversation"
+    "messages" | "messageById" | "messageWindowByConversation"
   >,
   conversationId: string,
   currentMessages?: Message[],
@@ -1946,7 +1992,8 @@ const resolveNewestCanonicalConversationMessage = (
     return state.messageById[newestCanonicalId] ?? null;
   }
 
-  const sourceMessages = currentMessages ?? state.messages[conversationId] ?? [];
+  const sourceMessages =
+    currentMessages ?? state.messages[conversationId] ?? [];
   for (let index = sourceMessages.length - 1; index >= 0; index -= 1) {
     const candidate = sourceMessages[index];
     if (candidate && isCanonicalConversationMessage(candidate)) {
@@ -2026,8 +2073,9 @@ const buildAppendOnlyConversationMessageState = (
   const nextMessages = [...currentMessages, incomingMessage];
   const stableMessageId = getStableMessageId(incomingMessage);
   const existingConversation =
-    state.conversations.find((conversation) => conversation.id === conversationId) ??
-    null;
+    state.conversations.find(
+      (conversation) => conversation.id === conversationId,
+    ) ?? null;
   const previousCanonicalMessage = resolveNewestCanonicalConversationMessage(
     state,
     conversationId,
@@ -2067,7 +2115,7 @@ const buildAppendOnlyConversationMessageState = (
     options?.prefetchedWindow ??
     (nextHasAuthoritativeHistory
       ? false
-      : state.prefetchedWindowByConversation[conversationId] ?? false);
+      : (state.prefetchedWindowByConversation[conversationId] ?? false));
   const nextHydrated =
     options?.hydrated ??
     (nextHasAuthoritativeHistory && Boolean(nextHistoryScopeKey));
@@ -2162,8 +2210,7 @@ const FAST_MESSAGE_PATCH_FIELDS = new Set<string>([
 const canUseFastMessagePatch = (updates: Partial<Message>): boolean => {
   const keys = Object.keys(updates);
   return (
-    keys.length > 0 &&
-    keys.every((key) => FAST_MESSAGE_PATCH_FIELDS.has(key))
+    keys.length > 0 && keys.every((key) => FAST_MESSAGE_PATCH_FIELDS.has(key))
   );
 };
 
@@ -2206,15 +2253,16 @@ const buildPatchedConversationMessageState = (
   nextMessages[targetIndex] = nextMessage;
 
   const currentConversation =
-    state.conversations.find((conversation) => conversation.id === conversationId) ??
-    null;
+    state.conversations.find(
+      (conversation) => conversation.id === conversationId,
+    ) ?? null;
   const shouldPatchConversationSummary =
     currentConversation?.lastMessage?.id === currentMessage.id;
   const conversations =
     currentConversation && shouldPatchConversationSummary
       ? replaceConversationInActivityOrder(
           state.conversations,
-          (normalizeConversation({
+          normalizeConversation({
             ...currentConversation,
             lastMessage: toMessageSummary(nextMessage),
             lastMessageStatus: toConversationLastMessageStatus(nextMessage),
@@ -2222,7 +2270,7 @@ const buildPatchedConversationMessageState = (
             ...currentConversation,
             lastMessage: toMessageSummary(nextMessage),
             lastMessageStatus: toConversationLastMessageStatus(nextMessage),
-          }),
+          },
         )
       : state.conversations;
 
@@ -2246,7 +2294,8 @@ const buildPatchedConversationMessageState = (
       state.hasAuthoritativeHistoryByConversation,
     prefetchedWindowByConversation: state.prefetchedWindowByConversation,
     historyScopeKeyByConversation: state.historyScopeKeyByConversation,
-    latestHistoryRequestByConversation: state.latestHistoryRequestByConversation,
+    latestHistoryRequestByConversation:
+      state.latestHistoryRequestByConversation,
     ...buildConversationCollectionState(conversations),
   };
 };
@@ -2288,8 +2337,9 @@ const buildConversationMessageState = (
   const nextAliasIndex = rebuildConversationMessageAliasIndex(resolvedMessages);
   const nextMessageWindow = buildConversationMessageWindow(resolvedMessages);
   const existingConversation =
-    state.conversations.find((conversation) => conversation.id === conversationId) ??
-    null;
+    state.conversations.find(
+      (conversation) => conversation.id === conversationId,
+    ) ?? null;
   const conversations = existingConversation
     ? replaceConversationInActivityOrder(
         state.conversations,
@@ -2326,7 +2376,7 @@ const buildConversationMessageState = (
     options?.prefetchedWindow ??
     (nextHasAuthoritativeHistory
       ? false
-      : state.prefetchedWindowByConversation[conversationId] ?? false);
+      : (state.prefetchedWindowByConversation[conversationId] ?? false));
   const nextHydrated =
     options?.hydrated ??
     (nextHasAuthoritativeHistory && Boolean(nextHistoryScopeKey));
@@ -2493,8 +2543,7 @@ const ingestConversationMessagesWithMetadata = (
         requestContext: options?.requestContext,
       },
     );
-    const unreadDelta =
-      options?.incrementUnread && mergedMessage ? 1 : 0;
+    const unreadDelta = options?.incrementUnread && mergedMessage ? 1 : 0;
     const conversations =
       unreadDelta > 0
         ? messageState.conversations.map((conversation) => {
@@ -2538,15 +2587,20 @@ const ingestConversationMessagesWithMetadata = (
         : options?.mode === "append"
           ? appendMessages(currentMessages, incomingList)
           : mergeMessages(currentMessages, incomingList);
-  const messageState = buildConversationMessageState(state, conversationId, nextMessages, {
-    hydrated: options?.hydrated,
-    hasNewer: options?.hasNewer,
-    stage: options?.stage,
-    hasAuthoritativeHistory: options?.hasAuthoritativeHistory,
-    prefetchedWindow: options?.prefetchedWindow,
-    historyScopeKey: options?.historyScopeKey,
-    requestContext: options?.requestContext,
-  });
+  const messageState = buildConversationMessageState(
+    state,
+    conversationId,
+    nextMessages,
+    {
+      hydrated: options?.hydrated,
+      hasNewer: options?.hasNewer,
+      stage: options?.stage,
+      hasAuthoritativeHistory: options?.hasAuthoritativeHistory,
+      prefetchedWindow: options?.prefetchedWindow,
+      historyScopeKey: options?.historyScopeKey,
+      requestContext: options?.requestContext,
+    },
+  );
   const mergedMessage = getResolvedMergedMessage(nextMessages, incomingList);
   const unreadDelta =
     options?.incrementUnread && !hadExistingIdentity && mergedMessage ? 1 : 0;
@@ -2761,8 +2815,7 @@ const applySenderProfilesToConversation = (
           senderProfile.status && senderProfile.status.trim().length > 0
             ? senderProfile.status
             : participant.status;
-        const nextUsername =
-          senderProfile.username || participant.username;
+        const nextUsername = senderProfile.username || participant.username;
 
         if (
           nextDisplayName === participant.displayName &&
@@ -2785,8 +2838,7 @@ const applySenderProfilesToConversation = (
     : conversation.participants;
 
   const otherUserProfile =
-    conversation.otherUser?.id &&
-    senderProfiles[conversation.otherUser.id]
+    conversation.otherUser?.id && senderProfiles[conversation.otherUser.id]
       ? senderProfiles[conversation.otherUser.id]
       : null;
   const nextOtherUser =
@@ -2799,11 +2851,11 @@ const applySenderProfilesToConversation = (
             otherUserProfile.avatar && otherUserProfile.avatar.trim().length > 0
               ? otherUserProfile.avatar
               : conversation.otherUser.avatar,
-          status:
-            (otherUserProfile.status &&
-            otherUserProfile.status.trim().length > 0
-              ? otherUserProfile.status
-              : conversation.otherUser.status) as typeof conversation.otherUser.status,
+          status: (otherUserProfile.status &&
+          otherUserProfile.status.trim().length > 0
+            ? otherUserProfile.status
+            : conversation.otherUser
+                .status) as typeof conversation.otherUser.status,
           username:
             otherUserProfile.username || conversation.otherUser.username,
         }
@@ -2823,7 +2875,8 @@ const applySenderProfilesToConversation = (
       ? {
           ...conversation.lastMessage,
           senderName:
-            lastMessageProfile.displayName || conversation.lastMessage.senderName,
+            lastMessageProfile.displayName ||
+            conversation.lastMessage.senderName,
         }
       : conversation.lastMessage;
 
@@ -2833,11 +2886,11 @@ const applySenderProfilesToConversation = (
 
   const nextDisplayName =
     conversation.type === "direct" || conversation.type === "private"
-      ? nextOtherUser?.displayName ?? conversation.displayName
+      ? (nextOtherUser?.displayName ?? conversation.displayName)
       : conversation.displayName;
   const nextDisplayAvatar =
     conversation.type === "direct" || conversation.type === "private"
-      ? nextOtherUser?.avatar ?? conversation.displayAvatar
+      ? (nextOtherUser?.avatar ?? conversation.displayAvatar)
       : conversation.displayAvatar;
 
   if (
@@ -2929,8 +2982,8 @@ const normalizeMessagesResponse = (
   const senderProfiles = normalizeSenderProfiles(payload.senderProfiles);
   const messages = applySenderProfilesToMessages(
     rawMessages
-    .map((item) => normalizeMessage(item))
-    .filter((item): item is Message => item !== null),
+      .map((item) => normalizeMessage(item))
+      .filter((item): item is Message => item !== null),
     senderProfiles,
   );
   const pagination = asRecord(payload.pagination);
@@ -3051,7 +3104,11 @@ export const useChatStore = create<ChatState>()(
       updateMessage: (conversationId, messageId, updates) =>
         get().updateMessage(conversationId, messageId, updates),
       ackOutgoingMessage: (conversationId, clientMessageId, serverMessage) =>
-        get().ackOutgoingMessage(conversationId, clientMessageId, serverMessage),
+        get().ackOutgoingMessage(
+          conversationId,
+          clientMessageId,
+          serverMessage,
+        ),
       failOutgoingMessage: (conversationId, clientMessageId, updates) =>
         get().failOutgoingMessage(conversationId, clientMessageId, updates),
     });
@@ -3060,8 +3117,8 @@ export const useChatStore = create<ChatState>()(
       set,
       get,
       emptyMessages: EMPTY_MESSAGES,
-      markConversationAsRead: (conversationId, anchorId) =>
-        conversationApi.markAsRead(conversationId, anchorId),
+      markConversationAsRead: (conversationId, input) =>
+        conversationApi.markAsRead(conversationId, input),
       getUnreadSummary: () => conversationApi.getUnreadSummary(),
       compareAnchorIdsInConversation,
       normalizeConversation,
@@ -3195,17 +3252,17 @@ export const useChatStore = create<ChatState>()(
       updateConversation: (id, updates) => {
         const nextConversation = normalizeConversation({ id, ...updates });
         set((state) => {
-          const conversations = mergeConversationCollections((Array.isArray(state.conversations)
-            ? state.conversations
-            : []
-          ).map((conversation) =>
-            conversation.id === id
-              ? (normalizeConversation({ ...conversation, ...updates }) ?? {
-                  ...conversation,
-                  ...updates,
-                })
-              : conversation,
-          ));
+          const conversations = mergeConversationCollections(
+            (Array.isArray(state.conversations) ? state.conversations : []).map(
+              (conversation) =>
+                conversation.id === id
+                  ? (normalizeConversation({ ...conversation, ...updates }) ?? {
+                      ...conversation,
+                      ...updates,
+                    })
+                  : conversation,
+            ),
+          );
 
           return {
             conversations,
@@ -3219,7 +3276,8 @@ export const useChatStore = create<ChatState>()(
       },
 
       applyConversationParticipantSummary: (conversationId, participant) => {
-        const normalizedParticipant = normalizeSenderProfileSummary(participant);
+        const normalizedParticipant =
+          normalizeSenderProfileSummary(participant);
         if (!normalizedParticipant) {
           return;
         }
@@ -3228,7 +3286,8 @@ export const useChatStore = create<ChatState>()(
           const senderProfiles = {
             [normalizedParticipant.id]: normalizedParticipant,
           };
-          const currentMessages = state.messages[conversationId] || EMPTY_MESSAGES;
+          const currentMessages =
+            state.messages[conversationId] || EMPTY_MESSAGES;
           const nextMessages = applySenderProfilesToMessages(
             currentMessages,
             senderProfiles,
@@ -3236,7 +3295,10 @@ export const useChatStore = create<ChatState>()(
           const messagesChanged = nextMessages !== currentMessages;
           const currentConversation = state.conversationById[conversationId];
           const nextConversation = currentConversation
-            ? applySenderProfilesToConversation(currentConversation, senderProfiles)
+            ? applySenderProfilesToConversation(
+                currentConversation,
+                senderProfiles,
+              )
             : null;
           const conversationChanged = nextConversation !== currentConversation;
 
@@ -3245,21 +3307,26 @@ export const useChatStore = create<ChatState>()(
           }
 
           const nextMessageById = messagesChanged
-            ? nextMessages.reduce<Record<string, Message>>((accumulator, message) => {
-                accumulator[message.id] = message;
-                return accumulator;
-              }, {
-                ...state.messageById,
-              })
+            ? nextMessages.reduce<Record<string, Message>>(
+                (accumulator, message) => {
+                  accumulator[message.id] = message;
+                  return accumulator;
+                },
+                {
+                  ...state.messageById,
+                },
+              )
             : state.messageById;
 
           const nextConversations = conversationChanged
             ? mergeConversationCollections(
-                (Array.isArray(state.conversations) ? state.conversations : []).map(
-                  (conversation) =>
-                    conversation.id === conversationId && nextConversation
-                      ? nextConversation
-                      : conversation,
+                (Array.isArray(state.conversations)
+                  ? state.conversations
+                  : []
+                ).map((conversation) =>
+                  conversation.id === conversationId && nextConversation
+                    ? nextConversation
+                    : conversation,
                 ),
               )
             : state.conversations;
@@ -3290,9 +3357,8 @@ export const useChatStore = create<ChatState>()(
         messageFetchGenerationByConversation.delete(id);
         outboxController.clearConversationTracking(id);
         set((state) => {
-          const conversations = (Array.isArray(state.conversations)
-            ? state.conversations
-            : []
+          const conversations = (
+            Array.isArray(state.conversations) ? state.conversations : []
           ).filter((conversation) => conversation.id !== id);
           return {
             conversations,
@@ -3315,9 +3381,9 @@ export const useChatStore = create<ChatState>()(
               ),
             ),
             hasAuthoritativeHistoryByConversation: Object.fromEntries(
-              Object.entries(state.hasAuthoritativeHistoryByConversation).filter(
-                ([key]) => key !== id,
-              ),
+              Object.entries(
+                state.hasAuthoritativeHistoryByConversation,
+              ).filter(([key]) => key !== id),
             ),
             prefetchedWindowByConversation: Object.fromEntries(
               Object.entries(state.prefetchedWindowByConversation).filter(
@@ -3335,7 +3401,9 @@ export const useChatStore = create<ChatState>()(
               ),
             ),
             hasMoreMessages: Object.fromEntries(
-              Object.entries(state.hasMoreMessages).filter(([key]) => key !== id),
+              Object.entries(state.hasMoreMessages).filter(
+                ([key]) => key !== id,
+              ),
             ),
             hasNewerMessagesByConversation: Object.fromEntries(
               Object.entries(state.hasNewerMessagesByConversation).filter(
@@ -3367,15 +3435,15 @@ export const useChatStore = create<ChatState>()(
 
       applyUnreadSummary: unreadController.applyUnreadSummary,
 
-      refreshUnreadSummarySnapshot: unreadController.refreshUnreadSummarySnapshot,
+      refreshUnreadSummarySnapshot:
+        unreadController.refreshUnreadSummarySnapshot,
 
       applyIncomingConversationMessage: (conversationId, message, options) => {
         if (!conversationId) return;
 
         set((state) => {
-          const conversations = (Array.isArray(state.conversations)
-            ? state.conversations
-            : []
+          const conversations = (
+            Array.isArray(state.conversations) ? state.conversations : []
           ).map((conversation) => {
             if (conversation.id !== conversationId) {
               return conversation;
@@ -3452,19 +3520,22 @@ export const useChatStore = create<ChatState>()(
 
       ingestMessages: (conversationId, messages, options) => {
         set((state) => {
-          const { nextState, metadata } = ingestConversationMessagesWithMetadata(
-            state,
-            conversationId,
-            messages,
-            options,
-          );
+          const { nextState, metadata } =
+            ingestConversationMessagesWithMetadata(
+              state,
+              conversationId,
+              messages,
+              options,
+            );
 
           if (metadata.mergedMessage) {
             logMessageDebug("chatStore", "message_ingested", {
               conversationId,
               source: options?.source ?? "unknown",
               mode: options?.mode ?? "upsert",
-              correlationKey: getCorrelationKeyForMessage(metadata.mergedMessage),
+              correlationKey: getCorrelationKeyForMessage(
+                metadata.mergedMessage,
+              ),
               mergedId: metadata.mergedMessage.id,
               mergedLocalId: metadata.mergedMessage.localId,
               mergedClientMessageId: metadata.mergedMessage.clientMessageId,
@@ -3495,7 +3566,7 @@ export const useChatStore = create<ChatState>()(
             get().historyStageByConversation[conversationId],
           )
             ? "live_realtime"
-            : get().historyStageByConversation[conversationId] ?? "empty",
+            : (get().historyStageByConversation[conversationId] ?? "empty"),
           source: "addMessage",
         });
       },
@@ -3526,7 +3597,7 @@ export const useChatStore = create<ChatState>()(
               get().historyStageByConversation[conversationId],
             )
               ? "live_realtime"
-              : get().historyStageByConversation[conversationId] ?? "empty",
+              : (get().historyStageByConversation[conversationId] ?? "empty"),
             source: "ackOutgoingMessage",
           },
         );
@@ -3570,8 +3641,10 @@ export const useChatStore = create<ChatState>()(
                       state.historyStageByConversation[conversationId],
                     )
                     ? "live_realtime"
-                    : state.historyStageByConversation[conversationId] ?? "empty"
-                  : state.historyStageByConversation[conversationId] ?? "empty",
+                    : (state.historyStageByConversation[conversationId] ??
+                      "empty")
+                  : (state.historyStageByConversation[conversationId] ??
+                    "empty"),
               hasAuthoritativeHistory:
                 state.hasAuthoritativeHistoryByConversation[conversationId] ??
                 false,
@@ -3610,7 +3683,8 @@ export const useChatStore = create<ChatState>()(
       updateMessage: (conversationId, messageId, updates) => {
         set((state) => {
           const currentMessages = state.messages[conversationId] || [];
-          const aliasIndex = state.messageAliasIndexByConversation[conversationId];
+          const aliasIndex =
+            state.messageAliasIndexByConversation[conversationId];
           const resolvedMessageId = resolveCanonicalMessageIdentity(
             currentMessages,
             aliasIndex,
@@ -3645,20 +3719,30 @@ export const useChatStore = create<ChatState>()(
             return fastPatchedState;
           }
 
-          return buildConversationMessageState(state, conversationId, updatedMessages, {
-            stage:
-              state.historyStageByConversation[conversationId] ??
-              (state.hasAuthoritativeHistoryByConversation[conversationId]
-                ? "authoritative_initial_window"
-                : "empty"),
-            hasAuthoritativeHistory:
-              state.hasAuthoritativeHistoryByConversation[conversationId] ??
-              false,
-          });
+          return buildConversationMessageState(
+            state,
+            conversationId,
+            updatedMessages,
+            {
+              stage:
+                state.historyStageByConversation[conversationId] ??
+                (state.hasAuthoritativeHistoryByConversation[conversationId]
+                  ? "authoritative_initial_window"
+                  : "empty"),
+              hasAuthoritativeHistory:
+                state.hasAuthoritativeHistoryByConversation[conversationId] ??
+                false,
+            },
+          );
         });
       },
 
-      markMessagesReadUpTo: (conversationId, lastMessageId, readerId, lastReadSeq) => {
+      markMessagesReadUpTo: (
+        conversationId,
+        lastMessageId,
+        readerId,
+        lastReadSeq,
+      ) => {
         const currentUserId = useAuthStore.getState().user?.id;
         if (!currentUserId) return;
         if (readerId && readerId === currentUserId) return;
@@ -3674,7 +3758,10 @@ export const useChatStore = create<ChatState>()(
           const updatedMessages = sortedMessages.map((message, index) => {
             if (message.senderId !== currentUserId) return message;
             if (message.status === MessageStatus.READ) return message;
-            const messageSeq = toFiniteNumber(message.serverSeq);
+            const messageSeq =
+              toFiniteNumber(
+                (message as { messageSeq?: unknown }).messageSeq,
+              ) ?? toFiniteNumber(message.serverSeq);
             const withinSeqBoundary =
               typeof lastReadSeq === "number" &&
               Number.isFinite(lastReadSeq) &&
@@ -3682,7 +3769,8 @@ export const useChatStore = create<ChatState>()(
               messageSeq <= lastReadSeq;
 
             if (boundaryIndex < 0) {
-              return withinSeqBoundary || matchesMessageIdentityValue(message, lastMessageId)
+              return withinSeqBoundary ||
+                matchesMessageIdentityValue(message, lastMessageId)
                 ? { ...message, status: MessageStatus.READ, readAt }
                 : message;
             }
@@ -3692,24 +3780,30 @@ export const useChatStore = create<ChatState>()(
               : message;
           });
 
-          return buildConversationMessageState(state, conversationId, updatedMessages, {
-            hydrated:
-              state.hasAuthoritativeHistoryByConversation[conversationId] ??
-              false,
-            hasAuthoritativeHistory:
-              state.hasAuthoritativeHistoryByConversation[conversationId] ??
-              false,
-            stage:
-              state.historyStageByConversation[conversationId] ??
-              (state.hasAuthoritativeHistoryByConversation[conversationId]
-                ? "live_realtime"
-                : "empty"),
-          });
+          return buildConversationMessageState(
+            state,
+            conversationId,
+            updatedMessages,
+            {
+              hydrated:
+                state.hasAuthoritativeHistoryByConversation[conversationId] ??
+                false,
+              hasAuthoritativeHistory:
+                state.hasAuthoritativeHistoryByConversation[conversationId] ??
+                false,
+              stage:
+                state.historyStageByConversation[conversationId] ??
+                (state.hasAuthoritativeHistoryByConversation[conversationId]
+                  ? "live_realtime"
+                  : "empty"),
+            },
+          );
         });
       },
 
       removeMessage: (conversationId, messageId) => {
-        const currentMessages = get().messages[conversationId] || EMPTY_MESSAGES;
+        const currentMessages =
+          get().messages[conversationId] || EMPTY_MESSAGES;
         const resolvedMessageId = resolveCanonicalMessageIdentity(
           currentMessages,
           get().messageAliasIndexByConversation[conversationId],
@@ -3730,7 +3824,8 @@ export const useChatStore = create<ChatState>()(
         }
         set((state) => {
           const updatedMessages = (state.messages[conversationId] || []).filter(
-            (message) => !matchesMessageIdentityValue(message, resolvedMessageId),
+            (message) =>
+              !matchesMessageIdentityValue(message, resolvedMessageId),
           );
           const nextState = buildConversationMessageState(
             state,
@@ -3749,7 +3844,8 @@ export const useChatStore = create<ChatState>()(
           );
           if (currentMessage) {
             const nextAliasIndex = {
-              ...(nextState.messageAliasIndexByConversation[conversationId] || {}),
+              ...(nextState.messageAliasIndexByConversation[conversationId] ||
+                {}),
             };
             getMessageAliasCandidates(currentMessage).forEach((alias) => {
               delete nextAliasIndex[alias];
@@ -3766,11 +3862,13 @@ export const useChatStore = create<ChatState>()(
         const beforeId = asStringValue(options?.beforeId);
         const afterId = asStringValue(options?.afterId);
         const beforeSeq =
-          typeof options?.beforeSeq === "number" && Number.isFinite(options.beforeSeq)
+          typeof options?.beforeSeq === "number" &&
+          Number.isFinite(options.beforeSeq)
             ? Math.floor(options.beforeSeq)
             : undefined;
         const afterSeq =
-          typeof options?.afterSeq === "number" && Number.isFinite(options.afterSeq)
+          typeof options?.afterSeq === "number" &&
+          Number.isFinite(options.afterSeq)
             ? Math.floor(options.afterSeq)
             : undefined;
         const hasBeforeCursor = Boolean(beforeSeq || beforeId || before);
@@ -3795,7 +3893,8 @@ export const useChatStore = create<ChatState>()(
               ? "pagination_newer"
               : "authoritative_open");
         const requestId =
-          options?.requestId ?? buildHistoryRequestId(conversationId, queryType);
+          options?.requestId ??
+          buildHistoryRequestId(conversationId, queryType);
         const historyScopeKey = buildHistoryScopeKey(conversationId);
         const requestContext: ConversationHistoryRequest = {
           requestId,
@@ -3876,7 +3975,7 @@ export const useChatStore = create<ChatState>()(
           error: null,
           messageErrors: {
             ...state.messageErrors,
-              [conversationId]: null,
+            [conversationId]: null,
           },
           latestHistoryRequestByConversation: {
             ...state.latestHistoryRequestByConversation,
@@ -3901,34 +4000,41 @@ export const useChatStore = create<ChatState>()(
               ? Math.min(100, Math.floor(options.limit))
               : 50;
           const params = new URLSearchParams({ limit: String(limit) });
-          if (typeof beforeSeq === "number") params.set("beforeSeq", String(beforeSeq));
-          if (typeof afterSeq === "number") params.set("afterSeq", String(afterSeq));
+          if (typeof beforeSeq === "number")
+            params.set("beforeSeq", String(beforeSeq));
+          if (typeof afterSeq === "number")
+            params.set("afterSeq", String(afterSeq));
           if (beforeId) params.set("beforeId", beforeId);
           if (afterId) params.set("afterId", afterId);
-          logMessageDebug("chatStore", "fetch_requested", {
-            conversationId,
-            fetchMode,
-            queryType,
-            requestId,
-            source: requestContext.source,
-            syncReason,
-            forceRefresh,
-            fetchRequestedAt: fetchRequestedAt.toISOString(),
-            before,
-            after,
-            beforeSeq,
-            afterSeq,
-            beforeId,
-            afterId,
-            limit,
-            initialFetchSeq,
-            fetchGeneration,
-            selectedConversationIdAtDispatch,
-            historyScopeKey,
-          }, {
-            alwaysOn: queryType === "authoritative_open",
-            level: "info",
-          });
+          logMessageDebug(
+            "chatStore",
+            "fetch_requested",
+            {
+              conversationId,
+              fetchMode,
+              queryType,
+              requestId,
+              source: requestContext.source,
+              syncReason,
+              forceRefresh,
+              fetchRequestedAt: fetchRequestedAt.toISOString(),
+              before,
+              after,
+              beforeSeq,
+              afterSeq,
+              beforeId,
+              afterId,
+              limit,
+              initialFetchSeq,
+              fetchGeneration,
+              selectedConversationIdAtDispatch,
+              historyScopeKey,
+            },
+            {
+              alwaysOn: queryType === "authoritative_open",
+              level: "info",
+            },
+          );
 
           const isUnreadFeedQuery = queryType === "unread_feed";
           const response = isUnreadFeedQuery
@@ -4009,17 +4115,22 @@ export const useChatStore = create<ChatState>()(
               selectedConversationIdAtDispatch === conversationId &&
               selectedConversationIdAtCommit !== conversationId
             ) {
-              logMessageDebug("chatStore", "fetch_stale_room_switch_ignored", {
-                conversationId,
-                fetchMode,
-                queryType,
-                requestId,
-                selectedConversationIdAtDispatch,
-                selectedConversationIdAtCommit,
-              }, {
-                alwaysOn: true,
-                level: "warn",
-              });
+              logMessageDebug(
+                "chatStore",
+                "fetch_stale_room_switch_ignored",
+                {
+                  conversationId,
+                  fetchMode,
+                  queryType,
+                  requestId,
+                  selectedConversationIdAtDispatch,
+                  selectedConversationIdAtCommit,
+                },
+                {
+                  alwaysOn: true,
+                  level: "warn",
+                },
+              );
               return state;
             }
 
@@ -4041,17 +4152,22 @@ export const useChatStore = create<ChatState>()(
             const shouldIgnorePartialCommit =
               queryType === "prefetch" && currentlyAuthoritative;
             if (shouldIgnorePartialCommit) {
-              logMessageDebug("chatStore", "fetch_partial_ignored", {
-                conversationId,
-                fetchMode,
-                queryType,
-                requestId,
-                reason: "authoritative_history_already_present",
-                responseCount: normalized.messages.length,
-              }, {
-                alwaysOn: true,
-                level: "info",
-              });
+              logMessageDebug(
+                "chatStore",
+                "fetch_partial_ignored",
+                {
+                  conversationId,
+                  fetchMode,
+                  queryType,
+                  requestId,
+                  reason: "authoritative_history_already_present",
+                  responseCount: normalized.messages.length,
+                },
+                {
+                  alwaysOn: true,
+                  level: "info",
+                },
+              );
               return {
                 ...state,
                 latestHistoryRequestByConversation: {
@@ -4072,11 +4188,10 @@ export const useChatStore = create<ChatState>()(
                     ? appendMessages(existingMessages, normalized.messages)
                     : mergeMessages(existingMessages, normalized.messages);
             const mergedMessages = nextMessages;
-            const nextStage: HistoryStage =
-              shouldPromoteToAuthoritative
-                ? "authoritative_initial_window"
-                : queryType === "unread_feed"
-                  ? "partial_unread_bootstrap"
+            const nextStage: HistoryStage = shouldPromoteToAuthoritative
+              ? "authoritative_initial_window"
+              : queryType === "unread_feed"
+                ? "partial_unread_bootstrap"
                 : queryType === "prefetch"
                   ? "partial_prefetch"
                   : queryType === "pagination_older"
@@ -4093,29 +4208,28 @@ export const useChatStore = create<ChatState>()(
               mergedMessages,
               {
                 hydrated:
-                  shouldPromoteToAuthoritative &&
-                  isAuthoritativeWindowResolved,
+                  shouldPromoteToAuthoritative && isAuthoritativeWindowResolved,
                 hasNewer:
                   fetchMode === "initial" || fetchMode === "newer"
                     ? normalized.hasNext
                     : undefined,
                 stage: nextStage,
-                hasAuthoritativeHistory:
-                  shouldPromoteToAuthoritative
-                    ? isAuthoritativeWindowResolved
-                    : currentlyAuthoritative,
+                hasAuthoritativeHistory: shouldPromoteToAuthoritative
+                  ? isAuthoritativeWindowResolved
+                  : currentlyAuthoritative,
                 prefetchedWindow:
                   queryType === "prefetch"
                     ? true
                     : shouldPromoteToAuthoritative
                       ? false
-                      : state.prefetchedWindowByConversation[conversationId] ??
-                        false,
+                      : (state.prefetchedWindowByConversation[conversationId] ??
+                        false),
                 historyScopeKey,
                 requestContext,
               },
             );
-            const currentConversation = messageState.conversationById[conversationId];
+            const currentConversation =
+              messageState.conversationById[conversationId];
             const resolvedConversation = currentConversation
               ? applySenderProfilesToConversation(
                   currentConversation,
@@ -4127,7 +4241,9 @@ export const useChatStore = create<ChatState>()(
                 ? applyConversationReadState(resolvedConversation, readState)
                 : null;
             const finalConversation =
-              readStateConversation ?? resolvedConversation ?? currentConversation;
+              readStateConversation ??
+              resolvedConversation ??
+              currentConversation;
             const nextConversationById =
               finalConversation && finalConversation !== currentConversation
                 ? {
@@ -4161,30 +4277,35 @@ export const useChatStore = create<ChatState>()(
               },
             };
           });
-          logMessageDebug("chatStore", "fetch_applied", {
-            conversationId,
-            fetchMode,
-            queryType,
-            requestId,
-            source: requestContext.source,
-            syncReason,
-            loaded: normalized.messages.length,
-            hasNext: normalized.hasNext,
-            hasPrev: normalized.hasPrev,
-            fetchGeneration,
-            initialFetchSeq,
-            selectedConversationIdAtDispatch,
-            selectedConversationIdAtCommit:
-              get().selectedConversationId ?? null,
-            historyStageAfter:
-              get().historyStageByConversation[conversationId] ?? "empty",
-            hasAuthoritativeHistoryAfter:
-              get().hasAuthoritativeHistoryByConversation[conversationId] ??
-              false,
-          }, {
-            alwaysOn: queryType === "authoritative_open",
-            level: "info",
-          });
+          logMessageDebug(
+            "chatStore",
+            "fetch_applied",
+            {
+              conversationId,
+              fetchMode,
+              queryType,
+              requestId,
+              source: requestContext.source,
+              syncReason,
+              loaded: normalized.messages.length,
+              hasNext: normalized.hasNext,
+              hasPrev: normalized.hasPrev,
+              fetchGeneration,
+              initialFetchSeq,
+              selectedConversationIdAtDispatch,
+              selectedConversationIdAtCommit:
+                get().selectedConversationId ?? null,
+              historyStageAfter:
+                get().historyStageByConversation[conversationId] ?? "empty",
+              hasAuthoritativeHistoryAfter:
+                get().hasAuthoritativeHistoryByConversation[conversationId] ??
+                false,
+            },
+            {
+              alwaysOn: queryType === "authoritative_open",
+              level: "info",
+            },
+          );
 
           return {
             loaded: normalized.messages.length,
@@ -4201,21 +4322,26 @@ export const useChatStore = create<ChatState>()(
           };
         } catch (error: unknown) {
           if (isCanceledRequestError(error)) {
-            logMessageDebug("chatStore", "fetch_cancelled", {
-              conversationId,
-              fetchMode,
-              queryType,
-              requestId,
-              syncReason,
-              before,
-              after,
-              beforeId: options?.beforeId,
-              afterId: options?.afterId,
-              selectedConversationIdAtDispatch,
-            }, {
-              alwaysOn: queryType === "authoritative_open",
-              level: "info",
-            });
+            logMessageDebug(
+              "chatStore",
+              "fetch_cancelled",
+              {
+                conversationId,
+                fetchMode,
+                queryType,
+                requestId,
+                syncReason,
+                before,
+                after,
+                beforeId: options?.beforeId,
+                afterId: options?.afterId,
+                selectedConversationIdAtDispatch,
+              },
+              {
+                alwaysOn: queryType === "authoritative_open",
+                level: "info",
+              },
+            );
             return {
               loaded: 0,
               hasMore: false,
@@ -4229,22 +4355,27 @@ export const useChatStore = create<ChatState>()(
           const apiError = extractApiError(error);
           const errorMessage =
             apiError.message || i18n.t("error:chat.fetchMessagesFailed");
-          logMessageDebug("chatStore", "fetch_failed", {
-            conversationId,
-            fetchMode,
-            queryType,
-            requestId,
-            syncReason,
-            before,
-            after,
-            beforeId: options?.beforeId,
-            afterId: options?.afterId,
-            errorMessage,
-            selectedConversationIdAtDispatch,
-          }, {
-            alwaysOn: queryType === "authoritative_open",
-            level: "warn",
-          });
+          logMessageDebug(
+            "chatStore",
+            "fetch_failed",
+            {
+              conversationId,
+              fetchMode,
+              queryType,
+              requestId,
+              syncReason,
+              before,
+              after,
+              beforeId: options?.beforeId,
+              afterId: options?.afterId,
+              errorMessage,
+              selectedConversationIdAtDispatch,
+            },
+            {
+              alwaysOn: queryType === "authoritative_open",
+              level: "warn",
+            },
+          );
           set((state) => ({
             error: errorMessage,
             messageErrors: {
@@ -4261,7 +4392,10 @@ export const useChatStore = create<ChatState>()(
             applied: false,
           };
         } finally {
-          if (abortController && activeAuthoritativeHistoryAbortController === abortController) {
+          if (
+            abortController &&
+            activeAuthoritativeHistoryAbortController === abortController
+          ) {
             activeAuthoritativeHistoryAbortController = null;
           }
           const nextInFlight = Math.max(
@@ -4406,6 +4540,16 @@ export const useChatStore = create<ChatState>()(
           attachmentCount: fileMetaArr?.length ?? 0,
         });
 
+        if (browserOnline === false) {
+          return Promise.resolve(
+            outboxController.queueExistingMessage(
+              conversationId,
+              tempMessage,
+              "offline",
+            ),
+          );
+        }
+
         return outboxController.dispatchExistingMessage(
           conversationId,
           tempMessage,
@@ -4418,6 +4562,14 @@ export const useChatStore = create<ChatState>()(
           get().sendRestrictionsByConversation[conversationId];
         if (activeRestriction) {
           throw new Error(activeRestriction.reason);
+        }
+
+        if (getBrowserOnlineState() === false) {
+          return outboxController.queueExistingMessage(
+            conversationId,
+            message,
+            "manual_retry",
+          );
         }
 
         return outboxController.dispatchExistingMessage(
@@ -4490,46 +4642,52 @@ export const useCurrentTypingStatus = () => {
   return useChatStore(selectCurrentTypingStatusFromState);
 };
 
+export const useCurrentTypingStatuses = () => {
+  return useChatStore(useShallow(selectCurrentTypingStatusesFromState));
+};
+
 export const useFilteredConversations = () => {
   const activeFilter = useChatSidebarStore((state) => state.filter);
   const searchQuery = useChatSidebarStore((state) => state.searchQuery);
 
-  return useChatStore((state) => {
-    let filtered = state.orderedConversationIds
-      .map((conversationId) => state.conversationById[conversationId])
-      .filter((conversation): conversation is Conversation =>
-        Boolean(conversation),
-      );
-
-    switch (activeFilter) {
-      case "unread":
-        filtered = filtered.filter(
-          (conversation) => conversation.unreadCount > 0,
+  return useChatStore(
+    useShallow((state) => {
+      let filtered = state.orderedConversationIds
+        .map((conversationId) => state.conversationById[conversationId])
+        .filter((conversation): conversation is Conversation =>
+          Boolean(conversation),
         );
-        break;
-      case "groups":
+
+      switch (activeFilter) {
+        case "unread":
+          filtered = filtered.filter(
+            (conversation) => conversation.unreadCount > 0,
+          );
+          break;
+        case "groups":
+          filtered = filtered.filter(
+            (conversation) =>
+              normalizeRoomType(
+                conversation.type,
+                conversation.participants?.length,
+              ) === "group",
+          );
+          break;
+      }
+
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
         filtered = filtered.filter(
           (conversation) =>
-            normalizeRoomType(
-              conversation.type,
-              conversation.participants?.length,
-            ) === "group",
+            conversation.name?.toLowerCase().includes(query) ||
+            conversation.displayName?.toLowerCase().includes(query) ||
+            conversation.lastMessage?.content?.toLowerCase().includes(query),
         );
-        break;
-    }
+      }
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (conversation) =>
-          conversation.name?.toLowerCase().includes(query) ||
-          conversation.displayName?.toLowerCase().includes(query) ||
-          conversation.lastMessage?.content?.toLowerCase().includes(query),
-      );
-    }
-
-    return filtered;
-  });
+      return filtered;
+    }),
+  );
 };
 
 export const useTotalUnreadCount = () => {
@@ -4599,10 +4757,10 @@ export const selectConversationMessageIdsFromState = (
   conversationId: string | null,
 ): string[] => {
   if (!conversationId) {
-    return [];
+    return EMPTY_MESSAGE_IDS;
   }
 
-  return state.messageIdsByConversation[conversationId] ?? [];
+  return state.messageIdsByConversation[conversationId] ?? EMPTY_MESSAGE_IDS;
 };
 
 export const selectMessageEntityFromState = (

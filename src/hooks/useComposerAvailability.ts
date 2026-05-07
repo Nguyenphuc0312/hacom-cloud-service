@@ -8,6 +8,7 @@ export type ComposerMode =
   | "online"
   | "reconnecting"
   | "offline"
+  | "unauthenticated"
   | "slow_mode"
   | "restricted";
 
@@ -51,6 +52,14 @@ export const useComposerAvailability = ({
   return React.useMemo(() => {
     const browserOnline = getBrowserOnlineState();
     const websocketReady = connectionState === "connected";
+    const isWarmupState =
+      connectionState === "connecting" || connectionState === "authenticating";
+    const isReconnectState = connectionState === "reconnecting";
+    const isAuthState =
+      connectionState === "unauthenticated" ||
+      connectionState === "auth_failed";
+    const isTerminalConnectionLoss =
+      connectionState === "disconnected" || connectionState === "error";
 
     if (!isConversationReady) {
       return {
@@ -59,9 +68,7 @@ export const useComposerAvailability = ({
         canAttach: false,
         canSubmit: false,
         statusTone: "info",
-        statusMessage: t("common:loading.default", {
-          defaultValue: "Loading conversation...",
-        }),
+        statusMessage: undefined,
       };
     }
 
@@ -124,13 +131,27 @@ export const useComposerAvailability = ({
         canAttach: false,
         canSubmit: true,
         statusTone: "error",
-        statusMessage: t("chat:composer.offlineHint", {
-          defaultValue: "Offline. Messages may fail and can be retried.",
+        statusMessage: t("chat:composer.offlineQueuedHint", {
+          defaultValue:
+            "Offline. Messages will be sent once the connection is stable.",
         }),
       };
     }
 
-    if (!websocketReady) {
+    if (isAuthState) {
+      return {
+        mode: "unauthenticated",
+        canType: true,
+        canAttach: false,
+        canSubmit: false,
+        statusTone: "error",
+        statusMessage: t("chat:composer.sessionInactiveHint", {
+          defaultValue: "Your session is no longer active. Please sign in again.",
+        }),
+      };
+    }
+
+    if (isReconnectState) {
       return {
         mode: "reconnecting",
         canType: true,
@@ -139,7 +160,35 @@ export const useComposerAvailability = ({
         statusTone: "warn",
         statusMessage: t("chat:composer.reconnectingHint", {
           defaultValue:
-            "Reconnecting. You can keep sending while messages are being confirmed.",
+            "Reconnecting. Messages will be sent once the connection is stable.",
+        }),
+      };
+    }
+
+    if (isTerminalConnectionLoss) {
+      return {
+        mode: "offline",
+        canType: true,
+        canAttach: false,
+        canSubmit: false,
+        statusTone: "error",
+        statusMessage: t("chat:composer.offlineHint", {
+          defaultValue:
+            "Connection lost. Please check your network or wait for the system to reconnect.",
+        }),
+      };
+    }
+
+    if (!websocketReady && !isWarmupState) {
+      return {
+        mode: "offline",
+        canType: true,
+        canAttach: false,
+        canSubmit: false,
+        statusTone: "error",
+        statusMessage: t("chat:composer.offlineHint", {
+          defaultValue:
+            "Connection lost. Please check your network or wait for the system to reconnect.",
         }),
       };
     }

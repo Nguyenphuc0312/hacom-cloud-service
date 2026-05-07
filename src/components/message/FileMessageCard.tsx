@@ -37,6 +37,7 @@ import {
 } from "../../utils/formatFileSize";
 import type { PreviewType } from "../../utils/formatFileSize";
 import { FileTypeIcon } from "./FileTypeIcon";
+import { Skeleton, SkeletonCircle } from "../ui";
 
 // ── Status types for edge cases ──────────────────────────────────────
 
@@ -222,7 +223,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
         )}
       >
         <div className="flex h-10 w-10 shrink-0 items-center justify-center">
-          <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <SkeletonCircle size={20} />
         </div>
         <div className="min-w-0 flex-1">
           <p
@@ -267,7 +268,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           }}
         >
           {(!thumbLoaded || isThumbLoading) && !thumbError && (
-            <div className="absolute inset-0 animate-pulse bg-surface-overlay" />
+            <Skeleton className="absolute inset-0" rounded="lg" />
           )}
 
           {thumbError && (
@@ -421,10 +422,10 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   return (
     <div
       className={clsx(
-        "group/file flex min-w-0 max-w-full items-center gap-3 rounded-lg p-3 transition-colors",
+        "group/file flex min-w-0 w-[min(22rem,100%)] items-center gap-3 rounded-lg border p-3 transition-colors",
         isOwn
-          ? "bg-surface/20 hover:bg-surface/25"
-          : "bg-surface-overlay hover:bg-surface-hover",
+          ? "border-white/20 bg-surface/16 hover:bg-surface/22"
+          : "border-border/70 bg-surface hover:bg-surface-hover",
         className,
       )}
     >

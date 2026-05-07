@@ -2,15 +2,23 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
-  EllipsisHorizontalIcon,
+  ExclamationTriangleIcon,
+  InformationCircleIcon,
+  PaperClipIcon,
+  XCircleIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { AttachmentMenu } from "./AttachmentMenu";
 import { AttachmentPreview } from "./AttachmentPreview";
 import { AttachmentTray } from "./AttachmentTray";
+import { EmojiButton } from "./EmojiButton";
 import { SendButton, type SendButtonState } from "./SendButton";
 import { ShareContactModal } from "../modals/ShareContactModal";
 import { ConversationLane } from "../layout/ConversationLane";
+import {
+  PollCreateDialog,
+  type PollCreatePayload,
+} from "../../features/chat/components/PollCreateDialog";
 import {
   useAutoResizeTextarea,
   useTypingIndicator,
@@ -24,7 +32,15 @@ import { UPLOAD_CONFIG } from "../../config";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { InlineNotice, toast } from "../ui";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
-import { recordChatPerformanceMeasure } from "../../utils/chatPerformance";
+import {
+  isChatPerformanceEnabled,
+  recordChatPerformanceMeasure,
+} from "../../utils/chatPerformance";
+import {
+  createLongMessageTextFile,
+  getInlineMessageValidationState,
+  MESSAGE_SOFT_LIMIT,
+} from "../../utils/messageLengthPolicy";
 
 export interface MentionCandidate {
   id: string;
@@ -39,6 +55,23 @@ export interface MentionCandidate {
 export interface MessageInputHandle {
   addFile: (file: File) => void;
 }
+
+const compactStatusToneClasses = {
+  info: "border-sky-200 bg-sky-50 text-sky-800",
+  warn: "border-amber-200 bg-amber-50 text-amber-900",
+  error: "border-rose-200 bg-rose-50 text-rose-800",
+} as const;
+
+const compactStatusToneIcons = {
+  info: InformationCircleIcon,
+  warn: ExclamationTriangleIcon,
+  error: XCircleIcon,
+} as const;
+
+const shouldRenderCompactStatusBar = (composerMode: ComposerMode): boolean =>
+  composerMode === "reconnecting" ||
+  composerMode === "offline" ||
+  composerMode === "unauthenticated";
 
 interface MessageInputProps {
   value: string;
@@ -289,6 +322,7 @@ const MessageInputComponent = React.forwardRef<
 
   const [showAttachmentMenu, setShowAttachmentMenu] = React.useState(false);
   const [isShareContactOpen, setIsShareContactOpen] = React.useState(false);
+  const [isPollDialogOpen, setIsPollDialogOpen] = React.useState(false);
   const [isComposerFocused, setIsComposerFocused] = React.useState(false);
   const [mentionMatch, setMentionMatch] = React.useState<MentionMatch | null>(
     null,
@@ -296,6 +330,7 @@ const MessageInputComponent = React.forwardRef<
   const [activeMentionIndex, setActiveMentionIndex] = React.useState(0);
   const [liveRegionMessage, setLiveRegionMessage] = React.useState("");
   const [isPrimarySendLocked, setIsPrimarySendLocked] = React.useState(false);
+  const [showLongPasteNotice, setShowLongPasteNotice] = React.useState(false);
   const primarySendLockedRef = React.useRef(false);
 
   const mentionListId = React.useId();
@@ -389,12 +424,18 @@ const MessageInputComponent = React.forwardRef<
   React.useEffect(() => {
     setDraftValue(externalValue);
     clearMentionState();
+    setShowLongPasteNotice(false);
   }, [clearMentionState, externalValue, valueResetKey]);
+
+  const messageValidation = React.useMemo(
+    () => getInlineMessageValidationState(draftValue),
+    [draftValue],
+  );
 
   const recordInputLatency = React.useCallback(
     (nextValue: string) => {
       if (
-        !import.meta.env.DEV ||
+        !isChatPerformanceEnabled() ||
         typeof window === "undefined" ||
         typeof window.requestAnimationFrame !== "function"
       ) {
@@ -489,6 +530,8 @@ const MessageInputComponent = React.forwardRef<
         } else {
           toast.info(t("common:toast.featureInDevelopment"));
         }
+      } else if (type === "poll") {
+        setIsPollDialogOpen(true);
       } else {
         toast.info(t("common:toast.featureInDevelopment"));
       }
@@ -506,6 +549,16 @@ const MessageInputComponent = React.forwardRef<
   );
 
   const handleSendText = React.useCallback(async () => {
+    if (!messageValidation.canSendInlineMessage) {
+      setLiveRegionMessage(
+        t("chat:composer.hardLimitError", {
+          max: messageValidation.hardLimit.toLocaleString("vi-VN"),
+          defaultValue: "Tin nhắn vượt giới hạn 20.000 ký tự.",
+        }),
+      );
+      return;
+    }
+
     const result = await sendTextMessage(draftValue);
     if (result === "failed") {
       setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
@@ -531,10 +584,13 @@ const MessageInputComponent = React.forwardRef<
     stopTypingNow,
     t,
     draftValue,
+    messageValidation.canSendInlineMessage,
+    messageValidation.hardLimit,
   ]);
 
   const handleSendAttachment = React.useCallback(async () => {
     const result = await sendAttachmentMessage();
+    stopTypingNow();
     setLiveRegionMessage(
       result === "failed"
         ? t("chat:composer.failedAnnouncement")
@@ -544,10 +600,20 @@ const MessageInputComponent = React.forwardRef<
             ? optimisticAnnouncement
           : t("chat:composer.sentAnnouncement"),
     );
-  }, [optimisticAnnouncement, sendAttachmentMessage, t]);
+  }, [optimisticAnnouncement, sendAttachmentMessage, stopTypingNow, t]);
 
   const handlePrimarySend = React.useCallback(async () => {
     if (primarySendLockedRef.current) {
+      return;
+    }
+
+    if (!messageValidation.canSendInlineMessage) {
+      setLiveRegionMessage(
+        t("chat:composer.hardLimitError", {
+          max: messageValidation.hardLimit.toLocaleString("vi-VN"),
+          defaultValue: "Tin nhắn vượt giới hạn 20.000 ký tự.",
+        }),
+      );
       return;
     }
 
@@ -609,6 +675,8 @@ const MessageInputComponent = React.forwardRef<
     t,
     uploadDrafts?.length,
     draftValue,
+    messageValidation.canSendInlineMessage,
+    messageValidation.hardLimit,
   ]);
 
   const handleInputChange = React.useCallback(
@@ -618,6 +686,9 @@ const MessageInputComponent = React.forwardRef<
 
       setDraftValue(nextValue);
       onChange(nextValue);
+      if (nextValue.length <= MESSAGE_SOFT_LIMIT) {
+        setShowLongPasteNotice(false);
+      }
       updateMentionState(nextValue, caret);
       recordInputLatency(nextValue);
 
@@ -627,6 +698,64 @@ const MessageInputComponent = React.forwardRef<
       });
     },
     [notifyInput, onChange, recordInputLatency, updateMentionState],
+  );
+
+  const handleEmojiChange = React.useCallback(
+    (nextValue: string) => {
+      setDraftValue(nextValue);
+      onChange(nextValue);
+      updateMentionState(nextValue, nextValue.length);
+      recordInputLatency(nextValue);
+
+      notifyInput({
+        hasText: nextValue.trim().length > 0,
+        isFocused: true,
+      });
+    },
+    [notifyInput, onChange, recordInputLatency, updateMentionState],
+  );
+
+  const handleSendAsTextFile = React.useCallback(() => {
+    if (!onAddFiles || draftValue.length === 0) {
+      return;
+    }
+
+    const result = onAddFiles([createLongMessageTextFile(draftValue)]);
+    const validationErrors = result?.errors;
+    if (Array.isArray(validationErrors) && validationErrors.length > 0) {
+      Array.from(new Set(validationErrors))
+        .slice(0, 2)
+        .forEach((message) => toast.error(message));
+      return;
+    }
+
+    setDraftValue("");
+    onChange("");
+    clearMentionState();
+    stopTypingNow();
+    setShowLongPasteNotice(false);
+    setLiveRegionMessage(
+      t("chat:composer.sendAsFileReady", {
+        defaultValue: "Đã chuyển nội dung thành tệp văn bản để gửi",
+      }),
+    );
+  }, [clearMentionState, draftValue, onAddFiles, onChange, stopTypingNow, t]);
+
+  const handleCreatePoll = React.useCallback(
+    (payload: PollCreatePayload) => {
+      toast.info(
+        t("common:toast.featureInDevelopment", {
+          defaultValue: "Tính năng đang được phát triển",
+        }),
+      );
+      logMessageDebug("MessageInput", "poll_create_demo_submitted", {
+        conversationId,
+        optionCount: payload.options.length,
+        allowMultiple: payload.allowMultiple,
+        anonymous: payload.anonymous,
+      });
+    },
+    [conversationId, t],
   );
 
   const handleMentionSelect = React.useCallback(
@@ -677,11 +806,15 @@ const MessageInputComponent = React.forwardRef<
   const canSend = hasQueueDrafts
     ? !submitDisabled &&
       !isSubmitBusy &&
+      messageValidation.canSendInlineMessage &&
       !hasUploadingDrafts &&
       (hasReadyDrafts || hasText)
     : selectedFile
       ? !submitDisabled && !isSubmitBusy && composerMode === "online"
-      : !submitDisabled && !isSubmitBusy && hasText;
+      : !submitDisabled &&
+        !isSubmitBusy &&
+        hasText &&
+        messageValidation.canSendInlineMessage;
   const disableAttachmentActions = attachmentsDisabled || isSubmitBusy;
   const sendButtonLabel = t("chat:composer.sendMessage");
   const composerVisualState: ComposerVisualState = disabled
@@ -708,9 +841,18 @@ const MessageInputComponent = React.forwardRef<
       ? "uploading"
       : composerMode === "offline"
         ? "offline"
-        : composerMode === "slow_mode"
+      : composerMode === "slow_mode"
           ? "slow-mode"
           : "ready-to-send";
+  const resolvedCompactStatusTone =
+    disabledReasonTone === "error"
+      ? "error"
+      : disabledReasonTone === "info"
+        ? "info"
+        : "warn";
+  const showCompactStatusBar =
+    Boolean(disabledReason) && shouldRenderCompactStatusBar(composerMode);
+  const CompactStatusIcon = compactStatusToneIcons[resolvedCompactStatusTone];
 
   const handleKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -937,19 +1079,34 @@ const MessageInputComponent = React.forwardRef<
           {liveRegionMessage}
         </p>
 
-        {disabledReason && (
-          <InlineNotice
-            tone={
-              disabledReasonTone === "error"
-                ? "error"
-                : disabledReasonTone === "info"
-                  ? "info"
-                  : "warning"
-            }
-            message={disabledReason}
-            className="mb-2"
-          />
-        )}
+        {disabledReason &&
+          (showCompactStatusBar ? (
+            <div className="mb-2 flex items-start">
+              <div
+                className={clsx(
+                  "inline-flex max-w-full items-start gap-1.5 rounded-full border px-3 py-1 text-xs font-medium shadow-sm",
+                  compactStatusToneClasses[resolvedCompactStatusTone],
+                )}
+                role="status"
+                aria-live="polite"
+              >
+                <CompactStatusIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span className="min-w-0 leading-5">{disabledReason}</span>
+              </div>
+            </div>
+          ) : (
+            <InlineNotice
+              tone={
+                disabledReasonTone === "error"
+                  ? "error"
+                  : disabledReasonTone === "info"
+                    ? "info"
+                    : "warning"
+              }
+              message={disabledReason}
+              className="mb-2"
+            />
+          ))}
 
         <input
           ref={fileInputRef}
@@ -1134,6 +1291,17 @@ const MessageInputComponent = React.forwardRef<
                 notifyBlur();
                 clearMentionState();
               }}
+              onPaste={(event) => {
+                const pastedText = event.clipboardData.getData("text");
+                const selectionLength =
+                  (event.currentTarget.selectionEnd ?? 0) -
+                  (event.currentTarget.selectionStart ?? 0);
+                const nextLength =
+                  draftValue.length - Math.max(0, selectionLength) + pastedText.length;
+                if (nextLength >= MESSAGE_SOFT_LIMIT) {
+                  setShowLongPasteNotice(true);
+                }
+              }}
               onFocus={() => setIsComposerFocused(true)}
               placeholder={t("chat:composer.placeholder")}
               disabled={disabled}
@@ -1162,6 +1330,12 @@ const MessageInputComponent = React.forwardRef<
                 composerVisualStyles.attachmentDivider,
               )}
             >
+              <EmojiButton
+                value={draftValue}
+                onChange={handleEmojiChange}
+                textareaRef={textareaRef}
+                disabled={disabled}
+              />
               <div className="relative">
                 <button
                   type="button"
@@ -1174,12 +1348,12 @@ const MessageInputComponent = React.forwardRef<
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                     disableAttachmentActions && "cursor-not-allowed opacity-50",
                   )}
-                  aria-label={t("chat:header.moreActions")}
+                  aria-label={t("chat:composer.attachFile")}
                   aria-haspopup="menu"
                   aria-expanded={showAttachmentMenu}
                   disabled={disableAttachmentActions}
                 >
-                  <EllipsisHorizontalIcon className="h-[18px] w-[18px]" />
+                  <PaperClipIcon className="h-[18px] w-[18px]" />
                 </button>
 
                 {showAttachmentMenu && (
@@ -1215,6 +1389,87 @@ const MessageInputComponent = React.forwardRef<
           />
         </div>
 
+        <p className="mt-1 px-1 text-[11px] leading-4 text-text-muted">
+          Nhấn Enter để gửi, Shift + Enter để xuống dòng
+        </p>
+
+        {(messageValidation.showCounter ||
+          messageValidation.isOverSoftLimit ||
+          messageValidation.isOverHardLimit) && (
+          <div className="mt-2 flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              {messageValidation.isOverHardLimit ? (
+                <InlineNotice
+                  tone="error"
+                  className="mb-0"
+                  message={t("chat:composer.hardLimitError", {
+                    max: messageValidation.hardLimit.toLocaleString("vi-VN"),
+                    defaultValue: "Tin nhắn vượt giới hạn 20.000 ký tự.",
+                  })}
+                  action={
+                    onAddFiles ? (
+                      <button
+                        type="button"
+                        onClick={handleSendAsTextFile}
+                        className="text-xs font-semibold underline-offset-2 hover:underline"
+                      >
+                        {t("chat:composer.sendAsTextFile", {
+                          defaultValue: "Gửi dưới dạng tệp .txt",
+                        })}
+                      </button>
+                    ) : undefined
+                  }
+                />
+              ) : messageValidation.isOverSoftLimit || showLongPasteNotice ? (
+                <InlineNotice
+                  tone="warning"
+                  className="mb-0"
+                  message={
+                    showLongPasteNotice
+                      ? t("chat:composer.longPasteNotice", {
+                          defaultValue:
+                            "Nội dung quá dài. Bạn có thể gửi dưới dạng tệp văn bản.",
+                        })
+                      : t("chat:composer.softLimitWarning", {
+                          defaultValue:
+                            "Tin nhắn khá dài. Hãy cân nhắc gửi dưới dạng tệp nếu là log hoặc tài liệu.",
+                        })
+                  }
+                  action={
+                    onAddFiles ? (
+                      <button
+                        type="button"
+                        onClick={handleSendAsTextFile}
+                        className="text-xs font-semibold underline-offset-2 hover:underline"
+                      >
+                        {t("chat:composer.sendAsTextFile", {
+                          defaultValue: "Gửi dưới dạng tệp .txt",
+                        })}
+                      </button>
+                    ) : undefined
+                  }
+                />
+              ) : null}
+            </div>
+
+            {messageValidation.showCounter && (
+              <p
+                className={clsx(
+                  "shrink-0 text-[11px] font-medium",
+                  messageValidation.isOverHardLimit
+                    ? "text-danger"
+                    : messageValidation.isOverSoftLimit
+                      ? "text-warning"
+                      : "text-text-muted",
+                )}
+              >
+                {messageValidation.charCount.toLocaleString("vi-VN")}/
+                {messageValidation.hardLimit.toLocaleString("vi-VN")}
+              </p>
+            )}
+          </div>
+        )}
+
         {onShareContact && currentUserId && (
           <ShareContactModal
             isOpen={isShareContactOpen}
@@ -1223,6 +1478,12 @@ const MessageInputComponent = React.forwardRef<
             onShare={onShareContact}
           />
         )}
+
+        <PollCreateDialog
+          isOpen={isPollDialogOpen}
+          onClose={() => setIsPollDialogOpen(false)}
+          onSubmit={handleCreatePoll}
+        />
       </ConversationLane>
     </div>
   );

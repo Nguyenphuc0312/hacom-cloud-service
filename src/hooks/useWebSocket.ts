@@ -62,11 +62,13 @@ import {
 } from "../features/chat/realtime";
 import type { NormalizedMessageRealtimeEvent } from "../features/chat/realtime/realtimeEventTypes";
 import { chatApi } from "../features/api/chatApi";
+import { getMessageSeq } from "../features/chat/domain/messageMerge";
 import { findMessageIdentityIndex } from "../features/chat/domain/messageIdentity";
 import { dispatchNotificationClick } from "../features/chat/events/chatUiEvents";
 import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
 import {
   realtimeMessageDeleted,
+  realtimeMessageDelivered,
   realtimeMessageReactionChanged,
   realtimeMessageReceived,
   realtimeMessageUpdated,
@@ -99,6 +101,7 @@ import {
   normalizeDisconnectEvent,
 } from "./useWebSocketConnectionLifecycle";
 import { useNotificationStore } from "../features/notification/state/notificationStore";
+import { markChatPerformance } from "../utils/chatPerformance";
 import type { UserSettingsUpdatedPayload } from "@hacom/chat-shared-types/chat";
 import type { Message, TypingStatus } from "../types";
 
@@ -120,11 +123,7 @@ interface UseWebSocketReturn {
     options?: { skipInitialDeltaSync?: boolean },
   ) => void;
   leaveConversation: (conversationId: string) => void;
-  sendMessage: (
-    conversationId: string,
-    content: string,
-    type?: string,
-  ) => void;
+  sendMessage: (conversationId: string, content: string, type?: string) => void;
   sendTyping: (conversationId: string) => void;
   stopTyping: (conversationId: string) => void;
 }
@@ -137,13 +136,14 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
 const asString = (value: unknown): string | null =>
   typeof value === "string" && value.trim().length > 0 ? value : null;
 
-const getLatestServerSeq = (messages: Array<{ serverSeq?: number }>): number | null => {
+const getLatestServerSeq = (messages: unknown[]): number | null => {
   let latest: number | null = null;
   messages.forEach((message) => {
-    if (typeof message.serverSeq !== "number" || !Number.isFinite(message.serverSeq)) {
+    const seq = getMessageSeq(message);
+    if (seq === null) {
       return;
     }
-    latest = latest === null ? message.serverSeq : Math.max(latest, message.serverSeq);
+    latest = latest === null ? seq : Math.max(latest, seq);
   });
   return latest;
 };
@@ -190,8 +190,10 @@ const hasMessageInRtkCache = (
   conversationId: string,
   message: Message,
 ): boolean =>
-  findMessageIdentityIndex(getConversationMessageCache(conversationId), message) >=
-  0;
+  findMessageIdentityIndex(
+    getConversationMessageCache(conversationId),
+    message,
+  ) >= 0;
 
 const toRealtimeConnectionStatus = (
   state: ConnectionState,
@@ -203,8 +205,10 @@ const toRealtimeConnectionStatus = (
     case "authenticating":
     case "reconnecting":
       return "connecting";
+    case "auth_failed":
     case "error":
       return "error";
+    case "unauthenticated":
     case "disconnected":
     default:
       return "disconnected";
@@ -235,8 +239,8 @@ export const shouldUseDeltaConversationRefresh = ({
 }): boolean =>
   Boolean(
     conversationId &&
-      (selectedConversationId === conversationId ||
-        joinedConversationIds.has(conversationId)),
+    (selectedConversationId === conversationId ||
+      joinedConversationIds.has(conversationId)),
   );
 
 export {
@@ -245,14 +249,45 @@ export {
 };
 export type { PendingConversationSyncStrategy };
 
-const REMOTE_TYPING_DECAY_INTERVAL_MS = 320;
-const REMOTE_TYPING_HALF_LIFE_MS = 1400;
-const REMOTE_TYPING_VISIBLE_THRESHOLD = 0.12;
+const REMOTE_TYPING_TTL_MS = 5_000;
 const CONVERSATION_JOIN_ACK_TIMEOUT_MS = 2_000;
 const CONVERSATION_JOIN_RETRY_DELAY_MAX_MS = 8_000;
 
-const computeTypingConfidence = (lastEventAt: number, now: number): number =>
-  Math.exp(-(now - lastEventAt) / REMOTE_TYPING_HALF_LIFE_MS);
+const parseTypingExpiryMs = (expiresAt: string | null): number => {
+  const parsed = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+  if (Number.isFinite(parsed) && parsed > Date.now()) {
+    return parsed;
+  }
+  return Date.now() + REMOTE_TYPING_TTL_MS;
+};
+
+const normalizeDeviceType = (
+  value: string | null,
+): "web" | "mobile" | "desktop" =>
+  value === "mobile" || value === "desktop" ? value : "web";
+
+const DELIVERY_ACK_DEVICE_ID_STORAGE_KEY = "chat:web:deliveryAckDeviceId";
+
+const getDeliveryAckDeviceId = (): string => {
+  if (typeof window === "undefined") {
+    return "web-ssr";
+  }
+  try {
+    const existing = window.sessionStorage.getItem(
+      DELIVERY_ACK_DEVICE_ID_STORAGE_KEY,
+    );
+    if (existing) return existing;
+    const generated =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const deviceId = `web:${generated}`;
+    window.sessionStorage.setItem(DELIVERY_ACK_DEVICE_ID_STORAGE_KEY, deviceId);
+    return deviceId;
+  } catch {
+    return `web:${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+};
 
 export const useWebSocket = (
   options: UseWebSocketOptions = {},
@@ -309,12 +344,12 @@ export const useWebSocket = (
   const chatRealtimeAdapterRef = useRef(createChatRealtimeAdapter());
   const suppressUnreadBroadcastRef = useRef(false);
   const emitQueueRef = useRef<Array<{ event: string; data: unknown }>>([]);
+  const deliveryAckDeviceIdRef = useRef(getDeliveryAckDeviceId());
+  const ackedDeliveryMessagesRef = useRef<Set<string>>(new Set());
   const resyncCoordinatorStateRef = useRef(
     createWebSocketResyncCoordinatorState(),
   );
-  const authCoordinatorStateRef = useRef(
-    createWebSocketAuthCoordinatorState(),
-  );
+  const authCoordinatorStateRef = useRef(createWebSocketAuthCoordinatorState());
   const connectionLifecycleStateRef = useRef(
     createWebSocketConnectionLifecycleState(),
   );
@@ -324,6 +359,7 @@ export const useWebSocket = (
   const remoteTypingTimersRef = useRef<
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
+  const processedTypingEventIdsRef = useRef<Set<string>>(new Set());
   const unsubscribersRef = useRef<Array<() => void>>([]);
 
   useEffect(() => {
@@ -480,51 +516,37 @@ export const useWebSocket = (
     [],
   );
 
-  const scheduleRemoteTypingDecay = useCallback(
-    (conversationId: string, userId: string, userName: string) => {
+  const scheduleRemoteTypingExpiry = useCallback(
+    (conversationId: string, userId: string, expiresAt: string | null) => {
       const key = `${conversationId}:${userId}`;
       clearRemoteTypingTimer(conversationId, userId);
 
-      const tick = () => {
-        const current = useChatStore
-          .getState()
-          .typingStatuses.find(
-            (item) =>
-              item.conversationId === conversationId && item.userId === userId,
-          );
-        const lastEventAt = current?.lastEventAt;
-        if (!lastEventAt) {
-          clearTyping(conversationId, userId);
-          remoteTypingTimersRef.current.delete(key);
-          return;
-        }
-
-        const confidence = computeTypingConfidence(lastEventAt, Date.now());
-        if (confidence < REMOTE_TYPING_VISIBLE_THRESHOLD) {
-          clearTyping(conversationId, userId);
-          remoteTypingTimersRef.current.delete(key);
-          return;
-        }
-
-        setTyping({
-          conversationId,
-          userId,
-          userName: current?.userName || userName,
-          isTyping: true,
-          activity: current?.activity || "typing",
-          confidence,
-          lastEventAt,
-        });
-
-        const timer = setTimeout(tick, REMOTE_TYPING_DECAY_INTERVAL_MS);
-        remoteTypingTimersRef.current.set(key, timer);
-      };
-
-      const timer = setTimeout(tick, REMOTE_TYPING_DECAY_INTERVAL_MS);
+      const delayMs = Math.max(0, parseTypingExpiryMs(expiresAt) - Date.now());
+      const timer = setTimeout(() => {
+        clearTyping(conversationId, userId);
+        remoteTypingTimersRef.current.delete(key);
+      }, delayMs);
       remoteTypingTimersRef.current.set(key, timer);
     },
-    [clearRemoteTypingTimer, clearTyping, setTyping],
+    [clearRemoteTypingTimer, clearTyping],
   );
+
+  const shouldProcessTypingEvent = useCallback((eventId: string | null) => {
+    if (!eventId) return true;
+
+    const processed = processedTypingEventIdsRef.current;
+    if (processed.has(eventId)) {
+      return false;
+    }
+
+    processed.add(eventId);
+    if (processed.size > 200) {
+      const oldest = processed.values().next().value;
+      if (oldest) processed.delete(oldest);
+    }
+
+    return true;
+  }, []);
 
   const authCoordinator = useMemo(
     () =>
@@ -675,7 +697,11 @@ export const useWebSocket = (
       eventId?: string | null;
     }) => {
       const currentUserId = useAuthStore.getState().user?.id ?? null;
-      if (!currentUserId || !input.senderId || input.senderId === currentUserId) {
+      if (
+        !currentUserId ||
+        !input.senderId ||
+        input.senderId === currentUserId
+      ) {
         return;
       }
 
@@ -770,7 +796,11 @@ export const useWebSocket = (
   );
 
   const maybeNotifyMembershipEvent = useCallback(
-    (conversationId: string, membershipState: string, reason: string | null) => {
+    (
+      conversationId: string,
+      membershipState: string,
+      reason: string | null,
+    ) => {
       const conversation = useChatStore
         .getState()
         .conversations.find((item) => item.id === conversationId);
@@ -881,8 +911,9 @@ export const useWebSocket = (
       clearConversationJoinRetry(conversationId);
 
       const attempt =
-        conversationSyncStateRef.current.joinRetryAttempts.get(conversationId) ??
-        0;
+        conversationSyncStateRef.current.joinRetryAttempts.get(
+          conversationId,
+        ) ?? 0;
       const retryDelay = Math.min(
         CONVERSATION_JOIN_ACK_TIMEOUT_MS * Math.max(attempt + 1, 1),
         CONVERSATION_JOIN_RETRY_DELAY_MAX_MS,
@@ -929,9 +960,7 @@ export const useWebSocket = (
           retryDelay,
         });
 
-        if (
-          useChatStore.getState().selectedConversationId === conversationId
-        ) {
+        if (useChatStore.getState().selectedConversationId === conversationId) {
           void scheduleConversationResync(conversationId, {
             reason: "conversation-refresh",
           });
@@ -994,6 +1023,35 @@ export const useWebSocket = (
       void handleReauthRequiredEvent({ reason });
     };
 
+    const sendDeliveryAckForMessage = (
+      event: NormalizedMessageRealtimeEvent,
+    ) => {
+      const currentUserId = useAuthStore.getState().user?.id;
+      if (!currentUserId || !event.senderId || event.senderId === currentUserId) {
+        return;
+      }
+      if (!event.messageId || event.incomingSeq === null) {
+        return;
+      }
+
+      const deviceId = deliveryAckDeviceIdRef.current;
+      const ackKey = `${event.conversationId}:${event.messageId}:${deviceId}`;
+      if (ackedDeliveryMessagesRef.current.has(ackKey)) {
+        return;
+      }
+      ackedDeliveryMessagesRef.current.add(ackKey);
+
+      emit(WebSocketEvents.MESSAGE_DELIVERY_ACK, {
+        type: WebSocketEvents.MESSAGE_DELIVERY_ACK,
+        conversationId: event.conversationId,
+        messageId: event.messageId,
+        messageSeq: event.incomingSeq,
+        deviceId,
+        deviceType: "web",
+        receivedAt: new Date().toISOString(),
+      });
+    };
+
     const unsubscribeConnectionEvents = registerConnectionEvents(socket, {
       onConnect: handleConnect,
       onDisconnect: handleDisconnect,
@@ -1045,6 +1103,14 @@ export const useWebSocket = (
         stableId,
         incomingSeq,
       });
+      if (eventType === "message:new") {
+        markChatPerformance("fe.socket.message.received", conversationId, {
+          eventId,
+          messageId,
+          clientMessageId,
+          messageSeq: incomingSeq,
+        });
+      }
       logMessageDebug("useWebSocket", "realtime.client.event_received", {
         requestId:
           asString(payload.requestId) ?? asString(messagePayload.requestId),
@@ -1081,10 +1147,10 @@ export const useWebSocket = (
       });
       const shouldIncrementUnread = Boolean(
         eventType === "message:new" &&
-          senderId &&
-          currentUserId &&
-          senderId !== currentUserId &&
-          (!isActiveConversation || !visibleAndFocused),
+        senderId &&
+        currentUserId &&
+        senderId !== currentUserId &&
+        (!isActiveConversation || !visibleAndFocused),
       );
       logMessageDebug("useWebSocket", "realtime.client.state_updated", {
         requestId:
@@ -1116,6 +1182,10 @@ export const useWebSocket = (
             }),
       );
 
+      if (eventType === "message:new") {
+        sendDeliveryAckForMessage(normalizedEvent);
+      }
+
       if (eventType === "message:new" && !hadMessageBeforeRtkPatch) {
         maybeNotifyIncomingMessage({
           conversationId,
@@ -1124,7 +1194,9 @@ export const useWebSocket = (
           senderName:
             asString(messagePayload.senderName) ?? asString(payload.senderName),
           content:
-            typeof messagePayload.content === "string" ? messagePayload.content : "",
+            typeof messagePayload.content === "string"
+              ? messagePayload.content
+              : "",
           mentions: Array.isArray(messagePayload.mentions)
             ? messagePayload.mentions.filter(
                 (item): item is string => typeof item === "string",
@@ -1137,13 +1209,17 @@ export const useWebSocket = (
       }
 
       if (isAmbiguousSelfReconcile) {
-        logMessageDebug("useWebSocket", "socket_message_missing_reconcile_alias", {
-          conversationId,
-          eventId,
-          messageId,
-          senderId,
-          stableId,
-        });
+        logMessageDebug(
+          "useWebSocket",
+          "socket_message_missing_reconcile_alias",
+          {
+            conversationId,
+            eventId,
+            messageId,
+            senderId,
+            stableId,
+          },
+        );
         const shouldUseDeltaRefresh = shouldUseDeltaConversationRefresh({
           conversationId,
           selectedConversationId: chatState.selectedConversationId,
@@ -1227,6 +1303,44 @@ export const useWebSocket = (
         void scheduleConversationSnapshotRefresh(conversationId, {
           reason: "socket:message:deleted",
         });
+      },
+      onMessageDelivered: (data: unknown) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+
+        const conversationId = getConversationId(payload);
+        const messageId =
+          asString(payload.messageId) ??
+          asString(payload.id) ??
+          asString(payload._id);
+        const messageSeq =
+          typeof payload.messageSeq === "number" &&
+          Number.isFinite(payload.messageSeq)
+            ? payload.messageSeq
+            : null;
+        const currentUserId = useAuthStore.getState().user?.id;
+        const senderUserId = asString(payload.senderUserId);
+        if (
+          !conversationId ||
+          !messageId ||
+          !currentUserId ||
+          (senderUserId && senderUserId !== currentUserId)
+        ) {
+          return;
+        }
+
+        const deliveredAt = asString(payload.deliveredAt) ?? undefined;
+
+        dispatch(
+          realtimeMessageDelivered({
+            conversationId,
+            messageId,
+            ...(messageSeq !== null ? { messageSeq } : {}),
+            currentUserId,
+            recipientUserId: asString(payload.recipientUserId) ?? undefined,
+            deliveredAt,
+          }),
+        );
       },
       onReactionAdded: (data: unknown) => {
         const payload = asRecord(data);
@@ -1343,30 +1457,33 @@ export const useWebSocket = (
 
       const conversationId = getConversationId(payload);
       const lastMessageId =
+        asString(payload.lastReadMessageId) ??
         asString(payload.lastMessageId) ??
         asString(payload.messageId) ??
         asString(payload.id) ??
         asString(payload._id);
-      if (!conversationId || !lastMessageId) return;
+      const lastReadSeq =
+        typeof payload.lastReadSeq === "number" ? payload.lastReadSeq : null;
+      if (!conversationId || (!lastMessageId && lastReadSeq === null)) return;
       logMessageDebug("useWebSocket", "socket_message_read_received", {
         conversationId,
         lastMessageId,
-        lastReadSeq:
-          typeof payload.lastReadSeq === "number" ? payload.lastReadSeq : null,
+        lastReadSeq,
       });
 
       const readerId =
-        asString(payload.userId) ?? asString(payload.senderId) ?? undefined;
+        asString(payload.actorUserId) ??
+        asString(payload.userId) ??
+        asString(payload.senderId) ??
+        undefined;
       const currentUserId = useAuthStore.getState().user?.id;
       dispatch(
         realtimeReadCursorUpdated({
           conversationId,
-          lastReadMessageId: lastMessageId,
+          ...(lastMessageId ? { lastReadMessageId: lastMessageId } : {}),
           ...(currentUserId ? { currentUserId } : {}),
           ...(readerId ? { readerId } : {}),
-          ...(typeof payload.lastReadSeq === "number"
-            ? { lastReadSeq: payload.lastReadSeq }
-            : {}),
+          ...(lastReadSeq !== null ? { lastReadSeq } : {}),
         }),
       );
     };
@@ -1539,23 +1656,23 @@ export const useWebSocket = (
       const payload = asRecord(data);
       const conversationId = payload ? getConversationId(payload) : null;
       const currentUserId = useAuthStore.getState().user?.id ?? null;
-      if (
-        conversationId &&
-        options?.bumpMembers
-      ) {
+      if (conversationId && options?.bumpMembers) {
         bumpMemberListVersion(conversationId);
       }
       if (
         conversationId &&
-        !(options?.skipIfCurrentUserIsTarget &&
+        !(
+          options?.skipIfCurrentUserIsTarget &&
           shouldSkipGroupConversationRefreshForCurrentUser(
             payload,
             currentUserId,
-          ))
+          )
+        )
       ) {
         const shouldUseDeltaRefresh = shouldUseDeltaConversationRefresh({
           conversationId,
-          selectedConversationId: useChatStore.getState().selectedConversationId,
+          selectedConversationId:
+            useChatStore.getState().selectedConversationId,
           joinedConversationIds:
             conversationSyncStateRef.current.joinedConversationIds,
         });
@@ -1809,6 +1926,7 @@ export const useWebSocket = (
     const handleTypingStart = (data: unknown) => {
       const payload = asRecord(data);
       if (!payload) return;
+      if (!shouldProcessTypingEvent(asString(payload.eventId))) return;
 
       const conversationId = getConversationId(payload);
       const userId = asString(payload.senderId) ?? asString(payload.userId);
@@ -1818,11 +1936,15 @@ export const useWebSocket = (
       if (currentUserId && userId === currentUserId) return;
 
       const userName =
+        asString(payload.displayName) ??
         asString(payload.senderName) ??
         asString(payload.userName) ??
         asString(payload.username) ??
         asString(payload.user_name) ??
         "";
+      const expiresAt =
+        asString(payload.expiresAt) ??
+        new Date(Date.now() + REMOTE_TYPING_TTL_MS).toISOString();
       const activity =
         asString(payload.activity) === "recording" ||
         asString(payload.activity) === "uploading" ||
@@ -1838,21 +1960,28 @@ export const useWebSocket = (
         activity,
         confidence: 1,
         lastEventAt,
+        expiresAt,
+        deviceId: asString(payload.deviceId) ?? undefined,
+        deviceType: normalizeDeviceType(asString(payload.deviceType)),
       };
 
       setTyping(typingStatus);
       dispatch(realtimeActions.typingStarted(typingStatus));
 
-      scheduleRemoteTypingDecay(conversationId, userId, userName);
+      scheduleRemoteTypingExpiry(conversationId, userId, expiresAt);
     };
 
     const handleTypingStop = (data: unknown) => {
       const payload = asRecord(data);
       if (!payload) return;
+      if (!shouldProcessTypingEvent(asString(payload.eventId))) return;
 
       const conversationId = getConversationId(payload);
       const userId = asString(payload.senderId) ?? asString(payload.userId);
       if (!conversationId || !userId) return;
+
+      const currentUserId = useAuthStore.getState().user?.id;
+      if (currentUserId && userId === currentUserId) return;
 
       clearRemoteTypingTimer(conversationId, userId);
       dispatch(
@@ -1865,14 +1994,18 @@ export const useWebSocket = (
         conversationId,
         userId,
         userName:
+          asString(payload.displayName) ??
           asString(payload.senderName) ??
           asString(payload.userName) ??
           asString(payload.username) ??
+          asString(payload.user_name) ??
           "",
         isTyping: false,
         activity: "online",
         confidence: 0,
         lastEventAt: Date.now(),
+        deviceId: asString(payload.deviceId) ?? undefined,
+        deviceType: normalizeDeviceType(asString(payload.deviceType)),
       });
       clearTyping(conversationId, userId);
     };
@@ -1894,7 +2027,7 @@ export const useWebSocket = (
       const scopes = Array.isArray(payload?.scopes)
         ? payload.scopes
             .map((scope) => asString(scope))
-          .filter((scope): scope is string => typeof scope === "string")
+            .filter((scope): scope is string => typeof scope === "string")
         : [];
       handleResyncRequired(scopes);
     };
@@ -1912,10 +2045,8 @@ export const useWebSocket = (
 
       useSettingsStore
         .getState()
-        .applyRemoteUpdate(
-          payload as unknown as UserSettingsUpdatedPayload,
-          );
-      };
+        .applyRemoteUpdate(payload as unknown as UserSettingsUpdatedPayload);
+    };
 
     const unsubscribeSyncEvents = registerSyncEvents(socket, {
       onConversationResynced: handleConversationResyncedEvent,
@@ -1936,6 +2067,7 @@ export const useWebSocket = (
     clearRemoteTypingTimer,
     clearTyping,
     dispatch,
+    emit,
     handleReauthRequiredEvent,
     handleUnauthorizedEvent,
     onError,
@@ -1950,7 +2082,8 @@ export const useWebSocket = (
     maybeReconcileGap,
     applyConversationParticipantSummary,
     scheduleConversationSnapshotRefresh,
-    scheduleRemoteTypingDecay,
+    scheduleRemoteTypingExpiry,
+    shouldProcessTypingEvent,
     selectConversation,
     setSendRestriction,
     clearSendRestriction,
@@ -1980,7 +2113,8 @@ export const useWebSocket = (
         requestConversationJoin,
         flushEmitQueue,
         flushQueuedMessages,
-        getConnectionState: () => getSocket()?.getConnectionState() ?? "unknown",
+        getConnectionState: () =>
+          getSocket()?.getConnectionState() ?? "unknown",
         getJoinedConversationIds: () =>
           Array.from(conversationSyncStateRef.current.joinedConversationIds),
         getQueuedEmitCount: () => emitQueueRef.current.length,
@@ -2096,16 +2230,18 @@ export const useWebSocket = (
 
   const sendTyping = useCallback(
     (conversationId: string) => {
-      emit(WebSocketEvents.TYPING_START, {
+      emit(WebSocketEvents.CONVERSATION_TYPING_STARTED, {
+        type: WebSocketEvents.CONVERSATION_TYPING_STARTED,
         conversationId,
-        isTyping: true,
+        deviceType: "web",
       });
 
       clearActiveTypingTimeout();
       typingTimeoutRef.current = setTimeout(() => {
-        emit(WebSocketEvents.TYPING_STOP, {
+        emit(WebSocketEvents.CONVERSATION_TYPING_STOPPED, {
+          type: WebSocketEvents.CONVERSATION_TYPING_STOPPED,
           conversationId,
-          isTyping: false,
+          deviceType: "web",
         });
       }, 3000);
     },
@@ -2116,9 +2252,10 @@ export const useWebSocket = (
     (conversationId: string) => {
       clearActiveTypingTimeout();
 
-      emit(WebSocketEvents.TYPING_STOP, {
+      emit(WebSocketEvents.CONVERSATION_TYPING_STOPPED, {
+        type: WebSocketEvents.CONVERSATION_TYPING_STOPPED,
         conversationId,
-        isTyping: false,
+        deviceType: "web",
       });
     },
     [clearActiveTypingTimeout, emit],
@@ -2183,10 +2320,7 @@ export const useWebSocket = (
       window.removeEventListener("online", handleOnlineEvent);
       window.removeEventListener("pageshow", handlePageShow);
       window.removeEventListener("focus", handleFocus);
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibilityChange,
-      );
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [handleBrowserOnline, handleResume]);
 
@@ -2206,12 +2340,7 @@ export const useWebSocket = (
       unsubscribersRef.current = [];
       disconnect();
     };
-  }, [
-    autoConnect,
-    connect,
-    disconnect,
-    isAuthenticated,
-  ]);
+  }, [autoConnect, connect, disconnect, isAuthenticated]);
 
   return {
     isConnected: connectionState === "connected",

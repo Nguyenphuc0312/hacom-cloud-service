@@ -185,6 +185,28 @@ describe("useWebSocketConnectionLifecycle", () => {
     expect(deps.resyncClientState).not.toHaveBeenCalled();
   });
 
+  it("does not reconnect on browser resume after terminal auth failure", async () => {
+    const { lifecycle, deps } = createLifecycle();
+    deps.getConnectionState.mockReturnValue("auth_failed");
+
+    lifecycle.handleResume("pageshow");
+    await Promise.resolve();
+
+    expect(deps.ensureFreshAccessToken).not.toHaveBeenCalled();
+    expect(deps.connectSocket).not.toHaveBeenCalled();
+  });
+
+  it("does not reconnect when browser returns online without valid auth", async () => {
+    const { lifecycle, deps } = createLifecycle();
+    deps.getConnectionState.mockReturnValue("unauthenticated");
+
+    lifecycle.handleBrowserOnline();
+    await Promise.resolve();
+
+    expect(deps.ensureFreshAccessToken).not.toHaveBeenCalled();
+    expect(deps.connectSocket).not.toHaveBeenCalled();
+  });
+
   it("flushes queued messages and resyncs when the browser comes back online", async () => {
     const { lifecycle, deps } = createLifecycle();
 

@@ -15,7 +15,15 @@ import {
 import { ErrorCode } from "@hacom/chat-shared-types/core";
 import type { FriendshipRelationDto } from "@hacom/chat-shared-types/chat";
 import { Avatar } from "../common/Avatar";
-import { Button, ConfirmDialog, Input, Modal, Spinner, toast } from "../ui";
+import {
+  Button,
+  ConfirmDialog,
+  Input,
+  Modal,
+  Skeleton,
+  SkeletonCircle,
+  toast,
+} from "../ui";
 import { useAuthStore } from "../../stores";
 import { useFriendshipStore } from "../../stores/friendshipStore";
 import { useFriendship } from "../../hooks/useFriendship";
@@ -271,17 +279,24 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
     async (rawInput: string) => {
       const toFriendlyResolveMessage = (
         message: string | undefined,
+        originalError?: unknown,
       ): string => {
-        if (!message) {
+        const originalMessage =
+          originalError instanceof Error ? originalError.message : undefined;
+        const candidate = [message, originalMessage]
+          .filter((value): value is string => Boolean(value))
+          .join(" ");
+
+        if (!candidate) {
           return t("friends:qr.invalidCode");
         }
 
-        const normalized = message.toLowerCase();
+        const normalized = candidate.toLowerCase();
         if (normalized.includes("invalid") || normalized.includes("expired")) {
           return t("friends:qr.invalidCode");
         }
 
-        return message;
+        return message ?? t("friends:qr.invalidCode");
       };
 
       const parsedCode = parseShareCodeInput(rawInput);
@@ -305,7 +320,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
         setResolveInput(parsedCode);
       } catch (error) {
         const apiError = extractApiError(error);
-        setResolveError(toFriendlyResolveMessage(apiError.message));
+        setResolveError(toFriendlyResolveMessage(apiError.message, error));
       } finally {
         setIsResolving(false);
       }
@@ -680,7 +695,7 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
               </p>
             </div>
           </div>
-          {isMyQrLoading ? <Spinner size="xs" /> : null}
+          {isMyQrLoading ? <SkeletonCircle size={16} /> : null}
         </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[15rem_1fr]">
@@ -692,8 +707,13 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
                 className="h-full w-full rounded-lg"
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-sm text-text-secondary">
-                {t("auth:qrLogin.creating")}
+              <div
+                className="h-full w-full space-y-3 p-4"
+                aria-busy="true"
+                aria-label={t("auth:qrLogin.creating")}
+                role="status"
+              >
+                <Skeleton className="h-full w-full" rounded="lg" />
               </div>
             )}
           </div>

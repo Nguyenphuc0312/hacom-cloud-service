@@ -9,11 +9,14 @@ import { chatApi } from "../api/chatApi";
 import {
   buildConversationMessagesCache,
   patchMessageReactionInCache,
+  patchDeliveredReceiptInCache,
   patchMessageInCache,
   patchReadCursorInCache,
   upsertMessageInCache,
 } from "../chat/domain/messageMerge";
 import { normalizeMessageForReduxCache } from "../chat/domain/serializableMessage";
+import { useChatStore } from "../../stores";
+import { markChatPerformance } from "../../utils/chatPerformance";
 
 export interface RealtimeMessagePayload {
   conversationId: string;
@@ -32,6 +35,15 @@ export interface RealtimeReadCursorPayload {
   lastReadSeq?: number;
   currentUserId?: string;
   readerId?: string;
+}
+
+export interface RealtimeMessageDeliveredPayload {
+  conversationId: string;
+  messageId: string;
+  messageSeq?: number;
+  currentUserId?: string;
+  recipientUserId?: string;
+  deliveredAt?: string;
 }
 
 export interface RealtimeMessageReactionPayload {
@@ -61,6 +73,8 @@ export const realtimeMessageDeleted =
   createAction<RealtimeMessageDeletedPayload>("realtime/messageDeleted");
 export const realtimeReadCursorUpdated =
   createAction<RealtimeReadCursorPayload>("realtime/readCursorUpdated");
+export const realtimeMessageDelivered =
+  createAction<RealtimeMessageDeliveredPayload>("realtime/messageDelivered");
 export const realtimeMessageReactionChanged =
   createAction<RealtimeMessageReactionPayload>(
     "realtime/messageReactionChanged",
@@ -68,12 +82,16 @@ export const realtimeMessageReactionChanged =
 
 const getMessageQueryArg = (conversationId: string) => ({ conversationId });
 
-const shouldSeedMissingMessageCache = (message: Message): boolean =>
+const shouldSeedMissingMessageCache = (
+  conversationId: string,
+  message: Message,
+): boolean =>
   message.transportStatus === "optimistic" ||
   message.sendState === "sending" ||
   message.sendState === "queued" ||
   message.sendState === "retrying" ||
-  message.sendState === "failed";
+  message.sendState === "failed" ||
+  useChatStore.getState().selectedConversationId === conversationId;
 
 export const normalizeRealtimeMessageEvent = (
   payload: unknown,
@@ -110,120 +128,151 @@ export const realtimeMiddleware: Middleware<
   object,
   RealtimeMiddlewareState,
   RealtimeDispatch
-> =
-  (storeApi) => (next) => (action) => {
-    const result = next(action);
+> = (storeApi) => (next) => (action) => {
+  const result = next(action);
 
-    if (realtimeMessageReceived.match(action)) {
-      const patch = storeApi.dispatch(
-        chatApi.util.updateQueryData(
+  if (realtimeMessageReceived.match(action)) {
+    markChatPerformance("fe.cache.patch.start", action.payload.conversationId, {
+      messageId: action.payload.message.id,
+      clientMessageId: action.payload.message.clientMessageId,
+      messageSeq:
+        action.payload.message.serverSeq ?? action.payload.message.messageSeq,
+    });
+    const patch = storeApi.dispatch(
+      chatApi.util.updateQueryData(
+        "getMessages",
+        getMessageQueryArg(action.payload.conversationId),
+        (draft) => {
+          upsertMessageInCache(draft, action.payload.message);
+        },
+      ),
+    );
+    if (
+      patch.patches.length === 0 &&
+      shouldSeedMissingMessageCache(
+        action.payload.conversationId,
+        action.payload.message,
+      )
+    ) {
+      storeApi.dispatch(
+        chatApi.util.upsertQueryData(
           "getMessages",
           getMessageQueryArg(action.payload.conversationId),
-          (draft) => {
-            upsertMessageInCache(draft, action.payload.message);
-          },
+          buildConversationMessagesCache(action.payload.conversationId, [
+            action.payload.message,
+          ]),
         ),
       );
-      if (
-        patch.patches.length === 0 &&
-        shouldSeedMissingMessageCache(action.payload.message)
-      ) {
-        storeApi.dispatch(
-          chatApi.util.upsertQueryData(
-            "getMessages",
-            getMessageQueryArg(action.payload.conversationId),
-            buildConversationMessagesCache(action.payload.conversationId, [
-              action.payload.message,
-            ]),
-          ),
-        );
-      }
     }
+    markChatPerformance("fe.cache.patch.done", action.payload.conversationId, {
+      messageId: action.payload.message.id,
+      clientMessageId: action.payload.message.clientMessageId,
+      patchCount: patch.patches.length,
+    });
+  }
 
-    if (realtimeMessageUpdated.match(action)) {
-      const patch = storeApi.dispatch(
-        chatApi.util.updateQueryData(
+  if (realtimeMessageUpdated.match(action)) {
+    const patch = storeApi.dispatch(
+      chatApi.util.updateQueryData(
+        "getMessages",
+        getMessageQueryArg(action.payload.conversationId),
+        (draft) => {
+          upsertMessageInCache(draft, action.payload.message);
+        },
+      ),
+    );
+    if (
+      patch.patches.length === 0 &&
+      shouldSeedMissingMessageCache(
+        action.payload.conversationId,
+        action.payload.message,
+      )
+    ) {
+      storeApi.dispatch(
+        chatApi.util.upsertQueryData(
           "getMessages",
           getMessageQueryArg(action.payload.conversationId),
-          (draft) => {
-            upsertMessageInCache(draft, action.payload.message);
-          },
+          buildConversationMessagesCache(action.payload.conversationId, [
+            action.payload.message,
+          ]),
         ),
       );
-      if (
-        patch.patches.length === 0 &&
-        shouldSeedMissingMessageCache(action.payload.message)
-      ) {
-        storeApi.dispatch(
-          chatApi.util.upsertQueryData(
-            "getMessages",
-            getMessageQueryArg(action.payload.conversationId),
-            buildConversationMessagesCache(action.payload.conversationId, [
-              action.payload.message,
-            ]),
-          ),
-        );
-      }
     }
+  }
 
-    if (realtimeMessageDeleted.match(action)) {
+  if (realtimeMessageDeleted.match(action)) {
+    storeApi.dispatch(
+      chatApi.util.updateQueryData(
+        "getMessages",
+        getMessageQueryArg(action.payload.conversationId),
+        (draft) => {
+          patchMessageInCache(draft, action.payload.messageId, {
+            isDeleted: true,
+            content: "",
+          });
+        },
+      ),
+    );
+  }
+
+  if (realtimeMessageReactionChanged.match(action)) {
+    storeApi.dispatch(
+      chatApi.util.updateQueryData(
+        "getMessages",
+        getMessageQueryArg(action.payload.conversationId),
+        (draft) => {
+          patchMessageReactionInCache(
+            draft,
+            {
+              messageId: action.payload.messageId,
+              emoji: action.payload.emoji,
+              userId: action.payload.userId,
+            },
+            action.payload.action,
+          );
+        },
+      ),
+    );
+  }
+
+  if (realtimeReadCursorUpdated.match(action)) {
+    if (
+      action.payload.lastReadMessageId ||
+      typeof action.payload.lastReadSeq === "number"
+    ) {
       storeApi.dispatch(
         chatApi.util.updateQueryData(
           "getMessages",
           getMessageQueryArg(action.payload.conversationId),
           (draft) => {
-            patchMessageInCache(draft, action.payload.messageId, {
-              isDeleted: true,
-              content: "",
+            patchReadCursorInCache(draft, {
+              lastReadMessageId: action.payload.lastReadMessageId,
+              lastReadSeq: action.payload.lastReadSeq,
+              currentUserId: action.payload.currentUserId,
+              readerId: action.payload.readerId,
             });
           },
         ),
       );
     }
+  }
 
-    if (realtimeMessageReactionChanged.match(action)) {
-      storeApi.dispatch(
-        chatApi.util.updateQueryData(
-          "getMessages",
-          getMessageQueryArg(action.payload.conversationId),
-          (draft) => {
-            patchMessageReactionInCache(
-              draft,
-              {
-                messageId: action.payload.messageId,
-                emoji: action.payload.emoji,
-                userId: action.payload.userId,
-              },
-              action.payload.action,
-            );
-          },
-        ),
-      );
-    }
+  if (realtimeMessageDelivered.match(action)) {
+    storeApi.dispatch(
+      chatApi.util.updateQueryData(
+        "getMessages",
+        getMessageQueryArg(action.payload.conversationId),
+        (draft) => {
+          patchDeliveredReceiptInCache(draft, {
+            messageId: action.payload.messageId,
+            messageSeq: action.payload.messageSeq,
+            currentUserId: action.payload.currentUserId,
+            deliveredAt: action.payload.deliveredAt,
+          });
+        },
+      ),
+    );
+  }
 
-    if (realtimeReadCursorUpdated.match(action)) {
-      if (action.payload.lastReadMessageId) {
-        storeApi.dispatch(
-          chatApi.util.updateQueryData(
-            "getMessages",
-            getMessageQueryArg(action.payload.conversationId),
-            (draft) => {
-              patchReadCursorInCache(draft, {
-                lastReadMessageId: action.payload.lastReadMessageId!,
-                lastReadSeq: action.payload.lastReadSeq,
-                currentUserId: action.payload.currentUserId,
-                readerId: action.payload.readerId,
-              });
-            },
-          ),
-        );
-      }
-      storeApi.dispatch(
-        chatApi.util.invalidateTags([
-          { type: "Unread", id: action.payload.conversationId },
-        ]),
-      );
-    }
-
-    return result;
-  };
+  return result;
+};

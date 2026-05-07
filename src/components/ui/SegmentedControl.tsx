@@ -32,7 +32,7 @@ export const SegmentedControl: React.FC<SegmentedControlProps> = ({
       role="tablist"
       aria-label={ariaLabel}
       className={clsx(
-        "segmented-control inline-flex w-full items-center gap-1 rounded-md border border-border/60 bg-surface p-1",
+        "segmented-control flex w-full items-center gap-1 overflow-x-auto rounded-md border border-border/60 bg-surface p-1",
         className,
       )}
     >
@@ -46,9 +46,9 @@ export const SegmentedControl: React.FC<SegmentedControlProps> = ({
             aria-selected={active}
             onClick={() => onChange(option.id)}
             className={clsx(
-              "segmented-control__option inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[10px] font-medium transition-micro",
+              "segmented-control__option inline-flex min-w-fit flex-[1_0_auto] items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] font-medium transition-micro",
               isCompact
-                ? "min-h-[var(--control-height-sm)] px-2.5 text-[12px]"
+                ? "min-h-[var(--control-height-sm)] px-3 text-[12px]"
                 : "min-h-[var(--control-height-md)] px-3 text-body-sm",
               active
                 ? "bg-surface-hover text-text-primary"
@@ -60,7 +60,7 @@ export const SegmentedControl: React.FC<SegmentedControlProps> = ({
                 {option.icon}
               </span>
             ) : null}
-            <span className="truncate">{option.label}</span>
+            <span>{option.label}</span>
             {typeof option.count === "number" && option.count > 0 ? (
               <span
                 className={clsx(

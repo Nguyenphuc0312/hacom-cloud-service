@@ -50,6 +50,7 @@ export const registerConversationEvents = (
     WebSocketEvents.CONVERSATION_MEMBERSHIP_UPDATED,
     handlers.onConversationMembershipUpdated,
   );
+  register(WebSocketEvents.CONVERSATION_READ_ADVANCED, handlers.onMessageRead);
   register(WebSocketEvents.MESSAGE_READ, handlers.onMessageRead);
   register(WebSocketEvents.MEMBER_UPDATED, handlers.onMemberUpdated);
   register(

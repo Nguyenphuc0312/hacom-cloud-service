@@ -363,7 +363,7 @@ describe("useChatScrollController", () => {
     harness.rerender({ messages: nextMessages });
     await harness.settle();
 
-    expect(harness.scrollToIndex).toHaveBeenLastCalledWith(100, "end", "smooth");
+    expect(harness.scrollToIndex).toHaveBeenLastCalledWith(100, "end", "auto");
     expect(harness.container.scrollTop).toBe(getBottomOffset(101));
     expect(harness.result.current.pendingNewMessages).toBe(0);
   });
@@ -414,7 +414,7 @@ describe("useChatScrollController", () => {
     harness.rerender({ messages: nextMessages });
     await harness.settle();
 
-    expect(harness.scrollToIndex).toHaveBeenLastCalledWith(100, "end", "smooth");
+    expect(harness.scrollToIndex).toHaveBeenLastCalledWith(100, "end", "auto");
     expect(harness.container.scrollTop).toBe(getBottomOffset(101));
     expect(harness.result.current.pendingNewMessages).toBe(0);
   });

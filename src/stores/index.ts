@@ -17,6 +17,7 @@ export {
   useHasConversation,
   useAdjacentConversationIds,
   useCurrentTypingStatus,
+  useCurrentTypingStatuses,
   useFilteredConversations,
   useTotalUnreadCount,
 } from "./chatStore";

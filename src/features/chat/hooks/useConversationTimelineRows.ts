@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs -- Immutable derived-row cache preserves item identity without scheduling a second render. */
 import React from "react";
 import type { Conversation, Message, Attachment } from "../../../types";
 import {
@@ -5,6 +6,11 @@ import {
   type TimelineItem,
   type UnreadTimelineMarker,
 } from "../../../hooks/useMessageGrouping";
+import {
+  getChatPerformanceDuration,
+  getChatPerformanceTimestamp,
+  recordChatPerformanceMeasure,
+} from "../../../utils/chatPerformance";
 
 type TimelineDateItem = Extract<TimelineItem, { kind: "date" }>;
 type TimelineUnreadItem = Extract<TimelineItem, { kind: "unread" }>;
@@ -29,6 +35,36 @@ interface TimelineRowsCache {
   items: ConversationTimelineItem[];
   itemsByKey: Map<string, ConversationTimelineItem>;
 }
+
+const findCommonPrefixLength = <T,>(
+  previousItems: readonly T[],
+  nextItems: readonly T[],
+): number => {
+  const limit = Math.min(previousItems.length, nextItems.length);
+  let index = 0;
+
+  while (index < limit && previousItems[index] === nextItems[index]) {
+    index += 1;
+  }
+
+  return index;
+};
+
+const compactMapIfNeeded = <T,>(
+  itemMap: Map<string, T>,
+  items: readonly T[],
+  getKey: (item: T) => string,
+): Map<string, T> => {
+  if (itemMap.size <= items.length * 2) {
+    return itemMap;
+  }
+
+  const compacted = new Map<string, T>();
+  items.forEach((item) => {
+    compacted.set(getKey(item), item);
+  });
+  return compacted;
+};
 
 const getAttachmentLayoutSignature = (
   attachments?: Attachment[],
@@ -197,57 +233,92 @@ export const useConversationTimelineRows = ({
     conversationType,
     unreadMarker,
   });
-  const [cache, setCache] = React.useState<TimelineRowsCache>(() => ({
+  const cacheRef = React.useRef<TimelineRowsCache>({
     groupedItems: null,
     items: [],
     itemsByKey: new Map(),
-  }));
+  });
 
   const computed = React.useMemo(() => {
+    const startedAt = getChatPerformanceTimestamp();
+    const cache = cacheRef.current;
     if (cache.groupedItems === groupedItems) {
-      return {
+      const result = {
         items: cache.items,
-        nextCache: cache,
       };
+      recordChatPerformanceMeasure(
+        "timeline-row-derive",
+        getChatPerformanceDuration(startedAt),
+        {
+          messageCount: messages.length,
+          groupedItemCount: groupedItems.length,
+          rowCount: result.items.length,
+          cacheHit: true,
+        },
+      );
+      return result;
     }
 
-    const nextItems = groupedItems.map(toConversationTimelineItem);
-    const nextItemsByKey = new Map<string, ConversationTimelineItem>();
+    const previousGroupedItems = cache.groupedItems;
+    const commonPrefixLength = previousGroupedItems
+      ? findCommonPrefixLength(previousGroupedItems, groupedItems)
+      : 0;
+    const canIncrementallyRebuildTail = Boolean(
+      previousGroupedItems && commonPrefixLength > 0,
+    );
+    const nextItems = canIncrementallyRebuildTail
+      ? cache.items.slice(0, commonPrefixLength)
+      : [];
+    const nextItemsByKey = canIncrementallyRebuildTail
+      ? new Map(cache.itemsByKey)
+      : new Map<string, ConversationTimelineItem>();
     const previousItemsByKey = cache.itemsByKey;
 
-    for (let index = 0; index < nextItems.length; index += 1) {
-      const nextItem = nextItems[index];
+    for (let index = commonPrefixLength; index < groupedItems.length; index += 1) {
+      let nextItem = toConversationTimelineItem(groupedItems[index]);
       const previousItem = previousItemsByKey.get(nextItem.key);
 
       if (
         previousItem &&
         areConversationTimelineItemsEqual(previousItem, nextItem)
       ) {
-        nextItems[index] = previousItem;
+        nextItem = previousItem;
       }
 
-      nextItemsByKey.set(nextItems[index].key, nextItems[index]);
+      nextItems[index] = nextItem;
+      nextItemsByKey.set(nextItem.key, nextItem);
     }
+
+    const compactedItemsByKey = compactMapIfNeeded(
+      nextItemsByKey,
+      nextItems,
+      (item) => item.key,
+    );
+
+    const nextCache = {
+      groupedItems,
+      items: nextItems,
+      itemsByKey: compactedItemsByKey,
+    };
+    cacheRef.current = nextCache;
+
+    recordChatPerformanceMeasure(
+      "timeline-row-derive",
+      getChatPerformanceDuration(startedAt),
+      {
+        messageCount: messages.length,
+        groupedItemCount: groupedItems.length,
+        rowCount: nextItems.length,
+        cacheHit: false,
+        incrementalTail: canIncrementallyRebuildTail,
+        commonPrefixLength,
+      },
+    );
 
     return {
       items: nextItems,
-      nextCache: {
-        groupedItems,
-        items: nextItems,
-        itemsByKey: nextItemsByKey,
-      },
     };
-  }, [cache, groupedItems]);
-
-  React.useEffect(() => {
-    setCache((current) => {
-      if (current.groupedItems === groupedItems) {
-        return current;
-      }
-
-      return computed.nextCache;
-    });
-  }, [computed.nextCache, groupedItems]);
+  }, [groupedItems, messages.length]);
 
   return computed.items;
 };

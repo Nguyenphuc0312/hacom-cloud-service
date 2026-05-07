@@ -6,14 +6,18 @@ import React, {
   useRef,
   useState,
 } from "react";
-import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
   VariableSizeList,
   type ListChildComponentProps,
   type ListOnScrollProps,
 } from "react-window";
-import { ConversationListSkeleton, ErrorState, StateBlock } from "../../ui";
+import {
+  ConversationListSkeleton,
+  ErrorState,
+  SkeletonButton,
+  StateBlock,
+} from "../../ui";
 import {
   ChatBubbleLeftRightIcon,
   MagnifyingGlassIcon,
@@ -55,9 +59,9 @@ interface RowData {
 const VIRTUALIZATION_THRESHOLD = 10;
 const LOAD_MORE_THRESHOLD_PX = 280;
 const ROOM_HEIGHT_BY_LAYOUT: Record<ChatLayoutState, number> = {
-  normal: 56,
-  "with-panel": 52,
-  mobile: 54,
+  normal: 72,
+  "with-panel": 68,
+  mobile: 64,
 };
 
 const measureViewportHeight = (node: HTMLDivElement): number => {
@@ -452,18 +456,20 @@ export const RoomList: React.FC<RoomListProps> = ({
 
       {(hasMore || isLoadingMore) && (
         <div className="px-4 pb-2 pt-2">
-          <div
-            className={clsx(
-              "flex h-9 items-center justify-center rounded-full border border-dashed border-border/60 text-xs text-text-muted",
-              isLoadingMore && "bg-surface/80",
-            )}
-          >
-            {isLoadingMore
-              ? t("common:status.loading", { defaultValue: "Loading..." })
-              : t("sidebar:actions.loadMore", {
-                  defaultValue: "Loading more...",
-                })}
-          </div>
+          {isLoadingMore ? (
+            <div
+              className="flex h-9 items-center justify-center rounded-full border border-dashed border-border/60 bg-surface/80"
+              aria-busy="true"
+            >
+              <SkeletonButton width="64%" height={14} className="max-w-44" />
+            </div>
+          ) : (
+            <div className="flex h-9 items-center justify-center rounded-full border border-dashed border-border/60 text-xs text-text-muted">
+              {t("sidebar:actions.loadMore", {
+                defaultValue: "Loading more...",
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -33,6 +33,7 @@ const renderComposer = (
     initialValue?: string;
     uploadDrafts?: AttachmentDraft[];
     hasReadyDrafts?: boolean;
+    onAddFiles?: (files: File[]) => { errors?: string[] } | void;
   } = {},
 ) => {
   const Harness = () => {
@@ -47,6 +48,7 @@ const renderComposer = (
         conversationId="room-1"
         uploadDrafts={options.uploadDrafts}
         hasReadyDrafts={options.hasReadyDrafts}
+        onAddFiles={options.onAddFiles}
         onRemoveDraft={vi.fn()}
         onCancelUpload={vi.fn()}
         onRetryUpload={vi.fn()}
@@ -195,5 +197,68 @@ describe("MessageInput send flow", () => {
       "see attached",
     );
     expect(screen.getByText("report.pdf")).toBeInTheDocument();
+  });
+
+  it("blocks inline send when the message exceeds the hard limit", async () => {
+    const onSend = vi.fn();
+
+    renderComposer(onSend, { initialValue: "x".repeat(20_001) });
+
+    const sendButton = screen.getByTestId("chat-send-button");
+    expect(sendButton).toBeDisabled();
+    expect(
+      screen.getByText("Tin nhắn vượt giới hạn 20.000 ký tự."),
+    ).toBeInTheDocument();
+
+    fireEvent.click(sendButton);
+
+    await waitFor(() => expect(onSend).not.toHaveBeenCalled());
+  });
+
+  it("converts an over-limit draft into a .txt attachment instead of sending inline", async () => {
+    const onSend = vi.fn();
+    const onAddFiles = vi.fn();
+
+    renderComposer(onSend, {
+      initialValue: "x".repeat(20_001),
+      onAddFiles,
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Gửi dưới dạng tệp .txt" }),
+    );
+
+    await waitFor(() => expect(onAddFiles).toHaveBeenCalledTimes(1));
+    const [files] = onAddFiles.mock.calls[0] as [File[]];
+    expect(files).toHaveLength(1);
+    expect(files[0]).toBeInstanceOf(File);
+    expect(files[0]?.name).toMatch(/^message-\d{8}-\d{4}\.txt$/);
+    await expect(files[0]?.text()).resolves.toHaveLength(20_001);
+    expect(onSend).not.toHaveBeenCalled();
+    expect(screen.getByTestId("chat-composer-input")).toHaveValue("");
+  });
+
+  it("surfaces long-paste guidance for very large payloads without sending", async () => {
+    const onSend = vi.fn();
+
+    renderComposer(onSend, { initialValue: "" });
+    const input = screen.getByTestId("chat-composer-input");
+
+    fireEvent.paste(input, {
+      clipboardData: {
+        getData: () => "x".repeat(100_000),
+      },
+    });
+    fireEvent.change(input, {
+      target: { value: "x".repeat(100_000) },
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Tin nhắn vượt giới hạn 20.000 ký tự."),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("chat-send-button")).toBeDisabled();
+    expect(onSend).not.toHaveBeenCalled();
   });
 });

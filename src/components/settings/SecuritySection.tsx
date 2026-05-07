@@ -7,7 +7,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LockClosedIcon } from "@heroicons/react/24/outline";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { SettingsFieldGroup } from "./SettingsFieldGroup";
+import { DeviceSessionList } from "./DeviceSessionList";
+import { SettingsCard } from "./SettingsCard";
 import { SettingsSection } from "./SettingsSection";
 import { Button, Input, PasswordStrength, toast } from "../ui";
 import { extractApiError } from "../../lib/apiContract";
@@ -73,8 +74,13 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
       title={t("security.title")}
       description={t("security.description")}
     >
-      <SettingsFieldGroup>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <SettingsCard
+        title={t("security.changePassword")}
+        description={t("security.changePasswordDesc", {
+          defaultValue: "Cập nhật mật khẩu đăng nhập Hacom Chat.",
+        })}
+      >
+        <form onSubmit={handleSubmit(onSubmit)} className="max-w-[480px] space-y-4">
           <Input
             {...register("currentPassword")}
             type="password"
@@ -115,7 +121,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
             autoComplete="new-password"
           />
 
-          <div className="flex justify-end pt-2">
+          <div className="flex justify-start pt-2">
             <Button
               type="submit"
               size="sm"
@@ -126,7 +132,9 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
             </Button>
           </div>
         </form>
-      </SettingsFieldGroup>
+      </SettingsCard>
+
+      <DeviceSessionList />
     </SettingsSection>
   );
 };

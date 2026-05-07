@@ -4,9 +4,11 @@
 
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { SettingsFieldGroup } from "./SettingsFieldGroup";
+import { SettingsCard } from "./SettingsCard";
+import { SettingsRow } from "./SettingsRow";
 import { SettingsSection } from "./SettingsSection";
-import { ToggleSwitch } from "./ToggleSwitch";
+import { SettingsToggle } from "./SettingsToggle";
+import { toast } from "../ui";
 import { useSettingsSection, useUpdateSettings } from "../../settings";
 
 interface PrivacySectionProps {
@@ -17,6 +19,13 @@ export const PrivacySection: React.FC<PrivacySectionProps> = ({ id }) => {
   const { t } = useTranslation("settings");
   const privacy = useSettingsSection("privacy");
   const update = useUpdateSettings();
+  const updatePrivacy = (
+    patch: Partial<typeof privacy>,
+    successMessage: string,
+  ) => {
+    update({ privacy: patch });
+    toast.success(successMessage);
+  };
 
   return (
     <SettingsSection
@@ -24,36 +33,62 @@ export const PrivacySection: React.FC<PrivacySectionProps> = ({ id }) => {
       title={t("privacy.title")}
       description={t("privacy.description")}
     >
-      <SettingsFieldGroup contentClassName="divide-y divide-border/60">
-        <ToggleSwitch
+      <SettingsCard bodyClassName="divide-y divide-border">
+        <SettingsRow
           label={t("privacy.showOnlineStatus")}
           description={t("privacy.showOnlineStatusProjectedDesc", {
             defaultValue:
-              "Managed by your shared chat privacy policy. Turn off to hide when you are online.",
+              "Được quản lý bởi chính sách riêng tư dùng chung. Tắt để ẩn trạng thái trực tuyến của bạn.",
           })}
-          checked={privacy.showOnlineStatus}
-          onChange={(value) => update({ privacy: { showOnlineStatus: value } })}
-          className="rounded-none px-0 py-4"
+          control={
+            <SettingsToggle
+              label={t("privacy.showOnlineStatus")}
+              checked={privacy.showOnlineStatus}
+              onChange={(value) =>
+                updatePrivacy(
+                  { showOnlineStatus: value },
+                  t("privacy.saved", {
+                    defaultValue: "Đã cập nhật quyền riêng tư.",
+                  }),
+                )
+              }
+            />
+          }
         />
-        <ToggleSwitch
+        <SettingsRow
           label={t("privacy.readReceipts")}
           description={t("privacy.readReceiptsDesc")}
-          checked={privacy.readReceipts}
-          onChange={(value) => update({ privacy: { readReceipts: value } })}
-          className="rounded-none px-0 py-4"
+          control={
+            <SettingsToggle
+              label={t("privacy.readReceipts")}
+              checked={privacy.readReceipts}
+              onChange={(value) =>
+                updatePrivacy(
+                  { readReceipts: value },
+                  t("privacy.saved", {
+                    defaultValue: "Đã cập nhật quyền riêng tư.",
+                  }),
+                )
+              }
+            />
+          }
         />
-        <ToggleSwitch
+        <SettingsRow
           label={t("privacy.allowStrangers")}
           description={t("privacy.allowStrangersDeprecatedDesc", {
             defaultValue:
-              "Deprecated compatibility field. Direct messages now require friendship.",
+              "Trường tương thích cũ. Tin nhắn trực tiếp hiện yêu cầu hai bên là bạn bè.",
           })}
-          checked={privacy.allowStrangersMessage}
-          onChange={() => {}}
-          disabled
-          className="rounded-none px-0 py-4"
+          control={
+            <SettingsToggle
+              label={t("privacy.allowStrangers")}
+              checked={privacy.allowStrangersMessage}
+              onChange={() => {}}
+              disabled
+            />
+          }
         />
-      </SettingsFieldGroup>
+      </SettingsCard>
     </SettingsSection>
   );
 };

@@ -54,4 +54,23 @@ describe("registerConversationEvents", () => {
       onConversationLeft,
     );
   });
+
+  it("wires canonical and legacy read events to the read handler", () => {
+    const on = vi.fn(() => vi.fn());
+    const socket = { on, off: vi.fn() };
+    const onMessageRead = vi.fn();
+
+    registerConversationEvents(socket, {
+      onMessageRead,
+    });
+
+    expect(on).toHaveBeenCalledWith(
+      WebSocketEvents.CONVERSATION_READ_ADVANCED,
+      onMessageRead,
+    );
+    expect(on).toHaveBeenCalledWith(
+      WebSocketEvents.MESSAGE_READ,
+      onMessageRead,
+    );
+  });
 });

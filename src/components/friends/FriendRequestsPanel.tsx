@@ -16,7 +16,7 @@ import {
   CheckIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { Spinner, toast } from "../ui";
+import { NotificationListSkeleton, toast } from "../ui";
 import { Avatar } from "../common/Avatar";
 import { Badge } from "../common/Badge";
 import {
@@ -192,9 +192,7 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Spinner size="sm" />
-          </div>
+          <NotificationListSkeleton count={3} />
         ) : items.length === 0 ? (
           <div className="py-8 text-center">
             <p className="text-sm text-text-muted">

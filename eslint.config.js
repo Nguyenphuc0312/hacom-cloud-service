@@ -19,6 +19,9 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      "react-hooks/incompatible-library": "error",
+    },
   },
   {
     files: [
@@ -34,24 +37,6 @@ export default defineConfig([
         "error",
         {
           patterns: ["**/services/api"],
-        },
-      ],
-    },
-  },
-  {
-    files: ["src/**/*.{ts,tsx}"],
-    ignores: ["src/hooks/useMessages.ts"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: ["**/hooks/useMessages"],
-              message:
-                "useMessages is deprecated. Use feature-level chat session/send hooks instead.",
-            },
-          ],
         },
       ],
     },

@@ -37,10 +37,21 @@ export interface IncomingMessagesPage {
   hasMoreNewer?: boolean;
 }
 
-const getMessageSeq = (message: Message): number | null =>
-  typeof message.serverSeq === "number" && Number.isFinite(message.serverSeq)
-    ? message.serverSeq
-    : null;
+export function getMessageSeq(message: unknown): number | null {
+  if (!message || typeof message !== "object") {
+    return null;
+  }
+
+  const record = message as Record<string, unknown>;
+  const raw = record.serverSeq ?? record.messageSeq ?? record.seq ?? null;
+
+  if (raw === null || raw === undefined || raw === "") {
+    return null;
+  }
+
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
 
 const isLocalPendingMessage = (message: Message): boolean =>
   message.transportStatus === "optimistic" ||
@@ -142,7 +153,7 @@ export const mergeMessageRecords = (
             incoming.status === MessageStatus.READ ||
             !isTempMessageId(incoming.id)
           ? "sent"
-          : incoming.sendState ?? current.sendState,
+          : (incoming.sendState ?? current.sendState),
   };
 
   if (merged.sendState === "sent") {
@@ -168,10 +179,7 @@ export const mergeMessageLists = (
       continue;
     }
 
-    merged[existingIndex] = mergeMessageRecords(
-      merged[existingIndex],
-      message,
-    );
+    merged[existingIndex] = mergeMessageRecords(merged[existingIndex], message);
   }
 
   return sortMessagesByCanonicalOrder(merged);
@@ -375,7 +383,7 @@ export const patchMessageReactionInCache = (
 export const patchReadCursorInCache = (
   cache: ConversationMessagesCache,
   input: {
-    lastReadMessageId: string;
+    lastReadMessageId?: string;
     lastReadSeq?: number;
     currentUserId?: string;
     readerId?: string;
@@ -384,21 +392,31 @@ export const patchReadCursorInCache = (
   if (!input.currentUserId) return;
   if (input.readerId && input.readerId === input.currentUserId) return;
 
-  const boundaryIndex = findMessageIdentityIndex(cache.messages, {
-    id: input.lastReadMessageId,
-    localId: input.lastReadMessageId,
-    stableId: input.lastReadMessageId,
-    clientMessageId: input.lastReadMessageId,
-  });
+  const boundaryIndex = input.lastReadMessageId
+    ? findMessageIdentityIndex(cache.messages, {
+        id: input.lastReadMessageId,
+        localId: input.lastReadMessageId,
+        stableId: input.lastReadMessageId,
+        clientMessageId: input.lastReadMessageId,
+      })
+    : -1;
   const readAt = new Date().toISOString() as unknown as Date;
   const messagesToPatch = cache.messages.filter((message, index) => {
     if (message.senderId !== input.currentUserId) return false;
     if (message.status === MessageStatus.READ) return false;
 
+    const messageRecord = message as {
+      messageSeq?: unknown;
+      serverSeq?: unknown;
+    };
     const messageSeq =
-      typeof message.serverSeq === "number" && Number.isFinite(message.serverSeq)
-        ? message.serverSeq
-        : null;
+      typeof messageRecord.messageSeq === "number" &&
+      Number.isFinite(messageRecord.messageSeq)
+        ? messageRecord.messageSeq
+        : typeof messageRecord.serverSeq === "number" &&
+            Number.isFinite(messageRecord.serverSeq)
+          ? messageRecord.serverSeq
+          : null;
     const withinSeqBoundary =
       typeof input.lastReadSeq === "number" &&
       Number.isFinite(input.lastReadSeq) &&
@@ -408,12 +426,14 @@ export const patchReadCursorInCache = (
     if (boundaryIndex < 0) {
       return (
         withinSeqBoundary ||
-        messagesShareIdentity(message, {
-          id: input.lastReadMessageId,
-          localId: input.lastReadMessageId,
-          stableId: input.lastReadMessageId,
-          clientMessageId: input.lastReadMessageId,
-        })
+        (input.lastReadMessageId
+          ? messagesShareIdentity(message, {
+              id: input.lastReadMessageId,
+              localId: input.lastReadMessageId,
+              stableId: input.lastReadMessageId,
+              clientMessageId: input.lastReadMessageId,
+            })
+          : false)
       );
     }
 
@@ -428,15 +448,97 @@ export const patchReadCursorInCache = (
   }
 };
 
+export const patchDeliveredReceiptInCache = (
+  cache: ConversationMessagesCache,
+  input: {
+    messageId: string;
+    messageSeq?: number;
+    currentUserId?: string;
+    deliveredAt?: string;
+  },
+): void => {
+  if (!input.currentUserId) return;
+
+  const matchingIndex = findMessageIdentityIndex(cache.messages, {
+    id: input.messageId,
+    localId: input.messageId,
+    stableId: input.messageId,
+    clientMessageId: input.messageId,
+  });
+  const message =
+    matchingIndex >= 0
+      ? cache.messages[matchingIndex]
+      : cache.messages.find((candidate) => {
+          const candidateRecord = candidate as unknown as {
+            messageSeq?: number;
+          };
+          const candidateSeq =
+            typeof candidateRecord.messageSeq === "number" &&
+            Number.isFinite(candidateRecord.messageSeq)
+              ? candidateRecord.messageSeq
+              : typeof candidate.serverSeq === "number" &&
+                  Number.isFinite(candidate.serverSeq)
+                ? candidate.serverSeq
+                : null;
+          return (
+            typeof input.messageSeq === "number" &&
+            candidateSeq === input.messageSeq &&
+            candidate.senderId === input.currentUserId
+          );
+        });
+
+  if (!message) return;
+  if (message.senderId !== input.currentUserId) return;
+  if (message.status === MessageStatus.READ) return;
+  if (message.status === MessageStatus.FAILED || message.sendState === "failed") return;
+  if (
+    message.status === MessageStatus.SENDING ||
+    message.sendState === "sending" ||
+    message.sendState === "queued" ||
+    message.sendState === "retrying"
+  ) {
+    return;
+  }
+
+  patchMessageInCache(cache, message.id, {
+    status: MessageStatus.DELIVERED,
+    sendState: "sent",
+    ...(input.deliveredAt
+      ? { deliveredAt: input.deliveredAt as unknown as Date }
+      : {}),
+  });
+};
+
 export const markMessageFailedInCache = (
   cache: ConversationMessagesCache,
   clientMessageId: string,
-  errorMessage?: string,
+  failure?:
+    | string
+    | {
+        message?: string;
+        code?: string;
+        statusCode?: number;
+      },
 ): void => {
+  const failureMessage =
+    typeof failure === "string" ? failure : failure?.message;
+  const failureCode = typeof failure === "string" ? undefined : failure?.code;
+  const failureStatusCode =
+    typeof failure === "string" ? undefined : failure?.statusCode;
+  const failureReason =
+    typeof failureStatusCode === "number"
+      ? failureStatusCode >= 500
+        ? "backend_5xx"
+        : failureStatusCode >= 400
+          ? "backend_4xx"
+          : "server"
+      : "server";
+
   patchMessageInCache(cache, clientMessageId, {
     status: MessageStatus.FAILED,
     sendState: "failed",
-    failureReason: "server",
-    errorMessage,
+    failureReason,
+    errorCode: failureCode,
+    errorMessage: failureMessage,
   });
 };

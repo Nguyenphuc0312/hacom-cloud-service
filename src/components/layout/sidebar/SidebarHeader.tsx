@@ -98,17 +98,17 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   return (
     <div
       className={clsx(
-        "border-b border-border/60",
-        isDense ? "px-3 py-3" : "px-4 py-3.5",
+        "border-b border-border/60 bg-surface",
+        isDense ? "px-3 py-3" : "px-4 py-4",
       )}
     >
-      <div className={clsx("flex items-center", isDense ? "gap-2" : "gap-2.5")}>
+      <div className={clsx("flex items-center", isDense ? "gap-2" : "gap-3")}>
         <button
           type="button"
           onClick={onCurrentUserClick}
           className={clsx(
             "flex min-w-0 flex-1 items-center rounded-md text-left transition-micro hover:bg-surface-hover/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-            isDense ? "gap-2 px-1 py-1" : "gap-2.5 px-1.5 py-1.5",
+            isDense ? "gap-2 px-1 py-1" : "gap-3 px-1.5 py-1.5",
           )}
           aria-label={currentUserName}
         >
@@ -120,22 +120,23 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
             showStatus
           />
 
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p
               className={clsx(
-                "truncate font-medium text-text-primary",
-                isDense ? "text-[13px] leading-[1.05rem]" : "text-[14px] leading-[1.1rem]",
+                "font-semibold text-text-primary",
+                isDense ? "text-[16px] leading-5" : "text-[20px] leading-7",
               )}
             >
-              {currentUserName}
+              Tin nhắn
             </p>
             <p
+              title={`${currentStatusLabel} · ${currentUserName}`}
               className={clsx(
                 "truncate text-text-muted",
                 isDense ? "text-[11px] leading-4" : "text-[12px] leading-4",
               )}
             >
-              {currentStatusLabel}
+              {currentStatusLabel} · {currentUserName}
             </p>
           </div>
         </button>

@@ -118,7 +118,8 @@ describe("SettingsPage", () => {
     expect(contentPane).not.toBeNull();
     expect(contentPane).toContainElement(screen.getByText("Sync failed"));
     expect(screen.getByText("profile-section")).toBeInTheDocument();
-    expect(screen.getByText("danger-zone-section")).toBeInTheDocument();
+    expect(screen.queryByText("danger-zone-section")).not.toBeInTheDocument();
+    expect(screen.queryByText("notification-section")).not.toBeInTheDocument();
   });
 
   it("uses a mobile list/detail stack inside the same content pane", () => {
@@ -129,13 +130,13 @@ describe("SettingsPage", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.queryByText("chat-section")).not.toBeInTheDocument();
+    expect(screen.queryByText("notification-section")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Chat & data" }));
+    fireEvent.click(screen.getByRole("button", { name: "Thông báo" }));
 
     expect(screen.getByText("common:actions.back")).toBeInTheDocument();
-    expect(screen.getByText("chat-section")).toBeInTheDocument();
-    expect(screen.getByText("language-section")).toBeInTheDocument();
+    expect(screen.getByText("notification-section")).toBeInTheDocument();
+    expect(screen.queryByText("language-section")).not.toBeInTheDocument();
     expect(screen.queryByText("profile-section")).not.toBeInTheDocument();
   });
 });

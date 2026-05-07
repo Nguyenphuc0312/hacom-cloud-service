@@ -52,7 +52,9 @@ describe("api contract", () => {
     });
 
     expect(apiClientMock.get).toHaveBeenCalledWith(
-      expect.stringContaining("/messages/search?q=hello&conversationId=conv-1&page=2&limit=20"),
+      expect.stringContaining(
+        "/messages/search?q=hello&conversationId=conv-1&page=2&limit=20",
+      ),
       expect.any(Object),
     );
   });
@@ -104,7 +106,9 @@ describe("api contract", () => {
   });
 
   it("createPrivateConversation rejects malformed peerUserId values before sending the request", async () => {
-    await expect(conversationApi.createPrivateConversation(ACTOR_USER_ID.slice(0, 8))).rejects.toMatchObject({
+    await expect(
+      conversationApi.createPrivateConversation(ACTOR_USER_ID.slice(0, 8)),
+    ).rejects.toMatchObject({
       name: "ApiContractError",
       statusCode: 422,
       code: ErrorCode.VALIDATION_ERROR,
@@ -145,7 +149,15 @@ describe("api contract", () => {
     apiClientMock.post.mockResolvedValue({
       data: {
         success: true,
-        data: null,
+        data: {
+          conversationId: "conv-3",
+          userId: "user-1",
+          previousLastReadSeq: 8,
+          lastReadSeq: 9,
+          lastReadMessageId: "msg-9",
+          lastReadAt: "2026-04-27T10:00:00.000Z",
+          unreadCount: 0,
+        },
       },
     });
 
@@ -155,6 +167,36 @@ describe("api contract", () => {
       "/conversations/conv-3/messages/read",
       {
         lastVisibleMessageId: "msg-9",
+      },
+    );
+  });
+
+  it("markAsRead posts lastReadSeq with legacy anchor", async () => {
+    apiClientMock.post.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          conversationId: "conv-3",
+          userId: "user-1",
+          previousLastReadSeq: 8,
+          lastReadSeq: 10,
+          lastReadMessageId: "msg-10",
+          lastReadAt: "2026-04-27T10:01:00.000Z",
+          unreadCount: 0,
+        },
+      },
+    });
+
+    await conversationApi.markAsRead("conv-3", {
+      lastVisibleMessageId: "msg-10",
+      lastReadSeq: 10,
+    });
+
+    expect(apiClientMock.post).toHaveBeenCalledWith(
+      "/conversations/conv-3/messages/read",
+      {
+        lastVisibleMessageId: "msg-10",
+        lastReadSeq: 10,
       },
     );
   });
@@ -218,6 +260,46 @@ describe("api contract", () => {
     expect(apiClientMock.get).toHaveBeenCalledWith(
       "/conversations/conv-11/messages?limit=25",
       expect.objectContaining({ signal: abortController.signal }),
+    );
+  });
+
+  it("sendMessage omits client-supplied sender identity hints from the API payload", async () => {
+    apiClientMock.post.mockResolvedValue({
+      data: {
+        success: true,
+        data: { id: "msg-1" },
+      },
+    });
+
+    const legacyRuntimePayload = {
+      content: "ok",
+      type: "text",
+      clientMessageId: "ede5548c-eb2d-43d4-883e-17540dfb659b",
+      tempId: "temp-ede5548c-eb2d-43d4-883e-17540dfb659b",
+      localId: "temp-ede5548c-eb2d-43d4-883e-17540dfb659b",
+      senderName: "Nguyễn Văn Long",
+      senderAvatar: null,
+    } as unknown as Parameters<typeof messageApi.sendMessage>[1];
+
+    await messageApi.sendMessage("conv-12", legacyRuntimePayload);
+
+    expect(apiClientMock.post).toHaveBeenCalledWith(
+      "/conversations/conv-12/messages",
+      {
+        content: "ok",
+        type: "text",
+        replyTo: undefined,
+        clientMessageId: "ede5548c-eb2d-43d4-883e-17540dfb659b",
+        tempId: "temp-ede5548c-eb2d-43d4-883e-17540dfb659b",
+        localId: "temp-ede5548c-eb2d-43d4-883e-17540dfb659b",
+        attachments: undefined,
+      },
+    );
+    expect(apiClientMock.post.mock.calls[0]?.[1]).not.toHaveProperty(
+      "senderName",
+    );
+    expect(apiClientMock.post.mock.calls[0]?.[1]).not.toHaveProperty(
+      "senderAvatar",
     );
   });
 });

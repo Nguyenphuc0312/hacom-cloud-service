@@ -24,12 +24,12 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
   className,
 }) => {
   const id = useId();
+  const descriptionId = description ? `${id}-description` : undefined;
 
   return (
-    <label
-      htmlFor={id}
+    <div
       className={clsx(
-        "flex cursor-pointer items-center justify-between gap-4 rounded-[1rem] px-3 py-3",
+        "flex items-center justify-between gap-4 rounded-[1rem] px-3 py-3",
         "transition-colors duration-150",
         !disabled && "hover:bg-surface-overlay/72",
         disabled && "cursor-not-allowed opacity-60",
@@ -37,22 +37,25 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
       )}
     >
       <div className="min-w-0 flex-1">
-        <span className="block text-sm font-medium text-text-primary">
+        <span id={id} className="block text-sm font-medium text-text-primary">
           {label}
         </span>
         {description && (
-          <span className="mt-0.5 block text-xs text-text-muted">
+          <span
+            id={descriptionId}
+            className="mt-0.5 block text-xs leading-5 text-text-secondary"
+          >
             {description}
           </span>
         )}
       </div>
 
       <button
-        id={id}
         role="switch"
         type="button"
         aria-checked={checked}
-        aria-label={label}
+        aria-labelledby={id}
+        aria-describedby={descriptionId}
         disabled={disabled}
         onClick={() => !disabled && onChange(!checked)}
         className={clsx(
@@ -71,7 +74,7 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
           )}
         />
       </button>
-    </label>
+    </div>
   );
 };
 

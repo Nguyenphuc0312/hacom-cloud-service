@@ -16,7 +16,14 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "../common/Avatar";
 import { UserSearchResultItem } from "../common/UserSearchResultItem";
-import { Input, Spinner, TabTrigger, toast } from "../ui";
+import {
+  ConfirmDialog,
+  DirectorySkeleton,
+  Input,
+  SkeletonCircle,
+  TabTrigger,
+  toast,
+} from "../ui";
 import type { Conversation, UserSummary } from "../../types";
 import { RoomMemberRole, UserStatus } from "../../types";
 import { useChatStore, useGroupStore } from "../../stores";
@@ -70,6 +77,11 @@ interface GroupMember {
   status?: UserSummary["status"];
   role: GroupMemberRole;
 }
+
+type PendingGroupConfirm =
+  | { type: "remove-member"; member: GroupMember }
+  | { type: "leave-group" }
+  | null;
 
 const ROLE_PRIORITY: Record<GroupMemberRole, number> = {
   [RoomMemberRole.OWNER]: 0,
@@ -251,6 +263,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const [resolvingRequestId, setResolvingRequestId] = useState<string | null>(
     null,
   );
+  const [pendingConfirm, setPendingConfirm] =
+    useState<PendingGroupConfirm>(null);
+  const [isConfirmActionPending, setIsConfirmActionPending] = useState(false);
 
   const updateConversation = useChatStore((state) => state.updateConversation);
   const removeConversation = useChatStore((state) => state.removeConversation);
@@ -345,10 +360,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     (currentUserId === createdBy
       ? RoomMemberRole.OWNER
       : RoomMemberRole.MEMBER);
-  const isAdmin = canRenameGroup(currentUserRole);
-  const canAddMembers = canAddGroupMembers(currentUserRole);
+  const groupCapabilities = conversation.permissions ?? null;
+  const isAdmin = canRenameGroup(currentUserRole, groupCapabilities);
+  const canAddMembers = canAddGroupMembers(currentUserRole, groupCapabilities);
   const canDeleteConversation = canDeleteConversationForSelf();
-  const canLeaveCurrentGroup = canLeaveGroup(currentUserRole, activeOwnerCount);
+  const canLeaveCurrentGroup = canLeaveGroup(
+    currentUserRole,
+    activeOwnerCount,
+    groupCapabilities,
+  );
   const participantCount =
     conversation.participantCount ??
     (members.length > 0 ? members.length : participants.length);
@@ -360,9 +380,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         actorUserId: currentUserId,
         targetRole: member.role,
         targetUserId: member.id,
+        capabilities: groupCapabilities,
       });
     },
-    [currentUserId, currentUserRole],
+    [currentUserId, currentUserRole, groupCapabilities],
   );
 
   const roleLabel = useCallback(
@@ -606,6 +627,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           actorUserId: currentUserId,
           targetRole: member.role,
           targetUserId: member.id,
+          capabilities: groupCapabilities,
         })
       ) {
         return;
@@ -632,38 +654,38 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         setActingMemberId(null);
       }
     },
-    [conversation.id, currentUserId, currentUserRole, refreshGroupState, t],
+    [conversation.id, currentUserId, currentUserRole, groupCapabilities, refreshGroupState, t],
   );
 
   const handleRemoveMember = useCallback(
-    async (member: GroupMember) => {
+    (member: GroupMember) => {
       if (!canRemoveMember(member)) return;
+      setPendingConfirm({ type: "remove-member", member });
+    },
+    [canRemoveMember],
+  );
 
-      const displayName = resolveMemberName(member) || member.id;
-      if (
-        !window.confirm(
-          t("profile:groupInfo.removeMemberConfirm", { name: displayName }),
-        )
-      ) {
-        return;
-      }
-
+  const confirmRemoveMember = useCallback(
+    async (member: GroupMember) => {
       setActingMemberId(member.id);
+      setIsConfirmActionPending(true);
       try {
         await chatApi.group.removeMember(conversation.id, member.id);
         await refreshGroupState();
+        setPendingConfirm(null);
         toast.success(t("profile:toast.memberRemoved"));
       } catch (error) {
         const apiError = extractApiError(error);
         toast.error(apiError.message || t("profile:toast.memberRemoveFailed"));
       } finally {
         setActingMemberId(null);
+        setIsConfirmActionPending(false);
       }
     },
-    [canRemoveMember, conversation.id, refreshGroupState, t],
+    [conversation.id, refreshGroupState, t],
   );
 
-  const handleLeaveGroup = useCallback(async () => {
+  const handleLeaveGroup = useCallback(() => {
     if (!canLeaveCurrentGroup) {
       toast.error(
         t("profile:groupInfo.leaveBlockedOwner", {
@@ -672,13 +694,16 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       );
       return;
     }
+    setPendingConfirm({ type: "leave-group" });
+  }, [canLeaveCurrentGroup, t]);
 
-    if (!window.confirm(t("profile:groupInfo.leaveConfirm"))) return;
-
+  const confirmLeaveGroup = useCallback(async () => {
     setIsSubmitting(true);
+    setIsConfirmActionPending(true);
     try {
       await chatApi.group.leaveGroup(conversation.id);
       removeConversation(conversation.id);
+      setPendingConfirm(null);
       toast.success(t("profile:toast.leftGroup"));
       onClose();
       navigate("/chat");
@@ -687,9 +712,9 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       toast.error(apiError.message || t("profile:toast.leaveGroupFailed"));
     } finally {
       setIsSubmitting(false);
+      setIsConfirmActionPending(false);
     }
   }, [
-    canLeaveCurrentGroup,
     conversation.id,
     navigate,
     onClose,
@@ -869,6 +894,28 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     ],
   );
 
+  const pendingConfirmMember =
+    pendingConfirm?.type === "remove-member" ? pendingConfirm.member : null;
+  const pendingConfirmMemberName = pendingConfirmMember
+    ? resolveMemberName(pendingConfirmMember) || pendingConfirmMember.id
+    : "";
+  const confirmTitle =
+    pendingConfirm?.type === "leave-group"
+      ? t("profile:groupInfo.leaveGroup")
+      : t("profile:groupInfo.actions.removeMember", {
+          defaultValue: "Remove member",
+        });
+  const confirmMessage =
+    pendingConfirm?.type === "leave-group"
+      ? t("profile:groupInfo.leaveConfirm")
+      : t("profile:groupInfo.removeMemberConfirm", {
+          name: pendingConfirmMemberName,
+        });
+  const confirmText =
+    pendingConfirm?.type === "leave-group"
+      ? t("profile:groupInfo.leaveGroup")
+      : t("common:actions.remove", { defaultValue: "Remove" });
+
   return (
     <div className={clsx("flex h-full flex-col bg-surface", className)}>
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -1024,9 +1071,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     />
                     <div className="max-h-44 overflow-y-auto rounded-lg border border-border">
                       {isSearching ? (
-                        <div className="flex justify-center py-4">
-                          <Spinner size="md" />
-                        </div>
+                        <DirectorySkeleton count={3} />
                       ) : searchErrorMessage ? (
                         <p className="px-3 py-3 text-sm text-danger">
                           {searchErrorMessage}
@@ -1074,9 +1119,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                 )}
 
                 {isLoadingMembers ? (
-                  <div className="flex justify-center py-4">
-                    <Spinner size="md" />
-                  </div>
+                  <DirectorySkeleton count={5} />
                 ) : members.length === 0 ? (
                   <p className="px-4 py-3 text-sm text-text-muted">
                     {t("profile:groupInfo.noMembers")}
@@ -1090,6 +1133,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                       actorUserId: currentUserId,
                       targetRole: member.role,
                       targetUserId: member.id,
+                      capabilities: groupCapabilities,
                     });
 
                     return (
@@ -1153,7 +1197,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                               )}
 
                               {actingMemberId === member.id && (
-                                <Spinner size="sm" className="ml-1" />
+                                <SkeletonCircle size={14} className="ml-1" />
                               )}
                             </div>
                           )}
@@ -1434,6 +1478,28 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           </button>
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={pendingConfirm !== null}
+        onClose={() => {
+          if (!isConfirmActionPending) {
+            setPendingConfirm(null);
+          }
+        }}
+        onConfirm={() => {
+          if (pendingConfirm?.type === "remove-member") {
+            void confirmRemoveMember(pendingConfirm.member);
+            return;
+          }
+          if (pendingConfirm?.type === "leave-group") {
+            void confirmLeaveGroup();
+          }
+        }}
+        title={confirmTitle}
+        message={confirmMessage}
+        confirmText={confirmText}
+        isLoading={isConfirmActionPending}
+        variant="danger"
+      />
     </div>
   );
 };

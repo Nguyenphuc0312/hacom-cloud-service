@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 interface TypingIndicatorProps {
   userName?: string;
+  userNames?: Array<string | undefined>;
   activity?: "typing" | "recording" | "uploading" | "online";
   confidence?: number;
   className?: string;
@@ -11,25 +12,65 @@ interface TypingIndicatorProps {
 
 export const TypingIndicator: React.FC<TypingIndicatorProps> = ({
   userName,
+  userNames,
   activity = "typing",
   confidence = 1,
   className,
 }) => {
   const { t } = useTranslation();
-  const label =
-    activity === "recording"
-      ? t("chat:typing.recording", {
-          name: userName,
-          defaultValue: userName ? `${userName} is recording` : "Recording",
-        })
-      : activity === "uploading"
-        ? t("chat:typing.uploading", {
-            name: userName,
-            defaultValue: userName ? `${userName} is uploading` : "Uploading",
-          })
-        : userName
-          ? t("chat:typing.user", { name: userName })
-          : t("chat:typing.default", { defaultValue: "Typing" });
+  const activeNames = React.useMemo(() => {
+    const names =
+      userNames && userNames.length > 0 ? userNames : userName ? [userName] : [];
+
+    return Array.from(
+      new Set(
+        names
+          .map((name) => name?.trim())
+          .filter((name): name is string => Boolean(name)),
+      ),
+    );
+  }, [userName, userNames]);
+
+  const label = React.useMemo(() => {
+    if (activity === "recording") {
+      return t("chat:typing.recording", {
+        name: userName,
+        defaultValue: userName ? `${userName} is recording` : "Recording",
+      });
+    }
+
+    if (activity === "uploading") {
+      return t("chat:typing.uploading", {
+        name: userName,
+        defaultValue: userName ? `${userName} is uploading` : "Uploading",
+      });
+    }
+
+    if (activeNames.length === 1) {
+      return t("chat:typing.user", { name: activeNames[0] });
+    }
+
+    if (activeNames.length === 2) {
+      return t("chat:typing.twoUsers", {
+        name1: activeNames[0],
+        name2: activeNames[1],
+        defaultValue: `${activeNames[0]}, ${activeNames[1]} are typing`,
+      });
+    }
+
+    if (activeNames.length > 2) {
+      return t("chat:typing.manyUsers", {
+        name1: activeNames[0],
+        name2: activeNames[1],
+        count: activeNames.length - 2,
+        defaultValue: `${activeNames[0]}, ${activeNames[1]} and ${
+          activeNames.length - 2
+        } others are typing`,
+      });
+    }
+
+    return t("chat:typing.default", { defaultValue: "Typing" });
+  }, [activity, activeNames, t, userName]);
 
   return (
     <div

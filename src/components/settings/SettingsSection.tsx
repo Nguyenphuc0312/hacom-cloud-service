@@ -28,11 +28,11 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
     <section
       id={id}
       data-settings-section={id ?? title}
-      className={clsx("border-t border-border/60 pt-8 first:border-t-0 first:pt-0", className)}
+      className={clsx("scroll-mt-6", className)}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="max-w-2xl">
-          <h2 className="text-base font-semibold text-text-primary sm:text-lg">
+          <h2 className="text-lg font-semibold text-text-primary sm:text-xl">
             {title}
           </h2>
           {description ? (

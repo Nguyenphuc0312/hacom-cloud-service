@@ -191,7 +191,9 @@ export const createWebSocketConnectionLifecycle = ({
     if (
       connectionState === "connecting" ||
       connectionState === "authenticating" ||
-      connectionState === "reconnecting"
+      connectionState === "reconnecting" ||
+      connectionState === "unauthenticated" ||
+      connectionState === "auth_failed"
     ) {
       return;
     }
@@ -219,7 +221,9 @@ export const createWebSocketConnectionLifecycle = ({
     if (
       connectionState === "connecting" ||
       connectionState === "authenticating" ||
-      connectionState === "reconnecting"
+      connectionState === "reconnecting" ||
+      connectionState === "unauthenticated" ||
+      connectionState === "auth_failed"
     ) {
       return;
     }

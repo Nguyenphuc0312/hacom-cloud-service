@@ -14,7 +14,7 @@ import {
   MusicalNoteIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { IconButton } from "../ui";
+import { IconButton, Skeleton } from "../ui";
 import { FileTypeIcon } from "../message/FileTypeIcon";
 import {
   formatFileSize,
@@ -297,13 +297,21 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
   const renderContent = () => {
     if (isLoadingUrl) {
       return (
-        <div className="flex flex-col items-center justify-center gap-4">
-          <span className="inline-block h-10 w-10 animate-spin rounded-full border-[3px] border-text-inverse/35 border-t-text-inverse" />
-          <p className="text-sm text-text-inverse/60">
-            {t("chat:filePreview.loading", {
-              defaultValue: "Loading preview...",
-            })}
-          </p>
+        <div
+          className="flex h-full w-full items-center justify-center p-6"
+          aria-busy="true"
+          aria-label={t("chat:filePreview.loading", {
+            defaultValue: "Loading preview...",
+          })}
+          role="status"
+        >
+          <div className="w-full max-w-3xl space-y-4">
+            <Skeleton className="aspect-video w-full bg-text-inverse/16" rounded="lg" />
+            <div className="mx-auto flex max-w-md items-center justify-center gap-3">
+              <Skeleton className="h-3 flex-1 bg-text-inverse/16" rounded="full" />
+              <Skeleton className="h-3 w-20 bg-text-inverse/16" rounded="full" />
+            </div>
+          </div>
         </div>
       );
     }
@@ -401,7 +409,7 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
               src={`${secureUrl}#toolbar=0`}
               className="h-full w-full rounded-xl border-0 bg-white"
               title={fileName || "PDF Preview"}
-              sandbox="allow-same-origin allow-scripts"
+              sandbox="allow-same-origin"
             />
             <p className="mt-2 text-xs text-text-inverse/50">
               {t("chat:filePreview.pdfFallback", {

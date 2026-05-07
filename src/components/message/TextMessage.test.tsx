@@ -2,7 +2,14 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("../ui", () => ({
+  toast: {
+    success: vi.fn(),
+  },
+}));
+
 import { TextMessage } from "./TextMessage";
+import { toast } from "../ui";
 
 vi.mock("react-i18next", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-i18next")>();
@@ -51,5 +58,32 @@ describe("TextMessage", () => {
     const paragraph = screen.getByText(/x{20}/).closest("p");
     expect(paragraph).toHaveClass("break-words");
     expect(paragraph?.className).toContain("[overflow-wrap:anywhere]");
+  });
+
+  it("copies the full structured content even when the message is collapsed", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText,
+      },
+    });
+
+    const fullContent = `INFO request started\n${"line=value\n".repeat(80)}`;
+
+    render(
+      <TextMessage
+        content={fullContent}
+        isOwn={false}
+        isCollapsible
+        renderMode="collapsed"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Copy" }));
+
+    expect(writeText).toHaveBeenCalledWith(fullContent.trim());
+    expect(toast.success).toHaveBeenCalledWith("Đã sao chép toàn bộ tin nhắn");
   });
 });

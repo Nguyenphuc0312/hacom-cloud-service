@@ -1254,7 +1254,7 @@ export const useChatScrollController = ({
         "own_message_follow_bottom",
         "OWN_MESSAGE_APPENDED",
         "own_message_follow_bottom",
-        "smooth",
+        "auto",
       );
     } else if (openingStillSettling && opening?.intent !== "restore") {
       scheduleBottom(
@@ -1268,7 +1268,7 @@ export const useChatScrollController = ({
         "realtime_follow_if_near_bottom",
         "NEW_MESSAGE_APPENDED",
         "realtime_follow_if_near_bottom",
-        "smooth",
+        "auto",
       );
     } else {
       isPinnedRef.current = false;

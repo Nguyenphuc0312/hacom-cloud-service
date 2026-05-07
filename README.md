@@ -1,13 +1,13 @@
-# chat-web-client
+﻿# chat-web-client
 
 Vite + React chat SPA.
 
-`chat-infrastructure` owns the platform runtime contract for `server-test` and production:
+`chat-infrastructure` owns the platform runtime contract for `develop` and production:
 
-- shared network: [`chat-infrastructure/contracts/runtime/server-test.md`](/d:/Workspace/hacom_holding_dx/projects/chat-infrastructure/contracts/runtime/server-test.md)
-- platform compose: [`chat-infrastructure/compose/infra/server-test.yml`](/d:/Workspace/hacom_holding_dx/projects/chat-infrastructure/compose/infra/server-test.yml)
+- shared network: [`chat-infrastructure/contracts/runtime/develop.md`](/d:/Workspace/hacom_holding_dx/projects/chat-infrastructure/contracts/runtime/develop.md)
+- platform compose: [`chat-infrastructure/compose/infra/develop.yml`](/d:/Workspace/hacom_holding_dx/projects/chat-infrastructure/compose/infra/develop.yml)
 
-This repo owns the web image and rollout. `server-test` deploy artifacts live under [`deploy/`](/d:/Workspace/hacom_holding_dx/projects/chat-web-client/deploy).
+This repo owns the web image and rollout. `develop` deploy artifacts live under [`deploy/`](/d:/Workspace/hacom_holding_dx/projects/chat-web-client/deploy).
 
 ## Runtime
 
@@ -47,10 +47,10 @@ Environment contract for frontend runtime:
 1. Copy the dedicated hybrid template:
 
 ```bash
-cp .env.dev.frontend-with-server-test.example .env
+cp .env.dev.frontend-with-develop.example .env
 ```
 
-2. Replace `server-test.example.com` with the actual shared dev host.
+2. Replace `develop.example.com` with the actual shared dev host.
 
 3. Run local frontend:
 
@@ -90,9 +90,9 @@ Production containers compile the app with relative paths:
 
 `chat-web-client` serves static assets only. Public backend routing is owned by `edge-proxy`, not by the web-client container.
 
-## Server-test deploy
+## Develop deploy
 
 - runtime alias on `chat-platform`: `chat-web-client`
 - release root on server: `${SERVER_APPS_ROOT}/${SERVICE_NAME}/releases/<git-sha>`
-- no runtime env file is required for `server-test`
-- public route ownership stays in `chat-infrastructure/docker/nginx/server-test.conf`
+- no runtime env file is required for `develop`
+- public route ownership stays in `chat-infrastructure/docker/nginx/develop.conf`

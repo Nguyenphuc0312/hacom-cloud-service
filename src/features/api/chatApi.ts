@@ -1,16 +1,16 @@
+import { ErrorCode } from "@hacom/chat-shared-types/core";
+import type { MarkReadResponseData } from "@hacom/chat-shared-types/chat";
+import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
 import {
-  createApi,
-  fakeBaseQuery,
-} from "@reduxjs/toolkit/query/react";
-import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
+  ApiContractError,
+  extractApiError,
+  unwrapApiSuccess,
+} from "../../lib/apiContract";
 import {
   normalizeConversation,
   normalizeConversationsPayload,
 } from "../../lib/conversationAdapter";
-import {
-  conversationApi,
-  messageApi,
-} from "../../services/api";
+import { conversationApi, messageApi } from "../../services/api";
 import { MessageStatus, MessageType } from "../../types";
 import type { Attachment, Conversation, Message } from "../../types";
 import {
@@ -25,6 +25,7 @@ import type {
   ConversationMessagesCache,
   MessageMergeMode,
 } from "../chat/domain/messageMerge";
+import { MESSAGE_HARD_LIMIT } from "../../utils/messageLengthPolicy";
 
 export interface GetConversationsArgs {
   page?: number;
@@ -92,6 +93,7 @@ export interface MarkConversationReadInput {
   conversationId: string;
   lastVisibleMessageId?: string;
   lastReadSeq?: number;
+  messageId?: string;
 }
 
 export interface SearchMessagesArgs {
@@ -122,22 +124,32 @@ type ExtractedApiError = ReturnType<typeof extractApiError>;
 
 interface ChatQueryError {
   name: string;
+  status: number;
   message: string;
   statusCode: number;
   code: ExtractedApiError["code"];
   details?: unknown;
   requestId?: string;
+  retryAfterSeconds?: number;
+  isNetworkError: boolean;
+  isAuthError: boolean;
+  isRateLimit: boolean;
 }
 
 const toChatQueryError = (error: unknown): ChatQueryError => {
   const apiError = extractApiError(error);
   return {
     name: apiError.name,
+    status: apiError.status,
     message: apiError.message,
     statusCode: apiError.statusCode,
     code: apiError.code,
     details: apiError.details,
     requestId: apiError.requestId,
+    retryAfterSeconds: apiError.retryAfterSeconds,
+    isNetworkError: apiError.isNetworkError,
+    isAuthError: apiError.isAuthError,
+    isRateLimit: apiError.isRateLimit,
   };
 };
 
@@ -236,6 +248,22 @@ const buildOptimisticMessage = (input: SendMessageInput): Message => {
   };
 };
 
+const createInlineMessageTooLongError = (
+  actualLength: number,
+): ApiContractError =>
+  new ApiContractError(
+    "Tin nhắn quá dài. Vui lòng rút gọn nội dung hoặc gửi dưới dạng tệp.",
+    {
+      statusCode: 422,
+      code: ErrorCode.MESSAGE_CONTENT_TOO_LONG,
+      details: {
+        field: "content",
+        maxLength: MESSAGE_HARD_LIMIT,
+        actualLength,
+      },
+    },
+  );
+
 export const chatApi = createApi({
   reducerPath: "chatApi",
   baseQuery: fakeBaseQuery<ChatQueryError>(),
@@ -249,7 +277,9 @@ export const chatApi = createApi({
           const response = await conversationApi.getConversations(page, limit, {
             updatedAfter: args?.updatedAfter,
           });
-          return { data: normalizeConversationsPayload(unwrapApiSuccess(response)) };
+          return {
+            data: normalizeConversationsPayload(unwrapApiSuccess(response)),
+          };
         } catch (error) {
           return { error: toChatQueryError(error) };
         }
@@ -269,9 +299,8 @@ export const chatApi = createApi({
     getConversationById: build.query<Conversation, string>({
       async queryFn(conversationId) {
         try {
-          const response = await conversationApi.getConversationById(
-            conversationId,
-          );
+          const response =
+            await conversationApi.getConversationById(conversationId);
           const normalized = normalizeConversation(unwrapApiSuccess(response));
           if (!normalized) {
             throw new Error("Invalid conversation response");
@@ -356,13 +385,19 @@ export const chatApi = createApi({
 
     sendMessage: build.mutation<Message, SendMessageInput>({
       async queryFn(input) {
+        if (input.content.length > MESSAGE_HARD_LIMIT) {
+          return {
+            error: toChatQueryError(
+              createInlineMessageTooLongError(input.content.length),
+            ),
+          };
+        }
+
         try {
           const response = await messageApi.sendMessage(input.conversationId, {
             content: input.content,
             type: input.type,
             replyToId: input.replyToId,
-            senderName: input.senderName,
-            senderAvatar: input.senderAvatar,
             clientMessageId: input.clientMessageId,
             tempId: input.localId,
             localId: input.localId,
@@ -374,7 +409,13 @@ export const chatApi = createApi({
         }
       },
       async onQueryStarted(input, { dispatch, queryFulfilled }) {
-        const queryArg = getMessageQueryArgForConversation(input.conversationId);
+        if (input.content.length > MESSAGE_HARD_LIMIT) {
+          return;
+        }
+
+        const queryArg = getMessageQueryArgForConversation(
+          input.conversationId,
+        );
         const optimisticMessage = buildOptimisticMessage(input);
         const optimisticPatch = dispatch(
           chatApi.util.updateQueryData("getMessages", queryArg, (draft) => {
@@ -411,13 +452,14 @@ export const chatApi = createApi({
             }),
           );
         } catch (error) {
+          const normalizedError = extractApiError(error);
           dispatch(
             chatApi.util.updateQueryData("getMessages", queryArg, (draft) => {
-              markMessageFailedInCache(
-                draft,
-                input.clientMessageId,
-                extractApiError(error).message,
-              );
+              markMessageFailedInCache(draft, input.clientMessageId, {
+                message: normalizedError.message,
+                code: normalizedError.code,
+                statusCode: normalizedError.statusCode,
+              });
             }),
           );
         }
@@ -512,7 +554,9 @@ export const chatApi = createApi({
         }
       },
       async onQueryStarted(input, { dispatch, queryFulfilled }) {
-        const queryArg = getMessageQueryArgForConversation(input.conversationId);
+        const queryArg = getMessageQueryArgForConversation(
+          input.conversationId,
+        );
         const patch = dispatch(
           chatApi.util.updateQueryData("getMessages", queryArg, (draft) => {
             patchMessageReactionInCache(draft, input, "add");
@@ -545,7 +589,9 @@ export const chatApi = createApi({
         }
       },
       async onQueryStarted(input, { dispatch, queryFulfilled }) {
-        const queryArg = getMessageQueryArgForConversation(input.conversationId);
+        const queryArg = getMessageQueryArgForConversation(
+          input.conversationId,
+        );
         const patch = dispatch(
           chatApi.util.updateQueryData("getMessages", queryArg, (draft) => {
             patchMessageReactionInCache(draft, input, "remove");
@@ -565,21 +611,22 @@ export const chatApi = createApi({
       },
     }),
 
-    markConversationRead: build.mutation<void, MarkConversationReadInput>({
+    markConversationRead: build.mutation<
+      MarkReadResponseData,
+      MarkConversationReadInput
+    >({
       async queryFn(input) {
         try {
-          await conversationApi.markAsRead(
-            input.conversationId,
-            input.lastVisibleMessageId,
-          );
-          return { data: undefined };
+          const data = await conversationApi.markAsRead(input.conversationId, {
+            lastVisibleMessageId: input.lastVisibleMessageId,
+            lastReadSeq: input.lastReadSeq,
+            messageId: input.messageId,
+          });
+          return { data };
         } catch (error) {
           return { error: toChatQueryError(error) };
         }
       },
-      invalidatesTags: (_result, _error, input) => [
-        { type: "Unread", id: input.conversationId },
-      ],
     }),
 
     getUnreadSummary: build.query<UnreadSummary, void>({

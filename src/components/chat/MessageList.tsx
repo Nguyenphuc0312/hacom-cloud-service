@@ -18,6 +18,7 @@ import {
 } from "../../utils/messageTimeline";
 import {
   isTargetMessage,
+  resolveThreadMessageRenderState,
   resolveTimelineMessageRenderState,
   type RenderableTimelineItem,
   type TimelineMessageRenderState,
@@ -35,6 +36,7 @@ import {
 import { useConversationMessagesRTK } from "../../features/chat/hooks/useConversationMessagesRTK";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
 import {
+  isChatPerformanceEnabled,
   logChatPerformance,
   measureChatPerformance,
 } from "../../utils/chatPerformance";
@@ -727,6 +729,31 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const pendingTimelineSizeChangesRef = React.useRef<
     Map<string, { index: number; delta: number }>
   >(new Map());
+  const lastDomVisibleMessageIdRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!isChatPerformanceEnabled()) return;
+    const latestMessage = messages[messages.length - 1];
+    if (!latestMessage || latestMessage.id === lastDomVisibleMessageIdRef.current) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const selector = `[data-message-id="${CSS.escape(latestMessage.id)}"]`;
+      const visible = Boolean(outerRef.current?.querySelector(selector));
+      if (!visible) return;
+      lastDomVisibleMessageIdRef.current = latestMessage.id;
+      logChatPerformance("fe.dom.message.visible", {
+        conversationId,
+        messageId: latestMessage.id,
+        clientMessageId: latestMessage.clientMessageId ?? null,
+        messageSeq: latestMessage.serverSeq ?? latestMessage.messageSeq ?? null,
+        messageCount: messages.length,
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [conversationId, messages]);
   const isPinnedToBottomRef = React.useRef(true);
   const previousMessagesForInsertRef = React.useRef<Message[]>([]);
   const previousMessagesForPerfRef = React.useRef<Message[]>([]);
@@ -1068,7 +1095,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   }, [conversationId, messages]);
 
   React.useEffect(() => {
-    if (!import.meta.env.DEV || viewportHeight <= 0) {
+    if (!isChatPerformanceEnabled() || viewportHeight <= 0) {
       return;
     }
 
@@ -1698,6 +1725,48 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       return;
     }
 
+    const targetMessage = threadRows[targetIndex]?.kind === "group"
+      ? threadRows[targetIndex].items.find((entry) =>
+          isTargetMessage(entry.message, jumpToMessageId),
+        )?.message
+      : null;
+    const shouldExpandTarget = targetMessage
+      ? resolveThreadMessageRenderState(
+          {
+            kind: "message",
+            message: targetMessage,
+          },
+          expandedLongMessageIds,
+        ).isCollapsible && !expandedLongMessageIds.has(targetMessage.id)
+      : false;
+
+    if (shouldExpandTarget && targetMessage) {
+      setExpandedLongMessageIds((previous) => {
+        if (previous.has(targetMessage.id)) {
+          return previous;
+        }
+        const next = new Set(previous);
+        next.add(targetMessage.id);
+        return next;
+      });
+
+      if (typeof window === "undefined") {
+        detachForJump("jump-to-message");
+        ensureItemVisible(targetIndex, "jump-to-message");
+        highlightMessage(jumpToMessageId);
+        onJumpHandled?.(jumpToMessageId);
+        return;
+      }
+
+      window.requestAnimationFrame(() => {
+        detachForJump("jump-to-message");
+        ensureItemVisible(targetIndex, "jump-to-message");
+        highlightMessage(jumpToMessageId);
+        onJumpHandled?.(jumpToMessageId);
+      });
+      return;
+    }
+
     detachForJump("jump-to-message");
     ensureItemVisible(targetIndex, "jump-to-message");
     highlightMessage(jumpToMessageId);
@@ -1705,6 +1774,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   }, [
     conversationId,
     detachForJump,
+    expandedLongMessageIds,
     ensureItemVisible,
     highlightMessage,
     jumpRequestVersion,
@@ -1785,6 +1855,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       <div
         ref={outerRef}
         onScroll={handleTanStackScroll}
+        data-testid="message-list-scroll"
         className="h-full min-h-0 overflow-auto overscroll-contain"
       >
         <div
@@ -1814,7 +1885,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       </div>
     ) : null;
 
-  const profiledVirtualizedRows = import.meta.env.DEV ? (
+  const profiledVirtualizedRows = isChatPerformanceEnabled() ? (
     <React.Profiler
       id={`MessageList:${conversationId}`}
       onRender={handleProfilerRender}
@@ -1851,12 +1922,16 @@ const MessageListComponent: React.FC<MessageListProps> = ({
           ) : messages.length === 0 && !historyLoadingState?.isPartial ? (
             <EmptyMessages />
           ) : messages.length === 0 ? (
-            <div className="flex h-full items-center justify-center px-6 text-sm text-text-secondary">
-              {t("chat:message.loadingHistory")}
+            <div
+              className="h-full min-h-0 overflow-y-auto px-[var(--chat-lane-padding)] py-4"
+              aria-busy="true"
+            >
+              <MessageListSkeleton count={6} />
             </div>
           ) : (
             <div
               ref={viewportRef}
+              data-testid="message-list-viewport"
               tabIndex={0}
               onKeyDown={handleKeyDown}
               className={clsx(

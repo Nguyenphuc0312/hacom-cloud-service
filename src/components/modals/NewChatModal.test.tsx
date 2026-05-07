@@ -63,7 +63,8 @@ describe("NewChatModal", () => {
       />,
     );
 
-    expect(screen.getByRole("dialog")).toHaveClass("max-w-[42rem]");
+    expect(screen.getByRole("dialog")).toHaveClass("max-w-lg");
+    expect(screen.getByRole("dialog")).toHaveClass("sm:w-[36rem]");
 
     fireEvent.click(
       screen.getByRole("button", {

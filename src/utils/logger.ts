@@ -9,6 +9,7 @@ type LoggerOptions = {
 const DEBUG_FLAGS = [
   "VITE_CHAT_DEBUG_LOGS",
   "VITE_CHAT_SOCKET_DEBUG",
+  "VITE_SOCKET_DEBUG",
   "VITE_CHAT_SCROLL_DEBUG",
 ] as const;
 

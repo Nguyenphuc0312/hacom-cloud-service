@@ -28,14 +28,14 @@ export const SettingsContent = React.forwardRef<HTMLDivElement, SettingsContentP
         data-settings-pane="content"
         data-settings-scroll-root="true"
         className={clsx(
-          "h-full min-h-0 min-w-0 overflow-y-auto rounded-[1.5rem] border border-border/70 bg-[hsl(var(--chat-panel-bg))/0.96]",
+          "h-full min-h-0 min-w-0 overflow-y-auto rounded-2xl border border-border bg-background",
           className,
         )}
       >
         <div
           className={clsx(
-            "mx-auto flex min-h-full w-full flex-col gap-8 px-4 py-5 sm:px-6 sm:py-6",
-            constrained && "max-w-[760px]",
+            "flex min-h-full w-full flex-col gap-6 px-4 py-5 sm:px-6 sm:py-6 lg:px-8",
+            constrained && "max-w-[840px]",
             bodyClassName,
           )}
         >

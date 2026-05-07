@@ -337,6 +337,31 @@ describe("chatApi active timeline cache boundary", () => {
     });
   });
 
+  it("rejects an over-limit inline message before creating optimistic cache state", async () => {
+    const store = createTestStore();
+    await seedMessages(store, "room-1", []);
+
+    await expect(
+      store
+        .dispatch(
+          chatApi.endpoints.sendMessage.initiate({
+            conversationId: "room-1",
+            clientMessageId: "client-too-long",
+            localId: "temp-client-too-long",
+            content: "x".repeat(20_001),
+            type: MessageType.TEXT,
+          }),
+        )
+        .unwrap(),
+    ).rejects.toMatchObject({
+      code: "MESSAGE_CONTENT_TOO_LONG",
+      statusCode: 422,
+    });
+
+    expect(apiMocks.sendMessage).not.toHaveBeenCalled();
+    expect(selectMessages(store, "room-1")).toHaveLength(0);
+  });
+
   it("preserves websocket tail messages when a stale REST replace page settles later", async () => {
     const store = createTestStore();
     await seedMessages(store, "room-1", [

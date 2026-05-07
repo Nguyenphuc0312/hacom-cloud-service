@@ -87,6 +87,21 @@ export type Conversation = Omit<
   SharedConversation,
   "lastReadAt" | "lastReadMessageId"
 > & {
+  permissions?: {
+    canEditGroupProfile?: boolean;
+    canAddMember?: boolean;
+    canRemoveMember?: boolean;
+    canPromoteMember?: boolean;
+    canDemoteAdmin?: boolean;
+    canTransferOwner?: boolean;
+    canLeaveGroup?: boolean;
+    canDeleteGroup?: boolean;
+    canPinMessage?: boolean;
+    canInviteExternal?: boolean;
+    canViewHistory?: boolean;
+    canAccessFile?: boolean;
+    canSendMessage?: boolean;
+  };
   currentUserRole?: "owner" | "admin" | "member" | null;
   allowMemberMessaging?: boolean;
   canCurrentUserSend?: boolean;
@@ -164,6 +179,7 @@ export interface Message
   clientMessageId?: string;
   version?: number;
   serverSeq?: number;
+  messageSeq?: number;
   serverTs?: Date | string;
   localOrder?: number;
   transportStatus?:
@@ -190,6 +206,9 @@ export interface TypingStatus {
   activity?: "typing" | "recording" | "uploading" | "online";
   confidence?: number;
   lastEventAt?: number;
+  expiresAt?: string;
+  deviceId?: string;
+  deviceType?: "web" | "mobile" | "desktop";
 }
 
 export interface Location {

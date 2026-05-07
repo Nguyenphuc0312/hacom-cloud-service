@@ -1,4 +1,5 @@
 import { configureStore } from "@reduxjs/toolkit";
+import { waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { chatApi } from "../api/chatApi";
@@ -12,6 +13,7 @@ import {
   realtimeMiddleware,
 } from "./realtimeMiddleware";
 import { MessageStatus, MessageType, type Message } from "../../types";
+import { useChatStore } from "../../stores";
 
 const createTestStore = () =>
   configureStore({
@@ -69,6 +71,7 @@ describe("realtimeMiddleware active RTKQ timeline writes", () => {
 
   beforeEach(() => {
     store = createTestStore();
+    useChatStore.getState().selectConversation(null);
   });
 
   it("dedupes message:new against an optimistic cache row", async () => {
@@ -191,5 +194,28 @@ describe("realtimeMiddleware active RTKQ timeline writes", () => {
     );
 
     expect(selectMessages(store, "room-not-open")).toEqual([]);
+  });
+
+  it("seeds the active conversation cache when message:new arrives before the initial query", async () => {
+    useChatStore.getState().selectConversation("room-1");
+
+    store.dispatch(
+      realtimeMessageReceived({
+        conversationId: "room-1",
+        message: createMessage({
+          id: "msg-live-1",
+          conversationId: "room-1",
+          serverSeq: 11,
+        }),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(selectMessages(store, "room-1")).toHaveLength(1);
+    });
+    expect(selectMessages(store, "room-1")[0]).toMatchObject({
+      id: "msg-live-1",
+      serverSeq: 11,
+    });
   });
 });

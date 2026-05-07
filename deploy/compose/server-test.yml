@@ -1,23 +1,10 @@
-name: ${COMPOSE_PROJECT_NAME:-chat-web-client-server-test}
-
+version: '3.8'
 services:
   chat-web-client:
-    image: ${CHAT_WEB_CLIENT_IMAGE:?CHAT_WEB_CLIENT_IMAGE is required}
+    image: ${CHAT_WEB_CLIENT_IMAGE}
+    container_name: chat-web-client
     restart: unless-stopped
-    expose:
-      - "80"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz >/dev/null || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    networks:
-      chat-platform:
-        aliases:
-          - chat-web-client
-
-networks:
-  chat-platform:
-    external: true
-    name: chat-platform
+    ports:
+      - "80:80"
+    environment:
+      - NODE_ENV=production

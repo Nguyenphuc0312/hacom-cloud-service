@@ -5,18 +5,23 @@ import { publicRoutes } from "./config/publicRoutes";
 import { privateRoutes } from "./config/privateRoutes";
 import {
   ActivationRoute,
+  ForceChangePasswordRoute,
   GuestRoute,
   ProtectedRoute,
 } from "./guards/RouteGuards";
 
 const renderRouteElement = (
   Component: React.ComponentType,
-  options?: { guestOnly?: boolean; activationOnly?: boolean; roles?: string[] },
+  options?: { guestOnly?: boolean; activationOnly?: boolean; forceChangePasswordOnly?: boolean; roles?: string[] },
 ): ReactElement => {
   const page = <Component />;
 
   if (options?.activationOnly) {
     return <ActivationRoute>{page}</ActivationRoute>;
+  }
+
+  if (options?.forceChangePasswordOnly) {
+    return <ForceChangePasswordRoute>{page}</ForceChangePasswordRoute>;
   }
 
   if (options?.guestOnly) {
@@ -32,12 +37,20 @@ const renderRouteElement = (
 
 export const buildPublicRouteObjects = (): RouteObject[] =>
   publicRoutes.map(
-    ({ path, index, component, guestOnly = true, activationOnly = false }) => ({
+    ({
+      path,
+      index,
+      component,
+      guestOnly = true,
+      activationOnly = false,
+      forceChangePasswordOnly = false,
+    }) => ({
       path,
       index,
       element: renderRouteElement(component as React.ComponentType, {
-        guestOnly,
+        guestOnly: forceChangePasswordOnly ? false : guestOnly,
         activationOnly,
+        forceChangePasswordOnly,
       }),
     }),
   );

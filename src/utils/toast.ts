@@ -1,10 +1,13 @@
-﻿/**
- * @fileoverview Toast utility functions
+/**
+ * @fileoverview Toast utility functions.
  */
 
 import toastLib from "react-hot-toast";
+import type { ToastOptions } from "react-hot-toast";
 
 const TOAST_DEDUPE_WINDOW_MS = 1800;
+const DEFAULT_TOAST_DURATION_MS = 5500;
+const ERROR_TOAST_DURATION_MS = 6000;
 const toastDedupedAt = new Map<string, number>();
 
 const shouldSuppressToast = (key: string): boolean => {
@@ -20,6 +23,10 @@ const shouldSuppressToast = (key: string): boolean => {
 const buildToastId = (level: string, message: string): string =>
   `toast:${level}:${message.trim().toLowerCase()}`;
 
+const baseOptions: ToastOptions = {
+  className: "toast-library",
+};
+
 export const toast = {
   success: (message: string) => {
     const id = buildToastId("success", message);
@@ -28,12 +35,12 @@ export const toast = {
     }
 
     toastLib.success(message, {
+      ...baseOptions,
       id,
-      duration: 3000,
-      className: "toast-base toast-success",
+      duration: DEFAULT_TOAST_DURATION_MS,
       iconTheme: {
-        primary: "hsl(var(--color-text-inverse))",
-        secondary: "hsl(var(--color-success))",
+        primary: "#16a34a",
+        secondary: "#ffffff",
       },
     });
   },
@@ -45,12 +52,12 @@ export const toast = {
     }
 
     toastLib.error(message, {
+      ...baseOptions,
       id,
-      duration: 4000,
-      className: "toast-base toast-danger",
+      duration: ERROR_TOAST_DURATION_MS,
       iconTheme: {
-        primary: "hsl(var(--color-text-inverse))",
-        secondary: "hsl(var(--color-danger))",
+        primary: "#dc2626",
+        secondary: "#ffffff",
       },
     });
   },
@@ -62,10 +69,10 @@ export const toast = {
     }
 
     toastLib(message, {
+      ...baseOptions,
       id,
-      duration: 3000,
-      className: "toast-base toast-info",
-      icon: "i",
+      duration: DEFAULT_TOAST_DURATION_MS,
+      icon: "ℹ",
     });
   },
 
@@ -76,9 +83,9 @@ export const toast = {
     }
 
     toastLib(message, {
+      ...baseOptions,
       id,
-      duration: 3000,
-      className: "toast-base toast-warning",
+      duration: DEFAULT_TOAST_DURATION_MS,
       icon: "!",
     });
   },
@@ -93,7 +100,7 @@ export const toast = {
 
   loading: (message: string) => {
     return toastLib.loading(message, {
-      className: "toast-base toast-neutral",
+      ...baseOptions,
     });
   },
 
@@ -105,17 +112,9 @@ export const toast = {
       error: string;
     },
   ) => {
-    return toastLib.promise(
-      promise,
-      {
-        loading: msgs.loading,
-        success: msgs.success,
-        error: msgs.error,
-      },
-      {
-        className: "toast-base",
-      },
-    );
+    return toastLib.promise(promise, msgs, {
+      ...baseOptions,
+    });
   },
 };
 

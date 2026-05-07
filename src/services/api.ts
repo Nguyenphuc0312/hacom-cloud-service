@@ -21,6 +21,7 @@ import type {
   FriendshipStatusResponseDto,
   FriendshipWriteResponseDto,
   GetDownloadUrlResponse,
+  MarkReadResponseData,
   ConversationReadStateDto,
   RoomMessagesResponse,
   UnreadFeedResponseDto,
@@ -43,7 +44,10 @@ const DIRECT_DM_TRACE_PREFIX = "direct_dm.request_trace";
 const DIRECT_DM_PATH = "/conversations/direct";
 
 const buildDirectDmTraceRequestId = (): string => {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return `direct-dm:${crypto.randomUUID()}`;
   }
 
@@ -166,7 +170,10 @@ const normalizeUnreadCountPayload = (
 const normalizeConversationReadState = (
   payload: unknown,
 ): ConversationReadStateDto => {
-  const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+  const record =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : {};
   const asFiniteNumber = (value: unknown): number | null =>
     typeof value === "number" && Number.isFinite(value) ? value : null;
   const asStringValue = (value: unknown): string | null =>
@@ -550,16 +557,13 @@ export const conversationApi = {
     avatar?: string;
     description?: string;
   }) => {
-    const response = await apiClient.post<ApiResponse<unknown>>(
-      "/groups",
-      {
-        type: "basic_group",
-        title: data.name,
-        memberIds: data.memberIds,
-        description: data.description,
-        avatarUrl: data.avatar,
-      },
-    );
+    const response = await apiClient.post<ApiResponse<unknown>>("/groups", {
+      type: "basic_group",
+      title: data.name,
+      memberIds: data.memberIds,
+      description: data.description,
+      avatarUrl: data.avatar,
+    });
 
     if (!response.data.success) {
       return response.data as ApiResponse<Conversation>;
@@ -663,52 +667,76 @@ export const conversationApi = {
 
   markAsRead: async (
     conversationId: string,
-    lastVisibleMessageId?: string,
-  ) => {
-    const payload = lastVisibleMessageId
-      ? {
-          lastVisibleMessageId,
-        }
-      : undefined;
-    await apiClient.post(
+    input?:
+      | string
+      | {
+          lastVisibleMessageId?: string;
+          lastReadSeq?: number;
+          messageId?: string;
+        },
+  ): Promise<MarkReadResponseData> => {
+    const payload =
+      typeof input === "string"
+        ? { lastVisibleMessageId: input }
+        : input &&
+            (input.lastVisibleMessageId ||
+              input.messageId ||
+              (typeof input.lastReadSeq === "number" &&
+                Number.isFinite(input.lastReadSeq)))
+          ? {
+              ...(input.lastVisibleMessageId
+                ? { lastVisibleMessageId: input.lastVisibleMessageId }
+                : {}),
+              ...(input.messageId ? { messageId: input.messageId } : {}),
+              ...(typeof input.lastReadSeq === "number" &&
+              Number.isFinite(input.lastReadSeq)
+                ? { lastReadSeq: input.lastReadSeq }
+                : {}),
+            }
+          : undefined;
+    const response = await apiClient.post<ApiResponse<MarkReadResponseData>>(
       `${canonicalConversationMessagesPath(conversationId)}/read`,
       payload,
     );
+    return unwrapApiSuccess(response.data);
   },
 
   getUnreadCount: async (conversationId: string) => {
-      const response = await apiClient.get<ApiResponse<unknown>>(
-        `${canonicalConversationMessagesPath(conversationId)}/unread`,
-      );
+    const response = await apiClient.get<ApiResponse<unknown>>(
+      `${canonicalConversationMessagesPath(conversationId)}/unread`,
+    );
     const payload = unwrapApiSuccess(response.data);
 
-      return {
-        ...response.data,
-        data: normalizeUnreadCountPayload(payload),
-      };
-    },
+    return {
+      ...response.data,
+      data: normalizeUnreadCountPayload(payload),
+    };
+  },
 
-    getUnreadFeed: async (conversationId: string, limit = 20) => {
-      const response = await apiClient.get<ApiResponse<UnreadFeedResponseDto>>(
-        `${canonicalConversationMessagesPath(conversationId)}/unread-feed?limit=${limit}`,
-      );
-      const payload = unwrapApiSuccess(response.data) as unknown as Record<string, unknown>;
-      const rawMessages = Array.isArray(payload.messages) ? payload.messages : [];
+  getUnreadFeed: async (conversationId: string, limit = 20) => {
+    const response = await apiClient.get<ApiResponse<UnreadFeedResponseDto>>(
+      `${canonicalConversationMessagesPath(conversationId)}/unread-feed?limit=${limit}`,
+    );
+    const payload = unwrapApiSuccess(response.data) as unknown as Record<
+      string,
+      unknown
+    >;
+    const rawMessages = Array.isArray(payload.messages) ? payload.messages : [];
 
-      return {
-        ...response.data,
-        data: {
-          messages: rawMessages as unknown as Message[],
-          readState: normalizeConversationReadState(payload.readState),
-          limit:
-            typeof payload.limit === "number" && Number.isFinite(payload.limit)
-              ? payload.limit
-              : limit,
-          hasMore: payload.hasMore === true,
-        },
-      };
-    },
-  };
+    return {
+      ...response.data,
+      data: {
+        messages: rawMessages as unknown as Message[],
+        readState: normalizeConversationReadState(payload.readState),
+        limit:
+          typeof payload.limit === "number" && Number.isFinite(payload.limit)
+            ? payload.limit
+            : limit,
+        hasMore: payload.hasMore === true,
+      },
+    };
+  },
+};
 
 // ============================================
 // GROUP API (Telegram-like)
@@ -915,10 +943,16 @@ export const messageApi = {
 
     if (options.beforeId) query.set("beforeId", options.beforeId);
     if (options.afterId) query.set("afterId", options.afterId);
-    if (typeof options.beforeSeq === "number" && Number.isFinite(options.beforeSeq)) {
+    if (
+      typeof options.beforeSeq === "number" &&
+      Number.isFinite(options.beforeSeq)
+    ) {
       query.set("beforeSeq", String(Math.floor(options.beforeSeq)));
     }
-    if (typeof options.afterSeq === "number" && Number.isFinite(options.afterSeq)) {
+    if (
+      typeof options.afterSeq === "number" &&
+      Number.isFinite(options.afterSeq)
+    ) {
       query.set("afterSeq", String(Math.floor(options.afterSeq)));
     }
 
@@ -964,8 +998,6 @@ export const messageApi = {
       {
         content: data.content,
         type: data.type || "text",
-        senderName: data.senderName,
-        senderAvatar: data.senderAvatar,
         replyTo: data.replyToId,
         clientMessageId: data.clientMessageId,
         tempId: data.tempId,

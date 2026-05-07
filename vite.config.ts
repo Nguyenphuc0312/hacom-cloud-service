@@ -110,40 +110,6 @@ export default defineConfig(({ mode }) => {
               }
             }
 
-            if (normalizedId.includes("/src/components/info/UserProfile")) {
-              return "chat-panel-user-profile";
-            }
-
-            if (normalizedId.includes("/src/components/info/GroupInfo")) {
-              return "chat-panel-group-info";
-            }
-
-            if (normalizedId.includes("/src/components/chat/SearchPanel")) {
-              return "chat-panel-search";
-            }
-
-            if (
-              normalizedId.includes("/src/components/chat/PinnedMessagesPanel")
-            ) {
-              return "chat-panel-pinned";
-            }
-
-            if (normalizedId.includes("/src/components/modals/NewChatModal")) {
-              return "chat-modal-new-chat";
-            }
-
-            if (
-              normalizedId.includes("/src/components/modals/ImagePreviewModal")
-            ) {
-              return "chat-modal-image-preview";
-            }
-
-            if (
-              normalizedId.includes("/src/components/modals/FilePreviewModal")
-            ) {
-              return "chat-modal-file-preview";
-            }
-
             return undefined;
           },
         },

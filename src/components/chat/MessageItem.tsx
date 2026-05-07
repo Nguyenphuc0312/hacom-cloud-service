@@ -9,6 +9,7 @@ import type { ConversationTimelineItem } from "../../features/chat/hooks/useConv
 import type { ChatDensity } from "../../stores/uiStore";
 import { getTimelineItemSpacingClass } from "./timelineDensity";
 import type { LongMessageRenderMode } from "../../utils/longMessagePolicy";
+import { recordChatRenderCount } from "../../utils/chatPerformance";
 
 interface MessageItemProps {
   item: ConversationTimelineItem;
@@ -138,6 +139,12 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   if (!resolvedMessage) {
     return null;
   }
+
+  recordChatRenderCount("MessageItem", resolvedMessage.id, {
+    itemKind: item.kind,
+    isSelectionMode,
+    isSelected,
+  });
 
   if (item.kind === "system") {
     return (

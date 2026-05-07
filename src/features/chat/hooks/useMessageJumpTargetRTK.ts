@@ -7,6 +7,7 @@ import {
 } from "../../api/chatApi";
 import {
   buildConversationMessagesCache,
+  getMessageSeq,
   upsertMessageInCache,
 } from "../domain/messageMerge";
 import { messagesShareIdentity } from "../domain/messageIdentity";
@@ -29,10 +30,7 @@ const getMessageCursor = (
   message: Message,
   direction: "before" | "after",
 ): { beforeSeq: number } | { afterSeq: number } | { beforeId: string } | { afterId: string } => {
-  const serverSeq =
-    typeof message.serverSeq === "number" && Number.isFinite(message.serverSeq)
-      ? message.serverSeq
-      : null;
+  const serverSeq = getMessageSeq(message);
 
   if (serverSeq !== null) {
     return direction === "before"
@@ -140,10 +138,7 @@ export const useMessageJumpTargetRTK = (
         conversationId: requestConversationId,
         messageId,
         targetMessageId: targetMessage.id,
-        targetSeq:
-          typeof targetMessage.serverSeq === "number"
-            ? targetMessage.serverSeq
-            : null,
+        targetSeq: getMessageSeq(targetMessage),
       });
 
       await triggerGetMessages(

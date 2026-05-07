@@ -44,7 +44,7 @@ export const useAuth = (): UseAuthReturn => {
   const login = useCallback(
     async (data: LoginFormData) => {
       const result = await storeLogin(data);
-      if (result === "authenticated") {
+      if (typeof result === "object" && result.status === "authenticated") {
         navigate("/chat", { replace: true });
       }
       return result;

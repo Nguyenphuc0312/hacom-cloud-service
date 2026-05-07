@@ -302,6 +302,21 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config as AuthRequestConfig | undefined;
     releasePendingRequest(originalRequest);
 
+    if (error.response?.status === 403) {
+      const responseData = error.response?.data as
+        | { code?: string; errorCode?: string }
+        | undefined;
+      const errorCode = responseData?.code ?? responseData?.errorCode;
+      if (
+        errorCode === "CHANGE_PASSWORD_REQUIRED" &&
+        typeof window !== "undefined" &&
+        window.location.pathname !== "/force-change-password"
+      ) {
+        window.location.assign("/force-change-password");
+      }
+      return Promise.reject(error);
+    }
+
     if (
       !originalRequest ||
       error.response?.status !== 401 ||

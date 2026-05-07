@@ -16,13 +16,23 @@ import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Sidebar } from "../components/layout/Sidebar";
 import { ChatWindow } from "../components/layout/ChatWindow";
-import { ErrorState, NoChatSelected, Spinner } from "../components/ui";
+import { AppShell, ModuleSidebar } from "../shared/layout";
+import {
+  ConfirmDialog,
+  ErrorState,
+  NoChatSelected,
+  NotificationListSkeleton,
+  PageSkeleton,
+  ProfileSkeleton,
+  Skeleton,
+} from "../components/ui";
 import { toast } from "../components/ui";
 import {
   useAuthStore,
   useChatStore,
   useSelectedConversation,
   useCurrentTypingStatus,
+  useCurrentTypingStatuses,
   useConversationCount,
   useFriendshipStore,
 } from "../stores";
@@ -60,7 +70,6 @@ import {
 } from "../lib/commandPalette";
 import { chatApi } from "../features/chat/api";
 import { store } from "../store";
-import { selectConversationMessagesFromState } from "../stores/chatStore";
 import type { ChatLayoutState } from "../utils/densityPolicy";
 import { isUuid } from "../utils/isUuid";
 
@@ -81,22 +90,28 @@ type InfoPanelMode = "conversation" | "self-profile";
 const CONVERSATIONS_PAGE_SIZE = 100;
 
 const DeferredPanelFallback: React.FC = () => (
-  <div className="flex h-full items-center justify-center px-6">
-    <Spinner size="md" />
+  <div className="h-full px-1 py-2" aria-busy="true">
+    <NotificationListSkeleton count={5} />
   </div>
 );
 
 const DeferredModalFallback: React.FC = () => (
   <div className="fixed inset-0 z-[70] flex items-center justify-center bg-text-primary/40 backdrop-blur-sm">
-    <div className="rounded-2xl border border-border/80 bg-surface/95 p-4 shadow-elev3">
-      <Spinner size="md" />
+    <div
+      className="w-[min(30rem,calc(100vw-2rem))] rounded-2xl border border-border/80 bg-surface/95 p-4 shadow-elev3"
+      aria-busy="true"
+    >
+      <Skeleton className="h-6 w-40" rounded="sm" />
+      <div className="mt-4 space-y-3">
+        <Skeleton className="h-10 w-full" rounded="md" />
+        <Skeleton className="h-10 w-full" rounded="md" />
+        <Skeleton className="h-10 w-2/3" rounded="md" />
+      </div>
     </div>
   </div>
 );
 
 const INFO_PANEL_EXIT_DURATION_MS = 240;
-const FOCUSABLE_SELECTOR =
-  'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 const loadConversationMutationUseCases = () =>
   import("../features/chat/usecases/createPrivateConversation").then(
@@ -169,6 +184,7 @@ export const ChatPage: React.FC = () => {
   // Selectors
   const selectedConversation = useSelectedConversation();
   const typingStatus = useCurrentTypingStatus();
+  const typingStatuses = useCurrentTypingStatuses();
   const conversationCount = useConversationCount();
   const refreshFriendshipDirectory = useFriendshipStore(
     (state) => state.refreshDirectory,
@@ -188,8 +204,6 @@ export const ChatPage: React.FC = () => {
   const [infoPanelMode, setInfoPanelMode] = useState<InfoPanelMode | null>(
     null,
   );
-  const [isMobileMenuOpen, setIsMobileMenuOpen] =
-    useState(!routeConversationId);
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth : 1440,
   );
@@ -197,6 +211,9 @@ export const ChatPage: React.FC = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const filePreview = useFilePreview();
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const [isDeleteConversationConfirmOpen, setIsDeleteConversationConfirmOpen] =
+    useState(false);
+  const [isDeletingConversation, setIsDeletingConversation] = useState(false);
   const [isLoadingMoreConversations, setIsLoadingMoreConversations] =
     useState(false);
   const [hasMoreConversations, setHasMoreConversations] = useState(true);
@@ -207,10 +224,7 @@ export const ChatPage: React.FC = () => {
   const [externalJumpRequestVersion, setExternalJumpRequestVersion] =
     useState(0);
   const renderCountRef = useRef(0);
-  const mobileSidebarRef = useRef<HTMLDivElement | null>(null);
   const chatPaneRef = useRef<HTMLDivElement | null>(null);
-  const focusBeforeMobileSidebarRef = useRef<HTMLElement | null>(null);
-  const previousMobileSidebarVisibleRef = useRef(false);
 
   const conversationAccessDeniedMessage = t(
     "error:chat.conversationAccessDenied",
@@ -376,7 +390,6 @@ export const ChatPage: React.FC = () => {
   // Handle select conversation
   const handleSelectConversation = useCallback(
     (id: string) => {
-      setIsMobileMenuOpen(false);
       if (id === routeConversationId) {
         return;
       }
@@ -524,15 +537,20 @@ export const ChatPage: React.FC = () => {
     routeConversationId,
   ]);
 
-  const handleDeleteConversation = useCallback(async () => {
+  const handleDeleteConversation = useCallback(() => {
     if (!selectedConversation) return;
-    if (!window.confirm(t("profile:userProfile.deleteConversation"))) return;
+    setIsDeleteConversationConfirmOpen(true);
+  }, [selectedConversation]);
 
+  const confirmDeleteConversation = useCallback(async () => {
+    if (!selectedConversation) return;
+    setIsDeletingConversation(true);
     try {
       const { deleteConversationUseCase } =
         await loadConversationMutationUseCases();
       await deleteConversationUseCase(selectedConversation.id);
       removeConversation(selectedConversation.id);
+      setIsDeleteConversationConfirmOpen(false);
       closeInfoPanel();
       selectConversation(null);
       navigate("/chat");
@@ -540,6 +558,8 @@ export const ChatPage: React.FC = () => {
     } catch (error) {
       const apiError = extractApiError(error);
       toast.error(apiError.message || t("error:generic.requestFailed"));
+    } finally {
+      setIsDeletingConversation(false);
     }
   }, [
     closeInfoPanel,
@@ -552,7 +572,6 @@ export const ChatPage: React.FC = () => {
 
   // Handle back (mobile)
   const handleBack = useCallback(() => {
-    setIsMobileMenuOpen(true);
     navigate("/chat");
   }, [navigate]);
 
@@ -741,8 +760,6 @@ export const ChatPage: React.FC = () => {
     };
   }, []);
 
-  const showSidebarOnMobile = !routeConversationId || isMobileMenuOpen;
-  const isMobileSidebarHidden = viewportWidth < 1024 && !showSidebarOnMobile;
   const shouldRenderInfoContent =
     isInfoPanelOpen &&
     (infoPanelMode === "self-profile" ||
@@ -771,53 +788,6 @@ export const ChatPage: React.FC = () => {
 
     return "normal";
   }, [viewportWidth]);
-
-  useEffect(() => {
-    const sidebar = mobileSidebarRef.current;
-    if (!sidebar) return;
-
-    if (isMobileSidebarHidden) {
-      sidebar.setAttribute("inert", "");
-    } else {
-      sidebar.removeAttribute("inert");
-    }
-  }, [isMobileSidebarHidden]);
-
-  useEffect(() => {
-    if (viewportWidth >= 1024) {
-      previousMobileSidebarVisibleRef.current = false;
-      return;
-    }
-
-    const wasVisible = previousMobileSidebarVisibleRef.current;
-
-    if (showSidebarOnMobile && !wasVisible) {
-      const activeElement = document.activeElement;
-      focusBeforeMobileSidebarRef.current =
-        activeElement instanceof HTMLElement ? activeElement : null;
-
-      window.requestAnimationFrame(() => {
-        const focusTarget =
-          mobileSidebarRef.current?.querySelector<HTMLElement>(
-            FOCUSABLE_SELECTOR,
-          );
-        focusTarget?.focus();
-      });
-    }
-
-    if (!showSidebarOnMobile && wasVisible) {
-      window.requestAnimationFrame(() => {
-        const previous = focusBeforeMobileSidebarRef.current;
-        if (previous && document.contains(previous)) {
-          previous.focus();
-          return;
-        }
-        chatPaneRef.current?.focus();
-      });
-    }
-
-    previousMobileSidebarVisibleRef.current = showSidebarOnMobile;
-  }, [showSidebarOnMobile, viewportWidth]);
 
   const showConversationSkeleton =
     (!hasFetchedConversationsOnce && conversationCount === 0) ||
@@ -851,10 +821,10 @@ export const ChatPage: React.FC = () => {
           attachment.fileName,
         ),
       };
-      const gallery = selectConversationMessagesFromState(
-        useChatStore.getState(),
-        selectedConversation.id,
-      )
+      const cachedMessages = rtkChatApi.endpoints.getMessages
+        .select({ conversationId: selectedConversation.id })(store.getState())
+        .data?.messages ?? [];
+      const gallery = cachedMessages
         .flatMap((message) =>
           (message.attachments ?? []).map((candidate) => ({
             attachment: candidate,
@@ -893,7 +863,6 @@ export const ChatPage: React.FC = () => {
       ({ conversationId: nextConversationId, messageId: nextMessageId }) => {
         if (!nextConversationId) return;
 
-        setIsMobileMenuOpen(false);
         if (nextMessageId) {
           setExternalJumpTargetMessageId(nextMessageId);
           setExternalJumpRequestVersion((current) => current + 1);
@@ -916,25 +885,7 @@ export const ChatPage: React.FC = () => {
 
   if (!currentUserSummary) {
     if (!isAuthInitialized || isAuthLoading) {
-      return (
-        <div className="flex h-full items-center justify-center bg-[hsl(var(--color-chat-canvas))] px-6">
-          <div className="w-full max-w-xl space-y-5 rounded-2xl border border-border/80 bg-surface/90 p-6 shadow-elev1">
-            <div className="flex items-center gap-3">
-              <Spinner size="md" />
-              <p className="text-sm font-medium text-text-secondary">
-                {t("common:loading.checkingAuth", {
-                  defaultValue: "Checking your session...",
-                })}
-              </p>
-            </div>
-            <div className="space-y-3">
-              <div className="h-3 w-1/2 animate-pulse rounded-full bg-surface-overlay" />
-              <div className="h-3 w-full animate-pulse rounded-full bg-surface-overlay" />
-              <div className="h-3 w-4/5 animate-pulse rounded-full bg-surface-overlay" />
-            </div>
-          </div>
-        </div>
-      );
+      return <PageSkeleton />;
     }
 
     return (
@@ -954,48 +905,34 @@ export const ChatPage: React.FC = () => {
   }
 
   return (
-    <div
-      className="chat-page-shell relative flex h-full min-h-0 overflow-hidden bg-[hsl(var(--color-chat-canvas))]"
+    <AppShell
+      className="chat-page-shell"
       data-chat-layout-state={chatLayoutState}
+      moduleSidebar={
+        <ModuleSidebar
+          className="chat-page-module-sidebar"
+          contentClassName="min-h-0"
+        >
+          <div className="h-full min-h-0 w-full">
+            <Sidebar
+              layoutState={sidebarLayoutState}
+              currentUser={currentUserSummary}
+              selectedId={routeConversationId}
+              isLoadingConversations={isLoadingConversations}
+              isLoadingMoreConversations={isLoadingMoreConversations}
+              hasMoreConversations={hasMoreConversations}
+              showConversationSkeleton={showConversationSkeleton}
+              conversationsError={conversationsError}
+              onSelectConversation={handleSelectConversation}
+              onRetryConversations={fetchConversations}
+              onLoadMoreConversations={handleLoadMoreConversations}
+              onNewChat={handleOpenNewChat}
+              onCurrentUserClick={handleOpenCurrentUserProfile}
+            />
+          </div>
+        </ModuleSidebar>
+      }
     >
-      {/* Sidebar */}
-      <div
-        ref={mobileSidebarRef}
-        className={clsx(
-          "absolute inset-y-0 left-0 z-30 w-full max-w-full transition-transform duration-300 sm:max-w-[min(23rem,94vw)] lg:relative lg:z-0 lg:max-w-none lg:flex-shrink-0 lg:transition-[width]",
-          "lg:border-r lg:border-border/60",
-          "lg:w-[var(--app-sidebar-width)]",
-          showSidebarOnMobile
-            ? "translate-x-0"
-            : "-translate-x-full lg:translate-x-0",
-        )}
-        aria-hidden={isMobileSidebarHidden}
-      >
-        <Sidebar
-          layoutState={sidebarLayoutState}
-          currentUser={currentUserSummary}
-          selectedId={routeConversationId}
-          isLoadingConversations={isLoadingConversations}
-          isLoadingMoreConversations={isLoadingMoreConversations}
-          hasMoreConversations={hasMoreConversations}
-          showConversationSkeleton={showConversationSkeleton}
-          conversationsError={conversationsError}
-          onSelectConversation={handleSelectConversation}
-          onRetryConversations={fetchConversations}
-          onLoadMoreConversations={handleLoadMoreConversations}
-          onNewChat={handleOpenNewChat}
-          onCurrentUserClick={handleOpenCurrentUserProfile}
-        />
-      </div>
-
-      {showSidebarOnMobile && routeConversationId && (
-        <button
-          type="button"
-          className="fixed inset-0 z-20 bg-text-primary/40 lg:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
-          aria-label={t("common:actions.close")}
-        />
-      )}
 
       {/* Chat window */}
       <div
@@ -1012,6 +949,7 @@ export const ChatPage: React.FC = () => {
             conversation={selectedConversation}
             currentUser={currentUserSummary}
             typingStatus={typingStatus || undefined}
+            typingStatuses={typingStatuses}
             onSendMessage={handleSendMessage}
             onReactMessage={handleReactMessage}
             onEditMessage={handleEditMessage}
@@ -1120,12 +1058,7 @@ export const ChatPage: React.FC = () => {
                     onStartConversation={handleStartChat}
                   />
                 ) : (
-                  <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-                    <Spinner size="md" />
-                    <p className="text-sm text-text-muted">
-                      {t("common:loading.default")}
-                    </p>
-                  </div>
+                  <ProfileSkeleton />
                 )
               ) : selectedConversation ? (
                 <GroupInfo
@@ -1198,7 +1131,31 @@ export const ChatPage: React.FC = () => {
           />
         </React.Suspense>
       )}
-    </div>
+
+      <ConfirmDialog
+        isOpen={isDeleteConversationConfirmOpen}
+        onClose={() => {
+          if (!isDeletingConversation) {
+            setIsDeleteConversationConfirmOpen(false);
+          }
+        }}
+        onConfirm={() => {
+          void confirmDeleteConversation();
+        }}
+        title={t("profile:userProfile.deleteConversation", {
+          defaultValue: "Delete conversation",
+        })}
+        message={t("profile:userProfile.deleteConversationConfirm", {
+          defaultValue:
+            "This conversation will be removed from your chat list.",
+        })}
+        confirmText={t("common:actions.delete", {
+          defaultValue: "Delete",
+        })}
+        isLoading={isDeletingConversation}
+        variant="danger"
+      />
+    </AppShell>
   );
 };
 
