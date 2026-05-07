@@ -187,6 +187,7 @@ jobs:
           }
 
           SERVER_APPS_ROOT_CLEAN="$(require_single_line "vars.SERVER_APPS_ROOT" "${SERVER_APPS_ROOT}")"
+          SERVER_RUNTIME_ENV_FILE_CLEAN="$(require_single_line "vars.SERVER_RUNTIME_ENV_FILE" "${SERVER_RUNTIME_ENV_FILE}")"
           SERVICE_NAME_CLEAN="$(require_single_line "vars.SERVICE_NAME" "${SERVICE_NAME}")"
           DEPLOY_ENV_CLEAN="$(require_single_line "vars.DEPLOY_ENV" "${DEPLOY_ENV}")"
           SERVER_PORT_CLEAN="$(require_single_line "secrets.SERVER_PORT" "${SERVER_PORT}")"
@@ -244,6 +245,7 @@ jobs:
 
           {
             printf 'SERVER_APPS_ROOT_CLEAN=%s\n' "${SERVER_APPS_ROOT_CLEAN}"
+            printf 'SERVER_RUNTIME_ENV_FILE_CLEAN=%s\n' "${SERVER_RUNTIME_ENV_FILE_CLEAN}"
             printf 'SERVICE_NAME_CLEAN=%s\n' "${SERVICE_NAME_CLEAN}"
             printf 'DEPLOY_ENV_CLEAN=%s\n' "${DEPLOY_ENV_CLEAN}"
             printf 'SERVER_PORT_CLEAN=%s\n' "${SERVER_PORT_CLEAN}"
@@ -350,6 +352,8 @@ jobs:
             printf 'RELEASE_SHA=%q\n' "${GITHUB_SHA}"
             printf 'SERVICE_NAME=%q\n' "${SERVICE_NAME_CLEAN}"
             printf 'DEPLOY_ENV=%q\n' "${DEPLOY_ENV_CLEAN}"
+            printf 'SERVER_APPS_ROOT=%q\n' "${SERVER_APPS_ROOT_CLEAN}"
+            printf 'SERVER_RUNTIME_ENV_FILE=%q\n' "${SERVER_RUNTIME_ENV_FILE_CLEAN}"
             printf 'COMPOSE_PROJECT_NAME=%q\n' "chat-web-client-${DEPLOY_ENV_CLEAN}"
             printf 'COMPOSE_FILE=%q\n' "deploy/compose/${DEPLOY_ENV_CLEAN}.yml"
             printf 'RUNTIME_SERVICE=%q\n' "chat-web-client"
