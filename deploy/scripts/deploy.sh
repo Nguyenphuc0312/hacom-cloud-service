@@ -53,10 +53,6 @@ if [ ! -f "${COMPOSE_FILE}" ]; then
   exit 1
 fi
 
-APP_ROOT="$(cd "${RELEASE_DIR}/../.." && pwd)"
-CURRENT_LINK="${APP_ROOT}/current"
-PREVIOUS_LINK="${APP_ROOT}/previous"
-
 compose() {
   docker compose \
     --env-file "${SERVER_RUNTIME_ENV_FILE}" \
@@ -118,11 +114,5 @@ compose config -q
 docker pull "${IMAGE_REF}"
 compose up -d --no-deps --force-recreate "${RUNTIME_SERVICE}"
 verify_health
-
-if [[ -L "${CURRENT_LINK}" ]]; then
-  rm -f "${PREVIOUS_LINK}"
-  ln -sfn "$(readlink -f "${CURRENT_LINK}")" "${PREVIOUS_LINK}"
-fi
-ln -sfn "${RELEASE_DIR}" "${CURRENT_LINK}"
 
 compose ps
