@@ -38,7 +38,7 @@ jobs:
       SERVICE_NAME: ${{ vars.SERVICE_NAME }}
       SERVER_APPS_ROOT: ${{ vars.SERVER_APPS_ROOT }}
       SERVER_HOST: ${{ secrets.SERVER_HOST }}
-      SERVER_INFRA_ENV_FILE: ${{ vars.SERVER_INFRA_ENV_FILE }}
+      SERVER_RUNTIME_ENV_FILE: ${{ vars.SERVER_RUNTIME_ENV_FILE }}
       SERVER_INFRA_ROOT: ${{ vars.SERVER_INFRA_ROOT }}
       SERVER_PORT: ${{ secrets.SERVER_PORT }}
       SERVER_USER: ${{ secrets.SERVER_USER }}
@@ -72,7 +72,9 @@ jobs:
           SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
         run: |
           set -euo pipefail
-          for var in DEPLOY_ENV SERVER_HOST SERVER_INFRA_ENV_FILE SERVER_INFRA_ROOT SERVER_PORT SERVER_USER SERVER_SSH_KEY SERVER_SSH_KNOWN_HOSTS GHCR_PULL_USERNAME GHCR_PULL_TOKEN SERVER_APPS_ROOT HEALTHCHECK_URL SERVICE_NAME; do
+          # App services must use SERVER_RUNTIME_ENV_FILE.
+          # SERVER_INFRA_ENV_FILE is only for infra repository deployments.
+          for var in DEPLOY_ENV SERVER_HOST SERVER_PORT SERVER_USER SERVER_SSH_KEY SERVER_SSH_KNOWN_HOSTS GHCR_PULL_USERNAME GHCR_PULL_TOKEN SERVER_APPS_ROOT SERVER_RUNTIME_ENV_FILE HEALTHCHECK_URL SERVICE_NAME; do
             if [ -n "${!var:-}" ]; then
               echo "${var}=SET"
             else
@@ -91,7 +93,7 @@ jobs:
           VITE_APP_ENV: ${{ vars.VITE_APP_ENV }}
           VITE_DASHBOARD_REFETCH_INTERVAL_MS: ${{ vars.VITE_DASHBOARD_REFETCH_INTERVAL_MS }}
           VITE_ADMIN_WRITE_ACTIONS_ENABLED: ${{ vars.VITE_ADMIN_WRITE_ACTIONS_ENABLED }}
-          SERVER_INFRA_ENV_FILE: ${{ vars.SERVER_INFRA_ENV_FILE }}
+          SERVER_RUNTIME_ENV_FILE: ${{ vars.SERVER_RUNTIME_ENV_FILE }}
           SERVER_INFRA_ROOT: ${{ vars.SERVER_INFRA_ROOT }}
           SERVER_PORT: ${{ secrets.SERVER_PORT }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
@@ -136,9 +138,30 @@ jobs:
             fi
           }
 
+          required_vars=(
+            DEPLOY_ENV
+            SERVER_HOST
+            SERVER_PORT
+            SERVER_USER
+            SERVER_SSH_KEY
+            SERVER_SSH_KNOWN_HOSTS
+            GHCR_PULL_USERNAME
+            GHCR_PULL_TOKEN
+            SERVER_APPS_ROOT
+            SERVER_RUNTIME_ENV_FILE
+            SERVICE_NAME
+          )
+
+          for var in "${required_vars[@]}"; do
+            if [ -z "${!var:-}" ]; then
+              echo "Missing required app deploy configuration: ${var}" >&2
+              exit 1
+            fi
+          done
+
           SERVER_APPS_ROOT_CLEAN="$(require_single_line "vars.SERVER_APPS_ROOT" "${SERVER_APPS_ROOT}")"
-          SERVER_INFRA_ENV_FILE_CLEAN="$(require_single_line "vars.SERVER_INFRA_ENV_FILE" "${SERVER_INFRA_ENV_FILE}")"
-          SERVER_INFRA_ROOT_CLEAN="$(require_single_line "vars.SERVER_INFRA_ROOT" "${SERVER_INFRA_ROOT}")"
+          SERVER_RUNTIME_ENV_FILE_CLEAN="$(require_single_line "vars.SERVER_RUNTIME_ENV_FILE" "${SERVER_RUNTIME_ENV_FILE}")"
+          SERVER_INFRA_ROOT_CLEAN="$(trim_single_line "${SERVER_INFRA_ROOT:-}")"
           SERVICE_NAME_CLEAN="$(require_single_line "vars.SERVICE_NAME" "${SERVICE_NAME}")"
           DEPLOY_ENV_CLEAN="$(require_single_line "vars.DEPLOY_ENV" "${DEPLOY_ENV}")"
           SERVER_PORT_CLEAN="$(require_single_line "secrets.SERVER_PORT" "${SERVER_PORT}")"
@@ -157,6 +180,13 @@ jobs:
           if [[ -z "${HEALTHCHECK_URL_CLEAN}" ]]; then
             HEALTHCHECK_URL_CLEAN="http://127.0.0.1/healthz"
           fi
+          case "${HEALTHCHECK_URL_CLEAN}" in
+            http://*|https://*) ;;
+            *)
+              echo "Invalid app deploy configuration: HEALTHCHECK_URL must start with http:// or https://"
+              exit 1
+              ;;
+          esac
           if [[ -z "${VITE_ADMIN_API_ROOT_CLEAN}" ]]; then
             VITE_ADMIN_API_ROOT_CLEAN="/api/v1/admin"
           fi
@@ -196,6 +226,12 @@ jobs:
             echo "SERVER_PORT secret must be digits only"
             exit 1
           fi
+          case "${SERVER_RUNTIME_ENV_FILE_CLEAN}" in
+            *develop*|*server-test*)
+              echo "Invalid app deploy configuration: SERVER_RUNTIME_ENV_FILE must not point to develop or server-test for production"
+              exit 1
+              ;;
+          esac
 
           RELEASE_DIR="${SERVER_APPS_ROOT_CLEAN}/${SERVICE_NAME_CLEAN}/releases/${IMAGE_TAG}"
 
@@ -207,9 +243,16 @@ jobs:
           require_file ./chat-admin-panel/deploy/scripts/deploy.sh
           require_file ./chat-admin-panel/deploy/scripts/rollback.sh
 
+          echo "Deploy kind: app"
+          echo "DEPLOY_ENV=${DEPLOY_ENV_CLEAN}"
+          echo "SERVICE_NAME=${SERVICE_NAME_CLEAN}"
+          echo "SERVER_APPS_ROOT=${SERVER_APPS_ROOT_CLEAN}"
+          echo "SERVER_RUNTIME_ENV_FILE=${SERVER_RUNTIME_ENV_FILE_CLEAN}"
+          echo "HEALTHCHECK_URL=${HEALTHCHECK_URL_CLEAN}"
+
           {
             printf 'SERVER_APPS_ROOT_CLEAN=%s\n' "${SERVER_APPS_ROOT_CLEAN}"
-            printf 'SERVER_INFRA_ENV_FILE_CLEAN=%s\n' "${SERVER_INFRA_ENV_FILE_CLEAN}"
+            printf 'SERVER_RUNTIME_ENV_FILE_CLEAN=%s\n' "${SERVER_RUNTIME_ENV_FILE_CLEAN}"
             printf 'SERVER_INFRA_ROOT_CLEAN=%s\n' "${SERVER_INFRA_ROOT_CLEAN}"
             printf 'SERVICE_NAME_CLEAN=%s\n' "${SERVICE_NAME_CLEAN}"
             printf 'DEPLOY_ENV_CLEAN=%s\n' "${DEPLOY_ENV_CLEAN}"
@@ -332,6 +375,8 @@ jobs:
             printf 'RELEASE_SHA=%q\n' "${USE_TAG}"
             printf 'SERVICE_NAME=%q\n' "${SERVICE_NAME_CLEAN}"
             printf 'DEPLOY_ENV=%q\n' "${DEPLOY_ENV_CLEAN}"
+            printf 'SERVER_APPS_ROOT=%q\n' "${SERVER_APPS_ROOT_CLEAN}"
+            printf 'SERVER_RUNTIME_ENV_FILE=%q\n' "${SERVER_RUNTIME_ENV_FILE_CLEAN}"
             printf 'COMPOSE_PROJECT_NAME=%q\n' "chat-admin-panel-${DEPLOY_ENV_CLEAN}"
             printf 'COMPOSE_FILE=%q\n' "deploy/compose/${DEPLOY_ENV_CLEAN}.yml"
             printf 'RUNTIME_SERVICE=%q\n' "chat-admin-panel"
@@ -363,7 +408,7 @@ jobs:
             -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" \
             'echo SSH_OK && whoami && hostname && docker --version && docker compose version'
 
-      - name: Verify server infrastructure
+      - name: Verify server app paths
         run: |
           set -Eeuo pipefail
           PORT="${SERVER_PORT_CLEAN}"
@@ -373,11 +418,13 @@ jobs:
             -o ServerAliveInterval=30 \
             -o ServerAliveCountMax=6 \
             -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" \
-            bash -se -- "${SERVER_APPS_ROOT_CLEAN}" "${SERVER_INFRA_ROOT_CLEAN}" "${SERVER_INFRA_ENV_FILE_CLEAN}" <<'ENDSSH'
+            bash -se -- "${SERVER_APPS_ROOT_CLEAN}" "${SERVER_RUNTIME_ENV_FILE_CLEAN}" "${SERVER_INFRA_ROOT_CLEAN}" <<'ENDSSH'
           set -Eeuo pipefail
           test -d "$1" || { echo "Missing apps root: $1" >&2; exit 1; }
-          test -d "$2" || { echo "Missing infra root: $2" >&2; exit 1; }
-          test -f "$3" || { echo "Missing infra env file: $3" >&2; exit 1; }
+          test -f "$2" || { echo "Runtime env file does not exist on server: $2" >&2; exit 1; }
+          if [ -n "${3:-}" ]; then
+            test -d "$3" || { echo "Configured SERVER_INFRA_ROOT does not exist on server: $3" >&2; exit 1; }
+          fi
           docker network inspect chat-platform >/dev/null || { echo "Docker network chat-platform not found" >&2; exit 1; }
           ENDSSH
 
@@ -395,6 +442,8 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" <<EOF
           set -eu
           cd "${RELEASE_DIR}"
+          test -f ./.release.env
+          test -f "${SERVER_RUNTIME_ENV_FILE_CLEAN}"
           echo "${GHCR_PULL_TOKEN}" | docker login ghcr.io -u "${GHCR_PULL_USERNAME}" --password-stdin
           chmod +x deploy/scripts/deploy.sh deploy/scripts/rollback.sh
           ./deploy/scripts/deploy.sh
@@ -416,7 +465,7 @@ jobs:
             set -a
             . ./.release.env
             set +a
-            docker compose -f "${COMPOSE_FILE}" ps || true
-            docker compose -f "${COMPOSE_FILE}" logs --tail=200 chat-admin-panel || true
+            docker compose --env-file "${SERVER_RUNTIME_ENV_FILE}" -p "${COMPOSE_PROJECT_NAME}" -f "${COMPOSE_FILE}" ps || true
+            docker compose --env-file "${SERVER_RUNTIME_ENV_FILE}" -p "${COMPOSE_PROJECT_NAME}" -f "${COMPOSE_FILE}" logs --tail=200 chat-admin-panel || true
           fi
           EOF
