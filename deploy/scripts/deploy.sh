@@ -69,6 +69,19 @@ service_container_id() {
   compose ps -q "${RUNTIME_SERVICE}" | head -n 1
 }
 
+service_runtime_status() {
+  local container_id
+  container_id="$(service_container_id)"
+
+  if [[ -z "${container_id}" ]]; then
+    return 1
+  fi
+
+  docker inspect \
+    --format '{{.State.Status}}' \
+    "${container_id}"
+}
+
 service_health_status() {
   local container_id
   container_id="$(service_container_id)"
@@ -78,7 +91,7 @@ service_health_status() {
   fi
 
   docker inspect \
-    --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+    --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
     "${container_id}"
 }
 
@@ -119,21 +132,46 @@ verify_health() {
   local sleep_seconds=5
 
   for ((i=1; i<=attempts; i++)); do
-    local status
-    status="$(service_health_status || true)"
-    if [[ "${status}" == "healthy" || "${status}" == "running" ]]; then
-      echo "Health check passed on attempt ${i} with status=${status}"
-      return 0
-    fi
-
     if probe_healthcheck_url; then
       echo "Health check passed on attempt ${i} via ${HEALTHCHECK_URL}"
       return 0
     fi
 
+    local runtime_status health_status
+    runtime_status="$(service_runtime_status || true)"
+    health_status="$(service_health_status || true)"
+
+    case "${health_status}" in
+      healthy)
+        echo "Health check passed on attempt ${i} with docker health status=${health_status}"
+        return 0
+        ;;
+      none)
+        if [[ "${runtime_status}" == "running" ]]; then
+          echo "Health check passed on attempt ${i} with runtime status=${runtime_status}"
+          return 0
+        fi
+        ;;
+      starting|'')
+        ;;
+      unhealthy)
+        echo "Runtime container reported unhealthy before ${HEALTHCHECK_URL:-health probe} became ready." >&2
+        return 1
+        ;;
+      *)
+        echo "Runtime container reported unexpected health status=${health_status}; waiting for readiness." >&2
+        ;;
+    esac
+
+    if [[ -n "${runtime_status}" && "${runtime_status}" != "running" ]]; then
+      echo "Runtime container is no longer running while waiting for readiness: status=${runtime_status}" >&2
+      return 1
+    fi
+
     sleep "${sleep_seconds}"
   done
 
+  echo "Runtime healthcheck timed out after $((attempts * sleep_seconds))s" >&2
   return 1
 }
 
