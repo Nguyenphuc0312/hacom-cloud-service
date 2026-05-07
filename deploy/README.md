@@ -2,6 +2,27 @@
 
 This folder contains release-bundle artifacts used by CI/CD for develop and production deploys.
 
+## App-level production deploy contract
+
+- Production app deploy uses only:
+  - `DEPLOY_ENV`
+  - `SERVICE_NAME`
+  - `SERVER_APPS_ROOT`
+  - `SERVER_RUNTIME_ENV_FILE`
+  - `SERVER_PORT`
+  - `HEALTHCHECK_URL`
+- Secrets required by the workflow:
+  - `SERVER_HOST`
+  - `SERVER_USER`
+  - `SERVER_SSH_KEY`
+  - `SERVER_SSH_KNOWN_HOSTS`
+  - `GHCR_PULL_USERNAME`
+  - `GHCR_PULL_TOKEN`
+- App-level deploy must not require or validate `SERVER_INFRA_ROOT`.
+- Remote app path derives as:
+  - `APP_DIR="$SERVER_APPS_ROOT/$SERVICE_NAME"`
+  - `RELEASE_DIR="$APP_DIR/current"`
+
 ## Compose files
 
 - deploy/compose/develop.yml

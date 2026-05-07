@@ -39,7 +39,6 @@ jobs:
       SERVER_APPS_ROOT: ${{ vars.SERVER_APPS_ROOT }}
       SERVER_HOST: ${{ secrets.SERVER_HOST }}
       SERVER_RUNTIME_ENV_FILE: ${{ vars.SERVER_RUNTIME_ENV_FILE }}
-      SERVER_INFRA_ROOT: ${{ vars.SERVER_INFRA_ROOT }}
       SERVER_PORT: ${{ secrets.SERVER_PORT }}
       SERVER_USER: ${{ secrets.SERVER_USER }}
       SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
@@ -73,7 +72,6 @@ jobs:
         run: |
           set -euo pipefail
           # App services must use SERVER_RUNTIME_ENV_FILE.
-          # SERVER_INFRA_ENV_FILE is only for infra repository deployments.
           for var in DEPLOY_ENV SERVER_HOST SERVER_PORT SERVER_USER SERVER_SSH_KEY SERVER_SSH_KNOWN_HOSTS GHCR_PULL_USERNAME GHCR_PULL_TOKEN SERVER_APPS_ROOT SERVER_RUNTIME_ENV_FILE HEALTHCHECK_URL SERVICE_NAME; do
             if [ -n "${!var:-}" ]; then
               echo "${var}=SET"
@@ -94,7 +92,6 @@ jobs:
           VITE_DASHBOARD_REFETCH_INTERVAL_MS: ${{ vars.VITE_DASHBOARD_REFETCH_INTERVAL_MS }}
           VITE_ADMIN_WRITE_ACTIONS_ENABLED: ${{ vars.VITE_ADMIN_WRITE_ACTIONS_ENABLED }}
           SERVER_RUNTIME_ENV_FILE: ${{ vars.SERVER_RUNTIME_ENV_FILE }}
-          SERVER_INFRA_ROOT: ${{ vars.SERVER_INFRA_ROOT }}
           SERVER_PORT: ${{ secrets.SERVER_PORT }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
@@ -149,6 +146,7 @@ jobs:
             GHCR_PULL_TOKEN
             SERVER_APPS_ROOT
             SERVER_RUNTIME_ENV_FILE
+            HEALTHCHECK_URL
             SERVICE_NAME
           )
 
@@ -161,7 +159,6 @@ jobs:
 
           SERVER_APPS_ROOT_CLEAN="$(require_single_line "vars.SERVER_APPS_ROOT" "${SERVER_APPS_ROOT}")"
           SERVER_RUNTIME_ENV_FILE_CLEAN="$(require_single_line "vars.SERVER_RUNTIME_ENV_FILE" "${SERVER_RUNTIME_ENV_FILE}")"
-          SERVER_INFRA_ROOT_CLEAN="$(trim_single_line "${SERVER_INFRA_ROOT:-}")"
           SERVICE_NAME_CLEAN="$(require_single_line "vars.SERVICE_NAME" "${SERVICE_NAME}")"
           DEPLOY_ENV_CLEAN="$(require_single_line "vars.DEPLOY_ENV" "${DEPLOY_ENV}")"
           SERVER_PORT_CLEAN="$(require_single_line "secrets.SERVER_PORT" "${SERVER_PORT}")"
@@ -169,7 +166,7 @@ jobs:
           SERVER_HOST_CLEAN="$(require_single_line "secrets.SERVER_HOST" "${SERVER_HOST}")"
           require_single_line "secrets.GHCR_PULL_USERNAME" "${GHCR_PULL_USERNAME}" >/dev/null
           require_single_line "secrets.GHCR_PULL_TOKEN" "${GHCR_PULL_TOKEN}" >/dev/null
-          HEALTHCHECK_URL_CLEAN="$(trim_single_line "${HEALTHCHECK_URL}")"
+          HEALTHCHECK_URL_CLEAN="$(require_single_line "vars.HEALTHCHECK_URL" "${HEALTHCHECK_URL}")"
           VITE_ADMIN_API_ROOT_CLEAN="$(trim_single_line "${VITE_ADMIN_API_ROOT}")"
           VITE_ADMIN_API_BASE_URL_CLEAN="$(trim_single_line "${VITE_ADMIN_API_BASE_URL}")"
           VITE_AUTH_BASE_URL_CLEAN="$(trim_single_line "${VITE_AUTH_BASE_URL}")"
@@ -177,9 +174,6 @@ jobs:
           VITE_DASHBOARD_REFETCH_INTERVAL_MS_CLEAN="$(trim_single_line "${VITE_DASHBOARD_REFETCH_INTERVAL_MS}")"
           VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN="$(trim_single_line "${VITE_ADMIN_WRITE_ACTIONS_ENABLED}")"
 
-          if [[ -z "${HEALTHCHECK_URL_CLEAN}" ]]; then
-            HEALTHCHECK_URL_CLEAN="http://127.0.0.1/healthz"
-          fi
           case "${HEALTHCHECK_URL_CLEAN}" in
             http://*|https://*) ;;
             *)
@@ -233,7 +227,9 @@ jobs:
               ;;
           esac
 
-          RELEASE_DIR="${SERVER_APPS_ROOT_CLEAN}/${SERVICE_NAME_CLEAN}/releases/${IMAGE_TAG}"
+          APP_DIR="${SERVER_APPS_ROOT_CLEAN}/${SERVICE_NAME_CLEAN}"
+          RELEASE_DIR="${APP_DIR}/current"
+          PREVIOUS_DIR="${APP_DIR}/previous"
 
           require_file ./chat-admin-panel/Dockerfile
           require_file ./chat-admin-panel/package-lock.json
@@ -253,13 +249,13 @@ jobs:
           {
             printf 'SERVER_APPS_ROOT_CLEAN=%s\n' "${SERVER_APPS_ROOT_CLEAN}"
             printf 'SERVER_RUNTIME_ENV_FILE_CLEAN=%s\n' "${SERVER_RUNTIME_ENV_FILE_CLEAN}"
-            printf 'SERVER_INFRA_ROOT_CLEAN=%s\n' "${SERVER_INFRA_ROOT_CLEAN}"
             printf 'SERVICE_NAME_CLEAN=%s\n' "${SERVICE_NAME_CLEAN}"
             printf 'DEPLOY_ENV_CLEAN=%s\n' "${DEPLOY_ENV_CLEAN}"
             printf 'SERVER_PORT_CLEAN=%s\n' "${SERVER_PORT_CLEAN}"
             printf 'SERVER_USER_CLEAN=%s\n' "${SERVER_USER_CLEAN}"
             printf 'SERVER_HOST_CLEAN=%s\n' "${SERVER_HOST_CLEAN}"
             printf 'HEALTHCHECK_URL_CLEAN=%s\n' "${HEALTHCHECK_URL_CLEAN}"
+            printf 'APP_DIR=%s\n' "${APP_DIR}"
             printf 'VITE_ADMIN_API_ROOT_CLEAN=%s\n' "${VITE_ADMIN_API_ROOT_CLEAN}"
             printf 'VITE_ADMIN_API_BASE_URL_CLEAN=%s\n' "${VITE_ADMIN_API_BASE_URL_CLEAN}"
             printf 'VITE_AUTH_BASE_URL_CLEAN=%s\n' "${VITE_AUTH_BASE_URL_CLEAN}"
@@ -268,6 +264,7 @@ jobs:
             printf 'VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN=%s\n' "${VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN}"
             printf 'IMAGE_REF=%s\n' "${IMAGE_REF}"
             printf 'RELEASE_DIR=%s\n' "${RELEASE_DIR}"
+            printf 'PREVIOUS_DIR=%s\n' "${PREVIOUS_DIR}"
             printf 'USE_TAG=%s\n' "${IMAGE_TAG}"
           } >> "${GITHUB_ENV}"
 
@@ -418,23 +415,31 @@ jobs:
             -o ServerAliveInterval=30 \
             -o ServerAliveCountMax=6 \
             -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" \
-            bash -se -- "${SERVER_APPS_ROOT_CLEAN}" "${SERVER_RUNTIME_ENV_FILE_CLEAN}" "${SERVER_INFRA_ROOT_CLEAN}" <<'ENDSSH'
+            bash -se -- "${SERVER_APPS_ROOT_CLEAN}" "${SERVER_RUNTIME_ENV_FILE_CLEAN}" <<'ENDSSH'
           set -Eeuo pipefail
           test -d "$1" || { echo "Missing apps root: $1" >&2; exit 1; }
           test -f "$2" || { echo "Runtime env file does not exist on server: $2" >&2; exit 1; }
-          if [ -n "${3:-}" ]; then
-            test -d "$3" || { echo "Configured SERVER_INFRA_ROOT does not exist on server: $3" >&2; exit 1; }
-          fi
-          docker network inspect chat-platform >/dev/null || { echo "Docker network chat-platform not found" >&2; exit 1; }
           ENDSSH
 
-      - name: Configure known_hosts, rsync, deploy
+      - name: Snapshot current app dir, rsync, deploy
         id: deploy_remote
         run: |
           set -Eeuo pipefail
           PORT="${SERVER_PORT_CLEAN}"
           ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" \
-            "mkdir -p '${RELEASE_DIR}'"
+            "bash -se -- '${APP_DIR}' '${RELEASE_DIR}' '${PREVIOUS_DIR}'" <<'EOF'
+          set -Eeuo pipefail
+          app_dir="$1"
+          release_dir="$2"
+          previous_dir="$3"
+          mkdir -p "${app_dir}"
+          rm -rf "${previous_dir}"
+          mkdir -p "${release_dir}"
+          if find "${release_dir}" -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
+            mkdir -p "${previous_dir}"
+            cp -a "${release_dir}/." "${previous_dir}/"
+          fi
+          EOF
           rsync -az --delete \
             -e "ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes -p ${PORT}" \
             ./chat-admin-panel/.release-bundle/ \

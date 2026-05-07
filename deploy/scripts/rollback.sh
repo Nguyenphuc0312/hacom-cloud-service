@@ -4,8 +4,8 @@ set -Eeuo pipefail
 APP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "${APP_ROOT}"
 
-if [[ ! -L previous ]]; then
-  echo "No previous release symlink found" >&2
+if [[ ! -e previous ]]; then
+  echo "No previous release snapshot found" >&2
   exit 1
 fi
 
