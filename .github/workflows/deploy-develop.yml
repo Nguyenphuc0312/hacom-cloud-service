@@ -168,6 +168,19 @@ jobs:
             printf 'RELEASE_DIR=%s\n' "${RELEASE_DIR}"
           } >> "${GITHUB_ENV}"
 
+      - name: Preflight Docker build context
+        run: |
+          set -Eeuo pipefail
+          pwd
+          ls -la
+          echo "Dockerfiles:"
+          find . -maxdepth 2 -name 'Dockerfile*' -type f | sort
+          echo "Top-level dirs:"
+          find . -maxdepth 2 -type d | sort
+          test -d ./chat-admin-panel
+          test -f ./chat-admin-panel/Dockerfile
+          test -f ./chat-admin-panel/package-lock.json
+
       - uses: docker/setup-buildx-action@v3
 
       - uses: docker/login-action@v3
