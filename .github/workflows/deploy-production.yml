@@ -315,42 +315,82 @@ jobs:
         run: |
           set -Eeuo pipefail
           container_name="chat-admin-panel-smoke"
+          smoke_port="${SMOKE_PORT:-18080}"
+          smoke_url="http://127.0.0.1:${smoke_port}"
+          health_out="$(mktemp)"
+          health_err="$(mktemp)"
           cleanup() {
             docker rm -f "${container_name}" >/dev/null 2>&1 || true
           }
           dump_debug() {
             echo "== docker ps -a =="
-            docker ps -a || true
+            docker ps -a --filter "name=${container_name}" || true
             echo "== docker logs ${container_name} =="
             docker logs "${container_name}" || true
+            echo "== docker inspect state ${container_name} =="
+            docker inspect "${container_name}" --format '{{json .State}}' || true
             echo "== docker inspect ${container_name} =="
             docker inspect "${container_name}" || true
           }
           trap 'status=$?; if [ $status -ne 0 ]; then dump_debug; fi; cleanup; exit $status' EXIT
 
-          docker run -d --rm --name "${container_name}" -p 127.0.0.1:18080:80 "${IMAGE_REF}" >/dev/null
-          docker ps -a --filter "name=${container_name}"
+          cleanup
+          docker run -d --rm --name "${container_name}" -p "127.0.0.1:${smoke_port}:80" "${IMAGE_REF}" >/dev/null
 
-          for attempt in $(seq 1 20); do
-            if curl -fsS http://127.0.0.1:18080/healthz >/dev/null; then
+          echo "Waiting for smoke container /healthz..."
+          healthy="false"
+          for attempt in $(seq 1 60); do
+            if curl -fsS --max-time 2 "${smoke_url}/healthz" >"${health_out}" 2>"${health_err}"; then
+              echo "Smoke healthcheck OK on attempt ${attempt}"
+              cat "${health_out}" || true
+              healthy="true"
               break
             fi
-            if ! docker ps --filter "name=${container_name}" --filter "status=running" --format '{{.Names}}' | grep -Fx "${container_name}" >/dev/null; then
-              echo "Smoke container exited before /healthz became reachable."
+
+            echo "Waiting for /healthz attempt ${attempt}/60..."
+            docker ps --filter "name=${container_name}" --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
+            container_status="$(docker inspect "${container_name}" --format '{{.State.Status}}' 2>/dev/null || true)"
+            if [[ -n "${container_status}" && "${container_status}" != "running" ]]; then
+              echo "Smoke container is no longer running while waiting for /healthz: status=${container_status}"
               exit 1
             fi
             sleep 1
           done
+          if [[ "${healthy}" != "true" ]]; then
+            echo "Smoke healthcheck failed after timeout"
+            echo "== curl stderr =="
+            cat "${health_err}" || true
+            exit 1
+          fi
 
-          curl -f http://127.0.0.1:18080/healthz
-
+          echo "Testing SPA root..."
           ROOT_HEADERS="$(mktemp)"
           ROOT_HTML="$(mktemp)"
+          root_ok="false"
+          for attempt in $(seq 1 20); do
+            if curl -fsS --max-time 3 -D "${ROOT_HEADERS}" "${smoke_url}/" -o "${ROOT_HTML}"; then
+              echo "Smoke root OK on attempt ${attempt}"
+              head -c 300 "${ROOT_HTML}" || true
+              echo
+              root_ok="true"
+              break
+            fi
+            echo "Waiting for root attempt ${attempt}/20..."
+            container_status="$(docker inspect "${container_name}" --format '{{.State.Status}}' 2>/dev/null || true)"
+            if [[ -n "${container_status}" && "${container_status}" != "running" ]]; then
+              echo "Smoke container is no longer running while waiting for /: status=${container_status}"
+              exit 1
+            fi
+            sleep 1
+          done
+          if [[ "${root_ok}" != "true" ]]; then
+            echo "Smoke root failed after timeout"
+            exit 1
+          fi
+
           JS_HEADERS="$(mktemp)"
           CSS_HEADERS="$(mktemp)"
           MISSING_HEADERS="$(mktemp)"
-
-          curl -fsS -D "${ROOT_HEADERS}" http://127.0.0.1:18080/ -o "${ROOT_HTML}"
           grep -Eiq '^cache-control: no-store, no-cache, must-revalidate' "${ROOT_HEADERS}"
 
           MAIN_JS="$(grep -oE '/assets/[^"]+\.js' "${ROOT_HTML}" | head -n 1)"
@@ -358,14 +398,14 @@ jobs:
           test -n "${MAIN_JS}"
           test -n "${MAIN_CSS}"
 
-          curl -fsSI -D "${JS_HEADERS}" "http://127.0.0.1:18080${MAIN_JS}" >/dev/null
-          curl -fsSI -D "${CSS_HEADERS}" "http://127.0.0.1:18080${MAIN_CSS}" >/dev/null
+          curl -fsSI -D "${JS_HEADERS}" "${smoke_url}${MAIN_JS}" >/dev/null
+          curl -fsSI -D "${CSS_HEADERS}" "${smoke_url}${MAIN_CSS}" >/dev/null
 
           grep -Eiq '^content-type: (application|text)/(x-)?javascript' "${JS_HEADERS}"
           grep -Eiq '^content-type: text/css' "${CSS_HEADERS}"
           grep -Eiq '^cache-control: public, max-age=31536000, immutable' "${CSS_HEADERS}"
 
-          MISSING_STATUS="$(curl -sS -o /dev/null -D "${MISSING_HEADERS}" -w '%{http_code}' http://127.0.0.1:18080/assets/__missing__.css)"
+          MISSING_STATUS="$(curl -sS -o /dev/null -D "${MISSING_HEADERS}" -w '%{http_code}' "${smoke_url}/assets/__missing__.css")"
           test "${MISSING_STATUS}" = "404"
           ! grep -Eiq '^content-type: text/html' "${MISSING_HEADERS}"
 
