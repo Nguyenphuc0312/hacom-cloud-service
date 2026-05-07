@@ -1,0 +1,564 @@
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-shell-chip {
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--color-card-muted);
+  font-size: 11px;
+  font-weight: var(--font-semibold);
+  box-shadow: none;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-page-container {
+  max-width: none;
+  margin: 0;
+  padding: var(--space-5) var(--space-4) var(--space-6);
+  min-height: calc(100vh - var(--topbar-height) - var(--space-4));
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-page-header {
+  gap: var(--space-3);
+  padding-bottom: var(--space-1);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-page-eyebrow {
+  margin-bottom: var(--space-1);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-page-header-title,
+.ds-page-header-title .ant-typography {
+  font-family: var(--font-family-sans);
+  font-size: 24px;
+  font-weight: var(--font-semibold);
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-page-header-description {
+  max-width: 72ch;
+  font-size: var(--font-sm);
+  line-height: 1.55;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-page-toolbar-group,
+.ds-page-toolbar-stack {
+  gap: var(--space-2);
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-page-container {
+  padding: 24px;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-page-header-title,
+.ds-page-header-title .ant-typography {
+  font-size: 20px;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-page-header-description {
+  max-width: 760px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-page-container {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  min-height: calc(100vh - 62px);
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-page-shell,
+.ds-page-shell-body {
+  width: 100%;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-page-shell > .ds-page-header {
+  display: none;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-page-shell-body {
+  margin-top: 0;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-page-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-page-shell-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-shell-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.02em;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-shell-chip--ghost {
+  background: var(--bg-sunken);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-shell-chip--success {
+  background: var(--bg-success-subtle);
+  border-color: rgba(22, 163, 74, 0.18);
+  color: #166534;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-shell-chip--warning {
+  background: var(--bg-warning-subtle);
+  border-color: rgba(217, 119, 6, 0.18);
+  color: #9a3412;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-page-container {
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5) var(--space-8);
+  min-height: calc(100vh - var(--topbar-height) - var(--space-6));
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-page-header {
+  align-items: flex-end;
+  gap: var(--space-5);
+  margin-bottom: var(--space-1);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-page-header-title,
+.ds-page-header-title .ant-typography {
+  margin: 0;
+  color: var(--text-heading);
+  font-family: var(--font-family-display);
+  font-size: clamp(28px, 3vw, 34px);
+  font-weight: var(--font-bold);
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-page-header-description {
+  max-width: 820px;
+  margin-top: var(--space-2);
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-page-header-description .ant-typography,
+.ds-page-header-meta,
+.ds-page-header-meta .ant-typography {
+  color: var(--text-muted);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-page-header-actions,
+.ds-page-header-meta {
+  gap: var(--space-2);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-page-toolbar-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-page-toolbar-group--secondary {
+  justify-content: flex-end;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-page-toolbar-meta {
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-page-toolbar-stack {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-shell-chip {
+  background: var(--gradient-surface-muted);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-shell-chip--ghost {
+  background: var(--color-card-muted);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-shell-chip--success {
+  background: var(--color-success-soft);
+  border-color: color-mix(in srgb, var(--brand-success) 24%, transparent);
+  color: var(--brand-success);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-shell-chip--warning {
+  background: var(--color-warning-soft);
+  border-color: color-mix(in srgb, var(--brand-warning) 24%, transparent);
+  color: var(--brand-warning);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-page-header {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-page-header-title,
+.ds-page-header-title .ant-typography {
+  font-size: clamp(28px, 3vw, 32px);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-page-header-description {
+  max-width: 72ch;
+  margin-top: var(--space-1);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-page-header-meta {
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-page-toolbar-stack {
+  justify-content: flex-end;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-page-toolbar-meta {
+  font-size: 12px;
+}
+
+/* Final full-width admin content pass. Keep this last. */
+.ds-page-container {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 12px 12px 16px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.ds-page-shell,
+.ds-page-shell-body {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.ds-page-header {
+  margin: 0 0 8px !important;
+}
+
+.ds-page-container {
+  padding: 12px 14px 16px 8px !important;
+}
+
+.ds-page-header {
+  margin-bottom: 8px !important;
+}
+
+.ds-page-container {
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 14px 18px 18px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.ds-page-shell > .ds-page-header {
+  display: flex !important;
+}
+
+.ds-page-header {
+  align-items: center !important;
+  margin: 0 0 10px !important;
+  padding: 0 !important;
+  gap: 12px !important;
+}
+
+.ds-page-eyebrow {
+  display: none !important;
+}
+
+.ds-page-header-title,
+.ds-page-header-title .ant-typography {
+  color: #111827 !important;
+  font-size: 22px !important;
+  font-weight: 780 !important;
+  line-height: 1.15 !important;
+  letter-spacing: 0 !important;
+}
+
+.ds-page-header-description {
+  margin-top: 2px !important;
+  color: #64748b !important;
+  font-size: 13px !important;
+  line-height: 1.25 !important;
+}
+
+.ds-page-shell-body {
+  gap: 10px !important;
+}
+
+.ds-page-header-meta .ant-btn {
+  height: 32px !important;
+  min-height: 32px !important;
+  padding-inline: 12px !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+}
+
+/* From src/styles/global/global.css */
+/* Page Header Pattern */
+.ds-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-5) var(--space-7);
+  margin-bottom: var(--space-6);
+  min-height: 56px;
+}
+
+/* From src/styles/global/global.css */
+.ds-page-header-title {
+  font-size: var(--font-xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  line-height: var(--lh-sm);
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* From src/styles/global/global.css */
+.ds-page-header-description {
+  font-size: var(--font-md);
+  color: var(--text-muted);
+  margin-bottom: 0;
+  margin-top: 2px;
+}
+
+/* From src/styles/global/global.css */
+.ds-page-header-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: 2px;
+}
+
+/* From src/styles/global/global.css */
+.ds-page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* From src/styles/global/global.css */
+.ds-page-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-4);
+  margin-bottom: var(--space-2);
+}
+
+/* From src/styles/global/global.css */
+/* Page Container/Section Spacing */
+.ds-page-container {
+  max-width: 1360px;
+  margin: var(--space-7) auto 0 auto;
+  padding: var(--space-7) var(--space-6);
+  background: var(--bg-surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xs);
+  min-height: 80vh;
+}
+
+/* From src/styles/global/global.css */
+/* Card, Section, Page Container */
+.ds-card,
+.ds-section,
+.ds-page-container {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  padding: var(--space-6);
+}
+
+/* From src/styles/global/global.css */
+.ds-page-container {
+  padding: var(--space-7);
+  max-width: 1360px;
+  margin: 0 auto;
+}
+
+/* From src/styles/global/global.css */
+/* Design-system Page Header */
+.ds-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  width: 100%;
+  flex-wrap: wrap;
+  padding-bottom: var(--space-2);
+}
+
+/* From src/styles/global/global.css */
+.ds-page-header > div {
+  min-width: 0;
+}
+
+/* From src/styles/global/global.css */
+.ds-page-header-title {
+  font-size: var(--font-xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+}
+
+/* From src/styles/global/global.css */
+.ds-page-header-description {
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* From src/styles/global/global.css */
+.ds-page-header-actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+/* From src/styles/global/global.css */
+.ds-page-header-meta {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--text-muted);
+}
+
+/* From src/styles/global/global.css */
+.ds-page-container {
+  max-width: var(--content-max-width);
+  margin-top: 0;
+  padding: var(--space-6) var(--space-5) var(--space-7);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  min-height: calc(100vh - var(--topbar-height) - var(--space-6));
+}
+
+/* From src/styles/production/production.css */
+.ds-page-eyebrow {
+  margin-bottom: var(--space-2);
+  color: var(--text-caption);
+  font-size: 11px;
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* From src/styles/production/production.css */
+.ds-page-header {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+/* From src/styles/production/production.css */
+.ds-page-header-title,
+.ds-page-header-title .ant-typography {
+  font-size: clamp(28px, 3vw, 32px);
+}
+
+/* From src/styles/production/production.css */
+.ds-page-header-description {
+  max-width: 72ch;
+  margin-top: var(--space-1);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* From src/styles/production/production.css */
+.ds-page-header-meta {
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* From src/styles/production/production.css */
+.ds-page-toolbar-stack {
+  justify-content: flex-end;
+}
+
+/* From src/styles/production/production.css */
+.ds-page-toolbar-meta {
+  font-size: 12px;
+}

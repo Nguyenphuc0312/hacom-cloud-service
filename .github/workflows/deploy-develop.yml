@@ -1,0 +1,327 @@
+name: deploy-develop
+
+on:
+  push:
+    branches: [ develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-develop-chat-admin-panel
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: develop
+    env:
+      GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME != '' &&
+        secrets.GHCR_PULL_USERNAME || github.repository_owner }}
+      GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: chat-admin-panel
+
+      - name: Validate deploy inputs
+        id: validate_inputs
+        env:
+          SERVER_APPS_ROOT: ${{ vars.SERVER_APPS_ROOT }}
+          SERVICE_NAME: ${{ vars.SERVICE_NAME }}
+          DEPLOY_ENV: ${{ vars.DEPLOY_ENV }}
+          HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL }}
+          VITE_ADMIN_API_ROOT: ${{ vars.VITE_ADMIN_API_ROOT }}
+          VITE_ADMIN_API_BASE_URL: ${{ vars.VITE_ADMIN_API_BASE_URL }}
+          VITE_AUTH_BASE_URL: ${{ vars.VITE_AUTH_BASE_URL }}
+          VITE_APP_ENV: ${{ vars.VITE_APP_ENV }}
+          VITE_DASHBOARD_REFETCH_INTERVAL_MS: ${{ vars.VITE_DASHBOARD_REFETCH_INTERVAL_MS }}
+          VITE_ADMIN_WRITE_ACTIONS_ENABLED: ${{ vars.VITE_ADMIN_WRITE_ACTIONS_ENABLED }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
+          GHCR_PULL_USERNAME: ${{ env.GHCR_PULL_USERNAME }}
+          GHCR_PULL_TOKEN: ${{ env.GHCR_PULL_TOKEN }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -Eeuo pipefail
+
+          trim_single_line() {
+            printf '%s' "$1" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+          }
+
+          require_single_line() {
+            local name="$1"
+            local raw_value="$2"
+            local cleaned_value
+            cleaned_value="$(trim_single_line "${raw_value}")"
+            if [[ -z "${cleaned_value}" ]]; then
+              echo "::error title=Missing required input::${name} is required"
+              exit 1
+            fi
+            printf '%s' "${cleaned_value}"
+          }
+
+          require_multiline() {
+            local name="$1"
+            local raw_value="$2"
+            local cleaned_value
+            cleaned_value="$(printf '%s' "${raw_value}" | tr -d '\r')"
+            if [[ -z "${cleaned_value}" ]]; then
+              echo "::error title=Missing required input::${name} is required"
+              exit 1
+            fi
+          }
+
+          require_file() {
+            local path="$1"
+            if [[ ! -f "${path}" ]]; then
+              echo "::error title=Missing required file::${path} was not found"
+              exit 1
+            fi
+          }
+
+          SERVER_APPS_ROOT_CLEAN="$(require_single_line "vars.SERVER_APPS_ROOT" "${SERVER_APPS_ROOT}")"
+          SERVER_RUNTIME_ENV_FILE_CLEAN="$(require_single_line "vars.SERVER_RUNTIME_ENV_FILE" "${SERVER_RUNTIME_ENV_FILE}")"
+          SERVICE_NAME_CLEAN="$(require_single_line "vars.SERVICE_NAME" "${SERVICE_NAME}")"
+          DEPLOY_ENV_CLEAN="$(require_single_line "vars.DEPLOY_ENV" "${DEPLOY_ENV}")"
+          SERVER_PORT_CLEAN="$(require_single_line "secrets.SERVER_PORT" "${SERVER_PORT}")"
+          SERVER_USER_CLEAN="$(require_single_line "secrets.SERVER_USER" "${SERVER_USER}")"
+          SERVER_HOST_CLEAN="$(require_single_line "secrets.SERVER_HOST" "${SERVER_HOST}")"
+          GHCR_PULL_USERNAME_CLEAN="$(require_single_line "secrets.GHCR_PULL_USERNAME" "${GHCR_PULL_USERNAME}")"
+          GHCR_PULL_TOKEN_CLEAN="$(require_single_line "secrets.GHCR_PULL_TOKEN" "${GHCR_PULL_TOKEN}")"
+          HEALTHCHECK_URL_CLEAN="$(trim_single_line "${HEALTHCHECK_URL}")"
+          VITE_ADMIN_API_ROOT_CLEAN="$(trim_single_line "${VITE_ADMIN_API_ROOT}")"
+          VITE_ADMIN_API_BASE_URL_CLEAN="$(trim_single_line "${VITE_ADMIN_API_BASE_URL}")"
+          VITE_AUTH_BASE_URL_CLEAN="$(trim_single_line "${VITE_AUTH_BASE_URL}")"
+          VITE_APP_ENV_CLEAN="$(trim_single_line "${VITE_APP_ENV}")"
+          VITE_DASHBOARD_REFETCH_INTERVAL_MS_CLEAN="$(trim_single_line "${VITE_DASHBOARD_REFETCH_INTERVAL_MS}")"
+          VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN="$(trim_single_line "${VITE_ADMIN_WRITE_ACTIONS_ENABLED}")"
+
+          if [[ -z "${HEALTHCHECK_URL_CLEAN}" ]]; then
+            HEALTHCHECK_URL_CLEAN="http://127.0.0.1/healthz"
+          fi
+          if [[ -z "${VITE_ADMIN_API_ROOT_CLEAN}" ]]; then
+            VITE_ADMIN_API_ROOT_CLEAN="/api/v1/admin"
+          fi
+          if [[ -z "${VITE_ADMIN_API_BASE_URL_CLEAN}" ]]; then
+            VITE_ADMIN_API_BASE_URL_CLEAN="${VITE_ADMIN_API_ROOT_CLEAN}"
+          fi
+          if [[ -z "${VITE_AUTH_BASE_URL_CLEAN}" ]]; then
+            VITE_AUTH_BASE_URL_CLEAN="/api/v1/auth"
+          fi
+          if [[ -z "${VITE_APP_ENV_CLEAN}" ]]; then
+            VITE_APP_ENV_CLEAN="STAGING"
+          fi
+          if [[ -z "${VITE_DASHBOARD_REFETCH_INTERVAL_MS_CLEAN}" ]]; then
+            VITE_DASHBOARD_REFETCH_INTERVAL_MS_CLEAN="15000"
+          fi
+          if [[ -z "${VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN}" ]]; then
+            echo "::error title=Missing required input::vars.VITE_ADMIN_WRITE_ACTIONS_ENABLED is required (true or false)"
+            exit 1
+          fi
+          if [[ "${VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN}" != "true" && "${VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN}" != "false" ]]; then
+            echo "::error title=Invalid input::vars.VITE_ADMIN_WRITE_ACTIONS_ENABLED must be true or false"
+            exit 1
+          fi
+          if [[ "${VITE_ADMIN_API_ROOT_CLEAN}" != "${VITE_ADMIN_API_BASE_URL_CLEAN}" ]]; then
+            echo "::error title=Invalid input::vars.VITE_ADMIN_API_ROOT and vars.VITE_ADMIN_API_BASE_URL must resolve to the same admin root"
+            exit 1
+          fi
+
+          require_multiline "secrets.SERVER_SSH_KEY" "${SERVER_SSH_KEY}"
+          require_multiline "secrets.SERVER_SSH_KNOWN_HOSTS" "${SERVER_SSH_KNOWN_HOSTS}"
+
+          IMAGE_OWNER="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          IMAGE_REF="ghcr.io/${IMAGE_OWNER}/chat-admin-panel:${GITHUB_SHA}"
+          RELEASE_DIR="${SERVER_APPS_ROOT_CLEAN}/${SERVICE_NAME_CLEAN}/releases/${GITHUB_SHA}"
+
+          require_file ./chat-admin-panel/Dockerfile
+          require_file ./chat-admin-panel/package-lock.json
+          require_file ./chat-admin-panel/nginx/default.conf.template
+          require_file ./chat-admin-panel/scripts/verify-dist-assets.mjs
+          require_file "./chat-admin-panel/deploy/compose/${DEPLOY_ENV_CLEAN}.yml"
+          require_file ./chat-admin-panel/deploy/scripts/deploy.sh
+          require_file ./chat-admin-panel/deploy/scripts/rollback.sh
+
+          {
+            printf 'SERVER_APPS_ROOT_CLEAN=%s\n' "${SERVER_APPS_ROOT_CLEAN}"
+            printf 'SERVER_RUNTIME_ENV_FILE_CLEAN=%s\n' "${SERVER_RUNTIME_ENV_FILE_CLEAN}"
+            printf 'SERVICE_NAME_CLEAN=%s\n' "${SERVICE_NAME_CLEAN}"
+            printf 'DEPLOY_ENV_CLEAN=%s\n' "${DEPLOY_ENV_CLEAN}"
+            printf 'SERVER_PORT_CLEAN=%s\n' "${SERVER_PORT_CLEAN}"
+            printf 'SERVER_USER_CLEAN=%s\n' "${SERVER_USER_CLEAN}"
+            printf 'SERVER_HOST_CLEAN=%s\n' "${SERVER_HOST_CLEAN}"
+            printf 'GHCR_PULL_USERNAME_CLEAN=%s\n' "${GHCR_PULL_USERNAME_CLEAN}"
+            printf 'GHCR_PULL_TOKEN_CLEAN=%s\n' "${GHCR_PULL_TOKEN_CLEAN}"
+            printf 'HEALTHCHECK_URL_CLEAN=%s\n' "${HEALTHCHECK_URL_CLEAN}"
+            printf 'VITE_ADMIN_API_ROOT_CLEAN=%s\n' "${VITE_ADMIN_API_ROOT_CLEAN}"
+            printf 'VITE_ADMIN_API_BASE_URL_CLEAN=%s\n' "${VITE_ADMIN_API_BASE_URL_CLEAN}"
+            printf 'VITE_AUTH_BASE_URL_CLEAN=%s\n' "${VITE_AUTH_BASE_URL_CLEAN}"
+            printf 'VITE_APP_ENV_CLEAN=%s\n' "${VITE_APP_ENV_CLEAN}"
+            printf 'VITE_DASHBOARD_REFETCH_INTERVAL_MS_CLEAN=%s\n' "${VITE_DASHBOARD_REFETCH_INTERVAL_MS_CLEAN}"
+            printf 'VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN=%s\n' "${VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN}"
+            printf 'IMAGE_REF=%s\n' "${IMAGE_REF}"
+            printf 'RELEASE_DIR=%s\n' "${RELEASE_DIR}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Preflight Docker build context
+        run: |
+          set -Eeuo pipefail
+          pwd
+          ls -la
+          echo "Dockerfiles:"
+          find . -maxdepth 2 -name 'Dockerfile*' -type f | sort
+          echo "Top-level dirs:"
+          find . -maxdepth 2 -type d | sort
+          test -d ./chat-admin-panel
+          test -f ./chat-admin-panel/Dockerfile
+          test -f ./chat-admin-panel/package-lock.json
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push runtime image
+        run: |
+          set -Eeuo pipefail
+          docker buildx build \
+            --file ./chat-admin-panel/Dockerfile \
+            --target production \
+            --platform linux/amd64 \
+            --progress plain \
+            --build-arg VITE_ADMIN_API_ROOT="${VITE_ADMIN_API_ROOT_CLEAN}" \
+            --build-arg VITE_ADMIN_API_BASE_URL="${VITE_ADMIN_API_BASE_URL_CLEAN}" \
+            --build-arg VITE_AUTH_BASE_URL="${VITE_AUTH_BASE_URL_CLEAN}" \
+            --build-arg VITE_APP_ENV="${VITE_APP_ENV_CLEAN}" \
+            --build-arg VITE_DASHBOARD_REFETCH_INTERVAL_MS="${VITE_DASHBOARD_REFETCH_INTERVAL_MS_CLEAN}" \
+            --build-arg VITE_ADMIN_WRITE_ACTIONS_ENABLED="${VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN}" \
+            --tag "${IMAGE_REF}" \
+            --push \
+            ./chat-admin-panel
+
+      - name: Verify built image contents
+        run: |
+          set -Eeuo pipefail
+          trap 'docker rm -f chat-admin-panel-smoke >/dev/null 2>&1 || true' EXIT
+          docker run -d --rm --name chat-admin-panel-smoke -p 18080:80 "${IMAGE_REF}" >/dev/null
+
+          for attempt in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:18080/healthz >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          ROOT_HEADERS="$(mktemp)"
+          ROOT_HTML="$(mktemp)"
+          JS_HEADERS="$(mktemp)"
+          CSS_HEADERS="$(mktemp)"
+          MISSING_HEADERS="$(mktemp)"
+
+          curl -fsS -D "${ROOT_HEADERS}" http://127.0.0.1:18080/ -o "${ROOT_HTML}"
+          grep -Eiq '^cache-control: no-store, no-cache, must-revalidate' "${ROOT_HEADERS}"
+
+          MAIN_JS="$(grep -oE '/assets/[^"]+\.js' "${ROOT_HTML}" | head -n 1)"
+          MAIN_CSS="$(grep -oE '/assets/[^"]+\.css' "${ROOT_HTML}" | head -n 1)"
+          test -n "${MAIN_JS}"
+          test -n "${MAIN_CSS}"
+
+          curl -fsSI -D "${JS_HEADERS}" "http://127.0.0.1:18080${MAIN_JS}" >/dev/null
+          curl -fsSI -D "${CSS_HEADERS}" "http://127.0.0.1:18080${MAIN_CSS}" >/dev/null
+
+          grep -Eiq '^content-type: (application|text)/(x-)?javascript' "${JS_HEADERS}"
+          grep -Eiq '^content-type: text/css' "${CSS_HEADERS}"
+          grep -Eiq '^cache-control: public, max-age=31536000, immutable' "${CSS_HEADERS}"
+
+          MISSING_STATUS="$(curl -sS -o /dev/null -D "${MISSING_HEADERS}" -w '%{http_code}' http://127.0.0.1:18080/assets/__missing__.css)"
+          test "${MISSING_STATUS}" = "404"
+          ! grep -Eiq '^content-type: text/html' "${MISSING_HEADERS}"
+
+      - name: Verify pushed manifest
+        run: |
+          set -Eeuo pipefail
+          docker buildx imagetools inspect "${IMAGE_REF}"
+          DIGEST="$(docker buildx imagetools inspect "${IMAGE_REF}" | awk '/Digest:/ {print $2; exit}')"
+          test -n "${DIGEST}"
+          echo "IMAGE_DIGEST=${DIGEST}" >> "${GITHUB_ENV}"
+
+      - name: Prepare release bundle
+        working-directory: ./chat-admin-panel
+        run: |
+          set -Eeuo pipefail
+          mkdir -p .release-bundle/deploy
+          cp -R deploy/compose .release-bundle/deploy/
+          cp -R deploy/scripts .release-bundle/deploy/
+          cp deploy/README.md .release-bundle/deploy/README.md
+
+          {
+            printf 'CHAT_ADMIN_PANEL_IMAGE=%q\n' "${IMAGE_REF}"
+            printf 'IMAGE_REF=%q\n' "${IMAGE_REF}"
+            printf 'IMAGE_DIGEST=%q\n' "${IMAGE_DIGEST}"
+            printf 'RELEASE_SHA=%q\n' "${GITHUB_SHA}"
+            printf 'SERVICE_NAME=%q\n' "${SERVICE_NAME_CLEAN}"
+            printf 'DEPLOY_ENV=%q\n' "${DEPLOY_ENV_CLEAN}"
+            printf 'SERVER_APPS_ROOT=%q\n' "${SERVER_APPS_ROOT_CLEAN}"
+            printf 'SERVER_RUNTIME_ENV_FILE=%q\n' "${SERVER_RUNTIME_ENV_FILE_CLEAN}"
+            printf 'COMPOSE_PROJECT_NAME=%q\n' "chat-admin-panel-${DEPLOY_ENV_CLEAN}"
+            printf 'COMPOSE_FILE=%q\n' "deploy/compose/${DEPLOY_ENV_CLEAN}.yml"
+            printf 'RUNTIME_SERVICE=%q\n' "chat-admin-panel"
+            printf 'MIGRATE_ENABLED=%q\n' "false"
+            printf 'HEALTHCHECK_URL=%q\n' "${HEALTHCHECK_URL_CLEAN}"
+          } > .release-bundle/.release.env
+
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SERVER_SSH_KEY }}
+
+      - name: Configure known_hosts, rsync, deploy
+        id: deploy_remote
+        run: |
+          set -Eeuo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SERVER_SSH_KNOWN_HOSTS }}" | tr -d '\r' > ~/.ssh/known_hosts
+          PORT="${SERVER_PORT_CLEAN}"
+          ssh -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" \
+            "mkdir -p '${RELEASE_DIR}'"
+          rsync -az --delete \
+            -e "ssh -p ${PORT}" \
+            ./chat-admin-panel/.release-bundle/ \
+            "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}:${RELEASE_DIR}/"
+          ssh -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" <<EOF
+          set -eu
+          cd "${RELEASE_DIR}"
+          echo "${GHCR_PULL_TOKEN_CLEAN}" | docker login ghcr.io -u "${GHCR_PULL_USERNAME_CLEAN}" --password-stdin
+          chmod +x deploy/scripts/deploy.sh deploy/scripts/rollback.sh
+          ./deploy/scripts/deploy.sh
+          EOF
+
+      - name: Show remote logs on failure
+        if: ${{ failure() && steps.validate_inputs.outcome == 'success' &&
+          steps.deploy_remote.outcome == 'failure' }}
+        run: |
+          set +e
+          if [[ -z "${SERVER_PORT_CLEAN:-}" || -z "${SERVER_USER_CLEAN:-}" || -z "${SERVER_HOST_CLEAN:-}" || -z "${RELEASE_DIR:-}" ]]; then
+            echo "Skipping remote logs because deploy connection variables are unavailable."
+            exit 0
+          fi
+          ssh -p "${SERVER_PORT_CLEAN}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" <<EOF
+          set +e
+          cd "${RELEASE_DIR}"
+          if [ -f ./.release.env ]; then
+            set -a
+            . ./.release.env
+            set +a
+            docker compose -f "${COMPOSE_FILE}" ps || true
+            docker compose -f "${COMPOSE_FILE}" logs --tail=200 chat-admin-panel || true
+          fi
+          EOF

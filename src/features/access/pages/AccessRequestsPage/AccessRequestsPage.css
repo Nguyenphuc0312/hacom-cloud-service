@@ -1,0 +1,109 @@
+.access-requests-page-filter {
+  padding: 6px 8px;
+}
+
+.access-requests-page-filter .ant-input-affix-wrapper,
+.access-requests-page-filter .ant-input,
+.access-requests-page-filter .ant-select-single .ant-select-selector {
+  height: 32px !important;
+  border-radius: 8px !important;
+}
+
+.access-requests-page-filter .ant-input-affix-wrapper .ant-input {
+  height: auto !important;
+  line-height: 1.35 !important;
+}
+
+.access-requests-page-filter .ant-input::placeholder,
+.access-requests-page-filter .ant-input-affix-wrapper .ant-input::placeholder {
+  color: #94a3b8;
+  font-weight: 650;
+}
+
+.ds-ops-summary-grid {
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.ds-ops-summary-grid .ds-stat-card {
+  min-height: 86px;
+  padding: 12px 14px;
+  border: 1px solid #e5eaf1;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.ds-ops-summary-grid .ds-stat-card-header {
+  margin-bottom: 6px;
+}
+
+.ds-ops-summary-grid .ds-stat-card-title {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.2;
+}
+
+.ds-ops-summary-grid .ds-stat-card-value-row {
+  margin-bottom: 4px;
+}
+
+.ds-ops-summary-grid .ds-stat-card-value {
+  color: #0f172a;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 0.95;
+}
+
+.ds-ops-summary-grid .ds-stat-card-meta {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.access-requests-page-filter .ds-toolbar-form {
+  display: grid !important;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(280px, 1.2fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.access-requests-page-filter .ds-toolbar-field {
+  min-width: 0;
+  width: 100%;
+}
+
+.access-requests-page-filter .ds-toolbar-actions {
+  justify-self: end;
+  width: auto;
+}
+
+.access-requests-page-filter .ant-form-item-label {
+  display: none;
+}
+
+.access-requests-page-filter .ant-btn {
+  min-width: 82px;
+}
+
+.access-requests-page-filter .ds-filter-toolbar-meta {
+  padding-top: 6px;
+}
+
+@media (max-width: 900px) {
+  .access-requests-page-filter .ds-toolbar-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .access-requests-page-filter .ds-toolbar-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .access-requests-page-filter .ds-toolbar-form {
+    grid-template-columns: 1fr;
+  }
+}

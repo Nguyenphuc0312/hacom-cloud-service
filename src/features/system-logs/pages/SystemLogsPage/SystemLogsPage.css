@@ -1,0 +1,46 @@
+.system-logs-page-filter {
+  padding: 6px 8px;
+}
+
+.system-logs-page-filter .ds-toolbar-form {
+  display: grid !important;
+  grid-template-columns: minmax(280px, 1.3fr) minmax(120px, 0.55fr) minmax(160px, 0.75fr) minmax(140px, 0.65fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.system-logs-page-filter .ds-toolbar-field {
+  min-width: 0;
+  width: 100%;
+}
+
+.system-logs-page-filter .ds-toolbar-actions {
+  justify-self: end;
+  width: auto;
+}
+
+.system-logs-page-filter .ant-btn {
+  min-width: 82px;
+}
+
+.system-logs-page-filter .ds-filter-toolbar-meta {
+  padding-top: 6px;
+}
+
+@media (max-width: 1120px) {
+  .system-logs-page-filter .ds-toolbar-form {
+    grid-template-columns: minmax(240px, 1fr) repeat(3, minmax(130px, 0.65fr));
+  }
+
+  .system-logs-page-filter .ds-toolbar-actions {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 760px) {
+  .system-logs-page-filter .ds-toolbar-form {
+    grid-template-columns: 1fr;
+  }
+}

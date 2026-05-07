@@ -1,0 +1,131 @@
+.hr-employees-page-filter {
+  padding: 8px 10px 6px;
+  border-color: #dfe3ea;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.hr-employees-page-filter .ds-toolbar-form {
+  display: grid !important;
+  grid-template-columns: minmax(320px, 1fr) 180px auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.hr-employees-page-filter .ds-toolbar-field {
+  min-width: 0;
+  width: 100%;
+}
+
+.hr-employees-page-filter .ds-toolbar-actions {
+  justify-self: end;
+  width: auto;
+  min-width: 0;
+}
+
+.hr-employees-page-filter .ds-toolbar-actions .ant-space {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  align-items: center;
+  gap: 8px !important;
+}
+
+.hr-employees-page-filter .ant-btn {
+  min-width: 86px;
+  height: 32px !important;
+  border-radius: 8px !important;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.hr-employees-page-filter .ant-btn-primary {
+  min-width: 90px;
+}
+
+.hr-employees-page-filter .ant-btn-default {
+  border-color: #d6dde8;
+  background: #ffffff;
+  color: #334155;
+}
+
+.hr-employees-page-filter .ant-btn-default:not(:disabled):hover,
+.hr-employees-page-filter .ant-btn-default:not(:disabled):focus-visible {
+  border-color: #b8c2d1;
+  background: #f8fafc;
+  color: #111827;
+}
+
+.hr-employees-page-filter .ant-btn:disabled {
+  border-color: #e4e8ef;
+  background: #f8fafc;
+  color: #aeb7c3;
+}
+
+.hr-employees-page-filter .ds-filter-toolbar-meta {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #eef1f5;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.hr-employees-page-filter .ant-input,
+.hr-employees-page-filter .ant-input-affix-wrapper,
+.hr-employees-page-filter .ant-select-single .ant-select-selector {
+  width: 100% !important;
+  height: 32px !important;
+  border-color: #d6dde8 !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.hr-employees-page-filter .ant-form-item-control,
+.hr-employees-page-filter .ant-form-item-control-input,
+.hr-employees-page-filter .ant-form-item-control-input-content {
+  width: 100%;
+  min-width: 0;
+}
+
+.hr-employees-page-filter .ant-input-affix-wrapper {
+  overflow: hidden;
+}
+
+.hr-employees-page-filter .ant-input:hover,
+.hr-employees-page-filter .ant-input-affix-wrapper:hover,
+.hr-employees-page-filter .ant-select-selector:hover {
+  border-color: #b8c2d1 !important;
+}
+
+.hr-employees-page-filter .ant-input:focus,
+.hr-employees-page-filter .ant-input-affix-wrapper-focused,
+.hr-employees-page-filter .ant-select-focused .ant-select-selector {
+  border-color: #7c5cff !important;
+  box-shadow: 0 0 0 2px rgba(124, 92, 255, 0.12) !important;
+}
+
+.hr-employees-page-filter .ant-input::placeholder {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+@media (max-width: 1180px) {
+  .hr-employees-page-filter .ds-toolbar-form {
+    grid-template-columns: minmax(240px, 1fr) minmax(150px, 0.7fr);
+  }
+
+  .hr-employees-page-filter .ds-toolbar-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .hr-employees-page-filter .ds-toolbar-form {
+    grid-template-columns: 1fr;
+  }
+}

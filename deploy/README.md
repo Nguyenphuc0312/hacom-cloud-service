@@ -1,10 +1,10 @@
-# chat-admin-panel deploy bundle
+﻿# chat-admin-panel deploy bundle
 
-This folder contains release-bundle artifacts used by CI/CD for server-test and production deploys.
+This folder contains release-bundle artifacts used by CI/CD for develop and production deploys.
 
 ## Compose files
 
-- deploy/compose/server-test.yml
+- deploy/compose/develop.yml
 - deploy/compose/production.yml
 
 ## Scripts
@@ -31,7 +31,41 @@ location /admin/ {
 }
 ```
 
-## Phase 4 write rollout notes (server-test)
+## Static asset rollout checks
+
+Every release must preserve these static-serving invariants:
+
+- The Vite bundle stays rooted at `/` and emits files under `/assets/`.
+- `dist/` must be rebuilt from a clean output directory before the image is created.
+- `index.html` must be served with `Cache-Control: no-store, no-cache, must-revalidate`.
+- Hashed assets under `/assets/*` must be served as the real file with `Cache-Control: public, immutable`.
+- Missing `/assets/*` requests must return `404`, never SPA fallback HTML.
+- Do not mount a host volume over `/usr/share/nginx/html`; let the image own the full release bundle.
+- All running replicas for the admin host must use the same image digest before traffic is considered healthy.
+
+Recommended smoke checks before and after deploy:
+
+```bash
+curl -I https://admin.example.com/
+curl -I https://admin.example.com/assets/<main-css>.css
+curl -I https://admin.example.com/assets/<main-js>.js
+curl -I https://admin.example.com/assets/__missing__.css
+```
+
+Expected results:
+
+- `/` returns `200 text/html` with `Cache-Control: no-store, no-cache, must-revalidate`
+- existing CSS returns `200 text/css`
+- existing JS returns `200 application/javascript` or `text/javascript`
+- missing CSS returns `404` and never `text/html`
+
+If the asset hash set changes and operators still see stale chunk or preload errors:
+
+1. Purge CDN/Cloudflare cache for the dedicated admin host.
+2. Hard reload the browser after the purge.
+3. Confirm the public host and every replica serve the same `index.html` asset hashes.
+
+## Phase 4 write rollout notes (develop)
 
 - Build-time flag `VITE_ADMIN_WRITE_ACTIONS_ENABLED` must be explicitly set to `true` only when backend write paths are verified.
 - Keep this flag aligned with backend runtime toggle `ADMIN_WRITE_ENABLED` in chat-admin-service to avoid UI/backend mismatch.

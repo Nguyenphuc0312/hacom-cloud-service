@@ -1,0 +1,54 @@
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-ops-detail-section,
+.ds-form-actions {
+  border-top-color: var(--border-subtle);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-form-section {
+  padding: var(--space-6);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-form-section-header {
+  margin-bottom: var(--space-5);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-form-section-title {
+  color: var(--text-heading);
+  font-size: var(--font-xl);
+  font-weight: var(--font-semibold);
+  letter-spacing: -0.02em;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-form-section-desc {
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-form-section-body {
+  gap: var(--space-6);
+}
+
+/* From src/styles/foundation/foundation.css */
+.ds-form-actions {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* From src/styles/global/global.css */
+.ds-form-section {
+  padding: var(--space-6);
+}
+
+/* From src/styles/global/global.css */
+.ds-form-actions {
+  position: static;
+  padding-top: var(--space-5);
+  margin-top: var(--space-5);
+}

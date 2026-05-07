@@ -1,0 +1,203 @@
+import { lazy, Suspense } from 'react';
+import type { ReactNode } from 'react';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
+
+import { RequireApprovedAccess } from '@/app/guards/RequireApprovedAccess/RequireApprovedAccess';
+import { RequireAuth } from '@/app/guards/RequireAuth/RequireAuth';
+import { RequireRole } from '@/app/guards/RequireRole/RequireRole';
+import { AppLayout } from '@/app/layout/AppLayout/AppLayout';
+import { QueryStateView } from '@/components/QueryStates/QueryStates';
+
+const LoginPage = lazy(() =>
+  import('@/features/auth/pages/LoginPage/LoginPage').then((module) => ({ default: module.LoginPage })),
+);
+const DashboardPage = lazy(() =>
+  import('@/features/dashboard/pages/DashboardPage/DashboardPage').then((module) => ({
+    default: module.DashboardPage,
+  })),
+);
+const UsersPage = lazy(() =>
+  import('@/features/users/pages/UsersPage/UsersPage').then((module) => ({ default: module.UsersPage })),
+);
+const UserDetailPage = lazy(() =>
+  import('@/features/users/pages/UserDetailPage/UserDetailPage').then((module) => ({
+    default: module.UserDetailPage,
+  })),
+);
+const HREmployeesPage = lazy(() =>
+  import('@/features/hr-employees/pages/HREmployeesPage/HREmployeesPage').then((module) => ({
+    default: module.HREmployeesPage,
+  })),
+);
+const AuditLogPage = lazy(() =>
+  import('@/features/audit/pages/AuditLogPage/AuditLogPage').then((module) => ({
+    default: module.AuditLogPage,
+  })),
+);
+const SystemLogsPage = lazy(() =>
+  import('@/features/system-logs/pages/SystemLogsPage/SystemLogsPage').then((module) => ({
+    default: module.SystemLogsPage,
+  })),
+);
+const ServicesPage = lazy(() =>
+  import('@/features/services/pages/ServicesPage/ServicesPage').then((module) => ({
+    default: module.ServicesPage,
+  })),
+);
+const SettingsPage = lazy(() =>
+  import('@/features/settings/pages/SettingsPage/SettingsPage').then((module) => ({
+    default: module.SettingsPage,
+  })),
+);
+const MonitoringOverviewPage = lazy(() =>
+  import('@/features/monitoring/pages/MonitoringOverviewPage/MonitoringOverviewPage').then((module) => ({
+    default: module.MonitoringOverviewPage,
+  })),
+);
+const ConversationsPage = lazy(() =>
+  import('@/features/conversations/pages/ConversationsPage/ConversationsPage').then((module) => ({
+    default: module.ConversationsPage,
+  })),
+);
+const AccessPendingPage = lazy(() =>
+  import('@/features/access/pages/AccessPendingPage/AccessPendingPage').then((module) => ({
+    default: module.AccessPendingPage,
+  })),
+);
+const AccessRequestsPage = lazy(() =>
+  import('@/features/access/pages/AccessRequestsPage/AccessRequestsPage').then((module) => ({
+    default: module.AccessRequestsPage,
+  })),
+);
+const AuthorityPage = lazy(() =>
+  import('@/features/authority/pages/AuthorityPage/AuthorityPage').then((module) => ({
+    default: module.AuthorityPage,
+  })),
+);
+const ProfilePage = lazy(() =>
+  import('@/features/profile/pages/ProfilePage/ProfilePage').then((module) => ({
+    default: module.ProfilePage,
+  })),
+);
+const NotFoundPage = lazy(() =>
+  import('@/features/errors/NotFoundPage/NotFoundPage').then((module) => ({
+    default: module.NotFoundPage,
+  })),
+);
+
+const withSuspense = (element: ReactNode) => (
+  <Suspense fallback={<QueryStateView kind="loading" title="Đang tải trang..." />}>
+    {element}
+  </Suspense>
+);
+
+const routes = [
+  {
+    path: '/login',
+    element: withSuspense(<LoginPage />),
+  },
+  {
+    path: '/access',
+    element: (
+      <RequireAuth>
+        {withSuspense(<AccessPendingPage />)}
+      </RequireAuth>
+    ),
+  },
+  {
+    path: '/',
+    element: (
+      <RequireAuth>
+        <RequireApprovedAccess>
+          <AppLayout />
+        </RequireApprovedAccess>
+      </RequireAuth>
+    ),
+    children: [
+      {
+        index: true,
+        element: withSuspense(<DashboardPage />),
+      },
+      {
+        path: 'services',
+        element: <Navigate to="/services/health" replace />,
+      },
+      {
+        path: 'services/health',
+        element: withSuspense(<ServicesPage />),
+      },
+      {
+        path: 'services/smtp',
+        element: <Navigate to="/settings/smtp" replace />,
+      },
+      {
+        path: 'services/email-templates',
+        element: <Navigate to="/settings/email-templates" replace />,
+      },
+      {
+        path: 'settings',
+        element: <Navigate to="/settings/smtp" replace />,
+      },
+      {
+        path: 'settings/:section',
+        element: withSuspense(<SettingsPage />),
+      },
+      {
+        path: 'monitoring',
+        element: withSuspense(<MonitoringOverviewPage />),
+      },
+      {
+        path: 'conversations',
+        element: withSuspense(<ConversationsPage />),
+      },
+      {
+        path: 'logs',
+        element: withSuspense(<SystemLogsPage />),
+      },
+      {
+        path: 'users',
+        element: withSuspense(<UsersPage />),
+      },
+      {
+        path: 'authority',
+        element: (
+          <RequireRole roles={['super_admin']}>
+            {withSuspense(<AuthorityPage />)}
+          </RequireRole>
+        ),
+      },
+      {
+        path: 'users/:id',
+        element: withSuspense(<UserDetailPage />),
+      },
+      {
+        path: 'hr-employees',
+        element: withSuspense(<HREmployeesPage />),
+      },
+      {
+        path: 'audit',
+        element: withSuspense(<AuditLogPage />),
+      },
+      {
+        path: 'access-requests',
+        element: withSuspense(<AccessRequestsPage />),
+      },
+      {
+        path: 'profile',
+        element: withSuspense(<ProfilePage />),
+      },
+      {
+        path: '*',
+        element: withSuspense(<NotFoundPage />),
+      },
+    ],
+  },
+];
+
+const rawBaseName = import.meta.env.BASE_URL || '/';
+const baseName =
+  rawBaseName.endsWith('/') && rawBaseName !== '/' ? rawBaseName.slice(0, -1) : rawBaseName;
+
+export const router = createBrowserRouter(routes, {
+  basename: baseName === '/' ? undefined : baseName,
+});

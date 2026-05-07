@@ -1,0 +1,348 @@
+/*
+ * Responsive admin safety layer.
+ * Imported last from main.tsx so feature pages inherit sane viewport behavior
+ * without duplicating one-off media queries.
+ */
+
+html {
+  overflow-x: hidden;
+}
+
+body,
+#root {
+  min-width: 320px;
+}
+
+.ds-admin-shell,
+.ds-admin-main,
+.ds-admin-main-content,
+.ds-page-container,
+.ds-page-shell,
+.ds-page-shell-body {
+  min-width: 0;
+}
+
+.ds-admin-main-content {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.ds-page-container {
+  width: 100%;
+  max-width: none !important;
+  margin: 0 !important;
+  padding-inline: clamp(12px, 1.8vw, 28px) !important;
+  padding-block: clamp(12px, 1.4vw, 24px) !important;
+}
+
+.ds-page-header,
+.ds-page-toolbar-stack,
+.ds-page-toolbar-group,
+.ds-table-shell-header,
+.ds-data-table-toolbar,
+.ds-filter-toolbar,
+.ds-toolbar-form,
+.ds-toolbar-actions {
+  min-width: 0;
+}
+
+.ds-page-toolbar-stack,
+.ds-page-toolbar-group,
+.ds-data-table-toolbar,
+.ds-toolbar-actions {
+  flex-wrap: wrap;
+}
+
+.ds-filter-toolbar .ant-form,
+.ds-toolbar-form {
+  width: 100%;
+}
+
+.ds-filter-toolbar .ant-input-affix-wrapper,
+.ds-filter-toolbar .ant-input,
+.ds-filter-toolbar .ant-select,
+.ds-filter-toolbar .ant-select-selector,
+.ds-toolbar-form .ant-input-affix-wrapper,
+.ds-toolbar-form .ant-input,
+.ds-toolbar-form .ant-select,
+.ds-toolbar-form .ant-select-selector {
+  min-width: 0;
+}
+
+.ds-dashboard-layout,
+.ds-data-summary-grid,
+.ds-settings-summary-grid,
+.ds-monitoring-kpi-grid,
+.ds-detail-overview-grid,
+.ds-detail-grid,
+.ds-settings-layout,
+.ds-settings-form-grid,
+.ds-admin-form-grid,
+.json-diff-grid {
+  min-width: 0;
+}
+
+.ds-table-shell,
+.ds-table-shell-body,
+.admin-table,
+.admin-table-inner,
+.ant-table-wrapper,
+.ant-table,
+.ant-table-container,
+.ant-table-content {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.admin-table {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-table .ant-table {
+  width: max-content;
+  min-width: 100%;
+}
+
+.admin-table .ant-table-cell,
+.admin-table .ant-table-thead > tr > th,
+.admin-table .ant-table-tbody > tr > td {
+  overflow-wrap: anywhere;
+}
+
+.admin-table .ant-pagination {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.ds-ui-surface-card,
+.ds-summary-tile,
+.ds-ops-summary-item,
+.ds-stat-card,
+.ds-table-shell,
+.ds-form-section {
+  min-width: 0;
+}
+
+.ds-ui-surface-card-title,
+.ds-table-shell-title,
+.ds-page-header-title,
+.ds-page-header-title .ant-typography {
+  overflow-wrap: anywhere;
+}
+
+.ant-drawer-content-wrapper {
+  max-width: 100vw;
+}
+
+.ds-app-drawer .ant-drawer-body {
+  overflow-x: hidden;
+}
+
+.ant-modal {
+  max-width: calc(100vw - 24px);
+}
+
+.ant-modal-content,
+.ant-modal-body {
+  min-width: 0;
+}
+
+@media (max-width: 1440px) {
+  .ds-page-container {
+    padding-inline: 18px !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  .ds-data-summary-grid,
+  .ds-settings-summary-grid,
+  .ds-monitoring-kpi-grid,
+  .ds-detail-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .ds-settings-layout,
+  .json-diff-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .ds-settings-nav {
+    position: static !important;
+  }
+
+  .ds-page-with-detail {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .ds-detail-panel {
+    position: static !important;
+    max-height: none !important;
+  }
+}
+
+@media (max-width: 920px) {
+  .ds-admin-shell {
+    display: block;
+  }
+
+  .ds-admin-main,
+  .ds-admin-shell.is-collapsed .ds-admin-main {
+    width: 100% !important;
+    flex-basis: auto !important;
+  }
+
+  .ds-page-header {
+    align-items: flex-start !important;
+    flex-direction: column;
+    gap: 10px !important;
+  }
+
+  .ds-page-header-actions,
+  .ds-page-header-meta,
+  .ds-page-toolbar-group--secondary {
+    justify-content: flex-start !important;
+    width: 100%;
+  }
+
+  .ds-table-shell-header {
+    align-items: stretch !important;
+    flex-direction: column;
+    gap: 10px !important;
+  }
+
+  .ds-data-table-toolbar,
+  .ds-toolbar-actions {
+    width: 100%;
+  }
+
+  .ds-filter-toolbar .ant-btn,
+  .ds-toolbar-actions .ant-btn,
+  .ds-data-table-toolbar .ant-btn {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .ds-page-container {
+    padding-inline: 12px !important;
+    padding-block: 12px !important;
+  }
+
+  .ds-page-shell,
+  .ds-page-shell-body {
+    gap: 8px !important;
+  }
+
+  .ds-page-header-title,
+  .ds-page-header-title .ant-typography {
+    font-size: 22px !important;
+    line-height: 1.18 !important;
+  }
+
+  .ds-page-header-description {
+    font-size: 13px !important;
+    line-height: 1.45 !important;
+  }
+
+  .ds-data-summary-grid,
+  .ds-settings-summary-grid,
+  .ds-monitoring-kpi-grid,
+  .ds-detail-overview-grid,
+  .ds-detail-grid,
+  .ds-dashboard-layout,
+  .ds-settings-form-grid,
+  .ds-admin-form-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .ds-dashboard-span-2,
+  .ds-dashboard-span-3,
+  .ds-dashboard-span-4,
+  .ds-dashboard-span-5,
+  .ds-dashboard-span-7,
+  .ds-dashboard-span-8,
+  .ds-dashboard-span-12 {
+    grid-column: span 1 !important;
+  }
+
+  .ds-filter-toolbar .ant-form,
+  .ds-toolbar-form,
+  .ds-admin-override-row {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .ds-filter-toolbar .ant-form-item,
+  .ds-toolbar-field,
+  .ds-toolbar-actions,
+  .ds-filter-toolbar .ant-input-affix-wrapper,
+  .ds-filter-toolbar .ant-select,
+  .ds-filter-toolbar .ant-btn,
+  .ds-toolbar-form .ant-input-affix-wrapper,
+  .ds-toolbar-form .ant-select,
+  .ds-toolbar-form .ant-btn {
+    width: 100% !important;
+  }
+
+  .ds-settings-action-bar {
+    align-items: stretch !important;
+    flex-direction: column;
+  }
+
+  .ds-settings-action-bar .ant-space,
+  .ds-settings-action-bar .ant-btn {
+    width: 100%;
+  }
+
+  .ds-app-drawer .ant-drawer-content-wrapper {
+    width: 100vw !important;
+  }
+
+  .ds-app-drawer .ant-drawer-header,
+  .ds-app-drawer .ant-drawer-body,
+  .ds-app-drawer .ant-drawer-footer {
+    padding-inline: 14px;
+  }
+
+  .ds-app-drawer .ds-detail-list-item {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .ant-modal {
+    top: 12px;
+  }
+}
+
+@media (max-width: 520px) {
+  .ds-page-container {
+    padding-inline: 10px !important;
+  }
+
+  .ds-page-header-title,
+  .ds-page-header-title .ant-typography {
+    font-size: 20px !important;
+  }
+
+  .ds-table-shell,
+  .ds-ui-surface-card,
+  .ds-form-section {
+    border-radius: 8px !important;
+  }
+
+  .ds-table-shell-header,
+  .ds-ui-surface-card,
+  .ds-form-section {
+    padding-inline: 12px !important;
+  }
+
+  .admin-table .ant-table-thead > tr > th,
+  .admin-table .ant-table-tbody > tr > td {
+    padding-inline: 10px !important;
+  }
+
+  .admin-table .ant-pagination {
+    justify-content: flex-start !important;
+  }
+}

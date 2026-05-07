@@ -26,6 +26,10 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     // Keep the production bundle rooted at the host root so one build can be deployed everywhere.
     base: '/',
+    build: {
+      assetsDir: 'assets',
+      emptyOutDir: true,
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
@@ -51,7 +55,7 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: 'jsdom',
       globals: true,
-      setupFiles: './src/test/setup.ts',
+      setupFiles: './src/test/setup/setup.ts',
     },
   };
 });

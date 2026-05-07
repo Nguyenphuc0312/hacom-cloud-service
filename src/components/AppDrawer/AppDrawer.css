@@ -1,0 +1,269 @@
+/* From src/styles/classic-admin/classic-admin.css */
+.ds-app-drawer-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-app-drawer-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* From src/styles/figma-dashboard/figma-dashboard.css */
+.ds-app-drawer-footer .ant-space {
+  display: flex;
+  align-items: center;
+  gap: 12px !important;
+}
+
+/* From src/styles/global/global.css */
+.json-diff-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+}
+
+/* From src/styles/global/global.css */
+.json-panel {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px;
+  width: 100%;
+}
+
+/* From src/styles/global/global.css */
+.json-panel h4 {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+/* From src/styles/global/global.css */
+.json-block {
+  margin: 0;
+  max-height: 58vh;
+  overflow: auto;
+  font-size: 12px;
+  font-family: Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Production detail drawers */
+.ds-app-drawer .ant-drawer-content {
+  background: #ffffff;
+}
+
+.ds-app-drawer .ant-drawer-header {
+  min-height: 56px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e5eaf1;
+}
+
+.ds-app-drawer .ant-drawer-close {
+  width: 32px;
+  height: 32px;
+  margin-inline-end: 8px;
+  border-radius: 8px;
+  color: #64748b;
+}
+
+.ds-app-drawer .ant-drawer-close:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.ds-app-drawer .ant-drawer-title {
+  color: #0f172a;
+  font-size: 17px;
+  font-weight: 760;
+  line-height: 1.25;
+}
+
+.ds-app-drawer .ant-drawer-body {
+  padding: 16px 18px 20px;
+  background:
+    linear-gradient(180deg, #f8fafc 0, #ffffff 108px),
+    #ffffff;
+}
+
+.ds-app-drawer .ant-drawer-footer {
+  padding: 12px 18px;
+  border-top: 1px solid #e5eaf1;
+  background: #ffffff;
+}
+
+.ds-app-drawer .ds-settings-stack {
+  gap: 12px !important;
+}
+
+.ds-app-drawer .ds-detail-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 10px;
+}
+
+.ds-app-drawer .ds-summary-tile {
+  min-height: 94px;
+  padding: 12px;
+  gap: 6px;
+  border: 1px solid #e5eaf1;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.ds-app-drawer .ds-summary-tile-label {
+  color: #64748b;
+  font-size: 11px !important;
+  font-weight: 740;
+  line-height: 1.25;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.ds-app-drawer .ds-summary-tile-value {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: #0f172a;
+  font-size: 22px !important;
+  font-weight: 780;
+  line-height: 1.08 !important;
+  letter-spacing: 0 !important;
+}
+
+.ds-app-drawer .ds-summary-tile-meta {
+  color: #64748b;
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+}
+
+.ds-app-drawer .ds-ui-surface-card {
+  padding: 14px 16px !important;
+  border: 1px solid #e5eaf1 !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.ds-app-drawer .ds-ui-surface-card-header {
+  margin-bottom: 12px !important;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.ds-app-drawer .ds-ui-surface-card-eyebrow {
+  margin-bottom: 2px !important;
+  color: #64748b !important;
+  font-size: 11px !important;
+  letter-spacing: 0.04em !important;
+}
+
+.ds-app-drawer .ds-ui-surface-card-title {
+  min-width: 0;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 17px !important;
+  line-height: 1.25 !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-app-drawer .ds-ui-surface-card-description {
+  display: none;
+}
+
+.ds-app-drawer .ds-detail-list {
+  gap: 0;
+}
+
+.ds-app-drawer .ds-detail-list-item {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.ds-app-drawer .ds-detail-list-item:first-child {
+  padding-top: 0;
+}
+
+.ds-app-drawer .ds-detail-list-item:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.ds-app-drawer .ds-detail-list-item span {
+  color: #64748b;
+  font-size: 11px !important;
+  font-weight: 740;
+  line-height: 1.35;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ds-app-drawer .ds-detail-list-item strong,
+.ds-app-drawer .ds-detail-list-item a {
+  min-width: 0;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 14px !important;
+  font-weight: 700;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.ds-app-drawer .ant-input,
+.ds-app-drawer .ant-input-affix-wrapper,
+.ds-app-drawer .ant-select-selector {
+  border-radius: 8px !important;
+}
+
+.ds-app-drawer .ds-admin-form-grid {
+  gap: 10px;
+}
+
+.ds-app-drawer .ds-admin-inline-actions,
+.ds-app-drawer .ds-settings-action-bar {
+  gap: 8px;
+}
+
+.ds-app-drawer .ds-settings-action-bar {
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #eef2f7;
+}
+
+.ds-app-drawer .ds-settings-action-copy {
+  display: none;
+}
+
+.ds-app-drawer .ds-admin-override-row {
+  grid-template-columns: minmax(0, 1fr) 150px auto;
+  gap: 8px;
+}
+
+.ds-app-drawer .ds-admin-chip-list {
+  gap: 6px;
+}
+
+@media (max-width: 720px) {
+  .ds-app-drawer .ds-detail-overview-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .ds-app-drawer .ds-detail-list-item {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .ds-app-drawer .ds-admin-override-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

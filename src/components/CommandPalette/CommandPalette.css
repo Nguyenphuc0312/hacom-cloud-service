@@ -1,0 +1,187 @@
+/* From src/styles/foundation/foundation.css */
+.command-palette-modal .ant-modal-content {
+  border: 1px solid var(--border-subtle);
+  background: var(--gradient-card);
+  box-shadow: var(--shadow-lg);
+}
+
+/* From src/styles/foundation/foundation.css */
+.command-palette-input-wrap {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* From src/styles/foundation/foundation.css */
+.command-palette-group-title,
+.command-palette-footer,
+.command-palette-item-description,
+.command-palette-empty {
+  color: var(--text-muted);
+}
+
+/* From src/styles/foundation/foundation.css */
+.command-palette-item {
+  border-color: transparent;
+}
+
+/* From src/styles/foundation/foundation.css */
+.command-palette-item:hover {
+  background: var(--color-card-muted);
+  border-color: var(--border-subtle);
+}
+
+/* From src/styles/foundation/foundation.css */
+.command-palette-item.is-active {
+  background: var(--color-accent-soft);
+  border-color: color-mix(in srgb, var(--brand-primary) 24%, transparent);
+}
+
+/* From src/styles/foundation/foundation.css */
+.command-palette-item-icon {
+  color: var(--text-secondary);
+}
+
+/* From src/styles/foundation/foundation.css */
+.command-palette-item-label {
+  color: var(--text-primary);
+}
+
+/* From src/styles/foundation/foundation.css */
+.command-palette-footer {
+  border-top-color: var(--border-subtle);
+  background: transparent;
+}
+
+/* From src/styles/global/global.css */
+.command-palette-modal .ant-modal-content {
+  border: 1px solid #dae3ef;
+  border-radius: 12px;
+  box-shadow: 0 24px 52px rgba(2, 6, 23, 0.2);
+  padding: 0;
+  overflow: hidden;
+}
+
+/* From src/styles/global/global.css */
+.command-palette-input-wrap {
+  padding: 14px;
+  border-bottom: 1px solid var(--admin-border);
+  background: #fcfdff;
+}
+
+/* From src/styles/global/global.css */
+.command-palette-input .ant-input {
+  font-size: 14px;
+}
+
+/* From src/styles/global/global.css */
+.command-palette-results {
+  max-height: 56vh;
+  overflow: auto;
+  padding: 8px;
+}
+
+/* From src/styles/global/global.css */
+.command-palette-group {
+  padding: 4px 4px 10px;
+}
+
+/* From src/styles/global/global.css */
+.command-palette-group-title {
+  display: inline-block;
+  margin: 0 4px 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+  color: #687588;
+}
+
+/* From src/styles/global/global.css */
+.command-palette-item {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  text-align: left;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    transform 120ms ease;
+}
+
+/* From src/styles/global/global.css */
+.command-palette-item:hover {
+  background: #f6f9fe;
+  border-color: #d3dde8;
+}
+
+/* From src/styles/global/global.css */
+.command-palette-item:focus-visible {
+  outline: 2px solid rgba(29, 78, 216, 0.36);
+  outline-offset: 1px;
+}
+
+/* From src/styles/global/global.css */
+.command-palette-item.is-active {
+  background: #edf4ff;
+  border-color: #c4d6f3;
+  transform: translateX(1px);
+}
+
+/* From src/styles/global/global.css */
+.command-palette-item:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* From src/styles/global/global.css */
+.command-palette-item-icon {
+  width: 18px;
+  display: inline-flex;
+  justify-content: center;
+  color: #37537a;
+  padding-top: 2px;
+}
+
+/* From src/styles/global/global.css */
+.command-palette-item-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* From src/styles/global/global.css */
+.command-palette-item-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+/* From src/styles/global/global.css */
+.command-palette-item-description {
+  font-size: 12px;
+  color: #5d6878;
+}
+
+/* From src/styles/global/global.css */
+.command-palette-empty {
+  padding: 28px 20px;
+  text-align: center;
+  font-size: 13px;
+  color: #5d6878;
+}
+
+/* From src/styles/global/global.css */
+.command-palette-footer {
+  border-top: 1px solid var(--admin-border);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #5d6878;
+  background: #fcfdff;
+}
