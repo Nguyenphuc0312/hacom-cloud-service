@@ -47,6 +47,10 @@ if [ ! -f "${SERVER_RUNTIME_ENV_FILE}" ]; then
   echo "Runtime env file does not exist on server: ${SERVER_RUNTIME_ENV_FILE}" >&2
   exit 1
 fi
+if [ ! -r "${SERVER_RUNTIME_ENV_FILE}" ]; then
+  echo "Runtime env file is not readable on server: ${SERVER_RUNTIME_ENV_FILE}" >&2
+  exit 1
+fi
 
 if [ ! -f "${COMPOSE_FILE}" ]; then
   echo "Compose file does not exist: ${COMPOSE_FILE}" >&2
@@ -85,6 +89,31 @@ dump_diagnostics() {
   compose logs --tail=200 "${RUNTIME_SERVICE}" || true
 }
 
+validate_runtime_service() {
+  local services
+  services="$(compose config --services)"
+
+  if ! printf '%s\n' "${services}" | grep -Fx -- "${RUNTIME_SERVICE}" >/dev/null; then
+    echo "Runtime service was not found in compose config: ${RUNTIME_SERVICE}" >&2
+    echo "Available services:" >&2
+    printf '%s\n' "${services}" >&2
+    exit 1
+  fi
+}
+
+probe_healthcheck_url() {
+  if [[ -z "${HEALTHCHECK_URL:-}" ]]; then
+    return 1
+  fi
+
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsS "${HEALTHCHECK_URL}" >/dev/null
+    return 0
+  fi
+
+  wget -qO- "${HEALTHCHECK_URL}" >/dev/null
+}
+
 verify_health() {
   local attempts=30
   local sleep_seconds=5
@@ -97,7 +126,7 @@ verify_health() {
       return 0
     fi
 
-    if [[ -n "${HEALTHCHECK_URL:-}" ]] && compose exec -T "${RUNTIME_SERVICE}" sh -lc "wget -qO- '${HEALTHCHECK_URL}' >/dev/null"; then
+    if probe_healthcheck_url; then
       echo "Health check passed on attempt ${i} via ${HEALTHCHECK_URL}"
       return 0
     fi
@@ -111,8 +140,9 @@ verify_health() {
 trap 'echo "Deploy failed"; dump_diagnostics' ERR
 
 compose config -q
+validate_runtime_service
 docker pull "${IMAGE_REF}"
-compose up -d --no-deps --force-recreate "${RUNTIME_SERVICE}"
+compose up -d --remove-orphans --force-recreate "${RUNTIME_SERVICE}"
 verify_health
 
 compose ps

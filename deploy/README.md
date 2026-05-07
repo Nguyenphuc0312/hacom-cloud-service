@@ -23,6 +23,27 @@ This folder contains release-bundle artifacts used by CI/CD for develop and prod
   - `APP_DIR="$SERVER_APPS_ROOT/$SERVICE_NAME"`
   - `RELEASE_DIR="$APP_DIR/current"`
 
+## Production runtime env baseline
+
+The server runtime env file is required even for this static panel so compose, host-port routing, and health checks stay app-scoped.
+
+Example:
+
+```env
+NODE_ENV=production
+CHAT_ADMIN_PANEL_HOST_PORT=3402
+```
+
+Recommended GitHub Environment production vars:
+
+- `DEPLOY_ENV=production`
+- `SERVICE_NAME=chat-admin-panel`
+- `SERVER_APPS_ROOT=/opt/hacom-prod/apps`
+- `SERVER_RUNTIME_ENV_FILE=/opt/hacom-prod/env/production/chat-admin-panel.env`
+- `HEALTHCHECK_URL=http://127.0.0.1:3402/healthz`
+
+`HEALTHCHECK_URL` must be an absolute `http://` or `https://` URL. Do not use a path-only value like `/healthz`.
+
 ## Compose files
 
 - deploy/compose/develop.yml

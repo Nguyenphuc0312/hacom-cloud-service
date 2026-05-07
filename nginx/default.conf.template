@@ -12,8 +12,9 @@ server {
     add_header Content-Security-Policy "default-src 'self'; connect-src 'self' http: https: https://cloudflareinsights.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' https://static.cloudflareinsights.com; base-uri 'self'; frame-ancestors 'none'; form-action 'self'" always;
 
     location = /healthz {
-        add_header Content-Type text/plain;
-        return 200 'ok';
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
     }
 
     location ^~ /assets/ {

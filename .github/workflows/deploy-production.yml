@@ -177,7 +177,7 @@ jobs:
           case "${HEALTHCHECK_URL_CLEAN}" in
             http://*|https://*) ;;
             *)
-              echo "Invalid app deploy configuration: HEALTHCHECK_URL must start with http:// or https://"
+              echo "HEALTHCHECK_URL must start with http:// or https://"
               exit 1
               ;;
           esac
@@ -201,11 +201,11 @@ jobs:
             exit 1
           fi
           if [[ "${VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN}" != "true" && "${VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN}" != "false" ]]; then
-            echo "::error title=Invalid input::vars.VITE_ADMIN_WRITE_ACTIONS_ENABLED must be true or false"
+            echo "Invalid VITE_ADMIN_WRITE_ACTIONS_ENABLED: must be true or false"
             exit 1
           fi
           if [[ "${VITE_ADMIN_API_ROOT_CLEAN}" != "${VITE_ADMIN_API_BASE_URL_CLEAN}" ]]; then
-            echo "::error title=Invalid input::vars.VITE_ADMIN_API_ROOT and vars.VITE_ADMIN_API_BASE_URL must resolve to the same admin root"
+            echo "VITE_ADMIN_API_ROOT and VITE_ADMIN_API_BASE_URL must match"
             exit 1
           fi
 
@@ -217,7 +217,7 @@ jobs:
             exit 1
           fi
           if ! [[ "${SERVER_PORT_CLEAN}" =~ ^[0-9]+$ ]]; then
-            echo "SERVER_PORT secret must be digits only"
+            echo "SERVER_PORT must contain digits only"
             exit 1
           fi
           case "${SERVER_RUNTIME_ENV_FILE_CLEAN}" in

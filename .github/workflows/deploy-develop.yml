@@ -33,6 +33,7 @@ jobs:
           SERVER_APPS_ROOT: ${{ vars.SERVER_APPS_ROOT }}
           SERVICE_NAME: ${{ vars.SERVICE_NAME }}
           DEPLOY_ENV: ${{ vars.DEPLOY_ENV }}
+          SERVER_RUNTIME_ENV_FILE: ${{ vars.SERVER_RUNTIME_ENV_FILE }}
           HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL }}
           VITE_ADMIN_API_ROOT: ${{ vars.VITE_ADMIN_API_ROOT }}
           VITE_ADMIN_API_BASE_URL: ${{ vars.VITE_ADMIN_API_BASE_URL }}
@@ -106,6 +107,13 @@ jobs:
           if [[ -z "${HEALTHCHECK_URL_CLEAN}" ]]; then
             HEALTHCHECK_URL_CLEAN="http://127.0.0.1/healthz"
           fi
+          case "${HEALTHCHECK_URL_CLEAN}" in
+            http://*|https://*) ;;
+            *)
+              echo "HEALTHCHECK_URL must start with http:// or https://"
+              exit 1
+              ;;
+          esac
           if [[ -z "${VITE_ADMIN_API_ROOT_CLEAN}" ]]; then
             VITE_ADMIN_API_ROOT_CLEAN="/api/v1/admin"
           fi
@@ -126,16 +134,21 @@ jobs:
             exit 1
           fi
           if [[ "${VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN}" != "true" && "${VITE_ADMIN_WRITE_ACTIONS_ENABLED_CLEAN}" != "false" ]]; then
-            echo "::error title=Invalid input::vars.VITE_ADMIN_WRITE_ACTIONS_ENABLED must be true or false"
+            echo "Invalid VITE_ADMIN_WRITE_ACTIONS_ENABLED: must be true or false"
             exit 1
           fi
           if [[ "${VITE_ADMIN_API_ROOT_CLEAN}" != "${VITE_ADMIN_API_BASE_URL_CLEAN}" ]]; then
-            echo "::error title=Invalid input::vars.VITE_ADMIN_API_ROOT and vars.VITE_ADMIN_API_BASE_URL must resolve to the same admin root"
+            echo "VITE_ADMIN_API_ROOT and VITE_ADMIN_API_BASE_URL must match"
             exit 1
           fi
 
           require_multiline "secrets.SERVER_SSH_KEY" "${SERVER_SSH_KEY}"
           require_multiline "secrets.SERVER_SSH_KNOWN_HOSTS" "${SERVER_SSH_KNOWN_HOSTS}"
+
+          if ! [[ "${SERVER_PORT_CLEAN}" =~ ^[0-9]+$ ]]; then
+            echo "SERVER_PORT must contain digits only"
+            exit 1
+          fi
 
           IMAGE_OWNER="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
           IMAGE_REF="ghcr.io/${IMAGE_OWNER}/chat-admin-panel:${GITHUB_SHA}"
@@ -321,7 +334,7 @@ jobs:
             set -a
             . ./.release.env
             set +a
-            docker compose -f "${COMPOSE_FILE}" ps || true
-            docker compose -f "${COMPOSE_FILE}" logs --tail=200 chat-admin-panel || true
+            docker compose --env-file "${SERVER_RUNTIME_ENV_FILE}" -p "${COMPOSE_PROJECT_NAME}" -f "${COMPOSE_FILE}" ps || true
+            docker compose --env-file "${SERVER_RUNTIME_ENV_FILE}" -p "${COMPOSE_PROJECT_NAME}" -f "${COMPOSE_FILE}" logs --tail=200 chat-admin-panel || true
           fi
           EOF
