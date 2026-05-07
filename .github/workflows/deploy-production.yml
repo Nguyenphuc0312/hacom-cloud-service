@@ -38,6 +38,8 @@ jobs:
       SERVICE_NAME: ${{ vars.SERVICE_NAME }}
       SERVER_APPS_ROOT: ${{ vars.SERVER_APPS_ROOT }}
       SERVER_HOST: ${{ secrets.SERVER_HOST }}
+      SERVER_INFRA_ENV_FILE: ${{ vars.SERVER_INFRA_ENV_FILE }}
+      SERVER_INFRA_ROOT: ${{ vars.SERVER_INFRA_ROOT }}
       SERVER_PORT: ${{ secrets.SERVER_PORT }}
       SERVER_USER: ${{ secrets.SERVER_USER }}
       SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
@@ -70,7 +72,7 @@ jobs:
           SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
         run: |
           set -euo pipefail
-          for var in DEPLOY_ENV SERVER_HOST SERVER_PORT SERVER_USER SERVER_SSH_KEY SERVER_SSH_KNOWN_HOSTS GHCR_PULL_USERNAME GHCR_PULL_TOKEN SERVER_APPS_ROOT HEALTHCHECK_URL SERVICE_NAME; do
+          for var in DEPLOY_ENV SERVER_HOST SERVER_INFRA_ENV_FILE SERVER_INFRA_ROOT SERVER_PORT SERVER_USER SERVER_SSH_KEY SERVER_SSH_KNOWN_HOSTS GHCR_PULL_USERNAME GHCR_PULL_TOKEN SERVER_APPS_ROOT HEALTHCHECK_URL SERVICE_NAME; do
             if [ -n "${!var:-}" ]; then
               echo "${var}=SET"
             else
@@ -89,6 +91,8 @@ jobs:
           VITE_APP_ENV: ${{ vars.VITE_APP_ENV }}
           VITE_DASHBOARD_REFETCH_INTERVAL_MS: ${{ vars.VITE_DASHBOARD_REFETCH_INTERVAL_MS }}
           VITE_ADMIN_WRITE_ACTIONS_ENABLED: ${{ vars.VITE_ADMIN_WRITE_ACTIONS_ENABLED }}
+          SERVER_INFRA_ENV_FILE: ${{ vars.SERVER_INFRA_ENV_FILE }}
+          SERVER_INFRA_ROOT: ${{ vars.SERVER_INFRA_ROOT }}
           SERVER_PORT: ${{ secrets.SERVER_PORT }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
@@ -133,6 +137,8 @@ jobs:
           }
 
           SERVER_APPS_ROOT_CLEAN="$(require_single_line "vars.SERVER_APPS_ROOT" "${SERVER_APPS_ROOT}")"
+          SERVER_INFRA_ENV_FILE_CLEAN="$(require_single_line "vars.SERVER_INFRA_ENV_FILE" "${SERVER_INFRA_ENV_FILE}")"
+          SERVER_INFRA_ROOT_CLEAN="$(require_single_line "vars.SERVER_INFRA_ROOT" "${SERVER_INFRA_ROOT}")"
           SERVICE_NAME_CLEAN="$(require_single_line "vars.SERVICE_NAME" "${SERVICE_NAME}")"
           DEPLOY_ENV_CLEAN="$(require_single_line "vars.DEPLOY_ENV" "${DEPLOY_ENV}")"
           SERVER_PORT_CLEAN="$(require_single_line "secrets.SERVER_PORT" "${SERVER_PORT}")"
@@ -203,6 +209,8 @@ jobs:
 
           {
             printf 'SERVER_APPS_ROOT_CLEAN=%s\n' "${SERVER_APPS_ROOT_CLEAN}"
+            printf 'SERVER_INFRA_ENV_FILE_CLEAN=%s\n' "${SERVER_INFRA_ENV_FILE_CLEAN}"
+            printf 'SERVER_INFRA_ROOT_CLEAN=%s\n' "${SERVER_INFRA_ROOT_CLEAN}"
             printf 'SERVICE_NAME_CLEAN=%s\n' "${SERVICE_NAME_CLEAN}"
             printf 'DEPLOY_ENV_CLEAN=%s\n' "${DEPLOY_ENV_CLEAN}"
             printf 'SERVER_PORT_CLEAN=%s\n' "${SERVER_PORT_CLEAN}"
@@ -328,6 +336,36 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           printf '%s\n' "${SERVER_SSH_KNOWN_HOSTS}" | tr -d '\r' > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
+
+      - name: Test SSH connection
+        run: |
+          set -Eeuo pipefail
+          PORT="${SERVER_PORT_CLEAN}"
+          ssh -i ~/.ssh/deploy_key \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=6 \
+            -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" \
+            'echo SSH_OK && whoami && hostname && docker --version && docker compose version'
+
+      - name: Verify server infrastructure
+        run: |
+          set -Eeuo pipefail
+          PORT="${SERVER_PORT_CLEAN}"
+          ssh -i ~/.ssh/deploy_key \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=6 \
+            -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" \
+            bash -se -- "${SERVER_APPS_ROOT_CLEAN}" "${SERVER_INFRA_ROOT_CLEAN}" "${SERVER_INFRA_ENV_FILE_CLEAN}" <<'ENDSSH'
+          set -Eeuo pipefail
+          test -d "$1" || { echo "Missing apps root: $1" >&2; exit 1; }
+          test -d "$2" || { echo "Missing infra root: $2" >&2; exit 1; }
+          test -f "$3" || { echo "Missing infra env file: $3" >&2; exit 1; }
+          docker network inspect chat-platform >/dev/null || { echo "Docker network chat-platform not found" >&2; exit 1; }
+          ENDSSH
 
       - name: Configure known_hosts, rsync, deploy
         id: deploy_remote
