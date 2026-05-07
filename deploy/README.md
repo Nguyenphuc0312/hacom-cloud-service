@@ -84,6 +84,7 @@ Every release must preserve these static-serving invariants:
 - Missing `/assets/*` requests must return `404`, never SPA fallback HTML.
 - Do not mount a host volume over `/usr/share/nginx/html`; let the image own the full release bundle.
 - All running replicas for the admin host must use the same image digest before traffic is considered healthy.
+- The runtime Nginx config is copied as a static file into `/etc/nginx/conf.d/default.conf`; do not route it through `/etc/nginx/templates` because envsubst would rewrite Nginx variables like `$uri`.
 
 Recommended smoke checks before and after deploy:
 
