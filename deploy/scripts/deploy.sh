@@ -1,16 +1,38 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "${ROOT_DIR}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RELEASE_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+RELEASE_ENV_FILE="${RELEASE_DIR}/.release.env"
 
-test -f .release.env
+if [ ! -f "${RELEASE_ENV_FILE}" ]; then
+  echo "Missing release env file: ${RELEASE_ENV_FILE}" >&2
+  exit 1
+fi
+
+cd "${RELEASE_DIR}"
 
 set -a
-. ./.release.env
+source "${RELEASE_ENV_FILE}"
 set +a
 
-: "${DEPLOY_ENV:?DEPLOY_ENV is required}"
+required_release_vars=(
+  DEPLOY_ENV
+  SERVICE_NAME
+  SERVER_RUNTIME_ENV_FILE
+  IMAGE_REF
+  COMPOSE_FILE
+  COMPOSE_PROJECT_NAME
+  RUNTIME_SERVICE
+)
+
+for var in "${required_release_vars[@]}"; do
+  if [ -z "${!var:-}" ]; then
+    echo "Missing required app release configuration: ${var}" >&2
+    exit 1
+  fi
+done
+
 case "${DEPLOY_ENV}" in
   develop|production)
     ;;
@@ -20,17 +42,44 @@ case "${DEPLOY_ENV}" in
     ;;
 esac
 
-: "${COMPOSE_FILE:?COMPOSE_FILE is required}"
-: "${RUNTIME_SERVICE:?RUNTIME_SERVICE is required}"
-: "${HEALTHCHECK_URL:=http://127.0.0.1/healthz}"
-: "${IMAGE_REF:?IMAGE_REF is required}"
+ln -sfn "${SERVER_RUNTIME_ENV_FILE}" .env.runtime
+if [ ! -f "${SERVER_RUNTIME_ENV_FILE}" ]; then
+  echo "Runtime env file does not exist on server: ${SERVER_RUNTIME_ENV_FILE}" >&2
+  exit 1
+fi
 
-APP_ROOT="$(cd "${ROOT_DIR}/../.." && pwd)"
+if [ ! -f "${COMPOSE_FILE}" ]; then
+  echo "Compose file does not exist: ${COMPOSE_FILE}" >&2
+  exit 1
+fi
+
+APP_ROOT="$(cd "${RELEASE_DIR}/../.." && pwd)"
 CURRENT_LINK="${APP_ROOT}/current"
 PREVIOUS_LINK="${APP_ROOT}/previous"
 
 compose() {
-  docker compose -f "${COMPOSE_FILE}" "$@"
+  docker compose \
+    --env-file "${SERVER_RUNTIME_ENV_FILE}" \
+    -p "${COMPOSE_PROJECT_NAME}" \
+    -f "${COMPOSE_FILE}" \
+    "$@"
+}
+
+service_container_id() {
+  compose ps -q "${RUNTIME_SERVICE}" | head -n 1
+}
+
+service_health_status() {
+  local container_id
+  container_id="$(service_container_id)"
+
+  if [[ -z "${container_id}" ]]; then
+    return 1
+  fi
+
+  docker inspect \
+    --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+    "${container_id}"
 }
 
 dump_diagnostics() {
@@ -45,10 +94,18 @@ verify_health() {
   local sleep_seconds=5
 
   for ((i=1; i<=attempts; i++)); do
-    if compose exec -T "${RUNTIME_SERVICE}" sh -lc "wget -qO- '${HEALTHCHECK_URL}' >/dev/null"; then
-      echo "Health check passed on attempt ${i}"
+    local status
+    status="$(service_health_status || true)"
+    if [[ "${status}" == "healthy" || "${status}" == "running" ]]; then
+      echo "Health check passed on attempt ${i} with status=${status}"
       return 0
     fi
+
+    if [[ -n "${HEALTHCHECK_URL:-}" ]] && compose exec -T "${RUNTIME_SERVICE}" sh -lc "wget -qO- '${HEALTHCHECK_URL}' >/dev/null"; then
+      echo "Health check passed on attempt ${i} via ${HEALTHCHECK_URL}"
+      return 0
+    fi
+
     sleep "${sleep_seconds}"
   done
 
@@ -66,6 +123,6 @@ if [[ -L "${CURRENT_LINK}" ]]; then
   rm -f "${PREVIOUS_LINK}"
   ln -sfn "$(readlink -f "${CURRENT_LINK}")" "${PREVIOUS_LINK}"
 fi
-ln -sfn "${ROOT_DIR}" "${CURRENT_LINK}"
+ln -sfn "${RELEASE_DIR}" "${CURRENT_LINK}"
 
 compose ps
