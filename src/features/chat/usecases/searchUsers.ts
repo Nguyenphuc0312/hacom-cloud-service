@@ -4,7 +4,7 @@ export const searchUsersUseCase = async (
   query: string,
   page = 1,
   limit = 20,
-  options?: { signal?: AbortSignal },
+  options?: { signal?: AbortSignal; includeSelf?: boolean },
 ) => {
   return chatApi.user.searchUsers(query, page, limit, options);
 };
