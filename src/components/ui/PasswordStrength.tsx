@@ -6,6 +6,7 @@
 import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
+import { PASSWORD_MIN_LENGTH } from "../../constants/passwordPolicy";
 import { calculatePasswordStrength } from "../../lib/validations";
 
 interface PasswordStrengthProps {
@@ -67,20 +68,23 @@ export const PasswordStrength: React.FC<PasswordStrengthProps> = ({
       {/* Password requirements */}
       <div className="text-xs text-text-muted space-y-0.5">
         <RequirementItem
-          met={password.length >= 8}
+          met={password.length >= PASSWORD_MIN_LENGTH}
           text={t("validation:strength.requirements.length")}
         />
         <RequirementItem
           met={/[a-z]/.test(password)}
           text={t("validation:strength.requirements.lowercase")}
+          optional
         />
         <RequirementItem
           met={/[A-Z]/.test(password)}
           text={t("validation:strength.requirements.uppercase")}
+          optional
         />
         <RequirementItem
           met={/[0-9]/.test(password)}
           text={t("validation:strength.requirements.number")}
+          optional
         />
         <RequirementItem
           met={/[^a-zA-Z0-9]/.test(password)}
