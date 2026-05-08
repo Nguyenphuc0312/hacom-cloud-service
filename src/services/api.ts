@@ -404,10 +404,18 @@ export const userApi = {
     query: string,
     page = 1,
     limit = 20,
-    options?: { signal?: AbortSignal },
+    options?: { signal?: AbortSignal; includeSelf?: boolean },
   ) => {
+    const searchParams = new URLSearchParams({
+      q: query,
+      page: String(page),
+      limit: String(limit),
+    });
+    if (options?.includeSelf) {
+      searchParams.set("includeSelf", "true");
+    }
     const response = await apiClient.get<ApiResponse<User[]>>(
-      `/users/search?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`,
+      `/users/search?${searchParams.toString()}`,
       { signal: options?.signal },
     );
     return response.data;

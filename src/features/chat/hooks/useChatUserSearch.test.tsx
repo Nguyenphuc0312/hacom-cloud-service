@@ -162,4 +162,38 @@ describe("useChatUserSearch helpers", () => {
       displayName: "Alice",
     });
   });
+
+  it("passes includeSelf through to the search use case when requested", async () => {
+    searchUsersUseCaseMock.mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: "current-user",
+          username: "self",
+          displayName: "Current User",
+          isFriend: false,
+          friendshipStatus: "none",
+        },
+      ],
+    } as never);
+
+    renderHook(() =>
+      useChatUserSearch("self", {
+        enabled: true,
+        includeSelf: true,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(searchUsersUseCaseMock).toHaveBeenCalledWith(
+        "self",
+        1,
+        20,
+        expect.objectContaining({
+          includeSelf: true,
+          signal: expect.any(AbortSignal),
+        }),
+      );
+    });
+  });
 });
