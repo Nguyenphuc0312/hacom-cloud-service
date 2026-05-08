@@ -39,10 +39,6 @@ export const loginSchema = z.object({
       i18nKey("validation:auth.passwordMax", {
         count: VALIDATION_CONFIG.PASSWORD_MAX_LENGTH,
       }),
-    )
-    .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-      i18nKey("validation:auth.passwordComplexity"),
     ),
   rememberMe: z.boolean().optional().default(false),
 });
@@ -72,10 +68,6 @@ export const registerSchema = z
         i18nKey("validation:auth.passwordMax", {
           count: VALIDATION_CONFIG.PASSWORD_MAX_LENGTH,
         }),
-      )
-      .regex(
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-        i18nKey("validation:auth.passwordComplexity"),
       ),
     confirmPassword: z
       .string()
@@ -125,10 +117,6 @@ export const resetPasswordSchema = z
         i18nKey("validation:auth.passwordMin", {
           count: VALIDATION_CONFIG.PASSWORD_MIN_LENGTH,
         }),
-      )
-      .regex(
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-        i18nKey("validation:auth.passwordComplexity"),
       ),
     confirmPassword: z
       .string()
@@ -185,10 +173,6 @@ export const changePasswordSchema = z
         i18nKey("validation:auth.passwordMin", {
           count: VALIDATION_CONFIG.PASSWORD_MIN_LENGTH,
         }),
-      )
-      .regex(
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-        i18nKey("validation:auth.passwordComplexity"),
       ),
     confirmPassword: z
       .string()

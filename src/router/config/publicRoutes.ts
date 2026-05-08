@@ -9,6 +9,9 @@ const ActivationFlowPage = lazy(
 const VerifyEmailPage = lazy(() => import("../../pages/VerifyEmailPage"));
 const ForgotPasswordPage = lazy(() => import("../../pages/ForgotPasswordPage"));
 const ResetPasswordPage = lazy(() => import("../../pages/ResetPasswordPage"));
+const ForceChangePasswordPage = lazy(
+  () => import("../../pages/ForceChangePasswordPage"),
+);
 
 /**
  * Public routes. Most are guest-only, but verification links must stay accessible
@@ -36,5 +39,11 @@ export const publicRoutes: AppRouteConfig[] = [
     path: ROUTE_PATHS.RESET_PASSWORD,
     component: ResetPasswordPage,
     guestOnly: true,
+  },
+  {
+    path: ROUTE_PATHS.FORCE_CHANGE_PASSWORD,
+    component: ForceChangePasswordPage,
+    guestOnly: false,
+    forceChangePasswordOnly: true,
   },
 ];

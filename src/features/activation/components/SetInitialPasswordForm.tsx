@@ -1,6 +1,11 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { Input, Button } from "../../../components/ui";
+<<<<<<< HEAD
+=======
+import { PASSWORD_MIN_LENGTH } from "../../../constants/passwordPolicy";
+import { calculatePasswordStrength } from "../../../lib/validations";
+>>>>>>> origin/main
 
 interface SetInitialPasswordFormProps {
   password: string;
@@ -65,8 +70,8 @@ export const SetInitialPasswordForm: React.FC<SetInitialPasswordFormProps> = ({
         isLoading={isSubmitting}
         disabled={
           isSubmitting ||
-          password.length < 8 ||
-          confirmPassword.length < 8 ||
+          password.length < PASSWORD_MIN_LENGTH ||
+          confirmPassword.length < PASSWORD_MIN_LENGTH ||
           password !== confirmPassword
         }
         onClick={() => {

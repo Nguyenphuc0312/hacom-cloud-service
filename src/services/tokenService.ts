@@ -155,3 +155,15 @@ export const clearTokens = (): void => {
   localStorage.removeItem(AUTH_CONFIG.REMEMBER_ME_KEY);
   sessionStorage.removeItem(AUTH_CONFIG.USER_KEY);
 };
+
+export const parseMustChangePasswordFromToken = (token: string): boolean => {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return false;
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = JSON.parse(atob(payload)) as Record<string, unknown>;
+    return decoded.mustChangePassword === true;
+  } catch {
+    return false;
+  }
+};

@@ -156,6 +156,7 @@ interface UseChatUserSearchOptions {
   minQueryLength?: number;
   excludeUserIds?: string[];
   enabled?: boolean;
+  includeSelf?: boolean;
 }
 
 const EMPTY_EXCLUDED_USER_IDS: string[] = [];
@@ -167,6 +168,7 @@ export const useChatUserSearch = (
   const minQueryLength = options?.minQueryLength ?? 2;
   const limit = options?.limit ?? 20;
   const enabled = options?.enabled ?? true;
+  const includeSelf = options?.includeSelf ?? false;
   const excludedUserIdsList = options?.excludeUserIds ?? EMPTY_EXCLUDED_USER_IDS;
   const excludedUserIdsKey = JSON.stringify(excludedUserIdsList);
   const excludedUserIds = useMemo(
@@ -196,6 +198,7 @@ export const useChatUserSearch = (
 
       try {
         const response = await searchUsersUseCase(trimmedQuery, 1, limit, {
+          includeSelf,
           signal: abortController.signal,
         });
         const payload = unwrapApiSuccess(response);
@@ -228,7 +231,7 @@ export const useChatUserSearch = (
       cancelled = true;
       abortController.abort();
     };
-  }, [debouncedQuery, enabled, excludedUserIds, limit, minQueryLength]);
+  }, [debouncedQuery, enabled, excludedUserIds, includeSelf, limit, minQueryLength]);
 
   return {
     results,

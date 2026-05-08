@@ -39,12 +39,12 @@ export const AuthLayoutSplit: React.FC<AuthLayoutSplitProps> = ({
   const isLoginPage = location.pathname === ROUTE_PATHS.LOGIN;
 
   const [currentIndex, setCurrentIndex] = React.useState(0);
-  
+
   React.useEffect(() => {
     const interval = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % HACoM_IMAGES.length);
     }, 3000);
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -64,20 +64,9 @@ export const AuthLayoutSplit: React.FC<AuthLayoutSplitProps> = ({
           <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/60" />
         </div>
 
-        {/* Top Logo */}
         <div className="relative z-10 p-10">
           <Link to="/" className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-lg">
-              <img src="/logo-dung.png" alt="Hacom" className="h-9 w-9 object-contain" />
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-black tracking-tight text-white drop-shadow-md">
-                Hacom
-              </span>
-              <span className="text-xs font-bold uppercase tracking-[0.2em] text-white/90 drop-shadow-sm">
-                Holdings
-              </span>
-            </div>
+            <img src="/logo-ngang.png" alt="Hacom Holdings" className="h-12 w-auto object-contain" />
           </Link>
         </div>
 

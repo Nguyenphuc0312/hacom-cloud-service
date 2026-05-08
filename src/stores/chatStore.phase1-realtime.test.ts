@@ -1481,6 +1481,64 @@ describe("chatStore phase-1 realtime flows", () => {
     expect(failed[0]?.errorCode).toBe("NETWORK_OFFLINE");
   });
 
+  it("queues a new message locally while the browser is offline and flushes it after reconnection", async () => {
+    const originalOnline = navigator.onLine;
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+
+    let queuedClientMessageId: string | undefined;
+    let queuedLocalId: string | undefined;
+    let queuedStableId: string | undefined;
+
+    try {
+      const queuedResult = await useChatStore
+        .getState()
+        .sendMessage("room-1", "queued offline", MessageType.TEXT);
+
+      expect(queuedResult.disposition).toBe("queued");
+      expect(sendMessageMock).not.toHaveBeenCalled();
+
+      const queued = getRoomMessages();
+      expect(queued).toHaveLength(1);
+      expect(queued[0]?.sendState).toBe("queued");
+      expect(queued[0]?.queuedReason).toBe("offline");
+
+      queuedClientMessageId = queued[0]?.clientMessageId;
+      queuedLocalId = queued[0]?.localId;
+      queuedStableId = queued[0]?.stableId;
+    } finally {
+      Object.defineProperty(window.navigator, "onLine", {
+        configurable: true,
+        value: originalOnline,
+      });
+    }
+
+    sendMessageMock.mockResolvedValueOnce(
+      makeSuccessEnvelope(
+        makeMessage({
+          id: "server-queued-1",
+          clientMessageId: queuedClientMessageId,
+          localId: queuedLocalId,
+          stableId: queuedStableId,
+          content: "queued offline",
+          status: MessageStatus.SENT,
+          sendState: "sent",
+        }),
+      ),
+    );
+
+    await useChatStore.getState().flushQueuedMessages("room-1");
+
+    const afterFlush = getRoomMessages();
+    expect(sendMessageMock).toHaveBeenCalledTimes(1);
+    expect(afterFlush).toHaveLength(1);
+    expect(afterFlush[0]?.id).toBe("server-queued-1");
+    expect(afterFlush[0]?.sendState).toBe("sent");
+    expect(afterFlush[0]?.queuedReason).toBeUndefined();
+  });
+
   it("marks backend 5xx failures distinctly from other errors", async () => {
     sendMessageMock.mockRejectedValueOnce({
       isAxiosError: true,

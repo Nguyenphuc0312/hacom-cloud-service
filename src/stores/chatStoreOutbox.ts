@@ -234,6 +234,54 @@ export const createChatOutboxController = <TState extends OutboxStateSlice>({
     );
   };
 
+  const queueExistingMessage = (
+    conversationId: string,
+    message: Message,
+    queuedReason: NonNullable<Message["queuedReason"]>,
+  ): SendMessageResult => {
+    const queueKey = getMessageQueueKey(conversationId, message);
+
+    clearMessageSendTimeout(queueKey);
+    set((state) => {
+      const current = state.outboxByConversation[conversationId] || [];
+      if (current.includes(queueKey)) {
+        return state;
+      }
+
+      return {
+        outboxByConversation: {
+          ...state.outboxByConversation,
+          [conversationId]: [...current, queueKey],
+        },
+      } as Partial<TState>;
+    });
+    updateMessage(conversationId, message.id, {
+      sendState: "queued",
+      status: MessageStatus.SENDING,
+      queuedReason,
+      failureReason: undefined,
+      errorCode: undefined,
+      errorMessage: undefined,
+    });
+
+    logMessageDebug("chatStore", "send_request_queued", {
+      conversationId,
+      queueKey,
+      correlationKey: getCorrelationKeyForMessage(message),
+      queuedReason,
+      connectionMode: resolveConnectionSendMode(),
+    });
+
+    return {
+      disposition: "queued",
+      messageId:
+        message.clientMessageId ||
+        message.stableId ||
+        message.localId ||
+        message.id,
+    };
+  };
+
   const dispatchExistingMessage = async (
     conversationId: string,
     message: Message,
@@ -537,6 +585,7 @@ export const createChatOutboxController = <TState extends OutboxStateSlice>({
     buildConversationCleanupState,
     dispatchExistingMessage,
     flushQueuedMessages,
+    queueExistingMessage,
     reset() {
       clearAllMessageSendTimeouts();
     },
