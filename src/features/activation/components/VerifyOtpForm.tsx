@@ -36,13 +36,6 @@ export const VerifyOtpForm: React.FC<VerifyOtpFormProps> = ({
   onResend,
 }) => {
   const { t } = useTranslation("auth");
-  const strength = calculatePasswordStrength(password);
-  const strengthLabel =
-    strength === "strong"
-      ? t("activation.setPassword.strong")
-      : strength === "medium"
-        ? t("activation.setPassword.medium")
-        : t("activation.setPassword.weak");
   const passwordsMatch = password === confirmPassword;
 
   return (
@@ -91,10 +84,6 @@ export const VerifyOtpForm: React.FC<VerifyOtpFormProps> = ({
         placeholder={t("auth:placeholders.password")}
         disabled={isSubmitting}
       />
-
-      <p className="text-xs text-text-muted">
-        {t("activation.setPassword.strength", { level: strengthLabel })}
-      </p>
 
       <Input
         type="password"

@@ -905,11 +905,6 @@ export const VerifyEmailPage: React.FC = () => {
                 {t("auth:verifyEmail.backToLogin")}
               </Button>
             </Link>
-            <Link to={ROUTE_PATHS.REGISTER}>
-              <Button variant="ghost" fullWidth>
-                {t("auth:verifyEmail.goToRegister")}
-              </Button>
-            </Link>
           </div>
         </AuthCard>
       </AuthShell>
@@ -1082,11 +1077,6 @@ export const VerifyEmailPage: React.FC = () => {
           <Link to={ROUTE_PATHS.LOGIN} className="sm:flex-1">
             <Button variant="ghost" fullWidth>
               {t("auth:verifyEmail.backToLogin")}
-            </Button>
-          </Link>
-          <Link to={ROUTE_PATHS.REGISTER} className="sm:flex-1">
-            <Button variant="secondary" fullWidth>
-              {t("auth:verifyEmail.goToRegister")}
             </Button>
           </Link>
         </div>

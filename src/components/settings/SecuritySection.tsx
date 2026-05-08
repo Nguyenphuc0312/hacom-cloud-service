@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 import { DeviceSessionList } from "./DeviceSessionList";
 import { SettingsCard } from "./SettingsCard";
 import { SettingsSection } from "./SettingsSection";
-import { Button, Input, PasswordStrength, toast } from "../ui";
+import { Button, Input, toast } from "../ui";
 import { extractApiError } from "../../lib/apiContract";
 import {
   changePasswordSchema,
@@ -32,7 +32,6 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
     formState: { errors },
     reset,
     setError,
-    watch,
   } = useForm<ChangePasswordFormData>({
     resolver: zodResolver(changePasswordSchema),
     defaultValues: {
@@ -42,7 +41,6 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
     },
   });
 
-  const newPasswordValue = watch("newPassword");
 
   const onSubmit = async (data: ChangePasswordFormData) => {
     setIsLoading(true);
@@ -103,11 +101,6 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
               disabled={isLoading}
               autoComplete="new-password"
             />
-            {newPasswordValue ? (
-              <div className="mt-2">
-                <PasswordStrength password={newPasswordValue} />
-              </div>
-            ) : null}
           </div>
 
           <Input

@@ -47,14 +47,14 @@ const railItems: SideRailItem[] = [
       pathname === ROUTE_PATHS.FRIENDS ||
       pathname.startsWith("/friend-discovery/"),
   },
-  { id: "tasks", label: "Công việc", icon: BriefcaseIcon },
-  { id: "calendar", label: "Lịch", icon: CalendarDaysIcon },
-  { id: "archive", label: "Lưu trữ", icon: FolderIcon },
-  { id: "notifications", label: "Thông báo", icon: BellIcon },
+  { id: "tasks", label: "Công việc", icon: BriefcaseIcon, to: ROUTE_PATHS.TASKS },
+  { id: "calendar", label: "Lịch", icon: CalendarDaysIcon, to: ROUTE_PATHS.CALENDAR },
+  { id: "archive", label: "Lưu trữ", icon: FolderIcon, to: ROUTE_PATHS.ARCHIVE },
+  { id: "notifications", label: "Thông báo", icon: BellIcon, to: ROUTE_PATHS.NOTIFICATIONS },
 ];
 
 const bottomItems: SideRailItem[] = [
-  { id: "help", label: "Trợ giúp", icon: QuestionMarkCircleIcon },
+  { id: "help", label: "Trợ giúp", icon: QuestionMarkCircleIcon, to: ROUTE_PATHS.HELP },
   {
     id: "settings",
     label: "Cài đặt",

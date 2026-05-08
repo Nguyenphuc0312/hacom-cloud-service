@@ -1,11 +1,16 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { FieldErrors, UseFormRegister } from "react-hook-form";
-import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
+import {
+  AtSymbolIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  FingerPrintIcon,
+  KeyIcon,
+} from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui";
 import type { LoginFormData } from "../../lib/validations";
-import { PasswordStrengthIndicator } from "./PasswordStrengthIndicator";
 import { translateI18nMessage } from "../../utils/userMessages";
 
 interface PasswordLoginFormProps {
@@ -15,7 +20,6 @@ interface PasswordLoginFormProps {
   isSubmitting: boolean;
   authError?: string | null;
   onSubmit: React.FormEventHandler<HTMLFormElement>;
-  passwordValue?: string;
 }
 
 export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
@@ -25,7 +29,6 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
   isSubmitting,
   authError,
   onSubmit,
-  passwordValue = ""
 }) => {
   const isBusy = isLoading || isSubmitting;
   const navigate = useNavigate();
@@ -53,40 +56,52 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
           </div>
         )}
 
-        <div>
-          <label htmlFor="loginIdentifier" className="block text-sm font-medium text-slate-700 mb-1">
+        <div className="space-y-1.5">
+          <label htmlFor="loginIdentifier" className="text-sm font-bold text-slate-700">
             Email hoặc số điện thoại
           </label>
-          <input
-            id="loginIdentifier"
-            {...register("loginIdentifier")}
-            type="text"
-            placeholder="Nhập email hoặc số điện thoại"
-            disabled={isBusy}
-            className="w-full h-11 px-3 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
-          />
+          <div className="relative">
+            <input
+              id="loginIdentifier"
+              {...register("loginIdentifier")}
+              type="text"
+              inputMode="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="username webauthn"
+              placeholder="name@company.com"
+              disabled={isBusy}
+              className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium outline-none transition-all focus:border-[#1d5fd6] focus:ring-2 focus:ring-[#1d5fd6]/10 disabled:bg-slate-50"
+              aria-invalid={Boolean(loginIdentifierError)}
+            />
+          </div>
           {loginIdentifierError && (
-            <p className="mt-1 text-xs text-danger">{loginIdentifierError}</p>
+            <p className="mt-1 text-xs font-semibold text-red-500">{loginIdentifierError}</p>
           )}
         </div>
 
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1">
-            Mật khẩu
-          </label>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label htmlFor="password" className="text-sm font-bold text-slate-700">
+              Mật khẩu
+            </label>
+          </div>
           <div className="relative">
             <input
               id="password"
               {...register("password")}
               type={showPassword ? "text" : "password"}
-              placeholder="Nhập mật khẩu"
+              placeholder="••••••••"
+              autoComplete="current-password"
               disabled={isBusy}
-              className="w-full h-11 px-3 pr-10 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
+              className="h-12 w-full rounded-xl border border-slate-200 px-4 pr-12 text-sm font-medium outline-none transition-all focus:border-[#1d5fd6] focus:ring-2 focus:ring-[#1d5fd6]/10 disabled:bg-slate-50"
+              aria-invalid={Boolean(passwordError)}
             />
             <button
               type="button"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
               onClick={() => setShowPassword(!showPassword)}
+              aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
             >
               {showPassword ? (
                 <EyeSlashIcon className="h-5 w-5" />
@@ -96,40 +111,39 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
             </button>
           </div>
           {passwordError && (
-            <p className="mt-1 text-xs text-danger">{passwordError}</p>
+            <p className="mt-1 text-xs font-semibold text-red-500">{passwordError}</p>
           )}
         </div>
 
-        <PasswordStrengthIndicator password={passwordValue} />
+        <div className="flex items-center justify-between py-1">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              {...register("rememberMe")}
+              className="h-4 w-4 rounded border-slate-300 text-[#1d5fd6] focus:ring-[#1d5fd6]"
+            />
+            <span className="text-sm font-medium text-slate-500">Ghi nhớ đăng nhập</span>
+          </label>
+          <button
+            type="button"
+            onClick={() => navigate('/forgot-password')}
+            className="text-sm font-bold text-slate-400 transition-colors hover:text-slate-600"
+          >
+            Quên mật khẩu?
+          </button>
+        </div>
+
 
         <Button
           type="submit"
           fullWidth
-          size="md"
-          className="h-11 rounded-lg bg-[#2b7ff6] text-sm font-semibold text-white hover:bg-blue-600"
+          className="h-12 rounded-xl bg-slate-900 text-sm font-bold text-white transition-all hover:bg-slate-800 active:scale-95 shadow-lg shadow-slate-900/10"
           isLoading={isBusy}
           disabled={isBusy}
           aria-busy={isBusy}
         >
-          Đăng Nhập
+          Đăng nhập ngay
         </Button>
-
-        <div className="flex items-center gap-3 pt-1">
-          <button
-            type="button"
-            onClick={() => navigate('/forgot-password')}
-            className="flex-1 h-11 rounded-lg border border-slate-200 bg-slate-50 text-[#2b7ff6] font-semibold text-sm hover:bg-slate-100 transition-colors"
-          >
-            Quên mật khẩu
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/register')}
-            className="flex-1 h-11 rounded-lg bg-[#2b7ff6] hover:bg-blue-600 text-white font-semibold text-sm transition-colors"
-          >
-            Đăng ký
-          </button>
-        </div>
       </form>
     </div>
   );
