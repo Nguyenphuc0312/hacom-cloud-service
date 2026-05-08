@@ -6,19 +6,20 @@ import { z } from 'zod';
 
 import { authClient } from '@/api/clients/authClient/authClient';
 import { currentAdminClient } from '@/api/clients/currentAdminClient/currentAdminClient';
-import './LoginPage.css';
 import {
   getAdminLoginErrorMessage,
   getErrorMessage,
   isAdminAccessIpPendingError,
 } from '@/api/error/error';
+import { PASSWORD_MIN_LENGTH, PASSWORD_MIN_LENGTH_MESSAGE } from '@/config/passwordPolicy';
 import { useAuthStore } from '@/store/authStore/authStore';
+import './LoginPage.css';
 
 const { Title, Text } = Typography;
 
 const loginSchema = z.object({
   email: z.string().email('Nhập email hợp lệ.'),
-  password: z.string().min(1, 'Nhập mật khẩu.'),
+  password: z.string().min(PASSWORD_MIN_LENGTH, PASSWORD_MIN_LENGTH_MESSAGE),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -100,7 +101,9 @@ export const LoginPage = () => {
           <Title level={3} style={{ marginBottom: 0 }}>
             Bảng quản trị chat
           </Title>
-          <Text type="secondary">Đăng nhập để quản lý người dùng, dịch vụ và cấu hình hệ thống.</Text>
+          <Text type="secondary">
+            Đăng nhập để quản lý người dùng, dịch vụ và cấu hình hệ thống.
+          </Text>
         </Space>
 
         <Tabs
@@ -117,11 +120,7 @@ export const LoginPage = () => {
                   onFinish={onFinish}
                   style={{ marginTop: 8 }}
                 >
-                  <Form.Item
-                    label="Email"
-                    name="email"
-                    rules={[{ required: true, message: 'Nhập email.' }]}
-                  >
+                  <Form.Item label="Email" name="email" rules={[{ required: true, message: 'Nhập email.' }]}>
                     <Input placeholder="admin@company.com" size="large" autoComplete="email" />
                   </Form.Item>
 
