@@ -63,7 +63,7 @@ export const AuthLayoutSplit: React.FC<AuthLayoutSplitProps> = ({
 
         <div className="relative z-10 p-10">
           <Link to="/" className="flex items-center gap-3">
-            <img src="/logo-ngang.png" alt="Hacom Holdings" className="h-12 w-auto object-contain" />
+            <img src="/hacom-logo-horizontal.png" alt="Hacom Holdings" className="h-12 w-auto object-contain" />
           </Link>
         </div>
 
