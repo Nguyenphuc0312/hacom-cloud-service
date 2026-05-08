@@ -1560,13 +1560,19 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
   const handleTanStackScroll = React.useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
-      const scrollOffset = event.currentTarget.scrollTop;
+      const maxScroll = getBottomScrollTarget(event.currentTarget);
+      const scrollOffset = Math.min(event.currentTarget.scrollTop, maxScroll);
+
+      if (event.currentTarget.scrollTop !== scrollOffset) {
+        event.currentTarget.scrollTop = scrollOffset;
+        return;
+      }
       handleScrollUpdate(
         scrollOffset,
         consumeProgrammaticScroll(scrollOffset),
       );
     },
-    [consumeProgrammaticScroll, handleScrollUpdate],
+    [consumeProgrammaticScroll, getBottomScrollTarget, handleScrollUpdate],
   );
 
   const handleRetry = React.useCallback(() => {

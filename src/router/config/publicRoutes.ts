@@ -6,7 +6,6 @@ const LoginPage = lazy(() => import("../../pages/LoginPage"));
 const ActivationFlowPage = lazy(
   () => import("../../features/activation/pages/ActivationFlowPage"),
 );
-const RegisterPage = lazy(() => import("../../pages/RegisterPage"));
 const VerifyEmailPage = lazy(() => import("../../pages/VerifyEmailPage"));
 const ForgotPasswordPage = lazy(() => import("../../pages/ForgotPasswordPage"));
 const ResetPasswordPage = lazy(() => import("../../pages/ResetPasswordPage"));
@@ -23,7 +22,6 @@ export const publicRoutes: AppRouteConfig[] = [
     guestOnly: false,
     activationOnly: true,
   },
-  { path: ROUTE_PATHS.REGISTER, component: RegisterPage, guestOnly: true },
   {
     path: ROUTE_PATHS.VERIFY_EMAIL,
     component: VerifyEmailPage,
