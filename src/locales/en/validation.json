@@ -7,7 +7,7 @@
     "passwordRequired": "Password is required",
     "passwordMin": "Password must be at least {{count}} characters",
     "passwordMax": "Password must not exceed {{count}} characters",
-    "passwordComplexity": "Password must contain at least 1 lowercase letter, 1 uppercase letter, and 1 number",
+    "passwordComplexity": "Password must be at least 8 characters",
     "confirmPasswordRequired": "Password confirmation is required",
     "confirmPasswordMismatch": "Passwords do not match",
     "acceptTerms": "You must accept the terms"

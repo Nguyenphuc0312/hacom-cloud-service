@@ -1,67 +1,25 @@
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
+import { useTranslation } from "react-i18next";
 import { AuthShell, AuthLogo } from "../components/auth";
 import { Button } from "../components/ui";
+import { PasswordStrength } from "../components/ui";
 import { toast } from "../components/ui";
 import { useAuthStore } from "../stores";
 import { authClient } from "../lib/axios";
 import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
+import { changePasswordSchema } from "../lib/validations";
+import type { ChangePasswordFormData } from "../lib/validations";
 import { getAccessToken } from "../services/tokenService";
+import { hasMinimumPasswordLength, PASSWORD_MIN_LENGTH } from "../constants/passwordPolicy";
+import { translateI18nMessage } from "../utils/userMessages";
 import type { ApiResponse } from "@hacom/chat-shared-types/core";
-
-const PASSWORD_LENGTH = 12;
-const passwordPattern =
-  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{12}$/;
-
-const changePasswordSchema = z
-  .object({
-    currentPassword: z.string().min(1, "Nhập mật khẩu hiện tại."),
-    newPassword: z
-      .string()
-      .length(PASSWORD_LENGTH, `Mật khẩu phải có đúng ${PASSWORD_LENGTH} ký tự`)
-      .regex(
-        passwordPattern,
-        "Mật khẩu phải chứa ít nhất 1 chữ thường, 1 chữ hoa, 1 số và 1 ký tự đặc biệt",
-      ),
-    confirmPassword: z.string().min(1, "Xác nhận mật khẩu mới."),
-  })
-  .refine((data) => data.newPassword === data.confirmPassword, {
-    message: "Mật khẩu xác nhận không khớp.",
-    path: ["confirmPassword"],
-  })
-  .refine((data) => data.newPassword !== data.currentPassword, {
-    message: "Mật khẩu mới không được trùng mật khẩu hiện tại.",
-    path: ["newPassword"],
-  });
-
-type ChangePasswordFormData = z.infer<typeof changePasswordSchema>;
-
-interface PolicyCheck {
-  label: string;
-  pass: boolean;
-}
-
-function getPolicyChecks(password: string): PolicyCheck[] {
-  return [
-    {
-      label: `Đúng ${PASSWORD_LENGTH} ký tự`,
-      pass: password.length === PASSWORD_LENGTH,
-    },
-    { label: "Có chữ thường (a-z)", pass: /[a-z]/.test(password) },
-    { label: "Có chữ hoa (A-Z)", pass: /[A-Z]/.test(password) },
-    { label: "Có chữ số (0-9)", pass: /\d/.test(password) },
-    {
-      label: "Có ký tự đặc biệt (!@#$%...)",
-      pass: /[^a-zA-Z0-9]/.test(password),
-    },
-  ];
-}
 
 export const ForceChangePasswordPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { logout } = useAuthStore();
+  const { t } = useTranslation();
 
   const {
     register,
@@ -78,8 +36,6 @@ export const ForceChangePasswordPage: React.FC = () => {
   });
 
   const newPasswordValue = watch("newPassword");
-  const policyChecks = getPolicyChecks(newPasswordValue);
-  const showPolicy = newPasswordValue.length > 0;
 
   const onSubmit = async (data: ChangePasswordFormData) => {
     setIsSubmitting(true);
@@ -141,7 +97,7 @@ export const ForceChangePasswordPage: React.FC = () => {
             />
             {errors.currentPassword && (
               <p className="mt-1 text-xs text-danger">
-                {errors.currentPassword.message}
+                {translateI18nMessage(errors.currentPassword.message, t)}
               </p>
             )}
           </div>
@@ -153,29 +109,21 @@ export const ForceChangePasswordPage: React.FC = () => {
             <input
               {...register("newPassword")}
               type="password"
-              placeholder={`Đúng ${PASSWORD_LENGTH} ký tự`}
+              placeholder={`Tối thiểu ${PASSWORD_MIN_LENGTH} ký tự`}
               disabled={isSubmitting}
               autoComplete="new-password"
               className="w-full h-11 px-3 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
             />
             {errors.newPassword && (
               <p className="mt-1 text-xs text-danger">
-                {errors.newPassword.message}
+                {translateI18nMessage(errors.newPassword.message, t)}
               </p>
             )}
-            {showPolicy && (
-              <ul className="mt-2 space-y-1">
-                {policyChecks.map((check) => (
-                  <li
-                    key={check.label}
-                    className={`text-xs flex items-center gap-1 ${check.pass ? "text-green-600" : "text-red-500"}`}
-                  >
-                    <span>{check.pass ? "✓" : "✗"}</span>
-                    <span>{check.label}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {newPasswordValue ? (
+              <div className="mt-2">
+                <PasswordStrength password={newPasswordValue} />
+              </div>
+            ) : null}
           </div>
 
           <div>
@@ -192,7 +140,7 @@ export const ForceChangePasswordPage: React.FC = () => {
             />
             {errors.confirmPassword && (
               <p className="mt-1 text-xs text-danger">
-                {errors.confirmPassword.message}
+                {translateI18nMessage(errors.confirmPassword.message, t)}
               </p>
             )}
           </div>
@@ -204,8 +152,7 @@ export const ForceChangePasswordPage: React.FC = () => {
             className="h-11 rounded-lg bg-[#2b7ff6] text-sm font-semibold text-white hover:bg-blue-600 mt-2"
             isLoading={isSubmitting}
             disabled={
-              isSubmitting ||
-              (showPolicy && policyChecks.some((c) => !c.pass))
+              isSubmitting || !hasMinimumPasswordLength(newPasswordValue ?? "")
             }
           >
             Đổi mật khẩu

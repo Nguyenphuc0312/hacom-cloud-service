@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { LockClosedIcon } from "@heroicons/react/24/outline";
 import { Button, Input } from "../../../components/ui";
 import { EmailOtpInput } from "../../../components/auth";
+import { PASSWORD_MIN_LENGTH } from "../../../constants/passwordPolicy";
 import { calculatePasswordStrength } from "../../../lib/validations";
 
 interface VerifyOtpFormProps {
@@ -137,8 +138,8 @@ export const VerifyOtpForm: React.FC<VerifyOtpFormProps> = ({
         disabled={
           isSubmitting ||
           otp.length !== 6 ||
-          password.length < 8 ||
-          confirmPassword.length < 8 ||
+          password.length < PASSWORD_MIN_LENGTH ||
+          confirmPassword.length < PASSWORD_MIN_LENGTH ||
           !passwordsMatch
         }
         onClick={() => {

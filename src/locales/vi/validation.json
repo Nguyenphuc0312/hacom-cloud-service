@@ -5,9 +5,9 @@
     "loginIdentifierRequired": "Email hoặc mã nhân viên không được để trống",
     "loginIdentifierMax": "Email hoặc mã nhân viên không được vượt quá 255 ký tự",
     "passwordRequired": "Mật khẩu không được để trống",
-    "passwordMin": "Mật khẩu phải có ít nhất {{count}} ký tự",
+    "passwordMin": "Mật khẩu phải có tối thiểu {{count}} ký tự",
     "passwordMax": "Mật khẩu không được quá {{count}} ký tự",
-    "passwordComplexity": "Mật khẩu phải chứa ít nhất 1 chữ thường, 1 chữ hoa và 1 số",
+    "passwordComplexity": "Mật khẩu phải có tối thiểu 8 ký tự",
     "confirmPasswordRequired": "Xác nhận mật khẩu không được để trống",
     "confirmPasswordMismatch": "Mật khẩu xác nhận không khớp",
     "acceptTerms": "Bạn phải đồng ý với điều khoản sử dụng"
