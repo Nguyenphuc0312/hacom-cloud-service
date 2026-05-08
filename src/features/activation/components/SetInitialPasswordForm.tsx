@@ -1,11 +1,8 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { Input, Button } from "../../../components/ui";
-<<<<<<< HEAD
-=======
 import { PASSWORD_MIN_LENGTH } from "../../../constants/passwordPolicy";
 import { calculatePasswordStrength } from "../../../lib/validations";
->>>>>>> origin/main
 
 interface SetInitialPasswordFormProps {
   password: string;
