@@ -1,6 +1,6 @@
 import React from "react";
 import clsx from "clsx";
-import { useTranslation } from "react-i18next";
+
 import {
   ArrowsPointingInIcon,
   ArrowUturnLeftIcon,
@@ -10,7 +10,7 @@ import {
 } from "@heroicons/react/24/outline";
 
 interface FormatToolbarProps {
-  textareaRef: React.RefObject<HTMLTextAreaElement>;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   value: string;
   onChange: (nextValue: string) => void;
   onToggleExpand: () => void;
@@ -24,7 +24,6 @@ export const FormatToolbar: React.FC<FormatToolbarProps> = ({
   onToggleExpand,
   disabled,
 }) => {
-  const { t } = useTranslation();
 
   const insertMarkdown = (prefix: string, suffix: string = "") => {
     if (!textareaRef.current || disabled) return;

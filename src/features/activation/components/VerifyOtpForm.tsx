@@ -4,7 +4,6 @@ import { LockClosedIcon } from "@heroicons/react/24/outline";
 import { Button, Input } from "../../../components/ui";
 import { EmailOtpInput } from "../../../components/auth";
 import { PASSWORD_MIN_LENGTH } from "../../../constants/passwordPolicy";
-import { calculatePasswordStrength } from "../../../lib/validations";
 
 interface VerifyOtpFormProps {
   otp: string;

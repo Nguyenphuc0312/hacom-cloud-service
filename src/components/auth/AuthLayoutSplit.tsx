@@ -1,6 +1,5 @@
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
-import { ROUTE_PATHS } from "../../router/paths";
+import { Link } from "react-router-dom";
 
 interface AuthLayoutSplitProps {
   children: React.ReactNode;
@@ -35,8 +34,6 @@ const HACoM_IMAGES = [
 export const AuthLayoutSplit: React.FC<AuthLayoutSplitProps> = ({
   children,
 }) => {
-  const location = useLocation();
-  const isLoginPage = location.pathname === ROUTE_PATHS.LOGIN;
 
   const [currentIndex, setCurrentIndex] = React.useState(0);
 
@@ -66,7 +63,7 @@ export const AuthLayoutSplit: React.FC<AuthLayoutSplitProps> = ({
 
         <div className="relative z-10 p-10">
           <Link to="/" className="flex items-center gap-3">
-            <img src="/logo-ngang.png" alt="Hacom Holdings" className="h-12 w-auto object-contain" />
+            <img src="/hacom-logo-horizontal.png" alt="Hacom Holdings" className="h-12 w-auto object-contain" />
           </Link>
         </div>
 

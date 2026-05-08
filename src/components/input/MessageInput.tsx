@@ -193,16 +193,6 @@ const COMPOSER_VISUAL_STATE_MAP: Record<
   },
 };
 
-const isDesktopViewport = (): boolean => {
-  if (
-    typeof window === "undefined" ||
-    typeof window.matchMedia !== "function"
-  ) {
-    return false;
-  }
-
-  return !window.matchMedia("(max-width: 768px), (pointer: coarse)").matches;
-};
 
 const buildMentionMatch = (
   text: string,
@@ -313,9 +303,6 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   });
   const rootRef = React.useRef<HTMLDivElement>(null);
   const [draftValue, setDraftValue] = React.useState(externalValue);
-  const [isDesktopLayout, setIsDesktopLayout] = React.useState(() =>
-    isDesktopViewport(),
-  );
   const [isFormatModeExpanded, setIsFormatModeExpanded] = React.useState(false);
 
   const { textareaRef, recomputeHeight } = useAutoResizeTextarea({
@@ -980,23 +967,6 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     ],
   );
 
-  React.useEffect(() => {
-    if (
-      typeof window === "undefined" ||
-      typeof window.matchMedia !== "function"
-    ) {
-      return;
-    }
-
-    const mediaQuery = window.matchMedia(
-      "(min-width: 769px) and (pointer: fine)",
-    );
-    const handleChange = () => setIsDesktopLayout(mediaQuery.matches);
-
-    handleChange();
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
-  }, []);
 
   React.useEffect(() => {
     if ((mode === "reply" || mode === "edit") && textareaRef.current) {
@@ -1006,7 +976,6 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
 
   React.useEffect(() => {
     if (!conversationId || !textareaRef.current) return;
-    if (!isDesktopViewport()) return;
 
     textareaRef.current.focus();
   }, [conversationId, textareaRef]);

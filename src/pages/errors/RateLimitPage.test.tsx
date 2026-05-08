@@ -21,7 +21,7 @@ describe("RateLimitPage", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Có thể thử lại sau 2s")).toBeInTheDocument();
+    expect(screen.getByText(/Có thể thử lại sau\s+2\s+giây/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Thử lại sau 2s" })).toBeDisabled();
 
     await act(async () => {

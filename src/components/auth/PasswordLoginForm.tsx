@@ -2,11 +2,8 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { FieldErrors, UseFormRegister } from "react-hook-form";
 import {
-  AtSymbolIcon,
   EyeIcon,
   EyeSlashIcon,
-  FingerPrintIcon,
-  KeyIcon,
 } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui";
