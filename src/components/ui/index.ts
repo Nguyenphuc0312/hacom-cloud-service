@@ -50,3 +50,4 @@ export {
   ErrorState,
   NoChatSelected,
 } from "./EmptyState";
+export { PasswordStrength } from "./PasswordStrength";
