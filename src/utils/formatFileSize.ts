@@ -32,7 +32,6 @@ const IMAGE_EXTENSIONS = new Set([
   "png",
   "gif",
   "webp",
-  "svg",
   "bmp",
   "heic",
   "heif",

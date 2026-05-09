@@ -10,8 +10,16 @@ import type {
   Message,
   MessageType,
 } from "../../../types";
-import { FileType, MessageType as MessageTypeEnum } from "../../../types";
+import { MessageType as MessageTypeEnum } from "../../../types";
 import { logMessageDebug } from "../../../utils/messageDebug";
+import {
+  DOCUMENT_UPLOAD_ACCEPT,
+  PHOTO_UPLOAD_ACCEPT,
+  UPLOAD_INPUT_ACCEPT,
+  resolveUploadFileType,
+  resolveUploadMimeTypeForFile,
+  validateUploadFileType,
+} from "../../../utils/uploadPolicy";
 import {
   useSendMessageMutation,
   type SendMessageAttachmentInput,
@@ -58,31 +66,6 @@ interface UseSendMessageResult {
     type?: MessageType,
   ) => unknown | Promise<unknown>;
 }
-
-const resolveFileType = (mimeType: string): FileType => {
-  if (mimeType.startsWith("image/")) return FileType.IMAGE;
-  if (mimeType.startsWith("video/")) return FileType.VIDEO;
-  if (mimeType.startsWith("audio/")) return FileType.AUDIO;
-
-  if (
-    mimeType === "application/zip" ||
-    mimeType === "application/x-zip-compressed"
-  ) {
-    return FileType.ARCHIVE;
-  }
-
-  if (
-    mimeType.includes("word") ||
-    mimeType.includes("excel") ||
-    mimeType.includes("powerpoint") ||
-    mimeType === "application/pdf" ||
-    mimeType === "text/plain"
-  ) {
-    return FileType.DOCUMENT;
-  }
-
-  return FileType.OTHER;
-};
 
 const isCanceledUploadError = (error: unknown): boolean => {
   if (!error || typeof error !== "object") return false;
@@ -136,7 +119,13 @@ const toSendMessageAttachments = (
     downloadUrl: attachment.downloadUrl,
     expiresAt: attachment.expiresAt,
     fileName: attachment.fileName || "attachment",
-    mimeType: attachment.mimeType || "application/octet-stream",
+    mimeType:
+      attachment.mimeType ||
+      resolveUploadMimeTypeForFile({
+        name: attachment.fileName || "attachment",
+        type: "",
+      }) ||
+      "",
     fileSize: attachment.fileSize ?? 0,
     width: attachment.width,
     height: attachment.height,
@@ -184,14 +173,26 @@ export const useSendMessage = ({
 
   const validateFile = React.useCallback(
     (file: File): string | null => {
-      const allowedTypes = [...UPLOAD_CONFIG.ALLOWED_FILE_TYPES, "video/mp4"];
+      const mimeType = resolveUploadMimeTypeForFile(file);
 
       if (file.size > UPLOAD_CONFIG.MAX_FILE_SIZE) {
         return t("error:upload.fileTooLarge");
       }
 
-      if (!allowedTypes.includes(file.type)) {
+      if (!mimeType) {
         return t("error:upload.unsupportedType");
+      }
+
+      const validatedType = validateUploadFileType({
+        fileName: file.name,
+        mimeType,
+      });
+      if (!validatedType.ok) {
+        return t(
+          validatedType.code === "MIME_EXTENSION_MISMATCH"
+            ? "error:upload.mimeExtensionMismatch"
+            : "error:upload.unsupportedType",
+        );
       }
 
       return null;
@@ -394,7 +395,7 @@ export const useSendMessage = ({
       const uploaded = unwrapApiSuccess(response);
       const attachment = legacyChatApi.file.toAttachment(uploaded);
       const mimeType = attachment.mimeType || selectedFile.type;
-      const attachmentType = resolveFileType(mimeType);
+      const attachmentType = resolveUploadFileType(mimeType);
       const messageType =
         attachmentType === "image" ? MessageTypeEnum.IMAGE : MessageTypeEnum.FILE;
 
@@ -452,11 +453,11 @@ export const useSendMessage = ({
       if (!input) return;
 
       if (mode === "photo") {
-        input.accept = "image/*,video/*";
+        input.accept = PHOTO_UPLOAD_ACCEPT;
       } else if (mode === "document") {
-        input.accept = ".pdf,.doc,.docx,.xls,.xlsx,.zip,.txt";
+        input.accept = DOCUMENT_UPLOAD_ACCEPT;
       } else {
-        input.removeAttribute("accept");
+        input.accept = UPLOAD_INPUT_ACCEPT;
       }
       input.value = "";
       input.click();

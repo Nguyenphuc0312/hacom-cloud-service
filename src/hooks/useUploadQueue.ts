@@ -19,9 +19,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ErrorCode } from "@hacom/chat-shared-types/core";
 import { chatApi } from "../features/chat/api";
-import { unwrapApiSuccess } from "../lib/apiContract";
-import { UPLOAD_CONFIG } from "../config";
+import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import type {
   AttachmentDraft,
   AttachmentDraftStatus,
@@ -32,6 +32,11 @@ import {
   createAttachmentDraft,
   isDuplicateFile,
 } from "../types/attachmentDraft";
+import {
+  DEFAULT_ALLOWED_UPLOAD_MIME_TYPES,
+  resolveUploadMimeTypeForFile,
+  validateUploadFileType,
+} from "../utils/uploadPolicy";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -75,6 +80,41 @@ export interface UploadQueueAddFilesResult {
 // ── Constants ───────────────────────────────────────────────────────
 
 const DEFAULT_CONCURRENCY = 3;
+
+const resolveUploadErrorMessage = (
+  error: unknown,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string => {
+  const apiError = extractApiError(error);
+  const code = String(apiError.code || "");
+
+  if (code === "UNSUPPORTED_MIME_TYPE") {
+    return t("error:upload.unsupportedType", {
+      defaultValue: "Unsupported file type",
+    });
+  }
+
+  if (code === "MIME_EXTENSION_MISMATCH") {
+    return t("error:upload.mimeExtensionMismatch", {
+      defaultValue: "File extension does not match file type",
+    });
+  }
+
+  if (
+    apiError.statusCode === 413 ||
+    apiError.code === ErrorCode.PAYLOAD_TOO_LARGE ||
+    apiError.code === ErrorCode.FILE_TOO_LARGE
+  ) {
+    return t("error:upload.tooLarge", {
+      defaultValue: "File too large",
+    });
+  }
+
+  return apiError.message ||
+    t("error:upload.uploadFailed", {
+      defaultValue: "Upload failed",
+    });
+};
 
 // ── XHR upload with progress ────────────────────────────────────────
 
@@ -217,21 +257,31 @@ export function useUploadQueue({
       });
 
       try {
+        const mimeType = resolveUploadMimeTypeForFile(draft.file);
+        if (!mimeType) {
+          updateDraft(draft.localId, {
+            status: "failed",
+            error: t("error:upload.unsupportedType", {
+              defaultValue: "Unsupported file type",
+            }),
+          });
+          return;
+        }
+
         // Step 1: Request presigned upload URL
         const signedResponse = await chatApi.file.requestUploadUrl({
           conversationId: cid,
           fileName: draft.file.name,
-          mimeType: draft.file.type || "application/octet-stream",
+          mimeType,
           fileSize: draft.file.size,
         });
         const signed = unwrapApiSuccess(signedResponse);
 
         // Step 2: Upload file via XHR
-        const mimeType = draft.file.type || "application/octet-stream";
         const uploadMethod = signed.uploadMethod || "PUT";
         const uploadHeaders = {
-          "Content-Type": mimeType,
           ...(signed.uploadHeaders || {}),
+          "Content-Type": mimeType,
         };
         try {
           await xhrUpload(
@@ -320,16 +370,12 @@ export function useUploadQueue({
         if (status === 413) {
           updateDraft(draft.localId, {
             status: "failed",
-            error: t("error:upload.tooLarge", {
-              defaultValue: "File too large",
-            }),
+            error: resolveUploadErrorMessage(err, t),
           });
         } else {
           updateDraft(draft.localId, {
             status: "failed",
-            error: t("error:upload.uploadFailed", {
-              defaultValue: "Upload failed",
-            }),
+            error: resolveUploadErrorMessage(err, t),
           });
         }
       } finally {
@@ -430,10 +476,7 @@ export function useUploadQueue({
 
   const addFiles = useCallback(
     (files: File[]): UploadQueueAddFilesResult => {
-      const allowedTypes = new Set<string>([
-        ...UPLOAD_CONFIG.ALLOWED_FILE_TYPES,
-        "video/mp4",
-      ]);
+      const allowedTypes = new Set<string>(DEFAULT_ALLOWED_UPLOAD_MIME_TYPES);
       const result: UploadQueueAddFilesResult = {
         acceptedCount: 0,
         rejectedCount: 0,
@@ -474,12 +517,35 @@ export function useUploadQueue({
           }
 
           // Check file type
-          if (!allowedTypes.has(file.type)) {
+          const resolvedMimeType = resolveUploadMimeTypeForFile(file);
+          if (!resolvedMimeType || !allowedTypes.has(resolvedMimeType)) {
             result.errors.push(
               t("error:upload.unsupportedTypeNamed", {
                 name: file.name,
                 defaultValue: `${file.name} has an unsupported file type`,
               }),
+            );
+            result.rejectedCount += 1;
+            continue;
+          }
+
+          const validatedType = validateUploadFileType({
+            fileName: file.name,
+            mimeType: resolvedMimeType,
+          });
+          if (!validatedType.ok) {
+            result.errors.push(
+              t(
+                validatedType.code === "MIME_EXTENSION_MISMATCH"
+                  ? "error:upload.mimeExtensionMismatch"
+                  : "error:upload.unsupportedType",
+                validatedType.code === "MIME_EXTENSION_MISMATCH"
+                  ? {
+                      defaultValue:
+                        "File extension does not match file type",
+                    }
+                  : { defaultValue: "Unsupported file type" },
+              ),
             );
             result.rejectedCount += 1;
             continue;

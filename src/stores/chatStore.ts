@@ -3039,7 +3039,7 @@ const toAttachmentPayload = (attachments?: Attachment[]) =>
     ...(attachment.downloadUrl ? { downloadUrl: attachment.downloadUrl } : {}),
     ...(attachment.expiresAt ? { expiresAt: attachment.expiresAt } : {}),
     fileName: attachment.fileName || "attachment",
-    mimeType: attachment.mimeType || "application/octet-stream",
+    mimeType: attachment.mimeType || "",
     fileSize:
       typeof attachment.fileSize === "number" && attachment.fileSize >= 0
         ? attachment.fileSize

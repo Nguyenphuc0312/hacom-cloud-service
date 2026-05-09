@@ -1,3 +1,5 @@
+import { resolveUploadFileCategory, resolveUploadMimeTypeForFile } from "../utils/uploadPolicy";
+
 /**
  * @fileoverview AttachmentDraft — data model for pending file uploads.
  *
@@ -62,27 +64,19 @@ export const ATTACHMENT_CONSTRAINTS = {
   /** Maximum total size in bytes (200 MB) */
   maxTotalSize: 200 * 1024 * 1024,
   /** Maximum single file size in bytes (50 MB — backend limit) */
-  maxSingleFileSize: 50 * 1024 * 1024,
+  maxSingleFileSize: 10 * 1024 * 1024,
 } as const;
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
 /** Classify a File into a FileKind based on MIME type and extension */
 export function resolveFileKind(file: File): FileKind {
-  const mime = file.type || "";
-  if (mime.startsWith("image/")) return "image";
-  if (mime.startsWith("video/")) return "video";
+  const mime = resolveUploadMimeTypeForFile(file) || "";
+  const category = resolveUploadFileCategory(mime);
+  if (category === "image") return "image";
+  if (category === "video") return "video";
   if (mime === "application/pdf") return "pdf";
-  if (
-    mime.includes("word") ||
-    mime.includes("document") ||
-    mime.includes("excel") ||
-    mime.includes("spreadsheet") ||
-    mime.includes("powerpoint") ||
-    mime.includes("presentation") ||
-    mime === "text/plain" ||
-    mime === "text/csv"
-  ) {
+  if (category === "document" || category === "archive" || category === "audio") {
     return "doc";
   }
 

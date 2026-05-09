@@ -39,6 +39,7 @@
     "tooManyFiles": "Tối đa {{max}} tệp",
     "fileTooLargeNamed": "{{name}} quá lớn",
     "unsupportedTypeNamed": "{{name}} có định dạng tệp không được hỗ trợ",
-    "totalSizeTooLarge": "Tổng dung lượng tệp vượt giới hạn"
+    "totalSizeTooLarge": "Tổng dung lượng tệp vượt giới hạn",
+    "mimeExtensionMismatch": "Phần mở rộng file không khớp với loại file"
   }
 }

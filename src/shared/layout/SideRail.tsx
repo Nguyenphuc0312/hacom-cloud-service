@@ -173,7 +173,11 @@ export const SideRail: React.FC<SideRailProps> = ({
         aria-label="Hacom Chat"
         title="Hacom Chat"
       >
-        H
+        <img
+          src="/logo-dung.png"
+          alt="Hacom Holdings"
+          className="h-full w-full object-contain mix-blend-multiply"
+        />
       </NavLink>
 
       <nav className="hc-side-rail__nav" aria-label="Module">

@@ -250,12 +250,12 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
 
         <div className="mt-7 text-center">
           <h2 className="text-[clamp(32px,4vw,44px)] font-extrabold leading-tight text-text-primary">
-            Chào mừng đến với <span className="text-primary">Hacom PC</span>
+            Chào mừng đến với <span className="text-primary">Hacom Chat</span>
           </h2>
-          <p className="mx-auto mt-4 max-w-[720px] text-[17px] font-medium leading-7 text-text-secondary">
-            Nền tảng trò chuyện nội bộ an toàn, tốc độ cao dành cho nhân sự Hacom
-            Holdings. Kết nối, cộng tác và điều phối công việc hiệu quả.
-          </p>
+          <div className="mx-auto mt-4 max-w-[720px] text-[17px] font-medium leading-7 text-text-secondary inline-block text-left">
+            <p>Nền tảng trò chuyện nội bộ an toàn, tốc độ cao dành cho nhân sự Hacom Holdings.</p>
+            <p>Kết nối, cộng tác và điều phối công việc hiệu quả.</p>
+          </div>
         </div>
 
         <div className="mt-8 grid w-full max-w-[720px] gap-4 sm:grid-cols-2">
