@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
@@ -143,8 +143,8 @@ export const AttachmentMenu: React.FC<AttachmentMenuProps> = ({
           title={
             !type.enabled
               ? t("common:toast.featureInDevelopment", {
-                  defaultValue: "Coming soon",
-                })
+                defaultValue: "Coming soon",
+              })
               : undefined
           }
           className={clsx(

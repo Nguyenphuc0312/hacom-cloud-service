@@ -5,7 +5,6 @@ export const ROUTE_PATHS = {
   ROOT: "/",
   LOGIN: "/login",
   ACTIVATION: "/activation",
-  REGISTER: "/register",
   VERIFY_EMAIL: "/verify-email",
   FORGOT_PASSWORD: "/forgot-password",
   RESET_PASSWORD: "/reset-password",
@@ -16,4 +15,10 @@ export const ROUTE_PATHS = {
   FRIEND_DISCOVERY: "/friend-discovery/:shareCode",
   JOIN_BY_TOKEN: "/join/:token",
   SETTINGS: "/settings",
+  MAINTENANCE: "/maintenance",
+  TASKS: "/tasks",
+  CALENDAR: "/calendar",
+  ARCHIVE: "/archive",
+  NOTIFICATIONS: "/notifications",
+  HELP: "/help",
 } as const;

@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useTranslation } from "react-i18next";
-import { AuthShell, AuthLogo } from "../components/auth";
+import { AuthLayoutSplit } from "../components/auth";
 import { Button } from "../components/ui";
 import { useAuthStore } from "../stores";
 import { ROUTE_PATHS } from "../router/paths";
@@ -73,60 +73,60 @@ export const ForgotPasswordPage: React.FC = () => {
   const isBusy = isLoading || isSubmitting;
 
   return (
-    <AuthShell maxWidth="sm" className="max-w-md mx-auto my-auto flex flex-col justify-center min-h-[100dvh] p-6 text-slate-800">
-      <div className="w-full max-w-[420px] rounded-2xl bg-white p-7 shadow-lg sm:p-9">
-        <AuthLogo subtitle="Lấy lại mật khẩu" />
+    <AuthLayoutSplit>
+      <div className="flex flex-col">
+        <header className="mb-8">
+          <h1 className="mb-2 text-3xl font-bold tracking-tight text-slate-900">
+            Quên mật khẩu?
+          </h1>
+          <p className="text-base font-medium text-slate-500">
+            Nhập email hoặc số điện thoại để lấy lại mật khẩu
+          </p>
+        </header>
 
-        <p className="mb-7 px-2 text-center text-sm leading-6 text-slate-500">
-          Nhập email hoặc số điện thoại để nhận mã OTP khôi phục mật khẩu.
-        </p>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {error && (
-            <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-800">
               {error}
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Email hoặc số điện thoại
-            </label>
+          <div className="space-y-1.5">
+            <label className="text-sm font-bold text-slate-700">Email hoặc số điện thoại</label>
             <input
               {...register("identifier")}
               type="text"
-              placeholder="Nhập email hoặc số điện thoại"
+              placeholder="name@company.com hoặc 09..."
               disabled={isBusy}
-              className="w-full h-11 px-3 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
+              className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium outline-none transition-all focus:border-[#1d5fd6] focus:ring-2 focus:ring-[#1d5fd6]/10 disabled:bg-slate-50"
             />
             {identifierError && (
-              <p className="mt-1 text-xs text-danger">{identifierError}</p>
+              <p className="text-xs font-semibold text-red-500">{identifierError}</p>
             )}
           </div>
 
           <Button
             type="submit"
             fullWidth
-            size="md"
-            className="h-11 rounded-lg bg-[#2b7ff6] text-sm font-semibold text-white hover:bg-blue-600"
             isLoading={isBusy}
             disabled={isBusy}
+            className="h-12 rounded-xl bg-slate-900 text-sm font-bold text-white transition-all hover:bg-slate-800 active:scale-95 shadow-lg shadow-slate-900/10"
           >
             Nhận mã OTP
           </Button>
 
-          <div className="pt-1 text-center">
+          <footer className="mt-8 text-center">
             <button
               type="button"
               onClick={() => navigate(ROUTE_PATHS.LOGIN)}
-              className="text-[#2b7ff6] font-semibold text-sm hover:text-blue-700 hover:underline transition-colors"
+              className="text-sm font-bold text-[#1d5fd6] hover:underline"
             >
               Quay lại đăng nhập
             </button>
-          </div>
+          </footer>
         </form>
       </div>
-    </AuthShell>
+    </AuthLayoutSplit>
   );
 };
 

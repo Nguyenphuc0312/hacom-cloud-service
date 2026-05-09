@@ -18,7 +18,6 @@ import {
 } from "@heroicons/react/24/outline";
 import { AuthCard, AuthShell } from "../components/auth";
 import { Button, Input, toast } from "../components/ui";
-import { PasswordStrength } from "../components/ui";
 import { resetPasswordSchema } from "../lib/validations";
 import type { ResetPasswordFormData } from "../lib/validations";
 import { authApi } from "../services/api";
@@ -37,14 +36,12 @@ export const ResetPasswordPage: React.FC = () => {
     register,
     handleSubmit,
     formState: { errors },
-    watch,
     setFocus,
   } = useForm<ResetPasswordFormData>({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: { password: "", confirmPassword: "" },
   });
 
-  const passwordValue = watch("password");
 
   useEffect(() => {
     if (!token) {
@@ -172,11 +169,6 @@ export const ResetPasswordPage: React.FC = () => {
               autoComplete="new-password"
               disabled={isLoading}
             />
-            {passwordValue && (
-              <div className="mt-2">
-                <PasswordStrength password={passwordValue} />
-              </div>
-            )}
           </div>
 
           <Input

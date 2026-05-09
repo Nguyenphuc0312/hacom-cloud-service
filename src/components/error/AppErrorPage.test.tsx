@@ -23,7 +23,7 @@ describe("AppErrorPage", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Hệ thống đang gặp sự cố" })).toBeInTheDocument();
-    expect(screen.getByText("Lỗi 500")).toBeInTheDocument();
+    expect(screen.getByText(/MÃ LỖI\s+500/)).toBeInTheDocument();
     expect(screen.getByText(/req-123/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Thử lại" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Về trang chat" })).toHaveAttribute(

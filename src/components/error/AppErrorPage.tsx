@@ -1,16 +1,12 @@
 import React from "react";
 import clsx from "clsx";
-import {
-  ClockIcon,
-  LockClosedIcon,
-  NoSymbolIcon,
-  ServerStackIcon,
-  ShieldExclamationIcon,
-  SignalSlashIcon,
-  WrenchScrewdriverIcon,
-} from "@heroicons/react/24/outline";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "../ui";
+import { ClockIcon } from "@heroicons/react/24/outline";
+
+// Illustrations
+import maintenanceIllustration from "../../assets/images/maintenance-illustration.jpg";
+import errorIllustration from "../../assets/images/error-illustration.jpg";
 
 export type AppErrorVariant =
   | "not-found"
@@ -36,22 +32,12 @@ export interface AppErrorPageProps {
   description: string;
   primaryAction?: AppErrorAction;
   secondaryAction?: AppErrorAction;
-  details?: string;
+  details?: string; // Kept for interface compatibility, but unused in UI
   requestId?: string;
   retryAfterSeconds?: number;
   variant?: AppErrorVariant;
   className?: string;
 }
-
-const variantIcons: Record<AppErrorVariant, React.ReactNode> = {
-  "not-found": <NoSymbolIcon />,
-  forbidden: <ShieldExclamationIcon />,
-  unauthorized: <LockClosedIcon />,
-  "rate-limit": <ClockIcon />,
-  server: <ServerStackIcon />,
-  offline: <SignalSlashIcon />,
-  maintenance: <WrenchScrewdriverIcon />,
-};
 
 const renderAction = (
   action: AppErrorAction,
@@ -59,15 +45,16 @@ const renderAction = (
   navigate: ReturnType<typeof useNavigate>,
 ) => {
   const linkClassName = clsx(
-    "inline-flex min-h-[var(--control-height-sm)] min-w-[8rem] items-center justify-center rounded-md px-3 text-body-sm font-medium transition-micro",
-    "focus:outline-none focus:ring-2 focus:ring-focus/25 focus:ring-offset-2 focus:ring-offset-surface",
+    "inline-flex min-h-[var(--control-height-md)] min-w-[8rem] items-center justify-center rounded-lg px-4 text-body-sm font-semibold transition-micro",
+    "focus:outline-none focus:ring-2 focus:ring-focus/30",
     variant === "primary"
-      ? "border border-primary bg-primary text-text-inverse hover:bg-primary-hover"
-      : "border border-border bg-surface-overlay text-text-primary hover:bg-surface-hover",
+      ? "bg-primary text-text-inverse hover:bg-primary-hover shadow-sm"
+      : "bg-surface-overlay text-text-primary hover:bg-surface-hover border border-border shadow-sm",
     action.disabled && "pointer-events-none opacity-65",
   );
   const className = "min-w-[8rem]";
   const buttonVariant = variant === "primary" ? "primary" : "secondary";
+
   const handleClick = () => {
     if (action.reload) {
       window.location.reload();
@@ -97,7 +84,7 @@ const renderAction = (
     <Button
       type="button"
       variant={buttonVariant}
-      size="sm"
+      size="md"
       className={className}
       onClick={handleClick}
       disabled={action.disabled}
@@ -113,81 +100,67 @@ export const AppErrorPage: React.FC<AppErrorPageProps> = ({
   description,
   primaryAction,
   secondaryAction,
-  details,
   requestId,
   retryAfterSeconds,
   variant = "server",
   className,
 }) => {
   const navigate = useNavigate();
-  const showDetails =
-    import.meta.env.DEV &&
-    import.meta.env.VITE_ERROR_DETAILS_DEBUG === "true" &&
-    details;
+
+  const isMaintenanceOrNotFound = variant === "maintenance" || variant === "not-found";
+  const illustrationSrc = isMaintenanceOrNotFound ? maintenanceIllustration : errorIllustration;
 
   return (
     <main
       className={clsx(
-        "flex min-h-[100dvh] items-center justify-center bg-background px-4 py-8 text-text-primary",
+        "flex min-h-[100dvh] w-full flex-col items-center justify-center bg-background px-4 py-8 text-text-primary overflow-hidden",
         className,
       )}
       aria-labelledby="app-error-title"
     >
-      <section className="w-full max-w-[34rem] rounded-xl border border-border bg-surface px-6 py-6 shadow-[var(--shadow-xs)] sm:px-7">
-        <div className="flex items-start gap-4">
-          <div
-            className={clsx(
-              "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border",
-              "border-border bg-surface-overlay text-text-secondary",
-            )}
-            aria-hidden="true"
-          >
-            <span className="h-5 w-5">{variantIcons[variant]}</span>
-          </div>
-          <div className="min-w-0 flex-1">
-            {statusCode ? (
-              <p className="text-caption font-semibold uppercase tracking-wide text-text-muted">
-                Lỗi {statusCode}
-              </p>
-            ) : null}
-            <h1
-              id="app-error-title"
-              className="mt-1 text-lg font-semibold leading-7 text-text-primary"
-            >
-              {title}
-            </h1>
-            <p className="mt-2 text-body-sm leading-6 text-text-secondary">
-              {description}
-            </p>
-            {retryAfterSeconds !== undefined ? (
-              <p className="mt-3 inline-flex items-center gap-2 rounded-md border border-border bg-surface-overlay px-2.5 py-1 text-caption font-medium text-text-secondary">
-                <ClockIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                Có thể thử lại sau {retryAfterSeconds}s
-              </p>
-            ) : null}
-            {requestId ? (
-              <p className="mt-3 break-all text-caption text-text-muted">
-                Mã yêu cầu: <span className="font-medium">{requestId}</span>
-              </p>
-            ) : null}
-          </div>
+      <section className="flex w-full max-w-md flex-col items-center text-center animate-fade-in">
+        <div className="mb-6 flex justify-center">
+          <img
+            src={illustrationSrc}
+            alt={isMaintenanceOrNotFound ? "Bảo trì" : "Lỗi ứng dụng"}
+            className="h-auto w-[280px] max-w-full object-contain drop-shadow-sm"
+          />
         </div>
 
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center">
+        {statusCode && (
+          <div className="mb-3 rounded-full bg-surface-overlay px-3 py-1 text-xs font-semibold tracking-wider text-text-muted border border-border">
+            MÃ LỖI {statusCode}
+          </div>
+        )}
+
+        <h1
+          id="app-error-title"
+          className="text-2xl font-bold tracking-tight text-text-primary sm:text-3xl"
+        >
+          {title}
+        </h1>
+
+        <p className="mt-4 max-w-sm text-body text-text-secondary leading-relaxed">
+          {description}
+        </p>
+
+        {retryAfterSeconds !== undefined && (
+          <p className="mt-4 inline-flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-1.5 text-sm font-medium text-warning-dark">
+            <ClockIcon className="h-4 w-4" aria-hidden="true" />
+            Có thể thử lại sau {retryAfterSeconds} giây
+          </p>
+        )}
+
+        {requestId && (
+          <p className="mt-4 text-xs text-text-muted">
+            Mã yêu cầu: <span className="font-mono">{requestId}</span>
+          </p>
+        )}
+
+        <div className="mt-8 flex w-full flex-col items-center justify-center gap-3 sm:flex-row">
           {primaryAction ? renderAction(primaryAction, "primary", navigate) : null}
           {secondaryAction ? renderAction(secondaryAction, "secondary", navigate) : null}
         </div>
-
-        {showDetails ? (
-          <details className="mt-5 rounded-lg border border-border bg-surface-overlay p-3 text-caption text-text-secondary">
-            <summary className="cursor-pointer font-medium text-text-primary">
-              Chi tiết kỹ thuật
-            </summary>
-            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words">
-              {details}
-            </pre>
-          </details>
-        ) : null}
 
         <div className="sr-only" aria-live="polite">
           {variant === "offline" ? "Ứng dụng đang mất kết nối mạng" : title}

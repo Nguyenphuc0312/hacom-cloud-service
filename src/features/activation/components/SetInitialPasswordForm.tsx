@@ -2,7 +2,6 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { Input, Button } from "../../../components/ui";
 import { PASSWORD_MIN_LENGTH } from "../../../constants/passwordPolicy";
-import { calculatePasswordStrength } from "../../../lib/validations";
 
 interface SetInitialPasswordFormProps {
   password: string;
@@ -24,14 +23,6 @@ export const SetInitialPasswordForm: React.FC<SetInitialPasswordFormProps> = ({
   onSubmit,
 }) => {
   const { t } = useTranslation("auth");
-  const strength = calculatePasswordStrength(password);
-
-  const strengthLabel =
-    strength === "strong"
-      ? t("activation.setPassword.strong")
-      : strength === "medium"
-        ? t("activation.setPassword.medium")
-        : t("activation.setPassword.weak");
 
   return (
     <section className="space-y-4">
@@ -58,10 +49,6 @@ export const SetInitialPasswordForm: React.FC<SetInitialPasswordFormProps> = ({
         placeholder={t("auth:placeholders.password")}
         disabled={isSubmitting}
       />
-
-      <p className="text-xs text-text-muted">
-        {t("activation.setPassword.strength", { level: strengthLabel })}
-      </p>
 
       <Input
         type="password"

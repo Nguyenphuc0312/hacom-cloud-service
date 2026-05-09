@@ -7,4 +7,4 @@ export * from "./SocialLoginRow";
 export * from "./VerificationStatusPanel";
 export * from "./ProtectedRoute";
 export * from "./AuthLogo";
-export * from "./PasswordStrengthIndicator";
+export * from "./AuthLayoutSplit";

@@ -18,7 +18,7 @@ import {
 } from "../../api/chatApi";
 import { chatApi as legacyChatApi } from "../api/chatApi";
 
-export type AttachmentPickerMode = "photo" | "document";
+export type AttachmentPickerMode = "photo" | "document" | "mixed";
 
 type SendDisposition = "optimistic" | "queued" | "sent" | "failed";
 
@@ -451,10 +451,13 @@ export const useSendMessage = ({
     (mode: AttachmentPickerMode, input: HTMLInputElement | null) => {
       if (!input) return;
 
-      input.accept =
-        mode === "photo"
-          ? "image/*,video/*"
-          : ".pdf,.doc,.docx,.xls,.xlsx,.zip,.txt";
+      if (mode === "photo") {
+        input.accept = "image/*,video/*";
+      } else if (mode === "document") {
+        input.accept = ".pdf,.doc,.docx,.xls,.xlsx,.zip,.txt";
+      } else {
+        input.removeAttribute("accept");
+      }
       input.value = "";
       input.click();
     },

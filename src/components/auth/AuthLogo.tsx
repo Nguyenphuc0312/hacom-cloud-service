@@ -8,18 +8,14 @@ interface AuthLogoProps {
 export const AuthLogo: React.FC<AuthLogoProps> = ({ subtitle }) => {
   return (
     <header className="mb-6 text-center">
-      <Link to="/" className="inline-block mb-2">
+      <Link to="/" className="mb-3 inline-flex justify-center rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25">
         <img
-          src="/logo.png"
-          alt="hacom HOLDINGS"
-          className="h-20 mx-auto"
-          style={{ width: "auto", objectFit: "contain" }}
+          src="/hacom-logo-horizontal.png"
+          alt="Hacom Holdings"
+          className="mx-auto h-12 w-auto object-contain"
         />
       </Link>
-      <h1 className="text-2xl font-bold text-[#1a73e8] mb-1">
-        hacom PC
-      </h1>
-      <p className="text-sm font-medium text-slate-500">
+      <p className="mt-4 text-sm font-medium leading-5 text-slate-500">
         {subtitle}
       </p>
     </header>
