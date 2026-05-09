@@ -75,11 +75,14 @@ export const ForgotPasswordPage: React.FC = () => {
   return (
     <AuthLayoutSplit>
       <div className="flex flex-col">
-        <header className="mb-8">
-          <h1 className="mb-2 text-3xl font-bold tracking-tight text-slate-900">
+        <header className="mb-[clamp(12px,2dvh,24px)]">
+          <h1
+            className="mb-1 font-bold tracking-tight text-slate-900"
+            style={{ fontSize: "clamp(1.25rem, 2.5vw, 1.875rem)" }}
+          >
             Quên mật khẩu?
           </h1>
-          <p className="text-base font-medium text-slate-500">
+          <p className="text-sm font-medium text-slate-500">
             Nhập email hoặc số điện thoại để lấy lại mật khẩu
           </p>
         </header>
@@ -96,7 +99,7 @@ export const ForgotPasswordPage: React.FC = () => {
             <input
               {...register("identifier")}
               type="text"
-              placeholder="name@company.com hoặc 09..."
+              placeholder="name@hacomholdings.com"
               disabled={isBusy}
               className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium outline-none transition-all focus:border-[#1d5fd6] focus:ring-2 focus:ring-[#1d5fd6]/10 disabled:bg-slate-50"
             />

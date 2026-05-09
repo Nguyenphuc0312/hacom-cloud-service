@@ -104,8 +104,26 @@ jobs:
     environment: develop
     env:
       SHARED_TYPES_REPO_TOKEN: ${{ secrets.SHARED_TYPES_REPO_TOKEN }}
+      SERVER_APPS_ROOT: ${{ vars.SERVER_APPS_ROOT }}
+      SERVER_RUNTIME_ENV_FILE: ${{ vars.SERVER_RUNTIME_ENV_FILE }}
+      SERVICE_NAME: chat-web-client
+      DEPLOY_ENV: develop
+      HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL }}
+      VITE_APP_BASE_PATH: ${{ vars.VITE_APP_BASE_PATH }}
+      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+      VITE_AUTH_BASE_URL: ${{ vars.VITE_AUTH_BASE_URL }}
+      VITE_USE_AUTH_SERVICE: ${{ vars.VITE_USE_AUTH_SERVICE }}
+      VITE_WS_URL: ${{ vars.VITE_WS_URL }}
+      VITE_WS_USE_QUERY_TOKEN: ${{ vars.VITE_WS_USE_QUERY_TOKEN }}
+      VITE_WS_AUTO_QUERY_TOKEN_FALLBACK: ${{ vars.VITE_WS_AUTO_QUERY_TOKEN_FALLBACK }}
+      SERVER_PORT: ${{ secrets.SERVER_PORT }}
+      SERVER_USER: ${{ secrets.SERVER_USER }}
+      SERVER_HOST: ${{ secrets.SERVER_HOST }}
+      SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+      SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
       GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME != '' && secrets.GHCR_PULL_USERNAME || github.repository_owner }}
       GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+      EXPECTED_SERVER_RUNTIME_ENV_FILE: /hdd3/apps/chat/env/develop/chat-web-client.env
     steps:
       - uses: actions/checkout@v4
         with:
@@ -129,24 +147,6 @@ jobs:
       - name: Validate deploy inputs
         id: validate_inputs
         env:
-          SERVER_APPS_ROOT: ${{ vars.SERVER_APPS_ROOT }}
-          SERVICE_NAME: ${{ vars.SERVICE_NAME }}
-          DEPLOY_ENV: ${{ vars.DEPLOY_ENV }}
-          HEALTHCHECK_URL: ${{ vars.HEALTHCHECK_URL }}
-          VITE_APP_BASE_PATH: ${{ vars.VITE_APP_BASE_PATH }}
-          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
-          VITE_AUTH_BASE_URL: ${{ vars.VITE_AUTH_BASE_URL }}
-          VITE_USE_AUTH_SERVICE: ${{ vars.VITE_USE_AUTH_SERVICE }}
-          VITE_WS_URL: ${{ vars.VITE_WS_URL }}
-          VITE_WS_USE_QUERY_TOKEN: ${{ vars.VITE_WS_USE_QUERY_TOKEN }}
-          VITE_WS_AUTO_QUERY_TOKEN_FALLBACK: ${{ vars.VITE_WS_AUTO_QUERY_TOKEN_FALLBACK }}
-          SERVER_PORT: ${{ secrets.SERVER_PORT }}
-          SERVER_USER: ${{ secrets.SERVER_USER }}
-          SERVER_HOST: ${{ secrets.SERVER_HOST }}
-          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
-          SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
-          GHCR_PULL_USERNAME: ${{ env.GHCR_PULL_USERNAME }}
-          GHCR_PULL_TOKEN: ${{ env.GHCR_PULL_TOKEN }}
           GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: |
           set -Eeuo pipefail
@@ -186,23 +186,23 @@ jobs:
             fi
           }
 
-          SERVER_APPS_ROOT_CLEAN="$(require_single_line "vars.SERVER_APPS_ROOT" "${SERVER_APPS_ROOT}")"
-          SERVER_RUNTIME_ENV_FILE_CLEAN="$(require_single_line "vars.SERVER_RUNTIME_ENV_FILE" "${SERVER_RUNTIME_ENV_FILE}")"
-          SERVICE_NAME_CLEAN="$(require_single_line "vars.SERVICE_NAME" "${SERVICE_NAME}")"
-          DEPLOY_ENV_CLEAN="$(require_single_line "vars.DEPLOY_ENV" "${DEPLOY_ENV}")"
-          SERVER_PORT_CLEAN="$(require_single_line "secrets.SERVER_PORT" "${SERVER_PORT}")"
-          SERVER_USER_CLEAN="$(require_single_line "secrets.SERVER_USER" "${SERVER_USER}")"
-          SERVER_HOST_CLEAN="$(require_single_line "secrets.SERVER_HOST" "${SERVER_HOST}")"
-          GHCR_PULL_USERNAME_CLEAN="$(require_single_line "secrets.GHCR_PULL_USERNAME" "${GHCR_PULL_USERNAME}")"
-          GHCR_PULL_TOKEN_CLEAN="$(require_single_line "secrets.GHCR_PULL_TOKEN" "${GHCR_PULL_TOKEN}")"
-          HEALTHCHECK_URL_CLEAN="$(trim_single_line "${HEALTHCHECK_URL}")"
-          VITE_APP_BASE_PATH_CLEAN="$(trim_single_line "${VITE_APP_BASE_PATH}")"
-          VITE_API_BASE_URL_CLEAN="$(trim_single_line "${VITE_API_BASE_URL}")"
-          VITE_AUTH_BASE_URL_CLEAN="$(trim_single_line "${VITE_AUTH_BASE_URL}")"
-          VITE_USE_AUTH_SERVICE_CLEAN="$(trim_single_line "${VITE_USE_AUTH_SERVICE}")"
-          VITE_WS_URL_CLEAN="$(trim_single_line "${VITE_WS_URL}")"
-          VITE_WS_USE_QUERY_TOKEN_CLEAN="$(trim_single_line "${VITE_WS_USE_QUERY_TOKEN}")"
-          VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN="$(trim_single_line "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK}")"
+          SERVER_APPS_ROOT_CLEAN="$(require_single_line "vars.SERVER_APPS_ROOT" "${SERVER_APPS_ROOT:-}")"
+          SERVER_RUNTIME_ENV_FILE_CLEAN="$(require_single_line "vars.SERVER_RUNTIME_ENV_FILE" "${SERVER_RUNTIME_ENV_FILE:-}")"
+          SERVICE_NAME_CLEAN="$(require_single_line "vars.SERVICE_NAME" "${SERVICE_NAME:-}")"
+          DEPLOY_ENV_CLEAN="$(require_single_line "vars.DEPLOY_ENV" "${DEPLOY_ENV:-}")"
+          SERVER_PORT_CLEAN="$(require_single_line "secrets.SERVER_PORT" "${SERVER_PORT:-}")"
+          SERVER_USER_CLEAN="$(require_single_line "secrets.SERVER_USER" "${SERVER_USER:-}")"
+          SERVER_HOST_CLEAN="$(require_single_line "secrets.SERVER_HOST" "${SERVER_HOST:-}")"
+          GHCR_PULL_USERNAME_CLEAN="$(require_single_line "secrets.GHCR_PULL_USERNAME" "${GHCR_PULL_USERNAME:-}")"
+          GHCR_PULL_TOKEN_CLEAN="$(require_single_line "secrets.GHCR_PULL_TOKEN" "${GHCR_PULL_TOKEN:-}")"
+          HEALTHCHECK_URL_CLEAN="$(trim_single_line "${HEALTHCHECK_URL:-}")"
+          VITE_APP_BASE_PATH_CLEAN="$(trim_single_line "${VITE_APP_BASE_PATH:-}")"
+          VITE_API_BASE_URL_CLEAN="$(trim_single_line "${VITE_API_BASE_URL:-}")"
+          VITE_AUTH_BASE_URL_CLEAN="$(trim_single_line "${VITE_AUTH_BASE_URL:-}")"
+          VITE_USE_AUTH_SERVICE_CLEAN="$(trim_single_line "${VITE_USE_AUTH_SERVICE:-}")"
+          VITE_WS_URL_CLEAN="$(trim_single_line "${VITE_WS_URL:-}")"
+          VITE_WS_USE_QUERY_TOKEN_CLEAN="$(trim_single_line "${VITE_WS_USE_QUERY_TOKEN:-}")"
+          VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN="$(trim_single_line "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK:-}")"
           if [[ -z "${HEALTHCHECK_URL_CLEAN}" ]]; then
             HEALTHCHECK_URL_CLEAN="http://127.0.0.1/healthz"
           fi
@@ -228,8 +228,23 @@ jobs:
             VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN="true"
           fi
 
-          require_multiline "secrets.SERVER_SSH_KEY" "${SERVER_SSH_KEY}"
-          require_multiline "secrets.SERVER_SSH_KNOWN_HOSTS" "${SERVER_SSH_KNOWN_HOSTS}"
+          require_multiline "secrets.SERVER_SSH_KEY" "${SERVER_SSH_KEY:-}"
+          require_multiline "secrets.SERVER_SSH_KNOWN_HOSTS" "${SERVER_SSH_KNOWN_HOSTS:-}"
+
+          if [[ "${SERVICE_NAME_CLEAN}" != "chat-web-client" ]]; then
+            echo "::error title=Invalid deploy configuration::vars.SERVICE_NAME must resolve to chat-web-client"
+            exit 1
+          fi
+
+          if [[ "${DEPLOY_ENV_CLEAN}" != "develop" ]]; then
+            echo "::error title=Invalid deploy configuration::vars.DEPLOY_ENV must resolve to develop"
+            exit 1
+          fi
+
+          if [[ "${SERVER_RUNTIME_ENV_FILE_CLEAN}" != "${EXPECTED_SERVER_RUNTIME_ENV_FILE}" ]]; then
+            echo "::error title=Invalid develop runtime env::vars.SERVER_RUNTIME_ENV_FILE must be ${EXPECTED_SERVER_RUNTIME_ENV_FILE}"
+            exit 1
+          fi
 
           IMAGE_OWNER="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
           IMAGE_REF="ghcr.io/${IMAGE_OWNER}/chat-web-client:${GITHUB_SHA}"
@@ -242,6 +257,44 @@ jobs:
           require_file "./chat-web-client/deploy/compose/${DEPLOY_ENV_CLEAN}.yml"
           require_file ./chat-web-client/deploy/scripts/deploy.sh
           require_file ./chat-web-client/deploy/scripts/rollback.sh
+
+          echo "::group::Validated deploy configuration"
+          printf 'SERVICE_NAME=%s\n' "${SERVICE_NAME_CLEAN}"
+          printf 'DEPLOY_ENV=%s\n' "${DEPLOY_ENV_CLEAN}"
+          printf 'SERVER_APPS_ROOT=%s\n' "${SERVER_APPS_ROOT_CLEAN}"
+          printf 'SERVER_RUNTIME_ENV_FILE=%s\n' "${SERVER_RUNTIME_ENV_FILE_CLEAN}"
+          printf 'HEALTHCHECK_URL=%s\n' "${HEALTHCHECK_URL_CLEAN}"
+          printf 'VITE_APP_BASE_PATH=%s\n' "${VITE_APP_BASE_PATH_CLEAN}"
+          printf 'VITE_API_BASE_URL=%s\n' "${VITE_API_BASE_URL_CLEAN}"
+          printf 'VITE_AUTH_BASE_URL=%s\n' "${VITE_AUTH_BASE_URL_CLEAN}"
+          printf 'VITE_USE_AUTH_SERVICE=%s\n' "${VITE_USE_AUTH_SERVICE_CLEAN}"
+          printf 'VITE_WS_URL=%s\n' "${VITE_WS_URL_CLEAN}"
+          printf 'VITE_WS_USE_QUERY_TOKEN=%s\n' "${VITE_WS_USE_QUERY_TOKEN_CLEAN}"
+          printf 'VITE_WS_AUTO_QUERY_TOKEN_FALLBACK=%s\n' "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN}"
+          printf 'IMAGE_REF=%s\n' "${IMAGE_REF}"
+          printf 'RELEASE_DIR=%s\n' "${RELEASE_DIR}"
+          echo "::endgroup::"
+
+          {
+            echo "### Deploy configuration"
+            echo
+            echo "| Key | Value |"
+            echo "| --- | --- |"
+            printf '| %s | `%s` |\n' "SERVICE_NAME" "${SERVICE_NAME_CLEAN}"
+            printf '| %s | `%s` |\n' "DEPLOY_ENV" "${DEPLOY_ENV_CLEAN}"
+            printf '| %s | `%s` |\n' "SERVER_APPS_ROOT" "${SERVER_APPS_ROOT_CLEAN}"
+            printf '| %s | `%s` |\n' "SERVER_RUNTIME_ENV_FILE" "${SERVER_RUNTIME_ENV_FILE_CLEAN}"
+            printf '| %s | `%s` |\n' "HEALTHCHECK_URL" "${HEALTHCHECK_URL_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_APP_BASE_PATH" "${VITE_APP_BASE_PATH_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_API_BASE_URL" "${VITE_API_BASE_URL_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_AUTH_BASE_URL" "${VITE_AUTH_BASE_URL_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_USE_AUTH_SERVICE" "${VITE_USE_AUTH_SERVICE_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_WS_URL" "${VITE_WS_URL_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_WS_USE_QUERY_TOKEN" "${VITE_WS_USE_QUERY_TOKEN_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_WS_AUTO_QUERY_TOKEN_FALLBACK" "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN}"
+            printf '| %s | `%s` |\n' "IMAGE_REF" "${IMAGE_REF}"
+            printf '| %s | `%s` |\n' "RELEASE_DIR" "${RELEASE_DIR}"
+          } >> "${GITHUB_STEP_SUMMARY}"
 
           {
             printf 'SERVER_APPS_ROOT_CLEAN=%s\n' "${SERVER_APPS_ROOT_CLEAN}"
@@ -370,7 +423,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SERVER_SSH_KNOWN_HOSTS }}" | tr -d '\r' > ~/.ssh/known_hosts
+          printf '%s\n' "${SERVER_SSH_KNOWN_HOSTS}" | tr -d '\r' > ~/.ssh/known_hosts
           PORT="${SERVER_PORT_CLEAN}"
           ssh -p "${PORT}" "${SERVER_USER_CLEAN}@${SERVER_HOST_CLEAN}" \
             "mkdir -p '${RELEASE_DIR}'"
