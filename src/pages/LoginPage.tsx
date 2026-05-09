@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
@@ -122,12 +122,22 @@ export const LoginPage: React.FC = () => {
   return (
     <AuthLayoutSplit>
       <div className="flex flex-col">
+        <div className="mb-10 flex justify-center">
+          <Link to="/" className="inline-block transition-transform hover:scale-105 active:scale-95">
+            <img
+              src="/hacom-logo-horizontal.png"
+              alt="Hacom Holdings"
+              className="h-16 w-auto object-contain"
+            />
+          </Link>
+        </div>
+
         <header className="mb-8">
-          <h1 className="mb-2 text-2xl font-bold tracking-tight text-slate-900 whitespace-nowrap">
+          <h1 className="mb-2 text-3xl font-bold tracking-tight text-slate-900 whitespace-nowrap">
             Chào mừng trở lại với Hacom Chat
           </h1>
           <p className="text-base font-medium text-slate-500">
-            Đăng nhập vào tài khoản của bạn
+            Đăng nhập vào tài khoản của bạn để tiếp tục
           </p>
         </header>
 
