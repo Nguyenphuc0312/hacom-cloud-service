@@ -2195,6 +2195,9 @@ export const useWebSocket = (
   const leaveConversation = useCallback(
     (conversationId: string) => {
       if (!conversationId) return;
+      if (!conversationSyncStateRef.current.joinedConversationIds.has(conversationId)) {
+        return;
+      }
 
       emit(WebSocketEvents.CONVERSATION_LEAVE, {
         conversationId,
@@ -2250,6 +2253,7 @@ export const useWebSocket = (
 
   const stopTyping = useCallback(
     (conversationId: string) => {
+      if (!typingTimeoutRef.current) return;
       clearActiveTypingTimeout();
 
       emit(WebSocketEvents.CONVERSATION_TYPING_STOPPED, {
