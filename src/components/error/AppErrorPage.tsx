@@ -119,11 +119,12 @@ export const AppErrorPage: React.FC<AppErrorPageProps> = ({
       aria-labelledby="app-error-title"
     >
       <section className="flex w-full max-w-md flex-col items-center text-center animate-fade-in">
-        <div className="mb-6 flex justify-center">
+        <div className="mb-[clamp(16px,3dvh,28px)] flex justify-center">
           <img
             src={illustrationSrc}
             alt={isMaintenanceOrNotFound ? "Bảo trì" : "Lỗi ứng dụng"}
-            className="h-auto w-[280px] max-w-full object-contain drop-shadow-sm"
+            className="h-auto max-w-full object-contain drop-shadow-sm"
+            style={{ width: "clamp(160px, 35vmin, 280px)" }}
           />
         </div>
 
@@ -135,12 +136,13 @@ export const AppErrorPage: React.FC<AppErrorPageProps> = ({
 
         <h1
           id="app-error-title"
-          className="text-2xl font-bold tracking-tight text-text-primary sm:text-3xl"
+          className="font-bold tracking-tight text-text-primary"
+          style={{ fontSize: "clamp(1.25rem, 3vw, 1.875rem)" }}
         >
           {title}
         </h1>
 
-        <p className="mt-4 max-w-sm text-body text-text-secondary leading-relaxed">
+        <p className="mt-3 max-w-sm text-body text-text-secondary leading-relaxed">
           {description}
         </p>
 
@@ -157,7 +159,7 @@ export const AppErrorPage: React.FC<AppErrorPageProps> = ({
           </p>
         )}
 
-        <div className="mt-8 flex w-full flex-col items-center justify-center gap-3 sm:flex-row">
+        <div className="mt-[clamp(16px,3dvh,32px)] flex w-full flex-col items-center justify-center gap-3 sm:flex-row">
           {primaryAction ? renderAction(primaryAction, "primary", navigate) : null}
           {secondaryAction ? renderAction(secondaryAction, "secondary", navigate) : null}
         </div>

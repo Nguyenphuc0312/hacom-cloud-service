@@ -122,26 +122,30 @@ export const LoginPage: React.FC = () => {
   return (
     <AuthLayoutSplit>
       <div className="flex flex-col">
-        <div className="mb-10 flex justify-center">
+        <div className="mb-[clamp(12px,2dvh,20px)] flex justify-center">
           <Link to="/" className="inline-block transition-transform hover:scale-105 active:scale-95">
             <img
-              src="/hacom-logo-horizontal.png"
+              src="/logo-dung.png"
               alt="Hacom Holdings"
-              className="h-16 w-auto object-contain"
+              className="w-auto object-contain mix-blend-multiply"
+              style={{ height: "clamp(48px, 8dvh, 72px)" }}
             />
           </Link>
         </div>
 
-        <header className="mb-8">
-          <h1 className="mb-2 text-3xl font-bold tracking-tight text-slate-900 whitespace-nowrap">
+        <header className="mb-[clamp(10px,1.5dvh,16px)]">
+          <h1
+            className="mb-1 font-bold tracking-tight text-slate-900"
+            style={{ fontSize: "clamp(1.125rem, 2.5vw, 1.5rem)" }}
+          >
             Chào mừng trở lại với Hacom Chat
           </h1>
-          <p className="text-base font-medium text-slate-500">
+          <p className="text-sm font-medium text-slate-500">
             Đăng nhập vào tài khoản của bạn để tiếp tục
           </p>
         </header>
 
-        <div className="mb-8 flex rounded-xl bg-slate-100 p-1" role="tablist" aria-label="Phương thức đăng nhập">
+        <div className="mb-[clamp(10px,1.5dvh,16px)] flex rounded-xl bg-slate-100 p-1" role="tablist" aria-label="Phương thức đăng nhập">
           <button
             id="login-tab-password"
             type="button"
@@ -208,15 +212,15 @@ export const LoginPage: React.FC = () => {
         )}
 
         {authMethod === "qr" && (
-          <div className="space-y-6">
-            <div className="rounded-xl bg-emerald-50 p-4 text-center">
+          <div className="space-y-3">
+            <div className="rounded-lg bg-emerald-50 px-3 py-2.5 text-center">
               <p className="flex items-center justify-center gap-2 text-sm font-semibold text-emerald-800">
-                <ShieldCheckIcon className="h-5 w-5 text-emerald-600" aria-hidden="true" />
+                <ShieldCheckIcon className="h-4 w-4 text-emerald-600" aria-hidden="true" />
                 Sử dụng ứng dụng di động để quét
               </p>
             </div>
 
-            <div className="flex justify-center py-4">
+            <div className="flex justify-center">
               <QrLoginPanel
                 rememberMe={rememberMe}
                 onSuccess={() => {
@@ -227,11 +231,11 @@ export const LoginPage: React.FC = () => {
               />
             </div>
 
-            <div className="flex justify-center pt-4">
+            <div className="flex justify-center">
               <button
                 type="button"
                 onClick={() => navigate('/forgot-password')}
-                className="flex h-11 w-full max-w-[200px] items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 active:scale-95"
+                className="flex h-9 w-full max-w-[200px] items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-600 transition-all hover:bg-slate-50 active:scale-95"
               >
                 Quên mật khẩu
               </button>
