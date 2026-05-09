@@ -39,6 +39,7 @@
     "tooManyFiles": "Maximum {{max}} files allowed",
     "fileTooLargeNamed": "{{name}} is too large",
     "unsupportedTypeNamed": "{{name}} has an unsupported file type",
-    "totalSizeTooLarge": "Total file size limit exceeded"
+    "totalSizeTooLarge": "Total file size limit exceeded",
+    "mimeExtensionMismatch": "File extension does not match file type"
   }
 }

@@ -44,6 +44,7 @@ import { resolveOverlayPlacements } from "../../utils/overlayResolver";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { logScrollTrace } from "../../utils/scrollTrace";
 import { logChatPerformance } from "../../utils/chatPerformance";
+import { resolveUploadFileType } from "../../utils/uploadPolicy";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import { getConversationDisplayName } from "../../utils/messageHelpers";
 import { shareContactUseCase } from "../../features/chat/usecases/shareContact";
@@ -61,11 +62,8 @@ const PinnedMessagesPanel = React.lazy(
 // ── Convert upload queue metadata to Attachment ─────────────────────
 
 function metaToAttachment(meta: UploadedFileMeta): Attachment {
-  const mime = meta.mimeType || "application/octet-stream";
-  let attachmentType: string = "file";
-  if (mime.startsWith("image/")) attachmentType = "image";
-  else if (mime.startsWith("video/")) attachmentType = "video";
-  else if (mime.startsWith("audio/")) attachmentType = "audio";
+  const mime = meta.mimeType || "";
+  const attachmentType = resolveUploadFileType(mime);
 
   return {
     id: meta.fileId,

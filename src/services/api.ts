@@ -39,6 +39,7 @@ import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
 import { getCsrfToken, isRefreshTokenCookieMode } from "./tokenService";
 import { isUuid } from "../utils/isUuid";
 import { logger } from "../utils/logger";
+import { resolveUploadMimeTypeForFile } from "../utils/uploadPolicy";
 
 const DIRECT_DM_TRACE_PREFIX = "direct_dm.request_trace";
 const DIRECT_DM_PATH = "/conversations/direct";
@@ -1163,7 +1164,17 @@ export const fileApi = {
     onProgress?: (progress: number) => void,
     signal?: AbortSignal,
   ) => {
-    const mimeType = file.type || "application/octet-stream";
+    const mimeType = resolveUploadMimeTypeForFile(file);
+    if (!mimeType) {
+      throw new ApiContractError("Unable to determine file type", {
+        statusCode: 400,
+        code: ErrorCode.VALIDATION_ERROR,
+        details: {
+          fileName: file.name,
+          mimeType: file.type,
+        },
+      });
+    }
     const signed = await fileApi.requestUploadUrl({
       conversationId,
       fileName: file.name,
@@ -1173,8 +1184,8 @@ export const fileApi = {
     const signedData = unwrapApiSuccess(signed);
     const uploadMethod = signedData.uploadMethod || "PUT";
     const uploadHeaders = {
-      "Content-Type": mimeType,
       ...(signedData.uploadHeaders || {}),
+      "Content-Type": mimeType,
     };
 
     await axios.request({

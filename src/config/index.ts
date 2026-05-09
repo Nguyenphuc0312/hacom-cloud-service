@@ -1,5 +1,9 @@
 import { logger } from "../utils/logger";
 import { MESSAGE_HARD_LIMIT } from "../utils/messageLengthPolicy";
+import {
+  DEFAULT_ALLOWED_UPLOAD_MIME_TYPES,
+  UPLOAD_INPUT_ACCEPT,
+} from "../utils/uploadPolicy";
 
 /**
  * @fileoverview Cấu hình ứng dụng
@@ -310,20 +314,15 @@ export const PAGINATION_CONFIG = {
 export const UPLOAD_CONFIG = {
   MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
   MAX_IMAGE_SIZE: 5 * 1024 * 1024, // 5MB
-  ALLOWED_IMAGE_TYPES: ["image/jpeg", "image/png", "image/gif", "image/webp"],
-  ALLOWED_FILE_TYPES: [
+  ALLOWED_IMAGE_TYPES: [
     "image/jpeg",
     "image/png",
     "image/gif",
     "image/webp",
-    "application/pdf",
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "text/plain",
-    "application/zip",
+    "image/bmp",
   ],
+  ALLOWED_FILE_TYPES: [...DEFAULT_ALLOWED_UPLOAD_MIME_TYPES],
+  ACCEPT: UPLOAD_INPUT_ACCEPT,
 };
 
 // WebSocket
