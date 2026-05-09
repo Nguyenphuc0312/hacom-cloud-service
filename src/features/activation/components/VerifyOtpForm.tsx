@@ -4,7 +4,6 @@ import { LockClosedIcon } from "@heroicons/react/24/outline";
 import { Button, Input } from "../../../components/ui";
 import { EmailOtpInput } from "../../../components/auth";
 import { PASSWORD_MIN_LENGTH } from "../../../constants/passwordPolicy";
-import { calculatePasswordStrength } from "../../../lib/validations";
 
 interface VerifyOtpFormProps {
   otp: string;
@@ -36,13 +35,6 @@ export const VerifyOtpForm: React.FC<VerifyOtpFormProps> = ({
   onResend,
 }) => {
   const { t } = useTranslation("auth");
-  const strength = calculatePasswordStrength(password);
-  const strengthLabel =
-    strength === "strong"
-      ? t("activation.setPassword.strong")
-      : strength === "medium"
-        ? t("activation.setPassword.medium")
-        : t("activation.setPassword.weak");
   const passwordsMatch = password === confirmPassword;
 
   return (
@@ -91,10 +83,6 @@ export const VerifyOtpForm: React.FC<VerifyOtpFormProps> = ({
         placeholder={t("auth:placeholders.password")}
         disabled={isSubmitting}
       />
-
-      <p className="text-xs text-text-muted">
-        {t("activation.setPassword.strength", { level: strengthLabel })}
-      </p>
 
       <Input
         type="password"

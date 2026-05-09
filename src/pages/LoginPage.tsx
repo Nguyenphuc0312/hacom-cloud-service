@@ -1,9 +1,10 @@
 import React, { useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
-import { AuthShell, QrLoginPanel, AuthLogo } from "../components/auth";
+import { KeyIcon, QrCodeIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { QrLoginPanel, AuthLayoutSplit } from "../components/auth";
 import { PasswordLoginForm } from "../components/auth/PasswordLoginForm";
 import { loginSchema } from "../lib/validations";
 import type { LoginFormData } from "../lib/validations";
@@ -119,38 +120,63 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <AuthShell maxWidth="sm" className="max-w-md mx-auto my-auto flex flex-col justify-center min-h-[100dvh] p-6 text-slate-800">
-      <div className="w-full max-w-[420px] rounded-2xl bg-white p-7 shadow-lg sm:p-9">
-        <AuthLogo subtitle="Đăng nhập để tiếp tục trò chuyện nội bộ" />
+    <AuthLayoutSplit>
+      <div className="flex flex-col">
+        <div className="mb-10 flex justify-center">
+          <Link to="/" className="inline-block transition-transform hover:scale-105 active:scale-95">
+            <img
+              src="/hacom-logo-horizontal.png"
+              alt="Hacom Holdings"
+              className="h-16 w-auto object-contain"
+            />
+          </Link>
+        </div>
 
-        <div className="mb-7 flex border-b border-slate-200">
+        <header className="mb-8">
+          <h1 className="mb-2 text-3xl font-bold tracking-tight text-slate-900 whitespace-nowrap">
+            Chào mừng trở lại với Hacom Chat
+          </h1>
+          <p className="text-base font-medium text-slate-500">
+            Đăng nhập vào tài khoản của bạn để tiếp tục
+          </p>
+        </header>
+
+        <div className="mb-8 flex rounded-xl bg-slate-100 p-1" role="tablist" aria-label="Phương thức đăng nhập">
           <button
+            id="login-tab-password"
+            type="button"
+            role="tab"
+            aria-selected={authMethod === "password"}
+            aria-controls="login-panel-password"
             onClick={() => setAuthMethod("password")}
-            className={`flex-1 pb-3 text-sm font-bold uppercase transition-colors ${
-              authMethod === "password"
-                ? "text-[#1a73e8] border-b-2 border-[#1a73e8]"
-                : "text-slate-500 hover:text-slate-700"
-            }`}
+            className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-all ${authMethod === "password"
+              ? "bg-white text-[#1d5fd6] shadow-sm"
+              : "text-slate-600 hover:text-slate-800"
+              }`}
           >
-            TÀI KHOẢN
+            <KeyIcon className="h-4 w-4" aria-hidden="true" />
+            Tài khoản
           </button>
           <button
+            id="login-tab-qr"
+            type="button"
+            role="tab"
+            aria-selected={authMethod === "qr"}
             onClick={() => setAuthMethod("qr")}
-            className={`flex-1 pb-3 text-sm font-bold uppercase transition-colors flex items-center justify-center gap-1.5 ${
-              authMethod === "qr"
-                ? "text-[#1a73e8] border-b-2 border-[#1a73e8]"
-                : "text-slate-500 hover:text-slate-700"
-            }`}
+            className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-all ${authMethod === "qr"
+              ? "bg-white text-[#1d5fd6] shadow-sm"
+              : "text-slate-600 hover:text-slate-800"
+              }`}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><path d="M9 14v7x"></path><path d="M6 17h.01"></path><path d="M3 21h3"></path><path d="M3 14h3"></path></svg>
-            QUÉT MÃ QR
+            <QrCodeIcon className="h-4 w-4" aria-hidden="true" />
+            Quét QR
           </button>
         </div>
 
         {authMethod === "password" && (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {(authStatus === "locked" || authStatus === "disabled") &&
-            lockedAccount ? (
+              lockedAccount ? (
               <LockedOrDisabledState
                 status={lockedAccount.status}
                 message={lockedAccount.message || error}
@@ -167,48 +193,54 @@ export const LoginPage: React.FC = () => {
               errors={errors}
               isLoading={isLoading}
               isSubmitting={isSubmitting}
-              passwordValue={watch("password")}
               authError={
                 authStatus === "locked" || authStatus === "disabled" ? null : error
               }
               onSubmit={handleSubmit(onSubmit)}
             />
+
+            <div className="relative py-4">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-200"></div>
+              </div>
+            </div>
           </div>
         )}
 
         {authMethod === "qr" && (
-          <div className="space-y-4">
-            <p className="text-center text-sm text-slate-500">
-              Mở ứng dụng di động để quét mã
-            </p>
-            <QrLoginPanel
-              rememberMe={rememberMe}
-              onSuccess={() => {
-                toast.success("Đăng nhập bằng QR thành công.");
-                const from = (location.state as { from?: string })?.from ?? "/chat";
-                navigate(from, { replace: true });
-              }}
-            />
-            <div className="mt-5 flex items-center gap-3 pt-2">
+          <div className="space-y-6">
+            <div className="rounded-xl bg-emerald-50 p-4 text-center">
+              <p className="flex items-center justify-center gap-2 text-sm font-semibold text-emerald-800">
+                <ShieldCheckIcon className="h-5 w-5 text-emerald-600" aria-hidden="true" />
+                Sử dụng ứng dụng di động để quét
+              </p>
+            </div>
+
+            <div className="flex justify-center py-4">
+              <QrLoginPanel
+                rememberMe={rememberMe}
+                onSuccess={() => {
+                  toast.success("Đăng nhập bằng QR thành công.");
+                  const from = (location.state as { from?: string })?.from ?? "/chat";
+                  navigate(from, { replace: true });
+                }}
+              />
+            </div>
+
+            <div className="flex justify-center pt-4">
               <button
                 type="button"
                 onClick={() => navigate('/forgot-password')}
-                className="flex-1 h-11 rounded-lg border border-slate-200 bg-slate-50 text-[#2b7ff6] font-semibold text-sm hover:bg-slate-100 transition-colors"
+                className="flex h-11 w-full max-w-[200px] items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 active:scale-95"
               >
                 Quên mật khẩu
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate('/register')}
-                className="flex-1 h-11 rounded-lg bg-[#2b7ff6] hover:bg-blue-600 text-white font-semibold text-sm transition-colors"
-              >
-                Đăng ký
               </button>
             </div>
           </div>
         )}
+
       </div>
-    </AuthShell>
+    </AuthLayoutSplit>
   );
 };
 

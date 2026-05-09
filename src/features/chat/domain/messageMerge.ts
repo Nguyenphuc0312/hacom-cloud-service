@@ -7,6 +7,7 @@ import {
   messagesShareIdentity,
 } from "./messageIdentity";
 import {
+  compareMessages,
   findSortedInsertIndex,
   sortMessagesByCanonicalOrder,
 } from "./messageOrdering";
@@ -264,12 +265,25 @@ export const upsertMessageInCache = (
       cache.messages[existingIndex],
       normalizedIncoming,
     );
-    cache.messages.splice(existingIndex, 1);
-    cache.messages.splice(
-      findSortedInsertIndex(cache.messages, merged),
-      0,
-      merged,
-    );
+    const prev = existingIndex > 0 ? cache.messages[existingIndex - 1] : null;
+    const next =
+      existingIndex + 1 < cache.messages.length
+        ? cache.messages[existingIndex + 1]
+        : null;
+    const shouldReposition =
+      (prev && compareMessages(prev, merged) > 0) ||
+      (next && compareMessages(merged, next) > 0);
+
+    if (shouldReposition) {
+      cache.messages.splice(existingIndex, 1);
+      cache.messages.splice(
+        findSortedInsertIndex(cache.messages, merged),
+        0,
+        merged,
+      );
+    } else {
+      cache.messages[existingIndex] = merged;
+    }
   } else {
     cache.messages.splice(
       findSortedInsertIndex(cache.messages, normalizedIncoming),

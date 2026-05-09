@@ -7,10 +7,15 @@ import {
   PaperClipIcon,
   XCircleIcon,
   XMarkIcon,
+  EllipsisHorizontalIcon,
+  PencilIcon,
 } from "@heroicons/react/24/outline";
+
+
 import { AttachmentMenu } from "./AttachmentMenu";
 import { AttachmentPreview } from "./AttachmentPreview";
 import { AttachmentTray } from "./AttachmentTray";
+import { FormatToolbar } from "./FormatToolbar";
 import { EmojiButton } from "./EmojiButton";
 import { SendButton, type SendButtonState } from "./SendButton";
 import { ShareContactModal } from "../modals/ShareContactModal";
@@ -41,6 +46,8 @@ import {
   getInlineMessageValidationState,
   MESSAGE_SOFT_LIMIT,
 } from "../../utils/messageLengthPolicy";
+
+
 
 export interface MentionCandidate {
   id: string;
@@ -186,16 +193,6 @@ const COMPOSER_VISUAL_STATE_MAP: Record<
   },
 };
 
-const isDesktopViewport = (): boolean => {
-  if (
-    typeof window === "undefined" ||
-    typeof window.matchMedia !== "function"
-  ) {
-    return false;
-  }
-
-  return !window.matchMedia("(max-width: 768px), (pointer: coarse)").matches;
-};
 
 const buildMentionMatch = (
   text: string,
@@ -261,11 +258,11 @@ const normalizeMentionCandidates = (
   return normalized;
 };
 
-const MessageInputComponent = React.forwardRef<
-  MessageInputHandle,
-  MessageInputProps
->(function MessageInput(
-  {
+const MessageInputComponent = React.forwardRef(function MessageInput(
+  props: MessageInputProps,
+  ref: React.ForwardedRef<MessageInputHandle>
+) {
+  const {
     value: externalValue,
     valueResetKey = 0,
     onChange,
@@ -299,22 +296,19 @@ const MessageInputComponent = React.forwardRef<
     hasUploadingDrafts = false,
     hasFailedDrafts = false,
     hasReadyDrafts = false,
-  },
-  ref,
-) {
+  } = props;
   const { t } = useTranslation();
   const optimisticAnnouncement = t("chat:composer.optimisticAnnouncement", {
     defaultValue: "Tin nhắn đang được gửi",
   });
   const rootRef = React.useRef<HTMLDivElement>(null);
   const [draftValue, setDraftValue] = React.useState(externalValue);
-  const [isDesktopLayout, setIsDesktopLayout] = React.useState(() =>
-    isDesktopViewport(),
-  );
-  const { textareaRef } = useAutoResizeTextarea({
+  const [isFormatModeExpanded, setIsFormatModeExpanded] = React.useState(false);
+
+  const { textareaRef, recomputeHeight } = useAutoResizeTextarea({
     value: draftValue,
     minRows: 1,
-    maxRows: isDesktopLayout ? 5 : 4,
+    maxRows: isFormatModeExpanded ? 15 : 5,
   });
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const renderCountRef = React.useRef(0);
@@ -334,6 +328,18 @@ const MessageInputComponent = React.forwardRef<
   const primarySendLockedRef = React.useRef(false);
 
   const mentionListId = React.useId();
+
+  const scheduleComposerResize = React.useCallback(() => {
+    if (
+      typeof window === "undefined" ||
+      typeof window.requestAnimationFrame !== "function"
+    ) {
+      recomputeHeight();
+      return;
+    }
+
+    window.requestAnimationFrame(recomputeHeight);
+  }, [recomputeHeight]);
 
   React.useLayoutEffect(() => {
     if (import.meta.env.DEV) {
@@ -567,6 +573,7 @@ const MessageInputComponent = React.forwardRef<
 
     setDraftValue("");
     onChange("");
+    scheduleComposerResize();
     clearMentionState();
     stopTypingNow();
     setLiveRegionMessage(
@@ -579,6 +586,7 @@ const MessageInputComponent = React.forwardRef<
   }, [
     clearMentionState,
     onChange,
+    scheduleComposerResize,
     optimisticAnnouncement,
     sendTextMessage,
     stopTypingNow,
@@ -598,7 +606,7 @@ const MessageInputComponent = React.forwardRef<
           ? t("chat:composer.queuedAnnouncement")
           : result === "optimistic"
             ? optimisticAnnouncement
-          : t("chat:composer.sentAnnouncement"),
+            : t("chat:composer.sentAnnouncement"),
     );
   }, [optimisticAnnouncement, sendAttachmentMessage, stopTypingNow, t]);
 
@@ -640,6 +648,7 @@ const MessageInputComponent = React.forwardRef<
         await Promise.resolve(onSend(content || undefined));
         setDraftValue("");
         onChange("");
+        scheduleComposerResize();
         clearMentionState();
         stopTypingNow();
         setLiveRegionMessage(optimisticAnnouncement);
@@ -669,6 +678,7 @@ const MessageInputComponent = React.forwardRef<
     onChange,
     onSend,
     releasePrimarySendLock,
+    scheduleComposerResize,
     selectedFile,
     stopTypingNow,
     submitDisabled,
@@ -686,6 +696,7 @@ const MessageInputComponent = React.forwardRef<
 
       setDraftValue(nextValue);
       onChange(nextValue);
+      scheduleComposerResize();
       if (nextValue.length <= MESSAGE_SOFT_LIMIT) {
         setShowLongPasteNotice(false);
       }
@@ -697,13 +708,14 @@ const MessageInputComponent = React.forwardRef<
         isFocused: event.target === document.activeElement,
       });
     },
-    [notifyInput, onChange, recordInputLatency, updateMentionState],
+    [notifyInput, onChange, recordInputLatency, scheduleComposerResize, updateMentionState],
   );
 
   const handleEmojiChange = React.useCallback(
     (nextValue: string) => {
       setDraftValue(nextValue);
       onChange(nextValue);
+      scheduleComposerResize();
       updateMentionState(nextValue, nextValue.length);
       recordInputLatency(nextValue);
 
@@ -712,7 +724,7 @@ const MessageInputComponent = React.forwardRef<
         isFocused: true,
       });
     },
-    [notifyInput, onChange, recordInputLatency, updateMentionState],
+    [notifyInput, onChange, recordInputLatency, scheduleComposerResize, updateMentionState],
   );
 
   const handleSendAsTextFile = React.useCallback(() => {
@@ -731,6 +743,7 @@ const MessageInputComponent = React.forwardRef<
 
     setDraftValue("");
     onChange("");
+    scheduleComposerResize();
     clearMentionState();
     stopTypingNow();
     setShowLongPasteNotice(false);
@@ -739,7 +752,7 @@ const MessageInputComponent = React.forwardRef<
         defaultValue: "Đã chuyển nội dung thành tệp văn bản để gửi",
       }),
     );
-  }, [clearMentionState, draftValue, onAddFiles, onChange, stopTypingNow, t]);
+  }, [clearMentionState, draftValue, onAddFiles, onChange, scheduleComposerResize, stopTypingNow, t]);
 
   const handleCreatePoll = React.useCallback(
     (payload: PollCreatePayload) => {
@@ -768,6 +781,7 @@ const MessageInputComponent = React.forwardRef<
 
       setDraftValue(nextValue);
       onChange(nextValue);
+      scheduleComposerResize();
       clearMentionState();
       recordInputLatency(nextValue);
 
@@ -785,6 +799,7 @@ const MessageInputComponent = React.forwardRef<
       mentionMatch,
       onChange,
       recordInputLatency,
+      scheduleComposerResize,
       textareaRef,
     ],
   );
@@ -805,16 +820,16 @@ const MessageInputComponent = React.forwardRef<
   const isSubmitBusy = isUploading || isSending || isPrimarySendLocked;
   const canSend = hasQueueDrafts
     ? !submitDisabled &&
-      !isSubmitBusy &&
-      messageValidation.canSendInlineMessage &&
-      !hasUploadingDrafts &&
-      (hasReadyDrafts || hasText)
+    !isSubmitBusy &&
+    messageValidation.canSendInlineMessage &&
+    !hasUploadingDrafts &&
+    (hasReadyDrafts || hasText)
     : selectedFile
       ? !submitDisabled && !isSubmitBusy && composerMode === "online"
       : !submitDisabled &&
-        !isSubmitBusy &&
-        hasText &&
-        messageValidation.canSendInlineMessage;
+      !isSubmitBusy &&
+      hasText &&
+      messageValidation.canSendInlineMessage;
   const disableAttachmentActions = attachmentsDisabled || isSubmitBusy;
   const sendButtonLabel = t("chat:composer.sendMessage");
   const composerVisualState: ComposerVisualState = disabled
@@ -873,7 +888,7 @@ const MessageInputComponent = React.forwardRef<
             mentionSuggestions.length === 0
               ? 0
               : (current - 1 + mentionSuggestions.length) %
-                mentionSuggestions.length,
+              mentionSuggestions.length,
           );
           return;
         }
@@ -897,6 +912,16 @@ const MessageInputComponent = React.forwardRef<
           clearMentionState();
           return;
         }
+      }
+
+      if (
+        event.key.toLowerCase() === "x" &&
+        event.shiftKey &&
+        (event.metaKey || event.ctrlKey)
+      ) {
+        event.preventDefault();
+        setIsFormatModeExpanded((prev) => !prev);
+        return;
       }
 
       if (event.key === "Escape") {
@@ -942,23 +967,6 @@ const MessageInputComponent = React.forwardRef<
     ],
   );
 
-  React.useEffect(() => {
-    if (
-      typeof window === "undefined" ||
-      typeof window.matchMedia !== "function"
-    ) {
-      return;
-    }
-
-    const mediaQuery = window.matchMedia(
-      "(min-width: 769px) and (pointer: fine)",
-    );
-    const handleChange = () => setIsDesktopLayout(mediaQuery.matches);
-
-    handleChange();
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
-  }, []);
 
   React.useEffect(() => {
     if ((mode === "reply" || mode === "edit") && textareaRef.current) {
@@ -968,7 +976,6 @@ const MessageInputComponent = React.forwardRef<
 
   React.useEffect(() => {
     if (!conversationId || !textareaRef.current) return;
-    if (!isDesktopViewport()) return;
 
     textareaRef.current.focus();
   }, [conversationId, textareaRef]);
@@ -1212,278 +1219,339 @@ const MessageInputComponent = React.forwardRef<
           <div
             data-composer-state={composerVisualState}
             className={clsx(
-              "chat-composer-shell relative flex min-w-0 flex-1 items-end rounded-xl border px-3 py-2 transition-micro",
+              "chat-composer-shell relative flex min-w-0 flex-1 flex-col rounded-xl border transition-micro",
               composerVisualStyles.shell,
             )}
           >
-            {showMentionPanel && (
-              <div
-                id={mentionListId}
-                role="listbox"
-                aria-label={t("chat:composer.mentionList")}
+            <div className="flex w-full items-end px-3 py-2">
+              {showMentionPanel && (
+                <div
+                  id={mentionListId}
+                  role="listbox"
+                  aria-label={t("chat:composer.mentionList")}
+                  className={clsx(
+                    "absolute bottom-full left-2 right-2 z-dropdown mb-2 max-h-52 overflow-y-auto rounded-xl border border-border bg-surface-raised shadow-elev2",
+                    "p-1",
+                  )}
+                >
+                  {mentionSuggestions.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-text-muted">
+                      {t("chat:composer.noMentionResults")}
+                    </p>
+                  ) : (
+                    mentionSuggestions.map((candidate, index) => {
+                      const isActive = index === activeMentionIndex;
+                      const mentionLabel =
+                        resolveUserDisplayName(candidate, {
+                          allowLegacyFallback: true,
+                        }) || candidate.username;
+                      return (
+                        <button
+                          key={`${candidate.id}:${candidate.username}`}
+                          id={`${mentionListId}-option-${index}`}
+                          type="button"
+                          role="option"
+                          aria-selected={isActive}
+                          className={clsx(
+                            "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left",
+                            "transition-colors",
+                            isActive
+                              ? "bg-primary/15 text-text-primary"
+                              : "text-text-secondary hover:bg-surface-hover",
+                          )}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            handleMentionSelect(candidate);
+                          }}
+                        >
+                          <span className="truncate text-sm font-medium">
+                            {mentionLabel}
+                          </span>
+                          <span className="truncate text-xs text-text-muted">
+                            @{candidate.username}
+                          </span>
+                          {candidate.displayName &&
+                            candidate.displayName !== mentionLabel && (
+                              <span className="truncate text-xs text-text-muted">
+                                {candidate.displayName}
+                              </span>
+                            )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              <textarea
+                ref={textareaRef}
+                data-testid="chat-composer-input"
+                value={draftValue}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                onSelect={(event) => {
+                  const caret =
+                    event.currentTarget.selectionStart ?? draftValue.length;
+                  updateMentionState(draftValue, caret);
+                }}
+                onBlur={() => {
+                  setIsComposerFocused(false);
+                  notifyBlur();
+                  clearMentionState();
+                }}
+                onPaste={(event) => {
+                  const pastedText = event.clipboardData.getData("text");
+                  const selectionLength =
+                    (event.currentTarget.selectionEnd ?? 0) -
+                    (event.currentTarget.selectionStart ?? 0);
+                  const nextLength =
+                    draftValue.length - Math.max(0, selectionLength) + pastedText.length;
+                  if (nextLength >= MESSAGE_SOFT_LIMIT) {
+                    setShowLongPasteNotice(true);
+                  }
+                }}
+                onFocus={() => setIsComposerFocused(true)}
+                placeholder={t("chat:composer.placeholder")}
+                disabled={disabled}
+                wrap="soft"
+                rows={1}
+                role="textbox"
+                aria-multiline="true"
+                aria-label={t("chat:composer.messageInput")}
+                aria-expanded={showMentionPanel}
+                aria-controls={showMentionPanel ? mentionListId : undefined}
+                aria-activedescendant={
+                  showMentionPanel && mentionSuggestions.length > 0
+                    ? `${mentionListId}-option-${activeMentionIndex}`
+                    : undefined
+                }
                 className={clsx(
-                  "absolute bottom-full left-2 right-2 z-dropdown mb-2 max-h-52 overflow-y-auto rounded-xl border border-border bg-surface-raised shadow-elev2",
-                  "p-1",
+                  "chat-composer-textarea w-full min-h-[var(--control-height-md)] flex-1 resize-none bg-transparent px-1 py-1.5",
+                  "text-sm text-text-primary placeholder:text-text-muted",
+                  "transition-colors focus:outline-none",
+                  disabled && "cursor-not-allowed opacity-70",
+                )}
+              />
+
+              <div
+                className={clsx(
+                  "chat-composer-action-group ml-1 flex shrink-0 items-end gap-1 border-l pl-2",
+                  composerVisualStyles.attachmentDivider,
                 )}
               >
-                {mentionSuggestions.length === 0 ? (
-                  <p className="px-3 py-2 text-xs text-text-muted">
-                    {t("chat:composer.noMentionResults")}
-                  </p>
-                ) : (
-                  mentionSuggestions.map((candidate, index) => {
-                    const isActive = index === activeMentionIndex;
-                    const mentionLabel =
-                      resolveUserDisplayName(candidate, {
-                        allowLegacyFallback: true,
-                      }) || candidate.username;
-                    return (
-                      <button
-                        key={`${candidate.id}:${candidate.username}`}
-                        id={`${mentionListId}-option-${index}`}
-                        type="button"
-                        role="option"
-                        aria-selected={isActive}
-                        className={clsx(
-                          "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left",
-                          "transition-colors",
-                          isActive
-                            ? "bg-primary/15 text-text-primary"
-                            : "text-text-secondary hover:bg-surface-hover",
-                        )}
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          handleMentionSelect(candidate);
-                        }}
-                      >
-                        <span className="truncate text-sm font-medium">
-                          {mentionLabel}
-                        </span>
-                        <span className="truncate text-xs text-text-muted">
-                          @{candidate.username}
-                        </span>
-                        {candidate.displayName &&
-                          candidate.displayName !== mentionLabel && (
-                            <span className="truncate text-xs text-text-muted">
-                              {candidate.displayName}
-                            </span>
-                          )}
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-            )}
-
-            <textarea
-              ref={textareaRef}
-              data-testid="chat-composer-input"
-              value={draftValue}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              onSelect={(event) => {
-                const caret =
-                  event.currentTarget.selectionStart ?? draftValue.length;
-                updateMentionState(draftValue, caret);
-              }}
-              onBlur={() => {
-                setIsComposerFocused(false);
-                notifyBlur();
-                clearMentionState();
-              }}
-              onPaste={(event) => {
-                const pastedText = event.clipboardData.getData("text");
-                const selectionLength =
-                  (event.currentTarget.selectionEnd ?? 0) -
-                  (event.currentTarget.selectionStart ?? 0);
-                const nextLength =
-                  draftValue.length - Math.max(0, selectionLength) + pastedText.length;
-                if (nextLength >= MESSAGE_SOFT_LIMIT) {
-                  setShowLongPasteNotice(true);
-                }
-              }}
-              onFocus={() => setIsComposerFocused(true)}
-              placeholder={t("chat:composer.placeholder")}
-              disabled={disabled}
-              rows={1}
-              role="textbox"
-              aria-multiline="true"
-              aria-label={t("chat:composer.messageInput")}
-              aria-expanded={showMentionPanel}
-              aria-controls={showMentionPanel ? mentionListId : undefined}
-              aria-activedescendant={
-                showMentionPanel && mentionSuggestions.length > 0
-                  ? `${mentionListId}-option-${activeMentionIndex}`
-                  : undefined
-              }
-              className={clsx(
-                "chat-composer-textarea w-full min-h-[var(--control-height-md)] flex-1 resize-none bg-transparent px-1 py-1.5",
-                "text-sm text-text-primary placeholder:text-text-muted",
-                "transition-colors focus:outline-none",
-                disabled && "cursor-not-allowed opacity-70",
-              )}
-            />
-
-            <div
-              className={clsx(
-                "chat-composer-action-group ml-1 flex shrink-0 items-end gap-1 border-l pl-2",
-                composerVisualStyles.attachmentDivider,
-              )}
-            >
-              <EmojiButton
-                value={draftValue}
-                onChange={handleEmojiChange}
-                textareaRef={textareaRef}
-                disabled={disabled}
-              />
-              <div className="relative">
+                <EmojiButton
+                  value={draftValue}
+                  onChange={handleEmojiChange}
+                  textareaRef={textareaRef}
+                  disabled={disabled}
+                />
                 <button
                   type="button"
-                  onClick={() => setShowAttachmentMenu((previous) => !previous)}
+                  onClick={() => openFilePicker("mixed", fileInputRef.current)}
                   className={clsx(
                     "chat-composer-attachment inline-flex h-[var(--control-height-md)] w-[var(--control-height-md)] items-center justify-center rounded-md transition-colors",
-                    showAttachmentMenu
-                      ? "bg-surface-active text-text-primary"
-                      : composerVisualStyles.attachmentButton,
+                    composerVisualStyles.attachmentButton,
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                     disableAttachmentActions && "cursor-not-allowed opacity-50",
                   )}
                   aria-label={t("chat:composer.attachFile")}
-                  aria-haspopup="menu"
-                  aria-expanded={showAttachmentMenu}
                   disabled={disableAttachmentActions}
                 >
                   <PaperClipIcon className="h-[18px] w-[18px]" />
                 </button>
 
-                {showAttachmentMenu && (
-                  <AttachmentMenu
-                    onSelect={handleAttachmentSelect}
-                    onClose={() => setShowAttachmentMenu(false)}
-                    canShareContact={
-                      Boolean(onShareContact) &&
-                      Boolean(currentUserId) &&
-                      Boolean(conversationId)
-                    }
-                    className="absolute bottom-full right-0 z-dropdown mb-2"
-                  />
-                )}
+                <button
+                  type="button"
+                  onClick={() => setIsFormatModeExpanded((prev) => !prev)}
+                  className={clsx(
+                    "chat-composer-attachment inline-flex h-[var(--control-height-md)] w-[var(--control-height-md)] items-center justify-center rounded-md transition-colors",
+                    isFormatModeExpanded
+                      ? "bg-surface-active text-text-primary"
+                      : composerVisualStyles.attachmentButton,
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+                    disabled && "cursor-not-allowed opacity-50",
+                  )}
+                  aria-label="Định dạng tin nhắn"
+                  title="Định dạng tin nhắn (Cmd+Shift+X)"
+                  disabled={disabled}
+                >
+                  <div className={clsx("relative flex items-center justify-center", "h-[18px] w-[18px]")}>
+                    <span className="font-bold text-sm tracking-tighter">A</span>
+                    <PencilIcon className="absolute bottom-[2px] -right-[4px] h-[10px] w-[10px]" strokeWidth={2.5} />
+                  </div>
+                </button>
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowAttachmentMenu((previous) => !previous)}
+                    className={clsx(
+                      "chat-composer-attachment inline-flex h-[var(--control-height-md)] w-[var(--control-height-md)] items-center justify-center rounded-md transition-colors",
+                      showAttachmentMenu
+                        ? "bg-surface-active text-text-primary"
+                        : composerVisualStyles.attachmentButton,
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+                      disableAttachmentActions && "cursor-not-allowed opacity-50",
+                    )}
+                    aria-label={t("chat:header.moreActions", { defaultValue: "Thêm hành động" })}
+                    aria-haspopup="menu"
+                    aria-expanded={showAttachmentMenu}
+                    disabled={disableAttachmentActions}
+                  >
+                    <EllipsisHorizontalIcon className="h-[20px] w-[20px]" />
+                  </button>
+
+                  {showAttachmentMenu && (
+                    <AttachmentMenu
+                      onSelect={handleAttachmentSelect}
+                      onClose={() => setShowAttachmentMenu(false)}
+                      canShareContact={
+                        Boolean(onShareContact) &&
+                        Boolean(currentUserId) &&
+                        Boolean(conversationId)
+                      }
+                      className="absolute bottom-full right-0 z-dropdown mb-2"
+                    />
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
-          <SendButton
-            disabled={!canSend}
-            state={sendButtonState}
-            isBusy={isSubmitBusy}
-            data-testid="chat-send-button"
-            onClick={() => {
-              logMessageDebug("MessageInput", "submit_triggered", {
-                conversationId,
-                trigger: "button",
-              });
-              void handlePrimarySend();
-            }}
-            ariaLabel={sendButtonLabel}
-            className="shrink-0"
-          />
-        </div>
-
-        <p className="mt-1 px-1 text-[11px] leading-4 text-text-muted">
-          Nhấn Enter để gửi, Shift + Enter để xuống dòng
-        </p>
-
-        {(messageValidation.showCounter ||
-          messageValidation.isOverSoftLimit ||
-          messageValidation.isOverHardLimit) && (
-          <div className="mt-2 flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              {messageValidation.isOverHardLimit ? (
-                <InlineNotice
-                  tone="error"
-                  className="mb-0"
-                  message={t("chat:composer.hardLimitError", {
-                    max: messageValidation.hardLimit.toLocaleString("vi-VN"),
-                    defaultValue: "Tin nhắn vượt giới hạn 20.000 ký tự.",
-                  })}
-                  action={
-                    onAddFiles ? (
-                      <button
-                        type="button"
-                        onClick={handleSendAsTextFile}
-                        className="text-xs font-semibold underline-offset-2 hover:underline"
-                      >
-                        {t("chat:composer.sendAsTextFile", {
-                          defaultValue: "Gửi dưới dạng tệp .txt",
-                        })}
-                      </button>
-                    ) : undefined
-                  }
-                />
-              ) : messageValidation.isOverSoftLimit || showLongPasteNotice ? (
-                <InlineNotice
-                  tone="warning"
-                  className="mb-0"
-                  message={
-                    showLongPasteNotice
-                      ? t("chat:composer.longPasteNotice", {
-                          defaultValue:
-                            "Nội dung quá dài. Bạn có thể gửi dưới dạng tệp văn bản.",
-                        })
-                      : t("chat:composer.softLimitWarning", {
-                          defaultValue:
-                            "Tin nhắn khá dài. Hãy cân nhắc gửi dưới dạng tệp nếu là log hoặc tài liệu.",
-                        })
-                  }
-                  action={
-                    onAddFiles ? (
-                      <button
-                        type="button"
-                        onClick={handleSendAsTextFile}
-                        className="text-xs font-semibold underline-offset-2 hover:underline"
-                      >
-                        {t("chat:composer.sendAsTextFile", {
-                          defaultValue: "Gửi dưới dạng tệp .txt",
-                        })}
-                      </button>
-                    ) : undefined
-                  }
-                />
-              ) : null}
+            {isFormatModeExpanded && (
+                <div className="px-3 pb-2 pt-0">
+                  <FormatToolbar
+                    textareaRef={textareaRef}
+                    value={draftValue}
+                    onChange={(nextValue) => {
+                      setDraftValue(nextValue);
+                      onChange(nextValue);
+                      const caret = textareaRef.current?.selectionEnd || nextValue.length;
+                      updateMentionState(nextValue, caret);
+                      recordInputLatency(nextValue);
+                      notifyInput({
+                        hasText: nextValue.trim().length > 0,
+                        isFocused: true,
+                      });
+                    }}
+                    onToggleExpand={() => setIsFormatModeExpanded(false)}
+                    disabled={disabled}
+                  />
+                </div>
+              )}
             </div>
 
-            {messageValidation.showCounter && (
-              <p
-                className={clsx(
-                  "shrink-0 text-[11px] font-medium",
-                  messageValidation.isOverHardLimit
-                    ? "text-danger"
-                    : messageValidation.isOverSoftLimit
-                      ? "text-warning"
-                      : "text-text-muted",
-                )}
-              >
-                {messageValidation.charCount.toLocaleString("vi-VN")}/
-                {messageValidation.hardLimit.toLocaleString("vi-VN")}
-              </p>
-            )}
+            <SendButton
+              disabled={!canSend}
+              state={sendButtonState}
+              isBusy={isSubmitBusy}
+              data-testid="chat-send-button"
+              onClick={() => {
+                logMessageDebug("MessageInput", "submit_triggered", {
+                  conversationId,
+                  trigger: "button",
+                });
+                void handlePrimarySend();
+              }}
+              ariaLabel={sendButtonLabel}
+              className="shrink-0"
+            />
           </div>
-        )}
 
-        {onShareContact && currentUserId && (
-          <ShareContactModal
-            isOpen={isShareContactOpen}
-            currentUserId={currentUserId}
-            onClose={() => setIsShareContactOpen(false)}
-            onShare={onShareContact}
+          <p className="mt-1 px-1 text-[11px] leading-4 text-text-muted">
+            Nhấn Enter để gửi, Shift + Enter để xuống dòng
+          </p>
+
+          {(messageValidation.showCounter ||
+            messageValidation.isOverSoftLimit ||
+            messageValidation.isOverHardLimit) && (
+              <div className="mt-2 flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  {messageValidation.isOverHardLimit ? (
+                    <InlineNotice
+                      tone="error"
+                      className="mb-0"
+                      message={t("chat:composer.hardLimitError", {
+                        max: messageValidation.hardLimit.toLocaleString("vi-VN"),
+                        defaultValue: "Tin nhắn vượt giới hạn 20.000 ký tự.",
+                      })}
+                      action={
+                        onAddFiles ? (
+                          <button
+                            type="button"
+                            onClick={handleSendAsTextFile}
+                            className="text-xs font-semibold underline-offset-2 hover:underline"
+                          >
+                            {t("chat:composer.sendAsTextFile", {
+                              defaultValue: "Gửi dưới dạng tệp .txt",
+                            })}
+                          </button>
+                        ) : undefined
+                      }
+                    />
+                  ) : messageValidation.isOverSoftLimit || showLongPasteNotice ? (
+                    <InlineNotice
+                      tone="warning"
+                      className="mb-0"
+                      message={
+                        showLongPasteNotice
+                          ? t("chat:composer.longPasteNotice", {
+                            defaultValue:
+                              "Nội dung quá dài. Bạn có thể gửi dưới dạng tệp văn bản.",
+                          })
+                          : t("chat:composer.softLimitWarning", {
+                            defaultValue:
+                              "Tin nhắn khá dài. Hãy cân nhắc gửi dưới dạng tệp nếu là log hoặc tài liệu.",
+                          })
+                      }
+                      action={
+                        onAddFiles ? (
+                          <button
+                            type="button"
+                            onClick={handleSendAsTextFile}
+                            className="text-xs font-semibold underline-offset-2 hover:underline"
+                          >
+                            {t("chat:composer.sendAsTextFile", {
+                              defaultValue: "Gửi dưới dạng tệp .txt",
+                            })}
+                          </button>
+                        ) : undefined
+                      }
+                    />
+                  ) : null}
+                </div>
+
+                {messageValidation.showCounter && (
+                  <p
+                    className={clsx(
+                      "shrink-0 text-[11px] font-medium",
+                      messageValidation.isOverHardLimit
+                        ? "text-danger"
+                        : messageValidation.isOverSoftLimit
+                          ? "text-warning"
+                          : "text-text-muted",
+                    )}
+                  >
+                    {messageValidation.charCount.toLocaleString("vi-VN")}/
+                    {messageValidation.hardLimit.toLocaleString("vi-VN")}
+                  </p>
+                )}
+              </div>
+            )}
+
+          {onShareContact && currentUserId && (
+            <ShareContactModal
+              isOpen={isShareContactOpen}
+              currentUserId={currentUserId}
+              onClose={() => setIsShareContactOpen(false)}
+              onShare={onShareContact}
+            />
+          )}
+
+          <PollCreateDialog
+            isOpen={isPollDialogOpen}
+            onClose={() => setIsPollDialogOpen(false)}
+            onSubmit={handleCreatePoll}
           />
-        )}
-
-        <PollCreateDialog
-          isOpen={isPollDialogOpen}
-          onClose={() => setIsPollDialogOpen(false)}
-          onSubmit={handleCreatePoll}
-        />
       </ConversationLane>
     </div>
   );

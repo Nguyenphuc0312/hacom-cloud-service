@@ -86,7 +86,7 @@ describe("LoginPage", () => {
       /Email hoặc số điện thoại/i,
     ) as HTMLInputElement;
     const passwordInput = screen.getByLabelText(
-      /Mật khẩu/i,
+      /^Mật khẩu$/i,
     ) as HTMLInputElement;
 
     fireEvent.change(loginIdentifierInput, {

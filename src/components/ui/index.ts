@@ -17,7 +17,6 @@ export {
 } from "./Surface";
 export { ToastProvider } from "./Toast";
 export { toast } from "../../utils/toast";
-export { PasswordStrength } from "./PasswordStrength";
 export { Modal, ConfirmDialog } from "./Modal";
 export {
   Skeleton,
@@ -51,3 +50,4 @@ export {
   ErrorState,
   NoChatSelected,
 } from "./EmptyState";
+export { PasswordStrength } from "./PasswordStrength";
