@@ -395,7 +395,7 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
 
         <div className="flex items-center justify-center gap-2 text-xs text-text-muted">
           {panelState?.status === QrLoginSessionStatus.APPROVED ||
-          panelState?.status === QrLoginSessionStatus.EXCHANGED ? (
+            panelState?.status === QrLoginSessionStatus.EXCHANGED ? (
             <CheckCircleIcon className="h-4 w-4 text-success" />
           ) : panelState?.status === QrLoginSessionStatus.REJECTED ||
             panelState?.status === QrLoginSessionStatus.EXPIRED ? (
@@ -420,17 +420,17 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
 
         {(panelState?.status === QrLoginSessionStatus.REJECTED ||
           panelState?.status === QrLoginSessionStatus.EXPIRED) && (
-          <Button
-            type="button"
-            variant="secondary"
-            fullWidth
-            onClick={() => void refreshSession()}
-            isLoading={isRefreshing}
-            className="h-10 rounded-xl"
-          >
-            {t("qrLogin.createNew")}
-          </Button>
-        )}
+            <Button
+              type="button"
+              variant="secondary"
+              fullWidth
+              onClick={() => void refreshSession()}
+              isLoading={isRefreshing}
+              className="h-10 rounded-xl"
+            >
+              {t("qrLogin.createNew")}
+            </Button>
+          )}
       </div>
     </section>
   );
