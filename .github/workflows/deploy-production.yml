@@ -126,6 +126,17 @@ jobs:
             [[ -n "${v}" ]] || { echo "::error::${1} is required"; exit 1; }
             printf '%s' "${v}"
           }
+          require_multiline() {
+            local name="$1"
+            local raw_value="$2"
+            local cleaned_value
+            cleaned_value="$(printf '%s' "${raw_value}" | tr -d '\r')"
+            [[ -n "${cleaned_value}" ]] || { echo "::error::${name} is required"; exit 1; }
+          }
+          require_file() {
+            local path="$1"
+            [[ -f "${path}" ]] || { echo "::error::${path} was not found"; exit 1; }
+          }
 
           # App services must use SERVER_RUNTIME_ENV_FILE.
           # SERVER_INFRA_ENV_FILE is only for infra repository deployments.
@@ -137,16 +148,18 @@ jobs:
             fi
           done
 
-          SERVER_APPS_ROOT_CLEAN="$(require "vars.SERVER_APPS_ROOT" "${SERVER_APPS_ROOT}")"
-          SERVER_RUNTIME_ENV_FILE_CLEAN="$(require "vars.SERVER_RUNTIME_ENV_FILE" "${SERVER_RUNTIME_ENV_FILE}")"
+          SERVER_APPS_ROOT_CLEAN="$(require "vars.SERVER_APPS_ROOT" "${SERVER_APPS_ROOT:-}")"
+          SERVER_RUNTIME_ENV_FILE_CLEAN="$(require "vars.SERVER_RUNTIME_ENV_FILE" "${SERVER_RUNTIME_ENV_FILE:-}")"
           SERVER_INFRA_ROOT_CLEAN="$(trim "${SERVER_INFRA_ROOT:-}")"
-          SERVICE_NAME_CLEAN="$(require "vars.SERVICE_NAME" "${SERVICE_NAME}")"
-          DEPLOY_ENV_CLEAN="$(require "vars.DEPLOY_ENV" "${DEPLOY_ENV}")"
-          SERVER_PORT_CLEAN="$(require "secrets.SERVER_PORT" "${SERVER_PORT}")"
-          SERVER_USER_CLEAN="$(require "secrets.SERVER_USER" "${SERVER_USER}")"
-          SERVER_HOST_CLEAN="$(require "secrets.SERVER_HOST" "${SERVER_HOST}")"
-          require "secrets.GHCR_PULL_USERNAME" "${GHCR_PULL_USERNAME}" >/dev/null
-          require "secrets.GHCR_PULL_TOKEN" "${GHCR_PULL_TOKEN}" >/dev/null
+          SERVICE_NAME_CLEAN="$(require "vars.SERVICE_NAME" "${SERVICE_NAME:-}")"
+          DEPLOY_ENV_CLEAN="$(require "vars.DEPLOY_ENV" "${DEPLOY_ENV:-}")"
+          SERVER_PORT_CLEAN="$(require "secrets.SERVER_PORT" "${SERVER_PORT:-}")"
+          SERVER_USER_CLEAN="$(require "secrets.SERVER_USER" "${SERVER_USER:-}")"
+          SERVER_HOST_CLEAN="$(require "secrets.SERVER_HOST" "${SERVER_HOST:-}")"
+          require "secrets.GHCR_PULL_USERNAME" "${GHCR_PULL_USERNAME:-}" >/dev/null
+          require "secrets.GHCR_PULL_TOKEN" "${GHCR_PULL_TOKEN:-}" >/dev/null
+          require_multiline "secrets.SERVER_SSH_KEY" "${SERVER_SSH_KEY:-}"
+          require_multiline "secrets.SERVER_SSH_KNOWN_HOSTS" "${SERVER_SSH_KNOWN_HOSTS:-}"
 
           if [ "${DEPLOY_ENV_CLEAN}" != "production" ]; then
             echo "DEPLOY_ENV must be production"
@@ -167,14 +180,14 @@ jobs:
 
           RELEASE_DIR="${SERVER_APPS_ROOT_CLEAN}/${SERVICE_NAME_CLEAN}/releases/${IMAGE_TAG}"
 
-          HEALTHCHECK_URL_CLEAN="$(trim "${HEALTHCHECK_URL}")"; [[ -n "${HEALTHCHECK_URL_CLEAN}" ]] || HEALTHCHECK_URL_CLEAN="http://127.0.0.1/healthz"
-          VITE_APP_BASE_PATH_CLEAN="$(trim "${VITE_APP_BASE_PATH}")"; [[ -n "${VITE_APP_BASE_PATH_CLEAN}" ]] || VITE_APP_BASE_PATH_CLEAN="/"
-          VITE_API_BASE_URL_CLEAN="$(trim "${VITE_API_BASE_URL}")"; [[ -n "${VITE_API_BASE_URL_CLEAN}" ]] || VITE_API_BASE_URL_CLEAN="/api/v1"
-          VITE_AUTH_BASE_URL_CLEAN="$(trim "${VITE_AUTH_BASE_URL}")"; [[ -n "${VITE_AUTH_BASE_URL_CLEAN}" ]] || VITE_AUTH_BASE_URL_CLEAN="/api/v1/auth"
-          VITE_USE_AUTH_SERVICE_CLEAN="$(trim "${VITE_USE_AUTH_SERVICE}")"; [[ -n "${VITE_USE_AUTH_SERVICE_CLEAN}" ]] || VITE_USE_AUTH_SERVICE_CLEAN="true"
-          VITE_WS_URL_CLEAN="$(trim "${VITE_WS_URL}")"; [[ -n "${VITE_WS_URL_CLEAN}" ]] || VITE_WS_URL_CLEAN="/ws"
-          VITE_WS_USE_QUERY_TOKEN_CLEAN="$(trim "${VITE_WS_USE_QUERY_TOKEN}")"; [[ -n "${VITE_WS_USE_QUERY_TOKEN_CLEAN}" ]] || VITE_WS_USE_QUERY_TOKEN_CLEAN="false"
-          VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN="$(trim "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK}")"; [[ -n "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN}" ]] || VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN="true"
+          HEALTHCHECK_URL_CLEAN="$(trim "${HEALTHCHECK_URL:-}")"; [[ -n "${HEALTHCHECK_URL_CLEAN}" ]] || HEALTHCHECK_URL_CLEAN="http://127.0.0.1/healthz"
+          VITE_APP_BASE_PATH_CLEAN="$(trim "${VITE_APP_BASE_PATH:-}")"; [[ -n "${VITE_APP_BASE_PATH_CLEAN}" ]] || VITE_APP_BASE_PATH_CLEAN="/"
+          VITE_API_BASE_URL_CLEAN="$(trim "${VITE_API_BASE_URL:-}")"; [[ -n "${VITE_API_BASE_URL_CLEAN}" ]] || VITE_API_BASE_URL_CLEAN="/api/v1"
+          VITE_AUTH_BASE_URL_CLEAN="$(trim "${VITE_AUTH_BASE_URL:-}")"; [[ -n "${VITE_AUTH_BASE_URL_CLEAN}" ]] || VITE_AUTH_BASE_URL_CLEAN="/api/v1/auth"
+          VITE_USE_AUTH_SERVICE_CLEAN="$(trim "${VITE_USE_AUTH_SERVICE:-}")"; [[ -n "${VITE_USE_AUTH_SERVICE_CLEAN}" ]] || VITE_USE_AUTH_SERVICE_CLEAN="true"
+          VITE_WS_URL_CLEAN="$(trim "${VITE_WS_URL:-}")"; [[ -n "${VITE_WS_URL_CLEAN}" ]] || VITE_WS_URL_CLEAN="/ws"
+          VITE_WS_USE_QUERY_TOKEN_CLEAN="$(trim "${VITE_WS_USE_QUERY_TOKEN:-}")"; [[ -n "${VITE_WS_USE_QUERY_TOKEN_CLEAN}" ]] || VITE_WS_USE_QUERY_TOKEN_CLEAN="false"
+          VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN="$(trim "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK:-}")"; [[ -n "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN}" ]] || VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN="true"
 
           case "${HEALTHCHECK_URL_CLEAN}" in
             http://*|https://*) ;;
@@ -190,6 +203,35 @@ jobs:
           echo "SERVER_APPS_ROOT=${SERVER_APPS_ROOT_CLEAN}"
           echo "SERVER_RUNTIME_ENV_FILE=${SERVER_RUNTIME_ENV_FILE_CLEAN}"
           echo "HEALTHCHECK_URL=${HEALTHCHECK_URL_CLEAN}"
+
+          require_file ./chat-web-client/Dockerfile
+          require_file ./chat-web-client/package-lock.json
+          require_file ./chat-shared-types/package-lock.json
+          require_file ./chat-web-client/nginx/default.conf.template
+          require_file "./chat-web-client/deploy/compose/${DEPLOY_ENV_CLEAN}.yml"
+          require_file ./chat-web-client/deploy/scripts/deploy.sh
+          require_file ./chat-web-client/deploy/scripts/rollback.sh
+
+          {
+            echo "### Deploy configuration"
+            echo
+            echo "| Key | Value |"
+            echo "| --- | --- |"
+            printf '| %s | `%s` |\n' "SERVICE_NAME" "${SERVICE_NAME_CLEAN}"
+            printf '| %s | `%s` |\n' "DEPLOY_ENV" "${DEPLOY_ENV_CLEAN}"
+            printf '| %s | `%s` |\n' "SERVER_APPS_ROOT" "${SERVER_APPS_ROOT_CLEAN}"
+            printf '| %s | `%s` |\n' "SERVER_RUNTIME_ENV_FILE" "${SERVER_RUNTIME_ENV_FILE_CLEAN}"
+            printf '| %s | `%s` |\n' "HEALTHCHECK_URL" "${HEALTHCHECK_URL_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_APP_BASE_PATH" "${VITE_APP_BASE_PATH_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_API_BASE_URL" "${VITE_API_BASE_URL_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_AUTH_BASE_URL" "${VITE_AUTH_BASE_URL_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_USE_AUTH_SERVICE" "${VITE_USE_AUTH_SERVICE_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_WS_URL" "${VITE_WS_URL_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_WS_USE_QUERY_TOKEN" "${VITE_WS_USE_QUERY_TOKEN_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_WS_AUTO_QUERY_TOKEN_FALLBACK" "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN}"
+            printf '| %s | `%s` |\n' "IMAGE_REF" "${IMAGE_REF}"
+            printf '| %s | `%s` |\n' "RELEASE_DIR" "${RELEASE_DIR}"
+          } >> "${GITHUB_STEP_SUMMARY}"
 
           {
             printf 'SERVER_APPS_ROOT_CLEAN=%s\n' "${SERVER_APPS_ROOT_CLEAN}"
