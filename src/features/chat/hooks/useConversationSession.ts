@@ -241,9 +241,6 @@ export const useConversationSession = ({
     selectedConversationId && selectedConversation && isCurrentRouteValidated,
   );
   const websocketReady = connectionState === "connected";
-  const selectedUnreadCount = selectedConversation?.unreadCount ?? 0;
-  const selectedFirstUnreadMessageId =
-    selectedConversation?.firstUnreadMessageId ?? null;
 
   useEffect(() => {
     if (
@@ -302,10 +299,14 @@ export const useConversationSession = ({
           selectedConversationId
         ] === true;
 
+      // Read unread state at execution time so this effect doesn't re-run on every incoming message
+      const currentConversation = latestState.conversationById[selectedConversationId];
+      const currentUnreadCount = currentConversation?.unreadCount ?? 0;
+      const currentFirstUnreadMessageId = currentConversation?.firstUnreadMessageId ?? null;
       if (
         !latestHasAuthoritativeHistory &&
         latestStage !== "partial_unread_bootstrap" &&
-        (selectedUnreadCount > 0 || Boolean(selectedFirstUnreadMessageId))
+        (currentUnreadCount > 0 || Boolean(currentFirstUnreadMessageId))
       ) {
         await fetchMessages(selectedConversationId, undefined, undefined, {
           limit: INITIAL_CONVERSATION_WINDOW_LIMIT,
@@ -366,8 +367,6 @@ export const useConversationSession = ({
     joinConversation,
     leaveConversation,
     selectedConversationId,
-    selectedFirstUnreadMessageId,
-    selectedUnreadCount,
     stopTyping,
     updateConversation,
   ]);
