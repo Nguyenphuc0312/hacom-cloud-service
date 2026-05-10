@@ -110,6 +110,9 @@ jobs:
           VITE_WS_URL: ${{ vars.VITE_WS_URL }}
           VITE_WS_USE_QUERY_TOKEN: ${{ vars.VITE_WS_USE_QUERY_TOKEN }}
           VITE_WS_AUTO_QUERY_TOKEN_FALLBACK: ${{ vars.VITE_WS_AUTO_QUERY_TOKEN_FALLBACK }}
+          VITE_CHAT_TIMELINE_V2_OWNER: ${{ vars.VITE_CHAT_TIMELINE_V2_OWNER }}
+          VITE_CHAT_SCROLL_OWNER_V2_DRIVES: ${{ vars.VITE_CHAT_SCROLL_OWNER_V2_DRIVES }}
+          VITE_CHAT_SCROLL_DEBUG: ${{ vars.VITE_CHAT_SCROLL_DEBUG }}
           SERVER_RUNTIME_ENV_FILE: ${{ vars.SERVER_RUNTIME_ENV_FILE }}
           SERVER_INFRA_ROOT: ${{ vars.SERVER_INFRA_ROOT }}
           SERVER_PORT: ${{ secrets.SERVER_PORT }}
@@ -188,6 +191,32 @@ jobs:
           VITE_WS_URL_CLEAN="$(trim "${VITE_WS_URL:-}")"; [[ -n "${VITE_WS_URL_CLEAN}" ]] || VITE_WS_URL_CLEAN="/ws"
           VITE_WS_USE_QUERY_TOKEN_CLEAN="$(trim "${VITE_WS_USE_QUERY_TOKEN:-}")"; [[ -n "${VITE_WS_USE_QUERY_TOKEN_CLEAN}" ]] || VITE_WS_USE_QUERY_TOKEN_CLEAN="false"
           VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN="$(trim "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK:-}")"; [[ -n "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN}" ]] || VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN="true"
+          # Timeline V2 production defaults: Stage 3 V2 drives, debug OFF.
+          # Override via vars.* per environment if you need to roll back to
+          # observe-only or full legacy without code change. Vite inlines
+          # these at build time; runtime container env CANNOT change them.
+          VITE_CHAT_TIMELINE_V2_OWNER_CLEAN="$(trim "${VITE_CHAT_TIMELINE_V2_OWNER:-}")"; [[ -n "${VITE_CHAT_TIMELINE_V2_OWNER_CLEAN}" ]] || VITE_CHAT_TIMELINE_V2_OWNER_CLEAN="true"
+          VITE_CHAT_SCROLL_OWNER_V2_DRIVES_CLEAN="$(trim "${VITE_CHAT_SCROLL_OWNER_V2_DRIVES:-}")"; [[ -n "${VITE_CHAT_SCROLL_OWNER_V2_DRIVES_CLEAN}" ]] || VITE_CHAT_SCROLL_OWNER_V2_DRIVES_CLEAN="true"
+          VITE_CHAT_SCROLL_DEBUG_CLEAN="$(trim "${VITE_CHAT_SCROLL_DEBUG:-}")"; [[ -n "${VITE_CHAT_SCROLL_DEBUG_CLEAN}" ]] || VITE_CHAT_SCROLL_DEBUG_CLEAN="false"
+
+          # Whitelist values. Vite needs the literal "true" or "false".
+          for v_name in \
+              VITE_CHAT_TIMELINE_V2_OWNER_CLEAN \
+              VITE_CHAT_SCROLL_OWNER_V2_DRIVES_CLEAN \
+              VITE_CHAT_SCROLL_DEBUG_CLEAN; do
+            v_val="${!v_name}"
+            if [[ "${v_val}" != "true" && "${v_val}" != "false" ]]; then
+              echo "::error title=Invalid V2 flag::${v_name} must be 'true' or 'false', got '${v_val}'"
+              exit 1
+            fi
+          done
+
+          # Hard rule for production: debug MUST be off unless an oncall
+          # explicitly opts in via vars.VITE_CHAT_SCROLL_DEBUG=true. Spamming
+          # console logs in production hurts performance and leaks state.
+          if [[ "${VITE_CHAT_SCROLL_DEBUG_CLEAN}" == "true" ]]; then
+            echo "::warning title=Debug logs enabled in production::vars.VITE_CHAT_SCROLL_DEBUG is 'true'. Confirm this is intentional (incident triage). Otherwise unset it."
+          fi
 
           case "${HEALTHCHECK_URL_CLEAN}" in
             http://*|https://*) ;;
@@ -229,6 +258,9 @@ jobs:
             printf '| %s | `%s` |\n' "VITE_WS_URL" "${VITE_WS_URL_CLEAN}"
             printf '| %s | `%s` |\n' "VITE_WS_USE_QUERY_TOKEN" "${VITE_WS_USE_QUERY_TOKEN_CLEAN}"
             printf '| %s | `%s` |\n' "VITE_WS_AUTO_QUERY_TOKEN_FALLBACK" "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_CHAT_TIMELINE_V2_OWNER" "${VITE_CHAT_TIMELINE_V2_OWNER_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_CHAT_SCROLL_OWNER_V2_DRIVES" "${VITE_CHAT_SCROLL_OWNER_V2_DRIVES_CLEAN}"
+            printf '| %s | `%s` |\n' "VITE_CHAT_SCROLL_DEBUG" "${VITE_CHAT_SCROLL_DEBUG_CLEAN}"
             printf '| %s | `%s` |\n' "IMAGE_REF" "${IMAGE_REF}"
             printf '| %s | `%s` |\n' "RELEASE_DIR" "${RELEASE_DIR}"
           } >> "${GITHUB_STEP_SUMMARY}"
@@ -250,6 +282,9 @@ jobs:
             printf 'VITE_WS_URL_CLEAN=%s\n' "${VITE_WS_URL_CLEAN}"
             printf 'VITE_WS_USE_QUERY_TOKEN_CLEAN=%s\n' "${VITE_WS_USE_QUERY_TOKEN_CLEAN}"
             printf 'VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN=%s\n' "${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN}"
+            printf 'VITE_CHAT_TIMELINE_V2_OWNER_CLEAN=%s\n' "${VITE_CHAT_TIMELINE_V2_OWNER_CLEAN}"
+            printf 'VITE_CHAT_SCROLL_OWNER_V2_DRIVES_CLEAN=%s\n' "${VITE_CHAT_SCROLL_OWNER_V2_DRIVES_CLEAN}"
+            printf 'VITE_CHAT_SCROLL_DEBUG_CLEAN=%s\n' "${VITE_CHAT_SCROLL_DEBUG_CLEAN}"
             printf 'IMAGE_REF=%s\n' "${IMAGE_REF}"
             printf 'RELEASE_DIR=%s\n' "${RELEASE_DIR}"
             printf 'USE_TAG=%s\n' "${IMAGE_TAG}"
@@ -317,6 +352,9 @@ jobs:
             --build-arg VITE_WS_URL="${VITE_WS_URL_CLEAN}" \
             --build-arg VITE_WS_USE_QUERY_TOKEN="${VITE_WS_USE_QUERY_TOKEN_CLEAN}" \
             --build-arg VITE_WS_AUTO_QUERY_TOKEN_FALLBACK="${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN}" \
+            --build-arg VITE_CHAT_TIMELINE_V2_OWNER="${VITE_CHAT_TIMELINE_V2_OWNER_CLEAN}" \
+            --build-arg VITE_CHAT_SCROLL_OWNER_V2_DRIVES="${VITE_CHAT_SCROLL_OWNER_V2_DRIVES_CLEAN}" \
+            --build-arg VITE_CHAT_SCROLL_DEBUG="${VITE_CHAT_SCROLL_DEBUG_CLEAN}" \
             --tag "${IMAGE_REF}" \
             --push \
             .
@@ -325,6 +363,54 @@ jobs:
         run: |
           set -Eeuo pipefail
           docker buildx imagetools inspect "${IMAGE_REF}"
+
+      - name: Verify Timeline V2 build-time flags landed in bundle
+        if: env.SKIP_BUILD == 'false'
+        # Pull the pushed image, extract dist/assets, assert that the V2
+        # debug-log marker `chat-scroll-v2` is present (proves V2 code in
+        # bundle) and that no empty env-object regression sits next to a
+        # VITE_CHAT_* literal. Mirrors the develop workflow's check.
+        run: |
+          set -Eeuo pipefail
+          docker pull "${IMAGE_REF}"
+          CID="$(docker create "${IMAGE_REF}")"
+          trap 'docker rm -f "${CID}" >/dev/null 2>&1 || true' EXIT
+          rm -rf ./_v2_bundle && mkdir -p ./_v2_bundle
+          docker cp "${CID}:/usr/share/nginx/html/assets" ./_v2_bundle/
+          ASSETS_DIR="./_v2_bundle/assets"
+          test -d "${ASSETS_DIR}"
+
+          echo "::group::V2 marker check"
+          if ! grep -RoE "chat-scroll-v2" "${ASSETS_DIR}" | head -3; then
+            echo "::error title=V2 marker missing::Bundle has no 'chat-scroll-v2' literal — Timeline V2 code was tree-shaken or not built. Did the build args reach the build stage?"
+            exit 1
+          fi
+          echo "::endgroup::"
+
+          echo "::group::All V2 flag literal occurrences (debug only)"
+          grep -RnoE \
+            "VITE_CHAT_TIMELINE_V2_OWNER|VITE_CHAT_SCROLL_OWNER_V2_DRIVES|VITE_CHAT_SCROLL_DEBUG" \
+            "${ASSETS_DIR}" | head -50 || true
+          echo "::endgroup::"
+
+          echo "::group::Empty env-object regression check"
+          if grep -RoE "const [A-Za-z_\$]+=\{\}" "${ASSETS_DIR}" | head -5; then
+            HITS_FILE="$(grep -RlE "const [A-Za-z_\$]+=\{\}" "${ASSETS_DIR}" || true)"
+            for f in ${HITS_FILE}; do
+              if grep -qE "\"VITE_CHAT_(TIMELINE_V2_OWNER|SCROLL_OWNER_V2_DRIVES|SCROLL_DEBUG)\"" "$f"; then
+                echo "::error title=V2 flags not inlined::${f} contains both an empty env object literal AND a VITE_CHAT_* string — the Vite build did not see the env vars."
+                exit 1
+              fi
+            done
+            echo "Empty {} literals found but not adjacent to VITE_CHAT_* — likely benign."
+          fi
+          echo "::endgroup::"
+
+          echo "::group::Effective V2 build flags (developer-readable)"
+          echo "VITE_CHAT_TIMELINE_V2_OWNER=${VITE_CHAT_TIMELINE_V2_OWNER_CLEAN}"
+          echo "VITE_CHAT_SCROLL_OWNER_V2_DRIVES=${VITE_CHAT_SCROLL_OWNER_V2_DRIVES_CLEAN}"
+          echo "VITE_CHAT_SCROLL_DEBUG=${VITE_CHAT_SCROLL_DEBUG_CLEAN}"
+          echo "::endgroup::"
 
       - name: Prepare release bundle
         working-directory: ./chat-web-client
