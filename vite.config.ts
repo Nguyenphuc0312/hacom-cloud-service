@@ -153,14 +153,15 @@ export default defineConfig(({ mode }) => {
 
     build: {
       rollupOptions: {
-        // Suppress circular-chunk warnings — they are safe for this app.
-        // All cross-chunk imports are consumed inside function bodies (render,
-        // component mount, event handlers) — never at module initialization time,
-        // so ES module live bindings resolve the cycle at runtime without issue.
-        // Suppressing prevents the build gate's /Circular chunk:/i check from
-        // triggering a false failure.
+        // Surface CIRCULAR_CHUNK warnings. We previously suppressed them on
+        // the assumption that cross-chunk imports are only used inside
+        // function bodies; that was incorrect. React 19's `Activity`
+        // namespace augmentation runs at module init, so any cycle between
+        // react-core and a vendor chunk that imports React APIs (e.g.
+        // @tiptap/react) crashes production with:
+        //   "Cannot set properties of undefined (setting 'Activity')".
+        // If a circular warning fires, fix the chunking — do not silence it.
         onwarn(warning, defaultHandler) {
-          if (warning.code === "CIRCULAR_CHUNK") return;
           defaultHandler(warning);
         },
         output: {
@@ -172,10 +173,19 @@ export default defineConfig(({ mode }) => {
             // IMPORTANT: nid.includes("/react/") would also match scoped
             // packages like "@tiptap/react", so we use anchored regex that
             // requires "node_modules/" to immediately precede the package name.
+            //
+            // We ALSO bundle @tiptap/react into react-core. The Tiptap React
+            // adapter touches React internals at module top level (it depends
+            // on React 19's `Activity`/scheduler namespace). When it lives in
+            // a separate chunk, Rollup's chunk graph forms a hidden cycle
+            // with react-core and `Activity` is set on `undefined` at init,
+            // producing: "Cannot set properties of undefined (setting
+            // 'Activity')". Co-locating eliminates the cross-chunk init race.
             if (
               /\/node_modules\/react\//.test(nid) ||
               /\/node_modules\/react-dom\//.test(nid) ||
-              /\/node_modules\/scheduler\//.test(nid)
+              /\/node_modules\/scheduler\//.test(nid) ||
+              /\/node_modules\/@tiptap\/react\//.test(nid)
             ) {
               return "react-core";
             }
