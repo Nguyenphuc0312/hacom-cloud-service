@@ -5,11 +5,13 @@
 
 import axios, { AxiosError, AxiosHeaders } from "axios";
 import type { AxiosInstance, InternalAxiosRequestConfig } from "axios";
+import { ErrorCode } from "@hacom/chat-shared-types/core";
 import {
   PUBLIC_CHAT_CONTRACT_HEADER,
   PUBLIC_CHAT_CONTRACT_VERSION,
 } from "@hacom/chat-shared-types/runtime";
 import { API_BASE_URL, AUTH_BASE_URL, USE_AUTH_SERVICE } from "../config";
+import { ApiContractError } from "./apiContract";
 import {
   authBaseUrl,
   buildAuthEndpoint,
@@ -230,6 +232,16 @@ export const authClient: AxiosInstance = axios.create({
   withCredentials: isRefreshTokenCookieMode(),
 });
 
+export const authenticatedAuthClient: AxiosInstance = axios.create({
+  baseURL: authBaseUrl,
+  timeout: 15000,
+  headers: {
+    "Content-Type": "application/json",
+    [API_CONTRACT_HEADER]: API_CONTRACT_VERSION,
+  },
+  withCredentials: isRefreshTokenCookieMode(),
+});
+
 authClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   config.url = normalizeAuthRequestPath(config.url);
   config.headers = config.headers ?? {};
@@ -243,6 +255,50 @@ authClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
   return config;
 });
+
+authenticatedAuthClient.interceptors.request.use(
+  async (config: InternalAxiosRequestConfig) => {
+    const requestConfig = config as AuthRequestConfig;
+    const requestId = buildRequestId(config);
+    requestConfig._requestId = requestId;
+    config.url = normalizeAuthRequestPath(config.url);
+
+    if (!requestConfig.signal || requestConfig._managedSignal) {
+      const controller = new AbortController();
+      requestConfig.signal = controller.signal;
+      requestConfig._managedSignal = true;
+      pendingRequestControllers.set(requestId, controller);
+    }
+
+    requestConfig.headers = requestConfig.headers ?? {};
+    const headers = requestConfig.headers as
+      | AxiosHeaders
+      | Record<string, string>;
+    if (headers instanceof AxiosHeaders) {
+      headers.set(API_CONTRACT_HEADER, API_CONTRACT_VERSION);
+    } else {
+      headers[API_CONTRACT_HEADER] = API_CONTRACT_VERSION;
+    }
+
+    const accessToken = getAccessToken();
+    if (accessToken) {
+      setAuthHeader(requestConfig, accessToken);
+      return requestConfig;
+    }
+
+    if (!isAuthSessionActive()) {
+      throw new ApiContractError(i18n.t("error:auth.sessionInactive"), {
+        statusCode: 401,
+        code: ErrorCode.UNAUTHORIZED,
+      });
+    }
+
+    const refreshedAccessToken = await refreshAccessToken();
+    setAuthHeader(requestConfig, refreshedAccessToken);
+    return requestConfig;
+  },
+  (error: AxiosError) => Promise.reject(error),
+);
 
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -334,6 +390,36 @@ apiClient.interceptors.response.use(
       const newAccessToken = await refreshAccessToken();
       setAuthHeader(originalRequest, newAccessToken);
       return apiClient(originalRequest);
+    } catch (refreshError) {
+      return Promise.reject(refreshError);
+    }
+  },
+);
+
+authenticatedAuthClient.interceptors.response.use(
+  (response) => {
+    releasePendingRequest(response.config);
+    return response;
+  },
+  async (error: AxiosError) => {
+    const originalRequest = error.config as AuthRequestConfig | undefined;
+    releasePendingRequest(originalRequest);
+
+    if (
+      !originalRequest ||
+      error.response?.status !== 401 ||
+      originalRequest._retry ||
+      /\/auth\/refresh$/i.test((originalRequest.url ?? "").split("?")[0])
+    ) {
+      return Promise.reject(error);
+    }
+
+    originalRequest._retry = true;
+
+    try {
+      const newAccessToken = await refreshAccessToken();
+      setAuthHeader(originalRequest, newAccessToken);
+      return authenticatedAuthClient(originalRequest);
     } catch (refreshError) {
       return Promise.reject(refreshError);
     }

@@ -3,6 +3,7 @@
  */
 
 import React, { useState } from "react";
+import { ErrorCode } from "@hacom/chat-shared-types/core";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LockClosedIcon } from "@heroicons/react/24/outline";
 import { useForm } from "react-hook-form";
@@ -54,10 +55,17 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
       reset();
     } catch (error) {
       const apiError = extractApiError(error);
-      if (apiError.statusCode === 400 || apiError.statusCode === 422) {
+      if (
+        apiError.code === ErrorCode.INVALID_CURRENT_PASSWORD ||
+        apiError.code === ErrorCode.INVALID_CREDENTIALS
+      ) {
         setError("currentPassword", {
           message: t("security.wrongPassword"),
         });
+      } else if (apiError.statusCode === 401) {
+        toast.error(
+          apiError.message || "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.",
+        );
       } else {
         toast.error(apiError.message || t("security.changeFailed"));
       }
