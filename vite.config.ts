@@ -174,34 +174,40 @@ export default defineConfig(({ mode }) => {
             // packages like "@tiptap/react", so we use anchored regex that
             // requires "node_modules/" to immediately precede the package name.
             //
-            // We ALSO bundle @tiptap/react into react-core. The Tiptap React
-            // adapter touches React internals at module top level (it depends
-            // on React 19's `Activity`/scheduler namespace). When it lives in
-            // a separate chunk, Rollup's chunk graph forms a hidden cycle
-            // with react-core and `Activity` is set on `undefined` at init,
-            // producing: "Cannot set properties of undefined (setting
-            // 'Activity')". Co-locating eliminates the cross-chunk init race.
+            // We ALSO bundle React adapter packages into react-core. Any
+            // library that calls React APIs (createContext, Activity, hooks
+            // module init, etc.) at MODULE TOP LEVEL must share a chunk with
+            // React itself, otherwise Rollup's chunk graph forms a hidden
+            // cycle with react-core and React is `undefined` when the
+            // adapter evaluates — producing crashes such as:
+            //   "Cannot set properties of undefined (setting 'Activity')"
+            //   "Cannot read properties of undefined (reading 'createContext')"
+            // Co-locating eliminates the cross-chunk init race. The cost is
+            // a slightly larger react-core chunk; the size impact per
+            // adapter is small (each is ~10–50 kB).
             if (
               /\/node_modules\/react\//.test(nid) ||
               /\/node_modules\/react-dom\//.test(nid) ||
               /\/node_modules\/scheduler\//.test(nid) ||
-              /\/node_modules\/@tiptap\/react\//.test(nid)
+              /\/node_modules\/@tiptap\/react\//.test(nid) ||
+              /\/node_modules\/react-i18next\//.test(nid) ||
+              /\/node_modules\/react-redux\//.test(nid) ||
+              /\/node_modules\/react-router\//.test(nid) ||
+              /\/node_modules\/react-router-dom\//.test(nid)
             ) {
               return "react-core";
             }
 
-            // Client-side routing (~87 kB, no React-context dependencies)
-            if (
-              nid.includes("/react-router/") ||
-              nid.includes("/react-router-dom/")
-            ) {
-              return "router-vendor";
-            }
+            // NOTE: react-router / react-router-dom / react-redux /
+            // react-i18next have moved into react-core (see comment above)
+            // because they touch React APIs at module init. They are
+            // intentionally NOT routed here.
 
-            // Rich text editor — TipTap (~355 kB)
-            // @tiptap/react path contains "/react/" so it must NOT be matched
-            // by the react-core check above. The anchored regex above ensures
-            // only node_modules/react/ matches, not node_modules/@tiptap/react/.
+            // Rich text editor — TipTap (~355 kB).
+            // The anchored react-core regex above only matches
+            // node_modules/react/ — not node_modules/@tiptap/react/. And
+            // @tiptap/react itself is captured by react-core, so this rule
+            // only sees the framework-agnostic Tiptap packages.
             if (nid.includes("/@tiptap/")) {
               return "editor-vendor";
             }
@@ -211,21 +217,22 @@ export default defineConfig(({ mode }) => {
               return "animation-vendor";
             }
 
-            // i18n — i18next + react-i18next + plugins (~56 kB)
+            // i18n core — framework-agnostic packages only. react-i18next is
+            // in react-core because it calls React.createContext at module
+            // init.
             if (
               nid.includes("/i18next/") ||
-              nid.includes("/react-i18next/") ||
               nid.includes("/i18next-resources-to-backend/") ||
               nid.includes("/i18next-browser-languagedetector/")
             ) {
               return "i18n-vendor";
             }
 
-            // Redux + RTK + react-redux + immer + reselect (~61 kB)
+            // Redux + RTK + immer + reselect — framework-agnostic only.
+            // react-redux is in react-core (createContext at module init).
             if (
               nid.includes("/redux/") ||
               nid.includes("/@reduxjs/") ||
-              nid.includes("/react-redux/") ||
               nid.includes("/immer/") ||
               nid.includes("/reselect/")
             ) {
