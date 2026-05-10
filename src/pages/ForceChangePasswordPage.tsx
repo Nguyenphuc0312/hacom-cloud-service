@@ -6,15 +6,13 @@ import { AuthShell, AuthLogo } from "../components/auth";
 import { Button } from "../components/ui";
 import { PasswordStrength } from "../components/ui";
 import { toast } from "../components/ui";
-import { useAuthStore } from "../stores";
-import { authClient } from "../lib/axios";
-import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
+import { extractApiError } from "../lib/apiContract";
 import { changePasswordSchema } from "../lib/validations";
 import type { ChangePasswordFormData } from "../lib/validations";
-import { getAccessToken } from "../services/tokenService";
 import { hasMinimumPasswordLength, PASSWORD_MIN_LENGTH } from "../constants/passwordPolicy";
+import { authApi } from "../services/api";
+import { useAuthStore } from "../stores";
 import { translateI18nMessage } from "../utils/userMessages";
-import type { ApiResponse } from "@hacom/chat-shared-types/core";
 
 export const ForceChangePasswordPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -40,30 +38,23 @@ export const ForceChangePasswordPage: React.FC = () => {
   const onSubmit = async (data: ChangePasswordFormData) => {
     setIsSubmitting(true);
     try {
-      const token = getAccessToken();
-      await authClient.post<ApiResponse<unknown>>(
-        AUTH_ENDPOINTS.changePassword,
-        {
-          currentPassword: data.currentPassword,
-          newPassword: data.newPassword,
-          confirmPassword: data.confirmPassword,
-        },
-        {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        },
-      );
+      await authApi.changePassword({
+        currentPassword: data.currentPassword,
+        newPassword: data.newPassword,
+        confirmPassword: data.confirmPassword,
+      });
 
       toast.success("Đổi mật khẩu thành công. Vui lòng đăng nhập lại.");
       await logout();
-    } catch (err: unknown) {
-      const axiosErr = err as {
-        response?: { data?: { message?: string; error?: string } };
-      };
-      const message =
-        axiosErr.response?.data?.message ??
-        axiosErr.response?.data?.error ??
-        "Đổi mật khẩu thất bại. Vui lòng thử lại.";
-      toast.error(message);
+    } catch (error: unknown) {
+      const apiError = extractApiError(error);
+      toast.error(
+        apiError.message || "Đổi mật khẩu thất bại. Vui lòng thử lại.",
+      );
+
+      if (apiError.statusCode === 401) {
+        await logout();
+      }
     } finally {
       setIsSubmitting(false);
     }

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ErrorCode } from "@hacom/chat-shared-types/core";
 
-const { apiClientMock, authClientMock } = vi.hoisted(() => ({
+const { apiClientMock, authClientMock, authenticatedAuthClientMock } = vi.hoisted(() => ({
   apiClientMock: {
     get: vi.fn(),
     post: vi.fn(),
@@ -18,11 +18,20 @@ const { apiClientMock, authClientMock } = vi.hoisted(() => ({
     delete: vi.fn(),
     request: vi.fn(),
   },
+  authenticatedAuthClientMock: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+    request: vi.fn(),
+  },
 }));
 
 vi.mock("../lib/axios", () => ({
   default: apiClientMock,
   authClient: authClientMock,
+  authenticatedAuthClient: authenticatedAuthClientMock,
 }));
 
 import { buildCreateDirectConversationPayload } from "./api";

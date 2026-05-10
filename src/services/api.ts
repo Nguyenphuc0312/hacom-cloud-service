@@ -3,7 +3,10 @@
  * Tất cả các API calls
  */
 
-import apiClient, { authClient } from "../lib/axios";
+import apiClient, {
+  authClient,
+  authenticatedAuthClient,
+} from "../lib/axios";
 import axios from "axios";
 import { ErrorCode, type ApiResponse } from "@hacom/chat-shared-types/core";
 import type {
@@ -36,7 +39,13 @@ import {
 } from "../lib/conversationAdapter";
 import { ApiContractError, unwrapApiSuccess } from "../lib/apiContract";
 import { AUTH_ENDPOINTS } from "../lib/authEndpoints";
-import { getCsrfToken, isRefreshTokenCookieMode } from "./tokenService";
+import {
+  getCsrfToken,
+  isRefreshTokenCookieMode,
+  isRememberMeEnabled,
+  storeTokens,
+  updateAccessToken,
+} from "./tokenService";
 import { isUuid } from "../utils/isUuid";
 import { logger } from "../utils/logger";
 import { resolveUploadMimeTypeForFile } from "../utils/uploadPolicy";
@@ -144,6 +153,17 @@ export interface ActivationVerifyResponse {
   verificationProof?: string | null;
 }
 
+interface ChangePasswordResponseData {
+  accessToken?: string;
+  refreshToken?: string;
+  tokens?: {
+    accessToken?: string;
+    refreshToken?: string;
+  };
+  mustChangePassword?: boolean;
+  nextAction?: string;
+}
+
 const canonicalConversationPath = (conversationId: string): string =>
   `/conversations/${conversationId}`;
 
@@ -205,6 +225,30 @@ const normalizePinnedMessagesPayload = (
   }
 
   return { messages: [] };
+};
+
+const persistAuthTokensFromPayload = (
+  payload: ChangePasswordResponseData,
+): void => {
+  const accessToken =
+    payload.tokens?.accessToken ?? payload.accessToken ?? null;
+  const refreshToken =
+    payload.tokens?.refreshToken ?? payload.refreshToken ?? null;
+
+  if (!accessToken) {
+    return;
+  }
+
+  if (isRefreshTokenCookieMode()) {
+    updateAccessToken(accessToken);
+    return;
+  }
+
+  if (!refreshToken) {
+    return;
+  }
+
+  storeTokens(accessToken, refreshToken, isRememberMeEnabled());
 };
 
 // ============================================
@@ -336,10 +380,13 @@ export const authApi = {
     newPassword: string;
     confirmPassword: string;
   }) => {
-    const response = await authClient.post<ApiResponse<{ message: string }>>(
+    const response = await authenticatedAuthClient.post<
+      ApiResponse<ChangePasswordResponseData>
+    >(
       AUTH_ENDPOINTS.changePassword,
       data,
     );
+    persistAuthTokensFromPayload(unwrapApiSuccess(response.data));
     return response.data;
   },
 };

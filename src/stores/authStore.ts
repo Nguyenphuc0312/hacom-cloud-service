@@ -5,7 +5,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import apiClient, {
-  authClient,
+  authenticatedAuthClient,
   resetAuthFailureState,
   setAuthFailureHandler,
 } from "../lib/axios";
@@ -745,10 +745,8 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: true, authStatus: "loading" });
 
           try {
-            // /api/v1/auth/me needs Bearer token — use authClient with explicit header.
-            const response = await authClient.get<ApiResponse<User>>(
+            const response = await authenticatedAuthClient.get<ApiResponse<User>>(
               AUTH_ENDPOINTS.me,
-              { headers: { Authorization: `Bearer ${token}` } },
             );
             const user = unwrapApiSuccess(response.data);
             const blockedStatus = resolveBlockedStatusFromUser(user);
