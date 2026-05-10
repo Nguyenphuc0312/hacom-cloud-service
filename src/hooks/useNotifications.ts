@@ -74,7 +74,7 @@ export const useNotifications = (isAuthenticated: boolean) => {
         return {};
       });
     } catch (err) {
-      logger.warn("useNotifications: failed to fetch initial notifications");
+      logger.warn("notifications", "initial_fetch_failed", err);
     }
   }, [upsertNotification]);
 
@@ -112,7 +112,10 @@ export const useNotifications = (isAuthenticated: boolean) => {
       try {
         await notificationApi.markRead(id);
       } catch (err) {
-        logger.warn("useNotifications: failed to mark notification read");
+        logger.warn("notifications", "mark_read_failed", {
+          notificationId: id,
+          error: err,
+        });
       }
     },
     [markAsRead],
@@ -123,7 +126,7 @@ export const useNotifications = (isAuthenticated: boolean) => {
     try {
       await notificationApi.markAllRead();
     } catch (err) {
-      logger.warn("useNotifications: failed to mark all notifications read");
+      logger.warn("notifications", "mark_all_read_failed", err);
     }
   }, [markAllAsRead]);
 
