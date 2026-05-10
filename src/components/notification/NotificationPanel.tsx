@@ -1,6 +1,7 @@
 import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import {
   AtSymbolIcon,
   BellIcon,
@@ -16,10 +17,14 @@ import {
   type NotificationFilter,
   type NotificationItem,
 } from "../../features/notification/state/notificationStore";
-import { dispatchNotificationClick } from "../../features/chat/events/chatUiEvents";
+import {
+  dispatchNotificationClick,
+  dispatchContactProfileView,
+} from "../../features/chat/events/chatUiEvents";
 import { formatRelativeTime } from "../../utils/formatTime";
 import { useChatStore } from "../../stores/chatStore";
 import { sortConversationsByActivity } from "../../utils/conversationRanking";
+import { ROUTE_PATHS } from "../../router/paths";
 
 interface NotificationPanelProps {
   isOpen?: boolean;
@@ -85,6 +90,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const notificationItems = useNotificationStore((state) => state.items);
   const activeFilter = useNotificationStore((state) => state.activeFilter);
   const setFilter = useNotificationStore((state) => state.setFilter);
@@ -155,16 +161,26 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
         onMarkRead?.(item.id);
       }
 
-      if (item.conversationId) {
-        dispatchNotificationClick({
-          conversationId: item.conversationId,
-          messageId: item.messageId,
-        });
+      const { targetType, conversationId, messageId, actorId } = item;
+
+      if (conversationId) {
+        dispatchNotificationClick({ conversationId, messageId });
+      } else if (
+        targetType === "friend_request" ||
+        targetType === "group_invite"
+      ) {
+        navigate(ROUTE_PATHS.FRIENDS);
+      } else if (targetType === "user_profile") {
+        if (actorId) {
+          dispatchContactProfileView({ userId: actorId });
+        } else {
+          navigate(ROUTE_PATHS.FRIENDS);
+        }
       }
 
       onClose?.();
     },
-    [markAsRead, onMarkRead, onClose],
+    [markAsRead, onMarkRead, onClose, navigate],
   );
 
   if (isOpen === false) return null;
