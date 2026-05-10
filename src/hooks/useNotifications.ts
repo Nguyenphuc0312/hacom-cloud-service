@@ -42,8 +42,14 @@ const backendToItem = (n: BackendNotification): NotificationItem => ({
   isRead: n.readAt !== null,
   readAt: n.readAt,
   conversationId:
-    n.targetType === "conversation" ? (n.targetId ?? undefined) : undefined,
+    n.targetType === "conversation" || n.targetType === "group_setting"
+      ? (n.targetId ?? undefined)
+      : undefined,
+  messageId:
+    n.targetType === "message" ? (n.targetId ?? undefined) : undefined,
   actorId: n.actorUserId,
+  targetType: n.targetType ?? undefined,
+  targetId: n.targetId ?? undefined,
 });
 
 export const useNotifications = (isAuthenticated: boolean) => {

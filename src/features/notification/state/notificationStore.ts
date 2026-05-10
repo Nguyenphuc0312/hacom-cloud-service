@@ -20,6 +20,8 @@ export interface NotificationItem {
   conversationId?: string;
   messageId?: string;
   actorId?: string | null;
+  targetType?: string;
+  targetId?: string;
 }
 
 interface NotificationState {
