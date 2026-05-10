@@ -515,6 +515,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       onSendMessage,
       replaceComposerSeed,
       replyToMessage,
+      t,
       uploadQueue,
     ],
   );

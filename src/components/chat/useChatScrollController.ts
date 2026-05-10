@@ -1290,7 +1290,7 @@ export const useChatScrollController = ({
   ]);
 
   const handleUserScroll = React.useCallback(
-    (_: number) => {
+    () => {
       // Coalesce scroll events — only process one per animation frame
       if (scrollRafRef.current !== null) return;
 
