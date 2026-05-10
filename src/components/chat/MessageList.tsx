@@ -461,7 +461,15 @@ const TimelineRow: React.FC<TimelineRowRenderProps<TimelineRowData>> =
       }
 
       if (renderState.measurementMode === "static") {
-        return;
+        if (hasCommittedInitialMeasurementRef.current) return;
+        const staticMeasureRafId = requestAnimationFrame(() => {
+          const currentNode = rowRef.current;
+          if (!currentNode) return;
+          const nextSize = Math.ceil(currentNode.getBoundingClientRect().height);
+          setItemSize(index, nextSize);
+          hasCommittedInitialMeasurementRef.current = true;
+        });
+        return () => cancelAnimationFrame(staticMeasureRafId);
       }
 
       let measureRafId: number | null = null;

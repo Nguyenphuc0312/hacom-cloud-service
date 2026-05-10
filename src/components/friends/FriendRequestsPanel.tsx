@@ -24,32 +24,17 @@ import {
   type FriendRequest as FriendshipRequest,
 } from "../../hooks/useFriendship";
 import { extractApiError } from "../../lib/apiContract";
-import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
+import {
+  getFriendRequestDisplayLabel,
+  getFriendRequestDisplayUser,
+  getFriendRequestUsernameLabel,
+} from "../../features/friends/requestDisplay";
 
 type Tab = "received" | "sent";
 
 interface FriendRequestsPanelProps {
   className?: string;
 }
-
-const getUserDisplayName = (
-  user:
-    | FriendshipRequest["requester"]
-    | FriendshipRequest["addressee"]
-    | undefined,
-): string => {
-  if (!user) {
-    return "?";
-  }
-
-  return (
-    resolveUserDisplayName(user, {
-      allowLegacyFallback: true,
-    }) ||
-    user.username ||
-    user.id
-  );
-};
 
 export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
   className,
@@ -61,6 +46,7 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
     fetchIncomingRequests,
     sentRequests,
     pendingCount,
+    sentCount,
     fetchSentRequests,
     fetchPendingCount,
     acceptFriendRequest,
@@ -154,6 +140,7 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
       id: "sent",
       label: t("friends:tabs.sent"),
       icon: PaperAirplaneIcon,
+      count: sentCount > 0 ? sentCount : undefined,
     },
   ];
 
@@ -204,11 +191,12 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
         ) : (
           <ul className="divide-y divide-border">
             {items.map((request) => {
-              const user =
-                activeTab === "received"
-                  ? request.requester
-                  : request.addressee;
-              const displayName = getUserDisplayName(user);
+              const user = getFriendRequestDisplayUser(
+                request,
+                activeTab === "received" ? "incoming" : "sent",
+              );
+              const displayName = getFriendRequestDisplayLabel(user);
+              const usernameLabel = getFriendRequestUsernameLabel(user);
               const isProcessing = processingIds.has(request.relationId);
 
               return (
@@ -221,9 +209,11 @@ export const FriendRequestsPanel: React.FC<FriendRequestsPanelProps> = ({
                     <p className="truncate text-sm font-medium text-text-primary">
                       {displayName}
                     </p>
-                    <p className="truncate text-xs text-text-muted">
-                      @{user?.username}
-                    </p>
+                    {usernameLabel ? (
+                      <p className="truncate text-xs text-text-muted">
+                        {usernameLabel}
+                      </p>
+                    ) : null}
                   </div>
 
                   {activeTab === "received" ? (
