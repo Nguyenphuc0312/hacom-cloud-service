@@ -363,6 +363,17 @@ jobs:
             printf 'RELEASE_DIR=%s\n' "${RELEASE_DIR}"
           } >> "${GITHUB_ENV}"
 
+      - name: Print resolved Timeline V2 flags
+        # Surface the post-validate values so anyone reading the run can see
+        # what the Vite bundle is about to bake in. These are the SAME
+        # values that flow into `--build-arg` below; if they look wrong
+        # here, the deploy is wrong before docker even runs.
+        run: |
+          set -Eeuo pipefail
+          echo "OWNER=${VITE_CHAT_TIMELINE_V2_OWNER_CLEAN}"
+          echo "DRIVES=${VITE_CHAT_SCROLL_OWNER_V2_DRIVES_CLEAN}"
+          echo "DEBUG=${VITE_CHAT_SCROLL_DEBUG_CLEAN}"
+
       - name: Preflight Docker build context
         run: |
           set -Eeuo pipefail
@@ -438,13 +449,35 @@ jobs:
           echo "IMAGE_DIGEST=${DIGEST}" >> "${GITHUB_ENV}"
 
       - name: Verify Timeline V2 build-time flags landed in bundle
-        # Pull the pushed image, extract dist/assets, and assert that:
-        #   1. The V2 debug-log marker `chat-scroll-v2` is present (proves
-        #      V2 code is in the bundle and was not tree-shaken away).
-        #   2. The expected literal flag values appear (proves Vite saw
-        #      `import.meta.env.VITE_*` and inlined the resolved value).
-        # If either check fails, the build is broken in the same way the
-        # `const sg={}` symptom reported on staging — abort before deploy.
+        # Pull the pushed image, extract dist/assets, and run two
+        # CONDITIONAL checks plus an unconditional regression guard:
+        #
+        #   * If OWNER=true: at least one V2-presence marker MUST exist in
+        #     the bundle. The list deliberately excludes `chat-scroll-v2`
+        #     because that literal is inside `console.debug` and gets
+        #     dead-code-eliminated when DEBUG=false (which is the prod
+        #     default). Acceptable markers — all of them survive DCE
+        #     regardless of DEBUG:
+        #       - `__CHAT_FLAGS_OVERRIDE__`             (live read in
+        #         experienceFlags.ts)
+        #       - `"VITE_CHAT_TIMELINE_V2_OWNER"`        (string key for
+        #         runtime override, never DCE'd)
+        #       - `"VITE_CHAT_SCROLL_OWNER_V2_DRIVES"`   (same)
+        #       - `ChatTimelineV2`                        (component
+        #         displayName)
+        #       - `suppressScrollWrites` / `onTimelineEvent` (prop names;
+        #         minifier preserves quoted property names in JSX output)
+        #
+        #   * If DEBUG=true: the literal `chat-scroll-v2` MUST exist. With
+        #     DEBUG=false this check is skipped and we print why.
+        #
+        #   * Empty env-object regression: minified bundles where Vite
+        #     could not replace `import.meta.env.VITE_CHAT_*` produce a
+        #     `const X={}` literal. We print every match for visibility
+        #     but only FAIL when it occurs within ~500 chars of an
+        #     unreplaced `import.meta.env.VITE_CHAT_*` reference. Plain
+        #     references to `"VITE_CHAT_*"` strings are LEGITIMATE (they
+        #     are runtime override keys) and do NOT cause a fail.
         run: |
           set -Eeuo pipefail
           docker pull "${IMAGE_REF}"
@@ -455,42 +488,60 @@ jobs:
           ASSETS_DIR="./_v2_bundle/assets"
           test -d "${ASSETS_DIR}"
 
-          echo "::group::V2 marker check"
-          if ! grep -RoE "chat-scroll-v2" "${ASSETS_DIR}" | head -3; then
-            echo "::error title=V2 marker missing::Bundle has no 'chat-scroll-v2' literal — Timeline V2 code was tree-shaken or not built. Did the build args reach the build stage?"
+          echo "Resolved V2 flags:"
+          echo "OWNER=${VITE_CHAT_TIMELINE_V2_OWNER_CLEAN}"
+          echo "DRIVES=${VITE_CHAT_SCROLL_OWNER_V2_DRIVES_CLEAN}"
+          echo "DEBUG=${VITE_CHAT_SCROLL_DEBUG_CLEAN}"
+
+          echo "::group::Bundle markers (informational)"
+          grep -RnoE \
+            "chat-scroll-v2|__CHAT_FLAGS_OVERRIDE__|VITE_CHAT_TIMELINE_V2_OWNER|VITE_CHAT_SCROLL_OWNER_V2_DRIVES|VITE_CHAT_SCROLL_DEBUG|ChatTimelineV2|suppressScrollWrites|onTimelineEvent" \
+            "${ASSETS_DIR}" 2>/dev/null | head -80 || true
+          echo "::endgroup::"
+
+          echo "::group::OWNER-gated V2 presence check"
+          if [ "${VITE_CHAT_TIMELINE_V2_OWNER_CLEAN}" = "true" ]; then
+            if grep -RqE \
+                "__CHAT_FLAGS_OVERRIDE__|VITE_CHAT_TIMELINE_V2_OWNER|VITE_CHAT_SCROLL_OWNER_V2_DRIVES|ChatTimelineV2|suppressScrollWrites|onTimelineEvent" \
+                "${ASSETS_DIR}"; then
+              echo "OWNER=true; V2 marker present."
+            else
+              echo "::error title=V2 marker missing::OWNER=true but no V2/runtime-flag marker found in bundle — verify Dockerfile ARG/ENV and --build-arg threading"
+              exit 1
+            fi
+          else
+            echo "OWNER=false; skip V2 presence check."
+          fi
+          echo "::endgroup::"
+
+          echo "::group::DEBUG-gated chat-scroll-v2 literal check"
+          if [ "${VITE_CHAT_SCROLL_DEBUG_CLEAN}" = "true" ]; then
+            if grep -Rq "chat-scroll-v2" "${ASSETS_DIR}"; then
+              echo "DEBUG=true; chat-scroll-v2 literal present."
+            else
+              echo "::error title=Debug log missing::DEBUG=true but bundle has no chat-scroll-v2 literal — Vite did not inline VITE_CHAT_SCROLL_DEBUG"
+              exit 1
+            fi
+          else
+            echo "DEBUG=false; skip chat-scroll-v2 literal check (debug code DCE'd as expected)."
+          fi
+          echo "::endgroup::"
+
+          echo "::group::Empty env-object regression guard"
+          # Tight proximity check using GNU grep -P (same line, within
+          # ~500 chars). Catches the `const X={};...import.meta.env.VITE_CHAT_*`
+          # signature without false-positiving on legitimate runtime
+          # override key strings.
+          if grep -RqnP \
+              "(const [A-Za-z0-9_\$]+=\{\}.{0,500}import\.meta\.env\.VITE_CHAT_)|(import\.meta\.env\.VITE_CHAT_.{0,500}const [A-Za-z0-9_\$]+=\{\})" \
+              "${ASSETS_DIR}" 2>/dev/null; then
+            echo "::error title=V2 flags not inlined::Empty env-object literal sits next to an unreplaced import.meta.env.VITE_CHAT_* reference — Vite did not see the build args"
+            grep -RnP \
+              "(const [A-Za-z0-9_\$]+=\{\}.{0,500}import\.meta\.env\.VITE_CHAT_)|(import\.meta\.env\.VITE_CHAT_.{0,500}const [A-Za-z0-9_\$]+=\{\})" \
+              "${ASSETS_DIR}" | head -5 || true
             exit 1
           fi
-          echo "::endgroup::"
-
-          echo "::group::All V2 flag literal occurrences (debug only)"
-          grep -RnoE \
-            "VITE_CHAT_TIMELINE_V2_OWNER|VITE_CHAT_SCROLL_OWNER_V2_DRIVES|VITE_CHAT_SCROLL_DEBUG" \
-            "${ASSETS_DIR}" | head -50 || true
-          echo "::endgroup::"
-
-          echo "::group::Empty env-object regression check"
-          # When Vite cannot replace `import.meta.env.X`, the minified
-          # bundle ends up with patterns like `const sg={};` adjacent to
-          # the literal flag name. We reject that explicitly.
-          if grep -RoE "const [A-Za-z_\$]+=\{\}" "${ASSETS_DIR}" | head -5; then
-            # Empty-object literals can appear for unrelated reasons. We only
-            # fail if the same file ALSO contains an unreplaced VITE_* literal
-            # which strongly suggests env injection failed.
-            HITS_FILE="$(grep -RlE "const [A-Za-z_\$]+=\{\}" "${ASSETS_DIR}" || true)"
-            for f in ${HITS_FILE}; do
-              if grep -qE "\"VITE_CHAT_(TIMELINE_V2_OWNER|SCROLL_OWNER_V2_DRIVES|SCROLL_DEBUG)\"" "$f"; then
-                echo "::error title=V2 flags not inlined::${f} contains both an empty env object literal AND a VITE_CHAT_* string — the Vite build did not see the env vars."
-                exit 1
-              fi
-            done
-            echo "Empty {} literals found but not adjacent to VITE_CHAT_* — likely benign."
-          fi
-          echo "::endgroup::"
-
-          echo "::group::Effective V2 build flags (developer-readable)"
-          echo "VITE_CHAT_TIMELINE_V2_OWNER=${VITE_CHAT_TIMELINE_V2_OWNER_CLEAN}"
-          echo "VITE_CHAT_SCROLL_OWNER_V2_DRIVES=${VITE_CHAT_SCROLL_OWNER_V2_DRIVES_CLEAN}"
-          echo "VITE_CHAT_SCROLL_DEBUG=${VITE_CHAT_SCROLL_DEBUG_CLEAN}"
+          echo "OK: no unreplaced import.meta.env.VITE_CHAT_* near empty {} literals."
           echo "::endgroup::"
 
       - name: Prepare release bundle
