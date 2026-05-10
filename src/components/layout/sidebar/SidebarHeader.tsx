@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
@@ -70,6 +71,8 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement | null>(null);
   const notificationRef = React.useRef<HTMLDivElement | null>(null);
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
+  const [panelStyle, setPanelStyle] = React.useState<React.CSSProperties>({});
   const isDense = layoutState !== "normal";
   const unreadCount = useNotificationUnreadCount();
   const togglePanel = useNotificationStore((s) => s.togglePanel);
@@ -83,6 +86,28 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
     () => resolveStatusLabel(currentUser.status, t),
     [currentUser.status, t],
   );
+
+  React.useLayoutEffect(() => {
+    if (!isPanelOpen) return;
+
+    const compute = () => {
+      const rect = notificationRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const VIEWPORT_PADDING = 12;
+      const GAP = 6;
+      const MAX_WIDTH = 400;
+
+      const popupWidth = Math.min(MAX_WIDTH, window.innerWidth - 2 * VIEWPORT_PADDING);
+      const left = Math.max(VIEWPORT_PADDING, rect.right - popupWidth);
+
+      setPanelStyle({ top: rect.bottom + GAP, left, width: popupWidth });
+    };
+
+    compute();
+    window.addEventListener("resize", compute);
+    return () => window.removeEventListener("resize", compute);
+  }, [isPanelOpen]);
 
   React.useEffect(() => {
     if (!isMenuOpen) return;
@@ -111,6 +136,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
 
     const handlePointerDown = (event: MouseEvent) => {
       if (notificationRef.current?.contains(event.target as Node)) return;
+      if (panelRef.current?.contains(event.target as Node)) return;
       togglePanel();
     };
 
@@ -219,14 +245,20 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
               )}
             </IconButtonSurface>
 
-            {isPanelOpen && (
-              <div className="absolute right-0 top-[calc(100%+0.4rem)] z-[80]">
-                <NotificationPanel
-                  onMarkRead={onMarkRead}
-                  onMarkAllRead={onMarkAllRead}
-                />
-              </div>
-            )}
+            {isPanelOpen &&
+              typeof document !== "undefined" &&
+              createPortal(
+                <div
+                  ref={panelRef}
+                  style={{ position: "fixed", zIndex: 80, ...panelStyle }}
+                >
+                  <NotificationPanel
+                    onMarkRead={onMarkRead}
+                    onMarkAllRead={onMarkAllRead}
+                  />
+                </div>,
+                document.body,
+              )}
           </div>
 
           <IconButtonSurface
