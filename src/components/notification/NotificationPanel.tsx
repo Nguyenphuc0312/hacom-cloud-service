@@ -22,8 +22,10 @@ import { useChatStore } from "../../stores/chatStore";
 import { sortConversationsByActivity } from "../../utils/conversationRanking";
 
 interface NotificationPanelProps {
-  isOpen: boolean;
-  onClose: () => void;
+  isOpen?: boolean;
+  onClose?: () => void;
+  onMarkRead?: (id: string) => void;
+  onMarkAllRead?: () => void;
   className?: string;
 }
 
@@ -78,10 +80,11 @@ const NotificationKindIcon: React.FC<{ item: NotificationItem }> = ({
 export const NotificationPanel: React.FC<NotificationPanelProps> = ({
   isOpen,
   onClose,
+  onMarkRead,
+  onMarkAllRead,
   className,
 }) => {
   const { t } = useTranslation();
-  const panelRef = React.useRef<HTMLDivElement | null>(null);
   const notificationItems = useNotificationStore((state) => state.items);
   const activeFilter = useNotificationStore((state) => state.activeFilter);
   const setFilter = useNotificationStore((state) => state.setFilter);
@@ -144,33 +147,12 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
     );
   }, [activeFilter, conversations, notificationItems, t]);
 
-  React.useEffect(() => {
-    if (!isOpen) return;
-
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!panelRef.current) return;
-      if (panelRef.current.contains(event.target as Node)) return;
-      onClose();
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-
-    window.addEventListener("mousedown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("mousedown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isOpen, onClose]);
 
   const handleSelectItem = React.useCallback(
     (item: NotificationItem & { source?: "conversation" | "transient" }) => {
       if (item.source !== "conversation") {
         markAsRead(item.id);
+        onMarkRead?.(item.id);
       }
 
       if (item.conversationId) {
@@ -180,20 +162,19 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
         });
       }
 
-      onClose();
+      onClose?.();
     },
-    [markAsRead, onClose],
+    [markAsRead, onMarkRead, onClose],
   );
 
-  if (!isOpen) return null;
+  if (isOpen === false) return null;
 
   const hasTransientItems = items.some((item) => item.source !== "conversation");
 
   return (
     <div
-      ref={panelRef}
       className={clsx(
-        "absolute right-4 top-[calc(100%+0.5rem)] z-[65] flex w-[min(25rem,calc(100vw-2rem))] max-w-full flex-col overflow-hidden rounded-[1.25rem] border border-border/80 bg-surface shadow-elev3",
+        "flex w-[min(25rem,calc(100vw-2rem))] max-w-full flex-col overflow-hidden rounded-[1.25rem] border border-border/80 bg-surface shadow-elev3",
         className,
       )}
       role="dialog"
@@ -222,7 +203,10 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
               size="xs"
               variant="ghost"
               disabled={!hasTransientItems}
-              onClick={() => markAllAsRead(activeFilter)}
+              onClick={() => {
+                markAllAsRead(activeFilter);
+                onMarkAllRead?.();
+              }}
             >
               {t("notifications.actions.markAllRead", {
                 defaultValue: "Mark read",

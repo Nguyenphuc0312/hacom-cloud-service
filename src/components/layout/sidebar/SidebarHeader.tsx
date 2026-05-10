@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
   ArrowLeftOnRectangleIcon,
+  BellIcon,
   Cog6ToothIcon,
   EllipsisHorizontalIcon,
   MagnifyingGlassIcon,
@@ -12,6 +13,8 @@ import {
 } from "@heroicons/react/24/outline";
 import { Avatar } from "../../common/Avatar";
 import { IconButtonSurface } from "../../ui";
+import { NotificationPanel } from "../../notification/NotificationPanel";
+import { useNotificationStore, useNotificationUnreadCount } from "../../../features/notification/state/notificationStore";
 import type { UserSummary } from "../../../types";
 import { getUserDisplayName } from "../../../utils/messageHelpers";
 import type { ChatLayoutState } from "../../../utils/densityPolicy";
@@ -25,6 +28,8 @@ interface SidebarHeaderProps {
   onOpenSettings?: () => void;
   onRequestLogout?: () => void;
   onFocusSearch?: () => void;
+  onMarkRead?: (id: string) => void;
+  onMarkAllRead?: () => void;
 }
 
 const resolveDisplayName = (user: UserSummary, fallback: string): string =>
@@ -58,11 +63,18 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   onOpenSettings,
   onRequestLogout,
   onFocusSearch,
+  onMarkRead,
+  onMarkAllRead,
 }) => {
   const { t } = useTranslation();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement | null>(null);
+  const notificationRef = React.useRef<HTMLDivElement | null>(null);
   const isDense = layoutState !== "normal";
+  const unreadCount = useNotificationUnreadCount();
+  const togglePanel = useNotificationStore((s) => s.togglePanel);
+  const isPanelOpen = useNotificationStore((s) => s.isPanelOpen);
 
   const currentUserName = useMemo(
     () => resolveDisplayName(currentUser, t("common:labels.user")),
@@ -94,6 +106,26 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isMenuOpen]);
+
+  React.useEffect(() => {
+    if (!isPanelOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (notificationRef.current?.contains(event.target as Node)) return;
+      togglePanel();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") togglePanel();
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isPanelOpen, togglePanel]);
 
   return (
     <div
@@ -169,6 +201,34 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           >
             <MagnifyingGlassIcon className="h-[18px] w-[18px]" />
           </IconButtonSurface>
+
+          <div className="relative" ref={notificationRef}>
+            <IconButtonSurface
+              onClick={togglePanel}
+              className={clsx(
+                "rounded-md text-text-muted hover:bg-surface-hover/70 hover:text-text-primary",
+                "h-[var(--control-height-md)] w-[var(--control-height-md)]",
+                isPanelOpen && "bg-surface-hover/70 text-text-primary",
+              )}
+              aria-label="Thông báo"
+            >
+              <BellIcon className="h-[18px] w-[18px]" />
+              {unreadCount > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-0.5 text-[10px] font-bold leading-none text-white">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+            </IconButtonSurface>
+
+            {isPanelOpen && (
+              <div className="absolute right-0 top-[calc(100%+0.4rem)] z-[80]">
+                <NotificationPanel
+                  onMarkRead={onMarkRead}
+                  onMarkAllRead={onMarkAllRead}
+                />
+              </div>
+            )}
+          </div>
 
           <IconButtonSurface
             onClick={() => setIsMenuOpen((current) => !current)}
