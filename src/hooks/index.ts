@@ -28,3 +28,4 @@ export { useMobileViewportMetrics } from "./useMobileViewportMetrics";
 export { useResendCooldown } from "./useResendCooldown";
 export { useOtpInput } from "./useOtpInput";
 export { useEmailVerificationChallenge } from "./useEmailVerificationChallenge";
+export { useNotifications } from "./useNotifications";

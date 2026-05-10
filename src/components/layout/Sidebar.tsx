@@ -9,7 +9,8 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ConfirmDialog, SegmentedControl, SkeletonButton } from "../ui";
-import { useLogout, usePresence } from "../../hooks";
+import { useLogout, usePresence, useNotifications } from "../../hooks";
+import { useAuthStore } from "../../stores";
 import { useChatStore } from "../../stores";
 import type { UserSummary } from "../../types";
 import { isDirectConversation } from "../../lib/conversationAdapter";
@@ -66,6 +67,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const { logout, isLoggingOut } = useLogout();
+  const isAuthenticated = !!useAuthStore((s) => s.user);
+  const { markRead, markAllRead } = useNotifications(isAuthenticated);
 
   const handleSelectRoom = useCallback(
     (conversationId: string) => {
@@ -114,6 +117,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onOpenSettings={() => navigate(ROUTE_PATHS.SETTINGS)}
           onRequestLogout={() => setIsLogoutConfirmOpen(true)}
           onFocusSearch={() => searchInputRef.current?.focus()}
+          onMarkRead={markRead}
+          onMarkAllRead={markAllRead}
         />
 
         <SidebarSearch
