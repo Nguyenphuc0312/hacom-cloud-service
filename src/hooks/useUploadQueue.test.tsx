@@ -23,6 +23,15 @@ vi.mock("../features/chat/api", () => ({
 const makeFile = (name = "photo.png", type = "image/png") =>
   new File(["content"], name, { type });
 
+const makeSizedFile = (name: string, type: string, sizeBytes: number) => {
+  const file = new File(["content"], name, { type });
+  Object.defineProperty(file, "size", {
+    value: sizeBytes,
+    configurable: true,
+  });
+  return file;
+};
+
 describe("useUploadQueue ObjectURL lifecycle", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -146,6 +155,41 @@ describe("useUploadQueue ObjectURL lifecycle", () => {
     expect(response?.acceptedCount).toBe(0);
     expect(response?.rejectedCount).toBe(3);
     expect(result.current.drafts).toHaveLength(0);
+  });
+
+  it("rejects an image above the 37.5 MB limit", () => {
+    const { result } = renderHook(() =>
+      useUploadQueue({ conversationId: "conversation-1", concurrency: 0 }),
+    );
+
+    let response: ReturnType<typeof result.current.addFiles> | undefined;
+    act(() => {
+      response = result.current.addFiles([
+        makeSizedFile("huge.jpg", "image/jpeg", 39_321_601),
+      ]);
+    });
+
+    expect(response?.acceptedCount).toBe(0);
+    expect(response?.rejectedCount).toBe(1);
+    expect(result.current.drafts).toHaveLength(0);
+  });
+
+  it("rejects total attachments above 450 MB", () => {
+    const { result } = renderHook(() =>
+      useUploadQueue({ conversationId: "conversation-1", concurrency: 0 }),
+    );
+
+    let response: ReturnType<typeof result.current.addFiles> | undefined;
+    act(() => {
+      response = result.current.addFiles([
+        makeSizedFile("video-1.mp4", "video/mp4", 250 * 1024 * 1024),
+        makeSizedFile("video-2.mp4", "video/mp4", 210 * 1024 * 1024),
+      ]);
+    });
+
+    expect(response?.acceptedCount).toBe(1);
+    expect(response?.rejectedCount).toBe(1);
+    expect(result.current.drafts).toHaveLength(1);
   });
 
   it("infers mime type from extension when browser file.type is empty", () => {

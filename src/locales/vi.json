@@ -115,7 +115,7 @@
     "dropZone": {
       "title": "Thả tệp vào đây",
       "subtitle": "Thả để đính kèm tệp vào cuộc trò chuyện",
-      "limits": "Tối đa 10 tệp · 50 MB mỗi tệp"
+      "limits": "Tối đa 10 tệp · Ảnh 37.5 MB · Tài liệu 150 MB · Video 300 MB"
     },
     "attachmentTray": {
       "queued": "Đang chờ",
@@ -385,9 +385,11 @@
       "noConversation": "Chưa chọn cuộc trò chuyện",
       "cancelled": "Đã hủy tải lên",
       "tooLarge": "Tệp quá lớn",
-      "tooManyFiles": "Tối đa {{max}} tệp",
+      "tooManyFiles": "Bạn chỉ có thể gửi tối đa {{max}} tệp trong một tin nhắn.",
       "fileTooLargeNamed": "{{name}} quá lớn",
-      "totalSizeTooLarge": "Tổng dung lượng tệp vượt giới hạn"
+      "fileTooLargeByType": "{{name}} vượt quá giới hạn {{limit}} cho loại {{type}}.",
+      "totalSizeTooLarge": "Tổng dung lượng tệp không được vượt quá 450 MB trong một tin nhắn.",
+      "messageSendFailedKeepDraft": "Gửi tin nhắn thất bại, tệp đã tải lên vẫn được giữ để bạn thử lại."
     }
   },
   "settings": {

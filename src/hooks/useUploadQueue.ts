@@ -34,6 +34,8 @@ import {
 } from "../types/attachmentDraft";
 import {
   DEFAULT_ALLOWED_UPLOAD_MIME_TYPES,
+  resolveUploadCategoryForMimeType,
+  resolveUploadMaxBytesForFile,
   resolveUploadMimeTypeForFile,
   validateUploadFileType,
 } from "../utils/uploadPolicy";
@@ -80,6 +82,17 @@ export interface UploadQueueAddFilesResult {
 // ── Constants ───────────────────────────────────────────────────────
 
 const DEFAULT_CONCURRENCY = 3;
+
+const formatFileSize = (bytes: number): string => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const exponent = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+    units.length - 1,
+  );
+  const value = bytes / 1024 ** exponent;
+  return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${units[exponent]}`;
+};
 
 const resolveUploadErrorMessage = (
   error: unknown,
@@ -497,7 +510,7 @@ export function useUploadQueue({
             result.errors.push(
               t("error:upload.tooManyFiles", {
                 max: ATTACHMENT_CONSTRAINTS.maxFilesPerMessage,
-                defaultValue: `Maximum ${ATTACHMENT_CONSTRAINTS.maxFilesPerMessage} files allowed`,
+                defaultValue: `Bạn chỉ có thể gửi tối đa ${ATTACHMENT_CONSTRAINTS.maxFilesPerMessage} tệp trong một tin nhắn.`,
               }),
             );
             result.rejectedCount += 1;
@@ -505,11 +518,16 @@ export function useUploadQueue({
           }
 
           // Check single file size
-          if (file.size > ATTACHMENT_CONSTRAINTS.maxSingleFileSize) {
+          const maxBytesForFile = resolveUploadMaxBytesForFile(file);
+          if (file.size > maxBytesForFile) {
             result.errors.push(
-              t("error:upload.fileTooLargeNamed", {
+              t("error:upload.fileTooLargeByType", {
                 name: file.name,
-                defaultValue: `${file.name} is too large`,
+                limit: formatFileSize(maxBytesForFile),
+                type: resolveUploadCategoryForMimeType(
+                  resolveUploadMimeTypeForFile(file) ?? "",
+                ),
+                defaultValue: `${file.name} vượt quá giới hạn ${formatFileSize(maxBytesForFile)}`,
               }),
             );
             result.rejectedCount += 1;
@@ -557,7 +575,8 @@ export function useUploadQueue({
           if (totalSize > ATTACHMENT_CONSTRAINTS.maxTotalSize) {
             result.errors.push(
               t("error:upload.totalSizeTooLarge", {
-                defaultValue: "Total file size limit exceeded",
+                defaultValue:
+                  "Tổng dung lượng tệp không được vượt quá 450 MB trong một tin nhắn.",
               }),
             );
             result.rejectedCount += 1;

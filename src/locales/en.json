@@ -115,7 +115,7 @@
     "dropZone": {
       "title": "Drop files here",
       "subtitle": "Release to attach files to this conversation",
-      "limits": "Up to 10 files · 50 MB each"
+      "limits": "Up to 10 files · Images 37.5 MB · Documents 150 MB · Video 300 MB"
     },
     "attachmentTray": {
       "queued": "Queued",
@@ -385,9 +385,11 @@
       "noConversation": "No conversation selected",
       "cancelled": "Upload cancelled",
       "tooLarge": "File too large",
-      "tooManyFiles": "Maximum {{max}} files allowed",
+      "tooManyFiles": "You can only send up to {{max}} files in one message.",
       "fileTooLargeNamed": "{{name}} is too large",
-      "totalSizeTooLarge": "Total file size limit exceeded"
+      "fileTooLargeByType": "{{name}} exceeds the {{limit}} limit for {{type}} files.",
+      "totalSizeTooLarge": "Total attachment size cannot exceed 450 MB in one message.",
+      "messageSendFailedKeepDraft": "Message send failed. Your uploaded files were kept so you can retry."
     }
   },
   "settings": {

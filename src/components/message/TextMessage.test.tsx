@@ -60,6 +60,53 @@ describe("TextMessage", () => {
     expect(paragraph?.className).toContain("[overflow-wrap:anywhere]");
   });
 
+  it("renders mentions with Vietnamese diacritics using metadata", () => {
+    render(
+      <TextMessage
+        content="Anh @Nguyễn Văn A kiểm tra giúp em"
+        isOwn={false}
+        currentUserId="me"
+        mentions={[
+          {
+            userId: "user-A",
+            displayName: "Nguyễn Văn A",
+            employeeCode: "NV001",
+          },
+        ]}
+      />,
+    );
+
+    const token = screen.getByText("@Nguyễn Văn A");
+    expect(token.tagName).toBe("SPAN");
+    expect(token.getAttribute("data-mention-user-id")).toBe("user-A");
+    expect(token.className).toContain("font-semibold");
+  });
+
+  it("highlights self-mention by userId not by name", () => {
+    render(
+      <TextMessage
+        content="Hi @Alice"
+        isOwn={false}
+        currentUserId="user-A"
+        mentions={[{ userId: "user-A", displayName: "Alice" }]}
+      />,
+    );
+
+    const token = screen.getByText("@Alice");
+    expect(token.className).toContain("bg-primary/15");
+  });
+
+  it("falls back to Unicode-aware regex when no mention metadata is provided", () => {
+    render(
+      <TextMessage
+        content="Hi @Hùng đi đâu rồi?"
+        isOwn={false}
+        currentUsername="other"
+      />,
+    );
+    expect(screen.getByText("@Hùng").tagName).toBe("SPAN");
+  });
+
   it("copies the full structured content even when the message is collapsed", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);

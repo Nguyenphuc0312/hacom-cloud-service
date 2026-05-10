@@ -192,7 +192,7 @@
   "dropZone": {
     "title": "Thả tệp vào đây",
     "subtitle": "Thả để đính kèm tệp vào cuộc trò chuyện",
-    "limits": "Tối đa 10 tệp · 50 MB mỗi tệp"
+    "limits": "Tối đa 10 tệp · Ảnh 37.5 MB · Tài liệu 150 MB · Video 300 MB"
   },
   "attachmentTray": {
     "queued": "Đang chờ",

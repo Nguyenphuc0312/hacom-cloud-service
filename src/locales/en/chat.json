@@ -192,7 +192,7 @@
   "dropZone": {
     "title": "Drop files here",
     "subtitle": "Release to attach files to this conversation",
-    "limits": "Up to 10 files · 50 MB each"
+    "limits": "Up to 10 files · Images 37.5 MB · Documents 150 MB · Video 300 MB"
   },
   "attachmentTray": {
     "queued": "Queued",

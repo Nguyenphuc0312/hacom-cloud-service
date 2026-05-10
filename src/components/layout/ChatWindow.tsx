@@ -465,27 +465,27 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           mentionUserIds.length ? mentionUserIds : undefined,
         );
         const sendPromise = Promise.resolve(sendResult);
-
-        inputValueRef.current = "";
-        replaceComposerSeed("");
-        clearPendingDraftPersist();
-        clearComposerDraft(conversation.id);
-        setReplyToMessage(undefined);
-        setEditingMessage(undefined);
-        setInputMode("normal");
-
-        if (queueMetas.length > 0) {
-          uploadQueue.clearAll();
-        }
-
-        void sendPromise
+        return sendPromise
           .then((result) => {
+            inputValueRef.current = "";
+            replaceComposerSeed("");
+            clearPendingDraftPersist();
+            clearComposerDraft(conversation.id);
+            setReplyToMessage(undefined);
+            setEditingMessage(undefined);
+            setInputMode("normal");
+
+            if (queueMetas.length > 0) {
+              uploadQueue.clearAll();
+            }
+
             logMessageDebug("ChatWindow", "send_resolved", {
               conversationId: conversation.id,
               disposition:
                 (result as { disposition?: string } | undefined)?.disposition ??
                 "unknown",
             });
+            return result ?? { disposition: "acceptedOptimistic" as const };
           })
           .catch((error) => {
             logMessageDebug("ChatWindow", "send_rejected", {
@@ -493,9 +493,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               errorMessage:
                 error instanceof Error ? error.message : "unknown_error",
             });
+            toast.error(
+              t("error:upload.messageSendFailedKeepDraft", {
+                defaultValue:
+                  "Gửi tin nhắn thất bại, tệp đã tải lên vẫn được giữ để bạn thử lại.",
+              }),
+            );
+            throw error;
           });
-
-        return { disposition: "acceptedOptimistic" as const };
       } catch (error) {
         logMessageDebug("ChatWindow", "send_rejected", {
           conversationId: conversation.id,

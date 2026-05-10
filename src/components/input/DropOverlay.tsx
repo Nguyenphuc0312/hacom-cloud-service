@@ -82,7 +82,8 @@ const DropOverlayComponent: React.FC<DropOverlayProps> = ({
           </p>
           <p className="mt-2 text-xs text-text-muted">
             {t("chat:dropZone.limits", {
-              defaultValue: "Up to 10 files · 50 MB each",
+              defaultValue:
+                "Tối đa 10 tệp · Ảnh 37.5 MB · Tài liệu 150 MB · Video 300 MB",
             })}
           </p>
         </div>
