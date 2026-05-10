@@ -131,6 +131,33 @@ const MessageGroupItem: React.FC<{
     isGroupTail,
   });
   const resendMessage = useChatStore((state) => state.resendMessage);
+  // Fallback hydrate: when API trả về `replyTo` mà không có `replyToMessage`
+  // (legacy messages, missing reply_snapshot), nhìn vào messageById index để
+  // tự dựng quote preview từ message gốc đang có trong store.
+  const replyTargetFromStore = useChatStore((state) =>
+    !message.replyToMessage && message.replyTo
+      ? state.messageById[message.replyTo]
+      : undefined,
+  );
+  const resolvedReplyPreview = React.useMemo(() => {
+    if (message.replyToMessage) return message.replyToMessage;
+    if (!message.replyTo) return undefined;
+    if (replyTargetFromStore) {
+      return {
+        id: replyTargetFromStore.id,
+        senderId: replyTargetFromStore.senderId,
+        senderName: replyTargetFromStore.senderName,
+        senderAvatar: replyTargetFromStore.senderAvatar,
+        content: replyTargetFromStore.content,
+        contentFormat: replyTargetFromStore.contentFormat,
+        type: replyTargetFromStore.type,
+        isDeleted: replyTargetFromStore.isDeleted,
+        createdAt: replyTargetFromStore.createdAt as unknown as Date,
+        attachments: replyTargetFromStore.attachments,
+      } as Message["replyToMessage"];
+    }
+    return undefined;
+  }, [message.replyToMessage, message.replyTo, replyTargetFromStore]);
   const hideActionRailTimerRef = React.useRef<number | null>(null);
   const isHighlighted =
     highlightedMessageId === message.id ||
@@ -159,6 +186,7 @@ const MessageGroupItem: React.FC<{
   const isRichBubble =
     message.type !== "text" ||
     Boolean(message.replyToMessage) ||
+    Boolean(message.replyTo) ||
     Boolean(message.forwardedFrom) ||
     message.isDeleted ||
     isFailedMessage(message) ||
@@ -314,12 +342,12 @@ const MessageGroupItem: React.FC<{
             isRich={isRichBubble}
             isHighlighted={isHighlighted}
           >
-            {message.replyToMessage && (
+            {(resolvedReplyPreview || message.replyTo) && (
               <button
                 type="button"
                 onClick={() => {
                   const targetId =
-                    message.replyTo || message.replyToMessage?.id;
+                    message.replyTo || resolvedReplyPreview?.id;
                   if (targetId) {
                     onNavigateToMessage?.(targetId);
                   }
@@ -339,10 +367,14 @@ const MessageGroupItem: React.FC<{
                       isOwn ? "text-text-primary/78" : "text-text-secondary",
                     )}
                   >
-                    {resolveUserDisplayName({
-                      displayName: message.replyToMessage.senderName,
-                      username: message.replyToMessage.senderId,
-                    })}
+                    {resolvedReplyPreview
+                      ? resolveUserDisplayName({
+                          displayName: resolvedReplyPreview.senderName,
+                          username: resolvedReplyPreview.senderId,
+                        })
+                      : t("chat:message.replyingTo", {
+                          defaultValue: "Tin nhắn được trả lời",
+                        })}
                   </div>
                   <p
                     className={clsx(
@@ -350,14 +382,18 @@ const MessageGroupItem: React.FC<{
                       isOwn ? "text-text-primary/68" : "text-text-muted",
                     )}
                   >
-                    {message.replyToMessage.isDeleted
-                      ? t("chat:message.deleted", {
-                          defaultValue: "Message deleted",
+                    {!resolvedReplyPreview
+                      ? t("chat:message.replyLoading", {
+                          defaultValue: "Đang tải tin nhắn...",
                         })
-                      : getPreviewFromMessage({
-                          contentFormat: message.replyToMessage.contentFormat,
-                          content: message.replyToMessage.content,
-                        })}
+                      : resolvedReplyPreview.isDeleted
+                        ? t("chat:message.deleted", {
+                            defaultValue: "Tin nhắn đã bị xóa",
+                          })
+                        : getPreviewFromMessage({
+                            contentFormat: resolvedReplyPreview.contentFormat,
+                            content: resolvedReplyPreview.content,
+                          })}
                   </p>
                 </div>
               </button>
