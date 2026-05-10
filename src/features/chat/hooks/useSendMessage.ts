@@ -51,7 +51,7 @@ interface UseSendMessageResult {
   isUploading: boolean;
   isSending: boolean;
   selectFile: (file: File) => boolean;
-  sendTextMessage: (content: string, options?: { contentFormat?: 'plain_text' | 'markdown' }) => Promise<SendDisposition>;
+  sendTextMessage: (content: string, options?: { contentFormat?: 'plain_text' | 'rich_text'; contentJson?: Record<string, unknown>; plainText?: string }) => Promise<SendDisposition>;
   sendAttachmentMessage: () => Promise<SendDisposition>;
   clearSelectedFile: () => void;
   cancelUpload: () => void;
@@ -229,7 +229,9 @@ export const useSendMessage = ({
       replyTo?: Message,
       fileMeta?: Attachment | Attachment[] | undefined,
       type: MessageType = MessageTypeEnum.TEXT,
-      contentFormat?: 'plain_text' | 'markdown',
+      contentFormat?: 'plain_text' | 'rich_text',
+      contentJson?: Record<string, unknown>,
+      plainText?: string,
     ) => {
       if (onSend) {
         return Promise.resolve(onSend(content, fileMeta, type));
@@ -295,6 +297,8 @@ export const useSendMessage = ({
           localId,
           content,
           contentFormat,
+          contentJson,
+          plainText,
           type,
           replyToId: replyTo?.id,
           senderId: currentUser?.id,
@@ -339,7 +343,7 @@ export const useSendMessage = ({
   );
 
   const sendTextMessage = React.useCallback(
-    async (content: string, options?: { contentFormat?: 'plain_text' | 'markdown' }) => {
+    async (content: string, options?: { contentFormat?: 'plain_text' | 'rich_text'; contentJson?: Record<string, unknown>; plainText?: string }) => {
       const text = content.trim();
       if (!text || disabled) return "failed";
 
@@ -358,7 +362,7 @@ export const useSendMessage = ({
             : "optimistic";
         }
 
-        const sendResult = sendMessage(text, undefined, undefined, MessageTypeEnum.TEXT, options?.contentFormat);
+        const sendResult = sendMessage(text, undefined, undefined, MessageTypeEnum.TEXT, options?.contentFormat, options?.contentJson, options?.plainText);
         const disposition = resolveDisposition(sendResult);
         return disposition === "sent" ? "optimistic" : disposition;
       } catch (error) {

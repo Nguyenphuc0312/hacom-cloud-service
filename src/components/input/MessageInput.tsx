@@ -12,10 +12,12 @@ import {
 } from "@heroicons/react/24/outline";
 
 
+import type { Editor } from "@tiptap/react";
 import { AttachmentMenu } from "./AttachmentMenu";
 import { AttachmentPreview } from "./AttachmentPreview";
 import { AttachmentTray } from "./AttachmentTray";
-import { FormatToolbar } from "./FormatToolbar";
+import { TipTapEditor, type TipTapEditorHandle } from "./TipTapEditor";
+import { RichTextToolbar } from "./RichTextToolbar";
 import { EmojiButton } from "./EmojiButton";
 import { SendButton, type SendButtonState } from "./SendButton";
 import { ShareContactModal } from "../modals/ShareContactModal";
@@ -46,6 +48,7 @@ import {
   getInlineMessageValidationState,
   MESSAGE_SOFT_LIMIT,
 } from "../../utils/messageLengthPolicy";
+import { hasRichFormatting } from "../../utils/messageContent.utils";
 
 
 
@@ -304,6 +307,8 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   const rootRef = React.useRef<HTMLDivElement>(null);
   const [draftValue, setDraftValue] = React.useState(externalValue);
   const [isFormatModeExpanded, setIsFormatModeExpanded] = React.useState(false);
+  const tipTapRef = React.useRef<TipTapEditorHandle>(null);
+  const [tipTapEditor, setTipTapEditor] = React.useState<Editor | null>(null);
 
   const { textareaRef, recomputeHeight } = useAutoResizeTextarea({
     value: draftValue,
@@ -431,6 +436,9 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     setDraftValue(externalValue);
     clearMentionState();
     setShowLongPasteNotice(false);
+    if (!externalValue) {
+      tipTapRef.current?.clearContent();
+    }
   }, [clearMentionState, externalValue, valueResetKey]);
 
   const messageValidation = React.useMemo(
@@ -565,15 +573,24 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       return;
     }
 
-    const contentFormat = /(\*\*[\s\S]+?\*\*|\*[\s\S]+?\*|~~[\s\S]+?~~|`[\s\S]+?`|__[\s\S]+?__|^\s*[-*+]\s|\d+\.\s)/m.test(draftValue)
-      ? ('markdown' as const)
-      : ('plain_text' as const);
-    const result = await sendTextMessage(draftValue, { contentFormat });
+    const html = tipTapRef.current?.getHTML() ?? "";
+    const plainText = tipTapRef.current?.getText().trim() ?? draftValue.trim();
+    const contentJson = tipTapRef.current?.getJSON() as Record<string, unknown> | undefined;
+    const isEmpty = tipTapRef.current?.isEmpty() ?? !plainText;
+
+    if (isEmpty || !plainText) return;
+
+    const hasFormatting = hasRichFormatting(html);
+    const contentFormat = hasFormatting ? ("rich_text" as const) : ("plain_text" as const);
+    const content = hasFormatting ? html : plainText;
+
+    const result = await sendTextMessage(content, { contentFormat, contentJson, plainText });
     if (result === "failed") {
       setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
       return;
     }
 
+    tipTapRef.current?.clearContent();
     setDraftValue("");
     onChange("");
     scheduleComposerResize();
@@ -588,13 +605,13 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     );
   }, [
     clearMentionState,
+    draftValue,
     onChange,
     scheduleComposerResize,
     optimisticAnnouncement,
     sendTextMessage,
     stopTypingNow,
     t,
-    draftValue,
     messageValidation.canSendInlineMessage,
     messageValidation.hardLimit,
   ]);
@@ -692,28 +709,6 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     messageValidation.hardLimit,
   ]);
 
-  const handleInputChange = React.useCallback(
-    (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const nextValue = event.target.value;
-      const caret = event.target.selectionStart ?? nextValue.length;
-
-      setDraftValue(nextValue);
-      onChange(nextValue);
-      scheduleComposerResize();
-      if (nextValue.length <= MESSAGE_SOFT_LIMIT) {
-        setShowLongPasteNotice(false);
-      }
-      updateMentionState(nextValue, caret);
-      recordInputLatency(nextValue);
-
-      notifyInput({
-        hasText: nextValue.trim().length > 0,
-        isFocused: event.target === document.activeElement,
-      });
-    },
-    [notifyInput, onChange, recordInputLatency, scheduleComposerResize, updateMentionState],
-  );
-
   const handleEmojiChange = React.useCallback(
     (nextValue: string) => {
       setDraftValue(nextValue);
@@ -780,21 +775,20 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
 
       const insertion = `@${candidate.username} `;
       const nextValue = `${draftValue.slice(0, mentionMatch.start)}${insertion}${draftValue.slice(mentionMatch.end)}`;
-      const nextCaret = mentionMatch.start + insertion.length;
+
+      const editor = tipTapRef.current?.getEditor();
+      if (editor) {
+        const matchLength = mentionMatch.end - mentionMatch.start;
+        const to = editor.state.selection.anchor;
+        const from = to - matchLength;
+        editor.chain().focus().deleteRange({ from, to }).insertContent(insertion).run();
+      }
 
       setDraftValue(nextValue);
       onChange(nextValue);
       scheduleComposerResize();
       clearMentionState();
       recordInputLatency(nextValue);
-
-      requestAnimationFrame(() => {
-        const textarea = textareaRef.current;
-        if (!textarea) return;
-
-        textarea.focus();
-        textarea.setSelectionRange(nextCaret, nextCaret);
-      });
     },
     [
       clearMentionState,
@@ -803,9 +797,82 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       onChange,
       recordInputLatency,
       scheduleComposerResize,
-      textareaRef,
     ],
   );
+
+  // Stable refs so TipTap's handleKeyDown closure doesn't go stale.
+  const showMentionPanelRef = React.useRef(false);
+  const mentionSuggestionsRef = React.useRef<typeof mentionSuggestions>([]);
+  const activeMentionIndexRef = React.useRef(0);
+
+  const handleMentionSelectRef = React.useRef(handleMentionSelect);
+  handleMentionSelectRef.current = handleMentionSelect;
+  const clearMentionStateRef = React.useRef(clearMentionState);
+  clearMentionStateRef.current = clearMentionState;
+  const onCancelReplyRef = React.useRef(onCancelReply);
+  onCancelReplyRef.current = onCancelReply;
+  const onCancelEditRef = React.useRef(onCancelEdit);
+  onCancelEditRef.current = onCancelEdit;
+
+  const handleTipTapInterceptKeydown = React.useCallback(
+    (event: KeyboardEvent): boolean => {
+      if (showMentionPanelRef.current) {
+        if (event.key === "ArrowDown") {
+          setActiveMentionIndex((current) =>
+            mentionSuggestionsRef.current.length === 0
+              ? 0
+              : (current + 1) % mentionSuggestionsRef.current.length,
+          );
+          return true;
+        }
+        if (event.key === "ArrowUp") {
+          setActiveMentionIndex((current) =>
+            mentionSuggestionsRef.current.length === 0
+              ? 0
+              : (current - 1 + mentionSuggestionsRef.current.length) %
+                mentionSuggestionsRef.current.length,
+          );
+          return true;
+        }
+        if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+          const candidate = mentionSuggestionsRef.current[activeMentionIndexRef.current];
+          if (candidate) {
+            handleMentionSelectRef.current(candidate);
+          }
+          return true;
+        }
+        if (event.key === "Escape") {
+          clearMentionStateRef.current();
+          return true;
+        }
+      }
+
+      if (event.key === "Escape") {
+        if (mode === "reply") onCancelReplyRef.current?.();
+        if (mode === "edit") onCancelEditRef.current?.();
+        return true;
+      }
+
+      if (
+        event.key.toLowerCase() === "x" &&
+        event.shiftKey &&
+        (event.metaKey || event.ctrlKey)
+      ) {
+        setIsFormatModeExpanded((prev) => !prev);
+        return true;
+      }
+
+      return false;
+    },
+    [mode],
+  );
+
+  // Keep stable refs in sync with render-time values.
+  React.useLayoutEffect(() => {
+    showMentionPanelRef.current = showMentionPanel;
+    mentionSuggestionsRef.current = mentionSuggestions;
+    activeMentionIndexRef.current = activeMentionIndex;
+  });
 
   const handleRemoveSelectedFile = React.useCallback(() => {
     if (isUploading) {
@@ -872,110 +939,14 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     Boolean(disabledReason) && shouldRenderCompactStatusBar(composerMode);
   const CompactStatusIcon = compactStatusToneIcons[resolvedCompactStatusTone];
 
-  const handleKeyDown = React.useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (showMentionPanel) {
-        if (event.key === "ArrowDown") {
-          event.preventDefault();
-          setActiveMentionIndex((current) =>
-            mentionSuggestions.length === 0
-              ? 0
-              : (current + 1) % mentionSuggestions.length,
-          );
-          return;
-        }
 
-        if (event.key === "ArrowUp") {
-          event.preventDefault();
-          setActiveMentionIndex((current) =>
-            mentionSuggestions.length === 0
-              ? 0
-              : (current - 1 + mentionSuggestions.length) %
-              mentionSuggestions.length,
-          );
-          return;
-        }
-
-        if (
-          event.key === "Enter" &&
-          !event.shiftKey &&
-          mentionSuggestions.length > 0 &&
-          !event.nativeEvent.isComposing
-        ) {
-          event.preventDefault();
-          const candidate = mentionSuggestions[activeMentionIndex];
-          if (candidate) {
-            handleMentionSelect(candidate);
-          }
-          return;
-        }
-
-        if (event.key === "Escape") {
-          event.preventDefault();
-          clearMentionState();
-          return;
-        }
-      }
-
-      if (
-        event.key.toLowerCase() === "x" &&
-        event.shiftKey &&
-        (event.metaKey || event.ctrlKey)
-      ) {
-        event.preventDefault();
-        setIsFormatModeExpanded((prev) => !prev);
-        return;
-      }
-
-      if (event.key === "Escape") {
-        if (mode === "reply") {
-          onCancelReply?.();
-        }
-
-        if (mode === "edit") {
-          onCancelEdit?.();
-        }
-
-        return;
-      }
-
-      if (
-        event.key === "Enter" &&
-        sendOnEnter &&
-        canSend &&
-        !event.shiftKey &&
-        !event.nativeEvent.isComposing
-      ) {
-        event.preventDefault();
-        logMessageDebug("MessageInput", "submit_triggered", {
-          conversationId,
-          trigger: "keyboard",
-        });
-        void handlePrimarySend();
-      }
-    },
-    [
-      activeMentionIndex,
-      clearMentionState,
-      handleMentionSelect,
-      handlePrimarySend,
-      mentionSuggestions,
-      mode,
-      onCancelEdit,
-      onCancelReply,
-      canSend,
-      conversationId,
-      sendOnEnter,
-      showMentionPanel,
-    ],
-  );
 
 
   React.useEffect(() => {
-    if ((mode === "reply" || mode === "edit") && textareaRef.current) {
-      textareaRef.current.focus();
+    if (mode === "reply" || mode === "edit") {
+      tipTapRef.current?.focus();
     }
-  }, [mode, textareaRef]);
+  }, [mode]);
 
   React.useEffect(() => {
     if (!conversationId || !textareaRef.current) return;
@@ -1286,54 +1257,44 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                 </div>
               )}
 
-              <textarea
-                ref={textareaRef}
+              <TipTapEditor
+                ref={tipTapRef}
                 data-testid="chat-composer-input"
-                value={draftValue}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyDown}
-                onSelect={(event) => {
-                  const caret =
-                    event.currentTarget.selectionStart ?? draftValue.length;
-                  updateMentionState(draftValue, caret);
+                placeholder={t("chat:composer.placeholder")}
+                disabled={disabled}
+                onContentChange={(plainText) => {
+                  setDraftValue(plainText);
+                  onChange(plainText);
+                  scheduleComposerResize();
+                  if (plainText.length <= MESSAGE_SOFT_LIMIT) {
+                    setShowLongPasteNotice(false);
+                  }
+                  recordInputLatency(plainText);
+                  notifyInput({
+                    hasText: plainText.trim().length > 0,
+                    isFocused: true,
+                  });
                 }}
+                onSelectionChange={(text, caretOffset) => {
+                  updateMentionState(text, caretOffset);
+                }}
+                onEnterPress={() => {
+                  if (sendOnEnter && canSend) {
+                    logMessageDebug("MessageInput", "submit_triggered", {
+                      conversationId,
+                      trigger: "keyboard",
+                    });
+                    void handlePrimarySend();
+                  }
+                }}
+                onInterceptKeydown={handleTipTapInterceptKeydown}
+                onFocus={() => setIsComposerFocused(true)}
                 onBlur={() => {
                   setIsComposerFocused(false);
                   notifyBlur();
                   clearMentionState();
                 }}
-                onPaste={(event) => {
-                  const pastedText = event.clipboardData.getData("text");
-                  const selectionLength =
-                    (event.currentTarget.selectionEnd ?? 0) -
-                    (event.currentTarget.selectionStart ?? 0);
-                  const nextLength =
-                    draftValue.length - Math.max(0, selectionLength) + pastedText.length;
-                  if (nextLength >= MESSAGE_SOFT_LIMIT) {
-                    setShowLongPasteNotice(true);
-                  }
-                }}
-                onFocus={() => setIsComposerFocused(true)}
-                placeholder={t("chat:composer.placeholder")}
-                disabled={disabled}
-                wrap="soft"
-                rows={1}
-                role="textbox"
-                aria-multiline="true"
-                aria-label={t("chat:composer.messageInput")}
-                aria-expanded={showMentionPanel}
-                aria-controls={showMentionPanel ? mentionListId : undefined}
-                aria-activedescendant={
-                  showMentionPanel && mentionSuggestions.length > 0
-                    ? `${mentionListId}-option-${activeMentionIndex}`
-                    : undefined
-                }
-                className={clsx(
-                  "chat-composer-textarea w-full min-h-[var(--control-height-md)] flex-1 resize-none bg-transparent px-1 py-1.5",
-                  "text-sm text-text-primary placeholder:text-text-muted",
-                  "transition-colors focus:outline-none",
-                  disabled && "cursor-not-allowed opacity-70",
-                )}
+                onEditorReady={setTipTapEditor}
               />
 
               <div
@@ -1345,7 +1306,9 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                 <EmojiButton
                   value={draftValue}
                   onChange={handleEmojiChange}
-                  textareaRef={textareaRef}
+                  onEmojiSelect={(emoji) => {
+                    tipTapRef.current?.insertAtCursor(emoji);
+                  }}
                   disabled={disabled}
                 />
                 <button
@@ -1422,20 +1385,8 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
 
             {isFormatModeExpanded && (
                 <div className="px-3 pb-2 pt-0">
-                  <FormatToolbar
-                    textareaRef={textareaRef}
-                    value={draftValue}
-                    onChange={(nextValue) => {
-                      setDraftValue(nextValue);
-                      onChange(nextValue);
-                      const caret = textareaRef.current?.selectionEnd || nextValue.length;
-                      updateMentionState(nextValue, caret);
-                      recordInputLatency(nextValue);
-                      notifyInput({
-                        hasText: nextValue.trim().length > 0,
-                        isFocused: true,
-                      });
-                    }}
+                  <RichTextToolbar
+                    editor={tipTapEditor}
                     onToggleExpand={() => setIsFormatModeExpanded(false)}
                     disabled={disabled}
                   />

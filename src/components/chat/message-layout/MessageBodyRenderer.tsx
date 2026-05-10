@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "../../common/Avatar";
 import { TextMessage } from "../../message/TextMessage";
+import { MessageContentRenderer } from "../../message/MessageContentRenderer";
 import { ImageMessage } from "../../message/ImageMessage";
 import { FileMessageCard } from "../../message/FileMessageCard";
 import { VoiceMessage } from "../../message/VoiceMessage";
@@ -164,6 +165,36 @@ const ContactCard: React.FC<{
   );
 };
 
+const renderTextContent = (
+  message: Message,
+  isOwn: boolean,
+  currentUsername?: string,
+  textRenderMode?: LongMessageRenderMode,
+  isCollapsibleText?: boolean,
+  onToggleTextExpand?: () => void,
+) => {
+  if (message.contentFormat === "rich_text") {
+    return (
+      <MessageContentRenderer
+        content={message.content}
+        contentFormat="rich_text"
+        isOwn={isOwn}
+      />
+    );
+  }
+  return (
+    <TextMessage
+      content={message.content}
+      contentFormat={message.contentFormat}
+      isOwn={isOwn}
+      currentUsername={currentUsername}
+      renderMode={textRenderMode}
+      isCollapsible={isCollapsibleText}
+      onToggleExpand={onToggleTextExpand}
+    />
+  );
+};
+
 export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
   message,
   isOwn,
@@ -193,17 +224,7 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                   onClick={onImageClick}
                 />
               ))
-            : (
-              <TextMessage
-                content={message.content}
-                contentFormat={message.contentFormat}
-                isOwn={isOwn}
-                currentUsername={currentUsername}
-                renderMode={textRenderMode}
-                isCollapsible={isCollapsibleText}
-                onToggleExpand={onToggleTextExpand}
-              />
-            )}
+            : renderTextContent(message, isOwn, currentUsername, textRenderMode, isCollapsibleText, onToggleTextExpand)}
         </div>
       );
     case MessageType.FILE:
@@ -219,17 +240,7 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                   onPreview={onFilePreview}
                 />
               ))
-            : (
-              <TextMessage
-                content={message.content}
-                contentFormat={message.contentFormat}
-                isOwn={isOwn}
-                currentUsername={currentUsername}
-                renderMode={textRenderMode}
-                isCollapsible={isCollapsibleText}
-                onToggleExpand={onToggleTextExpand}
-              />
-            )}
+            : renderTextContent(message, isOwn, currentUsername, textRenderMode, isCollapsibleText, onToggleTextExpand)}
         </div>
       );
     case MessageType.VOICE:
@@ -244,17 +255,7 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                   isOwn={isOwn}
                 />
               ))
-            : (
-              <TextMessage
-                content={message.content}
-                contentFormat={message.contentFormat}
-                isOwn={isOwn}
-                currentUsername={currentUsername}
-                renderMode={textRenderMode}
-                isCollapsible={isCollapsibleText}
-                onToggleExpand={onToggleTextExpand}
-              />
-            )}
+            : renderTextContent(message, isOwn, currentUsername, textRenderMode, isCollapsibleText, onToggleTextExpand)}
         </div>
       );
     case MessageType.CONTACT:
@@ -277,17 +278,10 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
       );
     case MessageType.TEXT:
     default: {
-      const firstUrl = extractFirstUrl(message.content);
+      const firstUrl = message.contentFormat !== "rich_text" ? extractFirstUrl(message.content) : null;
       return (
         <div className="space-y-2">
-          <TextMessage
-            content={message.content}
-            isOwn={isOwn}
-            currentUsername={currentUsername}
-            renderMode={textRenderMode}
-            isCollapsible={isCollapsibleText}
-            onToggleExpand={onToggleTextExpand}
-          />
+          {renderTextContent(message, isOwn, currentUsername, textRenderMode, isCollapsibleText, onToggleTextExpand)}
           {firstUrl ? <LinkPreviewCard url={firstUrl} isOwn={isOwn} /> : null}
         </div>
       );

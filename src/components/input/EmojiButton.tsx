@@ -8,7 +8,9 @@ interface EmojiButtonProps {
   value: string;
   disabled?: boolean;
   onChange: (value: string) => void;
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  textareaRef?: React.RefObject<HTMLTextAreaElement | null>;
+  /** When provided, emoji insertion is delegated here instead of using textareaRef. */
+  onEmojiSelect?: (emoji: string) => void;
   className?: string;
 }
 
@@ -17,6 +19,7 @@ export const EmojiButton: React.FC<EmojiButtonProps> = ({
   disabled = false,
   onChange,
   textareaRef,
+  onEmojiSelect,
   className,
 }) => {
   const { t } = useTranslation();
@@ -32,23 +35,27 @@ export const EmojiButton: React.FC<EmojiButtonProps> = ({
 
   const handleSelect = React.useCallback(
     (emoji: string) => {
-      const textarea = textareaRef.current;
+      setIsOpen(false);
+      if (onEmojiSelect) {
+        onEmojiSelect(emoji);
+        return;
+      }
+      const textarea = textareaRef?.current;
       const start = textarea?.selectionStart ?? value.length;
       const end = textarea?.selectionEnd ?? value.length;
       const nextValue = `${value.slice(0, start)}${emoji}${value.slice(end)}`;
       const nextCaret = start + emoji.length;
 
       onChange(nextValue);
-      setIsOpen(false);
       requestAnimationFrame(() => {
-        const nextTextarea = textareaRef.current;
+        const nextTextarea = textareaRef?.current;
         if (!nextTextarea) return;
 
         nextTextarea.focus();
         nextTextarea.setSelectionRange(nextCaret, nextCaret);
       });
     },
-    [onChange, textareaRef, value],
+    [onChange, onEmojiSelect, textareaRef, value],
   );
 
   React.useEffect(() => {
