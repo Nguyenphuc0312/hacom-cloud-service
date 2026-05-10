@@ -148,6 +148,8 @@ export interface ChatScrollControllerResult {
 const NEAR_BOTTOM_THRESHOLD_PX = 96;
 const LOAD_MORE_TRIGGER_PX = 120;
 const BOTTOM_SETTLE_DISTANCE_PX = 3;
+// Tolerance for DOM rect check — absorbs subpixel rounding and thin borders
+const BOTTOM_CLIPPING_BUFFER_PX = 4;
 const MAX_COMMAND_RAF_ATTEMPTS = 5;
 const MAX_SCROLL_SESSIONS = 80;
 const SMOOTH_SCROLL_MAX_DISTANCE_PX = 640;
@@ -686,6 +688,25 @@ export const useChatScrollController = ({
         scrollToOffset(getBottomTarget(), behavior);
 
         requestAnimationFrame(() => {
+          const outer = outerRef.current;
+
+          // DOM rect correction: virtualizer totalSize may be stale (estimated height)
+          // when this RAF fires. The inner [data-message-id] div reflects actual content
+          // height via getBoundingClientRect, so we can detect and correct any clipping
+          // before deciding whether we've truly settled at the bottom.
+          if (outer) {
+            const allRows = outer.querySelectorAll<HTMLElement>('[data-message-id]');
+            const lastRow = allRows[allRows.length - 1];
+            if (lastRow) {
+              const overflow =
+                lastRow.getBoundingClientRect().bottom -
+                (outer.getBoundingClientRect().bottom - BOTTOM_CLIPPING_BUFFER_PX);
+              if (overflow > 1) {
+                outer.scrollTop += overflow;
+              }
+            }
+          }
+
           const metrics = getMetrics();
           if (
             metrics.distanceToBottom !== null &&
