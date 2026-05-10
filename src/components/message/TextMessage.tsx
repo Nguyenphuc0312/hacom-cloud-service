@@ -2,9 +2,6 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { ClipboardDocumentIcon } from "@heroicons/react/24/outline";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { isOnlyEmoji } from "../../utils/messageHelpers";
 import { toast } from "../ui";
 import {
@@ -13,13 +10,11 @@ import {
 } from "../../utils/longMessagePolicy";
 import { MESSAGE_LINKIFY_MAX_CHARS } from "../../utils/messageLengthPolicy";
 
-const sanitizeSchema = {
-  ...defaultSchema,
-  attributes: {
-    ...defaultSchema.attributes,
-    a: [...(defaultSchema.attributes?.a ?? []), "target", "rel"],
-  },
-};
+// Lazy-load the markdown renderer so the entire react-markdown + unified
+// ecosystem is split into a separate async chunk (~100 kB).
+const MarkdownContent = React.lazy(
+  () => import("./MarkdownContent"),
+);
 
 interface TextMessageProps {
   content: string;
@@ -142,43 +137,9 @@ export const TextMessage: React.FC<TextMessageProps> = ({
   if (isMarkdown && !structuredBlockContent) {
     return (
       <div className="space-y-2">
-        <div
-          className={clsx(
-            "chat-message-markdown prose prose-sm max-w-none min-w-0 break-words [overflow-wrap:anywhere]",
-            // Contain prose inside chat bubble — collapse default prose margins
-            "[&_p]:m-0 [&_p+p]:mt-1",
-            "[&_ul]:my-1 [&_ul]:pl-5 [&_ol]:my-1 [&_ol]:pl-5",
-            "[&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_pre]:my-1",
-            "[&_code]:whitespace-pre-wrap [&_code]:[overflow-wrap:anywhere]",
-            "[&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto",
-            "[&_img]:max-w-full [&_img]:h-auto",
-            "[&_a]:[overflow-wrap:anywhere]",
-            isOwn ? "prose-invert text-text-inverse" : "text-text-primary",
-          )}
-        >
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[[rehypeSanitize, sanitizeSchema]]}
-            components={{
-              a: ({ children, href, ...props }) => (
-                <a
-                  {...props}
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={clsx(
-                    "underline underline-offset-2",
-                    isOwn ? "text-text-inverse" : "text-primary",
-                  )}
-                >
-                  {children}
-                </a>
-              ),
-            }}
-          >
-            {displayContent}
-          </ReactMarkdown>
-        </div>
+        <React.Suspense fallback={<span className="opacity-50 text-sm">{displayContent}</span>}>
+          <MarkdownContent content={displayContent} isOwn={isOwn} />
+        </React.Suspense>
         {isCollapsible && onToggleExpand ? (
           <button
             type="button"
