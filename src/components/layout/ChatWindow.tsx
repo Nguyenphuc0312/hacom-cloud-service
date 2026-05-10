@@ -875,7 +875,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [conversation.participants, currentUser.id]);
 
   // Keep ref in sync so handleSend always reads the latest candidates without being in its dep array.
-  mentionCandidatesRef.current = mentionCandidates;
+  React.useLayoutEffect(() => {
+    mentionCandidatesRef.current = mentionCandidates;
+  });
 
   const handleShareContact = React.useCallback(
     async (contactUserId: string) => {

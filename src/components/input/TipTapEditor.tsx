@@ -65,13 +65,14 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
     ref,
   ) => {
     const onEnterPressRef = React.useRef(onEnterPress);
-    onEnterPressRef.current = onEnterPress;
-
     const onInterceptKeydownRef = React.useRef(onInterceptKeydown);
-    onInterceptKeydownRef.current = onInterceptKeydown;
-
     const onSelectionChangeRef = React.useRef(onSelectionChange);
-    onSelectionChangeRef.current = onSelectionChange;
+
+    React.useLayoutEffect(() => {
+      onEnterPressRef.current = onEnterPress;
+      onInterceptKeydownRef.current = onInterceptKeydown;
+      onSelectionChangeRef.current = onSelectionChange;
+    });
 
     const editor = useEditor({
       extensions: extensions(placeholder),
