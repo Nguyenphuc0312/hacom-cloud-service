@@ -45,6 +45,16 @@ export {
 } from "./virtualizerAdapter";
 export type { ScrollVirtualizerAdapter } from "./virtualizerAdapter";
 
+export { createDomScrollAdapter } from "./domScrollAdapter";
+export type {
+  DomScrollAdapter,
+  DomScrollAdapterOptions,
+  ProgrammaticScrollHandle,
+} from "./domScrollAdapter";
+
+export { useScrollEventBridge } from "./useScrollEventBridge";
+export type { ScrollEventBridgeOptions } from "./useScrollEventBridge";
+
 export type {
   CommandRejectReason,
   MessageChangeSummary,
