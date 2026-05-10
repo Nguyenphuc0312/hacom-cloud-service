@@ -84,6 +84,8 @@ const MessageGroupItem: React.FC<{
   isOwn: boolean;
   isGroupTail: boolean;
   bubblePosition: MessageBubblePosition;
+  showSenderName?: boolean;
+  senderDisplayName?: string;
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
   onEdit?: (message: Message) => void | Promise<void>;
@@ -104,6 +106,8 @@ const MessageGroupItem: React.FC<{
   isOwn,
   isGroupTail,
   bubblePosition,
+  showSenderName = false,
+  senderDisplayName,
   onReply,
   onReact,
   onEdit,
@@ -307,13 +311,19 @@ const MessageGroupItem: React.FC<{
           isOwn ? "justify-end" : "justify-start",
         )}
       >
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 max-w-full">
           <MessageBubble
             isOwn={isOwn}
             position={bubblePosition}
             isRich={isRichBubble}
             isHighlighted={isHighlighted}
           >
+            {showSenderName && senderDisplayName && (
+              <p className="mb-1 truncate text-[12px] font-semibold leading-[1.15] text-primary">
+                {senderDisplayName}
+              </p>
+            )}
+
             {message.replyToMessage && (
               <button
                 type="button"
@@ -469,7 +479,7 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
   return (
     <section
       className={clsx(
-        "thread-message-group grid grid-cols-[36px,minmax(0,1fr)] gap-x-2.5",
+        "thread-message-group grid grid-cols-[36px,minmax(0,1fr)] gap-x-2.5 pb-1.5",
         row.isOwn && "grid-cols-[minmax(0,1fr)]",
       )}
     >
@@ -495,13 +505,7 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
           "flex flex-col",
         )}
       >
-        {!row.isOwn && row.showSenderName && (
-          <div className="mb-1 px-1 text-[12px] font-medium leading-4 text-text-secondary/92">
-            {senderDisplayName}
-          </div>
-        )}
-
-        <div className="flex w-full flex-col gap-0.5">
+        <div className="flex w-full flex-col gap-1">
           {row.items.map((item, index) => (
             <MessageGroupItem
               key={item.key}
@@ -509,6 +513,8 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
               isOwn={row.isOwn}
               isGroupTail={index === row.items.length - 1}
               bubblePosition={resolveBubblePosition(index, row.items.length)}
+              showSenderName={index === 0 && !row.isOwn && row.showSenderName}
+              senderDisplayName={senderDisplayName}
               onReply={onReply}
               onReact={onReact}
               onEdit={onEdit}

@@ -362,12 +362,6 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
               shouldAnimateInsert && "motion-message-insert",
             )}
           >
-            {isGroupConversation && !isOwn && showSenderName && (
-              <span className={contract.cluster.senderLabel}>
-                {senderDisplayName}
-              </span>
-            )}
-
             {message.replyToMessage && (
               <button
                 type="button"
@@ -424,6 +418,12 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                 hasError={isFailedMessage(message)}
                 isPending={isPendingMessage(message)}
               >
+                {isGroupConversation && !isOwn && showSenderName && (
+                  <p className={clsx(contract.cluster.senderLabel, "truncate")}>
+                    {senderDisplayName}
+                  </p>
+                )}
+
                 {message.forwardedFrom && (
                   <div
                     className={clsx(

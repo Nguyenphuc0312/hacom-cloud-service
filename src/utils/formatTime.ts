@@ -4,6 +4,7 @@ import {
   isToday,
   isYesterday,
   isThisWeek,
+  differenceInSeconds,
   differenceInMinutes,
   differenceInHours,
   differenceInDays,
@@ -14,49 +15,65 @@ import { getDateFnsLocale } from "../i18n/dateFns";
 const isValidDate = (date: Date): boolean => !Number.isNaN(date.getTime());
 
 /**
- * Format time for message timestamp.
+ * Format time for message timestamp — Zalo-style:
+ * < 1 min  → "vài giây"
+ * < 1 hour → "X phút"
+ * < 24 h   → "HH:mm"
+ * < 8 days → "EEE, HH:mm"  (e.g. "Thứ 2, 14:30")
+ * older    → "dd/MM/yyyy, HH:mm"
  */
 export function formatMessageTime(date: Date): string {
   if (!isValidDate(date)) return "";
   const locale = getDateFnsLocale();
+  const now = new Date();
+  const seconds = differenceInSeconds(now, date);
+  const minutes = differenceInMinutes(now, date);
+  const hours = differenceInHours(now, date);
+  const days = differenceInDays(now, date);
 
-  if (isToday(date)) {
+  if (seconds < 60) {
+    return i18n.t("chat:time.fewSeconds");
+  }
+  if (minutes < 60) {
+    return i18n.t("chat:time.minutesAgo", { count: minutes });
+  }
+  if (hours < 24) {
     return format(date, "HH:mm", { locale });
   }
-  if (isYesterday(date)) {
-    return `${i18n.t("chat:time.yesterday")} ${format(date, "HH:mm", { locale })}`;
+  if (days < 8) {
+    return format(date, "EEE, HH:mm", { locale });
   }
-  if (isThisWeek(date)) {
-    return format(date, "EEEE HH:mm", { locale });
-  }
-  return format(date, "d MMM, HH:mm", { locale });
+  return format(date, "dd/MM/yyyy, HH:mm", { locale });
 }
 
 /**
- * Format relative time for conversation list.
+ * Format relative time for conversation list — Zalo-style:
+ * < 1 min  → "vài giây"
+ * < 1 hour → "Xm"
+ * < 24 h   → "Xh"
+ * < 8 days → "EEE"  (e.g. "T2", "CN")
+ * older    → "dd/MM"
  */
 export function formatRelativeTime(date: Date): string {
   if (!isValidDate(date)) return "";
   const locale = getDateFnsLocale();
 
   const now = new Date();
+  const seconds = differenceInSeconds(now, date);
   const minutes = differenceInMinutes(now, date);
   const hours = differenceInHours(now, date);
   const days = differenceInDays(now, date);
 
-  if (minutes < 1) {
-    return i18n.t("chat:time.justNow");
+  if (seconds < 60) {
+    return i18n.t("chat:time.fewSeconds");
   }
   if (minutes < 60) {
     return i18n.t("chat:time.minutesShort", { count: minutes });
   }
-  if (hours < 24 && isToday(date)) {
+  if (hours < 24) {
     return i18n.t("chat:time.hoursShort", { count: hours });
   }
-  if (isYesterday(date)) {
-    return i18n.t("chat:time.yesterday");
-  }
-  if (days < 7) {
+  if (days < 8) {
     return format(date, "EEE", { locale });
   }
   return format(date, "dd/MM", { locale });
