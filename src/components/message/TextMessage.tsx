@@ -2,6 +2,7 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { ClipboardDocumentIcon } from "@heroicons/react/24/outline";
+import type { Mention } from "@hacom/chat-shared-types";
 import { isOnlyEmoji } from "../../utils/messageHelpers";
 import { toast } from "../ui";
 import {
