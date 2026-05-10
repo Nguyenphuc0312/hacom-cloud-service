@@ -151,6 +151,8 @@ const BOTTOM_SETTLE_DISTANCE_PX = 3;
 const MAX_COMMAND_RAF_ATTEMPTS = 5;
 const MAX_SCROLL_SESSIONS = 80;
 const SMOOTH_SCROLL_MAX_DISTANCE_PX = 640;
+// Pinned hysteresis thresholds live in scrollController.ts: ENTER=24px, LEAVE=80px.
+// NEAR_BOTTOM_THRESHOLD_PX (96) is used separately for append-follow decisions.
 
 const scrollSessions = new Map<string, ScrollSession>();
 
@@ -279,7 +281,6 @@ export const useChatScrollController = ({
   resolveMessageIndex,
   captureVisibleAnchor,
   scrollToOffset,
-  scrollToIndex,
 }: ChatScrollControllerParams): ChatScrollControllerResult => {
   const [mode, setMode] = React.useState<ChatScrollMode>("idle");
   const [isPinnedToBottom, setIsPinnedToBottom] = React.useState(true);
@@ -306,6 +307,7 @@ export const useChatScrollController = ({
   } | null>(null);
   const loadingOlderAnchorRef = React.useRef<ScrollAnchor | null>(null);
   const hasUserScrollSinceOpenRef = React.useRef(false);
+  const scrollRafRef = React.useRef<number | null>(null);
   const appliedUnreadSignatureRef = React.useRef<string | null>(null);
   const firstRenderMeasuredRef = React.useRef<string | null>(null);
   const appendStartedAtRef = React.useRef<number | null>(null);
@@ -681,8 +683,6 @@ export const useChatScrollController = ({
 
         setControllerMode("scrolling_to_bottom", command.event, command.reason);
         const behavior = command.behavior ?? resolveBottomBehavior(command.command);
-        const lastIndex = Math.max(0, itemCount - 1);
-        scrollToIndex(lastIndex, "end", behavior);
         scrollToOffset(getBottomTarget(), behavior);
 
         requestAnimationFrame(() => {
@@ -809,7 +809,6 @@ export const useChatScrollController = ({
       messages.length,
       resolveBottomBehavior,
       resolveMessageIndex,
-      scrollToIndex,
       scrollToOffset,
       setControllerMode,
       totalSize,
@@ -974,36 +973,19 @@ export const useChatScrollController = ({
     loadingOlderAnchorRef.current = null;
     lastOpeningBottomCommandKeyRef.current = null;
 
-    const session = scrollSessions.get(conversationId) ?? null;
-    const restoreCandidate = Boolean(
-      session &&
-        !session.consumed &&
-        !session.isPinnedToBottom &&
-        !hasUnread &&
-        messages.length > 0,
-    );
-    const restoreValid = Boolean(
-      restoreCandidate && session?.latestKey === latestKey,
-    );
-    const intent: OpenIntent =
-      restoreValid && !isFetchingMessages ? "restore" : "latest";
-    const pendingRestoreIntent =
-      restoreCandidate && isFetchingMessages ? "restore_candidate" : intent;
-
+    // Product rule: always open at latest message — no scroll position restore on conversation enter
     openingRef.current = {
       conversationId,
-      intent: pendingRestoreIntent,
+      intent: "latest",
       baselineLatestKey: latestKey,
-      restoreSession: restoreCandidate ? session : null,
+      restoreSession: null,
       bottomApplied: false,
       restoreApplied: false,
     };
 
     previousSnapshotRef.current = getSnapshot(conversationId, messages);
     setControllerMode(
-      isInitialLoading || (pendingRestoreIntent === "restore_candidate" && isFetchingMessages)
-        ? "waiting_for_data"
-        : "opening_conversation",
+      isInitialLoading ? "waiting_for_data" : "opening_conversation",
       "CONVERSATION_CHANGED",
       "conversation_open_start",
     );
@@ -1013,14 +995,9 @@ export const useChatScrollController = ({
       priority: null,
       reason: "conversation_open_start",
       previousLatestKey: previousSnapshot?.latestKey ?? null,
-      openIntent: pendingRestoreIntent,
-      hasRestore: Boolean(session),
-      restoreValid,
-      extra: {
-        restoreCandidate,
-        isFetchingMessages,
-        hasUnread,
-      },
+      openIntent: "latest",
+      hasRestore: false,
+      restoreValid: false,
     });
     logChatPerformance("open_to_first_render", {
       conversationId,
@@ -1062,41 +1039,8 @@ export const useChatScrollController = ({
       return;
     }
 
-    let intent = opening.intent;
-    let restoreSession = opening.restoreSession;
-    if (intent === "restore_candidate") {
-      if (isFetchingMessages) {
-        setControllerMode("waiting_for_data", "INITIAL_MESSAGES_READY", "restore_waiting_for_refresh");
-        return;
-      }
-
-      const restoreValid = Boolean(
-        restoreSession &&
-          !restoreSession.consumed &&
-          !hasUnread &&
-          restoreSession.latestKey === latestKey,
-      );
-      traceScrollDecision({
-        event: restoreValid ? "RESTORE_AVAILABLE" : "RESTORE_INVALIDATED",
-        command: null,
-        priority: null,
-        reason: restoreValid
-          ? "restore_valid_after_refresh"
-          : "restore_invalid_after_refresh",
-        openIntent: intent,
-        restoreValid,
-        previousLatestKey: opening.baselineLatestKey,
-      });
-      intent = restoreValid ? "restore" : "latest";
-      opening.intent = intent;
-      if (!restoreValid) {
-        restoreSession = null;
-        opening.restoreSession = null;
-      }
-    }
-
-    const ready = intent === "restore" ? isReadyForOffset() : isReadyForBottom();
-    if (!ready) {
+    // Product rule: always go to latest — no restore on open
+    if (!isReadyForBottom()) {
       setControllerMode(
         "waiting_for_measurement",
         "VIRTUALIZER_MEASURED",
@@ -1107,20 +1051,8 @@ export const useChatScrollController = ({
         command: null,
         priority: null,
         reason: "command_waiting_for_measurement",
-        openIntent: intent,
+        openIntent: "latest",
       });
-      return;
-    }
-
-    if (intent === "restore" && restoreSession) {
-      setControllerMode("restoring_history", "RESTORE_AVAILABLE", "restore_history_position");
-      scheduleOffset(
-        restoreSession.scrollTop,
-        "restore_history_position",
-        "RESTORE_AVAILABLE",
-        "restore_history_position",
-        restoreSession.anchor,
-      );
       return;
     }
 
@@ -1136,15 +1068,11 @@ export const useChatScrollController = ({
     conversationId,
     hasLoaded,
     hasUnread,
-    isFetchingMessages,
     isInitialLoading,
     isReadyForBottom,
-    isReadyForOffset,
-    latestKey,
     messages.length,
     onUnreadRestoreConsumed,
     scheduleBottom,
-    scheduleOffset,
     setControllerMode,
     traceScrollDecision,
     unreadRestoreSignature,
@@ -1254,7 +1182,7 @@ export const useChatScrollController = ({
         "own_message_follow_bottom",
         "OWN_MESSAGE_APPENDED",
         "own_message_follow_bottom",
-        "auto",
+        // behavior resolved by resolveBottomBehavior: smooth if distance <= 640px
       );
     } else if (openingStillSettling && opening?.intent !== "restore") {
       scheduleBottom(
@@ -1268,7 +1196,7 @@ export const useChatScrollController = ({
         "realtime_follow_if_near_bottom",
         "NEW_MESSAGE_APPENDED",
         "realtime_follow_if_near_bottom",
-        "auto",
+        // behavior resolved by resolveBottomBehavior: smooth if distance <= 640px
       );
     } else {
       isPinnedRef.current = false;
@@ -1330,78 +1258,84 @@ export const useChatScrollController = ({
   ]);
 
   const handleUserScroll = React.useCallback(
-    (scrollTop: number) => {
-      const outer = outerRef.current;
-      if (!outer) return;
+    (_scrollTop: number) => {
+      // Coalesce scroll events — only process one per animation frame
+      if (scrollRafRef.current !== null) return;
 
-      hasUserScrollSinceOpenRef.current = true;
-      const pinnedState = resolvePinnedToBottom(outer, NEAR_BOTTOM_THRESHOLD_PX, {
-        previouslyPinnedToBottom: isPinnedRef.current,
-      });
-      isPinnedRef.current = pinnedState.isPinnedToBottom;
-      setIsPinnedToBottom(pinnedState.isPinnedToBottom);
-      setControllerMode(
-        pinnedState.isPinnedToBottom ? "settled_at_bottom" : "settled_reading_history",
-        "USER_SCROLL",
-        "user_scroll",
-      );
-      if (pinnedState.isPinnedToBottom) {
-        setPendingNewMessages(0);
-        setFirstDetachedUnreadMessageId(null);
-      }
-      persistSession("user_scroll");
-      traceScrollDecision({
-        event: "USER_SCROLL",
-        command: null,
-        priority: null,
-        reason: "user_scroll",
-        nearBottom: pinnedState.isPinnedToBottom,
-        extra: {
-          scrollTop,
-        },
-      });
+      scrollRafRef.current = requestAnimationFrame(() => {
+        scrollRafRef.current = null;
 
-      if (
-        onLoadOlder &&
-        hasMoreOlder &&
-        !isLoadingOlder &&
-        modeRef.current !== "loading_older" &&
-        scrollTop < LOAD_MORE_TRIGGER_PX
-      ) {
-        const metrics = getMetrics();
-        const anchor = captureVisibleAnchor();
-        loadingOlderAnchorRef.current = anchor
-          ? {
-              ...anchor,
-              scrollTop: metrics.scrollTop,
-              scrollHeight: metrics.scrollHeight,
-            }
-          : {
-              messageId: null,
-              offsetFromTop: 0,
-              scrollTop: metrics.scrollTop,
-              scrollHeight: metrics.scrollHeight,
-            };
-        setControllerMode("loading_older", "LOAD_OLDER_START", "load_older_start");
+        const outer = outerRef.current;
+        if (!outer) return;
+
+        const currentScrollTop = outer.scrollTop;
+        hasUserScrollSinceOpenRef.current = true;
+        const pinnedState = resolvePinnedToBottom(outer, NEAR_BOTTOM_THRESHOLD_PX, {
+          previouslyPinnedToBottom: isPinnedRef.current,
+        });
+        isPinnedRef.current = pinnedState.isPinnedToBottom;
+        setIsPinnedToBottom(pinnedState.isPinnedToBottom);
+        setControllerMode(
+          pinnedState.isPinnedToBottom ? "settled_at_bottom" : "settled_reading_history",
+          "USER_SCROLL",
+          "user_scroll",
+        );
+        if (pinnedState.isPinnedToBottom) {
+          setPendingNewMessages(0);
+          setFirstDetachedUnreadMessageId(null);
+        }
+        persistSession("user_scroll");
         traceScrollDecision({
-          event: "LOAD_OLDER_START",
-          command: "load_older_anchor_restore",
-          priority: getCommandPriority("load_older_anchor_restore"),
-          reason: "anchor_captured",
-          extra: {
-            anchorMessageId: loadingOlderAnchorRef.current.messageId,
-            anchorOffsetFromTop: loadingOlderAnchorRef.current.offsetFromTop,
-          },
+          event: "USER_SCROLL",
+          command: null,
+          priority: null,
+          reason: "user_scroll",
+          nearBottom: pinnedState.isPinnedToBottom,
+          extra: { scrollTop: currentScrollTop },
         });
-        Promise.resolve(onLoadOlder()).catch(() => {
-          loadingOlderAnchorRef.current = null;
-          setControllerMode(
-            isPinnedRef.current ? "settled_at_bottom" : "settled_reading_history",
-            "LOAD_OLDER_COMMIT",
-            "load_older_failed",
-          );
-        });
-      }
+
+        if (
+          onLoadOlder &&
+          hasMoreOlder &&
+          !isLoadingOlder &&
+          modeRef.current !== "loading_older" &&
+          currentScrollTop < LOAD_MORE_TRIGGER_PX
+        ) {
+          const metrics = getMetrics();
+          const anchor = captureVisibleAnchor();
+          loadingOlderAnchorRef.current = anchor
+            ? {
+                ...anchor,
+                scrollTop: metrics.scrollTop,
+                scrollHeight: metrics.scrollHeight,
+              }
+            : {
+                messageId: null,
+                offsetFromTop: 0,
+                scrollTop: metrics.scrollTop,
+                scrollHeight: metrics.scrollHeight,
+              };
+          setControllerMode("loading_older", "LOAD_OLDER_START", "load_older_start");
+          traceScrollDecision({
+            event: "LOAD_OLDER_START",
+            command: "load_older_anchor_restore",
+            priority: getCommandPriority("load_older_anchor_restore"),
+            reason: "anchor_captured",
+            extra: {
+              anchorMessageId: loadingOlderAnchorRef.current.messageId,
+              anchorOffsetFromTop: loadingOlderAnchorRef.current.offsetFromTop,
+            },
+          });
+          Promise.resolve(onLoadOlder()).catch(() => {
+            loadingOlderAnchorRef.current = null;
+            setControllerMode(
+              isPinnedRef.current ? "settled_at_bottom" : "settled_reading_history",
+              "LOAD_OLDER_COMMIT",
+              "load_older_failed",
+            );
+          });
+        }
+      });
     },
     [
       captureVisibleAnchor,
@@ -1486,6 +1420,9 @@ export const useChatScrollController = ({
     () => () => {
       if (commandRafRef.current !== null) {
         cancelAnimationFrame(commandRafRef.current);
+      }
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
       }
     },
     [],

@@ -1720,10 +1720,10 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     };
 
     if (!viewportChanged && !composerChanged) return;
-    if (isPinnedToBottom) {
-      handleMediaResized();
-    }
-  }, [composerHeight, handleMediaResized, isPinnedToBottom, viewportHeight]);
+    // handleMediaResized internally handles both cases:
+    // pinned → scroll to bottom; detached → preserve visual anchor
+    handleMediaResized();
+  }, [composerHeight, handleMediaResized, viewportHeight]);
 
   React.useEffect(() => {
     if (!jumpToMessageId) return;
