@@ -379,6 +379,7 @@ export const authApi = {
     currentPassword: string;
     newPassword: string;
     confirmPassword: string;
+    logoutOtherDevices?: boolean;
   }) => {
     const response = await authenticatedAuthClient.post<
       ApiResponse<ChangePasswordResponseData>
