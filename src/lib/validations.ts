@@ -177,6 +177,7 @@ export const changePasswordSchema = z
     confirmPassword: z
       .string()
       .min(1, i18nKey("validation:auth.confirmPasswordRequired")),
+    logoutOtherDevices: z.boolean().default(true),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
     message: i18nKey("validation:auth.confirmPasswordMismatch"),
