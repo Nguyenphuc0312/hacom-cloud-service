@@ -25,6 +25,7 @@ import {
 } from "../../../utils/messageTimeline";
 import { logScrollTrace } from "../../../utils/scrollTrace";
 import { resolveUserDisplayName } from "../../../features/chat/identity/resolveUserDisplayName";
+import { getPreviewFromMessage } from "../../../utils/messageContent.utils";
 import { MessageBodyRenderer } from "./MessageBodyRenderer";
 import { MessageMeta } from "./MessageMeta";
 import { MessageRow } from "./MessageRow";
@@ -399,7 +400,10 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                       ? t("chat:message.deleted", {
                           defaultValue: "Message deleted",
                         })
-                      : message.replyToMessage.content}
+                      : getPreviewFromMessage({
+                          contentFormat: message.replyToMessage.contentFormat,
+                          content: message.replyToMessage.content,
+                        })}
                   </p>
                 </div>
               </button>

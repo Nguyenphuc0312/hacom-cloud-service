@@ -28,13 +28,18 @@ export function hasRichFormatting(html: string): boolean {
   return /<(strong|b|em|i|u|s|del|ul|ol|li|code|pre)\b/i.test(html);
 }
 
+const LEGACY_HTML_RE = /^<(p|div|ul|ol|li|strong|em|b|i|u|s|del|blockquote|h[1-6]|code|pre)\b/i;
+
 export function getPreviewFromMessage(message: {
   contentFormat?: string;
   plainText?: string;
   content?: string;
 }): string {
   if (message.plainText) return message.plainText;
-  if (message.contentFormat === "rich_text" && message.content) {
+  const isHtml =
+    message.contentFormat === "rich_text" ||
+    (!message.contentFormat && !!message.content && LEGACY_HTML_RE.test(message.content.trim()));
+  if (isHtml && message.content) {
     try {
       return stripHtmlToText(message.content);
     } catch {

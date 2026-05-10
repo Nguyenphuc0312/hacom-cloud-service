@@ -15,7 +15,10 @@ export const MessageContentRenderer: React.FC<MessageContentRendererProps> = ({
   isOwn,
   className,
 }) => {
-  const isRich = contentFormat === "rich_text";
+  const HTML_TAG_RE = /^<(p|div|ul|ol|li|strong|em|b|i|u|s|del|blockquote|h[1-6]|code|pre)\b/i;
+  const isRich =
+    contentFormat === "rich_text" ||
+    (!contentFormat && !!content && HTML_TAG_RE.test(content.trim()));
 
   if (isRich) {
     const safeHtml = sanitizeMessageHtml(content);
