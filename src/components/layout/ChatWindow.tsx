@@ -241,6 +241,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     Message | undefined
   >(undefined);
   const draftBeforeEditRef = React.useRef<string>(composerSeed);
+  // Ref so handleSend (declared before mentionCandidates useMemo) always reads the latest value.
+  const mentionCandidatesRef = React.useRef<MentionCandidate[]>([]);
   const inputValueRef = React.useRef(composerSeed);
   const inputModeRef = React.useRef<InputMode>("normal");
   const pendingDraftPersistRef = React.useRef<{
@@ -447,7 +449,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             : allAttachments
           : undefined;
 
-      const mentionUserIds = extractMentionUserIds(outgoingContent, mentionCandidates);
+      const mentionUserIds = extractMentionUserIds(outgoingContent, mentionCandidatesRef.current);
 
       logMessageDebug("ChatWindow", "send_requested", {
         conversationId: conversation.id,
@@ -514,7 +516,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       clearPendingDraftPersist,
       editingMessage,
       inputMode,
-      mentionCandidates,
       onEditMessage,
       onSendMessage,
       replaceComposerSeed,
@@ -877,6 +878,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         };
       });
   }, [conversation.participants, currentUser.id]);
+
+  // Keep ref in sync so handleSend always reads the latest candidates without being in its dep array.
+  mentionCandidatesRef.current = mentionCandidates;
 
   const handleShareContact = React.useCallback(
     async (contactUserId: string) => {
