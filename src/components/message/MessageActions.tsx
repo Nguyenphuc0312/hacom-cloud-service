@@ -3,15 +3,16 @@ import clsx from "clsx";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
-  ArrowPathIcon,
-  ArrowUturnLeftIcon,
-  ClipboardDocumentIcon,
-  EllipsisHorizontalIcon,
-  FaceSmileIcon,
-  PencilIcon,
-  TrashIcon,
-  XMarkIcon,
-} from "@heroicons/react/24/outline";
+  Copy,
+  CornerUpLeft,
+  MoreHorizontal,
+  Pencil,
+  RefreshCw,
+  SmilePlus,
+  Trash2,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import type { MessageActionId } from "../../utils/messageActionPolicy";
 
 type MessageActionsMode = "rail" | "inline" | "sheet";
@@ -28,12 +29,18 @@ interface MessageActionsProps {
 interface ActionDescriptor {
   id: MessageActionId;
   label: string;
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  icon: LucideIcon;
   danger?: boolean;
 }
 
 const baseButtonClass =
   "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors";
+
+const PILL_CLASS =
+  "flex items-center gap-2 rounded-full bg-white px-3 py-2.5 shadow-[0_4px_20px_rgba(0,0,0,0.10),0_1px_4px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.04)] dark:bg-[#2a2d34] dark:shadow-[0_4px_16px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.07)]";
+
+const BTN_CLASS =
+  "inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#f2f3f7] text-[#52556a] ring-1 ring-[#e3e5ec] transition-all duration-150 hover:bg-[#e6e8f0] hover:text-[#1a1c2e] hover:ring-[#d4d6e0] active:scale-95 dark:bg-white/8 dark:text-white/60 dark:ring-white/10 dark:hover:bg-white/14 dark:hover:text-white";
 
 export const MessageActions: React.FC<MessageActionsProps> = ({
   mode,
@@ -49,38 +56,38 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
       react: {
         id: "react",
         label: t("chat:message.actions.react", { defaultValue: "React" }),
-        icon: FaceSmileIcon,
+        icon: SmilePlus,
       },
       reply: {
         id: "reply",
         label: t("chat:message.actions.reply"),
-        icon: ArrowUturnLeftIcon,
+        icon: CornerUpLeft,
       },
       copy: {
         id: "copy",
         label: t("chat:message.actions.copy"),
-        icon: ClipboardDocumentIcon,
+        icon: Copy,
       },
       edit: {
         id: "edit",
         label: t("chat:message.actions.edit"),
-        icon: PencilIcon,
+        icon: Pencil,
       },
       retry: {
         id: "retry",
         label: t("chat:message.status.retry", { defaultValue: "Retry" }),
-        icon: ArrowPathIcon,
+        icon: RefreshCw,
       },
       delete: {
         id: "delete",
         label: t("chat:message.actions.delete"),
-        icon: TrashIcon,
+        icon: Trash2,
         danger: true,
       },
       more: {
         id: "more",
         label: t("chat:header.moreActions"),
-        icon: EllipsisHorizontalIcon,
+        icon: MoreHorizontal,
       },
     }),
     [t],
@@ -91,23 +98,18 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
 
   if (mode === "rail") {
     return (
-      <div
-        className={clsx(
-          "flex items-center gap-0.5 rounded-full border border-white/8 bg-[hsl(var(--color-chat-pill)/0.9)] p-1 shadow-xs backdrop-blur-sm",
-          className,
-        )}
-      >
+      <div className={clsx(PILL_CLASS, className)}>
         {descriptors.map((action) => (
           <button
             key={action.id}
             type="button"
             onClick={() => onAction(action.id)}
             data-testid={`message-action-${action.id}`}
-            className="rounded-full p-2.5 text-text-secondary transition-fast hover:bg-white/6 hover:text-text-primary"
+            className={BTN_CLASS}
             aria-label={action.label}
             title={action.label}
           >
-            <action.icon className="h-4 w-4" />
+            <action.icon size={15} strokeWidth={1.75} />
           </button>
         ))}
       </div>
@@ -116,12 +118,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
 
   if (mode === "inline") {
     return (
-      <div
-        className={clsx(
-          "inline-flex items-center gap-0.5 rounded-lg border border-border/70 bg-[hsl(var(--chat-panel-bg))/0.96] p-1 shadow-xs backdrop-blur-sm",
-          className,
-        )}
-      >
+      <div className={clsx(PILL_CLASS, "inline-flex", className)}>
         {descriptors.map((action) => (
           <button
             key={action.id}
@@ -129,13 +126,13 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
             onClick={() => onAction(action.id)}
             data-testid={`message-action-${action.id}`}
             className={clsx(
-              "inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary",
-              action.danger && "hover:bg-danger/10 hover:text-danger",
+              BTN_CLASS,
+              action.danger && "hover:!bg-red-50 hover:!text-red-500 dark:hover:!bg-red-500/10 dark:hover:!text-red-400",
             )}
             aria-label={action.label}
             title={action.label}
           >
-            <action.icon className="h-4 w-4" />
+            <action.icon size={15} strokeWidth={1.75} />
           </button>
         ))}
       </div>
@@ -174,7 +171,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
             className="rounded-full p-2 text-text-secondary transition-colors hover:bg-surface-overlay hover:text-text-primary"
             aria-label={t("common:actions.close")}
           >
-            <XMarkIcon className="h-4 w-4" />
+            <X size={16} strokeWidth={2} />
           </button>
         </div>
 
@@ -193,7 +190,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
                   : "text-text-secondary hover:bg-white/6 hover:text-text-primary",
               )}
             >
-              <action.icon className="h-5 w-5 shrink-0" />
+              <action.icon size={18} strokeWidth={1.9} className="shrink-0" />
               <span>{action.label}</span>
             </button>
           ))}
