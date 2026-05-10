@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 
 import NotificationPanel from "./NotificationPanel";
 import { useChatStore } from "../../stores/chatStore";
@@ -67,7 +68,11 @@ describe("NotificationPanel", () => {
   it("renders durable unread conversations even when the transient notification store is empty", () => {
     useChatStore.getState().setConversations([makeConversation()]);
 
-    render(<NotificationPanel isOpen onClose={vi.fn()} />);
+    render(
+      <MemoryRouter>
+        <NotificationPanel isOpen onClose={vi.fn()} />
+      </MemoryRouter>,
+    );
 
     expect(screen.getByRole("dialog", { name: "Notifications" })).toBeInTheDocument();
     expect(screen.getByText("Unread Room")).toBeInTheDocument();

@@ -10,8 +10,8 @@ import {
   MagnifyingGlassIcon,
   PencilSquareIcon,
   UserCircleIcon,
-  UserGroupIcon,
 } from "@heroicons/react/24/outline";
+import ContactsAddressBookOutlineIcon from "../../../shared/layout/ContactsAddressBookOutlineIcon";
 import { Avatar } from "../../common/Avatar";
 import { IconButtonSurface } from "../../ui";
 import { NotificationPanel } from "../../notification/NotificationPanel";
@@ -302,7 +302,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
                 }}
                 role="menuitem"
               >
-                <UserGroupIcon className="h-5 w-5" />
+                <ContactsAddressBookOutlineIcon className="h-5 w-5" />
                 <span>{t("friends:title", { defaultValue: "Friends" })}</span>
               </button>
               <button

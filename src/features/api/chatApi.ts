@@ -12,7 +12,7 @@ import {
 } from "../../lib/conversationAdapter";
 import { conversationApi, messageApi } from "../../services/api";
 import { MessageStatus, MessageType } from "../../types";
-import type { Attachment, Conversation, Message } from "../../types";
+import type { Attachment, Conversation, Mention, Message } from "../../types";
 import {
   buildConversationMessagesCache,
   markMessageFailedInCache,
@@ -232,6 +232,27 @@ const getMessageQueryArgForConversation = (
   conversationId: string,
 ): GetMessagesArgs => ({ conversationId });
 
+/**
+ * Normalize server-returned mentions to the client Mention object shape.
+ * The server sends string[] (userId), but the client Message type uses Mention[].
+ */
+const normalizeMentionsFromServer = (mentions: unknown): Mention[] | undefined => {
+  if (!Array.isArray(mentions) || mentions.length === 0) return undefined;
+  return mentions.map((m): Mention =>
+    typeof m === "string"
+      ? { userId: m, displayName: "" }
+      : { userId: String((m as Record<string, unknown>).userId ?? ""), displayName: String((m as Record<string, unknown>).displayName ?? "") },
+  );
+};
+
+/**
+ * Coerce a raw server Message response to the client Message type.
+ * Only normalizes the fields that differ between the two shapes.
+ */
+const coerceServerMessageToClientMessage = (raw: unknown): Message =>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ({ ...(raw as any), mentions: normalizeMentionsFromServer((raw as any).mentions) }) as Message;
+
 export const buildOptimisticMessage = (input: SendMessageInput): Message => {
   const localId = input.localId || `temp-${input.clientMessageId}`;
   return {
@@ -419,7 +440,7 @@ export const chatApi = createApi({
       async queryFn(messageId) {
         try {
           const response = await messageApi.getMessageById(messageId);
-          return { data: unwrapApiSuccess(response) };
+          return { data: coerceServerMessageToClientMessage(unwrapApiSuccess(response)) };
         } catch (error) {
           return { error: toChatQueryError(error) };
         }
@@ -450,7 +471,7 @@ export const chatApi = createApi({
             mentions: input.mentions,
             attachments: input.attachments,
           });
-          return { data: unwrapApiSuccess(response) };
+          return { data: coerceServerMessageToClientMessage(unwrapApiSuccess(response)) };
         } catch (error) {
           return { error: toChatQueryError(error) };
         }

@@ -1,4 +1,4 @@
-import DOMPurify from "dompurify";
+// removed dompurify dependency
 
 const ALLOWED_TAGS = [
   "p",
@@ -22,17 +22,47 @@ const ALLOWED_TAGS = [
 const ALLOWED_ATTR = ["href", "target", "rel"];
 
 export function sanitizeMessageHtml(html: string): string {
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS,
-    ALLOWED_ATTR,
-    FORBID_TAGS: ["script", "iframe", "object", "embed", "style", "form"],
-    FORBID_ATTR: ["style", "class", "onerror", "onload", "onclick"],
-    ADD_ATTR: ["target"],
-    ALLOW_DATA_ATTR: false,
-  });
+  if (typeof window === "undefined") return html;
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+
+  const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT);
+  let node = walker.nextNode();
+  while (node) {
+    const el = node as HTMLElement;
+    const tagName = el.tagName.toLowerCase();
+
+    if (!ALLOWED_TAGS.includes(tagName)) {
+      const parent = el.parentNode;
+      while (el.firstChild) {
+        parent?.insertBefore(el.firstChild, el);
+      }
+      parent?.removeChild(el);
+      // Restart walker because DOM changed
+      return sanitizeMessageHtml(doc.body.innerHTML);
+    }
+
+    // Filter attributes
+    const attrs = Array.from(el.attributes);
+    for (const attr of attrs) {
+      if (!ALLOWED_ATTR.includes(attr.name) && attr.name !== "target") {
+        el.removeAttribute(attr.name);
+      }
+    }
+
+    if (tagName === "a") {
+      el.setAttribute("target", "_blank");
+      el.setAttribute("rel", "noopener noreferrer");
+    }
+
+    node = walker.nextNode();
+  }
+
+  return doc.body.innerHTML;
 }
 
 export function stripHtmlToText(html: string): string {
+  if (typeof window === "undefined") return html;
   const div = document.createElement("div");
   div.innerHTML = sanitizeMessageHtml(html);
   return (div.textContent ?? div.innerText ?? "")
