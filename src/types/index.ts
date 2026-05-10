@@ -182,6 +182,8 @@ export interface Message
   messageSeq?: number;
   serverTs?: Date | string;
   localOrder?: number;
+  /** Structured JSON content (e.g. ProseMirror document for rich-text). */
+  contentJson?: Record<string, unknown>;
   transportStatus?:
     | "draft"
     | "optimistic"
