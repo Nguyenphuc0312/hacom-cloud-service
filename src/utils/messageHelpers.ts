@@ -15,6 +15,7 @@ import { isSameDay } from "./formatTime";
 import { sortConversationsByActivity } from "./conversationRanking";
 import i18n from "../i18n";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
+import { getPreviewFromMessage } from "./messageContent.utils";
 
 const isDirectType = (conversationType: unknown): boolean => {
   const normalized = normalizeRoomType(conversationType);
@@ -126,8 +127,11 @@ export function getMessagePreview(
 
   switch (message.type) {
     case MessageType.TEXT: {
-      const rawContent = (message as Message).plainText ?? message.content;
-      preview = rawContent;
+      preview = getPreviewFromMessage({
+        contentFormat: (message as Message).contentFormat,
+        plainText: (message as Message).plainText,
+        content: message.content,
+      });
       break;
     }
     case MessageType.IMAGE:
