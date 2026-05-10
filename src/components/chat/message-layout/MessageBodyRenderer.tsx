@@ -15,6 +15,7 @@ import { MessageType } from "../../../types";
 import type { LongMessageRenderMode } from "../../../utils/longMessagePolicy";
 import { isUuid } from "../../../utils/isUuid";
 import { logger } from "../../../utils/logger";
+import { shouldTreatMessageContentAsRichText } from "../../../utils/messageContent.utils";
 
 interface MessageBodyRendererProps {
   message: Message;
@@ -52,7 +53,9 @@ const extractContactPayload = (message: Message): ContactPayloadView | null => {
   if (!metadata) return null;
 
   const pickRecord = (value: unknown): Record<string, unknown> | null =>
-    value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+    value && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : null;
 
   const candidate =
     pickRecord(metadata.attachment) ??
@@ -62,7 +65,8 @@ const extractContactPayload = (message: Message): ContactPayloadView | null => {
   if (!candidate) return null;
 
   const displayName =
-    (typeof candidate.displayName === "string" && candidate.displayName.trim()) ||
+    (typeof candidate.displayName === "string" &&
+      candidate.displayName.trim()) ||
     (typeof candidate.name === "string" && candidate.name.trim()) ||
     "";
   if (!displayName) return null;
@@ -71,7 +75,8 @@ const extractContactPayload = (message: Message): ContactPayloadView | null => {
     typeof value === "string" && value.trim().length > 0 ? value : undefined;
 
   return {
-    contactUserId: asString(candidate.contactUserId) || asString(candidate.userId),
+    contactUserId:
+      asString(candidate.contactUserId) || asString(candidate.userId),
     displayName,
     username: asString(candidate.username),
     avatarUrl:
@@ -108,7 +113,9 @@ const ContactCard: React.FC<{
       <div className="flex items-center gap-2">
         <Avatar src={payload.avatarUrl} alt={payload.displayName} size="md" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{payload.displayName}</p>
+          <p className="truncate text-sm font-semibold">
+            {payload.displayName}
+          </p>
           {payload.username && (
             <p className="truncate text-xs opacity-80">@{payload.username}</p>
           )}
@@ -173,11 +180,16 @@ const renderTextContent = (
   isCollapsibleText?: boolean,
   onToggleTextExpand?: () => void,
 ) => {
-  if (message.contentFormat === "rich_text") {
+  if (
+    shouldTreatMessageContentAsRichText({
+      contentFormat: message.contentFormat,
+      content: message.content,
+    })
+  ) {
     return (
       <MessageContentRenderer
         content={message.content}
-        contentFormat="rich_text"
+        contentFormat={message.contentFormat}
         isOwn={isOwn}
       />
     );
@@ -205,9 +217,13 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
   onImageClick,
   onFilePreview,
 }) => {
-  const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+  const attachments = Array.isArray(message.attachments)
+    ? message.attachments
+    : [];
   const contactPayload =
-    message.type === MessageType.CONTACT ? extractContactPayload(message) : null;
+    message.type === MessageType.CONTACT
+      ? extractContactPayload(message)
+      : null;
 
   switch (message.type) {
     case MessageType.IMAGE:
@@ -224,7 +240,14 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                   onClick={onImageClick}
                 />
               ))
-            : renderTextContent(message, isOwn, currentUsername, textRenderMode, isCollapsibleText, onToggleTextExpand)}
+            : renderTextContent(
+                message,
+                isOwn,
+                currentUsername,
+                textRenderMode,
+                isCollapsibleText,
+                onToggleTextExpand,
+              )}
         </div>
       );
     case MessageType.FILE:
@@ -240,7 +263,14 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                   onPreview={onFilePreview}
                 />
               ))
-            : renderTextContent(message, isOwn, currentUsername, textRenderMode, isCollapsibleText, onToggleTextExpand)}
+            : renderTextContent(
+                message,
+                isOwn,
+                currentUsername,
+                textRenderMode,
+                isCollapsibleText,
+                onToggleTextExpand,
+              )}
         </div>
       );
     case MessageType.VOICE:
@@ -255,7 +285,14 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                   isOwn={isOwn}
                 />
               ))
-            : renderTextContent(message, isOwn, currentUsername, textRenderMode, isCollapsibleText, onToggleTextExpand)}
+            : renderTextContent(
+                message,
+                isOwn,
+                currentUsername,
+                textRenderMode,
+                isCollapsibleText,
+                onToggleTextExpand,
+              )}
         </div>
       );
     case MessageType.CONTACT:
@@ -278,10 +315,22 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
       );
     case MessageType.TEXT:
     default: {
-      const firstUrl = message.contentFormat !== "rich_text" ? extractFirstUrl(message.content) : null;
+      const firstUrl = shouldTreatMessageContentAsRichText({
+        contentFormat: message.contentFormat,
+        content: message.content,
+      })
+        ? null
+        : extractFirstUrl(message.content);
       return (
         <div className="space-y-2">
-          {renderTextContent(message, isOwn, currentUsername, textRenderMode, isCollapsibleText, onToggleTextExpand)}
+          {renderTextContent(
+            message,
+            isOwn,
+            currentUsername,
+            textRenderMode,
+            isCollapsibleText,
+            onToggleTextExpand,
+          )}
           {firstUrl ? <LinkPreviewCard url={firstUrl} isOwn={isOwn} /> : null}
         </div>
       );

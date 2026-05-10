@@ -20,6 +20,7 @@ import {
   getMessageStableKey,
 } from "../../../utils/messageTimeline";
 import { resolveUserDisplayName } from "../../../features/chat/identity/resolveUserDisplayName";
+import { getPreviewFromMessage } from "../../../utils/messageContent.utils";
 import type { ChatDensity } from "../../../stores/uiStore";
 import type {
   ConversationThreadGroupRow,
@@ -317,7 +318,8 @@ const MessageGroupItem: React.FC<{
               <button
                 type="button"
                 onClick={() => {
-                  const targetId = message.replyTo || message.replyToMessage?.id;
+                  const targetId =
+                    message.replyTo || message.replyToMessage?.id;
                   if (targetId) {
                     onNavigateToMessage?.(targetId);
                   }
@@ -352,7 +354,10 @@ const MessageGroupItem: React.FC<{
                       ? t("chat:message.deleted", {
                           defaultValue: "Message deleted",
                         })
-                      : message.replyToMessage.content}
+                      : getPreviewFromMessage({
+                          contentFormat: message.replyToMessage.contentFormat,
+                          content: message.replyToMessage.content,
+                        })}
                   </p>
                 </div>
               </button>
@@ -420,7 +425,6 @@ const MessageGroupItem: React.FC<{
             />
           )}
         </div>
-
       </div>
 
       <MessageActions
