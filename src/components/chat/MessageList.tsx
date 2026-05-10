@@ -1429,7 +1429,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
     pendingTimelineSizeChangesRef.current.clear();
 
-    if (isPinnedToBottom) {
+    const isInTransitToBottom =
+      scrollMode === "scrolling_to_bottom" ||
+      scrollMode === "appending_new_message";
+
+    if (isPinnedToBottom || isInTransitToBottom) {
       pendingResizeAnchorRef.current = null;
       handleMediaResized();
       return;
@@ -1444,7 +1448,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     requestAnimationFrame(() => {
       handleMediaResized(anchor);
     });
-  }, [handleMediaResized, isPinnedToBottom]);
+  }, [handleMediaResized, isPinnedToBottom, scrollMode]);
 
   const handleTimelineItemSizeChange = React.useCallback(
     ({ index, key, delta }: { index: number; key: string; delta: number }) => {

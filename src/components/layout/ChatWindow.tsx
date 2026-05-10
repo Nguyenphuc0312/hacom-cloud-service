@@ -1047,7 +1047,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       {/* Message input - hidden during selection mode */}
       {!isMessageSelectionMode && (
         <div
-          className="sticky z-sticky"
+          className="sticky z-sticky shrink-0"
           style={{
             bottom:
               viewportMetrics.keyboardInset > 0
