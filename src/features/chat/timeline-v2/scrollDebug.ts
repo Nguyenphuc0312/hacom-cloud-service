@@ -1,3 +1,5 @@
+import { logger } from "../../../utils/logger";
+
 /**
  * Timeline V2 — flag-gated debug logger.
  *
@@ -38,10 +40,7 @@ export function debugScroll(
   payload: Record<string, unknown> = {},
 ): void {
   if (!CHAT_SCROLL_DEBUG) return;
-  console.debug(`[chat-scroll-v2] ${event}`, {
-    ts: Date.now(),
-    ...payload,
-  });
+  logger.debug("chat-scroll-v2", event, payload);
 }
 
 /**
