@@ -10,7 +10,6 @@ import {
   notificationApi,
   type BackendNotification,
   type BackendNotificationType,
-  type NotificationTargetType,
 } from "../services/notificationApi";
 import { logger } from "../utils/logger";
 
@@ -75,9 +74,7 @@ export const useNotifications = (isAuthenticated: boolean) => {
         return {};
       });
     } catch (err) {
-      logger.warn("useNotifications: failed to fetch initial notifications", {
-        err,
-      });
+      logger.warn("useNotifications: failed to fetch initial notifications");
     }
   }, [upsertNotification]);
 
@@ -115,10 +112,7 @@ export const useNotifications = (isAuthenticated: boolean) => {
       try {
         await notificationApi.markRead(id);
       } catch (err) {
-        logger.warn("useNotifications: failed to mark notification read", {
-          id,
-          err,
-        });
+        logger.warn("useNotifications: failed to mark notification read");
       }
     },
     [markAsRead],
@@ -129,10 +123,7 @@ export const useNotifications = (isAuthenticated: boolean) => {
     try {
       await notificationApi.markAllRead();
     } catch (err) {
-      logger.warn(
-        "useNotifications: failed to mark all notifications read",
-        { err },
-      );
+      logger.warn("useNotifications: failed to mark all notifications read");
     }
   }, [markAllAsRead]);
 
