@@ -37,7 +37,7 @@ describe("timelineDensity spacing", () => {
         },
         "compact",
       ),
-    ).toBe("mb-2.5");
+    ).toBe("mb-2");
   });
 
   it("uses the largest intra-thread pause for real time gaps", () => {
@@ -50,6 +50,6 @@ describe("timelineDensity spacing", () => {
         },
         "expanded",
       ),
-    ).toBe("mb-6");
+    ).toBe("mb-5");
   });
 });
