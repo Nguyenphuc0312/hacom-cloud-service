@@ -51,6 +51,12 @@ export interface SendMessageInput {
   plainText?: string;
   type?: Message["type"];
   replyToId?: string;
+  /**
+   * Original message being replied to. Carried alongside `replyToId` so the
+   * optimistic bubble can render the quote block immediately, before the server
+   * ack arrives with the canonical `replyToMessage` snapshot.
+   */
+  replyToMessage?: Message;
   senderId?: string;
   senderName?: string;
   senderAvatar?: string;
@@ -226,7 +232,7 @@ const getMessageQueryArgForConversation = (
   conversationId: string,
 ): GetMessagesArgs => ({ conversationId });
 
-const buildOptimisticMessage = (input: SendMessageInput): Message => {
+export const buildOptimisticMessage = (input: SendMessageInput): Message => {
   const localId = input.localId || `temp-${input.clientMessageId}`;
   return {
     id: localId,
@@ -251,6 +257,25 @@ const buildOptimisticMessage = (input: SendMessageInput): Message => {
     isSystem: false,
     createdAt: new Date().toISOString() as unknown as Date,
     ...(input.replyToId ? { replyTo: input.replyToId } : {}),
+    // Build an optimistic reply preview from the original message the user
+    // clicked "reply" on, so the quote block renders in the bubble immediately.
+    // The server-acked Message will overwrite this with the canonical snapshot.
+    ...(input.replyToMessage
+      ? {
+          replyToMessage: {
+            id: input.replyToMessage.id,
+            senderId: input.replyToMessage.senderId,
+            senderName: input.replyToMessage.senderName,
+            senderAvatar: input.replyToMessage.senderAvatar,
+            content: input.replyToMessage.content,
+            contentFormat: input.replyToMessage.contentFormat,
+            type: input.replyToMessage.type,
+            isDeleted: input.replyToMessage.isDeleted,
+            createdAt: input.replyToMessage.createdAt,
+            attachments: input.replyToMessage.attachments,
+          },
+        }
+      : {}),
     // Optimistic mentions carry just userIds (the BE resolves displayName).
     // Once the server-acked Message comes back, the merge replaces these
     // placeholders with fully resolved Mention objects.

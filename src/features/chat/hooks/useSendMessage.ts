@@ -303,6 +303,7 @@ export const useSendMessage = ({
           plainText,
           type,
           replyToId: replyTo?.id,
+          replyToMessage: replyTo,
           senderId: currentUser?.id,
           senderName:
             currentUser?.displayName ||
