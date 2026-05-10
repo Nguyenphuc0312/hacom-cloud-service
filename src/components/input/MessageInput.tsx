@@ -671,10 +671,16 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     });
     try {
       if (hasQueueDrafts && hasReadyDrafts) {
-        const content = draftValue.trim();
+        // Capture TipTap content before clearing — preserves rich text formatting
+        const html = tipTapRef.current?.getHTML() ?? "";
+        const plainText = tipTapRef.current?.getText().trim() ?? draftValue.trim();
+        const isEmpty = tipTapRef.current?.isEmpty() ?? !plainText;
+        const hasFormatting = !isEmpty && hasRichFormatting(html);
+        const content = isEmpty ? undefined : (hasFormatting ? html : plainText);
         // ChatWindow gathers ready attachment metadata; only clear once it
         // confirms the send was accepted into the optimistic/server flow.
-        await Promise.resolve(onSend(content || undefined));
+        await Promise.resolve(onSend(content));
+        tipTapRef.current?.clearContent();
         setDraftValue("");
         onChange("");
         scheduleComposerResize();

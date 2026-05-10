@@ -431,13 +431,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       }
 
       const hasAttachments = allAttachments.length > 0;
-      if (!content && !hasAttachments) return;
-
-      const outgoingContent =
-        (content || "").trim() ||
-        (hasAttachments ? allAttachments[0].fileName : "") ||
-        "";
-      if (!outgoingContent) return;
+      const outgoingContent = (content || "").trim();
+      if (!outgoingContent && !hasAttachments) return;
 
       const messageType = hasAttachments
         ? MessageType.FILE
