@@ -19,6 +19,7 @@ export type FriendshipStatusType = FriendshipRelationDto["status"];
 
 export interface FriendRequest {
   relationId: string;
+  pairKey: string | null;
   createdAt: string;
   updatedAt: string;
   requester: User;
@@ -97,6 +98,7 @@ export interface FriendshipDirectorySnapshot {
   sentRequests: FriendRequest[];
   blockedUsers: BlockedUser[];
   pendingCount: number;
+  sentCount: number;
 }
 
 interface DeriveRelationshipStateInput {
@@ -122,6 +124,7 @@ interface FriendshipStoreState {
   sentRequests: FriendRequest[];
   blockedUsers: BlockedUser[];
   pendingCount: number;
+  sentCount: number;
 
   friendByUserId: Record<string, FriendRecord>;
   incomingByRelationId: Record<string, FriendRequest>;
@@ -251,6 +254,87 @@ const asRelations = (payload: unknown): FriendshipRelationDto[] => {
   return [];
 };
 
+const asPaginationTotal = (value: unknown): number | null => {
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+
+  const pagination = asRecord(record.pagination);
+  const directTotal =
+    typeof record.total === "number" && Number.isFinite(record.total)
+      ? record.total
+      : null;
+  const paginationTotal =
+    pagination &&
+    typeof pagination.total === "number" &&
+    Number.isFinite(pagination.total)
+      ? pagination.total
+      : null;
+
+  return directTotal ?? paginationTotal;
+};
+
+const asRelationPage = (
+  payload: unknown,
+): { relations: FriendshipRelationDto[]; total: number | null } => {
+  if (Array.isArray(payload)) {
+    return {
+      relations: payload as FriendshipRelationDto[],
+      total: null,
+    };
+  }
+
+  const record = asRecord(payload);
+  if (!record) {
+    return { relations: [], total: null };
+  }
+
+  const directData = Array.isArray(record.data)
+    ? (record.data as FriendshipRelationDto[])
+    : null;
+  if (directData) {
+    return {
+      relations: directData,
+      total: asPaginationTotal(record),
+    };
+  }
+
+  const nested = asRecord(record.data);
+  if (nested && Array.isArray(nested.data)) {
+    return {
+      relations: nested.data as FriendshipRelationDto[],
+      total: asPaginationTotal(nested) ?? asPaginationTotal(record),
+    };
+  }
+
+  return {
+    relations: [],
+    total: asPaginationTotal(record),
+  };
+};
+
+export const computeFriendshipPairKey = (
+  firstUserId: string,
+  secondUserId: string,
+): string => [firstUserId, secondUserId].sort().join(":");
+
+const resolveRequestPairKey = (
+  request: Pick<FriendRequest, "pairKey" | "requester" | "addressee">,
+): string | null => {
+  if (typeof request.pairKey === "string" && request.pairKey.trim().length > 0) {
+    return request.pairKey;
+  }
+
+  const requesterId = request.requester?.id?.trim();
+  const addresseeId = request.addressee?.id?.trim();
+  if (!requesterId || !addresseeId) {
+    return null;
+  }
+
+  return computeFriendshipPairKey(requesterId, addresseeId);
+};
+
 export const toFriendshipUser = (
   user:
     | FriendshipRelationDto["requester"]
@@ -303,6 +387,7 @@ const toRequestRecord = (
 
   return {
     relationId: relation.relationId,
+    pairKey: relation.pairKey,
     createdAt: relation.createdAt,
     updatedAt: relation.updatedAt,
     requester,
@@ -349,6 +434,29 @@ export const upsertFront = <T extends { relationId: string }>(
   nextRow: T,
 ): T[] => [nextRow, ...removeByRelationId(rows, nextRow.relationId)];
 
+export const removeByRelationIdentity = (
+  rows: FriendRequest[],
+  identity: { relationId: string; pairKey?: string | null },
+): FriendRequest[] => {
+  const pairKey =
+    typeof identity.pairKey === "string" && identity.pairKey.trim().length > 0
+      ? identity.pairKey
+      : null;
+
+  return rows.filter((item) => {
+    if (item.relationId === identity.relationId) {
+      return false;
+    }
+
+    return pairKey === null || resolveRequestPairKey(item) !== pairKey;
+  });
+};
+
+const upsertRequestFront = (
+  rows: FriendRequest[],
+  nextRow: FriendRequest,
+): FriendRequest[] => [nextRow, ...removeByRelationIdentity(rows, nextRow)];
+
 const sortByUpdatedAtDesc = <T extends { updatedAt: string }>(
   rows: T[],
 ): T[] => {
@@ -361,21 +469,35 @@ export const applyRelationToSnapshot = (
   snapshot: FriendshipDirectorySnapshot,
   relation: FriendshipRelationDto,
 ): FriendshipDirectorySnapshot => {
+  const relationIdentity = {
+    relationId: relation.relationId,
+    pairKey: relation.pairKey,
+  };
+  const hadIncoming = snapshot.incomingRequests.some(
+    (item) =>
+      item.relationId === relation.relationId ||
+      (resolveRequestPairKey(item) !== null &&
+        resolveRequestPairKey(item) === relation.pairKey),
+  );
+  const hadSent = snapshot.sentRequests.some(
+    (item) =>
+      item.relationId === relation.relationId ||
+      (resolveRequestPairKey(item) !== null &&
+        resolveRequestPairKey(item) === relation.pairKey),
+  );
   const next: FriendshipDirectorySnapshot = {
     friends: removeByRelationId(snapshot.friends, relation.relationId),
-    incomingRequests: removeByRelationId(
+    incomingRequests: removeByRelationIdentity(
       snapshot.incomingRequests,
-      relation.relationId,
+      relationIdentity,
     ),
-    sentRequests: removeByRelationId(
-      snapshot.sentRequests,
-      relation.relationId,
-    ),
+    sentRequests: removeByRelationIdentity(snapshot.sentRequests, relationIdentity),
     blockedUsers: removeByRelationId(
       snapshot.blockedUsers,
       relation.relationId,
     ),
     pendingCount: snapshot.pendingCount,
+    sentCount: snapshot.sentCount,
   };
 
   if (relation.status === "accepted") {
@@ -396,15 +518,22 @@ export const applyRelationToSnapshot = (
     const request = toRequestRecord(relation);
     if (request) {
       if (relation.actorRole === "addressee") {
-        next.incomingRequests = upsertFront(next.incomingRequests, request);
+        next.incomingRequests = upsertRequestFront(next.incomingRequests, request);
       }
       if (relation.actorRole === "requester") {
-        next.sentRequests = upsertFront(next.sentRequests, request);
+        next.sentRequests = upsertRequestFront(next.sentRequests, request);
       }
     }
   }
 
-  next.pendingCount = next.incomingRequests.length;
+  next.pendingCount =
+    relation.status === "pending" && relation.actorRole === "addressee"
+      ? snapshot.pendingCount + (hadIncoming ? 0 : 1)
+      : Math.max(0, snapshot.pendingCount - (hadIncoming ? 1 : 0));
+  next.sentCount =
+    relation.status === "pending" && relation.actorRole === "requester"
+      ? snapshot.sentCount + (hadSent ? 0 : 1)
+      : Math.max(0, snapshot.sentCount - (hadSent ? 1 : 0));
   return next;
 };
 
@@ -471,6 +600,7 @@ const initialSnapshot: FriendshipDirectorySnapshot = {
   sentRequests: [],
   blockedUsers: [],
   pendingCount: 0,
+  sentCount: 0,
 };
 
 const toIndexedFields = (snapshot: FriendshipDirectorySnapshot) => ({
@@ -506,12 +636,34 @@ const toIndexedFields = (snapshot: FriendshipDirectorySnapshot) => ({
 const normalizeSnapshot = (
   snapshot: FriendshipDirectorySnapshot,
 ): FriendshipDirectorySnapshot => {
+  const dedupeRequests = (rows: FriendRequest[]): FriendRequest[] => {
+    const seenRelationIds = new Set<string>();
+    const seenPairKeys = new Set<string>();
+
+    return rows.filter((item) => {
+      const pairKey = resolveRequestPairKey(item);
+      if (seenRelationIds.has(item.relationId)) {
+        return false;
+      }
+      if (pairKey && seenPairKeys.has(pairKey)) {
+        return false;
+      }
+
+      seenRelationIds.add(item.relationId);
+      if (pairKey) {
+        seenPairKeys.add(pairKey);
+      }
+      return true;
+    });
+  };
+
   return {
     friends: sortByUpdatedAtDesc(snapshot.friends),
-    incomingRequests: sortByUpdatedAtDesc(snapshot.incomingRequests),
-    sentRequests: sortByUpdatedAtDesc(snapshot.sentRequests),
+    incomingRequests: dedupeRequests(sortByUpdatedAtDesc(snapshot.incomingRequests)),
+    sentRequests: dedupeRequests(sortByUpdatedAtDesc(snapshot.sentRequests)),
     blockedUsers: sortByUpdatedAtDesc(snapshot.blockedUsers),
-    pendingCount: snapshot.pendingCount,
+    pendingCount: Math.max(0, snapshot.pendingCount),
+    sentCount: Math.max(0, snapshot.sentCount),
   };
 };
 
@@ -523,6 +675,7 @@ const currentSnapshot = (
   sentRequests: state.sentRequests,
   blockedUsers: state.blockedUsers,
   pendingCount: state.pendingCount,
+  sentCount: state.sentCount,
 });
 
 const isSnapshotStale = (timestamp: string | null): boolean => {
@@ -718,7 +871,8 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
     try {
       const response = await friendshipApi.getPendingRequests();
       const payload = unwrapApiSuccess(response);
-      const list = asRelations(payload)
+      const page = asRelationPage(payload);
+      const list = page.relations
         .map((relation) => toRequestRecord(relation))
         .filter((item): item is FriendRequest => item !== null);
 
@@ -726,7 +880,7 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
         const next = normalizeSnapshot({
           ...currentSnapshot(state),
           incomingRequests: list,
-          pendingCount: list.length,
+          pendingCount: page.total ?? list.length,
         });
 
         return {
@@ -757,7 +911,8 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
     try {
       const response = await friendshipApi.getSentRequests();
       const payload = unwrapApiSuccess(response);
-      const list = asRelations(payload)
+      const page = asRelationPage(payload);
+      const list = page.relations
         .map((relation) => toRequestRecord(relation))
         .filter((item): item is FriendRequest => item !== null);
 
@@ -765,6 +920,7 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
         const next = normalizeSnapshot({
           ...currentSnapshot(state),
           sentRequests: list,
+          sentCount: page.total ?? list.length,
         });
 
         return {
@@ -777,6 +933,7 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
         const next = normalizeSnapshot({
           ...currentSnapshot(state),
           sentRequests: [],
+          sentCount: 0,
         });
 
         return {
@@ -837,12 +994,9 @@ export const useFriendshipStore = create<FriendshipStoreState>((set, get) => ({
           ? (payload as { count: number }).count
           : 0;
 
-      set((state) => ({
-        pendingCount:
-          state.incomingRequests.length > 0
-            ? state.incomingRequests.length
-            : count,
-      }));
+      set({
+        pendingCount: count,
+      });
     } catch {
       // keep last known count on network failure
     }
@@ -912,6 +1066,7 @@ export const selectFriendshipState = (state: FriendshipStoreState) => ({
   sentRequests: state.sentRequests,
   blockedUsers: state.blockedUsers,
   pendingCount: state.pendingCount,
+  sentCount: state.sentCount,
   isFriendsLoading: state.isFriendsLoading,
   isIncomingLoading: state.isIncomingLoading,
   isSentLoading: state.isSentLoading,

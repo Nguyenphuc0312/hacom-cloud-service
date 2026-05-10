@@ -17,6 +17,7 @@ const EMPTY_SNAPSHOT: FriendshipDirectorySnapshot = {
   sentRequests: [],
   blockedUsers: [],
   pendingCount: 0,
+  sentCount: 0,
 };
 
 const capabilities = (

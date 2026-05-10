@@ -30,6 +30,11 @@ import { conversationApi, userApi } from "../services/api";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import { ROUTE_PATHS } from "../router/paths";
 import { UserStatus } from "../types";
+import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
+import {
+  getFriendRequestDisplayLabel,
+  getFriendRequestDisplayUser,
+} from "../features/friends/requestDisplay";
 
 type TabKey = "friends" | "requests" | "discover" | "blocked" | "qr";
 type RequestTabKey = "incoming" | "sent";
@@ -76,14 +81,30 @@ const extractArray = <T,>(payload: unknown): T[] => {
 };
 
 const toDisplayName = (user: ContactUser): string => {
-  const displayName =
-    typeof user.displayName === "string" ? user.displayName.trim() : "";
-  if (displayName) return displayName;
+  const resolved = resolveUserDisplayName(user, {
+    allowLegacyFallback: false,
+  }).trim();
+  if (
+    resolved &&
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      resolved,
+    )
+  ) {
+    return resolved;
+  }
 
-  const fullName = `${user.firstName || ""} ${user.lastName || ""}`.trim();
-  if (fullName) return fullName;
+  const username =
+    typeof user.username === "string" ? user.username.trim() : "";
+  if (
+    username &&
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      username,
+    )
+  ) {
+    return username;
+  }
 
-  return user.username || user.id;
+  return "Người dùng";
 };
 
 const normalizeStatus = (value: unknown): UserStatus | undefined => {
@@ -288,6 +309,7 @@ export const FriendsPage: React.FC = () => {
     isIncomingLoading,
     sentRequests,
     isSentLoading,
+    sentCount,
     blockedUsers,
     isBlockedLoading,
     pendingCount,
@@ -651,12 +673,12 @@ export const FriendsPage: React.FC = () => {
           {
             id: "incoming",
             label: t("friends:requests.incoming"),
-            count: incomingRequests.length,
+            count: pendingCount,
           },
           {
             id: "sent",
             label: t("friends:requests.sent"),
-            count: sentRequests.length,
+            count: sentCount,
           },
         ]}
         ariaLabel={t("friends:tabs.requests")}
@@ -686,10 +708,9 @@ export const FriendsPage: React.FC = () => {
       ) : (
         <div className="space-y-1">
           {requestItems.map((request) => {
-            const user =
-              requestTab === "incoming" ? request.requester : request.addressee;
-            if (!user) return null;
+            const user = getFriendRequestDisplayUser(request, requestTab);
             const contactUser = toContactUser(user);
+            const displayName = getFriendRequestDisplayLabel(user);
 
             const subtitle =
               requestTab === "incoming"
@@ -703,11 +724,19 @@ export const FriendsPage: React.FC = () => {
             return (
               <ContactRow
                 key={request.relationId}
-                user={contactUser}
+                user={{
+                  ...contactUser,
+                  displayName,
+                }}
                 subtitle={subtitle}
                 selected={previewTarget?.userId === contactUser.id}
                 onClick={() =>
-                  setPreviewTarget(profileFromSummary(contactUser))
+                  setPreviewTarget(
+                    profileFromSummary({
+                      ...contactUser,
+                      displayName,
+                    }),
+                  )
                 }
                 action={renderRelationshipAction(contactUser)}
               />

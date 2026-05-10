@@ -22,6 +22,7 @@ import {
   mapRelationToBlockedRecord,
   mapRelationToFriendRecord,
   mapRelationToRequestRecord,
+  computeFriendshipPairKey,
   removeByRelationId,
   toFriendshipUser,
   upsertFront,
@@ -65,6 +66,7 @@ interface UseFriendshipReturn {
   sentRequests: FriendRequest[];
   isSentLoading: boolean;
   fetchSentRequests: () => Promise<void>;
+  sentCount: number;
 
   pendingCount: number;
   fetchPendingCount: () => Promise<void>;
@@ -140,7 +142,7 @@ const toAuthUser = (
 
 const toUnknownUser = (userId: string): User => ({
   id: userId,
-  username: userId,
+  username: "",
   status: "offline",
 });
 
@@ -151,9 +153,11 @@ const optimisticSendRequestSnapshot = (
 ): FriendshipDirectorySnapshot => {
   const timestamp = nowIso();
   const relationId = `optimistic:request:${userId}:${Date.now()}`;
+  const pairKey = computeFriendshipPairKey(currentUser.id, userId);
 
   const optimisticRequest: FriendRequest = {
     relationId,
+    pairKey,
     createdAt: timestamp,
     updatedAt: timestamp,
     requester: currentUser,
@@ -327,6 +331,7 @@ export const useFriendship = (): UseFriendshipReturn => {
   const fetchSentRequests = useFriendshipStore(
     (state) => state.fetchSentRequests,
   );
+  const sentCount = useFriendshipStore((state) => state.sentCount);
   const pendingCount = useFriendshipStore((state) => state.pendingCount);
   const fetchPendingCount = useFriendshipStore(
     (state) => state.fetchPendingCount,
@@ -386,18 +391,17 @@ export const useFriendship = (): UseFriendshipReturn => {
         const response = await request();
         const payload = unwrapApiSuccess(response);
         const relation = extractWriteRelation(payload);
+        const store = useFriendshipStore.getState();
 
         if (relation) {
-          useFriendshipStore.getState().applyRelation(relation);
+          store.applyRelation(relation);
         } else {
-          const store = useFriendshipStore.getState();
           store.markUiInconsistency(`write_missing_relation:${actionKey}`);
-          store.triggerResync(fallbackResyncReason);
         }
 
-        useFriendshipStore
-          .getState()
-          .recordActionResult(actionKey, "success", nowMs() - startedAt);
+        store.triggerResync(fallbackResyncReason);
+
+        store.recordActionResult(actionKey, "success", nowMs() - startedAt);
         return true;
       } catch {
         const store = useFriendshipStore.getState();
@@ -551,6 +555,7 @@ export const useFriendship = (): UseFriendshipReturn => {
     sentRequests,
     isSentLoading,
     fetchSentRequests,
+    sentCount,
     pendingCount,
     fetchPendingCount,
     blockedUsers,

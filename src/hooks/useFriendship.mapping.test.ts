@@ -183,12 +183,14 @@ describe("useFriendship contract mappers", () => {
         sentRequests: [],
         blockedUsers: [],
         pendingCount: 0,
+        sentCount: 0,
       },
       pendingRelation,
     );
 
     expect(pendingSnapshot.incomingRequests).toHaveLength(1);
     expect(pendingSnapshot.pendingCount).toBe(1);
+    expect(pendingSnapshot.sentCount).toBe(0);
     expect(pendingSnapshot.friends).toHaveLength(0);
 
     const acceptedSnapshot = applyRelationToSnapshot(
@@ -198,6 +200,7 @@ describe("useFriendship contract mappers", () => {
 
     expect(acceptedSnapshot.incomingRequests).toHaveLength(0);
     expect(acceptedSnapshot.pendingCount).toBe(0);
+    expect(acceptedSnapshot.sentCount).toBe(0);
     expect(acceptedSnapshot.friends).toHaveLength(1);
     expect(acceptedSnapshot.friends[0]?.relationStatus).toBe(
       FriendshipStatus.ACCEPTED,
@@ -225,6 +228,7 @@ describe("useFriendship contract mappers", () => {
         sentRequests: [],
         blockedUsers: [],
         pendingCount: 0,
+        sentCount: 0,
       },
       acceptedRelation,
     );
@@ -239,5 +243,56 @@ describe("useFriendship contract mappers", () => {
     expect(blockedSnapshot.blockedUsers[0]?.relationStatus).toBe(
       FriendshipStatus.BLOCKED,
     );
+  });
+
+  it("dedupes optimistic sent request by pairKey when server relation arrives", () => {
+    const optimisticSnapshot = {
+      friends: [],
+      incomingRequests: [],
+      sentRequests: [
+        {
+          relationId: "optimistic:u1:u2",
+          pairKey: "u1:u2",
+          createdAt: "2026-04-06T00:00:00.000Z",
+          updatedAt: "2026-04-06T00:00:00.000Z",
+          requester: {
+            id: "u1",
+            username: "requester",
+            firstName: "Requester User",
+            status: "offline" as const,
+          },
+          addressee: {
+            id: "u2",
+            username: "",
+            status: "offline" as const,
+          },
+          friend: null,
+          status: FriendshipStatus.PENDING,
+          actorRole: "requester" as const,
+          capabilities: baseCapabilities({ canCancel: true }),
+          actionResult: "created" as const,
+        },
+      ],
+      blockedUsers: [],
+      pendingCount: 0,
+      sentCount: 1,
+    };
+
+    const canonicalRelation = makeRelation({
+      relationId: "fr-real",
+      pairKey: "u1:u2",
+      actorRole: "requester",
+      capabilities: baseCapabilities({ canCancel: true }),
+    });
+
+    const nextSnapshot = applyRelationToSnapshot(
+      optimisticSnapshot,
+      canonicalRelation,
+    );
+
+    expect(nextSnapshot.sentRequests).toHaveLength(1);
+    expect(nextSnapshot.sentRequests[0]?.relationId).toBe("fr-real");
+    expect(nextSnapshot.sentRequests[0]?.addressee.username).toBe("addressee");
+    expect(nextSnapshot.sentCount).toBe(1);
   });
 });
