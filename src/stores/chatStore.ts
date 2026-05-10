@@ -529,6 +529,47 @@ const normalizeReactions = (value: unknown): Message["reactions"] => {
   }));
 };
 
+/**
+ * Normalize mentions into the canonical Mention[] shape.
+ * Accepts both legacy `string[]` (raw userIds) and the resolved object form
+ * from chat-shared-types v1.4.0+. Legacy strings get a placeholder
+ * displayName so FE can still surface a styled token without breaking.
+ */
+const normalizeMentions = (value: unknown): Message["mentions"] => {
+  if (!Array.isArray(value)) return [];
+  const result: NonNullable<Message["mentions"]> = [];
+  for (const entry of value) {
+    if (typeof entry === "string") {
+      const userId = entry.trim();
+      if (userId) result.push({ userId, displayName: "" });
+      continue;
+    }
+    const record = asRecord(entry);
+    if (!record) continue;
+    const userId =
+      asStringValue(record.userId) ??
+      asStringValue(record.user_id) ??
+      asStringValue(record.id);
+    if (!userId) continue;
+    const displayName =
+      asStringValue(record.displayName) ??
+      asStringValue(record.display_name) ??
+      asStringValue(record.fullName) ??
+      "";
+    const employeeCode =
+      asStringValue(record.employeeCode) ?? asStringValue(record.employee_code);
+    const avatarUrl =
+      asStringValue(record.avatarUrl) ?? asStringValue(record.avatar_url);
+    result.push({
+      userId,
+      displayName,
+      ...(employeeCode ? { employeeCode } : {}),
+      ...(avatarUrl ? { avatarUrl } : {}),
+    });
+  }
+  return result;
+};
+
 const normalizeMessage = (
   input: unknown,
   fallbackConversationId?: string,
@@ -737,11 +778,7 @@ const normalizeMessage = (
     forwardedFrom: source.forwardedFrom as Message["forwardedFrom"],
     attachments: normalizeAttachments(source.attachments),
     reactions: normalizeReactions(source.reactions),
-    mentions: Array.isArray(source.mentions)
-      ? (source.mentions.filter(
-          (item): item is string => typeof item === "string",
-        ) as string[])
-      : [],
+    mentions: normalizeMentions(source.mentions),
     status,
     isEdited: Boolean(source.isEdited),
     isPinned: Boolean(source.isPinned),

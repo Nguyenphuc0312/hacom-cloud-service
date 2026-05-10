@@ -13,7 +13,8 @@ export type UploadFileCategory =
   | typeof FileType.VIDEO
   | typeof FileType.AUDIO
   | typeof FileType.DOCUMENT
-  | typeof FileType.ARCHIVE;
+  | typeof FileType.ARCHIVE
+  | "generic";
 
 export interface AllowedUploadFileType {
   extensions: readonly string[];
@@ -121,6 +122,21 @@ export const DOCUMENT_UPLOAD_ACCEPT = [
   "audio/mp4",
 ].join(",");
 
+export const UPLOAD_LIMITS = {
+  maxFilesPerMessage: 10,
+  maxTotalSizePerMessage: 471_859_200,
+  maxBytesByCategory: {
+    image: 39_321_600,
+    video: 314_572_800,
+    audio: 157_286_400,
+    document: 157_286_400,
+    archive: 157_286_400,
+    generic: 78_643_200,
+    avatar: 7_864_320,
+    group_avatar: 7_864_320,
+  },
+} as const;
+
 const PREFERRED_MIME_BY_EXTENSION: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
@@ -171,6 +187,10 @@ export const resolveUploadFileCategory = (
 ): UploadFileCategory | undefined =>
   ALLOWED_UPLOAD_FILE_TYPES[normalizeUploadMimeType(mimeType)]?.category;
 
+export const resolveUploadCategoryForMimeType = (
+  mimeType: string,
+): UploadFileCategory => resolveUploadFileCategory(mimeType) ?? "generic";
+
 export const resolveUploadFileType = (mimeType: string): FileType =>
   (resolveUploadFileCategory(mimeType) as FileType | undefined) ?? FileType.OTHER;
 
@@ -183,6 +203,18 @@ export const resolveUploadMimeTypeForFile = (
   }
 
   return inferUploadMimeTypeFromFileName(file.name);
+};
+
+export const resolveUploadMaxBytesForMimeType = (mimeType: string): number => {
+  const category = resolveUploadCategoryForMimeType(mimeType);
+  return UPLOAD_LIMITS.maxBytesByCategory[category];
+};
+
+export const resolveUploadMaxBytesForFile = (
+  file: Pick<File, "name" | "type">,
+): number => {
+  const mimeType = resolveUploadMimeTypeForFile(file) ?? "";
+  return resolveUploadMaxBytesForMimeType(mimeType);
 };
 
 export type UploadFileTypeValidationResult =

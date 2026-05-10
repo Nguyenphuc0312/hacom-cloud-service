@@ -1,4 +1,8 @@
-import { resolveUploadFileCategory, resolveUploadMimeTypeForFile } from "../utils/uploadPolicy";
+import {
+  UPLOAD_LIMITS,
+  resolveUploadFileCategory,
+  resolveUploadMimeTypeForFile,
+} from "../utils/uploadPolicy";
 
 /**
  * @fileoverview AttachmentDraft — data model for pending file uploads.
@@ -60,11 +64,11 @@ export interface AttachmentDraft {
 
 export const ATTACHMENT_CONSTRAINTS = {
   /** Maximum number of files per message */
-  maxFilesPerMessage: 10,
-  /** Maximum total size in bytes (200 MB) */
-  maxTotalSize: 200 * 1024 * 1024,
-  /** Maximum single file size in bytes (50 MB — backend limit) */
-  maxSingleFileSize: 10 * 1024 * 1024,
+  maxFilesPerMessage: UPLOAD_LIMITS.maxFilesPerMessage,
+  /** Maximum total size in bytes (450 MiB) */
+  maxTotalSize: UPLOAD_LIMITS.maxTotalSizePerMessage,
+  /** Maximum single file size in bytes by upload category */
+  maxFileSizeByCategory: UPLOAD_LIMITS.maxBytesByCategory,
 } as const;
 
 // ── Helpers ─────────────────────────────────────────────────────────

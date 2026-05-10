@@ -251,7 +251,17 @@ const buildOptimisticMessage = (input: SendMessageInput): Message => {
     isSystem: false,
     createdAt: new Date().toISOString() as unknown as Date,
     ...(input.replyToId ? { replyTo: input.replyToId } : {}),
-    ...(input.mentions?.length ? { mentions: input.mentions } : {}),
+    // Optimistic mentions carry just userIds (the BE resolves displayName).
+    // Once the server-acked Message comes back, the merge replaces these
+    // placeholders with fully resolved Mention objects.
+    ...(input.mentions?.length
+      ? {
+          mentions: input.mentions.map((userId) => ({
+            userId,
+            displayName: "",
+          })),
+        }
+      : {}),
     ...(input.attachments?.length ? { attachments: input.attachments } : {}),
   };
 };
