@@ -68,7 +68,6 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
 }) => {
   const { t } = useTranslation();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const [isNotificationOpen, setIsNotificationOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement | null>(null);
   const notificationRef = React.useRef<HTMLDivElement | null>(null);
   const isDense = layoutState !== "normal";
