@@ -81,6 +81,30 @@ function metaToAttachment(meta: UploadedFileMeta): Attachment {
 
 const DRAFT_PERSIST_DEBOUNCE_MS = 450;
 
+/** Extract user IDs for @username mentions found in message content. */
+function extractMentionUserIds(
+  content: string,
+  candidates: MentionCandidate[],
+): string[] {
+  if (!candidates.length) return [];
+  // Strip HTML tags for rich-text content so @username is plain text.
+  const text = /^</.test(content.trim())
+    ? content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
+    : content;
+  const usernameSet = new Set<string>();
+  for (const match of text.matchAll(/@(\S+)/g)) {
+    usernameSet.add(match[1].toLowerCase());
+  }
+  if (!usernameSet.size) return [];
+  const ids: string[] = [];
+  for (const candidate of candidates) {
+    if (usernameSet.has(candidate.username.toLowerCase())) {
+      ids.push(candidate.id);
+    }
+  }
+  return ids;
+}
+
 interface ChatWindowProps {
   layoutState: ChatLayoutState;
   conversation: Conversation;
@@ -92,6 +116,7 @@ interface ChatWindowProps {
     replyTo?: Message,
     fileMeta?: Attachment | Attachment[],
     type?: MessageType,
+    mentions?: string[],
   ) => unknown | Promise<unknown>;
   onReactMessage?: (messageId: string, emoji: string) => void | Promise<void>;
   onEditMessage?: (messageId: string, content: string) => void | Promise<void>;
@@ -422,6 +447,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             : allAttachments
           : undefined;
 
+      const mentionUserIds = extractMentionUserIds(outgoingContent, mentionCandidates);
+
       logMessageDebug("ChatWindow", "send_requested", {
         conversationId: conversation.id,
         inputMode,
@@ -430,6 +457,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         type: messageType || MessageType.TEXT,
         attachmentCount: allAttachments.length,
         replyToId: replyToMessage?.id,
+        mentionCount: mentionUserIds.length,
       });
       try {
         const sendResult = onSendMessage(
@@ -437,6 +465,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           replyToMessage,
           attachmentArg,
           messageType,
+          mentionUserIds.length ? mentionUserIds : undefined,
         );
         const sendPromise = Promise.resolve(sendResult);
 
@@ -485,6 +514,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       clearPendingDraftPersist,
       editingMessage,
       inputMode,
+      mentionCandidates,
       onEditMessage,
       onSendMessage,
       replaceComposerSeed,
@@ -825,6 +855,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           (typeof participantRecord.employee_code === "string" &&
             participantRecord.employee_code.trim()) ||
           "";
+        const fullNameFromHR =
+          (typeof participantRecord.fullNameFromHR === "string" &&
+            participantRecord.fullNameFromHR.trim()) ||
+          (typeof participantRecord.full_name_from_hr === "string" &&
+            participantRecord.full_name_from_hr.trim()) ||
+          (typeof participantRecord.fullName === "string" &&
+            participantRecord.fullName.trim()) ||
+          "";
 
         return {
           id: participant.id,
@@ -834,6 +872,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             resolveUserDisplayName(participant, {
               allowLegacyFallback: false,
             }) || undefined,
+          fullName: fullNameFromHR || undefined,
+          employeeCode: employeeCode || undefined,
         };
       });
   }, [conversation.participants, currentUser.id]);

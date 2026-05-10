@@ -64,6 +64,7 @@ interface UseSendMessageResult {
     replyTo?: Message,
     fileMeta?: Attachment | Attachment[] | undefined,
     type?: MessageType,
+    mentions?: string[],
   ) => unknown | Promise<unknown>;
 }
 
@@ -229,6 +230,7 @@ export const useSendMessage = ({
       replyTo?: Message,
       fileMeta?: Attachment | Attachment[] | undefined,
       type: MessageType = MessageTypeEnum.TEXT,
+      mentions?: string[],
       contentFormat?: 'plain_text' | 'rich_text',
       contentJson?: Record<string, unknown>,
       plainText?: string,
@@ -307,6 +309,7 @@ export const useSendMessage = ({
             currentUser?.effectiveDisplayName ||
             currentUser?.username,
           senderAvatar: currentUser?.avatar || undefined,
+          mentions: mentions?.length ? mentions : undefined,
           attachments: toSendMessageAttachments(fileMeta),
         })
           .unwrap()

@@ -55,6 +55,7 @@ export interface SendMessageInput {
   senderName?: string;
   senderAvatar?: string;
   localId?: string;
+  mentions?: string[];
   attachments?: SendMessageAttachmentInput[];
 }
 
@@ -250,6 +251,7 @@ const buildOptimisticMessage = (input: SendMessageInput): Message => {
     isSystem: false,
     createdAt: new Date().toISOString() as unknown as Date,
     ...(input.replyToId ? { replyTo: input.replyToId } : {}),
+    ...(input.mentions?.length ? { mentions: input.mentions } : {}),
     ...(input.attachments?.length ? { attachments: input.attachments } : {}),
   };
 };
@@ -410,6 +412,7 @@ export const chatApi = createApi({
             clientMessageId: input.clientMessageId,
             tempId: input.localId,
             localId: input.localId,
+            mentions: input.mentions,
             attachments: input.attachments,
           });
           return { data: unwrapApiSuccess(response) };

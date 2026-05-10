@@ -52,8 +52,7 @@ export interface MentionCandidate {
   username: string;
   displayName?: string;
   fullName?: string | null;
-  fullNameFromHR?: string | null;
-  full_name_from_hr?: string | null;
+  employeeCode?: string;
 }
 
 /** Imperative handle for MessageInput — allows parent to programmatically add files */
@@ -248,6 +247,8 @@ const normalizeMentionCandidates = (
       id: candidate.id,
       username,
       displayName: candidate.displayName?.trim() || undefined,
+      fullName: candidate.fullName?.trim() || undefined,
+      employeeCode: candidate.employeeCode?.trim() || undefined,
     });
   });
 
@@ -413,7 +414,14 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       .filter((candidate) => {
         const username = candidate.username.toLowerCase();
         const displayName = candidate.displayName?.toLowerCase() || "";
-        return username.includes(query) || displayName.includes(query);
+        const fullName = candidate.fullName?.toLowerCase() || "";
+        const employeeCode = candidate.employeeCode?.toLowerCase() || "";
+        return (
+          username.includes(query) ||
+          displayName.includes(query) ||
+          fullName.includes(query) ||
+          employeeCode.includes(query)
+        );
       })
       .slice(0, 8);
   }, [deferredMentionQuery, mentionMatch, normalizedMentionCandidates]);

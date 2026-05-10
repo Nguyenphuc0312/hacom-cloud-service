@@ -1035,6 +1035,7 @@ export const messageApi = {
       clientMessageId?: string;
       tempId?: string;
       localId?: string;
+      mentions?: string[];
       attachments?: Array<{
         id: string;
         type: Message["type"] | string;
@@ -1052,17 +1053,23 @@ export const messageApi = {
       }>;
     },
   ) => {
+    const body: Record<string, unknown> = {
+      content: data.content,
+      type: data.type || "text",
+      replyTo: data.replyToId,
+      clientMessageId: data.clientMessageId,
+      tempId: data.tempId,
+      localId: data.localId,
+      attachments: data.attachments,
+    };
+    if (data.contentFormat) body.contentFormat = data.contentFormat;
+    if (data.contentJson) body.contentJson = data.contentJson;
+    if (data.plainText) body.plainText = data.plainText;
+    if (data.mentions?.length) body.mentions = data.mentions;
+
     const response = await apiClient.post<ApiResponse<CreateMessageResponse>>(
       canonicalConversationMessagesPath(conversationId),
-      {
-        content: data.content,
-        type: data.type || "text",
-        replyTo: data.replyToId,
-        clientMessageId: data.clientMessageId,
-        tempId: data.tempId,
-        localId: data.localId,
-        attachments: data.attachments,
-      },
+      body,
     );
     return response.data;
   },
