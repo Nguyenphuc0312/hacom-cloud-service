@@ -38,12 +38,12 @@ const TIMELINE_DENSITY_CONTRACT: Record<
 > = {
   compact: {
     itemSpacing: {
-      tight: "mb-1",
-      related: "mb-2",
-      cluster: "mb-4",
-      semanticPause: "mb-2.5",
-      mediaCluster: "mb-4",
-      timePause: "mb-5",
+      tight: "mb-0.5",
+      related: "mb-1",
+      cluster: "mb-3",
+      semanticPause: "mb-2",
+      mediaCluster: "mb-3",
+      timePause: "mb-4",
     },
     dateDivider: {
       outer: "my-3",
@@ -59,7 +59,7 @@ const TIMELINE_DENSITY_CONTRACT: Record<
     cluster: {
       rowGap: "gap-1",
       senderLabel:
-        "mb-0.5 px-0.5 text-[12px] font-semibold leading-4 text-text-secondary",
+        "mb-1 block text-[11.5px] font-semibold leading-[1.15] text-primary",
       replyPreview:
         "mb-1 gap-1.5 rounded-[0.8rem] px-2.5 py-1.5 text-[11px]",
       forwardedBadge: "mb-1 flex items-center gap-1 text-[11px] leading-4",
@@ -74,7 +74,7 @@ const TIMELINE_DENSITY_CONTRACT: Record<
       tight: "mb-1",
       related: "mb-2",
       cluster: "mb-4",
-      semanticPause: "mb-2",
+      semanticPause: "mb-3",
       mediaCluster: "mb-4",
       timePause: "mb-5",
     },
@@ -90,9 +90,9 @@ const TIMELINE_DENSITY_CONTRACT: Record<
         "px-2.75 py-0.5 text-[10px] font-semibold tracking-[0.01em]",
     },
     cluster: {
-      rowGap: "gap-1.25",
+      rowGap: "gap-1",
       senderLabel:
-        "mb-0.5 px-0.5 text-[12px] font-semibold leading-4 text-text-secondary",
+        "mb-1 block text-[12px] font-semibold leading-[1.15] text-primary",
       replyPreview:
         "mb-1 gap-2 rounded-[0.8rem] px-3 py-2 text-[11px]",
       forwardedBadge: "mb-1.5 flex items-center gap-1 text-[11px] leading-4",
@@ -104,12 +104,12 @@ const TIMELINE_DENSITY_CONTRACT: Record<
   },
   expanded: {
     itemSpacing: {
-      tight: "mb-1.5",
-      related: "mb-2.5",
-      cluster: "mb-4.5",
-      semanticPause: "mb-3",
-      mediaCluster: "mb-5",
-      timePause: "mb-6",
+      tight: "mb-1",
+      related: "mb-2",
+      cluster: "mb-4",
+      semanticPause: "mb-2.5",
+      mediaCluster: "mb-4",
+      timePause: "mb-5",
     },
     dateDivider: {
       outer: "my-4",
@@ -123,7 +123,7 @@ const TIMELINE_DENSITY_CONTRACT: Record<
     cluster: {
       rowGap: "gap-1.5",
       senderLabel:
-        "mb-0.75 px-0.5 text-[12px] font-semibold leading-4 text-text-secondary",
+        "mb-1 block text-[12px] font-semibold leading-[1.15] text-primary",
       replyPreview:
         "mb-1 gap-2 rounded-[0.85rem] px-3 py-2 text-[11px]",
       forwardedBadge: "mb-1.5 flex items-center gap-1 text-[11px] leading-4",

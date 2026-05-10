@@ -36,10 +36,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 }) => (
   <div
     className={clsx(
-      "relative overflow-hidden transition-colors",
+      "relative inline-block max-w-full overflow-hidden transition-colors",
       isOwn
         ? "bg-[hsl(var(--chat-bubble-sent))] text-[hsl(var(--chat-bubble-sent-text))]"
-        : "bg-[hsl(var(--chat-bubble-received))] text-[hsl(var(--chat-bubble-received-text))]",
+        : "border border-black/[0.09] bg-[hsl(var(--chat-bubble-received))] text-[hsl(var(--chat-bubble-received-text))]",
       isOwn ? OUTGOING_RADIUS_MAP[position] : INCOMING_RADIUS_MAP[position],
       isRich ? "px-2 py-2" : "px-3 py-2",
       isHighlighted && "ring-1 ring-warning/35",

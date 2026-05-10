@@ -2,7 +2,10 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { Avatar } from "../../common/Avatar";
+import { createPortal } from "react-dom";
+import { Plus } from "lucide-react";
 import { MessageActions } from "../../message/MessageActions";
+import { EmojiReactionPicker } from "../../message/EmojiReactionPicker";
 import { ReactionBar } from "../../message/ReactionBar";
 import { ThreadIndicator } from "../../message/ThreadIndicator";
 import { MessageBodyRenderer } from "../message-layout/MessageBodyRenderer";
@@ -79,11 +82,72 @@ const resolveBubblePosition = (
   return "middle";
 };
 
+/** Mobile full-screen emoji overlay — mirrors EmojiReactionPicker but centered */
+const QUICK_EMOJIS_MOBILE = ["👍", "❤️", "😆", "😮", "😢", "😡"] as const;
+const EXTENDED_EMOJIS_MOBILE = [
+  "👍", "👎", "❤️", "🔥", "🎉", "😆", "😮", "😢", "😡", "🤩",
+  "🥹", "😍", "🤔", "👏", "💯", "✅", "🙏", "😭", "🫡", "💪",
+  "😴", "🤣", "😅", "😬", "🥲", "😤", "😩", "🤯", "🤗", "😎",
+] as const;
+
+const MobileEmojiOverlay: React.FC<{
+  onSelect: (emoji: string) => void;
+  onClose: () => void;
+}> = ({ onSelect, onClose }) => {
+  const [showMore, setShowMore] = React.useState(false);
+  const emojis = showMore ? EXTENDED_EMOJIS_MOBILE : QUICK_EMOJIS_MOBILE;
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-text-primary/30 p-4">
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+        aria-label="Đóng"
+      />
+      <div className="relative w-full max-w-sm rounded-2xl bg-white p-4 shadow-elev3 dark:bg-[#23262f]">
+        <p className="mb-3 text-center text-xs font-semibold text-text-secondary">
+          Chọn biểu cảm
+        </p>
+        <div className={clsx("flex flex-wrap justify-center gap-1", showMore && "max-w-xs mx-auto")}>
+          {emojis.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              aria-label={`React với ${emoji}`}
+              onClick={() => { onSelect(emoji); onClose(); }}
+              className="flex h-11 w-11 items-center justify-center rounded-full text-2xl transition-all duration-100 hover:scale-110 hover:bg-black/5 active:scale-95 dark:hover:bg-white/8"
+            >
+              {emoji}
+            </button>
+          ))}
+          <button
+            type="button"
+            aria-label={showMore ? "Thu gọn" : "Thêm"}
+            onClick={() => setShowMore((v) => !v)}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-[#f0f1f5] ring-1 ring-[#e3e5ec] transition-all duration-100 hover:scale-110 dark:bg-white/10 dark:ring-white/12"
+          >
+            <Plus
+              size={16}
+              strokeWidth={2.2}
+              className={clsx("transition-transform duration-200 text-[#52556a] dark:text-white/60", showMore && "rotate-45")}
+            />
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+};
+
 const MessageGroupItem: React.FC<{
   item: ConversationThreadMessageItem;
   isOwn: boolean;
   isGroupTail: boolean;
   bubblePosition: MessageBubblePosition;
+  showSenderName?: boolean;
+  senderDisplayName?: string;
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
   onEdit?: (message: Message) => void | Promise<void>;
@@ -104,6 +168,8 @@ const MessageGroupItem: React.FC<{
   isOwn,
   isGroupTail,
   bubblePosition,
+  showSenderName = false,
+  senderDisplayName,
   onReply,
   onReact,
   onEdit,
@@ -123,6 +189,7 @@ const MessageGroupItem: React.FC<{
   const { t } = useTranslation();
   const [isActionSheetOpen, setIsActionSheetOpen] = React.useState(false);
   const [isActionRailVisible, setIsActionRailVisible] = React.useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = React.useState(false);
   const message = item.message;
   recordChatRenderCount("MessageGroupItem", message.id, {
     isOwn,
@@ -131,6 +198,33 @@ const MessageGroupItem: React.FC<{
     isGroupTail,
   });
   const resendMessage = useChatStore((state) => state.resendMessage);
+  // Fallback hydrate: when API trả về `replyTo` mà không có `replyToMessage`
+  // (legacy messages, missing reply_snapshot), nhìn vào messageById index để
+  // tự dựng quote preview từ message gốc đang có trong store.
+  const replyTargetFromStore = useChatStore((state) =>
+    !message.replyToMessage && message.replyTo
+      ? state.messageById[message.replyTo]
+      : undefined,
+  );
+  const resolvedReplyPreview = React.useMemo(() => {
+    if (message.replyToMessage) return message.replyToMessage;
+    if (!message.replyTo) return undefined;
+    if (replyTargetFromStore) {
+      return {
+        id: replyTargetFromStore.id,
+        senderId: replyTargetFromStore.senderId,
+        senderName: replyTargetFromStore.senderName,
+        senderAvatar: replyTargetFromStore.senderAvatar,
+        content: replyTargetFromStore.content,
+        contentFormat: replyTargetFromStore.contentFormat,
+        type: replyTargetFromStore.type,
+        isDeleted: replyTargetFromStore.isDeleted,
+        createdAt: replyTargetFromStore.createdAt as unknown as Date,
+        attachments: replyTargetFromStore.attachments,
+      } as Message["replyToMessage"];
+    }
+    return undefined;
+  }, [message.replyToMessage, message.replyTo, replyTargetFromStore]);
   const hideActionRailTimerRef = React.useRef<number | null>(null);
   const isHighlighted =
     highlightedMessageId === message.id ||
@@ -159,6 +253,7 @@ const MessageGroupItem: React.FC<{
   const isRichBubble =
     message.type !== "text" ||
     Boolean(message.replyToMessage) ||
+    Boolean(message.replyTo) ||
     Boolean(message.forwardedFrom) ||
     message.isDeleted ||
     isFailedMessage(message) ||
@@ -208,8 +303,10 @@ const MessageGroupItem: React.FC<{
     (actionId: MessageActionId) => {
       switch (actionId) {
         case "react":
-          onReact(message.id, "\u{1F44D}");
-          break;
+          setIsActionSheetOpen(false);
+          setShowEmojiPicker((prev) => !prev);
+          return;
+
         case "reply":
           onReply(message);
           break;
@@ -241,13 +338,27 @@ const MessageGroupItem: React.FC<{
     [message, onDelete, onEdit, onReact, onReply, resendMessage],
   );
 
-  const isActionRailActive = isActionRailVisible || isActionSheetOpen;
+  const isActionRailActive = isActionRailVisible || isActionSheetOpen || showEmojiPicker;
+
+  const handleEmojiSelect = React.useCallback(
+    (emoji: string) => {
+      onReact(message.id, emoji);
+      setShowEmojiPicker(false);
+    },
+    [message.id, onReact],
+  );
+
+  const closeEmojiPicker = React.useCallback(() => {
+    setShowEmojiPicker(false);
+  }, []);
 
   const actionRail =
     inlineActions.length > 0 && !isSelectionMode ? (
       <div
         onMouseEnter={showActionRail}
-        onMouseLeave={() => hideActionRail(true)}
+        onMouseLeave={() => {
+          if (!showEmojiPicker) hideActionRail(true);
+        }}
         className={clsx(
           "absolute top-1 z-20 hidden transition-all duration-150 md:block",
           isOwn ? "right-full mr-2" : "left-full ml-2",
@@ -256,6 +367,14 @@ const MessageGroupItem: React.FC<{
             : "pointer-events-none translate-y-0.5 opacity-0",
         )}
       >
+        {/* Emoji picker floats above the action rail */}
+        {showEmojiPicker && (
+          <EmojiReactionPicker
+            onSelect={handleEmojiSelect}
+            onClose={closeEmojiPicker}
+            isOwn={isOwn}
+          />
+        )}
         <MessageActions
           mode="inline"
           actions={inlineActions}
@@ -307,19 +426,25 @@ const MessageGroupItem: React.FC<{
           isOwn ? "justify-end" : "justify-start",
         )}
       >
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 max-w-full">
           <MessageBubble
             isOwn={isOwn}
             position={bubblePosition}
             isRich={isRichBubble}
             isHighlighted={isHighlighted}
           >
+            {showSenderName && senderDisplayName && (
+              <p className="mb-1 truncate text-[12px] font-semibold leading-[1.15] text-primary">
+                {senderDisplayName}
+              </p>
+            )}
+
             {message.replyToMessage && (
               <button
                 type="button"
                 onClick={() => {
                   const targetId =
-                    message.replyTo || message.replyToMessage?.id;
+                    message.replyTo || resolvedReplyPreview?.id;
                   if (targetId) {
                     onNavigateToMessage?.(targetId);
                   }
@@ -339,10 +464,14 @@ const MessageGroupItem: React.FC<{
                       isOwn ? "text-text-primary/78" : "text-text-secondary",
                     )}
                   >
-                    {resolveUserDisplayName({
-                      displayName: message.replyToMessage.senderName,
-                      username: message.replyToMessage.senderId,
-                    })}
+                    {resolvedReplyPreview
+                      ? resolveUserDisplayName({
+                          displayName: resolvedReplyPreview.senderName,
+                          username: resolvedReplyPreview.senderId,
+                        })
+                      : t("chat:message.replyingTo", {
+                          defaultValue: "Tin nhắn được trả lời",
+                        })}
                   </div>
                   <p
                     className={clsx(
@@ -350,14 +479,18 @@ const MessageGroupItem: React.FC<{
                       isOwn ? "text-text-primary/68" : "text-text-muted",
                     )}
                   >
-                    {message.replyToMessage.isDeleted
-                      ? t("chat:message.deleted", {
-                          defaultValue: "Message deleted",
+                    {!resolvedReplyPreview
+                      ? t("chat:message.replyLoading", {
+                          defaultValue: "Đang tải tin nhắn...",
                         })
-                      : getPreviewFromMessage({
-                          contentFormat: message.replyToMessage.contentFormat,
-                          content: message.replyToMessage.content,
-                        })}
+                      : resolvedReplyPreview.isDeleted
+                        ? t("chat:message.deleted", {
+                            defaultValue: "Tin nhắn đã bị xóa",
+                          })
+                        : getPreviewFromMessage({
+                            contentFormat: resolvedReplyPreview.contentFormat,
+                            content: resolvedReplyPreview.content,
+                          })}
                   </p>
                 </div>
               </button>
@@ -434,6 +567,14 @@ const MessageGroupItem: React.FC<{
         onAction={handleAction}
         onClose={() => setIsActionSheetOpen(false)}
       />
+
+      {/* Mobile emoji picker — full-screen overlay (desktop uses inline picker above rail) */}
+      {showEmojiPicker && coarsePointer && (
+        <MobileEmojiOverlay
+          onSelect={handleEmojiSelect}
+          onClose={closeEmojiPicker}
+        />
+      )}
     </div>
   );
 };
@@ -469,7 +610,7 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
   return (
     <section
       className={clsx(
-        "thread-message-group grid grid-cols-[36px,minmax(0,1fr)] gap-x-2.5",
+        "thread-message-group grid grid-cols-[36px,minmax(0,1fr)] gap-x-2.5 pb-1.5",
         row.isOwn && "grid-cols-[minmax(0,1fr)]",
       )}
     >
@@ -495,13 +636,7 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
           "flex flex-col",
         )}
       >
-        {!row.isOwn && row.showSenderName && (
-          <div className="mb-1 px-1 text-[12px] font-medium leading-4 text-text-secondary/92">
-            {senderDisplayName}
-          </div>
-        )}
-
-        <div className="flex w-full flex-col gap-0.5">
+        <div className="flex w-full flex-col gap-1">
           {row.items.map((item, index) => (
             <MessageGroupItem
               key={item.key}
@@ -509,6 +644,8 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
               isOwn={row.isOwn}
               isGroupTail={index === row.items.length - 1}
               bubblePosition={resolveBubblePosition(index, row.items.length)}
+              showSenderName={index === 0 && !row.isOwn && row.showSenderName}
+              senderDisplayName={senderDisplayName}
               onReply={onReply}
               onReact={onReact}
               onEdit={onEdit}

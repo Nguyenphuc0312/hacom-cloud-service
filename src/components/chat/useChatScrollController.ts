@@ -838,6 +838,7 @@ export const useChatScrollController = ({
       itemCount,
       latestKey,
       messages.length,
+      outerRef,
       resolveBottomBehavior,
       resolveMessageIndex,
       scrollToOffset,
@@ -1289,7 +1290,7 @@ export const useChatScrollController = ({
   ]);
 
   const handleUserScroll = React.useCallback(
-    (_scrollTop: number) => {
+    () => {
       // Coalesce scroll events — only process one per animation frame
       if (scrollRafRef.current !== null) return;
 

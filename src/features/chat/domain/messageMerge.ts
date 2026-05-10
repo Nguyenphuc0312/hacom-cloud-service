@@ -164,6 +164,15 @@ export const mergeMessageRecords = (
     merged.errorMessage = undefined;
   }
 
+  // Preserve reply preview when server-acked event tạm thời thiếu snapshot
+  // — KHÔNG để optimistic quote block biến mất sau ack.
+  if (!merged.replyToMessage && current.replyToMessage) {
+    merged.replyToMessage = current.replyToMessage;
+  }
+  if (!merged.replyTo && current.replyTo) {
+    merged.replyTo = current.replyTo;
+  }
+
   return normalizeMessageForReduxCache(merged);
 };
 
