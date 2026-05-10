@@ -24,7 +24,7 @@ export const MessageRow: React.FC<MessageRowProps> = ({
     >
       <div
         className={clsx(
-          "hidden min-h-9 min-w-10 items-start pt-1 md:flex",
+          "hidden min-h-9 min-w-[2.25rem] items-start pt-1 sm:flex",
           isOwn ? "justify-start" : "justify-end",
         )}
       >

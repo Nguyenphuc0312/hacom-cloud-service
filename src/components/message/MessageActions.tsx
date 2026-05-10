@@ -103,7 +103,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
             type="button"
             onClick={() => onAction(action.id)}
             data-testid={`message-action-${action.id}`}
-            className="rounded-full p-2 text-text-secondary transition-fast hover:bg-white/6 hover:text-text-primary"
+            className="rounded-full p-2.5 text-text-secondary transition-fast hover:bg-white/6 hover:text-text-primary"
             aria-label={action.label}
             title={action.label}
           >
