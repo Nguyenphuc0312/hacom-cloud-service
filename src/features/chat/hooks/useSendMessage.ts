@@ -2,7 +2,6 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { ErrorCode } from "@hacom/chat-shared-types/core";
 import { toast } from "../../../components/ui";
-import { UPLOAD_CONFIG } from "../../../config";
 import { extractApiError, unwrapApiSuccess } from "../../../lib/apiContract";
 import { useAuthStore, useGroupStore } from "../../../stores";
 import type {
@@ -16,6 +15,7 @@ import {
   DOCUMENT_UPLOAD_ACCEPT,
   PHOTO_UPLOAD_ACCEPT,
   UPLOAD_INPUT_ACCEPT,
+  resolveUploadMaxBytesForFile,
   resolveUploadFileType,
   resolveUploadMimeTypeForFile,
   validateUploadFileType,
@@ -176,7 +176,7 @@ export const useSendMessage = ({
     (file: File): string | null => {
       const mimeType = resolveUploadMimeTypeForFile(file);
 
-      if (file.size > UPLOAD_CONFIG.MAX_FILE_SIZE) {
+      if (file.size > resolveUploadMaxBytesForFile(file)) {
         return t("error:upload.fileTooLarge");
       }
 
@@ -303,6 +303,7 @@ export const useSendMessage = ({
           plainText,
           type,
           replyToId: replyTo?.id,
+          replyToMessage: replyTo,
           senderId: currentUser?.id,
           senderName:
             currentUser?.displayName ||

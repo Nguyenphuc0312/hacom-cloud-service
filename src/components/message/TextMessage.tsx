@@ -21,6 +21,14 @@ interface TextMessageProps {
   contentFormat?: "plain_text" | "markdown" | "rich_text";
   isOwn: boolean;
   currentUsername?: string;
+  /**
+   * Resolved mention metadata for the message. When provided, drives
+   * mention rendering via display-name match — the only path that handles
+   * Vietnamese diacritics correctly. Without it, falls back to a Unicode-aware
+   * `@<token>` regex so legacy messages still get a styled token.
+   */
+  mentions?: Mention[];
+  currentUserId?: string;
   renderMode?: LongMessageRenderMode;
   isCollapsible?: boolean;
   onToggleExpand?: () => void;
@@ -69,26 +77,81 @@ const getStructuredBlockContent = (content: string): string | null => {
   return null;
 };
 
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Build an alternation regex from resolved mention displayNames.
+ * Matches longest-first to avoid "@An" eating part of "@An Nguyen".
+ * Returns null when there are no usable mentions.
+ */
+const buildMentionRegexFromMetadata = (mentions: Mention[]): RegExp | null => {
+  const names = mentions
+    .map((m) => m.displayName?.trim())
+    .filter((name): name is string => Boolean(name));
+  if (names.length === 0) return null;
+
+  const sorted = [...new Set(names)].sort((a, b) => b.length - a.length);
+  const alternation = sorted.map(escapeRegExp).join("|");
+  return new RegExp(`@(?:${alternation})`, "gu");
+};
+
+// Unicode-aware fallback for legacy messages without mention metadata.
+// Matches `@<token>` where token is letters / digits / Vietnamese diacritics
+// (the original `\w` alternative did not). Used only when `mentions[]` is
+// missing — the metadata path is preferred.
+const FALLBACK_MENTION_REGEX = /@[\p{L}\p{N}_.-]+/gu;
+
 const renderWithMentions = (
   text: string,
   isOwn: boolean,
-  currentUsername?: string,
+  options: { currentUserId?: string; mentions?: Mention[]; currentUsername?: string },
 ): React.ReactNode[] => {
-  if (!currentUsername) return [text];
+  const { currentUserId, mentions, currentUsername } = options;
 
-  const mentionRegex = /(@\w+)/g;
-  const segments = text.split(mentionRegex);
+  const fromMetadata = mentions && mentions.length > 0;
+  const regex = fromMetadata
+    ? buildMentionRegexFromMetadata(mentions)
+    : currentUsername || mentions
+      ? FALLBACK_MENTION_REGEX
+      : null;
 
-  return segments.map((segment, idx) => {
-    const isMention = /^@\w+$/.test(segment);
-    if (!isMention) return <React.Fragment key={idx}>{segment}</React.Fragment>;
+  if (!regex) return [text];
 
-    const mentionedName = segment.slice(1).toLowerCase();
-    const isSelfMention = mentionedName === currentUsername.toLowerCase();
+  // Build a lookup by displayName to resolve userId for self-mention check.
+  const byName = new Map<string, Mention>();
+  if (mentions) {
+    for (const m of mentions) {
+      if (m.displayName) byName.set(m.displayName.toLowerCase(), m);
+    }
+  }
 
-    return (
+  const out: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+  // Reset regex state in case the same instance was reused.
+  regex.lastIndex = 0;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      out.push(
+        <React.Fragment key={`t-${key++}`}>
+          {text.slice(lastIndex, match.index)}
+        </React.Fragment>,
+      );
+    }
+    const token = match[0];
+    const candidate = token.startsWith("@") ? token.slice(1) : token;
+    const resolved = byName.get(candidate.toLowerCase());
+    const isSelfMention = resolved
+      ? Boolean(currentUserId && resolved.userId === currentUserId)
+      : Boolean(
+          currentUsername &&
+            candidate.toLowerCase() === currentUsername.toLowerCase(),
+        );
+    out.push(
       <span
-        key={idx}
+        key={`m-${key++}`}
         className={clsx(
           "inline rounded px-0.5 font-semibold",
           isSelfMention
@@ -99,11 +162,20 @@ const renderWithMentions = (
               ? "text-text-inverse/95"
               : "text-primary/80",
         )}
+        data-mention-user-id={resolved?.userId}
+        title={resolved?.employeeCode || undefined}
       >
-        {segment}
-      </span>
+        {token}
+      </span>,
     );
-  });
+    lastIndex = match.index + token.length;
+  }
+  if (lastIndex < text.length) {
+    out.push(
+      <React.Fragment key={`t-${key++}`}>{text.slice(lastIndex)}</React.Fragment>,
+    );
+  }
+  return out;
 };
 
 export const TextMessage: React.FC<TextMessageProps> = ({
@@ -111,6 +183,8 @@ export const TextMessage: React.FC<TextMessageProps> = ({
   contentFormat,
   isOwn,
   currentUsername,
+  mentions,
+  currentUserId,
   renderMode = "expanded",
   isCollapsible = false,
   onToggleExpand,
@@ -249,7 +323,11 @@ export const TextMessage: React.FC<TextMessageProps> = ({
 
             return (
               <React.Fragment key={index}>
-                {renderWithMentions(part, isOwn, currentUsername)}
+                {renderWithMentions(part, isOwn, {
+                  currentUserId,
+                  currentUsername,
+                  mentions,
+                })}
               </React.Fragment>
             );
           })}

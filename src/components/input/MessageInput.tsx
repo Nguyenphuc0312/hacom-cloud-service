@@ -31,9 +31,9 @@ import type { ComposerMode } from "../../hooks/useComposerAvailability";
 import type { AttachmentPickerMode } from "../../features/chat/hooks/useSendMessage";
 import type { InputMode, Message } from "../../types";
 import type { AttachmentDraft } from "../../types/attachmentDraft";
-import { UPLOAD_CONFIG } from "../../config";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { getPreviewFromMessage } from "../../utils/messageContent.utils";
+import { resolveUploadMaxBytesForFile } from "../../utils/uploadPolicy";
 import { InlineNotice, toast } from "../ui";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import {
@@ -1217,7 +1217,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
             uploadProgress={uploadProgress}
             uploadError={uploadError}
             isUploading={isUploading}
-            maxFileSizeBytes={UPLOAD_CONFIG.MAX_FILE_SIZE}
+            maxFileSizeBytes={resolveUploadMaxBytesForFile(selectedFile)}
             onCancelUpload={cancelUpload}
             onRetryUpload={handleRetryUpload}
             onSendNow={() => void handleSendAttachment()}

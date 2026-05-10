@@ -3,6 +3,7 @@ import { MESSAGE_HARD_LIMIT } from "../utils/messageLengthPolicy";
 import {
   DEFAULT_ALLOWED_UPLOAD_MIME_TYPES,
   UPLOAD_INPUT_ACCEPT,
+  UPLOAD_LIMITS,
 } from "../utils/uploadPolicy";
 
 /**
@@ -312,8 +313,11 @@ export const PAGINATION_CONFIG = {
 
 // File Upload
 export const UPLOAD_CONFIG = {
-  MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
-  MAX_IMAGE_SIZE: 5 * 1024 * 1024, // 5MB
+  MAX_FILE_SIZE: UPLOAD_LIMITS.maxBytesByCategory.video,
+  MAX_IMAGE_SIZE: UPLOAD_LIMITS.maxBytesByCategory.image,
+  MAX_TOTAL_MESSAGE_SIZE: UPLOAD_LIMITS.maxTotalSizePerMessage,
+  MAX_FILES_PER_MESSAGE: UPLOAD_LIMITS.maxFilesPerMessage,
+  MAX_FILE_SIZE_BY_CATEGORY: UPLOAD_LIMITS.maxBytesByCategory,
   ALLOWED_IMAGE_TYPES: [
     "image/jpeg",
     "image/png",

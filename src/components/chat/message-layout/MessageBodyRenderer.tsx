@@ -21,6 +21,7 @@ interface MessageBodyRendererProps {
   message: Message;
   isOwn: boolean;
   currentUsername?: string;
+  currentUserId?: string;
   textRenderMode?: LongMessageRenderMode;
   isCollapsibleText?: boolean;
   onToggleTextExpand?: () => void;
@@ -176,6 +177,7 @@ const renderTextContent = (
   message: Message,
   isOwn: boolean,
   currentUsername?: string,
+  currentUserId?: string,
   textRenderMode?: LongMessageRenderMode,
   isCollapsibleText?: boolean,
   onToggleTextExpand?: () => void,
@@ -200,6 +202,8 @@ const renderTextContent = (
       contentFormat={message.contentFormat}
       isOwn={isOwn}
       currentUsername={currentUsername}
+      currentUserId={currentUserId}
+      mentions={message.mentions}
       renderMode={textRenderMode}
       isCollapsible={isCollapsibleText}
       onToggleExpand={onToggleTextExpand}
@@ -211,6 +215,7 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
   message,
   isOwn,
   currentUsername,
+  currentUserId,
   textRenderMode = "expanded",
   isCollapsibleText = false,
   onToggleTextExpand,
@@ -244,6 +249,7 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                 message,
                 isOwn,
                 currentUsername,
+                currentUserId,
                 textRenderMode,
                 isCollapsibleText,
                 onToggleTextExpand,
@@ -267,6 +273,7 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                 message,
                 isOwn,
                 currentUsername,
+                currentUserId,
                 textRenderMode,
                 isCollapsibleText,
                 onToggleTextExpand,
@@ -289,6 +296,7 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
                 message,
                 isOwn,
                 currentUsername,
+                currentUserId,
                 textRenderMode,
                 isCollapsibleText,
                 onToggleTextExpand,
@@ -308,6 +316,8 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
           content={message.content}
           isOwn={isOwn}
           currentUsername={currentUsername}
+          currentUserId={currentUserId}
+          mentions={message.mentions}
           renderMode={textRenderMode}
           isCollapsible={isCollapsibleText}
           onToggleExpand={onToggleTextExpand}
@@ -327,6 +337,7 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
             message,
             isOwn,
             currentUsername,
+            currentUserId,
             textRenderMode,
             isCollapsibleText,
             onToggleTextExpand,

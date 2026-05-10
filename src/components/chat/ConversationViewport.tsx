@@ -1,6 +1,8 @@
 import React from "react";
 import type { Attachment, Conversation, Message } from "../../types";
 import { MessageList } from "./MessageList";
+import { ChatTimelineV2 } from "../../features/chat/timeline-v2";
+import { CHAT_TIMELINE_V2_OWNER_ENABLED } from "../../features/chat/config/experienceFlags";
 import type { ChatDensity } from "../../stores/uiStore";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
 
@@ -125,8 +127,12 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
         [onReachedLatest],
       );
 
+      const TimelineImpl = CHAT_TIMELINE_V2_OWNER_ENABLED
+        ? ChatTimelineV2
+        : MessageList;
+
       return (
-        <MessageList
+        <TimelineImpl
           conversationId={conversation.id}
           conversationType={conversation.type}
           currentUserId={currentUserId}
