@@ -1,6 +1,9 @@
 import React from "react";
 import clsx from "clsx";
-import { sanitizeMessageHtml } from "../../utils/messageContent.utils";
+import {
+  sanitizeMessageHtml,
+  shouldTreatMessageContentAsRichText,
+} from "../../utils/messageContent.utils";
 
 interface MessageContentRendererProps {
   content: string;
@@ -15,10 +18,10 @@ export const MessageContentRenderer: React.FC<MessageContentRendererProps> = ({
   isOwn,
   className,
 }) => {
-  const HTML_TAG_RE = /^<(p|div|ul|ol|li|strong|em|b|i|u|s|del|blockquote|h[1-6]|code|pre)\b/i;
-  const isRich =
-    contentFormat === "rich_text" ||
-    (!contentFormat && !!content && HTML_TAG_RE.test(content.trim()));
+  const isRich = shouldTreatMessageContentAsRichText({
+    contentFormat,
+    content,
+  });
 
   if (isRich) {
     const safeHtml = sanitizeMessageHtml(content);
@@ -33,14 +36,13 @@ export const MessageContentRenderer: React.FC<MessageContentRendererProps> = ({
           "[&_em]:italic [&_i]:italic",
           "[&_u]:underline",
           "[&_s]:line-through [&_del]:line-through",
+          "[&_blockquote]:my-1 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:opacity-90",
           "[&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-1",
           "[&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-1",
           "[&_li]:my-0.5",
           "[&_p]:m-0 [&_p+p]:mt-1",
           "[&_code]:rounded [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em]",
-          isOwn
-            ? "[&_code]:bg-text-inverse/15"
-            : "[&_code]:bg-surface-overlay",
+          isOwn ? "[&_code]:bg-text-inverse/15" : "[&_code]:bg-surface-overlay",
           "[&_a]:underline [&_a]:underline-offset-2",
           isOwn
             ? "[&_a]:text-text-inverse [&_a]:hover:text-text-inverse/85"

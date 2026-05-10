@@ -11,7 +11,6 @@ import {
   PencilIcon,
 } from "@heroicons/react/24/outline";
 
-
 import type { Editor } from "@tiptap/react";
 import { AttachmentMenu } from "./AttachmentMenu";
 import { AttachmentPreview } from "./AttachmentPreview";
@@ -26,10 +25,7 @@ import {
   PollCreateDialog,
   type PollCreatePayload,
 } from "../../features/chat/components/PollCreateDialog";
-import {
-  useAutoResizeTextarea,
-  useTypingIndicator,
-} from "../../hooks";
+import { useAutoResizeTextarea, useTypingIndicator } from "../../hooks";
 import { useSendMessage } from "../../features/chat/hooks/useSendMessage";
 import type { ComposerMode } from "../../hooks/useComposerAvailability";
 import type { AttachmentPickerMode } from "../../features/chat/hooks/useSendMessage";
@@ -37,6 +33,7 @@ import type { InputMode, Message } from "../../types";
 import type { AttachmentDraft } from "../../types/attachmentDraft";
 import { UPLOAD_CONFIG } from "../../config";
 import { logMessageDebug } from "../../utils/messageDebug";
+import { getPreviewFromMessage } from "../../utils/messageContent.utils";
 import { InlineNotice, toast } from "../ui";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import {
@@ -49,8 +46,6 @@ import {
   MESSAGE_SOFT_LIMIT,
 } from "../../utils/messageLengthPolicy";
 import { hasRichFormatting } from "../../utils/messageContent.utils";
-
-
 
 export interface MentionCandidate {
   id: string;
@@ -150,8 +145,7 @@ const COMPOSER_VISUAL_STATE_MAP: Record<
   ComposerVisualStyles
 > = {
   idle: {
-    shell:
-      "border-border/45 bg-[hsl(var(--chat-panel-bg))] shadow-none",
+    shell: "border-border/45 bg-[hsl(var(--chat-panel-bg))] shadow-none",
     attachmentButton:
       "text-text-muted hover:bg-surface-hover hover:text-text-primary",
     attachmentDivider: "border-transparent",
@@ -195,7 +189,6 @@ const COMPOSER_VISUAL_STATE_MAP: Record<
     attachmentDivider: "border-danger/18",
   },
 };
-
 
 const buildMentionMatch = (
   text: string,
@@ -263,7 +256,7 @@ const normalizeMentionCandidates = (
 
 const MessageInputComponent = React.forwardRef(function MessageInput(
   props: MessageInputProps,
-  ref: React.ForwardedRef<MessageInputHandle>
+  ref: React.ForwardedRef<MessageInputHandle>,
 ) {
   const {
     value: externalValue,
@@ -575,16 +568,24 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
 
     const html = tipTapRef.current?.getHTML() ?? "";
     const plainText = tipTapRef.current?.getText().trim() ?? draftValue.trim();
-    const contentJson = tipTapRef.current?.getJSON() as Record<string, unknown> | undefined;
+    const contentJson = tipTapRef.current?.getJSON() as
+      | Record<string, unknown>
+      | undefined;
     const isEmpty = tipTapRef.current?.isEmpty() ?? !plainText;
 
     if (isEmpty || !plainText) return;
 
     const hasFormatting = hasRichFormatting(html);
-    const contentFormat = hasFormatting ? ("rich_text" as const) : ("plain_text" as const);
+    const contentFormat = hasFormatting
+      ? ("rich_text" as const)
+      : ("plain_text" as const);
     const content = hasFormatting ? html : plainText;
 
-    const result = await sendTextMessage(content, { contentFormat, contentJson, plainText });
+    const result = await sendTextMessage(content, {
+      contentFormat,
+      contentJson,
+      plainText,
+    });
     if (result === "failed") {
       setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
       return;
@@ -722,7 +723,13 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         isFocused: true,
       });
     },
-    [notifyInput, onChange, recordInputLatency, scheduleComposerResize, updateMentionState],
+    [
+      notifyInput,
+      onChange,
+      recordInputLatency,
+      scheduleComposerResize,
+      updateMentionState,
+    ],
   );
 
   const handleSendAsTextFile = React.useCallback(() => {
@@ -750,7 +757,15 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         defaultValue: "Đã chuyển nội dung thành tệp văn bản để gửi",
       }),
     );
-  }, [clearMentionState, draftValue, onAddFiles, onChange, scheduleComposerResize, stopTypingNow, t]);
+  }, [
+    clearMentionState,
+    draftValue,
+    onAddFiles,
+    onChange,
+    scheduleComposerResize,
+    stopTypingNow,
+    t,
+  ]);
 
   const handleCreatePoll = React.useCallback(
     (payload: PollCreatePayload) => {
@@ -781,7 +796,12 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         const matchLength = mentionMatch.end - mentionMatch.start;
         const to = editor.state.selection.anchor;
         const from = to - matchLength;
-        editor.chain().focus().deleteRange({ from, to }).insertContent(insertion).run();
+        editor
+          .chain()
+          .focus()
+          .deleteRange({ from, to })
+          .insertContent(insertion)
+          .run();
       }
 
       setDraftValue(nextValue);
@@ -835,7 +855,8 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
           return true;
         }
         if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
-          const candidate = mentionSuggestionsRef.current[activeMentionIndexRef.current];
+          const candidate =
+            mentionSuggestionsRef.current[activeMentionIndexRef.current];
           if (candidate) {
             handleMentionSelectRef.current(candidate);
           }
@@ -890,16 +911,16 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   const isSubmitBusy = isUploading || isSending || isPrimarySendLocked;
   const canSend = hasQueueDrafts
     ? !submitDisabled &&
-    !isSubmitBusy &&
-    messageValidation.canSendInlineMessage &&
-    !hasUploadingDrafts &&
-    (hasReadyDrafts || hasText)
+      !isSubmitBusy &&
+      messageValidation.canSendInlineMessage &&
+      !hasUploadingDrafts &&
+      (hasReadyDrafts || hasText)
     : selectedFile
       ? !submitDisabled && !isSubmitBusy && composerMode === "online"
       : !submitDisabled &&
-      !isSubmitBusy &&
-      hasText &&
-      messageValidation.canSendInlineMessage;
+        !isSubmitBusy &&
+        hasText &&
+        messageValidation.canSendInlineMessage;
   const disableAttachmentActions = attachmentsDisabled || isSubmitBusy;
   const sendButtonLabel = t("chat:composer.sendMessage");
   const composerVisualState: ComposerVisualState = disabled
@@ -926,7 +947,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       ? "uploading"
       : composerMode === "offline"
         ? "offline"
-      : composerMode === "slow_mode"
+        : composerMode === "slow_mode"
           ? "slow-mode"
           : "ready-to-send";
   const resolvedCompactStatusTone =
@@ -938,9 +959,6 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   const showCompactStatusBar =
     Boolean(disabledReason) && shouldRenderCompactStatusBar(composerMode);
   const CompactStatusIcon = compactStatusToneIcons[resolvedCompactStatusTone];
-
-
-
 
   React.useEffect(() => {
     if (mode === "reply" || mode === "edit") {
@@ -1110,7 +1128,11 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                   })}
                 </p>
                 <p className="truncate text-xs text-text-muted">
-                  {replyToMessage.content}
+                  {getPreviewFromMessage({
+                    contentFormat: replyToMessage.contentFormat,
+                    plainText: replyToMessage.plainText,
+                    content: replyToMessage.content,
+                  })}
                 </p>
               </div>
             </div>
@@ -1341,25 +1363,40 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                   title="Định dạng tin nhắn (Cmd+Shift+X)"
                   disabled={disabled}
                 >
-                  <div className={clsx("relative flex items-center justify-center", "h-[18px] w-[18px]")}>
-                    <span className="font-bold text-sm tracking-tighter">A</span>
-                    <PencilIcon className="absolute bottom-[2px] -right-[4px] h-[10px] w-[10px]" strokeWidth={2.5} />
+                  <div
+                    className={clsx(
+                      "relative flex items-center justify-center",
+                      "h-[18px] w-[18px]",
+                    )}
+                  >
+                    <span className="font-bold text-sm tracking-tighter">
+                      A
+                    </span>
+                    <PencilIcon
+                      className="absolute bottom-[2px] -right-[4px] h-[10px] w-[10px]"
+                      strokeWidth={2.5}
+                    />
                   </div>
                 </button>
 
                 <div className="relative">
                   <button
                     type="button"
-                    onClick={() => setShowAttachmentMenu((previous) => !previous)}
+                    onClick={() =>
+                      setShowAttachmentMenu((previous) => !previous)
+                    }
                     className={clsx(
                       "chat-composer-attachment inline-flex h-[var(--control-height-md)] w-[var(--control-height-md)] items-center justify-center rounded-md transition-colors",
                       showAttachmentMenu
                         ? "bg-surface-active text-text-primary"
                         : composerVisualStyles.attachmentButton,
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
-                      disableAttachmentActions && "cursor-not-allowed opacity-50",
+                      disableAttachmentActions &&
+                        "cursor-not-allowed opacity-50",
                     )}
-                    aria-label={t("chat:header.moreActions", { defaultValue: "Thêm hành động" })}
+                    aria-label={t("chat:header.moreActions", {
+                      defaultValue: "Thêm hành động",
+                    })}
                     aria-haspopup="menu"
                     aria-expanded={showAttachmentMenu}
                     disabled={disableAttachmentActions}
@@ -1384,128 +1421,128 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
             </div>
 
             {isFormatModeExpanded && (
-                <div className="px-3 pb-2 pt-0">
-                  <RichTextToolbar
-                    editor={tipTapEditor}
-                    onToggleExpand={() => setIsFormatModeExpanded(false)}
-                    disabled={disabled}
-                  />
-                </div>
-              )}
-            </div>
-
-            <SendButton
-              disabled={!canSend}
-              state={sendButtonState}
-              isBusy={isSubmitBusy}
-              data-testid="chat-send-button"
-              onClick={() => {
-                logMessageDebug("MessageInput", "submit_triggered", {
-                  conversationId,
-                  trigger: "button",
-                });
-                void handlePrimarySend();
-              }}
-              ariaLabel={sendButtonLabel}
-              className="shrink-0"
-            />
-          </div>
-
-          <p className="mt-1 px-1 text-[11px] leading-4 text-text-muted">
-            Nhấn Enter để gửi, Shift + Enter để xuống dòng
-          </p>
-
-          {(messageValidation.showCounter ||
-            messageValidation.isOverSoftLimit ||
-            messageValidation.isOverHardLimit) && (
-              <div className="mt-2 flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  {messageValidation.isOverHardLimit ? (
-                    <InlineNotice
-                      tone="error"
-                      className="mb-0"
-                      message={t("chat:composer.hardLimitError", {
-                        max: messageValidation.hardLimit.toLocaleString("vi-VN"),
-                        defaultValue: "Tin nhắn vượt giới hạn 20.000 ký tự.",
-                      })}
-                      action={
-                        onAddFiles ? (
-                          <button
-                            type="button"
-                            onClick={handleSendAsTextFile}
-                            className="text-xs font-semibold underline-offset-2 hover:underline"
-                          >
-                            {t("chat:composer.sendAsTextFile", {
-                              defaultValue: "Gửi dưới dạng tệp .txt",
-                            })}
-                          </button>
-                        ) : undefined
-                      }
-                    />
-                  ) : messageValidation.isOverSoftLimit || showLongPasteNotice ? (
-                    <InlineNotice
-                      tone="warning"
-                      className="mb-0"
-                      message={
-                        showLongPasteNotice
-                          ? t("chat:composer.longPasteNotice", {
-                            defaultValue:
-                              "Nội dung quá dài. Bạn có thể gửi dưới dạng tệp văn bản.",
-                          })
-                          : t("chat:composer.softLimitWarning", {
-                            defaultValue:
-                              "Tin nhắn khá dài. Hãy cân nhắc gửi dưới dạng tệp nếu là log hoặc tài liệu.",
-                          })
-                      }
-                      action={
-                        onAddFiles ? (
-                          <button
-                            type="button"
-                            onClick={handleSendAsTextFile}
-                            className="text-xs font-semibold underline-offset-2 hover:underline"
-                          >
-                            {t("chat:composer.sendAsTextFile", {
-                              defaultValue: "Gửi dưới dạng tệp .txt",
-                            })}
-                          </button>
-                        ) : undefined
-                      }
-                    />
-                  ) : null}
-                </div>
-
-                {messageValidation.showCounter && (
-                  <p
-                    className={clsx(
-                      "shrink-0 text-[11px] font-medium",
-                      messageValidation.isOverHardLimit
-                        ? "text-danger"
-                        : messageValidation.isOverSoftLimit
-                          ? "text-warning"
-                          : "text-text-muted",
-                    )}
-                  >
-                    {messageValidation.charCount.toLocaleString("vi-VN")}/
-                    {messageValidation.hardLimit.toLocaleString("vi-VN")}
-                  </p>
-                )}
+              <div className="px-3 pb-2 pt-0">
+                <RichTextToolbar
+                  editor={tipTapEditor}
+                  onToggleExpand={() => setIsFormatModeExpanded(false)}
+                  disabled={disabled}
+                />
               </div>
             )}
+          </div>
 
-          {onShareContact && currentUserId && (
-            <ShareContactModal
-              isOpen={isShareContactOpen}
-              currentUserId={currentUserId}
-              onClose={() => setIsShareContactOpen(false)}
-              onShare={onShareContact}
-            />
-          )}
-
-          <PollCreateDialog
-            isOpen={isPollDialogOpen}
-            onClose={() => setIsPollDialogOpen(false)}
-            onSubmit={handleCreatePoll}
+          <SendButton
+            disabled={!canSend}
+            state={sendButtonState}
+            isBusy={isSubmitBusy}
+            data-testid="chat-send-button"
+            onClick={() => {
+              logMessageDebug("MessageInput", "submit_triggered", {
+                conversationId,
+                trigger: "button",
+              });
+              void handlePrimarySend();
+            }}
+            ariaLabel={sendButtonLabel}
+            className="shrink-0"
           />
+        </div>
+
+        <p className="mt-1 px-1 text-[11px] leading-4 text-text-muted">
+          Nhấn Enter để gửi, Shift + Enter để xuống dòng
+        </p>
+
+        {(messageValidation.showCounter ||
+          messageValidation.isOverSoftLimit ||
+          messageValidation.isOverHardLimit) && (
+          <div className="mt-2 flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              {messageValidation.isOverHardLimit ? (
+                <InlineNotice
+                  tone="error"
+                  className="mb-0"
+                  message={t("chat:composer.hardLimitError", {
+                    max: messageValidation.hardLimit.toLocaleString("vi-VN"),
+                    defaultValue: "Tin nhắn vượt giới hạn 20.000 ký tự.",
+                  })}
+                  action={
+                    onAddFiles ? (
+                      <button
+                        type="button"
+                        onClick={handleSendAsTextFile}
+                        className="text-xs font-semibold underline-offset-2 hover:underline"
+                      >
+                        {t("chat:composer.sendAsTextFile", {
+                          defaultValue: "Gửi dưới dạng tệp .txt",
+                        })}
+                      </button>
+                    ) : undefined
+                  }
+                />
+              ) : messageValidation.isOverSoftLimit || showLongPasteNotice ? (
+                <InlineNotice
+                  tone="warning"
+                  className="mb-0"
+                  message={
+                    showLongPasteNotice
+                      ? t("chat:composer.longPasteNotice", {
+                          defaultValue:
+                            "Nội dung quá dài. Bạn có thể gửi dưới dạng tệp văn bản.",
+                        })
+                      : t("chat:composer.softLimitWarning", {
+                          defaultValue:
+                            "Tin nhắn khá dài. Hãy cân nhắc gửi dưới dạng tệp nếu là log hoặc tài liệu.",
+                        })
+                  }
+                  action={
+                    onAddFiles ? (
+                      <button
+                        type="button"
+                        onClick={handleSendAsTextFile}
+                        className="text-xs font-semibold underline-offset-2 hover:underline"
+                      >
+                        {t("chat:composer.sendAsTextFile", {
+                          defaultValue: "Gửi dưới dạng tệp .txt",
+                        })}
+                      </button>
+                    ) : undefined
+                  }
+                />
+              ) : null}
+            </div>
+
+            {messageValidation.showCounter && (
+              <p
+                className={clsx(
+                  "shrink-0 text-[11px] font-medium",
+                  messageValidation.isOverHardLimit
+                    ? "text-danger"
+                    : messageValidation.isOverSoftLimit
+                      ? "text-warning"
+                      : "text-text-muted",
+                )}
+              >
+                {messageValidation.charCount.toLocaleString("vi-VN")}/
+                {messageValidation.hardLimit.toLocaleString("vi-VN")}
+              </p>
+            )}
+          </div>
+        )}
+
+        {onShareContact && currentUserId && (
+          <ShareContactModal
+            isOpen={isShareContactOpen}
+            currentUserId={currentUserId}
+            onClose={() => setIsShareContactOpen(false)}
+            onShare={onShareContact}
+          />
+        )}
+
+        <PollCreateDialog
+          isOpen={isPollDialogOpen}
+          onClose={() => setIsPollDialogOpen(false)}
+          onSubmit={handleCreatePoll}
+        />
       </ConversationLane>
     </div>
   );

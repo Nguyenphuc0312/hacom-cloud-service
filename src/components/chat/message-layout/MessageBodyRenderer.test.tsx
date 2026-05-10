@@ -54,6 +54,19 @@ const buildContactMessage = (contactUserId: string): Message =>
     attachments: [],
   }) as unknown as Message;
 
+const buildTextMessage = (overrides: Partial<Message> = {}): Message =>
+  ({
+    id: "msg-text-1",
+    conversationId: "conv-text-1",
+    type: MessageType.TEXT,
+    content: "hello",
+    contentFormat: "plain_text",
+    attachments: [],
+    senderId: "user-1",
+    senderName: "Alice",
+    ...overrides,
+  }) as unknown as Message;
+
 describe("MessageBodyRenderer contact-card direct DM dispatch", () => {
   beforeEach(() => {
     dispatchContactProfileViewMock.mockReset();
@@ -94,5 +107,35 @@ describe("MessageBodyRenderer contact-card direct DM dispatch", () => {
     expect(toastErrorMock).toHaveBeenCalledWith(
       "This contact card cannot start a chat.",
     );
+  });
+
+  it("renders legacy HTML content safely even when contentFormat is plain_text", () => {
+    const { container } = render(
+      <MessageBodyRenderer
+        message={buildTextMessage({
+          content: "<p><u>hihi</u></p>",
+          contentFormat: "plain_text",
+        })}
+        isOwn={false}
+      />,
+    );
+
+    expect(screen.getByText("hihi")).toBeInTheDocument();
+    expect(container.querySelector("u")).not.toBeNull();
+  });
+
+  it("keeps non-allowlisted angle-bracket text as literal text", () => {
+    const { container } = render(
+      <MessageBodyRenderer
+        message={buildTextMessage({
+          content: "price is <abc> now",
+          contentFormat: "plain_text",
+        })}
+        isOwn={false}
+      />,
+    );
+
+    expect(screen.getByText("price is <abc> now")).toBeInTheDocument();
+    expect(container.querySelector("abc")).toBeNull();
   });
 });

@@ -17,13 +17,13 @@ const sanitizeSchema = {
   ...defaultSchema,
   attributes: {
     ...defaultSchema.attributes,
-    a: [...(defaultSchema.attributes?.a ?? []), 'target', 'rel'],
+    a: [...(defaultSchema.attributes?.a ?? []), "target", "rel"],
   },
 };
 
 interface TextMessageProps {
   content: string;
-  contentFormat?: 'plain_text' | 'markdown';
+  contentFormat?: "plain_text" | "markdown" | "rich_text";
   isOwn: boolean;
   currentUsername?: string;
   renderMode?: LongMessageRenderMode;
@@ -121,20 +121,23 @@ export const TextMessage: React.FC<TextMessageProps> = ({
   onToggleExpand,
   className,
 }) => {
-  const isMarkdown = contentFormat === 'markdown';
+  const isMarkdown = contentFormat === "markdown";
   const { t } = useTranslation();
   const displayContent =
     isCollapsible && renderMode === "collapsed"
       ? getCollapsedTextPreview(content)
       : content;
   const structuredBlockContent = getStructuredBlockContent(displayContent);
-  const fullStructuredBlockContent = getStructuredBlockContent(content) ?? content;
+  const fullStructuredBlockContent =
+    getStructuredBlockContent(content) ?? content;
   const onlyEmoji = isOnlyEmoji(displayContent);
   const shouldLinkify =
     displayContent.length <= MESSAGE_LINKIFY_MAX_CHARS &&
     !structuredBlockContent;
   const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const parts = shouldLinkify ? displayContent.split(urlRegex) : [displayContent];
+  const parts = shouldLinkify
+    ? displayContent.split(urlRegex)
+    : [displayContent];
 
   if (isMarkdown && !structuredBlockContent) {
     return (
@@ -142,9 +145,7 @@ export const TextMessage: React.FC<TextMessageProps> = ({
         <div
           className={clsx(
             "chat-message-markdown prose prose-sm max-w-none break-words [overflow-wrap:anywhere]",
-            isOwn
-              ? "prose-invert text-text-inverse"
-              : "text-text-primary",
+            isOwn ? "prose-invert text-text-inverse" : "text-text-primary",
           )}
         >
           <ReactMarkdown
