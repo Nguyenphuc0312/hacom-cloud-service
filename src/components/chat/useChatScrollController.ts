@@ -155,6 +155,10 @@ const MAX_SCROLL_SESSIONS = 80;
 const SMOOTH_SCROLL_MAX_DISTANCE_PX = 640;
 // Pinned hysteresis thresholds live in scrollController.ts: ENTER=24px, LEAVE=80px.
 // NEAR_BOTTOM_THRESHOLD_PX (96) is used separately for append-follow decisions.
+// Milliseconds after last wheel/touch event before we consider user scroll idle.
+const USER_SCROLL_IDLE_MS = 180;
+// Minimum gap between consecutive load-older triggers to prevent looping on prepend restore.
+const LOAD_OLDER_COOLDOWN_MS = 800;
 
 const scrollSessions = new Map<string, ScrollSession>();
 
@@ -314,6 +318,12 @@ export const useChatScrollController = ({
   const firstRenderMeasuredRef = React.useRef<string | null>(null);
   const appendStartedAtRef = React.useRef<number | null>(null);
   const lastOpeningBottomCommandKeyRef = React.useRef<string | null>(null);
+  // Set to true while wheel/touch scroll is active; cleared after USER_SCROLL_IDLE_MS.
+  // Prevents ResizeObserver anchor-restore from fighting user input.
+  const userScrollingRef = React.useRef(false);
+  const userScrollIdleTimerRef = React.useRef<number | null>(null);
+  // Timestamp of last load-older trigger to prevent re-entry before prepend settles.
+  const lastLoadOlderAtRef = React.useRef(0);
 
   const latestKey = getChatMessageLatestKey(messages);
 
@@ -1291,6 +1301,20 @@ export const useChatScrollController = ({
 
         const currentScrollTop = outer.scrollTop;
         hasUserScrollSinceOpenRef.current = true;
+
+        // Mark user as actively scrolling. Any anchor-restore logic that runs
+        // concurrently (ResizeObserver, measurement correction) must yield to
+        // the user's intent. The flag is cleared after USER_SCROLL_IDLE_MS of
+        // inactivity so that legitimate restores can still happen once the user
+        // stops scrolling.
+        userScrollingRef.current = true;
+        if (userScrollIdleTimerRef.current !== null) {
+          window.clearTimeout(userScrollIdleTimerRef.current);
+        }
+        userScrollIdleTimerRef.current = window.setTimeout(() => {
+          userScrollingRef.current = false;
+          userScrollIdleTimerRef.current = null;
+        }, USER_SCROLL_IDLE_MS);
         const pinnedState = resolvePinnedToBottom(outer, NEAR_BOTTOM_THRESHOLD_PX, {
           previouslyPinnedToBottom: isPinnedRef.current,
         });
@@ -1320,8 +1344,10 @@ export const useChatScrollController = ({
           hasMoreOlder &&
           !isLoadingOlder &&
           modeRef.current !== "loading_older" &&
-          currentScrollTop < LOAD_MORE_TRIGGER_PX
+          currentScrollTop < LOAD_MORE_TRIGGER_PX &&
+          performance.now() - lastLoadOlderAtRef.current >= LOAD_OLDER_COOLDOWN_MS
         ) {
+          lastLoadOlderAtRef.current = performance.now();
           const metrics = getMetrics();
           const anchor = captureVisibleAnchor();
           loadingOlderAnchorRef.current = anchor
@@ -1411,6 +1437,11 @@ export const useChatScrollController = ({
     messageId: string | null;
     offsetFromTop: number;
   } | null) => {
+    // While the user is actively scrolling, any concurrent resize/measurement
+    // must NOT restore the anchor. Doing so would fight user input and create
+    // the "scroll stuck" loop with very tall messages. The idle timer in
+    // handleUserScroll resets this flag after USER_SCROLL_IDLE_MS of inactivity.
+    if (userScrollingRef.current) return;
     if (modeRef.current === "loading_older") return;
     if (isPinnedRef.current) {
       scheduleBottom(
@@ -1444,6 +1475,10 @@ export const useChatScrollController = ({
       }
       if (scrollRafRef.current !== null) {
         cancelAnimationFrame(scrollRafRef.current);
+      }
+      if (userScrollIdleTimerRef.current !== null) {
+        window.clearTimeout(userScrollIdleTimerRef.current);
+        userScrollIdleTimerRef.current = null;
       }
     },
     [],

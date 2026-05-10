@@ -680,6 +680,34 @@ body {
   line-height: 1.3rem;
 }
 
+/* Prevent abnormally long message content from breaking bubble layout or
+   causing horizontal overflow that widens the virtualizer row beyond viewport. */
+.chat-message-text,
+.chat-message-markdown {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.chat-message-markdown pre,
+.chat-message-text pre {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.chat-message-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.chat-message-markdown img {
+  max-width: 100%;
+  height: auto;
+}
+
 .chat-shell[data-chat-layout-profile="mobile-compact"] .chat-composer-root {
   padding-top: 0;
   padding-bottom: max(env(safe-area-inset-bottom), 6px);
