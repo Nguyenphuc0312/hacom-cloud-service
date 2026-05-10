@@ -365,7 +365,7 @@ export const useSendMessage = ({
             : "optimistic";
         }
 
-        const sendResult = sendMessage(text, undefined, undefined, MessageTypeEnum.TEXT, options?.contentFormat, options?.contentJson, options?.plainText);
+        const sendResult = sendMessage(text, undefined, undefined, MessageTypeEnum.TEXT, undefined, options?.contentFormat, options?.contentJson, options?.plainText);
         const disposition = resolveDisposition(sendResult);
         return disposition === "sent" ? "optimistic" : disposition;
       } catch (error) {
