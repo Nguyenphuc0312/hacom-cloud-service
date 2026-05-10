@@ -565,7 +565,10 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       return;
     }
 
-    const result = await sendTextMessage(draftValue);
+    const contentFormat = /(\*\*[\s\S]+?\*\*|\*[\s\S]+?\*|~~[\s\S]+?~~|`[\s\S]+?`|__[\s\S]+?__|^\s*[-*+]\s|\d+\.\s)/m.test(draftValue)
+      ? ('markdown' as const)
+      : ('plain_text' as const);
+    const result = await sendTextMessage(draftValue, { contentFormat });
     if (result === "failed") {
       setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
       return;

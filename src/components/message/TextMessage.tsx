@@ -2,6 +2,9 @@ import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { ClipboardDocumentIcon } from "@heroicons/react/24/outline";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { isOnlyEmoji } from "../../utils/messageHelpers";
 import { toast } from "../ui";
 import {
@@ -10,8 +13,17 @@ import {
 } from "../../utils/longMessagePolicy";
 import { MESSAGE_LINKIFY_MAX_CHARS } from "../../utils/messageLengthPolicy";
 
+const sanitizeSchema = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    a: [...(defaultSchema.attributes?.a ?? []), 'target', 'rel'],
+  },
+};
+
 interface TextMessageProps {
   content: string;
+  contentFormat?: 'plain_text' | 'markdown';
   isOwn: boolean;
   currentUsername?: string;
   renderMode?: LongMessageRenderMode;
@@ -101,6 +113,7 @@ const renderWithMentions = (
 
 export const TextMessage: React.FC<TextMessageProps> = ({
   content,
+  contentFormat,
   isOwn,
   currentUsername,
   renderMode = "expanded",
@@ -108,6 +121,7 @@ export const TextMessage: React.FC<TextMessageProps> = ({
   onToggleExpand,
   className,
 }) => {
+  const isMarkdown = contentFormat === 'markdown';
   const { t } = useTranslation();
   const displayContent =
     isCollapsible && renderMode === "collapsed"
@@ -121,6 +135,58 @@ export const TextMessage: React.FC<TextMessageProps> = ({
     !structuredBlockContent;
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const parts = shouldLinkify ? displayContent.split(urlRegex) : [displayContent];
+
+  if (isMarkdown && !structuredBlockContent) {
+    return (
+      <div className="space-y-2">
+        <div
+          className={clsx(
+            "chat-message-markdown prose prose-sm max-w-none break-words [overflow-wrap:anywhere]",
+            isOwn
+              ? "prose-invert text-text-inverse"
+              : "text-text-primary",
+          )}
+        >
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[[rehypeSanitize, sanitizeSchema]]}
+            components={{
+              a: ({ children, href, ...props }) => (
+                <a
+                  {...props}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={clsx(
+                    "underline underline-offset-2",
+                    isOwn ? "text-text-inverse" : "text-primary",
+                  )}
+                >
+                  {children}
+                </a>
+              ),
+            }}
+          >
+            {displayContent}
+          </ReactMarkdown>
+        </div>
+        {isCollapsible && onToggleExpand ? (
+          <button
+            type="button"
+            onClick={onToggleExpand}
+            className={clsx(
+              "text-xs font-semibold underline-offset-2 hover:underline",
+              isOwn ? "text-text-inverse" : "text-primary",
+            )}
+          >
+            {renderMode === "collapsed"
+              ? t("chat:message.expandLong", { defaultValue: "Xem them" })
+              : t("chat:message.collapseLong", { defaultValue: "Thu gon" })}
+          </button>
+        ) : null}
+      </div>
+    );
+  }
 
   if (structuredBlockContent) {
     return (
