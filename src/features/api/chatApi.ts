@@ -46,6 +46,7 @@ export interface SendMessageInput {
   conversationId: string;
   clientMessageId: string;
   content: string;
+  contentFormat?: 'plain_text' | 'markdown';
   type?: Message["type"];
   replyToId?: string;
   senderId?: string;
@@ -234,6 +235,7 @@ const buildOptimisticMessage = (input: SendMessageInput): Message => {
     senderName: input.senderName || "",
     senderAvatar: input.senderAvatar,
     content: input.content,
+    contentFormat: input.contentFormat,
     type: input.type || MessageType.TEXT,
     status: MessageStatus.SENDING,
     sendState: "sending",
@@ -396,6 +398,7 @@ export const chatApi = createApi({
         try {
           const response = await messageApi.sendMessage(input.conversationId, {
             content: input.content,
+            contentFormat: input.contentFormat,
             type: input.type,
             replyToId: input.replyToId,
             clientMessageId: input.clientMessageId,

@@ -51,7 +51,7 @@ interface UseSendMessageResult {
   isUploading: boolean;
   isSending: boolean;
   selectFile: (file: File) => boolean;
-  sendTextMessage: (content: string) => Promise<SendDisposition>;
+  sendTextMessage: (content: string, options?: { contentFormat?: 'plain_text' | 'markdown' }) => Promise<SendDisposition>;
   sendAttachmentMessage: () => Promise<SendDisposition>;
   clearSelectedFile: () => void;
   cancelUpload: () => void;
@@ -229,6 +229,7 @@ export const useSendMessage = ({
       replyTo?: Message,
       fileMeta?: Attachment | Attachment[] | undefined,
       type: MessageType = MessageTypeEnum.TEXT,
+      contentFormat?: 'plain_text' | 'markdown',
     ) => {
       if (onSend) {
         return Promise.resolve(onSend(content, fileMeta, type));
@@ -293,6 +294,7 @@ export const useSendMessage = ({
           clientMessageId,
           localId,
           content,
+          contentFormat,
           type,
           replyToId: replyTo?.id,
           senderId: currentUser?.id,
@@ -337,7 +339,7 @@ export const useSendMessage = ({
   );
 
   const sendTextMessage = React.useCallback(
-    async (content: string) => {
+    async (content: string, options?: { contentFormat?: 'plain_text' | 'markdown' }) => {
       const text = content.trim();
       if (!text || disabled) return "failed";
 
@@ -356,7 +358,7 @@ export const useSendMessage = ({
             : "optimistic";
         }
 
-        const sendResult = sendMessage(text);
+        const sendResult = sendMessage(text, undefined, undefined, MessageTypeEnum.TEXT, options?.contentFormat);
         const disposition = resolveDisposition(sendResult);
         return disposition === "sent" ? "optimistic" : disposition;
       } catch (error) {

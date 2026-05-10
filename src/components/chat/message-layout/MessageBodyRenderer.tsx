@@ -196,6 +196,7 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
             : (
               <TextMessage
                 content={message.content}
+                contentFormat={message.contentFormat}
                 isOwn={isOwn}
                 currentUsername={currentUsername}
                 renderMode={textRenderMode}
@@ -221,6 +222,7 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
             : (
               <TextMessage
                 content={message.content}
+                contentFormat={message.contentFormat}
                 isOwn={isOwn}
                 currentUsername={currentUsername}
                 renderMode={textRenderMode}
@@ -245,6 +247,7 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
             : (
               <TextMessage
                 content={message.content}
+                contentFormat={message.contentFormat}
                 isOwn={isOwn}
                 currentUsername={currentUsername}
                 renderMode={textRenderMode}

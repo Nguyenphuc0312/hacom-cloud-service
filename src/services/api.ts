@@ -1025,6 +1025,7 @@ export const messageApi = {
     conversationId: string,
     data: {
       content: string;
+      contentFormat?: 'plain_text' | 'markdown';
       type?: Message["type"];
       replyToId?: string;
       senderName?: string;
