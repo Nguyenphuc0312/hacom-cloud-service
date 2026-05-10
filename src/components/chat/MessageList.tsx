@@ -1441,7 +1441,11 @@ const MessageListComponent: React.FC<MessageListProps> = ({
       scrollMode === "scrolling_to_bottom" ||
       scrollMode === "appending_new_message";
 
-    if (isPinnedToBottom || isInTransitToBottom) {
+    // Use ref instead of React state to avoid stale closure: finishBottom sets
+    // isPinnedRef.current synchronously, but setIsPinnedToBottom(true) is async.
+    // If the virtualizer size-change fires before React re-renders, isPinnedToBottom
+    // (state) would still be false, causing incorrect anchor-preserve behavior.
+    if (isPinnedToBottomRef.current || isInTransitToBottom) {
       pendingResizeAnchorRef.current = null;
       handleMediaResized();
       return;
@@ -1456,7 +1460,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     requestAnimationFrame(() => {
       handleMediaResized(anchor);
     });
-  }, [handleMediaResized, isPinnedToBottom, scrollMode]);
+  }, [handleMediaResized, scrollMode]);
 
   const handleTimelineItemSizeChange = React.useCallback(
     ({ index, key, delta }: { index: number; key: string; delta: number }) => {
