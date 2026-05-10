@@ -132,7 +132,7 @@ export interface ChatScrollControllerResult {
   isPinnedToBottom: boolean;
   pendingNewMessages: number;
   firstDetachedUnreadMessageId: string | null;
-  handleUserScroll: (scrollTop: number) => void;
+  handleUserScroll: (scrollTop?: number) => void;
   jumpToLatest: () => void;
   requestOffset: (
     offset: number,
@@ -1289,7 +1289,7 @@ export const useChatScrollController = ({
     traceScrollDecision,
   ]);
 
-  const handleUserScroll = React.useCallback(
+   const handleUserScroll = React.useCallback(
     () => {
       // Coalesce scroll events — only process one per animation frame
       if (scrollRafRef.current !== null) return;

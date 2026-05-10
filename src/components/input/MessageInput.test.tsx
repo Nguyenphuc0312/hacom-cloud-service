@@ -1,7 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Provider } from "react-redux";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { MessageInput } from "./MessageInput";
 import { store } from "../../store";
@@ -20,7 +20,9 @@ vi.mock("react-i18next", async (importOriginal) => {
 
 // Mock TipTapEditor to behave like a standard input for easier testing
 vi.mock("./TipTapEditor", () => ({
-  TipTapEditor: React.forwardRef(({ onContentChange, "data-testid": testId, disabled }: any, ref: any) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  TipTapEditor: React.forwardRef((props: any, ref: any) => {
+    const { onContentChange, "data-testid": testId, disabled } = props;
     const [value, setValue] = React.useState("");
 
     React.useImperativeHandle(ref, () => ({
@@ -195,7 +197,7 @@ describe("MessageInput send flow", () => {
   });
 
   it("prevents double send while the first submit is still pending", async () => {
-    let resolveSend: (value: any) => void = () => undefined;
+    let resolveSend: (value: unknown) => void = () => undefined;
     const onSend = vi.fn(
       () =>
         new Promise((resolve) => {
