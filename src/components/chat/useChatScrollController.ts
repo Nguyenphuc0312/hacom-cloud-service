@@ -433,10 +433,10 @@ export const useChatScrollController = ({
         isPinnedToBottom: isPinnedRef.current,
         anchor: anchor
           ? {
-              ...anchor,
-              scrollTop: metrics.scrollTop,
-              scrollHeight: metrics.scrollHeight,
-            }
+            ...anchor,
+            scrollTop: metrics.scrollTop,
+            scrollHeight: metrics.scrollHeight,
+          }
           : null,
         scrollTop: metrics.scrollTop,
         updatedAt: Date.now(),
@@ -512,11 +512,11 @@ export const useChatScrollController = ({
     const outer = outerRef.current;
     return Boolean(
       outer &&
-        outer.clientHeight > 0 &&
-        viewportHeight > 0 &&
-        !isInitialLoading &&
-        itemCount > 0 &&
-        totalSize > 0,
+      outer.clientHeight > 0 &&
+      viewportHeight > 0 &&
+      !isInitialLoading &&
+      itemCount > 0 &&
+      totalSize > 0,
     );
   }, [isInitialLoading, itemCount, outerRef, totalSize, viewportHeight]);
 
@@ -791,10 +791,10 @@ export const useChatScrollController = ({
           }
           openingRef.current = openingRef.current
             ? {
-                ...openingRef.current,
-                restoreApplied: true,
-                bottomApplied: false,
-              }
+              ...openingRef.current,
+              restoreApplied: true,
+              bottomApplied: false,
+            }
             : null;
           isPinnedRef.current = false;
           setIsPinnedToBottom(false);
@@ -1200,9 +1200,9 @@ export const useChatScrollController = ({
     const opening = openingRef.current;
     const openingStillSettling = Boolean(
       opening &&
-        opening.conversationId === conversationId &&
-        !opening.bottomApplied &&
-        !opening.restoreApplied,
+      opening.conversationId === conversationId &&
+      !opening.bottomApplied &&
+      !opening.restoreApplied,
     );
     const metrics = getMetrics();
     const nearBottom =
@@ -1353,16 +1353,16 @@ export const useChatScrollController = ({
           const anchor = captureVisibleAnchor();
           loadingOlderAnchorRef.current = anchor
             ? {
-                ...anchor,
-                scrollTop: metrics.scrollTop,
-                scrollHeight: metrics.scrollHeight,
-              }
+              ...anchor,
+              scrollTop: metrics.scrollTop,
+              scrollHeight: metrics.scrollHeight,
+            }
             : {
-                messageId: null,
-                offsetFromTop: 0,
-                scrollTop: metrics.scrollTop,
-                scrollHeight: metrics.scrollHeight,
-              };
+              messageId: null,
+              offsetFromTop: 0,
+              scrollTop: metrics.scrollTop,
+              scrollHeight: metrics.scrollHeight,
+            };
           setControllerMode("loading_older", "LOAD_OLDER_START", "load_older_start");
           traceScrollDecision({
             event: "LOAD_OLDER_START",

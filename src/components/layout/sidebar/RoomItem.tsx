@@ -312,7 +312,7 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
 
           <p
             className={clsx(
-              "mt-0.5 overflow-hidden pr-1 text-left",
+              "mt-0.5 truncate pr-1 text-left",
               isDense
                 ? "text-[11px] leading-[0.95rem]"
                 : "text-[12px] leading-[1rem]",
@@ -321,9 +321,6 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
             )}
             title={previewText || t("sidebar:room.noMessagesYet")}
             style={{
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
               fontWeight:
                 previewState === "failed" || shouldEmphasizeUnreadPreview
                   ? "var(--chat-unread-preview-weight)"

@@ -9,10 +9,10 @@ import {
   Cog6ToothIcon,
   FolderIcon,
   QuestionMarkCircleIcon,
-  UserGroupIcon,
 } from "@heroicons/react/24/outline";
 import type { UserSummary } from "../../types";
 import { ROUTE_PATHS } from "../../router/paths";
+import ContactsAddressBookOutlineIcon from "./ContactsAddressBookOutlineIcon";
 
 type SideRailItem = {
   id: string;
@@ -41,7 +41,7 @@ const railItems: SideRailItem[] = [
   {
     id: "contacts",
     label: "Danh bạ",
-    icon: UserGroupIcon,
+    icon: ContactsAddressBookOutlineIcon,
     to: ROUTE_PATHS.FRIENDS,
     activeWhen: (pathname) =>
       pathname === ROUTE_PATHS.FRIENDS ||
@@ -124,7 +124,6 @@ const SideRailButton: React.FC<{
       aria-hidden="true"
     />
   );
-
   if (item.to) {
     return (
       <NavLink

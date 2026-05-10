@@ -76,12 +76,37 @@ import type {
   Conversation as SharedConversation,
   ConversationDetail as SharedConversationDetail,
   Message as SharedMessage,
+  MessageSummary as SharedMessageSummary,
   TypingUser as SharedTypingUser,
 } from "@hacom/chat-shared-types/chat";
 import { MessageStatus as SharedMessageStatus } from "@hacom/chat-shared-types/chat";
 import type { User, UserSummary as SharedUserSummary } from "@hacom/chat-shared-types/auth";
 
 export type TypingUser = SharedTypingUser;
+
+/**
+ * Rich mention object used by the client. The shared-types package represents
+ * mentions as plain `string[]` (userId), but the API response and UI need a
+ * resolved display name. This type is client-owned and not augmented into
+ * @hacom/chat-shared-types to avoid version-skew conflicts.
+ */
+export interface Mention {
+  userId: string;
+  displayName: string;
+  employeeCode?: string;
+  avatarUrl?: string;
+}
+
+/**
+ * Extended reply-preview summary used in Message.replyToMessage. Adds
+ * contentFormat so the reply bubble can render markdown/rich-text previews.
+ * Uses Omit so the field is safe to add even if shared-types later defines it
+ * with a narrower type.
+ */
+export type ReplyMessageSummary = Omit<SharedMessageSummary, "contentFormat" | "mentions"> & {
+  contentFormat?: "plain_text" | "rich_text" | "markdown";
+  mentions?: Mention[];
+};
 
 export type Conversation = Omit<
   SharedConversation,
@@ -172,6 +197,11 @@ export interface Message
     | "serverTs"
     | "updatedAt"
     | "lastSendAttemptAt"
+    // Client overrides — use Omit so adding these to shared-types later with a
+    // narrower type does not cause TS2717 conflicts.
+    | "contentFormat"
+    | "mentions"
+    | "replyToMessage"
   > {
   id: string;
   localId?: string;
@@ -182,8 +212,16 @@ export interface Message
   messageSeq?: number;
   serverTs?: Date | string;
   localOrder?: number;
+  /** Content format hint. "markdown" is client-only; server sends plain_text or rich_text. */
+  contentFormat?: "plain_text" | "rich_text" | "markdown";
+  /** Pre-extracted plain-text version of rich/markdown content. */
+  plainText?: string;
   /** Structured JSON content (e.g. ProseMirror document for rich-text). */
   contentJson?: Record<string, unknown>;
+  /** Resolved mention objects. Shared-types uses string[], client uses rich objects. */
+  mentions?: Mention[];
+  /** Reply preview with extended contentFormat support. */
+  replyToMessage?: ReplyMessageSummary;
   transportStatus?:
     | "draft"
     | "optimistic"

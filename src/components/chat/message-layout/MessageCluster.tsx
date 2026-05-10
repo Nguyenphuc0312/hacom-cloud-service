@@ -134,20 +134,20 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   });
   const replySenderDisplayName = message.replyToMessage
     ? resolveUserDisplayName({
-        displayName: message.replyToMessage.senderName,
-        username: message.replyToMessage.senderId,
-      })
+      displayName: message.replyToMessage.senderName,
+      username: message.replyToMessage.senderId,
+    })
     : null;
   const forwardedFromName = message.forwardedFrom
     ? resolveUserDisplayName({
-        displayName:
-          (message.forwardedFrom as { displayName?: string | null })
-            .displayName || message.forwardedFrom.username,
-        username: message.forwardedFrom.username,
-        employeeCode: (
-          message.forwardedFrom as { employeeCode?: string | null }
-        ).employeeCode,
-      })
+      displayName:
+        (message.forwardedFrom as { displayName?: string | null })
+          .displayName || message.forwardedFrom.username,
+      username: message.forwardedFrom.username,
+      employeeCode: (
+        message.forwardedFrom as { employeeCode?: string | null }
+      ).employeeCode,
+    })
     : null;
   const replyTargetMessageId = message.replyTo || message.replyToMessage?.id;
 
@@ -368,37 +368,36 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                 onClick={handleReplyPreviewClick}
                 disabled={!replyTargetMessageId || isSelectionMode}
                 className={clsx(
-                  "flex w-full items-center border-l-2 text-left transition-colors",
+                  "flex w-full items-center border-l-[3px] text-left transition-colors",
                   contract.cluster.replyPreview,
                   replyTargetMessageId && !isSelectionMode
-                    ? "cursor-pointer hover:bg-black/5"
+                    ? "cursor-pointer hover:opacity-90"
                     : "cursor-default",
                   isOwn
-                    ? "border-text-inverse/35 bg-text-inverse/8 text-text-inverse/75"
-                    : "border-primary/45 bg-surface-hover/55 text-text-secondary",
+                    ? "border-[#0068ff] bg-[#f0f5ff] text-[#081c36]"
+                    : "border-[#0068ff] bg-[#eef1f6] text-[#081c36]",
                 )}
               >
-                <ReplyTypeIcon
-                  type={message.replyToMessage.type}
-                  className={clsx(
-                    "h-3.5 w-3.5 shrink-0",
-                    isOwn ? "text-text-inverse/60" : "text-text-muted",
-                  )}
-                />
-                <div className="min-w-0">
-                  <span className="font-semibold">
-                    {replySenderDisplayName}
-                  </span>
-                  <p className="mt-0.5 truncate leading-snug opacity-90">
-                    {message.replyToMessage.isDeleted
-                      ? t("chat:message.deleted", {
+                <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                  <ReplyTypeIcon
+                    type={message.replyToMessage.type}
+                    className="h-3.5 w-3.5 shrink-0 text-[#72808e]"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-[11.5px] font-bold leading-none text-[#0068ff]">
+                      {replySenderDisplayName}
+                    </span>
+                    <p className="mt-1 truncate text-[12.5px] leading-tight text-[#47525d]">
+                      {message.replyToMessage.isDeleted
+                        ? t("chat:message.deleted", {
                           defaultValue: "Message deleted",
                         })
-                      : getPreviewFromMessage({
+                        : getPreviewFromMessage({
                           contentFormat: message.replyToMessage.contentFormat,
                           content: message.replyToMessage.content,
                         })}
-                  </p>
+                    </p>
+                  </div>
                 </div>
               </button>
             )}

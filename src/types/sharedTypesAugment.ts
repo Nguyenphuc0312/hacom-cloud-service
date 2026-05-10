@@ -14,16 +14,7 @@
 // module so TypeScript can match the declaration to the correct package.
 import type {} from "@hacom/chat-shared-types";
 
-declare module "@hacom/chat-shared-types" {
-  interface Message {
-    /** Content format hint returned by the API. Defaults to "plain_text". */
-    contentFormat?: "plain_text" | "markdown" | "rich_text";
-    /** Pre-extracted plain-text version of rich/markdown content. */
-    plainText?: string;
-  }
-
-  interface MessageSummary {
-    /** Content format hint — needed for reply preview rendering. */
-    contentFormat?: "plain_text" | "markdown" | "rich_text";
-  }
-}
+// contentFormat, plainText, mentions, and replyToMessage extensions are
+// owned by the client-side Message type in src/types/index.ts.
+// They are intentionally not augmented here to avoid TS2717 conflicts when
+// @hacom/chat-shared-types adds these fields with a narrower type definition.
