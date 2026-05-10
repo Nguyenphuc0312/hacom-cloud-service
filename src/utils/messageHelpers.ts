@@ -5,19 +5,7 @@ import type {
   UserSummary,
 } from "../types";
 
-const stripMarkdownForPreview = (text: string): string =>
-  text
-    .replace(/\*\*([\s\S]*?)\*\*/g, '$1')
-    .replace(/\*([\s\S]*?)\*/g, '$1')
-    .replace(/~~([\s\S]*?)~~/g, '$1')
-    .replace(/__([\s\S]*?)__/g, '$1')
-    .replace(/`{3}[\s\S]*?`{3}/g, '')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/^#{1,6}\s+/gm, '')
-    .replace(/^\s*[-*+]\s+/gm, '')
-    .replace(/^\s*\d+\.\s+/gm, '')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .trim();
+
 import { MessageType, MessageStatus, RoomType } from "../types";
 import {
   isDirectConversation,
@@ -139,9 +127,7 @@ export function getMessagePreview(
   switch (message.type) {
     case MessageType.TEXT: {
       const rawContent = (message as Message).plainText ?? message.content;
-      preview = (message as Message).contentFormat === 'markdown'
-        ? stripMarkdownForPreview(rawContent)
-        : rawContent;
+      preview = rawContent;
       break;
     }
     case MessageType.IMAGE:

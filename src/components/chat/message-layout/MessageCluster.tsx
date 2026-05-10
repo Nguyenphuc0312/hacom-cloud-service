@@ -399,15 +399,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                       ? t("chat:message.deleted", {
                           defaultValue: "Message deleted",
                         })
-                      : message.replyToMessage.contentFormat === 'markdown'
-                        ? message.replyToMessage.content
-                            .replace(/\*\*([\s\S]*?)\*\*/g, '$1')
-                            .replace(/\*([\s\S]*?)\*/g, '$1')
-                            .replace(/~~([\s\S]*?)~~/g, '$1')
-                            .replace(/`([^`]+)`/g, '$1')
-                            .replace(/__([\s\S]*?)__/g, '$1')
-                            .trim()
-                        : message.replyToMessage.content}
+                      : message.replyToMessage.content}
                   </p>
                 </div>
               </button>
