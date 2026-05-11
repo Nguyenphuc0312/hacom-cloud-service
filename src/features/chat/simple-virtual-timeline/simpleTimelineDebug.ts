@@ -1,13 +1,12 @@
-import { logger } from "../../../utils/logger";
-import { isChatSimpleTimelineDebugEnabled } from "./simpleTimelineFlags";
-
 /**
- * Simple timeline debug logger. Off by default; opt in via
- * `VITE_CHAT_SIMPLE_TIMELINE_DEBUG=true` (or the `__CHAT_FLAGS_OVERRIDE__`
- * bucket at runtime). The string event list is closed — adding new events
- * here forces a deliberate change rather than letting components scatter
- * ad-hoc console.log calls.
+ * Simple timeline debug logger. No-op by default. Flip
+ * `globalThis.__SIMPLE_TIMELINE_DEBUG__ = true` in devtools to enable
+ * verbose trace logs. The string event list is closed — adding new
+ * events here forces a deliberate change rather than letting components
+ * scatter ad-hoc console.log calls.
  */
+import { logger } from "../../../utils/logger";
+
 export type SimpleTimelineDebugEvent =
   | "initial_bottom"
   | "user_scroll"
@@ -20,10 +19,17 @@ export type SimpleTimelineDebugEvent =
   | "media_load_detached_noop"
   | "jump_to_latest";
 
+const isDebugEnabled = (): boolean => {
+  if (typeof globalThis === "undefined") return false;
+  return (
+    (globalThis as Record<string, unknown>).__SIMPLE_TIMELINE_DEBUG__ === true
+  );
+};
+
 export function logSimpleTimeline(
   event: SimpleTimelineDebugEvent,
   payload: Record<string, unknown> = {},
 ): void {
-  if (!isChatSimpleTimelineDebugEnabled()) return;
+  if (!isDebugEnabled()) return;
   logger.debug("chat-simple-timeline", event, payload);
 }

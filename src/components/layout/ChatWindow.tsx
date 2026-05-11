@@ -190,13 +190,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onTyping,
   hasMoreMessages,
   isLoadingMessages,
-  historyLoadingState,
   onLoadOlderMessages,
   onImageClick,
   onFilePreview,
-  messageError,
-  onRetryMessages,
-  onReachedLatestMessage,
+  onReachedLatestMessage: _onReachedLatestMessage,
   connectionState = "connected",
   isConversationReady = true,
   externalJumpToMessageId = null,
@@ -532,10 +529,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [inspectMessageId, setInspectMessageId] = React.useState<string | null>(
     null,
   );
-  const [jumpTargetMessageId, setJumpTargetMessageId] = React.useState<
-    string | null
-  >(null);
-  const [jumpRequestVersion, setJumpRequestVersion] = React.useState(0);
+  const [, setJumpTargetMessageId] = React.useState<string | null>(null);
+  const [, setJumpRequestVersion] = React.useState(0);
   const [clockTick, setClockTick] = React.useState(() => Date.now());
   const [ephemeralNotice, setEphemeralNotice] =
     React.useState<EphemeralNotice | null>(null);
@@ -684,19 +679,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setInspectMessageId(message.id);
     setOverlayMode("inspect");
   }, []);
-
-  const handleJumpHandled = React.useCallback((messageId: string) => {
-    setJumpTargetMessageId((current) =>
-      current === messageId ? null : current,
-    );
-  }, []);
-
-  const handleReachedLatest = React.useCallback(
-    (message: Message) => {
-      onReachedLatestMessage?.(message);
-    },
-    [onReachedLatestMessage],
-  );
 
   const queueJumpToMessage = React.useCallback(
     (messageId: string) => {
@@ -1038,20 +1020,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         onLoadOlderMessages={onLoadOlderMessages}
         onImageClick={onImageClick}
         onFilePreview={onFilePreview}
-        messageError={messageError}
-        onRetryMessages={onRetryMessages}
         density={resolvedDensity}
         isSelectionMode={isMessageSelectionMode}
         selectedMessageIds={selectedMessageIds}
         onToggleSelect={toggleMessageSelection}
         onNavigateToMessage={handleNavigateToMessage}
         currentUsername={currentUsername}
-        onReachedLatest={handleReachedLatest}
-        jumpToMessageId={jumpTargetMessageId}
-        jumpRequestVersion={jumpRequestVersion}
-        onJumpHandled={handleJumpHandled}
         composerHeight={composerHeight}
-        historyLoadingState={historyLoadingState}
         className="flex-1 min-h-0"
       />
 
