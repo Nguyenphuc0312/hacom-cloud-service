@@ -33,18 +33,7 @@ interface TipTapEditorProps {
   "data-testid"?: string;
 }
 
-const extensions = (placeholder: string) => [
-  StarterKit.configure({
-    hardBreak: {
-      keepMarks: true,
-    },
-  }),
-  Underline,
-  Placeholder.configure({
-    placeholder,
-    emptyEditorClass: "is-editor-empty",
-  }),
-];
+
 
 export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorProps>(
   (
@@ -74,8 +63,25 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
       onSelectionChangeRef.current = onSelectionChange;
     });
 
+    const allExtensions = React.useMemo(
+      () => [
+        StarterKit.configure({
+          hardBreak: {
+            keepMarks: true,
+          },
+        }),
+        Underline,
+        Placeholder.configure({
+          placeholder,
+          emptyEditorClass: "is-editor-empty",
+          showOnlyWhenEditable: false,
+        }),
+      ],
+      [placeholder],
+    );
+
     const editor = useEditor({
-      extensions: extensions(placeholder),
+      extensions: allExtensions,
       content: initialContent || "",
       editable: !disabled,
       immediatelyRender: false,
@@ -114,7 +120,7 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
           role: "textbox",
           "aria-multiline": "true",
           "data-testid": testId ?? "chat-composer-input",
-          class: "tiptap-editor-inner",
+          class: "tiptap-editor-inner relative",
         },
       },
     });
@@ -155,11 +161,7 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
           "[&_.tiptap-editor-inner_p+p]:mt-1",
           "[&_.tiptap-editor-inner_ul]:list-disc [&_.tiptap-editor-inner_ul]:pl-5 [&_.tiptap-editor-inner_ul]:my-1",
           "[&_.tiptap-editor-inner_ol]:list-decimal [&_.tiptap-editor-inner_ol]:pl-5 [&_.tiptap-editor-inner_ol]:my-1",
-          "[&_.is-editor-empty_p:first-child]:before:content-[attr(data-placeholder)]",
-          "[&_.is-editor-empty_p:first-child]:before:text-text-muted",
-          "[&_.is-editor-empty_p:first-child]:before:float-left",
-          "[&_.is-editor-empty_p:first-child]:before:h-0",
-          "[&_.is-editor-empty_p:first-child]:before:pointer-events-none",
+          "[&_.tiptap-editor-inner_ol]:list-decimal [&_.tiptap-editor-inner_ol]:pl-5 [&_.tiptap-editor-inner_ol]:my-1",
           disabled && "cursor-not-allowed opacity-70",
           className,
         )}

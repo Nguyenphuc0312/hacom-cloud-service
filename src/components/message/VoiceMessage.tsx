@@ -130,7 +130,7 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
         className={clsx(
           "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60",
           isOwn
-            ? "bg-surface/25 text-text-inverse hover:bg-surface/35"
+            ? "bg-[hsl(var(--chat-bubble-sent-text))/0.2] text-[hsl(var(--chat-bubble-sent-text))] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.3]"
             : "bg-primary text-text-inverse hover:bg-secondary",
         )}
         aria-label={isPlaying ? t("chat:voice.pause") : t("chat:voice.play")}
@@ -163,10 +163,10 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
                   "w-1 rounded-full transition-colors",
                   isPlayed
                     ? isOwn
-                      ? "bg-text-inverse"
+                      ? "bg-[hsl(var(--chat-bubble-sent-text))]"
                       : "bg-primary"
                     : isOwn
-                      ? "bg-text-inverse/45"
+                      ? "bg-[hsl(var(--chat-bubble-sent-text))/0.45]"
                       : "bg-border-strong/45",
                 )}
                 style={{ height: `${height}%` }}
@@ -178,7 +178,7 @@ export const VoiceMessage: React.FC<VoiceMessageProps> = ({
         <p
           className={clsx(
             "mt-1 text-xs",
-            isOwn ? "text-text-inverse/70" : "text-text-muted",
+            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]" : "text-text-muted",
           )}
         >
           {isPlaying || currentTime > 0

@@ -157,10 +157,10 @@ const renderWithMentions = (
           "inline rounded px-0.5 font-semibold",
           isSelfMention
             ? isOwn
-              ? "bg-text-inverse/20 text-text-inverse"
+              ? "bg-[hsl(var(--chat-bubble-sent-text))/0.2] text-[hsl(var(--chat-bubble-sent-text))]"
               : "bg-primary/15 text-primary"
             : isOwn
-              ? "text-text-inverse/95"
+              ? "text-[hsl(var(--chat-bubble-sent-text))/0.95]"
               : "text-primary/80",
         )}
         data-mention-user-id={resolved?.userId}
@@ -221,7 +221,7 @@ export const TextMessage: React.FC<TextMessageProps> = ({
             onClick={onToggleExpand}
             className={clsx(
               "text-xs font-semibold underline-offset-2 hover:underline",
-              isOwn ? "text-text-inverse" : "text-primary",
+              isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-primary",
             )}
           >
             {renderMode === "collapsed"
@@ -296,7 +296,7 @@ export const TextMessage: React.FC<TextMessageProps> = ({
               ? "leading-tight text-3xl"
               : clsx(
                   "text-[14px] leading-[21px]",
-                  isOwn ? "text-text-inverse" : "text-text-primary",
+                  isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-text-primary",
                 ),
             className,
           )}
@@ -313,7 +313,7 @@ export const TextMessage: React.FC<TextMessageProps> = ({
                   className={clsx(
                     "underline decoration-border-strong underline-offset-2 transition-colors",
                     isOwn
-                      ? "text-text-inverse hover:text-text-inverse/85"
+                      ? "text-[hsl(var(--chat-bubble-sent-text))] hover:text-[hsl(var(--chat-bubble-sent-text))]/85"
                       : "text-primary hover:text-secondary",
                   )}
                 >
@@ -341,7 +341,7 @@ export const TextMessage: React.FC<TextMessageProps> = ({
           onClick={onToggleExpand}
           className={clsx(
             "text-xs font-semibold underline-offset-2 hover:underline",
-            isOwn ? "text-text-inverse" : "text-primary",
+            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-primary",
           )}
         >
           {renderMode === "collapsed"

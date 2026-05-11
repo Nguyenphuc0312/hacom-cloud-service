@@ -380,7 +380,8 @@ const MessageGroupItem: React.FC<{
 
       setIsActionSheetOpen(false);
     },
-    [message, onDelete, onEdit, onReact, onReply, resendMessage],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [message, onDelete, onEdit, onReact, onReply, resendMessage, isOwn],
   );
 
   const isActionRailActive = isActionRailVisible || isActionSheetOpen || showEmojiPicker;
@@ -498,7 +499,7 @@ const MessageGroupItem: React.FC<{
                 className={clsx(
                   "mb-2 flex w-full items-start gap-2 rounded-[12px] border-l-2 px-2.5 py-2 text-left transition-colors",
                   isOwn
-                    ? "border-text-primary/20 bg-text-primary/8 hover:bg-text-primary/12"
+                    ? "border-[hsl(var(--chat-bubble-sent-text))/0.2] bg-[hsl(var(--chat-bubble-sent-text))/0.08] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.12]"
                     : "border-border-strong/70 bg-surface-overlay/78 hover:bg-surface-hover",
                   !onNavigateToMessage && "cursor-default",
                 )}
@@ -507,7 +508,7 @@ const MessageGroupItem: React.FC<{
                   <div
                     className={clsx(
                       "text-[11px] font-semibold leading-4",
-                      isOwn ? "text-text-primary/78" : "text-text-secondary",
+                      isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.78]" : "text-text-secondary",
                     )}
                   >
                     {resolvedReplyPreview
@@ -522,7 +523,7 @@ const MessageGroupItem: React.FC<{
                   <p
                     className={clsx(
                       "truncate text-[12px] leading-4",
-                      isOwn ? "text-text-primary/68" : "text-text-muted",
+                      isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.68]" : "text-text-muted",
                     )}
                   >
                     {!resolvedReplyPreview
@@ -556,7 +557,7 @@ const MessageGroupItem: React.FC<{
               <div
                 className={clsx(
                   "mb-2 text-[11px] font-medium leading-4",
-                  isOwn ? "text-text-primary/68" : "text-text-muted",
+                  isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.68]" : "text-text-muted",
                 )}
               >
                 {t("chat:message.forwardedFrom", {
@@ -591,7 +592,7 @@ const MessageGroupItem: React.FC<{
                 layout="inline"
                 className={clsx(
                   "mt-1 justify-end text-[11px]",
-                  isOwn ? "text-text-primary/64" : "text-text-muted/84",
+                  isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.64]" : "text-text-muted/84",
                 )}
               />
             )}
