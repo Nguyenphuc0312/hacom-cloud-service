@@ -52,10 +52,20 @@ type MarkReadResponseData = {
   unreadCount?: number | null;
 };
 
-const toPositiveSeq = (value: unknown): number | null =>
-  typeof value === "number" && Number.isInteger(value) && value > 0
-    ? value
-    : null;
+const toPositiveSeq = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+  // BIGINT từ PG được serialize thành string ("233"). Phải coerce để optimistic
+  // update advance lastReadSeq đúng và stale-read guard không bị bypass.
+  if (typeof value === "string" && /^[1-9]\d*$/.test(value)) {
+    const parsed = Number(value);
+    if (Number.isSafeInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return null;
+};
 
 const normalizeMarkAsReadInput = (
   input?: string | MarkAsReadInput,

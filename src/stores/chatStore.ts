@@ -1038,10 +1038,20 @@ const mergeConversationSummary = (
   // ngược lên. Điều này xử lý race condition: user click conversation →
   // optimistic markAsRead set unread=0, sau đó stale GET /conversations
   // response trả về unreadCount=17 cũ.
-  const currentLastReadSeq =
-    typeof current.lastReadSeq === "number" ? current.lastReadSeq : 0;
-  const incomingLastReadSeq =
-    typeof incoming.lastReadSeq === "number" ? incoming.lastReadSeq : 0;
+  // BIGINT từ BE đến dưới dạng string ("186"). Coerce trước khi so sánh nếu
+  // không stale-read guard luôn xem cả hai là 0 và để stale unread overwrite.
+  const coerceSeq = (value: unknown): number => {
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+      return value;
+    }
+    if (typeof value === "string" && /^[1-9]\d*$/.test(value)) {
+      const parsed = Number(value);
+      if (Number.isSafeInteger(parsed) && parsed > 0) return parsed;
+    }
+    return 0;
+  };
+  const currentLastReadSeq = coerceSeq(current.lastReadSeq);
+  const incomingLastReadSeq = coerceSeq(incoming.lastReadSeq);
   const localReadIsAhead =
     currentLastReadSeq > 0 && currentLastReadSeq > incomingLastReadSeq;
   const preserveLocalRead =
