@@ -48,8 +48,8 @@ const normalizeConversation = (
 ): Conversation | null => c as Conversation;
 
 const buildConversationCollectionState = (
-  _conversations: Conversation[],
-): Partial<{ conversations: Conversation[] }> => ({ conversations: [] });
+  conversations: Conversation[],
+): Partial<{ conversations: Conversation[] }> => ({ conversations });
 
 const compareAnchorIdsInConversation = (
   _messages: Message[],
@@ -61,8 +61,8 @@ const compareAnchorIdsInConversation = (
 };
 
 const getConversationCursorTimestamp = (
-  _conversation: Conversation,
-): number => Date.now();
+  c: Conversation,
+): number => (void c, Date.now());
 
 const updateConversationReadProgress = (
   conversation: Conversation,
@@ -86,6 +86,21 @@ type MockState = {
   lastUnreadSummaryAppliedAt: number | null;
 };
 
+/**
+ * Wraps the set() updater so partial-returning updaters (from
+ * applyOptimisticConversationRead / applyUnreadSummary) do not drop fields
+ * that were not included in the partial return.
+ */
+const applyUpdater = (
+  state: MockState,
+  updater: (state: MockState) => MockState,
+): MockState => ({ ...state, ...updater(state) });
+
+/** Cast helper to satisfy the SetState union type for the mock. */
+const asMockSet = (
+  fn: (updater: (state: MockState) => MockState) => void,
+) => fn as unknown as Parameters<typeof createChatUnreadController>[0]["set"];
+
 describe("chatStoreUnread — optimistic mark-read rollback", () => {
   describe("API success path", () => {
     it("commits optimistic state when API succeeds", async () => {
@@ -96,9 +111,7 @@ describe("chatStoreUnread — optimistic mark-read rollback", () => {
       };
 
       const controller = createChatUnreadController({
-        set: (updater) => {
-          state = (updater as (state: MockState) => MockState)(state);
-        },
+        set: asMockSet((updater) => { state = applyUpdater(state, updater); }),
         get: () => state,
         emptyMessages: EMPTY_MESSAGES,
         markConversationAsRead: async () =>
@@ -135,9 +148,7 @@ describe("chatStoreUnread — optimistic mark-read rollback", () => {
       };
 
       const controller = createChatUnreadController({
-        set: (updater) => {
-          state = (updater as (state: MockState) => MockState)(state);
-        },
+        set: asMockSet((updater) => { state = applyUpdater(state, updater); }),
         get: () => state,
         emptyMessages: EMPTY_MESSAGES,
         markConversationAsRead: async () => {
@@ -177,9 +188,7 @@ describe("chatStoreUnread — optimistic mark-read rollback", () => {
       };
 
       const controller = createChatUnreadController({
-        set: (updater) => {
-          state = (updater as (state: MockState) => MockState)(state);
-        },
+        set: asMockSet((updater) => { state = applyUpdater(state, updater); }),
         get: () => state,
         emptyMessages: EMPTY_MESSAGES,
         markConversationAsRead: async () => {
@@ -215,9 +224,7 @@ describe("chatStoreUnread — optimistic mark-read rollback", () => {
       let attemptCount = 0;
 
       const controller = createChatUnreadController({
-        set: (updater) => {
-          state = (updater as (state: MockState) => MockState)(state);
-        },
+        set: asMockSet((updater) => { state = applyUpdater(state, updater); }),
         get: () => state,
         emptyMessages: EMPTY_MESSAGES,
         markConversationAsRead: async () => {
@@ -257,9 +264,7 @@ describe("chatStoreUnread — optimistic mark-read rollback", () => {
       };
 
       const controller = createChatUnreadController({
-        set: (updater) => {
-          state = (updater as (state: MockState) => MockState)(state);
-        },
+        set: asMockSet((updater) => { state = applyUpdater(state, updater); }),
         get: () => state,
         emptyMessages: EMPTY_MESSAGES,
         markConversationAsRead: async () => {
@@ -301,15 +306,13 @@ describe("chatStoreUnread — optimistic mark-read rollback", () => {
   describe("stale-overwrite guard", () => {
     it("prevents stale snapshot from overwriting optimistic read while in-flight", async () => {
       let state: MockState = {
-        conversations: [createMockConversation({ unreadCount: 0, lastReadSeq: 12 })],
+        conversations: [createMockConversation({ unreadCount: 0, lastReadSeq: 11 })],
         messages: { "conv-1": createMockMessages() },
         lastUnreadSummaryAppliedAt: null,
       };
 
       const controller = createChatUnreadController({
-        set: (updater) => {
-          state = (updater as (state: MockState) => MockState)(state);
-        },
+        set: asMockSet((updater) => { state = applyUpdater(state, updater); }),
         get: () => state,
         emptyMessages: EMPTY_MESSAGES,
         markConversationAsRead: async () =>
@@ -334,7 +337,10 @@ describe("chatStoreUnread — optimistic mark-read rollback", () => {
         updateConversationReadProgress,
       });
 
-      // Fire optimistic mark-read (API still pending)
+      // Fire optimistic mark-read (API still pending).
+      // lastReadSeq=11 starts at seq 11, incoming seq 12 advances forward — guard
+      // passes (12 > 11), optimistic update fires and records localSeq=12.
+      // Then applyUnreadSummary sees localSeq=12 > snapshotSeq=5 and blocks the stale snapshot.
       const pendingPromise = controller.markAsRead("conv-1", {
         lastReadSeq: 12,
         lastVisibleMessageId: "msg-12",
@@ -364,22 +370,25 @@ describe("chatStoreUnread — optimistic mark-read rollback", () => {
   });
 
   describe("reset", () => {
-    it("clears pendingRollbackSnapshot on reset", () => {
+    it("clears pendingRollbackSnapshot on reset", async () => {
       let state: MockState = {
         conversations: [createMockConversation()],
         messages: { "conv-1": createMockMessages() },
         lastUnreadSummaryAppliedAt: null,
       };
+      let attemptCount = 0;
+      let newAttempt = false;
 
       const controller = createChatUnreadController({
-        set: (updater) => {
-          state = (updater as (state: MockState) => MockState)(state);
-        },
+        set: asMockSet((updater) => { state = applyUpdater(state, updater); }),
         get: () => state,
         emptyMessages: EMPTY_MESSAGES,
         markConversationAsRead: async () => {
+          attemptCount += 1;
           await new Promise((r) => setTimeout(r, 10));
-          throw new Error("Fail");
+          if (attemptCount === 1) throw new Error("Fail");
+          newAttempt = true;
+          return makeSuccessEnvelope({ conversationId: "conv-1", lastReadSeq: 13, unreadCount: 0 });
         },
         getUnreadSummary: vi.fn(),
         compareAnchorIdsInConversation,
@@ -390,32 +399,14 @@ describe("chatStoreUnread — optimistic mark-read rollback", () => {
       });
 
       // Trigger a failed mark-read (creates a snapshot)
-      controller.markAsRead("conv-1", { lastReadSeq: 12 }).catch(() => {});
+      await controller.markAsRead("conv-1", { lastReadSeq: 12 }).catch(() => {});
 
       // Reset must clear all pending state
       controller.reset();
 
-      // After reset, a new mark-read should work normally
-      let newAttempt = false;
-      const controller2 = createChatUnreadController({
-        set: (updater) => {
-          state = (updater as (state: MockState) => MockState)(state);
-        },
-        get: () => state,
-        emptyMessages: EMPTY_MESSAGES,
-        markConversationAsRead: async () => {
-          newAttempt = true;
-          return makeSuccessEnvelope({ conversationId: "conv-1", lastReadSeq: 12, unreadCount: 0 });
-        },
-        getUnreadSummary: vi.fn(),
-        compareAnchorIdsInConversation,
-        normalizeConversation,
-        buildConversationCollectionState,
-        getConversationCursorTimestamp,
-        updateConversationReadProgress,
-      });
-
-      controller2.markAsRead("conv-1", { lastReadSeq: 12 });
+      // After reset, a new mark-read with a higher seq should work normally.
+      // Using lastReadSeq=13 avoids the skip guard (currentSeq=10 < 13).
+      await controller.markAsRead("conv-1", { lastReadSeq: 13 });
       expect(newAttempt).toBe(true);
     });
   });
