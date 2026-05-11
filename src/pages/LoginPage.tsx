@@ -50,14 +50,8 @@ export const LoginPage: React.FC = () => {
   }, [activationContext, authStatus, isAuthenticated, location, navigate]);
 
   useEffect(() => {
-    if (
-      authStatus === "anonymous" ||
-      authStatus === "idle" ||
-      authStatus === "activation_required"
-    ) {
-      clearError();
-    }
-  }, [authStatus, clearError]);
+    clearError();
+  }, [authMethod, clearError]);
 
   const {
     register,
@@ -182,6 +176,7 @@ export const LoginPage: React.FC = () => {
             {(authStatus === "locked" || authStatus === "disabled") &&
               lockedAccount ? (
               <LockedOrDisabledState
+                key="locked-state"
                 status={lockedAccount.status}
                 message={lockedAccount.message || error}
                 onReset={() => {
@@ -193,6 +188,7 @@ export const LoginPage: React.FC = () => {
             ) : null}
 
             <PasswordLoginForm
+              key="password-form"
               register={register}
               errors={errors}
               isLoading={isLoading}
@@ -222,6 +218,7 @@ export const LoginPage: React.FC = () => {
 
             <div className="flex justify-center">
               <QrLoginPanel
+                key="qr-panel"
                 rememberMe={rememberMe}
                 onSuccess={() => {
                   toast.success("Đăng nhập bằng QR thành công.");

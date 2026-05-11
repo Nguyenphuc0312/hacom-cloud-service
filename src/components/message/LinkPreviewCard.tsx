@@ -53,7 +53,7 @@ const LinkPreviewCardComponent: React.FC<LinkPreviewCardProps> = ({
       className={clsx(
         "group/link mt-1.5 flex items-center gap-2.5 rounded-lg border px-3 py-2 no-underline transition-colors",
         isOwn
-          ? "border-text-inverse/15 bg-text-inverse/8 hover:bg-text-inverse/14"
+          ? "border-[hsl(var(--chat-bubble-sent-text))/0.15] bg-[hsl(var(--chat-bubble-sent-text))/0.08] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.14]"
           : "border-border bg-surface-overlay/60 hover:bg-surface-overlay",
         className,
       )}
@@ -75,7 +75,7 @@ const LinkPreviewCardComponent: React.FC<LinkPreviewCardProps> = ({
         <GlobeAltIcon
           className={clsx(
             "hidden h-4 w-4",
-            isOwn ? "text-text-inverse/60" : "text-text-muted",
+            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.6]" : "text-text-muted",
           )}
         />
       </div>
@@ -83,7 +83,7 @@ const LinkPreviewCardComponent: React.FC<LinkPreviewCardProps> = ({
         <p
           className={clsx(
             "truncate text-xs font-medium leading-tight",
-            isOwn ? "text-text-inverse" : "text-text-primary",
+            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-text-primary",
           )}
         >
           {meta.title}
@@ -91,7 +91,7 @@ const LinkPreviewCardComponent: React.FC<LinkPreviewCardProps> = ({
         <p
           className={clsx(
             "truncate text-[11px] leading-tight",
-            isOwn ? "text-text-inverse/60" : "text-text-muted",
+            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.6]" : "text-text-muted",
           )}
         >
           {meta.url}
@@ -100,7 +100,7 @@ const LinkPreviewCardComponent: React.FC<LinkPreviewCardProps> = ({
       <svg
         className={clsx(
           "h-3.5 w-3.5 shrink-0 transition-transform group-hover/link:translate-x-0.5",
-          isOwn ? "text-text-inverse/50" : "text-text-muted",
+          isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.5]" : "text-text-muted",
         )}
         fill="none"
         viewBox="0 0 24 24"

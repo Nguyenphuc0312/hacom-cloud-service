@@ -19,6 +19,7 @@ type SideRailItem = {
   label: string;
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   to?: string;
+  onClick?: () => void;
   activeWhen?: (pathname: string) => boolean;
 };
 
@@ -111,7 +112,8 @@ const SideRailAvatar: React.FC<{
 const SideRailButton: React.FC<{
   item: SideRailItem;
   isActive?: boolean;
-}> = ({ item, isActive = false }) => {
+  onClick?: () => void;
+}> = ({ item, isActive = false, onClick }) => {
   const Icon = item.icon;
   const getItemClassName = (active: boolean) =>
     clsx("hc-side-rail__item", active && "hc-side-rail__item--active");
@@ -150,6 +152,7 @@ const SideRailButton: React.FC<{
       className={getItemClassName(isActive)}
       aria-label={item.label}
       title={item.label}
+      onClick={onClick || item.onClick}
     >
       {renderIndicator(isActive)}
       <Icon className="hc-side-rail__item-icon" aria-hidden="true" />
@@ -164,6 +167,8 @@ export const SideRail: React.FC<SideRailProps> = ({
 }) => {
   const { pathname } = useLocation();
 
+  const mainRailItems: SideRailItem[] = railItems;
+
   return (
     <aside className="hc-side-rail" aria-label="Điều hướng chính">
       <NavLink
@@ -175,12 +180,12 @@ export const SideRail: React.FC<SideRailProps> = ({
         <img
           src="/logo-dung.png"
           alt="Hacom Holdings"
-          className="h-full w-full object-contain mix-blend-multiply"
+          className="h-full w-full object-contain"
         />
       </NavLink>
 
       <nav className="hc-side-rail__nav" aria-label="Module">
-        {railItems.map((item) => (
+        {mainRailItems.map((item) => (
           <SideRailButton
             key={item.id}
             item={item}

@@ -229,7 +229,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           <p
             className={clsx(
               "truncate text-sm font-medium",
-              isOwn ? "text-text-inverse" : "text-text-primary",
+              isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-text-primary",
             )}
           >
             {attachment.fileName || t("chat:file.unknown")}
@@ -237,7 +237,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           <p
             className={clsx(
               "text-xs",
-              isOwn ? "text-text-inverse/70" : "text-text-muted",
+              isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]" : "text-text-muted",
             )}
           >
             {t("chat:filePreview.scanning", { defaultValue: "Scanning…" })}
@@ -315,7 +315,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           <span
             className={clsx(
               "truncate text-xs",
-              isOwn ? "text-text-inverse/70" : "text-text-muted",
+              isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]" : "text-text-muted",
             )}
           >
             {size}
@@ -327,7 +327,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
             className={clsx(
               "shrink-0 rounded-full p-1 transition-colors disabled:opacity-50",
               isOwn
-                ? "text-text-inverse/70 hover:text-text-inverse"
+                ? "text-[hsl(var(--chat-bubble-sent-text))/0.7] hover:text-[hsl(var(--chat-bubble-sent-text))]"
                 : "text-text-muted hover:text-text-primary",
             )}
             aria-label={t("chat:file.download")}
@@ -393,7 +393,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           <span
             className={clsx(
               "truncate text-xs",
-              isOwn ? "text-text-inverse/70" : "text-text-muted",
+              isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]" : "text-text-muted",
             )}
           >
             {attachment.fileName || t("chat:file.unknown")} · {size}
@@ -405,7 +405,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
             className={clsx(
               "shrink-0 rounded-full p-1 transition-colors disabled:opacity-50",
               isOwn
-                ? "text-text-inverse/70 hover:text-text-inverse"
+                ? "text-[hsl(var(--chat-bubble-sent-text))/0.7] hover:text-[hsl(var(--chat-bubble-sent-text))]"
                 : "text-text-muted hover:text-text-primary",
             )}
             aria-label={t("chat:file.download")}
@@ -424,7 +424,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
       className={clsx(
         "group/file flex min-w-0 w-[min(22rem,100%)] items-center gap-3 rounded-lg border p-3 transition-colors",
         isOwn
-          ? "border-white/20 bg-surface/16 hover:bg-surface/22"
+          ? "border-[hsl(var(--chat-bubble-sent-text))/0.15] bg-[hsl(var(--chat-bubble-sent-text))/0.08] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.12]"
           : "border-border/70 bg-surface hover:bg-surface-hover",
         className,
       )}
@@ -433,7 +433,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
       <div
         className={clsx(
           "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
-          isOwn ? "bg-surface/25" : "bg-surface",
+          isOwn ? "bg-[hsl(var(--chat-bubble-sent-text))/0.15]" : "bg-surface",
         )}
       >
         <FileTypeIcon type={iconType} />
@@ -444,7 +444,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
         <p
           className={clsx(
             "truncate text-sm font-medium",
-            isOwn ? "text-text-inverse" : "text-text-primary",
+            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-text-primary",
           )}
           title={attachment.fileName}
         >
@@ -453,7 +453,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
         <p
           className={clsx(
             "text-xs",
-            isOwn ? "text-text-inverse/70" : "text-text-muted",
+            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.7]" : "text-text-muted",
           )}
         >
           {size}
@@ -489,7 +489,7 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
           className={clsx(
             "flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50",
             isOwn
-              ? "bg-surface/25 text-text-inverse hover:bg-surface/40"
+              ? "bg-[hsl(var(--chat-bubble-sent-text))/0.15] text-[hsl(var(--chat-bubble-sent-text))] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.25]"
               : "bg-surface text-text-secondary hover:bg-surface-raised hover:text-text-primary",
           )}
           aria-label={t("chat:file.download")}

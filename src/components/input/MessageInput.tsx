@@ -105,6 +105,7 @@ interface MessageInputProps {
   composerMode?: ComposerMode;
   currentUserId?: string;
   onShareContact?: (contactUserId: string) => Promise<void>;
+  conversationName?: string;
 
   // ── Multi-file upload queue (from ChatWindow) ──
   uploadDrafts?: AttachmentDraft[];
@@ -144,10 +145,10 @@ const COMPOSER_VISUAL_STATE_MAP: Record<
   ComposerVisualStyles
 > = {
   idle: {
-    shell: "border-border/45 bg-[hsl(var(--chat-panel-bg))] shadow-none",
+    shell: "border-border/80 bg-surface/50 dark:bg-white/5 shadow-sm",
     attachmentButton:
       "text-text-muted hover:bg-surface-hover hover:text-text-primary",
-    attachmentDivider: "border-transparent",
+    attachmentDivider: "border-border/40",
   },
   focus: {
     shell:
@@ -283,6 +284,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     composerMode = "online",
     currentUserId,
     onShareContact,
+    conversationName,
     // Multi-file upload queue
     uploadDrafts,
     onAddFiles,
@@ -864,7 +866,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
             mentionSuggestionsRef.current.length === 0
               ? 0
               : (current - 1 + mentionSuggestionsRef.current.length) %
-                mentionSuggestionsRef.current.length,
+              mentionSuggestionsRef.current.length,
           );
           return true;
         }
@@ -925,16 +927,16 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   const isSubmitBusy = isUploading || isSending || isPrimarySendLocked;
   const canSend = hasQueueDrafts
     ? !submitDisabled &&
-      !isSubmitBusy &&
-      messageValidation.canSendInlineMessage &&
-      !hasUploadingDrafts &&
-      (hasReadyDrafts || hasText)
+    !isSubmitBusy &&
+    messageValidation.canSendInlineMessage &&
+    !hasUploadingDrafts &&
+    (hasReadyDrafts || hasText)
     : selectedFile
       ? !submitDisabled && !isSubmitBusy && composerMode === "online"
       : !submitDisabled &&
-        !isSubmitBusy &&
-        hasText &&
-        messageValidation.canSendInlineMessage;
+      !isSubmitBusy &&
+      hasText &&
+      messageValidation.canSendInlineMessage;
   const disableAttachmentActions = attachmentsDisabled || isSubmitBusy;
   const sendButtonLabel = t("chat:composer.sendMessage");
   const composerVisualState: ComposerVisualState = disabled
@@ -1296,7 +1298,14 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
               <TipTapEditor
                 ref={tipTapRef}
                 data-testid="chat-composer-input"
-                placeholder={t("chat:composer.placeholder")}
+                placeholder={
+                  conversationName
+                    ? t("chat:composer.dynamicPlaceholder", {
+                      name: conversationName,
+                      defaultValue: `Nhập @, tin nhắn tới ${conversationName}`,
+                    })
+                    : t("chat:composer.placeholder")
+                }
                 disabled={disabled}
                 onContentChange={(plainText) => {
                   setDraftValue(plainText);
@@ -1406,7 +1415,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                         : composerVisualStyles.attachmentButton,
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                       disableAttachmentActions &&
-                        "cursor-not-allowed opacity-50",
+                      "cursor-not-allowed opacity-50",
                     )}
                     aria-label={t("chat:header.moreActions", {
                       defaultValue: "Thêm hành động",
@@ -1469,79 +1478,79 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         {(messageValidation.showCounter ||
           messageValidation.isOverSoftLimit ||
           messageValidation.isOverHardLimit) && (
-          <div className="mt-2 flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              {messageValidation.isOverHardLimit ? (
-                <InlineNotice
-                  tone="error"
-                  className="mb-0"
-                  message={t("chat:composer.hardLimitError", {
-                    max: messageValidation.hardLimit.toLocaleString("vi-VN"),
-                    defaultValue: "Tin nhắn vượt giới hạn 20.000 ký tự.",
-                  })}
-                  action={
-                    onAddFiles ? (
-                      <button
-                        type="button"
-                        onClick={handleSendAsTextFile}
-                        className="text-xs font-semibold underline-offset-2 hover:underline"
-                      >
-                        {t("chat:composer.sendAsTextFile", {
-                          defaultValue: "Gửi dưới dạng tệp .txt",
-                        })}
-                      </button>
-                    ) : undefined
-                  }
-                />
-              ) : messageValidation.isOverSoftLimit || showLongPasteNotice ? (
-                <InlineNotice
-                  tone="warning"
-                  className="mb-0"
-                  message={
-                    showLongPasteNotice
-                      ? t("chat:composer.longPasteNotice", {
+            <div className="mt-2 flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                {messageValidation.isOverHardLimit ? (
+                  <InlineNotice
+                    tone="error"
+                    className="mb-0"
+                    message={t("chat:composer.hardLimitError", {
+                      max: messageValidation.hardLimit.toLocaleString("vi-VN"),
+                      defaultValue: "Tin nhắn vượt giới hạn 20.000 ký tự.",
+                    })}
+                    action={
+                      onAddFiles ? (
+                        <button
+                          type="button"
+                          onClick={handleSendAsTextFile}
+                          className="text-xs font-semibold underline-offset-2 hover:underline"
+                        >
+                          {t("chat:composer.sendAsTextFile", {
+                            defaultValue: "Gửi dưới dạng tệp .txt",
+                          })}
+                        </button>
+                      ) : undefined
+                    }
+                  />
+                ) : messageValidation.isOverSoftLimit || showLongPasteNotice ? (
+                  <InlineNotice
+                    tone="warning"
+                    className="mb-0"
+                    message={
+                      showLongPasteNotice
+                        ? t("chat:composer.longPasteNotice", {
                           defaultValue:
                             "Nội dung quá dài. Bạn có thể gửi dưới dạng tệp văn bản.",
                         })
-                      : t("chat:composer.softLimitWarning", {
+                        : t("chat:composer.softLimitWarning", {
                           defaultValue:
                             "Tin nhắn khá dài. Hãy cân nhắc gửi dưới dạng tệp nếu là log hoặc tài liệu.",
                         })
-                  }
-                  action={
-                    onAddFiles ? (
-                      <button
-                        type="button"
-                        onClick={handleSendAsTextFile}
-                        className="text-xs font-semibold underline-offset-2 hover:underline"
-                      >
-                        {t("chat:composer.sendAsTextFile", {
-                          defaultValue: "Gửi dưới dạng tệp .txt",
-                        })}
-                      </button>
-                    ) : undefined
-                  }
-                />
-              ) : null}
-            </div>
+                    }
+                    action={
+                      onAddFiles ? (
+                        <button
+                          type="button"
+                          onClick={handleSendAsTextFile}
+                          className="text-xs font-semibold underline-offset-2 hover:underline"
+                        >
+                          {t("chat:composer.sendAsTextFile", {
+                            defaultValue: "Gửi dưới dạng tệp .txt",
+                          })}
+                        </button>
+                      ) : undefined
+                    }
+                  />
+                ) : null}
+              </div>
 
-            {messageValidation.showCounter && (
-              <p
-                className={clsx(
-                  "shrink-0 text-[11px] font-medium",
-                  messageValidation.isOverHardLimit
-                    ? "text-danger"
-                    : messageValidation.isOverSoftLimit
-                      ? "text-warning"
-                      : "text-text-muted",
-                )}
-              >
-                {messageValidation.charCount.toLocaleString("vi-VN")}/
-                {messageValidation.hardLimit.toLocaleString("vi-VN")}
-              </p>
-            )}
-          </div>
-        )}
+              {messageValidation.showCounter && (
+                <p
+                  className={clsx(
+                    "shrink-0 text-[11px] font-medium",
+                    messageValidation.isOverHardLimit
+                      ? "text-danger"
+                      : messageValidation.isOverSoftLimit
+                        ? "text-warning"
+                        : "text-text-muted",
+                  )}
+                >
+                  {messageValidation.charCount.toLocaleString("vi-VN")}/
+                  {messageValidation.hardLimit.toLocaleString("vi-VN")}
+                </p>
+              )}
+            </div>
+          )}
 
         {onShareContact && currentUserId && (
           <ShareContactModal
