@@ -24,6 +24,8 @@ interface MessageActionsProps {
   onAction: (actionId: MessageActionId) => void;
   onClose?: () => void;
   className?: string;
+  /** Override label cho một số action (vd: deleteForEveryone label khác giữa sender vs admin). */
+  actionLabelOverrides?: Partial<Record<MessageActionId, string>>;
 }
 
 interface ActionDescriptor {
@@ -49,6 +51,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
   onAction,
   onClose,
   className,
+  actionLabelOverrides,
 }) => {
   const { t } = useTranslation();
   const actionMap = React.useMemo<Record<MessageActionId, ActionDescriptor>>(
@@ -78,9 +81,19 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
         label: t("chat:message.status.retry", { defaultValue: "Retry" }),
         icon: RefreshCw,
       },
-      delete: {
-        id: "delete",
-        label: t("chat:message.actions.delete"),
+      deleteForMe: {
+        id: "deleteForMe",
+        label: t("chat:message.actions.deleteForMe", {
+          defaultValue: "Xóa về phía tôi",
+        }),
+        icon: Trash2,
+        danger: true,
+      },
+      deleteForEveryone: {
+        id: "deleteForEveryone",
+        label: t("chat:message.actions.deleteForEveryone", {
+          defaultValue: "Thu hồi",
+        }),
         icon: Trash2,
         danger: true,
       },
@@ -93,7 +106,12 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
     [t],
   );
   const descriptors = actions
-    .map((actionId) => actionMap[actionId])
+    .map((actionId) => {
+      const base = actionMap[actionId];
+      if (!base) return base;
+      const overrideLabel = actionLabelOverrides?.[actionId];
+      return overrideLabel ? { ...base, label: overrideLabel } : base;
+    })
     .filter(Boolean);
 
   if (mode === "rail") {

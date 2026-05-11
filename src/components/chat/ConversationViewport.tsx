@@ -12,7 +12,10 @@ interface ConversationViewportProps {
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
   onEdit?: (message: Message) => void | Promise<void>;
-  onDelete?: (messageId: string) => void | Promise<void>;
+  onDelete?: (
+    messageId: string,
+    mode?: "FOR_ME" | "FOR_EVERYONE",
+  ) => void | Promise<void>;
   onInspect?: (message: Message) => void;
   hasMoreMessages?: boolean;
   isLoadingMessages?: boolean;
@@ -124,6 +127,12 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
           onToggleSelect={onToggleSelect}
           onNavigateToMessage={onNavigateToMessage}
           currentUsername={currentUsername}
+          viewerCanRecallOthers={
+            Boolean(
+              conversation.createdBy &&
+                conversation.createdBy === currentUserId,
+            )
+          }
           unreadMarker={unreadMarker}
           composerHeight={composerHeight}
           className={className}

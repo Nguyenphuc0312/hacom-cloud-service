@@ -18,7 +18,9 @@
   },
   "message": {
     "you": "You",
-    "deleted": "Message deleted",
+    "deleted": "Message has been unsent",
+    "recalled": "Message has been unsent",
+    "deletedByAdmin": "Removed by administrator",
     "editedAt": "Edited {{time}}",
     "jumpToLatest": "Jump to latest",
     "replyTargetMissing": "Original message is unavailable",
@@ -54,7 +56,10 @@
       "copyDetails": "Copy details",
       "inspect": "Inspect message",
       "edit": "Edit",
-      "delete": "Delete"
+      "delete": "Delete",
+      "deleteForMe": "Delete for me",
+      "deleteForEveryone": "Unsend",
+      "deleteForEveryoneAdmin": "Remove for everyone"
     },
     "structuredBlock": "Structured content",
     "expandLong": "Show more",
@@ -296,6 +301,8 @@
     "messageEdited": "Message edited",
     "editFailed": "Unable to edit message",
     "messageDeleted": "Message deleted",
+    "messageRecalled": "Message unsent",
+    "messageDeletedGlobal": "Message removed for everyone",
     "deleteFailed": "Unable to delete message",
     "resendSuccess": "Resent successfully",
     "resendFailed": "Resend failed",
@@ -310,5 +317,15 @@
     "voice": "Voice message",
     "location": "Location",
     "sticker": "Sticker"
+  },
+  "confirm": {
+    "deleteForMeTitle": "Delete for me?",
+    "deleteForMe": "This message will only be hidden from your view. Others can still see it.",
+    "deleteForEveryoneTitle": "Unsend message?",
+    "deleteForEveryone": "This message will be unsent for everyone in the conversation. This action cannot be undone.",
+    "deleteByAdminTitle": "Remove message for everyone?",
+    "deleteByAdmin": "You are removing another member's message as an administrator. No one in the conversation will see this content anymore.",
+    "deleteByAdminButton": "Remove for everyone",
+    "recall": "Unsend"
   }
 }

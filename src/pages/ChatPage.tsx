@@ -214,6 +214,13 @@ export const ChatPage: React.FC = () => {
   const [isDeleteConversationConfirmOpen, setIsDeleteConversationConfirmOpen] =
     useState(false);
   const [isDeletingConversation, setIsDeletingConversation] = useState(false);
+  const [pendingDeleteMessage, setPendingDeleteMessage] = useState<{
+    messageId: string;
+    mode: "FOR_ME" | "FOR_EVERYONE";
+    /** true khi viewer là admin/owner xóa tin của người khác → copy khác sender recall. */
+    isAdminDeletion?: boolean;
+  } | null>(null);
+  const [isDeletingMessage, setIsDeletingMessage] = useState(false);
   const [isLoadingMoreConversations, setIsLoadingMoreConversations] =
     useState(false);
   const [hasMoreConversations, setHasMoreConversations] = useState(true);
@@ -477,22 +484,59 @@ export const ChatPage: React.FC = () => {
   );
 
   const handleDeleteMessage = useCallback(
-    async (messageId: string) => {
+    (
+      messageId: string,
+      mode: "FOR_ME" | "FOR_EVERYONE" = "FOR_ME",
+      context?: "ADMIN_DELETE",
+    ) => {
       if (!selectedConversationId) return;
-
-      try {
-        await deleteMessageMutation({
-          conversationId: selectedConversationId,
-          messageId,
-        }).unwrap();
-        toast.success(t("chat:toast.messageDeleted"));
-      } catch (error) {
-        const apiError = extractApiError(error);
-        toast.error(apiError.message || t("chat:toast.deleteFailed"));
-      }
+      setPendingDeleteMessage({
+        messageId,
+        mode,
+        isAdminDeletion: context === "ADMIN_DELETE",
+      });
     },
-    [deleteMessageMutation, selectedConversationId, t],
+    [selectedConversationId],
   );
+
+  const closePendingDeleteMessage = useCallback(() => {
+    if (isDeletingMessage) return;
+    setPendingDeleteMessage(null);
+  }, [isDeletingMessage]);
+
+  const confirmDeleteMessage = useCallback(async () => {
+    if (!selectedConversationId || !pendingDeleteMessage) return;
+    setIsDeletingMessage(true);
+    try {
+      await deleteMessageMutation({
+        conversationId: selectedConversationId,
+        messageId: pendingDeleteMessage.messageId,
+        mode: pendingDeleteMessage.mode,
+      }).unwrap();
+      toast.success(
+        pendingDeleteMessage.mode === "FOR_EVERYONE"
+          ? pendingDeleteMessage.isAdminDeletion
+            ? t("chat:toast.messageDeletedGlobal", {
+                defaultValue: "Đã xóa tin nhắn ở mọi người",
+              })
+            : t("chat:toast.messageRecalled", {
+                defaultValue: "Đã thu hồi tin nhắn",
+              })
+          : t("chat:toast.messageDeleted"),
+      );
+      setPendingDeleteMessage(null);
+    } catch (error) {
+      const apiError = extractApiError(error);
+      toast.error(apiError.message || t("chat:toast.deleteFailed"));
+    } finally {
+      setIsDeletingMessage(false);
+    }
+  }, [
+    deleteMessageMutation,
+    pendingDeleteMessage,
+    selectedConversationId,
+    t,
+  ]);
 
   const closeInfoPanel = useCallback(() => {
     setIsInfoPanelOpen(false);
@@ -1153,6 +1197,54 @@ export const ChatPage: React.FC = () => {
           defaultValue: "Delete",
         })}
         isLoading={isDeletingConversation}
+        variant="danger"
+      />
+
+      <ConfirmDialog
+        isOpen={pendingDeleteMessage !== null}
+        onClose={closePendingDeleteMessage}
+        onConfirm={() => {
+          void confirmDeleteMessage();
+        }}
+        title={
+          pendingDeleteMessage?.mode === "FOR_EVERYONE"
+            ? pendingDeleteMessage.isAdminDeletion
+              ? t("chat:confirm.deleteByAdminTitle", {
+                  defaultValue: "Xóa tin nhắn ở mọi người?",
+                })
+              : t("chat:confirm.deleteForEveryoneTitle", {
+                  defaultValue: "Thu hồi tin nhắn?",
+                })
+            : t("chat:confirm.deleteForMeTitle", {
+                defaultValue: "Xóa về phía tôi?",
+              })
+        }
+        message={
+          pendingDeleteMessage?.mode === "FOR_EVERYONE"
+            ? pendingDeleteMessage.isAdminDeletion
+              ? t("chat:confirm.deleteByAdmin", {
+                  defaultValue:
+                    "Bạn đang xóa tin nhắn của thành viên khác với tư cách quản trị viên. Mọi người trong cuộc trò chuyện sẽ không còn thấy nội dung này.",
+                })
+              : t("chat:confirm.deleteForEveryone", {
+                  defaultValue:
+                    "Tin nhắn này sẽ bị thu hồi với tất cả mọi người trong cuộc trò chuyện. Hành động này không thể hoàn tác.",
+                })
+            : t("chat:confirm.deleteForMe", {
+                defaultValue:
+                  "Tin nhắn này sẽ chỉ bị xóa khỏi phía bạn. Người khác vẫn có thể xem tin nhắn.",
+              })
+        }
+        confirmText={
+          pendingDeleteMessage?.mode === "FOR_EVERYONE"
+            ? pendingDeleteMessage.isAdminDeletion
+              ? t("chat:confirm.deleteByAdminButton", {
+                  defaultValue: "Xóa ở mọi người",
+                })
+              : t("chat:confirm.recall", { defaultValue: "Thu hồi" })
+            : t("common:actions.delete", { defaultValue: "Xóa" })
+        }
+        isLoading={isDeletingMessage}
         variant="danger"
       />
     </AppShell>

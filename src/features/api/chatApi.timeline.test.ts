@@ -238,6 +238,7 @@ describe("chatApi active timeline cache boundary", () => {
         chatApi.endpoints.deleteMessage.initiate({
           conversationId: "room-1",
           messageId: "msg-1",
+          mode: "FOR_ME",
         }),
       )
       .unwrap();
