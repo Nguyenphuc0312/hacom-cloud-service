@@ -15,10 +15,7 @@ export const logScrollTrace = (
   event: string,
   details?: Record<string, unknown>,
 ): void => {
-  const envScrollDebugEnabled =
-    import.meta.env.DEV && import.meta.env.VITE_CHAT_SCROLL_DEBUG === "true";
-  const shouldLog = envScrollDebugEnabled || isMessageDebugEnabled();
-  if (!shouldLog) {
+  if (!isMessageDebugEnabled()) {
     return;
   }
 

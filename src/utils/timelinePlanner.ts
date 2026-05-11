@@ -7,7 +7,6 @@ import {
   isPendingMessage,
   type MessageSemanticFamily,
 } from "./messageTimeline";
-import { CHAT_TIMELINE_V2_ENABLED } from "../features/chat/config/experienceFlags";
 
 const DEFAULT_MAJOR_PAUSE_MS = 8 * 60 * 1000;
 
@@ -181,60 +180,6 @@ export const resolveClusterBreak = (
   const diffMs = Math.abs(nextTime.getTime() - previousTime.getTime());
   if (diffMs >= DEFAULT_MAJOR_PAUSE_MS) {
     return hardBreak("time_gap");
-  }
-
-  if (!CHAT_TIMELINE_V2_ENABLED) {
-    let score = 0;
-    let primaryReason: ClusterBreakReason | null = null;
-
-    const previousFamily = getMessageSemanticFamily(previousMessage);
-    const nextFamily = getMessageSemanticFamily(nextMessage);
-    if (previousFamily !== nextFamily) {
-      score += 32;
-      primaryReason = "semantic_family";
-    }
-
-    const previousTransport = getTransportBucket(previousMessage);
-    const nextTransport = getTransportBucket(nextMessage);
-    if (previousTransport !== nextTransport) {
-      score += 30;
-      if (!primaryReason) primaryReason = "status";
-    }
-
-    if (
-      getReplyContextKey(previousMessage) !== getReplyContextKey(nextMessage)
-    ) {
-      score += 24;
-      if (!primaryReason) primaryReason = "reply_context";
-    }
-
-    if (previousMessage.isEdited || nextMessage.isEdited) {
-      score += 14;
-      if (!primaryReason) primaryReason = "edited";
-    }
-
-    const pauseScore = getPauseScore(diffMs, groupingThresholdMs);
-    if (pauseScore > 0) {
-      score += pauseScore;
-      if (!primaryReason) primaryReason = "time_gap";
-    }
-
-    const rhythmScore = getVisualRhythmScore(previousMessage, nextMessage);
-    if (rhythmScore > 0) {
-      score += rhythmScore;
-      if (!primaryReason) primaryReason = "visual_pause";
-    }
-
-    if (score >= 50) {
-      return {
-        shouldBreak: true,
-        primaryReason,
-        score,
-        mergeLevel: "not-merged",
-      };
-    }
-
-    return score > 0 ? softMerge(primaryReason, score) : fullMerge();
   }
 
   const previousFamily = getMessageSemanticFamily(previousMessage);

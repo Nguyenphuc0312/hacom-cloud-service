@@ -1,8 +1,7 @@
 import React from "react";
 import type { Attachment, Conversation, Message } from "../../types";
-import { MessageList } from "./MessageList";
-import { ChatTimelineV2 } from "../../features/chat/timeline-v2";
-import { CHAT_TIMELINE_V2_OWNER_ENABLED } from "../../features/chat/config/experienceFlags";
+import { SimpleVirtualizedChatTimeline } from "../../features/chat/simple-virtual-timeline";
+import { useConversationMessagesRTK } from "../../features/chat/hooks/useConversationMessagesRTK";
 import type { ChatDensity } from "../../stores/uiStore";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
 
@@ -17,32 +16,16 @@ interface ConversationViewportProps {
   onInspect?: (message: Message) => void;
   hasMoreMessages?: boolean;
   isLoadingMessages?: boolean;
-  historyLoadingState?: {
-    stage:
-      | "empty"
-      | "partial_unread_bootstrap"
-      | "partial_prefetch"
-      | "authoritative_initial_window"
-      | "paginating_older"
-      | "live_realtime";
-    isPartial: boolean;
-  } | null;
   isConversationReady?: boolean;
   onLoadOlderMessages?: () => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
-  messageError?: string | null;
-  onRetryMessages?: () => void | Promise<void>;
   density: ChatDensity;
   isSelectionMode: boolean;
   selectedMessageIds: Set<string>;
   onToggleSelect: (messageId: string) => void;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
-  onReachedLatest?: (message: Message) => void;
-  jumpToMessageId?: string | null;
-  jumpRequestVersion?: number;
-  onJumpHandled?: (messageId: string) => void;
   composerHeight?: number;
   className?: string;
 }
@@ -58,25 +41,15 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
       onEdit,
       onDelete,
       onInspect,
-      hasMoreMessages,
-      isLoadingMessages,
-      historyLoadingState,
       isConversationReady,
-      onLoadOlderMessages,
       onImageClick,
       onFilePreview,
-      messageError,
-      onRetryMessages,
       density,
       isSelectionMode,
       selectedMessageIds,
       onToggleSelect,
       onNavigateToMessage,
       currentUsername,
-      onReachedLatest,
-      jumpToMessageId,
-      jumpRequestVersion,
-      onJumpHandled,
       composerHeight,
       className,
     }: ConversationViewportProps) => {
@@ -119,39 +92,31 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
         lastReadMessageId,
       ]);
 
-      const handleReachedLatest = React.useCallback(
-        (message: Message) => {
-          setUnreadMarker((current) => (current ? null : current));
-          onReachedLatest?.(message);
-        },
-        [onReachedLatest],
-      );
-
-      const TimelineImpl = CHAT_TIMELINE_V2_OWNER_ENABLED
-        ? ChatTimelineV2
-        : MessageList;
+      const {
+        messages,
+        hasMoreOlder,
+        isInitialLoading,
+        isLoadingOlder,
+        loadOlder,
+      } = useConversationMessagesRTK(conversation.id);
 
       return (
-        <TimelineImpl
+        <SimpleVirtualizedChatTimeline
           conversationId={conversation.id}
           conversationType={conversation.type}
           currentUserId={currentUserId}
+          messages={messages}
           onReply={onReply}
           onReact={onReact}
           onEdit={onEdit}
           onDelete={onDelete}
           onInspect={onInspect}
-          hasMore={hasMoreMessages}
-          isLoadingMore={Boolean(isLoadingMessages)}
-          isInitialLoading={Boolean(
-            isLoadingMessages || !isConversationReady
-          )}
-          historyLoadingState={historyLoadingState}
-          onLoadMore={onLoadOlderMessages}
           onImageClick={onImageClick}
           onFilePreview={onFilePreview}
-          error={messageError}
-          onRetry={onRetryMessages}
+          hasMore={hasMoreOlder}
+          isLoadingMore={isLoadingOlder}
+          isInitialLoading={isInitialLoading || !isConversationReady}
+          onLoadMore={loadOlder}
           density={density}
           layoutState={layoutState}
           isSelectionMode={isSelectionMode}
@@ -160,10 +125,6 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
           onNavigateToMessage={onNavigateToMessage}
           currentUsername={currentUsername}
           unreadMarker={unreadMarker}
-          onReachedLatest={handleReachedLatest}
-          jumpToMessageId={jumpToMessageId}
-          jumpRequestVersion={jumpRequestVersion}
-          onJumpHandled={onJumpHandled}
           composerHeight={composerHeight}
           className={className}
         />
