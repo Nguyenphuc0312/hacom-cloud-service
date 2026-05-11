@@ -1,4 +1,4 @@
-import { CHAT_SCROLL_MACHINE_V2_ENABLED } from "../features/chat/config/experienceFlags";
+import { isChatScrollMachineV2Enabled } from "../features/chat/config/experienceFlags";
 
 export type ScrollMode =
   | "at_bottom"
@@ -35,7 +35,7 @@ export const resolvePinnedToBottom = (
   mode: Extract<ScrollMode, "at_bottom" | "near_bottom" | "reading_history">;
 } => {
   const distanceFromBottomPx = getDistanceFromBottom(element);
-  if (!CHAT_SCROLL_MACHINE_V2_ENABLED) {
+  if (!isChatScrollMachineV2Enabled()) {
     return {
       distanceFromBottomPx,
       isPinnedToBottom: isPinnedToBottom(distanceFromBottomPx, thresholdPx),

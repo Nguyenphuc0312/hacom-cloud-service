@@ -1,15 +1,15 @@
 import { logger } from "../../../utils/logger";
+import { isChatScrollDebugEnabled as isChatScrollDebugEnabledFlag } from "../config/experienceFlags";
 
 /**
  * Timeline V2 — flag-gated debug logger.
  *
- * Enable in dev/staging via `VITE_CHAT_SCROLL_DEBUG=true`. In production builds
- * with the flag off, calls compile to a near no-op (one env-string compare).
+ * Enable via `VITE_CHAT_SCROLL_DEBUG=true` OR the runtime override
+ * (`globalThis.__CHAT_FLAGS_OVERRIDE__.VITE_CHAT_SCROLL_DEBUG = "true"`).
+ * Routed through the shared `experienceFlags` resolver so devtools-set
+ * overrides and Playwright `addInitScript` take effect — previously this
+ * read `import.meta.env` directly, which the override could not change.
  */
-
-const CHAT_SCROLL_DEBUG =
-  typeof import.meta !== "undefined" &&
-  import.meta.env?.VITE_CHAT_SCROLL_DEBUG === "true";
 
 export type DebugEvent =
   | "state_transition"
@@ -33,13 +33,14 @@ export type DebugEvent =
   | "new_message_badge_show"
   | "new_message_badge_click";
 
-export const isChatScrollDebugEnabled = (): boolean => CHAT_SCROLL_DEBUG;
+export const isChatScrollDebugEnabled = (): boolean =>
+  isChatScrollDebugEnabledFlag();
 
 export function debugScroll(
   event: DebugEvent,
   payload: Record<string, unknown> = {},
 ): void {
-  if (!CHAT_SCROLL_DEBUG) return;
+  if (!isChatScrollDebugEnabledFlag()) return;
   logger.debug("chat-scroll-v2", event, payload);
 }
 

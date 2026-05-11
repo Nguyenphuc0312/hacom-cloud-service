@@ -32,7 +32,7 @@ import { useChatScrollOwnerV2 } from "./useChatScrollOwnerV2";
 import { createDomScrollAdapter, type DomScrollAdapter } from "./domScrollAdapter";
 import { useScrollEventBridge } from "./useScrollEventBridge";
 import { debugScroll, isChatScrollDebugEnabled } from "./scrollDebug";
-import { CHAT_SCROLL_OWNER_V2_DRIVES_ENABLED } from "../config/experienceFlags";
+import { isChatScrollOwnerV2DrivesEnabled } from "../config/experienceFlags";
 
 /**
  * Public props are an exact superset of the legacy MessageList props so a
@@ -140,7 +140,9 @@ export const ChatTimelineV2: React.FC<ChatTimelineV2Props> = (props) => {
   // overhead for no benefit, so we gate it on the same flag that gates
   // legacy suppression — that way `active` and `suppressScrollWrites` are
   // always consistent.
-  const drivesScroll = CHAT_SCROLL_OWNER_V2_DRIVES_ENABLED;
+  // Resolved per render: lets the runaway-command kill-switch flip drives
+  // off mid-session, and lets Playwright addInitScript take effect.
+  const drivesScroll = isChatScrollOwnerV2DrivesEnabled();
   useScrollEventBridge({
     getOuterElement,
     adapter,

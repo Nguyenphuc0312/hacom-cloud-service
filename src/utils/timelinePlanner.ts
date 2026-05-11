@@ -7,7 +7,7 @@ import {
   isPendingMessage,
   type MessageSemanticFamily,
 } from "./messageTimeline";
-import { CHAT_TIMELINE_V2_ENABLED } from "../features/chat/config/experienceFlags";
+import { isChatTimelineV2Enabled } from "../features/chat/config/experienceFlags";
 
 const DEFAULT_MAJOR_PAUSE_MS = 8 * 60 * 1000;
 
@@ -183,7 +183,7 @@ export const resolveClusterBreak = (
     return hardBreak("time_gap");
   }
 
-  if (!CHAT_TIMELINE_V2_ENABLED) {
+  if (!isChatTimelineV2Enabled()) {
     let score = 0;
     let primaryReason: ClusterBreakReason | null = null;
 

@@ -7,7 +7,7 @@ import type { Conversation, Message, UserSummary } from "../../../types";
 import { getConversationByIdUseCase } from "../usecases/getConversationById";
 import { logMessageDebug } from "../../../utils/messageDebug";
 import { markChatPerformance } from "../../../utils/chatPerformance";
-import { CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED } from "../config/experienceFlags";
+import { isChatRtkqMessagesRuntimeEnabled } from "../config/experienceFlags";
 
 const INITIAL_CONVERSATION_WINDOW_LIMIT = 40;
 const OLDER_MESSAGES_PAGE_LIMIT = 30;
@@ -155,42 +155,42 @@ export const useConversationSession = ({
   updateConversation,
 }: UseConversationSessionOptions): UseConversationSessionResult => {
   const currentHasMore = useChatStore((state) =>
-    CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED
+    isChatRtkqMessagesRuntimeEnabled()
       ? false
       : selectedConversationId
         ? (state.hasMoreMessages[selectedConversationId] ?? true)
         : false,
   );
   const currentIsLoading = useChatStore((state) =>
-    CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED
+    isChatRtkqMessagesRuntimeEnabled()
       ? false
       : selectedConversationId
         ? Boolean(state.isLoadingMessagesByConversation[selectedConversationId])
         : false,
   );
   const currentMessageError = useChatStore((state) =>
-    CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED
+    isChatRtkqMessagesRuntimeEnabled()
       ? null
       : selectedConversationId
         ? (state.messageErrors[selectedConversationId] ?? null)
         : null,
   );
   const isSelectedConversationHydrated = useChatStore((state) =>
-    CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED
+    isChatRtkqMessagesRuntimeEnabled()
       ? Boolean(selectedConversationId)
       : selectedConversationId
         ? Boolean(state.messagesHydratedByConversation[selectedConversationId])
         : false,
   );
   const currentHistoryStage = useChatStore((state) =>
-    CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED
+    isChatRtkqMessagesRuntimeEnabled()
       ? "live_realtime"
       : selectedConversationId
         ? (state.historyStageByConversation[selectedConversationId] ?? "empty")
         : "empty",
   );
   const hasAuthoritativeHistory = useChatStore((state) =>
-    CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED
+    isChatRtkqMessagesRuntimeEnabled()
       ? Boolean(selectedConversationId)
       : selectedConversationId
         ? Boolean(
@@ -279,7 +279,7 @@ export const useConversationSession = ({
         skipInitialDeltaSync: false,
       });
 
-      if (CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED) {
+      if (isChatRtkqMessagesRuntimeEnabled()) {
         logMessageDebug(
           "ChatPage",
           "legacy_message_fetch_skipped_rtkq_runtime",
@@ -376,7 +376,7 @@ export const useConversationSession = ({
   }, [selectedConversationId]);
 
   const handleLoadOlderMessages = useCallback(async () => {
-    if (CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED) {
+    if (isChatRtkqMessagesRuntimeEnabled()) {
       return;
     }
     if (!selectedConversationId) return;
@@ -409,7 +409,7 @@ export const useConversationSession = ({
   }, [fetchMessages, selectedConversationId]);
 
   const handleRetryMessages = useCallback(async () => {
-    if (CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED) {
+    if (isChatRtkqMessagesRuntimeEnabled()) {
       return;
     }
     if (!selectedConversationId) return;
@@ -466,7 +466,7 @@ export const useConversationSession = ({
   );
 
   useEffect(() => {
-    if (CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED) {
+    if (isChatRtkqMessagesRuntimeEnabled()) {
       return;
     }
     if (

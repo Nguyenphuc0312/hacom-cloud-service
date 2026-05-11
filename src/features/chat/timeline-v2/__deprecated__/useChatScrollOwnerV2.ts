@@ -17,6 +17,8 @@
 
 import React from "react";
 import type { Message } from "../../../types";
+import { disableChatFlagForSession } from "../config/experienceFlags";
+import { logger } from "../../../utils/logger";
 import { classifyMessageChange } from "./messageChangeClassifier";
 import { ScrollCommandQueue } from "./scrollCommandQueue";
 import { debugScroll } from "./scrollDebug";
@@ -88,6 +90,18 @@ const computeTtlMs = (distancePx: number): number => {
   return Math.max(320, Math.min(1200, base + Math.round(distancePx / 3)));
 };
 
+/**
+ * Runaway-command kill-switch. If more than this many scroll commands are
+ * enqueued within `RUNAWAY_WINDOW_MS`, we treat V2 drives as broken for
+ * this session, fall back to legacy, and surface a warning. Tuned high
+ * enough to absorb a burst of legitimate prepends + media-settle commands
+ * but low enough to catch a feedback loop. The 2026-05 incident produced
+ * dozens per second.
+ */
+const RUNAWAY_THRESHOLD = 12;
+const RUNAWAY_WINDOW_MS = 1000;
+const DRIVES_ENV_KEY = "VITE_CHAT_SCROLL_OWNER_V2_DRIVES";
+
 export function useChatScrollOwnerV2(
   params: ChatScrollOwnerParams,
 ): ChatScrollOwnerResult {
@@ -122,6 +136,9 @@ export function useChatScrollOwnerV2(
     typeof setTimeout
   > | null>(null);
   const programmaticScrollExpiryRef = React.useRef<number>(0);
+  // Sliding-window timestamps of recent enqueue attempts (kill-switch input).
+  const enqueueTimestampsRef = React.useRef<number[]>([]);
+  const drivesKilledRef = React.useRef<boolean>(false);
   // Lazy-initialised once per hook instance. Using useState's lazy form keeps
   // the queue stable across renders without reading `ref.current` during
   // render, which strict react-hooks lint rules forbid.
@@ -145,13 +162,68 @@ export function useChatScrollOwnerV2(
 
   const enqueueRequests = React.useCallback(
     (requests: CommandRequest[]) => {
+      if (drivesKilledRef.current) return;
       for (const req of requests) {
+        // Loop-protection guard #1: never enqueue an index-target command
+        // whose index is missing / NaN / negative. The legacy MessageList
+        // captureVisibleAnchor used to forward `index: 0` as a placeholder;
+        // we now defend against any future regression of that kind by
+        // refusing the command rather than scrolling to row 0 (top of
+        // list) — which manifests as the "message jump" reported in prod.
+        if (
+          req.target.kind === "index" &&
+          (!Number.isFinite(req.target.index) || req.target.index < 0)
+        ) {
+          debugScroll("reject_command", {
+            reason: "invalid_anchor_index",
+            commandReason: req.reason,
+            index: req.target.index,
+          });
+          continue;
+        }
+        // Loop-protection guard #2: remote_message_following must only fire
+        // when the machine still considers us pinned at bottom. The state
+        // machine gates this on enqueue but a stale effect could slip
+        // through between dispatch and drain; double-check here.
+        if (
+          req.reason === "remote_message_following" &&
+          (!contextRef.current.isPinnedToBottom ||
+            stateRef.current !== "receiving_remote_message")
+        ) {
+          debugScroll("reject_command", {
+            reason: "no_longer_following_bottom",
+            state: stateRef.current,
+          });
+          continue;
+        }
+
         const distance =
           req.target.kind === "offset"
             ? Math.abs(req.target.value)
             : req.target.kind === "bottom"
               ? adapter.getTotalSize()
               : 0;
+
+        // Kill-switch: count this attempt against the sliding 1s window.
+        const now = nowFn();
+        const cutoff = now - RUNAWAY_WINDOW_MS;
+        const recent = enqueueTimestampsRef.current.filter((t) => t >= cutoff);
+        recent.push(now);
+        enqueueTimestampsRef.current = recent;
+        if (recent.length > RUNAWAY_THRESHOLD) {
+          drivesKilledRef.current = true;
+          disableChatFlagForSession(DRIVES_ENV_KEY);
+          queue.reset();
+          logger.warn("chat-scroll-v2", "runaway_kill_switch_triggered", {
+            commandsInWindow: recent.length,
+            windowMs: RUNAWAY_WINDOW_MS,
+            threshold: RUNAWAY_THRESHOLD,
+            state: stateRef.current,
+            lastReason: req.reason,
+          });
+          return;
+        }
+
         queue.enqueue(
           {
             reason: req.reason,
