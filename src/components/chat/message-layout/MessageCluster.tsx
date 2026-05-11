@@ -144,9 +144,6 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
         (message.forwardedFrom as { displayName?: string | null })
           .displayName || message.forwardedFrom.username,
       username: message.forwardedFrom.username,
-      employeeCode: (
-        message.forwardedFrom as { employeeCode?: string | null }
-      ).employeeCode,
     })
     : null;
   const replyTargetMessageId = message.replyTo || message.replyToMessage?.id;
@@ -257,6 +254,8 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
       onReact,
       onReply,
       openActions,
+      isOwn,
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     ],
   );
 

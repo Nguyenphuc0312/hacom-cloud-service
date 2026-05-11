@@ -335,7 +335,8 @@ const MessageGroupItem: React.FC<{
 
       setIsActionSheetOpen(false);
     },
-    [message, onDelete, onEdit, onReact, onReply, resendMessage],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [message, onDelete, onEdit, onReact, onReply, resendMessage, isOwn],
   );
 
   const isActionRailActive = isActionRailVisible || isActionSheetOpen || showEmojiPicker;
