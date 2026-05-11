@@ -145,6 +145,10 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
   // kịp catch up), FE phải giữ trạng thái local. Tránh badge nhảy lại đỏ ngay
   // sau khi user vừa đọc.
   const localMarkedReadSeq = new Map<string, number>();
+  // Snapshot map: stores the conversation state BEFORE an optimistic mark-read
+  // so it can be restored if the API call fails.
+  const pendingRollbackSnapshot = new Map<string, Conversation>();
+
   const recordLocalMarkedSeq = (conversationId: string, seq: number): void => {
     if (!conversationId || !Number.isInteger(seq) || seq <= 0) return;
     const previous = localMarkedReadSeq.get(conversationId) ?? 0;
@@ -154,6 +158,9 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
   };
   const getLocalMarkedSeq = (conversationId: string): number =>
     localMarkedReadSeq.get(conversationId) ?? 0;
+  const clearLocalMarkedSeq = (conversationId: string): void => {
+    localMarkedReadSeq.delete(conversationId);
+  };
 
   const applyOptimisticConversationRead = (
     conversationId: string,
@@ -342,6 +349,15 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
     const runMarkAsRead = async (
       requestInput: MarkAsReadInput,
     ): Promise<void> => {
+      // Capture snapshot BEFORE applying optimistic update so we can restore
+      // exactly the authoritative server state if the API call fails.
+      const snapshotConversation = get().conversations.find(
+        (c) => c.id === conversationId,
+      ) ?? null;
+      if (snapshotConversation) {
+        pendingRollbackSnapshot.set(conversationId, { ...snapshotConversation });
+      }
+
       applyOptimisticConversationRead(conversationId, requestInput);
       const optimisticSeq = toPositiveSeq(requestInput.lastReadSeq);
       if (optimisticSeq !== null) {
@@ -378,6 +394,26 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
             lastReadSeq: optimisticSeq,
             error: error instanceof Error ? error.message : String(error),
           });
+          // Rollback: restore the pre-optimistic conversation state.
+          // This ensures the UI shows the authoritative server state rather than
+          // a false "read" that never persisted. After rollback, a refetch of
+          // the unread summary will correct any remaining drift.
+          clearLocalMarkedSeq(conversationId);
+          const snapshot = pendingRollbackSnapshot.get(conversationId);
+          if (snapshot) {
+            set((state) => {
+              const conversations = state.conversations.map((c) =>
+                c.id === conversationId
+                  ? (normalizeConversation(snapshot) ?? c)
+                  : c,
+              );
+              return {
+                conversations,
+                ...buildConversationCollectionState(conversations),
+              };
+            });
+            pendingRollbackSnapshot.delete(conversationId);
+          }
           throw error;
         },
       );
@@ -508,6 +544,7 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
     applyOptimisticConversationRead,
     reset() {
       markAsReadInFlight.clear();
+      pendingRollbackSnapshot.clear();
     },
   };
 };
