@@ -1,4 +1,4 @@
-﻿{
+{
   "header": {
     "back": "Quay lại",
     "viewInfo": "Xem thông tin cuộc trò chuyện",
@@ -81,7 +81,8 @@
     "mentionTrigger": "Nhắc người dùng",
     "mentionList": "Gợi ý người dùng",
     "noMentionResults": "Không tìm thấy người dùng phù hợp",
-    "placeholder": "Nhập tin nhắn...",
+    "placeholder": "Nhập tin nhắn của bạn...",
+    "dynamicPlaceholder": "Nhập @, tin nhắn tới {{name}}",
     "messageInput": "Ô nhập tin nhắn",
     "sendMessage": "Gửi tin nhắn",
     "sending": "Đang gửi tin nhắn",

@@ -36,7 +36,6 @@ interface SidebarProps {
   onSelectConversation: (id: string) => void;
   onRetryConversations?: () => void;
   onLoadMoreConversations?: () => void;
-  onNewChat?: () => void;
   onCurrentUserClick?: () => void;
   className?: string;
 }
@@ -53,7 +52,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectConversation,
   onRetryConversations,
   onLoadMoreConversations,
-  onNewChat,
   onCurrentUserClick,
   className,
 }) => {
@@ -111,12 +109,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <SidebarHeader
           layoutState={layoutState}
           currentUser={currentUser}
-          onNewChat={onNewChat}
           onCurrentUserClick={onCurrentUserClick}
           onOpenFriends={() => navigate(ROUTE_PATHS.FRIENDS)}
           onOpenSettings={() => navigate(ROUTE_PATHS.SETTINGS)}
           onRequestLogout={() => setIsLogoutConfirmOpen(true)}
-          onFocusSearch={() => searchInputRef.current?.focus()}
           onMarkRead={markRead}
           onMarkAllRead={markAllRead}
         />

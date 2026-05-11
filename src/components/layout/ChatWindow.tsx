@@ -1126,6 +1126,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             composerMode={composerAvailability.mode}
             onShareContact={handleShareContact}
             uploadDrafts={uploadQueue.drafts}
+            conversationName={callDisplayName}
             onAddFiles={handleAddFiles}
             onRemoveDraft={uploadQueue.removeDraft}
             onCancelUpload={uploadQueue.cancelUpload}

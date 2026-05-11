@@ -12,10 +12,7 @@ import {
 } from "@heroicons/react/24/outline";
 import type { UserSummary } from "../../types";
 import { ROUTE_PATHS } from "../../router/paths";
-import { useUIStore } from "../../stores";
-import { emitOpenNewChatModal } from "../../lib/commandPalette";
 import ContactsAddressBookOutlineIcon from "./ContactsAddressBookOutlineIcon";
-import CreateGroupIcon from "./CreateGroupIcon";
 
 type SideRailItem = {
   id: string;
@@ -169,18 +166,8 @@ export const SideRail: React.FC<SideRailProps> = ({
   onCurrentUserClick,
 }) => {
   const { pathname } = useLocation();
-  const openModal = useUIStore((state) => state.openModal);
 
-  const mainRailItems: SideRailItem[] = [
-    ...railItems.slice(0, 1),
-    {
-      id: "new-chat",
-      label: "Tạo mới",
-      icon: CreateGroupIcon,
-      onClick: () => emitOpenNewChatModal(),
-    },
-    ...railItems.slice(1),
-  ];
+  const mainRailItems: SideRailItem[] = railItems;
 
   return (
     <aside className="hc-side-rail" aria-label="Điều hướng chính">
@@ -193,7 +180,7 @@ export const SideRail: React.FC<SideRailProps> = ({
         <img
           src="/logo-dung.png"
           alt="Hacom Holdings"
-          className="h-full w-full object-contain mix-blend-multiply"
+          className="h-full w-full object-contain"
         />
       </NavLink>
 

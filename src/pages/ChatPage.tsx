@@ -926,7 +926,6 @@ export const ChatPage: React.FC = () => {
               onSelectConversation={handleSelectConversation}
               onRetryConversations={fetchConversations}
               onLoadMoreConversations={handleLoadMoreConversations}
-              onNewChat={handleOpenNewChat}
               onCurrentUserClick={handleOpenCurrentUserProfile}
             />
           </div>

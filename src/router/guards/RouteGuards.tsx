@@ -182,7 +182,7 @@ export const ActivationRoute: React.FC<GuardProps> = ({ children }) => {
 
 export const ForceChangePasswordRoute: React.FC<GuardProps> = ({ children }) => {
   const { t } = useTranslation();
-  const { isAuthenticated, isInitialized, initialize, authStatus, user } = useAuthStore();
+  const { isAuthenticated, isInitialized, initialize, user } = useAuthStore();
 
   useEffect(() => {
     if (!isInitialized) {

@@ -7,10 +7,11 @@ import {
   BellIcon,
   Cog6ToothIcon,
   EllipsisHorizontalIcon,
-  MagnifyingGlassIcon,
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
 import ContactsAddressBookOutlineIcon from "../../../shared/layout/ContactsAddressBookOutlineIcon";
+import CreateGroupIcon from "../../../shared/layout/CreateGroupIcon";
+import { emitOpenNewChatModal } from "../../../lib/commandPalette";
 import { Avatar } from "../../common/Avatar";
 import { IconButtonSurface } from "../../ui";
 import { NotificationPanel } from "../../notification/NotificationPanel";
@@ -26,7 +27,6 @@ interface SidebarHeaderProps {
   onOpenFriends?: () => void;
   onOpenSettings?: () => void;
   onRequestLogout?: () => void;
-  onFocusSearch?: () => void;
   onMarkRead?: (id: string) => void;
   onMarkAllRead?: () => void;
 }
@@ -60,7 +60,6 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   onOpenFriends,
   onOpenSettings,
   onRequestLogout,
-  onFocusSearch,
   onMarkRead,
   onMarkAllRead,
 }) => {
@@ -202,17 +201,15 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           )}
           ref={menuRef}
         >
-
-
           <IconButtonSurface
-            onClick={onFocusSearch}
+            onClick={() => emitOpenNewChatModal()}
             className={clsx(
               "rounded-md text-text-muted hover:bg-surface-hover/70 hover:text-text-primary",
               "h-[var(--control-height-md)] w-[var(--control-height-md)]",
             )}
-            aria-label={t("sidebar:search.aria")}
+            aria-label="Tạo chat mới"
           >
-            <MagnifyingGlassIcon className="h-[18px] w-[18px]" />
+            <CreateGroupIcon className="h-[18px] w-[18px]" />
           </IconButtonSurface>
 
           <div className="relative" ref={notificationRef}>
