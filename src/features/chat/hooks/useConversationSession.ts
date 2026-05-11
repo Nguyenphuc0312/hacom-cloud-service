@@ -53,6 +53,21 @@ const scheduleIdleTask = (task: () => void): (() => void) => {
   };
 };
 
+const coercePositiveIntSeq = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+  // BIGINT từ PG được Sequelize serialize thành string ("233"). Phải coerce
+  // ở mọi điểm đọc seq để mark-read và stale-read guard hoạt động đúng.
+  if (typeof value === "string" && value.length > 0 && /^[1-9]\d*$/.test(value)) {
+    const parsed = Number(value);
+    if (Number.isSafeInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
 const getMessageReadSeq = (message: Message): number | null => {
   const record = message as unknown as {
     messageSeq?: unknown;
@@ -61,13 +76,8 @@ const getMessageReadSeq = (message: Message): number | null => {
   };
   const candidates = [record.messageSeq, record.serverSeq, record.seq];
   for (const candidate of candidates) {
-    if (
-      typeof candidate === "number" &&
-      Number.isInteger(candidate) &&
-      candidate > 0
-    ) {
-      return candidate;
-    }
+    const seq = coercePositiveIntSeq(candidate);
+    if (seq !== null) return seq;
   }
   return null;
 };
