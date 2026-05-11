@@ -352,19 +352,8 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
             {timeLabel}
           </span>
 
-          {unreadCount > 0 ? (
-            <span
-              className={clsx(
-                "sidebar-unread-badge inline-flex items-center justify-center rounded-full font-semibold leading-none",
-                isDense
-                  ? "min-h-4 min-w-4 px-1 text-[10px]"
-                  : "min-h-[18px] min-w-[18px] px-1.5 text-[10px]",
-                visualStyles.unreadBadge,
-              )}
-            >
-              {unreadLabel}
-            </span>
-          ) : null}
+          {/* unread badge hidden temporarily — unread count bug pending fix */}
+          {null}
         </div>
       </div>
     </button>
