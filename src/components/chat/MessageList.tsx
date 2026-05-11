@@ -90,53 +90,7 @@ interface MessageListProps {
   onJumpHandled?: (messageId: string) => void;
   composerHeight?: number;
   className?: string;
-  /**
-   * Timeline V2 hook. When provided, MessageList invokes this callback once
-   * its scroll outer element mounts so a V2 scroll owner can observe the
-   * same DOM node. Strictly additive: legacy behavior is unchanged when the
-   * prop is absent.
-   */
-  onOuterRef?: (element: HTMLDivElement | null) => void;
-  /**
-   * Timeline V2 cutover. When true, the legacy scroll controller's
-   * scrollToOffset/scrollToIndex callbacks are wrapped to no-op so only
-   * the V2 ScrollOwner issues commands. Other legacy behaviors
-   * (state tracking, anchor capture) continue to function as no-ops on
-   * scroll because their writes are blocked at the chokepoint. Defaults to
-   * false; see `onTimelineEvent` for the corresponding event forwarding.
-   */
-  suppressScrollWrites?: boolean;
-  /**
-   * Timeline V2 event forwarding. When `suppressScrollWrites` is true,
-   * MessageList emits this callback for events the V2 owner needs to see
-   * (anchor capture for load-older, media resize). Strictly additive: when
-   * absent, MessageList behaves identically to legacy.
-   */
-  onTimelineEvent?: (event: TimelineV2EventFromLegacy) => void;
 }
-
-/**
- * Events MessageList forwards into a V2 ScrollOwner during cutover. Kept
- * narrow on purpose — `user_scroll` is captured by V2's bridge directly
- * from the DOM and does NOT flow through this channel.
- *
- * `anchor_captured.anchor.index` is the index in the rendered timeline
- * `threadRows` — the same index space the virtualizer uses, which is what
- * the V2 owner's `preserve_after_prepend` command needs to call
- * `scrollToIndex` correctly. When the anchor cannot be resolved (no
- * visible item, empty list, etc.), `anchor` is `null` and the V2 owner
- * falls back to the "hold" path — never bottom.
- */
-export type TimelineV2EventFromLegacy =
-  | {
-      type: "anchor_captured";
-      anchor: {
-        messageId: string | null;
-        offsetFromTop: number;
-        index: number;
-      } | null;
-    }
-  | { type: "media_resized"; deltaPx: number };
 
 interface TimelineRowData {
   items: ConversationThreadRow[];
@@ -745,9 +699,6 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   onJumpHandled,
   composerHeight = 0,
   className,
-  onOuterRef,
-  suppressScrollWrites = false,
-  onTimelineEvent,
 }) => {
   const rtkMessages = useConversationMessagesRTK(conversationId);
   const messages = rtkMessages.messages;
@@ -774,15 +725,6 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const { t } = useTranslation();
   const viewportRef = React.useRef<HTMLDivElement | null>(null);
   const outerRef = React.useRef<HTMLDivElement | null>(null);
-  // Timeline V2 — surface the outer element so a V2 scroll owner can
-  // observe the same DOM node without duplicating the virtualizer setup.
-  // Effect runs once after mount and once on unmount; legacy behavior is
-  // untouched when the callback isn't provided.
-  React.useEffect(() => {
-    if (!onOuterRef) return undefined;
-    onOuterRef(outerRef.current);
-    return () => onOuterRef(null);
-  }, [onOuterRef]);
   const stickyDateRafRef = React.useRef<number | null>(null);
   const highlightTimerRef = React.useRef<number | null>(null);
   const lastSeenUnreadRestoreSignatureRef = React.useRef<string | null>(null);
@@ -977,27 +919,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
   const tanStackVirtualItems = tanStackVirtualizer.virtualItems;
   const tanStackTotalSize = tanStackVirtualizer.totalSize;
 
-  // Timeline V2 cutover chokepoint. When the V2 ScrollOwner is driving,
-  // the legacy scroll controller's commands are routed here and silently
-  // dropped — V2 owns the only scrollTo* writes against the DOM. Reads
-  // (getItemOffset, captureVisibleAnchor) continue to work, so the legacy
-  // controller's state tracking degrades gracefully without throwing.
-  const scrollToOffset = React.useMemo(() => {
-    if (suppressScrollWrites) {
-      return () => {
-        /* V2 drives — legacy scroll suppressed */
-      };
-    }
-    return tanStackScrollToOffset;
-  }, [suppressScrollWrites, tanStackScrollToOffset]);
-  const scrollToIndex = React.useMemo(() => {
-    if (suppressScrollWrites) {
-      return () => {
-        /* V2 drives — legacy scroll suppressed */
-      };
-    }
-    return tanStackScrollToIndex;
-  }, [suppressScrollWrites, tanStackScrollToIndex]);
+  const scrollToOffset = tanStackScrollToOffset;
+  const scrollToIndex = tanStackScrollToIndex;
 
   React.useLayoutEffect(() => {
     const viewportElement = viewportRef.current;
@@ -1346,47 +1269,26 @@ const MessageListComponent: React.FC<MessageListProps> = ({
 
   const captureVisibleAnchor = React.useCallback(() => {
     const outer = outerRef.current;
-    if (!outer || threadRows.length === 0) {
-      // Forward null to V2 — its anchor restore will fall back to "hold".
-      onTimelineEvent?.({ type: "anchor_captured", anchor: null });
-      return null;
-    }
+    if (!outer || threadRows.length === 0) return null;
 
     const visibleItem = findItemAtOffset(outer.scrollTop);
-    if (!visibleItem) {
-      onTimelineEvent?.({ type: "anchor_captured", anchor: null });
-      return null;
-    }
+    if (!visibleItem) return null;
 
     const anchorIndex = threadRows.findIndex(
       (item, index) =>
         index >= visibleItem.index &&
         isThreadRowMessageLike(item),
     );
-    if (anchorIndex < 0) {
-      onTimelineEvent?.({ type: "anchor_captured", anchor: null });
-      return null;
-    }
+    if (anchorIndex < 0) return null;
 
     const item = threadRows[anchorIndex];
-    if (!item || !isThreadRowMessageLike(item)) {
-      onTimelineEvent?.({ type: "anchor_captured", anchor: null });
-      return null;
-    }
+    if (!item || !isThreadRowMessageLike(item)) return null;
 
-    // `anchor` returned to legacy callers keeps the original shape (no
-    // `index`) so we don't ripple type changes through useChatScrollController.
-    // The V2 forwarder gets the enriched payload via onTimelineEvent.
-    const anchor = {
+    return {
       messageId: item.kind === "group" ? item.anchorMessageId : item.messageId,
       offsetFromTop: outer.scrollTop - getItemOffset(anchorIndex),
     };
-    onTimelineEvent?.({
-      type: "anchor_captured",
-      anchor: { ...anchor, index: anchorIndex },
-    });
-    return anchor;
-  }, [findItemAtOffset, getItemOffset, onTimelineEvent, outerRef, threadRows]);
+  }, [findItemAtOffset, getItemOffset, outerRef, threadRows]);
 
   const {
     pendingNewMessages,
@@ -1565,11 +1467,6 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         return;
       }
 
-      // Forward to V2 owner. The state machine's MEDIA_RESIZED handler
-      // ignores this when the user is detached or actively scrolling, so
-      // double dispatching is harmless during cutover.
-      onTimelineEvent?.({ type: "media_resized", deltaPx: delta });
-
       if (!isPinnedToBottomRef.current && !pendingResizeAnchorRef.current) {
         pendingResizeAnchorRef.current = captureVisibleAnchor();
       }
@@ -1586,7 +1483,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
         flushTimelineItemSizeChanges,
       );
     },
-    [captureVisibleAnchor, flushTimelineItemSizeChanges, onTimelineEvent],
+    [captureVisibleAnchor, flushTimelineItemSizeChanges],
   );
 
   const rowData = React.useMemo<TimelineRowData>(

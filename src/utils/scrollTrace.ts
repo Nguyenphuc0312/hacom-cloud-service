@@ -1,4 +1,5 @@
 import { isMessageDebugEnabled, logMessageDebug } from "./messageDebug";
+import { isChatScrollDebugEnabled } from "../features/chat/config/experienceFlags";
 
 const getScrollTraceStack = (): string | undefined => {
   const stack = new Error().stack;
@@ -15,9 +16,11 @@ export const logScrollTrace = (
   event: string,
   details?: Record<string, unknown>,
 ): void => {
-  const envScrollDebugEnabled =
-    import.meta.env.DEV && import.meta.env.VITE_CHAT_SCROLL_DEBUG === "true";
-  const shouldLog = envScrollDebugEnabled || isMessageDebugEnabled();
+  // Read through the shared resolver so devtools / Playwright overrides
+  // and the session kill-switch are honored (was: direct import.meta.env).
+  const shouldLog =
+    (import.meta.env.DEV && isChatScrollDebugEnabled()) ||
+    isMessageDebugEnabled();
   if (!shouldLog) {
     return;
   }

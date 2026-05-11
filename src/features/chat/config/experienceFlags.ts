@@ -1,3 +1,31 @@
+/**
+ * Chat experience flags — runtime-resolved.
+ *
+ * Post-cleanup (2026-05): the production chat path mounts exactly one
+ * timeline (`SimpleVirtualizedChatTimeline`). The V2 owner / drives flags
+ * are gone from the production decision tree. Only one emergency-rollback
+ * flag remains:
+ *
+ *   VITE_CHAT_USE_LEGACY_TIMELINE=true   → mount legacy MessageList only.
+ *
+ * Every flag is read through `resolveFlag()` at *call time* (not at module
+ * load) so that:
+ *
+ *   - `globalThis.__CHAT_FLAGS_OVERRIDE__` set from index.html, devtools,
+ *     or Playwright `addInitScript` reliably wins even when the module
+ *     that uses the flag was imported before the override was assigned.
+ *   - A session-level kill-switch (`disableChatFlagForSession`) can flip a
+ *     flag off mid-session without a redeploy.
+ *
+ * Precedence (highest first):
+ *   1. session kill-switch (`__CHAT_FLAGS_SESSION_KILL__[key] === "false"`)
+ *   2. runtime override   (`__CHAT_FLAGS_OVERRIDE__[key]`)
+ *   3. build-time env     (`import.meta.env[key]`)
+ *   4. hard-coded fallback
+ */
+
+type ChatFlagsOverride = Record<string, "true" | "false">;
+
 const resolveBooleanFlag = (
   envValue: string | undefined,
   fallback: boolean,
@@ -7,85 +35,81 @@ const resolveBooleanFlag = (
   return fallback;
 };
 
-/**
- * Runtime flag override hook.
- *
- * `import.meta.env.VITE_*` values are baked at build time, so a single
- * deployed bundle cannot toggle flags per-session. Two scenarios need
- * runtime override:
- *   1. Playwright E2E uses `page.addInitScript` to enable Timeline V2
- *      without spinning up a separate dev build per spec.
- *   2. On-call engineers debugging staging can toggle flags from devtools
- *      without redeploying.
- *
- * The override mechanism reads from `globalThis.__CHAT_FLAGS_OVERRIDE__` —
- * a plain `Record<string, "true" | "false">` keyed by the env var name
- * (e.g. "VITE_CHAT_TIMELINE_V2_OWNER"). When the key is absent or the
- * global is not set, behavior is identical to pre-override (build-time
- * env wins). Production bundles that never set the global behave exactly
- * as before.
- */
-type ChatFlagsOverride = Record<string, "true" | "false">;
-
-const readOverride = (key: string): string | undefined => {
+const readBucket = (
+  bucketKey: "__CHAT_FLAGS_OVERRIDE__" | "__CHAT_FLAGS_SESSION_KILL__",
+  key: string,
+): string | undefined => {
   if (typeof globalThis === "undefined") return undefined;
-  const bucket = (globalThis as { __CHAT_FLAGS_OVERRIDE__?: ChatFlagsOverride })
-    .__CHAT_FLAGS_OVERRIDE__;
+  const bucket = (globalThis as Record<string, unknown>)[bucketKey] as
+    | ChatFlagsOverride
+    | undefined;
   if (!bucket) return undefined;
   return bucket[key];
 };
 
-const resolveFlag = (
-  envKey: string,
-  envValue: string | undefined,
-  fallback: boolean,
-): boolean => resolveBooleanFlag(readOverride(envKey) ?? envValue, fallback);
+/**
+ * Mid-session kill-switch. Subsequent `is*Enabled()` calls for `key` return
+ * false regardless of env or override. Available for future emergencies;
+ * the post-cleanup production tree does not currently call this.
+ */
+export const disableChatFlagForSession = (key: string): void => {
+  if (typeof globalThis === "undefined") return;
+  const g = globalThis as Record<string, unknown>;
+  const existing = (g.__CHAT_FLAGS_SESSION_KILL__ as ChatFlagsOverride) ?? {};
+  existing[key] = "false";
+  g.__CHAT_FLAGS_SESSION_KILL__ = existing;
+};
 
-export const CHAT_TIMELINE_V2_ENABLED = resolveBooleanFlag(
-  import.meta.env.VITE_CHAT_TIMELINE_V2,
-  true,
-);
+const envValue = (key: string): string | undefined =>
+  (import.meta.env as Record<string, string | undefined>)[key];
 
-export const CHAT_SCROLL_MACHINE_V2_ENABLED = resolveBooleanFlag(
-  import.meta.env.VITE_CHAT_SCROLL_MACHINE_V2,
-  CHAT_TIMELINE_V2_ENABLED,
-);
+const resolveFlag = (envKey: string, fallback: boolean): boolean => {
+  const kill = readBucket("__CHAT_FLAGS_SESSION_KILL__", envKey);
+  if (kill === "false") return false;
+  const override = readBucket("__CHAT_FLAGS_OVERRIDE__", envKey);
+  return resolveBooleanFlag(override ?? envValue(envKey), fallback);
+};
 
-export const CHAT_RTKQ_MESSAGES_RUNTIME_ENABLED = resolveBooleanFlag(
-  import.meta.env.VITE_CHAT_RTKQ_MESSAGES_RUNTIME,
-  import.meta.env.MODE !== "test",
-);
+// ─── Production decision tree ──────────────────────────────────────────────
 
 /**
- * Timeline V2 scroll-owner switch. When true, ConversationViewport renders
- * `<ChatTimelineV2>` (Phase 1 wraps the legacy MessageList while the V2
- * scroll owner dogfoods its state-machine and command-queue logic).
+ * Production timeline. Defaults to TRUE — `SimpleVirtualizedChatTimeline`
+ * is the only timeline the production path mounts.
  *
- * Defaults to FALSE so production keeps the legacy render path until V2 is
- * verified end-to-end. Independent from `CHAT_TIMELINE_V2_ENABLED`, which is
- * a legacy heuristic flag inside timelinePlanner.ts / scrollController.ts
- * and must NOT be repurposed for the render-path switch.
+ * Disabling this WITHOUT also enabling `VITE_CHAT_USE_LEGACY_TIMELINE` is
+ * not a supported state; routing falls back to legacy in that case purely
+ * as a safety net.
  */
-export const CHAT_TIMELINE_V2_OWNER_ENABLED = resolveFlag(
-  "VITE_CHAT_TIMELINE_V2_OWNER",
-  import.meta.env.VITE_CHAT_TIMELINE_V2_OWNER,
-  false,
-);
+export const isChatSimpleVirtualTimelineEnabled = (): boolean =>
+  resolveFlag("VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE", true);
 
 /**
- * When true (and V2 owner is mounted), the V2 ScrollOwner DRIVES scroll —
- * the legacy `useChatScrollController`'s scrollToOffset/scrollToIndex
- * callbacks are wrapped to no-op so only V2 issues commands. Also activates
- * the V2 scroll-event bridge so user-scroll events flow into the V2 state
- * machine.
+ * Emergency rollback to the legacy MessageList. Default FALSE.
  *
- * Implies CHAT_TIMELINE_V2_OWNER_ENABLED. Defaults to FALSE because
- * dogfood (owner-only) and full cutover (owner-drives) are separate stages
- * in the rollout. Production should flip OWNER first, observe, then
- * DRIVES.
+ * TODO(remove by 2026-06-30): Delete this flag and the MessageList code
+ * path once the simple timeline has been stable in production for two
+ * release cycles. Until then, oncall can flip this to true to revert
+ * without a code change.
  */
-export const CHAT_SCROLL_OWNER_V2_DRIVES_ENABLED = resolveFlag(
-  "VITE_CHAT_SCROLL_OWNER_V2_DRIVES",
-  import.meta.env.VITE_CHAT_SCROLL_OWNER_V2_DRIVES,
-  false,
-);
+export const isChatUseLegacyTimelineEnabled = (): boolean =>
+  resolveFlag("VITE_CHAT_USE_LEGACY_TIMELINE", false);
+
+export const isChatSimpleTimelineDebugEnabled = (): boolean =>
+  resolveFlag("VITE_CHAT_SIMPLE_TIMELINE_DEBUG", false);
+
+// ─── Unrelated, kept for non-timeline consumers ───────────────────────────
+
+export const isChatTimelineV2Enabled = (): boolean =>
+  resolveFlag("VITE_CHAT_TIMELINE_V2", true);
+
+export const isChatScrollMachineV2Enabled = (): boolean =>
+  resolveFlag("VITE_CHAT_SCROLL_MACHINE_V2", isChatTimelineV2Enabled());
+
+export const isChatRtkqMessagesRuntimeEnabled = (): boolean =>
+  resolveFlag(
+    "VITE_CHAT_RTKQ_MESSAGES_RUNTIME",
+    import.meta.env.MODE !== "test",
+  );
+
+export const isChatScrollDebugEnabled = (): boolean =>
+  resolveFlag("VITE_CHAT_SCROLL_DEBUG", false);

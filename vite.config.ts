@@ -260,7 +260,15 @@ export default defineConfig(({ mode }) => {
       setupFiles: ["./src/test/setup.ts"],
       css: true,
       include: ["src/**/*.{test,spec}.{ts,tsx}"],
-      exclude: ["e2e/**", "**/e2e/**", "dist/**", "node_modules/**", "playwright.config.*"],
+      exclude: [
+        "e2e/**",
+        "**/e2e/**",
+        "dist/**",
+        "node_modules/**",
+        "playwright.config.*",
+        // Quarantined post-cleanup (2026-05). See timeline-v2/__deprecated__/README.md.
+        "**/__deprecated__/**",
+      ],
     },
 
     customLogger: devLogger,

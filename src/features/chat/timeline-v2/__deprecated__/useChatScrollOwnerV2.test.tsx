@@ -287,3 +287,82 @@ describe("useChatScrollOwnerV2 — user scroll blocks low-priority commands", ()
     expect(adapter.calls.bottom).toHaveLength(0);
   });
 });
+
+describe("useChatScrollOwnerV2 — runaway kill-switch", () => {
+  it("auto-disables drives flag after > 12 enqueues in 1s and resets queue", () => {
+    const adapter = createMockAdapter({ distanceToBottom: 0 });
+    let nowMs = 1_000_000;
+    const now = () => nowMs;
+    const { result } = renderHook(() =>
+      useChatScrollOwnerV2({
+        conversationId: "c1",
+        currentUserId: ME,
+        messages: [mkMsg("1")],
+        isInitialLoading: false,
+        isFetchingOlder: false,
+        hasOlder: false,
+        adapter,
+        now,
+      }),
+    );
+
+    // Settle into following_bottom.
+    act(() => {
+      result.current.dispatch({ type: "VIRTUALIZER_MEASURED", at: now() });
+    });
+
+    // Fire a burst of JUMP_TO_LATEST dispatches inside a 1s window.
+    act(() => {
+      for (let i = 0; i < 20; i += 1) {
+        nowMs += 30; // 30ms apart → 20 enqueues in 600ms total
+        result.current.dispatch({ type: "JUMP_TO_LATEST", at: now() });
+      }
+    });
+
+    // Kill-switch should have flipped the session-level override OFF.
+    const killBucket = (globalThis as Record<string, unknown>)
+      .__CHAT_FLAGS_SESSION_KILL__ as Record<string, string> | undefined;
+    expect(killBucket?.VITE_CHAT_SCROLL_OWNER_V2_DRIVES).toBe("false");
+
+    // Queue must be empty (we called reset() on trigger).
+    expect(result.current.inspectQueue().pending).toHaveLength(0);
+
+    // Clean up so other tests don't inherit the kill flag.
+    if (killBucket) delete killBucket.VITE_CHAT_SCROLL_OWNER_V2_DRIVES;
+  });
+
+  it("refuses index-target commands whose anchor index is invalid", () => {
+    const adapter = createMockAdapter({ distanceToBottom: 0 });
+    const { result } = renderHook(() =>
+      useChatScrollOwnerV2({
+        conversationId: "c1",
+        currentUserId: ME,
+        messages: [mkMsg("1"), mkMsg("2")],
+        isInitialLoading: false,
+        isFetchingOlder: false,
+        hasOlder: false,
+        adapter,
+      }),
+    );
+    act(() => {
+      result.current.dispatch({ type: "VIRTUALIZER_MEASURED", at: Date.now() });
+    });
+    // Simulate a load-older flow with a bogus anchor (index = NaN).
+    act(() => {
+      result.current.captureAnchor({
+        messageKey: "1",
+        index: Number.NaN,
+        offsetFromViewportTop: 0,
+      });
+    });
+    act(() => {
+      result.current.notifyLoadOlderDone({
+        prependedCount: 5,
+        anchorStillExists: true,
+      });
+    });
+
+    // No scrollToIndex call should have fired — anchor was rejected.
+    expect(adapter.calls.index).toHaveLength(0);
+  });
+});
