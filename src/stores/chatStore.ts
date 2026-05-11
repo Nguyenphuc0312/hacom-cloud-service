@@ -1033,21 +1033,46 @@ const mergeConversationSummary = (
     return incoming;
   }
 
+  // Stale-read guard: nếu local đã đánh dấu đọc xa hơn server response thì
+  // không cho response cũ (lastReadSeq thấp hơn / vắng mặt) đẩy unreadCount
+  // ngược lên. Điều này xử lý race condition: user click conversation →
+  // optimistic markAsRead set unread=0, sau đó stale GET /conversations
+  // response trả về unreadCount=17 cũ.
+  const currentLastReadSeq =
+    typeof current.lastReadSeq === "number" ? current.lastReadSeq : 0;
+  const incomingLastReadSeq =
+    typeof incoming.lastReadSeq === "number" ? incoming.lastReadSeq : 0;
+  const localReadIsAhead =
+    currentLastReadSeq > 0 && currentLastReadSeq > incomingLastReadSeq;
+  const preserveLocalRead =
+    localReadIsAhead ||
+    ((current.unreadCount ?? 0) === 0 &&
+      (incoming.unreadCount ?? 0) > 0 &&
+      incomingLastReadSeq <= currentLastReadSeq);
+
   return (normalizeConversation({
     ...current,
     ...incoming,
-    unreadCount: incoming.unreadCount,
-    lastReadMessageId:
-      incoming.lastReadMessageId ?? current.lastReadMessageId ?? undefined,
-    lastReadAt: incoming.lastReadAt ?? current.lastReadAt ?? undefined,
-    firstUnreadMessageId:
-      incoming.firstUnreadMessageId ??
-      current.firstUnreadMessageId ??
-      undefined,
-    firstUnreadMessageAt:
-      incoming.firstUnreadMessageAt ??
-      current.firstUnreadMessageAt ??
-      undefined,
+    unreadCount: preserveLocalRead
+      ? (current.unreadCount ?? 0)
+      : incoming.unreadCount,
+    lastReadSeq: Math.max(currentLastReadSeq, incomingLastReadSeq) || undefined,
+    lastReadMessageId: localReadIsAhead
+      ? (current.lastReadMessageId ?? incoming.lastReadMessageId ?? undefined)
+      : (incoming.lastReadMessageId ?? current.lastReadMessageId ?? undefined),
+    lastReadAt: localReadIsAhead
+      ? (current.lastReadAt ?? incoming.lastReadAt ?? undefined)
+      : (incoming.lastReadAt ?? current.lastReadAt ?? undefined),
+    firstUnreadMessageId: preserveLocalRead
+      ? undefined
+      : (incoming.firstUnreadMessageId ??
+        current.firstUnreadMessageId ??
+        undefined),
+    firstUnreadMessageAt: preserveLocalRead
+      ? undefined
+      : (incoming.firstUnreadMessageAt ??
+        current.firstUnreadMessageAt ??
+        undefined),
     summaryVersion:
       toConversationVersion(incoming) ||
       toConversationVersion(current) ||

@@ -584,6 +584,91 @@ export const useConversationSession = ({
     updateConversation,
   ]);
 
+  // Auto mark-as-read khi:
+  //   1) selectedConversationId change (user mở conversation)
+  //   2) tin nhắn mới arrive trong active conversation đã visible
+  //   3) tab được focus lại trong khi conversation đang mở
+  // handleReachedLatestMessage đã dedupe nội bộ qua lastVisibleReadAnchorKeyRef
+  // và short-circuit nếu lastReadSeq đã >= seq mới — gọi nhiều lần an toàn.
+  useEffect(() => {
+    if (!selectedConversationId || !isConversationReady) return;
+    if (
+      typeof document !== "undefined" &&
+      document.visibilityState === "hidden"
+    ) {
+      return;
+    }
+
+    const fire = () => {
+      const state = useChatStore.getState();
+      const cached = state.messages?.[selectedConversationId];
+      const messageList = Array.isArray(cached) ? cached : [];
+      if (messageList.length === 0) return;
+
+      // Tìm latest message phía server (bỏ qua temp/optimistic) có seq dương.
+      for (let i = messageList.length - 1; i >= 0; i -= 1) {
+        const candidate = messageList[i];
+        if (!candidate || typeof candidate.id !== "string") continue;
+        if (candidate.id.startsWith("temp-")) continue;
+        handleReachedLatestMessage(candidate);
+        return;
+      }
+    };
+
+    fire();
+
+    if (typeof document === "undefined") return;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fire();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [
+    selectedConversationId,
+    isConversationReady,
+    handleReachedLatestMessage,
+  ]);
+
+  // Khi message list của active conversation thay đổi (nhận tin mới realtime),
+  // tự đẩy lastReadSeq tới message mới nhất — chỉ khi tab đang visible.
+  const activeMessagesSignature = useChatStore((state) => {
+    if (!selectedConversationId) return "";
+    const list = state.messages?.[selectedConversationId];
+    if (!Array.isArray(list) || list.length === 0) return "";
+    const last = list[list.length - 1];
+    return last ? `${last.id}:${getMessageReadSeq(last) ?? "no-seq"}` : "";
+  });
+
+  useEffect(() => {
+    if (!selectedConversationId || !isConversationReady) return;
+    if (!activeMessagesSignature) return;
+    if (
+      typeof document !== "undefined" &&
+      document.visibilityState === "hidden"
+    ) {
+      return;
+    }
+    const state = useChatStore.getState();
+    const list = state.messages?.[selectedConversationId];
+    if (!Array.isArray(list) || list.length === 0) return;
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const candidate = list[i];
+      if (!candidate || typeof candidate.id !== "string") continue;
+      if (candidate.id.startsWith("temp-")) continue;
+      handleReachedLatestMessage(candidate);
+      return;
+    }
+  }, [
+    selectedConversationId,
+    isConversationReady,
+    activeMessagesSignature,
+    handleReachedLatestMessage,
+  ]);
+
   return {
     currentHasMore,
     currentIsLoading,
