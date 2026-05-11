@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Conversation, Message } from "../types";
 
 const conversationMarkAsReadMock = vi.hoisted(() => vi.fn());
@@ -27,13 +27,14 @@ const createMockConversation = (overrides: Partial<Conversation> = {}): Conversa
     ...overrides,
   } as Conversation);
 
-const createMockMessages = (): Message[] => [
-  { id: "msg-8", serverSeq: 8, createdAt: "2024-01-01T00:00:00.000Z" },
-  { id: "msg-9", serverSeq: 9, createdAt: "2024-01-01T00:00:30.000Z" },
-  { id: "msg-10", serverSeq: 10, createdAt: "2024-01-01T00:01:00.000Z" },
-  { id: "msg-11", serverSeq: 11, createdAt: "2024-01-01T00:01:30.000Z" },
-  { id: "msg-12", serverSeq: 12, createdAt: "2024-01-01T00:02:00.000Z" },
-] as Message[];
+const createMockMessages = (): Message[] =>
+  [
+    { id: "msg-8", serverSeq: 8, createdAt: "2024-01-01T00:00:00.000Z" },
+    { id: "msg-9", serverSeq: 9, createdAt: "2024-01-01T00:00:30.000Z" },
+    { id: "msg-10", serverSeq: 10, createdAt: "2024-01-01T00:01:00.000Z" },
+    { id: "msg-11", serverSeq: 11, createdAt: "2024-01-01T00:01:30.000Z" },
+    { id: "msg-12", serverSeq: 12, createdAt: "2024-01-01T00:02:00.000Z" },
+  ] as unknown as Message[];
 
 const makeSuccessEnvelope = (data: unknown) => ({
   success: true,
@@ -82,6 +83,7 @@ const EMPTY_MESSAGES: Message[] = [];
 type MockState = {
   conversations: Conversation[];
   messages: Record<string, Message[]>;
+  lastUnreadSummaryAppliedAt: number | null;
 };
 
 describe("chatStoreUnread — optimistic mark-read rollback", () => {
@@ -90,11 +92,12 @@ describe("chatStoreUnread — optimistic mark-read rollback", () => {
       let state: MockState = {
         conversations: [createMockConversation()],
         messages: { "conv-1": createMockMessages() },
+        lastUnreadSummaryAppliedAt: null,
       };
 
       const controller = createChatUnreadController({
         set: (updater) => {
-          state = updater(state) as MockState;
+          state = (updater as (state: MockState) => MockState)(state);
         },
         get: () => state,
         emptyMessages: EMPTY_MESSAGES,
@@ -128,11 +131,12 @@ describe("chatStoreUnread — optimistic mark-read rollback", () => {
       let state: MockState = {
         conversations: [createMockConversation({ unreadCount: 5 })],
         messages: { "conv-1": createMockMessages() },
+        lastUnreadSummaryAppliedAt: null,
       };
 
       const controller = createChatUnreadController({
         set: (updater) => {
-          state = updater(state) as MockState;
+          state = (updater as (state: MockState) => MockState)(state);
         },
         get: () => state,
         emptyMessages: EMPTY_MESSAGES,
@@ -169,11 +173,12 @@ describe("chatStoreUnread — optimistic mark-read rollback", () => {
           }),
         ],
         messages: { "conv-1": createMockMessages() },
+        lastUnreadSummaryAppliedAt: null,
       };
 
       const controller = createChatUnreadController({
         set: (updater) => {
-          state = updater(state) as MockState;
+          state = (updater as (state: MockState) => MockState)(state);
         },
         get: () => state,
         emptyMessages: EMPTY_MESSAGES,
@@ -205,12 +210,13 @@ describe("chatStoreUnread — optimistic mark-read rollback", () => {
       let state: MockState = {
         conversations: [createMockConversation({ unreadCount: 5 })],
         messages: { "conv-1": createMockMessages() },
+        lastUnreadSummaryAppliedAt: null,
       };
       let attemptCount = 0;
 
       const controller = createChatUnreadController({
         set: (updater) => {
-          state = updater(state) as MockState;
+          state = (updater as (state: MockState) => MockState)(state);
         },
         get: () => state,
         emptyMessages: EMPTY_MESSAGES,
@@ -247,11 +253,12 @@ describe("chatStoreUnread — optimistic mark-read rollback", () => {
           createMockConversation({ unreadCount: 5, lastReadSeq: 10 }),
         ],
         messages: { "conv-1": createMockMessages() },
+        lastUnreadSummaryAppliedAt: null,
       };
 
       const controller = createChatUnreadController({
         set: (updater) => {
-          state = updater(state) as MockState;
+          state = (updater as (state: MockState) => MockState)(state);
         },
         get: () => state,
         emptyMessages: EMPTY_MESSAGES,
@@ -296,11 +303,12 @@ describe("chatStoreUnread — optimistic mark-read rollback", () => {
       let state: MockState = {
         conversations: [createMockConversation({ unreadCount: 0, lastReadSeq: 12 })],
         messages: { "conv-1": createMockMessages() },
+        lastUnreadSummaryAppliedAt: null,
       };
 
       const controller = createChatUnreadController({
         set: (updater) => {
-          state = updater(state) as MockState;
+          state = (updater as (state: MockState) => MockState)(state);
         },
         get: () => state,
         emptyMessages: EMPTY_MESSAGES,
@@ -360,11 +368,12 @@ describe("chatStoreUnread — optimistic mark-read rollback", () => {
       let state: MockState = {
         conversations: [createMockConversation()],
         messages: { "conv-1": createMockMessages() },
+        lastUnreadSummaryAppliedAt: null,
       };
 
       const controller = createChatUnreadController({
         set: (updater) => {
-          state = updater(state) as MockState;
+          state = (updater as (state: MockState) => MockState)(state);
         },
         get: () => state,
         emptyMessages: EMPTY_MESSAGES,
@@ -390,7 +399,7 @@ describe("chatStoreUnread — optimistic mark-read rollback", () => {
       let newAttempt = false;
       const controller2 = createChatUnreadController({
         set: (updater) => {
-          state = updater(state) as MockState;
+          state = (updater as (state: MockState) => MockState)(state);
         },
         get: () => state,
         emptyMessages: EMPTY_MESSAGES,
