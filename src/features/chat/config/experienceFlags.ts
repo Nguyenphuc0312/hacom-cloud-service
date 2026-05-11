@@ -1,27 +1,10 @@
 /**
- * Chat experience flags — runtime-resolved.
+ * Chat experience flags.
  *
- * Post-cleanup (2026-05): the production chat path mounts exactly one
- * timeline (`SimpleVirtualizedChatTimeline`). The V2 owner / drives flags
- * are gone from the production decision tree. Only one emergency-rollback
- * flag remains:
- *
- *   VITE_CHAT_USE_LEGACY_TIMELINE=true   → mount legacy MessageList only.
- *
- * Every flag is read through `resolveFlag()` at *call time* (not at module
- * load) so that:
- *
- *   - `globalThis.__CHAT_FLAGS_OVERRIDE__` set from index.html, devtools,
- *     or Playwright `addInitScript` reliably wins even when the module
- *     that uses the flag was imported before the override was assigned.
- *   - A session-level kill-switch (`disableChatFlagForSession`) can flip a
- *     flag off mid-session without a redeploy.
- *
- * Precedence (highest first):
- *   1. session kill-switch (`__CHAT_FLAGS_SESSION_KILL__[key] === "false"`)
- *   2. runtime override   (`__CHAT_FLAGS_OVERRIDE__[key]`)
- *   3. build-time env     (`import.meta.env[key]`)
- *   4. hard-coded fallback
+ * Post-simplification: the chat path mounts exactly one timeline
+ * (`SimpleVirtualizedChatTimeline`) unconditionally. Timeline / scroll
+ * owner / legacy flags are gone — only flags for non-timeline concerns
+ * remain.
  */
 
 type ChatFlagsOverride = Record<string, "true" | "false">;
@@ -47,11 +30,6 @@ const readBucket = (
   return bucket[key];
 };
 
-/**
- * Mid-session kill-switch. Subsequent `is*Enabled()` calls for `key` return
- * false regardless of env or override. Available for future emergencies;
- * the post-cleanup production tree does not currently call this.
- */
 export const disableChatFlagForSession = (key: string): void => {
   if (typeof globalThis === "undefined") return;
   const g = globalThis as Record<string, unknown>;
@@ -70,46 +48,8 @@ const resolveFlag = (envKey: string, fallback: boolean): boolean => {
   return resolveBooleanFlag(override ?? envValue(envKey), fallback);
 };
 
-// ─── Production decision tree ──────────────────────────────────────────────
-
-/**
- * Production timeline. Defaults to TRUE — `SimpleVirtualizedChatTimeline`
- * is the only timeline the production path mounts.
- *
- * Disabling this WITHOUT also enabling `VITE_CHAT_USE_LEGACY_TIMELINE` is
- * not a supported state; routing falls back to legacy in that case purely
- * as a safety net.
- */
-export const isChatSimpleVirtualTimelineEnabled = (): boolean =>
-  resolveFlag("VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE", true);
-
-/**
- * Emergency rollback to the legacy MessageList. Default FALSE.
- *
- * TODO(remove by 2026-06-30): Delete this flag and the MessageList code
- * path once the simple timeline has been stable in production for two
- * release cycles. Until then, oncall can flip this to true to revert
- * without a code change.
- */
-export const isChatUseLegacyTimelineEnabled = (): boolean =>
-  resolveFlag("VITE_CHAT_USE_LEGACY_TIMELINE", false);
-
-export const isChatSimpleTimelineDebugEnabled = (): boolean =>
-  resolveFlag("VITE_CHAT_SIMPLE_TIMELINE_DEBUG", false);
-
-// ─── Unrelated, kept for non-timeline consumers ───────────────────────────
-
-export const isChatTimelineV2Enabled = (): boolean =>
-  resolveFlag("VITE_CHAT_TIMELINE_V2", true);
-
-export const isChatScrollMachineV2Enabled = (): boolean =>
-  resolveFlag("VITE_CHAT_SCROLL_MACHINE_V2", isChatTimelineV2Enabled());
-
 export const isChatRtkqMessagesRuntimeEnabled = (): boolean =>
   resolveFlag(
     "VITE_CHAT_RTKQ_MESSAGES_RUNTIME",
     import.meta.env.MODE !== "test",
   );
-
-export const isChatScrollDebugEnabled = (): boolean =>
-  resolveFlag("VITE_CHAT_SCROLL_DEBUG", false);

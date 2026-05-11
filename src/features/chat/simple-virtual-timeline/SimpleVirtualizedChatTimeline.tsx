@@ -1,7 +1,7 @@
 /**
  * Simple Virtualized Chat Timeline.
  *
- * Replacement for both legacy `MessageList` and `ChatTimelineV2`. Built on
+ * Production chat timeline. Built on
  * `@tanstack/react-virtual` purely for *render* virtualization; all scroll
  * behavior lives in `useSimpleChatScroll`. There is no scroll owner, no
  * command queue, no state machine, no bridge — only one component sets
@@ -27,6 +27,7 @@ import {
   type ConversationThreadRow,
 } from "../hooks/useConversationThreadRows";
 import { useSimpleChatScroll } from "./useSimpleChatScroll";
+import { ScrollToLatestButton } from "./ScrollToLatestButton";
 
 export interface SimpleVirtualizedChatTimelineProps {
   conversationId: string;
@@ -110,6 +111,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
 
   const {
     scrollRef,
+    isAtBottom,
     pendingNewMessages,
     handleScroll,
     handleMediaLoad,
@@ -267,20 +269,12 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
         </div>
       </div>
 
-      {pendingNewMessages > 0 && (
-        <button
-          type="button"
-          onClick={jumpToLatest}
-          data-testid="simple-timeline-new-messages-pill"
-          className={clsx(
-            "absolute bottom-3 left-1/2 -translate-x-1/2",
-            "rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground",
-            "shadow-md hover:shadow-lg",
-          )}
-        >
-          Có {pendingNewMessages} tin nhắn mới
-        </button>
-      )}
+      <ScrollToLatestButton
+        visible={!isAtBottom || pendingNewMessages > 0}
+        pendingCount={pendingNewMessages}
+        onClick={jumpToLatest}
+        composerHeight={composerHeight}
+      />
     </section>
   );
 };
