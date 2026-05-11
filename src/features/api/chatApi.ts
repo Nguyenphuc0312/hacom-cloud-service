@@ -19,6 +19,7 @@ import {
   mergeIncomingMessagesPage,
   patchMessageReactionInCache,
   patchMessageInCache,
+  removeMessageFromCache,
   upsertMessageInCache,
 } from "../chat/domain/messageMerge";
 import type {
@@ -87,9 +88,12 @@ export interface EditMessageInput {
   content: string;
 }
 
+export type DeleteMessageMode = "FOR_ME" | "FOR_EVERYONE";
+
 export interface DeleteMessageInput {
   conversationId: string;
   messageId: string;
+  mode: DeleteMessageMode;
 }
 
 export interface ReactToMessageInput {
@@ -581,7 +585,7 @@ export const chatApi = createApi({
     deleteMessage: build.mutation<void, DeleteMessageInput>({
       async queryFn(input) {
         try {
-          await messageApi.deleteMessage(input.messageId);
+          await messageApi.deleteMessage(input.messageId, { mode: input.mode });
           return { data: undefined };
         } catch (error) {
           return { error: toChatQueryError(error) };
@@ -593,10 +597,16 @@ export const chatApi = createApi({
             "getMessages",
             getMessageQueryArgForConversation(input.conversationId),
             (draft) => {
-              patchMessageInCache(draft, input.messageId, {
-                isDeleted: true,
-                content: "",
-              });
+              if (input.mode === "FOR_ME") {
+                removeMessageFromCache(draft, input.messageId);
+              } else {
+                patchMessageInCache(draft, input.messageId, {
+                  isDeleted: true,
+                  lifecycleStatus: "recalled",
+                  content: "",
+                  attachments: [],
+                });
+              }
             },
           ),
         );

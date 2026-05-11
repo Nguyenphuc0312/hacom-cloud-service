@@ -1083,8 +1083,13 @@ export const messageApi = {
     return response.data;
   },
 
-  deleteMessage: async (messageId: string) => {
-    await apiClient.delete(`/messages/${messageId}`);
+  deleteMessage: async (
+    messageId: string,
+    options?: { mode?: "FOR_ME" | "FOR_EVERYONE" },
+  ) => {
+    await apiClient.delete(`/messages/${messageId}`, {
+      data: options?.mode ? { mode: options.mode } : undefined,
+    });
   },
 
   pinMessage: async (messageId: string) => {

@@ -38,7 +38,10 @@ interface MessageGroupProps {
   onReact: (messageId: string, emoji: string) => void;
   onInspect?: (message: Message) => void;
   onEdit?: (message: Message) => void | Promise<void>;
-  onDelete?: (messageId: string) => void | Promise<void>;
+  onDelete?: (
+    messageId: string,
+    mode?: "FOR_ME" | "FOR_EVERYONE",
+  ) => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
   density?: ChatDensity;
@@ -47,6 +50,7 @@ interface MessageGroupProps {
   onToggleSelect?: (messageId: string) => void;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
+  viewerCanRecallOthers?: boolean;
   expandedLongMessageIds: Set<string>;
   onToggleLongMessageExpand: (messageId: string) => void;
   insertedMessageKeys: Set<string>;
@@ -151,7 +155,10 @@ const MessageGroupItem: React.FC<{
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
   onEdit?: (message: Message) => void | Promise<void>;
-  onDelete?: (messageId: string) => void | Promise<void>;
+  onDelete?: (
+    messageId: string,
+    mode?: "FOR_ME" | "FOR_EVERYONE",
+  ) => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
   isSelectionMode: boolean;
@@ -159,6 +166,7 @@ const MessageGroupItem: React.FC<{
   onToggleSelect?: (messageId: string) => void;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
+  viewerCanRecallOthers?: boolean;
   expandedLongMessageIds: Set<string>;
   onToggleLongMessageExpand: (messageId: string) => void;
   insertedMessageKeys: Set<string>;
@@ -181,6 +189,7 @@ const MessageGroupItem: React.FC<{
   onToggleSelect,
   onNavigateToMessage,
   currentUsername,
+  viewerCanRecallOthers,
   expandedLongMessageIds,
   onToggleLongMessageExpand,
   insertedMessageKeys,
@@ -245,9 +254,33 @@ const MessageGroupItem: React.FC<{
         isSelectionMode,
         canEdit: Boolean(onEdit),
         canDelete: Boolean(onDelete),
+        canDeleteForEveryone:
+          Boolean(onDelete) && !isOwn && viewerCanRecallOthers === true
+            ? true
+            : undefined,
         canRetry: isFailedMessage(message),
       }),
-    [coarsePointer, isOwn, isSelectionMode, message, onDelete, onEdit],
+    [
+      coarsePointer,
+      isOwn,
+      isSelectionMode,
+      message,
+      onDelete,
+      onEdit,
+      viewerCanRecallOthers,
+    ],
+  );
+
+  const adminRecallLabelOverride = React.useMemo(
+    () =>
+      !isOwn && viewerCanRecallOthers
+        ? ({
+            deleteForEveryone: t("chat:message.actions.deleteForEveryoneAdmin", {
+              defaultValue: "Xóa ở mọi người",
+            }),
+          } as const)
+        : undefined,
+    [isOwn, viewerCanRecallOthers, t],
   );
   const threadCount = getThreadCount(message);
   const isRichBubble =
@@ -318,9 +351,21 @@ const MessageGroupItem: React.FC<{
             void Promise.resolve(onEdit(message));
           }
           break;
-        case "delete":
+        case "deleteForMe":
           if (onDelete) {
-            void Promise.resolve(onDelete(message.id));
+            void Promise.resolve(onDelete(message.id, "FOR_ME"));
+          }
+          break;
+        case "deleteForEveryone":
+          if (onDelete) {
+            const adminCtx = !isOwn ? "ADMIN_DELETE" : undefined;
+            void Promise.resolve(
+              (onDelete as (
+                id: string,
+                mode?: "FOR_ME" | "FOR_EVERYONE",
+                context?: "ADMIN_DELETE",
+              ) => unknown)(message.id, "FOR_EVERYONE", adminCtx),
+            );
           }
           break;
         case "retry":
@@ -379,6 +424,7 @@ const MessageGroupItem: React.FC<{
           mode="inline"
           actions={inlineActions}
           onAction={handleAction}
+          actionLabelOverrides={adminRecallLabelOverride}
         />
       </div>
     ) : null;
@@ -484,9 +530,19 @@ const MessageGroupItem: React.FC<{
                           defaultValue: "Đang tải tin nhắn...",
                         })
                       : resolvedReplyPreview.isDeleted
-                        ? t("chat:message.deleted", {
-                            defaultValue: "Tin nhắn đã bị xóa",
-                          })
+                        ? resolvedReplyPreview.lifecycleStatus ===
+                          "deleted_admin"
+                          ? t("chat:message.deletedByAdmin", {
+                              defaultValue:
+                                "Tin nhắn đã bị xóa bởi quản trị viên",
+                            })
+                          : resolvedReplyPreview.lifecycleStatus === "recalled"
+                            ? t("chat:message.recalled", {
+                                defaultValue: "Tin nhắn đã được thu hồi",
+                              })
+                            : t("chat:message.deleted", {
+                                defaultValue: "Tin nhắn đã được thu hồi",
+                              })
                         : getPreviewFromMessage({
                             contentFormat: resolvedReplyPreview.contentFormat,
                             content: resolvedReplyPreview.content,
@@ -566,6 +622,7 @@ const MessageGroupItem: React.FC<{
         isOpen={isActionSheetOpen}
         onAction={handleAction}
         onClose={() => setIsActionSheetOpen(false)}
+        actionLabelOverrides={adminRecallLabelOverride}
       />
 
       {/* Mobile emoji picker — full-screen overlay (desktop uses inline picker above rail) */}
@@ -592,6 +649,7 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
   onToggleSelect,
   onNavigateToMessage,
   currentUsername,
+  viewerCanRecallOthers,
   expandedLongMessageIds,
   onToggleLongMessageExpand,
   insertedMessageKeys,
@@ -657,6 +715,7 @@ export const MessageGroup: React.FC<MessageGroupProps> = ({
               onToggleSelect={onToggleSelect}
               onNavigateToMessage={onNavigateToMessage}
               currentUsername={currentUsername}
+              viewerCanRecallOthers={viewerCanRecallOthers}
               expandedLongMessageIds={expandedLongMessageIds}
               onToggleLongMessageExpand={onToggleLongMessageExpand}
               insertedMessageKeys={insertedMessageKeys}

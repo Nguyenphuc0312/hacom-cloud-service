@@ -7,7 +7,8 @@ export type MessageActionId =
   | "reply"
   | "copy"
   | "edit"
-  | "delete"
+  | "deleteForMe"
+  | "deleteForEveryone"
   | "retry"
   | "more";
 
@@ -17,9 +18,28 @@ export interface MessageActionPolicyInput {
   isCoarsePointer: boolean;
   isSelectionMode?: boolean;
   canEdit?: boolean;
+  /** Có cho phép "Xóa về phía tôi" hay không. Thường = Boolean(onDelete). */
   canDelete?: boolean;
+  /**
+   * Có cho phép "Thu hồi"/"Xóa ở mọi người" hay không.
+   * Trong P3 mặc định = isOwn && tin nhắn còn trong window 24h.
+   * Admin/moderator có thể true cho tin nhắn của người khác (caller truyền vào).
+   */
+  canDeleteForEveryone?: boolean;
   canRetry?: boolean;
 }
+
+const RECALL_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+const isWithinRecallWindow = (message: Message): boolean => {
+  if (!message.createdAt) return false;
+  const createdAtMs =
+    message.createdAt instanceof Date
+      ? message.createdAt.getTime()
+      : new Date(message.createdAt).getTime();
+  if (Number.isNaN(createdAtMs)) return false;
+  return Date.now() - createdAtMs <= RECALL_WINDOW_MS;
+};
 
 interface ActionCandidate {
   id: Exclude<MessageActionId, "more">;
@@ -62,6 +82,7 @@ const getActionCandidates = ({
   isOwn,
   canEdit = false,
   canDelete = false,
+  canDeleteForEveryone,
   canRetry = false,
 }: MessageActionPolicyInput): ActionCandidate[] => {
   const failed = isFailedMessage(message);
@@ -114,8 +135,19 @@ const getActionCandidates = ({
 
   if (canDelete && canDeleteMessage(message)) {
     candidates.push({
-      id: "delete",
+      id: "deleteForMe",
       score: failed && isOwn ? 68 : 18,
+      railEligible: false,
+      menuEligible: true,
+    });
+  }
+
+  const allowRecall =
+    canDeleteForEveryone ?? (isOwn && isWithinRecallWindow(message));
+  if (allowRecall && canDeleteMessage(message)) {
+    candidates.push({
+      id: "deleteForEveryone",
+      score: isOwn ? 24 : 20,
       railEligible: false,
       menuEligible: true,
     });

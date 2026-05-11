@@ -9,6 +9,9 @@ interface ChatEventHandlers {
   onMessageNew?: RealtimeEventHandler;
   onMessageUpdated?: RealtimeEventHandler;
   onMessageDeleted?: RealtimeEventHandler;
+  onMessageRecalled?: RealtimeEventHandler;
+  onMessageDeletedGlobal?: RealtimeEventHandler;
+  onMessageDeletedForMe?: RealtimeEventHandler;
   onMessageDelivered?: RealtimeEventHandler;
   onReactionAdded?: RealtimeEventHandler;
   onReactionRemoved?: RealtimeEventHandler;
@@ -43,6 +46,18 @@ export const registerChatEvents = (
   register(WebSocketEvents.MESSAGE_DELETED, handlers.onMessageDeleted);
   register(WebSocketEvents.MESSAGE_DELIVERED, handlers.onMessageDelivered);
   register("message:revoked", handlers.onMessageDeleted);
+  register(
+    WebSocketEvents.MESSAGE_RECALLED,
+    handlers.onMessageRecalled ?? handlers.onMessageDeleted,
+  );
+  register(
+    WebSocketEvents.MESSAGE_DELETED_GLOBAL,
+    handlers.onMessageDeletedGlobal ?? handlers.onMessageDeleted,
+  );
+  register(
+    WebSocketEvents.MESSAGE_DELETED_FOR_ME,
+    handlers.onMessageDeletedForMe ?? handlers.onMessageDeleted,
+  );
   register("reaction:added", handlers.onReactionAdded);
   register("message:reaction_added", handlers.onReactionAdded);
   register("reaction:removed", handlers.onReactionRemoved);

@@ -1304,6 +1304,61 @@ export const useWebSocket = (
           reason: "socket:message:deleted",
         });
       },
+      onMessageRecalled: (data: unknown) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+        const conversationId = getConversationId(payload);
+        const messageId =
+          asString(payload.messageId) ?? asString(payload.id);
+        if (!conversationId || !messageId) return;
+        dispatch(
+          realtimeMessageDeleted({
+            conversationId,
+            messageId,
+            mode: "RECALL",
+            recalledBy: asString(payload.recalledBy) ?? undefined,
+            recalledAt: asString(payload.recalledAt) ?? undefined,
+          }),
+        );
+        void scheduleConversationSnapshotRefresh(conversationId, {
+          reason: "socket:message:recalled",
+        });
+      },
+      onMessageDeletedGlobal: (data: unknown) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+        const conversationId = getConversationId(payload);
+        const messageId =
+          asString(payload.messageId) ?? asString(payload.id);
+        if (!conversationId || !messageId) return;
+        dispatch(
+          realtimeMessageDeleted({
+            conversationId,
+            messageId,
+            mode: "ADMIN_DELETE",
+            deletedBy: asString(payload.deletedBy) ?? undefined,
+            deletedAt: asString(payload.deletedAt) ?? undefined,
+          }),
+        );
+        void scheduleConversationSnapshotRefresh(conversationId, {
+          reason: "socket:message:deleted_global",
+        });
+      },
+      onMessageDeletedForMe: (data: unknown) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+        const conversationId = getConversationId(payload);
+        const messageId =
+          asString(payload.messageId) ?? asString(payload.id);
+        if (!conversationId || !messageId) return;
+        dispatch(
+          realtimeMessageDeleted({
+            conversationId,
+            messageId,
+            mode: "FOR_ME",
+          }),
+        );
+      },
       onMessageDelivered: (data: unknown) => {
         const payload = asRecord(data);
         if (!payload) return;

@@ -322,6 +322,23 @@ export const patchMessageInCache = (
   upsertMessageInCache(cache, { ...current, ...patch });
 };
 
+export const removeMessageFromCache = (
+  cache: ConversationMessagesCache,
+  messageId: string,
+): void => {
+  const matchingIndex = findMessageIdentityIndex(cache.messages, {
+    id: messageId,
+    localId: messageId,
+    stableId: messageId,
+    clientMessageId: messageId,
+  });
+
+  if (matchingIndex < 0) return;
+
+  cache.messages.splice(matchingIndex, 1);
+  refreshCacheIndex(cache);
+};
+
 export const patchReactionSummary = (
   message: Message,
   emoji: string,
