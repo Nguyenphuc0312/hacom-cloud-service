@@ -510,6 +510,29 @@ export const useConversationSession = ({
     if (anchor.messageId) {
       markReadInput.lastVisibleMessageId = anchor.messageId;
     }
+    // Trace source: phân biệt seq đến từ messages list (đã load message) hay
+    // từ conversation summary lastMessage.messageSeq (F5/deep-link, chưa
+    // load messages). Cần phân biệt để debug nếu badge stuck.
+    const summarySeqHint = coercePositiveIntSeq(
+      (
+        useChatStore.getState().conversationById[selectedConversationId]
+          ?.lastMessage as { messageSeq?: unknown } | undefined
+      )?.messageSeq,
+    );
+    const fromMessagesList =
+      anchor.messageId !== null &&
+      (summarySeqHint === null || anchor.seq <= summarySeqHint) === false;
+    // eslint-disable-next-line no-console
+    console.debug(
+      fromMessagesList
+        ? "markRead.fromMessagesMeta"
+        : "markRead.fromConversationListLatestSeq",
+      {
+        conversationId: selectedConversationId,
+        lastReadSeq: anchor.seq,
+        anchorMessageId: anchor.messageId,
+      },
+    );
     void markAsRead(selectedConversationId, markReadInput).catch(() => {
       if (lastVisibleReadAnchorKeyRef.current === latestKey) {
         lastVisibleReadAnchorKeyRef.current = null;
