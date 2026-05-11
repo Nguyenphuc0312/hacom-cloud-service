@@ -37,8 +37,12 @@ export interface SimpleVirtualizedChatTimelineProps {
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
   onEdit?: (message: Message) => void | Promise<void>;
-  onDelete?: (messageId: string) => void | Promise<void>;
+  onDelete?: (
+    messageId: string,
+    mode?: "FOR_ME" | "FOR_EVERYONE",
+  ) => void | Promise<void>;
   onInspect?: (message: Message) => void;
+  viewerCanRecallOthers?: boolean;
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
   hasMore?: boolean;
@@ -97,6 +101,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
   onToggleSelect,
   onNavigateToMessage,
   currentUsername,
+  viewerCanRecallOthers,
   unreadMarker,
   composerHeight,
   className,
@@ -233,6 +238,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
                         onToggleSelect={onToggleSelect}
                         onNavigateToMessage={onNavigateToMessage}
                         currentUsername={currentUsername}
+                        viewerCanRecallOthers={viewerCanRecallOthers}
                         expandedLongMessageIds={EMPTY_EXPANDED}
                         onToggleLongMessageExpand={noopToggleExpand}
                         insertedMessageKeys={EMPTY_INSERTED}
@@ -257,6 +263,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
                         onToggleSelect={onToggleSelect}
                         onNavigateToMessage={onNavigateToMessage}
                         currentUsername={currentUsername}
+                        viewerCanRecallOthers={viewerCanRecallOthers}
                         textRenderMode="expanded"
                         isCollapsibleText={false}
                       />

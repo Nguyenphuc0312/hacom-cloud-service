@@ -123,6 +123,17 @@ export function getMessagePreview(
 ): string {
   if (!message) return "";
 
+  if (message.isDeleted || message.lifecycleStatus === "recalled") {
+    return i18n.t("chat:message.recalled", {
+      defaultValue: "Tin nhắn đã được thu hồi",
+    });
+  }
+  if (message.lifecycleStatus === "deleted_admin") {
+    return i18n.t("chat:message.deletedByAdmin", {
+      defaultValue: "Tin nhắn đã bị xóa bởi quản trị viên",
+    });
+  }
+
   let preview = "";
 
   switch (message.type) {

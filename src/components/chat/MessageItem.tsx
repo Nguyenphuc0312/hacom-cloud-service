@@ -17,7 +17,10 @@ interface MessageItemProps {
   onReply: (message: Message) => void;
   onReact: (messageId: string, emoji: string) => void;
   onEdit?: (message: Message) => void | Promise<void>;
-  onDelete?: (messageId: string) => void | Promise<void>;
+  onDelete?: (
+    messageId: string,
+    mode?: "FOR_ME" | "FOR_EVERYONE",
+  ) => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
   density?: ChatDensity;
@@ -26,6 +29,8 @@ interface MessageItemProps {
   onToggleSelect?: (messageId: string) => void;
   onNavigateToMessage?: (messageId: string) => void;
   currentUsername?: string;
+  /** Viewer được phép "Xóa ở mọi người" trên tin của người khác (admin/owner). */
+  viewerCanRecallOthers?: boolean;
   textRenderMode?: LongMessageRenderMode;
   isCollapsibleText?: boolean;
   onToggleTextExpand?: () => void;
@@ -122,6 +127,7 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
   onToggleSelect,
   onNavigateToMessage,
   currentUsername,
+  viewerCanRecallOthers,
   textRenderMode = "expanded",
   isCollapsibleText = false,
   onToggleTextExpand,
@@ -220,6 +226,7 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
             density={density}
             onNavigateToMessage={onNavigateToMessage}
             currentUsername={currentUsername}
+            viewerCanRecallOthers={viewerCanRecallOthers}
             textRenderMode={textRenderMode}
             isCollapsibleText={isCollapsibleText}
             onToggleTextExpand={onToggleTextExpand}

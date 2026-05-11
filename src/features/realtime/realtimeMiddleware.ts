@@ -12,6 +12,7 @@ import {
   patchDeliveredReceiptInCache,
   patchMessageInCache,
   patchReadCursorInCache,
+  removeMessageFromCache,
   upsertMessageInCache,
 } from "../chat/domain/messageMerge";
 import { normalizeMessageForReduxCache } from "../chat/domain/serializableMessage";
@@ -23,9 +24,18 @@ export interface RealtimeMessagePayload {
   message: Message;
 }
 
+export type RealtimeDeleteMode = "RECALL" | "ADMIN_DELETE" | "FOR_ME";
+
 export interface RealtimeMessageDeletedPayload {
   conversationId: string;
   messageId: string;
+  /** Chế độ xóa. Nếu thiếu (event legacy), xử lý như RECALL để giữ behavior cũ. */
+  mode?: RealtimeDeleteMode;
+  recalledBy?: string;
+  recalledAt?: string;
+  deletedBy?: string;
+  deletedAt?: string;
+  /** @deprecated giữ cho backward-compat; dùng mode thay thế. */
   revoked?: boolean;
 }
 
@@ -201,15 +211,41 @@ export const realtimeMiddleware: Middleware<
   }
 
   if (realtimeMessageDeleted.match(action)) {
+    const {
+      conversationId,
+      messageId,
+      mode,
+      recalledBy,
+      recalledAt,
+      deletedBy,
+      deletedAt,
+    } = action.payload;
     storeApi.dispatch(
       chatApi.util.updateQueryData(
         "getMessages",
-        getMessageQueryArg(action.payload.conversationId),
+        getMessageQueryArg(conversationId),
         (draft) => {
-          patchMessageInCache(draft, action.payload.messageId, {
+          if (mode === "FOR_ME") {
+            removeMessageFromCache(draft, messageId);
+            return;
+          }
+
+          const patch: Partial<Message> = {
             isDeleted: true,
             content: "",
-          });
+            attachments: [],
+          };
+          if (mode === "ADMIN_DELETE") {
+            patch.lifecycleStatus = "deleted_admin";
+            if (deletedBy) patch.deletedBy = deletedBy;
+            if (deletedAt) patch.deletedAt = deletedAt;
+          } else {
+            // RECALL hoặc legacy event: mặc định coi là recall (đồng nhất với behavior cũ)
+            patch.lifecycleStatus = "recalled";
+            if (recalledBy) patch.recalledBy = recalledBy;
+            if (recalledAt) patch.recalledAt = recalledAt;
+          }
+          patchMessageInCache(draft, messageId, patch);
         },
       ),
     );
