@@ -18,7 +18,9 @@
   },
   "message": {
     "you": "Bạn",
-    "deleted": "Tin nhắn đã bị xóa",
+    "deleted": "Tin nhắn đã được thu hồi",
+    "recalled": "Tin nhắn đã được thu hồi",
+    "deletedByAdmin": "Tin nhắn đã bị xóa bởi quản trị viên",
     "editedAt": "Đã chỉnh sửa lúc {{time}}",
     "jumpToLatest": "Đến tin mới nhất",
     "replyTargetMissing": "Tin nhắn gốc không còn khả dụng",
@@ -54,7 +56,10 @@
       "copyDetails": "Sao chép chi tiết",
       "inspect": "Xem chi tiết",
       "edit": "Chỉnh sửa",
-      "delete": "Xóa"
+      "delete": "Xóa",
+      "deleteForMe": "Xóa về phía tôi",
+      "deleteForEveryone": "Thu hồi",
+      "deleteForEveryoneAdmin": "Xóa ở mọi người"
     },
     "structuredBlock": "Nội dung có cấu trúc",
     "expandLong": "Xem thêm",
@@ -296,12 +301,24 @@
     "messageEdited": "Đã chỉnh sửa tin nhắn",
     "editFailed": "Không thể chỉnh sửa tin nhắn",
     "messageDeleted": "Đã xóa tin nhắn",
+    "messageRecalled": "Đã thu hồi tin nhắn",
+    "messageDeletedGlobal": "Đã xóa tin nhắn ở mọi người",
     "deleteFailed": "Không thể xóa tin nhắn",
     "resendSuccess": "Gửi lại thành công",
     "resendFailed": "Gửi lại không thành công",
     "connectionReconnecting": "Đang kết nối lại...",
     "connectionOffline": "Bạn đang ngoại tuyến. Tin nhắn sẽ được xếp hàng đợi.",
     "connectionRestored": "Kết nối đã được khôi phục"
+  },
+  "confirm": {
+    "deleteForMeTitle": "Xóa về phía tôi?",
+    "deleteForMe": "Tin nhắn này sẽ chỉ bị xóa khỏi phía bạn. Người khác vẫn có thể xem tin nhắn.",
+    "deleteForEveryoneTitle": "Thu hồi tin nhắn?",
+    "deleteForEveryone": "Tin nhắn này sẽ bị thu hồi với tất cả mọi người trong cuộc trò chuyện. Hành động này không thể hoàn tác.",
+    "deleteByAdminTitle": "Xóa tin nhắn ở mọi người?",
+    "deleteByAdmin": "Bạn đang xóa tin nhắn của thành viên khác với tư cách quản trị viên. Mọi người trong cuộc trò chuyện sẽ không còn thấy nội dung này.",
+    "deleteByAdminButton": "Xóa ở mọi người",
+    "recall": "Thu hồi"
   },
   "preview": {
     "photo": "Ảnh",
