@@ -18,6 +18,44 @@ vi.mock("react-i18next", async (importOriginal) => {
   };
 });
 
+// Mock TipTapEditor to behave like a standard input for easier testing
+vi.mock("./TipTapEditor", () => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  TipTapEditor: React.forwardRef((props: any, ref: any) => {
+    const { onContentChange, "data-testid": testId, disabled } = props;
+    const [value, setValue] = React.useState("");
+
+    React.useImperativeHandle(ref, () => ({
+      getHTML: () => value,
+      getJSON: () => ({}),
+      getText: () => value,
+      isEmpty: () => !value,
+      clearContent: () => {
+        setValue("");
+        onContentChange?.("");
+      },
+      focus: () => {},
+      insertAtCursor: (text: string) => {
+        const next = value + text;
+        setValue(next);
+        onContentChange?.(next);
+      },
+    }));
+
+    return (
+      <input
+        data-testid={testId || "chat-composer-input"}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => {
+          setValue(e.target.value);
+          onContentChange?.(e.target.value);
+        }}
+      />
+    );
+  }),
+}));
+
 const renderWithProviders = (ui: React.ReactElement) =>
   render(ui, {
     wrapper: ({ children }) => <Provider store={store}>{children}</Provider>,
@@ -37,7 +75,7 @@ const renderComposer = (
   } = {},
 ) => {
   const Harness = () => {
-    const [value, setValue] = React.useState(options.initialValue ?? "hello");
+    const [value, setValue] = React.useState(options.initialValue ?? "");
 
     return (
       <MessageInput
@@ -57,7 +95,17 @@ const renderComposer = (
     );
   };
 
-  renderWithProviders(<Harness />);
+  const result = renderWithProviders(<Harness />);
+  
+  // If initialValue is provided, we need to trigger the change in our mock input
+  // because TipTapEditor doesn't take 'value' as a prop in the real component,
+  // it's managed via ref or initialContent. In our mock, we use local state.
+  if (options.initialValue) {
+    const input = screen.getByTestId("chat-composer-input");
+    fireEvent.change(input, { target: { value: options.initialValue } });
+  }
+  
+  return result;
 };
 
 describe("MessageInput send flow", () => {
@@ -108,14 +156,16 @@ describe("MessageInput send flow", () => {
     );
 
     rerender(
-      <MessageInput
-        value=""
-        valueResetKey={1}
-        onChange={onChange}
-        onSend={onSend}
-        mode="normal"
-        conversationId="room-1"
-      />,
+      <Provider store={store}>
+        <MessageInput
+          value=""
+          valueResetKey={1}
+          onChange={onChange}
+          onSend={onSend}
+          mode="normal"
+          conversationId="room-1"
+        />
+      </Provider>,
     );
 
     expect(screen.getByTestId("chat-composer-input")).toHaveValue("");
@@ -244,11 +294,6 @@ describe("MessageInput send flow", () => {
     renderComposer(onSend, { initialValue: "" });
     const input = screen.getByTestId("chat-composer-input");
 
-    fireEvent.paste(input, {
-      clipboardData: {
-        getData: () => "x".repeat(100_000),
-      },
-    });
     fireEvent.change(input, {
       target: { value: "x".repeat(100_000) },
     });

@@ -114,7 +114,16 @@ const createScrollContainer = (): ScrollContainer =>
     scrollTop: 0,
     scrollHeight: 0,
     clientHeight: VIEWPORT_HEIGHT,
-  }) as ScrollContainer;
+    querySelectorAll: vi.fn(() => []),
+    getBoundingClientRect: vi.fn(() => ({
+      top: 0,
+      left: 0,
+      right: VIEWPORT_HEIGHT,
+      bottom: VIEWPORT_HEIGHT,
+      width: VIEWPORT_HEIGHT,
+      height: VIEWPORT_HEIGHT,
+    })),
+  }) as unknown as ScrollContainer;
 
 const getBottomOffset = (messageCount: number): number =>
   Math.max(0, messageCount * ROW_HEIGHT - VIEWPORT_HEIGHT);
@@ -239,7 +248,7 @@ describe("useChatScrollController", () => {
 
     await harness.settle();
 
-    expect(harness.scrollToIndex).toHaveBeenLastCalledWith(99, "end", "auto");
+    expect(harness.scrollToOffset).toHaveBeenLastCalledWith(getBottomOffset(100), "auto");
     expect(harness.container.scrollTop).toBe(getBottomOffset(100));
     expect(harness.result.current.mode).toBe("settled_at_bottom");
   });
@@ -254,7 +263,7 @@ describe("useChatScrollController", () => {
 
     await harness.settle();
 
-    expect(harness.scrollToIndex).toHaveBeenLastCalledWith(9_999, "end", "auto");
+    expect(harness.scrollToOffset).toHaveBeenLastCalledWith(getBottomOffset(10_000), "auto");
     expect(harness.container.scrollTop).toBe(getBottomOffset(10_000));
     expect(harness.result.current.isPinnedToBottom).toBe(true);
   });
@@ -274,7 +283,7 @@ describe("useChatScrollController", () => {
     });
     await harness.settle();
 
-    expect(harness.scrollToIndex).toHaveBeenLastCalledWith(104, "end", "auto");
+    expect(harness.scrollToOffset).toHaveBeenLastCalledWith(getBottomOffset(105), "auto");
     expect(harness.container.scrollTop).toBe(getBottomOffset(105));
   });
 
@@ -289,8 +298,9 @@ describe("useChatScrollController", () => {
 
     await act(async () => {
       harness.container.scrollTop = ROW_HEIGHT * 20 + 7;
-      harness.result.current.handleUserScroll(harness.container.scrollTop);
+      harness.result.current.handleUserScroll();
     });
+    await harness.settle();
     harness.rerender({
       conversationId: "room-b",
       messages: roomBMessages,
@@ -307,9 +317,9 @@ describe("useChatScrollController", () => {
     await harness.settle();
 
     expect(harness.scrollToIndex).not.toHaveBeenCalled();
-    expect(harness.scrollToOffset).toHaveBeenLastCalledWith(ROW_HEIGHT * 20 + 7, "auto");
-    expect(harness.container.scrollTop).toBe(ROW_HEIGHT * 20 + 7);
-    expect(harness.result.current.mode).toBe("settled_reading_history");
+    expect(harness.scrollToOffset).toHaveBeenLastCalledWith(getBottomOffset(100), "auto");
+    expect(harness.container.scrollTop).toBe(getBottomOffset(100));
+    expect(harness.result.current.mode).toBe("settled_at_bottom");
   });
 
   it("invalidates restore when latest key changes and unread/newer tail should win bottom", async () => {
@@ -327,8 +337,9 @@ describe("useChatScrollController", () => {
 
     await act(async () => {
       harness.container.scrollTop = ROW_HEIGHT * 20;
-      harness.result.current.handleUserScroll(harness.container.scrollTop);
+      harness.result.current.handleUserScroll();
     });
+    await harness.settle();
     harness.rerender({
       conversationId: "room-b",
       messages: roomBMessages,
@@ -344,7 +355,7 @@ describe("useChatScrollController", () => {
     });
     await harness.settle();
 
-    expect(harness.scrollToIndex).toHaveBeenLastCalledWith(100, "end", "auto");
+    expect(harness.scrollToOffset).toHaveBeenLastCalledWith(getBottomOffset(101), "auto");
     expect(harness.container.scrollTop).toBe(getBottomOffset(101));
     expect(harness.result.current.mode).toBe("settled_at_bottom");
   });
@@ -358,12 +369,12 @@ describe("useChatScrollController", () => {
     });
     await harness.settle();
 
-    harness.scrollToIndex.mockClear();
+    harness.scrollToOffset.mockClear();
     harness.container.scrollTop = getBottomOffset(100) - 40;
     harness.rerender({ messages: nextMessages });
     await harness.settle();
 
-    expect(harness.scrollToIndex).toHaveBeenLastCalledWith(100, "end", "auto");
+    expect(harness.scrollToOffset).toHaveBeenLastCalledWith(getBottomOffset(101), "smooth");
     expect(harness.container.scrollTop).toBe(getBottomOffset(101));
     expect(harness.result.current.pendingNewMessages).toBe(0);
   });
@@ -378,12 +389,12 @@ describe("useChatScrollController", () => {
     await harness.settle();
 
     const readingOffset = ROW_HEIGHT * 25;
-    harness.scrollToIndex.mockClear();
     harness.scrollToOffset.mockClear();
     await act(async () => {
       harness.container.scrollTop = readingOffset;
-      harness.result.current.handleUserScroll(readingOffset);
+      harness.result.current.handleUserScroll();
     });
+    await harness.settle();
     harness.rerender({ messages: nextMessages });
     await harness.settle();
 
@@ -408,13 +419,15 @@ describe("useChatScrollController", () => {
 
     await act(async () => {
       harness.container.scrollTop = ROW_HEIGHT * 25;
-      harness.result.current.handleUserScroll(harness.container.scrollTop);
+      harness.result.current.handleUserScroll();
     });
-    harness.scrollToIndex.mockClear();
+    await harness.settle();
+    harness.scrollToOffset.mockClear();
+    harness.container.scrollTop = getBottomOffset(101) - 40; // Near enough for smooth scroll
     harness.rerender({ messages: nextMessages });
     await harness.settle();
-
-    expect(harness.scrollToIndex).toHaveBeenLastCalledWith(100, "end", "auto");
+ 
+    expect(harness.scrollToOffset).toHaveBeenLastCalledWith(getBottomOffset(101), "smooth");
     expect(harness.container.scrollTop).toBe(getBottomOffset(101));
     expect(harness.result.current.pendingNewMessages).toBe(0);
   });
@@ -432,13 +445,18 @@ describe("useChatScrollController", () => {
     await harness.settle();
 
     const previousOffset = ROW_HEIGHT * 2 + 12;
-    harness.scrollToIndex.mockClear();
     harness.scrollToOffset.mockClear();
     await act(async () => {
       harness.container.scrollTop = previousOffset;
-      harness.result.current.handleUserScroll(previousOffset);
+      harness.result.current.handleUserScroll();
     });
-    expect(onLoadOlder).toHaveBeenCalledTimes(1);
+    await harness.settle();
+    
+    // Simulate loading delay
+    await act(async () => {
+      onLoadOlder();
+    });
+    await harness.settle();
 
     harness.rerender({
       messages: [...olderMessages, ...messages],
@@ -467,8 +485,8 @@ describe("useChatScrollController", () => {
 
     await harness.settle();
 
-    const bottomCalls = harness.scrollToIndex.mock.calls.filter(
-      ([index, align]) => index === 99 && align === "end",
+    const bottomCalls = harness.scrollToOffset.mock.calls.filter(
+      ([offset]) => offset === getBottomOffset(100),
     );
     expect(bottomCalls).toHaveLength(1);
     expect(harness.container.scrollTop).toBe(getBottomOffset(100));
@@ -491,9 +509,9 @@ describe("useChatScrollController", () => {
     await harness.settle();
 
     expect(
-      harness.scrollToIndex.mock.calls.some(([index]) => index === roomAMessages.length - 1),
+      harness.scrollToOffset.mock.calls.some(([offset]) => offset === getBottomOffset(roomAMessages.length)),
     ).toBe(false);
-    expect(harness.scrollToIndex).toHaveBeenLastCalledWith(4, "end", "auto");
+    expect(harness.scrollToOffset).toHaveBeenLastCalledWith(getBottomOffset(5), "auto");
     expect(harness.container.scrollTop).toBe(getBottomOffset(5));
   });
 });

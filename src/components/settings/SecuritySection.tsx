@@ -63,7 +63,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({ id }) => {
     } catch (error) {
       const apiError = extractApiError(error);
       if (
-        apiError.code === ErrorCode.INVALID_CURRENT_PASSWORD ||
+        (apiError.code as string) === "INVALID_CURRENT_PASSWORD" ||
         apiError.code === ErrorCode.INVALID_CREDENTIALS
       ) {
         setError("currentPassword", {
