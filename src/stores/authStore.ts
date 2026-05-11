@@ -527,7 +527,6 @@ export const useAuthStore = create<AuthState>()(
           set({
             isLoading: true,
             error: null,
-            authStatus: "loading",
             lockedAccount: null,
           });
 

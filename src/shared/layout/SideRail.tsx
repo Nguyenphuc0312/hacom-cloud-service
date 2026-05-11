@@ -12,13 +12,17 @@ import {
 } from "@heroicons/react/24/outline";
 import type { UserSummary } from "../../types";
 import { ROUTE_PATHS } from "../../router/paths";
+import { useUIStore } from "../../stores";
+import { emitOpenNewChatModal } from "../../lib/commandPalette";
 import ContactsAddressBookOutlineIcon from "./ContactsAddressBookOutlineIcon";
+import CreateGroupIcon from "./CreateGroupIcon";
 
 type SideRailItem = {
   id: string;
   label: string;
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   to?: string;
+  onClick?: () => void;
   activeWhen?: (pathname: string) => boolean;
 };
 
@@ -111,7 +115,8 @@ const SideRailAvatar: React.FC<{
 const SideRailButton: React.FC<{
   item: SideRailItem;
   isActive?: boolean;
-}> = ({ item, isActive = false }) => {
+  onClick?: () => void;
+}> = ({ item, isActive = false, onClick }) => {
   const Icon = item.icon;
   const getItemClassName = (active: boolean) =>
     clsx("hc-side-rail__item", active && "hc-side-rail__item--active");
@@ -150,6 +155,7 @@ const SideRailButton: React.FC<{
       className={getItemClassName(isActive)}
       aria-label={item.label}
       title={item.label}
+      onClick={onClick || item.onClick}
     >
       {renderIndicator(isActive)}
       <Icon className="hc-side-rail__item-icon" aria-hidden="true" />
@@ -163,6 +169,18 @@ export const SideRail: React.FC<SideRailProps> = ({
   onCurrentUserClick,
 }) => {
   const { pathname } = useLocation();
+  const openModal = useUIStore((state) => state.openModal);
+
+  const mainRailItems: SideRailItem[] = [
+    ...railItems.slice(0, 1),
+    {
+      id: "new-chat",
+      label: "Tạo mới",
+      icon: CreateGroupIcon,
+      onClick: () => emitOpenNewChatModal(),
+    },
+    ...railItems.slice(1),
+  ];
 
   return (
     <aside className="hc-side-rail" aria-label="Điều hướng chính">
@@ -180,7 +198,7 @@ export const SideRail: React.FC<SideRailProps> = ({
       </NavLink>
 
       <nav className="hc-side-rail__nav" aria-label="Module">
-        {railItems.map((item) => (
+        {mainRailItems.map((item) => (
           <SideRailButton
             key={item.id}
             item={item}

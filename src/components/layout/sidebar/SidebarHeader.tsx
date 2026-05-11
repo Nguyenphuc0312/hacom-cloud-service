@@ -8,7 +8,6 @@ import {
   Cog6ToothIcon,
   EllipsisHorizontalIcon,
   MagnifyingGlassIcon,
-  PencilSquareIcon,
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
 import ContactsAddressBookOutlineIcon from "../../../shared/layout/ContactsAddressBookOutlineIcon";
@@ -23,7 +22,6 @@ import type { ChatLayoutState } from "../../../utils/densityPolicy";
 interface SidebarHeaderProps {
   layoutState: ChatLayoutState;
   currentUser: UserSummary;
-  onNewChat?: () => void;
   onCurrentUserClick?: () => void;
   onOpenFriends?: () => void;
   onOpenSettings?: () => void;
@@ -58,7 +56,6 @@ const resolveStatusLabel = (
 export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   layoutState,
   currentUser,
-  onNewChat,
   onCurrentUserClick,
   onOpenFriends,
   onOpenSettings,
@@ -205,16 +202,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           )}
           ref={menuRef}
         >
-          <IconButtonSurface
-            onClick={onNewChat}
-            className={clsx(
-              "rounded-md bg-[hsl(var(--chat-active-surface)/0.12)] text-primary shadow-none hover:bg-[hsl(var(--chat-active-surface)/0.18)] hover:text-primary",
-              "h-[var(--control-height-md)] w-[var(--control-height-md)]",
-            )}
-            aria-label={t("sidebar:header.startNewChat")}
-          >
-            <PencilSquareIcon className="h-[18px] w-[18px]" />
-          </IconButtonSurface>
+
 
           <IconButtonSurface
             onClick={onFocusSearch}
