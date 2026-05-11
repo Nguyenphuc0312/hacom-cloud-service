@@ -541,7 +541,7 @@ export const useConversationSession = ({
   }, [markAsRead, resolveLatestKnownAnchor, selectedConversationId]);
 
   const handleReachedLatestMessage = useCallback(
-    (_message: Message) => {
+    () => {
       // Giữ chữ ký cũ để các callsite khác không break. Logic giờ luôn resolve
       // anchor theo max(loaded, conversation.lastMessage) thay vì chỉ message
       // truyền vào.
