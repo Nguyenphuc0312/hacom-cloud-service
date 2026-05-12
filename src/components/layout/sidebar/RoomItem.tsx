@@ -38,7 +38,6 @@ interface RoomItemViewProps {
   previewState: ReturnType<typeof getMessagePreviewState>;
   timeLabel: string;
   unreadCount: number;
-  unreadLabel: string;
   hasUnreadMention: boolean;
   avatarSrc?: string;
   avatarStatus?: UserStatus;
@@ -370,7 +369,6 @@ const RoomItemView = React.memo(
     prev.previewState === next.previewState &&
     prev.timeLabel === next.timeLabel &&
     prev.unreadCount === next.unreadCount &&
-    prev.unreadLabel === next.unreadLabel &&
     prev.hasUnreadMention === next.hasUnreadMention &&
     prev.avatarSrc === next.avatarSrc &&
     prev.avatarStatus === next.avatarStatus &&
@@ -460,7 +458,6 @@ export const RoomItemContainer = React.memo(
         previewState={viewModel.previewState}
         timeLabel={viewModel.timeLabel}
         unreadCount={viewModel.unreadCount}
-        unreadLabel={viewModel.unreadLabel}
         hasUnreadMention={viewModel.hasUnreadMention}
         avatarSrc={viewModel.avatarSrc}
         avatarStatus={viewModel.avatarStatus}
