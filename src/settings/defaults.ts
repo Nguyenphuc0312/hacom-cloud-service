@@ -26,10 +26,6 @@ export const DEFAULT_LANGUAGE: LanguageCode = "vi";
 
 export const defaultSettings: SettingsSchema = {
   ...DEFAULT_SETTINGS,
-<<<<<<< HEAD
   language: DEFAULT_LANGUAGE,
-=======
-  language: "vi",
->>>>>>> 011e84246f4a9e7396d9bcd894e1c43502e9ceed
   updatedAt: new Date().toISOString(),
 };
