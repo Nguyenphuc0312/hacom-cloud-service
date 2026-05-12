@@ -123,7 +123,9 @@
     "devicesTitle": "Thiết bị đang đăng nhập",
     "devicesDesc": "Quản lý các phiên đăng nhập của bạn.",
     "currentDevice": "Thiết bị hiện tại",
-    "currentDeviceBadge": "Đang sử dụng"
+    "currentDeviceBadge": "Đang sử dụng",
+    "showPassword": "Hiện mật khẩu",
+    "hidePassword": "Ẩn mật khẩu"
   },
   "blockedUsers": {
     "title": "Người dùng bị chặn",
