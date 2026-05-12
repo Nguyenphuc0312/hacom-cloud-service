@@ -764,7 +764,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     if (!externalJumpToMessageId) return;
 
     void handleNavigateToMessage(externalJumpToMessageId).finally(() => {
-      onExternalJumpHandled?.(externalJumpToMessageId);
+      setTimeout(() => {
+        onExternalJumpHandled?.(externalJumpToMessageId);
+      }, 0);
     });
   }, [
     externalJumpRequestVersion,
@@ -774,10 +776,32 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   ]);
 
   // Close panels when switching conversations
-  React.useEffect(() => {
+  const [prevConversationId, setPrevConversationId] = React.useState(conversation.id);
+
+  if (conversation.id !== prevConversationId) {
+    setPrevConversationId(conversation.id);
     setOverlayMode(null);
     setInspectMessageId(null);
-  }, [conversation.id]);
+    exitSelectionMode();
+
+    // Reset composer state
+    const nextDraft = readPersistedDraft(conversation.id);
+    setComposerSeed(nextDraft);
+    setComposerSeedVersion((v) => v + 1);
+    setReplyToMessage(undefined);
+    setEditingMessage(undefined);
+    setInputMode("normal");
+  }
+
+  React.useEffect(() => {
+    if (previousConversationIdRef.current === conversation.id) {
+      return;
+    }
+
+    navigationRequestSeqRef.current += 1;
+    flushPendingDraftPersist();
+    previousConversationIdRef.current = conversation.id;
+  }, [conversation.id, flushPendingDraftPersist]);
 
   React.useEffect(() => {
     const previousState = previousConnectionStateRef.current;
@@ -809,7 +833,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       connectionState === "disconnected" ||
       connectionState === "error"
     ) {
-      setEphemeralNotice(null);
+      setTimeout(() => setEphemeralNotice(null), 0);
     }
 
     previousConnectionStateRef.current = connectionState;
@@ -823,27 +847,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     },
     [],
   );
-
-  React.useEffect(() => {
-    if (previousConversationIdRef.current === conversation.id) {
-      return;
-    }
-
-    navigationRequestSeqRef.current += 1;
-    flushPendingDraftPersist();
-    previousConversationIdRef.current = conversation.id;
-    const nextDraft = readPersistedDraft(conversation.id);
-    draftBeforeEditRef.current = nextDraft;
-    replaceComposerSeed(nextDraft);
-    setReplyToMessage(undefined);
-    setEditingMessage(undefined);
-    setInputMode("normal");
-  }, [
-    conversation.id,
-    flushPendingDraftPersist,
-    readPersistedDraft,
-    replaceComposerSeed,
-  ]);
 
   const mentionCandidates = React.useMemo<MentionCandidate[]>(() => {
     const participants = Array.isArray(conversation.participants)
@@ -923,10 +926,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     [],
   );
 
-  // Exit selection on conversation change
-  React.useEffect(() => {
-    exitSelectionMode();
-  }, [conversation.id, exitSelectionMode]);
+  // Note: Selection exit handled in render-time conversation change check above.
 
   const handleSelectionDelete = React.useCallback(() => {
     if (!onDeleteMessage) return;

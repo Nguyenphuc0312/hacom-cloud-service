@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
@@ -84,7 +84,10 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
     [results, searchUserOverridesById],
   );
 
-  useEffect(() => {
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
     if (!isOpen) {
       setSearchQuery("");
       setSelectedUsersById({});
@@ -95,7 +98,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
       setPendingFriendRequestIds(new Set());
       setSearchUserOverridesById({});
     }
-  }, [isOpen]);
+  }
 
   const getDisplayName = useCallback((user: ChatSearchUser) => {
     return (

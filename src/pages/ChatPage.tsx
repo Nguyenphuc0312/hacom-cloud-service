@@ -567,19 +567,14 @@ export const ChatPage: React.FC = () => {
     openConversationInfoPanel,
   ]);
 
-  useEffect(() => {
-    if (infoPanelMode !== "conversation") {
-      return;
-    }
+  const [prevRouteConversationId, setPrevRouteConversationId] = useState(routeConversationId);
 
-    if (!routeConversationId) {
-      closeInfoPanel();
+  if (routeConversationId !== prevRouteConversationId) {
+    setPrevRouteConversationId(routeConversationId);
+    if (!routeConversationId && infoPanelMode === "conversation") {
+      setIsInfoPanelOpen(false);
     }
-  }, [
-    closeInfoPanel,
-    infoPanelMode,
-    routeConversationId,
-  ]);
+  }
 
   const handleDeleteConversation = useCallback(() => {
     if (!selectedConversation) return;
@@ -788,7 +783,7 @@ export const ChatPage: React.FC = () => {
 
   useEffect(() => {
     if (consumeOpenNewChatIntent()) {
-      setIsNewChatModalOpen(true);
+      setTimeout(() => setIsNewChatModalOpen(true), 0);
     }
 
     const openFromCommandPalette = () => {

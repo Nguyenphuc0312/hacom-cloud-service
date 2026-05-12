@@ -26,13 +26,17 @@ export const PollCreateDialog: React.FC<PollCreateDialogProps> = ({
   const [anonymous, setAnonymous] = React.useState(false);
   const firstInputRef = React.useRef<HTMLInputElement | null>(null);
 
-  React.useEffect(() => {
-    if (!isOpen) return;
-    setQuestion("");
-    setOptions(["", ""]);
-    setAllowMultiple(false);
-    setAnonymous(false);
-  }, [isOpen]);
+  const [prevIsOpen, setPrevIsOpen] = React.useState(isOpen);
+
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
+    if (isOpen) {
+      setQuestion("");
+      setOptions(["", ""]);
+      setAllowMultiple(false);
+      setAnonymous(false);
+    }
+  }
 
   const cleanOptions = options.map((option) => option.trim()).filter(Boolean);
   const canSubmit = question.trim().length > 0 && cleanOptions.length >= 2;

@@ -64,10 +64,12 @@ export const Avatar: React.FC<AvatarProps> = ({
   const safeSrc =
     typeof src === "string" && src.trim().length > 0 ? src.trim() : undefined;
   const [imageFailed, setImageFailed] = React.useState(false);
+  const [prevSrc, setPrevSrc] = React.useState(safeSrc);
 
-  React.useEffect(() => {
+  if (safeSrc !== prevSrc) {
+    setPrevSrc(safeSrc);
     setImageFailed(false);
-  }, [safeSrc]);
+  }
 
   const initials =
     safeAlt

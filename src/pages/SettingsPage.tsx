@@ -129,7 +129,6 @@ export const SettingsPage: React.FC = () => {
       setIsMobile(event.matches);
     };
 
-    setIsMobile(mediaQuery.matches);
 
     if (typeof mediaQuery.addEventListener === "function") {
       mediaQuery.addEventListener("change", handleChange);

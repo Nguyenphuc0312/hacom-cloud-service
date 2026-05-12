@@ -43,11 +43,14 @@ export const ResetPasswordPage: React.FC = () => {
   });
 
 
-  useEffect(() => {
+  const [prevToken, setPrevToken] = useState(token);
+
+  if (token !== prevToken) {
+    setPrevToken(token);
     if (!token) {
       setTokenError(t("auth:reset.invalidToken"));
     }
-  }, [token, t]);
+  }
 
   useEffect(() => {
     if (token) {

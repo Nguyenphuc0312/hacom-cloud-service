@@ -82,9 +82,12 @@ const SideRailAvatar: React.FC<{
       ? currentUser.avatar.trim()
       : "";
 
-  React.useEffect(() => {
+  const [prevAvatarSrc, setPrevAvatarSrc] = React.useState(avatarSrc);
+
+  if (avatarSrc !== prevAvatarSrc) {
+    setPrevAvatarSrc(avatarSrc);
     setImageFailed(false);
-  }, [avatarSrc]);
+  }
 
   return (
     <button

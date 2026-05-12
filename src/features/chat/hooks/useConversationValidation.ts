@@ -46,16 +46,22 @@ export const useConversationValidation = ({
   const [validationRetryToken, setValidationRetryToken] = useState(0);
   const validatingConversationIdRef = useRef<string | null>(null);
 
+  const [prevRouteId, setPrevRouteId] = useState(routeConversationId);
+
+  if (routeConversationId !== prevRouteId) {
+    setPrevRouteId(routeConversationId);
+    if (!routeConversationId) {
+      setLastValidatedConversationId(null);
+      setConversationValidationError(null);
+      setIsValidatingRoom(false);
+    }
+  }
+
   useEffect(() => {
     let isCancelled = false;
 
     if (!routeConversationId) {
       validatingConversationIdRef.current = null;
-      setLastValidatedConversationId((previous) =>
-        previous === null ? previous : null,
-      );
-      setConversationValidationError(null);
-      setIsValidatingRoom(false);
       return;
     }
 

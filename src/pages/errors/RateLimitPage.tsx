@@ -17,9 +17,12 @@ export const RateLimitPage: React.FC<RateLimitPageProps> = ({
     retryAfterSeconds ?? 0,
   );
 
-  React.useEffect(() => {
+  const [prevRetryAfter, setPrevRetryAfter] = React.useState(retryAfterSeconds);
+
+  if (retryAfterSeconds !== prevRetryAfter) {
+    setPrevRetryAfter(retryAfterSeconds);
     setRemainingSeconds(retryAfterSeconds ?? 0);
-  }, [retryAfterSeconds]);
+  }
 
   React.useEffect(() => {
     if (remainingSeconds <= 0) {

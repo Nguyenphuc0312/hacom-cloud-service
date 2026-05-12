@@ -367,9 +367,19 @@ export const useVirtualizedMessages = <Item, ListData>({
     };
   }, []);
 
+  const [prevEnabled, setPrevEnabled] = React.useState(enabled);
+  const [prevObserve, setPrevObserve] = React.useState(observeViewport);
+
+  if (enabled !== prevEnabled || observeViewport !== prevObserve) {
+    setPrevEnabled(enabled);
+    setPrevObserve(observeViewport);
+    if (!enabled || !observeViewport) {
+      setViewportHeight(0);
+    }
+  }
+
   React.useLayoutEffect(() => {
     if (!enabled || !observeViewport) {
-      setViewportHeight((previous) => (previous === 0 ? previous : 0));
       return;
     }
 

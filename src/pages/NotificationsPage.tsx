@@ -128,10 +128,19 @@ const NotificationsPage: React.FC = () => {
     [activeFilter, upsertNotification],
   );
 
-  useEffect(() => {
+  const [prevLoadPage, setPrevLoadPage] = useState(() => loadPage);
+
+  if (loadPage !== prevLoadPage) {
+    setPrevLoadPage(() => loadPage);
     pageRef.current = 1;
     setHasMore(true);
-    void loadPage(1);
+  }
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      void loadPage(1);
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [loadPage]);
 
   const handleLoadMore = useCallback(async () => {

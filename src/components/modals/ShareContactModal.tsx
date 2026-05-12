@@ -140,15 +140,23 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
     void runSearch(debouncedQuery);
   }, [abortSearch, activeTab, debouncedQuery, isOpen, runSearch]);
 
-  useEffect(() => {
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
     if (!isOpen) {
-      abortSearch();
       setActiveTab("my");
       setQuery("");
       setResults([]);
       setIsLoading(false);
       setSendingUserId(null);
       setErrorText(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!isOpen) {
+      abortSearch();
     }
   }, [abortSearch, isOpen]);
 

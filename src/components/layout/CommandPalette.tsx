@@ -484,14 +484,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   const commandCount = indexedCommands.length;
 
-  React.useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
+  const [prevIsOpen, setPrevIsOpen] = React.useState(isOpen);
 
-    setQuery("");
-    setActiveIndex(0);
-  }, [isOpen]);
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
+    if (isOpen) {
+      setQuery("");
+      setActiveIndex(0);
+    }
+  }
 
   React.useEffect(() => {
     if (!isOpen) {
@@ -507,18 +508,19 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     };
   }, [isOpen]);
 
-  React.useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
+  const [prevCommandCount, setPrevCommandCount] = React.useState(commandCount);
 
-    setActiveIndex((current) => {
-      if (commandCount === 0) {
-        return 0;
-      }
-      return Math.max(0, Math.min(current, commandCount - 1));
-    });
-  }, [commandCount, isOpen]);
+  if (commandCount !== prevCommandCount) {
+    setPrevCommandCount(commandCount);
+    if (isOpen) {
+      setActiveIndex((current) => {
+        if (commandCount === 0) {
+          return 0;
+        }
+        return Math.max(0, Math.min(current, commandCount - 1));
+      });
+    }
+  }
 
   React.useEffect(() => {
     if (!isOpen) {
