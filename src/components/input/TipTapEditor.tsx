@@ -56,11 +56,14 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
     const onEnterPressRef = React.useRef(onEnterPress);
     const onInterceptKeydownRef = React.useRef(onInterceptKeydown);
     const onSelectionChangeRef = React.useRef(onSelectionChange);
+    // Ref keeps latest placeholder without re-creating extensions on every change.
+    const placeholderRef = React.useRef(placeholder);
 
     React.useLayoutEffect(() => {
       onEnterPressRef.current = onEnterPress;
       onInterceptKeydownRef.current = onInterceptKeydown;
       onSelectionChangeRef.current = onSelectionChange;
+      placeholderRef.current = placeholder;
     });
 
     const allExtensions = React.useMemo(
@@ -72,12 +75,15 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
         }),
         Underline,
         Placeholder.configure({
-          placeholder,
+          // Function form reads from ref so decoration always shows current text
+          // without needing to recreate the editor instance on each prop change.
+          placeholder: () => placeholderRef.current,
           emptyEditorClass: "is-editor-empty",
           showOnlyWhenEditable: false,
         }),
       ],
-      [placeholder],
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [], // stable — placeholder is read via ref, not captured in closure
     );
 
     const editor = useEditor({
@@ -130,6 +136,14 @@ export const TipTapEditor = React.forwardRef<TipTapEditorHandle, TipTapEditorPro
         editor.setEditable(!disabled);
       }
     }, [disabled, editor]);
+
+    // When placeholder text changes, fire a no-op transaction so ProseMirror
+    // recomputes decorations and the new data-placeholder value is rendered.
+    React.useEffect(() => {
+      if (editor) {
+        editor.view.dispatch(editor.state.tr);
+      }
+    }, [editor, placeholder]);
 
     React.useImperativeHandle(ref, () => ({
       getHTML: () => editor?.getHTML() ?? "",
