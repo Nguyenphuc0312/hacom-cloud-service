@@ -382,8 +382,9 @@ export const useWebSocket = (
   }, [dispatch]);
 
   useEffect(() => {
-    syncDocumentTitleBadge(totalUnreadCount);
-    void syncAppBadge(totalUnreadCount);
+    // Temporarily disabled — unread count is being fixed; always show zero.
+    syncDocumentTitleBadge(0);
+    void syncAppBadge(0);
   }, [totalUnreadCount]);
 
   useEffect(() => {
