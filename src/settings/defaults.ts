@@ -19,5 +19,6 @@ export const SETTINGS_STORAGE_KEY = "chat-settings-v1";
 
 export const defaultSettings: SettingsSchema = {
   ...DEFAULT_SETTINGS,
+  language: "vi",
   updatedAt: new Date().toISOString(),
 };

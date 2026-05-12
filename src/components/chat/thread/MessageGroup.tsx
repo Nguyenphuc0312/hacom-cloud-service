@@ -513,12 +513,12 @@ const MessageGroupItem: React.FC<{
                   >
                     {resolvedReplyPreview
                       ? resolveUserDisplayName({
-                          displayName: resolvedReplyPreview.senderName,
-                          username: resolvedReplyPreview.senderId,
-                        })
+                        displayName: resolvedReplyPreview.senderName,
+                        username: resolvedReplyPreview.senderId,
+                      })
                       : t("chat:message.replyingTo", {
-                          defaultValue: "Tin nhắn được trả lời",
-                        })}
+                        defaultValue: "Tin nhắn được trả lời",
+                      })}
                   </div>
                   <p
                     className={clsx(
@@ -528,8 +528,8 @@ const MessageGroupItem: React.FC<{
                   >
                     {!resolvedReplyPreview
                       ? t("chat:message.replyLoading", {
-                          defaultValue: "Đang tải tin nhắn...",
-                        })
+                        defaultValue: "Đang tải tin nhắn...",
+                      })
                       : resolvedReplyPreview.isDeleted
                         ? resolvedReplyPreview.lifecycleStatus ===
                           "deleted_admin"
