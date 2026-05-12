@@ -103,7 +103,7 @@ export interface Mention {
  * with a narrower type.
  */
 export type MessageSummary = SharedMessageSummary & {
-  lifecycleStatus?: "recalled" | "deleted_admin" | string;
+  lifecycleStatus?: "active" | "recalled" | "deleted_admin";
   deletedBy?: string;
   deletedAt?: Date | string;
   recalledBy?: string;
@@ -209,6 +209,9 @@ export interface Message
     | "contentFormat"
     | "mentions"
     | "replyToMessage"
+    // shared-types uses string; client adds Date variant for parsed timestamps
+    | "deletedAt"
+    | "recalledAt"
   > {
   id: string;
   localId?: string;
@@ -243,7 +246,7 @@ export interface Message
   lastSendAttemptAt?: Date | string;
   updatedAt?: Date | string;
   status: SharedMessageStatus | "uploading";
-  lifecycleStatus?: "recalled" | "deleted_admin" | string;
+  lifecycleStatus?: "active" | "recalled" | "deleted_admin";
   deletedBy?: string;
   deletedAt?: Date | string;
   recalledBy?: string;
