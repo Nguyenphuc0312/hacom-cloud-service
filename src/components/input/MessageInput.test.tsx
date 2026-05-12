@@ -4,6 +4,7 @@ import { Provider } from "react-redux";
 import { describe, expect, it, vi } from "vitest";
 
 import { MessageInput } from "./MessageInput";
+import type { MessageInputHandle } from "./MessageInput";
 import { store } from "../../store";
 import type { AttachmentDraft } from "../../types/attachmentDraft";
 
@@ -305,5 +306,49 @@ describe("MessageInput send flow", () => {
     );
     expect(screen.getByTestId("chat-send-button")).toBeDisabled();
     expect(onSend).not.toHaveBeenCalled();
+  });
+});
+
+describe("MessageInput imperative handle", () => {
+  it("exposes focus() on the forwarded ref", () => {
+    const ref = React.createRef<MessageInputHandle>();
+    const onSend = vi.fn();
+
+    render(
+      <Provider store={store}>
+        <MessageInput
+          ref={ref}
+          value=""
+          onChange={vi.fn()}
+          onSend={onSend}
+          mode="normal"
+          conversationId="room-1"
+        />
+      </Provider>,
+    );
+
+    expect(typeof ref.current?.focus).toBe("function");
+    // Calling focus() should not throw even though TipTap is mocked
+    expect(() => ref.current?.focus()).not.toThrow();
+  });
+
+  it("exposes addFile() alongside focus() on the forwarded ref", () => {
+    const ref = React.createRef<MessageInputHandle>();
+
+    render(
+      <Provider store={store}>
+        <MessageInput
+          ref={ref}
+          value=""
+          onChange={vi.fn()}
+          onSend={vi.fn()}
+          mode="normal"
+          conversationId="room-1"
+        />
+      </Provider>,
+    );
+
+    expect(typeof ref.current?.addFile).toBe("function");
+    expect(typeof ref.current?.focus).toBe("function");
   });
 });

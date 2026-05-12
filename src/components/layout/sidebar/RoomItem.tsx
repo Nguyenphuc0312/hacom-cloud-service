@@ -215,7 +215,6 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
   previewState,
   timeLabel,
   unreadCount,
-  unreadLabel,
   hasUnreadMention,
   avatarSrc,
   avatarStatus,
