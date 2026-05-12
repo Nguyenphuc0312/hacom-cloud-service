@@ -165,21 +165,26 @@ export const useAttachmentDownloadUrl = (
     [attachment, cacheKey, conversationId, fallbackUrl],
   );
 
-  React.useEffect(() => {
+  const [prevCacheKey, setPrevCacheKey] = React.useState(cacheKey);
+
+  if (cacheKey !== prevCacheKey) {
+    setPrevCacheKey(cacheKey);
     setError(null);
     const cached = cacheKey
       ? SIGNED_URL_CACHE.get(cacheKey, CACHE_SKEW_MS)
       : undefined;
     if (cached) {
       setUrl(cached.url);
-      return;
+    } else {
+      setUrl(fallbackUrl);
     }
+  }
 
-    setUrl(fallbackUrl);
+  React.useEffect(() => {
     if (autoResolve) {
       void resolveUrl();
     }
-  }, [autoResolve, cacheKey, fallbackUrl, resolveUrl]);
+  }, [autoResolve, cacheKey, resolveUrl]);
 
   return {
     url,

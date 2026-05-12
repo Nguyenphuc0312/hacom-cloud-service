@@ -1,4 +1,4 @@
-﻿{
+{
   "auth": {
     "emailRequired": "Email không được để trống",
     "emailInvalid": "Email không hợp lệ",
@@ -52,5 +52,7 @@
       "special": "Có ký tự đặc biệt (!@#$...)",
       "optional": "khuyến khích"
     }
-  }
+  },
+  "showPassword": "Hiện mật khẩu",
+  "hidePassword": "Ẩn mật khẩu"
 }

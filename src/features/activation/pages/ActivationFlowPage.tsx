@@ -67,6 +67,19 @@ export const ActivationFlowPage: React.FC = () => {
   const from =
     (location.state as { from?: string } | null)?.from || ROUTE_PATHS.CHAT;
 
+  const [prevActivationContext, setPrevActivationContext] =
+    React.useState(activationContext);
+
+  if (activationContext !== prevActivationContext) {
+    setPrevActivationContext(activationContext);
+    if (
+      activationContext?.nextAction === "SET_PASSWORD" &&
+      activationContext.verificationProof
+    ) {
+      setStep("set_password");
+    }
+  }
+
   React.useEffect(() => {
     if (!activationContext) {
       if (authStatus === "authenticated") {
@@ -74,14 +87,6 @@ export const ActivationFlowPage: React.FC = () => {
       }
 
       navigate(ROUTE_PATHS.LOGIN, { replace: true });
-      return;
-    }
-
-    if (
-      activationContext.nextAction === "SET_PASSWORD" &&
-      activationContext.verificationProof
-    ) {
-      setStep("set_password");
       return;
     }
 

@@ -157,15 +157,22 @@ export const useMessageSearch = (
   );
 
   // Trigger search when debounced query changes
-  useEffect(() => {
-    if (debouncedQuery.trim()) {
-      performSearch(debouncedQuery, 1, false);
-    } else {
+  const [prevDebouncedQuery, setPrevDebouncedQuery] = useState(debouncedQuery);
+
+  if (debouncedQuery !== prevDebouncedQuery) {
+    setPrevDebouncedQuery(debouncedQuery);
+    if (!debouncedQuery.trim()) {
       setResults([]);
       setTotal(0);
       setPage(1);
       setError(null);
       setIsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (debouncedQuery.trim()) {
+      performSearch(debouncedQuery, 1, false);
     }
   }, [debouncedQuery, performSearch]);
 

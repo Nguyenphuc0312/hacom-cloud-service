@@ -1,4 +1,4 @@
-﻿{
+{
   "sidebar": {
     "header": {
       "workspace": "Không gian",
@@ -533,7 +533,9 @@
       "forward": "Chuyển tiếp",
       "reply": "Trả lời",
       "startChat": "Bắt đầu chat",
-      "signOut": "Đăng xuất"
+      "signOut": "Đăng xuất",
+      "showPassword": "Hiện mật khẩu",
+      "hidePassword": "Ẩn mật khẩu"
     },
     "loading": {
       "default": "Đang tải...",
@@ -678,7 +680,9 @@
       "password": "••••••••",
       "firstName": "Nguyễn",
       "lastName": "Văn A",
-      "username": "username"
+      "username": "username",
+      "showPassword": "Hiện mật khẩu",
+      "hidePassword": "Ẩn mật khẩu"
     }
   },
   "validation": {

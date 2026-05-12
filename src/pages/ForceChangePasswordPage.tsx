@@ -14,8 +14,13 @@ import { authApi } from "../services/api";
 import { useAuthStore } from "../stores";
 import { translateI18nMessage } from "../utils/userMessages";
 
+import { Eye, EyeOff } from "lucide-react";
+
 export const ForceChangePasswordPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { logout } = useAuthStore();
   const { t } = useTranslation();
 
@@ -78,14 +83,24 @@ export const ForceChangePasswordPage: React.FC = () => {
             <label className="block text-sm font-medium text-slate-700 mb-1">
               Mật khẩu hiện tại
             </label>
-            <input
-              {...register("currentPassword")}
-              type="password"
-              placeholder="Mật khẩu hiện tại"
-              disabled={isSubmitting}
-              autoComplete="current-password"
-              className="w-full h-11 px-3 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
-            />
+            <div className="relative">
+              <input
+                {...register("currentPassword")}
+                type={showCurrentPassword ? "text" : "password"}
+                placeholder="Mật khẩu hiện tại"
+                disabled={isSubmitting}
+                autoComplete="current-password"
+                className="w-full h-11 px-3 pr-10 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                aria-label={showCurrentPassword ? t("common.actions.hidePassword") : t("common.actions.showPassword")}
+              >
+                {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
             {errors.currentPassword && (
               <p className="mt-1 text-xs text-danger">
                 {translateI18nMessage(errors.currentPassword.message, t)}
@@ -97,14 +112,24 @@ export const ForceChangePasswordPage: React.FC = () => {
             <label className="block text-sm font-medium text-slate-700 mb-1">
               Mật khẩu mới
             </label>
-            <input
-              {...register("newPassword")}
-              type="password"
-              placeholder={`Tối thiểu ${PASSWORD_MIN_LENGTH} ký tự`}
-              disabled={isSubmitting}
-              autoComplete="new-password"
-              className="w-full h-11 px-3 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
-            />
+            <div className="relative">
+              <input
+                {...register("newPassword")}
+                type={showNewPassword ? "text" : "password"}
+                placeholder={`Tối thiểu ${PASSWORD_MIN_LENGTH} ký tự`}
+                disabled={isSubmitting}
+                autoComplete="new-password"
+                className="w-full h-11 px-3 pr-10 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                aria-label={showNewPassword ? t("common.actions.hidePassword") : t("common.actions.showPassword")}
+              >
+                {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
             {errors.newPassword && (
               <p className="mt-1 text-xs text-danger">
                 {translateI18nMessage(errors.newPassword.message, t)}
@@ -121,14 +146,24 @@ export const ForceChangePasswordPage: React.FC = () => {
             <label className="block text-sm font-medium text-slate-700 mb-1">
               Xác nhận mật khẩu mới
             </label>
-            <input
-              {...register("confirmPassword")}
-              type="password"
-              placeholder="Nhập lại mật khẩu mới"
-              disabled={isSubmitting}
-              autoComplete="new-password"
-              className="w-full h-11 px-3 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
-            />
+            <div className="relative">
+              <input
+                {...register("confirmPassword")}
+                type={showConfirmPassword ? "text" : "password"}
+                placeholder="Nhập lại mật khẩu mới"
+                disabled={isSubmitting}
+                autoComplete="new-password"
+                className="w-full h-11 px-3 pr-10 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                aria-label={showConfirmPassword ? t("common.actions.hidePassword") : t("common.actions.showPassword")}
+              >
+                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
             {errors.confirmPassword && (
               <p className="mt-1 text-xs text-danger">
                 {translateI18nMessage(errors.confirmPassword.message, t)}

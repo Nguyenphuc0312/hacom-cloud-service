@@ -207,10 +207,12 @@ export function useUploadQueue({
   const activePreviewUrls = useRef(new Set<string>());
   const revokedPreviewUrls = useRef(new Set<string>());
   const isProcessing = useRef(false);
+  const conversationIdRef = useRef(conversationId);
 
   // Stable ref to current conversationId for async callbacks
-  const conversationIdRef = useRef(conversationId);
-  conversationIdRef.current = conversationId;
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
 
   const registerPreviewUrl = useCallback((previewUrl: string | undefined) => {
     if (previewUrl) {

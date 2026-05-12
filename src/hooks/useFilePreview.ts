@@ -204,12 +204,21 @@ export function useFilePreview(): UseFilePreviewReturn {
   );
 
   // Whenever current target changes, resolve its URL
-  useEffect(() => {
+  const [prevCurrent, setPrevCurrent] = useState(current);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+
+  if (current !== prevCurrent || isOpen !== prevIsOpen) {
+    setPrevCurrent(current);
+    setPrevIsOpen(isOpen);
     if (!isOpen || !current) {
       setSecureUrl(null);
-      return;
     }
-    void resolveUrl(current);
+  }
+
+  useEffect(() => {
+    if (isOpen && current) {
+      void resolveUrl(current);
+    }
 
     return () => {
       abortRef.current?.abort();

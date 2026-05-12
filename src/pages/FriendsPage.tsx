@@ -363,19 +363,26 @@ export const FriendsPage: React.FC = () => {
     void refreshDirectory();
   }, [refreshDirectory]);
 
-  useEffect(() => {
+  const [prevSearchParamsStr, setPrevSearchParamsStr] = useState(() => searchParams.toString());
+  const [prevShareCode, setPrevShareCode] = useState(shareCode);
+
+  if (searchParams.toString() !== prevSearchParamsStr || shareCode !== prevShareCode) {
+    setPrevSearchParamsStr(searchParams.toString());
+    setPrevShareCode(shareCode);
+
     const nextQuery = searchParams.get("q") || "";
     const nextQrCode = shareCode || searchParams.get("code") || "";
-    setQuery((current) => (current === nextQuery ? current : nextQuery));
-    if (nextQrCode.trim().length > 0) {
-      setActiveTab("qr");
-      return;
+
+    if (query !== nextQuery) {
+      setQuery(nextQuery);
     }
 
-    if (nextQuery.trim().length >= 2) {
-      setActiveTab("discover");
+    if (nextQrCode.trim().length > 0) {
+      if (activeTab !== "qr") setActiveTab("qr");
+    } else if (nextQuery.trim().length >= 2) {
+      if (activeTab !== "discover") setActiveTab("discover");
     }
-  }, [searchParams, shareCode]);
+  }
 
   const searchUsers = useCallback(
     async (rawQuery: string) => {
