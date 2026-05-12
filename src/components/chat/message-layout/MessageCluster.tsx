@@ -290,7 +290,6 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
       onReply,
       openActions,
       isOwn,
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     ],
   );
 
