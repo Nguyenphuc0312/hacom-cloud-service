@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: develop
     env:
       GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME != '' &&
