@@ -1153,7 +1153,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         />
 
         {mode === "reply" && replyToMessage && (
-          <div className="mb-2 flex items-center justify-between rounded-[0.95rem] border border-border/70 bg-surface px-3 py-2 animate-slide-up-fade">
+          <div className="mb-2 flex items-center justify-between rounded-xl border border-border/70 bg-surface px-3 py-2 animate-slide-up-fade">
             <div className="flex min-w-0 items-center gap-2">
               <div className="h-7 w-1 rounded-full bg-primary" />
               <div className="min-w-0">
@@ -1186,7 +1186,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         )}
 
         {mode === "edit" && editingMessage && (
-          <div className="mb-2 flex items-center justify-between rounded-[0.95rem] border border-warning/30 bg-warning/10 px-3 py-2 animate-slide-up-fade">
+          <div className="mb-2 flex items-center justify-between rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 animate-slide-up-fade">
             <div className="flex min-w-0 items-center gap-2">
               <div className="h-7 w-1 rounded-full bg-warning" />
               <div className="min-w-0">
@@ -1260,6 +1260,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                   id={mentionListId}
                   role="listbox"
                   aria-label={t("chat:composer.mentionList")}
+                  aria-activedescendant={`${mentionListId}-option-${activeMentionIndex}`}
                   className={clsx(
                     "absolute bottom-full left-2 right-2 z-dropdown mb-2 max-h-52 overflow-y-auto rounded-xl border border-border bg-surface-raised shadow-elev2",
                     "p-1",
@@ -1401,8 +1402,8 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                     disabled && "cursor-not-allowed opacity-50",
                   )}
-                  aria-label="Định dạng tin nhắn"
-                  title="Định dạng tin nhắn (Cmd+Shift+X)"
+                  aria-label={t("chat:composer.formatLabel")}
+                  title={t("chat:composer.formatHint")}
                   disabled={disabled}
                 >
                   <div
@@ -1491,7 +1492,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         </div>
 
         <p className="mt-1 px-1 text-[11px] leading-4 text-text-muted">
-          Nhấn Enter để gửi, Shift + Enter để xuống dòng
+          {t("chat:composer.shortcutHint")}
         </p>
 
         {(messageValidation.showCounter ||

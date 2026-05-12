@@ -4,10 +4,8 @@ import { useTranslation } from "react-i18next";
 import {
   CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
-  NoSymbolIcon,
   PencilSquareIcon,
   PhoneIcon,
-  TrashIcon,
   UserPlusIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
@@ -44,7 +42,6 @@ interface UserProfileProps {
   initialUser?: ProfileUser | null;
   onClose: () => void;
   onStartConversation?: (userId: string) => void | Promise<void>;
-  onDeleteConversation?: () => void | Promise<void>;
   conversationContext?: UserProfileConversationContext;
   className?: string;
 }
@@ -92,8 +89,6 @@ const formatRelationshipLabel = (
       return t("friends:relationship.incoming");
     case "outgoing_request":
       return t("friends:relationship.outgoing");
-    case "blocked":
-      return t("friends:relationship.blocked");
     default:
       return t("friends:relationship.notFriend");
   }
@@ -117,7 +112,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   initialUser,
   onClose,
   onStartConversation,
-  onDeleteConversation,
   conversationContext = "standalone",
   className,
 }) => {
@@ -146,8 +140,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     rejectFriendRequest,
     cancelFriendRequest,
     removeFriend,
-    blockUser,
-    unblockUser,
   } = useFriendship();
 
   const isSelf = userId === currentUserId;
@@ -324,26 +316,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             {t("friends:unfriend")}
           </Button>
         ) : null,
-        capabilities.canBlock ? (
-          <Button
-            key="block"
-            type="button"
-            variant="secondary"
-            size="sm"
-            leftIcon={<NoSymbolIcon className="h-4 w-4" />}
-            isLoading={actingKey === "block"}
-            onClick={() =>
-              void handleAsyncAction(
-                "block",
-                () => blockUser(userId),
-                t("friends:blockSuccess"),
-                t("friends:actionFailed"),
-              )
-            }
-          >
-            {t("profile:userProfile.blockUser")}
-          </Button>
-        ) : null,
       ].filter(Boolean);
 
       return (
@@ -438,31 +410,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       );
     }
 
-    if (relationship.kind === "blocked") {
-      return (
-        <div className="space-y-2">
-          {capabilities.canUnblock ? (
-            <Button
-              type="button"
-              fullWidth
-              variant="secondary"
-              isLoading={actingKey === "unblock"}
-              onClick={() =>
-                void handleAsyncAction(
-                  "unblock",
-                  () => unblockUser(userId),
-                  t("friends:unblockSuccess"),
-                  t("friends:actionFailed"),
-                )
-              }
-            >
-              {t("friends:unblock")}
-            </Button>
-          ) : null}
-        </div>
-      );
-    }
-
     return (
       <div className="space-y-2">
         {capabilities.canSendRequest ? (
@@ -481,25 +428,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             }
           >
             {t("friends:addFriend")}
-          </Button>
-        ) : null}
-        {capabilities.canBlock ? (
-          <Button
-            type="button"
-            fullWidth
-            variant="secondary"
-            leftIcon={<NoSymbolIcon className="h-4 w-4" />}
-            isLoading={actingKey === "block"}
-            onClick={() =>
-              void handleAsyncAction(
-                "block",
-                () => blockUser(userId),
-                t("friends:blockSuccess"),
-                t("friends:actionFailed"),
-              )
-            }
-          >
-            {t("profile:userProfile.blockUser")}
           </Button>
         ) : null}
       </div>
@@ -623,22 +551,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 </section>
               )}
 
-              {onDeleteConversation ? (
-                <section className="border-t border-border/80 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void onDeleteConversation();
-                    }}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-danger transition-micro hover:bg-danger/8"
-                  >
-                    <TrashIcon className="h-5 w-5" />
-                    <span className="text-sm font-medium">
-                      {t("profile:userProfile.deleteConversation")}
-                    </span>
-                  </button>
-                </section>
-              ) : null}
             </div>
           )}
         </div>

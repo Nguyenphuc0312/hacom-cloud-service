@@ -96,5 +96,22 @@
     "searchInFriends": "Tìm người này trong trang Bạn bè",
     "searchPlaceholder": "Tìm cuộc trò chuyện, người dùng hoặc thao tác",
     "searchAria": "Tìm trong bảng lệnh"
+  },
+  "shortcut": {
+    "esc": "Esc"
+  },
+  "emptyState": {
+    "welcomeTitle": "Chào mừng đến với <1>Hacom Chat</1>",
+    "welcomeSubtitle1": "Nền tảng trò chuyện nội bộ an toàn, tốc độ cao dành cho nhân sự Hacom Holdings.",
+    "welcomeSubtitle2": "Kết nối, cộng tác và điều phối công việc hiệu quả.",
+    "featureCard": {
+      "startChat": "Bắt đầu trò chuyện",
+      "startChatDesc": "Tìm kiếm đồng nghiệp để nhắn tin hoặc tạo nhóm chat mới cho đội nhóm của bạn.",
+      "shareFile": "Chia sẻ file an toàn",
+      "shareFileDesc": "Kéo thả tài liệu, bài thuyết trình và hình ảnh trực tiếp vào bất kỳ cửa sổ chat nào.",
+      "completeProfile": "Hoàn thiện hồ sơ",
+      "completeProfileDesc": "Cập nhật chức danh, phòng ban và ảnh đại diện chuyên nghiệp để đồng nghiệp dễ nhận diện bạn."
+    },
+    "openProfile": "Mở hồ sơ"
   }
 }

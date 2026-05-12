@@ -356,7 +356,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               <div
                 ref={menuRef}
                 className={clsx(
-                  "absolute right-0 top-full z-dropdown mt-2 min-w-52 overflow-hidden rounded-[1rem] border border-border/80 bg-surface-raised p-1.5 shadow-elev2",
+                  "absolute right-0 top-full z-dropdown mt-2 min-w-52 overflow-hidden rounded-lg border border-border/80 bg-surface-raised p-1.5 shadow-elev2",
                   "animate-slide-up-fade",
                 )}
                 role="menu"

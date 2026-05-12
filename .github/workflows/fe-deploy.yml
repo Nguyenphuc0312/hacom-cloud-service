@@ -1,0 +1,133 @@
+name: Frontend Deploy
+
+on:
+  push:
+    branches: [develop, staging, main]
+    paths-ignore:
+      - "**.md"
+      - "**.txt"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options: [develop, staging, production]
+      image_tag:
+        description: Image tag to deploy (for rollback)
+        required: false
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.environment || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/SERVICE_NAME
+  IMAGE_TAG: ${{ inputs.image_tag || (github.ref_name == 'main' && github.sha || github.ref_name) }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment || (github.ref_name == 'main' && 'production' || github.ref_name) }}
+    environment:
+      name: ${{ inputs.environment || (github.ref_name == 'main' && 'production' || github.ref_name) }}
+      url: ${{ vars.DEPLOY_URL }}
+    env:
+      GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME != '' && secrets.GHCR_PULL_USERNAME || github.repository_owner }}
+      GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+      SERVER_HOST: ${{ secrets.SERVER_HOST }}
+      SERVER_USER: ${{ secrets.SERVER_USER }}
+      SERVER_PORT: ${{ secrets.SERVER_PORT }}
+      SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+      SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push
+        run: |
+          set -Eeuo pipefail
+          tags=(
+            "--tag" "${REGISTRY}/${IMAGE_NAME}:${GITHUB_SHA}"
+          )
+          case "${GITHUB_REF_NAME}" in
+            develop)  tags+=("--tag" "${REGISTRY}/${IMAGE_NAME}:develop") ;;
+            main)     tags+=("--tag" "${REGISTRY}/${IMAGE_NAME}:production") ;;
+            staging)  tags+=("--tag" "${REGISTRY}/${IMAGE_NAME}:staging") ;;
+          esac
+          docker buildx build \
+            --file Dockerfile \
+            --target production \
+            --platform linux/amd64 \
+            --progress plain \
+            --push \
+            "${tags[@]}" \
+            .
+
+      - name: Verify image
+        run: docker buildx imagetools inspect "${REGISTRY}/${IMAGE_NAME}:${GITHUB_SHA}"
+
+      - name: Deploy via SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SERVER_SSH_KEY }}
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SERVER_SSH_KNOWN_HOSTS }}" | tr -d '\r' > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Prepare release
+        run: |
+          cat > .release.env <<EOF
+          IMAGE_REF=${REGISTRY}/${IMAGE_NAME}:${GITHUB_SHA}
+          RELEASE_SHA=${GITHUB_SHA}
+          SERVER_RUNTIME_ENV_FILE=${{ vars.SERVER_RUNTIME_ENV_FILE }}
+          DEPLOY_ENV=${{ inputs.environment || github.ref_name }}
+          COMPOSE_FILE=deploy/compose/${{ inputs.environment || github.ref_name }}.yml
+          COMPOSE_PROJECT_NAME=SERVICE_NAME-${{ inputs.environment || github.ref_name }}
+          RUNTIME_SERVICE=SERVICE_NAME
+          HEALTHCHECK_URL=${{ vars.HEALTHCHECK_URL }}
+          EOF
+
+      - name: Sync and deploy
+        run: |
+          set -Eeuo pipefail
+          ssh_opts="-o BatchMode=yes -o StrictHostKeyChecking=yes -p ${SERVER_PORT}"
+          rsync -az --delete \
+            -e "ssh ${ssh_opts}" \
+            ./deploy/ \
+            "$SERVER_USER@$SERVER_HOST:${{ vars.SERVER_APPS_ROOT }}/SERVICE_NAME/deploy/"
+          rsync -az \
+            -e "ssh ${ssh_opts}" \
+            ./.release.env \
+            "$SERVER_USER@$SERVER_HOST:${{ vars.SERVER_APPS_ROOT }}/SERVICE_NAME/.release.env"
+          ssh ${ssh_opts} "$SERVER_USER@$SERVER_HOST" \
+            "cd '${{ vars.SERVER_APPS_ROOT }}/SERVICE_NAME' && chmod +x deploy/scripts/deploy.sh && ./deploy/scripts/deploy.sh"
+
+      - name: Healthcheck
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -p "$SERVER_PORT" "$SERVER_USER@$SERVER_HOST" \
+            "curl -fsS '${{ vars.HEALTHCHECK_URL }}' || exit 1"
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          set +e
+          ssh -o BatchMode=yes -p "$SERVER_PORT" "$SERVER_USER@$SERVER_HOST" \
+            "cd '${{ vars.SERVER_APPS_ROOT }}/SERVICE_NAME' && docker compose ps && docker compose logs --tail=100"

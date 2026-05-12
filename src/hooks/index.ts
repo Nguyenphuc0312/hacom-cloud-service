@@ -6,7 +6,6 @@ export { useAuth } from "./useAuth";
 export { useLogout } from "./useLogout";
 export { useWebSocket } from "./useWebSocket";
 export { useMessageGrouping } from "./useMessageGrouping";
-export { useVirtualizedMessages } from "./useVirtualizedMessages";
 export { useAutoResizeTextarea } from "./useAutoResizeTextarea";
 export { useTypingIndicator } from "./useTypingIndicator";
 export { useSendMessage } from "./useSendMessage";

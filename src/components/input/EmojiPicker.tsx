@@ -79,6 +79,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
               activeCategory === cat.id ? "bg-surface-overlay" : "hover:bg-surface-hover",
             )}
             title={cat.name}
+            aria-label={cat.name}
           >
             {cat.label}
           </button>

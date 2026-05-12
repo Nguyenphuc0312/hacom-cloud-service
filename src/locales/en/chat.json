@@ -117,6 +117,8 @@
     "attachBlocked": "Attachments are currently unavailable",
     "shortcutHint": "Enter to send, Shift+Enter for new line",
     "shortcutHintManual": "Use Send button to send",
+    "formatLabel": "Format message",
+    "formatHint": "Format message (Cmd+Shift+X)",
     "moreUploadErrors": "and {{count}} more files"
   },
   "density": {

@@ -350,8 +350,18 @@ const RoomItemViewComponent: React.FC<RoomItemViewProps> = ({
             {timeLabel}
           </span>
 
-          {/* unread badge hidden temporarily — unread count bug pending fix */}
-          {null}
+          {unreadCount > 0 && (
+            <span
+              className={clsx(
+                "inline-flex items-center justify-center rounded-full font-semibold tabular-nums",
+                isDense ? "min-h-4 min-w-4 px-1 text-[10px]" : "min-h-4 min-w-4 px-1 text-[11px]",
+                visualStyles.unreadBadge,
+              )}
+              aria-label={t("sidebar:room.unreadBadge", { count: unreadCount })}
+            >
+              {unreadCount > 99 ? "99+" : String(unreadCount)}
+            </span>
+          )}
         </div>
       </div>
     </button>

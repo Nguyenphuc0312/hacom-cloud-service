@@ -3,7 +3,10 @@
     "workspace": "Workspace",
     "startNewChat": "Start new chat",
     "expandSidebar": "Expand sidebar",
-    "collapseSidebar": "Collapse sidebar"
+    "collapseSidebar": "Collapse sidebar",
+    "conversations": "Messages",
+    "composeLabel": "New chat",
+    "notificationsLabel": "Notifications"
   },
   "search": {
     "placeholder": "Search conversations",
@@ -32,10 +35,25 @@
     "noMessagesYet": "No messages yet",
     "emptyBySearch": "No room matches your search.",
     "empty": "No conversations available.",
-    "listAria": "Conversation list"
+    "listAria": "Conversation list",
+    "unreadBadge": "{{count}} unread message(s)"
   },
   "sidebar": {
     "aria": "Sidebar"
+  },
+  "rail": {
+    "messages": "Messages",
+    "contacts": "Contacts",
+    "tasks": "Tasks",
+    "calendar": "Calendar",
+    "archive": "Archive",
+    "notifications": "Notifications",
+    "help": "Help",
+    "settings": "Settings",
+    "profile": "My Profile",
+    "navAria": "Main Navigation",
+    "logoAria": "Hacom Chat",
+    "moduleNavAria": "Modules"
   },
   "actions": {
     "loadMore": "Load more"

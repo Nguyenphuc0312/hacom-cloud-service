@@ -1,5 +1,6 @@
 import { unwrapApiSuccess } from "../lib/apiContract";
 import type { Conversation, Message } from "../types";
+import { logger } from "../utils/logger";
 
 type UnreadSummary = {
   totalUnreadCount: number;
@@ -282,8 +283,7 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
     );
     // Seq là authoritative khi được cung cấp. Nếu seq đã >= incoming, skip.
     if (lastReadSeq !== null && currentSeq >= lastReadSeq) {
-      // eslint-disable-next-line no-console
-      console.debug("markRead.skipped", {
+      logger.debug("chat-unread", "markRead.skipped", {
         conversationId,
         reason: "seq-already-advanced",
         currentSeq,
@@ -307,8 +307,7 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
         anchorId,
       ) >= 0
     ) {
-      // eslint-disable-next-line no-console
-      console.debug("markRead.skipped", {
+      logger.debug("chat-unread", "markRead.skipped", {
         conversationId,
         reason: "anchor-already-advanced",
         currentAnchor: currentConversation.lastReadMessageId,
@@ -363,8 +362,7 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
       if (optimisticSeq !== null) {
         recordLocalMarkedSeq(conversationId, optimisticSeq);
       }
-      // eslint-disable-next-line no-console
-      console.debug("markRead.request", {
+      logger.debug("chat-unread", "markRead.request", {
         conversationId,
         lastReadSeq: optimisticSeq,
         anchorId: getInputAnchorId(requestInput) ?? null,
@@ -377,8 +375,7 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
             if (ackSeq !== null) {
               recordLocalMarkedSeq(conversationId, ackSeq);
             }
-            // eslint-disable-next-line no-console
-            console.debug("markRead.success", {
+            logger.debug("chat-unread", "markRead.success", {
               conversationId,
               lastReadSeq: ackSeq,
               unreadCount: data.unreadCount ?? null,
@@ -388,8 +385,7 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
           return undefined;
         },
         (error: unknown) => {
-          // eslint-disable-next-line no-console
-          console.debug("markRead.failed", {
+          logger.debug("chat-unread", "markRead.failed", {
             conversationId,
             lastReadSeq: optimisticSeq,
             error: error instanceof Error ? error.message : String(error),
@@ -477,8 +473,7 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
             ? unreadSnapshot.lastReadSeq
             : 0;
         if (localSeq > 0 && snapshotSeq < localSeq) {
-          // eslint-disable-next-line no-console
-          console.debug("conversationList.preventStaleUnread", {
+          logger.debug("chat-unread", "conversationList.preventStaleUnread", {
             conversationId: conversation.id,
             localSeq,
             snapshotSeq,

@@ -3,7 +3,10 @@
     "workspace": "Không gian",
     "startNewChat": "Bắt đầu chat mới",
     "expandSidebar": "Mở rộng thanh bên",
-    "collapseSidebar": "Thu gọn thanh bên"
+    "collapseSidebar": "Thu gọn thanh bên",
+    "conversations": "Tin nhắn",
+    "composeLabel": "Tạo chat mới",
+    "notificationsLabel": "Thông báo"
   },
   "search": {
     "placeholder": "Tìm cuộc trò chuyện",
@@ -32,10 +35,25 @@
     "noMessagesYet": "Chưa có tin nhắn",
     "emptyBySearch": "Không có phòng phù hợp với tìm kiếm.",
     "empty": "Không có cuộc trò chuyện nào.",
-    "listAria": "Danh sách cuộc trò chuyện"
+    "listAria": "Danh sách cuộc trò chuyện",
+    "unreadBadge": "{{count}} tin nhắn chưa đọc"
   },
   "sidebar": {
     "aria": "Thanh bên"
+  },
+  "rail": {
+    "messages": "Tin nhắn",
+    "contacts": "Danh bạ",
+    "tasks": "Công việc",
+    "calendar": "Lịch",
+    "archive": "Lưu trữ",
+    "notifications": "Thông báo",
+    "help": "Trợ giúp",
+    "settings": "Cài đặt",
+    "profile": "Hồ sơ cá nhân",
+    "navAria": "Điều hướng chính",
+    "logoAria": "Hacom Chat",
+    "moduleNavAria": "Module"
   },
   "actions": {
     "loadMore": "Tải thêm"
