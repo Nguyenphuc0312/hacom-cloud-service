@@ -55,9 +55,11 @@ export interface MentionCandidate {
   employeeCode?: string;
 }
 
-/** Imperative handle for MessageInput — allows parent to programmatically add files */
+/** Imperative handle for MessageInput — allows parent to programmatically control the composer */
 export interface MessageInputHandle {
   addFile: (file: File) => void;
+  /** Focus the editor — e.g. after selecting a new conversation */
+  focus: () => void;
 }
 
 const compactStatusToneClasses = {
@@ -367,7 +369,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     onSend,
   });
 
-  // Expose selectFile to parent (e.g. for drag-and-drop)
+  // Expose imperative methods to parent components
   React.useImperativeHandle(
     ref,
     () => ({
@@ -383,6 +385,9 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         } else {
           selectFile(file);
         }
+      },
+      focus: () => {
+        tipTapRef.current?.focus();
       },
     }),
     [onAddFiles, selectFile],
@@ -747,6 +752,18 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
       updateMentionState,
     ],
   );
+ 
+  const handleFocusEditor = React.useCallback((e: React.MouseEvent) => {
+    // Do not focus if the click was on an interactive element like a button or menu
+    const target = e.target as HTMLElement;
+    const isInteractive = !!target.closest("button, input, select, textarea, [role='button'], [role='menuitem'], .z-dropdown");
+    const isInsideEditor = !!target.closest(".tiptap-composer");
+    
+    if (!isInteractive && !isInsideEditor && tipTapRef.current) {
+      // Focus the editor (TipTapEditor exposes focus() which focuses at the end)
+      tipTapRef.current.focus();
+    }
+  }, []);
 
   const handleSendAsTextFile = React.useCallback(() => {
     if (!onAddFiles || draftValue.length === 0) {
@@ -1079,8 +1096,10 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   return (
     <div
       ref={rootRef}
+      onClick={handleFocusEditor}
       className={clsx(
         "chat-composer-root border-t border-border/55 bg-[hsl(var(--chat-panel-bg))/0.96] pb-[max(env(safe-area-inset-bottom),10px)] pt-2 backdrop-blur",
+        "cursor-text",
         className,
       )}
     >
@@ -1231,7 +1250,7 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
           <div
             data-composer-state={composerVisualState}
             className={clsx(
-              "chat-composer-shell relative flex min-w-0 flex-1 flex-col rounded-xl border transition-micro",
+              "chat-composer-shell relative flex min-w-0 flex-1 flex-col rounded-xl border transition-micro cursor-text",
               composerVisualStyles.shell,
             )}
           >

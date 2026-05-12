@@ -57,7 +57,11 @@ if (!i18n.isInitialized) {
         escapeValue: false,
       },
       detection: {
-        order: ["localStorage", "navigator", "htmlTag"],
+        // Only read from localStorage; SettingsApplier owns the resolution
+        // of "system" → browser language and writes back to this key.
+        // Omitting "navigator"/"htmlTag" prevents a wrong-language flash on
+        // first visit before SettingsApplier has applied the default "vi".
+        order: ["localStorage"],
         caches: ["localStorage"],
         lookupLocalStorage: "chat.language",
       },

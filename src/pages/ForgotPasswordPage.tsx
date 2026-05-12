@@ -99,7 +99,7 @@ export const ForgotPasswordPage: React.FC = () => {
             <input
               {...register("identifier")}
               type="text"
-              placeholder="name@hacomholdings.com"
+              placeholder="name@hacomholdings.vn"
               disabled={isBusy}
               className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium outline-none transition-all focus:border-[#1d5fd6] focus:ring-2 focus:ring-[#1d5fd6]/10 disabled:bg-slate-50"
             />

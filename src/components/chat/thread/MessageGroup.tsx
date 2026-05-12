@@ -195,447 +195,447 @@ const MessageGroupItem: React.FC<{
   insertedMessageKeys,
   highlightedMessageId,
 }) => {
-  const { t } = useTranslation();
-  const [isActionSheetOpen, setIsActionSheetOpen] = React.useState(false);
-  const [isActionRailVisible, setIsActionRailVisible] = React.useState(false);
-  const [showEmojiPicker, setShowEmojiPicker] = React.useState(false);
-  const message = item.message;
-  recordChatRenderCount("MessageGroupItem", message.id, {
-    isOwn,
-    isSelectionMode,
-    isSelected,
-    isGroupTail,
-  });
-  const resendMessage = useChatStore((state) => state.resendMessage);
-  // Fallback hydrate: when API trả về `replyTo` mà không có `replyToMessage`
-  // (legacy messages, missing reply_snapshot), nhìn vào messageById index để
-  // tự dựng quote preview từ message gốc đang có trong store.
-  const replyTargetFromStore = useChatStore((state) =>
-    !message.replyToMessage && message.replyTo
-      ? state.messageById[message.replyTo]
-      : undefined,
-  );
-  const resolvedReplyPreview = React.useMemo(() => {
-    if (message.replyToMessage) return message.replyToMessage;
-    if (!message.replyTo) return undefined;
-    if (replyTargetFromStore) {
-      return {
-        id: replyTargetFromStore.id,
-        senderId: replyTargetFromStore.senderId,
-        senderName: replyTargetFromStore.senderName,
-        senderAvatar: replyTargetFromStore.senderAvatar,
-        content: replyTargetFromStore.content,
-        contentFormat: replyTargetFromStore.contentFormat,
-        type: replyTargetFromStore.type,
-        isDeleted: replyTargetFromStore.isDeleted,
-        createdAt: replyTargetFromStore.createdAt as unknown as Date,
-        attachments: replyTargetFromStore.attachments,
-      } as Message["replyToMessage"];
-    }
-    return undefined;
-  }, [message.replyToMessage, message.replyTo, replyTargetFromStore]);
-  const hideActionRailTimerRef = React.useRef<number | null>(null);
-  const isHighlighted =
-    highlightedMessageId === message.id ||
-    highlightedMessageId === message.localId ||
-    highlightedMessageId === message.stableId ||
-    highlightedMessageId === message.clientMessageId;
-  const renderState = resolveThreadMessageRenderState(
-    item,
-    expandedLongMessageIds,
-  );
-  const coarsePointer = isCoarsePointer();
-  const actionPolicy = React.useMemo(
-    () =>
-      resolveMessageActions({
-        message,
-        isOwn,
-        isCoarsePointer: coarsePointer,
-        isSelectionMode,
-        canEdit: Boolean(onEdit),
-        canDelete: Boolean(onDelete),
-        canDeleteForEveryone:
-          Boolean(onDelete) && !isOwn && viewerCanRecallOthers === true
-            ? true
-            : undefined,
-        canRetry: isFailedMessage(message),
-      }),
-    [
-      coarsePointer,
+    const { t } = useTranslation();
+    const [isActionSheetOpen, setIsActionSheetOpen] = React.useState(false);
+    const [isActionRailVisible, setIsActionRailVisible] = React.useState(false);
+    const [showEmojiPicker, setShowEmojiPicker] = React.useState(false);
+    const message = item.message;
+    recordChatRenderCount("MessageGroupItem", message.id, {
       isOwn,
       isSelectionMode,
-      message,
-      onDelete,
-      onEdit,
-      viewerCanRecallOthers,
-    ],
-  );
+      isSelected,
+      isGroupTail,
+    });
+    const resendMessage = useChatStore((state) => state.resendMessage);
+    // Fallback hydrate: when API trả về `replyTo` mà không có `replyToMessage`
+    // (legacy messages, missing reply_snapshot), nhìn vào messageById index để
+    // tự dựng quote preview từ message gốc đang có trong store.
+    const replyTargetFromStore = useChatStore((state) =>
+      !message.replyToMessage && message.replyTo
+        ? state.messageById[message.replyTo]
+        : undefined,
+    );
+    const resolvedReplyPreview = React.useMemo(() => {
+      if (message.replyToMessage) return message.replyToMessage;
+      if (!message.replyTo) return undefined;
+      if (replyTargetFromStore) {
+        return {
+          id: replyTargetFromStore.id,
+          senderId: replyTargetFromStore.senderId,
+          senderName: replyTargetFromStore.senderName,
+          senderAvatar: replyTargetFromStore.senderAvatar,
+          content: replyTargetFromStore.content,
+          contentFormat: replyTargetFromStore.contentFormat,
+          type: replyTargetFromStore.type,
+          isDeleted: replyTargetFromStore.isDeleted,
+          createdAt: replyTargetFromStore.createdAt as unknown as Date,
+          attachments: replyTargetFromStore.attachments,
+        } as Message["replyToMessage"];
+      }
+      return undefined;
+    }, [message.replyToMessage, message.replyTo, replyTargetFromStore]);
+    const hideActionRailTimerRef = React.useRef<number | null>(null);
+    const isHighlighted =
+      highlightedMessageId === message.id ||
+      highlightedMessageId === message.localId ||
+      highlightedMessageId === message.stableId ||
+      highlightedMessageId === message.clientMessageId;
+    const renderState = resolveThreadMessageRenderState(
+      item,
+      expandedLongMessageIds,
+    );
+    const coarsePointer = isCoarsePointer();
+    const actionPolicy = React.useMemo(
+      () =>
+        resolveMessageActions({
+          message,
+          isOwn,
+          isCoarsePointer: coarsePointer,
+          isSelectionMode,
+          canEdit: Boolean(onEdit),
+          canDelete: Boolean(onDelete),
+          canDeleteForEveryone:
+            Boolean(onDelete) && !isOwn && viewerCanRecallOthers === true
+              ? true
+              : undefined,
+          canRetry: isFailedMessage(message),
+        }),
+      [
+        coarsePointer,
+        isOwn,
+        isSelectionMode,
+        message,
+        onDelete,
+        onEdit,
+        viewerCanRecallOthers,
+      ],
+    );
 
-  const adminRecallLabelOverride = React.useMemo(
-    () =>
-      !isOwn && viewerCanRecallOthers
-        ? ({
+    const adminRecallLabelOverride = React.useMemo(
+      () =>
+        !isOwn && viewerCanRecallOthers
+          ? ({
             deleteForEveryone: t("chat:message.actions.deleteForEveryoneAdmin", {
               defaultValue: "Xóa ở mọi người",
             }),
           } as const)
-        : undefined,
-    [isOwn, viewerCanRecallOthers, t],
-  );
-  const threadCount = getThreadCount(message);
-  const isRichBubble =
-    message.type !== "text" ||
-    Boolean(message.replyToMessage) ||
-    Boolean(message.replyTo) ||
-    Boolean(message.forwardedFrom) ||
-    message.isDeleted ||
-    isFailedMessage(message) ||
-    isPendingMessage(message);
+          : undefined,
+      [isOwn, viewerCanRecallOthers, t],
+    );
+    const threadCount = getThreadCount(message);
+    const isRichBubble =
+      message.type !== "text" ||
+      Boolean(message.replyToMessage) ||
+      Boolean(message.replyTo) ||
+      Boolean(message.forwardedFrom) ||
+      message.isDeleted ||
+      isFailedMessage(message) ||
+      isPendingMessage(message);
 
-  const inlineActions = coarsePointer ? [] : actionPolicy.railActions;
+    const inlineActions = coarsePointer ? [] : actionPolicy.railActions;
 
-  const clearHideActionRailTimer = React.useCallback(() => {
-    if (hideActionRailTimerRef.current === null) {
-      return;
-    }
-
-    window.clearTimeout(hideActionRailTimerRef.current);
-    hideActionRailTimerRef.current = null;
-  }, []);
-
-  const showActionRail = React.useCallback(() => {
-    clearHideActionRailTimer();
-    setIsActionRailVisible(true);
-  }, [clearHideActionRailTimer]);
-
-  const hideActionRail = React.useCallback(
-    (withDelay = true) => {
-      clearHideActionRailTimer();
-
-      if (!withDelay) {
-        setIsActionRailVisible(false);
+    const clearHideActionRailTimer = React.useCallback(() => {
+      if (hideActionRailTimerRef.current === null) {
         return;
       }
 
-      hideActionRailTimerRef.current = window.setTimeout(() => {
-        setIsActionRailVisible(false);
-        hideActionRailTimerRef.current = null;
-      }, 120);
-    },
-    [clearHideActionRailTimer],
-  );
+      window.clearTimeout(hideActionRailTimerRef.current);
+      hideActionRailTimerRef.current = null;
+    }, []);
 
-  React.useEffect(
-    () => () => {
+    const showActionRail = React.useCallback(() => {
       clearHideActionRailTimer();
-    },
-    [clearHideActionRailTimer],
-  );
+      setIsActionRailVisible(true);
+    }, [clearHideActionRailTimer]);
 
-  const handleAction = React.useCallback(
-    (actionId: MessageActionId) => {
-      switch (actionId) {
-        case "react":
-          setIsActionSheetOpen(false);
-          setShowEmojiPicker((prev) => !prev);
+    const hideActionRail = React.useCallback(
+      (withDelay = true) => {
+        clearHideActionRailTimer();
+
+        if (!withDelay) {
+          setIsActionRailVisible(false);
           return;
-
-        case "reply":
-          onReply(message);
-          break;
-        case "copy":
-          void navigator.clipboard.writeText(message.content || "");
-          break;
-        case "edit":
-          if (onEdit) {
-            void Promise.resolve(onEdit(message));
-          }
-          break;
-        case "deleteForMe":
-          if (onDelete) {
-            void Promise.resolve(onDelete(message.id, "FOR_ME"));
-          }
-          break;
-        case "deleteForEveryone":
-          if (onDelete) {
-            const adminCtx = !isOwn ? "ADMIN_DELETE" : undefined;
-            void Promise.resolve(
-              (onDelete as (
-                id: string,
-                mode?: "FOR_ME" | "FOR_EVERYONE",
-                context?: "ADMIN_DELETE",
-              ) => unknown)(message.id, "FOR_EVERYONE", adminCtx),
-            );
-          }
-          break;
-        case "retry":
-          if (message.conversationId) {
-            void resendMessage(message.conversationId, message);
-          }
-          break;
-        case "more":
-          setIsActionSheetOpen(true);
-          return;
-      }
-
-      setIsActionSheetOpen(false);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [message, onDelete, onEdit, onReact, onReply, resendMessage, isOwn],
-  );
-
-  const isActionRailActive = isActionRailVisible || isActionSheetOpen || showEmojiPicker;
-
-  const handleEmojiSelect = React.useCallback(
-    (emoji: string) => {
-      onReact(message.id, emoji);
-      setShowEmojiPicker(false);
-    },
-    [message.id, onReact],
-  );
-
-  const closeEmojiPicker = React.useCallback(() => {
-    setShowEmojiPicker(false);
-  }, []);
-
-  const actionRail =
-    inlineActions.length > 0 && !isSelectionMode ? (
-      <div
-        onMouseEnter={showActionRail}
-        onMouseLeave={() => {
-          if (!showEmojiPicker) hideActionRail(true);
-        }}
-        className={clsx(
-          "absolute top-1 z-20 hidden transition-all duration-150 md:block",
-          isOwn ? "right-full mr-2" : "left-full ml-2",
-          isActionRailActive
-            ? "pointer-events-auto translate-y-0 opacity-100"
-            : "pointer-events-none translate-y-0.5 opacity-0",
-        )}
-      >
-        {/* Emoji picker floats above the action rail */}
-        {showEmojiPicker && (
-          <EmojiReactionPicker
-            onSelect={handleEmojiSelect}
-            onClose={closeEmojiPicker}
-            isOwn={isOwn}
-          />
-        )}
-        <MessageActions
-          mode="inline"
-          actions={inlineActions}
-          onAction={handleAction}
-          actionLabelOverrides={adminRecallLabelOverride}
-        />
-      </div>
-    ) : null;
-
-  return (
-    <div
-      className={clsx(
-        "group/message-item relative flex max-w-[var(--chat-bubble-max)] gap-2",
-        isOwn ? "self-end" : "self-start",
-        insertedMessageKeys.has(getMessageStableKey(message)) &&
-          isPendingMessage(message) &&
-          "motion-message-insert",
-      )}
-      onMouseEnter={showActionRail}
-      onMouseLeave={() => hideActionRail(true)}
-      onFocusCapture={showActionRail}
-      onBlurCapture={(event) => {
-        const nextFocused = event.relatedTarget as Node | null;
-        if (!event.currentTarget.contains(nextFocused)) {
-          hideActionRail(false);
         }
-      }}
-      data-testid={`message-item-${message.id}`}
-      data-message-id={message.id}
-    >
-      {isSelectionMode && (
-        <div className="flex shrink-0 items-start pt-1.5">
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={() => onToggleSelect?.(message.id)}
-            className="h-4 w-4 cursor-pointer rounded border-border text-primary focus:ring-primary/30"
-            aria-label={t("chat:selection.selectMessage", {
-              defaultValue: "Select message",
-            })}
+
+        hideActionRailTimerRef.current = window.setTimeout(() => {
+          setIsActionRailVisible(false);
+          hideActionRailTimerRef.current = null;
+        }, 120);
+      },
+      [clearHideActionRailTimer],
+    );
+
+    React.useEffect(
+      () => () => {
+        clearHideActionRailTimer();
+      },
+      [clearHideActionRailTimer],
+    );
+
+    const handleAction = React.useCallback(
+      (actionId: MessageActionId) => {
+        switch (actionId) {
+          case "react":
+            setIsActionSheetOpen(false);
+            setShowEmojiPicker((prev) => !prev);
+            return;
+
+          case "reply":
+            onReply(message);
+            break;
+          case "copy":
+            void navigator.clipboard.writeText(message.content || "");
+            break;
+          case "edit":
+            if (onEdit) {
+              void Promise.resolve(onEdit(message));
+            }
+            break;
+          case "deleteForMe":
+            if (onDelete) {
+              void Promise.resolve(onDelete(message.id, "FOR_ME"));
+            }
+            break;
+          case "deleteForEveryone":
+            if (onDelete) {
+              const adminCtx = !isOwn ? "ADMIN_DELETE" : undefined;
+              void Promise.resolve(
+                (onDelete as (
+                  id: string,
+                  mode?: "FOR_ME" | "FOR_EVERYONE",
+                  context?: "ADMIN_DELETE",
+                ) => unknown)(message.id, "FOR_EVERYONE", adminCtx),
+              );
+            }
+            break;
+          case "retry":
+            if (message.conversationId) {
+              void resendMessage(message.conversationId, message);
+            }
+            break;
+          case "more":
+            setIsActionSheetOpen(true);
+            return;
+        }
+
+        setIsActionSheetOpen(false);
+      },
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [message, onDelete, onEdit, onReact, onReply, resendMessage, isOwn],
+    );
+
+    const isActionRailActive = isActionRailVisible || isActionSheetOpen || showEmojiPicker;
+
+    const handleEmojiSelect = React.useCallback(
+      (emoji: string) => {
+        onReact(message.id, emoji);
+        setShowEmojiPicker(false);
+      },
+      [message.id, onReact],
+    );
+
+    const closeEmojiPicker = React.useCallback(() => {
+      setShowEmojiPicker(false);
+    }, []);
+
+    const actionRail =
+      inlineActions.length > 0 && !isSelectionMode ? (
+        <div
+          onMouseEnter={showActionRail}
+          onMouseLeave={() => {
+            if (!showEmojiPicker) hideActionRail(true);
+          }}
+          className={clsx(
+            "absolute top-1 z-20 hidden transition-all duration-150 md:block",
+            isOwn ? "right-full mr-2" : "left-full ml-2",
+            isActionRailActive
+              ? "pointer-events-auto translate-y-0 opacity-100"
+              : "pointer-events-none translate-y-0.5 opacity-0",
+          )}
+        >
+          {/* Emoji picker floats above the action rail */}
+          {showEmojiPicker && (
+            <EmojiReactionPicker
+              onSelect={handleEmojiSelect}
+              onClose={closeEmojiPicker}
+              isOwn={isOwn}
+            />
+          )}
+          <MessageActions
+            mode="inline"
+            actions={inlineActions}
+            onAction={handleAction}
+            actionLabelOverrides={adminRecallLabelOverride}
           />
         </div>
-      )}
+      ) : null;
 
-      {actionRail}
-
+    return (
       <div
         className={clsx(
-          "flex min-w-0 flex-1 items-start",
-          isOwn ? "justify-end" : "justify-start",
+          "group/message-item relative flex max-w-[var(--chat-bubble-max)] gap-2",
+          isOwn ? "self-end" : "self-start",
+          insertedMessageKeys.has(getMessageStableKey(message)) &&
+          isPendingMessage(message) &&
+          "motion-message-insert",
         )}
+        onMouseEnter={showActionRail}
+        onMouseLeave={() => hideActionRail(true)}
+        onFocusCapture={showActionRail}
+        onBlurCapture={(event) => {
+          const nextFocused = event.relatedTarget as Node | null;
+          if (!event.currentTarget.contains(nextFocused)) {
+            hideActionRail(false);
+          }
+        }}
+        data-testid={`message-item-${message.id}`}
+        data-message-id={message.id}
       >
-        <div className="min-w-0 max-w-full">
-          <MessageBubble
-            isOwn={isOwn}
-            position={bubblePosition}
-            isRich={isRichBubble}
-            isHighlighted={isHighlighted}
-          >
-            {showSenderName && senderDisplayName && (
-              <p className="mb-1 truncate text-[12px] font-semibold leading-[1.15] text-primary">
-                {senderDisplayName}
-              </p>
-            )}
+        {isSelectionMode && (
+          <div className="flex shrink-0 items-start pt-1.5">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => onToggleSelect?.(message.id)}
+              className="h-4 w-4 cursor-pointer rounded border-border text-primary focus:ring-primary/30"
+              aria-label={t("chat:selection.selectMessage", {
+                defaultValue: "Select message",
+              })}
+            />
+          </div>
+        )}
 
-            {message.replyToMessage && (
-              <button
-                type="button"
-                onClick={() => {
-                  const targetId =
-                    message.replyTo || resolvedReplyPreview?.id;
-                  if (targetId) {
-                    onNavigateToMessage?.(targetId);
-                  }
-                }}
-                className={clsx(
-                  "mb-2 flex w-full items-start gap-2 rounded-[12px] border-l-2 px-2.5 py-2 text-left transition-colors",
-                  isOwn
-                    ? "border-[hsl(var(--chat-bubble-sent-text))/0.2] bg-[hsl(var(--chat-bubble-sent-text))/0.08] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.12]"
-                    : "border-border-strong/70 bg-surface-overlay/78 hover:bg-surface-hover",
-                  !onNavigateToMessage && "cursor-default",
-                )}
-              >
-                <div className="min-w-0">
-                  <div
-                    className={clsx(
-                      "text-[11px] font-semibold leading-4",
-                      isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.78]" : "text-text-secondary",
-                    )}
-                  >
-                    {resolvedReplyPreview
-                      ? resolveUserDisplayName({
+        {actionRail}
+
+        <div
+          className={clsx(
+            "flex min-w-0 flex-1 items-start",
+            isOwn ? "justify-end" : "justify-start",
+          )}
+        >
+          <div className="min-w-0 max-w-full">
+            <MessageBubble
+              isOwn={isOwn}
+              position={bubblePosition}
+              isRich={isRichBubble}
+              isHighlighted={isHighlighted}
+            >
+              {showSenderName && senderDisplayName && (
+                <p className="mb-1 truncate text-[12px] font-semibold leading-[1.15] text-primary">
+                  {senderDisplayName}
+                </p>
+              )}
+
+              {message.replyToMessage && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetId =
+                      message.replyTo || resolvedReplyPreview?.id;
+                    if (targetId) {
+                      onNavigateToMessage?.(targetId);
+                    }
+                  }}
+                  className={clsx(
+                    "mb-2 flex w-full items-start gap-2 rounded-[12px] border-l-2 px-2.5 py-2 text-left transition-colors",
+                    isOwn
+                      ? "border-[hsl(var(--chat-bubble-sent-text))/0.2] bg-[hsl(var(--chat-bubble-sent-text))/0.08] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.12]"
+                      : "border-border-strong/70 bg-surface-overlay/78 hover:bg-surface-hover",
+                    !onNavigateToMessage && "cursor-default",
+                  )}
+                >
+                  <div className="min-w-0">
+                    <div
+                      className={clsx(
+                        "text-[11px] font-semibold leading-4",
+                        isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.78]" : "text-text-secondary",
+                      )}
+                    >
+                      {resolvedReplyPreview
+                        ? resolveUserDisplayName({
                           displayName: resolvedReplyPreview.senderName,
                           username: resolvedReplyPreview.senderId,
                         })
-                      : t("chat:message.replyingTo", {
+                        : t("chat:message.replyingTo", {
                           defaultValue: "Tin nhắn được trả lời",
                         })}
-                  </div>
-                  <p
-                    className={clsx(
-                      "truncate text-[12px] leading-4",
-                      isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.68]" : "text-text-muted",
-                    )}
-                  >
-                    {!resolvedReplyPreview
-                      ? t("chat:message.replyLoading", {
+                    </div>
+                    <p
+                      className={clsx(
+                        "truncate text-[12px] leading-4",
+                        isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.68]" : "text-text-muted",
+                      )}
+                    >
+                      {!resolvedReplyPreview
+                        ? t("chat:message.replyLoading", {
                           defaultValue: "Đang tải tin nhắn...",
                         })
-                      : resolvedReplyPreview.isDeleted
-                        ? resolvedReplyPreview.lifecycleStatus ===
-                          "deleted_admin"
-                          ? t("chat:message.deletedByAdmin", {
+                        : resolvedReplyPreview.isDeleted
+                          ? resolvedReplyPreview.lifecycleStatus ===
+                            "deleted_admin"
+                            ? t("chat:message.deletedByAdmin", {
                               defaultValue:
                                 "Tin nhắn đã bị xóa bởi quản trị viên",
                             })
-                          : resolvedReplyPreview.lifecycleStatus === "recalled"
-                            ? t("chat:message.recalled", {
+                            : resolvedReplyPreview.lifecycleStatus === "recalled"
+                              ? t("chat:message.recalled", {
                                 defaultValue: "Tin nhắn đã được thu hồi",
                               })
-                            : t("chat:message.deleted", {
+                              : t("chat:message.deleted", {
                                 defaultValue: "Tin nhắn đã được thu hồi",
                               })
-                        : getPreviewFromMessage({
+                          : getPreviewFromMessage({
                             contentFormat: resolvedReplyPreview.contentFormat,
                             content: resolvedReplyPreview.content,
                           })}
-                  </p>
-                </div>
-              </button>
-            )}
+                    </p>
+                  </div>
+                </button>
+              )}
 
-            {message.forwardedFrom && (
-              <div
-                className={clsx(
-                  "mb-2 text-[11px] font-medium leading-4",
-                  isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.68]" : "text-text-muted",
-                )}
-              >
-                {t("chat:message.forwardedFrom", {
-                  defaultValue: "Forwarded from {{name}}",
-                  name: resolveUserDisplayName({
-                    displayName:
-                      (message.forwardedFrom as { displayName?: string | null })
-                        .displayName || message.forwardedFrom.username,
-                    username: message.forwardedFrom.username,
-                  }),
-                })}
+              {message.forwardedFrom && (
+                <div
+                  className={clsx(
+                    "mb-2 text-[11px] font-medium leading-4",
+                    isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.68]" : "text-text-muted",
+                  )}
+                >
+                  {t("chat:message.forwardedFrom", {
+                    defaultValue: "Forwarded from {{name}}",
+                    name: resolveUserDisplayName({
+                      displayName:
+                        (message.forwardedFrom as { displayName?: string | null })
+                          .displayName || message.forwardedFrom.username,
+                      username: message.forwardedFrom.username,
+                    }),
+                  })}
+                </div>
+              )}
+
+              <MessageBodyRenderer
+                message={message}
+                isOwn={isOwn}
+                currentUsername={currentUsername}
+                textRenderMode={renderState.renderMode}
+                isCollapsibleText={renderState.isCollapsible}
+                onToggleTextExpand={() => onToggleLongMessageExpand(message.id)}
+                onImageClick={onImageClick}
+                onFilePreview={onFilePreview}
+              />
+
+              {isGroupTail && (
+                <MessageMeta
+                  message={message}
+                  isOwn={isOwn}
+                  showStatus={item.showStatus}
+                  density="comfortable"
+                  layout="inline"
+                  className={clsx(
+                    "mt-1 justify-end text-[11px]",
+                    isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.64]" : "text-text-muted/84",
+                  )}
+                />
+              )}
+            </MessageBubble>
+
+            {(message.reactions?.length ?? 0) > 0 && (
+              <div className="mt-1">
+                <ReactionBar
+                  reactions={message.reactions}
+                  onReact={(emoji) => onReact(message.id, emoji)}
+                />
               </div>
             )}
 
-            <MessageBodyRenderer
-              message={message}
-              isOwn={isOwn}
-              currentUsername={currentUsername}
-              textRenderMode={renderState.renderMode}
-              isCollapsibleText={renderState.isCollapsible}
-              onToggleTextExpand={() => onToggleLongMessageExpand(message.id)}
-              onImageClick={onImageClick}
-              onFilePreview={onFilePreview}
-            />
-
-            {isGroupTail && (
-              <MessageMeta
-                message={message}
+            {threadCount > 0 && (
+              <ThreadIndicator
+                threadCount={threadCount}
                 isOwn={isOwn}
-                showStatus={item.showStatus}
-                density="comfortable"
-                layout="inline"
-                className={clsx(
-                  "mt-1 justify-end text-[11px]",
-                  isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.64]" : "text-text-muted/84",
-                )}
+                className="mt-1"
               />
             )}
-          </MessageBubble>
-
-          {(message.reactions?.length ?? 0) > 0 && (
-            <div className="mt-1">
-              <ReactionBar
-                reactions={message.reactions}
-                onReact={(emoji) => onReact(message.id, emoji)}
-              />
-            </div>
-          )}
-
-          {threadCount > 0 && (
-            <ThreadIndicator
-              threadCount={threadCount}
-              isOwn={isOwn}
-              className="mt-1"
-            />
-          )}
+          </div>
         </div>
-      </div>
 
-      <MessageActions
-        mode="sheet"
-        actions={actionPolicy.menuActions}
-        isOpen={isActionSheetOpen}
-        onAction={handleAction}
-        onClose={() => setIsActionSheetOpen(false)}
-        actionLabelOverrides={adminRecallLabelOverride}
-      />
-
-      {/* Mobile emoji picker — full-screen overlay (desktop uses inline picker above rail) */}
-      {showEmojiPicker && coarsePointer && (
-        <MobileEmojiOverlay
-          onSelect={handleEmojiSelect}
-          onClose={closeEmojiPicker}
+        <MessageActions
+          mode="sheet"
+          actions={actionPolicy.menuActions}
+          isOpen={isActionSheetOpen}
+          onAction={handleAction}
+          onClose={() => setIsActionSheetOpen(false)}
+          actionLabelOverrides={adminRecallLabelOverride}
         />
-      )}
-    </div>
-  );
-};
+
+        {/* Mobile emoji picker — full-screen overlay (desktop uses inline picker above rail) */}
+        {showEmojiPicker && coarsePointer && (
+          <MobileEmojiOverlay
+            onSelect={handleEmojiSelect}
+            onClose={closeEmojiPicker}
+          />
+        )}
+      </div>
+    );
+  };
 
 export const MessageGroup: React.FC<MessageGroupProps> = ({
   row,
