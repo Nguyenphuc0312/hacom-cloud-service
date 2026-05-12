@@ -627,7 +627,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               aria-label={t("common:commandPalette.searchAria")}
             />
             <span className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-overlay px-2 py-1 text-caption text-text-muted">
-              <span>Esc</span>
+              <span>{t("common:shortcut.esc")}</span>
             </span>
           </label>
           <p className="mt-2 text-caption text-text-muted">

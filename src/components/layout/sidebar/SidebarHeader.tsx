@@ -180,7 +180,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
                 isDense ? "text-[16px] leading-5" : "text-[20px] leading-7",
               )}
             >
-              Tin nhắn
+              {t("sidebar:header.conversations")}
             </p>
             <p
               title={`${currentStatusLabel} · ${currentUserName}`}
@@ -207,7 +207,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
               "rounded-md text-text-muted hover:bg-surface-hover/70 hover:text-text-primary",
               "h-[var(--control-height-md)] w-[var(--control-height-md)]",
             )}
-            aria-label="Tạo chat mới"
+            aria-label={t("sidebar:header.composeLabel")}
           >
             <CreateGroupIcon className="h-[18px] w-[18px]" />
           </IconButtonSurface>
@@ -220,7 +220,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
                 "h-[var(--control-height-md)] w-[var(--control-height-md)]",
                 isPanelOpen && "bg-surface-hover/70 text-text-primary",
               )}
-              aria-label="Thông báo"
+              aria-label={t("sidebar:header.notificationsLabel")}
             >
               <BellIcon className="h-[18px] w-[18px]" />
               {unreadCount > 0 && (

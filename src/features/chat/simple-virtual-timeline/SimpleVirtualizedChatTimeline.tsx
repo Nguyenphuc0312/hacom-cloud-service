@@ -14,6 +14,7 @@
 
 import React from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Attachment, Conversation, Message } from "../../../types";
 import type { ChatDensity } from "../../../stores/uiStore";
@@ -106,6 +107,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
   composerHeight,
   className,
 }) => {
+  const { t } = useTranslation();
   const timelineItems = useConversationTimelineRows({
     messages: messages as Message[],
     currentUserId,
@@ -181,7 +183,8 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
     return (
       <section
         className={clsx("relative h-full min-h-0 flex-1", className)}
-        aria-label="empty conversation"
+        role="status"
+        aria-label={t("chat:empty.noChatDescription")}
       />
     );
   }
@@ -193,6 +196,9 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
         onScroll={handleScroll}
         data-testid="simple-timeline-scroll"
         className="chat-scroll-container h-full min-h-0 overflow-y-auto overscroll-contain"
+        role="log"
+        aria-label={t("chat:message.inConversationAria")}
+        aria-live="polite"
         style={{
           paddingBottom: composerHeight ?? 0,
           scrollBehavior: "auto",

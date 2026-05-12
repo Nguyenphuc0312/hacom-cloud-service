@@ -7,7 +7,6 @@ import {
   UserPlusIcon,
   ArrowRightOnRectangleIcon,
   MagnifyingGlassIcon,
-  TrashIcon,
   LinkIcon,
   ClipboardDocumentIcon,
   NoSymbolIcon,
@@ -39,7 +38,6 @@ import {
 } from "../../features/chat/hooks/useChatUserSearch";
 import {
   canAddGroupMembers,
-  canDeleteConversationForSelf,
   canLeaveGroup,
   canRemoveGroupMember,
   canRenameGroup,
@@ -54,7 +52,6 @@ interface GroupInfoProps {
   conversation: Conversation;
   currentUserId: string;
   onClose: () => void;
-  onDeleteConversation?: () => void | Promise<void>;
   className?: string;
 }
 
@@ -226,7 +223,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   conversation,
   currentUserId,
   onClose,
-  onDeleteConversation,
   className,
 }) => {
   const { t } = useTranslation(["profile", "common"]);
@@ -363,7 +359,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const groupCapabilities = conversation.permissions ?? null;
   const isAdmin = canRenameGroup(currentUserRole, groupCapabilities);
   const canAddMembers = canAddGroupMembers(currentUserRole, groupCapabilities);
-  const canDeleteConversation = canDeleteConversationForSelf();
   const canLeaveCurrentGroup = canLeaveGroup(
     currentUserRole,
     activeOwnerCount,
@@ -1443,22 +1438,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         <div className="h-px bg-border mx-4" />
 
         <div className="py-2">
-          {canDeleteConversation ? (
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => {
-                void onDeleteConversation?.();
-              }}
-              className="w-full flex items-center gap-4 px-4 py-3 hover:bg-danger/10 transition-colors text-danger"
-            >
-              <TrashIcon className="w-5 h-5" />
-              <span className="text-sm">
-                {t("profile:userProfile.deleteConversation")}
-              </span>
-            </button>
-          ) : null}
-
           <button
             type="button"
             disabled={isSubmitting || !canLeaveCurrentGroup}

@@ -19,17 +19,35 @@ export const Tooltip: React.FC<TooltipProps> = ({
   const [isVisible, setIsVisible] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleMouseEnter = () => {
+  const showTooltip = (showDelay: number) => {
     timeoutRef.current = setTimeout(() => {
       setIsVisible(true);
-    }, delay);
+    }, showDelay);
+  };
+
+  const hideTooltip = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    setIsVisible(false);
+  };
+
+  const handleMouseEnter = () => {
+    showTooltip(delay);
   };
 
   const handleMouseLeave = () => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    setIsVisible(false);
+    hideTooltip();
+  };
+
+  const handleFocus = () => {
+    // No delay for keyboard users — immediate feedback
+    showTooltip(0);
+  };
+
+  const handleBlur = () => {
+    hideTooltip();
   };
 
   useEffect(() => {
@@ -52,6 +70,8 @@ export const Tooltip: React.FC<TooltipProps> = ({
       className="relative inline-block"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
     >
       {children}
       {isVisible && (

@@ -3,7 +3,7 @@
  */
 
 export { ChatHeader } from "./ChatHeader";
-export { MessageBubble } from "./MessageBubble";
+export { MessageCluster as MessageBubble } from "./message-layout/MessageCluster";
 export { MessageItem } from "./MessageItem";
 export { DateDivider } from "./DateDivider";
 export { EmojiPicker } from "./EmojiPicker";

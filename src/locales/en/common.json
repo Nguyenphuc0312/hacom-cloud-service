@@ -96,5 +96,22 @@
     "searchInFriends": "Search this user in Friends",
     "searchPlaceholder": "Search chats, people, or actions",
     "searchAria": "Search command palette"
+  },
+  "shortcut": {
+    "esc": "Esc"
+  },
+  "emptyState": {
+    "welcomeTitle": "Welcome to <1>Hacom Chat</1>",
+    "welcomeSubtitle1": "A secure, high-speed internal chat platform for Hacom Holdings staff.",
+    "welcomeSubtitle2": "Connect, collaborate, and coordinate work efficiently.",
+    "featureCard": {
+      "startChat": "Start a conversation",
+      "startChatDesc": "Search for colleagues to message or create a new group chat for your team.",
+      "shareFile": "Secure file sharing",
+      "shareFileDesc": "Drag and drop documents, presentations, and images directly into any chat window.",
+      "completeProfile": "Complete your profile",
+      "completeProfileDesc": "Update your title, department, and professional avatar so colleagues can easily recognize you."
+    },
+    "openProfile": "Open profile"
   }
 }

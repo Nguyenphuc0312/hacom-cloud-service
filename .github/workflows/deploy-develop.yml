@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   quality:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       SHARED_TYPES_REPO_TOKEN: ${{ secrets.SHARED_TYPES_REPO_TOKEN }}
 
@@ -100,7 +100,7 @@ jobs:
 
   deploy:
     needs: quality
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: develop
     env:
       SHARED_TYPES_REPO_TOKEN: ${{ secrets.SHARED_TYPES_REPO_TOKEN }}
@@ -427,11 +427,7 @@ jobs:
             --build-arg VITE_WS_URL="${VITE_WS_URL_CLEAN}" \
             --build-arg VITE_WS_USE_QUERY_TOKEN="${VITE_WS_USE_QUERY_TOKEN_CLEAN}" \
             --build-arg VITE_WS_AUTO_QUERY_TOKEN_FALLBACK="${VITE_WS_AUTO_QUERY_TOKEN_FALLBACK_CLEAN}" \
-            --build-arg VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE="${VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE_CLEAN}" \
-            --build-arg VITE_CHAT_SIMPLE_TIMELINE_DEBUG="${VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN}" \
             --build-arg VITE_CHAT_USE_LEGACY_TIMELINE="${VITE_CHAT_USE_LEGACY_TIMELINE_CLEAN}" \
-            --build-arg VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE="${VITE_CHAT_SIMPLE_VIRTUAL_TIMELINE_CLEAN}" \
-            --build-arg VITE_CHAT_SIMPLE_TIMELINE_DEBUG="${VITE_CHAT_SIMPLE_TIMELINE_DEBUG_CLEAN}" \
             --tag "${IMAGE_REF}" \
             --push \
             .

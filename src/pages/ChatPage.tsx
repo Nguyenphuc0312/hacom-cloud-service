@@ -116,16 +116,13 @@ const INFO_PANEL_EXIT_DURATION_MS = 240;
 const loadConversationMutationUseCases = () =>
   import("../features/chat/usecases/createPrivateConversation").then(
     async ({ createPrivateConversationUseCase }) => {
-      const [{ createGroupConversationUseCase }, { deleteConversationUseCase }] =
-        await Promise.all([
-          import("../features/chat/usecases/createGroupConversation"),
-          import("../features/chat/usecases/deleteConversation"),
-        ]);
+      const { createGroupConversationUseCase } = await import(
+        "../features/chat/usecases/createGroupConversation"
+      );
 
       return {
         createPrivateConversationUseCase,
         createGroupConversationUseCase,
-        deleteConversationUseCase,
       };
     },
   );
@@ -154,7 +151,6 @@ export const ChatPage: React.FC = () => {
     selectConversation,
     addConversation,
     updateConversation,
-    removeConversation,
     isLoadingConversations,
     hasFetchedConversationsOnce,
     conversationsError,
@@ -167,7 +163,6 @@ export const ChatPage: React.FC = () => {
       selectConversation: state.selectConversation,
       addConversation: state.addConversation,
       updateConversation: state.updateConversation,
-      removeConversation: state.removeConversation,
       isLoadingConversations: state.isLoadingConversations,
       hasFetchedConversationsOnce: state.hasFetchedConversationsOnce,
       conversationsError: state.conversationsError,
@@ -211,9 +206,6 @@ export const ChatPage: React.FC = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const filePreview = useFilePreview();
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
-  const [isDeleteConversationConfirmOpen, setIsDeleteConversationConfirmOpen] =
-    useState(false);
-  const [isDeletingConversation, setIsDeletingConversation] = useState(false);
   const [pendingDeleteMessage, setPendingDeleteMessage] = useState<{
     messageId: string;
     mode: "FOR_ME" | "FOR_EVERYONE";
@@ -575,39 +567,6 @@ export const ChatPage: React.FC = () => {
       setIsInfoPanelOpen(false);
     }
   }
-
-  const handleDeleteConversation = useCallback(() => {
-    if (!selectedConversation) return;
-    setIsDeleteConversationConfirmOpen(true);
-  }, [selectedConversation]);
-
-  const confirmDeleteConversation = useCallback(async () => {
-    if (!selectedConversation) return;
-    setIsDeletingConversation(true);
-    try {
-      const { deleteConversationUseCase } =
-        await loadConversationMutationUseCases();
-      await deleteConversationUseCase(selectedConversation.id);
-      removeConversation(selectedConversation.id);
-      setIsDeleteConversationConfirmOpen(false);
-      closeInfoPanel();
-      selectConversation(null);
-      navigate("/chat");
-      toast.success(t("chat:toast.messageDeleted"));
-    } catch (error) {
-      const apiError = extractApiError(error);
-      toast.error(apiError.message || t("error:generic.requestFailed"));
-    } finally {
-      setIsDeletingConversation(false);
-    }
-  }, [
-    closeInfoPanel,
-    navigate,
-    removeConversation,
-    selectConversation,
-    selectedConversation,
-    t,
-  ]);
 
   // Handle back (mobile)
   const handleBack = useCallback(() => {
@@ -1092,7 +1051,6 @@ export const ChatPage: React.FC = () => {
                       status: otherUser.status,
                     }}
                     onClose={closeInfoPanel}
-                    onDeleteConversation={handleDeleteConversation}
                     onStartConversation={handleStartChat}
                   />
                 ) : (
@@ -1103,7 +1061,6 @@ export const ChatPage: React.FC = () => {
                   conversation={selectedConversation}
                   currentUserId={currentUserSummary.id}
                   onClose={closeInfoPanel}
-                  onDeleteConversation={handleDeleteConversation}
                 />
               ) : null}
             </React.Suspense>
@@ -1169,30 +1126,6 @@ export const ChatPage: React.FC = () => {
           />
         </React.Suspense>
       )}
-
-      <ConfirmDialog
-        isOpen={isDeleteConversationConfirmOpen}
-        onClose={() => {
-          if (!isDeletingConversation) {
-            setIsDeleteConversationConfirmOpen(false);
-          }
-        }}
-        onConfirm={() => {
-          void confirmDeleteConversation();
-        }}
-        title={t("profile:userProfile.deleteConversation", {
-          defaultValue: "Delete conversation",
-        })}
-        message={t("profile:userProfile.deleteConversationConfirm", {
-          defaultValue:
-            "This conversation will be removed from your chat list.",
-        })}
-        confirmText={t("common:actions.delete", {
-          defaultValue: "Delete",
-        })}
-        isLoading={isDeletingConversation}
-        variant="danger"
-      />
 
       <ConfirmDialog
         isOpen={pendingDeleteMessage !== null}

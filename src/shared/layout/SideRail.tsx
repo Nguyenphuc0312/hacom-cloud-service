@@ -1,6 +1,7 @@
 import React from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import {
   BellIcon,
   BriefcaseIcon,
@@ -32,7 +33,7 @@ interface SideRailProps {
 const railItems: SideRailItem[] = [
   {
     id: "messages",
-    label: "Tin nhắn",
+    label: "sidebar:rail.messages",
     icon: ChatBubbleLeftRightIcon,
     to: ROUTE_PATHS.CHAT,
     activeWhen: (pathname) =>
@@ -41,24 +42,24 @@ const railItems: SideRailItem[] = [
   },
   {
     id: "contacts",
-    label: "Danh bạ",
+    label: "sidebar:rail.contacts",
     icon: ContactsAddressBookOutlineIcon,
     to: ROUTE_PATHS.FRIENDS,
     activeWhen: (pathname) =>
       pathname === ROUTE_PATHS.FRIENDS ||
       pathname.startsWith("/friend-discovery/"),
   },
-  { id: "tasks", label: "Công việc", icon: BriefcaseIcon, to: ROUTE_PATHS.TASKS },
-  { id: "calendar", label: "Lịch", icon: CalendarDaysIcon, to: ROUTE_PATHS.CALENDAR },
-  { id: "archive", label: "Lưu trữ", icon: FolderIcon, to: ROUTE_PATHS.ARCHIVE },
-  { id: "notifications", label: "Thông báo", icon: BellIcon, to: ROUTE_PATHS.NOTIFICATIONS },
+  { id: "tasks", label: "sidebar:rail.tasks", icon: BriefcaseIcon, to: ROUTE_PATHS.TASKS },
+  { id: "calendar", label: "sidebar:rail.calendar", icon: CalendarDaysIcon, to: ROUTE_PATHS.CALENDAR },
+  { id: "archive", label: "sidebar:rail.archive", icon: FolderIcon, to: ROUTE_PATHS.ARCHIVE },
+  { id: "notifications", label: "sidebar:rail.notifications", icon: BellIcon, to: ROUTE_PATHS.NOTIFICATIONS },
 ];
 
 const bottomItems: SideRailItem[] = [
-  { id: "help", label: "Trợ giúp", icon: QuestionMarkCircleIcon, to: ROUTE_PATHS.HELP },
+  { id: "help", label: "sidebar:rail.help", icon: QuestionMarkCircleIcon, to: ROUTE_PATHS.HELP },
   {
     id: "settings",
-    label: "Cài đặt",
+    label: "sidebar:rail.settings",
     icon: Cog6ToothIcon,
     to: ROUTE_PATHS.SETTINGS,
     activeWhen: (pathname) => pathname === ROUTE_PATHS.SETTINGS,
@@ -76,6 +77,7 @@ const SideRailAvatar: React.FC<{
   currentUser?: Pick<UserSummary, "displayName" | "username" | "avatar"> | null;
   onCurrentUserClick?: () => void;
 }> = ({ currentUser, onCurrentUserClick }) => {
+  const { t } = useTranslation();
   const [imageFailed, setImageFailed] = React.useState(false);
   const avatarSrc =
     typeof currentUser?.avatar === "string" && currentUser.avatar.trim()
@@ -94,8 +96,8 @@ const SideRailAvatar: React.FC<{
       type="button"
       className="hc-side-rail__avatar"
       onClick={onCurrentUserClick}
-      aria-label="Hồ sơ cá nhân"
-      title={currentUser?.displayName || currentUser?.username || "Hồ sơ"}
+      aria-label={t("sidebar:rail.profile")}
+      title={currentUser?.displayName || currentUser?.username || t("sidebar:rail.profile")}
     >
       {avatarSrc && !imageFailed ? (
         <img
@@ -117,7 +119,9 @@ const SideRailButton: React.FC<{
   isActive?: boolean;
   onClick?: () => void;
 }> = ({ item, isActive = false, onClick }) => {
+  const { t } = useTranslation();
   const Icon = item.icon;
+  const translatedLabel = t(item.label);
   const getItemClassName = (active: boolean) =>
     clsx("hc-side-rail__item", active && "hc-side-rail__item--active");
   const renderIndicator = (active: boolean) => (
@@ -136,8 +140,8 @@ const SideRailButton: React.FC<{
         className={({ isActive: routeActive }) =>
           getItemClassName(routeActive || isActive)
         }
-        aria-label={item.label}
-        title={item.label}
+        aria-label={translatedLabel}
+        title={translatedLabel}
       >
         {({ isActive: routeActive }) => (
           <>
@@ -153,8 +157,8 @@ const SideRailButton: React.FC<{
     <button
       type="button"
       className={getItemClassName(isActive)}
-      aria-label={item.label}
-      title={item.label}
+      aria-label={translatedLabel}
+      title={translatedLabel}
       onClick={onClick || item.onClick}
     >
       {renderIndicator(isActive)}
@@ -168,17 +172,18 @@ export const SideRail: React.FC<SideRailProps> = ({
   activeModule,
   onCurrentUserClick,
 }) => {
+  const { t } = useTranslation();
   const { pathname } = useLocation();
 
   const mainRailItems: SideRailItem[] = railItems;
 
   return (
-    <aside className="hc-side-rail" aria-label="Điều hướng chính">
+    <aside className="hc-side-rail" aria-label={t("sidebar:rail.navAria")}>
       <NavLink
         to={ROUTE_PATHS.CHAT}
         className="hc-side-rail__logo"
-        aria-label="Hacom Chat"
-        title="Hacom Chat"
+        aria-label={t("sidebar:rail.logoAria")}
+        title={t("sidebar:rail.logoAria")}
       >
         <img
           src="/logo-dung.png"
@@ -187,7 +192,7 @@ export const SideRail: React.FC<SideRailProps> = ({
         />
       </NavLink>
 
-      <nav className="hc-side-rail__nav" aria-label="Module">
+      <nav className="hc-side-rail__nav" aria-label={t("sidebar:rail.moduleNavAria")}>
         {mainRailItems.map((item) => (
           <SideRailButton
             key={item.id}

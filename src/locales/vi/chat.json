@@ -117,6 +117,8 @@
     "attachBlocked": "Tính năng đính kèm hiện không khả dụng",
     "shortcutHint": "Enter để gửi, Shift+Enter để xuống dòng",
     "shortcutHintManual": "Dùng nút Gửi để gửi tin nhắn",
+    "formatLabel": "Định dạng tin nhắn",
+    "formatHint": "Định dạng tin nhắn (Cmd+Shift+X)",
     "moreUploadErrors": "và thêm {{count}} tệp"
   },
   "density": {

@@ -2,7 +2,7 @@ import React from "react";
 import clsx from "clsx";
 import { DateDivider } from "./DateDivider";
 import { UnreadDivider } from "./UnreadDivider";
-import { MessageBubble } from "./MessageBubble";
+import { MessageCluster } from "./message-layout/MessageCluster";
 import { SystemMessage } from "../message/SystemMessage";
 import type { Message, Attachment } from "../../types";
 import type { ConversationTimelineItem } from "../../features/chat/hooks/useConversationTimelineRows";
@@ -205,7 +205,7 @@ const MessageItemComponent: React.FC<MessageItemProps> = ({
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <MessageBubble
+          <MessageCluster
             message={resolvedMessage}
             isOwn={item.isOwn}
             mergeLevel={item.mergeLevel}

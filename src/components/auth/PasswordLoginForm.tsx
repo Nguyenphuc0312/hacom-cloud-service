@@ -54,8 +54,8 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
         )}
 
         <div className="space-y-1.5">
-          <label htmlFor="loginIdentifier" className="text-sm font-bold text-slate-700">
-            Email hoặc số điện thoại
+          <label htmlFor="loginIdentifier" className="text-sm font-bold text-text-primary">
+            {t("auth:login.loginIdentifier")}
           </label>
           <div className="relative">
             <input
@@ -68,19 +68,19 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
               autoComplete="username webauthn"
               placeholder="name@hacomholdings.vn"
               disabled={isBusy}
-              className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium outline-none transition-all focus:border-[#1d5fd6] focus:ring-2 focus:ring-[#1d5fd6]/10 disabled:bg-slate-50"
+              className="h-12 w-full rounded-xl border border-border bg-surface px-4 text-sm font-medium text-text-primary outline-none transition-all focus:border-[hsl(var(--color-primary))] focus:ring-2 focus:ring-[hsl(var(--color-focus-ring)/0.1)] disabled:opacity-60"
               aria-invalid={Boolean(loginIdentifierError)}
             />
           </div>
           {loginIdentifierError && (
-            <p className="mt-1 text-xs font-semibold text-red-500">{loginIdentifierError}</p>
+            <p className="mt-1 text-xs font-semibold text-danger">{loginIdentifierError}</p>
           )}
         </div>
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label htmlFor="password" className="text-sm font-bold text-slate-700">
-              Mật khẩu
+            <label htmlFor="password" className="text-sm font-bold text-text-primary">
+              {t("auth:login.password")}
             </label>
           </div>
           <div className="relative">
@@ -88,17 +88,17 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
               id="password"
               {...register("password")}
               type={showPassword ? "text" : "password"}
-              placeholder="••••••••"
+              placeholder={t("auth:placeholders.password")}
               autoComplete="current-password"
               disabled={isBusy}
-              className="h-12 w-full rounded-xl border border-slate-200 px-4 pr-12 text-sm font-medium outline-none transition-all focus:border-[#1d5fd6] focus:ring-2 focus:ring-[#1d5fd6]/10 disabled:bg-slate-50"
+              className="h-12 w-full rounded-xl border border-border bg-surface px-4 pr-12 text-sm font-medium text-text-primary outline-none transition-all focus:border-[hsl(var(--color-primary))] focus:ring-2 focus:ring-[hsl(var(--color-focus-ring)/0.1)] disabled:opacity-60"
               aria-invalid={Boolean(passwordError)}
             />
             <button
               type="button"
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition-colors hover:text-text-secondary"
               onClick={() => setShowPassword(!showPassword)}
-              aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+              aria-label={showPassword ? t("auth:login.hidePassword") : t("auth:login.showPassword")}
             >
               {showPassword ? (
                 <EyeSlashIcon className="h-5 w-5" />
@@ -108,7 +108,7 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
             </button>
           </div>
           {passwordError && (
-            <p className="mt-1 text-xs font-semibold text-red-500">{passwordError}</p>
+            <p className="mt-1 text-xs font-semibold text-danger">{passwordError}</p>
           )}
         </div>
 
@@ -117,16 +117,16 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
             <input
               type="checkbox"
               {...register("rememberMe")}
-              className="h-4 w-4 rounded border-slate-300 text-[#1d5fd6] focus:ring-[#1d5fd6]"
+              className="h-4 w-4 rounded border-border text-[hsl(var(--color-primary))] focus:ring-2 focus:ring-[hsl(var(--color-focus-ring)/0.2)]"
             />
-            <span className="text-sm font-medium text-slate-500">Ghi nhớ đăng nhập</span>
+            <span className="text-sm font-medium text-text-secondary">{t("auth:login.rememberMe")}</span>
           </label>
           <button
             type="button"
             onClick={() => navigate('/forgot-password')}
-            className="text-sm font-bold text-slate-400 transition-colors hover:text-slate-600"
+            className="text-sm font-bold text-text-muted transition-colors hover:text-text-secondary"
           >
-            Quên mật khẩu?
+            {t("auth:login.forgotPassword")}
           </button>
         </div>
 
@@ -134,12 +134,12 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
         <Button
           type="submit"
           fullWidth
-          className="h-12 rounded-xl bg-slate-900 text-sm font-bold text-white transition-all hover:bg-slate-800 active:scale-95 shadow-lg shadow-slate-900/10"
+          className="h-12 rounded-xl bg-[hsl(var(--color-primary))] text-sm font-bold text-white transition-all hover:brightness-110 active:scale-95 shadow-lg shadow-[hsl(var(--color-primary)/0.2)]"
           isLoading={isBusy}
           disabled={isBusy}
           aria-busy={isBusy}
         >
-          Đăng nhập ngay
+          {t("auth:login.submitCta")}
         </Button>
       </form>
     </div>

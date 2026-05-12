@@ -106,4 +106,4 @@ export const canLeaveGroup = (
   return activeOwnerCount > 1;
 };
 
-export const canDeleteConversationForSelf = (): boolean => true;
+export const canDeleteConversationForSelf = (): boolean => false;
