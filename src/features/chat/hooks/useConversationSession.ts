@@ -7,6 +7,7 @@ import type { Conversation, Message, UserSummary } from "../../../types";
 import { getConversationByIdUseCase } from "../usecases/getConversationById";
 import { logMessageDebug } from "../../../utils/messageDebug";
 import { markChatPerformance } from "../../../utils/chatPerformance";
+import { logger } from "../../../utils/logger";
 import { isChatRtkqMessagesRuntimeEnabled } from "../config/experienceFlags";
 
 const INITIAL_CONVERSATION_WINDOW_LIMIT = 40;
@@ -522,17 +523,14 @@ export const useConversationSession = ({
     const fromMessagesList =
       anchor.messageId !== null &&
       (summarySeqHint === null || anchor.seq <= summarySeqHint) === false;
-    // eslint-disable-next-line no-console
-    console.debug(
-      fromMessagesList
-        ? "markRead.fromMessagesMeta"
-        : "markRead.fromConversationListLatestSeq",
-      {
-        conversationId: selectedConversationId,
-        lastReadSeq: anchor.seq,
-        anchorMessageId: anchor.messageId,
-      },
-    );
+    logger.debug("chat-session", "markRead.readSource", {
+      source: fromMessagesList
+        ? "messages-meta"
+        : "conversation-list-latest-seq",
+      conversationId: selectedConversationId,
+      lastReadSeq: anchor.seq,
+      anchorMessageId: anchor.messageId,
+    });
     void markAsRead(selectedConversationId, markReadInput).catch(() => {
       if (lastVisibleReadAnchorKeyRef.current === latestKey) {
         lastVisibleReadAnchorKeyRef.current = null;

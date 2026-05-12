@@ -26,5 +26,5 @@
     "noUncheckedSideEffectImports": true
   },
   "include": ["src"],
-  "exclude": ["**/__deprecated__/**"]
+  "exclude": ["**/__deprecated__/**", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "src/test/setup.ts"]
 }
