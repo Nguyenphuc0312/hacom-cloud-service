@@ -21,4 +21,6 @@ export const ROUTE_PATHS = {
   ARCHIVE: "/archive",
   NOTIFICATIONS: "/notifications",
   HELP: "/help",
+  FAQ: "/faq",
+  REPORT_ISSUE: "/report-issue",
 } as const;

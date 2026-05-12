@@ -52,10 +52,20 @@ type MarkReadResponseData = {
   unreadCount?: number | null;
 };
 
-const toPositiveSeq = (value: unknown): number | null =>
-  typeof value === "number" && Number.isInteger(value) && value > 0
-    ? value
-    : null;
+const toPositiveSeq = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+  // BIGINT từ PG được serialize thành string ("233"). Phải coerce để optimistic
+  // update advance lastReadSeq đúng và stale-read guard không bị bypass.
+  if (typeof value === "string" && /^[1-9]\d*$/.test(value)) {
+    const parsed = Number(value);
+    if (Number.isSafeInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return null;
+};
 
 const normalizeMarkAsReadInput = (
   input?: string | MarkAsReadInput,
@@ -129,6 +139,28 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
   ) => Conversation;
 }) => {
   const markAsReadInFlight = new Map<string, MarkAsReadRequest>();
+  // localMarkedReadSeq: seq cuối cùng mà FE đã chủ động mark-read trong session
+  // hiện tại. Dùng để chống stale-overwrite: nếu server snapshot trả về
+  // unreadCount > 0 hoặc lastReadSeq < localMarkedReadSeq (do projection chưa
+  // kịp catch up), FE phải giữ trạng thái local. Tránh badge nhảy lại đỏ ngay
+  // sau khi user vừa đọc.
+  const localMarkedReadSeq = new Map<string, number>();
+  // Snapshot map: stores the conversation state BEFORE an optimistic mark-read
+  // so it can be restored if the API call fails.
+  const pendingRollbackSnapshot = new Map<string, Conversation>();
+
+  const recordLocalMarkedSeq = (conversationId: string, seq: number): void => {
+    if (!conversationId || !Number.isInteger(seq) || seq <= 0) return;
+    const previous = localMarkedReadSeq.get(conversationId) ?? 0;
+    if (seq > previous) {
+      localMarkedReadSeq.set(conversationId, seq);
+    }
+  };
+  const getLocalMarkedSeq = (conversationId: string): number =>
+    localMarkedReadSeq.get(conversationId) ?? 0;
+  const clearLocalMarkedSeq = (conversationId: string): void => {
+    localMarkedReadSeq.delete(conversationId);
+  };
 
   const applyOptimisticConversationRead = (
     conversationId: string,
@@ -244,13 +276,29 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
     const currentConversation = get().conversations.find(
       (conversation) => conversation.id === conversationId,
     );
-    if (
-      lastReadSeq !== null &&
-      (currentConversation?.lastReadSeq ?? 0) >= lastReadSeq
-    ) {
+    const currentSeq = Math.max(
+      currentConversation?.lastReadSeq ?? 0,
+      getLocalMarkedSeq(conversationId),
+    );
+    // Seq là authoritative khi được cung cấp. Nếu seq đã >= incoming, skip.
+    if (lastReadSeq !== null && currentSeq >= lastReadSeq) {
+      // eslint-disable-next-line no-console
+      console.debug("markRead.skipped", {
+        conversationId,
+        reason: "seq-already-advanced",
+        currentSeq,
+        incomingSeq: lastReadSeq,
+      });
       return Promise.resolve();
     }
+    // Anchor-id comparator chỉ được dùng khi KHÔNG có seq explicit. Seq là
+    // truth duy nhất — comparator dựa trên messages list local hay rơi vào
+    // localeCompare khi anchor mới chưa load, gây false-positive skip và làm
+    // POST mark-read không bao giờ được gọi (lỗi production: GET messages
+    // tới seq 243 nhưng FE không POST /messages/read 243 vì comparator
+    // báo current >= next).
     if (
+      lastReadSeq === null &&
       anchorId &&
       currentConversation?.lastReadMessageId &&
       compareAnchorIdsInConversation(
@@ -259,6 +307,13 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
         anchorId,
       ) >= 0
     ) {
+      // eslint-disable-next-line no-console
+      console.debug("markRead.skipped", {
+        conversationId,
+        reason: "anchor-already-advanced",
+        currentAnchor: currentConversation.lastReadMessageId,
+        incomingAnchor: anchorId,
+      });
       return Promise.resolve();
     }
 
@@ -294,13 +349,72 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
     const runMarkAsRead = async (
       requestInput: MarkAsReadInput,
     ): Promise<void> => {
+      // Capture snapshot BEFORE applying optimistic update so we can restore
+      // exactly the authoritative server state if the API call fails.
+      const snapshotConversation = get().conversations.find(
+        (c) => c.id === conversationId,
+      ) ?? null;
+      if (snapshotConversation) {
+        pendingRollbackSnapshot.set(conversationId, { ...snapshotConversation });
+      }
+
       applyOptimisticConversationRead(conversationId, requestInput);
+      const optimisticSeq = toPositiveSeq(requestInput.lastReadSeq);
+      if (optimisticSeq !== null) {
+        recordLocalMarkedSeq(conversationId, optimisticSeq);
+      }
+      // eslint-disable-next-line no-console
+      console.debug("markRead.request", {
+        conversationId,
+        lastReadSeq: optimisticSeq,
+        anchorId: getInputAnchorId(requestInput) ?? null,
+      });
       const request = markConversationAsRead(conversationId, requestInput).then(
         (response) => {
           if (response && typeof response === "object") {
-            applyServerConversationRead(response as MarkReadResponseData);
+            const data = response as MarkReadResponseData;
+            const ackSeq = toPositiveSeq(data.lastReadSeq);
+            if (ackSeq !== null) {
+              recordLocalMarkedSeq(conversationId, ackSeq);
+            }
+            // eslint-disable-next-line no-console
+            console.debug("markRead.success", {
+              conversationId,
+              lastReadSeq: ackSeq,
+              unreadCount: data.unreadCount ?? null,
+            });
+            applyServerConversationRead(data);
           }
           return undefined;
+        },
+        (error: unknown) => {
+          // eslint-disable-next-line no-console
+          console.debug("markRead.failed", {
+            conversationId,
+            lastReadSeq: optimisticSeq,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          // Rollback: restore the pre-optimistic conversation state.
+          // This ensures the UI shows the authoritative server state rather than
+          // a false "read" that never persisted. After rollback, a refetch of
+          // the unread summary will correct any remaining drift.
+          clearLocalMarkedSeq(conversationId);
+          const snapshot = pendingRollbackSnapshot.get(conversationId);
+          if (snapshot) {
+            set((state) => {
+              const conversations = state.conversations.map((c) =>
+                c.id === conversationId
+                  ? (normalizeConversation(snapshot) ?? c)
+                  : c,
+              );
+              return {
+                conversations,
+                ...buildConversationCollectionState(conversations),
+              };
+            });
+            pendingRollbackSnapshot.delete(conversationId);
+          }
+          throw error;
         },
       );
       markAsReadInFlight.set(conversationId, {
@@ -354,6 +468,31 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
           return conversation;
         }
 
+        // Stale-overwrite guard: nếu FE đã chủ động mark-read tới seq X mà
+        // snapshot trả về unreadCount > 0 hoặc lastReadSeq < X, projection
+        // backend chưa kịp catch up — không cho phép ghi đè badge về đỏ.
+        const localSeq = getLocalMarkedSeq(conversation.id);
+        const snapshotSeq =
+          typeof unreadSnapshot?.lastReadSeq === "number"
+            ? unreadSnapshot.lastReadSeq
+            : 0;
+        if (localSeq > 0 && snapshotSeq < localSeq) {
+          // eslint-disable-next-line no-console
+          console.debug("conversationList.preventStaleUnread", {
+            conversationId: conversation.id,
+            localSeq,
+            snapshotSeq,
+            snapshotUnread: unreadSnapshot?.unreadCount ?? null,
+          });
+          return normalizeConversation({
+            ...conversation,
+            unreadCount: 0,
+            lastReadSeq: localSeq,
+            firstUnreadMessageId: null,
+            firstUnreadMessageAt: null,
+          }) as Conversation;
+        }
+
         if (!unreadSnapshot) {
           return normalizeConversation({
             ...conversation,
@@ -405,6 +544,7 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
     applyOptimisticConversationRead,
     reset() {
       markAsReadInFlight.clear();
+      pendingRollbackSnapshot.clear();
     },
   };
 };

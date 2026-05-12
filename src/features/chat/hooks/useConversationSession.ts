@@ -53,6 +53,21 @@ const scheduleIdleTask = (task: () => void): (() => void) => {
   };
 };
 
+const coercePositiveIntSeq = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+  // BIGINT từ PG được Sequelize serialize thành string ("233"). Phải coerce
+  // ở mọi điểm đọc seq để mark-read và stale-read guard hoạt động đúng.
+  if (typeof value === "string" && value.length > 0 && /^[1-9]\d*$/.test(value)) {
+    const parsed = Number(value);
+    if (Number.isSafeInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
 const getMessageReadSeq = (message: Message): number | null => {
   const record = message as unknown as {
     messageSeq?: unknown;
@@ -61,13 +76,8 @@ const getMessageReadSeq = (message: Message): number | null => {
   };
   const candidates = [record.messageSeq, record.serverSeq, record.seq];
   for (const candidate of candidates) {
-    if (
-      typeof candidate === "number" &&
-      Number.isInteger(candidate) &&
-      candidate > 0
-    ) {
-      return candidate;
-    }
+    const seq = coercePositiveIntSeq(candidate);
+    if (seq !== null) return seq;
   }
   return null;
 };
@@ -424,45 +434,120 @@ export const useConversationSession = ({
     });
   }, [fetchMessages, selectedConversationId]);
 
-  const handleReachedLatestMessage = useCallback(
-    (message: Message) => {
-      if (!selectedConversationId) return;
-      if (message.id.startsWith("temp-")) {
-        return;
-      }
-
-      const conversation =
-        useChatStore.getState().conversationById[selectedConversationId];
-      if (!conversation) return;
-      const lastReadSeq = getMessageReadSeq(message);
-      const alreadyReadUpToLatest =
-        (lastReadSeq !== null &&
-          (conversation.lastReadSeq ?? 0) >= lastReadSeq) ||
-        (conversation.lastReadMessageId === message.id &&
-          (conversation.unreadCount ?? 0) <= 0);
-      if (alreadyReadUpToLatest) {
-        return;
-      }
-
-      const latestKey = `${selectedConversationId}:${message.id}:${
-        lastReadSeq ?? "no-seq"
-      }`;
-      if (lastVisibleReadAnchorKeyRef.current === latestKey) {
-        return;
-      }
-
-      lastVisibleReadAnchorKeyRef.current = latestKey;
-      const markReadInput =
-        lastReadSeq !== null
-          ? { lastVisibleMessageId: message.id, lastReadSeq }
-          : message.id;
-      void markAsRead(selectedConversationId, markReadInput).catch(() => {
-        if (lastVisibleReadAnchorKeyRef.current === latestKey) {
-          lastVisibleReadAnchorKeyRef.current = null;
+  // Resolve seq cao nhất hiện FE biết được:
+  //   max( loaded message seq, conversation.lastMessage.messageSeq )
+  // Conversation list có thể biết lastMessageSeq=238 trong khi messages mới
+  // load tới 233 — phải mark-read tới 238, không thì badge stuck ở 5.
+  const resolveLatestKnownAnchor = useCallback((): {
+    seq: number;
+    messageId: string | null;
+  } | null => {
+    if (!selectedConversationId) return null;
+    const state = useChatStore.getState();
+    const conversation = state.conversationById[selectedConversationId];
+    const list = state.messages?.[selectedConversationId];
+    let loadedSeq = 0;
+    let loadedMessageId: string | null = null;
+    if (Array.isArray(list)) {
+      for (let i = list.length - 1; i >= 0; i -= 1) {
+        const candidate = list[i];
+        if (!candidate || typeof candidate.id !== "string") continue;
+        if (candidate.id.startsWith("temp-")) continue;
+        const candidateSeq = getMessageReadSeq(candidate);
+        if (candidateSeq !== null) {
+          loadedSeq = candidateSeq;
+          loadedMessageId = candidate.id;
         }
-      });
+        break;
+      }
+    }
+    const summaryRaw = (
+      conversation?.lastMessage as { messageSeq?: unknown; id?: unknown } | undefined
+    ) ?? undefined;
+    const summarySeq = coercePositiveIntSeq(summaryRaw?.messageSeq);
+    const summaryId =
+      typeof summaryRaw?.id === "string" ? (summaryRaw.id as string) : null;
+
+    let seq = 0;
+    let messageId: string | null = null;
+    if (loadedSeq > 0) {
+      seq = loadedSeq;
+      messageId = loadedMessageId;
+    }
+    if (summarySeq !== null && summarySeq > seq) {
+      seq = summarySeq;
+      // Khi summary seq vượt loaded seq, không có message id verifiable trong
+      // messages list. Vẫn ưu tiên BE resolve theo lastReadSeq.
+      messageId = summaryId;
+    }
+    if (seq <= 0) return null;
+    return { seq, messageId };
+  }, [selectedConversationId]);
+
+  const fireMarkReadToLatest = useCallback(() => {
+    if (!selectedConversationId) return;
+    const anchor = resolveLatestKnownAnchor();
+    if (!anchor) return;
+    const conversation =
+      useChatStore.getState().conversationById[selectedConversationId];
+    if (!conversation) return;
+
+    const currentLastReadSeq = coercePositiveIntSeq(conversation.lastReadSeq) ?? 0;
+    const currentUnread = conversation.unreadCount ?? 0;
+    if (currentLastReadSeq >= anchor.seq && currentUnread <= 0) {
+      return;
+    }
+
+    const latestKey = `${selectedConversationId}:${anchor.messageId ?? "by-seq"}:${anchor.seq}`;
+    if (lastVisibleReadAnchorKeyRef.current === latestKey) {
+      return;
+    }
+    lastVisibleReadAnchorKeyRef.current = latestKey;
+
+    const markReadInput: { lastReadSeq: number; lastVisibleMessageId?: string } = {
+      lastReadSeq: anchor.seq,
+    };
+    if (anchor.messageId) {
+      markReadInput.lastVisibleMessageId = anchor.messageId;
+    }
+    // Trace source: phân biệt seq đến từ messages list (đã load message) hay
+    // từ conversation summary lastMessage.messageSeq (F5/deep-link, chưa
+    // load messages). Cần phân biệt để debug nếu badge stuck.
+    const summarySeqHint = coercePositiveIntSeq(
+      (
+        useChatStore.getState().conversationById[selectedConversationId]
+          ?.lastMessage as { messageSeq?: unknown } | undefined
+      )?.messageSeq,
+    );
+    const fromMessagesList =
+      anchor.messageId !== null &&
+      (summarySeqHint === null || anchor.seq <= summarySeqHint) === false;
+    // eslint-disable-next-line no-console
+    console.debug(
+      fromMessagesList
+        ? "markRead.fromMessagesMeta"
+        : "markRead.fromConversationListLatestSeq",
+      {
+        conversationId: selectedConversationId,
+        lastReadSeq: anchor.seq,
+        anchorMessageId: anchor.messageId,
+      },
+    );
+    void markAsRead(selectedConversationId, markReadInput).catch(() => {
+      if (lastVisibleReadAnchorKeyRef.current === latestKey) {
+        lastVisibleReadAnchorKeyRef.current = null;
+      }
+    });
+  }, [markAsRead, resolveLatestKnownAnchor, selectedConversationId]);
+
+  const handleReachedLatestMessage = useCallback(
+    () => {
+      // Giữ chữ ký cũ để các callsite khác không break. Logic giờ luôn resolve
+      // anchor theo max(loaded, conversation.lastMessage) thay vì chỉ message
+      // truyền vào.
+      fireMarkReadToLatest();
     },
-    [markAsRead, selectedConversationId],
+    [fireMarkReadToLatest],
   );
 
   useEffect(() => {
@@ -591,7 +676,7 @@ export const useConversationSession = ({
   // handleReachedLatestMessage đã dedupe nội bộ qua lastVisibleReadAnchorKeyRef
   // và short-circuit nếu lastReadSeq đã >= seq mới — gọi nhiều lần an toàn.
   useEffect(() => {
-    if (!selectedConversationId || !isConversationReady) return;
+    if (!selectedConversationId) return;
     if (
       typeof document !== "undefined" &&
       document.visibilityState === "hidden"
@@ -599,75 +684,76 @@ export const useConversationSession = ({
       return;
     }
 
-    const fire = () => {
-      const state = useChatStore.getState();
-      const cached = state.messages?.[selectedConversationId];
-      const messageList = Array.isArray(cached) ? cached : [];
-      if (messageList.length === 0) return;
-
-      // Tìm latest message phía server (bỏ qua temp/optimistic) có seq dương.
-      for (let i = messageList.length - 1; i >= 0; i -= 1) {
-        const candidate = messageList[i];
-        if (!candidate || typeof candidate.id !== "string") continue;
-        if (candidate.id.startsWith("temp-")) continue;
-        handleReachedLatestMessage(candidate);
-        return;
-      }
-    };
-
-    fire();
+    // Quan trọng: KHÔNG chờ isConversationReady — conversation list từ
+    // GET /conversations đã đủ để mark-read theo lastMessage.messageSeq dù
+    // messages chưa load. Đây là case F5 hoặc deep-link.
+    fireMarkReadToLatest();
 
     if (typeof document === "undefined") return;
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        fire();
+        fireMarkReadToLatest();
       }
     };
+    const onFocus = () => fireMarkReadToLatest();
     document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", onFocus);
     return () => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", onFocus);
     };
-  }, [
-    selectedConversationId,
-    isConversationReady,
-    handleReachedLatestMessage,
-  ]);
+  }, [selectedConversationId, fireMarkReadToLatest]);
 
-  // Khi message list của active conversation thay đổi (nhận tin mới realtime),
-  // tự đẩy lastReadSeq tới message mới nhất — chỉ khi tab đang visible.
-  const activeMessagesSignature = useChatStore((state) => {
+  // Trigger lại mark-read mỗi khi seq cao nhất FE biết được thay đổi — bất
+  // kể seq đó tới từ message list (load thêm, realtime) hay từ conversation
+  // summary (lastMessage.messageSeq tăng do WebSocket bump conversation list).
+  const latestKnownSeqSignature = useChatStore((state) => {
     if (!selectedConversationId) return "";
     const list = state.messages?.[selectedConversationId];
-    if (!Array.isArray(list) || list.length === 0) return "";
-    const last = list[list.length - 1];
-    return last ? `${last.id}:${getMessageReadSeq(last) ?? "no-seq"}` : "";
+    let loadedSeq = 0;
+    let loadedId = "";
+    if (Array.isArray(list)) {
+      for (let i = list.length - 1; i >= 0; i -= 1) {
+        const candidate = list[i];
+        if (!candidate || typeof candidate.id !== "string") continue;
+        if (candidate.id.startsWith("temp-")) continue;
+        const seq = getMessageReadSeq(candidate);
+        if (seq !== null) {
+          loadedSeq = seq;
+          loadedId = candidate.id;
+        }
+        break;
+      }
+    }
+    const summaryRaw = (
+      state.conversationById[selectedConversationId]?.lastMessage as
+        | { messageSeq?: unknown; id?: unknown }
+        | undefined
+    ) ?? undefined;
+    const summarySeq = coercePositiveIntSeq(summaryRaw?.messageSeq) ?? 0;
+    const seq = Math.max(loadedSeq, summarySeq);
+    const id =
+      summarySeq > loadedSeq && typeof summaryRaw?.id === "string"
+        ? (summaryRaw.id as string)
+        : loadedId;
+    return `${seq}:${id}`;
   });
 
   useEffect(() => {
-    if (!selectedConversationId || !isConversationReady) return;
-    if (!activeMessagesSignature) return;
+    if (!selectedConversationId) return;
+    if (!latestKnownSeqSignature || latestKnownSeqSignature === "0:") return;
     if (
       typeof document !== "undefined" &&
       document.visibilityState === "hidden"
     ) {
       return;
     }
-    const state = useChatStore.getState();
-    const list = state.messages?.[selectedConversationId];
-    if (!Array.isArray(list) || list.length === 0) return;
-    for (let i = list.length - 1; i >= 0; i -= 1) {
-      const candidate = list[i];
-      if (!candidate || typeof candidate.id !== "string") continue;
-      if (candidate.id.startsWith("temp-")) continue;
-      handleReachedLatestMessage(candidate);
-      return;
-    }
-  }, [
-    selectedConversationId,
-    isConversationReady,
-    activeMessagesSignature,
-    handleReachedLatestMessage,
-  ]);
+    // Debounce 400ms để gom nhiều message arrival liên tiếp thành 1 mark-read.
+    const handle = setTimeout(() => {
+      fireMarkReadToLatest();
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [selectedConversationId, latestKnownSeqSignature, fireMarkReadToLatest]);
 
   return {
     currentHasMore,

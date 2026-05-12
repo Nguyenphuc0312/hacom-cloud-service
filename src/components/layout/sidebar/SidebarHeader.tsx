@@ -7,11 +7,11 @@ import {
   BellIcon,
   Cog6ToothIcon,
   EllipsisHorizontalIcon,
-  MagnifyingGlassIcon,
-  PencilSquareIcon,
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
 import ContactsAddressBookOutlineIcon from "../../../shared/layout/ContactsAddressBookOutlineIcon";
+import CreateGroupIcon from "../../../shared/layout/CreateGroupIcon";
+import { emitOpenNewChatModal } from "../../../lib/commandPalette";
 import { Avatar } from "../../common/Avatar";
 import { IconButtonSurface } from "../../ui";
 import { NotificationPanel } from "../../notification/NotificationPanel";
@@ -23,12 +23,10 @@ import type { ChatLayoutState } from "../../../utils/densityPolicy";
 interface SidebarHeaderProps {
   layoutState: ChatLayoutState;
   currentUser: UserSummary;
-  onNewChat?: () => void;
   onCurrentUserClick?: () => void;
   onOpenFriends?: () => void;
   onOpenSettings?: () => void;
   onRequestLogout?: () => void;
-  onFocusSearch?: () => void;
   onMarkRead?: (id: string) => void;
   onMarkAllRead?: () => void;
 }
@@ -58,12 +56,10 @@ const resolveStatusLabel = (
 export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   layoutState,
   currentUser,
-  onNewChat,
   onCurrentUserClick,
   onOpenFriends,
   onOpenSettings,
   onRequestLogout,
-  onFocusSearch,
   onMarkRead,
   onMarkAllRead,
 }) => {
@@ -206,25 +202,14 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           ref={menuRef}
         >
           <IconButtonSurface
-            onClick={onNewChat}
-            className={clsx(
-              "rounded-md bg-[hsl(var(--chat-active-surface)/0.12)] text-primary shadow-none hover:bg-[hsl(var(--chat-active-surface)/0.18)] hover:text-primary",
-              "h-[var(--control-height-md)] w-[var(--control-height-md)]",
-            )}
-            aria-label={t("sidebar:header.startNewChat")}
-          >
-            <PencilSquareIcon className="h-[18px] w-[18px]" />
-          </IconButtonSurface>
-
-          <IconButtonSurface
-            onClick={onFocusSearch}
+            onClick={() => emitOpenNewChatModal()}
             className={clsx(
               "rounded-md text-text-muted hover:bg-surface-hover/70 hover:text-text-primary",
               "h-[var(--control-height-md)] w-[var(--control-height-md)]",
             )}
-            aria-label={t("sidebar:search.aria")}
+            aria-label="Tạo chat mới"
           >
-            <MagnifyingGlassIcon className="h-[18px] w-[18px]" />
+            <CreateGroupIcon className="h-[18px] w-[18px]" />
           </IconButtonSurface>
 
           <div className="relative" ref={notificationRef}>

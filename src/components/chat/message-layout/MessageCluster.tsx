@@ -150,9 +150,6 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
         (message.forwardedFrom as { displayName?: string | null })
           .displayName || message.forwardedFrom.username,
       username: message.forwardedFrom.username,
-      employeeCode: (
-        message.forwardedFrom as { employeeCode?: string | null }
-      ).employeeCode,
     })
     : null;
   const replyTargetMessageId = message.replyTo || message.replyToMessage?.id;
@@ -292,6 +289,8 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
       onReact,
       onReply,
       openActions,
+      isOwn,
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     ],
   );
 
@@ -422,20 +421,20 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
                     ? "cursor-pointer hover:opacity-90"
                     : "cursor-default",
                   isOwn
-                    ? "border-[#0068ff] bg-[#f0f5ff] text-[#081c36]"
-                    : "border-[#0068ff] bg-[#eef1f6] text-[#081c36]",
+                    ? "border-primary/70 bg-primary/5 text-text-primary dark:bg-primary/15"
+                    : "border-primary/40 bg-surface-hover/80 text-text-primary dark:bg-surface-hover/30",
                 )}
               >
                 <div className="flex min-w-0 flex-1 items-center gap-2.5">
                   <ReplyTypeIcon
                     type={message.replyToMessage.type}
-                    className="h-3.5 w-3.5 shrink-0 text-[#72808e]"
+                    className="h-3.5 w-3.5 shrink-0 text-text-muted"
                   />
                   <div className="min-w-0 flex-1">
-                    <span className="block text-[11.5px] font-bold leading-none text-[#0068ff]">
+                    <span className="block text-[11.5px] font-bold leading-none text-primary">
                       {replySenderDisplayName}
                     </span>
-                    <p className="mt-1 truncate text-[12.5px] leading-tight text-[#47525d]">
+                    <p className="mt-1 truncate text-[12.5px] leading-tight text-text-secondary">
                       {message.replyToMessage.isDeleted
                         ? message.replyToMessage.lifecycleStatus ===
                             "deleted_admin"

@@ -117,6 +117,7 @@ function renderHarness(initial: {
       setLayout(el, { scrollHeight: 1000, clientHeight: 500, scrollTop: 500 });
     }, [hook.scrollRef]);
     return (
+      /* eslint-disable react-hooks/refs */
       <div
         ref={hook.scrollRef}
         data-testid="scroll"
@@ -134,6 +135,7 @@ function renderHarness(initial: {
         <output data-testid="pending">{hook.pendingNewMessages}</output>
         <output data-testid="atbottom">{String(hook.isAtBottom)}</output>
       </div>
+      /* eslint-enable react-hooks/refs */
     );
   };
 

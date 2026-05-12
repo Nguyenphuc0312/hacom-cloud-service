@@ -75,7 +75,7 @@ const estimateRowHeight = (row: ConversationThreadRow | undefined): number => {
   return 56 + items * 56;
 };
 
-const noopToggleExpand = (_messageId: string): void => undefined;
+const noopToggleExpand: (id: string) => void = () => undefined;
 
 const SimpleVirtualizedChatTimelineComponent: React.FC<
   SimpleVirtualizedChatTimelineProps
@@ -131,6 +131,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
     loadOlder: onLoadMore,
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: threadRows.length,
     getScrollElement: () => scrollRef.current,

@@ -193,7 +193,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onLoadOlderMessages,
   onImageClick,
   onFilePreview,
-  onReachedLatestMessage: _onReachedLatestMessage,
   connectionState = "connected",
   isConversationReady = true,
   externalJumpToMessageId = null,
@@ -1101,6 +1100,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             composerMode={composerAvailability.mode}
             onShareContact={handleShareContact}
             uploadDrafts={uploadQueue.drafts}
+            conversationName={callDisplayName}
             onAddFiles={handleAddFiles}
             onRemoveDraft={uploadQueue.removeDraft}
             onCancelUpload={uploadQueue.cancelUpload}

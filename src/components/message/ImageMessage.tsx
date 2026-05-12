@@ -130,7 +130,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
           <p
             className={clsx(
               "mt-2 min-h-5 text-sm transition-opacity duration-150",
-              isOwn ? "text-text-inverse/90" : "text-text-secondary",
+              isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.9]" : "text-text-secondary",
               isLoaded ? "opacity-100" : "opacity-0",
             )}
             aria-hidden={!isLoaded}

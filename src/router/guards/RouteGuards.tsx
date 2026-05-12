@@ -40,7 +40,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     }
   }, [isInitialized, initialize]);
 
-  if (!isInitialized || authStatus === "loading") {
+  if (!isInitialized) {
     return <PageSpinner message={t("common:loading.checkingAuth")} />;
   }
 
@@ -115,7 +115,7 @@ export const GuestRoute: React.FC<GuardProps> = ({ children }) => {
     }
   }, [isInitialized, initialize]);
 
-  if (!isInitialized || authStatus === "loading") {
+  if (!isInitialized) {
     return <PageSpinner message={t("common:loading.default")} />;
   }
 
@@ -157,7 +157,7 @@ export const ActivationRoute: React.FC<GuardProps> = ({ children }) => {
     }
   }, [isInitialized, initialize]);
 
-  if (!isInitialized || authStatus === "loading") {
+  if (!isInitialized) {
     return <PageSpinner message={t("common:loading.checkingAuth")} />;
   }
 
@@ -182,7 +182,7 @@ export const ActivationRoute: React.FC<GuardProps> = ({ children }) => {
 
 export const ForceChangePasswordRoute: React.FC<GuardProps> = ({ children }) => {
   const { t } = useTranslation();
-  const { isAuthenticated, isInitialized, initialize, authStatus, user } = useAuthStore();
+  const { isAuthenticated, isInitialized, initialize, user } = useAuthStore();
 
   useEffect(() => {
     if (!isInitialized) {
@@ -190,7 +190,7 @@ export const ForceChangePasswordRoute: React.FC<GuardProps> = ({ children }) => 
     }
   }, [isInitialized, initialize]);
 
-  if (!isInitialized || authStatus === "loading") {
+  if (!isInitialized) {
     return <PageSpinner message={t("common:loading.checkingAuth")} />;
   }
 

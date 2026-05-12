@@ -8,6 +8,9 @@ const FriendsPage = lazy(() => import("../../pages/FriendsPage"));
 const JoinByLinkPage = lazy(() => import("../../pages/JoinByLinkPage"));
 const NotificationsPage = lazy(() => import("../../pages/NotificationsPage"));
 const MaintenancePage = lazy(() => import("../../pages/errors/MaintenancePage"));
+const HelpPage = lazy(() => import("../../pages/HelpPage"));
+const FAQPage = lazy(() => import("../../pages/FAQPage"));
+const ReportIssuePage = lazy(() => import("../../pages/ReportIssuePage"));
 
 /**
  * Authenticated routes. Optional `roles` enables role-based access control.
@@ -23,7 +26,9 @@ export const privateRoutes: AppRouteConfig[] = [
   { path: ROUTE_PATHS.CALENDAR, component: MaintenancePage },
   { path: ROUTE_PATHS.ARCHIVE, component: MaintenancePage },
   { path: ROUTE_PATHS.NOTIFICATIONS, component: NotificationsPage },
-  { path: ROUTE_PATHS.HELP, component: MaintenancePage },
+  { path: ROUTE_PATHS.HELP, component: HelpPage },
+  { path: ROUTE_PATHS.FAQ, component: FAQPage },
+  { path: ROUTE_PATHS.REPORT_ISSUE, component: ReportIssuePage },
   // Example for future admin route:
   // { path: "/admin", component: AdminDashboardPage, roles: ["admin"] },
 ];
