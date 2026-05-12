@@ -7,6 +7,7 @@ import { SelectionToolbar } from "../chat/SelectionToolbar";
 import { MessageInspectDrawer } from "../chat/thread/MessageInspectDrawer";
 import { DropOverlay } from "../input/DropOverlay";
 import { MessageInput } from "../input/MessageInput";
+import type { MessageInputHandle } from "../input/MessageInput";
 import { ConversationLane } from "./ConversationLane";
 import { AudioCallDialog } from "../../features/chat/components/AudioCallDialog";
 import { VideoCallView } from "../../features/chat/components/VideoCallView";
@@ -249,6 +250,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const previousConversationIdRef = React.useRef(conversation.id);
   const navigationRequestSeqRef = React.useRef(0);
   const renderCountRef = React.useRef(0);
+  const messageInputRef = React.useRef<MessageInputHandle>(null);
+  // Tracks latest canType without adding it as an effect dependency
+  const composerCanTypeRef = React.useRef(true);
 
   const replaceComposerSeed = React.useCallback((nextValue: string) => {
     inputValueRef.current = nextValue;
@@ -319,6 +323,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   React.useEffect(() => {
     inputModeRef.current = inputMode;
   }, [inputMode]);
+
+  // Auto-focus the message input when the active conversation changes.
+  // Guards: desktop pointer device only (avoids unwanted keyboard pop-up on
+  // mobile/tablet), and only when the composer is not disabled.
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!window.matchMedia("(pointer: fine)").matches) return;
+
+    const rafId = window.requestAnimationFrame(() => {
+      if (composerCanTypeRef.current) {
+        messageInputRef.current?.focus();
+      }
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [conversation.id]);
 
   React.useEffect(
     () => () => {
@@ -578,6 +597,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     isConversationReady,
     sendRestriction,
     slowModeRemainingSeconds,
+  });
+
+  // Keep ref in sync so the auto-focus effect can read latest canType without
+  // taking it as a dependency (avoids re-running on every typing state flip).
+  React.useLayoutEffect(() => {
+    composerCanTypeRef.current = composerAvailability.canType;
   });
 
   const emitUploadValidationToasts = React.useCallback(
@@ -1077,6 +1102,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           }}
         >
           <MessageInput
+            ref={messageInputRef}
             value={composerSeed}
             valueResetKey={composerSeedVersion}
             onChange={handleInputChange}

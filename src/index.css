@@ -1726,24 +1726,18 @@ a:focus-visible {
 }
 
 /* TipTap Placeholder */
-.tiptap-editor-inner.is-editor-empty:before {
+.tiptap-editor-inner p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
-  color: hsl(var(--color-text-muted));
-  opacity: 0.8;
-  position: absolute;
-  pointer-events: none;
+  float: left;
   height: 0;
-  font-style: normal;
-  left: 4px;
-  top: 6px;
+  color: hsl(var(--color-text-muted));
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 100%;
 }
 
-:root[data-theme="dark"] .tiptap-editor-inner.is-editor-empty:before {
+:root[data-theme="dark"] .tiptap-editor-inner p.is-editor-empty:first-child::before {
   color: #94a3b8;
-  /* Slate 400 */
-  opacity: 0.7;
-}
-
-:root[data-theme="dark"] .tiptap-editor-inner.is-editor-empty:before {
-  color: #64748b; /* Slate 500 */
 }

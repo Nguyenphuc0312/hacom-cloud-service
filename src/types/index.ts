@@ -17,7 +17,6 @@ export type {
 } from "@hacom/chat-shared-types/auth";
 
 export type {
-  MessageSummary,
   Attachment,
   Reaction,
   ForwardInfo,
@@ -103,7 +102,15 @@ export interface Mention {
  * Uses Omit so the field is safe to add even if shared-types later defines it
  * with a narrower type.
  */
-export type ReplyMessageSummary = Omit<SharedMessageSummary, "contentFormat" | "mentions"> & {
+export type MessageSummary = SharedMessageSummary & {
+  lifecycleStatus?: "active" | "recalled" | "deleted_admin";
+  deletedBy?: string;
+  deletedAt?: Date | string;
+  recalledBy?: string;
+  recalledAt?: Date | string;
+};
+
+export type ReplyMessageSummary = Omit<MessageSummary, "contentFormat" | "mentions"> & {
   contentFormat?: "plain_text" | "rich_text" | "markdown";
   mentions?: Mention[];
 };
@@ -202,6 +209,9 @@ export interface Message
     | "contentFormat"
     | "mentions"
     | "replyToMessage"
+    // shared-types uses string; client adds Date variant for parsed timestamps
+    | "deletedAt"
+    | "recalledAt"
   > {
   id: string;
   localId?: string;
@@ -236,6 +246,11 @@ export interface Message
   lastSendAttemptAt?: Date | string;
   updatedAt?: Date | string;
   status: SharedMessageStatus | "uploading";
+  lifecycleStatus?: "active" | "recalled" | "deleted_admin";
+  deletedBy?: string;
+  deletedAt?: Date | string;
+  recalledBy?: string;
+  recalledAt?: Date | string;
 }
 
 export interface TypingStatus {
