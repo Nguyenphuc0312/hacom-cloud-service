@@ -4,9 +4,8 @@ name: deploy-develop
 # on:
 #   push:
 #     branches: [ develop ]
-# NOTE: workflow_dispatch still available for manual trigger
+#   workflow_dispatch:
 
-permissions:
   contents: read
   packages: write
 
