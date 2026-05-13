@@ -401,6 +401,8 @@ export const normalizeConversation = (
       ? (otherUser?.avatar ?? asNullableString(payload.avatar))
       : asNullableString(payload.avatar));
   const avatar = asNullableString(payload.avatar);
+  const avatarFileId = asNullableString(payload.avatarFileId);
+  const avatarVersion = asNumber(payload.avatarVersion);
   const resolvedParticipantCount =
     normalizedType === RoomType.DIRECT && otherUser && participantCount < 2
       ? 2
@@ -422,6 +424,8 @@ export const normalizeConversation = (
     participantCount: resolvedParticipantCount,
     updatedAt,
     ...(avatar !== undefined ? { avatar } : {}),
+    ...(avatarFileId !== undefined ? { avatarFileId } : {}),
+    ...(avatarVersion !== undefined ? { avatarVersion } : {}),
     ...(otherUser ? { otherUser } : {}),
     ...(displayName ? { displayName } : {}),
     ...(displayAvatar !== undefined ? { displayAvatar } : {}),

@@ -10,6 +10,7 @@ import {
   LinkIcon,
   ClipboardDocumentIcon,
   NoSymbolIcon,
+  CameraIcon,
 } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -79,6 +80,15 @@ type PendingGroupConfirm =
   | { type: "remove-member"; member: GroupMember }
   | { type: "leave-group" }
   | null;
+type GroupAvatarUploadStage =
+  | "idle"
+  | "validating"
+  | "reserving"
+  | "uploading"
+  | "completing"
+  | "attaching"
+  | "success"
+  | "error";
 
 const ROLE_PRIORITY: Record<GroupMemberRole, number> = {
   [RoomMemberRole.OWNER]: 0,
@@ -92,6 +102,11 @@ const VALID_ROLES = new Set<string>([
   RoomMemberRole.MEMBER,
 ]);
 const VALID_STATUSES = new Set<string>(Object.values(UserStatus));
+const ALLOWED_GROUP_AVATAR_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object";
@@ -105,6 +120,38 @@ const asStatus = (value: unknown): UserSummary["status"] | undefined => {
   return VALID_STATUSES.has(status)
     ? (status as UserSummary["status"])
     : undefined;
+};
+
+const revokeBlobUrl = (value: string | null) => {
+  if (value?.startsWith("blob:")) {
+    URL.revokeObjectURL(value);
+  }
+};
+
+const resolveGroupAvatarStageLabel = (
+  stage: GroupAvatarUploadStage,
+  progress: number,
+) => {
+  switch (stage) {
+    case "validating":
+      return "Validating group avatar";
+    case "reserving":
+      return "Preparing secure avatar upload";
+    case "uploading":
+      return progress > 0
+        ? `Uploading group avatar ${progress}%`
+        : "Uploading group avatar";
+    case "completing":
+      return "Verifying group avatar";
+    case "attaching":
+      return "Applying group avatar";
+    case "success":
+      return "Group avatar updated";
+    case "error":
+      return "Group avatar update failed";
+    default:
+      return null;
+  }
 };
 
 const extractMemberRows = (payload: unknown): unknown[] => {
@@ -262,6 +309,13 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const [pendingConfirm, setPendingConfirm] =
     useState<PendingGroupConfirm>(null);
   const [isConfirmActionPending, setIsConfirmActionPending] = useState(false);
+  const [groupAvatarPreview, setGroupAvatarPreview] = useState<string | null>(
+    null,
+  );
+  const [groupAvatarStage, setGroupAvatarStage] =
+    useState<GroupAvatarUploadStage>("idle");
+  const [groupAvatarProgress, setGroupAvatarProgress] = useState(0);
+  const avatarInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const updateConversation = useChatStore((state) => state.updateConversation);
   const removeConversation = useChatStore((state) => state.removeConversation);
@@ -439,11 +493,104 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     await Promise.all([refreshConversation(), fetchMembers()]);
   }, [fetchMembers, refreshConversation]);
 
+  const handleGroupAvatarChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.currentTarget.value = "";
+
+      if (!file) {
+        setGroupAvatarStage("idle");
+        return;
+      }
+
+      const mimeType = file.type.trim().toLowerCase();
+      setGroupAvatarStage("validating");
+      if (!mimeType || !ALLOWED_GROUP_AVATAR_TYPES.has(mimeType)) {
+        setGroupAvatarStage("error");
+        toast.error(
+          t("profile:settings.upload.unsupportedType", {
+            defaultValue: "Unsupported image type",
+          }),
+        );
+        return;
+      }
+
+      setGroupAvatarProgress(0);
+      setGroupAvatarPreview((current) => {
+        revokeBlobUrl(current);
+        return URL.createObjectURL(file);
+      });
+
+      try {
+        const completed = await chatApi.file.uploadViaPipeline({
+          purpose: "group_avatar",
+          groupId: conversation.id,
+          filename: file.name,
+          mimeType,
+          sizeBytes: file.size,
+          file,
+          onStageChange: (stage) => setGroupAvatarStage(stage),
+          onProgress: (progress) => setGroupAvatarProgress(progress),
+        });
+
+        const fileId = completed.fileId || completed.attachment?.fileId;
+        if (!fileId) {
+          throw new Error("Group avatar upload completed without fileId");
+        }
+
+        setGroupAvatarStage("attaching");
+        await chatApi.group.attachAvatar(conversation.id, {
+          fileId,
+          uploadId: completed.uploadId,
+        });
+        await refreshGroupState();
+        setGroupAvatarStage("success");
+        setGroupAvatarProgress(100);
+        setGroupAvatarPreview((current) => {
+          revokeBlobUrl(current);
+          return null;
+        });
+        toast.success(
+          t("profile:groupInfo.avatarUpdated", {
+            defaultValue: "Group avatar updated",
+          }),
+        );
+      } catch (error) {
+        const apiError = extractApiError(error);
+        setGroupAvatarStage("error");
+        setGroupAvatarPreview((current) => {
+          revokeBlobUrl(current);
+          return null;
+        });
+        toast.error(
+          apiError.message ||
+            t("profile:groupInfo.avatarUpdateFailed", {
+              defaultValue: "Unable to update group avatar",
+            }),
+        );
+      }
+    },
+    [conversation.id, refreshGroupState, t],
+  );
+
   React.useEffect(() => {
     setGroupNameDraft(conversation.name || "");
     setIsRenamingGroup(false);
     setShowAddMember(false);
+    setGroupAvatarStage("idle");
+    setGroupAvatarProgress(0);
+    setGroupAvatarPreview((current) => {
+      revokeBlobUrl(current);
+      return null;
+    });
   }, [conversation.id, conversation.name]);
+
+  React.useEffect(
+    () => () => {
+      revokeBlobUrl(groupAvatarPreview);
+    },
+    [groupAvatarPreview],
+  );
 
   React.useEffect(() => {
     void fetchMembers();
@@ -930,7 +1077,13 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       <div className="flex-1 overflow-y-auto">
         <div className="px-4 py-4">
           <div className="flex items-start gap-3">
-            <Avatar src={conversation.avatar} alt={conversation.name} size="lg" />
+            <div className="shrink-0">
+              <Avatar
+                src={groupAvatarPreview || conversation.avatar}
+                alt={conversation.name}
+                size="lg"
+              />
+            </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -944,18 +1097,39 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                       count: participantCount,
                     })}
                   </p>
+                  {groupAvatarStage !== "idle" ? (
+                    <p className="mt-1 text-xs text-text-muted">
+                      {resolveGroupAvatarStageLabel(
+                        groupAvatarStage,
+                        groupAvatarProgress,
+                      )}
+                    </p>
+                  ) : null}
                 </div>
-                {isAdmin && !isRenamingGroup && (
-                  <button
-                    type="button"
-                    onClick={() => setIsRenamingGroup(true)}
-                    disabled={isSubmitting}
-                    className="rounded-md p-2 hover:bg-surface-overlay"
-                    aria-label={t("profile:groupInfo.renameGroup")}
-                  >
-                    <PencilIcon className="h-4 w-4 text-text-muted" />
-                  </button>
-                )}
+                {isAdmin && !isRenamingGroup ? (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => avatarInputRef.current?.click()}
+                      disabled={isSubmitting || groupAvatarStage === "uploading"}
+                      className="rounded-md p-2 hover:bg-surface-overlay"
+                      aria-label={t("profile:groupInfo.changeAvatar", {
+                        defaultValue: "Change group avatar",
+                      })}
+                    >
+                      <CameraIcon className="h-4 w-4 text-text-muted" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsRenamingGroup(true)}
+                      disabled={isSubmitting}
+                      className="rounded-md p-2 hover:bg-surface-overlay"
+                      aria-label={t("profile:groupInfo.renameGroup")}
+                    >
+                      <PencilIcon className="h-4 w-4 text-text-muted" />
+                    </button>
+                  </div>
+                ) : null}
               </div>
 
               {isRenamingGroup ? (
@@ -1002,6 +1176,15 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               ) : null}
             </div>
           </div>
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={(event) => {
+              void handleGroupAvatarChange(event);
+            }}
+          />
 
           {(canAddMembers || isAdmin || joinRequests.length > 0) && (
             <div className="mt-3 flex flex-wrap gap-2">

@@ -76,6 +76,7 @@ export interface User {
   unitCode?: string;
   loginIdentifier?: string;
   avatarFileId?: string | null;
+  avatarVersion?: number | null;
   backgroundFileId?: string | null;
   status?: "online" | "offline" | "away" | "dnd" | string;
   role?: string;

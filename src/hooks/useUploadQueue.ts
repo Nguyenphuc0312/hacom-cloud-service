@@ -21,7 +21,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ErrorCode } from "@hacom/chat-shared-types/core";
 import { chatApi } from "../features/chat/api";
-import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
+import { extractApiError } from "../lib/apiContract";
 import type {
   AttachmentDraft,
   AttachmentDraftStatus,
@@ -283,74 +283,16 @@ export function useUploadQueue({
           return;
         }
 
-        // Step 1: Request presigned upload URL
-        const signedResponse = await chatApi.file.requestUploadUrl({
+        const completed = await chatApi.file.uploadViaPipeline({
+          purpose: "message_attachment",
           conversationId: cid,
-          fileName: draft.file.name,
+          filename: draft.file.name,
           mimeType,
-          fileSize: draft.file.size,
+          sizeBytes: draft.file.size,
+          file: draft.file,
+          signal: abortController.signal,
+          onProgress: (pct) => updateDraft(draft.localId, { progress: pct }),
         });
-        const signed = unwrapApiSuccess(signedResponse);
-
-        // Step 2: Upload file via XHR
-        const uploadMethod = signed.uploadMethod || "PUT";
-        const uploadHeaders = {
-          ...(signed.uploadHeaders || {}),
-          "Content-Type": mimeType,
-        };
-        try {
-          await xhrUpload(
-            signed.uploadUrl,
-            uploadMethod,
-            uploadHeaders,
-            draft.file,
-            abortController.signal,
-            (pct) => updateDraft(draft.localId, { progress: pct }),
-          );
-        } catch (uploadErr: unknown) {
-          // Auto retry on 403 (expired presigned URL)
-          const status = (uploadErr as { status?: number }).status;
-          if (status === 403) {
-            const retryResponse = await chatApi.file.requestUploadUrl({
-              conversationId: cid,
-              fileName: draft.file.name,
-              mimeType,
-              fileSize: draft.file.size,
-            });
-            const retrySigned = unwrapApiSuccess(retryResponse);
-            const retryUploadMethod = retrySigned.uploadMethod || "PUT";
-            const retryUploadHeaders = {
-              "Content-Type": mimeType,
-              ...(retrySigned.uploadHeaders || {}),
-            };
-            await xhrUpload(
-              retrySigned.uploadUrl,
-              retryUploadMethod,
-              retryUploadHeaders,
-              draft.file,
-              abortController.signal,
-              (pct) => updateDraft(draft.localId, { progress: pct }),
-            );
-            // Use retry's objectKey / uploadId for complete step
-            Object.assign(signed, {
-              uploadId: retrySigned.uploadId,
-              objectKey: retrySigned.objectKey,
-              uploadUrl: retrySigned.uploadUrl,
-              uploadMethod: retrySigned.uploadMethod,
-              uploadHeaders: retrySigned.uploadHeaders,
-            });
-          } else {
-            throw uploadErr;
-          }
-        }
-
-        // Step 3: Complete upload
-        const completeResponse = await chatApi.file.completeUpload({
-          uploadId: signed.uploadId,
-          conversationId: cid,
-          objectKey: signed.objectKey,
-        });
-        const completed = unwrapApiSuccess(completeResponse);
         const attachment = chatApi.file.toAttachment(completed);
 
         const meta: UploadedFileMeta = {
