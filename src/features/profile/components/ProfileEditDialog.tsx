@@ -9,22 +9,29 @@ import { VALIDATION_CONFIG } from "../../../config";
 import { Avatar } from "../../../components/common/Avatar";
 import { Button, ConfirmDialog, Input, Modal, Textarea, toast } from "../../../components/ui";
 import { unwrapApiSuccess } from "../../../lib/apiContract";
-import { userApi } from "../../../services/api";
+import { fileApi, userApi } from "../../../services/api";
 import { useAuthStore, type User } from "../../../stores";
 import { resolveUserDisplayName } from "../../chat/identity/resolveUserDisplayName";
 
 const USERNAME_PATTERN = /^[A-Za-z0-9_]+$/;
-const AVATAR_MAX_SIZE = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
-  "image/gif",
 ]);
 const PHONE_PATTERN = /^\+?[0-9]{10,15}$/;
 
 type ProfileEditDialogMode = "full" | "quick";
 type UsernameState = "idle" | "checking" | "available" | "taken" | "error";
+type AvatarUploadStage =
+  | "idle"
+  | "validating"
+  | "reserving"
+  | "uploading"
+  | "completing"
+  | "attaching"
+  | "success"
+  | "error";
 
 interface ProfileEditDialogProps {
   isOpen: boolean;
@@ -86,17 +93,27 @@ const resolvePatchedProfileData = (payload: unknown): Partial<User> => {
   }
 };
 
-const resolveAvatarFromUploadResponse = (payload: unknown, fallback?: string) => {
-  try {
-    const data = unwrapApiSuccess(payload as never) as Record<string, unknown>;
-    return readValue(data, "avatar", "avatarUrl", "url") || fallback;
-  } catch {
-    const root = asRecord(payload);
-    return (
-      readValue(asRecord(root?.data), "avatar", "avatarUrl", "url") ||
-      readValue(root, "avatar", "avatarUrl", "url") ||
-      fallback
-    );
+const resolveAvatarUploadStageLabel = (
+  stage: AvatarUploadStage,
+  progress: number,
+) => {
+  switch (stage) {
+    case "validating":
+      return "Validating avatar";
+    case "reserving":
+      return "Preparing secure upload";
+    case "uploading":
+      return progress > 0 ? `Uploading avatar ${progress}%` : "Uploading avatar";
+    case "completing":
+      return "Verifying uploaded avatar";
+    case "attaching":
+      return "Applying avatar";
+    case "success":
+      return "Avatar updated";
+    case "error":
+      return "Avatar update failed";
+    default:
+      return null;
   }
 };
 
@@ -119,6 +136,9 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
   const [isDiscardOpen, setIsDiscardOpen] = React.useState(false);
   const [usernameState, setUsernameState] = React.useState<UsernameState>("idle");
   const [checkedUsername, setCheckedUsername] = React.useState("");
+  const [avatarUploadStage, setAvatarUploadStage] =
+    React.useState<AvatarUploadStage>("idle");
+  const [avatarUploadProgress, setAvatarUploadProgress] = React.useState(0);
 
   const displayNameRef = React.useRef<HTMLInputElement | null>(null);
   const avatarInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -152,6 +172,8 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
     setIsDiscardOpen(false);
     setUsernameState("idle");
     setCheckedUsername("");
+    setAvatarUploadStage("idle");
+    setAvatarUploadProgress(0);
   }, [isOpen, user]);
 
   React.useEffect(
@@ -307,6 +329,8 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
     setSubmitError(null);
     setUsernameState("idle");
     setCheckedUsername("");
+    setAvatarUploadStage("idle");
+    setAvatarUploadProgress(0);
   }, [user]);
 
   const requestClose = React.useCallback(() => {
@@ -324,28 +348,23 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
   }, [hasChanges, isSaving, onClose, resetDraft]);
 
   const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setAvatarUploadStage("validating");
     const file = event.target.files?.[0];
     if (!file) {
+      setAvatarUploadStage("idle");
       return;
     }
 
     if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
       toast.error(t("profile:settings.upload.unsupportedType"));
-      event.currentTarget.value = "";
-      return;
-    }
-
-    if (file.size > AVATAR_MAX_SIZE) {
-      toast.error(
-        t("profile:settings.upload.exceedsSize", {
-          maxMb: Math.floor(AVATAR_MAX_SIZE / (1024 * 1024)),
-        }),
-      );
+      setAvatarUploadStage("error");
       event.currentTarget.value = "";
       return;
     }
 
     setAvatarFile(file);
+    setAvatarUploadStage("idle");
+    setAvatarUploadProgress(0);
     setAvatarPreview((current) => {
       revokeBlobUrl(current);
       return URL.createObjectURL(file);
@@ -396,14 +415,48 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
       }
 
       if (avatarFile) {
-        const response = await userApi.updateAvatar(avatarFile);
-        const avatar = resolveAvatarFromUploadResponse(response, user.avatar);
-        if (avatar) {
-          updateUser({ avatar });
+        const mimeType = avatarFile.type.trim().toLowerCase();
+        if (!mimeType || !ALLOWED_IMAGE_TYPES.has(mimeType)) {
+          throw new Error(t("profile:settings.upload.unsupportedType"));
         }
+
+        setAvatarUploadStage("reserving");
+        setAvatarUploadProgress(0);
+        const completed = await fileApi.uploadViaPipeline({
+          purpose: "user_avatar",
+          filename: avatarFile.name,
+          mimeType,
+          sizeBytes: avatarFile.size,
+          file: avatarFile,
+          onStageChange: (stage) => setAvatarUploadStage(stage),
+          onProgress: (progress) => {
+            setAvatarUploadProgress(progress);
+          },
+        });
+
+        const fileId = completed.fileId || completed.attachment?.fileId;
+        if (!fileId) {
+          throw new Error("Avatar upload completed without fileId");
+        }
+
+        setAvatarUploadStage("attaching");
+        const response = await userApi.attachAvatar({
+          fileId,
+          uploadId: completed.uploadId,
+        });
+        updateUser(resolvePatchedProfileData(response));
+        setAvatarUploadStage("success");
+        setAvatarUploadProgress(100);
       }
 
-      await refreshProfile().catch(() => null);
+      const refreshedUser = await refreshProfile().catch(() => null);
+      if (refreshedUser?.avatar) {
+        updateUser({
+          avatar: refreshedUser.avatar,
+          avatarFileId: refreshedUser.avatarFileId ?? null,
+          avatarVersion: refreshedUser.avatarVersion ?? null,
+        });
+      }
       toast.success(t("profile:toast.profileUpdateSuccess"));
       resetDraft();
       onClose();
@@ -416,6 +469,9 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
         t("profile:toast.profileUpdateFailed");
 
       setSubmitError(message || t("profile:toast.profileUpdateFailed"));
+      setAvatarUploadStage((current) =>
+        current === "idle" ? current : "error",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -423,6 +479,14 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
 
   const footer = (
     <div className="flex flex-col gap-3">
+      {avatarUploadStage !== "idle" ? (
+        <p className="text-sm text-text-muted">
+          {resolveAvatarUploadStageLabel(
+            avatarUploadStage,
+            avatarUploadProgress,
+          )}
+        </p>
+      ) : null}
       {submitError ? (
         <p role="alert" className="text-sm text-danger">
           {submitError}
@@ -516,6 +580,8 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
                   disabled={isSaving}
                   onClick={() => {
                     setAvatarFile(null);
+                    setAvatarUploadStage("idle");
+                    setAvatarUploadProgress(0);
                     setAvatarPreview((current) => {
                       revokeBlobUrl(current);
                       return null;
