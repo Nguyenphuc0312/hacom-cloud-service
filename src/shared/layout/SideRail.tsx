@@ -8,9 +8,9 @@ import {
   CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
   Cog6ToothIcon,
-  FolderIcon,
   QuestionMarkCircleIcon,
 } from "@heroicons/react/24/outline";
+import MyDocsIcon from "./MyDocsIcon";
 import type { UserSummary } from "../../types";
 import { ROUTE_PATHS } from "../../router/paths";
 import ContactsAddressBookOutlineIcon from "./ContactsAddressBookOutlineIcon";
@@ -51,7 +51,7 @@ const railItems: SideRailItem[] = [
   },
   { id: "tasks", label: "sidebar:rail.tasks", icon: BriefcaseIcon, to: ROUTE_PATHS.TASKS },
   { id: "calendar", label: "sidebar:rail.calendar", icon: CalendarDaysIcon, to: ROUTE_PATHS.CALENDAR },
-  { id: "archive", label: "sidebar:rail.archive", icon: FolderIcon, to: ROUTE_PATHS.ARCHIVE },
+  { id: "archive", label: "sidebar:rail.archive", icon: MyDocsIcon, to: ROUTE_PATHS.ARCHIVE },
   { id: "notifications", label: "sidebar:rail.notifications", icon: BellIcon, to: ROUTE_PATHS.NOTIFICATIONS },
 ];
 
