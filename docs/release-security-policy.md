@@ -4,29 +4,28 @@
 
 Current frontend policy:
 
-- Access token default: `sessionStorage`.
-- Access token localStorage persistence is legacy opt-in only:
-  `VITE_ACCESS_TOKEN_STORAGE_MODE=local`.
-- Refresh token default: `sessionStorage`.
-- Refresh token cookie mode is supported by frontend config:
-  `VITE_REFRESH_TOKEN_STORAGE_MODE=cookie`.
+- Access token default: in-memory only.
+- Access tokens are cleared from browser storage during login, refresh, logout,
+  and bootstrap migration.
+- Refresh token preferred mode: `VITE_REFRESH_TOKEN_STORAGE_MODE=cookie`.
+- Fallback body mode keeps refresh tokens in `localStorage` only when
+  `rememberMe=true`; otherwise they stay in `sessionStorage`.
 - Cookie mode expects the backend to issue and clear an HttpOnly refresh cookie.
 - Logout and 401 handling must call token cleanup and remove both localStorage and
   sessionStorage token keys.
 
 Production recommendation:
 
-- Use `VITE_ACCESS_TOKEN_STORAGE_MODE=session`.
-- Use `VITE_REFRESH_TOKEN_STORAGE_MODE=cookie` only after backend confirms
-  HttpOnly refresh-cookie support, CSRF protection, and cookie clearing on logout.
+- Use `VITE_REFRESH_TOKEN_STORAGE_MODE=cookie` with backend-issued HttpOnly
+  refresh cookies, CSRF protection, and logout cookie clearing.
 - Do not pass WebSocket tokens in query strings unless the deployment explicitly
   requires the compatibility fallback.
 
 Accepted risk until backend confirmation:
 
 - If backend cannot issue HttpOnly refresh cookies, refresh tokens remain
-  client-readable in sessionStorage. This is safer than localStorage persistence
-  but still exposed to successful XSS.
+  client-readable. `rememberMe=true` then increases XSS blast radius because the
+  refresh token persists in `localStorage` until logout or expiry.
 
 ## Message And Attachment Rendering
 
@@ -57,4 +56,3 @@ Static gate coverage:
 - `npm run gate:static` fails if resource URL policy allows SVG/HTML data URLs.
 - `npm run gate:static` fails if the active message timeline leaves RTKQ or if
   WebSocket reintroduces Zustand writes for active messages.
-

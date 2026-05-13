@@ -131,61 +131,6 @@ const resolveUploadErrorMessage = (
 
 // ── XHR upload with progress ────────────────────────────────────────
 
-function xhrUpload(
-  url: string,
-  method: string,
-  headers: Record<string, string>,
-  file: File,
-  signal: AbortSignal,
-  onProgress: (pct: number) => void,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-
-    const onAbort = () => {
-      xhr.abort();
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
-
-    xhr.upload.addEventListener("progress", (e) => {
-      if (e.lengthComputable && e.total > 0) {
-        onProgress(Math.round((e.loaded * 100) / e.total));
-      }
-    });
-
-    xhr.addEventListener("load", () => {
-      signal.removeEventListener("abort", onAbort);
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve();
-      } else {
-        reject(
-          Object.assign(new Error(`Upload failed: ${xhr.status}`), {
-            status: xhr.status,
-          }),
-        );
-      }
-    });
-
-    xhr.addEventListener("error", () => {
-      signal.removeEventListener("abort", onAbort);
-      reject(new Error("Network error during upload"));
-    });
-
-    xhr.addEventListener("abort", () => {
-      signal.removeEventListener("abort", onAbort);
-      reject(
-        Object.assign(new Error("Upload cancelled"), { name: "AbortError" }),
-      );
-    });
-
-    xhr.open(method, url);
-    for (const [headerName, headerValue] of Object.entries(headers)) {
-      xhr.setRequestHeader(headerName, headerValue);
-    }
-    xhr.send(file);
-  });
-}
-
 // ── Helpers ─────────────────────────────────────────────────────────
 
 function isAbortError(err: unknown): boolean {
