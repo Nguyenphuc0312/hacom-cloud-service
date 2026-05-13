@@ -1,9 +1,10 @@
 ﻿name: deploy-develop
 
-on:
-  push:
-    branches: [develop]
-  workflow_dispatch:
+# TEMPORARILY DISABLED: auto deploy on push to develop
+# on:
+#   push:
+#     branches: [develop]
+# NOTE: workflow_dispatch still available for manual trigger
 
 permissions:
   contents: read
