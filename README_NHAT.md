@@ -10,3 +10,10 @@ Xác nhận kết quả: Chạy thành công lệnh npm run build với kết qu
 Dự án hiện đã tuân thủ các best-practice mới nhất của React 19 và React Compiler, đảm bảo hiệu năng tối ưu và tính ổn định cao.
 
 Ghi chú: Nếu bạn cần thực hiện thêm các thay đổi về logic chat, hãy lưu ý tuân thủ pattern so sánh giá trị cũ trong render để đồng bộ state thay vì lạm dụng useEffect như trước.
+
+////////// 13/05/2026 /////////
+Các thay đổi đã thực hiện:
+Cập nhật Component Sidebar: Tôi đã bổ sung thêm tính năng cho phép tùy chỉnh màu sắc cho các mục trong menu Sidebar. Giờ đây, các mục có thể được thiết lập trạng thái "danger" (nguy hiểm/cảnh báo) để hiển thị màu đỏ.
+Thay đổi Icon Đăng xuất: Thay thế icon cũ (ArrowLeftIcon) bằng icon mới (ArrowLeftOnRectangleIcon) giống với mẫu bạn đã cung cấp.
+Tô đỏ chữ Đăng xuất: Thiết lập mục Đăng xuất sang màu đỏ (text-danger) và hiệu ứng hover tương ứng (bg-danger/10).
+<!-- render_diffs(file:///d:/HacomCTY/chat-web-client/src/components/settings/SettingsSidebar.tsx) render_diffs(file:///d:/HacomCTY/chat-web-client/src/pages/SettingsPage.tsx) -->

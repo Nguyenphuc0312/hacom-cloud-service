@@ -9,6 +9,10 @@ import { logMessageDebug } from "../../../utils/messageDebug";
 import { markChatPerformance } from "../../../utils/chatPerformance";
 import { logger } from "../../../utils/logger";
 import { isChatRtkqMessagesRuntimeEnabled } from "../config/experienceFlags";
+import { useGetMessagesQuery } from "../../api/chatApi";
+import { getMessageSeq } from "../domain/messageMerge";
+import { store } from "../../../store";
+import { chatApi } from "../../api/chatApi";
 
 const INITIAL_CONVERSATION_WINDOW_LIMIT = 40;
 const OLDER_MESSAGES_PAGE_LIMIT = 30;
@@ -213,6 +217,32 @@ export const useConversationSession = ({
     useAdjacentConversationIds(selectedConversationId);
   const lastVisibleReadAnchorKeyRef = useRef<string | null>(null);
   const directInfoHydratedRef = useRef<Set<string>>(new Set());
+
+  // Subscribe to RTKQ messages so that when they load (or new messages arrive
+  // via WS patch), we can fire mark-read. The cache key is serialized as
+  // `getMessages:<conversationId>` so this shares the same cache entry with
+  // useConversationMessagesRTK — no duplicate HTTP request.
+  const { data: rtkqMessagesData } = useGetMessagesQuery(
+    { conversationId: selectedConversationId ?? "" },
+    { skip: !isChatRtkqMessagesRuntimeEnabled() || !selectedConversationId },
+  );
+
+  // Derive a stable string signature that changes whenever the newest
+  // non-pending message seq changes in the RTKQ cache.
+  const rtkqLatestSeqSig = useMemo(() => {
+    if (!isChatRtkqMessagesRuntimeEnabled() || !rtkqMessagesData?.messages) return "";
+    const msgs = rtkqMessagesData.messages;
+    for (let i = msgs.length - 1; i >= 0; i -= 1) {
+      const candidate = msgs[i];
+      if (!candidate || typeof candidate.id !== "string") continue;
+      if (candidate.id.startsWith("temp-")) continue;
+      const seq = getMessageSeq(candidate);
+      if (seq !== null && seq > 0) {
+        return `${seq}:${candidate.id}`;
+      }
+    }
+    return "";
+  }, [rtkqMessagesData]);
   const hasConversationCachedForRoute = useChatStore((state) =>
     routeConversationId
       ? Boolean(state.conversationById[routeConversationId])
@@ -437,8 +467,8 @@ export const useConversationSession = ({
 
   // Resolve seq cao nhất hiện FE biết được:
   //   max( loaded message seq, conversation.lastMessage.messageSeq )
-  // Conversation list có thể biết lastMessageSeq=238 trong khi messages mới
-  // load tới 233 — phải mark-read tới 238, không thì badge stuck ở 5.
+  // Khi RTKQ enabled, messages nằm trong Redux store (không phải Zustand state.messages).
+  // Phải đọc RTKQ cache imperatively để tìm latest seq.
   const resolveLatestKnownAnchor = useCallback((): {
     seq: number;
     messageId: string | null;
@@ -446,22 +476,44 @@ export const useConversationSession = ({
     if (!selectedConversationId) return null;
     const state = useChatStore.getState();
     const conversation = state.conversationById[selectedConversationId];
-    const list = state.messages?.[selectedConversationId];
     let loadedSeq = 0;
     let loadedMessageId: string | null = null;
-    if (Array.isArray(list)) {
-      for (let i = list.length - 1; i >= 0; i -= 1) {
-        const candidate = list[i];
+
+    if (isChatRtkqMessagesRuntimeEnabled()) {
+      // RTKQ path: messages are in Redux store, not Zustand state.messages
+      const rtkqState = chatApi.endpoints.getMessages.select(
+        { conversationId: selectedConversationId },
+      )(store.getState());
+      const msgs = rtkqState.data?.messages ?? [];
+      for (let i = msgs.length - 1; i >= 0; i -= 1) {
+        const candidate = msgs[i];
         if (!candidate || typeof candidate.id !== "string") continue;
         if (candidate.id.startsWith("temp-")) continue;
-        const candidateSeq = getMessageReadSeq(candidate);
-        if (candidateSeq !== null) {
-          loadedSeq = candidateSeq;
+        const seq = getMessageSeq(candidate);
+        if (seq !== null && seq > 0) {
+          loadedSeq = seq;
           loadedMessageId = candidate.id;
+          break;
         }
-        break;
+      }
+    } else {
+      // Legacy Zustand path
+      const list = state.messages?.[selectedConversationId];
+      if (Array.isArray(list)) {
+        for (let i = list.length - 1; i >= 0; i -= 1) {
+          const candidate = list[i];
+          if (!candidate || typeof candidate.id !== "string") continue;
+          if (candidate.id.startsWith("temp-")) continue;
+          const candidateSeq = getMessageReadSeq(candidate);
+          if (candidateSeq !== null) {
+            loadedSeq = candidateSeq;
+            loadedMessageId = candidate.id;
+          }
+          break;
+        }
       }
     }
+
     const summaryRaw = (
       conversation?.lastMessage as { messageSeq?: unknown; id?: unknown } | undefined
     ) ?? undefined;
@@ -488,13 +540,22 @@ export const useConversationSession = ({
   const fireMarkReadToLatest = useCallback(() => {
     if (!selectedConversationId) return;
     const anchor = resolveLatestKnownAnchor();
-    if (!anchor) return;
     const conversation =
       useChatStore.getState().conversationById[selectedConversationId];
+    const currentLastReadSeq = coercePositiveIntSeq(conversation?.lastReadSeq) ?? 0;
+    const currentUnread = conversation?.unreadCount ?? 0;
+
+    console.debug("[mark-read] evaluating", {
+      conversationId: selectedConversationId,
+      newestSeq: anchor?.seq ?? null,
+      currentLastReadSeq,
+      unreadCount: currentUnread,
+      anchorResolved: anchor !== null,
+    });
+
+    if (!anchor) return;
     if (!conversation) return;
 
-    const currentLastReadSeq = coercePositiveIntSeq(conversation.lastReadSeq) ?? 0;
-    const currentUnread = conversation.unreadCount ?? 0;
     if (currentLastReadSeq >= anchor.seq && currentUnread <= 0) {
       return;
     }
@@ -511,31 +572,36 @@ export const useConversationSession = ({
     if (anchor.messageId) {
       markReadInput.lastVisibleMessageId = anchor.messageId;
     }
-    // Trace source: phân biệt seq đến từ messages list (đã load message) hay
-    // từ conversation summary lastMessage.messageSeq (F5/deep-link, chưa
-    // load messages). Cần phân biệt để debug nếu badge stuck.
-    const summarySeqHint = coercePositiveIntSeq(
-      (
-        useChatStore.getState().conversationById[selectedConversationId]
-          ?.lastMessage as { messageSeq?: unknown } | undefined
-      )?.messageSeq,
-    );
-    const fromMessagesList =
-      anchor.messageId !== null &&
-      (summarySeqHint === null || anchor.seq <= summarySeqHint) === false;
-    logger.debug("chat-session", "markRead.readSource", {
-      source: fromMessagesList
-        ? "messages-meta"
-        : "conversation-list-latest-seq",
+
+    console.debug("[mark-read] request", {
       conversationId: selectedConversationId,
       lastReadSeq: anchor.seq,
       anchorMessageId: anchor.messageId,
     });
-    void markAsRead(selectedConversationId, markReadInput).catch(() => {
-      if (lastVisibleReadAnchorKeyRef.current === latestKey) {
-        lastVisibleReadAnchorKeyRef.current = null;
-      }
+    logger.debug("chat-session", "markRead.firing", {
+      conversationId: selectedConversationId,
+      lastReadSeq: anchor.seq,
+      anchorMessageId: anchor.messageId,
+      currentLastReadSeq,
+      currentUnread,
     });
+    void markAsRead(selectedConversationId, markReadInput)
+      .then(() => {
+        console.debug("[mark-read] success", {
+          conversationId: selectedConversationId,
+          lastReadSeq: anchor.seq,
+        });
+      })
+      .catch((error: unknown) => {
+        console.warn("[mark-read] failed", {
+          conversationId: selectedConversationId,
+          lastReadSeq: anchor.seq,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        if (lastVisibleReadAnchorKeyRef.current === latestKey) {
+          lastVisibleReadAnchorKeyRef.current = null;
+        }
+      });
   }, [markAsRead, resolveLatestKnownAnchor, selectedConversationId]);
 
   const handleReachedLatestMessage = useCallback(
@@ -752,6 +818,26 @@ export const useConversationSession = ({
     }, 400);
     return () => clearTimeout(handle);
   }, [selectedConversationId, latestKnownSeqSignature, fireMarkReadToLatest]);
+
+  // RTKQ reactive trigger: khi RTKQ enabled, latestKnownSeqSignature luôn là
+  // "0:" vì Zustand state.messages không được populate. Effect này subscribe
+  // trực tiếp vào RTKQ cache và gọi mark-read khi messages load lần đầu hoặc
+  // khi message mới đến (WS patch vào RTKQ cache).
+  useEffect(() => {
+    if (!selectedConversationId || !isChatRtkqMessagesRuntimeEnabled()) return;
+    if (!rtkqLatestSeqSig || rtkqLatestSeqSig === "") return;
+    if (
+      typeof document !== "undefined" &&
+      document.visibilityState === "hidden"
+    ) {
+      return;
+    }
+    // Debounce 400ms để gom nhiều message arrival liên tiếp thành 1 mark-read.
+    const handle = setTimeout(() => {
+      fireMarkReadToLatest();
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [selectedConversationId, rtkqLatestSeqSig, fireMarkReadToLatest]);
 
   return {
     currentHasMore,
