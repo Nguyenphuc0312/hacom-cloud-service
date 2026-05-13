@@ -1,36 +1,24 @@
-/**
- * @fileoverview useUploadQueue — concurrent upload pipeline with progress,
- * abort, and retry support.
- *
- * Flow per file:
- *   1) POST /files/upload-url → presigned URL
- *   2) PUT file to presigned URL (XHR for progress)
- *   3) POST /files/complete → returns fileId + metadata
- *   4) Mark draft status = 'ready'
- *
- * Features:
- * - Concurrency limit (default 3)
- * - Per-file AbortController for cancel
- * - Auto retry on 403 (expired URL) — re-requests upload URL once
- * - Validates file size, count, total size, duplicates
- * - Revokes ObjectURLs on removal / clear / unmount
- * - Conversation-scoped: clears drafts on conversation change
- */
-
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ErrorCode } from "@hacom/chat-shared-types/core";
-import { chatApi } from "../features/chat/api";
 import { extractApiError } from "../lib/apiContract";
+import uploadClient, {
+  type RecoverableUploadRecord,
+} from "../services/uploadClient";
 import type {
   AttachmentDraft,
-  AttachmentDraftStatus,
+  PersistedAttachmentDraft,
   UploadedFileMeta,
 } from "../types/attachmentDraft";
 import {
   ATTACHMENT_CONSTRAINTS,
   createAttachmentDraft,
+  createRecoveredAttachmentDraft,
+  isBlockingAttachmentDraft,
   isDuplicateFile,
+  isFinalizedAttachmentDraft,
+  resolveFileKind,
+  toPersistedAttachmentDraft,
 } from "../types/attachmentDraft";
 import {
   DEFAULT_ALLOWED_UPLOAD_MIME_TYPES,
@@ -40,36 +28,23 @@ import {
   validateUploadFileType,
 } from "../utils/uploadPolicy";
 
-// ── Types ───────────────────────────────────────────────────────────
-
 export interface UseUploadQueueOptions {
   conversationId: string | undefined;
-  /** Max concurrent uploads (default 3) */
   concurrency?: number;
 }
 
 export interface UseUploadQueueReturn {
-  /** Current list of attachment drafts */
   drafts: AttachmentDraft[];
-  /** Add files to the queue (from drop or file picker) */
   addFiles: (files: File[]) => UploadQueueAddFilesResult;
-  /** Remove a draft by localId */
   removeDraft: (localId: string) => void;
-  /** Cancel an in-progress upload */
   cancelUpload: (localId: string) => void;
-  /** Retry a failed upload */
   retryUpload: (localId: string) => void;
-  /** Clear all drafts (revoking ObjectURLs) */
   clearAll: () => void;
-  /** Whether there are drafts in a sendable state */
+  acknowledgeSent: () => void;
   hasReadyDrafts: boolean;
-  /** Whether any draft is still uploading */
   hasUploadingDrafts: boolean;
-  /** Whether any draft failed */
   hasFailedDrafts: boolean;
-  /** Get all ready drafts' uploaded metadata */
   getReadyMeta: () => UploadedFileMeta[];
-  /** Total count of non-removed drafts */
   activeCount: number;
 }
 
@@ -79,9 +54,8 @@ export interface UploadQueueAddFilesResult {
   errors: string[];
 }
 
-// ── Constants ───────────────────────────────────────────────────────
-
 const DEFAULT_CONCURRENCY = 3;
+const STORAGE_PREFIX = "uploadDraft:";
 
 const formatFileSize = (bytes: number): string => {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
@@ -94,23 +68,197 @@ const formatFileSize = (bytes: number): string => {
   return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${units[exponent]}`;
 };
 
-const resolveUploadErrorMessage = (
+const storageKeyForConversation = (conversationId: string) =>
+  `${STORAGE_PREFIX}${conversationId}`;
+
+const isAbortError = (error: unknown): boolean => {
+  if (!error || typeof error !== "object") return false;
+  const value = error as { name?: string; code?: string };
+  return (
+    value.name === "AbortError" ||
+    value.name === "CanceledError" ||
+    value.code === "ERR_CANCELED"
+  );
+};
+
+const isSignedUrlExpiredError = (error: unknown): boolean => {
+  const apiError = extractApiError(error);
+  return apiError.statusCode === 403;
+};
+
+const readPersistedDrafts = (
+  conversationId: string,
+): PersistedAttachmentDraft[] => {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(
+      storageKeyForConversation(conversationId),
+    );
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter(
+          (item): item is PersistedAttachmentDraft =>
+            Boolean(item) && typeof item === "object",
+        )
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const persistDrafts = (conversationId: string, drafts: AttachmentDraft[]) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    const persisted = drafts
+      .filter((draft) => draft.status !== "removed")
+      .map(toPersistedAttachmentDraft);
+
+    if (persisted.length === 0) {
+      window.sessionStorage.removeItem(storageKeyForConversation(conversationId));
+      return;
+    }
+
+    window.sessionStorage.setItem(
+      storageKeyForConversation(conversationId),
+      JSON.stringify(persisted),
+    );
+  } catch {
+    // Ignore sessionStorage failures to avoid breaking uploads.
+  }
+};
+
+const removePersistedDrafts = (conversationId?: string) => {
+  if (!conversationId || typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.removeItem(storageKeyForConversation(conversationId));
+  } catch {
+    // Ignore storage errors.
+  }
+};
+
+const normalizeRecoveredDraftStatus = (
+  draft: AttachmentDraft,
+  interruptedUploadMessage: string,
+): AttachmentDraft => {
+  if (draft.status === "finalized" || draft.status === "attached") {
+    return draft;
+  }
+
+  if (draft.status === "expired" || draft.status === "removed") {
+    return draft;
+  }
+
+  return {
+    ...draft,
+    status: "failed",
+    progress: 0,
+    errorCode: "UPLOAD_REQUIRES_READD",
+    errorMessage: interruptedUploadMessage,
+  };
+};
+
+const buildRecoveredDraft = (
+  record: RecoverableUploadRecord,
+  conversationId: string,
+): AttachmentDraft => ({
+  localId: `recovered-${record.uploadId}`,
+  file: null,
+  uploadId: record.uploadId,
+  fileId: record.fileId,
+  purpose: record.purpose,
+  conversationId,
+  filename: record.filename,
+  mimeType: record.mimeType,
+  sizeBytes: record.sizeBytes,
+  kind: resolveFileKind({
+    name: record.filename,
+    type: record.mimeType,
+  }),
+  progress: 100,
+  status: "finalized",
+  createdAt: record.createdAt,
+  expiresAt: record.expiresAt,
+  retryCount: 0,
+  uploaded: uploadClient.attachToMessageDraft({
+    uploadId: record.uploadId,
+    fileId: record.fileId,
+    purpose: record.purpose,
+    filename: record.filename,
+    mimeType: record.mimeType,
+    sizeBytes: record.sizeBytes,
+    width: record.width,
+    height: record.height,
+    duration: record.duration,
+    thumbnailUrl: record.thumbnailUrl,
+  }),
+});
+
+const mergeRecoveredDrafts = (
+  currentDrafts: AttachmentDraft[],
+  recoveredDrafts: RecoverableUploadRecord[],
+  conversationId: string,
+): AttachmentDraft[] => {
+  const nextDrafts = [...currentDrafts];
+
+  for (const recovered of recoveredDrafts) {
+    const existingIndex = nextDrafts.findIndex(
+      (draft) =>
+        draft.uploadId === recovered.uploadId || draft.fileId === recovered.fileId,
+    );
+
+    const recoveredDraft = buildRecoveredDraft(recovered, conversationId);
+
+    if (existingIndex >= 0) {
+      nextDrafts[existingIndex] = {
+        ...nextDrafts[existingIndex],
+        ...recoveredDraft,
+      };
+      continue;
+    }
+
+    nextDrafts.push(recoveredDraft);
+  }
+
+  return nextDrafts;
+};
+
+const resolveUploadError = (
   error: unknown,
   t: (key: string, options?: Record<string, unknown>) => string,
-): string => {
+): { code: string; message: string; statusCode: number } => {
   const apiError = extractApiError(error);
-  const code = String(apiError.code || "");
+  const code = String(apiError.code || "UPLOAD_FAILED");
 
   if (code === "UNSUPPORTED_MIME_TYPE") {
-    return t("error:upload.unsupportedType", {
-      defaultValue: "Unsupported file type",
-    });
+    return {
+      code,
+      statusCode: apiError.statusCode,
+      message: t("error:upload.unsupportedType", {
+        defaultValue: "Unsupported file type",
+      }),
+    };
   }
 
   if (code === "MIME_EXTENSION_MISMATCH") {
-    return t("error:upload.mimeExtensionMismatch", {
-      defaultValue: "File extension does not match file type",
-    });
+    return {
+      code,
+      statusCode: apiError.statusCode,
+      message: t("error:upload.mimeExtensionMismatch", {
+        defaultValue: "File extension does not match file type",
+      }),
+    };
   }
 
   if (
@@ -118,29 +266,45 @@ const resolveUploadErrorMessage = (
     apiError.code === ErrorCode.PAYLOAD_TOO_LARGE ||
     apiError.code === ErrorCode.FILE_TOO_LARGE
   ) {
-    return t("error:upload.tooLarge", {
-      defaultValue: "File too large",
-    });
+    return {
+      code: "FILE_TOO_LARGE",
+      statusCode: apiError.statusCode,
+      message: t("error:upload.tooLarge", {
+        defaultValue: "File too large",
+      }),
+    };
   }
 
-  return apiError.message ||
-    t("error:upload.uploadFailed", {
-      defaultValue: "Upload failed",
-    });
+  if (apiError.statusCode === 404) {
+    return {
+      code: "UPLOAD_CLEANED_UP",
+      statusCode: apiError.statusCode,
+      message: t("error:upload.cleanedUp", {
+        defaultValue: "Upload expired or was cleaned up. Please upload again.",
+      }),
+    };
+  }
+
+  if (apiError.statusCode === 403) {
+    return {
+      code: "UPLOAD_FORBIDDEN",
+      statusCode: apiError.statusCode,
+      message: t("error:upload.forbidden", {
+        defaultValue: "You no longer have permission for this conversation.",
+      }),
+    };
+  }
+
+  return {
+    code,
+    statusCode: apiError.statusCode,
+    message:
+      apiError.message ||
+      t("error:upload.uploadFailed", {
+        defaultValue: "Upload failed",
+      }),
+  };
 };
-
-// ── XHR upload with progress ────────────────────────────────────────
-
-// ── Helpers ─────────────────────────────────────────────────────────
-
-function isAbortError(err: unknown): boolean {
-  if (!err || typeof err !== "object") return false;
-  const e = err as { name?: string; code?: string };
-  return e.name === "AbortError" || e.code === "ERR_CANCELED";
-}
-
-/** Revoke ObjectURL if present */
-// ── Hook ────────────────────────────────────────────────────────────
 
 export function useUploadQueue({
   conversationId,
@@ -150,231 +314,330 @@ export function useUploadQueue({
   const [drafts, setDrafts] = useState<AttachmentDraft[]>([]);
   const abortControllers = useRef(new Map<string, AbortController>());
   const activePreviewUrls = useRef(new Set<string>());
-  const revokedPreviewUrls = useRef(new Set<string>());
-  const isProcessing = useRef(false);
-  const conversationIdRef = useRef(conversationId);
+  const draftsRef = useRef<AttachmentDraft[]>([]);
 
-  // Stable ref to current conversationId for async callbacks
   useEffect(() => {
-    conversationIdRef.current = conversationId;
-  }, [conversationId]);
+    draftsRef.current = drafts;
+  }, [drafts]);
 
-  const registerPreviewUrl = useCallback((previewUrl: string | undefined) => {
+  const registerPreviewUrl = useCallback((previewUrl?: string) => {
     if (previewUrl) {
       activePreviewUrls.current.add(previewUrl);
     }
   }, []);
 
-  const revokePreviewUrl = useCallback((previewUrl: string | undefined) => {
-    if (!previewUrl || revokedPreviewUrls.current.has(previewUrl)) {
+  const revokePreviewUrl = useCallback((previewUrl?: string) => {
+    if (!previewUrl) {
       return;
     }
 
     URL.revokeObjectURL(previewUrl);
-    revokedPreviewUrls.current.add(previewUrl);
     activePreviewUrls.current.delete(previewUrl);
   }, []);
 
-  const revokeAllActivePreviewUrls = useCallback(() => {
-    for (const previewUrl of Array.from(activePreviewUrls.current)) {
-      revokePreviewUrl(previewUrl);
-    }
-  }, [revokePreviewUrl]);
-
-  // ─ Update a single draft by localId ─
-
   const updateDraft = useCallback(
-    (localId: string, patch: Partial<AttachmentDraft>) => {
-      setDrafts((prev) =>
-        prev.map((d) => (d.localId === localId ? { ...d, ...patch } : d)),
+    (
+      localId: string,
+      updater: Partial<AttachmentDraft> | ((draft: AttachmentDraft) => AttachmentDraft),
+    ) => {
+      setDrafts((current) =>
+        current.map((draft) => {
+          if (draft.localId !== localId) {
+            return draft;
+          }
+
+          return typeof updater === "function"
+            ? updater(draft)
+            : { ...draft, ...updater };
+        }),
       );
     },
     [],
   );
 
-  // ─ Upload a single file ─
+  const abandonDraft = useCallback(async (draft: AttachmentDraft, reason: string) => {
+    if (!draft.uploadId) {
+      return;
+    }
+
+    try {
+      await uploadClient.abandonUpload({
+        uploadId: draft.uploadId,
+        reason,
+      });
+    } catch {
+      // Best effort only.
+    }
+  }, []);
 
   const uploadOne = useCallback(
-    async (draft: AttachmentDraft) => {
-      const cid = conversationIdRef.current;
-      if (!cid) {
-        updateDraft(draft.localId, {
+    async (localId: string) => {
+      const draft = draftsRef.current.find((item) => item.localId === localId);
+      if (!draft || !conversationId) {
+        return;
+      }
+
+      if (!draft.file) {
+        updateDraft(localId, {
           status: "failed",
-          error: t("error:upload.noConversation", {
-            defaultValue: "No conversation selected",
+          errorCode: "UPLOAD_REQUIRES_READD",
+          errorMessage: t("error:upload.interruptedNeedsReupload", {
+            defaultValue:
+              "This upload was interrupted by a refresh. Please choose the file again.",
           }),
         });
         return;
       }
 
-      const abortController = new AbortController();
-      abortControllers.current.set(draft.localId, abortController);
-
-      updateDraft(draft.localId, {
-        status: "uploading",
-        progress: 0,
-        error: undefined,
-      });
-
       try {
-        const mimeType = resolveUploadMimeTypeForFile(draft.file);
-        if (!mimeType) {
-          updateDraft(draft.localId, {
-            status: "failed",
-            error: t("error:upload.unsupportedType", {
-              defaultValue: "Unsupported file type",
-            }),
-          });
-          return;
-        }
-
-        const completed = await chatApi.file.uploadViaPipeline({
-          purpose: "message_attachment",
-          conversationId: cid,
-          filename: draft.file.name,
-          mimeType,
-          sizeBytes: draft.file.size,
-          file: draft.file,
-          signal: abortController.signal,
-          onProgress: (pct) => updateDraft(draft.localId, { progress: pct }),
+        const validated = uploadClient.validateUpload(draft.file, draft.purpose);
+        updateDraft(localId, {
+          status: "validating",
+          errorCode: undefined,
+          errorMessage: undefined,
+          mimeType: validated.mimeType,
         });
-        const attachment = chatApi.file.toAttachment(completed);
 
-        const meta: UploadedFileMeta = {
-          fileId: attachment.id,
-          mimeType: attachment.mimeType || mimeType,
-          size: attachment.fileSize || draft.file.size,
-          name: attachment.fileName || draft.file.name,
-          objectKey: attachment.objectKey,
-          thumbnailUrl: attachment.thumbnailUrl,
-          width: attachment.width,
-          height: attachment.height,
-          duration: attachment.duration,
+        const reserve = async (uploadId?: string) => {
+          updateDraft(localId, {
+            status: "reserving",
+            progress: 0,
+          });
+
+          const signed = await uploadClient.reserveUpload({
+            uploadId,
+            purpose: draft.purpose,
+            conversationId,
+            groupId: draft.groupId,
+            filename: draft.filename,
+            mimeType: validated.mimeType,
+            sizeBytes: draft.sizeBytes,
+          });
+
+          updateDraft(localId, {
+            uploadId: signed.uploadId,
+            expiresAt: signed.expiresAt,
+            status: "reserving",
+          });
+
+          return signed;
         };
 
-        updateDraft(draft.localId, {
-          status: "ready",
-          progress: 100,
-          uploaded: meta,
-        });
-      } catch (err) {
-        if (isAbortError(err)) {
-          updateDraft(draft.localId, {
-            status: "removed",
-            error: t("error:upload.cancelled", {
-              defaultValue: "Upload cancelled",
-            }),
+        const uploadWithSignedUrl = async (
+          signed: Awaited<ReturnType<typeof uploadClient.reserveUpload>>,
+        ) => {
+          const abortController = new AbortController();
+          abortControllers.current.set(localId, abortController);
+
+          updateDraft(localId, {
+            status: "uploading",
+            progress: 0,
           });
-          return;
+
+          try {
+            await uploadClient.uploadToSignedUrl({
+              signedUrl: signed.signedPutUrl || signed.uploadUrl,
+              method: signed.uploadMethod || "PUT",
+              headers: {
+                ...(signed.uploadHeaders || {}),
+                "Content-Type": validated.mimeType,
+              },
+              file: draft.file!,
+              abortSignal: abortController.signal,
+              onProgress: (progress) => {
+                updateDraft(localId, {
+                  progress,
+                  status: "uploading",
+                });
+              },
+            });
+          } finally {
+            abortControllers.current.delete(localId);
+          }
+        };
+
+        let signed = await reserve(draft.uploadId);
+
+        try {
+          await uploadWithSignedUrl(signed);
+        } catch (error) {
+          if (isAbortError(error)) {
+            updateDraft(localId, {
+              status: "cancelled",
+              errorCode: "UPLOAD_CANCELLED",
+              errorMessage: t("error:upload.cancelled", {
+                defaultValue: "Upload cancelled",
+              }),
+            });
+            await abandonDraft(
+              {
+                ...draft,
+                uploadId: signed.uploadId,
+              },
+              "cancelled",
+            );
+            return;
+          }
+
+          if (isSignedUrlExpiredError(error)) {
+            signed = await reserve(signed.uploadId);
+            await uploadWithSignedUrl(signed);
+          } else {
+            throw error;
+          }
         }
 
-        const status = (err as { status?: number }).status;
-        if (status === 413) {
-          updateDraft(draft.localId, {
-            status: "failed",
-            error: resolveUploadErrorMessage(err, t),
-          });
-        } else {
-          updateDraft(draft.localId, {
-            status: "failed",
-            error: resolveUploadErrorMessage(err, t),
-          });
+        updateDraft(localId, {
+          status: "completing",
+          progress: 100,
+        });
+
+        const completed = await uploadClient.completeUpload({
+          uploadId: signed.uploadId,
+        });
+        const attachment = completed.attachment;
+        const fileId = completed.fileId || attachment.fileId || attachment.id;
+        if (!fileId) {
+          throw new Error("UPLOAD_COMPLETE_MISSING_FILE_ID");
         }
-      } finally {
-        abortControllers.current.delete(draft.localId);
+
+        updateDraft(localId, {
+          status: "finalized",
+          progress: 100,
+          uploadId: signed.uploadId,
+          fileId,
+          expiresAt: signed.expiresAt,
+          errorCode: undefined,
+          errorMessage: undefined,
+          uploaded: uploadClient.attachToMessageDraft({
+            uploadId: signed.uploadId,
+            fileId,
+            purpose: draft.purpose,
+            filename: draft.filename,
+            mimeType: draft.mimeType,
+            sizeBytes: draft.sizeBytes,
+            objectKey: attachment.objectKey,
+            width: attachment.width,
+            height: attachment.height,
+            duration: attachment.duration,
+            thumbnailUrl: attachment.thumbnailUrl,
+          }),
+        });
+      } catch (error) {
+        const resolved = resolveUploadError(error, t);
+        updateDraft(localId, (currentDraft) => ({
+          ...currentDraft,
+          status:
+            resolved.code === "UPLOAD_CLEANED_UP" ? "expired" : "failed",
+          progress: 0,
+          errorCode: resolved.code,
+          errorMessage: resolved.message,
+          retryCount: currentDraft.retryCount + 1,
+        }));
       }
     },
-    [t, updateDraft],
+    [abandonDraft, conversationId, t, updateDraft],
   );
 
-  // ─ Process queue with concurrency limit ─
+  useEffect(() => {
+    if (!conversationId) {
+      setDrafts([]);
+      return;
+    }
 
-  const processQueue = useCallback(() => {
-    if (isProcessing.current) return;
-    isProcessing.current = true;
+    for (const controller of abortControllers.current.values()) {
+      controller.abort();
+    }
+    abortControllers.current.clear();
 
-    setDrafts((current) => {
-      const uploading = current.filter((d) => d.status === "uploading");
-      const queued = current.filter((d) => d.status === "queued");
-      const slots = concurrency - uploading.length;
-
-      if (slots > 0 && queued.length > 0) {
-        const toStart = queued.slice(0, slots);
-        // Fire uploads (async — don't await here)
-        for (const draft of toStart) {
-          void uploadOne(draft).then(() => {
-            isProcessing.current = false;
-            processQueue();
-          });
-        }
-      }
-
-      isProcessing.current = false;
-      return current; // no state change needed here
+    const interruptedUploadMessage = t("error:upload.interruptedNeedsReupload", {
+      defaultValue:
+        "This upload was interrupted by a refresh. Please choose the file again.",
     });
-  }, [concurrency, uploadOne]);
 
-  // ─ Trigger queue processing whenever drafts change ─
+    const hydrated = readPersistedDrafts(conversationId)
+      .map(createRecoveredAttachmentDraft)
+      .map((draft) =>
+        normalizeRecoveredDraftStatus(draft, interruptedUploadMessage),
+      );
+
+    setDrafts(hydrated);
+
+    let cancelled = false;
+    void uploadClient
+      .listRecoverableMessageDrafts({ conversationId, limit: 25 })
+      .then((items) => {
+        if (cancelled) {
+          return;
+        }
+        setDrafts((current) =>
+          mergeRecoveredDrafts(current, items, conversationId),
+        );
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, t]);
 
   useEffect(() => {
-    const hasQueued = drafts.some((d) => d.status === "queued");
-    const uploadingCount = drafts.filter(
-      (d) => d.status === "uploading",
-    ).length;
-    if (hasQueued && uploadingCount < concurrency) {
-      processQueue();
+    if (!conversationId) {
+      return;
     }
-  }, [drafts, concurrency, processQueue]);
 
-  // Revoke ObjectURLs only after their draft is no longer rendered.
+    persistDrafts(conversationId, drafts);
+  }, [conversationId, drafts]);
+
+  useEffect(() => {
+    if (!conversationId) {
+      return;
+    }
+
+    const blockingCount = drafts.filter(isBlockingAttachmentDraft).length;
+    if (blockingCount >= concurrency) {
+      return;
+    }
+
+    const queuedDrafts = drafts
+      .filter((draft) => draft.status === "idle")
+      .slice(0, Math.max(0, concurrency - blockingCount));
+
+    for (const draft of queuedDrafts) {
+      void uploadOne(draft.localId);
+    }
+  }, [concurrency, conversationId, drafts, uploadOne]);
+
   useEffect(() => {
     const nextPreviewUrls = new Set(
       drafts
-        .filter((draft) => draft.status !== "removed")
         .map((draft) => draft.previewUrl)
         .filter((previewUrl): previewUrl is string => Boolean(previewUrl)),
     );
 
-    for (const previewUrl of activePreviewUrls.current) {
+    for (const previewUrl of Array.from(activePreviewUrls.current)) {
       if (!nextPreviewUrls.has(previewUrl)) {
         revokePreviewUrl(previewUrl);
       }
     }
 
     for (const previewUrl of nextPreviewUrls) {
-      if (!revokedPreviewUrls.current.has(previewUrl)) {
-        activePreviewUrls.current.add(previewUrl);
-      }
+      activePreviewUrls.current.add(previewUrl);
     }
   }, [drafts, revokePreviewUrl]);
 
-  // ─ Clear drafts on conversation change ─
-
-  useEffect(() => {
-    setDrafts(() => {
-      // Abort all in-progress uploads
-      for (const [, controller] of abortControllers.current) {
+  useEffect(
+    () => () => {
+      for (const controller of abortControllers.current.values()) {
         controller.abort();
       }
       abortControllers.current.clear();
-      return [];
-    });
-  }, [conversationId]);
-
-  // ─ Cleanup on unmount ─
-
-  useEffect(() => {
-    const controllers = abortControllers.current;
-    return () => {
-      for (const [, controller] of controllers) {
-        controller.abort();
+      for (const previewUrl of Array.from(activePreviewUrls.current)) {
+        revokePreviewUrl(previewUrl);
       }
-      controllers.clear();
-      revokeAllActivePreviewUrls();
-    };
-  }, [revokeAllActivePreviewUrls]);
-
-  // ─ Public API ─
+    },
+    [revokePreviewUrl],
+  );
 
   const addFiles = useCallback(
     (files: File[]): UploadQueueAddFilesResult => {
@@ -385,28 +648,27 @@ export function useUploadQueue({
         errors: [],
       };
 
-      setDrafts((prev) => {
-        const active = prev.filter((d) => d.status !== "removed");
-
-        let next = [...prev];
+      setDrafts((currentDrafts) => {
+        const nextDrafts = [...currentDrafts];
 
         for (const file of files) {
-          // Check count limit
-          const currentActive = next.filter((d) => d.status !== "removed");
+          const activeDrafts = nextDrafts.filter(
+            (draft) => draft.status !== "removed",
+          );
+
           if (
-            currentActive.length >= ATTACHMENT_CONSTRAINTS.maxFilesPerMessage
+            activeDrafts.length >= ATTACHMENT_CONSTRAINTS.maxFilesPerMessage
           ) {
             result.errors.push(
               t("error:upload.tooManyFiles", {
                 max: ATTACHMENT_CONSTRAINTS.maxFilesPerMessage,
-                defaultValue: `Bạn chỉ có thể gửi tối đa ${ATTACHMENT_CONSTRAINTS.maxFilesPerMessage} tệp trong một tin nhắn.`,
+                defaultValue: `You can only send up to ${ATTACHMENT_CONSTRAINTS.maxFilesPerMessage} files in one message.`,
               }),
             );
             result.rejectedCount += 1;
             break;
           }
 
-          // Check single file size
           const maxBytesForFile = resolveUploadMaxBytesForFile(file);
           if (file.size > maxBytesForFile) {
             result.errors.push(
@@ -416,14 +678,13 @@ export function useUploadQueue({
                 type: resolveUploadCategoryForMimeType(
                   resolveUploadMimeTypeForFile(file) ?? "",
                 ),
-                defaultValue: `${file.name} vượt quá giới hạn ${formatFileSize(maxBytesForFile)}`,
+                defaultValue: `${file.name} exceeds ${formatFileSize(maxBytesForFile)}`,
               }),
             );
             result.rejectedCount += 1;
             continue;
           }
 
-          // Check file type
           const resolvedMimeType = resolveUploadMimeTypeForFile(file);
           if (!resolvedMimeType || !allowedTypes.has(resolvedMimeType)) {
             result.errors.push(
@@ -448,8 +709,7 @@ export function useUploadQueue({
                   : "error:upload.unsupportedType",
                 validatedType.code === "MIME_EXTENSION_MISMATCH"
                   ? {
-                      defaultValue:
-                        "File extension does not match file type",
+                      defaultValue: "File extension does not match file type",
                     }
                   : { defaultValue: "Unsupported file type" },
               ),
@@ -458,100 +718,149 @@ export function useUploadQueue({
             continue;
           }
 
-          // Check total size
           const totalSize =
-            currentActive.reduce((sum, d) => sum + d.file.size, 0) + file.size;
+            activeDrafts.reduce((sum, draft) => sum + draft.sizeBytes, 0) +
+            file.size;
           if (totalSize > ATTACHMENT_CONSTRAINTS.maxTotalSize) {
             result.errors.push(
               t("error:upload.totalSizeTooLarge", {
                 defaultValue:
-                  "Tổng dung lượng tệp không được vượt quá 450 MB trong một tin nhắn.",
+                  "Total attachment size must stay under 450 MB per message.",
               }),
             );
             result.rejectedCount += 1;
             break;
           }
 
-          // Check duplicates
-          const isDuplicate = active.some((d) => isDuplicateFile(d.file, file));
-          if (isDuplicate) {
+          const duplicate = activeDrafts.some((draft) =>
+            isDuplicateFile(draft, file),
+          );
+          if (duplicate) {
             result.rejectedCount += 1;
             continue;
           }
 
-          const draft = createAttachmentDraft(file);
+          const draft = createAttachmentDraft(file, {
+            purpose: "message_attachment",
+            conversationId,
+          });
           registerPreviewUrl(draft.previewUrl);
-          next = [...next, draft];
+          nextDrafts.push(draft);
           result.acceptedCount += 1;
         }
 
-        return next;
+        return nextDrafts;
       });
 
       return result;
     },
-    [registerPreviewUrl, t],
+    [conversationId, registerPreviewUrl, t],
   );
 
-  const removeDraft = useCallback((localId: string) => {
-    // Cancel if uploading
-    const controller = abortControllers.current.get(localId);
-    if (controller) {
-      controller.abort();
-      abortControllers.current.delete(localId);
-    }
-
-    setDrafts((prev) => prev.filter((d) => d.localId !== localId));
-  }, []);
-
-  const cancelUpload = useCallback(
+  const removeDraft = useCallback(
     (localId: string) => {
+      const draft = draftsRef.current.find((item) => item.localId === localId);
+      if (!draft) {
+        return;
+      }
+
       const controller = abortControllers.current.get(localId);
       if (controller) {
         controller.abort();
+        abortControllers.current.delete(localId);
       }
-      removeDraft(localId);
+
+      revokePreviewUrl(draft.previewUrl);
+      setDrafts((current) => current.filter((item) => item.localId !== localId));
+      void abandonDraft(draft, "removed");
     },
-    [removeDraft],
+    [abandonDraft, revokePreviewUrl],
   );
+
+  const cancelUpload = useCallback((localId: string) => {
+    const controller = abortControllers.current.get(localId);
+    if (controller) {
+      controller.abort();
+    }
+  }, []);
 
   const retryUpload = useCallback(
     (localId: string) => {
-      updateDraft(localId, { status: "queued", progress: 0, error: undefined });
+      updateDraft(localId, (draft) => {
+        if (!draft.file && !isFinalizedAttachmentDraft(draft)) {
+          return {
+            ...draft,
+            status: "failed",
+            errorCode: "UPLOAD_REQUIRES_READD",
+            errorMessage: t("error:upload.interruptedNeedsReupload", {
+              defaultValue:
+                "This upload was interrupted by a refresh. Please choose the file again.",
+            }),
+          };
+        }
+
+        return {
+          ...draft,
+          status: "idle",
+          progress: 0,
+          errorCode: undefined,
+          errorMessage: undefined,
+        };
+      });
     },
-    [updateDraft],
+    [t, updateDraft],
   );
 
   const clearAll = useCallback(() => {
-    // Abort all
-    for (const [, controller] of abortControllers.current) {
+    const currentDrafts = draftsRef.current;
+    for (const controller of abortControllers.current.values()) {
       controller.abort();
     }
     abortControllers.current.clear();
-
+    for (const draft of currentDrafts) {
+      revokePreviewUrl(draft.previewUrl);
+      void abandonDraft(draft, "removed");
+    }
     setDrafts([]);
-  }, []);
+    removePersistedDrafts(conversationId);
+  }, [abandonDraft, conversationId, revokePreviewUrl]);
 
-  // ─ Derived state ─
+  const acknowledgeSent = useCallback(() => {
+    for (const draft of draftsRef.current) {
+      revokePreviewUrl(draft.previewUrl);
+    }
+    setDrafts([]);
+    removePersistedDrafts(conversationId);
+  }, [conversationId, revokePreviewUrl]);
 
-  const activeDrafts = drafts.filter(
-    (
-      d,
-    ): d is AttachmentDraft & {
-      status: Exclude<AttachmentDraftStatus, "removed">;
-    } => d.status !== "removed",
+  const activeDrafts = useMemo(
+    () => drafts.filter((draft) => draft.status !== "removed"),
+    [drafts],
   );
 
-  const hasReadyDrafts = activeDrafts.some((d) => d.status === "ready");
-  const hasUploadingDrafts = activeDrafts.some(
-    (d) => d.status === "uploading" || d.status === "queued",
+  const hasReadyDrafts = activeDrafts.some(isFinalizedAttachmentDraft);
+  const hasUploadingDrafts = activeDrafts.some(isBlockingAttachmentDraft);
+  const hasFailedDrafts = activeDrafts.some((draft) =>
+    ["failed", "expired", "cancelled"].includes(draft.status),
   );
-  const hasFailedDrafts = activeDrafts.some((d) => d.status === "failed");
 
   const getReadyMeta = useCallback((): UploadedFileMeta[] => {
     return drafts
-      .filter((d) => d.status === "ready" && d.uploaded)
-      .map((d) => d.uploaded!);
+      .filter(isFinalizedAttachmentDraft)
+      .map((draft) => {
+        if (draft.uploaded) {
+          return draft.uploaded;
+        }
+
+        return uploadClient.attachToMessageDraft({
+          uploadId: draft.uploadId!,
+          fileId: draft.fileId!,
+          purpose: draft.purpose,
+          filename: draft.filename,
+          mimeType: draft.mimeType,
+          sizeBytes: draft.sizeBytes,
+        });
+      });
   }, [drafts]);
 
   return {
@@ -561,6 +870,7 @@ export function useUploadQueue({
     cancelUpload,
     retryUpload,
     clearAll,
+    acknowledgeSent,
     hasReadyDrafts,
     hasUploadingDrafts,
     hasFailedDrafts,

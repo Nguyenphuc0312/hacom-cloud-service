@@ -5,12 +5,13 @@ import {
   PhoneIcon,
 } from "@heroicons/react/24/outline";
 import { useTranslation } from "react-i18next";
-import { VALIDATION_CONFIG } from "../../../config";
-import { Avatar } from "../../../components/common/Avatar";
-import { Button, ConfirmDialog, Input, Modal, Textarea, toast } from "../../../components/ui";
-import { unwrapApiSuccess } from "../../../lib/apiContract";
-import { fileApi, userApi } from "../../../services/api";
-import { useAuthStore, type User } from "../../../stores";
+import { VALIDATION_CONFIG } from "../../../config"; 
+import { Avatar } from "../../../components/common/Avatar"; 
+import { Button, ConfirmDialog, Input, Modal, Textarea, toast } from "../../../components/ui"; 
+import { unwrapApiSuccess } from "../../../lib/apiContract"; 
+import { userApi } from "../../../services/api"; 
+import uploadClient from "../../../services/uploadClient";
+import { useAuthStore, type User } from "../../../stores"; 
 import { resolveUserDisplayName } from "../../chat/identity/resolveUserDisplayName";
 
 const USERNAME_PATTERN = /^[A-Za-z0-9_]+$/;
@@ -422,29 +423,44 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
 
         setAvatarUploadStage("reserving");
         setAvatarUploadProgress(0);
-        const completed = await fileApi.uploadViaPipeline({
+        setAvatarUploadStage("validating");
+        uploadClient.validateUpload(avatarFile, "user_avatar");
+        setAvatarUploadStage("reserving");
+        const reserved = await uploadClient.reserveUpload({
           purpose: "user_avatar",
           filename: avatarFile.name,
           mimeType,
           sizeBytes: avatarFile.size,
+        });
+        setAvatarUploadStage("uploading");
+        await uploadClient.uploadToSignedUrl({
+          signedUrl: reserved.signedPutUrl || reserved.uploadUrl,
+          method: reserved.uploadMethod || "PUT",
+          headers: {
+            ...(reserved.uploadHeaders || {}),
+            "Content-Type": mimeType,
+          },
           file: avatarFile,
-          onStageChange: (stage) => setAvatarUploadStage(stage),
           onProgress: (progress) => {
             setAvatarUploadProgress(progress);
           },
         });
+        setAvatarUploadStage("completing");
+        const completed = await uploadClient.completeUpload({
+          uploadId: reserved.uploadId,
+        });
 
-        const fileId = completed.fileId || completed.attachment?.fileId;
-        if (!fileId) {
-          throw new Error("Avatar upload completed without fileId");
-        }
+        const fileId = completed.fileId || completed.attachment?.fileId; 
+        if (!fileId) { 
+          throw new Error("Avatar upload completed without fileId"); 
+        } 
 
-        setAvatarUploadStage("attaching");
-        const response = await userApi.attachAvatar({
+        setAvatarUploadStage("attaching"); 
+        const response = await uploadClient.attachToUserAvatar({
           fileId,
           uploadId: completed.uploadId,
         });
-        updateUser(resolvePatchedProfileData(response));
+        updateUser(resolvePatchedProfileData(response)); 
         setAvatarUploadStage("success");
         setAvatarUploadProgress(100);
       }

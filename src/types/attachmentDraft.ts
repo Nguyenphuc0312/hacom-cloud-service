@@ -4,34 +4,34 @@ import {
   resolveUploadMimeTypeForFile,
 } from "../utils/uploadPolicy";
 
-/**
- * @fileoverview AttachmentDraft — data model for pending file uploads.
- *
- * Each draft tracks a single file from selection through upload to ready/failed.
- * Object URLs are created for image/video previews and MUST be revoked on cleanup.
- */
-
-// ── File kind classification ────────────────────────────────────────
-
 export type FileKind = "image" | "video" | "pdf" | "doc" | "other";
 
-// ── Upload lifecycle status ─────────────────────────────────────────
+export type FileUploadPurpose =
+  | "message_attachment"
+  | "user_avatar"
+  | "group_avatar";
 
 export type AttachmentDraftStatus =
-  | "queued"
+  | "idle"
+  | "validating"
+  | "reserving"
   | "uploading"
-  | "ready"
+  | "completing"
+  | "finalized"
+  | "attaching"
+  | "attached"
   | "failed"
-  | "blocked"
+  | "expired"
+  | "cancelled"
   | "removed";
-
-// ── Uploaded metadata (returned by POST /files/complete) ────────────
 
 export interface UploadedFileMeta {
   fileId: string;
+  uploadId: string;
   mimeType: string;
   size: number;
   name: string;
+  purpose: FileUploadPurpose;
   objectKey?: string;
   thumbnailUrl?: string;
   width?: number;
@@ -39,43 +39,60 @@ export interface UploadedFileMeta {
   duration?: number;
 }
 
-// ── Core draft type ─────────────────────────────────────────────────
-
 export interface AttachmentDraft {
-  /** Client-side unique ID (crypto.randomUUID or fallback) */
   localId: string;
-  /** The raw File object */
-  file: File;
-  /** Classified kind for UI rendering */
+  file?: File | null;
+  uploadId?: string;
+  fileId?: string;
+  purpose: FileUploadPurpose;
+  conversationId?: string;
+  groupId?: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
   kind: FileKind;
-  /** ObjectURL for image/video preview — MUST be revoked on cleanup */
   previewUrl?: string;
-  /** Current upload lifecycle status */
-  status: AttachmentDraftStatus;
-  /** Upload progress 0..100 */
   progress: number;
-  /** Human-readable error message (i18n key or plain text) */
-  error?: string;
-  /** Populated after successful upload + complete */
+  status: AttachmentDraftStatus;
+  errorCode?: string;
+  errorMessage?: string;
+  createdAt: string;
+  expiresAt?: string;
+  retryCount: number;
+  clientMessageId?: string;
   uploaded?: UploadedFileMeta;
 }
 
-// ── Constraints ─────────────────────────────────────────────────────
+export interface PersistedAttachmentDraft {
+  localId: string;
+  uploadId?: string;
+  fileId?: string;
+  purpose: FileUploadPurpose;
+  conversationId?: string;
+  groupId?: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  kind: FileKind;
+  progress: number;
+  status: AttachmentDraftStatus;
+  errorCode?: string;
+  errorMessage?: string;
+  createdAt: string;
+  expiresAt?: string;
+  retryCount: number;
+  clientMessageId?: string;
+  uploaded?: UploadedFileMeta;
+}
 
 export const ATTACHMENT_CONSTRAINTS = {
-  /** Maximum number of files per message */
   maxFilesPerMessage: UPLOAD_LIMITS.maxFilesPerMessage,
-  /** Maximum total size in bytes (450 MiB) */
   maxTotalSize: UPLOAD_LIMITS.maxTotalSizePerMessage,
-  /** Maximum single file size in bytes by upload category */
   maxFileSizeByCategory: UPLOAD_LIMITS.maxBytesByCategory,
 } as const;
 
-// ── Helpers ─────────────────────────────────────────────────────────
-
-/** Classify a File into a FileKind based on MIME type and extension */
-export function resolveFileKind(file: File): FileKind {
-  const mime = resolveUploadMimeTypeForFile(file) || "";
+export function resolveFileKind(input: Pick<File, "name" | "type">): FileKind {
+  const mime = resolveUploadMimeTypeForFile(input) || "";
   const category = resolveUploadFileCategory(mime);
   if (category === "image") return "image";
   if (category === "video") return "video";
@@ -84,8 +101,7 @@ export function resolveFileKind(file: File): FileKind {
     return "doc";
   }
 
-  // Fallback to extension
-  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  const ext = input.name.split(".").pop()?.toLowerCase() ?? "";
   const docExts = new Set([
     "doc",
     "docx",
@@ -102,11 +118,9 @@ export function resolveFileKind(file: File): FileKind {
   ]);
   if (ext === "pdf") return "pdf";
   if (docExts.has(ext)) return "doc";
-
   return "other";
 }
 
-/** Generate a unique local ID */
 export function generateLocalId(): string {
   if (
     typeof crypto !== "undefined" &&
@@ -117,22 +131,107 @@ export function generateLocalId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-/** Create an AttachmentDraft from a File */
-export function createAttachmentDraft(file: File): AttachmentDraft {
+export function createAttachmentDraft(
+  file: File,
+  input: {
+    purpose?: FileUploadPurpose;
+    conversationId?: string;
+    groupId?: string;
+    clientMessageId?: string;
+  } = {},
+): AttachmentDraft {
   const kind = resolveFileKind(file);
   const needsPreview = kind === "image" || kind === "video";
+  const mimeType = resolveUploadMimeTypeForFile(file) || file.type || "";
+  const createdAt = new Date().toISOString();
 
   return {
     localId: generateLocalId(),
     file,
+    purpose: input.purpose ?? "message_attachment",
+    conversationId: input.conversationId,
+    groupId: input.groupId,
+    filename: file.name,
+    mimeType,
+    sizeBytes: file.size,
     kind,
     previewUrl: needsPreview ? URL.createObjectURL(file) : undefined,
-    status: "queued",
     progress: 0,
+    status: "idle",
+    createdAt,
+    retryCount: 0,
+    clientMessageId: input.clientMessageId,
   };
 }
 
-/** Check if two files are likely duplicates (same name + size) */
-export function isDuplicateFile(a: File, b: File): boolean {
-  return a.name === b.name && a.size === b.size;
+export function createRecoveredAttachmentDraft(
+  draft: PersistedAttachmentDraft,
+): AttachmentDraft {
+  return {
+    ...draft,
+    file: null,
+    uploaded:
+      draft.uploaded ||
+      (draft.fileId && draft.uploadId
+        ? {
+            fileId: draft.fileId,
+            uploadId: draft.uploadId,
+            mimeType: draft.mimeType,
+            size: draft.sizeBytes,
+            name: draft.filename,
+            purpose: draft.purpose,
+          }
+        : undefined),
+  };
+}
+
+export function toPersistedAttachmentDraft(
+  draft: AttachmentDraft,
+): PersistedAttachmentDraft {
+  return {
+    localId: draft.localId,
+    uploadId: draft.uploadId,
+    fileId: draft.fileId,
+    purpose: draft.purpose,
+    conversationId: draft.conversationId,
+    groupId: draft.groupId,
+    filename: draft.filename,
+    mimeType: draft.mimeType,
+    sizeBytes: draft.sizeBytes,
+    kind: draft.kind,
+    progress: draft.progress,
+    status: draft.status,
+    errorCode: draft.errorCode,
+    errorMessage: draft.errorMessage,
+    createdAt: draft.createdAt,
+    expiresAt: draft.expiresAt,
+    retryCount: draft.retryCount,
+    clientMessageId: draft.clientMessageId,
+    uploaded: draft.uploaded,
+  };
+}
+
+export function isDuplicateFile(
+  draft: Pick<AttachmentDraft, "filename" | "sizeBytes">,
+  file: Pick<File, "name" | "size">,
+): boolean {
+  return draft.filename === file.name && draft.sizeBytes === file.size;
+}
+
+export function isFinalizedAttachmentDraft(draft: AttachmentDraft): boolean {
+  return (
+    (draft.status === "finalized" || draft.status === "attached") &&
+    typeof draft.fileId === "string" &&
+    draft.fileId.length > 0
+  );
+}
+
+export function isBlockingAttachmentDraft(draft: AttachmentDraft): boolean {
+  return [
+    "validating",
+    "reserving",
+    "uploading",
+    "completing",
+    "attaching",
+  ].includes(draft.status);
 }

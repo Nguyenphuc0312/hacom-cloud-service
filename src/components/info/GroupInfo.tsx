@@ -28,10 +28,11 @@ import type { Conversation, UserSummary } from "../../types";
 import { RoomMemberRole, UserStatus } from "../../types";
 import { useChatStore, useGroupStore } from "../../stores";
 import type { InviteLinkItem, JoinRequestItem } from "../../stores/groupStore";
-import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
-import { resolveConversationId } from "../../lib/conversationIdentity";
-import { chatApi } from "../../features/chat/api/chatApi";
-import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
+import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract"; 
+import { resolveConversationId } from "../../lib/conversationIdentity"; 
+import { chatApi } from "../../features/chat/api/chatApi"; 
+import uploadClient from "../../services/uploadClient";
+import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById"; 
 import {
   buildUserSearchSecondaryText,
   isGroupMemberEligible,
@@ -522,28 +523,43 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       });
 
       try {
-        const completed = await chatApi.file.uploadViaPipeline({
+        uploadClient.validateUpload(file, "group_avatar");
+        setGroupAvatarStage("reserving");
+        const reserved = await uploadClient.reserveUpload({
           purpose: "group_avatar",
           groupId: conversation.id,
           filename: file.name,
           mimeType,
           sizeBytes: file.size,
+        });
+        setGroupAvatarStage("uploading");
+        await uploadClient.uploadToSignedUrl({
+          signedUrl: reserved.signedPutUrl || reserved.uploadUrl,
+          method: reserved.uploadMethod || "PUT",
+          headers: {
+            ...(reserved.uploadHeaders || {}),
+            "Content-Type": mimeType,
+          },
           file,
-          onStageChange: (stage) => setGroupAvatarStage(stage),
           onProgress: (progress) => setGroupAvatarProgress(progress),
         });
+        setGroupAvatarStage("completing");
+        const completed = await uploadClient.completeUpload({
+          uploadId: reserved.uploadId,
+        });
 
-        const fileId = completed.fileId || completed.attachment?.fileId;
-        if (!fileId) {
-          throw new Error("Group avatar upload completed without fileId");
-        }
+        const fileId = completed.fileId || completed.attachment?.fileId; 
+        if (!fileId) { 
+          throw new Error("Group avatar upload completed without fileId"); 
+        } 
 
-        setGroupAvatarStage("attaching");
-        await chatApi.group.attachAvatar(conversation.id, {
+        setGroupAvatarStage("attaching"); 
+        await uploadClient.attachToGroupAvatar({
+          groupId: conversation.id,
           fileId,
           uploadId: completed.uploadId,
         });
-        await refreshGroupState();
+        await refreshGroupState(); 
         setGroupAvatarStage("success");
         setGroupAvatarProgress(100);
         setGroupAvatarPreview((current) => {
