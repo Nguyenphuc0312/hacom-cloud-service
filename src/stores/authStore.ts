@@ -538,6 +538,7 @@ export const useAuthStore = create<AuthState>()(
                 ? data.loginIdentifier
                 : undefined,
               password: data.password,
+              rememberMe: data.rememberMe,
             });
             get().applyLoginResponse(payload, data.rememberMe);
             return {

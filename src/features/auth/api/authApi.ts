@@ -41,6 +41,7 @@ export interface LoginPayload {
   loginIdentifier: string;
   email?: string;
   password: string;
+  rememberMe?: boolean;
 }
 
 export interface NormalizedAuthResponse {
@@ -212,6 +213,7 @@ export const loginAuthApi = {
         loginIdentifier: payload.loginIdentifier,
         email: payload.email,
         password: payload.password,
+        rememberMe: payload.rememberMe,
       },
     );
 

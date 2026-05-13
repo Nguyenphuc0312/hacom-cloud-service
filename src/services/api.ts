@@ -352,10 +352,14 @@ const persistAuthTokensFromPayload = (
 // AUTH_BASE_URL (/api/v1/auth by default).
 
 export const authApi = {
-  login: async (email: string, password: string) => {
+  login: async (
+    email: string,
+    password: string,
+    rememberMe = false,
+  ) => {
     const response = await authClient.post<ApiResponse<LoginResponse>>(
       AUTH_ENDPOINTS.login,
-      { email, password },
+      { email, password, rememberMe },
     );
     return response.data;
   },
@@ -532,6 +536,14 @@ export const userApi = {
       "/users/avatar",
       formData,
       { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return response.data;
+  },
+
+  attachAvatar: async (payload: { fileId?: string; uploadId?: string }) => {
+    const response = await apiClient.post<ApiResponse<User>>(
+      "/users/avatar/attach",
+      payload,
     );
     return response.data;
   },
@@ -910,14 +922,6 @@ export const groupApi = {
         ...payload,
         ...(avatarUrl ? { avatarUrl } : { avatarUrl: undefined }),
       },
-    );
-    return response.data;
-  },
-
-  attachAvatar: async (payload: { fileId?: string; uploadId?: string }) => {
-    const response = await apiClient.post<ApiResponse<User>>(
-      "/users/avatar/attach",
-      payload,
     );
     return response.data;
   },

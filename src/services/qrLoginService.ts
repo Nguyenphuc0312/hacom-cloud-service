@@ -34,10 +34,16 @@ export const qrLoginService = {
     return unwrapApiSuccess(response.data);
   },
 
-  async exchange(sessionId: string, webSecret: string): Promise<LoginResponse> {
+  async exchange(
+    sessionId: string,
+    webSecret: string,
+    rememberMe = false,
+  ): Promise<LoginResponse> {
     const response = await authClient.post<ApiResponse<LoginResponse>>(
       AUTH_ENDPOINTS.qrLoginSessionExchange(sessionId),
-      undefined,
+      {
+        rememberMe,
+      },
       {
         headers: {
           [WEB_SECRET_HEADER]: webSecret,

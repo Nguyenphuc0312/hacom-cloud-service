@@ -284,6 +284,7 @@ export const QrLoginPanel: React.FC<QrLoginPanelProps> = ({
         const loginResponse = await qrLoginService.exchange(
           panelSessionId,
           panelWebSecret,
+          rememberMe,
         );
 
         applyLoginResponse(
