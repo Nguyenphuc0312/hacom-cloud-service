@@ -11,6 +11,7 @@ export interface SettingsSidebarItem {
   label: string;
   description?: string;
   icon?: React.ReactNode;
+  tone?: "default" | "danger";
 }
 
 export interface SettingsSidebarGroup {
@@ -118,14 +119,20 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                       isListMode ? "px-3 py-3" : "px-3 py-2.5",
                       isActive
                         ? "bg-primary/10 text-text-primary"
-                        : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
+                        : item.tone === "danger"
+                          ? "text-danger hover:bg-danger/10"
+                          : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
                     )}
                   >
                     {item.icon ? (
                       <span
                         className={clsx(
                           "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
-                          isActive ? "text-primary" : "text-text-secondary",
+                          isActive
+                            ? "text-primary"
+                            : item.tone === "danger"
+                              ? "text-danger"
+                              : "text-text-secondary",
                         )}
                       >
                         {item.icon}

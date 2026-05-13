@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import {
   ArrowLeftIcon,
+  ArrowLeftOnRectangleIcon,
   BellIcon,
   Cog6ToothIcon,
   GlobeAltIcon,
@@ -200,7 +201,8 @@ export const SettingsPage: React.FC = () => {
       navId: "logout",
       id: "logout",
       label: t("settings:navigation.logout", { defaultValue: "Đăng xuất" }),
-      icon: <ArrowLeftIcon className="h-4 w-4" />,
+      icon: <ArrowLeftOnRectangleIcon className="h-4 w-4" />,
+      tone: "danger",
     },
   ];
 
@@ -335,8 +337,6 @@ export const SettingsPage: React.FC = () => {
           subtitle={t("common:status.lastUpdated", {
             time: formatTimestamp(updatedAt || null),
           })}
-          onBack={() => navigate(ROUTE_PATHS.CHAT)}
-          backLabel={t("common:actions.back")}
           badge={
             currentUser ? (
               <span className="hidden rounded-full bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary sm:inline-flex">
