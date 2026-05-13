@@ -194,6 +194,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onLoadOlderMessages,
   onImageClick,
   onFilePreview,
+  onReachedLatestMessage,
   connectionState = "connected",
   isConversationReady = true,
   externalJumpToMessageId = null,

@@ -108,6 +108,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
   unreadMarker,
   composerHeight,
   className,
+  onBottomVisible,
 }) => {
   const { t } = useTranslation();
   const timelineItems = useConversationTimelineRows({
