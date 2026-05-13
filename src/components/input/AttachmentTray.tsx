@@ -44,8 +44,10 @@ const AttachmentTrayComponent: React.FC<AttachmentTrayProps> = ({
 
   if (drafts.length === 0) return null;
 
-  const totalSize = drafts.reduce((sum, d) => sum + d.file.size, 0);
-  const readyCount = drafts.filter((d) => d.status === "ready").length;
+  const totalSize = drafts.reduce((sum, d) => sum + d.sizeBytes, 0);
+  const readyCount = drafts.filter(
+    (d) => d.status === "finalized" || d.status === "attached",
+  ).length;
 
   return (
     <div

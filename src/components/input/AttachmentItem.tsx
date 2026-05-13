@@ -1,16 +1,3 @@
-/**
- * @fileoverview AttachmentItem — single file card in the attachment tray.
- *
- * Shows:
- * - Thumbnail (image/video) or icon (pdf/doc/other)
- * - Filename (truncated)
- * - File size
- * - Status badge: queued / uploading / ready / failed / blocked
- * - Progress bar during upload
- * - Remove button (X)
- * - Retry button when failed
- */
-
 import React, { useCallback } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
@@ -19,7 +6,7 @@ import {
   ArrowPathIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
-  ShieldExclamationIcon,
+  ClockIcon,
   DocumentTextIcon,
   FilmIcon,
   PhotoIcon,
@@ -33,8 +20,6 @@ interface AttachmentItemProps {
   onCancel: (localId: string) => void;
   onRetry: (localId: string) => void;
 }
-
-// ── Kind → Icon mapping ─────────────────────────────────────────────
 
 const KindIcon: React.FC<{
   kind: AttachmentDraft["kind"];
@@ -54,26 +39,28 @@ const KindIcon: React.FC<{
   }
 };
 
-// ── Status badge ────────────────────────────────────────────────────
-
 const StatusBadge: React.FC<{
   status: AttachmentDraft["status"];
   t: (key: string, opts?: Record<string, unknown>) => string;
 }> = ({ status, t }) => {
   switch (status) {
-    case "queued":
+    case "idle":
+    case "validating":
+    case "reserving":
       return (
         <span className="text-[10px] font-medium text-text-muted">
           {t("chat:attachmentTray.queued")}
         </span>
       );
     case "uploading":
+    case "completing":
       return (
         <span className="text-[10px] font-medium text-primary">
           {t("chat:attachmentTray.uploading")}
         </span>
       );
-    case "ready":
+    case "finalized":
+    case "attached":
       return (
         <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-success">
           <CheckCircleIcon className="h-3 w-3" />
@@ -81,25 +68,24 @@ const StatusBadge: React.FC<{
         </span>
       );
     case "failed":
+    case "expired":
       return (
         <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-danger">
           <ExclamationTriangleIcon className="h-3 w-3" />
           {t("chat:attachmentTray.failed")}
         </span>
       );
-    case "blocked":
+    case "cancelled":
       return (
-        <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-danger">
-          <ShieldExclamationIcon className="h-3 w-3" />
-          {t("chat:attachmentTray.blocked")}
+        <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-warning">
+          <ClockIcon className="h-3 w-3" />
+          {t("chat:attachmentTray.cancelUpload")}
         </span>
       );
     default:
       return null;
   }
 };
-
-// ── Component ───────────────────────────────────────────────────────
 
 const AttachmentItemComponent: React.FC<AttachmentItemProps> = ({
   draft,
@@ -110,7 +96,11 @@ const AttachmentItemComponent: React.FC<AttachmentItemProps> = ({
   const { t } = useTranslation();
 
   const handleRemoveOrCancel = useCallback(() => {
-    if (draft.status === "uploading") {
+    if (
+      draft.status === "uploading" ||
+      draft.status === "reserving" ||
+      draft.status === "completing"
+    ) {
       onCancel(draft.localId);
     } else {
       onRemove(draft.localId);
@@ -130,13 +120,13 @@ const AttachmentItemComponent: React.FC<AttachmentItemProps> = ({
         "group relative flex flex-col items-center gap-1",
         "w-[5.5rem] shrink-0 rounded-lg border border-border bg-surface-overlay p-1.5",
         "transition-colors hover:bg-surface-hover",
-        draft.status === "failed" && "border-danger/40",
-        draft.status === "blocked" && "border-danger/40",
+        (draft.status === "failed" || draft.status === "expired") &&
+          "border-danger/40",
+        draft.status === "cancelled" && "border-warning/40",
       )}
       role="listitem"
-      aria-label={`${draft.file.name} — ${draft.status}`}
+      aria-label={`${draft.filename} - ${draft.status}`}
     >
-      {/* Remove / Cancel button */}
       <button
         type="button"
         onClick={handleRemoveOrCancel}
@@ -148,7 +138,9 @@ const AttachmentItemComponent: React.FC<AttachmentItemProps> = ({
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
         )}
         aria-label={
-          draft.status === "uploading"
+          draft.status === "uploading" ||
+          draft.status === "reserving" ||
+          draft.status === "completing"
             ? t("chat:attachmentTray.cancelUpload")
             : t("chat:attachmentTray.remove")
         }
@@ -156,7 +148,6 @@ const AttachmentItemComponent: React.FC<AttachmentItemProps> = ({
         <XMarkIcon className="h-3 w-3" />
       </button>
 
-      {/* Thumbnail / Icon */}
       <div className="relative flex h-12 w-full items-center justify-center overflow-hidden rounded">
         {hasPreview ? (
           <>
@@ -168,7 +159,7 @@ const AttachmentItemComponent: React.FC<AttachmentItemProps> = ({
                 draggable={false}
               />
             ) : (
-              <div className="relative flex h-12 w-full items-center justify-center bg-black/10 rounded">
+              <div className="relative flex h-12 w-full items-center justify-center rounded bg-black/10">
                 <FilmIcon className="h-5 w-5 text-text-muted" />
               </div>
             )}
@@ -179,8 +170,7 @@ const AttachmentItemComponent: React.FC<AttachmentItemProps> = ({
           </div>
         )}
 
-        {/* Progress overlay */}
-        {draft.status === "uploading" && (
+        {(draft.status === "uploading" || draft.status === "completing") && (
           <div className="absolute inset-0 flex items-center justify-center rounded bg-black/40">
             <span className="text-xs font-bold text-white">
               {draft.progress}%
@@ -189,24 +179,23 @@ const AttachmentItemComponent: React.FC<AttachmentItemProps> = ({
         )}
       </div>
 
-      {/* Filename */}
       <p
         className="w-full truncate text-center text-[11px] font-medium text-text-secondary"
-        title={draft.file.name}
+        title={draft.filename}
       >
-        {draft.file.name}
+        {draft.filename}
       </p>
 
-      {/* Size + Status */}
       <div className="flex w-full flex-col items-center gap-0.5">
         <span className="text-[10px] text-text-muted">
-          {formatFileSize(draft.file.size)}
+          {formatFileSize(draft.sizeBytes)}
         </span>
         <StatusBadge status={draft.status} t={t} />
       </div>
 
-      {/* Progress bar */}
-      {(draft.status === "uploading" || draft.status === "queued") && (
+      {["validating", "reserving", "uploading", "completing"].includes(
+        draft.status,
+      ) && (
         <div className="h-1 w-full overflow-hidden rounded-full bg-border">
           <div
             className="h-full rounded-full bg-primary transition-[width] duration-200"
@@ -216,16 +205,15 @@ const AttachmentItemComponent: React.FC<AttachmentItemProps> = ({
             aria-valuemin={0}
             aria-valuemax={100}
             aria-label={t("chat:attachmentTray.uploadProgress", {
-              name: draft.file.name,
+              name: draft.filename,
               progress: draft.progress,
-              defaultValue: `${draft.file.name} upload progress: ${draft.progress}%`,
+              defaultValue: `${draft.filename} upload progress: ${draft.progress}%`,
             })}
           />
         </div>
       )}
 
-      {/* Retry button for failed */}
-      {draft.status === "failed" && (
+      {(draft.status === "failed" || draft.status === "expired") && (
         <button
           type="button"
           onClick={handleRetry}
@@ -235,8 +223,8 @@ const AttachmentItemComponent: React.FC<AttachmentItemProps> = ({
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
           )}
           aria-label={t("chat:attachmentTray.retryUpload", {
-            name: draft.file.name,
-            defaultValue: `Retry upload ${draft.file.name}`,
+            name: draft.filename,
+            defaultValue: `Retry upload ${draft.filename}`,
           })}
         >
           <ArrowPathIcon className="h-3 w-3" />
@@ -244,16 +232,18 @@ const AttachmentItemComponent: React.FC<AttachmentItemProps> = ({
         </button>
       )}
 
-      {/* Error message */}
-      {draft.error && draft.status === "failed" && (
-        <p
-          className="w-full truncate text-center text-[9px] text-danger"
-          title={draft.error}
-          role="alert"
-        >
-          {draft.error}
-        </p>
-      )}
+      {draft.errorMessage &&
+        (draft.status === "failed" ||
+          draft.status === "expired" ||
+          draft.status === "cancelled") && (
+          <p
+            className="w-full truncate text-center text-[9px] text-danger"
+            title={draft.errorMessage}
+            role="alert"
+          >
+            {draft.errorMessage}
+          </p>
+        )}
     </div>
   );
 };

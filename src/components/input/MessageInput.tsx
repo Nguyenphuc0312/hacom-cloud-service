@@ -13,7 +13,6 @@ import {
 
 import type { Editor } from "@tiptap/react";
 import { AttachmentMenu } from "./AttachmentMenu";
-import { AttachmentPreview } from "./AttachmentPreview";
 import { AttachmentTray } from "./AttachmentTray";
 import { TipTapEditor, type TipTapEditorHandle } from "./TipTapEditor";
 import { RichTextToolbar } from "./RichTextToolbar";
@@ -33,7 +32,6 @@ import type { InputMode, Message } from "../../types";
 import type { AttachmentDraft } from "../../types/attachmentDraft";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { getPreviewFromMessage } from "../../utils/messageContent.utils";
-import { resolveUploadMaxBytesForFile } from "../../utils/uploadPolicy";
 import { InlineNotice, toast } from "../ui";
 import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import {
@@ -351,17 +349,8 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
   });
 
   const {
-    selectedFile,
-    previewUrl,
-    uploadProgress,
-    uploadError,
-    isUploading,
     isSending,
-    selectFile,
     sendTextMessage,
-    sendAttachmentMessage,
-    clearSelectedFile,
-    cancelUpload,
     openFilePicker,
   } = useSendMessage({
     conversationId,
@@ -382,15 +371,13 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
               .slice(0, 2)
               .forEach((message) => toast.error(message));
           }
-        } else {
-          selectFile(file);
         }
       },
       focus: () => {
         tipTapRef.current?.focus();
       },
     }),
-    [onAddFiles, selectFile],
+    [onAddFiles],
   );
 
   const { notifyInput, notifyBlur, stopTypingNow } = useTypingIndicator({
@@ -527,13 +514,10 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
             .slice(0, 2)
             .forEach((message) => toast.error(message));
         }
-      } else {
-        const file = files[0];
-        if (file) selectFile(file);
       }
       event.target.value = "";
     },
-    [attachmentsDisabled, disabledReason, onAddFiles, selectFile, t],
+    [attachmentsDisabled, disabledReason, onAddFiles, t],
   );
 
   const handleAttachmentSelect = React.useCallback(
@@ -632,20 +616,6 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     messageValidation.hardLimit,
   ]);
 
-  const handleSendAttachment = React.useCallback(async () => {
-    const result = await sendAttachmentMessage();
-    stopTypingNow();
-    setLiveRegionMessage(
-      result === "failed"
-        ? t("chat:composer.failedAnnouncement")
-        : result === "queued"
-          ? t("chat:composer.queuedAnnouncement")
-          : result === "optimistic"
-            ? optimisticAnnouncement
-            : t("chat:composer.sentAnnouncement"),
-    );
-  }, [optimisticAnnouncement, sendAttachmentMessage, stopTypingNow, t]);
-
   const handlePrimarySend = React.useCallback(async () => {
     if (primarySendLockedRef.current) {
       return;
@@ -668,16 +638,15 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     const hasQueueDrafts = (uploadDrafts?.length ?? 0) > 0;
     logMessageDebug("MessageInput", "submit_intent", {
       conversationId,
-      hasQueueDrafts,
-      hasReadyDrafts,
-      hasText: draftValue.trim().length > 0,
-      contentPreview: draftValue.trim().slice(0, 120),
-      selectedFileName: selectedFile?.name,
-      disabled,
-      submitDisabled,
-    });
-    try {
-      if (hasQueueDrafts && hasReadyDrafts) {
+      hasQueueDrafts, 
+      hasReadyDrafts, 
+      hasText: draftValue.trim().length > 0, 
+      contentPreview: draftValue.trim().slice(0, 120), 
+      disabled, 
+      submitDisabled, 
+    }); 
+    try { 
+      if (hasQueueDrafts) { 
         // Capture TipTap content before clearing — preserves rich text formatting
         const html = tipTapRef.current?.getHTML() ?? "";
         const plainText = tipTapRef.current?.getText().trim() ?? draftValue.trim();
@@ -693,38 +662,30 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
         scheduleComposerResize();
         clearMentionState();
         stopTypingNow();
-        setLiveRegionMessage(optimisticAnnouncement);
-        return;
-      }
+        setLiveRegionMessage(optimisticAnnouncement); 
+        return; 
+      } 
 
-      // Legacy single-file path
-      if (selectedFile) {
-        await handleSendAttachment();
-        return;
-      }
-
-      await handleSendText();
+      await handleSendText(); 
     } catch {
       setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
     } finally {
       releasePrimarySendLock();
     }
-  }, [
-    clearMentionState,
-    conversationId,
-    disabled,
-    handleSendAttachment,
-    handleSendText,
-    hasReadyDrafts,
-    optimisticAnnouncement,
+  }, [ 
+    clearMentionState, 
+    conversationId, 
+    disabled, 
+    handleSendText, 
+    hasReadyDrafts, 
+    optimisticAnnouncement, 
     onChange,
-    onSend,
-    releasePrimarySendLock,
-    scheduleComposerResize,
-    selectedFile,
-    stopTypingNow,
-    submitDisabled,
-    t,
+    onSend, 
+    releasePrimarySendLock, 
+    scheduleComposerResize, 
+    stopTypingNow, 
+    submitDisabled, 
+    t, 
     uploadDrafts?.length,
     draftValue,
     messageValidation.canSendInlineMessage,
@@ -928,32 +889,15 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     activeMentionIndexRef.current = activeMentionIndex;
   });
 
-  const handleRemoveSelectedFile = React.useCallback(() => {
-    if (isUploading) {
-      cancelUpload();
-    }
-    clearSelectedFile();
-  }, [cancelUpload, clearSelectedFile, isUploading]);
-
-  const handleRetryUpload = React.useCallback(() => {
-    void handleSendAttachment();
-  }, [handleSendAttachment]);
-
   const hasText = draftValue.trim().length > 0;
   const hasQueueDrafts = (uploadDrafts?.length ?? 0) > 0;
-  const isSubmitBusy = isUploading || isSending || isPrimarySendLocked;
-  const canSend = hasQueueDrafts
-    ? !submitDisabled &&
+  const isSubmitBusy = isSending || isPrimarySendLocked;
+  const canSend =
+    !submitDisabled &&
     !isSubmitBusy &&
     messageValidation.canSendInlineMessage &&
     !hasUploadingDrafts &&
-    (hasReadyDrafts || hasText)
-    : selectedFile
-      ? !submitDisabled && !isSubmitBusy && composerMode === "online"
-      : !submitDisabled &&
-      !isSubmitBusy &&
-      hasText &&
-      messageValidation.canSendInlineMessage;
+    (hasQueueDrafts ? hasReadyDrafts || hasText : hasText);
   const disableAttachmentActions = attachmentsDisabled || isSubmitBusy;
   const sendButtonLabel = t("chat:composer.sendMessage");
   const composerVisualState: ComposerVisualState = disabled
@@ -1004,12 +948,6 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
 
     textareaRef.current.focus();
   }, [conversationId, textareaRef]);
-
-  React.useEffect(() => {
-    if (uploadError) {
-      setLiveRegionMessage(t("chat:composer.failedAnnouncement"));
-    }
-  }, [t, uploadError]);
 
   React.useEffect(() => {
     if (!showMentionPanel) {
@@ -1229,22 +1167,6 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
               hasFailedDrafts={hasFailedDrafts}
             />
           )}
-
-        {/* Legacy single-file preview (hidden when queue is active) */}
-        {!hasQueueDrafts && selectedFile && (
-          <AttachmentPreview
-            selectedFile={selectedFile}
-            previewUrl={previewUrl}
-            uploadProgress={uploadProgress}
-            uploadError={uploadError}
-            isUploading={isUploading}
-            maxFileSizeBytes={resolveUploadMaxBytesForFile(selectedFile)}
-            onCancelUpload={cancelUpload}
-            onRetryUpload={handleRetryUpload}
-            onSendNow={() => void handleSendAttachment()}
-            onRemove={handleRemoveSelectedFile}
-          />
-        )}
 
         <div className="flex items-end gap-2">
           <div

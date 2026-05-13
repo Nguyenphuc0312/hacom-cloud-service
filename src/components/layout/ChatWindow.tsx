@@ -433,7 +433,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           });
       }
 
-      // ── Build attachments from upload queue + legacy single file ──
+      // ── Build attachments from finalized upload drafts ──
       const queueMetas = uploadQueue.getReadyMeta();
       const allAttachments: Attachment[] = [];
 
@@ -492,7 +492,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             setInputMode("normal");
 
             if (queueMetas.length > 0) {
-              uploadQueue.clearAll();
+              uploadQueue.acknowledgeSent();
             }
 
             logMessageDebug("ChatWindow", "send_resolved", {

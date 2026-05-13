@@ -4,6 +4,7 @@ interface CreateGroupConversationInput {
   name: string;
   memberIds: string[];
   avatar?: string;
+  avatarFileId?: string;
   description?: string;
 }
 

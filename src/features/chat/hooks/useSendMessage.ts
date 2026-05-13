@@ -2,29 +2,22 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { ErrorCode } from "@hacom/chat-shared-types/core";
 import { toast } from "../../../components/ui";
-import { extractApiError, unwrapApiSuccess } from "../../../lib/apiContract";
+import { extractApiError } from "../../../lib/apiContract";
 import { useAuthStore, useGroupStore } from "../../../stores";
-import type {
-  Attachment,
-  Message,
-  MessageType,
-} from "../../../types";
+import type { Attachment, Message, MessageType } from "../../../types";
 import { MessageType as MessageTypeEnum } from "../../../types";
 import { logMessageDebug } from "../../../utils/messageDebug";
 import {
   DOCUMENT_UPLOAD_ACCEPT,
   PHOTO_UPLOAD_ACCEPT,
   UPLOAD_INPUT_ACCEPT,
-  resolveUploadMaxBytesForFile,
   resolveUploadFileType,
   resolveUploadMimeTypeForFile,
-  validateUploadFileType,
 } from "../../../utils/uploadPolicy";
 import {
   useSendMessageMutation,
   type SendMessageAttachmentInput,
 } from "../../api/chatApi";
-import { chatApi as legacyChatApi } from "../api/chatApi";
 
 export type AttachmentPickerMode = "photo" | "document" | "mixed";
 
@@ -44,17 +37,15 @@ interface UseSendMessageOptions {
 }
 
 interface UseSendMessageResult {
-  selectedFile: File | null;
-  previewUrl: string | null;
-  uploadProgress: number;
-  uploadError: string | null;
-  isUploading: boolean;
   isSending: boolean;
-  selectFile: (file: File) => boolean;
-  sendTextMessage: (content: string, options?: { contentFormat?: 'plain_text' | 'rich_text'; contentJson?: Record<string, unknown>; plainText?: string }) => Promise<SendDisposition>;
-  sendAttachmentMessage: () => Promise<SendDisposition>;
-  clearSelectedFile: () => void;
-  cancelUpload: () => void;
+  sendTextMessage: (
+    content: string,
+    options?: {
+      contentFormat?: "plain_text" | "rich_text";
+      contentJson?: Record<string, unknown>;
+      plainText?: string;
+    },
+  ) => Promise<SendDisposition>;
   openFilePicker: (
     mode: AttachmentPickerMode,
     input: HTMLInputElement | null,
@@ -65,18 +56,11 @@ interface UseSendMessageResult {
     fileMeta?: Attachment | Attachment[] | undefined,
     type?: MessageType,
     mentions?: string[],
+    contentFormat?: "plain_text" | "rich_text",
+    contentJson?: Record<string, unknown>,
+    plainText?: string,
   ) => unknown | Promise<unknown>;
 }
-
-const isCanceledUploadError = (error: unknown): boolean => {
-  if (!error || typeof error !== "object") return false;
-  const value = error as { code?: string; name?: string };
-  return (
-    value.code === "ERR_CANCELED" ||
-    value.name === "AbortError" ||
-    value.name === "CanceledError"
-  );
-};
 
 const resolveDisposition = (result: unknown): SendDisposition => {
   const candidate = result as { disposition?: unknown } | undefined;
@@ -112,16 +96,21 @@ const toSendMessageAttachments = (
 ): SendMessageAttachmentInput[] | undefined => {
   if (!fileMeta) return undefined;
   const attachments = Array.isArray(fileMeta) ? fileMeta : [fileMeta];
-  return attachments.map((attachment) => ({
-    id: attachment.id,
-    type: attachment.type,
-    objectKey: attachment.objectKey,
-    url: attachment.url,
-    downloadUrl: attachment.downloadUrl,
-    expiresAt: attachment.expiresAt,
-    fileName: attachment.fileName || "attachment",
-    mimeType:
-      attachment.mimeType ||
+  return attachments.map((attachment) => ({ 
+    id: attachment.id, 
+    type: 
+      attachment.type || 
+      resolveUploadFileType( 
+        attachment.mimeType ||
+          resolveUploadMimeTypeForFile({
+            name: attachment.fileName || "attachment",
+            type: "",
+          }) || 
+          "", 
+      ), 
+    fileName: attachment.fileName || "attachment", 
+    mimeType: 
+      attachment.mimeType || 
       resolveUploadMimeTypeForFile({
         name: attachment.fileName || "attachment",
         type: "",
@@ -147,81 +136,9 @@ export const useSendMessage = ({
   const resolvedConversationId = conversationId ?? selectedConversationId;
   const currentUser = useAuthStore((state) => state.user);
   const [sendMessageMutation] = useSendMessageMutation();
-  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = React.useState(0);
-  const [uploadError, setUploadError] = React.useState<string | null>(null);
-  const [isUploading, setIsUploading] = React.useState(false);
   const [isSending, setIsSending] = React.useState(false);
-  const uploadAbortRef = React.useRef<AbortController | null>(null);
   const setSlowModeCooldown = useGroupStore(
     (state) => state.setSlowModeCooldown,
-  );
-
-  const clearSelectedFile = React.useCallback(() => {
-    setSelectedFile(null);
-    setUploadError(null);
-    setUploadProgress(0);
-    setIsUploading(false);
-    uploadAbortRef.current = null;
-    setPreviewUrl((current) => {
-      if (current) {
-        URL.revokeObjectURL(current);
-      }
-      return null;
-    });
-  }, []);
-
-  const validateFile = React.useCallback(
-    (file: File): string | null => {
-      const mimeType = resolveUploadMimeTypeForFile(file);
-
-      if (file.size > resolveUploadMaxBytesForFile(file)) {
-        return t("error:upload.fileTooLarge");
-      }
-
-      if (!mimeType) {
-        return t("error:upload.unsupportedType");
-      }
-
-      const validatedType = validateUploadFileType({
-        fileName: file.name,
-        mimeType,
-      });
-      if (!validatedType.ok) {
-        return t(
-          validatedType.code === "MIME_EXTENSION_MISMATCH"
-            ? "error:upload.mimeExtensionMismatch"
-            : "error:upload.unsupportedType",
-        );
-      }
-
-      return null;
-    },
-    [t],
-  );
-
-  const selectFile = React.useCallback(
-    (file: File) => {
-      const errorMessage = validateFile(file);
-      if (errorMessage) {
-        toast.error(errorMessage);
-        return false;
-      }
-
-      setUploadError(null);
-      setUploadProgress(0);
-      setSelectedFile(file);
-      setPreviewUrl((current) => {
-        if (current) {
-          URL.revokeObjectURL(current);
-        }
-        return URL.createObjectURL(file);
-      });
-
-      return true;
-    },
-    [validateFile],
   );
 
   const sendMessage = React.useCallback(
@@ -231,7 +148,7 @@ export const useSendMessage = ({
       fileMeta?: Attachment | Attachment[] | undefined,
       type: MessageType = MessageTypeEnum.TEXT,
       mentions?: string[],
-      contentFormat?: 'plain_text' | 'rich_text',
+      contentFormat?: "plain_text" | "rich_text",
       contentJson?: Record<string, unknown>,
       plainText?: string,
     ) => {
@@ -239,7 +156,7 @@ export const useSendMessage = ({
         return Promise.resolve(onSend(content, fileMeta, type));
       }
 
-      if (!selectedConversationId) {
+      if (!resolvedConversationId) {
         const error = new Error(
           t("error:chat.conversationOpenFailed", {
             defaultValue: "Conversation is not ready yet.",
@@ -259,7 +176,7 @@ export const useSendMessage = ({
           }),
         );
         logMessageDebug(source, "send_blocked_conversation_not_ready", {
-          conversationId: selectedConversationId,
+          conversationId: resolvedConversationId,
           isConversationReady,
           contentLength: content.trim().length,
           type,
@@ -284,7 +201,7 @@ export const useSendMessage = ({
           retryAfterSeconds &&
           retryAfterSeconds > 0
         ) {
-          setSlowModeCooldown(selectedConversationId, retryAfterSeconds);
+          setSlowModeCooldown(resolvedConversationId, retryAfterSeconds);
         }
 
         throw error;
@@ -294,7 +211,7 @@ export const useSendMessage = ({
         const clientMessageId = createClientMessageId();
         const localId = `temp-${clientMessageId}`;
         const sendPromise = sendMessageMutation({
-          conversationId: selectedConversationId,
+          conversationId: resolvedConversationId,
           clientMessageId,
           localId,
           content,
@@ -317,8 +234,7 @@ export const useSendMessage = ({
           .catch(handleSendError);
 
         void sendPromise.catch(() => {
-          // RTKQ cache marks the optimistic row as failed; callers can still
-          // inspect the ack promise if they need transport-level handling.
+          // The optimistic row is already marked failed by RTKQ side-effects.
         });
 
         return {
@@ -338,7 +254,7 @@ export const useSendMessage = ({
       currentUser?.username,
       isConversationReady,
       onSend,
-      selectedConversationId,
+      resolvedConversationId,
       sendMessageMutation,
       setSlowModeCooldown,
       source,
@@ -347,17 +263,23 @@ export const useSendMessage = ({
   );
 
   const sendTextMessage = React.useCallback(
-    async (content: string, options?: { contentFormat?: 'plain_text' | 'rich_text'; contentJson?: Record<string, unknown>; plainText?: string }) => {
+    async (
+      content: string,
+      options?: {
+        contentFormat?: "plain_text" | "rich_text";
+        contentJson?: Record<string, unknown>;
+        plainText?: string;
+      },
+    ) => {
       const text = content.trim();
       if (!text || disabled) return "failed";
 
+      setIsSending(true);
       try {
         if (onSend) {
           const sendResult = onSend(text, undefined, MessageTypeEnum.TEXT);
           if (isPromiseLike(sendResult)) {
-            void Promise.resolve(sendResult).catch(() => {
-              // Timeline handles eventual failure states.
-            });
+            void Promise.resolve(sendResult).catch(() => undefined);
             return "optimistic";
           }
 
@@ -366,97 +288,28 @@ export const useSendMessage = ({
             : "optimistic";
         }
 
-        const sendResult = sendMessage(text, undefined, undefined, MessageTypeEnum.TEXT, undefined, options?.contentFormat, options?.contentJson, options?.plainText);
+        const sendResult = sendMessage(
+          text,
+          undefined,
+          undefined,
+          MessageTypeEnum.TEXT,
+          undefined,
+          options?.contentFormat,
+          options?.contentJson,
+          options?.plainText,
+        );
         const disposition = resolveDisposition(sendResult);
         return disposition === "sent" ? "optimistic" : disposition;
       } catch (error) {
         const apiError = extractApiError(error);
         toast.error(apiError.message || t("error:chat.sendFailed"));
         return "failed";
+      } finally {
+        setIsSending(false);
       }
     },
     [disabled, onSend, sendMessage, t],
   );
-
-  const sendAttachmentMessage = React.useCallback(async () => {
-    if (
-      !selectedFile ||
-      !resolvedConversationId ||
-      disabled ||
-      isUploading ||
-      isSending
-    ) {
-      return "failed";
-    }
-
-    const abortController = new AbortController();
-    uploadAbortRef.current = abortController;
-    setIsUploading(true);
-    setUploadError(null);
-    setUploadProgress(0);
-
-    try {
-      const response = await legacyChatApi.file.uploadFile(
-        resolvedConversationId,
-        selectedFile,
-        setUploadProgress,
-        abortController.signal,
-      );
-      const uploaded = unwrapApiSuccess(response);
-      const attachment = legacyChatApi.file.toAttachment(uploaded);
-      const mimeType = attachment.mimeType || selectedFile.type;
-      const attachmentType = resolveUploadFileType(mimeType);
-      const messageType =
-        attachmentType === "image" ? MessageTypeEnum.IMAGE : MessageTypeEnum.FILE;
-
-      setIsSending(true);
-      const result = onSend
-        ? await Promise.resolve(
-            onSend(
-              attachment.fileName || selectedFile.name,
-              attachment,
-              messageType,
-            ),
-          )
-        : await sendMessage(
-            attachment.fileName || selectedFile.name,
-            undefined,
-            attachment,
-            messageType,
-          );
-      clearSelectedFile();
-      return resolveDisposition(result);
-    } catch (error) {
-      if (isCanceledUploadError(error)) {
-        setUploadError(t("error:upload.uploadCanceled"));
-        return "failed";
-      }
-
-      const apiError = extractApiError(error);
-      const errorMessage = apiError.message || t("error:upload.uploadFailed");
-      setUploadError(errorMessage);
-      toast.error(errorMessage);
-      return "failed";
-    } finally {
-      uploadAbortRef.current = null;
-      setIsUploading(false);
-      setIsSending(false);
-    }
-  }, [
-    clearSelectedFile,
-    disabled,
-    isSending,
-    isUploading,
-    onSend,
-    resolvedConversationId,
-    selectedFile,
-    sendMessage,
-    t,
-  ]);
-
-  const cancelUpload = React.useCallback(() => {
-    uploadAbortRef.current?.abort();
-  }, []);
 
   const openFilePicker = React.useCallback(
     (mode: AttachmentPickerMode, input: HTMLInputElement | null) => {
@@ -475,28 +328,9 @@ export const useSendMessage = ({
     [],
   );
 
-  React.useEffect(() => {
-    return () => {
-      uploadAbortRef.current?.abort();
-      uploadAbortRef.current = null;
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-    };
-  }, [previewUrl]);
-
   return {
-    selectedFile,
-    previewUrl,
-    uploadProgress,
-    uploadError,
-    isUploading,
     isSending,
-    selectFile,
     sendTextMessage,
-    sendAttachmentMessage,
-    clearSelectedFile,
-    cancelUpload,
     openFilePicker,
     sendMessage,
   };

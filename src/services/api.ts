@@ -48,9 +48,8 @@ import {
   storeTokens,
   updateAccessToken,
 } from "./tokenService";
-import { isUuid } from "../utils/isUuid";
-import { logger } from "../utils/logger";
-import { resolveUploadMimeTypeForFile } from "../utils/uploadPolicy";
+import { isUuid } from "../utils/isUuid"; 
+import { logger } from "../utils/logger"; 
 
 const DIRECT_DM_TRACE_PREFIX = "direct_dm.request_trace";
 const DIRECT_DM_PATH = "/conversations/direct";
@@ -107,14 +106,15 @@ export type FileUploadPurpose =
   | "user_avatar"
   | "group_avatar";
 
-export interface ReserveFileUploadPayload {
-  purpose: FileUploadPurpose;
-  conversationId?: string;
-  groupId?: string;
-  filename: string;
-  mimeType: string;
-  sizeBytes: number;
-}
+export interface ReserveFileUploadPayload { 
+  uploadId?: string;
+  purpose: FileUploadPurpose; 
+  conversationId?: string; 
+  groupId?: string; 
+  filename: string; 
+  mimeType: string; 
+  sizeBytes: number; 
+} 
 
 interface UploadToSignedUrlOptions {
   method?: string;
@@ -123,31 +123,9 @@ interface UploadToSignedUrlOptions {
   signal?: AbortSignal;
 }
 
-interface UploadViaPipelineInput extends ReserveFileUploadPayload {
-  file: File;
-  onProgress?: (progress: number) => void;
-  onStageChange?: (
-    stage: "reserving" | "uploading" | "completing",
-  ) => void;
-  signal?: AbortSignal;
-}
-
-const isSignedUrlExpiredError = (error: unknown): boolean => {
-  if (axios.isAxiosError(error)) {
-    return error.response?.status === 403;
-  }
-
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "status" in error &&
-    (error as { status?: unknown }).status === 403
-  );
-};
-
-const normalizeGroupAvatarUrlForRequest = (
-  avatarUrl?: string | null,
-): string | undefined => {
+const normalizeGroupAvatarUrlForRequest = ( 
+  avatarUrl?: string | null, 
+): string | undefined => { 
   if (typeof avatarUrl !== "string") {
     return undefined;
   }
@@ -529,18 +507,7 @@ export const userApi = {
     }
   },
 
-  updateAvatar: async (file: File) => {
-    const formData = new FormData();
-    formData.append("avatar", file);
-    const response = await apiClient.put<ApiResponse<{ avatar: string }>>(
-      "/users/avatar",
-      formData,
-      { headers: { "Content-Type": "multipart/form-data" } },
-    );
-    return response.data;
-  },
-
-  attachAvatar: async (payload: { fileId?: string; uploadId?: string }) => {
+  attachAvatar: async (payload: { fileId?: string; uploadId?: string }) => { 
     const response = await apiClient.post<ApiResponse<User>>(
       "/users/avatar/attach",
       payload,
@@ -714,20 +681,22 @@ export const conversationApi = {
     };
   },
 
-  createGroupConversation: async (data: {
-    name: string;
-    memberIds: string[];
-    avatar?: string;
-    description?: string;
-  }) => {
-    const avatarUrl = normalizeGroupAvatarUrlForRequest(data.avatar);
-    const response = await apiClient.post<ApiResponse<unknown>>("/groups", {
-      type: "basic_group",
-      title: data.name,
-      memberIds: data.memberIds,
-      description: data.description,
-      ...(avatarUrl ? { avatarUrl } : {}),
-    });
+  createGroupConversation: async (data: { 
+    name: string; 
+    memberIds: string[]; 
+    avatar?: string; 
+    avatarFileId?: string;
+    description?: string; 
+  }) => { 
+    const avatarUrl = normalizeGroupAvatarUrlForRequest(data.avatar); 
+    const response = await apiClient.post<ApiResponse<unknown>>("/groups", { 
+      type: "basic_group", 
+      title: data.name, 
+      memberIds: data.memberIds, 
+      description: data.description, 
+      ...(avatarUrl ? { avatarUrl } : {}), 
+      ...(data.avatarFileId ? { avatarFileId: data.avatarFileId } : {}),
+    }); 
 
     if (!response.data.success) {
       return response.data as ApiResponse<Conversation>;
@@ -1161,8 +1130,8 @@ export const messageApi = {
     return response.data;
   },
 
-  sendMessage: async (
-    conversationId: string,
+  sendMessage: async ( 
+    conversationId: string, 
     data: {
       content: string;
       contentFormat?: 'plain_text' | 'rich_text';
@@ -1191,17 +1160,21 @@ export const messageApi = {
         duration?: number;
         thumbnailUrl?: string;
       }>;
-    },
-  ) => {
-    const body: Record<string, unknown> = {
-      content: data.content,
-      type: data.type || "text",
-      replyTo: data.replyToId,
-      clientMessageId: data.clientMessageId,
-      tempId: data.tempId,
-      localId: data.localId,
-      attachments: data.attachments,
-    };
+    }, 
+  ) => { 
+    const normalizedAttachments = data.attachments?.map((attachment) => ({
+      id: attachment.id,
+      type: attachment.type,
+    }));
+    const body: Record<string, unknown> = { 
+      content: data.content, 
+      type: data.type || "text", 
+      replyTo: data.replyToId, 
+      clientMessageId: data.clientMessageId, 
+      tempId: data.tempId, 
+      localId: data.localId, 
+      attachments: normalizedAttachments, 
+    }; 
     if (data.contentFormat) body.contentFormat = data.contentFormat;
     if (data.contentJson) body.contentJson = data.contentJson;
     if (data.plainText) body.plainText = data.plainText;
@@ -1314,23 +1287,24 @@ export const messageApi = {
 // FILE API
 // ============================================
 
-export const fileApi = {
-  reserveFileUpload: async (payload: ReserveFileUploadPayload) => {
-    const response = await apiClient.post<ApiResponse<UploadSignedUrlResponse>>(
-      "/files/upload-url",
-      {
-        purpose: payload.purpose,
-        ...(payload.conversationId
-          ? { conversationId: payload.conversationId }
-          : {}),
+export const fileApi = { 
+  reserveFileUpload: async (payload: ReserveFileUploadPayload) => { 
+    const response = await apiClient.post<ApiResponse<UploadSignedUrlResponse>>( 
+      "/files/upload-url", 
+      { 
+        ...(payload.uploadId ? { uploadId: payload.uploadId } : {}),
+        purpose: payload.purpose, 
+        ...(payload.conversationId 
+          ? { conversationId: payload.conversationId } 
+          : {}), 
         ...(payload.groupId ? { groupId: payload.groupId } : {}),
         filename: payload.filename,
         mimeType: payload.mimeType,
         sizeBytes: payload.sizeBytes,
       } satisfies UploadSignedUrlRequest,
-    );
-    return response.data;
-  },
+    ); 
+    return response.data; 
+  }, 
 
   requestUploadUrl: async (payload: {
     conversationId: string;
@@ -1370,11 +1344,11 @@ export const fileApi = {
     });
   },
 
-  getDownloadUrl: async (params: {
-    conversationId: string;
-    objectKey?: string;
-    attachmentId?: string;
-    signal?: AbortSignal;
+  getDownloadUrl: async (params: { 
+    conversationId: string; 
+    objectKey?: string; 
+    attachmentId?: string; 
+    signal?: AbortSignal; 
   }) => {
     const response = await apiClient.get<ApiResponse<GetDownloadUrlResponse>>(
       "/files/download-url",
@@ -1386,53 +1360,13 @@ export const fileApi = {
         },
         signal: params.signal,
       },
-    );
-    return response.data;
-  },
-
-  uploadFile: async (
-    conversationId: string,
-    file: File,
-    onProgress?: (progress: number) => void,
-    signal?: AbortSignal,
-  ) => {
-    const mimeType = resolveUploadMimeTypeForFile(file);
-    if (!mimeType) {
-      throw new ApiContractError("Unable to determine file type", {
-        statusCode: 400,
-        code: ErrorCode.VALIDATION_ERROR,
-        details: {
-          fileName: file.name,
-          mimeType: file.type,
-        },
-      });
-    }
-    const completed = await fileApi.uploadViaPipeline({
-      purpose: "message_attachment",
-      conversationId,
-      filename: file.name,
-      mimeType,
-      sizeBytes: file.size,
-      file,
-      onProgress,
-      signal,
-    });
-    return { success: true, data: completed } as ApiResponse<CompleteUploadResponse>;
-  },
-
-  uploadImage: async (
-    conversationId: string,
-    file: File,
-    onProgress?: (progress: number) => void,
-    signal?: AbortSignal,
-  ) => {
-    return fileApi.uploadFile(conversationId, file, onProgress, signal);
-  },
-
-  uploadToSignedUrl: async (
-    url: string,
-    file: File,
-    options: UploadToSignedUrlOptions = {},
+    ); 
+    return response.data; 
+  }, 
+  uploadToSignedUrl: async ( 
+    url: string, 
+    file: File, 
+    options: UploadToSignedUrlOptions = {}, 
   ) => {
     await axios.request({
       url,
@@ -1447,71 +1381,67 @@ export const fileApi = {
 
         options.onProgress(
           Math.round((progressEvent.loaded * 100) / progressEvent.total),
-        );
+        ); 
+      }, 
+    }); 
+  }, 
+
+  toAttachment: (payload: CompleteUploadResponse): Attachment => { 
+    return payload.attachment as Attachment; 
+  }, 
+
+  listUnattachedUploads: async (params: {
+    conversationId: string;
+    limit?: number;
+    signal?: AbortSignal;
+  }) => {
+    const response = await apiClient.get<
+      ApiResponse<{
+        items: Array<{
+          uploadId: string;
+          fileId: string;
+          purpose: FileUploadPurpose;
+          conversationId?: string | null;
+          groupId?: string | null;
+          filename: string;
+          mimeType: string;
+          sizeBytes: number;
+          createdAt: string;
+          expiresAt?: string;
+          width?: number;
+          height?: number;
+          duration?: number;
+          thumbnailUrl?: string;
+        }>;
+      }>
+    >("/files/unattached", {
+      params: {
+        conversationId: params.conversationId,
+        ...(typeof params.limit === "number" ? { limit: params.limit } : {}),
       },
+      signal: params.signal,
     });
+    return response.data;
   },
 
-  uploadViaPipeline: async (input: UploadViaPipelineInput) => {
-    const reserve = async () =>
-      unwrapApiSuccess(
-        await fileApi.reserveFileUpload({
-          purpose: input.purpose,
-          conversationId: input.conversationId,
-          groupId: input.groupId,
-          filename: input.filename,
-          mimeType: input.mimeType,
-          sizeBytes: input.sizeBytes,
-        }),
-      );
-
-    const uploadOnce = async (signed: UploadSignedUrlResponse) => {
-      input.onStageChange?.("uploading");
-      await fileApi.uploadToSignedUrl(
-        signed.signedPutUrl || signed.uploadUrl,
-        input.file,
-        {
-          method: signed.uploadMethod || "PUT",
-          headers: {
-            ...(signed.uploadHeaders || {}),
-            "Content-Type": input.mimeType,
-          },
-          onProgress: input.onProgress,
-          signal: input.signal,
-        },
-      );
-    };
-
-    input.onStageChange?.("reserving");
-    let signed = await reserve();
-    try {
-      await uploadOnce(signed);
-    } catch (error) {
-      if (!isSignedUrlExpiredError(error)) {
-        throw error;
-      }
-
-      input.onStageChange?.("reserving");
-      signed = await reserve();
-      await uploadOnce(signed);
-    }
-
-    input.onStageChange?.("completing");
-    return unwrapApiSuccess(
-      await fileApi.completeFileUpload({
-        uploadId: signed.uploadId,
-      }),
+  abandonUpload: async (
+    uploadId: string,
+    options: { reason?: string; signal?: AbortSignal } = {},
+  ) => {
+    const response = await apiClient.delete<ApiResponse<{ uploadId: string }>>(
+      `/files/uploads/${uploadId}`,
+      {
+        params: options.reason ? { reason: options.reason } : undefined,
+        signal: options.signal,
+      },
     );
+    return response.data;
   },
-
-  toAttachment: (payload: CompleteUploadResponse): Attachment => {
-    return payload.attachment as Attachment;
-  },
-
-  deleteFile: async (fileId: string) => {
-    await apiClient.delete(`/files/${fileId}`);
-  },
-};
+ 
+  deleteFile: async (fileId: string) => { 
+    await apiClient.delete(`/files/${fileId}`); 
+  }, 
+}; 
 
 // ============================================
 // CONTACT API
