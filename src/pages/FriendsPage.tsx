@@ -833,8 +833,6 @@ export const FriendsPage: React.FC = () => {
       <AppPageHeader
         title={t("friends:title")}
         subtitle={t("friends:subtitle")}
-        onBack={() => navigate(ROUTE_PATHS.CHAT)}
-        backLabel={t("common:actions.back")}
         badge={
           pendingCount > 0 ? (
             <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary">
