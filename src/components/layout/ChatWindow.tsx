@@ -1052,6 +1052,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         currentUsername={currentUsername}
         composerHeight={composerHeight}
         className="flex-1 min-h-0"
+        onBottomVisible={onReachedLatestMessage ? () => onReachedLatestMessage({} as Message) : undefined}
       />
 
       {ephemeralNotice &&

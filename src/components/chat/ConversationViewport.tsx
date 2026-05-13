@@ -31,6 +31,8 @@ interface ConversationViewportProps {
   currentUsername?: string;
   composerHeight?: number;
   className?: string;
+  /** Fires when the user scrolls to within the near-bottom threshold. */
+  onBottomVisible?: () => void;
 }
 
 export const ConversationViewport: React.FC<ConversationViewportProps> =
@@ -55,6 +57,7 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
       currentUsername,
       composerHeight,
       className,
+      onBottomVisible,
     }: ConversationViewportProps) => {
       const conversationReadSnapshot = conversation as Conversation & {
         lastReadMessageId?: string;
@@ -73,7 +76,14 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
       } | null>(null);
 
       React.useEffect(() => {
+        // Unread marker should only be visible when the tab is visible.
+        // Even though unreadCount only increments when the tab is hidden/backgrounded
+        // (see shouldIncrementUnread in useWebSocket.ts), the stored unreadCount
+        // may still be > 0 when a hidden tab regains focus — the separator
+        // should not appear until the user explicitly scrolls to it.
+        const isVisible = document.visibilityState === "visible";
         const hasUnreadContext =
+          isVisible &&
           (conversation.unreadCount ?? 0) > 0 &&
           (firstUnreadMessageId || lastReadMessageId || lastReadAt);
 
@@ -136,6 +146,7 @@ export const ConversationViewport: React.FC<ConversationViewportProps> =
           unreadMarker={unreadMarker}
           composerHeight={composerHeight}
           className={className}
+          onBottomVisible={onBottomVisible}
         />
       );
     },

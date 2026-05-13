@@ -36,6 +36,8 @@ export interface UseSimpleChatScrollParams {
   isInitialLoading: boolean;
   isFetchingOlder?: boolean;
   loadOlder?: () => void | Promise<void>;
+  /** Fires when the user scrolls to within the near-bottom threshold. */
+  onBottomVisible?: () => void;
   /** Test seam. */
   now?: () => number;
 }
@@ -76,6 +78,7 @@ export function useSimpleChatScroll(
     isInitialLoading,
     isFetchingOlder,
     loadOlder,
+    onBottomVisible,
   } = params;
 
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
@@ -210,15 +213,20 @@ export function useSimpleChatScroll(
     return;
   }, [messages, currentUserId, isInitialSettled]);
 
-  // Rule 8: onScroll just observes — never writes back.
   const handleScroll = React.useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
 
     const atBottom = isNearBottom(el);
-    if (wasAtBottomRef.current !== atBottom) {
+    const wasAtBottom = wasAtBottomRef.current;
+    if (wasAtBottom !== atBottom) {
       wasAtBottomRef.current = atBottom;
       setIsAtBottom(atBottom);
+      // Rule 9: bottom sentinel — fire callback when user reaches the bottom.
+      // This enables auto mark-read when the user scrolls to the latest message.
+      if (atBottom && !wasAtBottom && typeof onBottomVisible === "function") {
+        onBottomVisible();
+      }
     }
     if (atBottom) {
       setPendingNewMessages((n) => (n === 0 ? n : 0));
@@ -258,7 +266,7 @@ export function useSimpleChatScroll(
     } else {
       logSimpleTimeline("user_scroll", { scrollTop: el.scrollTop });
     }
-  }, [hasOlder, isFetchingOlder, loadOlder]);
+  }, [hasOlder, isFetchingOlder, loadOlder, onBottomVisible]);
 
   // Rule 6: media settled.
   const handleMediaLoad = React.useCallback(() => {
