@@ -610,8 +610,6 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
 
   // Debounced unread summary refresh. Coalesces concurrent callers into one API call
   // within the debounce window.
-  let unreadSummaryTimer: ReturnType<typeof setTimeout> | null = null;
-  let unreadSummaryInFlight: Promise<void> | null = null;
   const refreshUnreadSummarySnapshot = (): Promise<void> => {
     if (unreadSummaryInFlight) {
       return unreadSummaryInFlight;
