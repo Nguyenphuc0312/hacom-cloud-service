@@ -60,6 +60,8 @@ export interface SimpleVirtualizedChatTimelineProps {
   unreadMarker?: UnreadTimelineMarker | null;
   composerHeight?: number;
   className?: string;
+  /** Fires when the user scrolls to within the near-bottom threshold. */
+  onBottomVisible?: () => void;
 }
 
 const EMPTY_SELECTED = new Set<string>();
@@ -131,6 +133,7 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
     isInitialLoading: Boolean(isInitialLoading),
     isFetchingOlder: Boolean(isLoadingMore),
     loadOlder: onLoadMore,
+    onBottomVisible,
   });
 
   // eslint-disable-next-line react-hooks/incompatible-library

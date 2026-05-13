@@ -145,13 +145,27 @@ export const broadcastUnreadSnapshot = (
     sourceTabId: TAB_ID,
   };
 
+  // BroadcastChannel primary: best-effort, no retry needed since localStorage
+  // fallback provides eventual delivery.
   if (typeof BroadcastChannel !== "undefined") {
-    const channel = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
-    channel.postMessage(payload);
-    channel.close();
+    try {
+      const channel = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
+      channel.postMessage(payload);
+      channel.close();
+    } catch {
+      // BroadcastChannel errors (quota exceeded, origin not same, etc.) are
+      // non-fatal. The localStorage fallback below provides cross-tab delivery.
+    }
   }
 
-  window.localStorage.setItem(STORAGE_EVENT_KEY, JSON.stringify(payload));
+  // localStorage secondary: always write so other tabs receive the update via
+  // the storage event handler. This is the reliable delivery path.
+  try {
+    window.localStorage.setItem(STORAGE_EVENT_KEY, JSON.stringify(payload));
+  } catch {
+    // localStorage may throw if quota is exceeded or private browsing mode has
+    // strict storage limits. This is non-fatal for cross-tab sync.
+  }
 };
 
 export const subscribeUnreadSnapshotBroadcast = (
@@ -163,14 +177,19 @@ export const subscribeUnreadSnapshotBroadcast = (
 
   let channel: BroadcastChannel | null = null;
   if (typeof BroadcastChannel !== "undefined") {
-    channel = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
-    channel.onmessage = (event: MessageEvent<BroadcastUnreadSnapshot>) => {
-      const payload = event.data;
-      if (!payload || payload.sourceTabId === TAB_ID) {
-        return;
-      }
-      handler(payload);
-    };
+    try {
+      channel = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
+      channel.onmessage = (event: MessageEvent<BroadcastUnreadSnapshot>) => {
+        const payload = event.data;
+        if (!payload || payload.sourceTabId === TAB_ID) {
+          return;
+        }
+        handler(payload);
+      };
+    } catch {
+      // BroadcastChannel unavailable (e.g., cross-origin iframe context).
+      channel = null;
+    }
   }
 
   const storageHandler = (event: StorageEvent) => {

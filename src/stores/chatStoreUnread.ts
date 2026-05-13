@@ -100,6 +100,42 @@ const normalizeMarkAsReadInput = (
 const getInputAnchorId = (input: MarkAsReadInput): string | undefined =>
   input.lastVisibleMessageId ?? input.messageId;
 
+const DEFAULT_MARK_READ_DEBOUNCE_MS = 200;
+const DEFAULT_UNREAD_SUMMARY_DEBOUNCE_MS = 500;
+const LOCAL_STORAGE_KEY = "chat:unread:local_seq";
+
+interface PersistedSeqState {
+  byConversation: Record<string, number>;
+  updatedAt: number;
+}
+
+const loadPersistedSeq = (): Record<string, number> => {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as PersistedSeqState;
+      if (parsed && typeof parsed.byConversation === "object") {
+        return parsed.byConversation;
+      }
+    }
+  } catch {
+    // localStorage unavailable or corrupted — ignore
+  }
+  return {};
+};
+
+const persistSeq = (byConversation: Record<string, number>): void => {
+  try {
+    const state: PersistedSeqState = {
+      byConversation,
+      updatedAt: Date.now(),
+    };
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // localStorage write failed (quota, private browsing) — ignore
+  }
+};
+
 export const createChatUnreadController = <TState extends UnreadStateSlice>({
   set,
   get,
@@ -111,6 +147,8 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
   buildConversationCollectionState,
   getConversationCursorTimestamp,
   updateConversationReadProgress,
+  markReadDebounceMs = DEFAULT_MARK_READ_DEBOUNCE_MS,
+  unreadSummaryDebounceMs = DEFAULT_UNREAD_SUMMARY_DEBOUNCE_MS,
 }: {
   set: SetState<TState>;
   get: GetState<TState>;
@@ -138,29 +176,47 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
     readAt?: Date | string | null,
     lastReadSeq?: number | null,
   ) => Conversation;
+  markReadDebounceMs?: number;
+  unreadSummaryDebounceMs?: number;
 }) => {
   const markAsReadInFlight = new Map<string, MarkAsReadRequest>();
   // localMarkedReadSeq: seq cuối cùng mà FE đã chủ động mark-read trong session
   // hiện tại. Dùng để chống stale-overwrite: nếu server snapshot trả về
   // unreadCount > 0 hoặc lastReadSeq < localMarkedReadSeq (do projection chưa
   // kịp catch up), FE phải giữ trạng thái local. Tránh badge nhảy lại đỏ ngay
-  // sau khi user vừa đọc.
-  const localMarkedReadSeq = new Map<string, number>();
+  // sau khi user vừa đọc. Persisted to localStorage so crash/reload retains state.
+  const persistedSeq = loadPersistedSeq();
+  const localMarkedReadSeq = new Map<string, number>(Object.entries(persistedSeq));
   // Snapshot map: stores the conversation state BEFORE an optimistic mark-read
   // so it can be restored if the API call fails.
   const pendingRollbackSnapshot = new Map<string, Conversation>();
+
+  // Mark-read debounce: coalesce rapid scroll-triggered mark-read calls.
+  const markReadDebounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const pendingMarkReadInputs = new Map<string, MarkAsReadInput>();
+
+  // Unread summary debounce: coalesce rapid snapshot refresh calls.
+  let unreadSummaryTimer: ReturnType<typeof setTimeout> | null = null;
+  let unreadSummaryInFlight: Promise<void> | null = null;
 
   const recordLocalMarkedSeq = (conversationId: string, seq: number): void => {
     if (!conversationId || !Number.isInteger(seq) || seq <= 0) return;
     const previous = localMarkedReadSeq.get(conversationId) ?? 0;
     if (seq > previous) {
       localMarkedReadSeq.set(conversationId, seq);
+      // Persist so crash/reload retains the mark-read position.
+      const serialized: Record<string, number> = {};
+      localMarkedReadSeq.forEach((v, k) => { serialized[k] = v; });
+      persistSeq(serialized);
     }
   };
   const getLocalMarkedSeq = (conversationId: string): number =>
     localMarkedReadSeq.get(conversationId) ?? 0;
   const clearLocalMarkedSeq = (conversationId: string): void => {
     localMarkedReadSeq.delete(conversationId);
+    const serialized: Record<string, number> = {};
+    localMarkedReadSeq.forEach((v, k) => { serialized[k] = v; });
+    persistSeq(serialized);
   };
 
   const applyOptimisticConversationRead = (
@@ -259,14 +315,35 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
     });
   };
 
-  const markAsRead = async (
+  // Debounced markAsRead entry: coalesce rapid scroll-triggered calls into one.
+  // The in-flight queue below still handles the case where a debounced call
+  // arrives while an existing request is pending.
+  const debouncedMarkRead = (
     conversationId: string,
-    input?: string | MarkAsReadInput,
+    input: MarkAsReadInput,
   ): Promise<void> => {
-    const normalizedInput = normalizeMarkAsReadInput(input);
-    if (!normalizedInput) {
-      return Promise.resolve();
+    // Cancel any pending debounced call for this conversation.
+    const existingTimer = markReadDebounceTimers.get(conversationId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
     }
+    pendingMarkReadInputs.set(conversationId, input);
+    const timer = setTimeout(() => {
+      markReadDebounceTimers.delete(conversationId);
+      const pendingInput = pendingMarkReadInputs.get(conversationId);
+      pendingMarkReadInputs.delete(conversationId);
+      if (pendingInput) {
+        void flushMarkAsRead(conversationId, pendingInput);
+      }
+    }, markReadDebounceMs);
+    markReadDebounceTimers.set(conversationId, timer);
+    return Promise.resolve();
+  };
+
+  const flushMarkAsRead = async (
+    conversationId: string,
+    normalizedInput: MarkAsReadInput,
+  ): Promise<void> => {
     const anchorId = getInputAnchorId(normalizedInput);
     const lastReadSeq = toPositiveSeq(normalizedInput.lastReadSeq);
 
@@ -522,14 +599,44 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
     });
   };
 
-  const refreshUnreadSummarySnapshot = async (): Promise<void> => {
-    const requestedAtMs = Date.now();
-    const response = await getUnreadSummary();
-    applyUnreadSummary(unwrapApiSuccess(response as never) as UnreadSummary, {
-      requestedAtMs,
-      appliedAtMs: Date.now(),
-      source: "snapshot",
-    });
+  // Debounced entry point that coalesces rapid scroll-triggered mark-read calls.
+  const markAsRead = (conversationId: string, input?: string | MarkAsReadInput): Promise<void> => {
+    const normalizedInput = normalizeMarkAsReadInput(input);
+    if (!normalizedInput) {
+      return Promise.resolve();
+    }
+    return debouncedMarkRead(conversationId, normalizedInput);
+  };
+
+  // Debounced unread summary refresh. Coalesces concurrent callers into one API call
+  // within the debounce window.
+  let unreadSummaryTimer: ReturnType<typeof setTimeout> | null = null;
+  let unreadSummaryInFlight: Promise<void> | null = null;
+  const refreshUnreadSummarySnapshot = (): Promise<void> => {
+    if (unreadSummaryInFlight) {
+      return unreadSummaryInFlight;
+    }
+    if (unreadSummaryTimer) {
+      return Promise.resolve();
+    }
+    unreadSummaryTimer = setTimeout(() => {
+      unreadSummaryTimer = null;
+      const p = (async () => {
+        const requestedAtMs = Date.now();
+        const response = await getUnreadSummary();
+        applyUnreadSummary(unwrapApiSuccess(response as never) as UnreadSummary, {
+          requestedAtMs,
+          appliedAtMs: Date.now(),
+          source: "snapshot",
+        });
+      })().finally(() => {
+        if (unreadSummaryInFlight === p) {
+          unreadSummaryInFlight = null;
+        }
+      });
+      unreadSummaryInFlight = p;
+    }, unreadSummaryDebounceMs);
+    return Promise.resolve();
   };
 
   return {
@@ -540,6 +647,14 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
     reset() {
       markAsReadInFlight.clear();
       pendingRollbackSnapshot.clear();
+      markReadDebounceTimers.forEach((t) => clearTimeout(t));
+      markReadDebounceTimers.clear();
+      pendingMarkReadInputs.clear();
+      if (unreadSummaryTimer) {
+        clearTimeout(unreadSummaryTimer);
+        unreadSummaryTimer = null;
+      }
+      unreadSummaryInFlight = null;
     },
   };
 };
