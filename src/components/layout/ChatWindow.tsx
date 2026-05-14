@@ -82,28 +82,73 @@ function metaToAttachment(meta: UploadedFileMeta): Attachment {
 
 const DRAFT_PERSIST_DEBOUNCE_MS = 450;
 
-/** Extract user IDs for @username mentions found in message content. */
-function extractMentionUserIds(
+/** Extract mentions with full display name info for optimistic message rendering.
+ * Returns array of { userId, displayName } objects to be passed to the send mutation.
+ * Uses the same smart regex matching as extractMentionUserIds to handle @fullName with spaces.
+ */
+function extractMentionDetails(
   content: string,
   candidates: MentionCandidate[],
-): string[] {
+): { userId: string; displayName: string }[] {
   if (!candidates.length) return [];
-  // Strip HTML tags for rich-text content so @username is plain text.
-  const text = /^</.test(content.trim())
-    ? content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
-    : content;
-  const usernameSet = new Set<string>();
-  for (const match of text.matchAll(/@(\S+)/g)) {
-    usernameSet.add(match[1].toLowerCase());
-  }
-  if (!usernameSet.size) return [];
-  const ids: string[] = [];
+
+  // Build a lookup map: lowercase token -> { id, displayName }
+  const tokenToInfo = new Map<string, { id: string; displayName: string }>();
+
   for (const candidate of candidates) {
-    if (usernameSet.has(candidate.username.toLowerCase())) {
-      ids.push(candidate.id);
+    const id = candidate.id;
+
+    // Username token
+    const username = candidate.username.toLowerCase().trim();
+    if (username) {
+      const displayName = candidate.resolvedName || candidate.displayName || candidate.fullName || candidate.username;
+      tokenToInfo.set(username, { id, displayName });
+    }
+
+    // Resolved display name token (handles @fullName insert with spaces)
+    const resolvedName = (
+      candidate.resolvedName ||
+      candidate.displayName ||
+      candidate.fullName ||
+      ""
+    ).toLowerCase().trim();
+    if (resolvedName && resolvedName !== username) {
+      const displayName = candidate.resolvedName || candidate.displayName || candidate.fullName || candidate.username;
+      tokenToInfo.set(resolvedName, { id, displayName });
     }
   }
-  return ids;
+
+  if (tokenToInfo.size === 0) return [];
+
+  // Strip HTML tags for rich-text content
+  const text = /^</.test(content.trim())
+    ? content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ")
+    : content;
+
+  // Sort tokens by length descending so longer names are matched first
+  const sortedTokens = Array.from(tokenToInfo.keys()).sort((a, b) => b.length - a.length);
+  const escapedTokens = sortedTokens.map((t) =>
+    t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+  );
+  const mentionPattern = new RegExp(
+    `@(${escapedTokens.join("|")})`,
+    "gi",
+  );
+
+  const seen = new Set<string>();
+  const result: { userId: string; displayName: string }[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = mentionPattern.exec(text)) !== null) {
+    const token = match[1].toLowerCase();
+    const info = tokenToInfo.get(token);
+    if (info && !seen.has(info.id)) {
+      seen.add(info.id);
+      result.push({ userId: info.id, displayName: info.displayName });
+    }
+  }
+
+  return result;
 }
 
 interface ChatWindowProps {
@@ -117,7 +162,8 @@ interface ChatWindowProps {
     replyTo?: Message,
     fileMeta?: Attachment | Attachment[],
     type?: MessageType,
-    mentions?: string[],
+    /** Array of mention objects with userId and displayName for optimistic rendering */
+    mentions?: { userId: string; displayName: string }[],
   ) => unknown | Promise<unknown>;
   onReactMessage?: (messageId: string, emoji: string) => void | Promise<void>;
   onEditMessage?: (messageId: string, content: string) => void | Promise<void>;
@@ -460,7 +506,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             : allAttachments
           : undefined;
 
-      const mentionUserIds = extractMentionUserIds(outgoingContent, mentionCandidatesRef.current);
+      const mentionDetails = extractMentionDetails(outgoingContent, mentionCandidatesRef.current);
 
       logMessageDebug("ChatWindow", "send_requested", {
         conversationId: conversation.id,
@@ -470,7 +516,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         type: messageType || MessageType.TEXT,
         attachmentCount: allAttachments.length,
         replyToId: replyToMessage?.id,
-        mentionCount: mentionUserIds.length,
+        mentionCount: mentionDetails.length,
       });
       try {
         const sendResult = onSendMessage(
@@ -478,7 +524,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           replyToMessage,
           attachmentArg,
           messageType,
-          mentionUserIds.length ? mentionUserIds : undefined,
+          mentionDetails,
         );
         const sendPromise = Promise.resolve(sendResult);
         return sendPromise
@@ -876,6 +922,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             participantRecord.fullName.trim()) ||
           "";
 
+        // Resolve primary display name: fullNameFromHR > displayName > username
+        const resolvedName =
+          fullNameFromHR ||
+          resolveUserDisplayName(participant, {
+            allowLegacyFallback: false,
+          }) ||
+          participant.username?.trim() ||
+          employeeCode ||
+          participant.id;
+
         return {
           id: participant.id,
           username:
@@ -886,6 +942,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             }) || undefined,
           fullName: fullNameFromHR || undefined,
           employeeCode: employeeCode || undefined,
+          resolvedName,
         };
       });
   }, [conversation.participants, currentUser.id]);

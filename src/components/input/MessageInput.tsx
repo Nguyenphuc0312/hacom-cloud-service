@@ -33,7 +33,6 @@ import type { AttachmentDraft } from "../../types/attachmentDraft";
 import { logMessageDebug } from "../../utils/messageDebug";
 import { getPreviewFromMessage } from "../../utils/messageContent.utils";
 import { InlineNotice, toast } from "../ui";
-import { resolveUserDisplayName } from "../../features/chat/identity/resolveUserDisplayName";
 import {
   isChatPerformanceEnabled,
   recordChatPerformanceMeasure,
@@ -48,9 +47,13 @@ import { hasRichFormatting } from "../../utils/messageContent.utils";
 export interface MentionCandidate {
   id: string;
   username: string;
+  /** Primary display name for UI (fullName or resolved displayName) */
   displayName?: string;
+  /** HR full name if available */
   fullName?: string | null;
   employeeCode?: string;
+  /** Resolved display name for insert (fullName > displayName > username) */
+  resolvedName?: string;
 }
 
 /** Imperative handle for MessageInput — allows parent to programmatically control the composer */
@@ -244,12 +247,19 @@ const normalizeMentionCandidates = (
     if (seen.has(key)) return;
     seen.add(key);
 
+    // Resolve the primary display name: fullName > displayName > username
+    const resolvedName =
+      candidate.fullName?.trim() ||
+      candidate.displayName?.trim() ||
+      username;
+
     normalized.push({
       id: candidate.id,
       username,
       displayName: candidate.displayName?.trim() || undefined,
       fullName: candidate.fullName?.trim() || undefined,
       employeeCode: candidate.employeeCode?.trim() || undefined,
+      resolvedName,
     });
   });
 
@@ -782,7 +792,10 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
     (candidate: MentionCandidate) => {
       if (!mentionMatch) return;
 
-      const insertion = `@${candidate.username} `;
+      // Insert @fullName (display name) for better readability, NOT @username.
+      // Backend resolves userId from the content via extractMentionUserIds on the server side.
+      const resolvedName = candidate.resolvedName || candidate.displayName || candidate.username;
+      const insertion = `@${resolvedName} `;
       const nextValue = `${draftValue.slice(0, mentionMatch.start)}${insertion}${draftValue.slice(mentionMatch.end)}`;
 
       const editor = tipTapRef.current?.getEditor();
@@ -1195,10 +1208,19 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                   ) : (
                     mentionSuggestions.map((candidate, index) => {
                       const isActive = index === activeMentionIndex;
-                      const mentionLabel =
-                        resolveUserDisplayName(candidate, {
-                          allowLegacyFallback: true,
-                        }) || candidate.username;
+                      // Primary: resolved full name / display name
+                      const primaryLabel =
+                        candidate.resolvedName ||
+                        candidate.displayName ||
+                        candidate.fullName ||
+                        candidate.username;
+                      // Secondary: employee code or username for disambiguation
+                      const secondaryLabel =
+                        candidate.employeeCode && candidate.employeeCode !== primaryLabel
+                          ? candidate.employeeCode
+                          : candidate.username && candidate.username !== primaryLabel
+                            ? `@${candidate.username}`
+                            : null;
                       return (
                         <button
                           key={`${candidate.id}:${candidate.username}`}
@@ -1219,17 +1241,13 @@ const MessageInputComponent = React.forwardRef(function MessageInput(
                           }}
                         >
                           <span className="truncate text-sm font-medium">
-                            {mentionLabel}
+                            {primaryLabel}
                           </span>
-                          <span className="truncate text-xs text-text-muted">
-                            @{candidate.username}
-                          </span>
-                          {candidate.displayName &&
-                            candidate.displayName !== mentionLabel && (
-                              <span className="truncate text-xs text-text-muted">
-                                {candidate.displayName}
-                              </span>
-                            )}
+                          {secondaryLabel && (
+                            <span className="truncate text-xs text-text-muted">
+                              {secondaryLabel}
+                            </span>
+                          )}
                         </button>
                       );
                     })
