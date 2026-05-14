@@ -55,7 +55,8 @@ interface UseSendMessageResult {
     replyTo?: Message,
     fileMeta?: Attachment | Attachment[] | undefined,
     type?: MessageType,
-    mentions?: string[],
+    /** Array of mention objects with userId and displayName for optimistic rendering */
+    mentions?: { userId: string; displayName: string }[],
     contentFormat?: "plain_text" | "rich_text",
     contentJson?: Record<string, unknown>,
     plainText?: string,
@@ -147,7 +148,8 @@ export const useSendMessage = ({
       replyTo?: Message,
       fileMeta?: Attachment | Attachment[] | undefined,
       type: MessageType = MessageTypeEnum.TEXT,
-      mentions?: string[],
+      /** Mentions with resolved displayName for optimistic rendering */
+      mentions?: { userId: string; displayName: string }[],
       contentFormat?: "plain_text" | "rich_text",
       contentJson?: Record<string, unknown>,
       plainText?: string,

@@ -62,7 +62,14 @@ export interface SendMessageInput {
   senderName?: string;
   senderAvatar?: string;
   localId?: string;
-  mentions?: string[];
+  /**
+   * Mentions with resolved display name for optimistic rendering.
+   * The RTK mutation extracts userIds for the API payload.
+   */
+  mentions?: {
+    userId: string;
+    displayName: string;
+  }[];
   attachments?: SendMessageAttachmentInput[];
 }
 
@@ -301,14 +308,13 @@ export const buildOptimisticMessage = (input: SendMessageInput): Message => {
           },
         }
       : {}),
-    // Optimistic mentions carry just userIds (the BE resolves displayName).
-    // Once the server-acked Message comes back, the merge replaces these
-    // placeholders with fully resolved Mention objects.
+    // Mentions carry resolved displayName for optimistic rendering.
+    // The server will return the canonical Mention[] with full profile data.
     ...(input.mentions?.length
       ? {
-          mentions: input.mentions.map((userId) => ({
-            userId,
-            displayName: "",
+          mentions: input.mentions.map((m) => ({
+            userId: m.userId,
+            displayName: m.displayName || m.userId,
           })),
         }
       : {}),
@@ -472,7 +478,8 @@ export const chatApi = createApi({
             clientMessageId: input.clientMessageId,
             tempId: input.localId,
             localId: input.localId,
-            mentions: input.mentions,
+            // API expects string[] of userIds
+            mentions: input.mentions?.map((m) => m.userId),
             attachments: input.attachments,
           });
           return { data: coerceServerMessageToClientMessage(unwrapApiSuccess(response)) };
