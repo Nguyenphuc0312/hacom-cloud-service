@@ -6,6 +6,8 @@ import type { Reaction } from "../../types";
 
 interface ReactionBarProps {
   reactions?: Reaction[];
+  /** Current authenticated user ID — used to highlight user's own reactions */
+  currentUserId?: string;
   onReact: (emoji: string) => void;
   showPicker?: boolean;
   onTogglePicker?: () => void;
@@ -14,6 +16,7 @@ interface ReactionBarProps {
 
 export const ReactionBar: React.FC<ReactionBarProps> = ({
   reactions = [],
+  currentUserId,
   onReact,
   showPicker = false,
   onTogglePicker,
@@ -22,42 +25,77 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
   const { t } = useTranslation();
   const hasReactions = reactions.length > 0;
 
+  // Set of emoji codes that the current user has reacted to
+  const myEmojiSet = React.useMemo(() => {
+    if (!currentUserId) return new Set<string>();
+    return new Set(
+      reactions
+        .filter((r) => r.userIds?.includes(currentUserId))
+        .map((r) => r.emoji),
+    );
+  }, [reactions, currentUserId]);
+
   return (
     <div className={clsx("flex flex-col gap-0.5", className)}>
       {showPicker && (
         <div className="flex items-center gap-1 rounded-full border border-border bg-surface px-1.5 py-1.5 shadow-elev2 animate-bounce-in">
-          {reactionEmojis.map((emoji) => (
-            <button
-              key={emoji}
-              onClick={() => onReact(emoji)}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-[15px] transition-micro hover:scale-110 hover:bg-surface-overlay active:scale-95"
-              aria-label={t("chat:reaction.reactWith", { emoji })}
-            >
-              <span>{emoji}</span>
-            </button>
-          ))}
+          {reactionEmojis.map((emoji) => {
+            const isOwn = myEmojiSet.has(emoji);
+            return (
+              <button
+                key={emoji}
+                onClick={() => onReact(emoji)}
+                className={clsx(
+                  "flex h-7 w-7 items-center justify-center rounded-full text-[15px]",
+                  "transition-all duration-100",
+                  "hover:scale-125 hover:bg-surface-overlay active:scale-95",
+                  // Highlight the emoji if current user already reacted
+                  isOwn && "ring-2 ring-primary ring-offset-1 dark:ring-offset-[#1a1c2e]",
+                )}
+                aria-label={t("chat:reaction.reactWith", { emoji })}
+                aria-pressed={isOwn}
+              >
+                <span>{emoji}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
       {hasReactions && (
         <div className="flex flex-wrap items-center gap-1">
-          {reactions.map((reaction) => (
-            <button
-              key={reaction.emoji}
-              onClick={() => onReact(reaction.emoji)}
-              className={clsx(
-                "flex items-center gap-1 rounded-full border border-border bg-surface px-1.5 py-0.5 text-[11px]",
-                "transition-micro hover:scale-105 hover:bg-surface-overlay hover:shadow-xs active:scale-100",
-              )}
-            >
-              <span>{reaction.emoji}</span>
-              {reaction.count > 1 && (
-                <span className="font-medium text-text-secondary">
-                  {reaction.count}
-                </span>
-              )}
-            </button>
-          ))}
+          {reactions.map((reaction) => {
+            const isOwn = currentUserId
+              ? reaction.userIds?.includes(currentUserId)
+              : false;
+
+            return (
+              <button
+                key={reaction.emoji}
+                onClick={() => onReact(reaction.emoji)}
+                className={clsx(
+                  "flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px]",
+                  "transition-all duration-100 hover:scale-105 hover:shadow-xs active:scale-100",
+                  // Active state when current user has reacted
+                  isOwn
+                    ? "border-primary/40 bg-primary/8 text-primary font-medium"
+                    : "border-border bg-surface hover:bg-surface-overlay",
+                )}
+              >
+                <span>{reaction.emoji}</span>
+                {reaction.count > 1 && (
+                  <span
+                    className={clsx(
+                      "font-medium",
+                      isOwn ? "text-primary" : "text-text-secondary",
+                    )}
+                  >
+                    {reaction.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
 
           {onTogglePicker && (
             <button

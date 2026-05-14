@@ -14,7 +14,7 @@ import { ThreadIndicator } from "../../message/ThreadIndicator";
 import type { Attachment, Conversation, Message } from "../../../types";
 import { RoomType } from "../../../types";
 import { normalizeRoomType } from "../../../lib/conversationAdapter";
-import { useChatStore } from "../../../stores";
+import { useAuthStore, useChatStore } from "../../../stores";
 import {
   resolveMessageActions,
   type MessageActionId,
@@ -120,6 +120,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   const { t } = useTranslation();
   const contract = getTimelineDensityContract(density);
   const resendMessage = useChatStore((s) => s.resendMessage);
+  const currentUserId = useAuthStore((s) => s.user?.id);
   const [isRailVisible, setIsRailVisible] = React.useState(false);
   const [isActionsOpen, setIsActionsOpen] = React.useState(false);
   const longPressTimerRef = React.useRef<number | null>(null);
@@ -530,6 +531,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
               >
                 <ReactionBar
                   reactions={message.reactions}
+                  currentUserId={currentUserId}
                   onReact={(emoji) => onReact(message.id, emoji)}
                 />
               </div>
