@@ -72,6 +72,7 @@ import { chatApi } from "../features/chat/api";
 import { store } from "../store";
 import type { ChatLayoutState } from "../utils/densityPolicy";
 import { isUuid } from "../utils/isUuid";
+import { useResponsive } from "../responsive/responsive";
 
 const UserProfile = React.lazy(() => import("../components/info/UserProfile"));
 const GroupInfo = React.lazy(() => import("../components/info/GroupInfo"));
@@ -199,9 +200,7 @@ export const ChatPage: React.FC = () => {
   const [infoPanelMode, setInfoPanelMode] = useState<InfoPanelMode | null>(
     null,
   );
-  const [viewportWidth, setViewportWidth] = useState(() =>
-    typeof window !== "undefined" ? window.innerWidth : 1440,
-  );
+  const { chatLayoutBreakpoint } = useResponsive();
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const filePreview = useFilePreview();
@@ -573,20 +572,6 @@ export const ChatPage: React.FC = () => {
     navigate("/chat");
   }, [navigate]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const handleResize = () => {
-      setViewportWidth(window.innerWidth);
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, []);
-
   // Handle new chat
   const handleStartChat = useCallback(
     async (userId: string) => {
@@ -762,30 +747,26 @@ export const ChatPage: React.FC = () => {
     isInfoPanelOpen &&
     (infoPanelMode === "self-profile" ||
       (infoPanelMode === "conversation" && Boolean(routeConversationId)));
-  const isDockedInfoPanelViewport = viewportWidth >= 1280;
+  const isDockedInfoPanelViewport = chatLayoutBreakpoint === "wide";
   const chatLayoutState = useMemo<ChatLayoutState>(() => {
-    if (viewportWidth < 1024) {
+    if (chatLayoutBreakpoint === "compact") {
       return "mobile";
     }
 
     return shouldRenderInfoContent && isDockedInfoPanelViewport
       ? "with-panel"
       : "normal";
-  }, [isDockedInfoPanelViewport, shouldRenderInfoContent, viewportWidth]);
+  }, [
+    chatLayoutBreakpoint,
+    isDockedInfoPanelViewport,
+    shouldRenderInfoContent,
+  ]);
   const chatWindowLayoutState = useMemo<ChatLayoutState>(() => {
-    if (viewportWidth < 1024) {
-      return "mobile";
-    }
-
-    return "normal";
-  }, [viewportWidth]);
+    return chatLayoutBreakpoint === "compact" ? "mobile" : "normal";
+  }, [chatLayoutBreakpoint]);
   const sidebarLayoutState = useMemo<ChatLayoutState>(() => {
-    if (viewportWidth < 1024) {
-      return "mobile";
-    }
-
-    return "normal";
-  }, [viewportWidth]);
+    return chatLayoutBreakpoint === "compact" ? "mobile" : "normal";
+  }, [chatLayoutBreakpoint]);
 
   const showConversationSkeleton =
     (!hasFetchedConversationsOnce && conversationCount === 0) ||
