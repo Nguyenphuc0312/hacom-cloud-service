@@ -300,8 +300,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const [groupNameDraft, setGroupNameDraft] = useState(conversation.name || "");
   const [showCreateInviteForm, setShowCreateInviteForm] = useState(false);
   const [inviteNameDraft, setInviteNameDraft] = useState("");
-  const [inviteUsageLimitDraft, setInviteUsageLimitDraft] = useState("");
-  const [inviteExpireAtDraft, setInviteExpireAtDraft] = useState("");
   const [isCreatingInvite, setIsCreatingInvite] = useState(false);
   const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
   const [resolvingRequestId, setResolvingRequestId] = useState<string | null>(
@@ -895,26 +893,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const handleCreateInviteLink = useCallback(async () => {
     if (!isAdmin || isCreatingInvite) return;
 
-    const usageLimit = inviteUsageLimitDraft.trim()
-      ? Number(inviteUsageLimitDraft.trim())
-      : undefined;
-    if (
-      usageLimit !== undefined &&
-      (!Number.isFinite(usageLimit) || usageLimit <= 0)
-    ) {
-      toast.error(t("profile:groupInfo.invite.invalidUsageLimit"));
-      return;
-    }
-
     setIsCreatingInvite(true);
     try {
       const response = await createGroupInviteLinkUseCase({
         conversationId: conversation.id,
         name: inviteNameDraft.trim() || undefined,
-        expireAt: inviteExpireAtDraft
-          ? new Date(inviteExpireAtDraft).toISOString()
-          : undefined,
-        usageLimit: usageLimit ? Math.floor(usageLimit) : undefined,
       });
       const payload = unwrapApiSuccess(response) as Record<string, unknown>;
       const id = typeof payload.id === "string" ? payload.id : "";
@@ -957,8 +940,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
 
       setShowCreateInviteForm(false);
       setInviteNameDraft("");
-      setInviteUsageLimitDraft("");
-      setInviteExpireAtDraft("");
       toast.success(t("profile:groupInfo.invite.created"));
     } catch (error) {
       const apiError = extractApiError(error);
@@ -970,9 +951,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     }
   }, [
     conversation.id,
-    inviteExpireAtDraft,
     inviteNameDraft,
-    inviteUsageLimitDraft,
     isAdmin,
     isCreatingInvite,
     t,
@@ -1424,25 +1403,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                         )}
                         disabled={isCreatingInvite}
                       />
-                      <Input
-                        type="number"
-                        value={inviteUsageLimitDraft}
-                        onChange={(event) =>
-                          setInviteUsageLimitDraft(event.target.value)
-                        }
-                        placeholder={t(
-                          "profile:groupInfo.invite.usageLimitPlaceholder",
-                        )}
-                        disabled={isCreatingInvite}
-                      />
-                      <Input
-                        type="datetime-local"
-                        value={inviteExpireAtDraft}
-                        onChange={(event) =>
-                          setInviteExpireAtDraft(event.target.value)
-                        }
-                        disabled={isCreatingInvite}
-                      />
                       <div className="flex items-center justify-end gap-2">
                         <button
                           type="button"
@@ -1450,8 +1410,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                           onClick={() => {
                             setShowCreateInviteForm(false);
                             setInviteNameDraft("");
-                            setInviteUsageLimitDraft("");
-                            setInviteExpireAtDraft("");
                           }}
                           className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-hover"
                         >
