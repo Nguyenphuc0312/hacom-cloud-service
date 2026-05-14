@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { LinkIcon } from "@heroicons/react/24/outline";
@@ -8,6 +8,7 @@ import { groupApi } from "../services/api";
 import { extractApiError, unwrapApiSuccess } from "../lib/apiContract";
 import { resolveConversationId } from "../lib/conversationIdentity";
 import { ROUTE_PATHS } from "../router/paths";
+import { useAuthStore } from "../stores/authStore";
 
 type JoinStatus = "idle" | "joining" | "joined" | "pending" | "failed";
 
@@ -15,6 +16,8 @@ export const JoinByLinkPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { token = "" } = useParams<{ token: string }>();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isInitialized = useAuthStore((state) => state.isInitialized);
 
   const [status, setStatus] = useState<JoinStatus>("idle");
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -26,42 +29,63 @@ export const JoinByLinkPage: React.FC = () => {
     return `${token.slice(0, 6)}...${token.slice(-4)}`;
   }, [token]);
 
-  const handleJoin = useCallback(async () => {
-    if (!token) return;
-    setStatus("joining");
-    setErrorText(null);
+  const joinAndNavigate = useCallback(
+    async (joinToken: string) => {
+      setStatus("joining");
+      setErrorText(null);
 
-    try {
-      const response = await groupApi.joinByLink(token);
-      const payload = unwrapApiSuccess(response) as Record<string, unknown>;
+      try {
+        const response = await groupApi.joinByLink(joinToken);
+        const payload = unwrapApiSuccess(response) as Record<string, unknown>;
 
-      setConversationId(
-        resolveConversationId(payload, {
-          source: "JoinByLinkPage.handleJoin",
-        }),
-      );
-      if (payload.status === "pending") {
-        setStatus("pending");
-        return;
+        const resolvedId = resolveConversationId(payload, {
+          source: "JoinByLinkPage.joinAndNavigate",
+        });
+
+        if (payload.status === "pending") {
+          setConversationId(resolvedId);
+          setStatus("pending");
+          return;
+        }
+
+        setConversationId(resolvedId);
+        setStatus("joined");
+        toast.success(
+          t("group:joinByLink.joined", { defaultValue: "Joined successfully" }),
+        );
+      } catch (error) {
+        const apiError = extractApiError(error);
+        setStatus("failed");
+        setErrorText(apiError.message);
       }
+    },
+    [t],
+  );
 
-      setStatus("joined");
-      toast.success(
-        t("group:joinByLink.joined", { defaultValue: "Joined successfully" }),
-      );
-    } catch (error) {
-      const apiError = extractApiError(error);
-      setStatus("failed");
-      setErrorText(apiError.message);
+  // Auto-join on mount: wait for auth init, redirect to login if unauthenticated, otherwise join immediately.
+  useEffect(() => {
+    if (!isInitialized) return;
+    if (!token) return;
+    if (status !== "idle") return;
+
+    if (!isAuthenticated) {
+      navigate(ROUTE_PATHS.LOGIN, {
+        state: { from: `/join/${token}` },
+        replace: true,
+      });
+      return;
     }
-  }, [t, token]);
+
+    void joinAndNavigate(token);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, isAuthenticated, isInitialized, status]);
 
   const openChat = useCallback(() => {
     if (conversationId) {
-      navigate(`${ROUTE_PATHS.CHAT}/${conversationId}`);
+      navigate(`${ROUTE_PATHS.CHAT}/${conversationId}`, { replace: true });
       return;
     }
-    navigate(ROUTE_PATHS.CHAT);
+    navigate(ROUTE_PATHS.CHAT, { replace: true });
   }, [conversationId, navigate]);
 
   const statusBody =
@@ -111,7 +135,11 @@ export const JoinByLinkPage: React.FC = () => {
 
             <div className="space-y-3">
               <p className="text-sm leading-6 text-text-secondary">
-                {statusBody}
+                {status === "joining"
+                  ? t("group:joinByLink.joining", {
+                      defaultValue: "Joining the group...",
+                    })
+                  : statusBody}
               </p>
 
               {errorText ? (
@@ -128,7 +156,7 @@ export const JoinByLinkPage: React.FC = () => {
                 onClick={
                   status === "joined" || status === "pending"
                     ? openChat
-                    : () => void handleJoin()
+                    : () => token && void joinAndNavigate(token)
                 }
               >
                 {status === "pending"

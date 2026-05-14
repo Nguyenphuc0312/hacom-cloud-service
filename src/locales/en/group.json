@@ -4,6 +4,7 @@
     "inviteLink": "Invite link",
     "description": "Use this invite link to join the group. Access depends on group settings.",
     "cta": "Join now",
+    "joining": "Joining the group...",
     "joined": "Joined successfully",
     "joinedDescription": "You can start chatting in this group now.",
     "openGroup": "Open group",
