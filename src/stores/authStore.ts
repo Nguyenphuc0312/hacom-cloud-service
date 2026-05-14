@@ -146,6 +146,7 @@ export type LoginResult =
 interface AuthState {
   user: User | null;
   authStatus: AuthStatus;
+  isBootstrappingAuth: boolean;
   activationContext: ActivationContext | null;
   lockedAccount: LockedAccountContext | null;
   pendingVerificationEmail: string | null;
@@ -405,6 +406,7 @@ export const useAuthStore = create<AuthState>()(
           set({
             user: null,
             authStatus: "anonymous",
+            isBootstrappingAuth: false,
             activationContext: null,
             lockedAccount: null,
             pendingVerificationEmail: null,
@@ -434,6 +436,7 @@ export const useAuthStore = create<AuthState>()(
       return {
         user: null,
         authStatus: "idle",
+        isBootstrappingAuth: false,
         activationContext: null,
         lockedAccount: null,
         pendingVerificationEmail: null,
@@ -462,6 +465,7 @@ export const useAuthStore = create<AuthState>()(
             set({
               user: null,
               authStatus: blockedStatus,
+              isBootstrappingAuth: false,
               activationContext: null,
               lockedAccount: {
                 status: blockedStatus,
@@ -489,6 +493,7 @@ export const useAuthStore = create<AuthState>()(
           set({
             user: userWithFlag,
             authStatus: "authenticated",
+            isBootstrappingAuth: false,
             activationContext: null,
             lockedAccount: null,
             pendingVerificationEmail: null,
@@ -556,6 +561,7 @@ export const useAuthStore = create<AuthState>()(
                 isLoading: false,
                 error: null,
                 authStatus: "activation_required",
+                isBootstrappingAuth: false,
                 activationContext: failure.activationContext,
                 lockedAccount: null,
                 isAuthenticated: false,
@@ -579,6 +585,7 @@ export const useAuthStore = create<AuthState>()(
                 isLoading: false,
                 error: lockedMessage,
                 authStatus: lockedStatus,
+                isBootstrappingAuth: false,
                 lockedAccount: {
                   status: lockedStatus,
                   code: failure.code,
@@ -605,6 +612,7 @@ export const useAuthStore = create<AuthState>()(
               isLoading: false,
               error: errorMessage,
               authStatus: "anonymous",
+              isBootstrappingAuth: false,
               activationContext: null,
               lockedAccount: null,
               isAuthenticated: false,
@@ -656,6 +664,7 @@ export const useAuthStore = create<AuthState>()(
               set({
                 user: null,
                 authStatus: "anonymous",
+                isBootstrappingAuth: false,
                 activationContext: null,
                 lockedAccount: null,
                 pendingVerificationEmail: pendingEmail,
@@ -671,6 +680,7 @@ export const useAuthStore = create<AuthState>()(
               set({
                 user: null,
                 authStatus: "anonymous",
+                isBootstrappingAuth: false,
                 activationContext: null,
                 lockedAccount: null,
                 pendingVerificationEmail: null,
@@ -701,6 +711,7 @@ export const useAuthStore = create<AuthState>()(
               isLoading: false,
               error: errorMessage,
               authStatus: "anonymous",
+              isBootstrappingAuth: false,
               activationContext: null,
               lockedAccount: null,
               pendingVerificationEmail: null,
@@ -730,6 +741,7 @@ export const useAuthStore = create<AuthState>()(
             set({
               user: null,
               authStatus: "anonymous",
+              isBootstrappingAuth: false,
               activationContext: null,
               lockedAccount: null,
               pendingVerificationEmail: null,
@@ -758,6 +770,7 @@ export const useAuthStore = create<AuthState>()(
               set({
                 user: null,
                 authStatus: blockedStatus,
+                isBootstrappingAuth: false,
                 activationContext: null,
                 lockedAccount: {
                   status: blockedStatus,
@@ -779,6 +792,7 @@ export const useAuthStore = create<AuthState>()(
             set({
               user,
               authStatus: "authenticated",
+              isBootstrappingAuth: false,
               activationContext: null,
               lockedAccount: null,
               pendingVerificationEmail: null,
@@ -795,6 +809,7 @@ export const useAuthStore = create<AuthState>()(
             set({
               user: null,
               authStatus: "anonymous",
+              isBootstrappingAuth: false,
               activationContext: null,
               lockedAccount: null,
               pendingVerificationEmail: null,
@@ -821,6 +836,7 @@ export const useAuthStore = create<AuthState>()(
               state.authStatus === "authenticated"
                 ? state.authStatus
                 : "authenticated",
+            isBootstrappingAuth: false,
             isAuthenticated: true,
           }));
           return user;
@@ -900,7 +916,12 @@ export const useAuthStore = create<AuthState>()(
           }
 
           initializePromise = (async () => {
-            set({ isLoading: true, error: null, authStatus: "loading" });
+            set({
+              isLoading: true,
+              error: null,
+              authStatus: "loading",
+              isBootstrappingAuth: true,
+            });
 
             const accessToken = getAccessToken();
             if (accessToken) {
@@ -915,6 +936,7 @@ export const useAuthStore = create<AuthState>()(
                   set({
                     user: null,
                     authStatus: blockedStatus,
+                    isBootstrappingAuth: false,
                     activationContext: null,
                     lockedAccount: {
                       status: blockedStatus,
@@ -936,6 +958,7 @@ export const useAuthStore = create<AuthState>()(
                 set({
                   user,
                   authStatus: "authenticated",
+                  isBootstrappingAuth: false,
                   activationContext: null,
                   lockedAccount: null,
                   pendingVerificationEmail: null,
@@ -956,6 +979,7 @@ export const useAuthStore = create<AuthState>()(
                   set({
                     user: null,
                     authStatus: "bootstrap_error",
+                    isBootstrappingAuth: false,
                     activationContext: null,
                     lockedAccount: null,
                     pendingVerificationEmail: null,
@@ -988,6 +1012,7 @@ export const useAuthStore = create<AuthState>()(
                   set({
                     user: null,
                     authStatus: blockedStatus,
+                    isBootstrappingAuth: false,
                     activationContext: null,
                     lockedAccount: {
                       status: blockedStatus,
@@ -1009,6 +1034,7 @@ export const useAuthStore = create<AuthState>()(
                 set({
                   user,
                   authStatus: "authenticated",
+                  isBootstrappingAuth: false,
                   activationContext: null,
                   lockedAccount: null,
                   pendingVerificationEmail: null,
@@ -1031,6 +1057,7 @@ export const useAuthStore = create<AuthState>()(
             set({
               user: null,
               authStatus: "anonymous",
+              isBootstrappingAuth: false,
               activationContext: null,
               lockedAccount: null,
               pendingVerificationEmail: null,

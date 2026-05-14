@@ -296,6 +296,8 @@ export const useWebSocket = (
   const dispatch = useAppDispatch();
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isAuthInitialized = useAuthStore((s) => s.isInitialized);
+  const isBootstrappingAuth = useAuthStore((s) => s.isBootstrappingAuth);
   const totalUnreadCount = useChatStore((s) => s.totalUnreadCount);
   const conversations = useChatStore((s) => s.conversations);
 
@@ -2388,7 +2390,7 @@ export const useWebSocket = (
       return;
     }
 
-    if (isAuthenticated) {
+    if (isAuthenticated && isAuthInitialized && !isBootstrappingAuth) {
       connect();
     } else {
       disconnect();
@@ -2399,7 +2401,14 @@ export const useWebSocket = (
       unsubscribersRef.current = [];
       disconnect();
     };
-  }, [autoConnect, connect, disconnect, isAuthenticated]);
+  }, [
+    autoConnect,
+    connect,
+    disconnect,
+    isAuthenticated,
+    isAuthInitialized,
+    isBootstrappingAuth,
+  ]);
 
   return {
     isConnected: connectionState === "connected",
