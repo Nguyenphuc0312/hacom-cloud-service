@@ -612,6 +612,11 @@ export const chatApi = createApi({
                   lifecycleStatus: "recalled",
                   content: "",
                   attachments: [],
+                  sendState: "sent",
+                  status: MessageStatus.SENT,
+                  failureReason: undefined,
+                  errorCode: undefined,
+                  errorMessage: undefined,
                 });
               }
             },

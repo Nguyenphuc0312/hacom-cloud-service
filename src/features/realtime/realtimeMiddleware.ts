@@ -5,6 +5,7 @@ import {
   type UnknownAction,
 } from "@reduxjs/toolkit";
 import type { Message } from "../../types";
+import { MessageStatus } from "../../types";
 import { chatApi } from "../api/chatApi";
 import {
   buildConversationMessagesCache,
@@ -230,20 +231,30 @@ export const realtimeMiddleware: Middleware<
             return;
           }
 
+          const now = new Date().toISOString() as unknown as Date;
           const patch: Partial<Message> = {
             isDeleted: true,
             content: "",
             attachments: [],
+            sendState: "sent",
+            status: MessageStatus.SENT,
+            failureReason: undefined,
+            errorCode: undefined,
+            errorMessage: undefined,
           };
           if (mode === "ADMIN_DELETE") {
             patch.lifecycleStatus = "deleted_admin";
             if (deletedBy) patch.deletedBy = deletedBy;
-            if (deletedAt) patch.deletedAt = deletedAt;
+            patch.deletedAt = deletedAt
+              ? (new Date(deletedAt) as unknown as Date)
+              : now;
           } else {
             // RECALL hoặc legacy event: mặc định coi là recall (đồng nhất với behavior cũ)
             patch.lifecycleStatus = "recalled";
             if (recalledBy) patch.recalledBy = recalledBy;
-            if (recalledAt) patch.recalledAt = recalledAt;
+            patch.recalledAt = recalledAt
+              ? (new Date(recalledAt) as unknown as Date)
+              : now;
           }
           patchMessageInCache(draft, messageId, patch);
         },

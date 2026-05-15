@@ -200,6 +200,10 @@ export function getMessagePreviewState(
     typeof record?.sendState === "string" ? record.sendState : undefined;
   const status = typeof record?.status === "string" ? record.status : undefined;
 
+  if (message.isDeleted || message.lifecycleStatus === "recalled" || message.lifecycleStatus === "deleted_admin") {
+    return null;
+  }
+
   if (sendState === "failed" || status === MessageStatus.FAILED) {
     return "failed";
   }

@@ -1300,6 +1300,10 @@ export const useWebSocket = (
           realtimeMessageDeleted({
             conversationId,
             messageId,
+            recalledBy: asString(payload.recalledBy) ?? undefined,
+            recalledAt: asString(payload.recalledAt) ?? undefined,
+            deletedBy: asString(payload.deletedBy) ?? undefined,
+            deletedAt: asString(payload.deletedAt) ?? undefined,
           }),
         );
         void scheduleConversationSnapshotRefresh(conversationId, {
