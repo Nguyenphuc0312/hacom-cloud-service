@@ -179,6 +179,7 @@
     "retry": "Retry",
     "videoNotSupported": "Your browser does not support video playback.",
     "pdfFallback": "Cannot render PDF preview. Open in a new tab.",
+    "pdfRenderError": "Failed to render PDF. Please open in a new tab.",
     "noPreview": "Preview unavailable for this file type",
     "modalLabel": "File preview",
     "zoomOut": "Zoom out",
@@ -194,7 +195,21 @@
     "deleted": "File no longer available",
     "scanning": "Scanning file",
     "preview": "Preview file",
-    "playVideo": "Play video"
+    "playVideo": "Play video",
+    "truncated": "Truncated",
+    "textTruncated": "Only first {{lines}} lines shown. Download to view full content.",
+    "csvTruncated": "Only first {{rows}} rows shown. Download to view full content.",
+    "emptyCsv": "CSV file is empty",
+    "showingRows": "Showing {{start}}-{{end}} of {{total}}",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "pdfFooter": "Use browser controls to zoom or scroll",
+    "documentNotice": "Preview is not available for this file type.",
+    "documentSuggestion": "Download the file to open it in your preferred application.",
+    "archiveNotice": "Archive contents cannot be previewed for security reasons.",
+    "archiveSuggestion": "Download and extract using your preferred archive tool.",
+    "largeArchive": "Large archive file",
+    "largeArchiveNotice": "Download may take some time depending on your connection speed."
   },
   "slowMode": {
     "active": "Slow mode active. Try again in {{seconds}}s"

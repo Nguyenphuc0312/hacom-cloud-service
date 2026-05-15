@@ -179,6 +179,7 @@
     "retry": "Thử lại",
     "videoNotSupported": "Trình duyệt của bạn không hỗ trợ phát video.",
     "pdfFallback": "Không thể hiển thị PDF. Hãy mở trong tab mới.",
+    "pdfRenderError": "Không thể hiển thị PDF. Hãy mở trong tab mới.",
     "noPreview": "Không có xem trước cho loại tệp này",
     "modalLabel": "Xem trước tệp",
     "zoomOut": "Thu nhỏ",
@@ -194,7 +195,21 @@
     "deleted": "Tệp không còn tồn tại",
     "scanning": "Đang quét tệp",
     "preview": "Xem trước tệp",
-    "playVideo": "Phát video"
+    "playVideo": "Phát video",
+    "truncated": "Đã cắt ngắn",
+    "textTruncated": "Chỉ hiển thị {{lines}} dòng đầu. Tải tệp để xem đầy đủ.",
+    "csvTruncated": "Chỉ hiển thị {{rows}} dòng đầu. Tải tệp để xem đầy đủ.",
+    "emptyCsv": "Tệp CSV trống",
+    "showingRows": "Hiển thị {{start}}-{{end}} trên {{total}}",
+    "previousPage": "Trang trước",
+    "nextPage": "Trang tiếp theo",
+    "pdfFooter": "Dùng điều khiển trình duyệt để phóng to hoặc cuộn",
+    "documentNotice": "Không có xem trước cho loại tệp này.",
+    "documentSuggestion": "Tải tệp để mở bằng ứng dụng bạn muốn.",
+    "archiveNotice": "Không thể xem trước nội dung archive vì lý do bảo mật.",
+    "archiveSuggestion": "Tải và giải nén bằng công cụ archive yêu thích của bạn.",
+    "largeArchive": "Tệp archive lớn",
+    "largeArchiveNotice": "Việc tải có thể mất thời gian tùy thuộc vào tốc độ kết nối của bạn."
   },
   "slowMode": {
     "active": "Chế độ chậm đang bật. Thử lại sau {{seconds}} giây"
@@ -266,7 +281,17 @@
   "voice": {
     "play": "Phát",
     "pause": "Tạm dừng",
-    "progress": "Tiến độ âm thanh"
+    "progress": "Tiến độ âm thanh",
+    "startRecording": "Bắt đầu ghi",
+    "holdToRecord": "Giữ để ghi âm",
+    "recording": "Đang ghi",
+    "paused": "Đã tạm dừng",
+    "stop": "Dừng ghi",
+    "resume": "Tiếp tục",
+    "sendRecording": "Gửi ghi âm",
+    "recordingComplete": "Ghi âm sẵn sàng",
+    "permissionDenied": "Quyền truy cập microphone bị từ chối",
+    "tryAgain": "Bấm để thử lại"
   },
   "image": {
     "failedToLoad": "Không tải được ảnh",

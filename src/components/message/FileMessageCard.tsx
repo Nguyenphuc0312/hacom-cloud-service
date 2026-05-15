@@ -35,7 +35,7 @@ import {
   getPreviewType,
   isFileTooLargeForPreview,
 } from "../../utils/formatFileSize";
-import type { PreviewType } from "../../utils/formatFileSize";
+import type { PreviewType, FileIconType } from "../../utils/formatFileSize";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { Skeleton, SkeletonCircle } from "../ui";
 
@@ -69,12 +69,16 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
   const previewType = getPreviewType(
     attachment.mimeType,
     attachment.fileName,
-  );
-  const iconType = getFileIconType(attachment.mimeType, attachment.fileName);
+  ) as PreviewType;
+  const iconType = getFileIconType(attachment.mimeType, attachment.fileName) as FileIconType;
   const extension = getFileExtension(attachment.fileName || "file");
   const size = formatFileSize(attachment.fileSize);
   const isPreviewable =
-    previewType !== "unsupported" &&
+    previewType !== "unknown" &&
+    previewType !== "archive" &&
+    previewType !== "document" &&
+    previewType !== "spreadsheet" &&
+    previewType !== "presentation" &&
     !isFileTooLargeForPreview(attachment.fileSize) &&
     fileStatus === "ready";
 

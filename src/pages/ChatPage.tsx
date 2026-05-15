@@ -41,6 +41,7 @@ import type { Attachment, UserSummary } from "../types";
 import { useFilePreview } from "../hooks/useFilePreview";
 import type { PreviewTarget } from "../hooks/useFilePreview";
 import { getPreviewType } from "../utils/formatFileSize";
+import type { PreviewType } from "../utils/formatFileSize";
 import { UserStatus } from "../types";
 import { isDirectConversation } from "../lib/conversationAdapter";
 import { resolveConversationId } from "../lib/conversationIdentity";
@@ -817,7 +818,7 @@ export const ChatPage: React.FC = () => {
         previewType: getPreviewType(
           attachment.mimeType,
           attachment.fileName,
-        ),
+        ) as PreviewType,
       };
       const cachedMessages = rtkChatApi.endpoints.getMessages
         .select({ conversationId: selectedConversation.id })(store.getState())
@@ -831,10 +832,10 @@ export const ChatPage: React.FC = () => {
             previewType: getPreviewType(
               candidate.mimeType,
               candidate.fileName,
-            ),
+            ) as PreviewType,
           })),
         )
-        .filter((candidate) => candidate.previewType !== "unsupported");
+        .filter((candidate) => candidate.previewType !== "unknown");
       filePreview.open(target, gallery.length > 0 ? gallery : undefined);
     },
     [filePreview, selectedConversation],

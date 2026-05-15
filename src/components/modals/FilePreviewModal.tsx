@@ -1,3 +1,8 @@
+/**
+ * @fileoverview FilePreviewModal - Unified file preview modal with support for all file types.
+ * Supports image, video, audio, PDF, text, CSV, documents, and archives.
+ */
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
@@ -16,12 +21,16 @@ import {
 } from "@heroicons/react/24/outline";
 import { IconButton, Skeleton } from "../ui";
 import { FileTypeIcon } from "../message/FileTypeIcon";
+import { TextPreview, CsvPreview, DocumentPreview, ArchivePreview, PdfPreview } from "../preview";
+import type { PreviewType } from "../../utils/mimeRegistry";
+import {
+  getMimePreviewType,
+} from "../../utils/mimeRegistry";
 import {
   formatFileSize,
   getFileExtension,
-  getFileIconType,
-} from "../../utils/formatFileSize";
-import type { PreviewType } from "../../utils/formatFileSize";
+  getIconTypeFromPreviewType,
+} from "../../utils/filePreviewUtils";
 import type { PreviewTarget } from "../../hooks/useFilePreview";
 
 interface FilePreviewModalProps {
@@ -64,15 +73,18 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
   const resetKey = `${currentIndex}:${secureUrl ?? ""}`;
   const [scaleState, setScaleState] = useState({ key: resetKey, value: 1 });
 
-  const previewType: PreviewType = current?.previewType ?? "unsupported";
-  const fileName = current?.attachment.fileName ?? "";
-  const fileMimeType = current?.attachment.mimeType ?? "";
-  const fileSize = formatFileSize(current?.attachment.fileSize);
+  // Get preview type from attachment
+  const attachment = current?.attachment;
+  const previewType: PreviewType = useMemo(() => {
+    if (!attachment) return "unknown";
+    return getMimePreviewType(attachment.mimeType, attachment.fileName);
+  }, [attachment]);
+
+  const fileName = attachment?.fileName ?? "";
+  const fileMimeType = attachment?.mimeType ?? "";
+  const fileSize = formatFileSize(attachment?.fileSize);
   const extension = getFileExtension(fileName || "file");
-  const iconType = getFileIconType(
-    current?.attachment.mimeType,
-    current?.attachment.fileName,
-  );
+  const iconType = getIconTypeFromPreviewType(previewType);
 
   useEffect(() => {
     if (!isOpen) {
@@ -324,110 +336,154 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
       return null;
     }
 
-    switch (previewType) {
-      case "image":
-        return (
-          <div
-            className="flex max-h-[88vh] max-w-[92vw] items-center justify-center overflow-hidden"
-            onClick={(event) => event.stopPropagation()}
-            onWheel={handleWheel}
-          >
-            <img
-              src={secureUrl}
-              alt={fileName || t("chat:image.previewAlt")}
-              decoding="async"
-              className="max-h-[88vh] max-w-[92vw] select-none object-contain transition-transform duration-150"
-              style={{ transform: `scale(${scale})` }}
-              draggable={false}
-            />
-          </div>
-        );
+    // Text file preview
+    if (previewType === "text") {
+      return (
+        <TextPreview
+          url={secureUrl}
+          fileName={fileName}
+          fileSize={current.attachment.fileSize}
+        />
+      );
+    }
 
-      case "video":
-        return (
-          <div
-            className="flex max-h-[85vh] max-w-[92vw] items-center justify-center"
-            onClick={(event) => event.stopPropagation()}
+    // CSV file preview
+    if (previewType === "csv") {
+      return (
+        <CsvPreview
+          url={secureUrl}
+          fileName={fileName}
+          fileSize={current.attachment.fileSize}
+        />
+      );
+    }
+
+    // PDF preview with enhanced controls
+    if (previewType === "pdf") {
+      return (
+        <PdfPreview
+          url={secureUrl}
+          fileName={fileName}
+          fileSize={current.attachment.fileSize}
+        />
+      );
+    }
+
+    // Document (Word, etc.) fallback
+    if (previewType === "document" || previewType === "spreadsheet" || previewType === "presentation") {
+      return (
+        <DocumentPreview
+          url={secureUrl}
+          fileName={fileName}
+          fileSize={current.attachment.fileSize}
+          mimeType={fileMimeType}
+          previewType={previewType}
+        />
+      );
+    }
+
+    // Archive fallback
+    if (previewType === "archive") {
+      return (
+        <ArchivePreview
+          url={secureUrl}
+          fileName={fileName}
+          fileSize={current.attachment.fileSize}
+          mimeType={fileMimeType}
+        />
+      );
+    }
+
+    // Image preview
+    if (previewType === "image") {
+      return (
+        <div
+          className="flex max-h-[88vh] max-w-[92vw] items-center justify-center overflow-hidden"
+          onClick={(event) => event.stopPropagation()}
+          onWheel={handleWheel}
+        >
+          <img
+            src={secureUrl}
+            alt={fileName || t("chat:image.previewAlt")}
+            decoding="async"
+            className="max-h-[88vh] max-w-[92vw] select-none object-contain transition-transform duration-150"
+            style={{ transform: `scale(${scale})` }}
+            draggable={false}
+          />
+        </div>
+      );
+    }
+
+    // Video preview
+    if (previewType === "video") {
+      return (
+        <div
+          className="flex max-h-[85vh] max-w-[92vw] items-center justify-center"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <video
+            src={secureUrl}
+            controls
+            playsInline
+            preload="metadata"
+            className="max-h-[85vh] max-w-[92vw] rounded-xl"
           >
-            <video
+            <track kind="captions" />
+            {t("chat:filePreview.videoNotSupported", {
+              defaultValue: "Your browser does not support video playback.",
+            })}
+          </video>
+        </div>
+      );
+    }
+
+    // Audio preview
+    if (previewType === "audio") {
+      return (
+        <div
+          className="w-[min(32rem,calc(100vw-2rem))] rounded-2xl border border-text-inverse/12 bg-text-inverse/6 p-5 backdrop-blur"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-text-inverse/10">
+              <MusicalNoteIcon className="h-6 w-6 text-text-inverse" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-text-inverse">
+                {fileName || t("chat:file.unknown")}
+              </p>
+              <p className="mt-1 text-xs text-text-inverse/58">
+                {metadataLine}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-xl bg-text-primary/24 p-3">
+            <audio
               src={secureUrl}
               controls
-              autoPlay
-              playsInline
-              className="max-h-[85vh] max-w-[92vw] rounded-xl"
+              preload="metadata"
+              className="w-full"
             >
-              <track kind="captions" />
-              {t("chat:filePreview.videoNotSupported", {
-                defaultValue: "Your browser does not support video playback.",
+              {t("chat:filePreview.audioNotSupported", {
+                defaultValue: "Your browser does not support audio playback.",
               })}
-            </video>
+            </audio>
           </div>
-        );
-
-      case "audio":
-        return (
-          <div
-            className="w-[min(32rem,calc(100vw-2rem))] rounded-2xl border border-text-inverse/12 bg-text-inverse/6 p-5 backdrop-blur"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-text-inverse/10">
-                <MusicalNoteIcon className="h-6 w-6 text-text-inverse" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-text-inverse">
-                  {fileName || t("chat:file.unknown")}
-                </p>
-                <p className="mt-1 text-xs text-text-inverse/58">
-                  {metadataLine}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-5 rounded-xl bg-text-primary/24 p-3">
-              <audio
-                src={secureUrl}
-                controls
-                autoPlay
-                preload="metadata"
-                className="w-full"
-              >
-                {t("chat:filePreview.audioNotSupported", {
-                  defaultValue: "Your browser does not support audio playback.",
-                })}
-              </audio>
-            </div>
-          </div>
-        );
-
-      case "pdf":
-        return (
-          <div
-            className="flex h-[85vh] w-[92vw] max-w-5xl flex-col items-center"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <iframe
-              src={`${secureUrl}#toolbar=0`}
-              className="h-full w-full rounded-xl border-0 bg-white"
-              title={fileName || "PDF Preview"}
-              sandbox="allow-same-origin"
-            />
-            <p className="mt-2 text-xs text-text-inverse/50">
-              {t("chat:filePreview.pdfFallback", {
-                defaultValue: "Cannot render PDF preview. Open in a new tab.",
-              })}
-            </p>
-          </div>
-        );
-
-      default:
-        return renderUnsupportedPreview();
+        </div>
+      );
     }
+
+    // Unknown type fallback
+    return renderUnsupportedPreview();
   };
 
   if (!isOpen) {
     return null;
   }
+
+  // Check if this preview type uses full-width layout
+  const isFullWidth = ["pdf", "text", "csv"].includes(previewType);
 
   return (
     <div
@@ -583,7 +639,10 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
         </button>
       )}
 
-      <div className={clsx("relative z-[1] flex items-center justify-center px-4", previewType === "pdf" && "w-full")}>
+      <div className={clsx(
+        "relative z-[1] flex items-center justify-center px-4",
+        isFullWidth && "w-full"
+      )}>
         {renderContent()}
       </div>
 
