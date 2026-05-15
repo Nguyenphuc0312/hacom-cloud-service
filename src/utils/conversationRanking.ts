@@ -132,6 +132,12 @@ const hasConversationFailedSend = (conversation: Conversation): boolean => {
     typeof conversation.lastMessage === "object"
       ? (conversation.lastMessage as unknown as Record<string, unknown>)
       : null;
+  const isDeleted = asBoolean(lastMessageRecord?.isDeleted);
+  const lifecycleStatus = asString(lastMessageRecord?.lifecycleStatus);
+  if (isDeleted || lifecycleStatus === "recalled" || lifecycleStatus === "deleted_admin") {
+    return false;
+  }
+
   const sendState =
     typeof lastMessageRecord?.sendState === "string"
       ? lastMessageRecord.sendState

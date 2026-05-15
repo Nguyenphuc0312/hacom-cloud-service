@@ -146,18 +146,30 @@ export const mergeMessageRecords = (
       incoming.id ||
       current.id,
     localOrder: incoming.localOrder ?? current.localOrder,
+    // Preserve failed state only if message is not deleted
+    // Deleted messages should not show as "failed"
     sendState:
-      incoming.sendState === "failed"
-        ? "failed"
-        : incoming.status === MessageStatus.SENT ||
-            incoming.status === MessageStatus.DELIVERED ||
-            incoming.status === MessageStatus.READ ||
-            !isTempMessageId(incoming.id)
-          ? "sent"
-          : (incoming.sendState ?? current.sendState),
+      (incoming.isDeleted || incoming.lifecycleStatus === "recalled" || incoming.lifecycleStatus === "deleted_admin")
+        ? "sent"
+        : incoming.sendState === "failed"
+          ? "failed"
+          : incoming.status === MessageStatus.SENT ||
+              incoming.status === MessageStatus.DELIVERED ||
+              incoming.status === MessageStatus.READ ||
+              !isTempMessageId(incoming.id)
+            ? "sent"
+            : (incoming.sendState ?? current.sendState),
   };
 
   if (merged.sendState === "sent") {
+    merged.queuedReason = undefined;
+    merged.failureReason = undefined;
+    merged.errorCode = undefined;
+    merged.errorMessage = undefined;
+  }
+
+  // Clear failure fields when message is deleted/recalled
+  if (merged.isDeleted || merged.lifecycleStatus === "recalled" || merged.lifecycleStatus === "deleted_admin") {
     merged.queuedReason = undefined;
     merged.failureReason = undefined;
     merged.errorCode = undefined;

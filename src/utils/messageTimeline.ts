@@ -49,8 +49,12 @@ export const isPendingMessage = (message: Message): boolean =>
   message.sendState === "retrying" ||
   (!message.sendState && message.status === MessageStatus.SENDING);
 
-export const isFailedMessage = (message: Message): boolean =>
-  message.sendState === "failed" || message.status === MessageStatus.FAILED;
+export const isFailedMessage = (message: Message): boolean => {
+  if (message.isDeleted) return false;
+  if (message.lifecycleStatus === "recalled") return false;
+  if (message.lifecycleStatus === "deleted_admin") return false;
+  return message.sendState === "failed" || message.status === MessageStatus.FAILED;
+};
 
 export const createReplySnapshot = (
   message?: Message,

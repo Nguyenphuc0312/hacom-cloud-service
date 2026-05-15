@@ -1166,8 +1166,20 @@ const updateConversationActivitySummary = (
   conversation: Conversation,
   message: Message,
   unreadCount: number,
-): Conversation =>
-  (normalizeConversation({
+): Conversation => {
+  const messageIsDeleted =
+    message.isDeleted ||
+    message.lifecycleStatus === "recalled" ||
+    message.lifecycleStatus === "deleted_admin";
+
+  const nextLastMessageStatus: Conversation["lastMessageStatus"] =
+    messageIsDeleted
+      ? null
+      : message.sendState === "failed" || message.status === MessageStatus.FAILED
+        ? "failed"
+        : "sent";
+
+  return (normalizeConversation({
     ...conversation,
     unreadCount,
     lastMessage: toMessageSummary(message),
@@ -1175,10 +1187,7 @@ const updateConversationActivitySummary = (
     lastMessageAt: message.createdAt,
     lastMessageSortAt: message.createdAt,
     lastMessageId: message.id,
-    lastMessageStatus:
-      message.sendState === "failed" || message.status === MessageStatus.FAILED
-        ? "failed"
-        : "sent",
+    lastMessageStatus: nextLastMessageStatus,
     lastActivityAt: message.createdAt,
   }) ?? {
     ...conversation,
@@ -1186,6 +1195,7 @@ const updateConversationActivitySummary = (
     lastMessage: toMessageSummary(message),
     updatedAt: new Date(message.createdAt),
   }) as Conversation;
+};
 
 const updateConversationReadProgress = (
   conversation: Conversation,
@@ -1828,6 +1838,10 @@ const toConversationLastMessageStatus = (
   message: Message | null | undefined,
 ): Conversation["lastMessageStatus"] => {
   if (!message) return null;
+
+  if (message.isDeleted || message.lifecycleStatus === "recalled" || message.lifecycleStatus === "deleted_admin") {
+    return null;
+  }
 
   if (
     message.sendState === "failed" ||

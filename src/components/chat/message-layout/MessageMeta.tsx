@@ -15,6 +15,7 @@ import {
   formatMessageTime,
   formatRelativeDate,
 } from "../../../utils/formatTime";
+import { isFailedMessage } from "../../../utils/messageTimeline";
 import type { ChatDensity } from "../../../stores/uiStore";
 import { getTimelineDensityContract } from "../timelineDensity";
 
@@ -56,7 +57,7 @@ const MessageStatusGlyph: React.FC<{ message: Message }> = React.memo(({ message
     );
   }
 
-  if (sendState === "failed" || status === MessageStatus.FAILED) {
+  if (isFailedMessage(message)) {
     return (
       <ExclamationCircleIcon
         className="h-3 w-3 text-danger"

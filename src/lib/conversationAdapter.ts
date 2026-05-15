@@ -215,6 +215,12 @@ const normalizeLastMessageStatus = (
     : null;
   const sendState = asString(messageRecord?.sendState)?.toLowerCase();
   const status = asString(messageRecord?.status)?.toLowerCase();
+  const isDeleted = asBoolean(messageRecord?.isDeleted);
+  const lifecycleStatus = asString(messageRecord?.lifecycleStatus);
+
+  if (isDeleted || lifecycleStatus === "recalled" || lifecycleStatus === "deleted_admin") {
+    return null;
+  }
 
   if (
     sendState === "sending" ||
