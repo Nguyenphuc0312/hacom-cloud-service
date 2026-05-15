@@ -106,6 +106,8 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
 
           {hasDisplayUrl && (
             <img
+              loading="lazy"
+              decoding="async"
               className={clsx(
                 "absolute inset-0 h-full w-full cursor-pointer object-cover transition-opacity duration-150",
                 isLoaded ? "opacity-100" : "opacity-0",
@@ -167,6 +169,7 @@ export const ImageMessage: React.FC<ImageMessageProps> = ({
           <img
             src={resolvedUrl}
             alt={attachment.fileName || t("chat:image.previewAlt")}
+            decoding="async"
             className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-elev3"
             onClick={(e) => e.stopPropagation()}
           />

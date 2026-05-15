@@ -54,6 +54,7 @@ import { useMessageJumpTargetRTK } from "../../features/chat/hooks/useMessageJum
 import { chatApi as rtkChatApi } from "../../features/api/chatApi";
 import { store } from "../../store";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
+import { FeatureErrorBoundary } from "../error";
 
 const SearchPanel = React.lazy(() => import("../chat/SearchPanel"));
 const PinnedMessagesPanel = React.lazy(
@@ -1087,7 +1088,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       )}
 
-      <ConversationViewport
+      <FeatureErrorBoundary name="Tin nhắn">
+        <ConversationViewport
         layoutState={layoutState}
         conversation={conversation}
         currentUserId={currentUser.id}
@@ -1111,7 +1113,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         composerHeight={composerHeight}
         className="flex-1 min-h-0"
         onBottomVisible={onReachedLatestMessage ? () => onReachedLatestMessage({} as Message) : undefined}
-      />
+        />
+      </FeatureErrorBoundary>
 
       {ephemeralNotice &&
         bottomOverlayPlacements["ephemeral-notice"]?.visible && (
@@ -1160,7 +1163,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 : "0px",
           }}
         >
-          <MessageInput
+          <FeatureErrorBoundary name="Nhập tin nhắn">
+            <MessageInput
             ref={messageInputRef}
             value={composerSeed}
             valueResetKey={composerSeedVersion}
@@ -1195,6 +1199,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             hasFailedDrafts={uploadQueue.hasFailedDrafts}
             hasReadyDrafts={uploadQueue.hasReadyDrafts}
           />
+          </FeatureErrorBoundary>
         </div>
       )}
 

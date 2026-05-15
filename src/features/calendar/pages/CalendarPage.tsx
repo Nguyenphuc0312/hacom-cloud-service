@@ -298,13 +298,14 @@ export const CalendarPage: React.FC = () => {
     [currentYear, currentMonth]
   );
 
-  // Check if a date is today
+  // Check if a date is today — stable snapshot computed once per component mount
+  const todaySnapshot = React.useMemo(() => new Date(), []);
   const isToday = useCallback(
     (date: Date) =>
-      date.getDate() === today.getDate() &&
-      date.getMonth() === today.getMonth() &&
-      date.getFullYear() === today.getFullYear(),
-    []
+      date.getDate() === todaySnapshot.getDate() &&
+      date.getMonth() === todaySnapshot.getMonth() &&
+      date.getFullYear() === todaySnapshot.getFullYear(),
+    [todaySnapshot]
   );
 
   // Check if a date is selected
@@ -324,7 +325,7 @@ export const CalendarPage: React.FC = () => {
     } else {
       setCurrentMonth((m) => m - 1);
     }
-  }, [currentMonth]);
+  }, [currentMonth, setCurrentMonth, setCurrentYear]);
 
   // Navigate to next month
   const goToNextMonth = useCallback(() => {
@@ -334,7 +335,7 @@ export const CalendarPage: React.FC = () => {
     } else {
       setCurrentMonth((m) => m + 1);
     }
-  }, [currentMonth]);
+  }, [currentMonth, setCurrentMonth, setCurrentYear]);
 
   // Go to today
   const goToToday = useCallback(() => {
@@ -342,14 +343,14 @@ export const CalendarPage: React.FC = () => {
     setCurrentYear(now.getFullYear());
     setCurrentMonth(now.getMonth());
     setSelectedDate(now);
-  }, []);
+  }, [setCurrentMonth, setCurrentYear, setSelectedDate]);
 
   // Handle mini calendar navigation
   const handleMiniCalendarNavigate = useCallback((year: number, month: number) => {
     setCurrentYear(year);
     setCurrentMonth(month);
     setSelectedDate(new Date(year, month, 1));
-  }, []);
+  }, [setCurrentMonth, setCurrentYear, setSelectedDate]);
 
   // Handle date selection
   const handleDateClick = useCallback((date: Date) => {
