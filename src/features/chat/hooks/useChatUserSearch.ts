@@ -4,6 +4,7 @@ import { useDebounce } from "../../../hooks";
 import { extractApiError, unwrapApiSuccess } from "../../../lib/apiContract";
 import { UserStatus } from "../../../types";
 import { searchUsersUseCase } from "../usecases/searchUsers";
+import { ExpiringLruCache } from "../../../utils/expiringLruCache";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -161,6 +162,61 @@ interface UseChatUserSearchOptions {
 
 const EMPTY_EXCLUDED_USER_IDS: string[] = [];
 
+// Phase 1: User search LRU cache to reduce duplicate API calls
+const USER_SEARCH_CACHE_MAX = 100;
+const USER_SEARCH_CACHE_TTL_MS = 60_000; // 60 seconds
+
+interface UserSearchCacheEntry {
+  data: ChatSearchUser[];
+  excludes: string; // JSON string of excluded user IDs
+}
+
+const userSearchCache = new ExpiringLruCache<UserSearchCacheEntry>({
+  maxEntries: USER_SEARCH_CACHE_MAX,
+});
+
+const buildUserSearchCacheKey = (
+  query: string,
+  limit: number,
+  excludeUserIds: Set<string>,
+): string => {
+  const normalizedQuery = query.trim().toLowerCase();
+  const excludes = Array.from(excludeUserIds).sort().join(",");
+  return `${normalizedQuery}:${limit}:${excludes}`;
+};
+
+const getCachedResults = (
+  query: string,
+  limit: number,
+  excludeUserIds: Set<string>,
+): ChatSearchUser[] | null => {
+  const cacheKey = buildUserSearchCacheKey(query, limit, excludeUserIds);
+  const entry = userSearchCache.get(cacheKey, 0);
+  if (!entry) return null;
+
+  // Verify excluded users match
+  const cachedExcludes = entry.excludes;
+  const currentExcludes = Array.from(excludeUserIds).sort().join(",");
+  if (cachedExcludes !== currentExcludes) return null;
+
+  return entry.data;
+};
+
+const setCachedResults = (
+  query: string,
+  limit: number,
+  excludeUserIds: Set<string>,
+  data: ChatSearchUser[],
+): void => {
+  const cacheKey = buildUserSearchCacheKey(query, limit, excludeUserIds);
+  const excludes = Array.from(excludeUserIds).sort().join(",");
+  userSearchCache.set(
+    cacheKey,
+    { data, excludes },
+    Date.now() + USER_SEARCH_CACHE_TTL_MS,
+  );
+};
+
 export const useChatUserSearch = (
   query: string,
   options?: UseChatUserSearchOptions,
@@ -193,6 +249,24 @@ export const useChatUserSearch = (
         return;
       }
 
+      // Phase 1: Check cache first before making API call
+      const cachedData = getCachedResults(trimmedQuery, limit, excludedUserIds);
+      if (cachedData) {
+        if (!cancelled) {
+          setResults(cachedData);
+          setIsLoading(false);
+          setErrorMessage(null);
+          if (import.meta.env.DEV) {
+            console.debug("[api-perf] USER_SEARCH cache hit", {
+              query: trimmedQuery,
+              limit,
+              resultCount: cachedData.length,
+            });
+          }
+        }
+        return;
+      }
+
       setIsLoading(true);
       setErrorMessage(null);
 
@@ -208,7 +282,16 @@ export const useChatUserSearch = (
           .filter((user) => !excludedUserIds.has(user.id));
 
         if (!cancelled) {
+          // Phase 1: Cache successful results
+          setCachedResults(trimmedQuery, limit, excludedUserIds, nextResults);
           setResults(nextResults);
+          if (import.meta.env.DEV) {
+            console.debug("[api-perf] USER_SEARCH cache miss", {
+              query: trimmedQuery,
+              limit,
+              resultCount: nextResults.length,
+            });
+          }
         }
       } catch (error) {
         if (abortController.signal.aborted) {

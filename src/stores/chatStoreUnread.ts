@@ -1,6 +1,7 @@
 import { unwrapApiSuccess } from "../lib/apiContract";
 import type { Conversation, Message } from "../types";
 import { logger } from "../utils/logger";
+import { apiPerfLogger } from "../utils/apiPerfLogger";
 
 type UnreadSummary = {
   totalUnreadCount: number;
@@ -100,7 +101,7 @@ const normalizeMarkAsReadInput = (
 const getInputAnchorId = (input: MarkAsReadInput): string | undefined =>
   input.lastVisibleMessageId ?? input.messageId;
 
-const DEFAULT_MARK_READ_DEBOUNCE_MS = 200;
+const DEFAULT_MARK_READ_DEBOUNCE_MS = 500; // Phase 1: Increased from 200ms to 500ms to reduce API calls during rapid scrolling
 const DEFAULT_UNREAD_SUMMARY_DEBOUNCE_MS = 500;
 const LOCAL_STORAGE_KEY = "chat:unread:local_seq";
 
@@ -366,6 +367,7 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
         currentSeq,
         incomingSeq: lastReadSeq,
       });
+      apiPerfLogger.logDedupeBlocked("mark_read", conversationId, "seq-already-advanced");
       return Promise.resolve();
     }
     // Anchor-id comparator chỉ được dùng khi KHÔNG có seq explicit. Seq là
@@ -418,6 +420,8 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
         (!queuedAnchorId && anchorId)
       ) {
         existingRequest.queuedInput = normalizedInput;
+        // Phase 1: Log debounce coalescing
+        apiPerfLogger.logDedupeBlocked("mark_read_coalesced", conversationId, "queued-input");
       }
       return existingRequest.promise;
     }
@@ -439,6 +443,8 @@ export const createChatUnreadController = <TState extends UnreadStateSlice>({
       if (optimisticSeq !== null) {
         recordLocalMarkedSeq(conversationId, optimisticSeq);
       }
+      // Phase 1: Log mark-read API call
+      apiPerfLogger.logMarkRead(conversationId, optimisticSeq ?? undefined);
       logger.debug("chat-unread", "markRead.request", {
         conversationId,
         lastReadSeq: optimisticSeq,

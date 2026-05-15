@@ -47,7 +47,11 @@ export const useConversationMessagesRTK = (
 
   const query = useGetMessagesQuery(initialArg, {
     skip,
-    refetchOnMountOrArgChange: true,
+    // Phase 1 optimization: Disable eager refetch on mount.
+    // Cache is kept across conversation switches (RTK Query deduplicates by arg).
+    // New messages arrive via WebSocket + optimistic update — no full refetch needed.
+    // Reconnect still triggers refetch via refetchOnReconnect to sync state.
+    refetchOnMountOrArgChange: false,
     refetchOnReconnect: true,
     selectFromResult: ({
       data,
