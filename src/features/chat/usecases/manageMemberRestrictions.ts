@@ -19,5 +19,8 @@ export const restrictMemberUseCase = async (
   userId: string,
   restrictedUntil: string,
 ) => {
-  return chatApi.group.restrictMember(conversationId, userId, restrictedUntil);
+  // Convert ISO date string to seconds from now
+  const restrictedUntilDate = new Date(restrictedUntil);
+  const seconds = Math.max(1, Math.floor((restrictedUntilDate.getTime() - Date.now()) / 1000));
+  return chatApi.group.restrictMember(conversationId, userId, seconds);
 };
