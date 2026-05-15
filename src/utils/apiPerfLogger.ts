@@ -274,6 +274,32 @@ export const apiPerfLogger = {
   },
 
   /**
+   * Log API call with full details (used by RTK Query middleware)
+   */
+  logApiCall: (params: {
+    endpoint: string;
+    method: string;
+    duration: number;
+    status: number;
+    cached?: boolean;
+    error?: string;
+  }): void => {
+    logEntry({
+      type: "api_call",
+      timestamp: Date.now(),
+      endpoint: params.endpoint,
+      method: params.method,
+      duration: params.duration,
+      status: params.status,
+      cached: params.cached ?? false,
+    });
+    metrics.apiCalls++;
+    if (params.cached) {
+      metrics.cacheHits++;
+    }
+  },
+
+  /**
    * Get current metrics summary
    */
   getMetrics: () => ({

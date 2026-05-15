@@ -342,6 +342,7 @@ export const chatApi = createApi({
   reducerPath: "chatApi",
   baseQuery: fakeBaseQuery<ChatQueryError>(),
   tagTypes: ["Conversation", "Messages", "Unread"],
+  keepUnusedDataFor: 60, // Phase 2: Keep conversation data for 60 seconds
   endpoints: (build) => ({
     getConversations: build.query<Conversation[], GetConversationsArgs | void>({
       async queryFn(args) {
@@ -358,6 +359,8 @@ export const chatApi = createApi({
           return { error: toChatQueryError(error) };
         }
       },
+      // Phase 2: Keep cache for 60 seconds, refetch on window focus only if stale
+      keepUnusedDataFor: 60,
       providesTags: (result) =>
         result
           ? [
