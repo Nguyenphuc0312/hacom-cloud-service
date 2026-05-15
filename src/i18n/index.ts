@@ -18,6 +18,7 @@ export const appNamespaces = [
   "settings",
   "friends",
   "group",
+  "calendar",
 ] as const;
 
 const isProduction =
