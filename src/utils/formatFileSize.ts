@@ -1,280 +1,107 @@
 /**
- * Format file size to human readable string
- * Examples: "1.5 KB", "2.3 MB", "1 GB"
+ * @fileoverview Format file size and file type utilities.
+ * This file re-exports from mimeRegistry and filePreviewUtils for backward compatibility.
  */
-export function formatFileSize(bytes: number | undefined): string {
-  if (bytes === undefined || bytes === 0) {
-    return "0 B";
-  }
 
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const k = 1024;
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
+export type { PreviewType } from "./mimeRegistry";
+export type { FileCategory } from "./mimeRegistry";
+export {
+  getMimePreviewType,
+  getMimeCategory,
+  canBrowserPreview,
+  canBrowserFullPreview,
+  isImageMimeType,
+  isVideoMimeType,
+  isAudioMimeType,
+  getMimeTypesByPreviewType,
+  getAllowedMimeTypes,
+} from "./mimeRegistry";
 
-  if (i === 0) {
-    return `${bytes} ${units[i]}`;
-  }
+export {
+  formatFileSize,
+  getFileExtension,
+  getFileExtensionLower,
+  getAttachmentPreviewType,
+  getAttachmentCategory,
+  canAttachmentPreview,
+  isAttachmentImage,
+  isAttachmentVideo,
+  isAttachmentAudio,
+  isAttachmentText,
+  isAttachmentCsv,
+  isAttachmentPdf,
+  isAttachmentDocument,
+  isAttachmentSpreadsheet,
+  isAttachmentPresentation,
+  isAttachmentArchive,
+  shouldShowInlinePreview,
+  shouldShowAudioPlayer,
+  needsPreviewModal,
+  isFileTooLargeForPreview,
+  isFileTooLargeForTextPreview,
+  getPreviewTypeDisplayName,
+  getIconTypeFromPreviewType,
+  MAX_PREVIEW_SIZE,
+  MAX_TEXT_PREVIEW_SIZE,
+  MAX_TEXT_PREVIEW_LINES,
+  MAX_CSV_PREVIEW_ROWS,
+} from "./filePreviewUtils";
 
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${units[i]}`;
-}
+export type { FileIconType } from "./filePreviewUtils";
+
+// Import MIME_REGISTRY directly from mimeRegistry for inline use
+import { MIME_REGISTRY } from "./mimeRegistry";
+import type { FileIconType } from "./filePreviewUtils";
 
 /**
- * Get file extension from filename
+ * Map preview type to file icon type (inlined to avoid circular deps)
  */
-export function getFileExtension(fileName: string): string {
-  const parts = fileName.split(".");
-  return parts.length > 1 ? parts.pop()?.toUpperCase() || "" : "";
-}
-
-const IMAGE_EXTENSIONS = new Set([
-  "jpg",
-  "jpeg",
-  "png",
-  "gif",
-  "webp",
-  "bmp",
-  "heic",
-  "heif",
-  "avif",
-]);
-
-const VIDEO_EXTENSIONS = new Set([
-  "mp4",
-  "mov",
-  "webm",
-  "mkv",
-  "avi",
-  "m4v",
-]);
-
-const AUDIO_EXTENSIONS = new Set([
-  "mp3",
-  "wav",
-  "ogg",
-  "m4a",
-  "aac",
-  "flac",
-]);
-
-const PDF_EXTENSIONS = new Set(["pdf"]);
-
-const resolveExtensionPreviewType = (
-  fileName: string | undefined,
-): PreviewType => {
-  if (!fileName) return "unsupported";
-
-  const extension = getFileExtension(fileName).toLowerCase();
-  if (IMAGE_EXTENSIONS.has(extension)) return "image";
-  if (VIDEO_EXTENSIONS.has(extension)) return "video";
-  if (AUDIO_EXTENSIONS.has(extension)) return "audio";
-  if (PDF_EXTENSIONS.has(extension)) return "pdf";
-  return "unsupported";
+const PREVIEW_TO_ICON_MAP: Record<string, FileIconType> = {
+  image: "image",
+  video: "video",
+  audio: "audio",
+  pdf: "pdf",
+  text: "document",
+  csv: "spreadsheet",
+  document: "document",
+  spreadsheet: "spreadsheet",
+  presentation: "presentation",
+  archive: "archive",
+  unknown: "generic",
 };
 
 /**
- * Get file type category from mime type
+ * @deprecated Use getMimePreviewType from mimeRegistry (synchronous)
  */
-export function getFileCategory(
-  mimeType: string,
-): "document" | "image" | "video" | "audio" | "archive" | "other" {
-  if (mimeType.startsWith("image/")) return "image";
-  if (mimeType.startsWith("video/")) return "video";
-  if (mimeType.startsWith("audio/")) return "audio";
-  if (
-    mimeType.includes("pdf") ||
-    mimeType.includes("document") ||
-    mimeType.includes("text")
-  )
-    return "document";
-  if (
-    mimeType.includes("zip") ||
-    mimeType.includes("rar") ||
-    mimeType.includes("tar")
-  )
-    return "archive";
-  return "other";
-}
-
-/**
- * Get file icon emoji based on extension
- */
-export function getFileIcon(fileName: string): string {
-  const ext = getFileExtension(fileName).toLowerCase();
-
-  const iconMap: Record<string, string> = {
-    // Documents
-    pdf: "📕",
-    doc: "📄",
-    docx: "📄",
-    txt: "📝",
-    rtf: "📝",
-
-    // Spreadsheets
-    xls: "📊",
-    xlsx: "📊",
-    csv: "📊",
-
-    // Presentations
-    ppt: "📽️",
-    pptx: "📽️",
-
-    // Images
-    jpg: "🖼️",
-    jpeg: "🖼️",
-    png: "🖼️",
-    gif: "🖼️",
-    svg: "🖼️",
-    webp: "🖼️",
-
-    // Videos
-    mp4: "🎬",
-    avi: "🎬",
-    mov: "🎬",
-    mkv: "🎬",
-    webm: "🎬",
-
-    // Audio
-    mp3: "🎵",
-    wav: "🎵",
-    ogg: "🎵",
-    flac: "🎵",
-
-    // Archives
-    zip: "📦",
-    rar: "📦",
-    "7z": "📦",
-    tar: "📦",
-    gz: "📦",
-
-    // Code
-    js: "💻",
-    ts: "💻",
-    py: "💻",
-    java: "💻",
-    html: "💻",
-    css: "💻",
-    json: "💻",
-
-    // Others
-    exe: "⚙️",
-    apk: "📱",
-  };
-
-  return iconMap[ext] || "📄";
-}
-
-/**
- * Check if file type is previewable
- */
-export function isPreviewable(
-  mimeType: string | undefined,
-  fileName?: string,
-): boolean {
-  return getPreviewType(mimeType, fileName) !== "unsupported";
-}
-
-/**
- * Determine the preview type for a given MIME type
- */
-export type PreviewType =
-  | "image"
-  | "video"
-  | "audio"
-  | "pdf"
-  | "unsupported";
-
 export function getPreviewType(
   mimeType: string | undefined,
   fileName?: string,
-): PreviewType {
+): string {
+  // Direct inline implementation to avoid circular dependencies
   if (mimeType) {
-    if (mimeType.startsWith("image/")) return "image";
-    if (mimeType.startsWith("video/")) return "video";
-    if (mimeType.startsWith("audio/")) return "audio";
-    if (mimeType === "application/pdf") return "pdf";
+    const def = MIME_REGISTRY.get(mimeType.toLowerCase());
+    if (def) return def.previewType;
   }
 
-  return resolveExtensionPreviewType(fileName);
+  if (fileName) {
+    const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
+    for (const [, definition] of MIME_REGISTRY) {
+      if (definition.extensions.includes(ext)) {
+        return definition.previewType;
+      }
+    }
+  }
+
+  return "unknown";
 }
 
 /**
- * Get a Heroicon-style icon class identifier for a file's MIME type
+ * @deprecated Use getMimePreviewType from mimeRegistry + getIconTypeFromPreviewType from filePreviewUtils
  */
-export type FileIconType =
-  | "image"
-  | "video"
-  | "audio"
-  | "pdf"
-  | "spreadsheet"
-  | "presentation"
-  | "document"
-  | "archive"
-  | "code"
-  | "generic";
-
 export function getFileIconType(
   mimeType: string | undefined,
   fileName: string | undefined,
 ): FileIconType {
-  if (mimeType) {
-    if (mimeType.startsWith("image/")) return "image";
-    if (mimeType.startsWith("video/")) return "video";
-    if (mimeType.startsWith("audio/")) return "audio";
-    if (mimeType === "application/pdf") return "pdf";
-    if (
-      mimeType.includes("spreadsheet") ||
-      mimeType.includes("excel") ||
-      mimeType === "text/csv"
-    )
-      return "spreadsheet";
-    if (mimeType.includes("presentation") || mimeType.includes("powerpoint"))
-      return "presentation";
-    if (
-      mimeType.includes("document") ||
-      mimeType.includes("msword") ||
-      mimeType.startsWith("text/")
-    )
-      return "document";
-    if (
-      mimeType.includes("zip") ||
-      mimeType.includes("rar") ||
-      mimeType.includes("tar") ||
-      mimeType.includes("gzip") ||
-      mimeType.includes("7z")
-    )
-      return "archive";
-  }
-
-  if (fileName) {
-    const ext = getFileExtension(fileName).toLowerCase();
-    const codeExts = [
-      "js",
-      "ts",
-      "py",
-      "java",
-      "html",
-      "css",
-      "json",
-      "xml",
-      "jsx",
-      "tsx",
-    ];
-    if (codeExts.includes(ext)) return "code";
-    if (["xls", "xlsx", "csv"].includes(ext)) return "spreadsheet";
-    if (["ppt", "pptx"].includes(ext)) return "presentation";
-    if (["zip", "rar", "7z", "tar", "gz"].includes(ext)) return "archive";
-  }
-
-  return "generic";
-}
-
-/** Maximum file size allowed for inline preview (100 MB) */
-export const MAX_PREVIEW_SIZE = 100 * 1024 * 1024;
-
-/** Check whether a file is too large for inline preview */
-export function isFileTooLargeForPreview(
-  fileSize: number | undefined,
-): boolean {
-  if (!fileSize) return false;
-  return fileSize > MAX_PREVIEW_SIZE;
+  const previewType = getPreviewType(mimeType, fileName);
+  return PREVIEW_TO_ICON_MAP[previewType] ?? "unknown";
 }

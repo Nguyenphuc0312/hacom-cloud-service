@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import type { Attachment } from "../types";
-import type { PreviewType } from "../utils/formatFileSize";
+import type { PreviewType } from "../utils/mimeRegistry";
 import { fileApi } from "../services/api";
 import { unwrapApiSuccess } from "../lib/apiContract";
 import { resolvePublicResourceUrl } from "../config";
