@@ -364,6 +364,9 @@ export const useWebSocket = (
   const processedTypingEventIdsRef = useRef<Set<string>>(new Set());
   const unsubscribersRef = useRef<Array<() => void>>([]);
 
+  // Track unsubscribe functions for external subscriptions so they can be cleaned up on unmount.
+  const externalUnsubscribersRef = useRef<Array<() => void>>([]);
+
   useEffect(() => {
     const socket = initSocket();
     const unsub = socket.onStateChange((state) => {
@@ -416,7 +419,7 @@ export const useWebSocket = (
   }, [conversations, totalUnreadCount]);
 
   useEffect(() => {
-    return subscribeUnreadSnapshotBroadcast((snapshot) => {
+    const unsub = subscribeUnreadSnapshotBroadcast((snapshot) => {
       suppressUnreadBroadcastRef.current = true;
       logMessageDebug("useWebSocket", "cross_tab_unread_snapshot_received", {
         totalUnreadCount: snapshot.totalUnreadCount,
@@ -436,6 +439,12 @@ export const useWebSocket = (
         },
       );
     });
+    externalUnsubscribersRef.current.push(unsub);
+    return () => {
+      unsub();
+      const idx = externalUnsubscribersRef.current.indexOf(unsub);
+      if (idx !== -1) externalUnsubscribersRef.current.splice(idx, 1);
+    };
   }, [applyUnreadSummary]);
 
   const getNotificationPreferences = useCallback(() => {
@@ -577,11 +586,11 @@ export const useWebSocket = (
     [onError],
   );
   const {
-    subscribeToRefreshEvents,
     handleConnectFailure,
     recoverSocketAuth,
     handleUnauthorizedEvent,
     handleReauthRequiredEvent,
+    subscribeToRefreshEvents,
   } = authCoordinator;
 
   useEffect(() => subscribeToRefreshEvents(), [subscribeToRefreshEvents]);
@@ -2401,14 +2410,37 @@ export const useWebSocket = (
     }
 
     return () => {
+      // 1. Clear all timer-based resources first (before disconnecting socket).
+      // This prevents stale timers from firing into a disconnected socket or
+      // cleaned-up state after a rapid unmount/reconnect cycle.
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+      clearAllRemoteTypingTimers();
+      clearAllConversationJoinRetries();
+
+      // 2. Clear the emit queue so no pending messages are flushed into a
+      // socket that is about to be destroyed or has already changed identity.
+      emitQueueRef.current = [];
+
+      // 3. Unsubscribe all socket event listeners registered by setupSocket.
       unsubscribersRef.current.forEach((unsub) => unsub());
       unsubscribersRef.current = [];
+
+      // 4. Unsubscribe external subscriptions (auth refresh, cross-tab unread).
+      externalUnsubscribersRef.current.forEach((unsub) => unsub());
+      externalUnsubscribersRef.current = [];
+
+      // 5. Tear down the socket connection last.
       disconnect();
     };
   }, [
     autoConnect,
     connect,
     disconnect,
+    clearAllRemoteTypingTimers,
+    clearAllConversationJoinRetries,
     isAuthenticated,
     isAuthInitialized,
     isBootstrappingAuth,

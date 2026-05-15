@@ -7,8 +7,8 @@
  */
 
 import React from "react";
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { act, render } from "@testing-library/react";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { act, cleanup, render } from "@testing-library/react";
 import { useSimpleChatScroll } from "./useSimpleChatScroll";
 import { MessageStatus, MessageType, type Message } from "../../../types";
 
@@ -113,7 +113,6 @@ function renderHarness(initial: {
     React.useEffect(() => {
       const el = hook.scrollRef.current;
       if (!el) return;
-      // Default layout: 1000px content in 500px viewport, scrolled to bottom.
       setLayout(el, { scrollHeight: 1000, clientHeight: 500, scrollTop: 500 });
     }, [hook.scrollRef]);
     return (
@@ -141,10 +140,11 @@ function renderHarness(initial: {
 
   let currentMessages = initial.messages;
   let currentLoading = false;
+  let currentHasOlder = Boolean(initial.hasOlder);
   const { rerender, getByTestId } = render(
     <Harness
       messages={currentMessages}
-      hasOlder={Boolean(initial.hasOlder)}
+      hasOlder={currentHasOlder}
       isInitialLoading={currentLoading}
       loadOlder={initial.loadOlder}
     />,
@@ -156,7 +156,7 @@ function renderHarness(initial: {
       rerender(
         <Harness
           messages={currentMessages}
-          hasOlder={Boolean(initial.hasOlder)}
+          hasOlder={currentHasOlder}
           isInitialLoading={currentLoading}
           loadOlder={initial.loadOlder}
         />,
@@ -167,7 +167,7 @@ function renderHarness(initial: {
       rerender(
         <Harness
           messages={currentMessages}
-          hasOlder={Boolean(initial.hasOlder)}
+          hasOlder={currentHasOlder}
           isInitialLoading={currentLoading}
           loadOlder={initial.loadOlder}
         />,
@@ -188,6 +188,10 @@ function renderHarness(initial: {
 }
 
 describe("useSimpleChatScroll", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it("rule 1: initial load scrolls to bottom (once)", () => {
     const api = renderHarness({ messages: [mk("1"), mk("2")] });
     act(() => flushRaf());

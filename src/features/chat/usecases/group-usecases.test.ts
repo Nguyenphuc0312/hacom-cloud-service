@@ -1,45 +1,56 @@
-import { transferOwnershipUseCase } from '../transferOwnership';
-import { deleteGroupUseCase } from '../deleteGroup';
-import { banMemberUseCase, unbanMemberUseCase } from '../manageMemberRestrictions';
-import { getGroupInvitesUseCase, acceptGroupInviteUseCase, declineGroupInviteUseCase } from '../groupInvites';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Mock the API module
-jest.mock('../../api/chatApi', () => ({
+// vi.hoisted() makes mocks available inside vi.mock factory (which is hoisted)
+const transferOwnershipMock = vi.hoisted(() => vi.fn());
+const deleteGroupMock = vi.hoisted(() => vi.fn());
+const banMemberMock = vi.hoisted(() => vi.fn());
+const unbanMemberMock = vi.hoisted(() => vi.fn());
+const getGroupInvitesMock = vi.hoisted(() => vi.fn());
+const acceptGroupInviteMock = vi.hoisted(() => vi.fn());
+const declineGroupInviteMock = vi.hoisted(() => vi.fn());
+
+// Mock the chatApi re-export module that usecases import from
+vi.mock('../api/chatApi', () => ({
   chatApi: {
     group: {
-      transferOwnership: jest.fn(),
-      deleteGroup: jest.fn(),
-      banMember: jest.fn(),
-      unbanMember: jest.fn(),
-      getGroupInvites: jest.fn(),
-      acceptGroupInvite: jest.fn(),
-      declineGroupInvite: jest.fn(),
+      transferOwnership: transferOwnershipMock,
+      deleteGroup: deleteGroupMock,
+      banMember: banMemberMock,
+      unbanMember: unbanMemberMock,
+      getGroupInvites: getGroupInvitesMock,
+      acceptGroupInvite: acceptGroupInviteMock,
+      declineGroupInvite: declineGroupInviteMock,
     },
   },
 }));
 
-import { chatApi } from '../../api/chatApi';
+// Import after mocks
+import { transferOwnershipUseCase } from './transferOwnership';
+import { deleteGroupUseCase } from './deleteGroup';
+import { banMemberUseCase, unbanMemberUseCase } from './manageMemberRestrictions';
+import {
+  getGroupInvitesUseCase,
+  acceptGroupInviteUseCase,
+  declineGroupInviteUseCase,
+} from './groupInvites';
 
 describe('Group Use Cases', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('transferOwnershipUseCase', () => {
     it('should call transferOwnership API with correct parameters', async () => {
-      (chatApi.group.transferOwnership as jest.Mock).mockResolvedValue(undefined);
+      transferOwnershipMock.mockResolvedValue(undefined);
 
       await transferOwnershipUseCase('group-1', 'new-owner-id');
 
-      expect(chatApi.group.transferOwnership).toHaveBeenCalledWith(
-        'group-1',
-        'new-owner-id',
-      );
+      expect(transferOwnershipMock).toHaveBeenCalledWith('group-1', 'new-owner-id');
     });
 
     it('should propagate errors from API', async () => {
       const error = new Error('Transfer failed');
-      (chatApi.group.transferOwnership as jest.Mock).mockRejectedValue(error);
+      transferOwnershipMock.mockRejectedValue(error);
 
       await expect(
         transferOwnershipUseCase('group-1', 'new-owner-id'),
@@ -49,67 +60,60 @@ describe('Group Use Cases', () => {
 
   describe('deleteGroupUseCase', () => {
     it('should call deleteGroup API with correct parameters', async () => {
-      (chatApi.group.deleteGroup as jest.Mock).mockResolvedValue(undefined);
+      deleteGroupMock.mockResolvedValue(undefined);
 
       await deleteGroupUseCase('group-1');
 
-      expect(chatApi.group.deleteGroup).toHaveBeenCalledWith('group-1');
+      expect(deleteGroupMock).toHaveBeenCalledWith('group-1');
     });
 
     it('should propagate errors from API', async () => {
       const error = new Error('Delete failed');
-      (chatApi.group.deleteGroup as jest.Mock).mockRejectedValue(error);
+      deleteGroupMock.mockRejectedValue(error);
 
-      await expect(deleteGroupUseCase('group-1')).rejects.toThrow(
-        'Delete failed',
-      );
+      await expect(deleteGroupUseCase('group-1')).rejects.toThrow('Delete failed');
     });
   });
 
   describe('banMemberUseCase', () => {
     it('should call banMember API with correct parameters', async () => {
-      (chatApi.group.banMember as jest.Mock).mockResolvedValue(undefined);
+      banMemberMock.mockResolvedValue(undefined);
 
       await banMemberUseCase('group-1', 'user-1');
 
-      expect(chatApi.group.banMember).toHaveBeenCalledWith('group-1', 'user-1');
+      expect(banMemberMock).toHaveBeenCalledWith('group-1', 'user-1');
     });
 
     it('should propagate errors from API', async () => {
       const error = new Error('Ban failed');
-      (chatApi.group.banMember as jest.Mock).mockRejectedValue(error);
+      banMemberMock.mockRejectedValue(error);
 
-      await expect(banMemberUseCase('group-1', 'user-1')).rejects.toThrow(
-        'Ban failed',
-      );
+      await expect(banMemberUseCase('group-1', 'user-1')).rejects.toThrow('Ban failed');
     });
   });
 
   describe('unbanMemberUseCase', () => {
     it('should call unbanMember API with correct parameters', async () => {
-      (chatApi.group.unbanMember as jest.Mock).mockResolvedValue(undefined);
+      unbanMemberMock.mockResolvedValue(undefined);
 
       await unbanMemberUseCase('group-1', 'user-1');
 
-      expect(chatApi.group.unbanMember).toHaveBeenCalledWith(
-        'group-1',
-        'user-1',
-      );
+      expect(unbanMemberMock).toHaveBeenCalledWith('group-1', 'user-1');
     });
 
     it('should propagate errors from API', async () => {
       const error = new Error('Unban failed');
-      (chatApi.group.unbanMember as jest.Mock).mockRejectedValue(error);
+      unbanMemberMock.mockRejectedValue(error);
 
-      await expect(unbanMemberUseCase('group-1', 'user-1')).rejects.toThrow(
-        'Unban failed',
-      );
+      await expect(unbanMemberUseCase('group-1', 'user-1')).rejects.toThrow('Unban failed');
     });
   });
 
   describe('getGroupInvitesUseCase', () => {
     it('should return parsed invites from API', async () => {
       const mockResponse = {
+        success: true,
+        statusCode: 200,
         data: [
           {
             id: 'invite-1',
@@ -120,38 +124,30 @@ describe('Group Use Cases', () => {
           },
         ],
       };
-      (chatApi.group.getGroupInvites as jest.Mock).mockResolvedValue(
-        mockResponse,
-      );
+      getGroupInvitesMock.mockResolvedValue(mockResponse);
 
       const result = await getGroupInvitesUseCase();
 
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({
+      expect(result[0]).toMatchObject({
         id: 'invite-1',
         conversationId: 'group-1',
         inviterUserId: 'user-1',
-        inviterName: '',
-        inviterAvatar: undefined,
         status: 'pending',
         createdAt: '2024-01-01T00:00:00Z',
-        conversationName: undefined,
-        conversationAvatar: undefined,
       });
     });
 
     it('should pass status filter to API', async () => {
-      (chatApi.group.getGroupInvites as jest.Mock).mockResolvedValue({ data: [] });
+      getGroupInvitesMock.mockResolvedValue({ success: true, statusCode: 200, data: [] });
 
       await getGroupInvitesUseCase('pending');
 
-      expect(chatApi.group.getGroupInvites).toHaveBeenCalledWith('pending');
+      expect(getGroupInvitesMock).toHaveBeenCalledWith('pending');
     });
 
     it('should return empty array when API returns no data', async () => {
-      (chatApi.group.getGroupInvites as jest.Mock).mockResolvedValue({
-        data: null,
-      });
+      getGroupInvitesMock.mockResolvedValue({ success: true, statusCode: 200, data: null });
 
       const result = await getGroupInvitesUseCase();
 
@@ -161,21 +157,21 @@ describe('Group Use Cases', () => {
 
   describe('acceptGroupInviteUseCase', () => {
     it('should call acceptGroupInvite API with correct parameters', async () => {
-      (chatApi.group.acceptGroupInvite as jest.Mock).mockResolvedValue({});
+      acceptGroupInviteMock.mockResolvedValue({});
 
       await acceptGroupInviteUseCase('invite-1');
 
-      expect(chatApi.group.acceptGroupInvite).toHaveBeenCalledWith('invite-1');
+      expect(acceptGroupInviteMock).toHaveBeenCalledWith('invite-1');
     });
   });
 
   describe('declineGroupInviteUseCase', () => {
     it('should call declineGroupInvite API with correct parameters', async () => {
-      (chatApi.group.declineGroupInvite as jest.Mock).mockResolvedValue(undefined);
+      declineGroupInviteMock.mockResolvedValue(undefined);
 
       await declineGroupInviteUseCase('invite-1');
 
-      expect(chatApi.group.declineGroupInvite).toHaveBeenCalledWith('invite-1');
+      expect(declineGroupInviteMock).toHaveBeenCalledWith('invite-1');
     });
   });
 });

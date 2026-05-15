@@ -281,6 +281,8 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
             <img
               src={thumbnailUrl}
               alt={attachment.fileName || t("chat:image.previewAlt")}
+              loading="lazy"
+              decoding="async"
               className={clsx(
                 "absolute inset-0 h-full w-full cursor-pointer object-cover transition-opacity",
                 thumbLoaded ? "opacity-100" : "opacity-0",
@@ -374,6 +376,8 @@ const FileMessageCardComponent: React.FC<FileMessageCardProps> = ({
             <img
               src={attachment.thumbnailUrl}
               alt=""
+              loading="lazy"
+              decoding="async"
               className="absolute inset-0 h-full w-full rounded-lg object-cover"
             />
           ) : (

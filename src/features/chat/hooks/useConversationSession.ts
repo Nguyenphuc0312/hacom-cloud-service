@@ -545,12 +545,11 @@ export const useConversationSession = ({
     const currentLastReadSeq = coercePositiveIntSeq(conversation?.lastReadSeq) ?? 0;
     const currentUnread = conversation?.unreadCount ?? 0;
 
-    console.debug("[mark-read] evaluating", {
+    logMessageDebug("chat-session", "markRead.evaluating", {
       conversationId: selectedConversationId,
       newestSeq: anchor?.seq ?? null,
       currentLastReadSeq,
       unreadCount: currentUnread,
-      anchorResolved: anchor !== null,
     });
 
     if (!anchor) return;
@@ -573,7 +572,7 @@ export const useConversationSession = ({
       markReadInput.lastVisibleMessageId = anchor.messageId;
     }
 
-    console.debug("[mark-read] request", {
+    logMessageDebug("chat-session", "markRead.request", {
       conversationId: selectedConversationId,
       lastReadSeq: anchor.seq,
       anchorMessageId: anchor.messageId,
@@ -587,13 +586,13 @@ export const useConversationSession = ({
     });
     void markAsRead(selectedConversationId, markReadInput)
       .then(() => {
-        console.debug("[mark-read] success", {
+        logMessageDebug("chat-session", "markRead.success", {
           conversationId: selectedConversationId,
           lastReadSeq: anchor.seq,
         });
       })
       .catch((error: unknown) => {
-        console.warn("[mark-read] failed", {
+        logger.warn("chat-session", "markRead.failed", {
           conversationId: selectedConversationId,
           lastReadSeq: anchor.seq,
           error: error instanceof Error ? error.message : String(error),

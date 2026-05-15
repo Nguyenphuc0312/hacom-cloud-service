@@ -335,6 +335,7 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
             <img
               src={secureUrl}
               alt={fileName || t("chat:image.previewAlt")}
+              decoding="async"
               className="max-h-[88vh] max-w-[92vw] select-none object-contain transition-transform duration-150"
               style={{ transform: `scale(${scale})` }}
               draggable={false}

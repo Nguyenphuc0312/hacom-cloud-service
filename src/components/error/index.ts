@@ -5,3 +5,7 @@ export {
   type AppErrorPageProps,
   type AppErrorVariant,
 } from "./AppErrorPage";
+export {
+  FeatureErrorBoundary,
+  type FeatureErrorBoundaryProps,
+} from "./FeatureErrorBoundary";

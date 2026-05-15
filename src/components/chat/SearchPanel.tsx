@@ -5,6 +5,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useDebouncedCallback } from "../../hooks/useDebounce";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
@@ -160,14 +161,16 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     [goToNext, goToPrevious, onClose, query, setQuery],
   );
 
-  // Infinite scroll handler
-  const handleScroll = useCallback(() => {
+  // Infinite scroll handler — debounced to avoid triggering loadMore on every pixel scroll
+  const handleScrollRaw = useCallback(() => {
     if (!listRef.current || isLoading || !hasMore) return;
     const el = listRef.current;
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 100) {
       loadMore();
     }
   }, [isLoading, hasMore, loadMore]);
+
+  const handleScroll = useDebouncedCallback(handleScrollRaw, 100);
 
   const handleClose = useCallback(() => {
     onClose();

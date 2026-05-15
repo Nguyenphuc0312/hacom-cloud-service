@@ -93,7 +93,7 @@ const isCoarsePointer = (): boolean =>
   typeof window.matchMedia === "function" &&
   window.matchMedia("(pointer: coarse)").matches;
 
-export const MessageCluster: React.FC<MessageClusterProps> = ({
+export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   message,
   isOwn,
   mergeLevel = "not-merged",
@@ -584,4 +584,5 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   );
 };
 
-export default MessageCluster;
+export type { MessageClusterProps };
+export const MessageCluster = React.memo(MessageClusterComponent);
