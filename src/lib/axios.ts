@@ -28,6 +28,7 @@ import {
 import { updateSocketAuth } from "./socket";
 import { refreshAccessTokenShared } from "../services/authRefreshCoordinator";
 import { logger } from "../utils/logger";
+import { apiPerfLogger } from "../utils/apiPerfLogger";
 
 type AuthFailureReason = "missing_refresh_token" | "refresh_failed";
 type AuthFailureHandler = (reason: AuthFailureReason) => void | Promise<void>;
@@ -306,6 +307,10 @@ apiClient.interceptors.request.use(
     const requestId = buildRequestId(config);
     requestConfig._requestId = requestId;
 
+    // Phase 2: Track API call start
+    const endpoint = `${config.method?.toUpperCase() ?? "GET"} ${config.url ?? ""}`;
+    apiPerfLogger.startApiCall(endpoint, config.method?.toUpperCase() ?? "GET");
+
     if (!requestConfig.signal || requestConfig._managedSignal) {
       const controller = new AbortController();
       requestConfig.signal = controller.signal;
@@ -352,11 +357,22 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => {
     releasePendingRequest(response.config);
+    // Phase 2: Track API call metrics
+    apiPerfLogger.endApiCall(
+      (response.config as AuthRequestConfig)._requestId ?? "",
+      response.status,
+      false,
+    );
     return response;
   },
   async (error: AxiosError) => {
     const originalRequest = error.config as AuthRequestConfig | undefined;
     releasePendingRequest(originalRequest);
+    // Phase 2: Track API call metrics (error)
+    const requestId = originalRequest?._requestId ?? "";
+    if (requestId) {
+      apiPerfLogger.endApiCall(requestId, error.response?.status ?? 0, false);
+    }
 
     if (error.response?.status === 403) {
       const responseData = error.response?.data as
@@ -399,11 +415,22 @@ apiClient.interceptors.response.use(
 authenticatedAuthClient.interceptors.response.use(
   (response) => {
     releasePendingRequest(response.config);
+    // Phase 2: Track API call metrics
+    apiPerfLogger.endApiCall(
+      (response.config as AuthRequestConfig)._requestId ?? "",
+      response.status,
+      false,
+    );
     return response;
   },
   async (error: AxiosError) => {
     const originalRequest = error.config as AuthRequestConfig | undefined;
     releasePendingRequest(originalRequest);
+    // Phase 2: Track API call metrics (error)
+    const requestId = originalRequest?._requestId ?? "";
+    if (requestId) {
+      apiPerfLogger.endApiCall(requestId, error.response?.status ?? 0, false);
+    }
 
     if (
       !originalRequest ||
