@@ -1,0 +1,60 @@
+{
+  "calendar": {
+    "title": "Calendar",
+    "search": {
+      "placeholder": "Search events..."
+    },
+    "myCalendars": "My calendars",
+    "addCalendar": "Add Calendar",
+    "today": "Today",
+    "day": "Day",
+    "week": "Week",
+    "month": "Month",
+    "events": {
+      "more": "+{{count}} more events",
+      "noEvents": "No events"
+    },
+    "eventTypes": {
+      "vietnam_holiday": "Vietnam Holidays",
+      "international": "International",
+      "work": "Work",
+      "personal": "Personal"
+    },
+    "eventDetails": {
+      "title": "Event Details",
+      "date": "Date",
+      "type": "Type",
+      "description": "Description"
+    },
+    "types": {
+      "vietnam": "Vietnam",
+      "international": "International",
+      "work": "Work",
+      "personal": "Personal",
+      "other": "Other"
+    },
+    "viewDevelopment": {
+      "title": "{{view}} view is under development",
+      "subtitle": "Switch to Month view to see the calendar",
+      "switchButton": "Switch to Month View"
+    },
+    "holidays": {
+      "newYear": "New Year's Day",
+      "vietnamPartyFounding": "Vietnamese Communist Party Founding Day",
+      "intlWomenDay": "International Women's Day",
+      "liberationDay": "Liberation Day",
+      "intlLaborDay": "International Labor Day",
+      "intlChildrensDay": "International Children's Day",
+      "warInvalidsDay": "War Invalid & Martyr Day",
+      "nationalDay": "National Day",
+      "vietnamWomenDay": "Vietnamese Women's Day",
+      "vietnamTeachersDay": "Vietnamese Teachers' Day",
+      "vnaDay": "Vietnam People's Army Day",
+      "valentine": "Valentine",
+      "earthDay": "Earth Day",
+      "worldEnvDay": "World Environment Day",
+      "halloween": "Halloween",
+      "christmas": "Christmas"
+    }
+  }
+}
