@@ -87,7 +87,8 @@ export const shouldSyncUserSettingsForScopes = (scopes: string[]): boolean =>
   scopes.length === 0 || scopes.includes("user_settings");
 
 const CONVERSATION_SYNC_FALLBACK_TIMEOUT_MS = 2_500;
-const CONVERSATION_SNAPSHOT_REFRESH_DEBOUNCE_MS = 250;
+// Phase 1: Increased from 250ms to 500ms to reduce API calls during WS event bursts
+const CONVERSATION_SNAPSHOT_REFRESH_DEBOUNCE_MS = 500;
 
 const toCursorValue = (value: unknown): string | undefined => {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
