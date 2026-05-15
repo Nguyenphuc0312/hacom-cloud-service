@@ -48,6 +48,9 @@ import {
 import { createGroupInviteLinkUseCase } from "../../features/chat/usecases/createGroupInviteLink";
 import { revokeGroupInviteLinkUseCase } from "../../features/chat/usecases/revokeGroupInviteLink";
 import { resolveGroupJoinRequestUseCase } from "../../features/chat/usecases/resolveGroupJoinRequest";
+import { transferOwnershipUseCase } from "../../features/chat/usecases/transferOwnership";
+import { deleteGroupUseCase } from "../../features/chat/usecases/deleteGroup";
+import { banMemberUseCase, unbanMemberUseCase } from "../../features/chat/usecases/manageMemberRestrictions";
 import { getUserDisplayName } from "../../utils/messageHelpers";
 
 interface GroupInfoProps {
@@ -80,6 +83,8 @@ interface GroupMember {
 type PendingGroupConfirm =
   | { type: "remove-member"; member: GroupMember }
   | { type: "leave-group" }
+  | { type: "transfer-ownership"; member: GroupMember }
+  | { type: "delete-group" }
   | null;
 type GroupAvatarUploadStage =
   | "idle"
@@ -878,6 +883,108 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     t,
   ]);
 
+  const handleTransferOwnership = useCallback(
+    (member: GroupMember) => {
+      if (currentUserRole !== RoomMemberRole.OWNER) return;
+      if (member.role === RoomMemberRole.OWNER) return;
+      setPendingConfirm({ type: "transfer-ownership", member });
+    },
+    [currentUserRole],
+  );
+
+  const confirmTransferOwnership = useCallback(
+    async (member: GroupMember) => {
+      setActingMemberId(member.id);
+      setIsConfirmActionPending(true);
+      try {
+        await transferOwnershipUseCase(conversation.id, member.id);
+        await refreshGroupState();
+        setPendingConfirm(null);
+        toast.success(
+          t("profile:toast.ownershipTransferred", {
+            name: resolveMemberName({ id: member.id, username: member.username, displayName: member.displayName }),
+          }),
+        );
+      } catch (error) {
+        const apiError = extractApiError(error);
+        toast.error(apiError.message || t("profile:toast.ownershipTransferFailed"));
+      } finally {
+        setActingMemberId(null);
+        setIsConfirmActionPending(false);
+      }
+    },
+    [conversation.id, refreshGroupState, t],
+  );
+
+  const handleDeleteGroup = useCallback(() => {
+    if (currentUserRole !== RoomMemberRole.OWNER) return;
+    setPendingConfirm({ type: "delete-group" });
+  }, [currentUserRole]);
+
+  const confirmDeleteGroup = useCallback(async () => {
+    setIsSubmitting(true);
+    setIsConfirmActionPending(true);
+    try {
+      await deleteGroupUseCase(conversation.id);
+      removeConversation(conversation.id);
+      setPendingConfirm(null);
+      toast.success(t("profile:toast.groupDeleted"));
+      onClose();
+      navigate("/chat");
+    } catch (error) {
+      const apiError = extractApiError(error);
+      toast.error(apiError.message || t("profile:toast.groupDeleteFailed"));
+    } finally {
+      setIsSubmitting(false);
+      setIsConfirmActionPending(false);
+    }
+  }, [conversation.id, navigate, onClose, removeConversation, t]);
+
+  const handleBanMember = useCallback(
+    async (member: GroupMember) => {
+      if (currentUserRole !== RoomMemberRole.OWNER && currentUserRole !== RoomMemberRole.ADMIN) return;
+      if (member.role === RoomMemberRole.OWNER) return;
+      setActingMemberId(member.id);
+      try {
+        await banMemberUseCase(conversation.id, member.id);
+        await refreshGroupState();
+        toast.success(
+          t("profile:toast.memberBanned", {
+            name: resolveMemberName({ id: member.id, username: member.username, displayName: member.displayName }),
+          }),
+        );
+      } catch (error) {
+        const apiError = extractApiError(error);
+        toast.error(apiError.message || t("profile:toast.banMemberFailed"));
+      } finally {
+        setActingMemberId(null);
+      }
+    },
+    [conversation.id, currentUserRole, refreshGroupState, t],
+  );
+
+  const handleUnbanMember = useCallback(
+    async (member: GroupMember) => {
+      if (currentUserRole !== RoomMemberRole.OWNER && currentUserRole !== RoomMemberRole.ADMIN) return;
+      setActingMemberId(member.id);
+      try {
+        await unbanMemberUseCase(conversation.id, member.id);
+        await refreshGroupState();
+        toast.success(
+          t("profile:toast.memberUnbanned", {
+            name: resolveMemberName({ id: member.id, username: member.username, displayName: member.displayName }),
+          }),
+        );
+      } catch (error) {
+        const apiError = extractApiError(error);
+        toast.error(apiError.message || t("profile:toast.unbanMemberFailed"));
+      } finally {
+        setActingMemberId(null);
+      }
+    },
+    [conversation.id, currentUserRole, refreshGroupState, t],
+  );
+
   const tabs = [
     { id: "members", label: t("profile:groupInfo.tabs.members") },
     {
@@ -1032,26 +1139,40 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   );
 
   const pendingConfirmMember =
-    pendingConfirm?.type === "remove-member" ? pendingConfirm.member : null;
+    pendingConfirm?.type === "remove-member" || pendingConfirm?.type === "transfer-ownership"
+      ? pendingConfirm.member
+      : null;
   const pendingConfirmMemberName = pendingConfirmMember
     ? resolveMemberName(pendingConfirmMember) || pendingConfirmMember.id
     : "";
   const confirmTitle =
     pendingConfirm?.type === "leave-group"
       ? t("profile:groupInfo.leaveGroup")
-      : t("profile:groupInfo.actions.removeMember", {
-          defaultValue: "Remove member",
-        });
+      : pendingConfirm?.type === "transfer-ownership"
+        ? t("profile:groupInfo.transferOwnership")
+        : pendingConfirm?.type === "delete-group"
+          ? t("profile:groupInfo.deleteGroup")
+          : t("profile:groupInfo.actions.removeMember", {
+              defaultValue: "Remove member",
+            });
   const confirmMessage =
     pendingConfirm?.type === "leave-group"
       ? t("profile:groupInfo.leaveConfirm")
-      : t("profile:groupInfo.removeMemberConfirm", {
-          name: pendingConfirmMemberName,
-        });
+      : pendingConfirm?.type === "transfer-ownership"
+        ? t("profile:groupInfo.transferOwnershipConfirm", {
+            name: pendingConfirmMemberName,
+          })
+        : pendingConfirm?.type === "delete-group"
+          ? t("profile:groupInfo.deleteGroupConfirm")
+          : t("profile:groupInfo.removeMemberConfirm", {
+              name: pendingConfirmMemberName,
+            });
   const confirmText =
     pendingConfirm?.type === "leave-group"
       ? t("profile:groupInfo.leaveGroup")
-      : t("common:actions.remove", { defaultValue: "Remove" });
+      : pendingConfirm?.type === "delete-group"
+        ? t("profile:groupInfo.deleteGroup")
+        : t("common:actions.remove", { defaultValue: "Remove" });
 
   return (
     <div className={clsx("flex h-full flex-col bg-surface", className)}>
@@ -1345,6 +1466,17 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                           </p>
                           {(canToggleRole || canRemoveMember(member)) && (
                             <div className="mt-2 flex flex-wrap items-center gap-3">
+                              {currentUserRole === RoomMemberRole.OWNER && member.role !== RoomMemberRole.OWNER && (
+                                <button
+                                  type="button"
+                                  disabled={isMemberActionRunning}
+                                  onClick={() => void handleTransferOwnership(member)}
+                                  className="text-xs text-warning underline-offset-2 hover:text-warning/80 hover:underline disabled:opacity-60"
+                                >
+                                  {t("profile:groupInfo.actions.transferOwnership")}
+                                </button>
+                              )}
+
                               {canToggleRole && (
                                 <button
                                   type="button"
@@ -1366,6 +1498,17 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                                   className="text-xs text-danger underline-offset-2 hover:underline disabled:opacity-60"
                                 >
                                   {t("profile:groupInfo.actions.removeMember")}
+                                </button>
+                              )}
+
+                              {(currentUserRole === RoomMemberRole.OWNER || currentUserRole === RoomMemberRole.ADMIN) && member.role === RoomMemberRole.MEMBER && (
+                                <button
+                                  type="button"
+                                  disabled={isMemberActionRunning}
+                                  onClick={() => void handleBanMember(member)}
+                                  className="text-xs text-danger underline-offset-2 hover:underline disabled:opacity-60"
+                                >
+                                  {t("profile:groupInfo.actions.banMember")}
                                 </button>
                               )}
 
@@ -1595,6 +1738,16 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         <div className="h-px bg-border mx-4" />
 
         <div className="py-2">
+          {currentUserRole === RoomMemberRole.OWNER && (
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => void handleDeleteGroup()}
+              className="w-full flex items-center gap-4 px-4 py-3 text-danger transition-colors hover:bg-danger/10"
+            >
+              <span className="text-sm">{t("profile:groupInfo.deleteGroup")}</span>
+            </button>
+          )}
           <button
             type="button"
             disabled={isSubmitting || !canLeaveCurrentGroup}
@@ -1628,6 +1781,14 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           }
           if (pendingConfirm?.type === "leave-group") {
             void confirmLeaveGroup();
+            return;
+          }
+          if (pendingConfirm?.type === "transfer-ownership") {
+            void confirmTransferOwnership(pendingConfirm.member);
+            return;
+          }
+          if (pendingConfirm?.type === "delete-group") {
+            void confirmDeleteGroup();
           }
         }}
         title={confirmTitle}

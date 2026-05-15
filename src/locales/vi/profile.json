@@ -40,7 +40,9 @@
     "actions": {
       "makeAdmin": "Cấp admin",
       "removeAdmin": "Gỡ admin",
-      "removeMember": "Xóa khỏi nhóm"
+      "removeMember": "Xóa khỏi nhóm",
+      "transferOwnership": "Chuyển quyền sở hữu",
+      "banMember": "Cấm thành viên"
     },
     "viewAllMedia": "Xem tất cả phương tiện",
     "noSharedFiles": "Chưa có tệp được chia sẻ",
@@ -50,6 +52,10 @@
     "leaveGroup": "Rời nhóm",
     "leaveBlockedOwner": "Hãy chuyển quyền sở hữu trước khi rời nhóm này.",
     "leaveConfirm": "Bạn có chắc muốn rời nhóm này?",
+    "deleteGroup": "Xóa nhóm",
+    "deleteGroupConfirm": "Bạn có chắc muốn xóa nhóm này? Hành động này không thể hoàn tác.",
+    "transferOwnership": "Chuyển quyền sở hữu",
+    "transferOwnershipConfirm": "Bạn có chắc muốn chuyển quyền sở hữu cho {{name}}? Họ sẽ trở thành chủ nhóm mới.",
     "invite": {
       "invalidUsageLimit": "Giới hạn lượt dùng phải lớn hơn 0",
       "created": "Đã tạo liên kết mời",
@@ -195,7 +201,15 @@
     "memberDemoted": "Đã gỡ quyền admin",
     "roleUpdateFailed": "Không thể cập nhật vai trò thành viên",
     "leftGroup": "Đã rời nhóm",
-    "leaveGroupFailed": "Không thể rời nhóm lúc này"
+    "leaveGroupFailed": "Không thể rời nhóm lúc này",
+    "ownershipTransferred": "Đã chuyển quyền sở hữu cho {{name}}",
+    "ownershipTransferFailed": "Không thể chuyển quyền sở hữu",
+    "groupDeleted": "Đã xóa nhóm",
+    "groupDeleteFailed": "Không thể xóa nhóm",
+    "memberBanned": "{{name}} đã bị cấm",
+    "banMemberFailed": "Không thể cấm thành viên",
+    "memberUnbanned": "{{name}} đã được bỏ cấm",
+    "unbanMemberFailed": "Không thể bỏ cấm thành viên"
   },
   "title": "Hồ sơ",
   "pageTitle": "Hồ sơ"

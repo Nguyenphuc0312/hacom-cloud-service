@@ -1076,6 +1076,26 @@ export const groupApi = {
   deleteGroup: async (groupId: string) => {
     await apiClient.delete(`/groups/${groupId}`);
   },
+
+  // Group Invitation API
+  getGroupInvites: async (status?: 'pending' | 'accepted' | 'declined') => {
+    const query = status ? `?status=${status}` : '';
+    const response = await apiClient.get<ApiResponse<unknown>>(
+      `/conversations/group-invites${query}`,
+    );
+    return response.data;
+  },
+
+  acceptGroupInvite: async (inviteId: string) => {
+    const response = await apiClient.post<ApiResponse<unknown>>(
+      `/conversations/group-invites/${inviteId}/accept`,
+    );
+    return response.data;
+  },
+
+  declineGroupInvite: async (inviteId: string) => {
+    await apiClient.post(`/conversations/group-invites/${inviteId}/decline`);
+  },
 };
 
 // ============================================

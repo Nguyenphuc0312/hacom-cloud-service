@@ -7,6 +7,8 @@ import {
   CornerUpLeft,
   MoreHorizontal,
   Pencil,
+  Pin,
+  PinOff,
   RefreshCw,
   SmilePlus,
   Trash2,
@@ -96,6 +98,16 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
         }),
         icon: Trash2,
         danger: true,
+      },
+      pin: {
+        id: "pin",
+        label: t("chat:message.actions.pin", { defaultValue: "Ghim tin nhắn" }),
+        icon: Pin,
+      },
+      unpin: {
+        id: "unpin",
+        label: t("chat:message.actions.unpin", { defaultValue: "Bỏ ghim" }),
+        icon: PinOff,
       },
       more: {
         id: "more",
