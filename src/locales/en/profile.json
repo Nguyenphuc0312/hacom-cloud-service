@@ -44,6 +44,8 @@
       "transferOwnership": "Transfer ownership",
       "banMember": "Ban member"
     },
+    "banMemberConfirm": "Are you sure you want to ban {{name}}? They will not be able to join this group.",
+    "banMember": "Ban member",
     "viewAllMedia": "View all media",
     "noSharedFiles": "No shared files",
     "unavailableAction": "This action is unavailable in this build.",

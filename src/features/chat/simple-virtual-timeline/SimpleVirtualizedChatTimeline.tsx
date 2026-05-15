@@ -15,6 +15,7 @@
 import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
+import { ChatBubbleLeftIcon } from "@heroicons/react/24/outline";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Attachment, Conversation, Message } from "../../../types";
 import type { ChatDensity } from "../../../stores/uiStore";
@@ -186,10 +187,21 @@ const SimpleVirtualizedChatTimelineComponent: React.FC<
   if (messages.length === 0) {
     return (
       <section
-        className={clsx("relative h-full min-h-0 flex-1", className)}
+        className={clsx(
+          "relative flex h-full min-h-0 flex-1 flex-col items-center justify-center gap-3",
+          className,
+        )}
         role="status"
-        aria-label={t("chat:empty.noChatDescription")}
-      />
+        aria-label={t("chat:empty.messagesDescription")}
+      >
+        <ChatBubbleLeftIcon className="h-12 w-12 text-text-muted/40" />
+        <p className="text-sm font-medium text-text-secondary">
+          {t("chat:empty.messagesTitle")}
+        </p>
+        <p className="text-xs text-text-muted">
+          {t("chat:empty.messagesDescription")}
+        </p>
+      </section>
     );
   }
 

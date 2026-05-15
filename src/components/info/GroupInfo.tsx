@@ -85,6 +85,7 @@ type PendingGroupConfirm =
   | { type: "leave-group" }
   | { type: "transfer-ownership"; member: GroupMember }
   | { type: "delete-group" }
+  | { type: "ban-member"; member: GroupMember }
   | null;
 type GroupAvatarUploadStage =
   | "idle"
@@ -941,13 +942,22 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   }, [conversation.id, navigate, onClose, removeConversation, t]);
 
   const handleBanMember = useCallback(
-    async (member: GroupMember) => {
+    (member: GroupMember) => {
       if (currentUserRole !== RoomMemberRole.OWNER && currentUserRole !== RoomMemberRole.ADMIN) return;
       if (member.role === RoomMemberRole.OWNER) return;
+      setPendingConfirm({ type: "ban-member", member });
+    },
+    [currentUserRole],
+  );
+
+  const confirmBanMember = useCallback(
+    async (member: GroupMember) => {
       setActingMemberId(member.id);
+      setIsConfirmActionPending(true);
       try {
         await banMemberUseCase(conversation.id, member.id);
         await refreshGroupState();
+        setPendingConfirm(null);
         toast.success(
           t("profile:toast.memberBanned", {
             name: resolveMemberName({ id: member.id, username: member.username, displayName: member.displayName }),
@@ -958,9 +968,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         toast.error(apiError.message || t("profile:toast.banMemberFailed"));
       } finally {
         setActingMemberId(null);
+        setIsConfirmActionPending(false);
       }
     },
-    [conversation.id, currentUserRole, refreshGroupState, t],
+    [conversation.id, refreshGroupState, t],
   );
 
   const tabs = [
@@ -1130,9 +1141,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         ? t("profile:groupInfo.transferOwnership")
         : pendingConfirm?.type === "delete-group"
           ? t("profile:groupInfo.deleteGroup")
-          : t("profile:groupInfo.actions.removeMember", {
-              defaultValue: "Remove member",
-            });
+          : pendingConfirm?.type === "ban-member"
+            ? t("profile:groupInfo.banMember")
+            : t("profile:groupInfo.actions.removeMember", {
+                defaultValue: "Remove member",
+              });
   const confirmMessage =
     pendingConfirm?.type === "leave-group"
       ? t("profile:groupInfo.leaveConfirm")
@@ -1142,9 +1155,13 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           })
         : pendingConfirm?.type === "delete-group"
           ? t("profile:groupInfo.deleteGroupConfirm")
-          : t("profile:groupInfo.removeMemberConfirm", {
-              name: pendingConfirmMemberName,
-            });
+          : pendingConfirm?.type === "ban-member"
+            ? t("profile:groupInfo.banMemberConfirm", {
+                name: pendingConfirmMemberName,
+              })
+            : t("profile:groupInfo.removeMemberConfirm", {
+                name: pendingConfirmMemberName,
+              });
   const confirmText =
     pendingConfirm?.type === "leave-group"
       ? t("profile:groupInfo.leaveGroup")
@@ -1767,6 +1784,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
           }
           if (pendingConfirm?.type === "delete-group") {
             void confirmDeleteGroup();
+            return;
+          }
+          if (pendingConfirm?.type === "ban-member") {
+            void confirmBanMember(pendingConfirm.member);
           }
         }}
         title={confirmTitle}

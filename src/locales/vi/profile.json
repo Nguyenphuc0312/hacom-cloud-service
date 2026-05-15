@@ -44,6 +44,8 @@
       "transferOwnership": "Chuyển quyền sở hữu",
       "banMember": "Cấm thành viên"
     },
+    "banMemberConfirm": "Bạn có chắc muốn cấm {{name}}? Họ sẽ không thể tham gia nhóm này.",
+    "banMember": "Cấm thành viên",
     "viewAllMedia": "Xem tất cả phương tiện",
     "noSharedFiles": "Chưa có tệp được chia sẻ",
     "unavailableAction": "Thao tác này hiện chưa khả dụng trong bản build này.",
