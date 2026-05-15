@@ -53,6 +53,8 @@ interface MessageClusterProps {
     messageId: string,
     mode?: "FOR_ME" | "FOR_EVERYONE",
   ) => void | Promise<void>;
+  onPin?: (messageId: string) => void | Promise<void>;
+  onUnpin?: (messageId: string) => void | Promise<void>;
   onImageClick?: (imageUrl: string) => void;
   onFilePreview?: (attachment: Attachment) => void;
   isSelectionMode?: boolean;
@@ -61,6 +63,8 @@ interface MessageClusterProps {
   currentUsername?: string;
   /** Viewer (admin/owner) được phép "Xóa ở mọi người" trên tin của người khác. */
   viewerCanRecallOthers?: boolean;
+  /** Viewer (admin/owner) được phép ghim tin nhắn. */
+  viewerCanPin?: boolean;
   textRenderMode?: LongMessageRenderMode;
   isCollapsibleText?: boolean;
   onToggleTextExpand?: () => void;
@@ -104,6 +108,8 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   onReact,
   onEdit,
   onDelete,
+  onPin,
+  onUnpin,
   onImageClick,
   onFilePreview,
   isSelectionMode = false,
@@ -111,6 +117,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
   onNavigateToMessage,
   currentUsername,
   viewerCanRecallOthers,
+  viewerCanPin,
   textRenderMode = "expanded",
   isCollapsibleText = false,
   onToggleTextExpand,
@@ -217,6 +224,8 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
             ? true
             : undefined,
         canRetry: isFailedMessage(message),
+        canPin: viewerCanPin,
+        isPinned: message.isPinned ?? false,
       }),
     [
       coarsePointer,
@@ -226,6 +235,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
       onDelete,
       onEdit,
       viewerCanRecallOthers,
+      viewerCanPin,
     ],
   );
 
@@ -274,6 +284,18 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
           handleRetry();
           closeActions();
           break;
+        case "pin":
+          if (onPin) {
+            void Promise.resolve(onPin(message.id));
+          }
+          closeActions();
+          break;
+        case "unpin":
+          if (onUnpin) {
+            void Promise.resolve(onUnpin(message.id));
+          }
+          closeActions();
+          break;
         case "more":
           openActions();
           break;
@@ -287,6 +309,8 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
       message,
       onDelete,
       onEdit,
+      onPin,
+      onUnpin,
       onReact,
       onReply,
       openActions,

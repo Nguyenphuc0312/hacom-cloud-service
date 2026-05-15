@@ -10,6 +10,8 @@ export type MessageActionId =
   | "deleteForMe"
   | "deleteForEveryone"
   | "retry"
+  | "pin"
+  | "unpin"
   | "more";
 
 export interface MessageActionPolicyInput {
@@ -27,6 +29,10 @@ export interface MessageActionPolicyInput {
    */
   canDeleteForEveryone?: boolean;
   canRetry?: boolean;
+  /** Có cho phép ghim tin nhắn hay không (owner/admin). */
+  canPin?: boolean;
+  /** Tin nhắn đã được ghim chưa. */
+  isPinned?: boolean;
 }
 
 const RECALL_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -77,6 +83,12 @@ const canEditMessage = (message: Message, isOwn: boolean): boolean =>
 
 const canDeleteMessage = (message: Message): boolean => !message.isDeleted;
 
+const canPinMessage = (message: Message): boolean =>
+  message.type !== MessageType.SYSTEM &&
+  !message.isDeleted &&
+  !isPendingMessage(message) &&
+  !isFailedMessage(message);
+
 const getActionCandidates = ({
   message,
   isOwn,
@@ -84,6 +96,8 @@ const getActionCandidates = ({
   canDelete = false,
   canDeleteForEveryone,
   canRetry = false,
+  canPin = false,
+  isPinned = false,
 }: MessageActionPolicyInput): ActionCandidate[] => {
   const failed = isFailedMessage(message);
   const candidates: ActionCandidate[] = [];
@@ -151,6 +165,25 @@ const getActionCandidates = ({
       railEligible: false,
       menuEligible: true,
     });
+  }
+
+  // Pin/Unpin actions (only for group admins/owners)
+  if (canPin && canPinMessage(message)) {
+    if (isPinned) {
+      candidates.push({
+        id: "unpin",
+        score: 30,
+        railEligible: true,
+        menuEligible: true,
+      });
+    } else {
+      candidates.push({
+        id: "pin",
+        score: 28,
+        railEligible: true,
+        menuEligible: true,
+      });
+    }
   }
 
   return candidates.sort((a, b) => b.score - a.score);

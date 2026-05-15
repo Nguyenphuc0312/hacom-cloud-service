@@ -59,7 +59,9 @@
       "delete": "Delete",
       "deleteForMe": "Delete for me",
       "deleteForEveryone": "Unsend",
-      "deleteForEveryoneAdmin": "Remove for everyone"
+      "deleteForEveryoneAdmin": "Remove for everyone",
+      "pin": "Pin message",
+      "unpin": "Unpin"
     },
     "structuredBlock": "Structured content",
     "expandLong": "Show more",

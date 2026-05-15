@@ -40,7 +40,9 @@
     "actions": {
       "makeAdmin": "Make admin",
       "removeAdmin": "Remove admin",
-      "removeMember": "Remove member"
+      "removeMember": "Remove member",
+      "transferOwnership": "Transfer ownership",
+      "banMember": "Ban member"
     },
     "viewAllMedia": "View all media",
     "noSharedFiles": "No shared files",
@@ -50,6 +52,10 @@
     "leaveGroup": "Leave group",
     "leaveBlockedOwner": "Transfer ownership before leaving this group.",
     "leaveConfirm": "Are you sure you want to leave this group?",
+    "deleteGroup": "Delete group",
+    "deleteGroupConfirm": "Are you sure you want to delete this group? This action cannot be undone.",
+    "transferOwnership": "Transfer ownership",
+    "transferOwnershipConfirm": "Are you sure you want to transfer ownership to {{name}}? They will become the new owner.",
     "invite": {
       "invalidUsageLimit": "Usage limit must be greater than 0",
       "created": "Invite link created",
@@ -195,7 +201,15 @@
     "memberDemoted": "Admin role removed",
     "roleUpdateFailed": "Unable to update member role",
     "leftGroup": "Left group",
-    "leaveGroupFailed": "Unable to leave group right now"
+    "leaveGroupFailed": "Unable to leave group right now",
+    "ownershipTransferred": "Ownership transferred to {{name}}",
+    "ownershipTransferFailed": "Unable to transfer ownership",
+    "groupDeleted": "Group deleted",
+    "groupDeleteFailed": "Unable to delete group",
+    "memberBanned": "{{name}} has been banned",
+    "banMemberFailed": "Unable to ban member",
+    "memberUnbanned": "{{name}} has been unbanned",
+    "unbanMemberFailed": "Unable to unban member"
   },
   "title": "Profile",
   "pageTitle": "Profile"

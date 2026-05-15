@@ -59,7 +59,9 @@
       "delete": "Xóa",
       "deleteForMe": "Xóa về phía tôi",
       "deleteForEveryone": "Thu hồi",
-      "deleteForEveryoneAdmin": "Xóa ở mọi người"
+      "deleteForEveryoneAdmin": "Xóa ở mọi người",
+      "pin": "Ghim tin nhắn",
+      "unpin": "Bỏ ghim"
     },
     "structuredBlock": "Nội dung có cấu trúc",
     "expandLong": "Xem thêm",
