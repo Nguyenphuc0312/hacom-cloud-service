@@ -225,7 +225,7 @@ export const MessageCluster: React.FC<MessageClusterProps> = ({
             : undefined,
         canRetry: isFailedMessage(message),
         canPin: viewerCanPin,
-        isPinned: message.isPinned ?? false,
+        isPinned: message.isPinned === true,
       }),
     [
       coarsePointer,

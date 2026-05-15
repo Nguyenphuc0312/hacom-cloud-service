@@ -251,8 +251,6 @@ export interface Message
   deletedAt?: Date | string;
   recalledBy?: string;
   recalledAt?: Date | string;
-  /** Whether this message is pinned in the group. Client-side cache. */
-  isPinned?: boolean;
 }
 
 export interface TypingStatus {

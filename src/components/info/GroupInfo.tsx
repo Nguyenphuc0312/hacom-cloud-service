@@ -50,7 +50,7 @@ import { revokeGroupInviteLinkUseCase } from "../../features/chat/usecases/revok
 import { resolveGroupJoinRequestUseCase } from "../../features/chat/usecases/resolveGroupJoinRequest";
 import { transferOwnershipUseCase } from "../../features/chat/usecases/transferOwnership";
 import { deleteGroupUseCase } from "../../features/chat/usecases/deleteGroup";
-import { banMemberUseCase, unbanMemberUseCase } from "../../features/chat/usecases/manageMemberRestrictions";
+import { banMemberUseCase } from "../../features/chat/usecases/manageMemberRestrictions";
 import { getUserDisplayName } from "../../utils/messageHelpers";
 
 interface GroupInfoProps {
@@ -956,28 +956,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       } catch (error) {
         const apiError = extractApiError(error);
         toast.error(apiError.message || t("profile:toast.banMemberFailed"));
-      } finally {
-        setActingMemberId(null);
-      }
-    },
-    [conversation.id, currentUserRole, refreshGroupState, t],
-  );
-
-  const handleUnbanMember = useCallback(
-    async (member: GroupMember) => {
-      if (currentUserRole !== RoomMemberRole.OWNER && currentUserRole !== RoomMemberRole.ADMIN) return;
-      setActingMemberId(member.id);
-      try {
-        await unbanMemberUseCase(conversation.id, member.id);
-        await refreshGroupState();
-        toast.success(
-          t("profile:toast.memberUnbanned", {
-            name: resolveMemberName({ id: member.id, username: member.username, displayName: member.displayName }),
-          }),
-        );
-      } catch (error) {
-        const apiError = extractApiError(error);
-        toast.error(apiError.message || t("profile:toast.unbanMemberFailed"));
       } finally {
         setActingMemberId(null);
       }
