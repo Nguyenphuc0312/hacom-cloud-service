@@ -72,7 +72,9 @@ export const MessageSurface: React.FC<MessageSurfaceProps> = React.memo(
     return (
       <div
         className={clsx(
-          "chat-message-surface relative min-w-0 overflow-hidden px-[var(--chat-message-padding-x)] py-[var(--chat-message-padding-y)] text-[14.5px] leading-[var(--chat-message-line-height)] transition-colors",
+          "chat-message-surface relative min-w-0 max-w-[85%] overflow-hidden px-[var(--chat-message-padding-x)] py-[var(--chat-message-padding-y)] text-[14.5px] leading-[var(--chat-message-line-height)] transition-colors",
+          // Own messages can be slightly wider on desktop
+          isOwn && "sm:max-w-[70%] lg:max-w-[65%]",
           getBubbleRadiusClass(isOwn, isGroupStart, isGroupEnd, mergeLevel),
           isOwn
             ? "bg-[hsl(var(--chat-bubble-sent))] text-[hsl(var(--chat-bubble-sent-text))]"
