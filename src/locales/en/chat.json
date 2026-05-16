@@ -209,7 +209,8 @@
     "archiveNotice": "Archive contents cannot be previewed for security reasons.",
     "archiveSuggestion": "Download and extract using your preferred archive tool.",
     "largeArchive": "Large archive file",
-    "largeArchiveNotice": "Download may take some time depending on your connection speed."
+    "largeArchiveNotice": "Download may take some time depending on your connection speed.",
+    "pdfRenderedWithJs": "Rendered using PDF.js viewer"
   },
   "slowMode": {
     "active": "Slow mode active. Try again in {{seconds}}s"

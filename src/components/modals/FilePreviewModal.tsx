@@ -21,7 +21,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { IconButton, Skeleton } from "../ui";
 import { FileTypeIcon } from "../message/FileTypeIcon";
-import { TextPreview, CsvPreview, DocumentPreview, ArchivePreview, PdfPreview } from "../preview";
+import { TextPreview, CsvPreview, DocumentPreview, ArchivePreview, PdfPreview, PdfJsViewer } from "../preview";
 import type { PreviewType } from "../../utils/mimeRegistry";
 import {
   getMimePreviewType,
@@ -358,11 +358,20 @@ const FilePreviewModalComponent: React.FC<FilePreviewModalProps> = ({
       );
     }
 
-    // PDF preview with enhanced controls
+    // PDF preview using PDF.js for cross-origin support
     if (previewType === "pdf") {
+      if (secureUrl) {
+        return (
+          <PdfJsViewer
+            url={secureUrl}
+            fileName={fileName}
+            fileSize={current.attachment.fileSize}
+          />
+        );
+      }
       return (
         <PdfPreview
-          url={secureUrl}
+          url=""
           fileName={fileName}
           fileSize={current.attachment.fileSize}
         />
