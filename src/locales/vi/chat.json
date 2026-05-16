@@ -209,7 +209,8 @@
     "archiveNotice": "Không thể xem trước nội dung archive vì lý do bảo mật.",
     "archiveSuggestion": "Tải và giải nén bằng công cụ archive yêu thích của bạn.",
     "largeArchive": "Tệp archive lớn",
-    "largeArchiveNotice": "Việc tải có thể mất thời gian tùy thuộc vào tốc độ kết nối của bạn."
+    "largeArchiveNotice": "Việc tải có thể mất thời gian tùy thuộc vào tốc độ kết nối của bạn.",
+    "pdfRenderedWithJs": "Hiển thị bằng trình xem PDF.js"
   },
   "slowMode": {
     "active": "Chế độ chậm đang bật. Thử lại sau {{seconds}} giây"
