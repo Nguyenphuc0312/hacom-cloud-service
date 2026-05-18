@@ -1,4 +1,16 @@
-export const reactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🎉", "🔥"];
+/** Quick reactions — shown first in the reaction picker. Max 6 for compact layout. */
+export const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "😡"] as const;
+
+/** All available quick reactions (alias for backwards compatibility) */
+export const reactionEmojis = [...QUICK_REACTIONS] as unknown as string[];
+
+/** Extended reactions — shown when user taps "+" in the picker */
+export const EXTENDED_REACTIONS = [
+  "👎", "🔥", "🎉", "🤩", "🥹", "😍", "🤔", "👏",
+  "💯", "✅", "🙏", "😭", "🫡", "💪",
+  "😴", "🤣", "😅", "😬", "🥲", "😤",
+  "😩", "🤯", "🤗", "😎",
+] as const;
 
 export const commonEmojis = [
   "😀",

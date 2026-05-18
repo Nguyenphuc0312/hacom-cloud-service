@@ -31,6 +31,7 @@ import type {
 } from "../../../features/chat/hooks/useConversationThreadRows";
 import { resolveThreadMessageRenderState } from "../messageListShared";
 import { recordChatRenderCount } from "../../../utils/chatPerformance";
+import { QUICK_REACTIONS, EXTENDED_REACTIONS } from "../../../constants/emojis";
 
 interface MessageGroupProps {
   row: ConversationThreadGroupRow;
@@ -87,30 +88,23 @@ const resolveBubblePosition = (
 };
 
 /** Mobile full-screen emoji overlay — mirrors EmojiReactionPicker but centered */
-const QUICK_EMOJIS_MOBILE = ["👍", "❤️", "😆", "😮", "😢", "😡"] as const;
-const EXTENDED_EMOJIS_MOBILE = [
-  "👍", "👎", "❤️", "🔥", "🎉", "😆", "😮", "😢", "😡", "🤩",
-  "🥹", "😍", "🤔", "👏", "💯", "✅", "🙏", "😭", "🫡", "💪",
-  "😴", "🤣", "😅", "😬", "🥲", "😤", "😩", "🤯", "🤗", "😎",
-] as const;
-
 const MobileEmojiOverlay: React.FC<{
   onSelect: (emoji: string) => void;
   onClose: () => void;
 }> = ({ onSelect, onClose }) => {
   const [showMore, setShowMore] = React.useState(false);
-  const emojis = showMore ? EXTENDED_EMOJIS_MOBILE : QUICK_EMOJIS_MOBILE;
+  const emojis = showMore ? EXTENDED_REACTIONS : QUICK_REACTIONS;
 
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-text-primary/30 p-4">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 p-4">
       <button
         type="button"
         className="absolute inset-0 cursor-default"
         onClick={onClose}
         aria-label="Đóng"
       />
-      <div className="relative w-full max-w-sm rounded-2xl bg-surface p-4 shadow-elev3 dark:bg-surface-raised">
+      <div className="relative w-full max-w-sm rounded-2xl border border-border bg-surface p-4 shadow-elev3">
         <p className="mb-3 text-center text-xs font-semibold text-text-secondary">
           Chọn biểu cảm
         </p>
@@ -119,9 +113,9 @@ const MobileEmojiOverlay: React.FC<{
             <button
               key={emoji}
               type="button"
-              aria-label={`React với ${emoji}`}
+              aria-label={`Thả reaction ${emoji}`}
               onClick={() => { onSelect(emoji); onClose(); }}
-              className="flex h-11 w-11 items-center justify-center rounded-full text-2xl transition-all duration-100 hover:scale-110 hover:bg-surface-overlay active:scale-95 dark:hover:bg-surface-overlay"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-2xl transition-all duration-100 hover:scale-110 hover:bg-surface-hover active:scale-95"
             >
               {emoji}
             </button>
@@ -130,12 +124,12 @@ const MobileEmojiOverlay: React.FC<{
             type="button"
             aria-label={showMore ? "Thu gọn" : "Thêm"}
             onClick={() => setShowMore((v) => !v)}
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-overlay ring-1 ring-border transition-all duration-100 hover:scale-110 hover:bg-surface-hover dark:bg-surface-overlay dark:ring-white/10 dark:hover:bg-surface-active"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-overlay ring-1 ring-border transition-all duration-100 hover:scale-110 hover:bg-surface-hover"
           >
             <Plus
               size={16}
               strokeWidth={2.2}
-              className={clsx("transition-transform duration-200 text-text-secondary dark:text-text-secondary", showMore && "rotate-45")}
+              className={clsx("transition-transform duration-200 text-text-secondary", showMore && "rotate-45")}
             />
           </button>
         </div>
