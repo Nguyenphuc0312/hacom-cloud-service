@@ -56,10 +56,10 @@ export const buildPublicRouteObjects = (): RouteObject[] =>
   );
 
 export const buildPrivateRouteObjects = (): RouteObject[] =>
-  privateRoutes.map(({ path, index, component, roles }) => ({
+  privateRoutes.map(({ path, index, component, element, roles }) => ({
     path,
     index,
-    element: renderRouteElement(component as React.ComponentType, {
+    element: element ?? renderRouteElement(component as React.ComponentType, {
       roles,
     }),
   }));

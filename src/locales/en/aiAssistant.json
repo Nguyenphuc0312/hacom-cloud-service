@@ -1,0 +1,44 @@
+{
+  "page": {
+    "title": "Your Personal AI",
+    "subtitle": "Smart assistant to help you look up work, attendance, digitized documents and internal information you're authorized to access."
+  },
+  "prompt": {
+    "placeholder": "Ask your personal AI..."
+  },
+  "suggestions": {
+    "title": "Quick suggestions",
+    "summarizeWork": "Summarize today's work",
+    "checkAttendance": "Check attendance information",
+    "findDocuments": "Find digitized documents",
+    "askProcess": "Ask about internal processes",
+    "createReport": "Create a quick report"
+  },
+  "dataSources": {
+    "title": "Data sources available",
+    "attendance": {
+      "name": "Attendance",
+      "description": "Track and look up your personal attendance records."
+    },
+    "documents": {
+      "name": "Digitized Documents",
+      "description": "Search content from OCR data and internal documents."
+    },
+    "reports": {
+      "name": "Work Reports",
+      "description": "Help aggregate reports by day, week, or department."
+    },
+    "internalInfo": {
+      "name": "Public Internal Information",
+      "description": "Retrieve data authorized for use within the system."
+    },
+    "status": {
+      "available": "Available",
+      "developing": "In development"
+    }
+  },
+  "chat": {
+    "aiTyping": "AI is responding...",
+    "mockResponse": "The personal AI feature is being finalized. Once connected to the data, I can help you look up attendance information, digitized documents, and compile work reports."
+  }
+}
