@@ -7,6 +7,7 @@ import { MessageContentRenderer } from "../../message/MessageContentRenderer";
 import { ImageMessage } from "../../message/ImageMessage";
 import { FileMessageCard } from "../../message/FileMessageCard";
 import { VoiceMessage } from "../../message/VoiceMessage";
+import { StickerMessage } from "../../message/StickerMessage";
 import { LinkPreviewCard } from "../../message/LinkPreviewCard";
 import { toast } from "../../ui";
 import { dispatchContactProfileView } from "../../../features/chat/events/chatUiEvents";
@@ -336,6 +337,28 @@ export const MessageBodyRenderer: React.FC<MessageBodyRendererProps> = ({
           isCollapsible={isCollapsibleText}
           onToggleExpand={onToggleTextExpand}
         />
+      );
+    case MessageType.STICKER:
+      return (
+        <div className="space-y-2">
+          {attachments.length > 0
+            ? attachments.map((attachment, index) => (
+                <StickerMessage
+                  key={attachment.id || `${message.id}-sticker-${index}`}
+                  conversationId={message.conversationId}
+                  attachment={attachment}
+                />
+              ))
+            : renderTextContent(
+                message,
+                isOwn,
+                currentUsername,
+                currentUserId,
+                textRenderMode,
+                isCollapsibleText,
+                onToggleTextExpand,
+              )}
+        </div>
       );
     case MessageType.TEXT:
     default: {
