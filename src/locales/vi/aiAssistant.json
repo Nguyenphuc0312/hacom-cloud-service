@@ -1,0 +1,44 @@
+{
+  "page": {
+    "title": "AI cá nhân của bạn",
+    "subtitle": "Trợ lý thông minh giúp bạn tra cứu công việc, chấm công, tài liệu số hóa và thông tin nội bộ được phép truy cập."
+  },
+  "prompt": {
+    "placeholder": "Nhập câu hỏi cho AI cá nhân..."
+  },
+  "suggestions": {
+    "title": "Gợi ý nhanh",
+    "summarizeWork": "Tóm tắt công việc hôm nay",
+    "checkAttendance": "Kiểm tra thông tin chấm công",
+    "findDocuments": "Tìm tài liệu số hóa",
+    "askProcess": "Hỏi về quy trình nội bộ",
+    "createReport": "Tạo báo cáo nhanh"
+  },
+  "dataSources": {
+    "title": "Nguồn dữ liệu có thể hỗ trợ",
+    "attendance": {
+      "name": "Chấm công",
+      "description": "Theo dõi và tra cứu thông tin chấm công cá nhân."
+    },
+    "documents": {
+      "name": "Tài liệu số hóa",
+      "description": "Tìm kiếm nội dung từ dữ liệu đã OCR và tài liệu nội bộ."
+    },
+    "reports": {
+      "name": "Báo cáo công việc",
+      "description": "Hỗ trợ tổng hợp báo cáo theo ngày, tuần hoặc phòng ban."
+    },
+    "internalInfo": {
+      "name": "Thông tin nội bộ công khai",
+      "description": "Truy xuất các dữ liệu được phép sử dụng trong hệ thống."
+    },
+    "status": {
+      "available": "Đã sẵn sàng",
+      "developing": "Đang phát triển"
+    }
+  },
+  "chat": {
+    "aiTyping": "AI đang trả lời...",
+    "mockResponse": "Tính năng AI cá nhân đang được hoàn thiện. Sau khi kết nối dữ liệu, tôi có thể hỗ trợ bạn tra cứu thông tin chấm công, tài liệu số hóa và tổng hợp báo cáo công việc."
+  }
+}

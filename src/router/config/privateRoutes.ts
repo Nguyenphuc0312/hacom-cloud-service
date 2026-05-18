@@ -12,6 +12,8 @@ const HelpPage = lazy(() => import("../../pages/HelpPage"));
 const FAQPage = lazy(() => import("../../pages/FAQPage"));
 const ReportIssuePage = lazy(() => import("../../pages/ReportIssuePage"));
 const CalendarPage = lazy(() => import("../../features/calendar/pages/CalendarPage"));
+const AiAssistantPage = lazy(() => import("../../features/ai-assistant/pages/AiAssistantPage"));
+const ArchiveToAiRedirect = lazy(() => import("../../pages/errors/ArchiveToAiRedirect"));
 
 /**
  * Authenticated routes. Optional `roles` enables role-based access control.
@@ -25,7 +27,8 @@ export const privateRoutes: AppRouteConfig[] = [
   { path: ROUTE_PATHS.MAINTENANCE, component: MaintenancePage },
   { path: ROUTE_PATHS.TASKS, component: MaintenancePage },
   { path: ROUTE_PATHS.CALENDAR, component: CalendarPage },
-  { path: ROUTE_PATHS.ARCHIVE, component: MaintenancePage },
+  { path: ROUTE_PATHS.AI_ASSISTANT, component: AiAssistantPage },
+  { path: ROUTE_PATHS.ARCHIVE, component: ArchiveToAiRedirect },
   { path: ROUTE_PATHS.NOTIFICATIONS, component: NotificationsPage },
   { path: ROUTE_PATHS.HELP, component: HelpPage },
   { path: ROUTE_PATHS.FAQ, component: FAQPage },
