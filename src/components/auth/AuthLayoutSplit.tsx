@@ -130,13 +130,13 @@ export const AuthLayoutSplit: React.FC<AuthLayoutSplitProps> = ({
       </div>
 
       {/* Right side: Form — scrollable, fluid padding via clamp */}
-      <div className="relative w-full bg-[#F8FAFC] lg:w-1/2 overflow-y-auto">
+      <div className="relative w-full bg-surface-hover lg:w-1/2 overflow-y-auto">
         <div
           className="flex min-h-dvh items-center justify-center"
           style={{ padding: "clamp(16px, 4dvh, 40px) clamp(12px, 3vw, 40px)" }}
         >
           <div
-            className="w-full rounded-3xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100"
+            className="w-full rounded-3xl bg-surface shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border"
             style={{
               maxWidth: "clamp(320px, 90vw, 500px)",
               padding: "clamp(20px, 3.5dvh, 36px) clamp(16px, 4vw, 36px)",

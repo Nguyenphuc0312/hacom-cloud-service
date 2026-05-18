@@ -77,34 +77,34 @@ export const ForgotPasswordPage: React.FC = () => {
       <div className="flex flex-col">
         <header className="mb-[clamp(12px,2dvh,24px)]">
           <h1
-            className="mb-1 font-bold tracking-tight text-slate-900"
+            className="mb-1 font-bold tracking-tight text-text-primary"
             style={{ fontSize: "clamp(1.25rem, 2.5vw, 1.875rem)" }}
           >
             Quên mật khẩu?
           </h1>
-          <p className="text-sm font-medium text-slate-500">
+          <p className="text-sm font-medium text-text-muted">
             Nhập email hoặc số điện thoại để lấy lại mật khẩu
           </p>
         </header>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-800">
+            <div className="rounded-xl border border-danger/30 bg-danger/8 p-4 text-sm font-medium text-danger">
               {error}
             </div>
           )}
 
           <div className="space-y-1.5">
-            <label className="text-sm font-bold text-slate-700">Email hoặc số điện thoại</label>
+            <label className="text-sm font-bold text-text-secondary">Email hoặc số điện thoại</label>
             <input
               {...register("identifier")}
               type="text"
               placeholder="name@hacomholdings.vn"
               disabled={isBusy}
-              className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium outline-none transition-all focus:border-[#1d5fd6] focus:ring-2 focus:ring-[#1d5fd6]/10 disabled:bg-slate-50"
+              className="h-12 w-full rounded-xl border border-border px-4 text-sm font-medium outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/10 disabled:bg-surface-overlay"
             />
             {identifierError && (
-              <p className="text-xs font-semibold text-red-500">{identifierError}</p>
+              <p className="text-xs font-semibold text-danger">{identifierError}</p>
             )}
           </div>
 
@@ -113,7 +113,7 @@ export const ForgotPasswordPage: React.FC = () => {
             fullWidth
             isLoading={isBusy}
             disabled={isBusy}
-            className="h-12 rounded-xl bg-slate-900 text-sm font-bold text-white transition-all hover:bg-slate-800 active:scale-95 shadow-lg shadow-slate-900/10"
+            className="h-12 rounded-xl bg-primary text-sm font-bold text-text-inverse transition-all hover:bg-primary-hover active:scale-95 shadow-lg shadow-primary/10"
           >
             Nhận mã OTP
           </Button>
@@ -122,7 +122,7 @@ export const ForgotPasswordPage: React.FC = () => {
             <button
               type="button"
               onClick={() => navigate(ROUTE_PATHS.LOGIN)}
-              className="text-sm font-bold text-[#1d5fd6] hover:underline"
+              className="text-sm font-bold text-primary hover:underline"
             >
               Quay lại đăng nhập
             </button>

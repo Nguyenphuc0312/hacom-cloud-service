@@ -61,7 +61,7 @@ export const InlineNotice: React.FC<InlineNoticeProps> = ({
         <button
           type="button"
           onClick={onDismiss}
-          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-fast hover:bg-black/5"
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-fast hover:bg-surface-overlay"
           aria-label="Dismiss notice"
         >
           <XMarkIcon className="h-4 w-4" />

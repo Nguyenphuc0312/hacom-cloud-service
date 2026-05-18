@@ -16,7 +16,7 @@ export const AuthLogo: React.FC<AuthLogoProps> = ({ subtitle }) => {
           style={{ height: "clamp(48px, 7dvh, 72px)" }}
         />
       </Link>
-      <p className="mt-2 text-sm font-medium leading-5 text-slate-500">
+      <p className="mt-2 text-sm font-medium leading-5 text-text-muted">
         {subtitle}
       </p>
     </header>

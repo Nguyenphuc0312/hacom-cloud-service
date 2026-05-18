@@ -77,7 +77,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
                   "transition-all duration-100",
                   "hover:scale-125 hover:bg-surface-overlay active:scale-95",
                   // Highlight the emoji if current user already reacted
-                  isOwn && "ring-2 ring-primary ring-offset-1 dark:ring-offset-[#1a1c2e]",
+                  isOwn && "ring-2 ring-primary ring-offset-1 dark:ring-offset-[hsl(var(--ring-offset))]",
                 )}
                 aria-label={t("chat:reaction.reactWith", { emoji })}
                 aria-pressed={isOwn}

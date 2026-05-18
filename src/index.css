@@ -264,6 +264,7 @@
   --color-text-muted: 0 0% 52%;
   --color-text-inverse: 210 8% 6%;
   --color-text-disabled: 0 0% 42%;
+  --ring-offset: 210 8% 6%;
   --skeleton-base: 210 8% 14%;
   --skeleton-highlight: 210 8% 20%;
 
