@@ -1,122 +1,196 @@
-import React from "react";
-import clsx from "clsx";
-import { GlobeAltIcon } from "@heroicons/react/24/outline";
+/**
+ * @fileoverview LinkPreviewCard - Enhanced link preview with OG metadata.
+ *
+ * Features:
+ * - OG image (full width, max height 200px)
+ * - Domain in uppercase
+ * - Title (bold, max 2 lines)
+ * - Description (max 3 lines)
+ * - Clickable card opens link in new tab
+ * - Loading skeleton while fetching OG data
+ * - Fallback to simple link preview if no OG data
+ */
 
-interface LinkMeta {
-  url: string;
-  hostname: string;
-  /** Client-extracted title — set to hostname as fallback */
-  title?: string;
-}
+import React, { useMemo } from "react";
+import clsx from "clsx";
+import { ArrowUpRightIcon } from "@heroicons/react/24/outline";
+import { Skeleton } from "../ui";
+import type { LinkPreviewMeta } from "./linkPreviewUtils";
+import { buildLinkMeta } from "./linkPreviewUtils";
 
 interface LinkPreviewCardProps {
   url: string;
   isOwn: boolean;
+  /** OG metadata (fetched by backend) */
+  meta?: LinkPreviewMeta;
+  /** Whether OG data is still loading */
+  isLoading?: boolean;
+  /** Skeleton height for loading state */
+  skeletonHeight?: number;
   className?: string;
 }
 
-/** Extract a clean hostname from a URL */
-const extractHostname = (url: string): string => {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
-};
-
-/** Build link metadata from a URL — client-side only, no fetching */
-const buildLinkMeta = (url: string): LinkMeta => {
-  const hostname = extractHostname(url);
-  return { url, hostname, title: hostname };
-};
-
-/**
- * A minimal, clean link preview card shown beneath message text when URLs
- * are detected. Currently client-side only (hostname + favicon); can be
- * extended with server-side OG metadata fetching later.
- */
-const LinkPreviewCardComponent: React.FC<LinkPreviewCardProps> = ({
+export const LinkPreviewCard: React.FC<LinkPreviewCardProps> = ({
   url,
   isOwn,
+  meta,
+  isLoading = false,
+  skeletonHeight = 160,
   className,
 }) => {
-  const meta = React.useMemo(() => buildLinkMeta(url), [url]);
+  // Use provided meta or build basic meta
+  const linkMeta = useMemo(
+    () => meta || buildLinkMeta(url),
+    [meta, url],
+  );
 
   // Favicon via Google's public service
-  const faviconUrl = `https://www.google.com/s2/favicons?sz=32&domain=${meta.hostname}`;
+  const faviconUrl = useMemo(
+    () => `https://www.google.com/s2/favicons?sz=32&domain=${linkMeta.hostname}`,
+    [linkMeta.hostname],
+  );
+
+  const textColor = isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-text-primary";
+  const secondaryTextColor = isOwn
+    ? "text-[hsl(var(--chat-bubble-sent-text))/0.6]"
+    : "text-text-muted";
+  const borderColor = isOwn
+    ? "border-[hsl(var(--chat-bubble-sent-text))/0.15]"
+    : "border-border";
+
+  // Loading skeleton
+  if (isLoading) {
+    return (
+      <div
+        className={clsx(
+          "w-full max-w-[360px] overflow-hidden rounded-xl border",
+          borderColor,
+          "bg-surface-overlay/60",
+          className,
+        )}
+      >
+        {/* OG Image skeleton */}
+        <Skeleton
+          className="w-full"
+          height={skeletonHeight}
+          rounded="none"
+        />
+
+        <div className="p-3">
+          {/* Domain skeleton */}
+          <Skeleton width={100} height={12} className="mb-2" />
+
+          {/* Title skeleton */}
+          <Skeleton width="80%" height={16} className="mb-1" />
+
+          {/* Description skeleton */}
+          <Skeleton width="100%" height={12} className="mb-0.5" />
+          <Skeleton width="90%" height={12} />
+        </div>
+      </div>
+    );
+  }
+
+  const hasOgImage = Boolean(linkMeta.imageUrl);
+  const hasDescription = Boolean(linkMeta.description);
+  const hasTitle = Boolean(linkMeta.title) && linkMeta.title !== linkMeta.hostname;
 
   return (
     <a
-      href={meta.url}
+      href={linkMeta.url}
       target="_blank"
       rel="noopener noreferrer"
       className={clsx(
-        "group/link mt-1.5 flex items-center gap-2.5 rounded-lg border px-3 py-2 no-underline transition-colors",
+        "group/link block w-full max-w-[360px] overflow-hidden rounded-xl border no-underline transition-colors",
+        borderColor,
         isOwn
-          ? "border-[hsl(var(--chat-bubble-sent-text))/0.15] bg-[hsl(var(--chat-bubble-sent-text))/0.08] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.14]"
-          : "border-border bg-surface-overlay/60 hover:bg-surface-overlay",
+          ? "bg-[hsl(var(--chat-bubble-sent-text))/0.08] hover:bg-[hsl(var(--chat-bubble-sent-text))/0.14]"
+          : "bg-surface-overlay/60 hover:bg-surface-overlay",
         className,
       )}
-      onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface/30">
-        <img
-          src={faviconUrl}
-          alt=""
-          className="h-4 w-4"
-          loading="lazy"
-          onError={(e) => {
-            // Hide broken favicon, show fallback icon
-            (e.currentTarget as HTMLImageElement).style.display = "none";
-            const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-            if (fallback) fallback.style.display = "block";
-          }}
-        />
-        <GlobeAltIcon
-          className={clsx(
-            "hidden h-4 w-4",
-            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.6]" : "text-text-muted",
-          )}
-        />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p
-          className={clsx(
-            "truncate text-xs font-medium leading-tight",
-            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))]" : "text-text-primary",
-          )}
-        >
-          {meta.title}
-        </p>
-        <p
-          className={clsx(
-            "truncate text-[11px] leading-tight",
-            isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.6]" : "text-text-muted",
-          )}
-        >
-          {meta.url}
-        </p>
-      </div>
-      <svg
-        className={clsx(
-          "h-3.5 w-3.5 shrink-0 transition-transform group-hover/link:translate-x-0.5",
-          isOwn ? "text-[hsl(var(--chat-bubble-sent-text))/0.5]" : "text-text-muted",
+      {/* OG Image */}
+      {hasOgImage && (
+        <div className="relative w-full overflow-hidden" style={{ maxHeight: 200 }}>
+          <img
+            src={linkMeta.imageUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="w-full object-cover"
+            style={{ maxHeight: 200 }}
+          />
+        </div>
+      )}
+
+      {/* Content */}
+      <div className="p-3">
+        {/* Domain + favicon */}
+        <div className="mb-1 flex items-center gap-1.5">
+          <div className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-surface/30">
+            <img
+              src={faviconUrl}
+              alt=""
+              className="h-3 w-3"
+              loading="lazy"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+            />
+          </div>
+          <span className={clsx("text-[11px] font-medium uppercase tracking-wide", secondaryTextColor)}>
+            {linkMeta.siteName || linkMeta.hostname}
+          </span>
+        </div>
+
+        {/* Title */}
+        {hasTitle && (
+          <p
+            className={clsx(
+              "mb-1 text-sm font-semibold leading-tight line-clamp-2",
+              textColor,
+            )}
+          >
+            {linkMeta.title}
+          </p>
         )}
-        fill="none"
-        viewBox="0 0 24 24"
-        strokeWidth={2}
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
+
+        {/* Description */}
+        {hasDescription && (
+          <p
+            className={clsx(
+              "text-[13px] leading-relaxed line-clamp-3",
+              secondaryTextColor,
+            )}
+          >
+            {linkMeta.description}
+          </p>
+        )}
+
+        {/* Original URL (only show if no title/description) */}
+        {!hasTitle && !hasDescription && (
+          <p
+            className={clsx(
+              "truncate text-xs",
+              secondaryTextColor,
+            )}
+          >
+            {linkMeta.url}
+          </p>
+        )}
+      </div>
+
+      {/* External link icon */}
+      <div className="absolute bottom-3 right-3">
+        <ArrowUpRightIcon
+          className={clsx(
+            "h-4 w-4 transition-transform group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5",
+            secondaryTextColor,
+          )}
         />
-      </svg>
+      </div>
     </a>
   );
 };
-
-export const LinkPreviewCard = React.memo(LinkPreviewCardComponent);
 
 export default LinkPreviewCard;
