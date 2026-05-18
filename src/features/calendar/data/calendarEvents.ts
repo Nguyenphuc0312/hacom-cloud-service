@@ -138,19 +138,21 @@ export const formatDateString = (date: Date): string => {
 
 /**
  * Get event color based on type.
+ * Returns a CSS class pair — background/text — that works in both light and dark modes.
+ * Uses opacity modifier so the color reads correctly on both light and dark surfaces.
  */
 export const getEventColor = (type: EventType): { bg: string; text: string; border: string } => {
   switch (type) {
     case "vietnam_holiday":
-      return { bg: "bg-rose-100", text: "text-rose-700", border: "border-rose-200" };
+      return { bg: "bg-rose-500/10", text: "text-rose-600 dark:text-rose-300", border: "border-rose-500/20" };
     case "international":
-      return { bg: "bg-blue-100", text: "text-blue-700", border: "border-blue-200" };
+      return { bg: "bg-blue-500/10", text: "text-blue-600 dark:text-blue-300", border: "border-blue-500/20" };
     case "work":
-      return { bg: "bg-purple-100", text: "text-purple-700", border: "border-purple-200" };
+      return { bg: "bg-purple-500/10", text: "text-purple-600 dark:text-purple-300", border: "border-purple-500/20" };
     case "personal":
-      return { bg: "bg-amber-100", text: "text-amber-700", border: "border-amber-200" };
+      return { bg: "bg-amber-500/10", text: "text-amber-600 dark:text-amber-300", border: "border-amber-500/20" };
     default:
-      return { bg: "bg-gray-100", text: "text-gray-700", border: "border-gray-200" };
+      return { bg: "bg-gray-500/10", text: "text-gray-600 dark:text-gray-300", border: "border-gray-500/20" };
   }
 };
 

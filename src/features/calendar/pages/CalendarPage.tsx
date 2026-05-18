@@ -89,7 +89,7 @@ const EventDetailModal: React.FC<{
       />
 
       {/* Modal */}
-      <div className="relative z-10 w-full max-w-md animate-scale-in rounded-xl bg-white p-6 shadow-lg">
+      <div className="relative z-10 w-full max-w-md animate-scale-in rounded-xl border border-border bg-surface p-6 shadow-lg">
         <button
           type="button"
           onClick={onClose}
@@ -372,11 +372,11 @@ export const CalendarPage: React.FC = () => {
   ];
 
   return (
-    <div className="calendar-page flex h-full min-h-0 flex-col bg-[var(--hc-bg-page)]">
+    <div className="calendar-page flex h-full min-h-0 flex-col bg-[var(--chat-shell-bg)]">
       {/* Main container */}
       <div className="flex flex-1 gap-4 overflow-hidden p-4 lg:p-6">
         {/* Left sidebar */}
-        <aside className="w-60 shrink-0 overflow-y-auto rounded-xl bg-white shadow-sm">
+        <aside className="w-60 shrink-0 overflow-y-auto rounded-xl border border-border bg-surface shadow-sm">
           <div className="p-4">
             {/* Search */}
             <div className="relative mb-4">
@@ -386,7 +386,7 @@ export const CalendarPage: React.FC = () => {
                 placeholder="Tìm kiếm sự kiện..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
               {searchQuery && (
                 <button
@@ -436,8 +436,6 @@ export const CalendarPage: React.FC = () => {
                 ))}
               </div>
             </div>
-
-            {/* Add calendar button */}
             <button
               type="button"
               className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-surface px-3 py-2 text-sm font-medium text-text-secondary hover:border-primary hover:bg-primary/5 hover:text-primary transition-micro"
@@ -449,7 +447,7 @@ export const CalendarPage: React.FC = () => {
         </aside>
 
         {/* Main calendar area */}
-        <div className="flex flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-sm">
+        <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
           {/* Header */}
           <header className="shrink-0 border-b border-border px-4 py-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -477,7 +475,7 @@ export const CalendarPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={goToToday}
-                  className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text-primary hover:bg-surface-hover transition-micro"
+                  className="rounded-xl bg-primary px-4 py-1.5 text-sm font-medium text-white hover:bg-primary/90 transition-micro"
                 >
                   Hôm nay
                 </button>
@@ -514,7 +512,7 @@ export const CalendarPage: React.FC = () => {
                     key={day}
                     className={clsx(
                       "py-2 text-center text-sm font-medium",
-                      index === 0 ? "text-rose-500" : "text-text-secondary"
+                      index === 0 ? "text-rose-500 dark:text-rose-400" : "text-text-secondary"
                     )}
                   >
                     {day}
@@ -523,7 +521,7 @@ export const CalendarPage: React.FC = () => {
               </div>
 
               {/* Calendar days grid */}
-              <div className="grid grid-cols-7 gap-px rounded-lg border border-border bg-border">
+              <div className="grid grid-cols-7 gap-px rounded-lg border border-border bg-surface">
                 {calendarDays.map((dayInfo, index) => {
                   const dayEvents = getEventsByDate(searchedEvents, dayInfo.date);
                   const maxVisibleEvents = 3;
@@ -535,7 +533,7 @@ export const CalendarPage: React.FC = () => {
                       key={index}
                       onClick={() => handleDateClick(dayInfo.date)}
                       className={clsx(
-                        "min-h-[120px] cursor-pointer bg-white p-1.5 transition-micro",
+                        "min-h-[120px] cursor-pointer border-border bg-surface p-1.5 transition-micro",
                         !dayInfo.isCurrentMonth && "bg-surface-overlay",
                         dayInfo.isCurrentMonth &&
                           !isToday(dayInfo.date) &&

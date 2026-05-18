@@ -174,7 +174,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-text-primary/30 p-3 md:items-center">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 p-3 md:items-center">
       <button
         type="button"
         className="absolute inset-0 cursor-default"
@@ -183,7 +183,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
       />
       <div
         className={clsx(
-          "relative w-full max-w-sm rounded-[1.25rem] border border-white/8 bg-[hsl(var(--color-sidebar-surface))] p-3 shadow-elev3",
+          "relative w-full max-w-sm rounded-2xl border border-border bg-surface p-3 shadow-elev3",
           "animate-slide-up-fade",
           className,
         )}
@@ -198,7 +198,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 text-text-secondary transition-colors hover:bg-surface-overlay hover:text-text-primary"
+            className="rounded-full p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
             aria-label={t("common:actions.close")}
           >
             <X size={16} strokeWidth={2} />
@@ -217,7 +217,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
                 "w-full text-left",
                 action.danger
                   ? "text-danger hover:bg-danger/8"
-                  : "text-text-secondary hover:bg-surface-overlay hover:text-text-primary",
+                  : "text-text-secondary hover:bg-surface-hover hover:text-text-primary",
               )}
             >
               <action.icon size={18} strokeWidth={1.9} className="shrink-0" />
