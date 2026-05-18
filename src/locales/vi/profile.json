@@ -31,6 +31,7 @@
     "noSearchResult": "Không tìm thấy kết quả phù hợp",
     "noMembers": "Không có thành viên",
     "youSuffix": "(Bạn)",
+    "noRealName": "Chưa cập nhật tên thật",
     "removeMemberConfirm": "Bạn có chắc muốn xóa {{name}} khỏi nhóm?",
     "roles": {
       "owner": "Chủ nhóm",
@@ -42,7 +43,12 @@
       "removeAdmin": "Gỡ admin",
       "removeMember": "Xóa khỏi nhóm",
       "transferOwnership": "Chuyển quyền sở hữu",
-      "banMember": "Cấm thành viên"
+      "banMember": "Cấm thành viên",
+      "options": "Tùy chọn cho {{name}}"
+    },
+    "confirm": {
+      "makeAdmin": "Cấp quyền admin cho {{name}}?",
+      "removeAdmin": "Hạ quyền admin của {{name}}?"
     },
     "banMemberConfirm": "Bạn có chắc muốn cấm {{name}}? Họ sẽ không thể tham gia nhóm này.",
     "banMember": "Cấm thành viên",
@@ -55,9 +61,11 @@
     "leaveBlockedOwner": "Hãy chuyển quyền sở hữu trước khi rời nhóm này.",
     "leaveConfirm": "Bạn có chắc muốn rời nhóm này?",
     "deleteGroup": "Xóa nhóm",
+    "deleteGroupWarning": "Hành động này không thể hoàn tác. Tất cả tin nhắn, tệp và dữ liệu nhóm sẽ bị xóa vĩnh viễn.",
     "deleteGroupConfirm": "Bạn có chắc muốn xóa nhóm này? Hành động này không thể hoàn tác.",
     "transferOwnership": "Chuyển quyền sở hữu",
     "transferOwnershipConfirm": "Bạn có chắc muốn chuyển quyền sở hữu cho {{name}}? Họ sẽ trở thành chủ nhóm mới.",
+    "dangerZone": "Khu vực nguy hiểm",
     "invite": {
       "invalidUsageLimit": "Giới hạn lượt dùng phải lớn hơn 0",
       "created": "Đã tạo liên kết mời",
@@ -70,7 +78,7 @@
       "create": "Tạo liên kết mời",
       "namePlaceholder": "Tên liên kết (tùy chọn)",
       "usageLimitPlaceholder": "Giới hạn lượt dùng (tùy chọn)",
-      "empty": "Chưa có liên kết mời.",
+      "empty": "Chưa có liên kết mời nào.",
       "unnamed": "Liên kết mời",
       "usage": "Lượt dùng: {{count}}/{{limit}}",
       "revokedLabel": "Đã thu hồi",
@@ -81,7 +89,7 @@
       "rejected": "Đã từ chối yêu cầu tham gia",
       "resolveFailed": "Không thể xử lý yêu cầu tham gia",
       "noPermission": "Chỉ admin mới xử lý được yêu cầu tham gia.",
-      "empty": "Không có yêu cầu tham gia."
+      "empty": "Không có yêu cầu nào đang chờ."
     }
   },
   "newChatModal": {
