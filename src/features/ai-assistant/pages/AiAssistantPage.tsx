@@ -68,7 +68,7 @@ export const AiAssistantPage: React.FC = () => {
   const hasMessages = messages.length > 0;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-[var(--hc-bg-page)]">
+    <div className="flex h-full flex-col overflow-hidden bg-[var(--chat-shell-bg)]">
       {/* Mini header — chat state only */}
       {hasMessages && (
         <header className="flex h-12 flex-shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
@@ -125,7 +125,7 @@ export const AiAssistantPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex-shrink-0 border-t border-border bg-[var(--hc-bg-page)] px-4 pb-4 pt-3">
+          <div className="flex-shrink-0 border-t border-border bg-[var(--chat-shell-bg)] px-4 pb-4 pt-3">
             <AiPromptBox
               ref={textareaRef}
               value={inputValue}
