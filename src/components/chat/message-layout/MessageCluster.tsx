@@ -130,6 +130,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   const currentUserId = useAuthStore((s) => s.user?.id);
   const [isRailVisible, setIsRailVisible] = React.useState(false);
   const [isActionsOpen, setIsActionsOpen] = React.useState(false);
+  const [isReactionPickerOpen, setIsReactionPickerOpen] = React.useState(false);
   const longPressTimerRef = React.useRef<number | null>(null);
   const normalizedConversationType = normalizeRoomType(conversationType);
   const isGroupConversation =
@@ -243,7 +244,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     (actionId: MessageActionId) => {
       switch (actionId) {
         case "react":
-          onReact(message.id, "\u{1F44D}");
+          setIsReactionPickerOpen(true);
           if (isActionsOpen) closeActions();
           break;
         case "reply":
@@ -378,12 +379,16 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     <div
       className={clsx("group/message-cluster w-full", className)}
       onMouseEnter={showRail}
-      onMouseLeave={() => hideRail()}
+      onMouseLeave={() => {
+        hideRail();
+        setIsReactionPickerOpen(false);
+      }}
       onFocusCapture={showRail}
       onBlurCapture={(event) => {
         const nextFocused = event.relatedTarget as Node | null;
         if (!event.currentTarget.contains(nextFocused)) {
           hideRail();
+          setIsReactionPickerOpen(false);
         }
       }}
     >
@@ -546,20 +551,20 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
               />
             )}
 
-            {(message.reactions?.length ?? 0) > 0 && (
-              <div
-                className={clsx(
-                  contract.cluster.reactionOffset,
-                  isOwn ? "self-end" : "self-start",
-                )}
-              >
-                <ReactionBar
-                  reactions={message.reactions}
-                  currentUserId={currentUserId}
-                  onReact={(emoji) => onReact(message.id, emoji)}
-                />
-              </div>
-            )}
+            <div
+              className={clsx(
+                contract.cluster.reactionOffset,
+                isOwn ? "self-end" : "self-start",
+              )}
+            >
+              <ReactionBar
+                reactions={message.reactions}
+                currentUserId={currentUserId}
+                onReact={(emoji) => onReact(message.id, emoji)}
+                showPicker={isReactionPickerOpen}
+                onTogglePicker={() => setIsReactionPickerOpen((prev) => !prev)}
+              />
+            </div>
 
             {threadCountValue > 0 && (
               <ThreadIndicator
