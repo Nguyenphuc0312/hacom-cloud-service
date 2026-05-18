@@ -121,7 +121,7 @@ const submitLogin = async (container: HTMLElement) => {
 
 describe('LoginPage admin preflight', () => {
   beforeEach(() => {
-    sessionStorage.clear();
+    localStorage.clear();
     useAuthStore.setState({
       accessToken: null,
       user: null,
