@@ -24,6 +24,8 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
 }) => {
   const { t } = useTranslation();
   const hasReactions = reactions.length > 0;
+  const canTogglePicker = Boolean(onTogglePicker);
+  const containerRef = React.useRef<HTMLDivElement>(null);
 
   // Set of emoji codes that the current user has reacted to
   const myEmojiSet = React.useMemo(() => {
@@ -35,8 +37,33 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
     );
   }, [reactions, currentUserId]);
 
+  // Close picker when clicking outside
+  React.useEffect(() => {
+    if (!showPicker) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (containerRef.current && !containerRef.current.contains(target)) {
+        onTogglePicker?.();
+      }
+    };
+
+    document.addEventListener("click", handleClickOutside, true);
+    return () => {
+      document.removeEventListener("click", handleClickOutside, true);
+    };
+  }, [showPicker, onTogglePicker]);
+
+  const handleEmojiClick = React.useCallback(
+    (emoji: string) => {
+      onReact(emoji);
+      onTogglePicker?.();
+    },
+    [onReact, onTogglePicker],
+  );
+
   return (
-    <div className={clsx("flex flex-col gap-0.5", className)}>
+    <div ref={containerRef} className={clsx("flex flex-col gap-0.5", className)}>
       {showPicker && (
         <div className="flex items-center gap-1 rounded-full border border-border bg-surface px-1.5 py-1.5 shadow-elev2 animate-bounce-in">
           {reactionEmojis.map((emoji) => {
@@ -44,7 +71,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
             return (
               <button
                 key={emoji}
-                onClick={() => onReact(emoji)}
+                onClick={() => handleEmojiClick(emoji)}
                 className={clsx(
                   "flex h-7 w-7 items-center justify-center rounded-full text-[15px]",
                   "transition-all duration-100",
@@ -62,7 +89,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
         </div>
       )}
 
-      {hasReactions && (
+      {(hasReactions || (canTogglePicker && showPicker)) && (
         <div className="flex flex-wrap items-center gap-1">
           {reactions.map((reaction) => {
             const isOwn = currentUserId
@@ -72,7 +99,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
             return (
               <button
                 key={reaction.emoji}
-                onClick={() => onReact(reaction.emoji)}
+                onClick={() => handleEmojiClick(reaction.emoji)}
                 className={clsx(
                   "flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px]",
                   "transition-all duration-100 hover:scale-105 hover:shadow-xs active:scale-100",
@@ -97,7 +124,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
             );
           })}
 
-          {onTogglePicker && (
+          {onTogglePicker && !showPicker && (
             <button
               onClick={onTogglePicker}
               className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-surface text-[11px] text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary"
@@ -107,6 +134,17 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
             </button>
           )}
         </div>
+      )}
+
+      {/* Standalone trigger button when no reactions and picker is not open */}
+      {!hasReactions && canTogglePicker && !showPicker && (
+        <button
+          onClick={onTogglePicker}
+          className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-surface text-[11px] text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-primary"
+          aria-label={t("chat:reaction.add")}
+        >
+          +
+        </button>
       )}
     </div>
   );
