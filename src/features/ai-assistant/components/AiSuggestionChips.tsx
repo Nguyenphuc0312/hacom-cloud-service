@@ -59,31 +59,26 @@ export const AiSuggestionChips: React.FC<AiSuggestionChipsProps> = ({
   const { t } = useTranslation("aiAssistant");
 
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-xs font-medium uppercase tracking-wider text-text-muted">
-        {t("suggestions.title")}
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {SUGGESTIONS.map((suggestion) => {
-          const Icon = suggestion.icon;
-          return (
-            <button
-              key={suggestion.id}
-              type="button"
-              onClick={() => onSelect(suggestion.prompt)}
-              className={clsx(
-                "inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-2",
-                "text-body-sm text-text-secondary transition-all",
-                "hover:border-primary/50 hover:bg-surface-overlay hover:text-text-primary",
-                "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-              )}
-            >
-              <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
-              <span className="whitespace-nowrap">{t(suggestion.labelKey)}</span>
-            </button>
-          );
-        })}
-      </div>
+    <div className="flex flex-wrap justify-center gap-2">
+      {SUGGESTIONS.map((suggestion) => {
+        const Icon = suggestion.icon;
+        return (
+          <button
+            key={suggestion.id}
+            type="button"
+            onClick={() => onSelect(suggestion.prompt)}
+            className={clsx(
+              "inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-2",
+              "text-body-sm text-text-secondary transition-all",
+              "hover:border-primary/50 hover:bg-primary/10 hover:text-text-primary",
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+            )}
+          >
+            <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
+            <span className="whitespace-nowrap">{t(suggestion.labelKey)}</span>
+          </button>
+        );
+      })}
     </div>
   );
 };

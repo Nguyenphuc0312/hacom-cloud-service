@@ -110,7 +110,7 @@ const MobileEmojiOverlay: React.FC<{
         onClick={onClose}
         aria-label="Đóng"
       />
-      <div className="relative w-full max-w-sm rounded-2xl bg-white p-4 shadow-elev3 dark:bg-[#23262f]">
+      <div className="relative w-full max-w-sm rounded-2xl bg-surface p-4 shadow-elev3 dark:bg-surface-raised">
         <p className="mb-3 text-center text-xs font-semibold text-text-secondary">
           Chọn biểu cảm
         </p>
@@ -121,7 +121,7 @@ const MobileEmojiOverlay: React.FC<{
               type="button"
               aria-label={`React với ${emoji}`}
               onClick={() => { onSelect(emoji); onClose(); }}
-              className="flex h-11 w-11 items-center justify-center rounded-full text-2xl transition-all duration-100 hover:scale-110 hover:bg-black/5 active:scale-95 dark:hover:bg-white/8"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-2xl transition-all duration-100 hover:scale-110 hover:bg-surface-overlay active:scale-95 dark:hover:bg-surface-overlay"
             >
               {emoji}
             </button>
@@ -130,12 +130,12 @@ const MobileEmojiOverlay: React.FC<{
             type="button"
             aria-label={showMore ? "Thu gọn" : "Thêm"}
             onClick={() => setShowMore((v) => !v)}
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-[#f0f1f5] ring-1 ring-[#e3e5ec] transition-all duration-100 hover:scale-110 dark:bg-white/10 dark:ring-white/12"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-overlay ring-1 ring-border transition-all duration-100 hover:scale-110 hover:bg-surface-hover dark:bg-surface-overlay dark:ring-white/10 dark:hover:bg-surface-active"
           >
             <Plus
               size={16}
               strokeWidth={2.2}
-              className={clsx("transition-transform duration-200 text-[#52556a] dark:text-white/60", showMore && "rotate-45")}
+              className={clsx("transition-transform duration-200 text-text-secondary dark:text-text-secondary", showMore && "rotate-45")}
             />
           </button>
         </div>

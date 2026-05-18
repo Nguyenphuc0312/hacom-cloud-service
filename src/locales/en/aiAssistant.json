@@ -1,10 +1,13 @@
 {
   "page": {
-    "title": "Your Personal AI",
-    "subtitle": "Smart assistant to help you look up work, attendance, digitized documents and internal information you're authorized to access."
+    "title": "Personal AI",
+    "greeting": "Hello",
+    "greetingWithName": "Hello, {name}",
+    "subtitle": "How can I help you today?"
   },
   "prompt": {
-    "placeholder": "Ask your personal AI..."
+    "placeholder": "Ask your personal AI...",
+    "send": "Send"
   },
   "suggestions": {
     "title": "Quick suggestions",
@@ -38,7 +41,12 @@
     }
   },
   "chat": {
+    "newChat": "New chat",
     "aiTyping": "AI is responding...",
-    "mockResponse": "The personal AI feature is being finalized. Once connected to the data, I can help you look up attendance information, digitized documents, and compile work reports."
+    "mockDefault": "I'm being finalized to support Hacom's internal operations. Please check back once the feature officially launches.",
+    "mockAttendance": "To look up attendance information, I need to connect to the HRM system. This feature is being finalized and will be available soon.",
+    "mockReport": "The automated report generation feature is under development. Once complete, I can aggregate reports by day, week, or department.",
+    "mockDocument": "I can help search the digitized document repository once the internal OCR data is connected.",
+    "mockWork": "The work summarization feature will connect to your calendar and tasks. It is currently under development."
   }
 }

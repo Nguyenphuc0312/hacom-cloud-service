@@ -129,17 +129,17 @@ export const LoginPage: React.FC = () => {
 
         <header className="mb-[clamp(10px,1.5dvh,16px)]">
           <h1
-            className="mb-1 font-bold tracking-tight text-slate-900"
+            className="mb-1 font-bold tracking-tight text-text-primary"
             style={{ fontSize: "clamp(1.125rem, 2.5vw, 1.5rem)" }}
           >
             Chào mừng trở lại với Hacom Chat
           </h1>
-          <p className="text-sm font-medium text-slate-500">
+          <p className="text-sm font-medium text-text-muted">
             Đăng nhập vào tài khoản của bạn để tiếp tục
           </p>
         </header>
 
-        <div className="mb-[clamp(10px,1.5dvh,16px)] flex rounded-xl bg-slate-100 p-1" role="tablist" aria-label="Phương thức đăng nhập">
+        <div className="mb-[clamp(10px,1.5dvh,16px)] flex rounded-xl bg-surface-overlay p-1" role="tablist" aria-label="Phương thức đăng nhập">
           <button
             id="login-tab-password"
             type="button"
@@ -148,8 +148,8 @@ export const LoginPage: React.FC = () => {
             aria-controls="login-panel-password"
             onClick={() => setAuthMethod("password")}
             className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-all ${authMethod === "password"
-              ? "bg-white text-[#1d5fd6] shadow-sm"
-              : "text-slate-600 hover:text-slate-800"
+              ? "bg-surface text-primary shadow-sm"
+              : "text-text-secondary hover:text-text-primary"
               }`}
           >
             <KeyIcon className="h-4 w-4" aria-hidden="true" />
@@ -162,8 +162,8 @@ export const LoginPage: React.FC = () => {
             aria-selected={authMethod === "qr"}
             onClick={() => setAuthMethod("qr")}
             className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-all ${authMethod === "qr"
-              ? "bg-white text-[#1d5fd6] shadow-sm"
-              : "text-slate-600 hover:text-slate-800"
+              ? "bg-surface text-primary shadow-sm"
+              : "text-text-secondary hover:text-text-primary"
               }`}
           >
             <QrCodeIcon className="h-4 w-4" aria-hidden="true" />
@@ -201,7 +201,7 @@ export const LoginPage: React.FC = () => {
 
             <div className="relative py-4">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-200"></div>
+                <div className="w-full border-t border-border"></div>
               </div>
             </div>
           </div>
@@ -232,7 +232,7 @@ export const LoginPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => navigate('/forgot-password')}
-                className="flex h-9 w-full max-w-[200px] items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-600 transition-all hover:bg-slate-50 active:scale-95"
+                className="flex h-9 w-full max-w-[200px] items-center justify-center rounded-xl border border-border bg-surface text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover active:scale-95"
               >
                 Quên mật khẩu
               </button>

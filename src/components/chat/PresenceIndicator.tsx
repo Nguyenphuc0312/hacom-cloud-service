@@ -28,7 +28,7 @@ const stateColors: Record<PresenceState, string> = {
   idle: "bg-yellow-400",
   dnd: "bg-red-500",
   busy: "bg-red-400",
-  offline: "bg-gray-400",
+  offline: "bg-[hsl(var(--color-text-muted))]",
 };
 
 function formatLastSeen(isoString?: string): string {
@@ -79,7 +79,7 @@ export const PresenceIndicator: React.FC<PresenceIndicatorProps> = ({
         />
       )}
       {lastSeenText && (
-        <span className="text-xs text-gray-500 dark:text-gray-400">
+        <span className="text-xs text-text-muted">
           {lastSeenText}
         </span>
       )}

@@ -68,19 +68,19 @@ export const ForceChangePasswordPage: React.FC = () => {
   return (
     <AuthShell
       maxWidth="sm"
-      className="max-w-md mx-auto my-auto flex flex-col justify-center min-h-[100dvh] p-6 text-slate-800"
+      className="max-w-md mx-auto my-auto flex flex-col justify-center min-h-[100dvh] p-6 text-text-primary"
     >
-      <div className="w-full max-w-[420px] rounded-2xl bg-white p-7 shadow-lg sm:p-9">
+        <div className="w-full max-w-[420px] rounded-2xl bg-surface p-7 shadow-lg sm:p-9">
         <AuthLogo subtitle="Đổi mật khẩu bắt buộc" />
 
-        <p className="mb-6 px-2 text-center text-sm leading-6 text-slate-500">
+        <p className="mb-6 px-2 text-center text-sm leading-6 text-text-muted">
           Tài khoản của bạn đang sử dụng mật khẩu tạm. Vui lòng đổi mật khẩu
           trước khi tiếp tục sử dụng hệ thống.
         </p>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-text-secondary mb-1">
               Mật khẩu hiện tại
             </label>
             <div className="relative">
@@ -90,12 +90,12 @@ export const ForceChangePasswordPage: React.FC = () => {
                 placeholder="Mật khẩu hiện tại"
                 disabled={isSubmitting}
                 autoComplete="current-password"
-                className="w-full h-11 px-3 pr-10 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
+                className="w-full h-11 px-3 pr-10 rounded-lg border border-border focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-sm"
               />
               <button
                 type="button"
                 onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary transition-colors"
                 aria-label={showCurrentPassword ? t("common.actions.hidePassword") : t("common.actions.showPassword")}
               >
                 {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -109,7 +109,7 @@ export const ForceChangePasswordPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-text-secondary mb-1">
               Mật khẩu mới
             </label>
             <div className="relative">
@@ -119,12 +119,12 @@ export const ForceChangePasswordPage: React.FC = () => {
                 placeholder={`Tối thiểu ${PASSWORD_MIN_LENGTH} ký tự`}
                 disabled={isSubmitting}
                 autoComplete="new-password"
-                className="w-full h-11 px-3 pr-10 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
+                className="w-full h-11 px-3 pr-10 rounded-lg border border-border focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-sm"
               />
               <button
                 type="button"
                 onClick={() => setShowNewPassword(!showNewPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary transition-colors"
                 aria-label={showNewPassword ? t("common.actions.hidePassword") : t("common.actions.showPassword")}
               >
                 {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -143,7 +143,7 @@ export const ForceChangePasswordPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-text-secondary mb-1">
               Xác nhận mật khẩu mới
             </label>
             <div className="relative">
@@ -153,12 +153,12 @@ export const ForceChangePasswordPage: React.FC = () => {
                 placeholder="Nhập lại mật khẩu mới"
                 disabled={isSubmitting}
                 autoComplete="new-password"
-                className="w-full h-11 px-3 pr-10 rounded-lg border border-slate-300 focus:border-[#2b7ff6] focus:ring-1 focus:ring-[#2b7ff6] outline-none transition-colors text-sm"
+                className="w-full h-11 px-3 pr-10 rounded-lg border border-border focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors text-sm"
               />
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary transition-colors"
                 aria-label={showConfirmPassword ? t("common.actions.hidePassword") : t("common.actions.showPassword")}
               >
                 {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -175,7 +175,7 @@ export const ForceChangePasswordPage: React.FC = () => {
             type="submit"
             fullWidth
             size="md"
-            className="h-11 rounded-lg bg-[#2b7ff6] text-sm font-semibold text-white hover:bg-blue-600 mt-2"
+            className="h-11 rounded-lg bg-primary text-sm font-semibold text-text-inverse hover:bg-primary-hover mt-2"
             isLoading={isSubmitting}
             disabled={
               isSubmitting || !hasMinimumPasswordLength(newPasswordValue ?? "")

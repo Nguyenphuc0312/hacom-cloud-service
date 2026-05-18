@@ -1,10 +1,13 @@
 {
   "page": {
     "title": "AI cá nhân của bạn",
-    "subtitle": "Trợ lý thông minh giúp bạn tra cứu công việc, chấm công, tài liệu số hóa và thông tin nội bộ được phép truy cập."
+    "greeting": "Xin chào",
+    "greetingWithName": "Xin chào, {name}",
+    "subtitle": "Tôi có thể giúp gì cho bạn?"
   },
   "prompt": {
-    "placeholder": "Nhập câu hỏi cho AI cá nhân..."
+    "placeholder": "Nhập câu hỏi cho AI cá nhân...",
+    "send": "Gửi"
   },
   "suggestions": {
     "title": "Gợi ý nhanh",
@@ -38,7 +41,12 @@
     }
   },
   "chat": {
+    "newChat": "Cuộc trò chuyện mới",
     "aiTyping": "AI đang trả lời...",
-    "mockResponse": "Tính năng AI cá nhân đang được hoàn thiện. Sau khi kết nối dữ liệu, tôi có thể hỗ trợ bạn tra cứu thông tin chấm công, tài liệu số hóa và tổng hợp báo cáo công việc."
+    "mockDefault": "Tôi đang được hoàn thiện để hỗ trợ các nghiệp vụ nội bộ Hacom. Hãy thử lại sau khi tính năng chính thức ra mắt.",
+    "mockAttendance": "Để tra cứu thông tin chấm công, tôi cần kết nối với hệ thống HRM. Tính năng này đang được hoàn thiện và sẽ sớm khả dụng.",
+    "mockReport": "Tính năng tạo báo cáo tự động đang trong giai đoạn phát triển. Sau khi hoàn thiện, tôi có thể tổng hợp báo cáo theo ngày, tuần hoặc phòng ban.",
+    "mockDocument": "Tôi có thể hỗ trợ tìm kiếm trong kho tài liệu số hóa sau khi kết nối dữ liệu OCR nội bộ.",
+    "mockWork": "Tính năng tóm tắt công việc sẽ kết nối với lịch và task của bạn. Hiện đang được phát triển."
   }
 }

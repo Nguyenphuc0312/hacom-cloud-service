@@ -41,10 +41,10 @@ const baseButtonClass =
   "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors";
 
 const PILL_CLASS =
-  "flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-[0_4px_20px_rgba(0,0,0,0.12),0_1px_4px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)] dark:bg-[#32363d] dark:shadow-[0_4px_24px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.08)]";
+  "flex items-center gap-2 rounded-full bg-surface px-3 py-2 shadow-[0_4px_20px_rgba(0,0,0,0.12),0_1px_4px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.08)]";
 
 const BTN_CLASS =
-  "inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#f2f3f7] text-[#52556a] ring-1 ring-[#e3e5ec] transition-all duration-150 hover:bg-[#e6e8f0] hover:text-[#1a1c2e] hover:ring-[#d4d6e0] active:scale-95 dark:bg-[#4a4e58] dark:text-[#f0f1f5] dark:ring-white/5 dark:hover:bg-[#5a5f6a] dark:hover:text-white";
+  "inline-flex h-8 w-8 items-center justify-center rounded-full bg-surface-overlay text-text-secondary ring-1 ring-border transition-all duration-150 hover:bg-surface-hover hover:text-text-primary active:scale-95 dark:bg-surface-overlay dark:text-text-secondary dark:ring-white/10 dark:hover:bg-surface-active dark:hover:text-text-primary";
 
 export const MessageActions: React.FC<MessageActionsProps> = ({
   mode,
@@ -217,7 +217,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
                 "w-full text-left",
                 action.danger
                   ? "text-danger hover:bg-danger/8"
-                  : "text-text-secondary hover:bg-white/6 hover:text-text-primary",
+                  : "text-text-secondary hover:bg-surface-overlay hover:text-text-primary",
               )}
             >
               <action.icon size={18} strokeWidth={1.9} className="shrink-0" />
