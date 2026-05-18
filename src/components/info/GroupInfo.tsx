@@ -11,6 +11,7 @@ import {
   ClipboardDocumentIcon,
   NoSymbolIcon,
   CameraIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -20,7 +21,6 @@ import {
   ConfirmDialog,
   DirectorySkeleton,
   Input,
-  SkeletonCircle,
   TabTrigger,
   toast,
 } from "../ui";
@@ -28,11 +28,11 @@ import type { Conversation, UserSummary } from "../../types";
 import { RoomMemberRole, UserStatus } from "../../types";
 import { useChatStore, useGroupStore } from "../../stores";
 import type { InviteLinkItem, JoinRequestItem } from "../../stores/groupStore";
-import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract"; 
-import { resolveConversationId } from "../../lib/conversationIdentity"; 
-import { chatApi } from "../../features/chat/api/chatApi"; 
+import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
+import { resolveConversationId } from "../../lib/conversationIdentity";
+import { chatApi } from "../../features/chat/api/chatApi";
 import uploadClient from "../../services/uploadClient";
-import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById"; 
+import { getConversationByIdUseCase } from "../../features/chat/usecases/getConversationById";
 import {
   buildUserSearchSecondaryText,
   isGroupMemberEligible,
@@ -52,6 +52,15 @@ import { transferOwnershipUseCase } from "../../features/chat/usecases/transferO
 import { deleteGroupUseCase } from "../../features/chat/usecases/deleteGroup";
 import { banMemberUseCase } from "../../features/chat/usecases/manageMemberRestrictions";
 import { getUserDisplayName } from "../../utils/messageHelpers";
+
+// New group members components
+import {
+  MembersList,
+  RemoveMemberModal,
+  BanMemberModal,
+  TransferOwnershipModal,
+  DeleteGroupModal,
+} from "../../features/chat/components/group-members";
 
 interface GroupInfoProps {
   conversation: Conversation;
@@ -87,6 +96,7 @@ type PendingGroupConfirm =
   | { type: "delete-group" }
   | { type: "ban-member"; member: GroupMember }
   | null;
+
 type GroupAvatarUploadStage =
   | "idle"
   | "validating"
@@ -96,6 +106,9 @@ type GroupAvatarUploadStage =
   | "attaching"
   | "success"
   | "error";
+
+// Modal states for new confirmation modals
+type ModalMemberTarget = { memberId: string; memberName: string } | null;
 
 const ROLE_PRIORITY: Record<GroupMemberRole, number> = {
   [RoomMemberRole.OWNER]: 0,
@@ -322,6 +335,12 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const [groupAvatarProgress, setGroupAvatarProgress] = useState(0);
   const avatarInputRef = React.useRef<HTMLInputElement | null>(null);
 
+  // New modal states for refined confirmation experience
+  const [removeMemberTarget, setRemoveMemberTarget] = useState<ModalMemberTarget>(null);
+  const [banMemberTarget, setBanMemberTarget] = useState<ModalMemberTarget>(null);
+  const [transferOwnershipTarget, setTransferOwnershipTarget] = useState<ModalMemberTarget>(null);
+  const [deleteGroupTarget, setDeleteGroupTarget] = useState(false);
+
   const updateConversation = useChatStore((state) => state.updateConversation);
   const removeConversation = useChatStore((state) => state.removeConversation);
   const loadMembersFailedMessage = t("profile:toast.loadMembersFailed");
@@ -439,29 +458,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     },
     [currentUserId, currentUserRole, groupCapabilities],
   );
-
-  const roleLabel = useCallback(
-    (role: GroupMemberRole) => {
-      if (role === RoomMemberRole.OWNER)
-        return t("profile:groupInfo.roles.owner");
-      if (role === RoomMemberRole.ADMIN)
-        return t("profile:groupInfo.roles.admin");
-      return t("profile:groupInfo.roles.member");
-    },
-    [t],
-  );
-
-  const roleBadgeClass = useCallback((role: GroupMemberRole) => {
-    if (role === RoomMemberRole.OWNER) {
-      return "bg-warning/15 text-warning";
-    }
-
-    if (role === RoomMemberRole.ADMIN) {
-      return "bg-primary/10 text-primary";
-    }
-
-    return "bg-surface-overlay text-text-muted";
-  }, []);
 
   const fetchMembers = useCallback(async () => {
     setIsLoadingMembers(true);
@@ -822,7 +818,12 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const handleRemoveMember = useCallback(
     (member: GroupMember) => {
       if (!canRemoveMember(member)) return;
+      // Set both old and new modal states
       setPendingConfirm({ type: "remove-member", member });
+      setRemoveMemberTarget({
+        memberId: member.id,
+        memberName: resolveMemberName(member) || member.id,
+      });
     },
     [canRemoveMember],
   );
@@ -835,6 +836,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         await chatApi.group.removeMember(conversation.id, member.id);
         await refreshGroupState();
         setPendingConfirm(null);
+        setRemoveMemberTarget(null);
         toast.success(t("profile:toast.memberRemoved"));
       } catch (error) {
         const apiError = extractApiError(error);
@@ -889,6 +891,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       if (currentUserRole !== RoomMemberRole.OWNER) return;
       if (member.role === RoomMemberRole.OWNER) return;
       setPendingConfirm({ type: "transfer-ownership", member });
+      setTransferOwnershipTarget({
+        memberId: member.id,
+        memberName: resolveMemberName(member) || member.id,
+      });
     },
     [currentUserRole],
   );
@@ -901,6 +907,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         await transferOwnershipUseCase(conversation.id, member.id);
         await refreshGroupState();
         setPendingConfirm(null);
+        setTransferOwnershipTarget(null);
         toast.success(
           t("profile:toast.ownershipTransferred", {
             name: resolveMemberName({ id: member.id, username: member.username, displayName: member.displayName }),
@@ -920,6 +927,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const handleDeleteGroup = useCallback(() => {
     if (currentUserRole !== RoomMemberRole.OWNER) return;
     setPendingConfirm({ type: "delete-group" });
+    setDeleteGroupTarget(true);
   }, [currentUserRole]);
 
   const confirmDeleteGroup = useCallback(async () => {
@@ -929,6 +937,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       await deleteGroupUseCase(conversation.id);
       removeConversation(conversation.id);
       setPendingConfirm(null);
+      setDeleteGroupTarget(false);
       toast.success(t("profile:toast.groupDeleted"));
       onClose();
       navigate("/chat");
@@ -946,6 +955,10 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
       if (currentUserRole !== RoomMemberRole.OWNER && currentUserRole !== RoomMemberRole.ADMIN) return;
       if (member.role === RoomMemberRole.OWNER) return;
       setPendingConfirm({ type: "ban-member", member });
+      setBanMemberTarget({
+        memberId: member.id,
+        memberName: resolveMemberName(member) || member.id,
+      });
     },
     [currentUserRole],
   );
@@ -958,6 +971,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         await banMemberUseCase(conversation.id, member.id);
         await refreshGroupState();
         setPendingConfirm(null);
+        setBanMemberTarget(null);
         toast.success(
           t("profile:toast.memberBanned", {
             name: resolveMemberName({ id: member.id, username: member.username, displayName: member.displayName }),
@@ -973,18 +987,6 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
     },
     [conversation.id, refreshGroupState, t],
   );
-
-  const tabs = [
-    { id: "members", label: t("profile:groupInfo.tabs.members") },
-    {
-      id: "inviteLinks",
-      label: t("profile:groupInfo.tabs.inviteLinks"),
-    },
-    {
-      id: "joinRequests",
-      label: t("profile:groupInfo.tabs.joinRequests"),
-    },
-  ] as const;
 
   const handleCreateInviteLink = useCallback(async () => {
     if (!isAdmin || isCreatingInvite) return;
@@ -1134,6 +1136,30 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
   const pendingConfirmMemberName = pendingConfirmMember
     ? resolveMemberName(pendingConfirmMember) || pendingConfirmMember.id
     : "";
+
+  // Pending join requests count (only pending status)
+  const pendingJoinRequestsCount = joinRequests.filter((r) => r.status === "pending").length;
+
+  type TabId = "members" | "inviteLinks" | "joinRequests";
+  interface TabItem {
+    id: TabId;
+    label: string;
+    badge?: number;
+  }
+
+  const tabs: TabItem[] = [
+    { id: "members", label: t("profile:groupInfo.tabs.members") },
+    {
+      id: "inviteLinks",
+      label: t("profile:groupInfo.tabs.inviteLinks"),
+    },
+    {
+      id: "joinRequests",
+      label: t("profile:groupInfo.tabs.joinRequests"),
+      badge: pendingJoinRequestsCount > 0 ? pendingJoinRequestsCount : undefined,
+    },
+  ];
+
   const confirmTitle =
     pendingConfirm?.type === "leave-group"
       ? t("profile:groupInfo.leaveGroup")
@@ -1336,10 +1362,17 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
               <TabTrigger
                 key={tab.id}
                 active={activeTab === tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => setActiveTab(tab.id as typeof activeTab)}
                 className="min-w-0 flex-1"
               >
-                {tab.label}
+                <span className="flex items-center gap-1.5">
+                  {tab.label}
+                  {tab.badge !== undefined && (
+                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-xs font-medium leading-none text-white">
+                      {tab.badge}
+                    </span>
+                  )}
+                </span>
               </TabTrigger>
             ))}
           </div>
@@ -1414,108 +1447,34 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                     {t("profile:groupInfo.noMembers")}
                   </p>
                 ) : (
-                  members.map((member) => {
-                    const isMemberActionRunning =
-                      isSubmitting || actingMemberId === member.id;
-                    const canToggleRole = canToggleAdminRole({
-                      actorRole: currentUserRole,
-                      actorUserId: currentUserId,
-                      targetRole: member.role,
-                      targetUserId: member.id,
-                      capabilities: groupCapabilities,
-                    });
-
-                    return (
-                      <div
-                        key={member.id}
-                        className="flex items-start gap-3 px-4 py-3 transition-micro hover:bg-surface-hover"
-                      >
-                        <Avatar
-                          src={member.avatar}
-                          alt={resolveMemberName(member) || member.id}
-                          size="md"
-                          status={member.status}
-                          showStatus
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="truncate text-sm font-medium text-text-primary">
-                              {resolveMemberName(member) || member.id}
-                            </p>
-                            {member.id === currentUserId && (
-                              <span className="text-xs text-text-muted">
-                                {t("profile:groupInfo.youSuffix")}
-                              </span>
-                            )}
-                            <span
-                              className={clsx(
-                                "rounded-full px-2 py-0.5 text-caption",
-                                roleBadgeClass(member.role),
-                              )}
-                            >
-                              {roleLabel(member.role)}
-                            </span>
-                          </div>
-                          <p className="mt-1 truncate text-xs text-text-muted">
-                            @{member.username}
-                          </p>
-                          {(canToggleRole || canRemoveMember(member)) && (
-                            <div className="mt-2 flex flex-wrap items-center gap-3">
-                              {currentUserRole === RoomMemberRole.OWNER && member.role !== RoomMemberRole.OWNER && (
-                                <button
-                                  type="button"
-                                  disabled={isMemberActionRunning}
-                                  onClick={() => void handleTransferOwnership(member)}
-                                  className="text-xs text-warning underline-offset-2 hover:text-warning/80 hover:underline disabled:opacity-60"
-                                >
-                                  {t("profile:groupInfo.actions.transferOwnership")}
-                                </button>
-                              )}
-
-                              {canToggleRole && (
-                                <button
-                                  type="button"
-                                  disabled={isMemberActionRunning}
-                                  onClick={() => void handleToggleMemberRole(member)}
-                                  className="text-xs text-text-secondary underline-offset-2 hover:text-text-primary hover:underline disabled:opacity-60"
-                                >
-                                  {member.role === RoomMemberRole.ADMIN
-                                    ? t("profile:groupInfo.actions.removeAdmin")
-                                    : t("profile:groupInfo.actions.makeAdmin")}
-                                </button>
-                              )}
-
-                              {canRemoveMember(member) && (
-                                <button
-                                  type="button"
-                                  disabled={isMemberActionRunning}
-                                  onClick={() => void handleRemoveMember(member)}
-                                  className="text-xs text-danger underline-offset-2 hover:underline disabled:opacity-60"
-                                >
-                                  {t("profile:groupInfo.actions.removeMember")}
-                                </button>
-                              )}
-
-                              {(currentUserRole === RoomMemberRole.OWNER || currentUserRole === RoomMemberRole.ADMIN) && member.role === RoomMemberRole.MEMBER && (
-                                <button
-                                  type="button"
-                                  disabled={isMemberActionRunning}
-                                  onClick={() => void handleBanMember(member)}
-                                  className="text-xs text-danger underline-offset-2 hover:underline disabled:opacity-60"
-                                >
-                                  {t("profile:groupInfo.actions.banMember")}
-                                </button>
-                              )}
-
-                              {actingMemberId === member.id && (
-                                <SkeletonCircle size={14} className="ml-1" />
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
+                  <MembersList
+                    members={members}
+                    isLoading={isLoadingMembers}
+                    currentUserId={currentUserId}
+                    currentUserRole={currentUserRole}
+                    capabilities={groupCapabilities}
+                    actingMemberId={actingMemberId}
+                    onMakeAdmin={(memberId) => {
+                      const member = members.find((m) => m.id === memberId);
+                      if (member) void handleToggleMemberRole(member);
+                    }}
+                    onRemoveAdmin={(memberId) => {
+                      const member = members.find((m) => m.id === memberId);
+                      if (member) void handleToggleMemberRole(member);
+                    }}
+                    onTransferOwnership={(memberId) => {
+                      const member = members.find((m) => m.id === memberId);
+                      if (member) handleTransferOwnership(member);
+                    }}
+                    onBanMember={(memberId) => {
+                      const member = members.find((m) => m.id === memberId);
+                      if (member) handleBanMember(member);
+                    }}
+                    onRemoveMember={(memberId) => {
+                      const member = members.find((m) => m.id === memberId);
+                      if (member) handleRemoveMember(member);
+                    }}
+                  />
                 )}
               </>
             )}
@@ -1568,9 +1527,20 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   )}
 
                   {inviteLinks.length === 0 ? (
-                    <p className="text-sm text-text-muted">
-                      {t("profile:groupInfo.invite.empty")}
-                    </p>
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <LinkIcon className="mb-3 h-10 w-10 text-text-muted" />
+                      <p className="mb-4 text-sm text-text-muted">
+                        {t("profile:groupInfo.invite.empty")}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateInviteForm(true)}
+                        className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm text-text-inverse hover:opacity-90"
+                      >
+                        <LinkIcon className="h-4 w-4" />
+                        {t("profile:groupInfo.invite.create")}
+                      </button>
+                    </div>
                   ) : (
                     <div className="divide-y divide-border rounded-lg border border-border">
                       {inviteLinks.map((link) => {
@@ -1652,9 +1622,12 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
                   {t("profile:groupInfo.joinRequests.noPermission")}
                 </p>
               ) : joinRequests.length === 0 ? (
-                <p className="text-sm text-text-muted">
-                  {t("profile:groupInfo.joinRequests.empty")}
-                </p>
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <CheckIcon className="mb-3 h-10 w-10 text-text-muted" />
+                  <p className="text-sm text-text-muted">
+                    {t("profile:groupInfo.joinRequests.empty")}
+                  </p>
+                </div>
               ) : (
                 <div className="divide-y divide-border rounded-lg border border-border">
                   {joinRequests.map((request) => {
@@ -1730,36 +1703,45 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         </div>
         </div>
 
-        <div className="h-px bg-border mx-4" />
-
-        <div className="py-2">
+        <div className="border-t border-border bg-danger/5">
           {currentUserRole === RoomMemberRole.OWNER && (
+            <div className="px-4 py-3">
+              <div className="mb-2 flex items-center gap-2">
+                <ExclamationTriangleIcon className="h-4 w-4 text-danger" />
+                <span className="text-xs font-medium uppercase tracking-wide text-danger">
+                  {t("profile:groupInfo.dangerZone", { defaultValue: "Danger Zone" })}
+                </span>
+              </div>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => void handleDeleteGroup()}
+                className="w-full flex items-center justify-center gap-2 rounded-md border border-danger/30 bg-danger/10 px-4 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/20 disabled:opacity-60"
+              >
+                <ExclamationTriangleIcon className="h-4 w-4" />
+                {t("profile:groupInfo.deleteGroup")}
+              </button>
+            </div>
+          )}
+          <div className="px-4 py-2">
             <button
               type="button"
-              disabled={isSubmitting}
-              onClick={() => void handleDeleteGroup()}
-              className="w-full flex items-center gap-4 px-4 py-3 text-danger transition-colors hover:bg-danger/10"
+              disabled={isSubmitting || !canLeaveCurrentGroup}
+              title={
+                canLeaveCurrentGroup ? undefined : blockedOwnerLeaveTitle
+              }
+              onClick={() => void handleLeaveGroup()}
+              className={clsx(
+                "w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-colors",
+                canLeaveCurrentGroup
+                  ? "text-danger hover:bg-danger/10"
+                  : "cursor-not-allowed text-text-muted opacity-60",
+              )}
             >
-              <span className="text-sm">{t("profile:groupInfo.deleteGroup")}</span>
+              <ArrowRightOnRectangleIcon className="w-5 h-5" />
+              <span>{t("profile:groupInfo.leaveGroup")}</span>
             </button>
-          )}
-          <button
-            type="button"
-            disabled={isSubmitting || !canLeaveCurrentGroup}
-            title={
-              canLeaveCurrentGroup ? undefined : blockedOwnerLeaveTitle
-            }
-            onClick={() => void handleLeaveGroup()}
-            className={clsx(
-              "w-full flex items-center gap-4 px-4 py-3 text-danger transition-colors",
-              canLeaveCurrentGroup
-                ? "hover:bg-danger/10"
-                : "cursor-not-allowed opacity-60",
-            )}
-          >
-            <ArrowRightOnRectangleIcon className="w-5 h-5" />
-            <span className="text-sm">{t("profile:groupInfo.leaveGroup")}</span>
-          </button>
+          </div>
         </div>
       </div>
       <ConfirmDialog
@@ -1795,6 +1777,57 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         confirmText={confirmText}
         isLoading={isConfirmActionPending}
         variant="danger"
+      />
+
+      {/* New refined modals */}
+      <RemoveMemberModal
+        isOpen={removeMemberTarget !== null}
+        onClose={() => setRemoveMemberTarget(null)}
+        onConfirm={() => {
+          if (removeMemberTarget) {
+            const member = members.find((m) => m.id === removeMemberTarget.memberId);
+            if (member) void confirmRemoveMember(member);
+            else setRemoveMemberTarget(null);
+          }
+        }}
+        memberName={removeMemberTarget?.memberName || ""}
+        isLoading={isConfirmActionPending}
+      />
+
+      <BanMemberModal
+        isOpen={banMemberTarget !== null}
+        onClose={() => setBanMemberTarget(null)}
+        onConfirm={() => {
+          if (banMemberTarget) {
+            const member = members.find((m) => m.id === banMemberTarget.memberId);
+            if (member) void confirmBanMember(member);
+            else setBanMemberTarget(null);
+          }
+        }}
+        memberName={banMemberTarget?.memberName || ""}
+        isLoading={isConfirmActionPending}
+      />
+
+      <TransferOwnershipModal
+        isOpen={transferOwnershipTarget !== null}
+        onClose={() => setTransferOwnershipTarget(null)}
+        onConfirm={() => {
+          if (transferOwnershipTarget) {
+            const member = members.find((m) => m.id === transferOwnershipTarget.memberId);
+            if (member) void confirmTransferOwnership(member);
+            else setTransferOwnershipTarget(null);
+          }
+        }}
+        memberName={transferOwnershipTarget?.memberName || ""}
+        isLoading={isConfirmActionPending}
+      />
+
+      <DeleteGroupModal
+        isOpen={deleteGroupTarget}
+        onClose={() => setDeleteGroupTarget(false)}
+        onConfirm={() => void confirmDeleteGroup()}
+        groupName={conversation.name || ""}
+        isLoading={isConfirmActionPending}
       />
     </div>
   );

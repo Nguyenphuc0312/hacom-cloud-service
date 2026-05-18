@@ -31,6 +31,7 @@
     "noSearchResult": "No matching results",
     "noMembers": "No members",
     "youSuffix": "(You)",
+    "noRealName": "Real name not set",
     "removeMemberConfirm": "Are you sure you want to remove {{name}} from this group?",
     "roles": {
       "owner": "Owner",
@@ -42,7 +43,12 @@
       "removeAdmin": "Remove admin",
       "removeMember": "Remove member",
       "transferOwnership": "Transfer ownership",
-      "banMember": "Ban member"
+      "banMember": "Ban member",
+      "options": "Options for {{name}}"
+    },
+    "confirm": {
+      "makeAdmin": "Grant admin permissions to {{name}}?",
+      "removeAdmin": "Remove admin permissions from {{name}}?"
     },
     "banMemberConfirm": "Are you sure you want to ban {{name}}? They will not be able to join this group.",
     "banMember": "Ban member",
@@ -55,9 +61,11 @@
     "leaveBlockedOwner": "Transfer ownership before leaving this group.",
     "leaveConfirm": "Are you sure you want to leave this group?",
     "deleteGroup": "Delete group",
+    "deleteGroupWarning": "This action cannot be undone. All messages, files, and group data will be permanently deleted.",
     "deleteGroupConfirm": "Are you sure you want to delete this group? This action cannot be undone.",
     "transferOwnership": "Transfer ownership",
     "transferOwnershipConfirm": "Are you sure you want to transfer ownership to {{name}}? They will become the new owner.",
+    "dangerZone": "Danger Zone",
     "invite": {
       "invalidUsageLimit": "Usage limit must be greater than 0",
       "created": "Invite link created",
@@ -81,7 +89,7 @@
       "rejected": "Join request rejected",
       "resolveFailed": "Unable to resolve join request",
       "noPermission": "Only admins can resolve join requests.",
-      "empty": "No join requests."
+      "empty": "No pending requests."
     }
   },
   "newChatModal": {
