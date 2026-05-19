@@ -64,9 +64,6 @@ import type { NormalizedMessageRealtimeEvent } from "../features/chat/realtime/r
 import { chatApi } from "../features/api/chatApi";
 import {
   getMessageSeq,
-  patchMessageReactionInCache,
-  findMessageIdentityIndex,
-  patchReactionSummary,
 } from "../features/chat/domain/messageMerge";
 import { findMessageIdentityIndex } from "../features/chat/domain/messageIdentity";
 import { dispatchNotificationClick } from "../features/chat/events/chatUiEvents";
@@ -1510,7 +1507,7 @@ export const useWebSocket = (
         if (!Array.isArray(reactions)) return;
 
         // Update RTK Query cache directly
-        const patch = chatApi.util.updateQueryData(
+        chatApi.util.updateQueryData(
           "getMessages",
           { conversationId },
           (draft) => {
@@ -1522,15 +1519,10 @@ export const useWebSocket = (
                 m.clientMessageId === messageId,
             );
             if (message) {
-              message.reactions = reactions as import("@chat/shared-types").Reaction[];
+              message.reactions = reactions as import("@hacom/chat-shared-types").Reaction[];
             }
           },
         );
-
-        // If message not in cache, create a minimal entry
-        if (patch.patches.length === 0) {
-          // Message not in cache - skip update
-        }
       },
       onConversationParticipantUpdated: (data: unknown) => {
         const payload = asRecord(data);

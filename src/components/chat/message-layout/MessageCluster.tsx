@@ -169,7 +169,7 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   const replyTargetMessageId = message.replyTo || message.replyToMessage?.id;
 
   // Reaction picker hook
-  const { isOpen: isPickerOpen, pickerStyle, close: closePicker } = useReactionPicker({
+  const { pickerStyle, close: closePicker } = useReactionPicker({
     triggerRef: reactionTriggerRef,
   });
 
@@ -202,10 +202,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     longPressTimerRef.current = null;
   }, []);
 
-  const showRail = React.useCallback(() => {
-    setIsHovered(true);
-  }, []);
-
   const hideRail = React.useCallback(
     (force = false) => {
       if (force || !isActionsOpen) {
@@ -230,7 +226,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
 
   const openActions = React.useCallback(() => {
     setIsActionsOpen(true);
-    setIsRailVisible(true);
   }, []);
 
   const closeActions = React.useCallback(() => {
@@ -399,8 +394,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         : undefined,
     [isOwn, viewerCanRecallOthers, t],
   );
-
-  const actionRail = null; // Kept for future use - rail actions are now handled by MessageActionBar
 
   return (
     <div

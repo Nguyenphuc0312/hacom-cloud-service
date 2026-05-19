@@ -47,7 +47,7 @@ export function useReactionBar({
   const reactedByMe = myReactionEmoji !== null;
 
   const handleChipClick = useCallback(
-    (emoji: string) => {
+    (_emoji: string) => {
       // This will be connected to the parent's onToggleReaction handler
       // The parent component will handle the actual reaction logic
     },
