@@ -36,8 +36,6 @@ import type { LongMessageRenderMode } from "../../../utils/longMessagePolicy";
 import { MessageActionBar } from "../MessageActionBar";
 import { QuickReactBar } from "../QuickReactBar";
 import { ReactionBar } from "../ReactionBar";
-import { ReactionPicker } from "../ReactionPicker";
-import { useReactionPicker } from "../ReactionPicker/useReactionPicker";
 
 interface MessageClusterProps {
   message: Message;
@@ -132,11 +130,8 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   const contract = getTimelineDensityContract(density);
   const resendMessage = useChatStore((s) => s.resendMessage);
   const currentUserId = useAuthStore((s) => s.user?.id);
-  // State for the new MessageActionBar
   const [isActionsOpen, setIsActionsOpen] = React.useState(false);
-  const [isReactionPickerOpen, setIsReactionPickerOpen] = React.useState(false);
   const [isHovered, setIsHovered] = React.useState(false);
-  const reactionTriggerRef = React.useRef<HTMLDivElement>(null);
   const longPressTimerRef = React.useRef<number | null>(null);
   const normalizedConversationType = normalizeRoomType(conversationType);
   const isGroupConversation =
@@ -169,11 +164,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     : null;
   const replyTargetMessageId = message.replyTo || message.replyToMessage?.id;
 
-  // Reaction picker hook
-  const { pickerStyle, close: closePicker } = useReactionPicker({
-    triggerRef: reactionTriggerRef,
-  });
-
   // Get user's current reaction emoji
   const myReactionEmoji = React.useMemo(() => {
     if (!currentUserId || !message.reactions) return null;
@@ -184,9 +174,8 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   const handleReactionSelect = React.useCallback(
     (emoji: string) => {
       onReact(message.id, emoji);
-      closePicker();
     },
-    [message.id, onReact, closePicker],
+    [message.id, onReact],
   );
 
   const handleReactionToggle = React.useCallback(
@@ -209,10 +198,9 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     (force = false) => {
       if (force || !isActionsOpen) {
         setIsHovered(false);
-        closePicker();
       }
     },
-    [isActionsOpen, closePicker],
+    [isActionsOpen],
   );
 
   const handleClusterMouseEnter = React.useCallback(() => {
@@ -227,7 +215,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     leaveTimerRef.current = setTimeout(() => {
       hideRail();
       setIsHovered(false);
-      setIsReactionPickerOpen(false);
     }, 150);
   }, [hideRail]);
 
@@ -293,9 +280,8 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     (actionId: MessageActionId) => {
       switch (actionId) {
         case "react":
-          // Open the new reaction picker
-          setIsReactionPickerOpen(true);
           if (isActionsOpen) closeActions();
+          setIsHovered(true);
           break;
         case "reply":
           onReply(message);
@@ -362,7 +348,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
       onEdit,
       onPin,
       onUnpin,
-      onReact,
       onReply,
       openActions,
       isOwn,
@@ -426,7 +411,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         if (!event.currentTarget.contains(nextFocused)) {
           hideRail();
           setIsHovered(false);
-          setIsReactionPickerOpen(false);
         }
       }}
     >
@@ -434,13 +418,9 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
         isOwn={isOwn}
         actionRail={
           isHovered ? (
-            <div
-              ref={reactionTriggerRef}
-              className="transition-fast pointer-events-auto opacity-100"
-            >
+            <div className="transition-fast pointer-events-auto opacity-100">
               <MessageActionBar
                 isOutgoing={isOwn}
-                onReactClick={() => setIsReactionPickerOpen(true)}
                 onReplyClick={() => onReply(message)}
                 onMoreClick={openActions}
               />
@@ -613,16 +593,6 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                 onToggleReaction={handleReactionToggle}
               />
             </div>
-
-            {/* Reaction Picker - positioned relative to message */}
-            {isReactionPickerOpen && (
-              <ReactionPicker
-                onSelect={handleReactionSelect}
-                onClose={() => setIsReactionPickerOpen(false)}
-                style={pickerStyle}
-                currentUserReaction={myReactionEmoji}
-              />
-            )}
 
             {threadCountValue > 0 && (
               <ThreadIndicator
