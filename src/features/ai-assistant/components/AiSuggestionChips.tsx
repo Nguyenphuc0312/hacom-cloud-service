@@ -2,11 +2,11 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import {
-  ClipboardDocumentListIcon,
-  ClockIcon,
   DocumentMagnifyingGlassIcon,
+  ClipboardDocumentCheckIcon,
+  UsersIcon,
   QuestionMarkCircleIcon,
-  ChartBarIcon,
+  ArchiveBoxIcon,
 } from "@heroicons/react/24/outline";
 
 export interface AiSuggestion {
@@ -18,16 +18,22 @@ export interface AiSuggestion {
 
 const SUGGESTIONS: AiSuggestion[] = [
   {
-    id: "summarize-work",
-    labelKey: "suggestions.summarizeWork",
-    icon: ClipboardDocumentListIcon,
-    prompt: "Tóm tắt công việc hôm nay",
+    id: "latest-docs",
+    labelKey: "suggestions.latestDocs",
+    icon: ArchiveBoxIcon,
+    prompt: "Tóm tắt tài liệu mới nhất",
   },
   {
-    id: "check-attendance",
-    labelKey: "suggestions.checkAttendance",
-    icon: ClockIcon,
-    prompt: "Kiểm tra thông tin chấm công",
+    id: "van-thu",
+    labelKey: "suggestions.vanThu",
+    icon: ClipboardDocumentCheckIcon,
+    prompt: "Quy định về công tác văn thư là gì?",
+  },
+  {
+    id: "nhan-su",
+    labelKey: "suggestions.nhanSu",
+    icon: UsersIcon,
+    prompt: "Tìm thông tin liên quan đến nhân sự",
   },
   {
     id: "find-documents",
@@ -40,12 +46,6 @@ const SUGGESTIONS: AiSuggestion[] = [
     labelKey: "suggestions.askProcess",
     icon: QuestionMarkCircleIcon,
     prompt: "Hỏi về quy trình nội bộ",
-  },
-  {
-    id: "create-report",
-    labelKey: "suggestions.createReport",
-    icon: ChartBarIcon,
-    prompt: "Tạo báo cáo nhanh",
   },
 ];
 
