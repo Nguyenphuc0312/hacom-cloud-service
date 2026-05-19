@@ -22,7 +22,7 @@ export class AiApiError extends Error {
 
 export async function sendAiChatMessage(
   question: string,
-  sessionId?: string | null,
+  sessionId: string,
 ): Promise<AiChatResponse> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -31,7 +31,7 @@ export async function sendAiChatMessage(
     const response = await fetch(AI_CHAT_API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, session_id: sessionId ?? null }),
+      body: JSON.stringify({ question, session_id: sessionId }),
       signal: controller.signal,
     });
 

@@ -15,24 +15,41 @@ function generateId(): string {
   return Math.random().toString(36).slice(2);
 }
 
-function readStoredSessionId(): string | null {
+function generateSessionId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function readOrCreateSessionId(): string {
   try {
-    return localStorage.getItem(SESSION_STORAGE_KEY);
+    const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (stored) return stored;
+    const newId = generateSessionId();
+    localStorage.setItem(SESSION_STORAGE_KEY, newId);
+    return newId;
   } catch {
-    return null;
+    return generateSessionId();
   }
 }
 
-function persistSessionId(id: string | null): void {
+function persistSessionId(id: string): void {
   try {
-    if (id) {
-      localStorage.setItem(SESSION_STORAGE_KEY, id);
-    } else {
-      localStorage.removeItem(SESSION_STORAGE_KEY);
-    }
+    localStorage.setItem(SESSION_STORAGE_KEY, id);
   } catch {
     // ignore storage errors
   }
+}
+
+function clearSessionId(): string {
+  const newId = generateSessionId();
+  try {
+    localStorage.setItem(SESSION_STORAGE_KEY, newId);
+  } catch {
+    // ignore
+  }
+  return newId;
 }
 
 export const AiAssistantPage: React.FC = () => {
@@ -41,25 +58,20 @@ export const AiAssistantPage: React.FC = () => {
   const [inputValue, setInputValue] = useState("");
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(readStoredSessionId);
+  const [sessionId, setSessionId] = useState<string>(readOrCreateSessionId);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const userDisplayName = user
     ? (user.effectiveDisplayName || user.displayName || user.fullName || user.firstName || user.username)
     : undefined;
 
-  const updateSessionId = useCallback((id: string | null) => {
-    setSessionId(id);
-    persistSessionId(id);
-  }, []);
-
   const handleNewChat = useCallback(() => {
     setMessages([]);
     setInputValue("");
     setIsLoading(false);
-    updateSessionId(null);
+    setSessionId(clearSessionId());
     setTimeout(() => textareaRef.current?.focus(), 0);
-  }, [updateSessionId]);
+  }, []);
 
   const getErrorMessage = useCallback(
     (err: unknown): string => {
@@ -99,8 +111,9 @@ export const AiAssistantPage: React.FC = () => {
       try {
         const response = await sendAiChatMessage(trimmed, sessionId);
 
-        if (response.session_id) {
-          updateSessionId(response.session_id);
+        if (response.session_id && response.session_id !== sessionId) {
+          setSessionId(response.session_id);
+          persistSessionId(response.session_id);
         }
 
         const assistantMessage: AiChatMessage = {
@@ -126,7 +139,7 @@ export const AiAssistantPage: React.FC = () => {
         setTimeout(() => textareaRef.current?.focus(), 0);
       }
     },
-    [isLoading, sessionId, updateSessionId, getErrorMessage],
+    [isLoading, sessionId, getErrorMessage],
   );
 
   const hasMessages = messages.length > 0;
