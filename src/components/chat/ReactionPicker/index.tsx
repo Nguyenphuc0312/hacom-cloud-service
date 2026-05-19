@@ -80,7 +80,7 @@ export const ReactionPicker: React.FC<ReactionPickerProps> = ({
 
     const query = searchQuery.toLowerCase();
     const allEmojis = Object.entries(EMOJI_NAME_MAP)
-      .filter(([emoji, name]) => name.toLowerCase().includes(query))
+      .filter(([, name]) => name.toLowerCase().includes(query))
       .map(([emoji]) => emoji);
 
     return allEmojis;

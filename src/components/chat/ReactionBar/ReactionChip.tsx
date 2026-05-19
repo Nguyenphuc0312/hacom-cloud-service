@@ -13,7 +13,7 @@
 
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { clsx } from "clsx";
-import type { Reaction } from "@chat/shared-types";
+import type { Reaction } from "@hacom/chat-shared-types/chat";
 
 interface ReactionChipProps {
   reaction: Reaction;

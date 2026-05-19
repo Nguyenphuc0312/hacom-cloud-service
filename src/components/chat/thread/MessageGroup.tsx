@@ -194,7 +194,6 @@ const MessageGroupItem: React.FC<{
     const { t } = useTranslation();
     const currentUserId = useAuthStore((s) => s.user?.id);
     const [isActionSheetOpen, setIsActionSheetOpen] = React.useState(false);
-    const [isActionRailVisible, setIsActionRailVisible] = React.useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = React.useState(false);
     const [isHovered, setIsHovered] = React.useState(false);
     const reactionTriggerRef = React.useRef<HTMLDivElement>(null);
@@ -233,7 +232,6 @@ const MessageGroupItem: React.FC<{
       }
       return undefined;
     }, [message.replyToMessage, message.replyTo, replyTargetFromStore]);
-    const hideActionRailTimerRef = React.useRef<number | null>(null);
     const isHighlighted =
       highlightedMessageId === message.id ||
       highlightedMessageId === message.localId ||
@@ -321,44 +319,6 @@ const MessageGroupItem: React.FC<{
 
     const inlineActions = coarsePointer ? [] : actionPolicy.railActions;
 
-    const clearHideActionRailTimer = React.useCallback(() => {
-      if (hideActionRailTimerRef.current === null) {
-        return;
-      }
-
-      window.clearTimeout(hideActionRailTimerRef.current);
-      hideActionRailTimerRef.current = null;
-    }, []);
-
-    const _showActionRail = React.useCallback(() => {
-      clearHideActionRailTimer();
-      setIsActionRailVisible(true);
-    }, [clearHideActionRailTimer]);
-
-    const hideActionRail = React.useCallback(
-      (withDelay = true) => {
-        clearHideActionRailTimer();
-
-        if (!withDelay) {
-          setIsActionRailVisible(false);
-          return;
-        }
-
-        hideActionRailTimerRef.current = window.setTimeout(() => {
-          setIsActionRailVisible(false);
-          hideActionRailTimerRef.current = null;
-        }, 120);
-      },
-      [clearHideActionRailTimer],
-    );
-
-    React.useEffect(
-      () => () => {
-        clearHideActionRailTimer();
-      },
-      [clearHideActionRailTimer],
-    );
-
     const handleAction = React.useCallback(
       (actionId: MessageActionId) => {
         switch (actionId) {
@@ -411,21 +371,6 @@ const MessageGroupItem: React.FC<{
       [message, onDelete, onEdit, onReact, onReply, resendMessage, isOwn],
     );
 
-    const _isActionRailActive = isActionRailVisible || isActionSheetOpen || showEmojiPicker;
-
-    // Hide action rail when picker is closed
-    const _handleHideRail = React.useCallback(
-      (withDelay = true) => {
-        if (!withDelay) {
-          hideActionRail(false);
-          closePicker();
-          return;
-        }
-        hideActionRail(true);
-      },
-      [hideActionRail, closePicker],
-    );
-
     const actionRail =
       inlineActions.length > 0 && !isSelectionMode ? (
         <div
@@ -433,7 +378,6 @@ const MessageGroupItem: React.FC<{
           onMouseLeave={() => {
             if (!isPickerOpen) {
               setIsHovered(false);
-              hideActionRail(true);
             }
           }}
           className={clsx(
@@ -477,7 +421,6 @@ const MessageGroupItem: React.FC<{
         onMouseLeave={() => {
           if (!isPickerOpen) {
             setIsHovered(false);
-            hideActionRail(true);
           }
         }}
         onFocusCapture={() => setIsHovered(true)}
@@ -485,7 +428,6 @@ const MessageGroupItem: React.FC<{
           const nextFocused = event.relatedTarget as Node | null;
           if (!event.currentTarget.contains(nextFocused)) {
             setIsHovered(false);
-            hideActionRail(false);
           }
         }}
         data-testid={`message-item-${message.id}`}

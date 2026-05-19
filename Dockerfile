@@ -55,6 +55,7 @@ COPY chat-web-client ./chat-web-client
 
 WORKDIR /workspace/chat-shared-types
 RUN npm run build
+RUN test -f /workspace/chat-shared-types/dist/index.d.ts
 
 WORKDIR /workspace/chat-web-client
 RUN npm run build && node scripts/verify-dist-assets.mjs
