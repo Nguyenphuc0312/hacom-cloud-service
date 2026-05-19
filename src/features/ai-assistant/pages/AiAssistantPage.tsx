@@ -4,12 +4,36 @@ import { AiPromptBox } from "../components/AiPromptBox";
 import { AiSuggestionChips } from "../components/AiSuggestionChips";
 import { AiChatPreview } from "../components/AiChatPreview";
 import type { AiChatMessage } from "../components/AiChatPreview";
-import { getMockResponse } from "../aiMockResponses";
+import { sendAiChatMessage, AiApiError } from "../services/aiChatApi";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../../stores/authStore";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 
-const generateId = () => Math.random().toString(36).slice(2);
+const SESSION_STORAGE_KEY = "ai_assistant_session_id";
+
+function generateId(): string {
+  return Math.random().toString(36).slice(2);
+}
+
+function readStoredSessionId(): string | null {
+  try {
+    return localStorage.getItem(SESSION_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function persistSessionId(id: string | null): void {
+  try {
+    if (id) {
+      localStorage.setItem(SESSION_STORAGE_KEY, id);
+    } else {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
 
 export const AiAssistantPage: React.FC = () => {
   const { t } = useTranslation("aiAssistant");
@@ -17,27 +41,49 @@ export const AiAssistantPage: React.FC = () => {
   const [inputValue, setInputValue] = useState("");
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(readStoredSessionId);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const userDisplayName = user
     ? (user.effectiveDisplayName || user.displayName || user.fullName || user.firstName || user.username)
     : undefined;
 
+  const updateSessionId = useCallback((id: string | null) => {
+    setSessionId(id);
+    persistSessionId(id);
+  }, []);
+
   const handleNewChat = useCallback(() => {
     setMessages([]);
     setInputValue("");
     setIsLoading(false);
-    textareaRef.current?.focus();
-  }, []);
+    updateSessionId(null);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }, [updateSessionId]);
+
+  const getErrorMessage = useCallback(
+    (err: unknown): string => {
+      if (err instanceof AiApiError) {
+        if (err.kind === "timeout") return t("chat.errorTimeout");
+        if (err.kind === "network") return t("chat.errorNetwork");
+        if (err.status === 422) return t("chat.error422");
+        if (err.status === 405) return t("chat.error405");
+        if (err.status >= 500) return t("chat.error500");
+      }
+      return t("chat.errorNetwork");
+    },
+    [t],
+  );
 
   const handleSubmit = useCallback(
     async (prompt: string) => {
-      if (!prompt.trim()) return;
+      const trimmed = prompt.trim();
+      if (!trimmed || isLoading) return;
 
       const userMessage: AiChatMessage = {
         id: generateId(),
         role: "user",
-        content: prompt,
+        content: trimmed,
         timestamp: new Date(),
       };
 
@@ -50,26 +96,44 @@ export const AiAssistantPage: React.FC = () => {
 
       setIsLoading(true);
 
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      try {
+        const response = await sendAiChatMessage(trimmed, sessionId);
 
-      const assistantMessage: AiChatMessage = {
-        id: generateId(),
-        role: "assistant",
-        content: getMockResponse(prompt),
-        timestamp: new Date(),
-      };
+        if (response.session_id) {
+          updateSessionId(response.session_id);
+        }
 
-      setIsLoading(false);
-      setMessages((prev) => [...prev, assistantMessage]);
+        const assistantMessage: AiChatMessage = {
+          id: generateId(),
+          role: "assistant",
+          content: response.answer,
+          timestamp: new Date(),
+          sources: response.sources?.length > 0 ? response.sources : undefined,
+        };
+
+        setMessages((prev) => [...prev, assistantMessage]);
+      } catch (err) {
+        const errorMessage: AiChatMessage = {
+          id: generateId(),
+          role: "assistant",
+          content: getErrorMessage(err),
+          timestamp: new Date(),
+          error: true,
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+      } finally {
+        setIsLoading(false);
+        setTimeout(() => textareaRef.current?.focus(), 0);
+      }
     },
-    [],
+    [isLoading, sessionId, updateSessionId, getErrorMessage],
   );
 
   const hasMessages = messages.length > 0;
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--chat-shell-bg)]">
-      {/* Mini header — chat state only */}
+      {/* Mini header — shown only when chat is active */}
       {hasMessages && (
         <header className="flex h-12 flex-shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
           <button
@@ -90,7 +154,7 @@ export const AiAssistantPage: React.FC = () => {
         </header>
       )}
 
-      {/* Empty state — centered both axes, max-width 680px */}
+      {/* Empty state */}
       {!hasMessages && (
         <div className="flex flex-1 items-center justify-center overflow-y-auto px-4">
           <div className="flex w-full max-w-[680px] flex-col items-center gap-8 py-12">
@@ -107,10 +171,12 @@ export const AiAssistantPage: React.FC = () => {
             </div>
 
             <div className="w-full">
-              <AiSuggestionChips onSelect={(prompt) => {
-                setInputValue(prompt);
-                setTimeout(() => textareaRef.current?.focus(), 0);
-              }} />
+              <AiSuggestionChips
+                onSelect={(prompt) => {
+                  setInputValue(prompt);
+                  setTimeout(() => textareaRef.current?.focus(), 0);
+                }}
+              />
             </div>
           </div>
         </div>
@@ -126,13 +192,15 @@ export const AiAssistantPage: React.FC = () => {
           </div>
 
           <div className="flex-shrink-0 border-t border-border bg-[var(--chat-shell-bg)] px-4 pb-4 pt-3">
-            <AiPromptBox
-              ref={textareaRef}
-              value={inputValue}
-              onChange={setInputValue}
-              onSubmit={handleSubmit}
-              isLoading={isLoading}
-            />
+            <div className="mx-auto max-w-[680px]">
+              <AiPromptBox
+                ref={textareaRef}
+                value={inputValue}
+                onChange={setInputValue}
+                onSubmit={handleSubmit}
+                isLoading={isLoading}
+              />
+            </div>
           </div>
         </div>
       )}

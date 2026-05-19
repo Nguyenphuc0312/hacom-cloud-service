@@ -1,21 +1,21 @@
 {
   "page": {
-    "title": "Personal AI",
+    "title": "AI Assistant",
     "greeting": "Hello",
     "greetingWithName": "Hello, {name}",
-    "subtitle": "How can I help you today?"
+    "subtitle": "Ask questions about HACOM internal data"
   },
   "prompt": {
-    "placeholder": "Ask your personal AI...",
+    "placeholder": "Ask your question...",
     "send": "Send"
   },
   "suggestions": {
     "title": "Quick suggestions",
-    "summarizeWork": "Summarize today's work",
-    "checkAttendance": "Check attendance information",
+    "latestDocs": "Summarize the latest documents",
+    "vanThu": "What are the regulations on document management?",
+    "nhanSu": "Find information related to HR",
     "findDocuments": "Find digitized documents",
-    "askProcess": "Ask about internal processes",
-    "createReport": "Create a quick report"
+    "askProcess": "Ask about internal processes"
   },
   "dataSources": {
     "title": "Data sources available",
@@ -41,12 +41,15 @@
     }
   },
   "chat": {
-    "newChat": "New chat",
-    "aiTyping": "AI is responding...",
-    "mockDefault": "I'm being finalized to support Hacom's internal operations. Please check back once the feature officially launches.",
-    "mockAttendance": "To look up attendance information, I need to connect to the HRM system. This feature is being finalized and will be available soon.",
-    "mockReport": "The automated report generation feature is under development. Once complete, I can aggregate reports by day, week, or department.",
-    "mockDocument": "I can help search the digitized document repository once the internal OCR data is connected.",
-    "mockWork": "The work summarization feature will connect to your calendar and tasks. It is currently under development."
+    "newChat": "New conversation",
+    "aiTyping": "AI is thinking...",
+    "sources": "{{count}} reference sources",
+    "sourcePage": "Page {{page}}",
+    "sourceScore": "Score: {{score}}",
+    "errorTimeout": "Request timed out. Please try again.",
+    "errorNetwork": "Cannot connect to AI service. Please check your network or API status.",
+    "error422": "Invalid or missing question. Please check your input.",
+    "error405": "Method not supported by API. Please contact your administrator.",
+    "error500": "AI service encountered an error. Please try again later."
   }
 }
