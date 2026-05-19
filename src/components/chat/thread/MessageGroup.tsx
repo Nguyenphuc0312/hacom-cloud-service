@@ -330,7 +330,7 @@ const MessageGroupItem: React.FC<{
       hideActionRailTimerRef.current = null;
     }, []);
 
-    const showActionRail = React.useCallback(() => {
+    const _showActionRail = React.useCallback(() => {
       clearHideActionRailTimer();
       setIsActionRailVisible(true);
     }, [clearHideActionRailTimer]);
@@ -411,10 +411,10 @@ const MessageGroupItem: React.FC<{
       [message, onDelete, onEdit, onReact, onReply, resendMessage, isOwn],
     );
 
-    const isActionRailActive = isActionRailVisible || isActionSheetOpen || showEmojiPicker;
+    const _isActionRailActive = isActionRailVisible || isActionSheetOpen || showEmojiPicker;
 
     // Hide action rail when picker is closed
-    const handleHideRail = React.useCallback(
+    const _handleHideRail = React.useCallback(
       (withDelay = true) => {
         if (!withDelay) {
           hideActionRail(false);
@@ -672,8 +672,8 @@ const MessageGroupItem: React.FC<{
         {/* Mobile emoji picker — full-screen overlay (desktop uses inline picker above rail) */}
         {showEmojiPicker && coarsePointer && (
           <MobileEmojiOverlay
-            onSelect={handleEmojiSelect}
-            onClose={closeEmojiPicker}
+            onSelect={handleReactionSelect}
+            onClose={() => setShowEmojiPicker(false)}
           />
         )}
       </div>

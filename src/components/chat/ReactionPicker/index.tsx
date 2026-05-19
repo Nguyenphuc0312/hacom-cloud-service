@@ -27,7 +27,7 @@ import type { PickerPosition } from "./useReactionPicker";
 
 interface ReactionPickerProps {
   onSelect: (emoji: string) => void;
-  onClose: () => void;
+  onClose?: () => void;
   style?: React.CSSProperties;
   position?: PickerPosition;
   currentUserReaction?: string | null;
@@ -44,9 +44,7 @@ const TABS: { id: TabId; label: string; icon: string }[] = [
 
 export const ReactionPicker: React.FC<ReactionPickerProps> = ({
   onSelect,
-  onClose,
   style,
-  position = "bottom",
   currentUserReaction,
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>("recent");
@@ -246,7 +244,7 @@ export const ReactionPicker: React.FC<ReactionPickerProps> = ({
           </div>
         ) : activeTab !== "recent" && (
           <div className="grid grid-cols-8 gap-0.5">
-            {displayEmojis.map((emoji) => (
+            {displayEmojis.map((emoji: string) => (
               <EmojiButton
                 key={emoji}
                 emoji={emoji}

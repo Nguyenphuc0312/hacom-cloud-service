@@ -165,20 +165,6 @@ export async function handleReaction(
 export async function toggleReaction(
   options: HandleReactionOptions,
 ): Promise<HandleReactionResult> {
-  const { emoji, currentUserId, conversationId, messageId } = options;
-
-  const currentReactions = getMessageReactionsFromCache(conversationId, messageId);
-  const existingGroup = currentReactions.find((group) =>
-    group.userIds.includes(currentUserId),
-  );
-  const existingEmoji = existingGroup?.emoji;
-
-  // If clicking the same emoji, remove it
-  // If clicking a different emoji, replace it
-  return handleReaction({
-    messageId,
-    emoji,
-    currentUserId,
-    conversationId,
-  });
+  // Delegate to handleReaction which handles the toggle logic
+  return handleReaction(options);
 }

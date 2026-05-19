@@ -39,7 +39,6 @@ export function useReactionPicker({
     const triggerRect = trigger.getBoundingClientRect();
     const viewportHeight = window.innerHeight;
     const spaceBelow = viewportHeight - triggerRect.bottom;
-    const spaceAbove = triggerRect.top;
 
     // Check if there's enough space below
     const needsToOpenUpward = spaceBelow < pickerHeight + VIEWPORT_MARGIN;

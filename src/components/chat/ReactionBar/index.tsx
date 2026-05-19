@@ -8,7 +8,7 @@
  * - Animate chips on appear
  */
 
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback } from "react";
 import { clsx } from "clsx";
 import type { Reaction } from "@chat/shared-types";
 import { ReactionChip } from "./ReactionChip";
@@ -37,8 +37,6 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
     visibleReactions,
     overflowCount,
     hasOverflow,
-    myReactionEmoji,
-    reactedByMe,
   } = useReactionBar({
     reactions,
     currentUserId,

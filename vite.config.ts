@@ -255,6 +255,13 @@ export default defineConfig(({ mode }) => {
       },
     },
 
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "src"),
+        "@chat/shared-types": path.resolve(__dirname, "../chat-shared-types/src/index.ts"),
+      },
+    },
+
     test: {
       environment: "jsdom",
       setupFiles: ["./src/test/setup.ts"],
