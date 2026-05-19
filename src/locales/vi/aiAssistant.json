@@ -2,7 +2,7 @@
   "page": {
     "title": "AI Assistant",
     "greeting": "Xin chào",
-    "greetingWithName": "Xin chào, {name}",
+    "greetingWithName": "Xin chào, {{name}}",
     "subtitle": "Hỏi đáp với dữ liệu nội bộ HACOM"
   },
   "prompt": {

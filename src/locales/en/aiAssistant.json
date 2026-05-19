@@ -2,7 +2,7 @@
   "page": {
     "title": "AI Assistant",
     "greeting": "Hello",
-    "greetingWithName": "Hello, {name}",
+    "greetingWithName": "Hello, {{name}}",
     "subtitle": "Ask questions about HACOM internal data"
   },
   "prompt": {
