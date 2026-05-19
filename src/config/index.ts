@@ -208,6 +208,14 @@ export const AUTH_BASE_URL = resolveHttpBaseUrl(
 );
 
 /**
+ * HR API base URL for attendance and HRM data
+ */
+export const HR_API_BASE_URL = resolveHttpBaseUrl(
+  import.meta.env.VITE_HR_API_BASE_URL,
+  "http://localhost:3001",
+);
+
+/**
  * Feature flag: redirect auth traffic to the dedicated auth-service.
  * true  → FE calls AUTH_BASE_URL for /auth/* endpoints.
  * false → FE calls API_BASE_URL (legacy, rollback).
