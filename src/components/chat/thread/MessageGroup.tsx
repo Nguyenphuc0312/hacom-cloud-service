@@ -5,14 +5,12 @@ import { Avatar } from "../../common/Avatar";
 import { createPortal } from "react-dom";
 import { Plus } from "lucide-react";
 import { MessageActions } from "../../message/MessageActions";
-import { EmojiReactionPicker } from "../../message/EmojiReactionPicker";
-import { ReactionBar } from "../../message/ReactionBar";
 import { ThreadIndicator } from "../../message/ThreadIndicator";
 import { MessageBodyRenderer } from "../message-layout/MessageBodyRenderer";
 import { MessageMeta } from "../message-layout/MessageMeta";
 import { MessageBubble, type MessageBubblePosition } from "./MessageBubble";
 import type { Attachment, Message } from "../../../types";
-import { useChatStore } from "../../../stores";
+import { useChatStore, useAuthStore } from "../../../stores";
 import {
   type MessageActionId,
   resolveMessageActions,
@@ -32,6 +30,10 @@ import type {
 import { resolveThreadMessageRenderState } from "../messageListShared";
 import { recordChatRenderCount } from "../../../utils/chatPerformance";
 import { QUICK_REACTIONS, EXTENDED_REACTIONS } from "../../../constants/emojis";
+import { MessageActionBar } from "../MessageActionBar";
+import { ReactionBar } from "../ReactionBar";
+import { ReactionPicker } from "../ReactionPicker";
+import { useReactionPicker } from "../ReactionPicker/useReactionPicker";
 
 interface MessageGroupProps {
   row: ConversationThreadGroupRow;
@@ -190,9 +192,12 @@ const MessageGroupItem: React.FC<{
   highlightedMessageId,
 }) => {
     const { t } = useTranslation();
+    const currentUserId = useAuthStore((s) => s.user?.id);
     const [isActionSheetOpen, setIsActionSheetOpen] = React.useState(false);
     const [isActionRailVisible, setIsActionRailVisible] = React.useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = React.useState(false);
+    const [isHovered, setIsHovered] = React.useState(false);
+    const reactionTriggerRef = React.useRef<HTMLDivElement>(null);
     const message = item.message;
     recordChatRenderCount("MessageGroupItem", message.id, {
       isOwn,
@@ -239,6 +244,34 @@ const MessageGroupItem: React.FC<{
       expandedLongMessageIds,
     );
     const coarsePointer = isCoarsePointer();
+
+    // Reaction picker hook
+    const { isOpen: isPickerOpen, pickerStyle, close: closePicker } = useReactionPicker({
+      triggerRef: reactionTriggerRef,
+    });
+
+    // Get user's current reaction emoji
+    const myReactionEmoji = React.useMemo(() => {
+      if (!currentUserId || !message.reactions) return null;
+      const group = message.reactions.find((r) => r.userIds.includes(currentUserId));
+      return group?.emoji ?? null;
+    }, [message.reactions, currentUserId]);
+
+    const handleReactionSelect = React.useCallback(
+      (emoji: string) => {
+        onReact(message.id, emoji);
+        closePicker();
+      },
+      [message.id, onReact, closePicker],
+    );
+
+    const handleReactionToggle = React.useCallback(
+      (emoji: string) => {
+        onReact(message.id, emoji);
+      },
+      [message.id, onReact],
+    );
+
     const actionPolicy = React.useMemo(
       () =>
         resolveMessageActions({
@@ -380,47 +413,54 @@ const MessageGroupItem: React.FC<{
 
     const isActionRailActive = isActionRailVisible || isActionSheetOpen || showEmojiPicker;
 
-    const handleEmojiSelect = React.useCallback(
-      (emoji: string) => {
-        onReact(message.id, emoji);
-        setShowEmojiPicker(false);
+    // Hide action rail when picker is closed
+    const handleHideRail = React.useCallback(
+      (withDelay = true) => {
+        if (!withDelay) {
+          hideActionRail(false);
+          closePicker();
+          return;
+        }
+        hideActionRail(true);
       },
-      [message.id, onReact],
+      [hideActionRail, closePicker],
     );
-
-    const closeEmojiPicker = React.useCallback(() => {
-      setShowEmojiPicker(false);
-    }, []);
 
     const actionRail =
       inlineActions.length > 0 && !isSelectionMode ? (
         <div
-          onMouseEnter={showActionRail}
+          onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => {
-            if (!showEmojiPicker) hideActionRail(true);
+            if (!isPickerOpen) {
+              setIsHovered(false);
+              hideActionRail(true);
+            }
           }}
           className={clsx(
             "absolute top-1 z-20 hidden transition-all duration-150 md:block",
             isOwn ? "right-full mr-2" : "left-full ml-2",
-            isActionRailActive
+            isHovered
               ? "pointer-events-auto translate-y-0 opacity-100"
               : "pointer-events-none translate-y-0.5 opacity-0",
           )}
         >
-          {/* Emoji picker floats above the action rail */}
+          <div ref={reactionTriggerRef}>
+            <MessageActionBar
+              isOutgoing={isOwn}
+              onReactClick={() => setShowEmojiPicker(true)}
+              onReplyClick={() => onReply(message)}
+              onMoreClick={() => setIsActionSheetOpen(true)}
+            />
+          </div>
+          {/* Legacy Emoji picker - kept for mobile overlay */}
           {showEmojiPicker && (
-            <EmojiReactionPicker
-              onSelect={handleEmojiSelect}
-              onClose={closeEmojiPicker}
-              isOwn={isOwn}
+            <ReactionPicker
+              onSelect={handleReactionSelect}
+              onClose={() => setShowEmojiPicker(false)}
+              style={pickerStyle}
+              currentUserReaction={myReactionEmoji}
             />
           )}
-          <MessageActions
-            mode="inline"
-            actions={inlineActions}
-            onAction={handleAction}
-            actionLabelOverrides={adminRecallLabelOverride}
-          />
         </div>
       ) : null;
 
@@ -433,12 +473,18 @@ const MessageGroupItem: React.FC<{
           isPendingMessage(message) &&
           "motion-message-insert",
         )}
-        onMouseEnter={showActionRail}
-        onMouseLeave={() => hideActionRail(true)}
-        onFocusCapture={showActionRail}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => {
+          if (!isPickerOpen) {
+            setIsHovered(false);
+            hideActionRail(true);
+          }
+        }}
+        onFocusCapture={() => setIsHovered(true)}
         onBlurCapture={(event) => {
           const nextFocused = event.relatedTarget as Node | null;
           if (!event.currentTarget.contains(nextFocused)) {
+            setIsHovered(false);
             hideActionRail(false);
           }
         }}
@@ -596,7 +642,10 @@ const MessageGroupItem: React.FC<{
               <div className="mt-1">
                 <ReactionBar
                   reactions={message.reactions}
-                  onReact={(emoji) => onReact(message.id, emoji)}
+                  currentUserId={currentUserId}
+                  isOutgoing={isOwn}
+                  onReact={handleReactionSelect}
+                  onToggleReaction={handleReactionToggle}
                 />
               </div>
             )}
