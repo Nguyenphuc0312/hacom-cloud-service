@@ -31,9 +31,8 @@ import { resolveThreadMessageRenderState } from "../messageListShared";
 import { recordChatRenderCount } from "../../../utils/chatPerformance";
 import { QUICK_REACTIONS, EXTENDED_REACTIONS } from "../../../constants/emojis";
 import { MessageActionBar } from "../MessageActionBar";
+import { QuickReactBar } from "../QuickReactBar";
 import { ReactionBar } from "../ReactionBar";
-import { ReactionPicker } from "../ReactionPicker";
-import { useReactionPicker } from "../ReactionPicker/useReactionPicker";
 
 interface MessageGroupProps {
   row: ConversationThreadGroupRow;
@@ -194,9 +193,9 @@ const MessageGroupItem: React.FC<{
     const { t } = useTranslation();
     const currentUserId = useAuthStore((s) => s.user?.id);
     const [isActionSheetOpen, setIsActionSheetOpen] = React.useState(false);
-    const [showEmojiPicker, setShowEmojiPicker] = React.useState(false);
+    const [showMobileReact, setShowMobileReact] = React.useState(false);
     const [isHovered, setIsHovered] = React.useState(false);
-    const reactionTriggerRef = React.useRef<HTMLDivElement>(null);
+    const leaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const message = item.message;
     recordChatRenderCount("MessageGroupItem", message.id, {
       isOwn,
@@ -243,11 +242,6 @@ const MessageGroupItem: React.FC<{
     );
     const coarsePointer = isCoarsePointer();
 
-    // Reaction picker hook
-    const { isOpen: isPickerOpen, pickerStyle, close: closePicker } = useReactionPicker({
-      triggerRef: reactionTriggerRef,
-    });
-
     // Get user's current reaction emoji
     const myReactionEmoji = React.useMemo(() => {
       if (!currentUserId || !message.reactions) return null;
@@ -258,9 +252,9 @@ const MessageGroupItem: React.FC<{
     const handleReactionSelect = React.useCallback(
       (emoji: string) => {
         onReact(message.id, emoji);
-        closePicker();
+        setShowMobileReact(false);
       },
-      [message.id, onReact, closePicker],
+      [message.id, onReact],
     );
 
     const handleReactionToggle = React.useCallback(
@@ -319,12 +313,33 @@ const MessageGroupItem: React.FC<{
 
     const inlineActions = coarsePointer ? [] : actionPolicy.railActions;
 
+    const handleItemMouseEnter = React.useCallback(() => {
+      if (leaveTimerRef.current) {
+        clearTimeout(leaveTimerRef.current);
+        leaveTimerRef.current = null;
+      }
+      setIsHovered(true);
+    }, []);
+
+    const handleItemMouseLeave = React.useCallback(() => {
+      leaveTimerRef.current = setTimeout(() => {
+        setIsHovered(false);
+      }, 150);
+    }, []);
+
+    React.useEffect(
+      () => () => {
+        if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+      },
+      [],
+    );
+
     const handleAction = React.useCallback(
       (actionId: MessageActionId) => {
         switch (actionId) {
           case "react":
             setIsActionSheetOpen(false);
-            setShowEmojiPicker((prev) => !prev);
+            setShowMobileReact((prev) => !prev);
             return;
 
           case "reply":
@@ -374,12 +389,8 @@ const MessageGroupItem: React.FC<{
     const actionRail =
       inlineActions.length > 0 && !isSelectionMode ? (
         <div
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => {
-            if (!isPickerOpen) {
-              setIsHovered(false);
-            }
-          }}
+          onMouseEnter={handleItemMouseEnter}
+          onMouseLeave={handleItemMouseLeave}
           className={clsx(
             "absolute top-1 z-20 hidden transition-all duration-150 md:block",
             isOwn ? "right-full mr-2" : "left-full ml-2",
@@ -388,23 +399,11 @@ const MessageGroupItem: React.FC<{
               : "pointer-events-none translate-y-0.5 opacity-0",
           )}
         >
-          <div ref={reactionTriggerRef}>
-            <MessageActionBar
-              isOutgoing={isOwn}
-              onReactClick={() => setShowEmojiPicker(true)}
-              onReplyClick={() => onReply(message)}
-              onMoreClick={() => setIsActionSheetOpen(true)}
-            />
-          </div>
-          {/* Legacy Emoji picker - kept for mobile overlay */}
-          {showEmojiPicker && (
-            <ReactionPicker
-              onSelect={handleReactionSelect}
-              onClose={() => setShowEmojiPicker(false)}
-              style={pickerStyle}
-              currentUserReaction={myReactionEmoji}
-            />
-          )}
+          <MessageActionBar
+            isOutgoing={isOwn}
+            onReplyClick={() => onReply(message)}
+            onMoreClick={() => setIsActionSheetOpen(true)}
+          />
         </div>
       ) : null;
 
@@ -417,13 +416,9 @@ const MessageGroupItem: React.FC<{
           isPendingMessage(message) &&
           "motion-message-insert",
         )}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => {
-          if (!isPickerOpen) {
-            setIsHovered(false);
-          }
-        }}
-        onFocusCapture={() => setIsHovered(true)}
+        onMouseEnter={handleItemMouseEnter}
+        onMouseLeave={handleItemMouseLeave}
+        onFocusCapture={handleItemMouseEnter}
         onBlurCapture={(event) => {
           const nextFocused = event.relatedTarget as Node | null;
           if (!event.currentTarget.contains(nextFocused)) {
@@ -456,6 +451,15 @@ const MessageGroupItem: React.FC<{
           )}
         >
           <div className="min-w-0 max-w-full">
+            <div className="relative w-full">
+              <QuickReactBar
+                visible={isHovered && !isSelectionMode}
+                isMine={isOwn}
+                currentUserReaction={myReactionEmoji}
+                onReact={handleReactionSelect}
+                onMouseEnter={handleItemMouseEnter}
+                onMouseLeave={handleItemMouseLeave}
+              />
             <MessageBubble
               isOwn={isOwn}
               position={bubblePosition}
@@ -579,6 +583,7 @@ const MessageGroupItem: React.FC<{
                 />
               )}
             </MessageBubble>
+            </div>
 
             {(message.reactions?.length ?? 0) > 0 && (
               <div className="mt-1">
@@ -611,11 +616,11 @@ const MessageGroupItem: React.FC<{
           actionLabelOverrides={adminRecallLabelOverride}
         />
 
-        {/* Mobile emoji picker — full-screen overlay (desktop uses inline picker above rail) */}
-        {showEmojiPicker && coarsePointer && (
+        {/* Mobile emoji picker — full-screen overlay shown via long-press action sheet */}
+        {showMobileReact && coarsePointer && (
           <MobileEmojiOverlay
             onSelect={handleReactionSelect}
-            onClose={() => setShowEmojiPicker(false)}
+            onClose={() => setShowMobileReact(false)}
           />
         )}
       </div>
