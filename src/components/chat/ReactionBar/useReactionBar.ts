@@ -3,7 +3,7 @@
  */
 
 import { useCallback, useMemo } from "react";
-import type { Reaction } from "@chat/shared-types";
+import type { Reaction } from "@hacom/chat-shared-types/chat";
 import { getTopReactions, getUserReactionEmoji } from "../../../utils/computeNewReactions";
 
 export interface UseReactionBarOptions {

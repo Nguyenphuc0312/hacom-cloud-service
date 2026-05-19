@@ -12,9 +12,13 @@
 
 import { toast } from "react-hot-toast";
 import { chatApi } from "@/features/api/chatApi";
+import { unwrapApiSuccess } from "@/lib/apiContract";
+import { messageApi } from "@/services/api";
+import type { Message } from "@/types";
 import { computeNewReactions, type ComputeResult } from "@/utils/computeNewReactions";
 import { saveRecentEmoji } from "@/components/chat/ReactionPicker/emoji-data";
-import type { Reaction } from "@chat/shared-types";
+import { store, type AppDispatch, type RootState } from "@/store";
+import type { Reaction } from "@hacom/chat-shared-types/chat";
 
 interface HandleReactionOptions {
   messageId: string;
@@ -30,15 +34,20 @@ interface HandleReactionResult {
   newReactions: Reaction[];
 }
 
+interface ReactionStoreContext {
+  dispatch: AppDispatch;
+  getState: () => RootState;
+}
+
 /**
  * Get the current reactions for a message from RTK cache.
  */
 function getMessageReactionsFromCache(
   conversationId: string,
   messageId: string,
+  getState: () => RootState,
 ): Reaction[] {
-  const state = chatApi.util.getState();
-  const cache = chatApi.endpoints.getMessages.select({ conversationId })(state);
+  const cache = chatApi.endpoints.getMessages.select({ conversationId })(getState());
 
   if (!cache?.data?.messages) {
     return [];
@@ -62,11 +71,10 @@ function updateReactionsInCache(
   conversationId: string,
   messageId: string,
   reactions: Reaction[],
-): void {
-  chatApi.util.updateQueryData(
-    "getMessages",
-    { conversationId },
-    (draft) => {
+  dispatch: AppDispatch,
+) {
+  return dispatch(
+    chatApi.util.updateQueryData("getMessages", { conversationId }, (draft) => {
       const message = draft.messages.find(
         (msg) =>
           msg.id === messageId ||
@@ -78,7 +86,29 @@ function updateReactionsInCache(
       if (message) {
         message.reactions = reactions;
       }
-    },
+    }),
+  );
+}
+
+function syncMessageInCache(
+  conversationId: string,
+  message: Message,
+  dispatch: AppDispatch,
+) {
+  return dispatch(
+    chatApi.util.updateQueryData("getMessages", { conversationId }, (draft) => {
+      const cachedMessage = draft.messages.find(
+        (candidate) =>
+          candidate.id === message.id ||
+          candidate.localId === message.id ||
+          candidate.stableId === message.id ||
+          candidate.clientMessageId === message.id,
+      );
+
+      if (cachedMessage) {
+        Object.assign(cachedMessage, message);
+      }
+    }),
   );
 }
 
@@ -91,11 +121,17 @@ function updateReactionsInCache(
  */
 export async function handleReaction(
   options: HandleReactionOptions,
+  context: ReactionStoreContext = store,
 ): Promise<HandleReactionResult> {
   const { messageId, emoji, currentUserId, conversationId } = options;
+  const { dispatch, getState } = context;
 
   // Step 1: Get current snapshot from cache
-  const previousReactions = getMessageReactionsFromCache(conversationId, messageId);
+  const previousReactions = getMessageReactionsFromCache(
+    conversationId,
+    messageId,
+    getState,
+  );
 
   // Step 2: Compute new reactions
   const { reactions: newReactions, action } = computeNewReactions(
@@ -115,26 +151,35 @@ export async function handleReaction(
   }
 
   // Step 3: Optimistic update
-  updateReactionsInCache(conversationId, messageId, newReactions);
+  const patch = updateReactionsInCache(
+    conversationId,
+    messageId,
+    newReactions,
+    dispatch,
+  );
 
   // Step 4: API call
   try {
+    let canonicalMessage: Message | null = null;
+
     if (action === "remove") {
-      await chatApi.endpoints.removeReaction.initiate({
-        conversationId,
-        messageId,
-        emoji,
-      });
+      canonicalMessage = unwrapApiSuccess(
+        await messageApi.removeReaction(messageId, emoji),
+      );
     } else if (action === "add") {
-      await chatApi.endpoints.addReaction.initiate({
-        conversationId,
-        messageId,
-        emoji,
-      });
+      canonicalMessage = unwrapApiSuccess(
+        await messageApi.addReaction(messageId, emoji),
+      );
 
       // Step 5: Save to localStorage if adding
       saveRecentEmoji(emoji);
     }
+
+    if (!canonicalMessage) {
+      throw new Error(`Unsupported reaction action: ${action}`);
+    }
+
+    syncMessageInCache(conversationId, canonicalMessage, dispatch);
 
     return {
       success: true,
@@ -142,9 +187,9 @@ export async function handleReaction(
       previousReactions,
       newReactions,
     };
-  } catch (error) {
+  } catch {
     // Step 6: Rollback on error
-    updateReactionsInCache(conversationId, messageId, previousReactions);
+    patch.undo();
 
     // Show error toast
     toast.error("Không thể gửi reaction");
@@ -164,7 +209,8 @@ export async function handleReaction(
  */
 export async function toggleReaction(
   options: HandleReactionOptions,
+  context: ReactionStoreContext = store,
 ): Promise<HandleReactionResult> {
   // Delegate to handleReaction which handles the toggle logic
-  return handleReaction(options);
+  return handleReaction(options, context);
 }

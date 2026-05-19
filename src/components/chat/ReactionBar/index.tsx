@@ -10,7 +10,7 @@
 
 import React, { useCallback } from "react";
 import { clsx } from "clsx";
-import type { Reaction } from "@chat/shared-types";
+import type { Reaction } from "@hacom/chat-shared-types/chat";
 import { ReactionChip } from "./ReactionChip";
 import { useReactionBar } from "./useReactionBar";
 

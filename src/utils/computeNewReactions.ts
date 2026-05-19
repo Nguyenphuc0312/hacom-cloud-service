@@ -6,7 +6,7 @@
  * 3. Tapping the same emoji again → TOGGLE OFF (remove reaction)
  */
 
-import type { Reaction } from "@chat/shared-types";
+import type { Reaction } from "@hacom/chat-shared-types/chat";
 
 export interface ComputeResult {
   reactions: Reaction[];

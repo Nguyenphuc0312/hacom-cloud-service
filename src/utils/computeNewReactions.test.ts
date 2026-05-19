@@ -5,6 +5,8 @@
 import { describe, it, expect } from "vitest";
 import { computeNewReactions } from "./computeNewReactions";
 
+type Reaction = import("@hacom/chat-shared-types/chat").Reaction;
+
 describe("computeNewReactions", () => {
   const userA = "user-a";
   const userB = "user-b";
@@ -12,7 +14,7 @@ describe("computeNewReactions", () => {
 
   describe("Case 1: User reacts for the first time", () => {
     it("should add reaction when no existing reactions", () => {
-      const prev: import("@chat/shared-types").Reaction[] = [];
+      const prev: Reaction[] = [];
       const result = computeNewReactions(prev, userA, "❤️");
 
       expect(result.action).toBe("add");
@@ -25,7 +27,7 @@ describe("computeNewReactions", () => {
     });
 
     it("should add new emoji when other reactions exist", () => {
-      const prev: import("@chat/shared-types").Reaction[] = [
+      const prev: Reaction[] = [
         { emoji: "👍", userIds: [userB], count: 1 },
       ];
       const result = computeNewReactions(prev, userA, "❤️");
@@ -42,7 +44,7 @@ describe("computeNewReactions", () => {
 
   describe("Case 2: User taps same emoji (toggle off)", () => {
     it("should remove user from reaction when tapping same emoji", () => {
-      const prev: import("@chat/shared-types").Reaction[] = [
+      const prev: Reaction[] = [
         { emoji: "❤️", userIds: [userA, userB], count: 2 },
       ];
       const result = computeNewReactions(prev, userA, "❤️");
@@ -57,7 +59,7 @@ describe("computeNewReactions", () => {
     });
 
     it("should remove entire group when last user taps same emoji", () => {
-      const prev: import("@chat/shared-types").Reaction[] = [
+      const prev: Reaction[] = [
         { emoji: "❤️", userIds: [userA], count: 1 },
       ];
       const result = computeNewReactions(prev, userA, "❤️");
@@ -67,7 +69,7 @@ describe("computeNewReactions", () => {
     });
 
     it("should handle toggle off in group with multiple reactions", () => {
-      const prev: import("@chat/shared-types").Reaction[] = [
+      const prev: Reaction[] = [
         { emoji: "❤️", userIds: [userA], count: 1 },
         { emoji: "👍", userIds: [userB, userC], count: 2 },
       ];
@@ -82,7 +84,7 @@ describe("computeNewReactions", () => {
 
   describe("Case 3: User changes emoji (replace)", () => {
     it("should remove from old group and add to new group", () => {
-      const prev: import("@chat/shared-types").Reaction[] = [
+      const prev: Reaction[] = [
         { emoji: "👍", userIds: [userA], count: 1 },
       ];
       const result = computeNewReactions(prev, userA, "❤️");
@@ -97,7 +99,7 @@ describe("computeNewReactions", () => {
     });
 
     it("should merge into existing target group", () => {
-      const prev: import("@chat/shared-types").Reaction[] = [
+      const prev: Reaction[] = [
         { emoji: "👍", userIds: [userA], count: 1 },
         { emoji: "❤️", userIds: [userB], count: 1 },
       ];
@@ -113,7 +115,7 @@ describe("computeNewReactions", () => {
     });
 
     it("should not duplicate user in target group", () => {
-      const prev: import("@chat/shared-types").Reaction[] = [
+      const prev: Reaction[] = [
         { emoji: "👍", userIds: [userA], count: 1 },
         { emoji: "❤️", userIds: [userA, userB], count: 2 },
       ];
@@ -128,7 +130,7 @@ describe("computeNewReactions", () => {
 
   describe("Case 4: Multiple users, one removes reaction", () => {
     it("should only affect the user who removed", () => {
-      const prev: import("@chat/shared-types").Reaction[] = [
+      const prev: Reaction[] = [
         { emoji: "❤️", userIds: [userA, userB, userC], count: 3 },
       ];
       const result = computeNewReactions(prev, userB, "❤️");
@@ -142,7 +144,7 @@ describe("computeNewReactions", () => {
 
   describe("Case 5: Group count drops to 0", () => {
     it("should remove empty groups", () => {
-      const prev: import("@chat/shared-types").Reaction[] = [
+      const prev: Reaction[] = [
         { emoji: "❤️", userIds: [userA], count: 1 },
         { emoji: "👍", userIds: [userB], count: 1 },
       ];
@@ -154,7 +156,7 @@ describe("computeNewReactions", () => {
     });
 
     it("should handle all groups becoming empty", () => {
-      const prev: import("@chat/shared-types").Reaction[] = [
+      const prev: Reaction[] = [
         { emoji: "❤️", userIds: [userA], count: 1 },
       ];
       const result = computeNewReactions(prev, userA, "❤️");
@@ -166,7 +168,7 @@ describe("computeNewReactions", () => {
 
   describe("Sorting", () => {
     it("should sort by count descending", () => {
-      const prev: import("@chat/shared-types").Reaction[] = [
+      const prev: Reaction[] = [
         { emoji: "👍", userIds: [userA], count: 1 },
         { emoji: "❤️", userIds: [userA, userB, userC], count: 3 },
       ];
@@ -181,7 +183,7 @@ describe("computeNewReactions", () => {
     });
 
     it("should maintain sort order when reactions are added/removed", () => {
-      const prev: import("@chat/shared-types").Reaction[] = [
+      const prev: Reaction[] = [
         { emoji: "👍", userIds: [userA, userB], count: 2 },
         { emoji: "❤️", userIds: [userC], count: 1 },
       ];
@@ -199,7 +201,7 @@ describe("computeNewReactions", () => {
 
   describe("Edge cases", () => {
     it("should handle empty userId gracefully", () => {
-      const prev: import("@chat/shared-types").Reaction[] = [];
+      const prev: Reaction[] = [];
       const result = computeNewReactions(prev, "", "❤️");
 
       expect(result.reactions).toHaveLength(1);
@@ -214,7 +216,7 @@ describe("computeNewReactions", () => {
     });
 
     it("should not modify original array", () => {
-      const prev: import("@chat/shared-types").Reaction[] = [
+      const prev: Reaction[] = [
         { emoji: "❤️", userIds: [userA], count: 1 },
       ];
       const original = [...prev];
