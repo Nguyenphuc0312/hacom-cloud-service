@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import clsx from "clsx";
 import {
   ChevronLeftIcon,
@@ -6,6 +6,10 @@ import {
   MagnifyingGlassIcon,
   PlusIcon,
   XMarkIcon,
+  ClockIcon,
+  UserCircleIcon,
+  ExclamationTriangleIcon,
+  CheckCircleIcon,
 } from "@heroicons/react/24/outline";
 import {
   getCalendarEvents,
@@ -17,6 +21,12 @@ import {
   type CalendarEvent,
   type EventType,
 } from "../data/calendarEvents";
+import {
+  hrApi,
+  type AttendanceCalendarDay,
+  type ClassificationColor,
+} from "../../api/hrApi";
+import { unwrapApiSuccess } from "../../lib/apiContract";
 
 /**
  * Calendar view types.
@@ -34,6 +44,51 @@ interface CalendarTypeFilter {
 }
 
 /**
+ * Attendance status color mapping
+ */
+const ATTENDANCE_COLORS: Record<ClassificationColor, { bg: string; border: string; text: string; dot: string }> = {
+  green: {
+    bg: "bg-green-50 dark:bg-green-950/30",
+    border: "border-green-200 dark:border-green-800",
+    text: "text-green-700 dark:text-green-300",
+    dot: "bg-green-500",
+  },
+  yellow: {
+    bg: "bg-yellow-50 dark:bg-yellow-950/30",
+    border: "border-yellow-200 dark:border-yellow-800",
+    text: "text-yellow-700 dark:text-yellow-300",
+    dot: "bg-yellow-500",
+  },
+  orange: {
+    bg: "bg-orange-50 dark:bg-orange-950/30",
+    border: "border-orange-200 dark:border-orange-800",
+    text: "text-orange-700 dark:text-orange-300",
+    dot: "bg-orange-500",
+  },
+  red: {
+    bg: "bg-red-50 dark:bg-red-950/30",
+    border: "border-red-200 dark:border-red-800",
+    text: "text-red-700 dark:text-red-300",
+    dot: "bg-red-500",
+  },
+};
+
+/**
+ * Get attendance color styles
+ */
+const getAttendanceColors = (color: ClassificationColor | null | undefined) => {
+  if (!color) {
+    return {
+      bg: "",
+      border: "",
+      text: "",
+      dot: "bg-gray-400",
+    };
+  }
+  return ATTENDANCE_COLORS[color] || ATTENDANCE_COLORS.green;
+};
+
+/**
  * Generate calendar days for a given month.
  */
 const generateCalendarDays = (
@@ -43,32 +98,55 @@ const generateCalendarDays = (
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
 
-  // Get the day of week for the first day (0 = Sunday)
   const startDayOfWeek = firstDay.getDay();
 
-  // Generate days from previous month to fill the first week
   const days: Array<{ date: Date; isCurrentMonth: boolean }> = [];
 
-  // Days from previous month
   for (let i = startDayOfWeek - 1; i >= 0; i--) {
     const date = new Date(year, month, -i);
     days.push({ date, isCurrentMonth: false });
   }
 
-  // Days from current month
   for (let day = 1; day <= lastDay.getDate(); day++) {
     const date = new Date(year, month, day);
     days.push({ date, isCurrentMonth: true });
   }
 
-  // Days from next month to fill the last week
-  const remainingDays = 42 - days.length; // Always show 6 weeks (42 days)
+  const remainingDays = 42 - days.length;
   for (let i = 1; i <= remainingDays; i++) {
     const date = new Date(year, month + 1, i);
     days.push({ date, isCurrentMonth: false });
   }
 
   return days;
+};
+
+/**
+ * Format date to YYYY-MM-DD
+ */
+const formatDateString = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+/**
+ * Format time from HH:mm format
+ */
+const formatTime = (time: string | null | undefined): string => {
+  if (!time) return "--:--";
+  return time;
+};
+
+/**
+ * Format total time (HH:mm)
+ */
+const formatTotalTime = (totalMinutes: number | null | undefined): string => {
+  if (!totalMinutes) return "";
+  const hours = Math.floor(totalMinutes / 60);
+  const mins = totalMinutes % 60;
+  return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 };
 
 /**
@@ -82,13 +160,11 @@ const EventDetailModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Modal */}
       <div className="relative z-10 w-full max-w-md animate-scale-in rounded-xl border border-border bg-surface p-6 shadow-lg">
         <button
           type="button"
@@ -122,6 +198,181 @@ const EventDetailModal: React.FC<{
               {event.description}
             </p>
           )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Attendance detail tooltip component
+ */
+const AttendanceTooltip: React.FC<{
+  attendance: AttendanceCalendarDay;
+  onClose: () => void;
+}> = ({ attendance, onClose }) => {
+  const colors = getAttendanceColors(attendance.classificationColor);
+
+  const getExceptionStatusLabel = (status: string | null | undefined): string => {
+    switch (status) {
+      case "NONE":
+        return "Không cần xử lý";
+      case "PENDING_MANAGER_CONFIRMATION":
+        return "Chờ quản lý xác nhận";
+      case "PENDING_HR_REVIEW":
+        return "Chờ HR review";
+      case "ESCALATED":
+        return "Escalate";
+      case "APPROVED":
+        return "Đã phê duyệt";
+      case "REJECTED":
+        return "Từ chối";
+      case "RESOLVED":
+        return "Đã xử lý";
+      default:
+        return "Không xác định";
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      <div className="relative z-10 w-full max-w-md animate-scale-in rounded-xl border border-border bg-surface p-6 shadow-lg">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-primary transition-micro"
+        >
+          <XMarkIcon className="h-5 w-5" />
+        </button>
+
+        <div className="pr-8">
+          {/* Header with status */}
+          <div className="mb-4 flex items-center gap-2">
+            <span className={clsx("h-3 w-3 rounded-full", colors.dot)} />
+            <span className={clsx("text-sm font-medium", colors.text)}>
+              {attendance.classificationLabel || "Chưa có dữ liệu"}
+            </span>
+          </div>
+
+          {/* Date */}
+          <h3 className="text-xl font-semibold text-text-primary">
+            {attendance.date && new Date(attendance.date).toLocaleDateString("vi-VN", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </h3>
+
+          {/* Attendance details */}
+          <div className="mt-4 space-y-3">
+            {/* Time info */}
+            <div className="flex items-center gap-3 text-sm">
+              <ClockIcon className="h-5 w-5 text-text-muted" />
+              <div>
+                <span className="text-text-secondary">Giờ vào: </span>
+                <span className="font-medium text-text-primary">
+                  {formatTime(attendance.firstPunch)}
+                </span>
+                <span className="mx-2 text-text-muted">—</span>
+                <span className="text-text-secondary">Giờ ra: </span>
+                <span className="font-medium text-text-primary">
+                  {formatTime(attendance.lastPunch)}
+                </span>
+              </div>
+            </div>
+
+            {/* Total time */}
+            {attendance.totalMinutes && attendance.totalMinutes > 0 && (
+              <div className="flex items-center gap-3 text-sm">
+                <ClockIcon className="h-5 w-5 text-text-muted" />
+                <div>
+                  <span className="text-text-secondary">Tổng giờ làm: </span>
+                  <span className="font-medium text-text-primary">
+                    {formatTotalTime(attendance.totalMinutes)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Employee info */}
+            {attendance.employeeCode && (
+              <div className="flex items-center gap-3 text-sm">
+                <UserCircleIcon className="h-5 w-5 text-text-muted" />
+                <div>
+                  <span className="text-text-secondary">Mã NV: </span>
+                  <span className="font-medium text-text-primary">
+                    {attendance.employeeCode}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Classification reasons */}
+            {attendance.classificationReasons && attendance.classificationReasons.length > 0 && (
+              <div className="mt-4">
+                <h4 className="mb-2 text-sm font-medium text-text-primary">
+                  Lý do:
+                </h4>
+                <ul className="space-y-1">
+                  {attendance.classificationReasons.map((reason, idx) => (
+                    <li
+                      key={idx}
+                      className={clsx(
+                        "flex items-start gap-2 text-sm",
+                        colors.text
+                      )}
+                    >
+                      <span className="mt-1">•</span>
+                      <span>{reason}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Exception status */}
+            {attendance.exceptionStatus && attendance.exceptionStatus !== "NONE" && (
+              <div className="mt-4 rounded-lg bg-surface-hover p-3">
+                <div className="flex items-center gap-2">
+                  <ExclamationTriangleIcon className="h-5 w-5 text-orange-500" />
+                  <span className="text-sm font-medium text-text-primary">
+                    {getExceptionStatusLabel(attendance.exceptionStatus)}
+                  </span>
+                </div>
+                {attendance.exceptionReason && (
+                  <p className="mt-2 text-sm text-text-secondary">
+                    {attendance.exceptionReason}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Action status */}
+            {attendance.requiresAction && (
+              <div className="mt-4 flex items-center gap-2 rounded-lg bg-orange-50 p-3 dark:bg-orange-950/30">
+                <ExclamationTriangleIcon className="h-5 w-5 text-orange-500" />
+                <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                  Cần xử lý
+                </span>
+              </div>
+            )}
+
+            {/* No action needed */}
+            {!attendance.requiresAction && attendance.classificationStatus === "PASS" && (
+              <div className="mt-4 flex items-center gap-2 rounded-lg bg-green-50 p-3 dark:bg-green-950/30">
+                <CheckCircleIcon className="h-5 w-5 text-green-500" />
+                <span className="text-sm font-medium text-green-700 dark:text-green-300">
+                  Không cần xử lý
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -253,6 +504,71 @@ const EventBadge: React.FC<{
 };
 
 /**
+ * Attendance badge component for calendar day cell
+ */
+const AttendanceBadge: React.FC<{
+  attendance: AttendanceCalendarDay;
+  onClick: () => void;
+}> = ({ attendance, onClick }) => {
+  const colors = getAttendanceColors(attendance.classificationColor);
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={clsx(
+        "attendance-badge block w-full cursor-pointer rounded border text-left transition-micro",
+        colors.bg,
+        colors.border,
+        "px-1.5 py-0.5 text-xs"
+      )}
+      title={attendance.classificationLabel || "Chưa có dữ liệu chấm công"}
+    >
+      <div className="flex items-center gap-1">
+        <span className={clsx("h-1.5 w-1.5 shrink-0 rounded-full", colors.dot)} />
+        <span className={clsx("truncate font-medium", colors.text)}>
+          {attendance.firstPunch && attendance.lastPunch
+            ? `${formatTime(attendance.firstPunch)} - ${formatTime(attendance.lastPunch)}`
+            : attendance.classificationLabel || "Chưa có dữ liệu"}
+        </span>
+      </div>
+      {attendance.classificationLabel && (
+        <span className={clsx("block truncate text-[10px] opacity-80", colors.text)}>
+          {attendance.classificationLabel}
+        </span>
+      )}
+    </button>
+  );
+};
+
+/**
+ * Attendance legend component
+ */
+const AttendanceLegend: React.FC = () => (
+  <div className="flex flex-wrap items-center gap-4 text-xs">
+    <div className="flex items-center gap-1.5">
+      <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
+      <span className="text-text-secondary">Hợp lệ</span>
+    </div>
+    <div className="flex items-center gap-1.5">
+      <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />
+      <span className="text-text-secondary">Cần xác nhận</span>
+    </div>
+    <div className="flex items-center gap-1.5">
+      <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
+      <span className="text-text-secondary">Cần review</span>
+    </div>
+    <div className="flex items-center gap-1.5">
+      <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+      <span className="text-text-secondary">Escalate</span>
+    </div>
+  </div>
+);
+
+/**
  * Calendar page component.
  */
 export const CalendarPage: React.FC = () => {
@@ -262,7 +578,42 @@ export const CalendarPage: React.FC = () => {
   const [currentView, setCurrentView] = useState<CalendarView>("month");
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [selectedAttendance, setSelectedAttendance] = useState<AttendanceCalendarDay | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Attendance data state
+  const [attendanceData, setAttendanceData] = useState<AttendanceCalendarDay[]>([]);
+  const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
+  const [attendanceError, setAttendanceError] = useState<string | null>(null);
+
+  // Fetch attendance data when month changes
+  useEffect(() => {
+    const fetchAttendance = async () => {
+      setIsLoadingAttendance(true);
+      setAttendanceError(null);
+
+      try {
+        const fromDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`;
+        const toDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${new Date(currentYear, currentMonth + 1, 0).getDate().toString().padStart(2, "0")}`;
+
+        const response = await hrApi.getMyAttendanceCalendar({ from: fromDate, to: toDate });
+
+        if (response.success && response.data) {
+          setAttendanceData(response.data.items);
+        } else {
+          setAttendanceData([]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch attendance:", error);
+        setAttendanceError("Không thể tải dữ liệu chấm công");
+        setAttendanceData([]);
+      } finally {
+        setIsLoadingAttendance(false);
+      }
+    };
+
+    fetchAttendance();
+  }, [currentYear, currentMonth]);
 
   // Calendar type filters
   const [filters, setFilters] = useState<CalendarTypeFilter[]>([
@@ -298,7 +649,16 @@ export const CalendarPage: React.FC = () => {
     [currentYear, currentMonth]
   );
 
-  // Check if a date is today — stable snapshot computed once per component mount
+  // Get attendance for a specific date
+  const getAttendanceForDate = useCallback(
+    (date: Date): AttendanceCalendarDay | undefined => {
+      const dateStr = formatDateString(date);
+      return attendanceData.find((a) => a.date === dateStr);
+    },
+    [attendanceData]
+  );
+
+  // Check if a date is today
   const todaySnapshot = React.useMemo(() => new Date(), []);
   const isToday = useCallback(
     (date: Date) =>
@@ -407,6 +767,20 @@ export const CalendarPage: React.FC = () => {
                 onNavigate={handleMiniCalendarNavigate}
                 selectedDate={selectedDate}
               />
+            </div>
+
+            {/* Attendance legend */}
+            <div className="mb-4">
+              <h3 className="mb-2 text-sm font-semibold text-text-primary">
+                Chấm công
+              </h3>
+              <AttendanceLegend />
+              {isLoadingAttendance && (
+                <p className="mt-2 text-xs text-text-muted">Đang tải...</p>
+              )}
+              {attendanceError && (
+                <p className="mt-2 text-xs text-red-500">{attendanceError}</p>
+              )}
             </div>
 
             {/* Calendar types */}
@@ -524,9 +898,11 @@ export const CalendarPage: React.FC = () => {
               <div className="grid grid-cols-7 gap-px rounded-lg border border-border bg-surface">
                 {calendarDays.map((dayInfo, index) => {
                   const dayEvents = getEventsByDate(searchedEvents, dayInfo.date);
-                  const maxVisibleEvents = 3;
+                  const maxVisibleEvents = 2;
                   const visibleEvents = dayEvents.slice(0, maxVisibleEvents);
                   const remainingCount = dayEvents.length - maxVisibleEvents;
+                  const attendance = getAttendanceForDate(dayInfo.date);
+                  const attendanceColors = getAttendanceColors(attendance?.classificationColor);
 
                   return (
                     <div
@@ -540,7 +916,9 @@ export const CalendarPage: React.FC = () => {
                           "hover:bg-surface-hover",
                         isSelected(dayInfo.date) &&
                           !isToday(dayInfo.date) &&
-                          "bg-primary/5 ring-2 ring-primary/30 ring-inset"
+                          "bg-primary/5 ring-2 ring-primary/30 ring-inset",
+                        attendance?.classificationColor &&
+                          attendanceColors.bg
                       )}
                     >
                       {/* Date number */}
@@ -555,7 +933,20 @@ export const CalendarPage: React.FC = () => {
                         >
                           {dayInfo.date.getDate()}
                         </span>
+                        {attendance && (
+                          <span className={clsx("h-2 w-2 rounded-full", attendanceColors.dot)} />
+                        )}
                       </div>
+
+                      {/* Attendance badge */}
+                      {attendance && (
+                        <div className="mb-1">
+                          <AttendanceBadge
+                            attendance={attendance}
+                            onClick={() => setSelectedAttendance(attendance)}
+                          />
+                        </div>
+                      )}
 
                       {/* Events */}
                       <div className="space-y-0.5">
@@ -572,7 +963,6 @@ export const CalendarPage: React.FC = () => {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              // Could show a popover with all events
                             }}
                             className="block w-full px-1.5 py-0.5 text-xs font-medium text-text-muted hover:text-primary transition-micro"
                           >
@@ -615,6 +1005,14 @@ export const CalendarPage: React.FC = () => {
         <EventDetailModal
           event={selectedEvent}
           onClose={() => setSelectedEvent(null)}
+        />
+      )}
+
+      {/* Attendance tooltip */}
+      {selectedAttendance && (
+        <AttendanceTooltip
+          attendance={selectedAttendance}
+          onClose={() => setSelectedAttendance(null)}
         />
       )}
     </div>
