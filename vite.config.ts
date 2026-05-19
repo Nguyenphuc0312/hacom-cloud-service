@@ -128,6 +128,7 @@ export default defineConfig(({ mode }) => {
   const apiTarget  = resolveHttpTarget(env.VITE_DEV_API_PROXY_TARGET,  "http://localhost:3001");
   const authTarget = resolveHttpTarget(env.VITE_DEV_AUTH_PROXY_TARGET, "http://localhost:3101");
   const wsTarget   = resolveWsTarget(env.VITE_DEV_WS_PROXY_TARGET,    "http://localhost:8001");
+  const hrTarget   = resolveHttpTarget(env.VITE_DEV_HR_PROXY_TARGET,   "http://localhost:3000");
 
   const shouldAnalyzeBundle = mode === "analyze";
 
@@ -288,6 +289,11 @@ export default defineConfig(({ mode }) => {
         "/api/v1/auth": httpProxy(authTarget),
         "/api/v1":      httpProxy(apiTarget),
         "/ws":          wsProxy(wsTarget),
+        // HR API proxy — rewrites /hr-api/* → /api/* on the HR service host
+        "/hr-api": {
+          ...httpProxy(hrTarget),
+          rewrite: (path: string) => path.replace(/^\/hr-api/, "/api"),
+        },
       },
     },
   };
