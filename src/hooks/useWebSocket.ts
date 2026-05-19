@@ -62,7 +62,12 @@ import {
 } from "../features/chat/realtime";
 import type { NormalizedMessageRealtimeEvent } from "../features/chat/realtime/realtimeEventTypes";
 import { chatApi } from "../features/api/chatApi";
-import { getMessageSeq } from "../features/chat/domain/messageMerge";
+import {
+  getMessageSeq,
+  patchMessageReactionInCache,
+  findMessageIdentityIndex,
+  patchReactionSummary,
+} from "../features/chat/domain/messageMerge";
 import { findMessageIdentityIndex } from "../features/chat/domain/messageIdentity";
 import { dispatchNotificationClick } from "../features/chat/events/chatUiEvents";
 import { getConversationByIdUseCase } from "../features/chat/usecases/getConversationById";
@@ -1477,6 +1482,55 @@ export const useWebSocket = (
             action: "remove",
           }),
         );
+      },
+      /**
+       * REACTION_UPDATED - New unified event that carries full reactions array.
+       * Updates RTK Query cache directly without dispatching to Zustand.
+       * This is the preferred path for reaction updates.
+       */
+      onReactionUpdated: (data: unknown) => {
+        const payload = asRecord(data);
+        if (!payload) return;
+
+        const conversationId = getConversationId(payload);
+        const messageId =
+          asString(payload.messageId) ??
+          asString(payload.message_id) ??
+          asString(payload.id) ??
+          asString(payload._id);
+        const reactions = payload.reactions;
+
+        if (!conversationId || !messageId) return;
+
+        // Only update if this conversation is active
+        const chatState = useChatStore.getState();
+        if (chatState.selectedConversationId !== conversationId) return;
+
+        // Validate reactions is an array
+        if (!Array.isArray(reactions)) return;
+
+        // Update RTK Query cache directly
+        const patch = chatApi.util.updateQueryData(
+          "getMessages",
+          { conversationId },
+          (draft) => {
+            const message = draft.messages.find(
+              (m) =>
+                m.id === messageId ||
+                m.localId === messageId ||
+                m.stableId === messageId ||
+                m.clientMessageId === messageId,
+            );
+            if (message) {
+              message.reactions = reactions as import("@chat/shared-types").Reaction[];
+            }
+          },
+        );
+
+        // If message not in cache, create a minimal entry
+        if (patch.patches.length === 0) {
+          // Message not in cache - skip update
+        }
       },
       onConversationParticipantUpdated: (data: unknown) => {
         const payload = asRecord(data);
