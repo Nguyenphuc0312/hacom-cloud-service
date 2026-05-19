@@ -34,6 +34,7 @@ import type { ChatDensity } from "../../../stores/uiStore";
 import { getTimelineDensityContract } from "../timelineDensity";
 import type { LongMessageRenderMode } from "../../../utils/longMessagePolicy";
 import { MessageActionBar } from "../MessageActionBar";
+import { QuickReactBar } from "../QuickReactBar";
 import { ReactionBar } from "../ReactionBar";
 import { ReactionPicker } from "../ReactionPicker";
 import { useReactionPicker } from "../ReactionPicker/useReactionPicker";
@@ -196,6 +197,8 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     [message.id, onReact],
   );
 
+  const leaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const clearLongPressTimer = React.useCallback(() => {
     if (longPressTimerRef.current === null) return;
     window.clearTimeout(longPressTimerRef.current);
@@ -212,9 +215,26 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
     [isActionsOpen, closePicker],
   );
 
+  const handleClusterMouseEnter = React.useCallback(() => {
+    if (leaveTimerRef.current) {
+      clearTimeout(leaveTimerRef.current);
+      leaveTimerRef.current = null;
+    }
+    setIsHovered(true);
+  }, []);
+
+  const handleClusterMouseLeave = React.useCallback(() => {
+    leaveTimerRef.current = setTimeout(() => {
+      hideRail();
+      setIsHovered(false);
+      setIsReactionPickerOpen(false);
+    }, 150);
+  }, [hideRail]);
+
   React.useEffect(
     () => () => {
       clearLongPressTimer();
+      if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
     },
     [clearLongPressTimer],
   );
@@ -398,12 +418,8 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
   return (
     <div
       className={clsx("group/message-cluster w-full", className)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => {
-        hideRail();
-        setIsHovered(false);
-        setIsReactionPickerOpen(false);
-      }}
+      onMouseEnter={handleClusterMouseEnter}
+      onMouseLeave={handleClusterMouseLeave}
       onFocusCapture={() => setIsHovered(true)}
       onBlurCapture={(event) => {
         const nextFocused = event.relatedTarget as Node | null;
@@ -509,58 +525,68 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
               </button>
             )}
 
-            <div
-              onPointerDown={handlePointerDown}
-              onPointerUp={clearLongPressTimer}
-              onPointerLeave={clearLongPressTimer}
-              onPointerCancel={clearLongPressTimer}
-              className="w-full"
-            >
-              <MessageSurface
-                isOwn={isOwn}
-                isGroupStart={isGroupStart}
-                isGroupEnd={isGroupEnd}
-                mergeLevel={mergeLevel}
-                hasError={isFailedMessage(message)}
-                isPending={isPendingMessage(message)}
+            <div className="relative w-full">
+              <QuickReactBar
+                visible={isHovered && !isSelectionMode}
+                isMine={isOwn}
+                currentUserReaction={myReactionEmoji}
+                onReact={handleReactionSelect}
+                onMouseEnter={handleClusterMouseEnter}
+                onMouseLeave={handleClusterMouseLeave}
+              />
+              <div
+                onPointerDown={handlePointerDown}
+                onPointerUp={clearLongPressTimer}
+                onPointerLeave={clearLongPressTimer}
+                onPointerCancel={clearLongPressTimer}
+                className="w-full"
               >
-                {isGroupConversation && !isOwn && showSenderName && (
-                  <p className={clsx(contract.cluster.senderLabel, "truncate")}>
-                    {senderDisplayName}
-                  </p>
-                )}
-
-                {message.forwardedFrom && (
-                  <div
-                    className={clsx(
-                      contract.cluster.forwardedBadge,
-                      isOwn ? "text-text-inverse/82" : "text-text-secondary",
-                    )}
-                  >
-                    <svg
-                      className="h-3 w-3"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path d="M12 2l9 9h-6v4H9v-4H3l9-9zm0 18h10v2H2v-2h10z" />
-                    </svg>
-                    {t("chat:message.forwardedFrom", {
-                      name: forwardedFromName,
-                    })}
-                  </div>
-                )}
-
-                <MessageBodyRenderer
-                  message={message}
+                <MessageSurface
                   isOwn={isOwn}
-                  currentUsername={currentUsername}
-                  textRenderMode={textRenderMode}
-                  isCollapsibleText={isCollapsibleText}
-                  onToggleTextExpand={onToggleTextExpand}
-                  onImageClick={onImageClick}
-                  onFilePreview={onFilePreview}
-                />
-              </MessageSurface>
+                  isGroupStart={isGroupStart}
+                  isGroupEnd={isGroupEnd}
+                  mergeLevel={mergeLevel}
+                  hasError={isFailedMessage(message)}
+                  isPending={isPendingMessage(message)}
+                >
+                  {isGroupConversation && !isOwn && showSenderName && (
+                    <p className={clsx(contract.cluster.senderLabel, "truncate")}>
+                      {senderDisplayName}
+                    </p>
+                  )}
+
+                  {message.forwardedFrom && (
+                    <div
+                      className={clsx(
+                        contract.cluster.forwardedBadge,
+                        isOwn ? "text-text-inverse/82" : "text-text-secondary",
+                      )}
+                    >
+                      <svg
+                        className="h-3 w-3"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                      >
+                        <path d="M12 2l9 9h-6v4H9v-4H3l9-9zm0 18h10v2H2v-2h10z" />
+                      </svg>
+                      {t("chat:message.forwardedFrom", {
+                        name: forwardedFromName,
+                      })}
+                    </div>
+                  )}
+
+                  <MessageBodyRenderer
+                    message={message}
+                    isOwn={isOwn}
+                    currentUsername={currentUsername}
+                    textRenderMode={textRenderMode}
+                    isCollapsibleText={isCollapsibleText}
+                    onToggleTextExpand={onToggleTextExpand}
+                    onImageClick={onImageClick}
+                    onFilePreview={onFilePreview}
+                  />
+                </MessageSurface>
+              </div>
             </div>
 
             {showMeta && (
