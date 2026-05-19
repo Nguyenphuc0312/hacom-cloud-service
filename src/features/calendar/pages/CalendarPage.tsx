@@ -26,7 +26,6 @@ import {
   type AttendanceCalendarDay,
   type ClassificationColor,
 } from "../../api/hrApi";
-import { unwrapApiSuccess } from "../../lib/apiContract";
 
 /**
  * Calendar view types.
@@ -596,13 +595,8 @@ export const CalendarPage: React.FC = () => {
         const fromDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`;
         const toDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${new Date(currentYear, currentMonth + 1, 0).getDate().toString().padStart(2, "0")}`;
 
-        const response = await hrApi.getMyAttendanceCalendar({ from: fromDate, to: toDate });
-
-        if (response.success && response.data) {
-          setAttendanceData(response.data.items);
-        } else {
-          setAttendanceData([]);
-        }
+        const data = await hrApi.getMyAttendanceCalendar({ from: fromDate, to: toDate });
+        setAttendanceData(data.items ?? []);
       } catch (error) {
         console.error("Failed to fetch attendance:", error);
         setAttendanceError("Không thể tải dữ liệu chấm công");
