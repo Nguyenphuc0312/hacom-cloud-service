@@ -519,7 +519,10 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                 onPointerUp={clearLongPressTimer}
                 onPointerLeave={clearLongPressTimer}
                 onPointerCancel={clearLongPressTimer}
-                className="w-full"
+                className={clsx(
+                  "flex w-full",
+                  isOwn ? "justify-end" : "justify-start",
+                )}
               >
                 <MessageSurface
                   isOwn={isOwn}

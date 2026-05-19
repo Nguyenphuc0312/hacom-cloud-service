@@ -212,7 +212,7 @@ export const AUTH_BASE_URL = resolveHttpBaseUrl(
  */
 export const HR_API_BASE_URL = resolveHttpBaseUrl(
   import.meta.env.VITE_HR_API_BASE_URL,
-  "http://localhost:3001",
+  "/hr-api",
 );
 
 /**

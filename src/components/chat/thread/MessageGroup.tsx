@@ -450,8 +450,11 @@ const MessageGroupItem: React.FC<{
             isOwn ? "justify-end" : "justify-start",
           )}
         >
-          <div className="min-w-0 max-w-full">
-            <div className="relative w-full">
+          <div className={clsx(
+            "min-w-0 max-w-full flex flex-col",
+            isOwn ? "items-end" : "items-start",
+          )}>
+            <div className="relative">
               <QuickReactBar
                 visible={isHovered && !isSelectionMode}
                 isMine={isOwn}
