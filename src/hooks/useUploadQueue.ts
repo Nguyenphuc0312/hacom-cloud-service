@@ -436,7 +436,7 @@ export function useUploadQueue({
 
           try {
             await uploadClient.uploadToSignedUrl({
-              signedUrl: signed.signedPutUrl || signed.uploadUrl,
+              signedUrl: signed.uploadUrl,
               method: signed.uploadMethod || "PUT",
               headers: {
                 ...(signed.uploadHeaders || {}),
@@ -494,9 +494,11 @@ export function useUploadQueue({
 
         const completed = await uploadClient.completeUpload({
           uploadId: signed.uploadId,
+          conversationId: conversationId,
+          objectKey: signed.objectKey,
         });
         const attachment = completed.attachment;
-        const fileId = completed.fileId || attachment.fileId || attachment.id;
+        const fileId = attachment.id;
         if (!fileId) {
           throw new Error("UPLOAD_COMPLETE_MISSING_FILE_ID");
         }

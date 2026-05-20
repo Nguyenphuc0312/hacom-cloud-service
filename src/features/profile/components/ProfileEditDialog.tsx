@@ -434,7 +434,7 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
         });
         setAvatarUploadStage("uploading");
         await uploadClient.uploadToSignedUrl({
-          signedUrl: reserved.signedPutUrl || reserved.uploadUrl,
+          signedUrl: reserved.uploadUrl,
           method: reserved.uploadMethod || "PUT",
           headers: {
             ...(reserved.uploadHeaders || {}),
@@ -448,9 +448,11 @@ export const ProfileEditDialog: React.FC<ProfileEditDialogProps> = ({
         setAvatarUploadStage("completing");
         const completed = await uploadClient.completeUpload({
           uploadId: reserved.uploadId,
+          conversationId: "", // User avatar doesn't have a conversation
+          objectKey: reserved.objectKey,
         });
 
-        const fileId = completed.fileId || completed.attachment?.fileId; 
+        const fileId = completed.attachment?.id; 
         if (!fileId) { 
           throw new Error("Avatar upload completed without fileId"); 
         } 
