@@ -79,7 +79,12 @@ export const uploadClient = {
     });
   },
 
-  async completeUpload(payload: { uploadId: string; checksum?: string }) {
+  async completeUpload(payload: { 
+    uploadId: string; 
+    conversationId: string; 
+    objectKey: string; 
+    checksum?: string; 
+  }) {
     return unwrapApiSuccess(await fileApi.completeFileUpload(payload));
   },
 

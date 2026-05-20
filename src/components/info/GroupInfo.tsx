@@ -1,4 +1,4 @@
-﻿import React, { useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import clsx from "clsx";
 import {
   XMarkIcon,
@@ -534,7 +534,7 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         });
         setGroupAvatarStage("uploading");
         await uploadClient.uploadToSignedUrl({
-          signedUrl: reserved.signedPutUrl || reserved.uploadUrl,
+          signedUrl: reserved.uploadUrl,
           method: reserved.uploadMethod || "PUT",
           headers: {
             ...(reserved.uploadHeaders || {}),
@@ -546,9 +546,11 @@ export const GroupInfo: React.FC<GroupInfoProps> = ({
         setGroupAvatarStage("completing");
         const completed = await uploadClient.completeUpload({
           uploadId: reserved.uploadId,
+          conversationId: conversation.id,
+          objectKey: reserved.objectKey,
         });
 
-        const fileId = completed.fileId || completed.attachment?.fileId; 
+        const fileId = completed.attachment?.id; 
         if (!fileId) { 
           throw new Error("Group avatar upload completed without fileId"); 
         } 

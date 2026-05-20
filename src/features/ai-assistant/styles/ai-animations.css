@@ -1,0 +1,27 @@
+/* AI Assistant Modern Animations */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes scan {
+  0%, 100% { transform: translateY(-100%); }
+  50% { transform: translateY(100%); }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s linear infinite;
+}
+
+.animate-scan {
+  animation: scan 3s ease-in-out infinite;
+}
+
+/* AI Chat Prose Refinements */
+.prose-ai p {
+  margin-bottom: 1.25rem !important;
+}
+
+.prose-ai p:last-child {
+  margin-bottom: 0 !important;
+}
