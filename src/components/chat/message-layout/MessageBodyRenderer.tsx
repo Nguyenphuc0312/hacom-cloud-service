@@ -130,7 +130,7 @@ const ContactCard: React.FC<{
     if (!hasDispatchableContactUserId) {
       toast.error(
         t("chat:contactShare.invalidProfile", {
-          defaultValue: "This contact card cannot start a chat.",
+          defaultValue: "Cannot view profile for this contact.",
         }),
       );
       return;

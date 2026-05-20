@@ -87,7 +87,7 @@ const FilePreviewModal = React.lazy(
   () => import("../components/modals/FilePreviewModal"),
 );
 
-type InfoPanelMode = "conversation" | "self-profile";
+type InfoPanelMode = "conversation" | "self-profile" | "contact-profile";
 
 const CONVERSATIONS_PAGE_SIZE = 100;
 
@@ -201,6 +201,7 @@ export const ChatPage: React.FC = () => {
   const [infoPanelMode, setInfoPanelMode] = useState<InfoPanelMode | null>(
     null,
   );
+  const [contactProfileUserId, setContactProfileUserId] = useState<string | null>(null);
   const { chatLayoutBreakpoint } = useResponsive();
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -544,6 +545,12 @@ export const ChatPage: React.FC = () => {
     setIsInfoPanelOpen(true);
   }, []);
 
+  const openContactProfile = useCallback((userId: string) => {
+    setContactProfileUserId(userId);
+    setInfoPanelMode("contact-profile");
+    setIsInfoPanelOpen(true);
+  }, []);
+
   // Handle toggle info panel
   const handleToggleInfoPanel = useCallback(() => {
     if (isInfoPanelOpen && infoPanelMode === "conversation") {
@@ -747,6 +754,7 @@ export const ChatPage: React.FC = () => {
   const shouldRenderInfoContent =
     isInfoPanelOpen &&
     (infoPanelMode === "self-profile" ||
+      infoPanelMode === "contact-profile" ||
       (infoPanelMode === "conversation" && Boolean(routeConversationId)));
   const isDockedInfoPanelViewport = chatLayoutBreakpoint === "wide";
   const chatLayoutState = useMemo<ChatLayoutState>(() => {
@@ -831,12 +839,9 @@ export const ChatPage: React.FC = () => {
   useEffect(() => {
     return listenForContactProfileView(({ userId }) => {
       if (!userId) return;
-
-      void handleStartChat(userId).then(() => {
-        openConversationInfoPanel();
-      });
+      openContactProfile(userId);
     });
-  }, [handleStartChat, openConversationInfoPanel]);
+  }, [openContactProfile]);
 
   useEffect(() => {
     return listenForNotificationClick(
@@ -1013,6 +1018,14 @@ export const ChatPage: React.FC = () => {
                       avatar: currentUserSummary.avatar,
                       status: currentUserSummary.status,
                     }}
+                    onClose={closeInfoPanel}
+                    onStartConversation={handleStartChat}
+                  />
+                ) : infoPanelMode === "contact-profile" && contactProfileUserId ? (
+                  <UserProfile
+                    key={`contact-profile:${contactProfileUserId}`}
+                    userId={contactProfileUserId}
+                    currentUserId={currentUserSummary.id}
                     onClose={closeInfoPanel}
                     onStartConversation={handleStartChat}
                   />
