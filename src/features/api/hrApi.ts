@@ -111,20 +111,25 @@ export const hrApi = {
     if (params?.to) query.set("to", params.to);
     const queryString = query.toString();
 
-    const response = await hrApiClient.get<AttendanceCalendarResponse>(
+    const response = await hrApiClient.get(
       `/attendance/calendar/me${queryString ? `?${queryString}` : ""}`
     );
-    return response.data;
+    // Unwrap standard envelope: { success: true, statusCode, data: <payload> }
+    const body = response.data as { success?: boolean; data?: AttendanceCalendarResponse } & AttendanceCalendarResponse;
+    return (body?.success === true && body.data !== undefined ? body.data : body) as AttendanceCalendarResponse;
   },
 
   /**
    * Get attendance detail for a specific date
    */
   getMyAttendanceDay: async (date: string): Promise<AttendanceCalendarDay | null> => {
-    const response = await hrApiClient.get<AttendanceCalendarDay | null>(
+    const response = await hrApiClient.get(
       `/attendance/calendar/me/${date}`
     );
-    return response.data;
+    const body = response.data as { success?: boolean; data?: AttendanceCalendarDay | null } & (AttendanceCalendarDay | null);
+    return (body && typeof body === 'object' && 'success' in body && (body as { success?: boolean }).success === true
+      ? (body as { success?: boolean; data?: AttendanceCalendarDay | null }).data ?? null
+      : body) as AttendanceCalendarDay | null;
   },
 
   /**
