@@ -10,7 +10,7 @@ import { useAiAssistantStore } from "../state/aiAssistantStore";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
 import { AiLayout } from "../components/AiLayout";
 import { AiChatHeader } from "../components/AiChatHeader";
-import type { AiChatRequest, AiMessage } from "../types";
+import type { AiMessage } from "../types";
 
 /**
  * Trang AI Assistant chính – layout kiểu ChatGPT.
@@ -43,10 +43,10 @@ export const AiAssistantPage: React.FC = () => {
 
   const userDisplayName = user
     ? user.effectiveDisplayName ||
-      user.displayName ||
-      user.fullName ||
-      user.firstName ||
-      user.username
+    user.displayName ||
+    user.fullName ||
+    user.firstName ||
+    user.username
     : undefined;
 
   /** Gửi tin nhắn đến AI API */
@@ -61,7 +61,7 @@ export const AiAssistantPage: React.FC = () => {
       if (
         !currentId ||
         conversations.find((c) => c.id === currentId)?.endpoint !==
-          selectedEndpoint
+        selectedEndpoint
       ) {
         currentId = createNewConversation(selectedEndpoint);
       }
@@ -93,21 +93,21 @@ export const AiAssistantPage: React.FC = () => {
 
       try {
         const isCompany = selectedEndpoint === "company";
-        const request: AiChatRequest = {
+        const request: any = {
           question: trimmed,
-          session_id: currentId,
+          session_id: currentId || "",
           department: user?.departmentName || "",
-          ...(isCompany
-            ? {
-                employee_code: user?.employeeCode || user?.employee_code,
-                employee_name:
-                  user?.fullNameFromHR || user?.displayName || user?.username,
-              }
-            : {
-                user_id: user?.id,
-                user_name: user?.displayName || user?.username,
-              }),
         };
+
+        if (isCompany) {
+          // Schema cho Công ty
+          request.user_id = user?.id || "";
+          request.user_name = user?.fullNameFromHR || user?.displayName || user?.username || "";
+        } else {
+          // Schema cho Cá nhân
+          request.employee_code = user?.employeeCode || user?.employee_code || "";
+          request.employee_name = user?.fullNameFromHR || user?.displayName || user?.username || "";
+        }
 
         const response = await sendAiChatMessage(request, selectedEndpoint, {
           onToken: (token) => {
@@ -125,18 +125,18 @@ export const AiAssistantPage: React.FC = () => {
           conversations: state.conversations.map((c) =>
             c.id === currentId
               ? {
-                  ...c,
-                  messages: c.messages.map((m) =>
-                    m.id === assistantMessageId
-                      ? {
-                          ...m,
-                          content: response.answer,
-                          sources: response.sources,
-                          isStreaming: false,
-                        }
-                      : m,
-                  ),
-                }
+                ...c,
+                messages: c.messages.map((m) =>
+                  m.id === assistantMessageId
+                    ? {
+                      ...m,
+                      content: response.answer,
+                      sources: response.sources,
+                      isStreaming: false,
+                    }
+                    : m,
+                ),
+              }
               : c,
           ),
         }));
@@ -152,13 +152,13 @@ export const AiAssistantPage: React.FC = () => {
           conversations: state.conversations.map((c) =>
             c.id === currentId
               ? {
-                  ...c,
-                  messages: c.messages.map((m) =>
-                    m.id === assistantMessageId
-                      ? { ...m, isError: true, isStreaming: false }
-                      : m,
-                  ),
-                }
+                ...c,
+                messages: c.messages.map((m) =>
+                  m.id === assistantMessageId
+                    ? { ...m, isError: true, isStreaming: false }
+                    : m,
+                ),
+              }
               : c,
           ),
         }));
