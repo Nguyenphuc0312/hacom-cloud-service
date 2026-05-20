@@ -605,8 +605,11 @@ export const CalendarPage: React.FC = () => {
         }
       } catch (error: unknown) {
         console.error("Failed to fetch attendance:", error);
+        const msg = (error as Error)?.message ?? "";
         const status = (error as { response?: { status?: number } })?.response?.status;
-        if (status === 401 || status === 403) {
+        if (msg.includes("HR_API_HTML_RESPONSE")) {
+          setAttendanceError("Không thể kết nối dữ liệu chấm công HRM. Vui lòng kiểm tra cấu hình HR API.");
+        } else if (status === 401 || status === 403) {
           setAttendanceError("Phiên đăng nhập hết hạn.");
         } else if (!status) {
           setAttendanceError("Không thể kết nối dữ liệu chấm công HRM.");

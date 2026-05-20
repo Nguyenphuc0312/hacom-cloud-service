@@ -31,10 +31,19 @@ const createHrApiClient = (): AxiosInstance => {
 
   // Response interceptor for error handling
   client.interceptors.response.use(
-    (response) => response,
+    (response) => {
+      if (
+        typeof response.data === "string" &&
+        response.data.trimStart().startsWith("<!doctype html")
+      ) {
+        return Promise.reject(
+          new Error("HR_API_HTML_RESPONSE: received HTML instead of JSON — check VITE_HR_API_BASE_URL")
+        );
+      }
+      return response;
+    },
     (error) => {
       if (error.response?.status === 401) {
-        // Auth error - trigger logout or refresh
         console.error("HR API: Authentication error");
       }
       return Promise.reject(error);
