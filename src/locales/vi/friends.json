@@ -113,6 +113,7 @@
     "toastDeclined": "Đã từ chối lời mời",
     "toastCancelled": "Đã hủy lời mời kết bạn",
     "toastSent": "Đã gửi lời mời kết bạn",
-    "invalidCode": "Mã QR không hợp lệ hoặc đã hết hạn. Có thể người dùng đã reset mã mới."
+    "invalidCode": "Mã QR không hợp lệ hoặc đã hết hạn. Có thể người dùng đã reset mã mới.",
+    "download": "Tải QR"
   }
 }

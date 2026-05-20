@@ -9,6 +9,7 @@ import {
   QrCodeIcon,
   UserPlusIcon,
   ArrowPathIcon,
+  ArrowDownTrayIcon,
   ChatBubbleLeftRightIcon,
   NoSymbolIcon,
 } from "@heroicons/react/24/outline";
@@ -218,6 +219,14 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
     },
     [t],
   );
+
+  const handleDownloadQr = React.useCallback(() => {
+    if (!myQrImageUrl) return;
+    const link = document.createElement("a");
+    link.href = myQrImageUrl;
+    link.download = "hacom-chat-qr.png";
+    link.click();
+  }, [myQrImageUrl]);
 
   const handleShare = React.useCallback(async () => {
     if (!myQr) {
@@ -677,29 +686,31 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
   return (
     <div className="space-y-6">
       <section className="rounded-3xl border border-border bg-surface p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Avatar
-              src={currentUser?.avatar}
-              alt={getDisplayName(currentUser, t("friends:qr.unknownUser"))}
-              size="lg"
-            />
-            <div>
-              <p className="text-base font-semibold text-text-primary">
-                {getDisplayName(currentUser, t("friends:qr.unknownUser"))}
-              </p>
-              <p className="text-sm text-text-secondary">
-                {currentUser?.username
-                  ? `@${currentUser.username}`
-                  : t("friends:qr.missingUsername")}
-              </p>
-            </div>
-          </div>
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold text-text-primary">
+            {t("friends:qr.myCodeTitle")}
+          </h3>
           {isMyQrLoading ? <SkeletonCircle size={16} /> : null}
         </div>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-[15rem_1fr]">
-          <div className="mx-auto flex h-60 w-60 items-center justify-center rounded-2xl border border-border bg-white p-3 shadow-sm">
+        <div className="mt-6 flex flex-col items-center gap-4">
+          <Avatar
+            src={currentUser?.avatar}
+            alt={getDisplayName(currentUser, t("friends:qr.unknownUser"))}
+            size="lg"
+          />
+          <div className="text-center">
+            <p className="text-base font-semibold text-text-primary">
+              {getDisplayName(currentUser, t("friends:qr.unknownUser"))}
+            </p>
+            {currentUser?.username ? (
+              <p className="text-sm text-text-secondary">
+                @{currentUser.username}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="mx-auto flex h-52 w-52 items-center justify-center rounded-2xl border border-border bg-white p-3 shadow-sm">
             {myQrImageUrl ? (
               <img
                 src={myQrImageUrl}
@@ -718,102 +729,67 @@ export const FriendQrWorkspace: React.FC<FriendQrWorkspaceProps> = ({
             )}
           </div>
 
-          <div className="space-y-3">
-            <p className="text-sm text-text-secondary">
-              {t("friends:qr.myCodeHint")}
+          <p className="max-w-xs text-center text-sm text-text-secondary">
+            {t("friends:qr.myCodeHint")}
+          </p>
+
+          {myQr?.updatedAt ? (
+            <p className="text-xs text-text-muted">
+              {t("friends:qr.updatedAt", {
+                time: new Date(myQr.updatedAt).toLocaleString(),
+              })}
             </p>
+          ) : null}
 
-            <div className="rounded-xl border border-border bg-surface-overlay px-3 py-2">
-              <p className="text-xs uppercase tracking-wide text-text-muted">
-                {t("friends:qr.shareCode")}
-              </p>
-              <p className="mt-1 break-all text-sm font-medium text-text-primary">
-                {myQr?.shareCode || "--"}
-              </p>
+          {resetNotice ? (
+            <div className="w-full rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-center text-sm text-warning">
+              {resetNotice}
             </div>
+          ) : null}
 
-            <div className="rounded-xl border border-border bg-surface-overlay px-3 py-2">
-              <p className="text-xs uppercase tracking-wide text-text-muted">
-                {t("friends:qr.deepLink")}
-              </p>
-              <p className="mt-1 break-all text-sm text-text-primary">
-                {myQr?.deepLink || "--"}
-              </p>
-            </div>
-
-            {myQr?.updatedAt ? (
-              <p className="text-xs text-text-muted">
-                {t("friends:qr.updatedAt", {
-                  time: new Date(myQr.updatedAt).toLocaleString(),
-                })}
-              </p>
-            ) : null}
-
-            {resetNotice ? (
-              <div className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
-                {resetNotice}
-              </div>
-            ) : null}
-
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                leftIcon={<ArrowPathIcon className="h-4 w-4" />}
-                onClick={() => void refreshMyQr()}
-                disabled={isMyQrLoading}
-              >
-                {t("friends:qr.refresh")}
-              </Button>
-              <Button
-                type="button"
-                leftIcon={<LinkIcon className="h-4 w-4" />}
-                onClick={() => void handleShare()}
-                disabled={!myQr}
-              >
-                {t("friends:qr.share")}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() =>
-                  myQr
-                    ? void copyText(
-                        myQr.deepLink,
-                        t("friends:qr.deepLinkCopied"),
-                      )
-                    : undefined
-                }
-                disabled={!myQr}
-              >
-                {t("friends:qr.copyLink")}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() =>
-                  myQr
-                    ? void copyText(
-                        myQr.shareCode,
-                        t("friends:qr.shareCodeCopied"),
-                      )
-                    : undefined
-                }
-                disabled={!myQr}
-              >
-                {t("friends:qr.copyCode")}
-              </Button>
-              <Button
-                type="button"
-                variant="danger"
-                leftIcon={<ArrowPathIcon className="h-4 w-4" />}
-                onClick={() => setIsResetConfirmOpen(true)}
-                disabled={!myQr}
-              >
-                {t("friends:qr.reset")}
-              </Button>
-            </div>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button
+              type="button"
+              leftIcon={<ArrowDownTrayIcon className="h-4 w-4" />}
+              onClick={handleDownloadQr}
+              disabled={!myQrImageUrl}
+            >
+              {t("friends:qr.download")}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              leftIcon={<LinkIcon className="h-4 w-4" />}
+              onClick={() =>
+                myQr
+                  ? void copyText(
+                      myQr.deepLink,
+                      t("friends:qr.deepLinkCopied"),
+                    )
+                  : undefined
+              }
+              disabled={!myQr}
+            >
+              {t("friends:qr.copyLink")}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void handleShare()}
+              disabled={!myQr}
+            >
+              {t("friends:qr.share")}
+            </Button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsResetConfirmOpen(true)}
+            disabled={!myQr}
+            className="text-xs text-text-muted transition-colors hover:text-danger disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {t("friends:qr.reset")}
+          </button>
         </div>
       </section>
 
