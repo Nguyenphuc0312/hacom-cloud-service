@@ -168,6 +168,7 @@
     "searchHint": "Type at least {{min}} characters",
     "noResults": "No contacts found",
     "shareAction": "Share",
+    "cardLabel": "Contact card",
     "viewProfile": "View profile",
     "invalidProfile": "This contact card cannot start a chat.",
     "sent": "Contact shared",

@@ -113,6 +113,7 @@
     "toastDeclined": "Friend request declined",
     "toastCancelled": "Friend request cancelled",
     "toastSent": "Friend request sent",
-    "invalidCode": "The QR code is invalid or expired. The user may have already reset a new code."
+    "invalidCode": "The QR code is invalid or expired. The user may have already reset a new code.",
+    "download": "Download QR"
   }
 }

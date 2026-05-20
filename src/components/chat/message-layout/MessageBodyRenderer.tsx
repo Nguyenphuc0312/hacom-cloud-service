@@ -1,6 +1,7 @@
 import React from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { Avatar } from "../../common/Avatar";
 import { TextMessage } from "../../message/TextMessage";
 import { MessageContentRenderer } from "../../message/MessageContentRenderer";
@@ -17,6 +18,11 @@ import type { LongMessageRenderMode } from "../../../utils/longMessagePolicy";
 import { isUuid } from "../../../utils/isUuid";
 import { logger } from "../../../utils/logger";
 import { shouldTreatMessageContentAsRichText } from "../../../utils/messageContent.utils";
+import { useAuthStore } from "../../../stores";
+import { useFriendship } from "../../../hooks/useFriendship";
+import { conversationApi } from "../../../services/api";
+import { ROUTE_PATHS } from "../../../router/paths";
+import { extractApiError, unwrapApiSuccess } from "../../../lib/apiContract";
 
 interface MessageBodyRendererProps {
   message: Message;
@@ -99,9 +105,157 @@ const ContactCard: React.FC<{
   conversationId?: string;
 }> = ({ payload, isOwn, messageId, conversationId }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+  const { getRelationshipState, sendFriendRequest } = useFriendship();
+  const [actionLoading, setActionLoading] = React.useState<string | null>(null);
+
   const hasDispatchableContactUserId = Boolean(
     payload.contactUserId && isUuid(payload.contactUserId),
   );
+
+  const relationship =
+    payload.contactUserId && currentUserId && hasDispatchableContactUserId
+      ? getRelationshipState(payload.contactUserId, currentUserId)
+      : null;
+
+  const handleViewProfile = () => {
+    logger.debug("direct_dm", "source_trace", {
+      source: "MessageBodyRenderer.contactCard",
+      messageId,
+      conversationId,
+      contactUserId: payload.contactUserId,
+    });
+
+    if (!hasDispatchableContactUserId) {
+      toast.error(
+        t("chat:contactShare.invalidProfile", {
+          defaultValue: "This contact card cannot start a chat.",
+        }),
+      );
+      return;
+    }
+
+    dispatchContactProfileView({ userId: payload.contactUserId });
+  };
+
+  const handleAddFriend = async () => {
+    if (!payload.contactUserId || !hasDispatchableContactUserId) return;
+    setActionLoading("add");
+    try {
+      const success = await sendFriendRequest(payload.contactUserId);
+      if (!success) {
+        toast.error(t("friends:actionFailed"));
+      }
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleMessage = async () => {
+    if (!payload.contactUserId || !hasDispatchableContactUserId) return;
+    setActionLoading("message");
+    try {
+      const response = await conversationApi.createPrivateConversation(
+        payload.contactUserId,
+      );
+      const room = unwrapApiSuccess(response) as { id?: string };
+      if (room.id) {
+        navigate(`${ROUTE_PATHS.CHAT}/${room.id}`);
+      }
+    } catch (error) {
+      const apiError = extractApiError(error);
+      toast.error(apiError.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const viewProfileBtn = hasDispatchableContactUserId ? (
+    <button
+      type="button"
+      onClick={handleViewProfile}
+      className={clsx(
+        "text-xs font-medium underline-offset-2 hover:underline",
+        isOwn ? "text-text-inverse/70" : "text-text-secondary",
+      )}
+    >
+      {t("chat:contactShare.viewProfile", { defaultValue: "View profile" })}
+    </button>
+  ) : null;
+
+  const renderCta = () => {
+    if (!relationship || relationship.kind === "self") {
+      return viewProfileBtn;
+    }
+
+    if (relationship.kind === "friend" && relationship.capabilities.canMessage) {
+      return (
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled={actionLoading === "message"}
+            onClick={() => void handleMessage()}
+            className={clsx(
+              "rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60",
+              isOwn
+                ? "bg-text-inverse/15 text-text-inverse hover:bg-text-inverse/25"
+                : "bg-primary/10 text-primary hover:bg-primary/20",
+            )}
+          >
+            {actionLoading === "message"
+              ? "..."
+              : t("friends:message")}
+          </button>
+          {viewProfileBtn}
+        </div>
+      );
+    }
+
+    if (relationship.kind === "outgoing_request") {
+      return (
+        <div className="flex items-center gap-3">
+          <span
+            className={clsx(
+              "rounded-lg px-2.5 py-1 text-xs font-medium opacity-55",
+              isOwn
+                ? "bg-text-inverse/10 text-text-inverse"
+                : "bg-surface-overlay text-text-muted",
+            )}
+          >
+            {t("friends:qr.pending")}
+          </span>
+          {viewProfileBtn}
+        </div>
+      );
+    }
+
+    if (
+      relationship.kind === "not_friend" &&
+      relationship.capabilities.canSendRequest
+    ) {
+      return (
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled={actionLoading === "add"}
+            onClick={() => void handleAddFriend()}
+            className={clsx(
+              "rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60",
+              isOwn
+                ? "bg-text-inverse/15 text-text-inverse hover:bg-text-inverse/25"
+                : "bg-primary/10 text-primary hover:bg-primary/20",
+            )}
+          >
+            {actionLoading === "add" ? "..." : t("friends:addFriend")}
+          </button>
+          {viewProfileBtn}
+        </div>
+      );
+    }
+
+    return viewProfileBtn;
+  };
 
   return (
     <div
@@ -112,6 +266,15 @@ const ContactCard: React.FC<{
           : "border-border bg-surface-overlay/50",
       )}
     >
+      <p
+        className={clsx(
+          "text-[10px] font-medium uppercase tracking-wider",
+          isOwn ? "text-text-inverse/50" : "text-text-muted",
+        )}
+      >
+        {t("chat:contactShare.cardLabel", { defaultValue: "Contact card" })}
+      </p>
+
       <div className="flex items-center gap-2">
         <Avatar src={payload.avatarUrl} alt={payload.displayName} size="md" />
         <div className="min-w-0 flex-1">
@@ -138,38 +301,7 @@ const ContactCard: React.FC<{
         </div>
       )}
 
-      {payload.contactUserId && (
-        <button
-          type="button"
-          onClick={() => {
-            logger.debug("direct_dm", "source_trace", {
-              source: "MessageBodyRenderer.contactCard",
-              messageId,
-              conversationId,
-              contactUserId: payload.contactUserId,
-            });
-
-            if (!hasDispatchableContactUserId) {
-              toast.error(
-                t("chat:contactShare.invalidProfile", {
-                  defaultValue: "This contact card cannot start a chat.",
-                }),
-              );
-              return;
-            }
-
-            dispatchContactProfileView({ userId: payload.contactUserId });
-          }}
-          className={clsx(
-            "text-xs font-medium underline-offset-2 hover:underline",
-            isOwn ? "text-text-inverse" : "text-primary",
-          )}
-        >
-          {t("chat:contactShare.viewProfile", {
-            defaultValue: "View profile",
-          })}
-        </button>
-      )}
+      {renderCta()}
     </div>
   );
 };

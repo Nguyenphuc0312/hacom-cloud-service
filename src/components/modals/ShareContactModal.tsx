@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { MagnifyingGlassIcon, UserIcon } from "@heroicons/react/24/outline";
+import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { Modal, Input, Button, DirectorySkeleton } from "../ui";
 import { Avatar } from "../common/Avatar";
 import { useDebounce } from "../../hooks/useDebounce";
 import { extractApiError, unwrapApiSuccess } from "../../lib/apiContract";
 import type { PublicUserSummary } from "@hacom/chat-shared-types/auth";
 import { searchUsersUseCase } from "../../features/chat/usecases/searchUsers";
+import { useAuthStore } from "../../stores";
 
 type TabKey = "my" | "choose";
 
@@ -46,6 +47,14 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
+  const currentUser = useAuthStore((s) => s.user);
+  const displayName =
+    currentUser
+      ? `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim() ||
+        currentUser.username ||
+        currentUser.email ||
+        ""
+      : "";
 
   const [activeTab, setActiveTab] = useState<TabKey>("my");
   const [query, setQuery] = useState("");
@@ -214,28 +223,38 @@ export const ShareContactModal: React.FC<ShareContactModalProps> = ({
         </div>
 
         {activeTab === "my" && (
-          <div className="rounded-xl border border-border bg-surface-raised p-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-primary/10 p-2 text-primary">
-                <UserIcon className="h-5 w-5" />
+          <div className="space-y-3">
+            <div className="rounded-xl border border-border bg-surface-raised p-4">
+              <div className="flex items-center gap-3">
+                <Avatar
+                  src={currentUser?.avatar || undefined}
+                  alt={displayName || currentUserId}
+                  size="md"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-text-primary">
+                    {displayName ||
+                      t("friends:qr.unknownUser", {
+                        defaultValue: "Unknown user",
+                      })}
+                  </p>
+                  {currentUser?.username ? (
+                    <p className="truncate text-xs text-text-muted">
+                      @{currentUser.username}
+                    </p>
+                  ) : null}
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-text-primary">
-                  {t("chat:contactShare.shareMyCard", {
-                    defaultValue: "Share my contact card",
-                  })}
-                </p>
-                <p className="text-xs text-text-muted">
-                  {t("chat:contactShare.privacyNote", {
-                    defaultValue:
-                      "Visible fields are controlled by your privacy settings.",
-                  })}
-                </p>
-              </div>
+              <p className="mt-3 text-xs text-text-muted">
+                {t("chat:contactShare.privacyNote", {
+                  defaultValue:
+                    "Visible fields are controlled by your privacy settings.",
+                })}
+              </p>
             </div>
             <Button
               type="button"
-              className="mt-4 w-full"
+              className="w-full"
               isLoading={sendingUserId === currentUserId}
               onClick={() => void handleShare(currentUserId)}
             >
