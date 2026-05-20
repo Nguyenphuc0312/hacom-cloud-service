@@ -3,7 +3,6 @@ import { NavLink, useLocation } from "react-router-dom";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import {
-  BellIcon,
   BriefcaseIcon,
   CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
@@ -52,7 +51,6 @@ const railItems: SideRailItem[] = [
   { id: "tasks", label: "sidebar:rail.tasks", icon: BriefcaseIcon, to: ROUTE_PATHS.TASKS },
   { id: "calendar", label: "sidebar:rail.calendar", icon: CalendarDaysIcon, to: ROUTE_PATHS.CALENDAR },
   { id: "ai-assistant", label: "sidebar:rail.aiAssistant", icon: SparklesIcon, to: ROUTE_PATHS.AI_ASSISTANT },
-  { id: "notifications", label: "sidebar:rail.notifications", icon: BellIcon, to: ROUTE_PATHS.NOTIFICATIONS },
 ];
 
 const bottomItems: SideRailItem[] = [
