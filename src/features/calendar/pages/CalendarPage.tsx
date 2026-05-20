@@ -596,10 +596,23 @@ export const CalendarPage: React.FC = () => {
         const toDate = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${new Date(currentYear, currentMonth + 1, 0).getDate().toString().padStart(2, "0")}`;
 
         const data = await hrApi.getMyAttendanceCalendar({ from: fromDate, to: toDate });
-        setAttendanceData(data.items ?? []);
-      } catch (error) {
+
+        if (data.reason === "EMPLOYEE_NOT_LINKED") {
+          setAttendanceError("Tài khoản chưa liên kết hồ sơ nhân sự.");
+          setAttendanceData([]);
+        } else {
+          setAttendanceData(data.items ?? []);
+        }
+      } catch (error: unknown) {
         console.error("Failed to fetch attendance:", error);
-        setAttendanceError("Không thể tải dữ liệu chấm công");
+        const status = (error as { response?: { status?: number } })?.response?.status;
+        if (status === 401 || status === 403) {
+          setAttendanceError("Phiên đăng nhập hết hạn.");
+        } else if (!status) {
+          setAttendanceError("Không thể kết nối dữ liệu chấm công HRM.");
+        } else {
+          setAttendanceError("Không thể tải dữ liệu chấm công.");
+        }
         setAttendanceData([]);
       } finally {
         setIsLoadingAttendance(false);
