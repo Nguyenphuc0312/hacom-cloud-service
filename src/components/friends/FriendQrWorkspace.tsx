@@ -8,7 +8,6 @@ import {
   LinkIcon,
   QrCodeIcon,
   UserPlusIcon,
-  ArrowPathIcon,
   ArrowDownTrayIcon,
   ChatBubbleLeftRightIcon,
   NoSymbolIcon,
