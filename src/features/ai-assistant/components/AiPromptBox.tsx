@@ -54,11 +54,11 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
 
     return (
       <div className="relative w-full">
-        <div className="relative flex items-end rounded-3xl border border-gray-300 bg-white shadow-sm transition-all focus-within:border-gray-400 focus-within:shadow-md">
+        <div className="relative flex items-end rounded-3xl border border-border bg-surface shadow-sm transition-all focus-within:border-border-strong focus-within:shadow-md">
           {/* Attach button */}
           <button
             type="button"
-            className="flex h-10 w-10 shrink-0 items-center justify-center ml-2 mb-1.5 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            className="flex h-10 w-10 shrink-0 items-center justify-center ml-2 mb-1.5 rounded-full text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors"
             title="Tải lên tài liệu"
           >
             <PaperclipIcon size={18} strokeWidth={2} />
@@ -77,7 +77,7 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
             }
             rows={1}
             disabled={isLoading}
-            className="flex-1 resize-none bg-transparent py-4 px-2 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none"
+            className="flex-1 resize-none bg-transparent py-4 px-2 text-base text-text-primary placeholder:text-text-muted focus:outline-none"
             style={{ minHeight: "52px", maxHeight: `${MAX_HEIGHT}px` }}
           />
 
@@ -87,7 +87,7 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
               <button
                 type="button"
                 onClick={onStop}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-900 text-white hover:bg-gray-700 transition-colors"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white hover:bg-primary-hover transition-colors"
                 aria-label="Dừng phản hồi"
               >
                 <SquareIcon size={14} fill="white" />
@@ -107,8 +107,8 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
                 className={clsx(
                   "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all",
                   hasText
-                    ? "bg-gray-900 text-white hover:bg-gray-700 cursor-pointer"
-                    : "bg-gray-200 text-gray-400 cursor-not-allowed",
+                    ? "bg-primary text-white hover:bg-primary-hover cursor-pointer"
+                    : "bg-surface-active text-text-disabled cursor-not-allowed",
                 )}
                 aria-label="Gửi tin nhắn"
               >

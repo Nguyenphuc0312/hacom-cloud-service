@@ -19,15 +19,15 @@ export const AiChatHeader: React.FC = () => {
   const isCompany = selectedEndpoint === "company";
 
   return (
-    <header className="flex h-12 flex-shrink-0 items-center justify-between px-4 sticky top-0 z-30 bg-white border-b border-gray-100">
+    <header className="flex h-12 flex-shrink-0 items-center justify-between px-4 sticky top-0 z-30 bg-surface border-b border-border">
       {/* Left – Model label */}
-      <button className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition-colors group">
+      <button className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface-hover transition-colors group">
         <div
           className={clsx(
             "flex h-6 w-6 items-center justify-center rounded-md",
             isCompany
-              ? "bg-blue-600 text-white"
-              : "bg-emerald-600 text-white",
+              ? "bg-primary text-white"
+              : "bg-success text-white",
           )}
         >
           {isCompany ? (
@@ -36,12 +36,12 @@ export const AiChatHeader: React.FC = () => {
             <SparklesIcon size={14} strokeWidth={2.5} />
           )}
         </div>
-        <span className="text-sm font-semibold text-gray-800">
+        <span className="text-sm font-semibold text-text-primary">
           {isCompany ? "Hacom AI" : "Trợ lý ảo cá nhân"}
         </span>
         <ChevronDownIcon
           size={14}
-          className="text-gray-400 group-hover:text-gray-600 transition-colors"
+          className="text-text-muted group-hover:text-text-secondary transition-colors"
         />
       </button>
 
@@ -52,8 +52,8 @@ export const AiChatHeader: React.FC = () => {
           className={clsx(
             "flex h-8 w-8 items-center justify-center rounded-lg transition-all",
             isSourcePanelOpen
-              ? "bg-gray-200 text-gray-700"
-              : "text-gray-400 hover:bg-gray-100 hover:text-gray-600",
+              ? "bg-surface-active text-text-secondary"
+              : "text-text-muted hover:bg-surface-hover hover:text-text-secondary",
           )}
           title="Tài liệu tham chiếu"
           aria-label="Toggle source panel"

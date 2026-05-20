@@ -18,7 +18,7 @@ export const AiLayout: React.FC<AiLayoutProps> = ({ children }) => {
   const { isSidebarOpen, isSourcePanelOpen, toggleSidebar } = useAiAssistantStore();
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-white relative font-sans">
+    <div className="flex h-full w-full overflow-hidden bg-surface relative font-sans">
       {/* ── 1. Left Sidebar ── */}
       <aside
         className={clsx(
@@ -35,7 +35,7 @@ export const AiLayout: React.FC<AiLayoutProps> = ({ children }) => {
       {!isSidebarOpen && (
         <button
           onClick={toggleSidebar}
-          className="absolute top-3 left-3 z-50 h-10 w-10 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-all"
+          className="absolute top-3 left-3 z-50 h-10 w-10 flex items-center justify-center rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-hover transition-all"
           aria-label="Mở sidebar"
         >
           <PanelLeftIcon size={20} strokeWidth={1.8} />
@@ -43,7 +43,7 @@ export const AiLayout: React.FC<AiLayoutProps> = ({ children }) => {
       )}
 
       {/* ── 2. Main Chat Area ── */}
-      <main className="flex-1 flex flex-col min-w-0 relative h-full bg-white">
+      <main className="flex-1 flex flex-col min-w-0 relative h-full bg-surface">
         {children}
       </main>
 
