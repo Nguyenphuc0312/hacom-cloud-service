@@ -5,6 +5,8 @@ import { extractApiError, unwrapApiSuccess } from "../../../lib/apiContract";
 import { UserStatus } from "../../../types";
 import { searchUsersUseCase } from "../usecases/searchUsers";
 import { ExpiringLruCache } from "../../../utils/expiringLruCache";
+import { useFriendshipStore, type FriendRecord } from "../../../stores/friendshipStore";
+import { resolveUserDisplayName } from "../identity/resolveUserDisplayName";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -322,5 +324,69 @@ export const useChatUserSearch = (
     errorMessage,
     debouncedQuery,
     minQueryLength,
+  };
+};
+
+// --- Friend suggestions (reads directly from store, no API call needed) ---
+
+const removeDiacritics = (s: string): string =>
+  s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+const friendRecordToSearchUser = (friend: FriendRecord): ChatSearchUser => ({
+  id: friend.id,
+  username: friend.username,
+  displayName: resolveUserDisplayName(friend, { allowLegacyFallback: true }),
+  fullName: friend.fullName ?? null,
+  avatarUrl: friend.avatar ?? null,
+  status: (friend.status as UserStatus | undefined) ?? UserStatus.OFFLINE,
+  employeeCode: friend.employeeCode ?? friend.employee_code ?? null,
+  departmentName: friend.departmentName ?? null,
+  unitCode: friend.unitCode ?? null,
+  title: friend.title ?? null,
+  isFriend: true,
+  canAddFriend: false,
+  friendshipStatus: "accepted",
+});
+
+const matchesFriendQuery = (user: ChatSearchUser, query: string): boolean => {
+  const q = removeDiacritics(query.toLowerCase().trim());
+  if (!q) return true;
+  const check = (s: string | null | undefined) =>
+    Boolean(s && removeDiacritics(s.toLowerCase()).includes(q));
+  return (
+    check(user.displayName) ||
+    check(user.username) ||
+    check(user.employeeCode) ||
+    check(user.departmentName)
+  );
+};
+
+interface UseFriendSuggestionsOptions {
+  query?: string;
+  enabled?: boolean;
+  limit?: number;
+}
+
+export const useFriendSuggestions = (options?: UseFriendSuggestionsOptions) => {
+  const query = options?.query ?? "";
+  const enabled = options?.enabled ?? true;
+  const limit = options?.limit ?? 50;
+
+  const rawFriends = useFriendshipStore((state) => state.friends);
+  const isLoading = useFriendshipStore((state) => state.isFriendsLoading);
+  const hasHydrated = useFriendshipStore((state) => state.hasHydrated);
+
+  const suggestions = useMemo(() => {
+    if (!enabled) return [];
+    const mapped = rawFriends.map(friendRecordToSearchUser);
+    const filtered = query.trim()
+      ? mapped.filter((f) => matchesFriendQuery(f, query))
+      : mapped;
+    return filtered.slice(0, limit);
+  }, [enabled, rawFriends, query, limit]);
+
+  return {
+    suggestions,
+    isLoading: isLoading && !hasHydrated,
   };
 };
