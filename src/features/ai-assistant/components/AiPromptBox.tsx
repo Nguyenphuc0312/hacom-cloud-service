@@ -1,21 +1,28 @@
 import React, { forwardRef, useCallback } from "react";
-import { useTranslation } from "react-i18next";
-import { PaperAirplaneIcon } from "@heroicons/react/24/outline";
+import clsx from "clsx";
+import { 
+  MicIcon, 
+  SendHorizonalIcon, 
+  PaperclipIcon,
+  SquareIcon,
+  KeyboardIcon
+} from "lucide-react";
+import { useChatUiStore } from "../../../features/chat/state/chatUiStore";
 
 interface AiPromptBoxProps {
   value: string;
   onChange: (value: string) => void;
   onSubmit: (value: string) => void;
+  onStop?: () => void;
   isLoading?: boolean;
 }
 
-const LINE_HEIGHT = 24; // approx line-height in px
-const MAX_LINES = 6;
+const LINE_HEIGHT = 24;
+const MAX_LINES = 8;
 const MAX_HEIGHT = LINE_HEIGHT * MAX_LINES;
 
 export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
-  ({ value, onChange, onSubmit, isLoading = false }, ref) => {
-    const { t } = useTranslation("aiAssistant");
+  ({ value, onChange, onSubmit, onStop, isLoading = false }, ref) => {
 
     const adjustHeight = useCallback((textarea: HTMLTextAreaElement) => {
       textarea.style.height = "auto";
@@ -34,58 +41,96 @@ export const AiPromptBox = forwardRef<HTMLTextAreaElement, AiPromptBoxProps>(
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        if (value.trim()) {
+        if (value.trim() && !isLoading) {
           onSubmit(value.trim());
-          // Reset height after submit
           if (ref && "current" in ref && ref.current) {
-            ref.current.style.height = "auto";
+            ref.current.style.height = "64px";
           }
         }
       }
     };
 
     const hasText = value.trim().length > 0;
+    const { selectedEndpoint } = useChatUiStore();
+    const isCompany = selectedEndpoint === "company";
 
     return (
       <div className="relative w-full">
-        <textarea
-          ref={ref}
-          value={value}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          placeholder={t("prompt.placeholder")}
-          rows={1}
-          disabled={isLoading}
-          className="focus:border-primary/60 focus:shadow-[0_0_0_2px_hsl(var(--color-primary)/0.15)] w-full resize-none rounded-2xl border border-border bg-surface px-4 py-3 pr-12 text-body text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-0"
-          style={{ minHeight: "56px", maxHeight: `${MAX_HEIGHT}px` }}
-          onLoad={(e) => adjustHeight(e.currentTarget)}
-        />
+        {/* Input Wrapper */}
+        <div className="relative flex items-end">
+          <textarea
+            ref={ref}
+            value={value}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            placeholder={isCompany ? "Hỏi bất cứ điều gì về quy trình & tài liệu công ty..." : "Chat tự do với AI..."}
+            rows={1}
+            disabled={isLoading}
+            className={clsx(
+              "w-full resize-none rounded-[36px] border bg-white border-border/80 pl-8 pr-36 py-5 text-base font-medium text-text-primary placeholder:text-text-muted/60 transition-all shadow-xl shadow-black/5",
+              "focus:border-primary/60 focus:ring-1 focus:ring-primary/20 focus:outline-none"
+            )}
+            style={{ minHeight: "64px", maxHeight: `${MAX_HEIGHT}px` }}
+          />
 
-        {/* Send button — only visible when there's text */}
-        <button
-          type="button"
-          onClick={() => {
-            if (value.trim()) {
-              onSubmit(value.trim());
-              if (ref && "current" in ref && ref.current) {
-                ref.current.style.height = "auto";
-              }
-            }
-          }}
-          disabled={!hasText || isLoading}
-          className={`
-            absolute bottom-2.5 right-2.5 flex h-9 w-9 shrink-0 items-center justify-center
-            rounded-xl bg-primary text-text-inverse
-            transition-all duration-150
-            ${hasText && !isLoading
-              ? "opacity-100 hover:bg-primary-hover cursor-pointer"
-              : "opacity-0 pointer-events-none"
-            }
-          `}
-          aria-label={t("prompt.send")}
-        >
-          <PaperAirplaneIcon className="h-4 w-4" strokeWidth={1.5} />
-        </button>
+          {/* Right Actions Cluster */}
+          <div className="absolute right-3 bottom-3 flex items-center gap-1.5">
+            <button
+              type="button"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-text-muted hover:bg-surface-active transition-colors"
+              title="Tải lên tài liệu"
+            >
+              <PaperclipIcon size={18} strokeWidth={2.5} />
+            </button>
+
+            <button
+              type="button"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-text-muted hover:bg-surface-active transition-colors"
+              title="Nhập bằng giọng nói"
+            >
+              <MicIcon size={18} strokeWidth={2.5} />
+            </button>
+
+            {isLoading ? (
+               <button
+                  type="button"
+                  onClick={onStop}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-white hover:bg-neutral-800 transition-all shadow-lg shadow-black/10"
+                  aria-label="Dừng phản hồi"
+               >
+                  <SquareIcon size={16} fill="white" />
+               </button>
+            ) : (
+               <button
+                  type="button"
+                  onClick={() => {
+                    if (value.trim()) {
+                      onSubmit(value.trim());
+                      if (ref && "current" in ref && ref.current) {
+                        ref.current.style.height = "64px";
+                      }
+                    }
+                  }}
+                  disabled={!hasText}
+                  className={clsx(
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300",
+                    hasText
+                      ? "bg-black text-white hover:bg-neutral-800 shadow-xl shadow-black/20 scale-100 cursor-pointer"
+                      : "bg-surface-active text-text-disabled scale-95 cursor-not-allowed"
+                  )}
+                  aria-label="Gửi tin nhắn"
+               >
+                  <SendHorizonalIcon size={20} strokeWidth={2.5} />
+               </button>
+            )}
+          </div>
+        </div>
+        
+        {/* Keyboard Shortcut Hint */}
+        <div className="absolute -bottom-6 left-6 flex items-center gap-1.5 opacity-0 group-hover:opacity-40 transition-opacity pointer-events-none">
+           <KeyboardIcon size={10} className="text-text-muted" />
+           <span className="text-[9px] font-black uppercase tracking-widest text-text-muted">Press Enter to send</span>
+        </div>
       </div>
     );
   },

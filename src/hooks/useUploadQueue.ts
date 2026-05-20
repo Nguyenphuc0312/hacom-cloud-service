@@ -103,9 +103,9 @@ const readPersistedDrafts = (
     const parsed = JSON.parse(raw) as unknown;
     return Array.isArray(parsed)
       ? parsed.filter(
-          (item): item is PersistedAttachmentDraft =>
-            Boolean(item) && typeof item === "object",
-        )
+        (item): item is PersistedAttachmentDraft =>
+          Boolean(item) && typeof item === "object",
+      )
       : [];
   } catch {
     return [];
@@ -711,8 +711,8 @@ export function useUploadQueue({
                   : "error:upload.unsupportedType",
                 validatedType.code === "MIME_EXTENSION_MISMATCH"
                   ? {
-                      defaultValue: "File extension does not match file type",
-                    }
+                    defaultValue: "File extension does not match file type",
+                  }
                   : { defaultValue: "Unsupported file type" },
               ),
             );

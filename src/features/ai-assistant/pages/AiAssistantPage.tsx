@@ -1,223 +1,227 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { AiAssistantHero } from "../components/AiAssistantHero";
 import { AiPromptBox } from "../components/AiPromptBox";
 import { AiSuggestionChips } from "../components/AiSuggestionChips";
 import { AiChatPreview } from "../components/AiChatPreview";
-import type { AiChatMessage } from "../components/AiChatPreview";
 import { sendAiChatMessage, AiApiError } from "../services/aiChatApi";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../../stores/authStore";
-import { ArrowLeftIcon } from "@heroicons/react/24/outline";
-
-const SESSION_STORAGE_KEY = "ai_assistant_session_id";
-
-function generateId(): string {
-  return Math.random().toString(36).slice(2);
-}
-
-function generateSessionId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-function readOrCreateSessionId(): string {
-  try {
-    const stored = localStorage.getItem(SESSION_STORAGE_KEY);
-    if (stored) return stored;
-    const newId = generateSessionId();
-    localStorage.setItem(SESSION_STORAGE_KEY, newId);
-    return newId;
-  } catch {
-    return generateSessionId();
-  }
-}
-
-function persistSessionId(id: string): void {
-  try {
-    localStorage.setItem(SESSION_STORAGE_KEY, id);
-  } catch {
-    // ignore storage errors
-  }
-}
-
-function clearSessionId(): string {
-  const newId = generateSessionId();
-  try {
-    localStorage.setItem(SESSION_STORAGE_KEY, newId);
-  } catch {
-    // ignore
-  }
-  return newId;
-}
+import { useAiAssistantStore } from "../state/aiAssistantStore";
+import { useChatUiStore } from "../../chat/state/chatUiStore";
+import { AiLayout } from "../components/AiLayout";
+import { AiChatHeader } from "../components/AiChatHeader";
+import type { AiChatRequest, AiMessage } from "../types";
 
 export const AiAssistantPage: React.FC = () => {
   const { t } = useTranslation("aiAssistant");
   const user = useAuthStore((s) => s.user);
   const [inputValue, setInputValue] = useState("");
-  const [messages, setMessages] = useState<AiChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionId, setSessionId] = useState<string>(readOrCreateSessionId);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Global state from stores
+  const { 
+    conversations, 
+    activeConversationId, 
+    addMessage, 
+    updateLastMessage,
+    setThinking,
+    createNewConversation
+  } = useAiAssistantStore();
+  const { selectedEndpoint } = useChatUiStore();
+
+  const activeConversation = conversations.find(c => c.id === activeConversationId && c.endpoint === selectedEndpoint);
+  const messages = activeConversation?.messages || [];
 
   const userDisplayName = user
     ? (user.effectiveDisplayName || user.displayName || user.fullName || user.firstName || user.username)
     : undefined;
 
-  const handleNewChat = useCallback(() => {
-    setMessages([]);
-    setInputValue("");
-    setIsLoading(false);
-    setSessionId(clearSessionId());
-    setTimeout(() => textareaRef.current?.focus(), 0);
-  }, []);
-
-  const getErrorMessage = useCallback(
-    (err: unknown): string => {
-      if (err instanceof AiApiError) {
-        if (err.kind === "timeout") return t("chat.errorTimeout");
-        if (err.kind === "network") return t("chat.errorNetwork");
-        if (err.status === 422) return t("chat.error422");
-        if (err.status === 405) return t("chat.error405");
-        if (err.status >= 500) return t("chat.error500");
-      }
-      return t("chat.errorNetwork");
-    },
-    [t],
-  );
-
+  // Handle message sending
   const handleSubmit = useCallback(
-    async (prompt: string) => {
-      const trimmed = prompt.trim();
+    async (promptText: string) => {
+      const trimmed = promptText.trim();
       if (!trimmed || isLoading) return;
 
-      const userMessage: AiChatMessage = {
-        id: generateId(),
+      let currentId = activeConversationId;
+      
+      // 1. Create a new conversation if none is active or endpoint mismatch
+      if (!currentId || (conversations.find(c => c.id === currentId)?.endpoint !== selectedEndpoint)) {
+        currentId = createNewConversation(selectedEndpoint);
+      }
+
+      const userMessage: AiMessage = {
+        id: crypto.randomUUID(),
         role: "user",
         content: trimmed,
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, userMessage]);
+      addMessage(currentId, userMessage);
       setInputValue("");
-
-      if (textareaRef.current) {
-        textareaRef.current.style.height = "auto";
-      }
-
       setIsLoading(true);
 
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      // 2. Prepare assistant placeholder message
+      const assistantMessageId = crypto.randomUUID();
+      const assistantMessage: AiMessage = {
+        id: assistantMessageId,
+        role: "assistant",
+        content: "",
+        timestamp: new Date(),
+        isStreaming: true,
+      };
+      addMessage(currentId, assistantMessage);
+
       try {
-        const response = await sendAiChatMessage(trimmed, sessionId);
-
-        if (response.session_id && response.session_id !== sessionId) {
-          setSessionId(response.session_id);
-          persistSessionId(response.session_id);
-        }
-
-        const assistantMessage: AiChatMessage = {
-          id: generateId(),
-          role: "assistant",
-          content: response.answer,
-          timestamp: new Date(),
-          sources: response.sources?.length > 0 ? response.sources : undefined,
+        const isCompany = selectedEndpoint === "company";
+        const request: AiChatRequest = {
+          question: trimmed,
+          session_id: currentId,
+          department: user?.departmentName || "",
+          // Only send relevant fields based on endpoint
+          ...(isCompany ? {
+            employee_code: user?.employeeCode || user?.employee_code,
+            employee_name: user?.fullNameFromHR || user?.displayName || user?.username,
+          } : {
+            user_id: user?.id,
+            user_name: user?.displayName || user?.username,
+          })
         };
 
-        setMessages((prev) => [...prev, assistantMessage]);
+        const response = await sendAiChatMessage(
+          request, 
+          selectedEndpoint,
+          {
+            onToken: (token) => {
+              updateLastMessage(currentId!, token, true);
+            },
+            onThinking: (thinking) => {
+              setThinking(currentId!, thinking);
+            }
+          }
+        );
+
+        // Finalize message with sources and full content
+        updateLastMessage(currentId, response.answer, false);
+        
+        useAiAssistantStore.setState((state) => ({
+          conversations: state.conversations.map(c => 
+            c.id === currentId 
+              ? {
+                  ...c,
+                  messages: c.messages.map(m => 
+                    m.id === assistantMessageId 
+                      ? { ...m, content: response.answer, sources: response.sources, isStreaming: false }
+                      : m
+                  )
+                }
+              : c
+          )
+        }));
+
       } catch (err) {
-        const errorMessage: AiChatMessage = {
-          id: generateId(),
-          role: "assistant",
-          content: getErrorMessage(err),
-          timestamp: new Date(),
-          error: true,
-        };
-        setMessages((prev) => [...prev, errorMessage]);
+        let content = t("chat.errorNetwork");
+        if (err instanceof AiApiError) {
+          if (err.kind === "timeout") content = t("chat.errorTimeout");
+          if (err.status === 422) content = t("chat.error422");
+        }
+        
+        updateLastMessage(currentId, content, false);
+        useAiAssistantStore.setState((state) => ({
+          conversations: state.conversations.map(c => 
+            c.id === currentId 
+              ? {
+                  ...c,
+                  messages: c.messages.map(m => 
+                    m.id === assistantMessageId 
+                      ? { ...m, isError: true, isStreaming: false }
+                      : m
+                  )
+                }
+              : c
+          )
+        }));
       } finally {
         setIsLoading(false);
         setTimeout(() => textareaRef.current?.focus(), 0);
       }
     },
-    [isLoading, sessionId, getErrorMessage],
+    [isLoading, activeConversationId, conversations, selectedEndpoint, user, addMessage, updateLastMessage, setThinking, createNewConversation, t]
   );
 
   const hasMessages = messages.length > 0;
 
+  // Auto focus input on load or when switching conversations
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, [activeConversationId]);
+
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-[var(--chat-shell-bg)]">
-      {/* Mini header — shown only when chat is active */}
-      {hasMessages && (
-        <header className="flex h-12 flex-shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
-          <button
-            type="button"
-            onClick={handleNewChat}
-            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-body-sm text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
-            aria-label={t("chat.newChat")}
-          >
-            <ArrowLeftIcon className="h-4 w-4" strokeWidth={1.5} />
-            <span>{t("chat.newChat")}</span>
-          </button>
+    <AiLayout>
+      <div className="flex h-full flex-col overflow-hidden bg-surface/30">
+        <AiChatHeader />
+        
+        {/* Empty state */}
+        {!hasMessages && (
+          <div className="flex flex-1 items-center justify-center overflow-y-auto px-4 custom-scrollbar">
+            <div className="flex w-full max-w-[720px] flex-col items-center gap-12 py-16">
+              <AiAssistantHero displayName={userDisplayName} />
 
-          <div className="h-4 w-px bg-border" />
+              <div className="w-full">
+                <AiPromptBox
+                  ref={textareaRef}
+                  value={inputValue}
+                  onChange={setInputValue}
+                  onSubmit={handleSubmit}
+                  isLoading={isLoading}
+                />
+              </div>
 
-          <span className="text-body-sm font-medium text-text-primary">
-            {t("page.title")}
-          </span>
-        </header>
-      )}
-
-      {/* Empty state */}
-      {!hasMessages && (
-        <div className="flex flex-1 items-center justify-center overflow-y-auto px-4">
-          <div className="flex w-full max-w-[680px] flex-col items-center gap-8 py-12">
-            <AiAssistantHero displayName={userDisplayName} />
-
-            <div className="w-full">
-              <AiPromptBox
-                ref={textareaRef}
-                value={inputValue}
-                onChange={setInputValue}
-                onSubmit={handleSubmit}
-                isLoading={isLoading}
-              />
-            </div>
-
-            <div className="w-full">
-              <AiSuggestionChips
-                onSelect={(prompt) => {
-                  setInputValue(prompt);
-                  setTimeout(() => textareaRef.current?.focus(), 0);
-                }}
-              />
+              <div className="w-full">
+                <AiSuggestionChips
+                  onSelect={(prompt) => {
+                    setInputValue(prompt);
+                    setTimeout(() => textareaRef.current?.focus(), 0);
+                  }}
+                />
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Chat state — messages scroll independently, input fixed at bottom */}
-      {hasMessages && (
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto">
-            <div className="mx-auto flex max-w-[680px] flex-col gap-6 px-4 py-8">
-              <AiChatPreview messages={messages} isLoading={isLoading} />
+        {/* Chat state */}
+        {hasMessages && (
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              <div className="mx-auto flex max-w-[800px] flex-col px-4 py-6">
+                <AiChatPreview messages={messages} isLoading={isLoading} />
+              </div>
+            </div>
+
+            {/* Input fixed at bottom */}
+            <div className="flex-shrink-0 bg-gradient-to-t from-[var(--chat-shell-bg)] via-[var(--chat-shell-bg)] to-transparent px-4 pb-6 pt-10">
+              <div className="mx-auto max-w-[800px] relative">
+                <AiPromptBox
+                  ref={textareaRef}
+                  value={inputValue}
+                  onChange={setInputValue}
+                  onSubmit={handleSubmit}
+                  isLoading={isLoading}
+                />
+                
+                <p className="mt-3 text-center text-[10px] text-text-muted font-bold uppercase tracking-widest">
+                  AI có thể đưa ra câu trả lời sai. Hãy kiểm chứng các thông tin quan trọng.
+                </p>
+              </div>
             </div>
           </div>
-
-          <div className="flex-shrink-0 border-t border-border bg-[var(--chat-shell-bg)] px-4 pb-4 pt-3">
-            <div className="mx-auto max-w-[680px]">
-              <AiPromptBox
-                ref={textareaRef}
-                value={inputValue}
-                onChange={setInputValue}
-                onSubmit={handleSubmit}
-                isLoading={isLoading}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </AiLayout>
   );
 };
 

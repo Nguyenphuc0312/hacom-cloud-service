@@ -1,52 +1,74 @@
 import React from "react";
-import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import {
-  DocumentMagnifyingGlassIcon,
-  ClipboardDocumentCheckIcon,
-  UsersIcon,
-  QuestionMarkCircleIcon,
-  ArchiveBoxIcon,
-} from "@heroicons/react/24/outline";
+  FileTextIcon,
+  CalendarDaysIcon,
+  Users2Icon,
+  SearchIcon,
+  LightbulbIcon,
+  HeartHandshakeIcon
+} from "lucide-react";
+import { motion } from "framer-motion";
+import { useChatUiStore } from "../../chat/state/chatUiStore";
 
 export interface AiSuggestion {
   id: string;
-  labelKey: string;
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  label: string;
+  sublabel: string;
+  icon: any;
   prompt: string;
+  mode: "company" | "personal" | "any";
 }
 
 const SUGGESTIONS: AiSuggestion[] = [
   {
-    id: "latest-docs",
-    labelKey: "suggestions.latestDocs",
-    icon: ArchiveBoxIcon,
-    prompt: "Tóm tắt tài liệu mới nhất",
+    id: "nhan-su-v2",
+    label: "Quy trình nghỉ phép",
+    sublabel: "Tìm hiểu chế độ và thủ tục xin nghỉ",
+    icon: CalendarDaysIcon,
+    prompt: "Quy trình xin nghỉ phép của công ty như thế nào?",
+    mode: "company"
   },
   {
-    id: "van-thu",
-    labelKey: "suggestions.vanThu",
-    icon: ClipboardDocumentCheckIcon,
-    prompt: "Quy định về công tác văn thư là gì?",
+    id: "van-thu-v2",
+    label: "Công tác văn thư",
+    sublabel: "Quy định về văn bản và lưu trữ",
+    icon: FileTextIcon,
+    prompt: "Tóm tắt các quy định quan trọng về công tác văn thư lưu trữ",
+    mode: "company"
   },
   {
-    id: "nhan-su",
-    labelKey: "suggestions.nhanSu",
-    icon: UsersIcon,
-    prompt: "Tìm thông tin liên quan đến nhân sự",
+    id: "nhan-su-v3",
+    label: "Chính sách nhân sự",
+    sublabel: "Chế độ phúc lợi và lương thưởng",
+    icon: HeartHandshakeIcon,
+    prompt: "Hacom có những chính sách phúc lợi đặc biệt nào cho nhân viên?",
+    mode: "company"
   },
   {
-    id: "find-documents",
-    labelKey: "suggestions.findDocuments",
-    icon: DocumentMagnifyingGlassIcon,
-    prompt: "Tìm tài liệu số hóa",
+    id: "find-docs-v2",
+    label: "Tìm tài liệu nội bộ",
+    sublabel: "Truy lục chính sách số hóa",
+    icon: SearchIcon,
+    prompt: "Tìm giúp tôi bộ quy trình làm việc của phòng CNTT",
+    mode: "company"
   },
   {
-    id: "ask-process",
-    labelKey: "suggestions.askProcess",
-    icon: QuestionMarkCircleIcon,
-    prompt: "Hỏi về quy trình nội bộ",
+    id: "soan-thao",
+    label: "Hỗ trợ soạn thảo",
+    sublabel: "Viết email, thông báo chuyên nghiệp",
+    icon: LightbulbIcon,
+    prompt: "Viết giúp tôi một mẫu email thông báo mời họp nội bộ chuyên nghiệp",
+    mode: "personal"
   },
+  {
+    id: "nhan-su-list",
+    label: "Sơ đồ tổ chức",
+    sublabel: "Tìm kiếm thông tin đồng nghiệp",
+    icon: Users2Icon,
+    prompt: "Ai là người chịu trách nhiệm về mảng tuyển dụng tại Hacom?",
+    mode: "personal"
+  }
 ];
 
 interface AiSuggestionChipsProps {
@@ -56,27 +78,40 @@ interface AiSuggestionChipsProps {
 export const AiSuggestionChips: React.FC<AiSuggestionChipsProps> = ({
   onSelect,
 }) => {
-  const { t } = useTranslation("aiAssistant");
+  const { selectedEndpoint } = useChatUiStore();
+
+  const filteredSuggestions = SUGGESTIONS.filter(s => s.mode === "any" || s.mode === selectedEndpoint);
 
   return (
-    <div className="flex flex-wrap justify-center gap-2">
-      {SUGGESTIONS.map((suggestion) => {
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-3xl mx-auto">
+      {filteredSuggestions.map((suggestion, index) => {
         const Icon = suggestion.icon;
         return (
-          <button
+          <motion.button
             key={suggestion.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.05 }}
             type="button"
             onClick={() => onSelect(suggestion.prompt)}
             className={clsx(
-              "inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-2",
-              "text-body-sm text-text-secondary transition-all",
-              "hover:border-primary/50 hover:bg-primary/10 hover:text-text-primary",
-              "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+              "flex items-center gap-4 p-4 rounded-2xl border border-border bg-white text-left transition-all group",
+              "hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 hover:bg-primary/5",
+              "active:scale-[0.98]"
             )}
           >
-            <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
-            <span className="whitespace-nowrap">{t(suggestion.labelKey)}</span>
-          </button>
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface-active group-hover:bg-white text-text-muted group-hover:text-primary transition-all shadow-sm">
+              <Icon size={22} strokeWidth={2.5} />
+            </div>
+            <div className="flex flex-col min-w-0">
+               <span className="text-sm font-bold text-text-primary group-hover:text-primary transition-colors truncate">
+                  {suggestion.label}
+               </span>
+               <span className="text-[11px] font-medium text-text-muted truncate leading-relaxed">
+                  {suggestion.sublabel}
+               </span>
+            </div>
+          </motion.button>
         );
       })}
     </div>
