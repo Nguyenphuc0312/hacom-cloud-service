@@ -82,6 +82,8 @@ export interface AttendanceCalendarDay {
 
 export interface AttendanceCalendarResponse {
   items: AttendanceCalendarDay[];
+  reason?: string | null;
+  message?: string | null;
 }
 
 /**
