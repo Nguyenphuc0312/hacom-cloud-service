@@ -1,4 +1,4 @@
-﻿{
+{
   "app": {
     "name": "Hacom Chat",
     "shortName": "HC"
@@ -102,8 +102,8 @@
   },
   "emptyState": {
     "welcomeTitle": "Chào mừng đến với <1>Hacom Chat</1>",
-    "welcomeSubtitle1": "Nền tảng trò chuyện nội bộ an toàn, tốc độ cao dành cho nhân sự Hacom Holdings.",
-    "welcomeSubtitle2": "Kết nối, cộng tác và điều phối công việc hiệu quả.",
+    "welcomeSubtitle1": "Nền tảng trao đổi nội bộ bảo mật dành riêng cho Hacom Holdings",
+    "welcomeSubtitle2": "Đảm bảo kết nối ổn định, truyền tải nhanh và an toàn dữ liệu doanh nghiệp.",
     "featureCard": {
       "startChat": "Bắt đầu trò chuyện",
       "startChatDesc": "Tìm kiếm đồng nghiệp để nhắn tin hoặc tạo nhóm chat mới cho đội nhóm của bạn.",
@@ -112,6 +112,7 @@
       "completeProfile": "Hoàn thiện hồ sơ",
       "completeProfileDesc": "Cập nhật chức danh, phòng ban và ảnh đại diện chuyên nghiệp để đồng nghiệp dễ nhận diện bạn."
     },
+    "downloadPC": "Tải Hacom PC cho máy tính",
     "openProfile": "Mở hồ sơ"
   }
 }

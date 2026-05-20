@@ -5,7 +5,6 @@ import { useTranslation } from "react-i18next";
 import { ErrorCode } from "@hacom/chat-shared-types/core";
 import {
   MagnifyingGlassIcon,
-  NoSymbolIcon,
   UserGroupIcon,
   UserPlusIcon,
 } from "@heroicons/react/24/outline";
@@ -36,7 +35,7 @@ import {
   getFriendRequestDisplayUser,
 } from "../features/friends/requestDisplay";
 
-type TabKey = "friends" | "requests" | "discover" | "blocked" | "qr";
+type TabKey = "friends" | "requests" | "discover" | "qr";
 type RequestTabKey = "incoming" | "sent";
 
 interface ContactUser {
@@ -310,8 +309,6 @@ export const FriendsPage: React.FC = () => {
     sentRequests,
     isSentLoading,
     sentCount,
-    blockedUsers,
-    isBlockedLoading,
     pendingCount,
     refreshDirectory,
     getRelationshipState,
@@ -613,27 +610,19 @@ export const FriendsPage: React.FC = () => {
       label: t("friends:tabs.discover"),
     },
     {
-      id: "blocked" as const,
-      label: t("friends:tabs.blocked"),
-      count: blockedUsers.length,
-    },
-    {
       id: "qr" as const,
       label: t("friends:tabs.qr"),
     },
   ];
 
   const isDirectoryLoading =
-    isFriendsLoading || isIncomingLoading || isSentLoading || isBlockedLoading;
+    isFriendsLoading || isIncomingLoading || isSentLoading;
 
   const friendItems = useMemo(
     () => friends.map((friend) => toContactUser(friend)),
     [friends],
   );
-  const blockedItems = useMemo(
-    () => blockedUsers.map((user) => toContactUser(user)),
-    [blockedUsers],
-  );
+
 
   const renderFriendsTab = () => {
     if (isFriendsLoading && friendItems.length === 0) {
@@ -791,38 +780,7 @@ export const FriendsPage: React.FC = () => {
     </div>
   );
 
-  const renderBlockedTab = () => {
-    if (isBlockedLoading && blockedUsers.length === 0) {
-      return (
-        <DirectorySkeleton count={5} />
-      );
-    }
 
-    if (blockedItems.length === 0) {
-      return (
-        <StateBlock
-          icon={<NoSymbolIcon className="h-6 w-6" />}
-          title={t("friends:empty.blockedTitle")}
-          description={t("friends:empty.blockedBody")}
-          className="border-dashed shadow-none"
-        />
-      );
-    }
-
-    return (
-      <div className="space-y-1">
-        {blockedItems.map((user) => (
-          <ContactRow
-            key={user.id}
-            user={user}
-            selected={previewTarget?.userId === user.id}
-            onClick={() => setPreviewTarget(profileFromSummary(user))}
-            action={renderRelationshipAction(user)}
-          />
-        ))}
-      </div>
-    );
-  };
 
   const renderQrTab = () => (
     <FriendQrWorkspace initialShareCode={shareCode ?? null} />
@@ -882,7 +840,7 @@ export const FriendsPage: React.FC = () => {
               {activeTab === "friends" && renderFriendsTab()}
               {activeTab === "requests" && renderRequestsTab()}
               {activeTab === "discover" && renderDiscoverTab()}
-              {activeTab === "blocked" && renderBlockedTab()}
+
               {activeTab === "qr" && (
                 <>
                   <div className="hidden lg:block">

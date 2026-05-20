@@ -3,13 +3,11 @@ import React, {
   useDeferredValue,
   useMemo,
   useRef,
-  useState,
 } from "react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
-import { ConfirmDialog, SegmentedControl, SkeletonButton } from "../ui";
-import { useLogout, usePresence, useNotifications } from "../../hooks";
+import { SegmentedControl, SkeletonButton } from "../ui";
+import { usePresence, useNotifications } from "../../hooks";
 import { useAuthStore } from "../../stores";
 import { useChatStore } from "../../stores";
 import type { UserSummary } from "../../types";
@@ -19,7 +17,6 @@ import { SidebarContainer } from "./sidebar/SidebarContainer";
 import { SidebarHeader } from "./sidebar/SidebarHeader";
 import { SidebarSearch } from "./sidebar/SidebarSearch";
 import { RoomList } from "./sidebar/RoomList";
-import { ROUTE_PATHS } from "../../router/paths";
 import { useChatSidebarStore } from "../../features/chat/state/chatSidebarStore";
 import { useSidebarConversationList } from "../../features/chat/hooks/useSidebarConversationList";
 import type { ChatLayoutState } from "../../utils/densityPolicy";
@@ -56,17 +53,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   className,
 }) => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchQuery = useChatSidebarStore((state) => state.searchQuery);
   const setSearchQuery = useChatSidebarStore((state) => state.setSearchQuery);
   const activeFilter = useChatSidebarStore((state) => state.filter);
   const setActiveFilter = useChatSidebarStore((state) => state.setFilter);
   const deferredSearchQuery = useDeferredValue(searchQuery);
-  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
-  const { logout, isLoggingOut } = useLogout();
   const isAuthenticated = !!useAuthStore((s) => s.user);
-  const { markRead, markAllRead } = useNotifications(isAuthenticated);
+  useNotifications(isAuthenticated);
 
   const handleSelectRoom = useCallback(
     (conversationId: string) => {
@@ -95,13 +89,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   usePresence({ userIds: dmUserIds, enabled: dmUserIds.length > 0 });
 
-  const handleLogoutConfirm = async () => {
-    try {
-      await logout();
-    } finally {
-      setIsLogoutConfirmOpen(false);
-    }
-  };
+
 
   return (
     <>
@@ -110,11 +98,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           layoutState={layoutState}
           currentUser={currentUser}
           onCurrentUserClick={onCurrentUserClick}
-          onOpenFriends={() => navigate(ROUTE_PATHS.FRIENDS)}
-          onOpenSettings={() => navigate(ROUTE_PATHS.SETTINGS)}
-          onRequestLogout={() => setIsLogoutConfirmOpen(true)}
-          onMarkRead={markRead}
-          onMarkAllRead={markAllRead}
         />
 
         <SidebarSearch
@@ -141,11 +124,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 id: "all",
                 label: t("sidebar:tabs.all"),
                 count: counts.all,
-              },
-              {
-                id: "unread",
-                label: t("sidebar:tabs.unread"),
-                count: counts.unread,
               },
               {
                 id: "groups",
@@ -190,19 +168,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </SidebarContainer>
 
-      <ConfirmDialog
-        isOpen={isLogoutConfirmOpen}
-        onClose={() => {
-          if (!isLoggingOut) setIsLogoutConfirmOpen(false);
-        }}
-        onConfirm={handleLogoutConfirm}
-        title={t("sidebar:logout.confirmTitle")}
-        message={t("sidebar:logout.confirmMessage")}
-        confirmText={t("sidebar:logout.confirmText")}
-        cancelText={t("sidebar:logout.cancelText")}
-        variant="warning"
-        isLoading={isLoggingOut}
-      />
+
     </>
   );
 };

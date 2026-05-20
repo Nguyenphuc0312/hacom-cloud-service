@@ -13,6 +13,7 @@ import {
   InboxIcon,
   ExclamationTriangleIcon,
   DocumentArrowUpIcon,
+  ComputerDesktopIcon,
 } from "@heroicons/react/24/outline";
 import { Button } from "./Button";
 import { ROUTE_PATHS } from "../../router/paths";
@@ -77,9 +78,9 @@ export const EmptyConversations: React.FC<{
       action={
         onNewChat
           ? {
-              label: t("chat:empty.startNewChat"),
-              onClick: onNewChat,
-            }
+            label: t("chat:empty.startNewChat"),
+            onClick: onNewChat,
+          }
           : undefined
       }
     />
@@ -116,10 +117,10 @@ export const EmptySearchResults: React.FC<{
       action={
         onClear
           ? {
-              label: t("chat:empty.clearSearch"),
-              onClick: onClear,
-              variant: "outline",
-            }
+            label: t("chat:empty.clearSearch"),
+            onClick: onClear,
+            variant: "outline",
+          }
           : undefined
       }
     />
@@ -157,10 +158,10 @@ export const ErrorState: React.FC<{
       action={
         onRetry
           ? {
-              label: t("common:actions.retry"),
-              onClick: onRetry,
-              variant: "primary",
-            }
+            label: t("common:actions.retry"),
+            onClick: onRetry,
+            variant: "primary",
+          }
           : undefined
       }
     />
@@ -205,6 +206,7 @@ const WELCOME_SLIDES = [
 export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
   onNewChat,
 }) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [activeSlideIndex, setActiveSlideIndex] = React.useState(0);
   const activeSlide = WELCOME_SLIDES[activeSlideIndex];
@@ -253,8 +255,19 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
             Chào mừng đến với <span className="text-primary">Hacom Chat</span>
           </h2>
           <div className="mx-auto mt-4 max-w-[720px] text-[17px] font-medium leading-7 text-text-secondary inline-block text-left">
-            <p>Nền tảng trò chuyện nội bộ an toàn, tốc độ cao dành cho nhân sự Hacom Holdings.</p>
-            <p>Kết nối, cộng tác và điều phối công việc hiệu quả.</p>
+            <p>{t("common:emptyState.welcomeSubtitle1")}</p>
+            <p>{t("common:emptyState.welcomeSubtitle2")}</p>
+          </div>
+          <div className="mt-8 flex justify-center">
+            <Button
+              variant="outline"
+              size="lg"
+              className="rounded-full border-primary/20 hover:bg-primary/5 hover:text-primary transition-all duration-300"
+              leftIcon={<ComputerDesktopIcon className="h-5 w-5" />}
+              onClick={() => window.open("https://www.hacomholdings.vn/", "_blank")}
+            >
+              {t("common:emptyState.downloadPC")}
+            </Button>
           </div>
         </div>
 
@@ -269,11 +282,10 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
             </span>
             <div className="min-w-0">
               <p className="text-sm font-bold text-text-primary">
-                Bắt đầu trò chuyện
+                {t("common:emptyState.featureCard.startChat")}
               </p>
               <p className="mt-2 text-sm font-medium leading-5 text-text-secondary">
-                Tìm kiếm đồng nghiệp để nhắn tin hoặc tạo nhóm chat mới cho đội nhóm
-                của bạn.
+                {t("common:emptyState.featureCard.startChatDesc")}
               </p>
             </div>
           </button>
@@ -284,11 +296,10 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
             </span>
             <div className="min-w-0">
               <p className="text-sm font-bold text-text-primary">
-                Chia sẻ file an toàn
+                {t("common:emptyState.featureCard.shareFile")}
               </p>
               <p className="mt-2 text-sm font-medium leading-5 text-text-secondary">
-                Kéo thả tài liệu, bài thuyết trình và hình ảnh trực tiếp vào bất kỳ
-                cửa sổ chat nào.
+                {t("common:emptyState.featureCard.shareFileDesc")}
               </p>
             </div>
           </div>
@@ -297,11 +308,10 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
         <div className="mt-4 flex w-full max-w-[720px] items-center justify-between gap-4 rounded-lg border border-border bg-surface px-5 py-4 shadow-elev1">
           <div className="min-w-0">
             <p className="text-sm font-bold text-text-primary">
-              Hoàn thiện hồ sơ
+              {t("common:emptyState.featureCard.completeProfile")}
             </p>
             <p className="mt-1.5 text-sm font-medium leading-5 text-text-secondary">
-              Cập nhật chức danh, phòng ban và ảnh đại diện chuyên nghiệp để đồng
-              nghiệp dễ nhận diện bạn.
+              {t("common:emptyState.featureCard.completeProfileDesc")}
             </p>
           </div>
           <button
@@ -309,7 +319,7 @@ export const NoChatSelected: React.FC<NoChatSelectedProps> = ({
             className="h-10 shrink-0 rounded-lg bg-primary px-5 text-sm font-bold text-white transition-micro hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
             onClick={() => navigate(ROUTE_PATHS.SETTINGS)}
           >
-            Mở hồ sơ
+            {t("common:emptyState.openProfile")}
           </button>
         </div>
       </div>
