@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useResponsiveOptional } from "../responsive/responsive";
 
 export interface MobileViewportMetrics {
   width: number;
@@ -12,9 +13,28 @@ const FALLBACK_VIEWPORT: MobileViewportMetrics = {
   keyboardInset: 0,
 };
 
-const readViewportMetrics = (): MobileViewportMetrics => {
+const readKeyboardInset = (): number => {
   if (typeof window === "undefined") {
-    return FALLBACK_VIEWPORT;
+    return 0;
+  }
+
+  const visualViewport = window.visualViewport;
+  if (!visualViewport) {
+    return 0;
+  }
+
+  const layoutHeight = window.innerHeight;
+  const viewportBottom =
+    visualViewport.height + Math.max(0, visualViewport.offsetTop);
+  return Math.max(
+    0,
+    Math.round(layoutHeight - Math.min(layoutHeight, viewportBottom)),
+  );
+};
+
+const readLayoutSize = (): Pick<MobileViewportMetrics, "width" | "height"> => {
+  if (typeof window === "undefined") {
+    return { width: FALLBACK_VIEWPORT.width, height: FALLBACK_VIEWPORT.height };
   }
 
   const layoutWidth = window.innerWidth;
@@ -23,54 +43,62 @@ const readViewportMetrics = (): MobileViewportMetrics => {
 
   if (!visualViewport) {
     return {
-      width: layoutWidth,
-      height: layoutHeight,
-      keyboardInset: 0,
+      width: Math.round(layoutWidth),
+      height: Math.round(layoutHeight),
     };
   }
 
-  const width = Math.round(visualViewport.width);
-  const height = Math.round(visualViewport.height);
-  const viewportBottom =
-    visualViewport.height + Math.max(0, visualViewport.offsetTop);
-  const keyboardInset = Math.max(
-    0,
-    Math.round(layoutHeight - Math.min(layoutHeight, viewportBottom)),
-  );
-
   return {
-    width,
-    height,
-    keyboardInset,
+    width: Math.round(visualViewport.width),
+    height: Math.round(visualViewport.height),
   };
 };
 
 export const useMobileViewportMetrics = (): MobileViewportMetrics => {
-  const [metrics, setMetrics] = useState<MobileViewportMetrics>(() =>
-    readViewportMetrics(),
-  );
+  const globalLayout = useResponsiveOptional();
+  const [keyboardInset, setKeyboardInset] = useState(0);
+  const [localSize, setLocalSize] = useState(() => readLayoutSize());
 
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
 
+    const flushKeyboard = () => {
+      setKeyboardInset(readKeyboardInset());
+    };
+
+    flushKeyboard();
+    window.visualViewport?.addEventListener("resize", flushKeyboard);
+    window.visualViewport?.addEventListener("scroll", flushKeyboard);
+    window.addEventListener("resize", flushKeyboard);
+
+    return () => {
+      window.visualViewport?.removeEventListener("resize", flushKeyboard);
+      window.visualViewport?.removeEventListener("scroll", flushKeyboard);
+      window.removeEventListener("resize", flushKeyboard);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || globalLayout) {
+      return;
+    }
+
     let frameId: number | null = null;
-    const visualViewport = window.visualViewport;
 
     const flush = () => {
       frameId = null;
-      const nextMetrics = readViewportMetrics();
-      setMetrics((previous) => {
+      const nextSize = readLayoutSize();
+      setLocalSize((previous) => {
         if (
-          Math.abs(previous.width - nextMetrics.width) <= 1 &&
-          Math.abs(previous.height - nextMetrics.height) <= 1 &&
-          Math.abs(previous.keyboardInset - nextMetrics.keyboardInset) <= 1
+          Math.abs(previous.width - nextSize.width) <= 1 &&
+          Math.abs(previous.height - nextSize.height) <= 1
         ) {
           return previous;
         }
 
-        return nextMetrics;
+        return nextSize;
       });
     };
 
@@ -85,8 +113,8 @@ export const useMobileViewportMetrics = (): MobileViewportMetrics => {
     schedule();
     window.addEventListener("resize", schedule);
     window.addEventListener("orientationchange", schedule);
-    visualViewport?.addEventListener("resize", schedule);
-    visualViewport?.addEventListener("scroll", schedule);
+    window.visualViewport?.addEventListener("resize", schedule);
+    window.visualViewport?.addEventListener("scroll", schedule);
 
     return () => {
       if (frameId !== null) {
@@ -94,12 +122,24 @@ export const useMobileViewportMetrics = (): MobileViewportMetrics => {
       }
       window.removeEventListener("resize", schedule);
       window.removeEventListener("orientationchange", schedule);
-      visualViewport?.removeEventListener("resize", schedule);
-      visualViewport?.removeEventListener("scroll", schedule);
+      window.visualViewport?.removeEventListener("resize", schedule);
+      window.visualViewport?.removeEventListener("scroll", schedule);
     };
-  }, []);
+  }, [globalLayout]);
 
-  return metrics;
+  if (globalLayout) {
+    return {
+      width: globalLayout.width,
+      height: globalLayout.height,
+      keyboardInset,
+    };
+  }
+
+  return {
+    width: localSize.width,
+    height: localSize.height,
+    keyboardInset,
+  };
 };
 
 export default useMobileViewportMetrics;

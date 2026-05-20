@@ -32,8 +32,9 @@ import { ROUTE_PATHS } from "../router/paths";
 import { useSettings } from "../settings";
 import { useAuthStore } from "../stores";
 import { resolveUserDisplayName } from "../features/chat/identity/resolveUserDisplayName";
+import { RSP_BREAKPOINT_MIN } from "../responsive/responsive";
 
-const MOBILE_MEDIA_QUERY = "(max-width: 767px)";
+const MOBILE_MEDIA_QUERY = `(max-width: ${RSP_BREAKPOINT_MIN.md - 1}px)`;
 
 const SETTINGS_TARGETS = {
   profile: "settings-profile",

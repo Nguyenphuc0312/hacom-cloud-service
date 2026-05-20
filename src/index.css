@@ -1310,8 +1310,9 @@ a:focus-visible {
   }
 
   .hc-app-shell {
-    display: grid;
-    grid-template-columns: var(--hc-sidebar-width) minmax(0, 1fr);
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
     height: 100%;
     max-height: 100%;
     min-height: 0;
@@ -1320,9 +1321,17 @@ a:focus-visible {
     background: var(--hc-bg-app);
   }
 
+  .hc-app-shell > :first-child {
+    flex: 0 0 auto;
+    width: var(--hc-sidebar-width);
+    min-width: 0;
+    max-width: min(100%, var(--hc-sidebar-width));
+  }
+
   .hc-app-shell__main {
     position: relative;
     display: flex;
+    flex: 1 1 0%;
     min-width: 0;
     min-height: 0;
     overflow: hidden;
@@ -1568,7 +1577,7 @@ a:focus-visible {
     width: 100%;
     align-items: center;
     gap: var(--space-3);
-    padding-inline: var(--app-shell-gutter);
+    padding-inline: var(--rsp-shell-gutter-px, var(--app-shell-gutter));
   }
 
   .app-page-back-button {
@@ -1600,7 +1609,7 @@ a:focus-visible {
     flex: 1;
     width: 100%;
     overflow: hidden;
-    padding: var(--space-5) var(--app-shell-gutter);
+    padding: var(--space-5) var(--rsp-shell-gutter-px, var(--app-shell-gutter));
   }
 
   .app-page-shell--narrow .app-page-header__inner,
@@ -1658,8 +1667,11 @@ a:focus-visible {
   }
 
   @media (max-width: 1023px) {
-    .hc-app-shell {
-      grid-template-columns: var(--hc-sidebar-width-tablet) minmax(0, 1fr);
+    .hc-app-shell > :first-child {
+      flex: 0 0 auto;
+      width: var(--hc-sidebar-width-tablet);
+      max-width: min(50vw, var(--hc-sidebar-width-tablet));
+      min-width: 0;
     }
 
     .private-app-viewport>.hc-side-rail {
@@ -1685,8 +1697,9 @@ a:focus-visible {
       position: relative;
       inset: auto;
       z-index: 0;
-      width: auto;
-      max-width: none;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
       box-shadow: none;
     }
 
@@ -1703,7 +1716,6 @@ a:focus-visible {
   @media (max-width: 767px) {
     .hc-app-shell {
       --hc-sidebar-width-tablet: clamp(220px, 44vw, 280px);
-      grid-template-columns: var(--hc-sidebar-width-tablet) minmax(0, 1fr);
     }
   }
 }
