@@ -164,7 +164,7 @@ export function getMessagePreview(
       preview = i18n.t("chat:preview.sticker");
       break;
     case MessageType.CONTACT: {
-      const meta = (message as Message).metadata;
+      const meta = (message as Message).metadata as Record<string, unknown> | undefined;
       const att = (meta?.attachment ?? meta?.contact) as Record<string, unknown> | undefined;
       const name = typeof att?.displayName === "string" && att.displayName.trim()
         ? att.displayName.trim()
