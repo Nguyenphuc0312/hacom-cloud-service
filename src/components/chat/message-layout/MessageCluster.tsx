@@ -467,8 +467,8 @@ export const MessageClusterComponent: React.FC<MessageClusterProps> = ({
                     ? "cursor-pointer hover:opacity-90"
                     : "cursor-default",
                   isOwn
-                    ? "border-primary/70 bg-primary/5 text-text-primary dark:bg-primary/15"
-                    : "border-primary/40 bg-surface-hover/80 text-text-primary dark:bg-surface-hover/30",
+                    ? "border-primary/70 bg-primary/10 text-text-primary dark:bg-primary/20"
+                    : "border-primary/40 bg-surface-hover text-text-primary dark:bg-surface-hover/50",
                 )}
               >
                 <div className="flex min-w-0 flex-1 items-center gap-2.5">
