@@ -222,8 +222,8 @@ export const AiSidebar: React.FC = () => {
       {/* 4. Footer User Info (Visual only for SAE feeling) */}
       <div className="p-4 border-t border-border/50 bg-surface-active/20">
          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center text-white font-black shadow-lg shadow-primary/20">
-               H
+            <div className="h-10 w-10 shrink-0">
+               <img alt="Hacom Holdings" className="h-full w-full object-contain" src="/logo-dung.png" />
             </div>
             <div className="flex flex-col min-w-0">
                <span className="text-sm font-black text-text-primary truncate uppercase tracking-tighter">Hacom Holdings</span>
