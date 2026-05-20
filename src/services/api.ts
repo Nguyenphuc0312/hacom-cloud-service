@@ -1313,14 +1313,10 @@ export const fileApi = {
       "/files/upload-url", 
       { 
         ...(payload.uploadId ? { uploadId: payload.uploadId } : {}),
-        purpose: payload.purpose, 
-        ...(payload.conversationId 
-          ? { conversationId: payload.conversationId } 
-          : {}), 
-        ...(payload.groupId ? { groupId: payload.groupId } : {}),
-        filename: payload.filename,
+        conversationId: payload.conversationId || "",
+        fileName: payload.filename,
         mimeType: payload.mimeType,
-        sizeBytes: payload.sizeBytes,
+        fileSize: payload.sizeBytes,
       } satisfies UploadSignedUrlRequest,
     ); 
     return response.data; 
@@ -1341,10 +1337,7 @@ export const fileApi = {
     });
   },
 
-  completeFileUpload: async (payload: {
-    uploadId: string;
-    checksum?: string;
-  }) => {
+  completeFileUpload: async (payload: CompleteUploadRequest) => {
     const response = await apiClient.post<ApiResponse<CompleteUploadResponse>>(
       "/files/complete",
       payload satisfies CompleteUploadRequest,
@@ -1360,7 +1353,8 @@ export const fileApi = {
   }) => {
     return fileApi.completeFileUpload({
       uploadId: payload.uploadId,
-      checksum: payload.checksum,
+      conversationId: payload.conversationId || "",
+      objectKey: payload.objectKey || "",
     });
   },
 

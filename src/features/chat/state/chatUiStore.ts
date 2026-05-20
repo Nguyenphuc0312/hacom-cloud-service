@@ -52,6 +52,8 @@ interface ChatUiState {
   setMediaPanelOpen: (value: boolean) => void;
   setComposerDraft: (conversationId: string, value: string) => void;
   clearComposerDraft: (conversationId: string) => void;
+  selectedEndpoint: "company" | "personal";
+  setSelectedEndpoint: (endpoint: "company" | "personal") => void;
 }
 
 export const useChatUiStore = create<ChatUiState>((set) => ({
@@ -92,4 +94,11 @@ export const useChatUiStore = create<ChatUiState>((set) => ({
         composerDraftByConversation: nextDrafts,
       };
     }),
+  selectedEndpoint: (typeof window !== "undefined" && window.sessionStorage.getItem("chat:selectedEndpoint") as "company" | "personal") || "company",
+  setSelectedEndpoint: (endpoint) => {
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem("chat:selectedEndpoint", endpoint);
+    }
+    set({ selectedEndpoint: endpoint });
+  },
 }));

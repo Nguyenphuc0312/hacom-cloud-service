@@ -1,51 +1,72 @@
 import React from "react";
-import { useTranslation } from "react-i18next";
-import clsx from "clsx";
 import {
-  DocumentMagnifyingGlassIcon,
-  ClipboardDocumentCheckIcon,
-  UsersIcon,
-  QuestionMarkCircleIcon,
-  ArchiveBoxIcon,
-} from "@heroicons/react/24/outline";
+  FileTextIcon,
+  CalendarDaysIcon,
+  Users2Icon,
+  SearchIcon,
+  LightbulbIcon,
+  HeartHandshakeIcon,
+} from "lucide-react";
+import { useChatUiStore } from "../../chat/state/chatUiStore";
 
 export interface AiSuggestion {
   id: string;
-  labelKey: string;
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  label: string;
+  sublabel: string;
+  icon: any;
   prompt: string;
+  mode: "company" | "personal" | "any";
 }
 
 const SUGGESTIONS: AiSuggestion[] = [
   {
-    id: "latest-docs",
-    labelKey: "suggestions.latestDocs",
-    icon: ArchiveBoxIcon,
-    prompt: "Tóm tắt tài liệu mới nhất",
+    id: "nhan-su-v2",
+    label: "Quy trình nghỉ phép",
+    sublabel: "Tìm hiểu thủ tục xin nghỉ",
+    icon: CalendarDaysIcon,
+    prompt: "Quy trình xin nghỉ phép của công ty như thế nào?",
+    mode: "company",
   },
   {
-    id: "van-thu",
-    labelKey: "suggestions.vanThu",
-    icon: ClipboardDocumentCheckIcon,
-    prompt: "Quy định về công tác văn thư là gì?",
+    id: "van-thu-v2",
+    label: "Công tác văn thư",
+    sublabel: "Quy định văn bản & lưu trữ",
+    icon: FileTextIcon,
+    prompt: "Tóm tắt các quy định quan trọng về công tác văn thư lưu trữ",
+    mode: "company",
   },
   {
-    id: "nhan-su",
-    labelKey: "suggestions.nhanSu",
-    icon: UsersIcon,
-    prompt: "Tìm thông tin liên quan đến nhân sự",
+    id: "nhan-su-v3",
+    label: "Chính sách nhân sự",
+    sublabel: "Phúc lợi & lương thưởng",
+    icon: HeartHandshakeIcon,
+    prompt: "Hacom có những chính sách phúc lợi đặc biệt nào cho nhân viên?",
+    mode: "company",
   },
   {
-    id: "find-documents",
-    labelKey: "suggestions.findDocuments",
-    icon: DocumentMagnifyingGlassIcon,
-    prompt: "Tìm tài liệu số hóa",
+    id: "find-docs-v2",
+    label: "Tìm tài liệu nội bộ",
+    sublabel: "Tra cứu chính sách",
+    icon: SearchIcon,
+    prompt: "Tìm giúp tôi bộ quy trình làm việc của phòng CNTT",
+    mode: "company",
   },
   {
-    id: "ask-process",
-    labelKey: "suggestions.askProcess",
-    icon: QuestionMarkCircleIcon,
-    prompt: "Hỏi về quy trình nội bộ",
+    id: "soan-thao",
+    label: "Hỗ trợ soạn thảo",
+    sublabel: "Viết email & thông báo",
+    icon: LightbulbIcon,
+    prompt:
+      "Viết giúp tôi một mẫu email thông báo mời họp nội bộ chuyên nghiệp",
+    mode: "personal",
+  },
+  {
+    id: "nhan-su-list",
+    label: "Sơ đồ tổ chức",
+    sublabel: "Tìm kiếm đồng nghiệp",
+    icon: Users2Icon,
+    prompt: "Ai là người chịu trách nhiệm về mảng tuyển dụng tại Hacom?",
+    mode: "personal",
   },
 ];
 
@@ -53,29 +74,41 @@ interface AiSuggestionChipsProps {
   onSelect: (prompt: string) => void;
 }
 
+/**
+ * Gợi ý câu hỏi kiểu ChatGPT – card border nhẹ, 2 cột,
+ * hover hiệu ứng nhẹ nhàng.
+ */
 export const AiSuggestionChips: React.FC<AiSuggestionChipsProps> = ({
   onSelect,
 }) => {
-  const { t } = useTranslation("aiAssistant");
+  const { selectedEndpoint } = useChatUiStore();
+
+  const filteredSuggestions = SUGGESTIONS.filter(
+    (s) => s.mode === "any" || s.mode === selectedEndpoint,
+  );
 
   return (
-    <div className="flex flex-wrap justify-center gap-2">
-      {SUGGESTIONS.map((suggestion) => {
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+      {filteredSuggestions.map((suggestion) => {
         const Icon = suggestion.icon;
         return (
           <button
             key={suggestion.id}
             type="button"
             onClick={() => onSelect(suggestion.prompt)}
-            className={clsx(
-              "inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-2",
-              "text-body-sm text-text-secondary transition-all",
-              "hover:border-primary/50 hover:bg-primary/10 hover:text-text-primary",
-              "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-            )}
+            className="flex items-start gap-3 p-3.5 rounded-xl border border-gray-200 bg-white text-left transition-all hover:bg-gray-50 hover:border-gray-300 active:scale-[0.99] group"
           >
-            <Icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
-            <span className="whitespace-nowrap">{t(suggestion.labelKey)}</span>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500 group-hover:bg-gray-200 transition-colors">
+              <Icon size={18} strokeWidth={2} />
+            </div>
+            <div className="flex flex-col min-w-0 gap-0.5">
+              <span className="text-sm font-medium text-gray-800 truncate">
+                {suggestion.label}
+              </span>
+              <span className="text-xs text-gray-400 truncate">
+                {suggestion.sublabel}
+              </span>
+            </div>
           </button>
         );
       })}

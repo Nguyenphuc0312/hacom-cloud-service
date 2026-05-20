@@ -103,9 +103,9 @@ const readPersistedDrafts = (
     const parsed = JSON.parse(raw) as unknown;
     return Array.isArray(parsed)
       ? parsed.filter(
-          (item): item is PersistedAttachmentDraft =>
-            Boolean(item) && typeof item === "object",
-        )
+        (item): item is PersistedAttachmentDraft =>
+          Boolean(item) && typeof item === "object",
+      )
       : [];
   } catch {
     return [];
@@ -436,7 +436,7 @@ export function useUploadQueue({
 
           try {
             await uploadClient.uploadToSignedUrl({
-              signedUrl: signed.signedPutUrl || signed.uploadUrl,
+              signedUrl: signed.uploadUrl,
               method: signed.uploadMethod || "PUT",
               headers: {
                 ...(signed.uploadHeaders || {}),
@@ -494,9 +494,11 @@ export function useUploadQueue({
 
         const completed = await uploadClient.completeUpload({
           uploadId: signed.uploadId,
+          conversationId: conversationId,
+          objectKey: signed.objectKey,
         });
         const attachment = completed.attachment;
-        const fileId = completed.fileId || attachment.fileId || attachment.id;
+        const fileId = attachment.id;
         if (!fileId) {
           throw new Error("UPLOAD_COMPLETE_MISSING_FILE_ID");
         }
@@ -709,8 +711,8 @@ export function useUploadQueue({
                   : "error:upload.unsupportedType",
                 validatedType.code === "MIME_EXTENSION_MISMATCH"
                   ? {
-                      defaultValue: "File extension does not match file type",
-                    }
+                    defaultValue: "File extension does not match file type",
+                  }
                   : { defaultValue: "Unsupported file type" },
               ),
             );
