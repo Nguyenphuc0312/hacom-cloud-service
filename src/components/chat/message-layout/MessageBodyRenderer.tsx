@@ -190,7 +190,7 @@ const ContactCard: React.FC<{
       onClick={handleViewProfile}
       className={clsx(
         "text-xs font-medium underline-offset-2 hover:underline",
-        isOwn ? "text-text-inverse/70" : "text-text-secondary",
+        isOwn ? "opacity-75 hover:opacity-100" : "text-text-secondary hover:text-primary",
       )}
     >
       {t("chat:contactShare.viewProfile", { defaultValue: "View profile" })}
@@ -212,7 +212,7 @@ const ContactCard: React.FC<{
             className={clsx(
               "rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60",
               isOwn
-                ? "bg-text-inverse/15 text-text-inverse hover:bg-text-inverse/25"
+                ? "bg-black/[0.08] dark:bg-white/15 hover:bg-black/[0.13] dark:hover:bg-white/20"
                 : "bg-primary/10 text-primary hover:bg-primary/20",
             )}
           >
@@ -235,7 +235,7 @@ const ContactCard: React.FC<{
             className={clsx(
               "rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60",
               isOwn
-                ? "bg-text-inverse/15 text-text-inverse hover:bg-text-inverse/25"
+                ? "bg-black/[0.08] dark:bg-white/15 hover:bg-black/[0.13] dark:hover:bg-white/20"
                 : "bg-success/10 text-success hover:bg-success/20",
             )}
           >
@@ -253,7 +253,7 @@ const ContactCard: React.FC<{
             className={clsx(
               "rounded-lg px-2.5 py-1 text-xs font-medium opacity-55",
               isOwn
-                ? "bg-text-inverse/10 text-text-inverse"
+                ? "bg-black/[0.06] dark:bg-white/10"
                 : "bg-surface-overlay text-text-muted",
             )}
           >
@@ -277,7 +277,7 @@ const ContactCard: React.FC<{
             className={clsx(
               "rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60",
               isOwn
-                ? "bg-text-inverse/15 text-text-inverse hover:bg-text-inverse/25"
+                ? "bg-black/[0.08] dark:bg-white/15 hover:bg-black/[0.13] dark:hover:bg-white/20"
                 : "bg-primary/10 text-primary hover:bg-primary/20",
             )}
           >
@@ -296,14 +296,14 @@ const ContactCard: React.FC<{
       className={clsx(
         "min-w-[14rem] space-y-2 rounded-xl border px-3 py-2.5",
         isOwn
-          ? "border-text-inverse/15 bg-text-inverse/8"
+          ? "border-black/10 bg-black/[0.06] dark:border-white/15 dark:bg-white/10"
           : "border-border bg-surface-overlay/50",
       )}
     >
       <p
         className={clsx(
           "text-[10px] font-medium uppercase tracking-wider",
-          isOwn ? "text-text-inverse/50" : "text-text-muted",
+          isOwn ? "opacity-55" : "text-text-muted",
         )}
       >
         {t("chat:contactShare.cardLabel", { defaultValue: "Contact card" })}
@@ -316,20 +316,20 @@ const ContactCard: React.FC<{
             {payload.displayName}
           </p>
           {payload.username && (
-            <p className="truncate text-xs opacity-80">@{payload.username}</p>
+            <p className="truncate text-xs opacity-70">@{payload.username}</p>
           )}
         </div>
       </div>
 
       {(payload.phone || payload.email) && (
-        <div className="space-y-0.5 text-xs opacity-85">
+        <div className="space-y-0.5 text-xs opacity-75">
           {payload.phone && <p>{payload.phone}</p>}
           {payload.email && <p>{payload.email}</p>}
         </div>
       )}
 
       {(payload.orgUnit || payload.title) && (
-        <div className="space-y-0.5 text-xs opacity-80">
+        <div className="space-y-0.5 text-xs opacity-70">
           {payload.orgUnit && <p>{payload.orgUnit}</p>}
           {payload.title && <p>{payload.title}</p>}
         </div>
