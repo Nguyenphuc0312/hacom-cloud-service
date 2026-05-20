@@ -83,11 +83,14 @@ const applyRefreshedTokens = (
     return;
   }
 
-  if (!refreshToken) {
-    throw new Error("Refresh response missing refresh token");
+  // Use the rotated token if the backend provided one; otherwise keep the
+  // existing refresh token. Some backends don't rotate on every refresh call.
+  const tokenToStore = refreshToken ?? getRefreshToken();
+  if (!tokenToStore) {
+    throw new Error("No refresh token available to persist after refresh");
   }
 
-  storeTokens(accessToken, refreshToken, isRememberMeEnabled());
+  storeTokens(accessToken, tokenToStore, isRememberMeEnabled());
 };
 
 const performRefresh = async (trigger: AuthRefreshTrigger): Promise<string> => {
