@@ -1,78 +1,64 @@
 import React from "react";
-import { 
-  Building2Icon, 
-  SparklesIcon, 
-  ShieldCheckIcon,
-  WifiIcon,
+import {
+  Building2Icon,
+  SparklesIcon,
   PanelRightIcon,
-  ClockIcon
+  ChevronDownIcon,
 } from "lucide-react";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
 import { useAiAssistantStore } from "../state/aiAssistantStore";
 import clsx from "clsx";
 
+/**
+ * Header tối giản kiểu ChatGPT – chỉ hiện model name + toggle source panel.
+ */
 export const AiChatHeader: React.FC = () => {
   const { selectedEndpoint } = useChatUiStore();
-  const { isSourcePanelOpen, toggleSourcePanel, activeConversationId, conversations } = useAiAssistantStore();
-  
+  const { isSourcePanelOpen, toggleSourcePanel } = useAiAssistantStore();
+
   const isCompany = selectedEndpoint === "company";
-  const activeConversation = conversations.find(c => c.id === activeConversationId);
 
   return (
-    <header className="flex h-16 flex-shrink-0 items-center justify-between border-b border-border bg-surface/80 backdrop-blur-md px-6 sticky top-0 z-30">
-      {/* Left Interface Status */}
-      <div className="flex items-center gap-4">
-        <div className={clsx(
-          "flex h-10 w-10 items-center justify-center rounded-xl shadow-sm",
-          isCompany ? "bg-primary/10 text-primary" : "bg-success/10 text-success"
-        )}>
-          {isCompany ? <Building2Icon size={20} strokeWidth={2.5} /> : <SparklesIcon size={20} strokeWidth={2.5} />}
+    <header className="flex h-12 flex-shrink-0 items-center justify-between px-4 sticky top-0 z-30 bg-white border-b border-gray-100">
+      {/* Left – Model label */}
+      <button className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition-colors group">
+        <div
+          className={clsx(
+            "flex h-6 w-6 items-center justify-center rounded-md",
+            isCompany
+              ? "bg-blue-600 text-white"
+              : "bg-emerald-600 text-white",
+          )}
+        >
+          {isCompany ? (
+            <Building2Icon size={14} strokeWidth={2.5} />
+          ) : (
+            <SparklesIcon size={14} strokeWidth={2.5} />
+          )}
         </div>
-        
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <h2 className="text-sm font-black text-text-primary uppercase tracking-tight">
-              {isCompany ? "HACOM Knowledge Base" : "Personal AI Assistant"}
-            </h2>
-            <div className={clsx(
-               "flex items-center gap-1 px-2 py-0.5 rounded-full text-[90%] font-bold uppercase tracking-widest",
-               isCompany ? "bg-primary/10 text-primary" : "bg-success/10 text-success"
-            )}>
-               <ShieldCheckIcon size={10} strokeWidth={3} />
-               <span>Verified</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-[10px] text-text-muted font-bold uppercase tracking-wider">
-             <span className="flex items-center gap-1 text-success">
-                <WifiIcon size={10} strokeWidth={3} />
-                Connected
-             </span>
-             <span className="h-1 w-1 rounded-full bg-border" />
-             {activeConversation ? (
-               <span className="flex items-center gap-1">
-                 <ClockIcon size={10} strokeWidth={3} />
-                 Updated {new Date(activeConversation.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-               </span>
-             ) : (
-               <span>Ready to help</span>
-             )}
-          </div>
-        </div>
-      </div>
+        <span className="text-sm font-semibold text-gray-800">
+          {isCompany ? "Hệ thống tri thức nội bộ" : "trợ lý ảo cá nhân"}
+        </span>
+        <ChevronDownIcon
+          size={14}
+          className="text-gray-400 group-hover:text-gray-600 transition-colors"
+        />
+      </button>
 
-      {/* Right Actions */}
-      <div className="flex items-center gap-3">
+      {/* Right – Source panel toggle */}
+      <div className="flex items-center gap-1">
         <button
           onClick={() => toggleSourcePanel()}
           className={clsx(
-            "flex h-10 w-10 items-center justify-center rounded-xl transition-all border border-border",
-            isSourcePanelOpen 
-              ? "bg-primary/10 text-primary border-primary/20 shadow-sm" 
-              : "text-text-muted hover:bg-surface-active hover:text-text-primary"
+            "flex h-8 w-8 items-center justify-center rounded-lg transition-all",
+            isSourcePanelOpen
+              ? "bg-gray-200 text-gray-700"
+              : "text-gray-400 hover:bg-gray-100 hover:text-gray-600",
           )}
           title="Tài liệu tham chiếu"
+          aria-label="Toggle source panel"
         >
-          <PanelRightIcon size={20} strokeWidth={2} />
+          <PanelRightIcon size={18} strokeWidth={1.8} />
         </button>
       </div>
     </header>
