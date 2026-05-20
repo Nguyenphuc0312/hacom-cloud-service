@@ -17,6 +17,7 @@ import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import type { AiMessage, AiChatSource } from "../types";
 import { useAiAssistantStore } from "../state/aiAssistantStore";
+import { useChatUiStore } from "../../chat/state/chatUiStore";
 import "../styles/ai-animations.css";
 
 interface AiChatPreviewProps {
@@ -37,9 +38,9 @@ const ThinkingBlock: React.FC<{ content: string }> = ({ content }) => {
         className="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-600 transition-colors mb-1"
       >
         <div className="flex gap-1">
-          <span className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-bounce [animation-duration:1s]" />
-          <span className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-bounce [animation-duration:1s] [animation-delay:0.2s]" />
-          <span className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-bounce [animation-duration:1s] [animation-delay:0.4s]" />
+          <span className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-dot-bounce" style={{ animationDelay: '0s' }} />
+          <span className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-dot-bounce" style={{ animationDelay: '0.2s' }} />
+          <span className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-dot-bounce" style={{ animationDelay: '0.4s' }} />
         </div>
         <span className="font-medium">Đang suy nghĩ...</span>
       </button>
@@ -62,6 +63,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const { setSelectedSources, toggleSourcePanel } = useAiAssistantStore();
+  const { selectedEndpoint } = useChatUiStore();
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -129,7 +131,7 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
               >
                 {/* Label */}
                 <span className="text-xs font-semibold text-gray-500 mb-1">
-                  {message.role === "user" ? "Bạn" : "AI"}
+                  {message.role === "user" ? "Bạn" : (selectedEndpoint === "company" ? "Hacom AI" : "Trợ lý ảo cá nhân")}
                 </span>
 
                 {/* Thinking */}
@@ -254,13 +256,13 @@ export const AiChatPreview: React.FC<AiChatPreviewProps> = ({
                 </div>
                 <div className="flex flex-col gap-1">
                   <span className="text-xs font-semibold text-gray-500 mb-1">
-                    AI
+                    {selectedEndpoint === "company" ? "Hacom AI" : "Trợ lý ảo cá nhân"}
                   </span>
-                  <div className="flex items-center gap-1.5 py-1">
-                    <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce [animation-duration:1s]" />
-                    <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce [animation-duration:1s] [animation-delay:0.15s]" />
-                    <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce [animation-duration:1s] [animation-delay:0.3s]" />
-                  </div>
+                    <div className="flex items-center gap-1.5 py-1">
+                      <span className="h-2 w-2 rounded-full bg-gray-400 animate-dot-bounce" style={{ animationDelay: '0s' }} />
+                      <span className="h-2 w-2 rounded-full bg-gray-400 animate-dot-bounce" style={{ animationDelay: '0.2s' }} />
+                      <span className="h-2 w-2 rounded-full bg-gray-400 animate-dot-bounce" style={{ animationDelay: '0.4s' }} />
+                    </div>
                 </div>
               </div>
             </div>

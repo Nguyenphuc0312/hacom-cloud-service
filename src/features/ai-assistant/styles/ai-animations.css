@@ -19,6 +19,11 @@
   50% { opacity: 0; }
 }
 
+@keyframes dot-bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-4px); }
+}
+
 .animate-shimmer {
   animation: shimmer 2s linear infinite;
 }
@@ -33,6 +38,10 @@
 
 .animate-typing-cursor {
   animation: typing-cursor 0.8s ease-in-out infinite;
+}
+
+.animate-dot-bounce {
+  animation: dot-bounce 1.4s infinite ease-in-out;
 }
 
 /* ── ChatGPT-style Prose Overrides ── */

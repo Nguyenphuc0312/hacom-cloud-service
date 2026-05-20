@@ -37,7 +37,7 @@ export const AiChatHeader: React.FC = () => {
           )}
         </div>
         <span className="text-sm font-semibold text-gray-800">
-          {isCompany ? "Hệ thống tri thức nội bộ" : "trợ lý ảo cá nhân"}
+          {isCompany ? "Hacom AI" : "Trợ lý ảo cá nhân"}
         </span>
         <ChevronDownIcon
           size={14}
