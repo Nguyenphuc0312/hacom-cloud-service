@@ -338,7 +338,8 @@
     "file": "File",
     "voice": "Voice message",
     "location": "Location",
-    "sticker": "Sticker"
+    "sticker": "Sticker",
+    "contact": "[Contact card]"
   },
   "confirm": {
     "deleteForMeTitle": "Delete for me?",
