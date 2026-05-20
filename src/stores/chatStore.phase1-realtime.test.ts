@@ -719,6 +719,91 @@ describe("chatStore.phase1-realtime — message deduplication contract", () => {
 // Read monotonicity contract
 // ============================================
 
+// ============================================
+// mergeConversationSummary — stale-read guard
+// ============================================
+
+describe("chatStore.phase1-realtime — mergeConversationSummary stale-read guard", () => {
+  const coerceSeq = (value: unknown): number => {
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+    if (typeof value === "string" && /^[1-9]\d*$/.test(value)) {
+      const parsed = Number(value);
+      if (Number.isSafeInteger(parsed) && parsed > 0) return parsed;
+    }
+    return 0;
+  };
+
+  const computePreserveLocalRead = (
+    current: { unreadCount?: number; lastReadSeq?: number | string },
+    incoming: { unreadCount?: number; lastReadSeq?: number | string },
+  ): boolean => {
+    const currentLastReadSeq = coerceSeq(current.lastReadSeq);
+    const incomingLastReadSeq = coerceSeq(incoming.lastReadSeq);
+    const localReadIsAhead = currentLastReadSeq > 0 && currentLastReadSeq > incomingLastReadSeq;
+    return (
+      localReadIsAhead ||
+      ((current.unreadCount ?? 0) === 0 &&
+        (incoming.unreadCount ?? 0) > 0 &&
+        incomingLastReadSeq < currentLastReadSeq)
+    );
+  };
+
+  it("applies incoming unreadCount when new message arrives with same lastReadSeq", () => {
+    // User read up to seq 10, new message at seq 11.
+    // Server rebuilds: lastReadSeq=10 (checkpoint unchanged), unreadCount=1 (1 new msg).
+    // Guard must NOT preserve local read=0 — there IS a new message.
+    const preserve = computePreserveLocalRead(
+      { unreadCount: 0, lastReadSeq: 10 },
+      { unreadCount: 1, lastReadSeq: 10 },
+    );
+    expect(preserve).toBe(false);
+  });
+
+  it("preserves local read when server lastReadSeq is behind local (stale REST race)", () => {
+    // User marked read to seq 10 (optimistic), stale GET returns lastReadSeq=8, unreadCount=5.
+    const preserve = computePreserveLocalRead(
+      { unreadCount: 0, lastReadSeq: 10 },
+      { unreadCount: 5, lastReadSeq: 8 },
+    );
+    expect(preserve).toBe(true);
+  });
+
+  it("preserves local read when local checkpoint is strictly ahead of incoming", () => {
+    const preserve = computePreserveLocalRead(
+      { unreadCount: 0, lastReadSeq: 15 },
+      { unreadCount: 3, lastReadSeq: 12 },
+    );
+    expect(preserve).toBe(true);
+  });
+
+  it("does not preserve when current already has unreadCount > 0", () => {
+    // Current has existing unread — incoming can always overwrite
+    const preserve = computePreserveLocalRead(
+      { unreadCount: 2, lastReadSeq: 10 },
+      { unreadCount: 5, lastReadSeq: 10 },
+    );
+    expect(preserve).toBe(false);
+  });
+
+  it("does not preserve when incoming unreadCount is 0", () => {
+    // Server says no unread — always accept
+    const preserve = computePreserveLocalRead(
+      { unreadCount: 0, lastReadSeq: 10 },
+      { unreadCount: 0, lastReadSeq: 10 },
+    );
+    expect(preserve).toBe(false);
+  });
+
+  it("coerces BIGINT string lastReadSeq correctly", () => {
+    // Backend sends seq as string
+    const preserve = computePreserveLocalRead(
+      { unreadCount: 0, lastReadSeq: 10 },
+      { unreadCount: 1, lastReadSeq: "10" },
+    );
+    expect(preserve).toBe(false);
+  });
+});
+
 describe("chatStore.phase1-realtime — read monotonicity", () => {
   it("lastReadSeq must be monotonic — new value must be >= current", () => {
     const advanceRead = (
