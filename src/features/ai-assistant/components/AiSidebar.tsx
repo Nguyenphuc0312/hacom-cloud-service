@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import clsx from "clsx";
-import { 
+import {
   PlusIcon,
   SearchIcon,
   Trash2Icon,
@@ -9,23 +9,27 @@ import {
   MessageSquareIcon,
   Building2Icon,
   UserCircle2Icon,
-  PinOffIcon
+  PinOffIcon,
+  PanelLeftCloseIcon,
 } from "lucide-react";
 import { useAiAssistantStore } from "../state/aiAssistantStore";
 import { useChatUiStore } from "../../chat/state/chatUiStore";
-import { motion } from "framer-motion";
-import { format, isToday, isYesterday, subDays, isAfter } from "date-fns";
-import { vi } from "date-fns/locale";
+import { isToday, isYesterday, subDays, isAfter } from "date-fns";
 
+/**
+ * Sidebar trái hiển thị danh sách hội thoại AI, nút tạo mới,
+ * tabs chuyển đổi Công ty / Cá nhân – phong cách ChatGPT.
+ */
 export const AiSidebar: React.FC = () => {
-  const { 
-    conversations, 
-    activeConversationId, 
-    setActiveConversation, 
+  const {
+    conversations,
+    activeConversationId,
+    setActiveConversation,
     createNewConversation,
     deleteConversation,
     togglePinConversation,
-    renameConversation
+    renameConversation,
+    toggleSidebar,
   } = useAiAssistantStore();
 
   const { selectedEndpoint, setSelectedEndpoint } = useChatUiStore();
@@ -35,31 +39,66 @@ export const AiSidebar: React.FC = () => {
 
   const activeTab = selectedEndpoint;
 
-  // Grouping logic
+  /** Nhóm hội thoại theo thời gian */
   const groupedConversations = useMemo(() => {
-    const filtered = conversations.filter(c => 
-      c.endpoint === activeTab &&
-      (c.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-       c.messages.some(m => m.content.toLowerCase().includes(searchQuery.toLowerCase())))
+    const filtered = conversations.filter(
+      (c) =>
+        c.endpoint === activeTab &&
+        (c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          c.messages.some((m) =>
+            m.content.toLowerCase().includes(searchQuery.toLowerCase()),
+          )),
     );
 
     const groups: { label: string; items: typeof conversations }[] = [
-      { label: "Đã ghim", items: filtered.filter(c => c.isPinned) },
-      { label: "Hôm nay", items: filtered.filter(c => !c.isPinned && isToday(new Date(c.updatedAt))) },
-      { label: "Hôm qua", items: filtered.filter(c => !c.isPinned && isYesterday(new Date(c.updatedAt))) },
-      { label: "7 ngày qua", items: filtered.filter(c => !c.isPinned && !isToday(new Date(c.updatedAt)) && !isYesterday(new Date(c.updatedAt)) && isAfter(new Date(c.updatedAt), subDays(new Date(), 7))) },
-      { label: "Cũ hơn", items: filtered.filter(c => !c.isPinned && !isAfter(new Date(c.updatedAt), subDays(new Date(), 7))) },
+      { label: "Đã ghim", items: filtered.filter((c) => c.isPinned) },
+      {
+        label: "Hôm nay",
+        items: filtered.filter(
+          (c) => !c.isPinned && isToday(new Date(c.updatedAt)),
+        ),
+      },
+      {
+        label: "Hôm qua",
+        items: filtered.filter(
+          (c) => !c.isPinned && isYesterday(new Date(c.updatedAt)),
+        ),
+      },
+      {
+        label: "7 ngày qua",
+        items: filtered.filter(
+          (c) =>
+            !c.isPinned &&
+            !isToday(new Date(c.updatedAt)) &&
+            !isYesterday(new Date(c.updatedAt)) &&
+            isAfter(new Date(c.updatedAt), subDays(new Date(), 7)),
+        ),
+      },
+      {
+        label: "Cũ hơn",
+        items: filtered.filter(
+          (c) =>
+            !c.isPinned &&
+            !isAfter(new Date(c.updatedAt), subDays(new Date(), 7)),
+        ),
+      },
     ];
 
-    return groups.filter(g => g.items.length > 0);
+    return groups.filter((g) => g.items.length > 0);
   }, [conversations, activeTab, searchQuery]);
 
-  const handleStartRename = (e: React.MouseEvent, id: string, title: string) => {
+  /** Bắt đầu đổi tên */
+  const handleStartRename = (
+    e: React.MouseEvent,
+    id: string,
+    title: string,
+  ) => {
     e.stopPropagation();
     setEditingId(id);
     setEditValue(title);
   };
 
+  /** Lưu tên mới */
   const handleSaveRename = (id: string) => {
     if (editValue.trim()) {
       renameConversation(id, editValue.trim());
@@ -68,24 +107,44 @@ export const AiSidebar: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full w-full flex-col bg-surface border-r border-border select-none">
-      {/* 1. SaaS Mode Switcher */}
-      <div className="p-4 border-b border-border/50">
-        <div className="flex p-1 bg-surface-active/50 rounded-2xl border border-border/40">
+    <div className="flex h-full w-full flex-col bg-[#f9f9f9] border-r border-gray-200 select-none">
+      {/* ── Header: New chat + Collapse ── */}
+      <div className="flex items-center justify-between p-3">
+        <button
+          onClick={toggleSidebar}
+          className="h-10 w-10 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-200/60 transition-colors"
+          aria-label="Thu gọn sidebar"
+        >
+          <PanelLeftCloseIcon size={20} strokeWidth={1.8} />
+        </button>
+        <button
+          onClick={() => {
+            createNewConversation(activeTab);
+          }}
+          className="h-10 w-10 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-200/60 transition-colors"
+          aria-label="Tạo cuộc trò chuyện mới"
+        >
+          <PlusIcon size={20} strokeWidth={1.8} />
+        </button>
+      </div>
+
+      {/* ── Mode tabs: Công ty / Cá nhân ── */}
+      <div className="px-3 mb-2">
+        <div className="flex bg-gray-200/60 rounded-lg p-0.5">
           <button
             onClick={() => {
               setSelectedEndpoint("company");
               setActiveConversation(null);
             }}
             className={clsx(
-              "flex-1 flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-[14px] text-xs font-bold transition-all",
-              activeTab === "company" 
-                ? "bg-white shadow-sm text-primary ring-1 ring-black/5" 
-                : "text-text-muted hover:text-text-primary"
+              "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all",
+              activeTab === "company"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700",
             )}
           >
-            <Building2Icon size={16} strokeWidth={2.5} />
-            <span>CÔNG TY</span>
+            <Building2Icon size={14} strokeWidth={2} />
+            <span>Công ty</span>
           </button>
           <button
             onClick={() => {
@@ -93,115 +152,117 @@ export const AiSidebar: React.FC = () => {
               setActiveConversation(null);
             }}
             className={clsx(
-              "flex-1 flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-[14px] text-xs font-bold transition-all",
-              activeTab === "personal" 
-                ? "bg-white shadow-sm text-success ring-1 ring-black/5" 
-                : "text-text-muted hover:text-text-primary"
+              "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all",
+              activeTab === "personal"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700",
             )}
           >
-            <UserCircle2Icon size={16} strokeWidth={2.5} />
-            <span>CÁ NHÂN</span>
+            <UserCircle2Icon size={14} strokeWidth={2} />
+            <span>Cá nhân</span>
           </button>
         </div>
       </div>
 
-      {/* 2. Actions: New Chat & Search */}
-      <div className="p-4 space-y-3">
-        <button
-          onClick={() => createNewConversation(activeTab)}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-black text-white hover:bg-black/80 transition-all text-sm font-bold shadow-lg shadow-black/10 active:scale-[0.98]"
-        >
-          <PlusIcon size={18} strokeWidth={3} />
-          <span>Cuộc hội thoại mới</span>
-        </button>
-
-        <div className="relative group">
-          <SearchIcon size={16} strokeWidth={2.5} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-primary transition-colors" />
+      {/* ── Search ── */}
+      <div className="px-3 mb-2">
+        <div className="relative">
+          <SearchIcon
+            size={14}
+            strokeWidth={2}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          />
           <input
             type="text"
-            placeholder="Tìm kiếm hội thoại..."
+            placeholder="Tìm kiếm..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-border bg-surface-active/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 transition-all"
           />
         </div>
       </div>
 
-      {/* 3. History List */}
-      <div className="flex-1 overflow-y-auto px-2 pb-4 custom-scrollbar">
-        <div className="space-y-6">
+      {/* ── Conversation list ── */}
+      <div className="flex-1 overflow-y-auto px-2 pb-4 ai-scrollbar">
+        <div className="space-y-4">
           {groupedConversations.map((group) => (
             <div key={group.label}>
-              <h3 className="px-3 mb-2 text-[10px] font-black uppercase tracking-[0.1em] text-text-muted/60">
+              <h3 className="px-2 mb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">
                 {group.label}
               </h3>
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 {group.items.map((conv) => (
-                  <motion.div
+                  <div
                     key={conv.id}
-                    layoutId={conv.id}
                     onClick={() => setActiveConversation(conv.id)}
                     className={clsx(
-                      "group relative flex flex-col gap-0.5 px-3 py-3 rounded-2xl transition-all cursor-pointer border border-transparent",
-                      activeConversationId === conv.id 
-                        ? "bg-primary/5 border-primary/10 text-primary" 
-                        : "text-text-secondary hover:bg-surface-active/60"
+                      "group relative flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-all cursor-pointer",
+                      activeConversationId === conv.id
+                        ? "bg-gray-200/80 text-gray-900"
+                        : "text-gray-600 hover:bg-gray-200/40",
                     )}
                   >
-                    <div className="flex items-center gap-3">
-                      <MessageSquareIcon size={16} strokeWidth={2} className={clsx(
-                        "shrink-0",
-                        activeConversationId === conv.id ? "text-primary" : "text-text-muted opacity-60"
-                      )} />
-                      
-                      {editingId === conv.id ? (
-                        <input
-                          autoFocus
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onBlur={() => handleSaveRename(conv.id)}
-                          onKeyDown={(e) => e.key === "Enter" && handleSaveRename(conv.id)}
-                          className="flex-1 bg-transparent text-sm font-medium outline-none border-b border-primary"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      ) : (
-                        <span className="flex-1 truncate text-sm font-medium leading-tight">
-                          {conv.title}
-                        </span>
-                      )}
+                    <MessageSquareIcon
+                      size={16}
+                      strokeWidth={1.8}
+                      className="shrink-0 text-gray-400"
+                    />
 
-                      {/* Hover Actions */}
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity translate-x-1">
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); togglePinConversation(conv.id); }}
-                          className="p-1.5 rounded-lg hover:bg-white shadow-sm text-text-muted hover:text-primary transition-colors"
-                          title={conv.isPinned ? "Bỏ ghim" : "Ghim"}
-                        >
-                          {conv.isPinned ? <PinOffIcon size={12} strokeWidth={2.5} /> : <PinIcon size={12} strokeWidth={2.5} />}
-                        </button>
-                        <button 
-                          onClick={(e) => handleStartRename(e, conv.id, conv.title)}
-                          className="p-1.5 rounded-lg hover:bg-white shadow-sm text-text-muted hover:text-primary transition-colors"
-                          title="Đổi tên"
-                        >
-                          <Edit2Icon size={12} strokeWidth={2.5} />
-                        </button>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); deleteConversation(conv.id); }}
-                          className="p-1.5 rounded-lg hover:bg-error/10 shadow-sm text-text-muted hover:text-error transition-colors"
-                          title="Xóa"
-                        >
-                          <Trash2Icon size={12} strokeWidth={2.5} />
-                        </button>
-                      </div>
+                    {editingId === conv.id ? (
+                      <input
+                        autoFocus
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onBlur={() => handleSaveRename(conv.id)}
+                        onKeyDown={(e) =>
+                          e.key === "Enter" && handleSaveRename(conv.id)
+                        }
+                        className="flex-1 bg-transparent text-sm outline-none border-b border-gray-400 py-0"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span className="flex-1 truncate text-sm leading-snug">
+                        {conv.title}
+                      </span>
+                    )}
+
+                    {/* Hover actions */}
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          togglePinConversation(conv.id);
+                        }}
+                        className="p-1 rounded hover:bg-gray-300/60 text-gray-400 hover:text-gray-700 transition-colors"
+                        title={conv.isPinned ? "Bỏ ghim" : "Ghim"}
+                      >
+                        {conv.isPinned ? (
+                          <PinOffIcon size={12} strokeWidth={2} />
+                        ) : (
+                          <PinIcon size={12} strokeWidth={2} />
+                        )}
+                      </button>
+                      <button
+                        onClick={(e) =>
+                          handleStartRename(e, conv.id, conv.title)
+                        }
+                        className="p-1 rounded hover:bg-gray-300/60 text-gray-400 hover:text-gray-700 transition-colors"
+                        title="Đổi tên"
+                      >
+                        <Edit2Icon size={12} strokeWidth={2} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteConversation(conv.id);
+                        }}
+                        className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
+                        title="Xóa"
+                      >
+                        <Trash2Icon size={12} strokeWidth={2} />
+                      </button>
                     </div>
-                    
-                    <div className="flex items-center gap-2 ml-7 mt-0.5 opacity-40">
-                       <span className="text-[10px] font-medium uppercase tracking-tight">
-                         {format(new Date(conv.updatedAt), "HH:mm, dd/MM", { locale: vi })}
-                       </span>
-                    </div>
-                  </motion.div>
+                  </div>
                 ))}
               </div>
             </div>
@@ -209,30 +270,42 @@ export const AiSidebar: React.FC = () => {
         </div>
 
         {groupedConversations.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 px-6 text-center animate-in fade-in duration-500">
-            <div className="h-20 w-20 rounded-3xl bg-surface-active/50 flex flex-col items-center justify-center mb-4 text-text-muted/30 border border-border/30">
-              <MessageSquareIcon size={32} strokeWidth={1} />
-            </div>
-            <p className="text-sm font-bold text-text-primary">Không tìm thấy hội thoại</p>
-            <p className="text-xs text-text-muted mt-1 leading-relaxed">Hãy thử tìm từ khóa khác hoặc tạo cuộc trò chuyện mới để bắt đầu.</p>
+          <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+            <MessageSquareIcon
+              size={32}
+              strokeWidth={1}
+              className="text-gray-300 mb-3"
+            />
+            <p className="text-sm font-medium text-gray-500">
+              Chưa có hội thoại
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              Bắt đầu bằng cách tạo cuộc trò chuyện mới
+            </p>
           </div>
         )}
       </div>
 
-      {/* 4. Footer User Info (Visual only for SAE feeling) */}
-      <div className="p-4 border-t border-border/50 bg-surface-active/20">
-         <div className="flex items-center gap-3">
-            <div className="h-10 w-10 shrink-0">
-               <img alt="Hacom Holdings" className="h-full w-full object-contain" src="/logo-dung.png" />
-            </div>
-            <div className="flex flex-col min-w-0">
-               <span className="text-sm font-black text-text-primary truncate uppercase tracking-tighter">Hacom Holdings</span>
-               <span className="text-[10px] font-bold text-success flex items-center gap-1 uppercase tracking-widest">
-                  <span className="h-1 w-1 rounded-full bg-success animate-pulse" />
-                  Hệ thống sẵn sàng
-               </span>
-            </div>
-         </div>
+      {/* ── Footer ── */}
+      <div className="p-3 border-t border-gray-200">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 shrink-0">
+            <img
+              alt="Hacom Holdings"
+              className="h-full w-full object-contain"
+              src="/logo-dung.png"
+            />
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-xs font-semibold text-gray-800 truncate">
+              Hacom Holdings
+            </span>
+            <span className="text-[10px] text-gray-400 flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+              Sẵn sàng
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );

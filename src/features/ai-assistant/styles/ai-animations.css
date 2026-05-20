@@ -1,4 +1,4 @@
-/* AI Assistant Modern Animations */
+/* AI Assistant – ChatGPT-style Animations */
 @keyframes shimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
@@ -9,6 +9,16 @@
   50% { transform: translateY(100%); }
 }
 
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes typing-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 .animate-shimmer {
   animation: shimmer 2s linear infinite;
 }
@@ -17,11 +27,128 @@
   animation: scan 3s ease-in-out infinite;
 }
 
-/* AI Chat Prose Refinements */
-.prose-ai p {
-  margin-bottom: 1.25rem !important;
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out both;
 }
 
-.prose-ai p:last-child {
-  margin-bottom: 0 !important;
+.animate-typing-cursor {
+  animation: typing-cursor 0.8s ease-in-out infinite;
+}
+
+/* ── ChatGPT-style Prose Overrides ── */
+.prose-chatgpt {
+  font-family: 'Söhne', 'Inter', 'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--color-text-primary, #1a1a1a);
+}
+
+.prose-chatgpt p {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+.prose-chatgpt p:last-child {
+  margin-bottom: 0;
+}
+
+.prose-chatgpt h1,
+.prose-chatgpt h2,
+.prose-chatgpt h3,
+.prose-chatgpt h4 {
+  font-weight: 700;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.3;
+}
+.prose-chatgpt h1 { font-size: 1.5rem; }
+.prose-chatgpt h2 { font-size: 1.25rem; }
+.prose-chatgpt h3 { font-size: 1.1rem; }
+
+.prose-chatgpt ul,
+.prose-chatgpt ol {
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+}
+.prose-chatgpt li {
+  margin: 0.35rem 0;
+}
+
+.prose-chatgpt code {
+  font-family: 'Söhne Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.875em;
+  background: #f4f4f5;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.prose-chatgpt pre {
+  margin: 1rem 0;
+  padding: 1rem 1.25rem;
+  background: #1e1e1e;
+  border-radius: 12px;
+  overflow-x: auto;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.prose-chatgpt pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  color: #e5e7eb;
+  font-size: 0.85em;
+  line-height: 1.6;
+}
+
+.prose-chatgpt blockquote {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid #d1d5db;
+  background: #f9fafb;
+  border-radius: 0 8px 8px 0;
+  font-style: italic;
+  color: #6b7280;
+}
+
+.prose-chatgpt strong {
+  font-weight: 700;
+}
+
+.prose-chatgpt table {
+  margin: 1rem 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+.prose-chatgpt th,
+.prose-chatgpt td {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e5e7eb;
+  text-align: left;
+}
+.prose-chatgpt th {
+  background: #f9fafb;
+  font-weight: 600;
+}
+
+.prose-chatgpt a {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-chatgpt a:hover {
+  color: #1d4ed8;
+}
+
+/* ── Scrollbar ── */
+.ai-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.ai-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ai-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 99px;
+}
+.ai-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
 }

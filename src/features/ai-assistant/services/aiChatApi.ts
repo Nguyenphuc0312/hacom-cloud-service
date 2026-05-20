@@ -1,7 +1,7 @@
 const BASE_URL = "https://ai-chat.fitora.id.vn";
 const ENDPOINTS = {
-  company: `${BASE_URL}/api/chat/personal/stream`,
-  personal: `${BASE_URL}/api/chat/stream`,
+  company: `${BASE_URL}/api/chat/stream`,
+  personal: `${BASE_URL}/api/chat/personal/stream`,
 };
 const TIMEOUT_MS = 60_000;
 

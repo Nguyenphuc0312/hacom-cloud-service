@@ -2,58 +2,56 @@ import React from "react";
 import { useAiAssistantStore } from "../state/aiAssistantStore";
 import { AiSidebar } from "./AiSidebar";
 import { AiSourcePanel } from "./AiSourcePanel";
-import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { AnimatePresence } from "framer-motion";
+import { PanelLeftIcon } from "lucide-react";
 import clsx from "clsx";
 
 interface AiLayoutProps {
   children: React.ReactNode;
 }
 
+/**
+ * Layout gốc cho AI Assistant – chia 3 vùng: Sidebar | Main | Source Panel.
+ * Sidebar có thể toggle đóng/mở, kiểu ChatGPT.
+ */
 export const AiLayout: React.FC<AiLayoutProps> = ({ children }) => {
   const { isSidebarOpen, isSourcePanelOpen, toggleSidebar } = useAiAssistantStore();
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-surface relative font-sans selection:bg-primary/20">
-      {/* 1. Left Sidebar */}
-      <AnimatePresence initial={false} mode="wait">
-        {isSidebarOpen && (
-          <motion.aside
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 320, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 32 }}
-            className="flex-shrink-0 z-30 relative overflow-hidden h-full border-r border-border shadow-2xl shadow-black/5"
-          >
-            <div className="w-[320px] h-full">
-              <AiSidebar />
-            </div>
-          </motion.aside>
-        )}
-      </AnimatePresence>
-
-      {/* Sidebar Toggle Floating Button (Minimalist) */}
-      <motion.button
-        animate={{ left: isSidebarOpen ? 305 : 15 }}
-        transition={{ type: "spring", stiffness: 300, damping: 32 }}
-        onClick={toggleSidebar}
+    <div className="flex h-full w-full overflow-hidden bg-white relative font-sans">
+      {/* ── 1. Left Sidebar ── */}
+      <aside
         className={clsx(
-          "absolute top-8 z-50 h-10 w-10 flex items-center justify-center bg-white/80 backdrop-blur border border-border shadow-xl rounded-2xl hover:bg-white hover:scale-110 transition-all",
+          "flex-shrink-0 h-full transition-[width] duration-300 ease-in-out overflow-hidden",
+          isSidebarOpen ? "w-[260px]" : "w-0"
         )}
       >
-        {isSidebarOpen ? <ChevronLeftIcon size={18} strokeWidth={3} /> : <ChevronRightIcon size={18} strokeWidth={3} />}
-      </motion.button>
+        <div className="w-[260px] h-full">
+          <AiSidebar />
+        </div>
+      </aside>
 
-      {/* 2. Main Chat Area */}
-      <main className="flex-1 flex flex-col min-w-0 relative h-full bg-white/20">
+      {/* Sidebar toggle (visible khi sidebar đóng) */}
+      {!isSidebarOpen && (
+        <button
+          onClick={toggleSidebar}
+          className="absolute top-3 left-3 z-50 h-10 w-10 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-all"
+          aria-label="Mở sidebar"
+        >
+          <PanelLeftIcon size={20} strokeWidth={1.8} />
+        </button>
+      )}
+
+      {/* ── 2. Main Chat Area ── */}
+      <main className="flex-1 flex flex-col min-w-0 relative h-full bg-white">
         {children}
       </main>
 
-      {/* 3. Right Source Panel */}
+      {/* ── 3. Right Source Panel ── */}
       <AnimatePresence>
         {isSourcePanelOpen && (
           <div className="flex-shrink-0">
-             <AiSourcePanel />
+            <AiSourcePanel />
           </div>
         )}
       </AnimatePresence>
